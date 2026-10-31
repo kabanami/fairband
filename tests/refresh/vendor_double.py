@@ -37,21 +37,27 @@ class Router:
     FMP requests read ``fmp/<route>[.<period>][.<symbol>].json`` (a slash in the route becomes a
     dash), GuruFocus requests ``gurufocus/<route>.<symbol>.json``. ``calls`` counts the requests per
     endpoint, named as the fetch stores them (``income-annual``, ``quote``, ``summary``); a retry
-    counts again. An endpoint in ``fail`` answers HTTP 500; one in ``bodies`` answers 200 with that
-    body instead of its fixture. A request with no fixture answers 404.
+    counts again, and ``requested`` keeps each endpoint's last query parameters, the key left out.
+    An endpoint in ``fail`` answers ``fail_status`` (HTTP 500 unless set); one in ``bodies``
+    answers 200 with that body instead of its fixture. A request with no fixture answers 404.
     """
 
     def __init__(self) -> None:
         self.calls: Counter[str] = Counter()
         self.fail: set[str] = set()
+        self.fail_status = 500
+        self.requested: dict[str, dict[str, str]] = {}
         self.bodies: dict[str, bytes] = {}
         self.transport = httpx.MockTransport(self._handle)
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         endpoint, fixture = _resolve(request)
         self.calls[endpoint] += 1
+        self.requested[endpoint] = {
+            name: value for name, value in request.url.params.items() if name != "apikey"
+        }
         if endpoint in self.fail:
-            return httpx.Response(500)
+            return httpx.Response(self.fail_status)
         body = self.bodies.get(endpoint)
         if body is None:
             if not fixture.is_file():

@@ -17,6 +17,8 @@ from fairband.refresh import fetch as fetch_module
 from fairband.refresh.fetch import FetchOutcome, fetch_company
 from fairband.store.facts import facts_for
 from fairband.store.observations import observations_for
+from fairband.store.vendor import response_payload
+from fairband.vendors.normalize_fmp import price_closes
 
 FMP_ENDPOINTS = (
     "income-annual",
@@ -44,7 +46,6 @@ DATASETS = {
     ("balance-asreported-annual", "balance-asreported-annual"),
     ("profile", "profile"),
     ("quote", "quote"),
-    ("price-close", "price-history"),
     ("estimate-annual", "estimates-annual"),
     ("estimate-quarter", "estimates-quarter"),
     ("street-actual", "earnings"),
@@ -107,7 +108,8 @@ def test_fetches_all_endpoints_and_stores(
     assert json.loads(income["params"]) == {"symbol": "ACME", "period": "annual", "limit": "11"}
     fixture = FIXTURES / "fmp" / "income-statement.annual.ACME.json"
     assert income["payload"] == fixture.read_text(encoding="utf-8")
-    assert json.loads(stored["price-history"]["params"]) == {"symbol": "ACME", "from": "2021-11-01"}
+    assert json.loads(stored["price-history"]["params"]) == {"symbol": "ACME"}
+    assert router.requested["price-history"] == {"symbol": "ACME", "from": "2021-11-01"}
     assert json.loads(stored["summary"]["params"]) == {"symbol": "ACME"}
 
     assert stored_datasets(conn) == DATASETS
@@ -116,10 +118,13 @@ def test_fetches_all_endpoints_and_stores(
     assert {(f.observed_at, f.entered_at) for f in facts} == {(clock.now, clock.now)}
     [moat] = [o for o in observations_for(conn, "ACME", "gf-score") if o.field == "moat_score"]
     assert moat.value == Decimal(7)
-    closes = observations_for(conn, "ACME", "price-close")
-    assert [(o.period, o.field, o.value, o.unit, o.as_of) for o in closes] == [
-        (date(2026, 10, d), "close", Decimal(close), "currency", date(2026, 10, d))
-        for d, close in ((28, "49.0"), (29, "49.5"), (30, "50.0"))
+    # The closes stay in the stored payload; nothing is normalized from them here.
+    history = response_payload(conn, stored["price-history"]["id"])
+    assert history is not None
+    assert price_closes(json.loads(history)) == [
+        (date(2026, 10, 28), 49.0),
+        (date(2026, 10, 29), 49.5),
+        (date(2026, 10, 30), 50.0),
     ]
     [adr] = [o for o in observations_for(conn, "ACME", "profile") if o.field == "is_adr"]
     assert adr.value == Decimal(0)
@@ -129,9 +134,8 @@ def test_reuses_within_24h(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
     fetch(conn, clients, policy, clock)
-    # Still 2026-11-01 in UTC: the price history's ``from`` date is part of its reuse key, so a
-    # fetch on a later day calls that one endpoint again even within the 24 hours.
-    clock.now += timedelta(hours=14)
+    # 23 hours on is the next UTC day: the price history's start date moves, its reuse key does not.
+    clock.now += timedelta(hours=23)
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome("ACME", calls=0, reused=14, failed=(), error=None)
     assert router.calls.total() == 14
@@ -184,6 +188,16 @@ def test_response_and_its_rows_commit_together(
     assert (count(conn, "vendor_responses"), count(conn, "facts")) == (0, 0)
 
 
+def test_refuses_to_run_inside_a_transaction(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    conn.execute("BEGIN")
+    with pytest.raises(ValueError, match="fetch_company must not run inside a transaction"):
+        fetch(conn, clients, policy, clock)
+    conn.rollback()
+    assert router.calls.total() == 0
+
+
 def test_endpoint_failure_recorded_and_continues(
     conn: sqlite3.Connection,
     clients_with_500_on_quote: Clients,
@@ -210,6 +224,60 @@ def test_endpoint_failure_recorded_and_continues(
     router.fail.clear()
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome("ACME", calls=1, reused=13, failed=(), error=None)
+    assert stored_datasets(conn) == DATASETS
+
+
+def test_rate_limit_stops_the_company(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    router.fail.add("quote")
+    router.fail_status = 429
+    outcome = fetch(conn, clients, policy, clock)
+    assert outcome == FetchOutcome(
+        "ACME",
+        calls=8,
+        reused=0,
+        failed=("quote",),
+        error="data fetch failed: quote",
+        rate_limited=True,
+    )
+    # The endpoints after the quote were not called.
+    before = FMP_ENDPOINTS[: FMP_ENDPOINTS.index("quote")]
+    assert router.calls == Counter({**dict.fromkeys(before, 1), "quote": policy.refresh.attempts})
+    stored = responses(conn)
+    assert list(stored) == [*before, "quote"]
+    assert (stored["quote"]["http_status"], stored["quote"]["payload"]) == (429, None)
+
+
+def test_unusable_200_is_failed_and_not_reused(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    # GuruFocus answers some failures with HTTP 200 and an error body; FMP answers an unknown
+    # symbol with an empty list.
+    error_body = json.dumps(
+        {"error": "Your API token is invalid, or ACME is not covered by your GuruFocus plan."},
+        indent=2,
+    )
+    router.bodies.update({"quote": b"[]", "summary": error_body.encode()})
+    outcome = fetch(conn, clients, policy, clock)
+    assert outcome == FetchOutcome(
+        "ACME", calls=14, reused=0, failed=("quote", "summary"), error="data fetch failed: quote"
+    )
+    stored = responses(conn)
+    assert (stored["quote"]["http_status"], stored["quote"]["payload"]) == (200, "[]")
+    assert stored["quote"]["error"] == "unusable payload: []"
+    summary = stored["summary"]
+    assert (summary["http_status"], summary["payload"]) == (200, error_body)
+    # Whitespace runs collapse to one space, then the text is cut at 80 characters.
+    assert summary["error"] == (
+        'unusable payload: { "error": "Your API token is invalid, or ACME is not covered by'
+        " your GuruFocus "
+    )
+    assert stored_datasets(conn) == DATASETS - {("quote", "quote"), ("gf-score", "summary")}
+
+    router.bodies.clear()
+    outcome = fetch(conn, clients, policy, clock)
+    assert outcome == FetchOutcome("ACME", calls=2, reused=12, failed=(), error=None)
     assert stored_datasets(conn) == DATASETS
 
 
@@ -261,17 +329,20 @@ def test_missing_gf_key_still_reuses_fresh_gf_responses(
 def test_no_key_in_stored_params_or_payload(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
-    # The failed calls store an error that quotes the request URL, and the profile body echoes
-    # both keys, so the scrub has something to remove in each column.
+    # The failed calls store an error that quotes the request URL, and the profile and key-ratios
+    # bodies echo the keys, so the scrub has something to remove in each column.
     router.fail.update({"quote", "summary"})
     echo = [{"symbol": "ACME", "isAdr": False, "note": f"apikey={FMP_KEY} user/{GF_TOKEN}"}]
     router.bodies["profile"] = json.dumps(echo).encode()
+    # An unusable answer stores the start of its body as the error.
+    router.bodies["keyratios"] = json.dumps({"error": f"invalid token {GF_TOKEN}"}).encode()
     fetch(conn, clients, policy, clock)
 
     rows = conn.execute("SELECT params, payload, error FROM vendor_responses").fetchall()
     assert len(rows) == 14
     texts = [text for row in rows for text in row if text is not None]
     assert any("<key>" in text for text in texts)
+    assert 'unusable payload: {"error": "invalid token <key>"}' in texts
     forms = {
         form for key in clients.secrets for form in (key, quote(key, safe=""), quote_plus(key))
     }

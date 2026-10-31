@@ -65,11 +65,16 @@ def latest_response(
     symbol: str | None,
     params: Mapping[str, str],
 ) -> ResponseRow | None:
-    """The most recently observed HTTP 200 response to the same call, if any."""
+    """The most recently observed HTTP 200 response to the same call that carries no error, if any.
+
+    A 200 recorded with an error (a body the caller could not use) is never returned, so it is
+    never reused.
+    """
     row = conn.execute(
         "SELECT id, provider, endpoint, params, symbol, http_status, observed_at, error"
         " FROM vendor_responses"
-        " WHERE provider = ? AND endpoint = ? AND symbol IS ? AND params = ? AND http_status = 200"
+        " WHERE provider = ? AND endpoint = ? AND symbol IS ? AND params = ?"
+        " AND http_status = 200 AND error IS NULL"
         " ORDER BY observed_at DESC, id DESC LIMIT 1",
         (provider, endpoint, symbol, _canonical(params)),
     ).fetchone()

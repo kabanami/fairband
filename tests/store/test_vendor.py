@@ -45,6 +45,15 @@ def test_record_response_and_latest_response(conn: sqlite3.Connection) -> None:
     )
 
 
+def test_latest_response_skips_a_200_with_an_error(conn: sqlite3.Connection) -> None:
+    clean = _ok(conn, T0)
+    unusable = "unusable payload: []"
+    later = T0 + timedelta(hours=1)
+    record_response(conn, "fmp", "income-statement", ANNUAL, "AAPL", 200, "[]", unusable, later)
+    found = latest_response(conn, "fmp", "income-statement", "AAPL", ANNUAL)
+    assert found is not None and (found.id, found.error) == (clean, None)
+
+
 def test_latest_response_matches_params_in_any_order(conn: sqlite3.Connection) -> None:
     response_id = _ok(conn, T0)
     reordered = {"limit": "11", "period": "annual", "symbol": "AAPL"}
