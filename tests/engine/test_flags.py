@@ -106,10 +106,27 @@ def test_margin_flag_needs_a_trailing_margin(policy: Policy) -> None:
     assert margin_flag(margins([20, 20, 20, 20, 20, 20]), None, policy) is None
 
 
-def test_margin_flag_high_step_needs_a_positive_high(policy: Policy) -> None:
-    # Every margin negative: -10.5% clears the high of -10% times 1.1, but the step needs a
-    # positive high (and the median of -17.5% cannot fire either).
+def test_margin_flag_below_a_negative_high(policy: Policy) -> None:
+    # Every margin negative: -10.5% is not above the high of -10%, and the median of -17.5%
+    # cannot fire.
     assert margin_flag(margins([-40, -30, -20, -15, -12, -10]), -0.105, policy) is None
+
+
+def test_margin_flag_losses_turned_profitable(policy: Policy) -> None:
+    # mech/1.2's case: a loss-making history, then a positive trailing margin.
+    flag = margin_flag(margins([-30, -25, -20, -15, -12, -10]), 0.05, policy)
+    assert flag is not None
+    assert (flag.code, flag.word) == ("margin-flag", "Newly profitable")
+    assert flag.sentence == (
+        "The trailing operating margin is 5.0%, against a median of -17.5% and a high of "
+        "-10.0% over 6 fiscal years; the window holds a loss year."
+    )
+
+
+def test_margin_flag_high_of_zero(policy: Policy) -> None:
+    flag = margin_flag(margins([-20, -15, -10, -5, -2, 0]), 0.01, policy)
+    assert flag is not None and flag.word == "Newly profitable"
+    assert margin_flag(margins([-20, -15, -10, -5, -2, 0]), 0.0, policy) is None
 
 
 def trailing(

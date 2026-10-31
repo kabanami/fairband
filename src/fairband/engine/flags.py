@@ -3,10 +3,10 @@
 The margin flag is ``mech/1.2``'s. The margin is operating income ÷ revenue for each fiscal year
 that has both and a positive revenue; the median and the high run over the last ten such years,
 and the flag needs at least ``margin_flag_min_years`` of them. It fires when the trailing margin
-is ``margin_flag_ratio`` times the median or more (a positive median), or ``margin_flag_above_high``
-or more above the high (a positive high). Its word reads the history: "Newly profitable" for a
-median at or below zero, "Possible cycle peak" for a loss year in the window, else "Margin above
-history".
+is ``margin_flag_ratio`` times the median or more (a positive median), or when it is above the
+high by ``margin_flag_above_high`` of the high's size or more, so a loss-making history that turns
+profitable fires too. Its word reads the history: "Newly profitable" for a median at or below
+zero, "Possible cycle peak" for a loss year in the window, else "Margin above history".
 
 The gate flags are the three ``mech/1.2`` gate tests on the trailing figures, kept as flags. The
 cash-flow statement signs capital spending as an outflow, so ``capex`` is negative for spending:
@@ -31,7 +31,7 @@ def margin_flag(series: Series, ttm_margin: float | None, policy: Policy) -> Fla
         return None
     median, high = statistics.median(history), max(history)
     by_median = median > 0 and ttm_margin >= policy.margin_flag_ratio * median
-    by_high = high > 0 and ttm_margin >= high * (1 + policy.margin_flag_above_high)
+    by_high = ttm_margin > high and ttm_margin >= high + policy.margin_flag_above_high * abs(high)
     if not (by_median or by_high):
         return None
     loss = min(history) < 0  # the revenue is positive, so a negative margin is an operating loss
