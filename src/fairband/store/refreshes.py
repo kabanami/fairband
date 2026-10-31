@@ -1,0 +1,219 @@
+"""The refresh record, its per-company progress and the universe deciles each full refresh saves.
+
+``refreshes`` holds one row per run; its status is ``running`` until ``finish_refresh`` sets
+``done``, ``failed`` or ``cancelled``, or ``mark_interrupted`` finds it after a stop and sets
+``interrupted``. One refresh runs at a time: ``create_refresh`` raises ``RefreshRunning`` while a
+row is ``running``. ``refresh_items`` holds each company's latest status within a refresh, and
+``deciles`` the decile edges as JSON lists of floats. These are the only rows the store updates.
+"""
+
+import json
+import sqlite3
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Literal
+
+from fairband.engine.classifier import Deciles
+from fairband.store._codec import dump_stamp, inserted_id, load_stamp
+
+type Finished = Literal["done", "failed", "interrupted", "cancelled"]
+
+
+class RefreshRunning(Exception):
+    """A refresh is already running; ``refresh_id`` names it."""
+
+    def __init__(self, refresh_id: int) -> None:
+        super().__init__(f"refresh {refresh_id} is running")
+        self.refresh_id = refresh_id
+
+
+@dataclass(frozen=True)
+class RefreshRow:
+    id: int
+    kind: str
+    symbols: tuple[str, ...] | None
+    status: str
+    stage: str | None
+    started_at: datetime
+    finished_at: datetime | None
+    policy_version: str
+    method_version: str
+    calibration: dict[str, Any] | None
+    message: str | None
+
+
+@dataclass(frozen=True)
+class ItemRow:
+    refresh_id: int
+    symbol: str
+    status: str
+    error: str | None
+    updated_at: datetime
+
+
+def create_refresh(
+    conn: sqlite3.Connection,
+    kind: str,
+    symbols: Sequence[str] | None,
+    policy_version: str,
+    method_version: str,
+    started_at: datetime,
+) -> int:
+    """Start a ``running`` refresh and return its id. The check and the insert hold the write
+    lock together, so two connections cannot both start one."""
+    stored_symbols = None if symbols is None else json.dumps(list(symbols))
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        running = conn.execute(
+            "SELECT id FROM refreshes WHERE status = 'running' ORDER BY id LIMIT 1"
+        ).fetchone()
+        if running is not None:
+            raise RefreshRunning(int(running["id"]))
+        cursor = conn.execute(
+            "INSERT INTO refreshes (kind, symbols, status, started_at, policy_version,"
+            " method_version) VALUES (?, ?, 'running', ?, ?, ?)",
+            (kind, stored_symbols, dump_stamp(started_at), policy_version, method_version),
+        )
+    return inserted_id(cursor)
+
+
+def set_stage(conn: sqlite3.Connection, refresh_id: int, stage: str) -> None:
+    with conn:
+        cursor = conn.execute("UPDATE refreshes SET stage = ? WHERE id = ?", (stage, refresh_id))
+        _require_one(cursor, refresh_id)
+
+
+def finish_refresh(
+    conn: sqlite3.Connection,
+    refresh_id: int,
+    status: Finished,
+    finished_at: datetime,
+    message: str | None = None,
+    calibration: dict[str, Any] | None = None,
+) -> None:
+    """Close the refresh with its status, finish time, message and calibration counts."""
+    stored_calibration = (
+        None if calibration is None else json.dumps(calibration, sort_keys=True, allow_nan=False)
+    )
+    with conn:
+        cursor = conn.execute(
+            "UPDATE refreshes SET status = ?, finished_at = ?, message = ?, calibration = ?"
+            " WHERE id = ?",
+            (status, dump_stamp(finished_at), message, stored_calibration, refresh_id),
+        )
+        _require_one(cursor, refresh_id)
+
+
+def upsert_item(
+    conn: sqlite3.Connection,
+    refresh_id: int,
+    symbol: str,
+    status: str,
+    error: str | None,
+    updated_at: datetime,
+) -> None:
+    """Record the company's status within the refresh, replacing its earlier status."""
+    with conn:
+        conn.execute(
+            "INSERT INTO refresh_items (refresh_id, symbol, status, error, updated_at)"
+            " VALUES (?, ?, ?, ?, ?)"
+            " ON CONFLICT (refresh_id, symbol) DO UPDATE"
+            " SET status = excluded.status, error = excluded.error,"
+            " updated_at = excluded.updated_at",
+            (refresh_id, symbol, status, error, dump_stamp(updated_at)),
+        )
+
+
+def items(conn: sqlite3.Connection, refresh_id: int) -> list[ItemRow]:
+    """The refresh's companies, ordered by symbol."""
+    rows = conn.execute(
+        "SELECT * FROM refresh_items WHERE refresh_id = ? ORDER BY symbol", (refresh_id,)
+    )
+    return [
+        ItemRow(
+            refresh_id=r["refresh_id"],
+            symbol=r["symbol"],
+            status=r["status"],
+            error=r["error"],
+            updated_at=load_stamp(r["updated_at"]),
+        )
+        for r in rows
+    ]
+
+
+def current_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
+    """The ``running`` refresh, if any."""
+    row = conn.execute(
+        "SELECT * FROM refreshes WHERE status = 'running' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    return None if row is None else _refresh(row)
+
+
+def latest_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
+    """The refresh with the greatest id, whatever its status."""
+    row = conn.execute("SELECT * FROM refreshes ORDER BY id DESC LIMIT 1").fetchone()
+    return None if row is None else _refresh(row)
+
+
+def mark_interrupted(conn: sqlite3.Connection, at: datetime) -> int:
+    """Set every ``running`` refresh to ``interrupted``, finished ``at``; return how many."""
+    with conn:
+        cursor = conn.execute(
+            "UPDATE refreshes SET status = 'interrupted', finished_at = ? WHERE status = 'running'",
+            (dump_stamp(at),),
+        )
+    return cursor.rowcount
+
+
+def save_deciles(conn: sqlite3.Connection, refresh_id: int, deciles: Deciles, at: datetime) -> None:
+    """Store the deciles under ``refresh_id`` (the object's own ``refresh_id`` is not read)."""
+    with conn:
+        conn.execute(
+            "INSERT INTO deciles (refresh_id, growth_edges, margin_slope_edges, n_growth,"
+            " n_margin, computed_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                refresh_id,
+                json.dumps(list(deciles.growth_edges), allow_nan=False),
+                json.dumps(list(deciles.margin_slope_edges), allow_nan=False),
+                deciles.n_growth,
+                deciles.n_margin,
+                dump_stamp(at),
+            ),
+        )
+
+
+def latest_deciles(conn: sqlite3.Connection) -> Deciles | None:
+    """The deciles of the greatest refresh id, citing that refresh."""
+    row = conn.execute("SELECT * FROM deciles ORDER BY refresh_id DESC LIMIT 1").fetchone()
+    if row is None:
+        return None
+    return Deciles(
+        growth_edges=tuple(float(x) for x in json.loads(row["growth_edges"])),
+        margin_slope_edges=tuple(float(x) for x in json.loads(row["margin_slope_edges"])),
+        n_growth=row["n_growth"],
+        n_margin=row["n_margin"],
+        refresh_id=row["refresh_id"],
+    )
+
+
+def _require_one(cursor: sqlite3.Cursor, refresh_id: int) -> None:
+    if cursor.rowcount != 1:
+        raise ValueError(f"no refresh {refresh_id}")
+
+
+def _refresh(row: sqlite3.Row) -> RefreshRow:
+    symbols, calibration = row["symbols"], row["calibration"]
+    return RefreshRow(
+        id=row["id"],
+        kind=row["kind"],
+        symbols=None if symbols is None else tuple(json.loads(symbols)),
+        status=row["status"],
+        stage=row["stage"],
+        started_at=load_stamp(row["started_at"]),
+        finished_at=load_stamp(row["finished_at"]),
+        policy_version=row["policy_version"],
+        method_version=row["method_version"],
+        calibration=None if calibration is None else json.loads(calibration),
+        message=row["message"],
+    )
