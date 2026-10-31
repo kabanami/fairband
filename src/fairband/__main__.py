@@ -2,8 +2,11 @@
 
 import argparse
 from collections.abc import Callable
+from contextlib import closing
 
 from fairband import __version__
+from fairband.config import load_settings
+from fairband.store.db import connect, migrate
 
 DEFAULT_PORT = 8470
 REFRESH_KINDS = ("full", "price", "scoped")
@@ -56,7 +59,13 @@ def _refresh(args: argparse.Namespace) -> int:
 
 
 def _migrate(args: argparse.Namespace) -> int:
-    raise NotImplementedError("migrate is not built yet")
+    with closing(connect(load_settings().db_path)) as conn:
+        applied = migrate(conn)
+    for filename in applied:
+        print(f"Applied {filename}")
+    if not applied:
+        print("No migrations to apply.")
+    return 0
 
 
 _COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
