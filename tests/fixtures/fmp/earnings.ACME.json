@@ -1,0 +1,58 @@
+[
+  {
+    "symbol": "ACME",
+    "date": "2027-04-29",
+    "epsActual": null,
+    "epsEstimated": 0.54,
+    "revenueActual": null,
+    "revenueEstimated": 300000000,
+    "lastUpdated": "2026-10-31",
+    "confirmed": false,
+    "fiscalPeriod": "Q1",
+    "fiscalYear": 2027,
+    "periodEnding": "2027-03-31",
+    "time": "amc"
+  },
+  {
+    "symbol": "ACME",
+    "date": "2027-02-04",
+    "epsActual": null,
+    "epsEstimated": 0.52,
+    "revenueActual": null,
+    "revenueEstimated": 300000000,
+    "lastUpdated": "2026-10-31",
+    "confirmed": true,
+    "fiscalPeriod": "Q4",
+    "fiscalYear": 2026,
+    "periodEnding": "2026-12-31",
+    "time": "amc"
+  },
+  {
+    "symbol": "ACME",
+    "date": "2026-10-30",
+    "epsActual": 0.51,
+    "epsEstimated": 0.5,
+    "revenueActual": 300000000,
+    "revenueEstimated": 300000000,
+    "lastUpdated": "2026-10-30",
+    "confirmed": true,
+    "fiscalPeriod": "Q3",
+    "fiscalYear": 2026,
+    "periodEnding": "2026-09-30",
+    "time": "amc"
+  },
+  {
+    "symbol": "ACME",
+    "date": "2026-07-31",
+    "epsActual": 0.49,
+    "epsEstimated": 0.48,
+    "revenueActual": 300000000,
+    "revenueEstimated": 300000000,
+    "lastUpdated": "2026-07-31",
+    "confirmed": true,
+    "fiscalPeriod": "Q2",
+    "fiscalYear": 2026,
+    "periodEnding": "2026-06-30",
+    "time": "amc"
+  }
+]

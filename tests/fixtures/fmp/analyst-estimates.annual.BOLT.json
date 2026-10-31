@@ -1,0 +1,38 @@
+[
+  {
+    "symbol": "BOLT",
+    "date": "2028-06-30",
+    "revenueLow": 4140000000,
+    "revenueHigh": 5060000000,
+    "revenueAvg": 4600000000,
+    "ebitdaLow": 920000000,
+    "ebitdaHigh": 1380000000,
+    "ebitdaAvg": 1150000000,
+    "netIncomeLow": 504000000,
+    "netIncomeHigh": 616000000,
+    "netIncomeAvg": 560000000,
+    "epsAvg": 5.5,
+    "epsHigh": 6.05,
+    "epsLow": 4.95,
+    "numAnalystsRevenue": 8,
+    "numAnalystsEps": 4
+  },
+  {
+    "symbol": "BOLT",
+    "date": "2027-06-30",
+    "revenueLow": 3870000000,
+    "revenueHigh": 4730000000,
+    "revenueAvg": 4300000000,
+    "ebitdaLow": 860000000,
+    "ebitdaHigh": 1290000000,
+    "ebitdaAvg": 1075000000,
+    "netIncomeLow": 459000000,
+    "netIncomeHigh": 561000000,
+    "netIncomeAvg": 510000000,
+    "epsAvg": 5.0,
+    "epsHigh": 5.5,
+    "epsLow": 4.5,
+    "numAnalystsRevenue": 10,
+    "numAnalystsEps": 8
+  }
+]

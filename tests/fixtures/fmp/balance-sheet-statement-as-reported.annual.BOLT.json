@@ -1,0 +1,24 @@
+[
+  {
+    "symbol": "BOLT",
+    "fiscalYear": 2026,
+    "period": "FY",
+    "reportedCurrency": "USD",
+    "date": "2026-06-30",
+    "data": {
+      "assets": 3500000000,
+      "operatingleaserightofuseasset": 120000000,
+      "operatingleaseliabilitycurrent": 20000000
+    }
+  },
+  {
+    "symbol": "BOLT",
+    "fiscalYear": 2025,
+    "period": "FY",
+    "reportedCurrency": "USD",
+    "date": "2025-06-30",
+    "data": {
+      "assets": 3300000000
+    }
+  }
+]

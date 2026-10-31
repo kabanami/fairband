@@ -1,0 +1,21 @@
+[
+  {
+    "symbol": "BOLT",
+    "name": "Bolt Industries",
+    "price": 100.0,
+    "changePercentage": 1.0,
+    "change": 0.5,
+    "volume": 1000000,
+    "dayLow": 99.0,
+    "dayHigh": 101.0,
+    "yearHigh": 110.0,
+    "yearLow": 80.0,
+    "marketCap": 10000000000,
+    "priceAvg50": 100.0,
+    "priceAvg200": 100.0,
+    "exchange": "NYSE",
+    "open": 100.0,
+    "previousClose": 99.5,
+    "timestamp": 1793390400
+  }
+]

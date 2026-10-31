@@ -1,0 +1,21 @@
+[
+  {
+    "symbol": "ACME",
+    "name": "Acme Corp",
+    "price": 50.0,
+    "changePercentage": 1.0,
+    "change": 0.5,
+    "volume": 1000000,
+    "dayLow": 49.0,
+    "dayHigh": 51.0,
+    "yearHigh": 55.0,
+    "yearLow": 40.0,
+    "marketCap": 5000000000,
+    "priceAvg50": 50.0,
+    "priceAvg200": 50.0,
+    "exchange": "NASDAQ",
+    "open": 50.0,
+    "previousClose": 49.5,
+    "timestamp": 1793390400
+  }
+]

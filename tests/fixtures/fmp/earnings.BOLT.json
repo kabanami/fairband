@@ -1,0 +1,44 @@
+[
+  {
+    "symbol": "BOLT",
+    "date": "2027-01-28",
+    "epsActual": null,
+    "epsEstimated": 1.25,
+    "revenueActual": null,
+    "revenueEstimated": 300000000,
+    "lastUpdated": "2026-10-31",
+    "confirmed": false,
+    "fiscalPeriod": "Q2",
+    "fiscalYear": 2027,
+    "periodEnding": "2026-12-31",
+    "time": "bmo"
+  },
+  {
+    "symbol": "BOLT",
+    "date": "2026-10-29",
+    "epsActual": 1.21,
+    "epsEstimated": 1.2,
+    "revenueActual": 300000000,
+    "revenueEstimated": 300000000,
+    "lastUpdated": "2026-10-29",
+    "confirmed": true,
+    "fiscalPeriod": "Q1",
+    "fiscalYear": 2027,
+    "periodEnding": "2026-09-30",
+    "time": "bmo"
+  },
+  {
+    "symbol": "BOLT",
+    "date": "2026-08-13",
+    "epsActual": 1.17,
+    "epsEstimated": 1.15,
+    "revenueActual": 300000000,
+    "revenueEstimated": 300000000,
+    "lastUpdated": "2026-08-13",
+    "confirmed": true,
+    "fiscalPeriod": "Q4",
+    "fiscalYear": 2026,
+    "periodEnding": "2026-06-30",
+    "time": "bmo"
+  }
+]

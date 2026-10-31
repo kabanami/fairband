@@ -1,0 +1,26 @@
+[
+  {
+    "symbol": "BOLT",
+    "date": "2026-10-30",
+    "open": 100.0,
+    "high": 101.0,
+    "low": 99.0,
+    "close": 100.0,
+    "volume": 1000000,
+    "change": 0.0,
+    "changePercent": 0.0,
+    "vwap": 100.0
+  },
+  {
+    "symbol": "BOLT",
+    "date": "2026-10-29",
+    "open": 99.0,
+    "high": 100.0,
+    "low": 98.0,
+    "close": 99.0,
+    "volume": 1000000,
+    "change": 0.0,
+    "changePercent": 0.0,
+    "vwap": 99.0
+  }
+]

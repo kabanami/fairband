@@ -1,0 +1,44 @@
+[
+  {
+    "symbol": "ACME",
+    "fiscalYear": 2025,
+    "period": "FY",
+    "reportedCurrency": "USD",
+    "date": "2025-12-31",
+    "data": {
+      "assets": 1510000000,
+      "goodwill": 250000000,
+      "otherintangibleassetsnet": 260000000,
+      "operatingleaserightofuseasset": 90000000,
+      "operatingleaseliabilitycurrent": 15000000
+    }
+  },
+  {
+    "symbol": "ACME",
+    "fiscalYear": 2024,
+    "period": "FY",
+    "reportedCurrency": "USD",
+    "date": "2024-12-31",
+    "data": {
+      "assets": 1460000000,
+      "goodwill": 250000000,
+      "finitelivedintangibleassetsnet": 280000000,
+      "operatingleaserightofuseasset": 85000000,
+      "operatingleaseliabilitycurrent": 14000000
+    }
+  },
+  {
+    "symbol": "ACME",
+    "fiscalYear": 2023,
+    "period": "FY",
+    "reportedCurrency": "USD",
+    "date": "2023-12-31",
+    "data": {
+      "assets": 1410000000,
+      "goodwill": 250000000,
+      "finitelivedintangibleassetsnet": 300000000,
+      "operatingleaserightofuseasset": 80000000,
+      "operatingleaseliabilitycurrent": 13000000
+    }
+  }
+]
