@@ -2,7 +2,8 @@
 
 ``result_to_json`` writes sorted keys, so one result always gives the same string. Dates are ISO
 ``YYYY-MM-DD``; timestamps are UTC RFC 3339, and a timestamp without a time zone is refused.
-``intermediates`` is written as it stands, so it must hold JSON values only.
+``intermediates`` is written as it stands, so it must hold JSON values only. A NaN or infinity
+anywhere is refused, since RFC 8259 JSON has no such number.
 """
 
 import json
@@ -106,8 +107,8 @@ class ValuationResult:
 
 
 def result_to_json(r: ValuationResult) -> str:
-    """The result as a JSON string with sorted keys."""
-    return json.dumps(_plain(r), sort_keys=True)
+    """The result as a JSON string with sorted keys; a NaN or infinity raises ``ValueError``."""
+    return json.dumps(_plain(r), sort_keys=True, allow_nan=False)
 
 
 def result_from_json(s: str) -> ValuationResult:

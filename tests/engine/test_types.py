@@ -1,6 +1,7 @@
 import json
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 
@@ -124,6 +125,18 @@ def test_naive_timestamp_is_refused(sample_result: ValuationResult) -> None:
     )
     with pytest.raises(ValueError, match="time zone"):
         result_to_json(replace(sample_result, inputs=(naive,)))
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"value": float("nan")}, {"intermediates": {"a": [1, float("nan")]}}],
+    ids=["value", "intermediates"],
+)
+def test_non_finite_number_is_refused(
+    sample_result: ValuationResult, change: dict[str, Any]
+) -> None:
+    with pytest.raises(ValueError, match="JSON compliant"):
+        result_to_json(replace(sample_result, **change))
 
 
 def test_phase_numbers_and_method_version() -> None:
