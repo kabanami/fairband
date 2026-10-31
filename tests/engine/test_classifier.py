@@ -120,8 +120,8 @@ def test_zero_first_revenue_in_a_short_series_falls_back(deciles: Deciles) -> No
         Flag(
             "short-history",
             "Short history",
-            "Only 3 fiscal years are on file; growth runs from fiscal 2024 to 2025 "
-            "instead of over three years.",
+            "Only 3 fiscal years are on file, so the trends cover fewer than five years; "
+            "growth runs from fiscal 2024 to 2025 instead of over three years.",
         )
         in ev.checks
     )
@@ -142,7 +142,7 @@ def test_missing_revenue_three_years_back_falls_back(deciles: Deciles) -> None:
         Flag(
             "short-history",
             "Short history",
-            "Revenue for fiscal 2022 is missing or negative; growth runs from fiscal 2023 "
+            "Revenue for fiscal 2022 is missing or negative, so growth runs from fiscal 2023 "
             "to 2025 instead of over three years.",
         )
         in ev.checks
@@ -198,10 +198,10 @@ def test_mature_growth_vs_stable_by_growth_word(deciles: Deciles) -> None:
     assert growth.growth_decile == 7 and growth.growth_word == "High"
     assert growth.phase == "Mature Growth"
 
-    stable = classify(series([100, 101, 102, 103], [10, 10, 10, 10]), deciles)
+    stable = classify(series([100, 100, 101, 102, 103], [10, 10, 10, 10, 10]), deciles)
     assert stable.growth_decile == 4 and stable.growth_word == "Low"
     assert stable.phase == "Mature Stable"
-    assert stable.years_used == 4 and stable.reason is None
+    assert stable.years_used == 5 and stable.reason is None
     assert stable.dickinson == "Mature" and stable.checks == ()
 
 
@@ -295,11 +295,23 @@ def test_short_history_flagged_and_two_years_unclassified(deciles: Deciles) -> N
         Flag(
             "short-history",
             "Short history",
-            "Only 2 fiscal years are on file; growth runs from fiscal 2024 to 2025 "
-            "instead of over three years.",
+            "Only 2 fiscal years are on file, so the trends cover fewer than five years; "
+            "growth runs from fiscal 2024 to 2025 instead of over three years.",
         )
         in two.checks
     )
+
+    four = classify(series([100, 110, 121, 133.1], [10, 11, 12, 13]), deciles)
+    assert (
+        Flag(
+            "short-history",
+            "Short history",
+            "Only 4 fiscal years are on file, so the trends cover fewer than five years.",
+        )
+        in four.checks
+    )
+    five = classify(series([100, 100, 110, 121, 133.1], [10, 10, 11, 12, 13]), deciles)
+    assert "short-history" not in codes(five)
 
     empty = classify((), deciles)
     assert empty.phase is None and empty.years_used == 0
@@ -314,6 +326,21 @@ def test_missing_margin_years_are_skipped(deciles: Deciles) -> None:
     too_few = classify(series([100, 110, 121, 133.1], [None, None, -12, -13]), deciles)
     assert too_few.margin_slope is None and too_few.margin_direction is None
     assert too_few.phase == "Young Growth"
+
+
+def test_trend_keeps_the_year_index_across_gaps(deciles: Deciles) -> None:
+    # 2021-2025 margins -10%, -20%, none, none, -11%: on the year index (0, 1, 4) the trend
+    # improves; packed together as 0, 1, 2 the same three values would worsen
+    ev = classify(series([100, 100, 100, 100, 100], [-10, -20, None, None, -11]), deciles)
+    assert ev.margin_slope == pytest.approx(0.005)
+    assert ev.phase == "High Growth"
+
+
+def test_margin_lookback_stops_at_five_years(deciles: Deciles) -> None:
+    revenue: list[float | None] = [100 * 1.1**k for k in range(9)]  # 2017 to 2025
+    income: list[float | None] = [10, None, None, None, None, None, None, None, None]
+    ev = classify(series(revenue, income), deciles)
+    assert ev.phase is None and ev.reason == "no operating margin" and ev.margin is None
 
 
 def test_no_margin_at_all_is_unclassified(deciles: Deciles) -> None:
@@ -350,6 +377,12 @@ def test_compute_deciles_excludes_unmeasurable() -> None:
     # an unclassifiable series stays out of the margin ranking even with a margin trend
     no_last_revenue = series([100, 110, 121, 133.1, None], [10, 11, 12, 13, 14])
     assert compute_deciles({"A": series_a, "G": no_last_revenue}).n_margin == 1
+
+    # a Start-up with a margin trend, and a series with no margin, stay out of both rankings
+    startup_with_margin = series([0, 100, 110, 121], [-5, 10, 11, 12])
+    no_margin = series([100, 110, 121, 133.1], [None, None, None, None])
+    d = compute_deciles({"A": series_a, "S": startup_with_margin, "M": no_margin})
+    assert d.n_growth == 1 and d.n_margin == 1
 
     startup = series([0, 10, 40, 120], [-5, -8, -9, -9])
     assert compute_deciles({"A": series_a, "S": startup}, refresh_id=7) == Deciles(

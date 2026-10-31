@@ -13,15 +13,16 @@ when the margin must decide. A zero revenue is a reported zero, never a missing 
 Growth is the CAGR from the fiscal year three years back to the last, or over the span on file
 when there are two or three years. When the first year of that span has a missing, zero or
 negative revenue, growth runs over the longest run of consecutive positive revenues that ends
-at the last year, and the company is flagged "short history". The growth word and the margin
-direction are deciles of the universe at the refresh (``Deciles``). The revenue and margin
-trends are least-squares slopes through the last five fiscal years, at least three points; a
-year with no margin (revenue or operating income missing, or revenue zero or negative) is
-skipped.
+at the last year. The growth word and the margin direction are deciles of the universe at the
+refresh (``Deciles``). The revenue and margin trends are least-squares slopes against the year
+index of the last five fiscal years, at least three points; a year with no value (for the
+margin: revenue or operating income missing, or revenue zero or negative) is skipped but the
+years after it keep their place. The margin sign comes from the last of those five years that
+has a margin. Fewer than five fiscal years, or a shortened growth span, is "short history".
 """
 
 import statistics
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
@@ -30,7 +31,6 @@ from fairband.engine.types import Flag, Phase, PhaseEvidence
 _GROWTH_SPAN = 3
 _TREND_WINDOW = 5
 _TREND_MIN_POINTS = 3
-_SHORT_HISTORY_YEARS = 4
 
 GROWTH_WORDS = ("Close to zero or negative", "Low", "Moderate", "High", "Very High")
 
@@ -121,22 +121,23 @@ def compute_deciles(
 ) -> Deciles:
     """The universe's growth and margin-slope deciles, nine edges each.
 
-    A series that ``classify`` cannot classify for a data gap is left out. Growth ranks every
-    other series with a measurable ``growth_3y``. The margin slope ranks every other series whose
-    last margin is positive (zero counts as positive) and whose five-year margin trend exists.
-    With fewer than two values a side gets no edges, and ``classify`` then puts every value in
-    decile 1; a universe this small does not occur in practice.
+    Both rankings take only a series with no data gap, not a Start-up, with a measurable growth
+    and with an operating margin in the last five fiscal years. Growth ranks each of them; the
+    margin slope ranks those whose last margin is positive (zero counts as positive) and whose
+    margin trend exists. With fewer than two values a side gets no edges, and ``classify`` then
+    puts every value in decile 1; a universe this small does not occur in practice.
     """
     growth: list[float] = []
     margin_slopes: list[float] = []
     for series in series_by_symbol.values():
-        if _data_gap(series) is not None:
+        if _data_gap(series) is not None or is_startup(series):
             continue
-        g = growth_3y(series)
-        if g is not None:
-            growth.append(g)
-        margin, m_slope = _last_margin(series), _margin_trend(series)
-        if margin is not None and margin >= 0 and m_slope is not None:
+        g, margin = growth_3y(series), _last_margin(series)
+        if g is None or margin is None:
+            continue
+        growth.append(g)
+        m_slope = _trend(series, _margin)
+        if margin >= 0 and m_slope is not None:
             margin_slopes.append(m_slope)
     return Deciles(
         growth_edges=_edges(growth),
@@ -199,9 +200,8 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
     span = None if growth is None else growth[1]
     g_decile = None if g3 is None else decile(g3, deciles.growth_edges)
     g_word = None if g_decile is None else GROWTH_WORDS[(g_decile - 1) // 2]
-    revenues = [fy.revenue for fy in series[-_TREND_WINDOW:] if fy.revenue is not None]
-    rev_slope = _trend(revenues)
-    margin, m_slope = _last_margin(series), _margin_trend(series)
+    rev_slope = _trend(series, lambda fy: fy.revenue)
+    margin, m_slope = _last_margin(series), _trend(series, _margin)
     direction = _margin_direction(margin, m_slope, deciles.margin_slope_edges)
     fcf = _fcf_sign(series[-1])
 
@@ -318,18 +318,25 @@ def _checks(
             )
         )
     n = len(series)
-    if n < _SHORT_HISTORY_YEARS or (span is not None and span < _GROWTH_SPAN):
-        if n < _SHORT_HISTORY_YEARS:
-            sentence = f"Only {n} fiscal years are on file"
-        else:
+    clauses: list[str] = []
+    if n < _TREND_WINDOW:
+        clauses.append(
+            f"Only {n} fiscal years are on file, so the trends cover fewer than five years"
+        )
+    if span is not None and span < _GROWTH_SPAN:
+        clause = (
+            f"growth runs from fiscal {series[-1 - span].year} to {series[-1].year} "
+            "instead of over three years"
+        )
+        if n > _GROWTH_SPAN:  # the year three years back is on file: its revenue cut the span
             year = series[-1 - _GROWTH_SPAN].year
-            sentence = f"Revenue for fiscal {year} is missing or negative"
-        if span is not None:
-            sentence += (
-                f"; growth runs from fiscal {series[-1 - span].year} to {series[-1].year} "
-                "instead of over three years"
-            )
-        checks.append(Flag("short-history", "Short history", sentence + "."))
+            clause = f"revenue for fiscal {year} is missing or negative, so {clause}"
+        clauses.append(clause)
+    if clauses:
+        sentence = "; ".join(clauses)
+        checks.append(
+            Flag("short-history", "Short history", sentence[:1].upper() + sentence[1:] + ".")
+        )
     if margin == 0:
         checks.append(
             Flag(
@@ -357,8 +364,22 @@ def _edges(values: list[float]) -> tuple[float, ...]:
     return tuple(statistics.quantiles(values, n=10, method="inclusive"))
 
 
-def _trend(values: list[float]) -> float | None:
-    return slope(values) if len(values) >= _TREND_MIN_POINTS else None
+def _trend(series: Series, value: Callable[[FiscalYear], float | None]) -> float | None:
+    """The least-squares slope of ``value`` against the year index of the last five years.
+
+    A year without a value is skipped but keeps its index, so a gap does not pull the later
+    years back; ``None`` with fewer than three values.
+    """
+    positions: list[int] = []
+    values: list[float] = []
+    for i, fy in enumerate(series[-_TREND_WINDOW:]):
+        v = value(fy)
+        if v is not None:
+            positions.append(i)
+            values.append(v)
+    if len(values) < _TREND_MIN_POINTS:
+        return None
+    return statistics.linear_regression(positions, values).slope
 
 
 def _margin(fy: FiscalYear) -> float | None:
@@ -368,12 +389,9 @@ def _margin(fy: FiscalYear) -> float | None:
 
 
 def _last_margin(series: Series) -> float | None:
-    """The margin of the last fiscal year that has one."""
-    return next((m for fy in reversed(series) if (m := _margin(fy)) is not None), None)
-
-
-def _margin_trend(series: Series) -> float | None:
-    return _trend([m for fy in series[-_TREND_WINDOW:] if (m := _margin(fy)) is not None])
+    """The margin of the last of the last five fiscal years that has one."""
+    window = series[-_TREND_WINDOW:]
+    return next((m for fy in reversed(window) if (m := _margin(fy)) is not None), None)
 
 
 def _margin_direction(
