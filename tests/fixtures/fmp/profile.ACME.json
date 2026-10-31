@@ -1,0 +1,22 @@
+[
+  {
+    "symbol": "ACME",
+    "price": 50.0,
+    "marketCap": 5000000000,
+    "beta": 1.0,
+    "lastDividend": 1.0,
+    "range": "40.0-55.0",
+    "companyName": "Acme Corp",
+    "currency": "USD",
+    "exchangeFullName": "NASDAQ Global Select",
+    "exchange": "NASDAQ",
+    "industry": "Specialty Industrial Machinery",
+    "sector": "Industrials",
+    "country": "US",
+    "ipoDate": "1990-01-02",
+    "isEtf": false,
+    "isActivelyTrading": true,
+    "isAdr": false,
+    "isFund": false
+  }
+]

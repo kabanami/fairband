@@ -1,4 +1,4 @@
-"""FMP estimates, earnings, quotes, closes and screener rows to store rows.
+"""FMP estimates, earnings, quotes, profiles, closes and screener rows to store rows.
 
 Observations carry ``unit`` ``currency``, ``per-share``, ``shares``, ``count``, or ``None`` for a
 label or a date:
@@ -22,6 +22,10 @@ label or a date:
   from the row for the symbol; ``period`` ``None``, ``as_of`` the UTC date of the row's
   ``timestamp`` (else the observed date). The documented stable quote has no
   ``sharesOutstanding``, so ``shares_outstanding`` has no value unless a row supplies it.
+- ``profile``: ``is_adr`` (1 or 0 from the boolean ``isAdr``; no value when the flag is absent or
+  not a boolean; unit ``None``) and ``market_cap`` (``marketCap``) from the profile object, which
+  arrives as a one-item list or a bare object; ``period`` ``None``, ``as_of`` the observed date.
+  The screener carries no ``isAdr``, so the ADR flag is read from here.
 
 A row without a parseable ``date`` is skipped and records nothing; nothing here raises on vendor
 data.
@@ -158,6 +162,25 @@ def quote_observations(
     return [
         source.observation("quote", None, name, number(row.get(key)), unit, as_of)
         for name, key, unit in _QUOTE
+    ]
+
+
+def profile_observations(
+    payload: Any, symbol: str, response_id: int, observed_at: datetime, entered_at: datetime
+) -> list[ObservationRow]:
+    """``is_adr`` and ``market_cap`` from the profile object (the first one of a list); none when
+    the payload holds no object."""
+    row = payload if isinstance(payload, dict) else next(objects(payload), None)
+    if row is None:
+        return []
+    flag = row.get("isAdr")
+    is_adr = Decimal(int(flag)) if isinstance(flag, bool) else None
+    source = Source(symbol, response_id, observed_at, entered_at)
+    as_of = observed_at.date()
+    market_cap = number(row.get("marketCap"))
+    return [
+        source.observation("profile", None, "is_adr", is_adr, None, as_of),
+        source.observation("profile", None, "market_cap", market_cap, MONEY, as_of),
     ]
 
 

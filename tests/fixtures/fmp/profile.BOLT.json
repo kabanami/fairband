@@ -1,0 +1,22 @@
+[
+  {
+    "symbol": "BOLT",
+    "price": 100.0,
+    "marketCap": 10000000000,
+    "beta": 1.0,
+    "lastDividend": 1.0,
+    "range": "80.0-110.0",
+    "companyName": "Bolt Industries",
+    "currency": "USD",
+    "exchangeFullName": "New York Stock Exchange",
+    "exchange": "NYSE",
+    "industry": "Tools & Accessories",
+    "sector": "Industrials",
+    "country": "US",
+    "ipoDate": "1995-06-01",
+    "isEtf": false,
+    "isActivelyTrading": true,
+    "isAdr": false,
+    "isFund": false
+  }
+]

@@ -18,6 +18,7 @@ from fairband.vendors.normalize_fmp import (
     earnings_observations,
     estimate_observations,
     price_closes,
+    profile_observations,
     quote_observations,
     screener_rows,
     statement_facts,
@@ -351,6 +352,29 @@ def test_quote_observations_pick_the_symbol_from_a_batch() -> None:
     share_class = [{"symbol": "BRK-B", "price": 500, "timestamp": None}]
     rows = quote_observations(share_class, "BRK.B", RID, OBSERVED, ENTERED)
     assert obs(rows, "quote", None, "price").as_of == OBSERVED.date()  # no timestamp
+
+
+def test_profile_observations() -> None:
+    rows = profile_observations(load("profile.ACME"), "ACME", RID, OBSERVED, ENTERED)
+    assert {r.field for r in rows} == {"is_adr", "market_cap"}
+    adr = obs(rows, "profile", None, "is_adr")
+    assert (adr.value, adr.unit, adr.as_of) == (Decimal(0), None, OBSERVED.date())
+    cap = obs(rows, "profile", None, "market_cap")
+    assert (cap.value, cap.unit, cap.response_id) == (Decimal(5000000000), "currency", RID)
+
+
+def test_profile_observations_shapes() -> None:
+    # A bare object reads like a one-item list; an ADR is 1; an absent or non-boolean flag has no
+    # value; a payload without an object gives no rows.
+    bare = profile_observations({"isAdr": True, "marketCap": "7"}, "X", RID, OBSERVED, ENTERED)
+    assert obs(bare, "profile", None, "is_adr").value == Decimal(1)
+    assert obs(bare, "profile", None, "market_cap").value == Decimal(7)
+    for flag in ({}, {"isAdr": None}, {"isAdr": "true"}):
+        rows = profile_observations([flag], "X", RID, OBSERVED, ENTERED)
+        assert obs(rows, "profile", None, "is_adr").value is None
+        assert obs(rows, "profile", None, "market_cap").value is None
+    for empty in ([], ["x"], None, "profile"):
+        assert profile_observations(empty, "X", RID, OBSERVED, ENTERED) == []
 
 
 def test_price_closes() -> None:
