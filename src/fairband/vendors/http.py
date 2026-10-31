@@ -2,19 +2,32 @@
 
 ``VendorHttp.get`` makes up to ``policy.attempts`` tries. It retries a transport error and the
 statuses 408, 429, 500, 502, 503 and 504, sleeping the policy's backoff between tries (or a numeric
-``Retry-After`` smaller than the time left), and gives up when the next sleep would pass the call's
-wall-clock deadline. The deadline governs retries; a try in flight is bounded by the httpx timeouts
-alone. Any other failure, a redirect included, is final on the first try: a redirect is refused
-before it can carry a credential anywhere. Every URL, log line and ``VendorError`` message passes
-through ``scrub`` first, so the key never leaves this module in the clear.
+``Retry-After`` smaller than the time left). Any other failure, a redirect included, is final on
+the first try: a redirect is refused before it can carry a credential anywhere.
+
+The deadline (``policy.deadline_s`` from the start of the call) bounds the whole call. No sleep is
+made that would leave under 0.1 s, no try is sent with under 0.1 s left, each try's timeouts are
+capped at the time left, and the body is read in chunks with the clock checked after each one.
+httpx's timeouts still apply per phase and per socket read, so a call can overrun: by one capped
+read window while a body drips in, by one capped window per slow phase (connect, send, headers) of
+its last try, and without a bound here if a server drips its headers. The refresh layer's per-item
+bound is the last resort.
+
+Every URL, log line and ``VendorError`` message this module makes passes through ``scrub``. httpx
+and httpcore log raw URLs and headers themselves; a filter on each of their loggers scrubs the
+secrets of every open client from their records, whatever levels and handlers the application's
+logging configuration sets.
 """
 
+import json
 import logging
 import math
+import threading
 import time
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import TracebackType
 from typing import Any, Self
 
@@ -28,9 +41,56 @@ logger = logging.getLogger("fairband.vendors")
 
 _RETRYABLE_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
 _DETAIL_CHARS = 200
-# httpx logs every request URL, key included, at INFO; httpcore logs response headers (a
-# redirect's Location among them) at DEBUG. Held at WARNING, the only request lines are ours.
-_URL_LOGGERS = ("httpx", "httpcore")
+_MIN_WINDOW_S = 0.1  # the least time left that a try is sent with
+# httpx logs each request URL at INFO; httpcore logs response headers (a redirect's Location among
+# them) at DEBUG. A logger's filters do not apply to its children's records, so each httpcore
+# logger is named, and the parent too in case anything logs there.
+_THIRD_PARTY_LOGGERS = (
+    "httpx",
+    "httpcore",
+    "httpcore.connection",
+    "httpcore.http11",
+    "httpcore.http2",
+    "httpcore.proxy",
+    "httpcore.socks",
+)
+
+_live_secrets: Counter[str] = Counter()  # each open client's secrets, counted per client
+_live_lock = threading.Lock()
+
+
+class _ScrubLiveSecrets(logging.Filter):
+    """Rewrites a record so that its message has every open client's secrets scrubbed."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        with _live_lock:
+            secrets = tuple(_live_secrets)
+        if secrets:
+            # A bad format keeps the bare text: a filter must not raise into the code that logged.
+            try:
+                message = record.getMessage()
+            except (TypeError, ValueError, KeyError):
+                message = str(record.msg)
+            record.msg, record.args = scrub(message, secrets), ()
+        return True
+
+
+_SCRUB_FILTER = _ScrubLiveSecrets()
+
+
+def _register(secrets: Sequence[str]) -> None:
+    with _live_lock:
+        _live_secrets.update(secrets)
+    for name in _THIRD_PARTY_LOGGERS:
+        logging.getLogger(name).addFilter(_SCRUB_FILTER)  # a no-op once attached
+
+
+def _unregister(secrets: Sequence[str]) -> None:
+    with _live_lock:
+        _live_secrets.subtract(secrets)
+        for secret in secrets:
+            if _live_secrets[secret] <= 0:
+                del _live_secrets[secret]
 
 
 class VendorError(Exception):
@@ -46,7 +106,8 @@ class VendorError(Exception):
 class VendorResponse:
     """A 2xx response.
 
-    ``json`` is the parsed body of a 200 with a JSON content type, else ``None``. ``text`` is the
+    ``json`` is the parsed body of a 200 whose content type names JSON, or whose body, under
+    another content type, starts with ``{`` or ``[`` and parses; else ``None``. ``text`` is the
     body as received and is not scrubbed: these vendors never echo the key in a body, and the caller
     scrubs the payload before storing it. ``url`` is scrubbed. ``observed_at`` is the clock at the
     start of the successful try; ``attempts`` counts the tries.
@@ -64,11 +125,12 @@ type _Failure = tuple[VendorError, float | None]  # the error and the Retry-Afte
 
 
 class VendorHttp:
-    """GETs under ``base_url`` with the policy's timeouts and retries, scrubbing ``secrets``.
+    """GETs under ``base_url`` with the policy's timeouts, retries and deadline.
 
     One ``httpx.Client`` per instance: redirects are not followed, TLS is verified and the
-    environment (proxies, certificates, netrc) is ignored. Close it, or use it as a context manager.
-    Creating one sets the httpx and httpcore loggers to WARNING, since they log raw URLs.
+    environment (proxies, certificates, netrc) is ignored. ``secrets`` are scrubbed from everything
+    this client emits, and from httpx's and httpcore's log records until ``close``. Close it, or
+    use it as a context manager.
     """
 
     def __init__(
@@ -80,9 +142,7 @@ class VendorHttp:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], datetime] = utcnow,
     ) -> None:
-        for name in _URL_LOGGERS:
-            logging.getLogger(name).setLevel(logging.WARNING)
-        self._secrets = tuple(secrets)
+        self._secrets = tuple(secret for secret in secrets if secret)
         self._policy = policy
         self._sleep = sleep
         self._clock = clock
@@ -99,9 +159,14 @@ class VendorHttp:
                 pool=policy.connect_timeout_s,
             ),
         )
+        _register(self._secrets)
+        self._open = True
 
     def close(self) -> None:
         self._client.close()
+        if self._open:
+            self._open = False
+            _unregister(self._secrets)
 
     def __enter__(self) -> Self:
         return self
@@ -115,46 +180,45 @@ class VendorHttp:
         self.close()
 
     def get(self, path: str, params: Mapping[str, str]) -> VendorResponse:
-        """GET ``path`` with ``params``; raises ``VendorError`` when no try succeeds.
-
-        The deadline runs from the first try; a retry whose sleep would end past it is not made.
-        """
-        start = self._clock()
-        attempt = 0
-        while True:
-            attempt += 1
-            outcome = self._attempt(path, params, attempt)
-            if isinstance(outcome, VendorResponse):
-                return outcome
+        """GET ``path`` with ``params``; raises ``VendorError`` when no try succeeds in time."""
+        deadline = self._clock() + timedelta(seconds=self._policy.deadline_s)
+        attempt = 1
+        outcome = self._attempt(path, params, attempt, deadline)
+        while not isinstance(outcome, VendorResponse):
             failure, retry_after = outcome
             # Raised here, outside any except block, so no httpx exception (whose message may
             # carry the raw URL) is chained to it.
             if not failure.retryable or attempt >= self._policy.attempts:
                 raise failure
-            remaining = self._policy.deadline_s - (self._clock() - start).total_seconds()
+            remaining = self._seconds_left(deadline)
             delay = self._backoff(attempt)
             if retry_after is not None and retry_after < remaining:
                 delay = retry_after
-            if delay > remaining:
-                raise self._error(
-                    f"{failure}; the next try would pass the {self._policy.deadline_s:g} s"
-                    " deadline",
-                    failure.status,
-                    retryable=True,
-                )
+            if remaining - delay < _MIN_WINDOW_S:
+                raise self._out_of_time(failure)
             self._log(logging.WARNING, f"{failure}; retrying in {delay:g} s")
             self._sleep(delay)
+            if self._seconds_left(deadline) < _MIN_WINDOW_S:  # the sleep overran
+                raise self._out_of_time(failure)
+            attempt += 1
+            outcome = self._attempt(path, params, attempt, deadline)
+        return outcome
 
     def _attempt(
-        self, path: str, params: Mapping[str, str], attempt: int
+        self, path: str, params: Mapping[str, str], attempt: int, deadline: datetime
     ) -> VendorResponse | _Failure:
         """One try: the response on a 2xx, else the error and any Retry-After seconds."""
-        request = self._client.build_request("GET", path, params=params)
+        timeout = self._timeout(max(self._seconds_left(deadline), _MIN_WINDOW_S))
+        request = self._client.build_request("GET", path, params=params, timeout=timeout)
         url = str(request.url)  # raw: _log, _error and VendorResponse scrub it
         tag = f"attempt {attempt}/{self._policy.attempts}"
         began = self._clock()
         try:
-            response = self._client.send(request)
+            response = self._client.send(request, stream=True)
+            try:
+                body, whole = self._read(response, deadline)
+            finally:
+                response.close()
         except httpx.RequestError as exc:
             name = type(exc).__name__
             self._log(logging.INFO, f"GET {url} -> {name} ({self._ms_since(began)} ms, {tag})")
@@ -164,15 +228,21 @@ class VendorHttp:
         status = response.status_code
         self._log(logging.INFO, f"GET {url} -> {status} ({self._ms_since(began)} ms, {tag})")
         what = f"{status} {response.reason_phrase}"
+        text = body.decode(response.encoding or "utf-8", errors="replace")
         if response.is_success:
-            body: Any = None
-            if status == 200 and _is_json(response):
+            if not whole:
+                message = (
+                    f"GET {url} -> {what}; the body was still arriving at the deadline ({tag})"
+                )
+                return self._error(message, status, retryable=True), None
+            data: Any = None
+            if status == 200:
                 try:
-                    body = response.json()
+                    data = _json(response.headers.get("Content-Type", ""), body)
                 except ValueError:
                     message = f"GET {url} -> {what} with a body that is not JSON ({tag})"
                     return self._error(message, status, retryable=False), None
-            return VendorResponse(status, body, response.text, self._scrub(url), began, attempt)
+            return VendorResponse(status, data, text, self._scrub(url), began, attempt)
         if status in _RETRYABLE_STATUSES:
             failure = self._error(f"GET {url} -> {what} ({tag})", status, retryable=True)
             return failure, _retry_after(response)
@@ -180,14 +250,36 @@ class VendorHttp:
             what += ": redirect refused"
         # The body names the refusal (a plan limit, a bad symbol). It is scrubbed before it is
         # cut, so a cut cannot leave part of a key behind.
-        elif detail := " ".join(self._scrub(response.text).split())[:_DETAIL_CHARS]:
+        elif detail := " ".join(self._scrub(text).split())[:_DETAIL_CHARS]:
             what += f": {detail}"
         return self._error(f"GET {url} -> {what} ({tag})", status, retryable=False), None
+
+    def _read(self, response: httpx.Response, deadline: datetime) -> tuple[bytes, bool]:
+        """The body and whether it is whole: reading stops at the first chunk past the deadline."""
+        chunks: list[bytes] = []
+        for chunk in response.iter_bytes():
+            chunks.append(chunk)
+            if self._clock() >= deadline:
+                return b"".join(chunks), False
+        return b"".join(chunks), True
+
+    def _timeout(self, window_s: float) -> httpx.Timeout:
+        """The policy's timeouts, each capped at ``window_s``."""
+        connect_s = min(self._policy.connect_timeout_s, window_s)
+        read_s = min(self._policy.read_timeout_s, window_s)
+        return httpx.Timeout(connect=connect_s, read=read_s, write=connect_s, pool=connect_s)
 
     def _backoff(self, attempt: int) -> float:
         """The sleep after try ``attempt``; the last policy value repeats."""
         backoff = self._policy.backoff_s
         return backoff[min(attempt, len(backoff)) - 1] if backoff else 0.0
+
+    def _out_of_time(self, failure: VendorError) -> VendorError:
+        message = f"{failure}; the {self._policy.deadline_s:g} s deadline leaves no time to retry"
+        return self._error(message, failure.status, retryable=True)
+
+    def _seconds_left(self, deadline: datetime) -> float:
+        return (deadline - self._clock()).total_seconds()
 
     def _ms_since(self, began: datetime) -> int:
         return round((self._clock() - began).total_seconds() * 1000)
@@ -202,10 +294,19 @@ class VendorHttp:
         return VendorError(self._scrub(message), status, retryable)
 
 
-def _is_json(response: httpx.Response) -> bool:
-    content_type: str = response.headers.get("Content-Type", "")
-    media_type = content_type.split(";")[0].strip().lower()
-    return media_type == "application/json" or media_type.endswith("+json")
+def _json(content_type: str, body: bytes) -> Any:
+    """The parsed body when ``content_type`` names JSON, or when the body, under another type,
+    starts with ``{`` or ``[`` and parses; else ``None``. Declared JSON that does not parse raises
+    ``ValueError``.
+    """
+    if "json" in content_type.lower():
+        return json.loads(body)
+    if body.lstrip()[:1] in (b"{", b"["):
+        try:
+            return json.loads(body)
+        except ValueError:
+            return None
+    return None
 
 
 def _retry_after(response: httpx.Response) -> float | None:

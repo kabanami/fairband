@@ -9,6 +9,8 @@ def test_scrub_plain_and_encoded() -> None:
     assert scrub("/public/user/T0K3N/stock", ["T0K3N"]) == "/public/user/<key>/stock"
     # A token with a reserved character: raw in a path, percent-encoded in a query string.
     assert scrub("/user/T0:K3N/x?t=T0%3AK3N", ["T0:K3N"]) == "/user/<key>/x?t=<key>"
+    # A space: '%20' from quote, '+' from a query string's form encoding.
+    assert scrub("a=T0%20K3N&b=T0+K3N&c=T0 K3N", ["T0 K3N"]) == "a=<key>&b=<key>&c=<key>"
 
 
 def test_scrub_every_secret_longest_first() -> None:

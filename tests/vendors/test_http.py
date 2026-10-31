@@ -5,8 +5,9 @@ request takes time, so the backoff and the deadline are exact.
 """
 
 import logging
+import logging.config
 import traceback
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -19,27 +20,30 @@ T0 = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
 FMP_BASE = "https://fmp.example/stable"
 FMP_PARAMS = {"symbol": "AAPL", "apikey": "SECRET123"}
 
-type Reply = int | httpx.Response | type[httpx.TransportError]
+type Reply = (
+    int | httpx.Response | type[httpx.TransportError] | Callable[[httpx.Request], httpx.Response]
+)
 
 
 class FakeTime:
-    def __init__(self) -> None:
+    def __init__(self, oversleep_s: float = 0) -> None:
         self.now = T0
         self.sleeps: list[float] = []
+        self.oversleep_s = oversleep_s
 
     def clock(self) -> datetime:
         return self.now
 
     def sleep(self, seconds: float) -> None:
         self.sleeps.append(seconds)
-        self.now += timedelta(seconds=seconds)
+        self.now += timedelta(seconds=seconds + self.oversleep_s)
 
 
 class Script:
     """Answers the n-th request with the n-th reply (the last one repeats) and keeps the requests.
 
-    A reply is a status, a response, or a transport error class raised with the request URL in
-    its message, as httpx's own errors may carry it.
+    A reply is a status, a response, a transport error class raised with the request URL in its
+    message (as httpx's own errors may carry it), or a function of the request.
     """
 
     def __init__(self, *replies: Reply, time: FakeTime | None = None, takes_s: float = 0) -> None:
@@ -58,7 +62,40 @@ class Script:
             return httpx.Response(reply)
         if isinstance(reply, httpx.Response):
             return reply
-        raise reply(f"cannot reach {request.url}", request=request)
+        if isinstance(reply, type):
+            raise reply(f"cannot reach {request.url}", request=request)
+        return reply(request)
+
+
+def slow_server(time: FakeTime, natural_s: float) -> Callable[[httpx.Request], httpx.Response]:
+    """Answers 503 after ``natural_s``, or times out at the try's read window if that is sooner."""
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        read_s = request.extensions["timeout"]["read"]
+        time.now += timedelta(seconds=min(natural_s, read_s))
+        if natural_s > read_s:
+            raise httpx.ReadTimeout("timed out", request=request)
+        return httpx.Response(503)
+
+    return reply
+
+
+class Drip(httpx.SyncByteStream):
+    """A body that sends a byte every ``every_s`` seconds, each inside its read window.
+
+    It ends after ``count`` bytes, so a client that reads it to the end fails the test instead of
+    hanging it.
+    """
+
+    def __init__(self, time: FakeTime, every_s: float, count: int = 20) -> None:
+        self.time = time
+        self.every_s = every_s
+        self.count = count
+
+    def __iter__(self) -> Iterator[bytes]:
+        for _ in range(self.count):
+            self.time.now += timedelta(seconds=self.every_s)
+            yield b" "
 
 
 @pytest.fixture
@@ -99,7 +136,8 @@ def test_key_never_in_response_url_or_logs(
     params: dict[str, str],
     secret: str,
 ) -> None:
-    caplog.set_level(logging.DEBUG)  # every logger, httpx's own included
+    # The root at DEBUG: httpx and httpcore, which set no level of their own, log here too.
+    caplog.set_level(logging.DEBUG)
     ok = Script(httpx.Response(200, json={"symbol": "AAPL"}))
     with _client(ok, policy, base_url=base_url, secrets=[secret]) as http:
         response = http.get(path, params)
@@ -115,8 +153,95 @@ def test_key_never_in_response_url_or_logs(
     assert "<key>" in str(caught.value) and secret not in str(caught.value)
 
     assert _vendor_lines(caplog)
+    assert any(record.name == "httpx" for record in caplog.records)  # httpx's own request lines
     assert secret not in caplog.text
     assert all(secret not in record.getMessage() for record in caplog.records)
+
+
+@pytest.fixture
+def restore_httpx_logger() -> Iterator[None]:
+    logger = logging.getLogger("httpx")
+    level, handlers, propagate, disabled = (
+        logger.level,
+        logger.handlers[:],
+        logger.propagate,
+        logger.disabled,
+    )
+    yield
+    logger.setLevel(level)
+    logger.handlers[:] = handlers
+    logger.propagate, logger.disabled = propagate, disabled
+
+
+@pytest.mark.usefixtures("restore_httpx_logger")
+def test_httpx_lines_scrubbed_when_logging_is_configured_later(policy: RefreshPolicy) -> None:
+    seen: list[logging.LogRecord] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            seen.append(record)
+
+    with _client(Script(200), policy) as http:
+        # The app's own startup order: its logging configuration comes after the client exists.
+        logging.config.dictConfig(
+            {
+                "version": 1,
+                "disable_existing_loggers": False,
+                "handlers": {"capture": {"()": Capture}},
+                "loggers": {"httpx": {"level": "INFO", "handlers": ["capture"]}},
+            }
+        )
+        http.get("/quote", FMP_PARAMS)
+    messages = [record.getMessage() for record in seen]
+    assert any(m.startswith("HTTP Request: GET") and "apikey=<key>" in m for m in messages)
+    assert not any("SECRET123" in m for m in messages)
+
+
+def test_httpcore_records_scrubbed(caplog: pytest.LogCaptureFixture, policy: RefreshPolicy) -> None:
+    caplog.set_level(logging.DEBUG, logger="httpcore.http11")
+    headers = [(b"Location", b"https://elsewhere.example/?apikey=SECRET123")]
+    with _client(Script(200), policy):
+        logging.getLogger("httpcore.http11").debug(
+            "receive_response_headers.complete return_value=%r",
+            (b"HTTP/1.1", 302, b"Found", headers),
+        )
+    [record] = [r for r in caplog.records if r.name == "httpcore.http11"]
+    assert "SECRET123" not in record.getMessage() and "apikey=<key>" in record.getMessage()
+
+
+def test_every_httpx_and_httpcore_logger_scrubs(
+    caplog: pytest.LogCaptureFixture, policy: RefreshPolicy
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    # The real transport imports httpcore, which makes its loggers; a new one fails this test.
+    with VendorHttp(FMP_BASE, ["SECRET123"], policy):
+        names = [
+            name
+            for name, logger in logging.Logger.manager.loggerDict.items()
+            if isinstance(logger, logging.Logger) and name.split(".")[0] in ("httpx", "httpcore")
+        ]
+        for name in names:
+            logging.getLogger(name).error("GET %s", "https://x.example/?apikey=SECRET123")
+    assert {"httpx", "httpcore.connection", "httpcore.http11"} <= set(names)
+    assert len(caplog.records) == len(names)
+    assert "SECRET123" not in caplog.text
+
+
+def test_secret_scrubbed_until_its_last_client_closes(
+    caplog: pytest.LogCaptureFixture, policy: RefreshPolicy
+) -> None:
+    caplog.set_level(logging.DEBUG, logger="httpcore.http11")
+    log = logging.getLogger("httpcore.http11")
+    first, second = _client(Script(200), policy), _client(Script(200), policy)
+    first.close()
+    first.close()  # a second close must not release the other client's registration
+    log.debug("still open: %s", "SECRET123")
+    second.close()
+    log.debug("all closed: %s", "SECRET123")
+    assert [r.getMessage() for r in caplog.records] == [
+        "still open: <key>",
+        "all closed: SECRET123",
+    ]
 
 
 def test_transport_errors_retried_then_raised_scrubbed(
@@ -202,6 +327,73 @@ def test_deadline_bounds_retries(policy: RefreshPolicy) -> None:
     assert caught.value.status == 503 and caught.value.retryable is True
 
 
+@pytest.mark.parametrize("natural_s", [5, 13, 16, 26, 40])
+def test_deadline_bounds_the_whole_call(policy: RefreshPolicy, natural_s: float) -> None:
+    # Each try lasts natural_s or until its read window closes. With every window capped at the
+    # time left, the call ends by the deadline; uncapped, a 16 s try would end the call at 32 s.
+    time = FakeTime()
+    script = Script(slow_server(time, natural_s))
+    with _client(script, policy, time) as http, pytest.raises(VendorError) as caught:
+        http.get("/quote", FMP_PARAMS)
+    assert caught.value.retryable is True
+    assert time.now - T0 <= timedelta(seconds=policy.deadline_s)
+
+
+def test_each_try_gets_at_most_the_time_left(policy: RefreshPolicy) -> None:
+    time = FakeTime()
+    script = Script(503, 200, time=time, takes_s=26)
+    with _client(script, policy) as http:
+        http.get("/quote", FMP_PARAMS)
+    # The first try has all 30 s; the second starts at 28 s (26 s try, 2 s sleep) with 2 s left.
+    assert [r.extensions["timeout"] for r in script.requests] == [
+        {"connect": 5, "read": 15, "write": 5, "pool": 5},
+        {"connect": 2, "read": 2, "write": 2, "pool": 2},
+    ]
+
+
+def test_no_try_starts_at_the_deadline(policy: RefreshPolicy) -> None:
+    # A 28 s try leaves 2 s: the 2 s sleep would end exactly at the deadline.
+    time = FakeTime()
+    script = Script(503, time=time, takes_s=28)
+    with _client(script, policy) as http, pytest.raises(VendorError) as caught:
+        http.get("/quote", FMP_PARAMS)
+    assert len(script.requests) == 1 and time.sleeps == []
+    assert caught.value.status == 503 and caught.value.retryable is True
+
+
+def test_no_sleep_that_leaves_under_a_tenth_of_a_second(policy: RefreshPolicy) -> None:
+    # A 27.95 s try leaves 2.05 s; after the 2 s sleep, 0.05 s would be too little to send.
+    time = FakeTime()
+    script = Script(503, time=time, takes_s=27.95)
+    with _client(script, policy) as http, pytest.raises(VendorError) as caught:
+        http.get("/quote", FMP_PARAMS)
+    assert len(script.requests) == 1 and time.sleeps == []
+    assert caught.value.status == 503 and caught.value.retryable is True
+
+
+def test_no_try_with_under_a_tenth_of_a_second_left(policy: RefreshPolicy) -> None:
+    # A 27.8 s try leaves 2.2 s; the 2 s sleep overruns by 0.15 s and leaves 0.05 s.
+    time = FakeTime(oversleep_s=0.15)
+    script = Script(503, time=time, takes_s=27.8)
+    with _client(script, policy) as http, pytest.raises(VendorError) as caught:
+        http.get("/quote", FMP_PARAMS)
+    assert len(script.requests) == 1 and time.sleeps == [2]
+    assert caught.value.status == 503 and caught.value.retryable is True
+
+
+def test_slow_drip_body_cut_at_the_deadline(policy: RefreshPolicy) -> None:
+    # A byte every 14 s never trips the 15 s read window; the client stops reading at the first
+    # byte past the deadline, so the call overruns by less than one read window.
+    time = FakeTime()
+    drip = httpx.Response(200, headers={"Content-Type": "application/json"}, stream=Drip(time, 14))
+    script = Script(drip)
+    with _client(script, policy, time) as http, pytest.raises(VendorError) as caught:
+        http.get("/quote", FMP_PARAMS)
+    assert len(script.requests) == 1
+    assert caught.value.status == 200 and caught.value.retryable is True
+    assert time.now - T0 <= timedelta(seconds=policy.deadline_s + policy.read_timeout_s)
+
+
 @pytest.mark.parametrize(
     ("retry_after", "slept"),
     [("1", 1.0), ("120", 2), ("Sun, 01 Nov 2026 09:31:00 GMT", 2)],
@@ -217,11 +409,27 @@ def test_retry_after_honored_within_deadline(
     assert time.sleeps == [slept]
 
 
-def test_json_parsed_only_for_a_json_200(policy: RefreshPolicy) -> None:
-    csv = httpx.Response(200, text="a,b\n1,2", headers={"Content-Type": "text/csv"})
-    with _client(Script(csv), policy) as http:
+@pytest.mark.parametrize(
+    ("content_type", "body", "parsed"),
+    [
+        ("application/json; charset=utf-8", '{"a": 1}', {"a": 1}),
+        ("application/vnd.api+json", "[1]", [1]),
+        ("text/html; charset=utf-8", ' \n[{"a": 1}]', [{"a": 1}]),
+        ("text/html", "[not json", None),
+        ("text/csv", "a,b\n1,2", None),
+    ],
+    ids=["json", "json-suffix", "json-as-html", "bracket-not-json", "csv"],
+)
+def test_json_parsed_when_declared_or_sniffed(
+    policy: RefreshPolicy, content_type: str, body: str, parsed: object
+) -> None:
+    reply = httpx.Response(200, text=body, headers={"Content-Type": content_type})
+    with _client(Script(reply), policy) as http:
         response = http.get("/quote", FMP_PARAMS)
-    assert response.json is None and response.text == "a,b\n1,2"
+    assert response.json == parsed and response.text == body
+
+
+def test_declared_json_that_does_not_parse_is_refused(policy: RefreshPolicy) -> None:
 
     bad = httpx.Response(200, content=b"{oops", headers={"Content-Type": "application/json"})
     script = Script(bad)
