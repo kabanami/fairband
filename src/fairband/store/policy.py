@@ -10,12 +10,13 @@ from datetime import datetime
 
 from fairband.policy import Policy
 from fairband.store._codec import dump_stamp
+from fairband.store.db import transaction
 
 
 def record_policy(conn: sqlite3.Connection, policy: Policy, at: datetime) -> None:
     """Store the policy if its version is new; ``ValueError`` if the version has another hash."""
     content = json.dumps(policy.raw, sort_keys=True)
-    with conn:
+    with transaction(conn):
         conn.execute(
             "INSERT INTO policy_versions (version, hash, content, created_at) VALUES (?, ?, ?, ?)"
             " ON CONFLICT (version) DO NOTHING",

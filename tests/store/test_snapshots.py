@@ -147,6 +147,19 @@ def test_refusal_snapshot_keeps_nulls(
     assert (row.refusal, row.price, row.flags) == ("no positive forward anchor", 41.0, ())
 
 
+def test_priceless_refusal_snapshot_round_trips(
+    conn: sqlite3.Connection, new_refresh: Callable[[], int]
+) -> None:
+    refusal = refusal_result("NEW", "data fetch failed: quote", load_policy(), date(2026, 10, 31))
+    assert (refusal.price, refusal.price_date) == (None, None)
+    snapshot_id = insert_snapshot(conn, refusal, new_refresh(), clock=_at())
+    row = latest_snapshot(conn, "NEW")
+    assert row is not None and row.id == snapshot_id and row.result == refusal
+    assert (row.price, row.price_date, row.refusal) == (None, None, "data fetch failed: quote")
+    stored = conn.execute("select price, price_date from snapshots").fetchone()
+    assert tuple(stored) == (None, None)
+
+
 def test_insert_snapshot_refuses_a_nan_before_writing(
     conn: sqlite3.Connection, new_refresh: Callable[[], int]
 ) -> None:

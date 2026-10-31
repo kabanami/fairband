@@ -23,6 +23,7 @@ from fairband.store._codec import (
     load_float,
     load_stamp,
 )
+from fairband.store.db import transaction
 
 
 @dataclass(frozen=True)
@@ -88,7 +89,7 @@ def insert_snapshot(
         result.method_version,
         result_to_json(result),
     )
-    with conn:
+    with transaction(conn):
         cursor = conn.execute(
             "INSERT INTO snapshots (symbol, refresh_id, deciles_refresh_id, created_at, phase,"
             " route, value, buy_level, fair_low, fair_high, trim_level, price, stance5, stance3,"

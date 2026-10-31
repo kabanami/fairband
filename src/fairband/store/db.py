@@ -1,8 +1,13 @@
 """The SQLite connection and the numbered migrations.
 
 ``connect`` opens the database in WAL mode with foreign keys enforced and full sync, and returns
-rows as ``sqlite3.Row``. It keeps Python's default deferred transactions: the record modules wrap
-each write call in ``with conn:``, so the call commits, or rolls back, as one transaction.
+rows as ``sqlite3.Row``. It keeps Python's default deferred transactions.
+
+``transaction`` is the record modules' one transaction rule: a write call commits, or rolls back,
+as one transaction of its own, unless the caller already holds one, which it then joins. A caller
+groups several record calls into one transaction with ``with transaction(conn):``. A bare
+``with conn:`` does not group them: it holds no transaction until its first write, so the first
+record call would commit on its own.
 
 ``migrate`` applies the packaged ``NNN_name.sql`` files not yet recorded in ``schema_versions``, in
 filename order; each file commits together with its ``schema_versions`` row, or not at all. Before
@@ -13,7 +18,8 @@ with ``ValueError`` on a mismatch: a migration, once applied, is never edited.
 import hashlib
 import re
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from importlib import resources
@@ -43,6 +49,27 @@ def connect(path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA synchronous=FULL")
     return conn
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection, *, immediate: bool = False) -> Iterator[None]:
+    """One transaction around the block, or nothing when ``conn`` is already in one.
+
+    Outside a transaction it begins one explicitly (``BEGIN IMMEDIATE`` with ``immediate``, taking
+    the write lock at once), so the record calls inside the block see it and join it; it commits
+    when the block ends and rolls back when the block or the commit raises. Inside a transaction
+    it does nothing: the caller commits or rolls back.
+    """
+    if conn.in_transaction:
+        yield
+        return
+    conn.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
+    try:
+        yield
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
 
 
 def applied_versions(conn: sqlite3.Connection) -> list[int]:

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from fairband.store._codec import dump_stamp, inserted_id, load_stamp
+from fairband.store.db import transaction
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,7 @@ def record_response(
         payload,
         error,
     )
-    with conn:
+    with transaction(conn):
         cursor = conn.execute(
             "INSERT INTO vendor_responses (provider, endpoint, params, symbol, http_status,"
             " observed_at, payload, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

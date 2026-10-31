@@ -19,6 +19,7 @@ from fairband.store._codec import (
     load_decimal,
     load_stamp,
 )
+from fairband.store.db import transaction
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ def insert_observations(conn: sqlite3.Connection, rows: Sequence[ObservationRow]
         )
         for r in rows
     ]
-    with conn:
+    with transaction(conn):
         conn.executemany(
             "INSERT INTO observations (symbol, dataset, period, field, value, unit, as_of,"
             " observed_at, entered_at, response_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

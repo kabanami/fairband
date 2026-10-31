@@ -19,6 +19,7 @@ from fairband.store._codec import (
     load_decimal,
     load_stamp,
 )
+from fairband.store.db import transaction
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ def insert_facts(conn: sqlite3.Connection, rows: Sequence[FactRow]) -> None:
         )
         for r in rows
     ]
-    with conn:
+    with transaction(conn):
         conn.executemany(
             "INSERT INTO facts (symbol, dataset, period_end, fiscal_year, fiscal_period, field,"
             " value, unit, currency, kind, estimate_method, missing_reason, as_of, observed_at,"

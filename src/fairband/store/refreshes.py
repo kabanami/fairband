@@ -16,6 +16,7 @@ from typing import Any, Literal
 
 from fairband.engine.classifier import Deciles
 from fairband.store._codec import dump_stamp, inserted_id, load_stamp
+from fairband.store.db import transaction
 
 type Finished = Literal["done", "failed", "interrupted", "cancelled"]
 
@@ -60,11 +61,10 @@ def create_refresh(
     method_version: str,
     started_at: datetime,
 ) -> int:
-    """Start a ``running`` refresh and return its id. The check and the insert hold the write
-    lock together, so two connections cannot both start one."""
+    """Start a ``running`` refresh and return its id. Called outside a transaction, it takes the
+    write lock before the check, so two connections cannot both start one."""
     stored_symbols = None if symbols is None else json.dumps(list(symbols))
-    with conn:
-        conn.execute("BEGIN IMMEDIATE")
+    with transaction(conn, immediate=True):
         running = conn.execute(
             "SELECT id FROM refreshes WHERE status = 'running' ORDER BY id LIMIT 1"
         ).fetchone()
@@ -79,7 +79,7 @@ def create_refresh(
 
 
 def set_stage(conn: sqlite3.Connection, refresh_id: int, stage: str) -> None:
-    with conn:
+    with transaction(conn):
         cursor = conn.execute("UPDATE refreshes SET stage = ? WHERE id = ?", (stage, refresh_id))
         _require_one(cursor, refresh_id)
 
@@ -96,7 +96,7 @@ def finish_refresh(
     stored_calibration = (
         None if calibration is None else json.dumps(calibration, sort_keys=True, allow_nan=False)
     )
-    with conn:
+    with transaction(conn):
         cursor = conn.execute(
             "UPDATE refreshes SET status = ?, finished_at = ?, message = ?, calibration = ?"
             " WHERE id = ?",
@@ -114,7 +114,7 @@ def upsert_item(
     updated_at: datetime,
 ) -> None:
     """Record the company's status within the refresh, replacing its earlier status."""
-    with conn:
+    with transaction(conn):
         conn.execute(
             "INSERT INTO refresh_items (refresh_id, symbol, status, error, updated_at)"
             " VALUES (?, ?, ?, ?, ?)"
@@ -158,7 +158,7 @@ def latest_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
 
 def mark_interrupted(conn: sqlite3.Connection, at: datetime) -> int:
     """Set every ``running`` refresh to ``interrupted``, finished ``at``; return how many."""
-    with conn:
+    with transaction(conn):
         cursor = conn.execute(
             "UPDATE refreshes SET status = 'interrupted', finished_at = ? WHERE status = 'running'",
             (dump_stamp(at),),
@@ -168,7 +168,7 @@ def mark_interrupted(conn: sqlite3.Connection, at: datetime) -> int:
 
 def save_deciles(conn: sqlite3.Connection, refresh_id: int, deciles: Deciles, at: datetime) -> None:
     """Store the deciles under ``refresh_id`` (the object's own ``refresh_id`` is not read)."""
-    with conn:
+    with transaction(conn):
         conn.execute(
             "INSERT INTO deciles (refresh_id, growth_edges, margin_slope_edges, n_growth,"
             " n_margin, computed_at) VALUES (?, ?, ?, ?, ?, ?)",

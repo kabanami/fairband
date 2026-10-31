@@ -11,6 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from fairband.store._codec import dump_decimal, dump_stamp, load_decimal, load_stamp
+from fairband.store.db import transaction
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ def insert_companies(conn: sqlite3.Connection, rows: Sequence[CompanyRow]) -> No
         )
         for r in rows
     ]
-    with conn:
+    with transaction(conn):
         conn.executemany(
             "INSERT INTO companies (symbol, refresh_id, name, exchange, sector, industry, country,"
             " currency, is_adr, cap_band, market_cap, eligible, exclusion_reason, observed_at)"
