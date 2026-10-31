@@ -7,8 +7,9 @@ count; no trailing figures. Then the phase's route runs (``route_mature_growth``
 ``route_mature_stable``, on the shared ``route_steps``) and refuses on its own guards. Mature
 Growth: no trailing revenue, no statutory tax rate, the anchor's refusals (an incomplete NTM
 consensus, no positive forward anchor, a forward P/E unit error), consensus earnings that turn
-negative within the path. Mature Stable: no positive trailing earnings. A refusal is a result
-with no value and a reason, never an exception.
+negative within the path, a value a share at or below zero under the reinvestment charge (which
+keeps the value-side intermediates). Mature Stable: no positive trailing earnings. A refusal is a
+result with no value and a reason, never an exception.
 
 Every result of ``value_company`` is valid until the next earnings date when that is after the
 data date, else for the policy's fallback days. Its flags are the assembly's, the classifier's
@@ -36,10 +37,11 @@ aggregate entry is ``None`` when the aggregate ROIC is unavailable.
   clean, forward), ``epv`` (a share), ``dividend_yield``, ``net_buyback_yield``,
   ``income_basis``, ``price_facts``; at the price, ``implied_growth``,
   ``implied_growth_by_runway``, ``implied_by_roic``, ``multiples``, ``growth_share``,
-  ``expected_return`` (``None`` for a value at or below zero).
+  ``expected_return``.
 - Mature Stable: ``e_trailing``, ``nri_gap``, ``ttm_margin``, ``median_margin``,
   ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``terminal_roic``, ``epv`` and
-  ``stable_growth`` (totals), ``shares``, ``value_per_share``, ``eps``,
+  ``stable_growth`` (a share), ``epv_total`` and ``stable_growth_total``, ``shares``,
+  ``value_per_share``, ``eps``,
   ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price,
   ``multiples`` and ``expected_return``.
 """
@@ -111,8 +113,10 @@ def value_company(
     phase = classify(inputs.series, deciles)
     refresh_id = deciles.refresh_id
 
-    def refuse(reason: str, flags: tuple[Flag, ...] = ()) -> ValuationResult:
-        return _refuse(inputs, policy, today, reason, phase, refresh_id, flags)
+    def refuse(
+        reason: str, flags: tuple[Flag, ...] = (), intermediates: dict[str, Any] | None = None
+    ) -> ValuationResult:
+        return _refuse(inputs, policy, today, reason, phase, refresh_id, flags, intermediates)
 
     if inputs.refusal is not None:
         return refuse(inputs.refusal)
@@ -135,7 +139,7 @@ def value_company(
     c = Context(inputs, trailing, price, shares, policy, today)
     outcome = value_mature_growth(c) if phase.phase == "Mature Growth" else value_mature_stable(c)
     if isinstance(outcome, Refused):
-        return refuse(outcome.reason, outcome.flags)
+        return refuse(outcome.reason, outcome.flags, outcome.intermediates)
     return _valued(inputs, phase, price, policy, refresh_id, outcome)
 
 
@@ -251,9 +255,11 @@ def _refuse(
     phase: PhaseEvidence | None,
     refresh_id: int | None,
     flags: tuple[Flag, ...] = (),
+    intermediates: dict[str, Any] | None = None,
 ) -> ValuationResult:
-    """A refusal from ``value_company``: the company's price when it is one, its price facts,
-    the base inputs, the flags so far and the validity window of every result."""
+    """A refusal from ``value_company``: the company's price when it is one, its price facts
+    beside any intermediates the route computed, the base inputs, the flags so far and the
+    validity window of every result."""
     price = i.price if i.price is not None and _positive(i.price) else None
     checks = () if phase is None else phase.checks
     result = refusal_result(
@@ -267,7 +273,10 @@ def _refuse(
         inputs=_base_inputs(i),
         flags=_unique(i.input_flags + checks + flags),
         deciles_refresh_id=refresh_id,
-        intermediates={"price_facts": price_facts_for(i.closes, price, today)},
+        intermediates={
+            **(intermediates or {}),
+            "price_facts": price_facts_for(i.closes, price, today),
+        },
     )
     return replace(result, valid_until=_valid_until(i, policy))
 

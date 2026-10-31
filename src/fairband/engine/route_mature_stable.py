@@ -3,8 +3,10 @@
 E is trailing net income less the non-recurring gap on the diluted shares; when the margin flag
 fires, E is scaled to the ten-year median operating margin. The value at belief is the
 stable-growth value at the moat's terminal ROIC, always: so it equals EPV for a Narrow or no moat
-and is at most 15% above it for a Wide one. A capital sum at or below zero does not turn the
-charge off here; its flag stays on the row as information. EPV is shown as the no-growth value.
+and is about 15% above it for a Wide one (15.4% at r 9%, g_t 3% and the 13% cap). A capital sum at
+or below zero does not turn the charge off here: it leaves the ten-year ROIC unavailable, and the
+row says so. EPV is shown as the no-growth value. ``epv`` and ``stable_growth`` are a share;
+``epv_total`` and ``stable_growth_total`` are the totals.
 """
 
 from typing import Any
@@ -27,9 +29,11 @@ from fairband.engine.route_steps import (
     nil,
     nri_gap,
     price_facts_for,
+    rule,
     trailing_flags,
     ttm_margin,
 )
+from fairband.engine.types import Flag
 from fairband.policy import Policy
 
 
@@ -61,8 +65,10 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "e_normalized": e_normalized,
         "moat": moat,
         **roic.intermediates(),
-        "epv": epv_total,
-        "stable_growth": stable,
+        "epv": epv_total / c.shares,
+        "epv_total": epv_total,
+        "stable_growth": value,
+        "stable_growth_total": stable,
         "shares": c.shares,
         "value_per_share": value,
         "eps": eps(t, gap, None),
@@ -74,8 +80,15 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         *common_inputs(i, t, roic),
         data(i, "net_income_ttm", t.net_income, "USD", "statements"),
         *common_rules(policy, moat, roic),
+        rule(
+            policy,
+            "belief",
+            policy.terminal_growth,
+            "ratio",
+            "the terminal growth, the expected return's growth for a stable company",
+        ),
     )
-    flags = roic.flags + trailing_flags(i, t, gap, policy)
+    flags = _roic_flags(roic) + trailing_flags(i, t, gap, policy)
     return Valued("mature-stable", value, moat, im, inputs, flags)
 
 
@@ -87,3 +100,17 @@ def stable_at_price(
         "multiples": multiples_at(price, im["eps"]),
         "expected_return": expected(price, value, im, (None, None), policy.terminal_growth),
     }
+
+
+def _roic_flags(roic: RoicTerms) -> tuple[Flag, ...]:
+    """The ROIC flags as this route reads them. It never zeroes the charge, so a capital sum at or
+    below zero is not "charge zeroed" here but an unavailable ROIC, in the same place."""
+    if not roic.charge_off:
+        return roic.flags
+    unavailable = Flag(
+        "roic-unavailable",
+        "ROIC unavailable",
+        f"Operating capital summed to zero or below over the {roic.result.years_used} ROIC years, "
+        "so the ten-year ROIC is unavailable and the stable-growth value uses the terminal ROIC.",
+    )
+    return tuple(unavailable if f.code == "charge-zeroed" else f for f in roic.flags)

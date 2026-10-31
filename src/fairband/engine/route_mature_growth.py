@@ -112,17 +112,14 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         **income(i.market_cap, t),
         "price_facts": price_facts_for(i.closes, c.price, c.today),
     }
-    im |= growth_at_price(im, c.price, value, policy)
-
-    flags = (
-        anchor.flags
-        + path.flags
-        + roic.flags
-        + trailing_flags(i, t, gap, policy)
-        + present(long_runway(im, policy))
-        + present(value_spread_flag(list(by_roic.values()), policy))
-        + present(value_spread_flag(list(by_runway.values()), policy))
+    flags = anchor.flags + path.flags + roic.flags + trailing_flags(i, t, gap, policy)
+    spread = present(value_spread_flag(list(by_roic.values()), policy)) + present(
+        value_spread_flag(list(by_runway.values()), policy)
     )
+    if value <= 0:
+        return Refused("value not positive under the reinvestment charge", flags + spread, im)
+    im |= growth_at_price(im, c.price, value, policy)
+    flags += present(long_runway(im, policy)) + spread
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "sbc_ttm", t.sbc, "USD", "statements"),

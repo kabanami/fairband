@@ -67,7 +67,9 @@ MATURE_STABLE_KEYS = {
     "roic",
     "terminal_roic",
     "epv",
+    "epv_total",
     "stable_growth",
+    "stable_growth_total",
     "shares",
     "value_per_share",
     "eps",
@@ -315,17 +317,19 @@ def test_flags_in_order_without_duplicates(
 def test_income_needs_a_market_cap(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    r = value_company(replace(mg_inputs, market_cap=None), deciles, policy, TODAY)
-    im = r.intermediates
-    assert (im["income_basis"], im["dividend_yield"], im["net_buyback_yield"]) == (
-        "unavailable",
-        0.0,
-        0.0,
-    )
-    assert im["expected_return"]["income"] == 0.0
+    for market_cap in (None, 0.0, math.nan, math.inf):
+        r = value_company(replace(mg_inputs, market_cap=market_cap), deciles, policy, TODAY)
+        im = r.intermediates
+        assert (im["income_basis"], im["dividend_yield"], im["net_buyback_yield"]) == (
+            "unavailable",
+            0.0,
+            0.0,
+        )
+        assert im["expected_return"]["income"] == 0.0
+        assert result_from_json(result_to_json(r)) == r
 
 
-def test_value_at_or_below_zero_has_no_expected_return(
+def test_value_at_or_below_zero_is_refused(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     # a 1% ROIC: growing at the belief costs more than the earnings, so the value is negative
@@ -333,9 +337,13 @@ def test_value_at_or_below_zero_has_no_expected_return(
         replace(y, operating_income=(y.operating_income or 0) / 22) for y in mg_inputs.capital_years
     )
     r = value_company(replace(mg_inputs, capital_years=poor), deciles, policy, TODAY)
-    assert r.value is not None and r.value < 0
-    assert r.intermediates["expected_return"] is None and r.stance5 == "TRIM"
-    assert result_from_json(result_to_json(r)) == r
+    assert_refused(r, "value not positive under the reinvestment charge")
+    im = r.intermediates
+    # the value side is kept for the drawer; nothing at the price is computed
+    assert im["value_per_share"] < 0 and im["runway_roic"] < 0.02
+    assert im["price_facts"] == asdict(price_facts(mg_inputs.closes, TODAY))
+    assert not {"implied_growth", "multiples", "expected_return"} & set(im)
+    assert r.price == 150.0 and r.phase.phase == "Mature Growth"
 
 
 @pytest.mark.parametrize(
@@ -392,12 +400,15 @@ def test_mature_stable_end_to_end(
     assert r.phase.phase == "Mature Stable" and r.flags == ()
     im = r.intermediates
     assert set(im) == MATURE_STABLE_KEYS
-    assert r.value == im["value_per_share"] == pytest.approx(im["stable_growth"] / 1_000e6)
+    assert r.value == im["value_per_share"] == im["stable_growth"]
+    assert im["stable_growth"] == pytest.approx(im["stable_growth_total"] / 1_000e6)
     assert im["e_trailing"] == pytest.approx(3_400e6 - 0.10 * 1_000e6)
     assert im["e_normalized"] == im["e_trailing"] and im["margin_scaled"] is False
     assert im["moat"] == "Wide" and im["terminal_roic"] == 0.13
-    assert im["epv"] == pytest.approx(3_300e6 / 0.09)
-    assert im["stable_growth"] == pytest.approx(3_300e6 * (1 - 0.03 / 0.13) / 0.06)
+    assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
+    assert im["epv"] == pytest.approx(3.30 / 0.09)  # a share, as the screen's EPV column
+    assert im["stable_growth_total"] == pytest.approx(3_300e6 * (1 - 0.03 / 0.13) / 0.06)
+    assert im["stable_growth"] / im["epv"] == pytest.approx(1.154, abs=1e-3)  # about 15% above
     assert im["median_margin"] == pytest.approx(0.20) and im["ttm_margin"] == pytest.approx(0.20)
     assert im["eps"] == {"reported": 3.40, "clean": pytest.approx(3.30), "forward": None}
     assert im["multiples"]["pe_forward"] is None
@@ -406,9 +417,13 @@ def test_mature_stable_end_to_end(
     assert er["income"] == pytest.approx((1_500e6 + 500e6) / 40_000e6)
     assert r.levels == levels_for(r.value, "Wide", policy)
     assert r.stance5 == stance5(40.0, r.levels)
-    names = {i.name for i in r.inputs}
-    assert {"net_income_ttm", "aggregate_roic", "terminal_roic", "moat_class"} <= names
-    assert not {"belief", "runway_years", "ntm_net_income"} & names
+    by_name = {i.name: i for i in r.inputs}
+    assert {"net_income_ttm", "aggregate_roic", "terminal_roic", "moat_class", "belief"} <= set(
+        by_name
+    )
+    assert not {"runway_years", "ntm_net_income"} & set(by_name)
+    belief = by_name["belief"]
+    assert (belief.tag, belief.value) == ("RULE", policy.terminal_growth)
     assert result_from_json(result_to_json(r)) == r
 
 
@@ -421,7 +436,8 @@ def test_mature_stable_scales_a_margin_above_history(
     im = r.intermediates
     assert "margin-flag" in codes(r) and im["margin_scaled"] is True
     assert im["e_normalized"] == pytest.approx(im["e_trailing"] * 0.20 / 0.32)
-    assert im["epv"] == pytest.approx(im["e_normalized"] / 0.09)
+    assert im["epv_total"] == pytest.approx(im["e_normalized"] / 0.09)
+    assert im["epv"] == pytest.approx(im["epv_total"] / 1_000e6)
 
 
 def test_mature_stable_never_zeroes_the_charge(
@@ -435,10 +451,13 @@ def test_mature_stable_never_zeroes_the_charge(
     inputs = replace(ms_inputs, capital_years=negative, moat_score=None)
     r = value_company(inputs, deciles, policy, TODAY)
     im = r.intermediates
-    assert "charge-zeroed" in codes(r)  # shown as information only
+    assert "charge-zeroed" not in codes(r) and im["roic"]["aggregate"] is None
+    unavailable = next(f for f in r.flags if f.code == "roic-unavailable")
+    assert "summed to zero or below" in unavailable.sentence
+    assert "stable-growth value uses the terminal ROIC" in unavailable.sentence
     assert im["moat"] == "None" and im["terminal_roic"] == policy.required_return
-    assert r.value == pytest.approx(im["epv"] / 1_000e6)
-    assert im["epv"] == pytest.approx(3_300e6 / 0.09)
+    assert r.value == pytest.approx(im["epv"])
+    assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
 
 
 def test_mature_stable_without_the_nri_gap(

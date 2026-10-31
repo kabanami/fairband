@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
@@ -60,10 +60,11 @@ class Valued:
 
 @dataclass(frozen=True)
 class Refused:
-    """A route's refusal, with the flags it had raised."""
+    """A route's refusal, with the flags it had raised and the intermediates it had computed."""
 
     reason: str
     flags: tuple[Flag, ...] = ()
+    intermediates: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -143,8 +144,9 @@ def ttm_margin(t: TrailingFigures) -> float | None:
 
 
 def income(market_cap: float | None, t: TrailingFigures) -> dict[str, Any]:
-    """The dividend and net buyback yields of the expected return's income term."""
-    if market_cap is None or market_cap <= 0:
+    """The dividend and net buyback yields of the expected return's income term; nil, with
+    the basis "unavailable", without a positive, finite market cap."""
+    if market_cap is None or not math.isfinite(market_cap) or market_cap <= 0:
         return {"dividend_yield": 0.0, "net_buyback_yield": 0.0, "income_basis": "unavailable"}
     return {
         "dividend_yield": -nil(t.dividends) / market_cap,
