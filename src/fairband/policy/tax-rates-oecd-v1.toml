@@ -1,0 +1,1046 @@
+# Statutory corporate income tax rates: the OECD combined (central plus sub-central) rate, the
+# labelled fallback for a company's marginal tax rate (research.md D9). Rates are decimal
+# fractions. Country names are the OECD's. Puerto Rico is not in the OECD table, so it has no
+# rows. Series: dataflow OECD.CTP.TPS:DSD_TAX_CIT@DF_CIT(2.0), MEASURE=CIT_C (combined
+# corporate income tax rate), TARGETING=ST (statutory), SECTOR=S13 (general government).
+# Data explorer: https://data-explorer.oecd.org/vis?df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_TAX_CIT%40DF_CIT&df[ag]=OECD.CTP.TPS
+
+[meta]
+source = "OECD Corporate Tax Statistics, Table II.1 statutory corporate income tax rates, combined central and sub-central"
+url = "https://sdmx.oecd.org/public/rest/data/OECD.CTP.TPS,DSD_TAX_CIT@DF_CIT,2.0/all?startPeriod=2014&dimensionAtObservation=AllDimensions"
+retrieved = "2026-10-31"
+
+[[rates]]
+country = "United States"
+year = 2014
+rate = 0.390755
+
+[[rates]]
+country = "United States"
+year = 2015
+rate = 0.389975
+
+[[rates]]
+country = "United States"
+year = 2016
+rate = 0.38923934
+
+[[rates]]
+country = "United States"
+year = 2017
+rate = 0.38906474
+
+[[rates]]
+country = "United States"
+year = 2018
+rate = 0.2583858
+
+[[rates]]
+country = "United States"
+year = 2019
+rate = 0.25886141
+
+[[rates]]
+country = "United States"
+year = 2020
+rate = 0.25766571
+
+[[rates]]
+country = "United States"
+year = 2021
+rate = 0.25754568
+
+[[rates]]
+country = "United States"
+year = 2022
+rate = 0.25808085
+
+[[rates]]
+country = "United States"
+year = 2023
+rate = 0.25767935
+
+[[rates]]
+country = "United States"
+year = 2024
+rate = 0.25631375
+
+[[rates]]
+country = "United States"
+year = 2025
+rate = 0.25569714
+
+[[rates]]
+country = "United States"
+year = 2026
+rate = 0.255285
+
+[[rates]]
+country = "Canada"
+year = 2014
+rate = 0.26225272
+
+[[rates]]
+country = "Canada"
+year = 2015
+rate = 0.2668885
+
+[[rates]]
+country = "Canada"
+year = 2016
+rate = 0.26686924
+
+[[rates]]
+country = "Canada"
+year = 2017
+rate = 0.26644782
+
+[[rates]]
+country = "Canada"
+year = 2018
+rate = 0.26767004
+
+[[rates]]
+country = "Canada"
+year = 2019
+rate = 0.26607878
+
+[[rates]]
+country = "Canada"
+year = 2020
+rate = 0.26244757
+
+[[rates]]
+country = "Canada"
+year = 2021
+rate = 0.26168278
+
+[[rates]]
+country = "Canada"
+year = 2022
+rate = 0.25949263
+
+[[rates]]
+country = "Canada"
+year = 2023
+rate = 0.26015751
+
+[[rates]]
+country = "Canada"
+year = 2024
+rate = 0.2599
+
+[[rates]]
+country = "Canada"
+year = 2025
+rate = 0.26
+
+[[rates]]
+country = "Canada"
+year = 2026
+rate = 0.26
+
+[[rates]]
+country = "United Kingdom"
+year = 2014
+rate = 0.21
+
+[[rates]]
+country = "United Kingdom"
+year = 2015
+rate = 0.2
+
+[[rates]]
+country = "United Kingdom"
+year = 2016
+rate = 0.2
+
+[[rates]]
+country = "United Kingdom"
+year = 2017
+rate = 0.19
+
+[[rates]]
+country = "United Kingdom"
+year = 2018
+rate = 0.19
+
+[[rates]]
+country = "United Kingdom"
+year = 2019
+rate = 0.19
+
+[[rates]]
+country = "United Kingdom"
+year = 2020
+rate = 0.19
+
+[[rates]]
+country = "United Kingdom"
+year = 2021
+rate = 0.19
+
+[[rates]]
+country = "United Kingdom"
+year = 2022
+rate = 0.19
+
+[[rates]]
+country = "United Kingdom"
+year = 2023
+rate = 0.25
+
+[[rates]]
+country = "United Kingdom"
+year = 2024
+rate = 0.25
+
+[[rates]]
+country = "United Kingdom"
+year = 2025
+rate = 0.25
+
+[[rates]]
+country = "United Kingdom"
+year = 2026
+rate = 0.25
+
+[[rates]]
+country = "Ireland"
+year = 2014
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2015
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2016
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2017
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2018
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2019
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2020
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2021
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2022
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2023
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2024
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2025
+rate = 0.125
+
+[[rates]]
+country = "Ireland"
+year = 2026
+rate = 0.125
+
+[[rates]]
+country = "Netherlands"
+year = 2014
+rate = 0.25
+
+[[rates]]
+country = "Netherlands"
+year = 2015
+rate = 0.25
+
+[[rates]]
+country = "Netherlands"
+year = 2016
+rate = 0.25
+
+[[rates]]
+country = "Netherlands"
+year = 2017
+rate = 0.25
+
+[[rates]]
+country = "Netherlands"
+year = 2018
+rate = 0.25
+
+[[rates]]
+country = "Netherlands"
+year = 2019
+rate = 0.25
+
+[[rates]]
+country = "Netherlands"
+year = 2020
+rate = 0.25
+
+[[rates]]
+country = "Netherlands"
+year = 2021
+rate = 0.25
+
+[[rates]]
+country = "Netherlands"
+year = 2022
+rate = 0.258
+
+[[rates]]
+country = "Netherlands"
+year = 2023
+rate = 0.258
+
+[[rates]]
+country = "Netherlands"
+year = 2024
+rate = 0.258
+
+[[rates]]
+country = "Netherlands"
+year = 2025
+rate = 0.258
+
+[[rates]]
+country = "Netherlands"
+year = 2026
+rate = 0.258
+
+[[rates]]
+country = "Switzerland"
+year = 2014
+rate = 0.21148581
+
+[[rates]]
+country = "Switzerland"
+year = 2015
+rate = 0.21148581
+
+[[rates]]
+country = "Switzerland"
+year = 2016
+rate = 0.21148581
+
+[[rates]]
+country = "Switzerland"
+year = 2017
+rate = 0.21148581
+
+[[rates]]
+country = "Switzerland"
+year = 2018
+rate = 0.21148581
+
+[[rates]]
+country = "Switzerland"
+year = 2019
+rate = 0.21148581
+
+[[rates]]
+country = "Switzerland"
+year = 2020
+rate = 0.21148581
+
+[[rates]]
+country = "Switzerland"
+year = 2021
+rate = 0.19698516
+
+[[rates]]
+country = "Switzerland"
+year = 2022
+rate = 0.19653352
+
+[[rates]]
+country = "Switzerland"
+year = 2023
+rate = 0.19653352
+
+[[rates]]
+country = "Switzerland"
+year = 2024
+rate = 0.19608138
+
+[[rates]]
+country = "Switzerland"
+year = 2025
+rate = 0.19607821
+
+[[rates]]
+country = "Switzerland"
+year = 2026
+rate = 0.19471871
+
+[[rates]]
+country = "Germany"
+year = 2014
+rate = 0.2970721
+
+[[rates]]
+country = "Germany"
+year = 2015
+rate = 0.29780475
+
+[[rates]]
+country = "Germany"
+year = 2016
+rate = 0.29818844
+
+[[rates]]
+country = "Germany"
+year = 2017
+rate = 0.29889263
+
+[[rates]]
+country = "Germany"
+year = 2018
+rate = 0.29897059
+
+[[rates]]
+country = "Germany"
+year = 2019
+rate = 0.29937781
+
+[[rates]]
+country = "Germany"
+year = 2020
+rate = 0.29830331
+
+[[rates]]
+country = "Germany"
+year = 2021
+rate = 0.29941208
+
+[[rates]]
+country = "Germany"
+year = 2022
+rate = 0.29927068
+
+[[rates]]
+country = "Germany"
+year = 2023
+rate = 0.30058462
+
+[[rates]]
+country = "Germany"
+year = 2024
+rate = 0.30133026
+
+[[rates]]
+country = "Germany"
+year = 2025
+rate = 0.30133026
+
+[[rates]]
+country = "Germany"
+year = 2026
+rate = 0.30133026
+
+[[rates]]
+country = "France"
+year = 2014
+rate = 0.38
+
+[[rates]]
+country = "France"
+year = 2015
+rate = 0.38
+
+[[rates]]
+country = "France"
+year = 2016
+rate = 0.34433333
+
+[[rates]]
+country = "France"
+year = 2017
+rate = 0.44433333
+
+[[rates]]
+country = "France"
+year = 2018
+rate = 0.34433333
+
+[[rates]]
+country = "France"
+year = 2019
+rate = 0.34433333
+
+[[rates]]
+country = "France"
+year = 2020
+rate = 0.32023
+
+[[rates]]
+country = "France"
+year = 2021
+rate = 0.284075
+
+[[rates]]
+country = "France"
+year = 2022
+rate = 0.25825
+
+[[rates]]
+country = "France"
+year = 2023
+rate = 0.25825
+
+[[rates]]
+country = "France"
+year = 2024
+rate = 0.25825
+
+[[rates]]
+country = "France"
+year = 2025
+rate = 0.3613
+
+[[rates]]
+country = "France"
+year = 2026
+rate = 0.3613
+
+[[rates]]
+country = "Luxembourg"
+year = 2014
+rate = 0.2922
+
+[[rates]]
+country = "Luxembourg"
+year = 2015
+rate = 0.2922
+
+[[rates]]
+country = "Luxembourg"
+year = 2016
+rate = 0.2922
+
+[[rates]]
+country = "Luxembourg"
+year = 2017
+rate = 0.2708
+
+[[rates]]
+country = "Luxembourg"
+year = 2018
+rate = 0.2601
+
+[[rates]]
+country = "Luxembourg"
+year = 2019
+rate = 0.2494
+
+[[rates]]
+country = "Luxembourg"
+year = 2020
+rate = 0.2494
+
+[[rates]]
+country = "Luxembourg"
+year = 2021
+rate = 0.2494
+
+[[rates]]
+country = "Luxembourg"
+year = 2022
+rate = 0.2494
+
+[[rates]]
+country = "Luxembourg"
+year = 2023
+rate = 0.2494
+
+[[rates]]
+country = "Luxembourg"
+year = 2024
+rate = 0.2494
+
+[[rates]]
+country = "Luxembourg"
+year = 2025
+rate = 0.2387
+
+[[rates]]
+country = "Luxembourg"
+year = 2026
+rate = 0.2387
+
+[[rates]]
+country = "Israel"
+year = 2014
+rate = 0.265
+
+[[rates]]
+country = "Israel"
+year = 2015
+rate = 0.265
+
+[[rates]]
+country = "Israel"
+year = 2016
+rate = 0.25
+
+[[rates]]
+country = "Israel"
+year = 2017
+rate = 0.24
+
+[[rates]]
+country = "Israel"
+year = 2018
+rate = 0.23
+
+[[rates]]
+country = "Israel"
+year = 2019
+rate = 0.23
+
+[[rates]]
+country = "Israel"
+year = 2020
+rate = 0.23
+
+[[rates]]
+country = "Israel"
+year = 2021
+rate = 0.23
+
+[[rates]]
+country = "Israel"
+year = 2022
+rate = 0.23
+
+[[rates]]
+country = "Israel"
+year = 2023
+rate = 0.23
+
+[[rates]]
+country = "Israel"
+year = 2024
+rate = 0.23
+
+[[rates]]
+country = "Israel"
+year = 2025
+rate = 0.23
+
+[[rates]]
+country = "Singapore"
+year = 2014
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2015
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2016
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2017
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2018
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2019
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2020
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2021
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2022
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2023
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2024
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2025
+rate = 0.17
+
+[[rates]]
+country = "Singapore"
+year = 2026
+rate = 0.17
+
+[[rates]]
+country = "Japan"
+year = 2014
+rate = 0.3462
+
+[[rates]]
+country = "Japan"
+year = 2015
+rate = 0.3211
+
+[[rates]]
+country = "Japan"
+year = 2016
+rate = 0.2997
+
+[[rates]]
+country = "Japan"
+year = 2017
+rate = 0.2997
+
+[[rates]]
+country = "Japan"
+year = 2018
+rate = 0.2974
+
+[[rates]]
+country = "Japan"
+year = 2019
+rate = 0.2974
+
+[[rates]]
+country = "Japan"
+year = 2020
+rate = 0.2974
+
+[[rates]]
+country = "Japan"
+year = 2021
+rate = 0.2974
+
+[[rates]]
+country = "Japan"
+year = 2022
+rate = 0.2974
+
+[[rates]]
+country = "Japan"
+year = 2023
+rate = 0.2974
+
+[[rates]]
+country = "Japan"
+year = 2024
+rate = 0.2974
+
+[[rates]]
+country = "Japan"
+year = 2025
+rate = 0.2974
+
+[[rates]]
+country = "Japan"
+year = 2026
+rate = 0.2974
+
+[[rates]]
+country = "Australia"
+year = 2014
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2015
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2016
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2017
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2018
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2019
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2020
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2021
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2022
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2023
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2024
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2025
+rate = 0.3
+
+[[rates]]
+country = "Australia"
+year = 2026
+rate = 0.3
+
+[[rates]]
+country = "Bermuda"
+year = 2014
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2015
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2016
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2017
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2018
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2019
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2020
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2021
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2022
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2023
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2024
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2025
+rate = 0.0
+
+[[rates]]
+country = "Bermuda"
+year = 2026
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2014
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2015
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2016
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2017
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2018
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2019
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2020
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2021
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2022
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2023
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2024
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2025
+rate = 0.0
+
+[[rates]]
+country = "Cayman Islands"
+year = 2026
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2014
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2015
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2016
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2017
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2018
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2019
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2020
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2021
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2022
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2023
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2024
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2025
+rate = 0.0
+
+[[rates]]
+country = "Jersey"
+year = 2026
+rate = 0.0
