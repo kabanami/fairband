@@ -527,6 +527,33 @@ def test_estimate_fiscal_years_follow_a_52_53_week_year(store: Store) -> None:
     assert [a.fiscal_year for a in inputs.annual_estimates] == [2026, 2027]
 
 
+def test_estimate_fiscal_years_across_the_turn_of_the_calendar_year(store: Store) -> None:
+    """A year that ends on the Saturday nearest 31 December: FY2026 ends 2027-01-02 and FY2027
+    ends 2028-01-01, each within a week after the 2025 end's month and day in the year before."""
+    annual = [
+        statement(date(2024, 12, 28), 2024, "FY", revenue=900 * M),
+        statement(date(2025, 12, 27), 2025, "FY", revenue=1000 * M),
+    ]
+    quarter_ends = ["2025-12-27", "2027-01-02", "2027-04-03", "2028-01-01", "2028-12-30"]
+    year_ends = ["2027-01-02", "2028-01-01", "2028-12-30"]
+    conn = store(
+        **{
+            "income-annual": annual,
+            "estimates-quarter": [{"date": d, "epsAvg": 1.0} for d in quarter_ends],
+            "estimates-annual": [{"date": d, "epsAvg": 4.0} for d in year_ends],
+        }
+    )
+    inputs = build(conn)
+    assert [(q.fiscal_year, q.fiscal_period) for q in inputs.quarter_estimates] == [
+        (2025, "Q4"),
+        (2026, "Q4"),
+        (2027, "Q1"),
+        (2027, "Q4"),
+        (2028, "Q4"),
+    ]
+    assert [a.fiscal_year for a in inputs.annual_estimates] == [2026, 2027, 2028]
+
+
 @pytest.mark.parametrize(
     ("profile", "market_cap", "source"),
     [

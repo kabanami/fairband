@@ -66,8 +66,10 @@ class FiscalCalendar:
     """The company's fiscal-year end: the month and day of its newest annual period end.
 
     FMP labels a fiscal year by the calendar year its period ends in, so a period belongs to the
-    year whose end it does not pass. A period ending up to a week past the year's month and day
-    still belongs to that year, since a 52/53-week year's end moves by up to six days.
+    year whose end it does not pass. A period ending up to a week past a year's month and day
+    still belongs to that year, since a 52/53-week year's end moves by up to six days; that week
+    can cross into the next calendar year (a year ending on the Saturday nearest 31 December ends
+    on 2 January 2027 for fiscal 2026).
     """
 
     month: int
@@ -77,7 +79,10 @@ class FiscalCalendar:
         return date(year, self.month, min(self.day, monthrange(year, self.month)[1]))
 
     def fiscal_year(self, end: date) -> int:
-        return end.year if end <= self.year_end(end.year) + _YEAR_END_DRIFT else end.year + 1
+        for year in (end.year - 1, end.year):
+            if end <= self.year_end(year) + _YEAR_END_DRIFT:
+                return year
+        return end.year + 1
 
     def quarter(self, end: date) -> int:
         """1 to 4, counted from the start of the period's fiscal year."""
