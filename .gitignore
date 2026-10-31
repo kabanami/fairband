@@ -1,2 +1,10 @@
 *:Zone.Identifier
 .claude/worktrees/
+.venv/
+__pycache__/
+*.db
+data/
+keys.toml
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/

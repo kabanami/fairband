@@ -1,0 +1,37 @@
+[project]
+name = "fairband"
+version = "0.1.0"
+description = "A local valuation screen for a value investor."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fairband"]
+
+[tool.ruff]
+line-length = 100
+# The documents under docs/ quote Python in Markdown; Ruff must not rewrite them.
+extend-exclude = ["docs"]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
