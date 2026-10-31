@@ -7,10 +7,11 @@ sensitivity (the company's, then the policy's ``roic_sensitivity``, each with th
 rule applied to it), and so is the implied growth at the price.
 
 ``growth_at_price`` rebuilds the growth path and the charge from the intermediates alone, so a
-stored result moves to a new price without its inputs.
+stored result moves to a new price without its inputs. The implied growth is solved between −50%
+and 200% a year; ``None`` means no growth in that range reaches the price.
 """
 
-from dataclasses import asdict, replace
+from dataclasses import replace
 from typing import Any
 
 from fairband.engine.anchor import (
@@ -24,7 +25,6 @@ from fairband.engine.anchor import (
 from fairband.engine.flags import long_runway_flag, value_spread_flag
 from fairband.engine.mature_growth import Charge, GrowthPath, implied_growth, value_at_belief
 from fairband.engine.multiples import epv, growth_share
-from fairband.engine.price_facts import price_facts
 from fairband.engine.roic import terminal_roic
 from fairband.engine.route_steps import (
     Context,
@@ -40,11 +40,14 @@ from fairband.engine.route_steps import (
     multiples_at,
     nri_gap,
     present,
+    price_facts_for,
     rule,
     trailing_flags,
 )
 from fairband.engine.types import Flag
 from fairband.policy import Moat, Policy
+
+_IMPLIED_HI = 2.0  # the highest growth the implied-growth solve tries: 200% a year
 
 
 def value_mature_growth(c: Context) -> Valued | Refused:
@@ -97,6 +100,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "runway": runway,
         **roic.intermediates(),
         "runway_roic": roic.runway,
+        "charge_off": roic.charge_off,
         "shares": c.shares,
         "value_total": value_total,
         "value_per_share": value,
@@ -106,7 +110,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "eps": e,
         "epv": None if e["clean"] is None else epv(e["clean"], policy.required_return),
         **income(i.market_cap, t),
-        "price_facts": asdict(price_facts(i.closes, c.today)),
+        "price_facts": price_facts_for(i.closes, c.price, c.today),
     }
     im |= growth_at_price(im, c.price, value, policy)
 
@@ -153,13 +157,13 @@ def growth_at_price(
     aggregate = im["roic"]["aggregate"]
     usable = aggregate if aggregate is not None and aggregate > 0 else None
     return {
-        "implied_growth": implied_growth(target, growth, charge),
+        "implied_growth": implied_growth(target, growth, charge, hi=_IMPLIED_HI),
         "implied_growth_by_runway": {
-            str(n): implied_growth(target, replace(growth, runway=n), charge)
+            str(n): implied_growth(target, replace(growth, runway=n), charge, hi=_IMPLIED_HI)
             for n in _runways(policy)
         },
         "implied_by_roic": {
-            key: None if ch is None else implied_growth(target, growth, ch)
+            key: None if ch is None else implied_growth(target, growth, ch, hi=_IMPLIED_HI)
             for key, ch in _roic_charges(usable, im["moat"], policy).items()
         },
         "multiples": multiples_at(price, im["eps"]),

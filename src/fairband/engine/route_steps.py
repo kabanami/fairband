@@ -6,9 +6,9 @@ returns ``Valued`` or ``Refused`` and ``route`` builds the result from it.
 
 ``RoicTerms`` reads the aggregate ROIC as the charge takes it (spec 6.6, ROIC): an aggregate at or
 below zero counts as unavailable, so the runway years take the terminal ROIC and the row is
-flagged; a capital sum at or below zero turns the charge off. The income term of the expected
-return is the trailing flows over the market cap: FMP signs dividends and buybacks as outflows
-(negative) and stock issued as an inflow, and a missing flow counts as nil.
+flagged; a capital sum at or below zero turns Mature Growth's charge off. The income term of the
+expected return is the trailing flows over the market cap: FMP signs dividends and buybacks as
+outflows (negative) and stock issued as an inflow, and a missing flow counts as nil.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.flags import gate_flags, margin_flag, nri_flag
 from fairband.engine.multiples import multiples
+from fairband.engine.price_facts import price_facts
 from fairband.engine.returns import expected_return
 from fairband.engine.roic import CapitalYear, RoicResult, aggregate_roic, terminal_roic
 from fairband.engine.types import Flag, Provenance, Route, TaggedInput
@@ -107,7 +108,6 @@ class RoicTerms:
                 "by_year": [asdict(y) for y in r.by_year],
             },
             "terminal_roic": self.terminal,
-            "charge_off": self.charge_off,
         }
 
 
@@ -126,6 +126,14 @@ def eps(t: TrailingFigures, gap: float | None, forward: float | None) -> dict[st
 
 def multiples_at(price: float, e: dict[str, float | None]) -> dict[str, float | None]:
     return asdict(multiples(price, e["reported"], e["clean"], e["forward"]))
+
+
+def price_facts_for(
+    closes: Sequence[tuple[date, float]], price: float | None, today: date
+) -> dict[str, float | None] | None:
+    """The price columns of spec 6.3 for every row with a price, a refused one too; ``None`` for
+    a row without a price."""
+    return None if price is None else asdict(price_facts(closes, today))
 
 
 def ttm_margin(t: TrailingFigures) -> float | None:
@@ -184,7 +192,6 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
         data(i, "moat_score", i.moat_score, "score"),
         data(i, "gf_eps_ttm", i.gf_eps_ttm, "USD a share"),
         data(i, "gf_eps_without_nri", i.gf_eps_without_nri, "USD a share"),
-        data(i, "closes", float(len(i.closes)), "daily closes"),
     )
 
 

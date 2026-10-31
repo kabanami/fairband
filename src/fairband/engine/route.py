@@ -12,8 +12,10 @@ with no value and a reason, never an exception.
 
 Every result of ``value_company`` is valid until the next earnings date when that is after the
 data date, else for the policy's fallback days. Its flags are the assembly's, the classifier's
-checks and the route's, the first of each code kept. ``reprice`` moves a result to a new price
-from its intermediates alone; ``refusal_result`` is the shape of every refusal.
+checks and the route's, the first of each code kept. Its intermediates hold ``price_facts``, the
+price columns of spec 6.3, on a refusal too (``None`` for a row without a price). ``reprice``
+moves a result to a new price from its intermediates alone; ``refusal_result`` is the shape of
+every refusal.
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
@@ -36,8 +38,8 @@ aggregate entry is ``None`` when the aggregate ROIC is unavailable.
   ``implied_growth_by_runway``, ``implied_by_roic``, ``multiples``, ``growth_share``,
   ``expected_return`` (``None`` for a value at or below zero).
 - Mature Stable: ``e_trailing``, ``nri_gap``, ``ttm_margin``, ``median_margin``,
-  ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``terminal_roic``, ``charge_off``,
-  ``epv`` and ``stable_growth`` (totals), ``shares``, ``value_per_share``, ``eps``,
+  ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``terminal_roic``, ``epv`` and
+  ``stable_growth`` (totals), ``shares``, ``value_per_share``, ``eps``,
   ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price,
   ``multiples`` and ``expected_return``.
 """
@@ -45,6 +47,7 @@ aggregate entry is ``None`` when the aggregate ROIC is unavailable.
 import math
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
+from typing import Any
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
@@ -53,7 +56,7 @@ from fairband.engine.levels import levels_for, stance3, stance5
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route_mature_growth import growth_at_price, long_runway, value_mature_growth
 from fairband.engine.route_mature_stable import stable_at_price, value_mature_stable
-from fairband.engine.route_steps import Context, Refused, Valued, data
+from fairband.engine.route_steps import Context, Refused, Valued, data, price_facts_for
 from fairband.engine.types import Flag, PhaseEvidence, Provenance, TaggedInput, ValuationResult
 from fairband.policy import Policy
 
@@ -103,12 +106,13 @@ def value_company(
     assert policy.required_return > policy.terminal_growth, "policy: r must exceed g_t"
     assert min(policy.runway_years.values()) >= 1, "policy: a runway is a year or more"
     if deciles is None:
-        return _refuse(inputs, policy, inputs.refusal or "no universe deciles yet", None, None)
+        reason = inputs.refusal or "no universe deciles yet"
+        return _refuse(inputs, policy, today, reason, None, None)
     phase = classify(inputs.series, deciles)
     refresh_id = deciles.refresh_id
 
     def refuse(reason: str, flags: tuple[Flag, ...] = ()) -> ValuationResult:
-        return _refuse(inputs, policy, reason, phase, refresh_id, flags)
+        return _refuse(inputs, policy, today, reason, phase, refresh_id, flags)
 
     if inputs.refusal is not None:
         return refuse(inputs.refusal)
@@ -146,8 +150,10 @@ def refusal_result(
     inputs: tuple[TaggedInput, ...] = (),
     flags: tuple[Flag, ...] = (),
     deciles_refresh_id: int | None = None,
+    intermediates: dict[str, Any] | None = None,
 ) -> ValuationResult:
-    """A row with no value and the reason, valid for the policy's fallback days."""
+    """A row with no value and the reason, valid for the policy's fallback days; its
+    intermediates are empty unless given."""
     if phase is None:
         phase = PhaseEvidence(
             None, reason, 0, None, None, None, None, None, None, None, None, None, ()
@@ -165,7 +171,7 @@ def refusal_result(
         valid_until=data_date + timedelta(days=policy.validity_fallback_days),
         phase=phase,
         inputs=inputs,
-        intermediates={},
+        intermediates={} if intermediates is None else intermediates,
         flags=flags,
         refusal=reason,
         policy_version=policy.version,
@@ -179,8 +185,12 @@ def reprice(
 ) -> ValuationResult:
     """The result at a new price: the same value, levels and validity; the stance, the
     price-dependent intermediates and the long-runway flag recomputed from the intermediates.
-    A result with no value only takes the new price and date. ``policy`` is the one the result
-    was computed under; a price that is not positive and finite raises ``ValueError``."""
+    A result with no value only takes the new price and date; ``price_facts`` stay as they were.
+
+    A price that is not positive and finite raises ``ValueError``: the caller skips such a quote.
+    The policy version is not checked: the caller passes the policy the result cites
+    (``result.policy_version``), since r, g_t, the runways and the ROIC sensitivity come from it.
+    """
     if not _positive(price):
         raise ValueError(f"price {price} must be positive and finite")
     if result.value is None or result.levels is None:
@@ -236,13 +246,14 @@ def _valued(
 def _refuse(
     i: CompanyInputs,
     policy: Policy,
+    today: date,
     reason: str,
     phase: PhaseEvidence | None,
     refresh_id: int | None,
     flags: tuple[Flag, ...] = (),
 ) -> ValuationResult:
-    """A refusal from ``value_company``: the company's price when it is one, the base inputs,
-    the flags so far and the validity window of every result."""
+    """A refusal from ``value_company``: the company's price when it is one, its price facts,
+    the base inputs, the flags so far and the validity window of every result."""
     price = i.price if i.price is not None and _positive(i.price) else None
     checks = () if phase is None else phase.checks
     result = refusal_result(
@@ -256,12 +267,14 @@ def _refuse(
         inputs=_base_inputs(i),
         flags=_unique(i.input_flags + checks + flags),
         deciles_refresh_id=refresh_id,
+        intermediates={"price_facts": price_facts_for(i.closes, price, today)},
     )
     return replace(result, valid_until=_valid_until(i, policy))
 
 
 def _base_inputs(i: CompanyInputs) -> tuple[TaggedInput, ...]:
-    """The DATA inputs every result of ``value_company`` carries: what the guards read."""
+    """The DATA inputs every result of ``value_company`` carries: what the guards and the
+    price facts read."""
     years = [fy.year for fy in i.series]
     span = f"fiscal {years[0]} to {years[-1]}" if years else None
     earnings = None if i.next_earnings is None else i.next_earnings.isoformat()
@@ -270,6 +283,7 @@ def _base_inputs(i: CompanyInputs) -> tuple[TaggedInput, ...]:
         data(i, "price", i.price, "USD"),
         data(i, "shares_diluted", i.shares_diluted, "shares"),
         data(i, "next_earnings", None, "date", note=earnings),
+        data(i, "closes", float(len(i.closes)), "daily closes"),
     )
 
 

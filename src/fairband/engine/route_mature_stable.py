@@ -2,18 +2,16 @@
 
 E is trailing net income less the non-recurring gap on the diluted shares; when the margin flag
 fires, E is scaled to the ten-year median operating margin. The value at belief is the
-stable-growth value at the moat's terminal ROIC, or with no charge when invested capital sums to
-zero or below (the ROIC rules of spec 6.6); EPV is shown beside it as the no-growth value.
+stable-growth value at the moat's terminal ROIC, always: so it equals EPV for a Narrow or no moat
+and is at most 15% above it for a Wide one. A capital sum at or below zero does not turn the
+charge off here; its flag stays on the row as information. EPV is shown as the no-growth value.
 """
 
-import math
-from dataclasses import asdict
 from typing import Any
 
 from fairband.engine.anchor import moat_class
 from fairband.engine.flags import margin_flag, median_margin
 from fairband.engine.mature_stable import mature_stable_values, normalize_for_margin
-from fairband.engine.price_facts import price_facts
 from fairband.engine.route_steps import (
     Context,
     Refused,
@@ -28,6 +26,7 @@ from fairband.engine.route_steps import (
     multiples_at,
     nil,
     nri_gap,
+    price_facts_for,
     trailing_flags,
     ttm_margin,
 )
@@ -49,9 +48,8 @@ def value_mature_stable(c: Context) -> Valued | Refused:
 
     moat = moat_class(i.moat_score, policy)
     roic = RoicTerms.of(i.capital_years, moat, policy)
-    charged = math.inf if roic.charge_off else roic.terminal
     epv_total, stable = mature_stable_values(
-        e_normalized, charged, policy.required_return, policy.terminal_growth
+        e_normalized, roic.terminal, policy.required_return, policy.terminal_growth
     )
     value = stable / c.shares
     im: dict[str, Any] = {
@@ -69,7 +67,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "value_per_share": value,
         "eps": eps(t, gap, None),
         **income(i.market_cap, t),
-        "price_facts": asdict(price_facts(i.closes, c.today)),
+        "price_facts": price_facts_for(i.closes, c.price, c.today),
     }
     im |= stable_at_price(im, c.price, value, policy)
     inputs = (

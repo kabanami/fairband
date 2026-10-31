@@ -1,6 +1,6 @@
 import json
 import math
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import date, timedelta
 from typing import Any
 
@@ -10,6 +10,7 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
 from fairband.engine.levels import levels_for, stance3, stance5
 from fairband.engine.mature_growth import Charge, GrowthPath, value_at_belief
+from fairband.engine.price_facts import price_facts
 from fairband.engine.roic import aggregate_roic
 from fairband.engine.route import CompanyInputs, refusal_result, reprice, value_company
 from fairband.engine.types import (
@@ -65,7 +66,6 @@ MATURE_STABLE_KEYS = {
     "moat",
     "roic",
     "terminal_roic",
-    "charge_off",
     "epv",
     "stable_growth",
     "shares",
@@ -164,12 +164,14 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert set(im["implied_growth_by_runway"]) == {"5", "10", "20"}
     assert set(im["implied_by_roic"]) == {"aggregate", "0.15", "0.09"}
     assert im["implied_by_roic"]["0.15"] > implied
-    # at a ROIC equal to r growth adds no value, so no growth reaches the price; on a 5-year
-    # runway the charge makes higher growth worth less, and none reaches it either
+    # at a ROIC equal to r growth adds no value, so no growth reaches the price
     assert im["value_by_roic"]["0.09"] == pytest.approx(5.90 / 0.09)
     assert im["implied_by_roic"]["0.09"] is None
-    assert im["implied_growth_by_runway"]["5"] is None
-    assert im["implied_growth_by_runway"]["10"] > implied
+    # a 5-year runway needs growth beyond the old 50% bracket of the solve
+    five = im["implied_growth_by_runway"]["5"]
+    assert five > 0.5 and im["implied_growth_by_runway"]["10"] > implied
+    at_five = value_at_belief(GrowthPath(5_900e6, (0.12, 0.10), five, 5), charge) / 1_000e6
+    assert at_five == pytest.approx(150.0, rel=1e-6)
 
     assert im["nri_gap"] == pytest.approx(0.05)
     assert im["eps"] == {"reported": 5.30, "clean": pytest.approx(5.25), "forward": 5.90}
@@ -422,18 +424,21 @@ def test_mature_stable_scales_a_margin_above_history(
     assert im["epv"] == pytest.approx(im["e_normalized"] / 0.09)
 
 
-def test_mature_stable_with_the_charge_zeroed(
+def test_mature_stable_never_zeroes_the_charge(
     ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
+    # capital sums to zero or below and the moat is None: the stable-growth value is EPV
     negative = tuple(
         replace(y, total_current_liabilities=3 * (y.total_current_assets or 0))
         for y in ms_inputs.capital_years
     )
-    r = value_company(replace(ms_inputs, capital_years=negative), deciles, policy, TODAY)
+    inputs = replace(ms_inputs, capital_years=negative, moat_score=None)
+    r = value_company(inputs, deciles, policy, TODAY)
     im = r.intermediates
-    assert im["charge_off"] is True and "charge-zeroed" in codes(r)
-    assert im["terminal_roic"] == 0.09  # the rule's value; the charge itself is off
-    assert im["stable_growth"] == pytest.approx(3_300e6 / (0.09 - 0.03))
+    assert "charge-zeroed" in codes(r)  # shown as information only
+    assert im["moat"] == "None" and im["terminal_roic"] == policy.required_return
+    assert r.value == pytest.approx(im["epv"] / 1_000e6)
+    assert im["epv"] == pytest.approx(3_300e6 / 0.09)
 
 
 def test_mature_stable_without_the_nri_gap(
@@ -495,8 +500,26 @@ def test_refuses_other_phases(
     r = value_company(young_growth_inputs, deciles, policy, TODAY)
     assert_refused(r, "Young Growth route not built yet")
     assert r.phase.phase == "Young Growth" and r.price == 150.0
-    assert [i.name for i in r.inputs] == ["statements", "price", "shares_diluted", "next_earnings"]
+    names = [i.name for i in r.inputs]
+    assert names == ["statements", "price", "shares_diluted", "next_earnings", "closes"]
     assert r.inputs[0].value == 6 and r.inputs[0].note == "fiscal 2020 to 2025"
+    # the price columns are not value-based: a refused row has them too
+    facts = asdict(price_facts(young_growth_inputs.closes, TODAY))
+    assert r.intermediates == {"price_facts": facts} and facts["high_52w"] == pytest.approx(150.0)
+
+
+def test_refusals_carry_the_price_facts(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    facts = asdict(price_facts(mg_inputs.closes, TODAY))
+    for r in (
+        value_company(replace(mg_inputs, currency="EUR"), deciles, policy, TODAY),
+        value_company(mg_inputs, None, policy, TODAY),
+    ):
+        assert r.value is None and r.intermediates == {"price_facts": facts}
+    # a row with no price has no price facts
+    r = value_company(replace(mg_inputs, price=None, currency="EUR"), deciles, policy, TODAY)
+    assert r.intermediates == {"price_facts": None}
 
 
 def test_refuses_start_up_and_unclassified(
@@ -541,6 +564,8 @@ def test_refusal_result_shape(policy: Policy) -> None:
     assert r.phase.phase is None and r.phase.reason == "data fetch failed: quote"
     assert (r.phase.years_used, r.phase.checks) == (0, ())
     assert (r.inputs, r.intermediates, r.flags, r.deciles_refresh_id) == ((), {}, (), None)
+    kept = refusal_result("X", "x", policy, date(2026, 10, 31), intermediates={"price_facts": None})
+    assert kept.intermediates == {"price_facts": None}
     assert (r.policy_version, r.method_version) == (policy.version, METHOD_VERSION)
     assert_refused(r, "data fetch failed: quote")
 
