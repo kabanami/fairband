@@ -1,0 +1,17 @@
+{
+  "summary": {
+    "general": {
+      "company": "Acme Corp",
+      "price": 142.1,
+      "currency": "$",
+      "country": "USA"
+    },
+    "company_data": {
+      "moat_score": 7,
+      "z2score": "4.37",
+      "depositary_receipt_ratio": "1",
+      "mscore": "-2.71",
+      "fscore": 6
+    }
+  }
+}

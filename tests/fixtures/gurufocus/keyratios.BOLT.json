@@ -1,0 +1,26 @@
+{
+  "Basic": {
+    "Company": "Bolt Industries",
+    "Market Cap (M)": "2930.1"
+  },
+  "Fundamental": {
+    "Beneish M-Score": "-",
+    "EPS without NRI": "-0.42"
+  },
+  "Valuation Ratio": {
+    "PE Ratio": "At Loss",
+    "EPS (TTM)": "-"
+  },
+  "Profitability": {
+    "Gross Margin %": "18.9"
+  },
+  "Growth": {
+    "3-Year EPS without NRI Growth Rate": "-"
+  },
+  "Price": {
+    "Price (52w High)": "44.80"
+  },
+  "Dividends": {
+    "Dividend Yield %": "-"
+  }
+}

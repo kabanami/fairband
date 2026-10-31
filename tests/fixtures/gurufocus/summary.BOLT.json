@@ -1,0 +1,16 @@
+{
+  "summary": {
+    "general": {
+      "company": "Bolt Industries",
+      "price": "38.40",
+      "currency": "$",
+      "country": "USA"
+    },
+    "company_data": {
+      "moat_score": null,
+      "z2score": "-",
+      "mscore": "N/A",
+      "fscore": "-"
+    }
+  }
+}

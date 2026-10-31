@@ -1,0 +1,29 @@
+{
+  "Basic": {
+    "Company": "Acme Corp",
+    "Market Cap (M)": "24105.5"
+  },
+  "Growth": {
+    "3-Year EPS without NRI Growth Rate": "12.1",
+    "5-Year EPS without NRI Growth Rate": "-"
+  },
+  "Fundamental": {
+    "Beneish M-Score": "-2.71",
+    "EPS (TTM)": "6.11",
+    "EPS without NRI": "5.87",
+    "Shares Outstanding (Diluted Average)": "169.4"
+  },
+  "Valuation Ratio": {
+    "PE Ratio": "23.26",
+    "PE Ratio without NRI": "24.21"
+  },
+  "Profitability": {
+    "Gross Margin %": "41.2"
+  },
+  "Price": {
+    "Price (52w High)": "151.02"
+  },
+  "Dividends": {
+    "Dividend Yield %": null
+  }
+}
