@@ -228,6 +228,18 @@ def test_mature_growth_inputs_cite_their_sources(
     assert by_name["moat_class"].note == "Wide" and by_name["belief"].value == pytest.approx(0.063)
 
 
+def test_an_input_assembly_estimated_is_tagged_as_an_estimate(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    method = "tax-rate-latest-oecd-year-v1"
+    inputs = replace(mg_inputs, estimate_methods={"tax_rate_latest": method})
+    by_name = {i.name: i for i in value_company(inputs, deciles, policy, TODAY).inputs}
+    tax = by_name["tax_rate_latest"]
+    assert (tax.tag, tax.kind, tax.estimate_method, tax.value) == ("DATA", "estimate", method, 0.25)
+    assert tax.provenance == mg_inputs.provenance["tax_rate_latest"]
+    assert (by_name["price"].kind, by_name["price"].estimate_method) == ("observed", None)
+
+
 def test_mature_growth_is_deterministic(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

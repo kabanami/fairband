@@ -22,7 +22,9 @@ Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of thes
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
 ``estimates_quarter``, ``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``gf_eps_ttm``,
 ``gf_eps_without_nri``, ``next_earnings``, ``tax_rate_latest``, ``closes``. A missing key cites
-the source "unknown". A RULE input cites the policy version.
+the source "unknown". A DATA input named in ``CompanyInputs.estimate_methods`` is an estimate
+under that method (a tax rate carried forward, say); every other DATA input is observed. A RULE
+input cites the policy version.
 
 Intermediates hold JSON values only. Totals are in USD, per-share figures in USD a share, rates
 as fractions. A sensitivity map is keyed by the runway in years ("5", "10", "20") or by the runway
@@ -47,7 +49,7 @@ aggregate entry is ``None`` when the aggregate ROIC is unavailable.
 """
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Any
 
@@ -72,7 +74,8 @@ _VALUE_SPREAD = "value-spread"
 
 @dataclass(frozen=True)
 class CompanyInputs:
-    """Everything the engine reads for one company, as assembly built it from the store."""
+    """Everything the engine reads for one company, as assembly built it from the store.
+    ``estimate_methods`` maps an input name to the method assembly estimated it by."""
 
     symbol: str
     name: str
@@ -99,6 +102,7 @@ class CompanyInputs:
     provenance: dict[str, Provenance]
     input_flags: tuple[Flag, ...]
     refusal: str | None
+    estimate_methods: dict[str, str] = field(default_factory=dict)
 
 
 def value_company(

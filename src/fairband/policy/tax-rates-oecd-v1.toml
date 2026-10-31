@@ -10,6 +10,25 @@ source = "OECD Corporate Tax Statistics, Table II.1 statutory corporate income t
 url = "https://sdmx.oecd.org/public/rest/data/OECD.CTP.TPS,DSD_TAX_CIT@DF_CIT,2.0/all?startPeriod=2014&dimensionAtObservation=AllDimensions"
 retrieved = "2026-10-31"
 
+# The ISO 3166-1 alpha-2 code of each country above, the form FMP gives a company's country.
+[country_aliases]
+US = "United States"
+CA = "Canada"
+GB = "United Kingdom"
+IE = "Ireland"
+NL = "Netherlands"
+CH = "Switzerland"
+DE = "Germany"
+FR = "France"
+LU = "Luxembourg"
+IL = "Israel"
+SG = "Singapore"
+JP = "Japan"
+AU = "Australia"
+BM = "Bermuda"
+KY = "Cayman Islands"
+JE = "Jersey"
+
 [[rates]]
 country = "United States"
 year = 2014

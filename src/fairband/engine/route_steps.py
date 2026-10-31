@@ -25,7 +25,7 @@ from fairband.engine.multiples import multiples
 from fairband.engine.price_facts import price_facts
 from fairband.engine.returns import expected_return
 from fairband.engine.roic import CapitalYear, RoicResult, aggregate_roic, terminal_roic
-from fairband.engine.types import Flag, Provenance, Route, TaggedInput
+from fairband.engine.types import Flag, Kind, Provenance, Route, TaggedInput
 from fairband.policy import Moat, Policy
 
 if TYPE_CHECKING:
@@ -217,10 +217,13 @@ def data(
     note: str | None = None,
 ) -> TaggedInput:
     """A DATA input citing ``provenance[source]`` (default: its own name), or the source
-    "unknown"; a value that is not a finite number is stored as ``None``."""
+    "unknown"; an estimate when ``estimate_methods`` names it, else observed. A value that is not a
+    finite number is stored as ``None``."""
     provenance = i.provenance.get(source or name, _UNKNOWN)
     finite = None if value is None or not math.isfinite(value) else value
-    return TaggedInput(name, finite, unit, "DATA", "observed", provenance, note=note)
+    method = i.estimate_methods.get(name)
+    kind: Kind = "observed" if method is None else "estimate"
+    return TaggedInput(name, finite, unit, "DATA", kind, provenance, method, note)
 
 
 def rule(

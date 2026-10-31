@@ -3,7 +3,8 @@
 The packaged table holds the OECD combined (central plus sub-central) statutory rate. A year after
 the newest year on file for a country takes that newest rate as a labelled estimate; an earlier
 missing year or an unknown country gives ``None``, so the caller refuses with a reason instead of
-silently using another year's rate.
+silently using another year's rate. A country is named as the OECD names it or by the ISO 3166-1
+alpha-2 code of the table's ``[country_aliases]`` (``US``), the form FMP gives a company's country.
 """
 
 import tomllib
@@ -28,15 +29,23 @@ class TaxRate:
 
 
 class TaxTable:
-    def __init__(self, rates: Mapping[tuple[str, int], float], source: str) -> None:
+    def __init__(
+        self,
+        rates: Mapping[tuple[str, int], float],
+        source: str,
+        aliases: Mapping[str, str] | None = None,
+    ) -> None:
         self._rates = dict(rates)
+        self._aliases = dict(aliases or {})
         self._newest: dict[str, int] = {}
         for country, year in self._rates:
             self._newest[country] = max(year, self._newest.get(country, year))
         self.source = source
 
     def rate_for(self, country: str, year: int) -> TaxRate | None:
-        """The rate for ``year``; a later year carries the newest rate forward as an estimate."""
+        """The rate for ``year``; a later year carries the newest rate forward as an estimate.
+        ``country`` is the OECD name or its code."""
+        country = self._aliases.get(country, country)
         rate = self._rates.get((country, year))
         if rate is not None:
             return TaxRate(rate, year, estimate=False, method=None, source=self.source)
@@ -56,7 +65,8 @@ class TaxTable:
 
 
 def load_tax_table(path: Path | None = None) -> TaxTable:
-    """Parse the tax table (default: the packaged OECD v1 file). Rates must be fractions."""
+    """Parse the tax table (default: the packaged OECD v1 file). Rates must be fractions, and a
+    country code must name a country with rates."""
     if path is None:
         data = resources.files("fairband.policy").joinpath(_TAX_FILE).read_bytes()
     else:
@@ -74,7 +84,19 @@ def load_tax_table(path: Path | None = None) -> TaxTable:
         if (country, year) in rates:
             raise ValueError(f"tax table: {country} {year} appears twice")
         rates[(country, year)] = rate
-    return TaxTable(rates, source)
+    aliases = _aliases(raw.get("country_aliases", {}), {c for c, _ in rates})
+    return TaxTable(rates, source, aliases)
+
+
+def _aliases(raw: Any, countries: set[str]) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        raise TypeError("tax table: [country_aliases] must be a table")
+    for code, name in raw.items():
+        if not isinstance(name, str):
+            raise TypeError(f"tax table: country alias {code} must be a string")
+        if name not in countries:
+            raise ValueError(f"tax table: country alias {code} names {name}, which has no rates")
+    return dict(raw)
 
 
 def _row(row: Any) -> tuple[str, int, float]:

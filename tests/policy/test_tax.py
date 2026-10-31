@@ -5,24 +5,26 @@ import pytest
 from fairband.policy.tax import load_tax_table
 
 # The jurisdictions the brief asks for; Puerto Rico is not in the OECD table, so it is omitted.
-_JURISDICTIONS = [
-    "United States",
-    "Canada",
-    "United Kingdom",
-    "Ireland",
-    "Netherlands",
-    "Switzerland",
-    "Germany",
-    "France",
-    "Luxembourg",
-    "Israel",
-    "Singapore",
-    "Japan",
-    "Australia",
-    "Bermuda",
-    "Cayman Islands",
-    "Jersey",
-]
+# Each with the ISO 3166-1 alpha-2 code FMP gives as a company's country.
+_CODES = {
+    "US": "United States",
+    "CA": "Canada",
+    "GB": "United Kingdom",
+    "IE": "Ireland",
+    "NL": "Netherlands",
+    "CH": "Switzerland",
+    "DE": "Germany",
+    "FR": "France",
+    "LU": "Luxembourg",
+    "IL": "Israel",
+    "SG": "Singapore",
+    "JP": "Japan",
+    "AU": "Australia",
+    "BM": "Bermuda",
+    "KY": "Cayman Islands",
+    "JE": "Jersey",
+}
+_JURISDICTIONS = list(_CODES.values())
 
 
 def test_exact_year() -> None:
@@ -53,6 +55,31 @@ def test_each_jurisdiction_covered_from_2014(country: str) -> None:
     t = load_tax_table()
     years = sorted(y for (c, y) in t.years() if c == country)
     assert years and years == list(range(2014, years[-1] + 1))
+
+
+@pytest.mark.parametrize(("code", "name"), _CODES.items())
+def test_country_code_or_name(code: str, name: str) -> None:
+    t = load_tax_table()
+    exact = t.rate_for(code, 2022)
+    assert exact is not None and exact == t.rate_for(name, 2022)
+    later = t.rate_for(code, 2040)
+    assert later is not None and later.estimate is True
+
+
+def test_every_country_in_the_table_has_a_code() -> None:
+    t = load_tax_table()
+    assert {c for c, _ in t.years()} == set(_CODES.values())
+    assert t.rate_for("TW", 2022) is None
+
+
+def test_code_for_a_country_without_rates_is_refused(tmp_path: Path) -> None:
+    table = tmp_path / "tax.toml"
+    table.write_text(
+        '[meta]\nsource = "s"\n\n[country_aliases]\nUS = "United Staets"\n\n'
+        '[[rates]]\ncountry = "United States"\nyear = 2022\nrate = 0.25\n'
+    )
+    with pytest.raises(ValueError, match="United Staets"):
+        load_tax_table(table)
 
 
 def test_rate_given_as_a_percentage_is_refused(tmp_path: Path) -> None:
