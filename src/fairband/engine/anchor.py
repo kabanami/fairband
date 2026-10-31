@@ -135,13 +135,17 @@ def ntm_quarters(
         (e for e in estimates if e.period_end > last_reported), key=lambda e: e.period_end
     )
     window = after[:_NTM_QUARTERS]
-    if len(window) < _NTM_QUARTERS:
+    if len(window) < _NTM_QUARTERS or not consecutive_quarters([e.period_end for e in window]):
         return None
-    for earlier, later in pairwise(window):
-        days = (later.period_end - earlier.period_end).days
-        if not _QUARTER_DAYS_MIN <= days <= _QUARTER_DAYS_MAX:
-            return None
     return tuple(window)
+
+
+def consecutive_quarters(ends: Sequence[date]) -> bool:
+    """Each period end falls 80 to 100 days after the one before."""
+    return all(
+        _QUARTER_DAYS_MIN <= (later - earlier).days <= _QUARTER_DAYS_MAX
+        for earlier, later in pairwise(ends)
+    )
 
 
 def sbc_basis(
