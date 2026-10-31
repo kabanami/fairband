@@ -16,9 +16,9 @@ import pytest
 from vendor_double import Clients, Clock, Router
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
-from fairband.engine.classifier import FiscalYear
+from fairband.engine.classifier import Deciles, FiscalYear
 from fairband.engine.roic import CapitalYear
-from fairband.engine.route import CompanyInputs
+from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.types import Provenance
 from fairband.policy import Policy, load_policy
 from fairband.policy.tax import LATEST_YEAR_METHOD, TaxTable, load_tax_table
@@ -420,6 +420,28 @@ def test_tax_rate_estimate_flag_and_refusal(
 
     add_company(conn_with_company, country="TW")  # a newer universe row, outside the table
     assert build(conn_with_company).refusal == "no statutory tax rate for TW 2015"
+
+
+@pytest.mark.parametrize(
+    ("is_adr", "currency"), [(True, "USD"), (False, "TWD")], ids=["adr", "currency"]
+)
+def test_foreign_filer_outside_the_tax_table_is_refused_as_foreign(
+    store: Store, policy: Policy, is_adr: bool, currency: str
+) -> None:
+    """A Taiwanese filer: no tax rate on file, so a U.S. filer would be refused for it."""
+    annual = [{**row, "reportedCurrency": currency} for row in income_annual(YEARS)]
+    profiles = [{"symbol": "ACME", "isAdr": is_adr, "marketCap": 5_000 * M}]
+    conn = store(company=False, profile=profiles, **{**bodies(), "income-annual": annual})
+    add_company(conn, country="TW")
+    inputs = build(conn)
+    assert (inputs.is_adr, inputs.currency) == (is_adr, currency)
+    assert inputs.refusal is None
+    assert inputs.tax_rate_latest is None and {y.tax_rate for y in inputs.capital_years} == {None}
+
+    deciles = Deciles((-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3), (0.0,) * 9, 1, 1, 1)
+    result = value_company(inputs, deciles, policy, TODAY)
+    assert result.refusal == "foreign filer: currency and share-unit handling not built yet"
+    assert result.phase.phase is not None
 
 
 def test_provenance_dates(conn_with_company: sqlite3.Connection) -> None:

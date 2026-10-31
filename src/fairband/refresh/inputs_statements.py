@@ -17,7 +17,8 @@ lease lines come from the as-reported balance sheet only. A balance sheet ending
 
 The tax rate is the OECD statutory rate for the company's country and fiscal year (D3, D9). A rate
 carried past the table's newest year flags ``tax-carried-forward`` and makes ``tax_rate_latest``
-an estimate; the first year with an operating income and no rate refuses the company.
+an estimate. The first year with an operating income and no rate gives ``tax_refusal``; a year
+without a rate keeps a ``None`` rate.
 
 Trailing figures (spec 6.6): the sums of the last four quarters when each ends 80 to 100 days after
 the one before (the anchor's rule), joined to the quarterly cash flow by period end, a sum ``None``
@@ -87,7 +88,8 @@ class FiscalCalendar:
 @dataclass(frozen=True)
 class Statements:
     """The statement-side fields of ``CompanyInputs``; ``calendar`` is ``None`` and ``refusal`` is
-    "no financial statements" when the store holds no annual income statement."""
+    "no financial statements" when the store holds no annual income statement. ``tax_refusal``
+    names the first year with an operating income and no statutory tax rate."""
 
     calendar: FiscalCalendar | None
     series: Series
@@ -101,6 +103,7 @@ class Statements:
     provenance: dict[str, Provenance]
     flags: tuple[Flag, ...]
     refusal: str | None
+    tax_refusal: str | None = None
     estimate_methods: dict[str, str] = field(default_factory=dict)
 
 
@@ -224,7 +227,8 @@ def statements_for(
         data_date=max(r.observed_at for r in facts).date(),
         provenance=provenance,
         flags=flags,
-        refusal=_tax_refusal(country, capital),
+        refusal=None,
+        tax_refusal=_tax_refusal(country, capital),
         estimate_methods=methods,
     )
 

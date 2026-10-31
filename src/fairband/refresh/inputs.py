@@ -15,6 +15,9 @@ share count) is ``inputs_statements``; its docstring states those rules. ``build
 - the currency: the newest annual income statement's, else the universe row's, else ``"unknown"``
   flagged ``currency-unknown``. The route reads every currency but USD as a foreign filer, so an
   unknown one gets the foreign-filer refusal, which is the honest outcome;
+- the refusal: "no financial statements", else the statements' missing tax rate, except for a
+  foreign filer (an ADR, or a currency other than USD), whose missing rates stay ``None`` so the
+  route gives it the foreign-filer refusal of spec 11 with its phase;
 - the GuruFocus moat score and EPS, the next earnings date (``None`` when before ``today``) and the
   closes of the latest price-history payload (none when it is absent or does not parse).
 
@@ -102,6 +105,8 @@ def build_inputs(
     calendar = stated.calendar
     currency = stated.currency or (None if company is None else company.currency)
     flags = stated.flags if currency is not None else (*stated.flags, _UNKNOWN_CURRENCY)
+    is_adr = _is_adr(profile, company)
+    foreign = is_adr or currency != "USD"
     quarters = cite("estimates_quarter", _quarter_estimates(read("estimate-quarter"), calendar))
     annual = cite("estimates_annual", _annual_estimates(read("estimate-annual"), calendar))
     street = cite("street_ttm_eps", _street_ttm_eps(read("street-actual"), stated))
@@ -113,7 +118,7 @@ def build_inputs(
         name=company.name if company is not None and company.name else symbol,
         country=country,
         currency=currency or "unknown",
-        is_adr=_is_adr(profile, company),
+        is_adr=is_adr,
         market_cap=cite("market_cap", _market_cap(quote, profile, company)),
         price=cite("price", _value(price, _QUOTE)),
         price_date=None if price is None else price.as_of,
@@ -133,7 +138,7 @@ def build_inputs(
         data_date=stated.data_date,
         provenance=provenance,
         input_flags=flags,
-        refusal=stated.refusal,
+        refusal=stated.refusal or (None if foreign else stated.tax_refusal),
         estimate_methods=stated.estimate_methods,
     )
 
