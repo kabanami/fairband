@@ -82,13 +82,22 @@ def test_decile_boundaries_and_empty_edges() -> None:
 def test_growth_3y() -> None:
     ones: list[float | None] = [1, 1, 1, 1, 1]
     assert growth_3y(series([50, 100, 110, 121, 133.1], ones)) == pytest.approx(0.1)
+    assert growth_3y(series([100, None, None, 133.1], ones[:4])) == pytest.approx(0.1)
     assert growth_3y(series([100, 110, 121], ones[:3])) == pytest.approx(0.1)
     assert growth_3y(series([100, 121], ones[:2])) == pytest.approx(0.21)
     assert growth_3y(series([121], ones[:1])) is None
-    assert growth_3y(series([None, 110, 121, 133.1], ones[:4])) is None
+    # a missing, zero or negative first year falls back to the run of positive revenues
+    assert growth_3y(series([None, 110, 121, 133.1], ones[:4])) == pytest.approx(0.1)
+    assert growth_3y(series([None, None, 121, 133.1], ones[:4])) == pytest.approx(0.1)
+    assert growth_3y(series([-5, 110, 121, 133.1], ones[:4])) == pytest.approx(0.1)
+    assert growth_3y(series([0, 110, 121], ones[:3])) == pytest.approx(0.1)
+    assert growth_3y(series([None, 110, None, 133.1], ones[:4])) is None
+    assert growth_3y(series([None, 121], ones[:2])) is None
+    # the last year missing or negative, and a Start-up, have no growth
     assert growth_3y(series([100, 110, 121, None], ones[:4])) is None
-    assert growth_3y(series([0, 10, 40], ones[:3])) is None
-    assert growth_3y(series([-5, 10, 40], ones[:3])) is None
+    assert growth_3y(series([100, -5], ones[:2])) is None
+    assert growth_3y(series([0, 10, 40, 120], ones[:4])) is None
+    assert growth_3y(series([10, 20, 0], ones[:3])) is None
 
 
 def test_is_startup() -> None:
@@ -104,10 +113,56 @@ def test_startup_when_revenue_zero_three_years_ago(deciles: Deciles) -> None:
     assert classify(s, deciles).phase == "Start-up"
 
 
-def test_unmeasurable_growth_is_startup(deciles: Deciles) -> None:
-    ev = classify(series([0, 10, 40], [-5, -8, -9]), deciles)
-    assert ev.phase == "Start-up" and ev.growth_3y is None and ev.growth_word is None
-    assert "short-history" in codes(ev)
+def test_zero_first_revenue_in_a_short_series_falls_back(deciles: Deciles) -> None:
+    ev = classify(series([0, 110, 121], [-5, -8, -9]), deciles)
+    assert ev.phase == "Young Growth" and ev.growth_3y == pytest.approx(0.1)
+    assert (
+        Flag(
+            "short-history",
+            "Short history",
+            "Only 3 fiscal years are on file; growth runs from fiscal 2024 to 2025 "
+            "instead of over three years.",
+        )
+        in ev.checks
+    )
+
+
+def test_missing_last_revenue_is_unclassified(deciles: Deciles) -> None:
+    ev = classify(series([100, 110, 121, None], [10, 11, 12, 13]), deciles)
+    assert ev.phase is None and ev.reason == "no revenue for the last fiscal year"
+    # a zero three years back does not make it a Start-up when the last year is missing
+    ev = classify(series([0, 110, 121, None], [-5, -8, -9, -9]), deciles)
+    assert ev.phase is None and ev.reason == "no revenue for the last fiscal year"
+
+
+def test_missing_revenue_three_years_back_falls_back(deciles: Deciles) -> None:
+    ev = classify(series([100, None, 110, 121, 133.1], [10, 10, 11, 12, 13]), deciles)
+    assert ev.growth_3y == pytest.approx(0.1) and ev.phase == "Mature Growth"
+    assert (
+        Flag(
+            "short-history",
+            "Short history",
+            "Revenue for fiscal 2022 is missing or negative; growth runs from fiscal 2023 "
+            "to 2025 instead of over three years.",
+        )
+        in ev.checks
+    )
+
+    gap = classify(series([100, None, 110, None, 133.1], [10, 10, 11, 12, 13]), deciles)
+    assert gap.phase is None and gap.reason == "no measurable revenue growth"
+
+
+def test_negative_revenue(deciles: Deciles) -> None:
+    last = classify(series([100, 110, 121, -5], [10, 11, 12, 13]), deciles)
+    assert last.phase is None and last.reason == "negative revenue"
+
+    first = classify(series([-5, 110, 121, 133.1], [10, 11, 12, 13]), deciles)
+    assert first.growth_3y == pytest.approx(0.1) and first.phase == "Mature Growth"
+    assert "short-history" in codes(first)
+    assert first.margin_slope is not None and first.margin_slope < 0  # -5's margin skipped
+
+    no_run = classify(series([-5, 110, -3, 133.1], [10, 11, 12, 13]), deciles)
+    assert no_run.phase is None and no_run.reason == "no measurable revenue growth"
 
 
 def test_decline_needs_low_growth_and_falling_trend(deciles: Deciles) -> None:
@@ -240,8 +295,8 @@ def test_short_history_flagged_and_two_years_unclassified(deciles: Deciles) -> N
         Flag(
             "short-history",
             "Short history",
-            "Only 2 fiscal years are on file; growth runs over the years that exist "
-            "instead of three.",
+            "Only 2 fiscal years are on file; growth runs from fiscal 2024 to 2025 "
+            "instead of over three years.",
         )
         in two.checks
     )
@@ -291,6 +346,10 @@ def test_compute_deciles_excludes_unmeasurable() -> None:
     # only A has a positive last margin and a slope; one value gives no edges
     assert d.n_margin == 1 and d.margin_slope_edges == ()
     assert d.refresh_id is None
+
+    # an unclassifiable series stays out of the margin ranking even with a margin trend
+    no_last_revenue = series([100, 110, 121, 133.1, None], [10, 11, 12, 13, 14])
+    assert compute_deciles({"A": series_a, "G": no_last_revenue}).n_margin == 1
 
     startup = series([0, 10, 40, 120], [-5, -8, -9, -9])
     assert compute_deciles({"A": series_a, "S": startup}, refresh_id=7) == Deciles(
