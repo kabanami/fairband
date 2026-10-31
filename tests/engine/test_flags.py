@@ -9,6 +9,7 @@ from fairband.engine.flags import (
     gate_flags,
     long_runway_flag,
     margin_flag,
+    median_margin,
     nri_flag,
     value_spread_flag,
 )
@@ -127,6 +128,17 @@ def test_margin_flag_high_of_zero(policy: Policy) -> None:
     flag = margin_flag(margins([-20, -15, -10, -5, -2, 0]), 0.01, policy)
     assert flag is not None and flag.word == "Newly profitable"
     assert margin_flag(margins([-20, -15, -10, -5, -2, 0]), 0.0, policy) is None
+
+
+def test_median_margin_is_the_margin_flags_median(policy: Policy) -> None:
+    # the last ten years that have a margin; a year with no operating income is skipped
+    history = margins([90, None, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+    assert median_margin(history) == pytest.approx(0.55)
+    assert median_margin(history, window=3) == pytest.approx(0.90)
+    flag = margin_flag(history, 1.50, policy)
+    assert flag is not None and "median of 55.0%" in flag.sentence
+    assert median_margin(margins([None, None])) is None
+    assert median_margin(()) is None
 
 
 def trailing(

@@ -14,6 +14,7 @@ from fairband.engine.classifier import (
     dickinson,
     growth_3y,
     is_startup,
+    operating_margin,
     slope,
 )
 from fairband.engine.types import Flag, PhaseEvidence
@@ -404,3 +405,11 @@ def test_dickinson() -> None:
     assert dickinson(fy(2025, 1, 1, cfo=-1, cfi=-1, cff=-1)) == "Shake-out"
     assert dickinson(fy(2025, 1, 1, cfo=1, cfi=1, cff=-1)) == "Shake-out"
     assert dickinson(fy(2025, 1, 1, cfo=None)) is None
+
+
+def test_operating_margin() -> None:
+    assert operating_margin(fy(2025, 200, 50)) == 0.25
+    assert operating_margin(fy(2025, 200, -50)) == -0.25
+    assert operating_margin(fy(2025, None, 50)) is None
+    assert operating_margin(fy(2025, 200, None)) is None
+    assert operating_margin(fy(2025, 0, 50)) is None  # a zero revenue cannot be divided

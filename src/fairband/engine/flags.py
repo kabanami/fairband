@@ -17,16 +17,23 @@ import statistics
 from collections.abc import Sequence
 
 from fairband.engine.anchor import TrailingFigures
-from fairband.engine.classifier import FiscalYear, Series
+from fairband.engine.classifier import Series, operating_margin
 from fairband.engine.types import Flag
 from fairband.policy import Policy
 
 _MARGIN_WINDOW = 10  # mech/1.2: the median and the high over the last ten fiscal years
 
 
+def median_margin(series: Series, window: int = _MARGIN_WINDOW) -> float | None:
+    """The median operating margin over the last ``window`` fiscal years that have one, the
+    median the margin flag uses; ``None`` when no year has one."""
+    history = _margin_history(series, window)
+    return statistics.median(history) if history else None
+
+
 def margin_flag(series: Series, ttm_margin: float | None, policy: Policy) -> Flag | None:
     """The ``margin-flag`` for the trailing operating margin against its own history."""
-    history = [m for fy in series if (m := _margin(fy)) is not None][-_MARGIN_WINDOW:]
+    history = _margin_history(series, _MARGIN_WINDOW)
     if ttm_margin is None or len(history) < policy.margin_flag_min_years:
         return None
     median, high = statistics.median(history), max(history)
@@ -150,7 +157,6 @@ def value_spread_flag(values: Sequence[float | None], policy: Policy) -> Flag | 
     )
 
 
-def _margin(fy: FiscalYear) -> float | None:
-    if fy.revenue is None or fy.operating_income is None or fy.revenue <= 0:
-        return None
-    return fy.operating_income / fy.revenue
+def _margin_history(series: Series, window: int) -> list[float]:
+    """The operating margins of the last ``window`` fiscal years that have one, oldest first."""
+    return [m for fy in series if (m := operating_margin(fy)) is not None][-window:]

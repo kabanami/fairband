@@ -116,6 +116,13 @@ def is_startup(series: Series) -> bool:
     return series[-1].revenue == 0 or back == 0
 
 
+def operating_margin(fy: FiscalYear) -> float | None:
+    """Operating income ÷ revenue; ``None`` when either is missing or the revenue is not positive."""
+    if fy.revenue is None or fy.operating_income is None or fy.revenue <= 0:
+        return None
+    return fy.operating_income / fy.revenue
+
+
 def compute_deciles(
     series_by_symbol: Mapping[str, Series], refresh_id: int | None = None
 ) -> Deciles:
@@ -136,7 +143,7 @@ def compute_deciles(
         if g is None or margin is None:
             continue
         growth.append(g)
-        m_slope = _trend(series, _margin)
+        m_slope = _trend(series, operating_margin)
         if margin >= 0 and m_slope is not None:
             margin_slopes.append(m_slope)
     return Deciles(
@@ -201,7 +208,7 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
     g_decile = None if g3 is None else decile(g3, deciles.growth_edges)
     g_word = None if g_decile is None else GROWTH_WORDS[(g_decile - 1) // 2]
     rev_slope = _trend(series, lambda fy: fy.revenue)
-    margin, m_slope = _last_margin(series), _trend(series, _margin)
+    margin, m_slope = _last_margin(series), _trend(series, operating_margin)
     direction = _margin_direction(margin, m_slope, deciles.margin_slope_edges)
     fcf = _fcf_sign(series[-1])
 
@@ -382,16 +389,10 @@ def _trend(series: Series, value: Callable[[FiscalYear], float | None]) -> float
     return statistics.linear_regression(positions, values).slope
 
 
-def _margin(fy: FiscalYear) -> float | None:
-    if fy.revenue is None or fy.operating_income is None or fy.revenue <= 0:
-        return None
-    return fy.operating_income / fy.revenue
-
-
 def _last_margin(series: Series) -> float | None:
     """The margin of the last of the last five fiscal years that has one."""
     window = series[-_TREND_WINDOW:]
-    return next((m for fy in reversed(window) if (m := _margin(fy)) is not None), None)
+    return next((m for fy in reversed(window) if (m := operating_margin(fy)) is not None), None)
 
 
 def _margin_direction(
