@@ -34,6 +34,7 @@
     "isActivelyTrading": true
   },
   {
+    "_comment": "Synthetic placement: live FMP files Berkshire under Financial Services / Insurance - Diversified, which the universe excludes by industry. It sits under Industrials here so the fixture admits a share class (BRK-B becomes BRK.B).",
     "symbol": "BRK-B",
     "companyName": "Berkshire Hathaway Inc.",
     "marketCap": 1000000000000,

@@ -25,10 +25,13 @@ band. The rows go in one transaction, with ``observed_at`` the screener response
 
 The industry match: the policy lists FMP's industry strings for banks, insurers and REITs, taken
 from FMP's published vocabulary; without a live key, the live screener's strings are unconfirmed.
-So an industry is excluded when, lower-cased, it equals an entry or starts with an entry followed
-by ``" - "``: the bare ``Banks``, ``Insurance`` and ``REIT`` entries also cover a ``Banks -
-Regional`` or a ``REIT - Data Center`` the list does not name. The first full refresh confirms the
-live vocabulary: its calibration counts the exclusions by reason, so a leak shows.
+So the industry and each entry are normalized (lower-cased, each hyphen, en dash and em dash made
+a space, whitespace collapsed), and an industry is excluded when it equals an entry or starts with
+an entry and a space. The bare ``Banks``, ``Insurance`` and ``REIT`` entries then also cover a
+string the list does not name, in any dash style: ``Banks—Regional``, ``Insurance Brokers``,
+``REIT - Data Center``; ``Banking Software`` is not excluded (``banking`` is not ``banks``). The
+first full refresh confirms the live vocabulary: its calibration counts the exclusions by reason,
+so a leak shows.
 
 A ``VendorError`` from the screener is stored as ``fetch`` stores one (its status, its scrubbed
 message, no payload) and propagates. A payload that gives no rows is stored with the error
@@ -58,6 +61,7 @@ SKIPPED = "skipped"
 _PARAMS: dict[str, str] = {}
 _REASONS = ("industry", "symbol pattern", "manual exclusion", SKIPPED)
 _DETAIL_CHARS = 80  # of an unusable payload, kept as its error
+_DASHES = re.compile("[-\u2013\u2014]")  # hyphen, en dash, em dash
 
 
 @dataclass(frozen=True)
@@ -177,11 +181,15 @@ def _exclusion(
 
 
 def _excluded_industry(industry: str, excluded: Sequence[str]) -> bool:
-    """Whether ``industry``, lower-cased, equals an entry or starts with an entry and ``" - "``."""
-    name = industry.lower()
-    return any(
-        name == entry.lower() or name.startswith(f"{entry.lower()} - ") for entry in excluded
-    )
+    """Whether ``industry``, normalized, equals a normalized entry or starts with one and a space."""
+    name = _normalized(industry)
+    entries = (_normalized(entry) for entry in excluded)
+    return any(name == entry or name.startswith(f"{entry} ") for entry in entries)
+
+
+def _normalized(industry: str) -> str:
+    """Lower-cased, each hyphen, en dash and em dash a space, whitespace collapsed."""
+    return " ".join(_DASHES.sub(" ", industry.lower()).split())
 
 
 def _company(

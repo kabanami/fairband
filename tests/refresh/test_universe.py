@@ -183,9 +183,20 @@ def test_stored_screener_response_is_scrubbed(
 
 @pytest.mark.parametrize(
     "industry",
-    ["Banks", "banks - regional", "BANKS - DIVERSIFIED", "REIT - Data Center", "Insurance - Title"],
+    [
+        "Banks",
+        "banks - regional",
+        "BANKS - DIVERSIFIED",
+        "REIT - Data Center",
+        "Insurance - Title",
+        "Banks\u2014Regional",  # an em dash
+        "REIT \u2013 Office",  # an en dash
+        "Insurance Brokers",  # no dash
+        "Reit office",
+        "REIT  -  Office",
+    ],
 )
-def test_industry_excluded_case_insensitively_by_its_first_word_group(
+def test_industry_excluded_whatever_its_case_and_dashes(
     conn: sqlite3.Connection,
     clients: Clients,
     router: Router,
@@ -199,7 +210,9 @@ def test_industry_excluded_case_insensitively_by_its_first_word_group(
     assert stored(conn)["ACME"].exclusion_reason == f"industry: {industry}"
 
 
-@pytest.mark.parametrize("industry", ["Real Estate Services", "Asset Management", None])
+@pytest.mark.parametrize(
+    "industry", ["Real Estate Services", "Asset Management", "Banking Software", None]
+)
 def test_industry_outside_the_list_is_admitted(
     conn: sqlite3.Connection,
     clients: Clients,

@@ -133,8 +133,9 @@ cap_floor_usd = 2e9
 cap_bands = [[200e9, "Mega"], [10e9, "Large"], [2e9, "Mid"]]
 # Every FMP industry string for banks, insurance and REITs, from FMP's available-industries
 # vocabulary (checked 2026-10-31 against three published copies of that list). The universe build
-# also excludes an industry that starts with an entry and " - ", ignoring case, so the bare
-# Banks, Insurance and REIT entries cover a string the list does not name.
+# compares them ignoring case and dash style, and also excludes an industry that starts with an
+# entry and a space, so the bare Banks, Insurance and REIT entries cover a string the list does
+# not name (Banks—Regional, Insurance Brokers).
 excluded_industries = [
   "Banks",
   "Banks - Diversified",
