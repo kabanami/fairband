@@ -1065,7 +1065,9 @@
         onDragStart: function (e) {
           drag.current.from = c.key;
           e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', c.key);
+          // fairband: a type of its own, which no text field accepts, so a header dropped on FIND
+          // types nothing; Firefox starts a drag only with some data set.
+          e.dataTransfer.setData('application/x-fairband-column', c.key);
         },
         onDragOver: function (e) {
           var from = drag.current.from;

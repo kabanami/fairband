@@ -630,6 +630,7 @@ def test_app_js_find_and_filters() -> None:
         "total: state.rows.length",
     ):
         assert prop in script, prop
+    assert "var rows = narrow(state.rows, state.query, state.filters);" in script
     assert "footnote" not in script
 
 
@@ -755,6 +756,10 @@ def test_bundle_orders_columns_by_the_list() -> None:
     # The edge is on the side where the column will land: after the target when it comes from
     # the left.
     assert "var after = visible.indexOf(from) < visible.indexOf(c.key);" in bundle
+    # A drag carries a type of its own, which no text field accepts: a header dropped on FIND
+    # types nothing into it.
+    assert "e.dataTransfer.setData('application/x-fairband-column', c.key);" in bundle
+    assert "'text/plain'" not in bundle
 
 
 def test_bundle_is_the_november_build() -> None:
