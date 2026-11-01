@@ -23,6 +23,12 @@ from fairband.engine.types import (
 from fairband.policy import Policy
 
 TODAY = date(2026, 10, 31)
+# At a return equal to r, growth up to r adds no value and the value is year-1 earnings over r;
+# years 1 and 2 pay for the 12% and 10% steps, above r, and the payout floor raises their cash
+# from below zero to zero, which adds it back.
+VALUE_AT_R = (
+    5.90 / 0.09 + 5.90 * (0.12 / 0.09 - 1) / 1.09 + 5.90 * 1.12 * (0.10 / 0.09 - 1) / 1.09**2
+)
 
 MATURE_GROWTH_KEYS = {
     "anchor",
@@ -183,9 +189,13 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert set(im["implied_growth_by_runway"]) == {"5", "10", "20"}
     assert set(im["implied_by_roic"]) == {"aggregate", "0.15", "0.09"}
     assert implied < im["implied_by_roic"]["aggregate"] < im["implied_by_roic"]["0.15"]
-    # at a ROIC equal to r growth adds no value, so no growth reaches the price
-    assert im["value_by_roic"]["0.09"] == pytest.approx(5.90 / 0.09)
-    assert im["implied_by_roic"]["0.09"] is None
+    # at a ROIC equal to r growth up to r adds no value; only growth above r, which the payout
+    # floor makes free, reaches the price
+    assert im["value_by_roic"]["0.09"] == pytest.approx(VALUE_AT_R)
+    at_r = im["implied_by_roic"]["0.09"]
+    assert at_r > 0.09 and at_r > im["implied_by_roic"]["0.15"]
+    at_r_value = value_at_belief(replace(growth, belief=at_r), Charge(0.09, 0.09, 0.09, 0.03))
+    assert at_r_value / 1_000e6 == pytest.approx(150.0, rel=1e-6)
     # at $170 a 5-year runway needs growth beyond the old 50% bracket of the solve
     assert im["implied_growth_by_runway"]["10"] > implied
     five = reprice(r, 170.0, date(2026, 11, 2), policy).intermediates["implied_growth_by_runway"]
@@ -433,7 +443,7 @@ def test_income_needs_a_market_cap(
 def test_a_return_below_r_is_floored(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    # a 2% marginal return: the charge uses r, at which growth adds no value
+    # a 2% marginal return: the charge uses r, at which growth up to r adds no value
     poor = tuple(
         replace(y, operating_income=(y.operating_income or 0) / 22) for y in mg_inputs.capital_years
     )
@@ -441,7 +451,7 @@ def test_a_return_below_r_is_floored(
     im = r.intermediates
     assert im["runway_return"]["used"] == "floor" and im["runway_return"]["marginal_usable"]
     assert im["runway_roic"] == im["terminal_roic"] == policy.required_return
-    assert r.refusal is None and r.value == pytest.approx(5.90 / 0.09)
+    assert r.refusal is None and r.value == pytest.approx(VALUE_AT_R)
     floored = next(f for f in r.flags if f.code == "return-floored")
     assert floored.sentence.startswith("The five-year marginal return of 2.0%")
     [note] = [i.note for i in r.inputs if i.name == "runway_return"]

@@ -8,6 +8,7 @@ from fairband.engine.mature_growth import (
     GrowthPath,
     cash_to_equity,
     earnings_by_year,
+    floored_years,
     growth_rates,
     implied_growth,
     terminal_multiple,
@@ -15,6 +16,8 @@ from fairband.engine.mature_growth import (
 )
 
 R, GT = 0.09, 0.03
+FADE = GrowthPath(1000.0, (0.25, 0.26), 0.053, 20, fade_years=5)
+CHARGE = Charge(0.149, 0.13, R, GT)
 
 
 def worked_example() -> GrowthPath:
@@ -69,9 +72,13 @@ def test_implied_growth_none_when_out_of_range() -> None:
     assert implied_growth(1e9, worked_example(), Charge(0.20, 0.13, R, GT)) is None
 
 
-def test_charge_off_equals_uncharged() -> None:
-    off = value_at_belief(worked_example(), Charge(0.2, 0.13, R, GT, charge_off=True))
-    assert off == pytest.approx(value_at_belief(worked_example(), uncharged()))
+def test_charge_off_keeps_the_terminal_charge() -> None:
+    off = Charge(0.20, 0.13, R, GT, charge_off=True)
+    assert value_at_belief(worked_example(), off) == pytest.approx(28.2647, abs=0.001)
+    assert value_at_belief(FADE, replace(CHARGE, charge_off=True)) == pytest.approx(
+        37618.17, abs=0.01
+    )
+    assert floored_years(FADE, replace(CHARGE, charge_off=True)) == ()  # no charge, no floor
 
 
 def test_growth_rates_take_the_belief_for_missing_steps() -> None:
@@ -125,3 +132,42 @@ def test_implied_growth_when_value_falls_with_growth() -> None:
     p, c = GrowthPath(1.0, (None, None), 0.04, 10), Charge(0.06, 0.09, R, GT)
     assert value_at_belief(replace(p, belief=0.06), c) < value_at_belief(p, c)
     assert implied_growth(value_at_belief(p, c), p, c) == pytest.approx(0.04, abs=1e-5)
+
+
+def test_fade_path_rates_and_earnings() -> None:
+    assert growth_rates(FADE)[:8] == pytest.approx(
+        (0.25, 0.26, 0.2186, 0.1772, 0.1358, 0.0944, 0.053, 0.053), abs=1e-4
+    )
+    assert earnings_by_year(FADE)[:9] == pytest.approx(
+        (1000.00, 1250.00, 1575.00, 1919.29, 2259.39, 2566.22, 2808.47, 2957.32, 3114.06),
+        abs=0.01,
+    )
+
+
+def test_value_with_the_fade_and_the_floor() -> None:
+    assert value_at_belief(FADE, CHARGE) == pytest.approx(24941.95, abs=0.01)
+    assert value_at_belief(replace(FADE, fade_years=0), CHARGE) == pytest.approx(19699.10, abs=0.01)
+
+
+def test_fade_cut_by_the_runway() -> None:
+    five = replace(FADE, runway=5)
+    assert growth_rates(five) == pytest.approx((0.25, 0.26, 0.2186, 0.1772), abs=1e-4)
+    assert value_at_belief(five, CHARGE) == pytest.approx(20520.66, abs=0.01)
+
+
+def test_no_fade_when_g3_is_at_or_below_the_belief() -> None:
+    path = GrowthPath(1000.0, (0.04, 0.05), 0.053, 20, fade_years=5)
+    assert growth_rates(path)[:4] == pytest.approx((0.04, 0.05, 0.053, 0.053))
+    assert value_at_belief(path, CHARGE) == pytest.approx(14910.79, abs=0.01)
+
+
+def test_no_fade_when_g3_is_the_belief() -> None:
+    path = GrowthPath(1000.0, (0.25, None), 0.053, 20, fade_years=5)
+    assert growth_rates(path)[1:4] == pytest.approx((0.053, 0.053, 0.053))
+    assert floored_years(path, CHARGE) == (1,)  # year 1 pays for the 25% step and floors
+
+
+def test_payout_floor() -> None:
+    assert cash_to_equity(100.0, 0.25, 0.149) == 0.0  # -67.79 before the floor
+    assert cash_to_equity(100.0, 0.053, 0.149) == pytest.approx(64.43, abs=0.01)
+    assert floored_years(FADE, CHARGE) == (1, 2, 3, 4)  # growth above 14.9% in years 2 to 5
