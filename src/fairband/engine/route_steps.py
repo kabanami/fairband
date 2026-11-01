@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 _UNKNOWN = Provenance("unknown", None, None, None)
 # The ``estimate_methods`` key assembly sets when invested capital takes the issuer's as-reported
-# intangibles total; no input bears the name, so the aggregate ROIC carries the method.
+# intangibles total; no input bears the name, so the inputs read from invested capital carry it.
 _INTANGIBLES = "intangibles"
 _INTANGIBLES_NOTE = "invested capital uses the issuer's total intangibles excluding goodwill"
 
@@ -203,10 +203,8 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
         data(i, "dividends_ttm", t.dividends, "USD", "statements"),
         data(i, "buybacks_ttm", t.buybacks, "USD", "statements"),
         data(i, "equity_issued_ttm", t.equity_issued, "USD", "statements"),
-        _aggregate_roic(i, roic),
-        data(
-            i, "runway_return", roic.runway, "ratio", "statements", runway_note(roic.runway_return)
-        ),
+        _from_capital(i, "aggregate_roic", roic.result.aggregate),
+        _from_capital(i, "runway_return", roic.runway, runway_note(roic.runway_return)),
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),  # the newest ROIC year's rate
         data(i, "moat_score", i.moat_score, "score"),
         data(i, "gf_eps_ttm", i.gf_eps_ttm, "USD a share"),
@@ -214,14 +212,18 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
     )
 
 
-def _aggregate_roic(i: CompanyInputs, roic: RoicTerms) -> TaggedInput:
-    """The aggregate ROIC, an estimate under the intangibles method when assembly took the
-    issuer's as-reported intangibles total into invested capital (D17)."""
-    found = data(i, "aggregate_roic", roic.result.aggregate, "ratio", "statements")
+def _from_capital(
+    i: CompanyInputs, name: str, value: float | None, note: str | None = None
+) -> TaggedInput:
+    """A return read from invested capital, cited to the statements: an estimate under the
+    intangibles method when assembly took the issuer's as-reported intangibles total into
+    invested capital (D17). Its note is ``note``; without one, an estimate's note says why."""
+    found = data(i, name, value, "ratio", "statements", note)
     method = i.estimate_methods.get(_INTANGIBLES)
     if method is None:
         return found
-    return replace(found, kind="estimate", estimate_method=method, note=_INTANGIBLES_NOTE)
+    why = _INTANGIBLES_NOTE if note is None else note
+    return replace(found, kind="estimate", estimate_method=method, note=why)
 
 
 def common_rules(policy: Policy, moat: Moat, roic: RoicTerms) -> tuple[TaggedInput, ...]:

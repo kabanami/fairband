@@ -272,26 +272,32 @@ def test_both_routes_carry_the_tax_rate_with_the_assembly_note(
         assert tax.provenance == inputs.provenance["tax_rate_latest"]
 
 
-def test_the_intangibles_estimate_reaches_the_aggregate_roic(
+def test_the_intangibles_estimate_reaches_the_roic_inputs(
     mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """Assembly took the issuer's as-reported intangibles total (D17) into invested capital: on
-    both routes the aggregate ROIC the drawer shows is an estimate under that method, and says
-    why. The snapshot keeps it."""
+    both routes the aggregate ROIC and the runway return the drawer shows are estimates under
+    that method. The aggregate ROIC says why; the runway return keeps the note naming the measure
+    the charge used. The snapshot keeps them."""
     method = "bs10-intangibles-total-v1"
     for inputs in (mg_inputs, ms_inputs):
-        r = value_company(inputs, deciles, policy, TODAY)
-        [plain] = [i for i in r.inputs if i.name == "aggregate_roic"]
-        assert (plain.kind, plain.estimate_method, plain.note) == ("observed", None, None)
+        plain = {i.name: i for i in value_company(inputs, deciles, policy, TODAY).inputs}
+        ten_year, runway = plain["aggregate_roic"], plain["runway_return"]
+        assert (ten_year.kind, ten_year.estimate_method, ten_year.note) == ("observed", None, None)
+        assert (runway.kind, runway.estimate_method) == ("observed", None)
         r = value_company(
             replace(inputs, estimate_methods={"intangibles": method}), deciles, policy, TODAY
         )
-        [roic] = [i for i in r.inputs if i.name == "aggregate_roic"]
-        assert (roic.tag, roic.kind, roic.estimate_method) == ("DATA", "estimate", method)
-        assert (
-            roic.note == "invested capital uses the issuer's total intangibles excluding goodwill"
+        by_name = {i.name: i for i in r.inputs}
+        for name in ("aggregate_roic", "runway_return"):
+            found = by_name[name]
+            assert (found.tag, found.kind, found.estimate_method) == ("DATA", "estimate", method)
+            assert (found.value, found.provenance) == (plain[name].value, plain[name].provenance)
+        assert by_name["aggregate_roic"].note == (
+            "invested capital uses the issuer's total intangibles excluding goodwill"
         )
-        assert (roic.value, roic.provenance) == (plain.value, plain.provenance)
+        assert by_name["runway_return"].note == runway.note
+        assert runway.note is not None
         assert result_from_json(result_to_json(r)) == r
 
 
