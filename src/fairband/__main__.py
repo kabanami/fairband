@@ -2,10 +2,12 @@
 
 import argparse
 import logging
+import signal
 import sys
 import threading
-from collections.abc import Callable
-from contextlib import closing
+from collections.abc import Callable, Iterator
+from contextlib import closing, contextmanager
+from types import FrameType
 
 from fairband import __version__
 from fairband.config import (
@@ -95,6 +97,7 @@ def _refresh(args: argparse.Namespace) -> int:
     policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
         migrate(conn)
+    cancel = threading.Event()
     fmp, gf, secrets = build_clients(keys, policy)
     try:
         refresh = Refresh(
@@ -104,11 +107,12 @@ def _refresh(args: argparse.Namespace) -> int:
             policy,
             tax,
             utcnow,
-            threading.Event(),
+            cancel,
             _print_progress,
             secrets,
         )
-        refresh_id = refresh.run("scoped", args.symbols)
+        with _ctrl_c_cancels(cancel):
+            refresh_id = refresh.run("scoped", args.symbols)
     except RefreshRunning as exc:
         print(f"{exc}; try again when it has finished", file=sys.stderr)
         return 1
@@ -126,6 +130,27 @@ def _refresh(args: argparse.Namespace) -> int:
     for symbol, snapshot in rows:
         print(_snapshot_line(symbol, snapshot))
     return 0 if status == "done" else 1
+
+
+@contextmanager
+def _ctrl_c_cancels(cancel: threading.Event) -> Iterator[None]:
+    """While the block runs, the first Ctrl-C sets ``cancel`` (the refresh ends ``cancelled``
+    after the current company) and puts back Python's default handler, so a second Ctrl-C
+    interrupts at once. Python runs signal handlers on the main thread only, so on any other
+    thread this changes nothing. The handler in place before is restored at the end."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def first_ctrl_c(signum: int, frame: FrameType | None) -> None:
+        cancel.set()
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+
+    previous = signal.signal(signal.SIGINT, first_ctrl_c)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, signal.default_int_handler if previous is None else previous)
 
 
 def _usage(message: str) -> int:

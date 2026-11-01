@@ -8,6 +8,7 @@ one.
 
 import json
 import logging
+import signal
 import sqlite3
 import threading
 from collections import Counter
@@ -130,6 +131,18 @@ def env(
 
 
 @pytest.fixture
+def env_without_universe(
+    tmp_path: Path, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> Iterator[Env]:
+    """No refresh has run: no universe rows, no deciles (``universe_id`` 0, so the first
+    refresh is 1)."""
+    db_path = tmp_path / "data" / "fairband.db"
+    with closing(connect(db_path)) as conn:
+        migrate(conn)
+    yield Env(db_path, 0, clients, router, clock, policy, load_tax_table())
+
+
+@pytest.fixture
 def env_with_deciles(env: Env) -> Env:
     """Deciles stored under the universe's refresh, and ACME's twelve synthetic years with a full
     NTM consensus, so ACME is Mature Growth and gets a value."""
@@ -188,6 +201,15 @@ def test_scoped_refresh_without_deciles_writes_refusal_snapshots(env: Env) -> No
     ]
 
 
+def test_first_refresh_before_any_universe_says_no_deciles(env_without_universe: Env) -> None:
+    """Without a universe row the country is unknown, so assembly finds no tax rate; the missing
+    deciles are still the reason a first scoped refresh gives."""
+    env = env_without_universe
+    refresh_id = env.run(["ACME"])
+    assert refresh_id == 1 and env.last().status == "done"
+    assert env.snapshots() == [("ACME", refresh_id, "no universe deciles yet")]
+
+
 def test_scoped_refresh_with_stored_deciles_values(env_with_deciles: Env) -> None:
     env = env_with_deciles
     refresh_id = env.run(["ACME"])
@@ -205,7 +227,10 @@ def test_scoped_refresh_with_stored_deciles_values(env_with_deciles: Env) -> Non
 
 def test_stop_after_first_then_continue(env: Env) -> None:
     """The cancel lands in the fetch stage: ACME keeps its stored responses, BOLT is never
-    started and nothing is valued; the next run reuses ACME's responses and fetches BOLT."""
+    started, and no snapshot is written, because a cancel ends the run after the current symbol
+    and no later stage runs (a full refresh could not compute deciles from part of the
+    universe either). Nothing is lost: the next run reuses ACME's responses (no call), fetches
+    BOLT and values both."""
     cancel = threading.Event()
 
     def stop_after_first(progress: Progress) -> None:
@@ -454,6 +479,73 @@ def test_cli_exits_1_when_the_refresh_is_not_done(
         f"refresh {env.universe_id + 1}: failed: rate limited by FMP: stopped after 0 companies",
         "ACME  —  no snapshot yet",
     ]
+
+
+def press_ctrl_c(times: int) -> Callable[[Progress], None]:
+    """A progress printer that, at the start of the fetch stage, calls the SIGINT handler in
+    place ``times`` times, as Ctrl-C would; ``pressed`` records each handler called."""
+    pressed: list[object] = []
+    print_progress = cli._print_progress
+
+    def on_progress(progress: Progress) -> None:
+        if progress.stage == "fetch" and not pressed:
+            for _ in range(times):
+                handler = signal.getsignal(signal.SIGINT)
+                assert callable(handler)
+                if not pressed and handler is signal.default_int_handler:
+                    pytest.fail("the command installed no SIGINT handler")
+                pressed.append(handler)
+                handler(signal.SIGINT, None)
+        print_progress(progress)
+
+    on_progress.pressed = pressed  # type: ignore[attr-defined]
+    return on_progress
+
+
+def test_cli_ctrl_c_cancels_after_the_current_symbol(
+    env: Env, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    use_cli(env, monkeypatch, tmp_path)
+    before = signal.getsignal(signal.SIGINT)
+    on_progress = press_ctrl_c(1)
+    monkeypatch.setattr(cli, "_print_progress", on_progress)
+    assert cli.main(["refresh", "ACME,BOLT"]) == 1
+    row = env.last()
+    assert (row.status, row.stage) == ("cancelled", "fetch")
+    assert env.items(row.id) == [("ACME", "pending", None), ("BOLT", "pending", None)]
+    assert env.router.calls == Counter()
+    assert f"refresh {row.id}: cancelled" in capsys.readouterr().out.splitlines()
+    [handler] = on_progress.pressed  # type: ignore[attr-defined]
+    assert handler is not before  # the command's own handler ran
+    assert signal.getsignal(signal.SIGINT) is before  # and is gone once the command ends
+
+
+def test_cli_second_ctrl_c_interrupts(
+    env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    use_cli(env, monkeypatch, tmp_path)
+    before = signal.getsignal(signal.SIGINT)
+    on_progress = press_ctrl_c(2)
+    monkeypatch.setattr(cli, "_print_progress", on_progress)
+    with pytest.raises(KeyboardInterrupt):
+        cli.main(["refresh", "ACME"])
+    assert on_progress.pressed[1] is signal.default_int_handler  # type: ignore[attr-defined]
+    assert (env.last().status, env.last().message) == ("failed", "KeyboardInterrupt")
+    assert signal.getsignal(signal.SIGINT) is before
+
+
+def test_cli_off_the_main_thread_leaves_sigint_alone(
+    env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Python delivers signals to the main thread only; installing a handler elsewhere raises."""
+    use_cli(env, monkeypatch, tmp_path)
+    before = signal.getsignal(signal.SIGINT)
+    exits: list[int] = []
+    thread = threading.Thread(target=lambda: exits.append(cli.main(["refresh", "ACME"])))
+    thread.start()
+    thread.join()
+    assert exits == [0] and env.last().status == "done"
+    assert signal.getsignal(signal.SIGINT) is before
 
 
 @pytest.mark.parametrize(

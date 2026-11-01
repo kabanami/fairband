@@ -1,15 +1,16 @@
 """Route dispatch: one ``CompanyInputs`` record in, one ``ValuationResult`` out (spec 6.6).
 
-``value_company`` refuses before any arithmetic, in this order: the refusal assembly set; no
-universe deciles yet; a foreign filer (spec 11); an unclassified company (the classifier's
-reason); a phase other than the two mature ones; no positive price; no positive diluted share
-count; no trailing figures. Then the phase's route runs (``route_mature_growth``,
-``route_mature_stable``, on the shared ``route_steps``) and refuses on its own guards. Mature
-Growth: no trailing revenue, no statutory tax rate, the anchor's refusals (an incomplete NTM
-consensus, no positive forward anchor, a forward P/E unit error), consensus earnings that turn
-negative within the path, a value a share at or below zero under the reinvestment charge (which
-keeps the value-side intermediates). Mature Stable: no positive trailing earnings. A refusal is a
-result with no value and a reason, never an exception.
+``value_company`` refuses before any arithmetic, in this order: no universe deciles yet (whatever
+else assembly found, which the next run with deciles judges); the refusal assembly set; a foreign
+filer (spec 11); an unclassified company (the classifier's reason); a phase other than the two
+mature ones; no positive price; no positive diluted share count; no trailing figures. Then the
+phase's route runs (``route_mature_growth``, ``route_mature_stable``, on the shared
+``route_steps``) and refuses on its own guards. Mature Growth: no trailing revenue, no statutory
+tax rate, the anchor's refusals (an incomplete NTM consensus, no positive forward anchor, a
+forward P/E unit error), consensus earnings that turn negative within the path, a value a share at
+or below zero under the reinvestment charge (which keeps the value-side intermediates). Mature
+Stable: no positive trailing earnings. A refusal is a result with no value and a reason, never an
+exception.
 
 Every result of ``value_company`` is valid until the next earnings date when that is after the
 data date, else for the policy's fallback days. Its flags are the assembly's, the classifier's
@@ -112,8 +113,7 @@ def value_company(
     assert policy.required_return > policy.terminal_growth, "policy: r must exceed g_t"
     assert min(policy.runway_years.values()) >= 1, "policy: a runway is a year or more"
     if deciles is None:
-        reason = inputs.refusal or "no universe deciles yet"
-        return _refuse(inputs, policy, today, reason, None, None)
+        return _refuse(inputs, policy, today, "no universe deciles yet", None, None)
     phase = classify(inputs.series, deciles)
     refresh_id = deciles.refresh_id
 

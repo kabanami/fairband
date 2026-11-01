@@ -512,9 +512,17 @@ def test_assembly_refusal_comes_first_with_the_phase(
     assert_refused(r, reason)
     assert r.phase.phase == "Mature Growth" and r.flags == (flag("x"),)
     assert r.price == 150.0 and r.valid_until == mg_inputs.next_earnings
+
+
+def test_no_deciles_outranks_an_assembly_refusal(mg_inputs: CompanyInputs, policy: Policy) -> None:
+    """Before the first full refresh the reason is the missing deciles; the assembly refusal is
+    judged again by the run that has them."""
+    reason = "no statutory tax rate for unknown 2015"
+    inputs = replace(mg_inputs, refusal=reason, input_flags=(flag("x"),))
     r = value_company(inputs, None, policy, TODAY)
-    assert_refused(r, reason)
-    assert r.phase.phase is None and r.phase.reason == reason
+    assert_refused(r, "no universe deciles yet")
+    assert r.phase.phase is None and r.phase.reason == "no universe deciles yet"
+    assert r.flags == (flag("x"),) and r.price == 150.0
 
 
 def test_refuses_foreign_filer(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
