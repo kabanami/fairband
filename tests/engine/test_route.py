@@ -118,6 +118,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
+    assert METHOD_VERSION == "fairband-mechanical/0.2"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:

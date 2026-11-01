@@ -1,9 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v1.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v2.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
-cite the exact policy it was computed under. Code elsewhere holds no valuation constant.
+cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
+file stays in the package byte for byte, because the snapshots valued under it cite its hash.
 """
 
 import hashlib
@@ -16,7 +17,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v1.toml"
+_POLICY_FILE = "fairband-policy-v2.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -66,6 +67,10 @@ class Policy:
     moat_narrow_min: float
     base_rates: tuple[BaseRateClass, ...]
     inflation_addition: float
+    marginal_return_span_years: int
+    marginal_capital_growth_min: float
+    fallback_return_years: int
+    fade_years: int
     roic_sensitivity: tuple[float, float]
     analyst_min: int
     nri_flag_share: float
@@ -86,7 +91,7 @@ class Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v1 file) into a ``Policy``."""
+    """Parse the policy file (default: the packaged v2 file) into a ``Policy``."""
     if path is None:
         data = resources.files(__name__).joinpath(_POLICY_FILE).read_bytes()
     else:
@@ -126,6 +131,10 @@ def load_policy(path: Path | None = None) -> Policy:
         moat_narrow_min=read("moat_narrow_min", _num),
         base_rates=read("base_rates", _base_rates),
         inflation_addition=read("inflation_addition", _num),
+        marginal_return_span_years=read("marginal_return_span_years", _whole),
+        marginal_capital_growth_min=read("marginal_capital_growth_min", _num),
+        fallback_return_years=read("fallback_return_years", _whole),
+        fade_years=read("fade_years", _whole),
         roic_sensitivity=read("roic_sensitivity", _pair),
         analyst_min=read("analyst_min", _whole),
         nri_flag_share=read("nri_flag_share", _num),

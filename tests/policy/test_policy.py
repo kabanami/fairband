@@ -7,14 +7,16 @@ import pytest
 
 from fairband.policy import BaseRateClass, load_policy
 
+V1_SHA256 = "cfc46d15585c283322f50a710d3385f4921c186ed94679a542c0571a43b54bde"
+
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v1.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v2.toml").read_bytes()
 
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v1" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v2" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -26,6 +28,27 @@ def test_values_match_design() -> None:
     assert p.base_rates[-1].median == 0.033 and p.inflation_addition == 0.02
     assert p.analyst_min == 5 and p.universe.cap_floor_usd == 2_000_000_000
     assert p.refresh.reuse_hours == 24 and p.refresh.gf_reuse_days == 7 and p.refresh.workers == 16
+
+
+def test_v2_is_the_default_and_carries_the_calibration_values() -> None:
+    p = load_policy()
+    assert p.version == "fairband-policy-v2"
+    assert p.marginal_return_span_years == 5 and p.marginal_capital_growth_min == 0.20
+    assert p.fallback_return_years == 3 and p.fade_years == 5
+    assert p.roic_sensitivity == (0.15, 0.09) and p.wide_terminal_roic_cap == 0.13
+    assert p.required_return == 0.09 and p.terminal_growth == 0.03  # unchanged
+
+
+def test_v1_file_is_unchanged() -> None:
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v1.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V1_SHA256
+
+
+def test_return_measure_note_is_recorded() -> None:
+    raw = load_policy().raw
+    note = raw["values"]["return_measure"]
+    assert "value" not in note and "Return on invested capital" in note["note"]
+    assert "source" in note
 
 
 def test_every_value_has_a_source_line() -> None:
