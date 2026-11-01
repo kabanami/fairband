@@ -287,10 +287,25 @@ def test_only_required_endpoints_set_the_error(
     router.fail.update({"profile", "estimates-quarter", "income-annual", "keyratios"})
     outcome = fetch(conn, clients, policy, clock)
     assert outcome.failed == ("income-annual", "profile", "estimates-quarter", "keyratios")
-    assert outcome.error == "data fetch failed: income-annual, estimates-quarter"
+    assert outcome.error == "data fetch failed: income-annual"
     router.fail = {"profile", "keyratios"}
     outcome = fetch(conn, clients, policy, clock)
     assert (outcome.calls, outcome.failed, outcome.error) == (4, ("profile", "keyratios"), None)
+
+
+def test_an_empty_quarterly_consensus_is_not_a_fetch_failure(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """FMP answers ``[]`` for a company without quarterly coverage, a foreign filer that reports
+    twice a year among them. The endpoint failed, but the company can still be valued or refused
+    for its own reason: only the Mature Growth route reads the consensus, and it refuses an
+    incomplete one itself."""
+    router.bodies["estimates-quarter"] = b"[]"
+    outcome = fetch(conn, clients, policy, clock)
+    assert outcome == FetchOutcome(
+        "ACME", calls=14, reused=0, failed=("estimates-quarter",), error=None
+    )
+    assert responses(conn)["estimates-quarter"]["error"] == "unusable payload: []"
 
 
 def test_missing_gf_key_marks_gf_failed(

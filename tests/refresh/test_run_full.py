@@ -43,6 +43,7 @@ from fairband.web.app import create_app
 
 RATE_LIMITED = "data fetch incomplete: rate limited"
 NOT_BUILT = "Young Growth route not built yet"
+FOREIGN = "foreign filer: currency and share-unit handling not built yet"
 # The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused; every company
 # carries a flag (the synthetic company has no leases on its balance sheet, among others).
 CALIBRATION = {
@@ -324,6 +325,25 @@ def test_deciles_leave_out_symbols_without_statements(env_fixture_universe: Env)
     with closing(env.connect()) as conn:
         assert deciles_for_universe(conn, [*ADMITTED, "NONE"], refresh_id) == saved
         assert deciles_for_universe(conn, ["NONE"], 99) == Deciles((), (), 0, 0, 99)
+
+
+def test_an_empty_quarterly_consensus_is_not_a_fetch_failure(env_fixture_universe: Env) -> None:
+    """FMP answers ``[]`` for a company without quarterly coverage. AXLE reports in euros (a
+    foreign filer, which reports twice a year) and gets the foreign-filer refusal with its phase;
+    MILD is Mature Stable, whose route never reads the consensus, and gets its value."""
+    env = env_fixture_universe
+    for symbol in ("AXLE", "MILD"):
+        env.router.symbol_bodies[("estimates-quarter", symbol)] = b"[]"
+    annual = json.loads(env.router.symbol_bodies[("income-annual", "AXLE")])
+    euros = [{**row, "reportedCurrency": "EUR"} for row in annual]
+    env.router.symbol_bodies[("income-annual", "AXLE")] = json.dumps(euros).encode()
+    refresh_id = env.refresh().run("full")
+    assert env.last().status == "done"
+    assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
+    axle, mild = env.snapshot("AXLE"), env.snapshot("MILD")
+    assert (axle.phase, axle.refusal, axle.value) == ("Mature Growth", FOREIGN, None)
+    assert (mild.phase, mild.route, mild.refusal) == ("Mature Stable", "mature-stable", None)
+    assert mild.value is not None and mild.value > 0
 
 
 # --- the server's worker and its startup -----------------------------------------------------

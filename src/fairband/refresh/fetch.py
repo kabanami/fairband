@@ -73,10 +73,11 @@ STATEMENT_QUARTERS = 8
 PRICE_YEARS = 5
 EARNINGS_ROWS = 12
 
-# Without these the company cannot be valued; their failure sets ``FetchOutcome.error``.
-REQUIRED = frozenset(
-    {"income-annual", "balance-annual", "cashflow-annual", "quote", "estimates-quarter"}
-)
+# Without these the company cannot be valued; their failure sets ``FetchOutcome.error``. The
+# quarterly consensus is not among them: FMP answers ``[]`` for a company without quarterly
+# coverage (a foreign filer that reports twice a year, say), and only the Mature Growth route
+# reads it, which refuses an incomplete NTM consensus itself.
+REQUIRED = frozenset({"income-annual", "balance-annual", "cashflow-annual", "quote"})
 NO_GF_KEY = "no GuruFocus key"
 _GF_ENDPOINTS = frozenset({"summary", "keyratios"})
 _DETAIL_CHARS = 80  # of an unusable payload, kept as its error

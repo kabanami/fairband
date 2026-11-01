@@ -34,9 +34,7 @@ from fairband.store.refreshes import RefreshRunning, current_refresh, save_decil
 from fairband.store.vendor import record_response
 
 GROWTH_EDGES = (-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3)
-BOLT_FAILED = (
-    "data fetch failed: income-annual, balance-annual, cashflow-annual, quote, estimates-quarter"
-)
+BOLT_FAILED = "data fetch failed: income-annual, balance-annual, cashflow-annual, quote"
 QUOTE_DATE = date(2026, 10, 30)  # both fixture quotes'
 RATE_LIMITED = "data fetch incomplete: rate limited"
 
