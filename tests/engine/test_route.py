@@ -11,9 +11,16 @@ from fairband.engine.classifier import Deciles
 from fairband.engine.levels import levels_for, stance3, stance5
 from fairband.engine.mature_growth import Charge, GrowthPath, growth_rates, value_at_belief
 from fairband.engine.price_facts import price_facts
-from fairband.engine.roic import aggregate_roic, runway_return, terminal_return, terminal_roic
+from fairband.engine.roic import (
+    CapitalYear,
+    aggregate_roic,
+    runway_return,
+    terminal_return,
+    terminal_roic,
+)
 from fairband.engine.route import CompanyInputs, refusal_result, reprice, value_company
 from fairband.engine.route_mature_growth import growth_at_price
+from fairband.engine.route_steps import Context, Valued
 from fairband.engine.types import (
     Flag,
     Provenance,
@@ -91,6 +98,7 @@ MATURE_STABLE_KEYS = {
     "net_buyback_yield",
     "income_basis",
     "price_facts",
+    "growth_route",
     "multiples",
     "expected_return",
 }
@@ -669,9 +677,12 @@ def test_mature_stable_never_zeroes_the_charge(
     r = value_company(inputs, deciles, policy, TODAY)
     im = r.intermediates
     assert "charge-zeroed" not in codes(r) and im["roic"]["aggregate"] is None
+    assert "ten-year-roic-unavailable" in codes(r)  # the shown ten-year figure, its own flag
     unavailable = next(f for f in r.flags if f.code == "roic-unavailable")
-    assert "summed to zero or below" in unavailable.sentence
-    assert "stable-growth value uses the terminal ROIC" in unavailable.sentence
+    assert unavailable.sentence == (
+        "Operating capital summed to zero or below over the last 3 ROIC years and the marginal "
+        "return is not usable, so the stable-growth value uses the moat's terminal return."
+    )
     assert im["moat"] == "None" and im["terminal_roic"] == policy.required_return
     assert r.value == pytest.approx(im["epv"])
     assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
@@ -696,6 +707,98 @@ def test_mature_stable_refusals(ms_inputs: CompanyInputs, deciles: Deciles, poli
     assert r.phase.phase == "Mature Stable"
     none = replace(ms_inputs, trailing=replace(ms_inputs.trailing, net_income=None))
     assert_refused(value_company(none, deciles, policy, TODAY), "no positive trailing earnings")
+
+
+def _with_consensus(stable: CompanyInputs, growth: CompanyInputs) -> CompanyInputs:
+    """The stable company with the growth company's NTM and annual consensus."""
+    return replace(
+        stable, quarter_estimates=growth.quarter_estimates, annual_estimates=growth.annual_estimates
+    )
+
+
+def test_mature_stable_cross_check_present_with_a_path(
+    ms_inputs: CompanyInputs, mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # the stable company has no consensus of its own; it takes the growth company's
+    inputs = _with_consensus(ms_inputs, mg_inputs)
+    r = value_company(inputs, deciles, policy, TODAY)
+    gr = r.intermediates["growth_route"]
+    assert gr["refusal"] is None and gr["value_per_share"] > 0
+    assert set(gr) == {
+        "value_per_share",
+        "runway_return",
+        "path_steps",
+        "belief",
+        "implied_growth",
+        "refusal",
+    }
+    assert r.value == r.intermediates["stable_growth"]  # the headline stays the stable value
+    assert r.levels == levels_for(r.value, "Wide", policy)
+    assert result_from_json(result_to_json(r)) == r
+    # the cross-check is the value the growth route reaches on the same company, with its implied
+    # growth at the price: none at $40, below the $48.12 the growth route gives at -50% a year
+    assert inputs.trailing is not None
+    for price, implied in ((40.0, None), (120.0, pytest.approx(0.0747, abs=1e-4))):
+        priced = replace(inputs, price=price)
+        r = value_company(priced, deciles, policy, TODAY)
+        gr = r.intermediates["growth_route"]
+        c = Context(priced, inputs.trailing, price, 1_000e6, policy, TODAY)
+        own = route_mature_growth.value_mature_growth(c)
+        assert isinstance(own, Valued) and own.value != r.value
+        im = own.intermediates
+        assert gr["value_per_share"] == own.value == pytest.approx(111.62, abs=0.01)
+        assert gr["implied_growth"] == im["implied_growth"] == implied
+        assert gr["runway_return"] == im["runway_return"] == r.intermediates["runway_return"]
+        assert (gr["path_steps"], gr["belief"]) == (im["path_steps"], im["belief"])
+
+
+def test_mature_stable_cross_check_absent_with_a_refusal(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    r = value_company(replace(ms_inputs, quarter_estimates=()), deciles, policy, TODAY)
+    assert r.intermediates["growth_route"] == {"refusal": "incomplete NTM consensus"}
+    assert r.refusal is None and r.value == r.intermediates["stable_growth"]
+
+
+def test_mature_stable_cross_check_refuses_a_value_not_positive(
+    ms_inputs: CompanyInputs,
+    mg_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(route_mature_growth, "value_at_belief", lambda growth, charge: -1.0)
+    r = value_company(_with_consensus(ms_inputs, mg_inputs), deciles, policy, TODAY)
+    reason = "value not positive under the reinvestment charge"
+    assert r.intermediates["growth_route"] == {"refusal": reason}
+    assert r.refusal is None and r.value == r.intermediates["stable_growth"]
+
+
+def _capital_year(year: int, nopat: float, capital: float) -> CapitalYear:
+    """A year whose invested capital is all net property and equipment, taxed at 25%."""
+    return CapitalYear(year, nopat / 0.75, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, capital, 0.0, 0.0, 0.0)
+
+
+def test_mature_stable_reads_the_shared_terminal(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # a Wide stable row whose marginal return is above 13% and ten-year aggregate 10% values at
+    # 13%: invested capital is $10 bn at each year end to 2023 and $20 bn at the ends of 2024 and
+    # 2025; NOPAT is $0.87 bn a year and $3.67 bn in 2025. Average capital rises $10 bn from 2020
+    # to 2025 and NOPAT $2.8 bn, a 28% marginal return; $11.5 bn of NOPAT over $115 bn of average
+    # capital is 10%.
+    capital = [10e9] * 9 + [20e9] * 2  # the balance sheets of 2015 to 2025
+    nopat = [0.87e9] * 10 + [3.67e9]
+    years = tuple(
+        _capital_year(2015 + k, n, ic) for k, (n, ic) in enumerate(zip(nopat, capital, strict=True))
+    )
+    r = value_company(replace(ms_inputs, capital_years=years), deciles, policy, TODAY)
+    im = r.intermediates
+    assert im["moat"] == "Wide" and im["runway_return"]["used"] == "marginal"
+    assert im["runway_return"]["marginal"] == pytest.approx(0.28)
+    assert im["roic"]["aggregate"] == pytest.approx(0.10)
+    assert r.intermediates["terminal_roic"] == 0.13
+    assert im["stable_growth_total"] == pytest.approx(3_300e6 * (1 - 0.03 / 0.13) / 0.06)
 
 
 # --- Refusals before the route ------------------------------------------------------------------

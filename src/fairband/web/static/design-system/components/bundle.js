@@ -783,7 +783,11 @@
     { key: 'dataDate', head: 'Data date', num: true,
       cell: function (r) { return dateCell(r.dataDate); } },
     { key: 'validUntil', head: 'Valid until', num: true,
-      cell: function (r) { return dateCell(r.validUntil); } }
+      cell: function (r) { return dateCell(r.validUntil); } },
+    // fairband: the growth route's value a share, a Mature Stable row's cross-check (calibration
+    // spec 5.7).
+    { key: 'growthRouteValue', head: 'Growth-route value', num: true,
+      cell: function (r) { return figureCell(money(r.growthRouteValue)); } }
   ];
 
   var DEFAULT_COLUMNS = ['ticker', 'name', 'phase', 'band', 'mechanical',

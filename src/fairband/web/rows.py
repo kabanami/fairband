@@ -69,6 +69,7 @@ EXTRA_KEYS = (
     "dataDate",
     "validUntil",
     "route",
+    "growthRouteValue",
 )
 ROW_KEYS = SCREEN_ROW_KEYS + EXTRA_KEYS
 
@@ -144,7 +145,18 @@ def screen_row(
         "dataDate": snapshot.data_date.isoformat(),
         "validUntil": snapshot.valid_until.isoformat(),
         "route": snapshot.route,
+        "growthRouteValue": _growth_route_value(snapshot),
     }
+
+
+def _growth_route_value(snapshot: SnapshotRow) -> float | None:
+    """The growth route's value a share: a Mature Growth row's own value, a Mature Stable row's
+    cross-check (calibration spec 5.7) when it has one; ``None`` elsewhere."""
+    if snapshot.route == "mature-growth":
+        return snapshot.value
+    if snapshot.route == "mature-stable":
+        return _table(snapshot.result.intermediates, "growth_route").get("value_per_share")
+    return None
 
 
 def placeholder_row(company: CompanyRow) -> dict[str, Any]:

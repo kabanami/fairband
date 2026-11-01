@@ -19,12 +19,18 @@ stored result moves to a new price without its inputs. The implied growth is the
 the value equals the price, the fade moving with it; it is solved between −50% and 200% a year,
 and ``None`` means no growth in that range reaches the price. The expected return's growth reads
 the path's rates from year 2.
+
+``growth_cross_check`` runs the same anchor, path and charge for a Mature Stable row, on that
+row's moat and returns, so its value is the one this route would reach (calibration spec 5.7).
 """
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 from typing import Any
 
 from fairband.engine.anchor import (
+    Anchor,
+    Belief,
+    Path,
     base_fiscal_year,
     belief_from_sales,
     moat_class,
@@ -65,31 +71,18 @@ from fairband.engine.types import Flag
 from fairband.policy import Moat, Policy
 
 _IMPLIED_HI = 2.0  # the highest growth the implied-growth solve tries: 200% a year
+_NOT_POSITIVE = "value not positive under the reinvestment charge"
 
 
 def value_mature_growth(c: Context) -> Valued | Refused:
     i, t, policy = c.inputs, c.trailing, c.policy
-    if t.revenue is None:
-        return Refused("no trailing revenue")
-    if i.tax_rate_latest is None:
-        return Refused("no statutory tax rate")
-    quarters = ntm_quarters(i.quarter_estimates, t.period_end) or ()
-    anchor = ntm_anchor(quarters, t, i.street_ttm_eps, c.shares, i.tax_rate_latest, c.price, policy)
-    if anchor.refusal is not None:
-        return Refused(anchor.refusal, anchor.flags)
-    base_year = base_fiscal_year(quarters)
-    path = path_steps(i.annual_estimates, base_year, policy)
-    if any(g is not None and g <= -1 for g in path.steps):
-        return Refused(
-            "consensus earnings turn negative within the path", anchor.flags + path.flags
-        )
-
-    belief = belief_from_sales(t.revenue / 1e6, policy)
+    found = _anchor_and_path(c)
+    if isinstance(found, Refused):
+        return found
+    anchor, path, base_year, belief = found
     moat = moat_class(i.moat_score, policy)
-    runway = policy.runway_years[moat]
     roic = RoicTerms.of(i.capital_years, moat, policy)
-    growth = GrowthPath(anchor.ntm_net_income, path.steps, belief.rate, runway, policy.fade_years)
-    charge = _charge(roic.runway, roic.terminal, roic.charge_off, policy)
+    growth, charge = _growth_and_charge(anchor, path, belief, moat, roic, policy)
     value_total = value_at_belief(growth, charge)
     value = value_total / c.shares
     by_runway = {
@@ -112,9 +105,9 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "ntm_net_income": anchor.ntm_net_income,
         "path": {"base_year": base_year, "on_eps": path.on_eps, "analysts": list(path.analysts)},
         "path_steps": list(path.steps),
-        "belief": {"rate": belief.rate, "sales_class": belief.sales_class, "median": belief.median},
+        "belief": asdict(belief),
         "moat": moat,
-        "runway": runway,
+        "runway": growth.runway,
         "fade_years": growth.fade_years,
         "growth_rates": list(growth_rates(growth)),
         **roic.intermediates(),
@@ -141,7 +134,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         value_spread_flag(list(by_runway.values()), policy)
     )
     if value <= 0:
-        return Refused("value not positive under the reinvestment charge", flags + spread, im)
+        return Refused(_NOT_POSITIVE, flags + spread, im)
     im |= growth_at_price(im, c.price, value, policy)
     flags += present(long_runway(im, policy)) + spread
     inputs = (
@@ -153,7 +146,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         data(i, "path_step_3", path.steps[1], "ratio", "estimates_annual"),
         data(i, "street_ttm_eps", i.street_ttm_eps, "USD a share"),
         *common_rules(policy, moat, roic),
-        rule(policy, "runway_years", runway, "years", f"{moat} moat"),
+        rule(policy, "runway_years", growth.runway, "years", f"{moat} moat"),
         rule(
             policy,
             "belief",
@@ -164,6 +157,58 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         ),
     )
     return Valued("mature-growth", value, moat, im, inputs, flags)
+
+
+def growth_cross_check(c: Context, moat: Moat, roic: RoicTerms) -> dict[str, Any]:
+    """The growth route's value a share for a Mature Stable row (calibration spec 5.7), from the
+    row's moat and returns: with the runway return, the path, the belief and the implied growth at
+    the price; or only the refusal the route would give."""
+    found = _anchor_and_path(c)
+    if isinstance(found, Refused):
+        return {"refusal": found.reason}
+    anchor, path, _, belief = found
+    growth, charge = _growth_and_charge(anchor, path, belief, moat, roic, c.policy)
+    value = value_at_belief(growth, charge) / c.shares
+    if value <= 0:
+        return {"refusal": _NOT_POSITIVE}
+    return {
+        "value_per_share": value,
+        "runway_return": roic.intermediates()["runway_return"],
+        "path_steps": list(path.steps),
+        "belief": asdict(belief),
+        "implied_growth": implied_growth(c.price * c.shares, growth, charge, hi=_IMPLIED_HI),
+        "refusal": None,
+    }
+
+
+def _anchor_and_path(c: Context) -> tuple[Anchor, Path, int, Belief] | Refused:
+    """Year 1's anchor, the consensus path with its base fiscal year, and the belief; or the
+    route's refusal, with the flags raised before it."""
+    i, t, policy = c.inputs, c.trailing, c.policy
+    if t.revenue is None:
+        return Refused("no trailing revenue")
+    if i.tax_rate_latest is None:
+        return Refused("no statutory tax rate")
+    quarters = ntm_quarters(i.quarter_estimates, t.period_end) or ()
+    anchor = ntm_anchor(quarters, t, i.street_ttm_eps, c.shares, i.tax_rate_latest, c.price, policy)
+    if anchor.refusal is not None:
+        return Refused(anchor.refusal, anchor.flags)
+    base_year = base_fiscal_year(quarters)
+    path = path_steps(i.annual_estimates, base_year, policy)
+    if any(g is not None and g <= -1 for g in path.steps):
+        return Refused(
+            "consensus earnings turn negative within the path", anchor.flags + path.flags
+        )
+    return anchor, path, base_year, belief_from_sales(t.revenue / 1e6, policy)
+
+
+def _growth_and_charge(
+    anchor: Anchor, path: Path, belief: Belief, moat: Moat, roic: RoicTerms, policy: Policy
+) -> tuple[GrowthPath, Charge]:
+    """The growth path to the moat's runway and the charge at the returns of ``roic``."""
+    runway = policy.runway_years[moat]
+    growth = GrowthPath(anchor.ntm_net_income, path.steps, belief.rate, runway, policy.fade_years)
+    return growth, _charge(roic.runway, roic.terminal, roic.charge_off, policy)
 
 
 def growth_at_price(

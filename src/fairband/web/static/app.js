@@ -200,6 +200,7 @@
           low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
           buyLevel: r.levels.buy, trimLevel: r.levels.trim, caption: ROUTES[r.route] || r.route
         }),
+        crossCheck(r.intermediates.growth_route),
         r.stance5 ? h('p', { className: 'caption app-muted' }, 'Five-step stance: ' + r.stance5)
           : null) : null,
       /* A refusal takes the band's place: it is the answer when there is no value. */
@@ -227,6 +228,15 @@
       h('p', { key: 'versions', className: 'caption app-muted app-section' },
         'Policy ' + r.policy_version + ' · method ' + r.method_version)
     ];
+  }
+
+  /* A Mature Stable row's growth-route value, under the band (calibration spec 5.7); a refused
+     cross-check shows only among the intermediates. */
+  function crossCheck(g) {
+    if (!g || g.value_per_share == null) return null;
+    return h('p', { className: 'caption app-muted' }, 'Growth-route cross-check: ' +
+      F.formatMoney(g.value_per_share) + ' (implied growth ' + F.formatPercent(g.implied_growth) +
+      ')');
   }
 
   function section(key, title) {
@@ -328,17 +338,18 @@
 
   /* A number's key says what it is. A key ending in one of these names a fraction, which reads
      as a percentage; so do the fractions those endings miss (the implied-growth maps, the price
-     changes, the drawdown, the path steps, the growth share). A dollar amount or a count whose
-     key happens to end the same way (value_by_roic, stable_growth, roic's years) does not. A map
-     keyed by runway years or by ROIC values takes its own key's reading. */
+     changes, the drawdown, the path steps, the growth rates, the growth share). A dollar amount
+     or a count whose key happens to end the same way (value_by_roic, stable_growth, roic's years)
+     does not. A map keyed by runway years or by ROIC values takes its own key's reading. */
   var PERCENT = /(_growth|_yield|_return|margin|roic|belief)$/;
-  var ALSO_PERCENT = /^(implied_|change_|drawdown|path_steps$|growth_share$)/;
+  var ALSO_PERCENT = /^(implied_|change_|drawdown|path_steps$|growth_rates$|growth_share$)/;
   var NOT_PERCENT = /^(value|stable_growth|years?$)/;
   /* Counts and years read whole. P/E multiples to one decimal with x. A figure a share (EPV, the
-     value, EPS, the non-recurring gap, the 52-week prices, the value maps by runway and by ROIC)
-     reads to cents; a total (NOPAT, invested capital, net income, earnings, anything at a
-     million or more) to whole dollars. Any other number to two decimals. */
-  var COUNT = /^(years?|base_year|runway|analysts|shares)$/;
+     value, EPS, the non-recurring gap, the 52-week prices, the value maps by runway and by ROIC,
+     whatever the entry's key) reads to cents; a total (NOPAT, invested capital, net income,
+     earnings, anything at a million or more) to whole dollars. Any other number to two
+     decimals. */
+  var COUNT = /^(years?|base_year|runway|fade_years|analysts|shares)$/;
   var MULTIPLE = /^pe_/;
   var PER_SHARE = /^(epv|value_per_share|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
   var PER_SHARE_GROUP = /^(eps$|value_by_)/;
@@ -346,9 +357,10 @@
 
   function figure(v, key, group) {
     if (isPercent(key, group)) return F.formatPercent(v);
+    if (PER_SHARE_GROUP.test(group || '')) return F.formatMoney(v);  /* value_by_roic's runway */
     if (COUNT.test(key)) return plain(v);
     if (MULTIPLE.test(key)) return decimals(v, 1) + 'x';
-    if (PER_SHARE.test(key) || PER_SHARE_GROUP.test(group || '')) return F.formatMoney(v);
+    if (PER_SHARE.test(key)) return F.formatMoney(v);
     if (TOTAL.test(key) || Math.abs(v) >= 1e6) return dollars(v);
     return decimals(v, 2);
   }

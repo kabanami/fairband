@@ -19,7 +19,12 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
+from support.engine_companies import (
+    mature_growth_inputs,
+    mature_stable_inputs,
+    universe_deciles,
+    young_growth_inputs,
+)
 
 from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Settings
@@ -99,6 +104,7 @@ EXTRA_COLUMNS = [
     "dataDate",
     "validUntil",
     "route",
+    "growthRouteValue",
 ]
 
 
@@ -260,6 +266,7 @@ def test_screen_rows_and_default_sort(
         "dataDate": "2026-10-30",
         "validUntil": "2027-01-28",
         "route": "mature-growth",
+        "growthRouteValue": valued.value,
     }
 
     refused = results["AAL"]
@@ -396,6 +403,42 @@ def test_screen_placeholder_row_not_yet_valued(
         "marketCap": 3_000_000_000.0,
         "refusal": "not yet valued",
     }
+
+
+def test_growth_route_value_column(client: TestClient) -> None:
+    rows = {row["ticker"]: row for row in _screen(client)["rows"]}
+    assert rows["AAPL"]["growthRouteValue"] == rows["AAPL"]["mechanical"]
+    assert rows["AAL"]["growthRouteValue"] is None
+
+
+def test_growth_route_value_on_mature_stable_rows(
+    db_path: Path, policy: Policy, client: TestClient
+) -> None:
+    """A Mature Stable row shows its growth-route cross-check in the column, while its value
+    stays the stable-growth value; one whose cross-check refused shows nothing."""
+    growth = mature_growth_inputs()
+    with_path = replace(
+        mature_stable_inputs(),
+        quarter_estimates=growth.quarter_estimates,
+        annual_estimates=growth.annual_estimates,
+    )
+    stable = {
+        "MSCO": value_company(with_path, universe_deciles(), policy, TODAY),
+        "MSNC": value_company(
+            replace(mature_stable_inputs(), symbol="MSNC"), universe_deciles(), policy, TODAY
+        ),
+    }
+    with closing(connect(db_path)) as conn:
+        companies = [_company(s, 1, "Mature Stable Co", Decimal(40_000_000_000)) for s in stable]
+        insert_companies(conn, companies)
+        for result in stable.values():
+            insert_snapshot(conn, result, 1, clock=lambda: CREATED)
+    rows = {row["ticker"]: row for row in _screen(client)["rows"]}
+    msco, msnc = rows["MSCO"], rows["MSNC"]
+    cross_check = stable["MSCO"].intermediates["growth_route"]["value_per_share"]
+    assert msco["growthRouteValue"] == cross_check != msco["mechanical"]
+    assert msco["mechanical"] == stable["MSCO"].intermediates["stable_growth"]
+    assert msnc["growthRouteValue"] is None and msnc["mechanical"] is not None
 
 
 def test_screen_keeps_the_universe_when_a_refresh_admits_none(
@@ -537,6 +580,7 @@ EXTRA_COLUMN_HEADS = {
     "priceDate": "Price date",
     "dataDate": "Data date",
     "validUntil": "Valid until",
+    "growthRouteValue": "Growth-route value",
 }
 
 

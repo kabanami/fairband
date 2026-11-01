@@ -2,11 +2,15 @@
 
 E is trailing net income less the non-recurring gap on the diluted shares; when the margin flag
 fires, E is scaled to the ten-year median operating margin. The value at belief is the
-stable-growth value at the moat's terminal ROIC, always: so it equals EPV for a Narrow or no moat
-and is about 15% above it for a Wide one (15.4% at r 9%, g_t 3% and the 13% cap). A capital sum at
-or below zero does not turn the charge off here: it leaves the ten-year ROIC unavailable, and the
-row says so. EPV is shown as the no-growth value. ``epv`` and ``stable_growth`` are a share;
-``epv_total`` and ``stable_growth_total`` are the totals.
+stable-growth value at the moat's terminal return (``RoicTerms``), always: so it equals EPV for a
+Narrow or no moat and is about 15% above it for a Wide one (15.4% at r 9%, g_t 3% and the 13%
+cap). A capital sum at or below zero does not turn the charge off here: the value takes the moat's
+terminal return, and the row says so. EPV is shown as the no-growth value. ``epv`` and
+``stable_growth`` are a share; ``epv_total`` and ``stable_growth_total`` are the totals.
+
+``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
+5.7), or that route's refusal; the value, the levels and the stance stay on the stable-growth
+value.
 """
 
 from typing import Any
@@ -14,6 +18,7 @@ from typing import Any
 from fairband.engine.anchor import moat_class
 from fairband.engine.flags import margin_flag, median_margin
 from fairband.engine.mature_stable import mature_stable_values, normalize_for_margin
+from fairband.engine.route_mature_growth import growth_cross_check
 from fairband.engine.route_steps import (
     Context,
     Refused,
@@ -74,6 +79,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "eps": eps(t, gap, None),
         **income(i.market_cap, t),
         "price_facts": price_facts_for(i.closes, c.price, c.today),
+        "growth_route": growth_cross_check(c, moat, roic),
     }
     im |= stable_at_price(im, c.price, value, policy)
     inputs = (
@@ -88,7 +94,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
             "the terminal growth, the expected return's growth for a stable company",
         ),
     )
-    flags = _roic_flags(roic) + trailing_flags(i, t, gap, policy)
+    flags = _roic_flags(roic, policy) + trailing_flags(i, t, gap, policy)
     return Valued("mature-stable", value, moat, im, inputs, flags)
 
 
@@ -103,15 +109,17 @@ def stable_at_price(
     }
 
 
-def _roic_flags(roic: RoicTerms) -> tuple[Flag, ...]:
-    """The ROIC flags as this route reads them. It never zeroes the charge, so a capital sum at or
-    below zero is not "charge zeroed" here but an unavailable ROIC, in the same place."""
+def _roic_flags(roic: RoicTerms, policy: Policy) -> tuple[Flag, ...]:
+    """The ROIC flags as this route reads them. It never zeroes the charge, so a fallback capital
+    sum at or below zero is not "charge zeroed" here but an unavailable ROIC, in the same place;
+    the ten-year flag, about the ten-year figure shown, stays."""
     if not roic.charge_off:
         return roic.flags
     unavailable = Flag(
         "roic-unavailable",
         "ROIC unavailable",
-        f"Operating capital summed to zero or below over the {roic.result.years_used} ROIC years, "
-        "so the ten-year ROIC is unavailable and the stable-growth value uses the terminal ROIC.",
+        "Operating capital summed to zero or below over the last "
+        f"{policy.fallback_return_years} ROIC years and the marginal return is not usable, so the "
+        "stable-growth value uses the moat's terminal return.",
     )
     return tuple(unavailable if f.code == "charge-zeroed" else f for f in roic.flags)
