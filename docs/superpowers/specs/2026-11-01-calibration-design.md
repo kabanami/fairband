@@ -198,7 +198,7 @@ trial). Also at each runway and at each return of the sensitivity, as today.
 return of 5.1 as used), `"0.15"`, `"0.09"`. A fourth key `"ten-year"` holds the value at the
 ten-year aggregate as the runway return, not floored, with the moat's terminal rule applied to
 it (which floors the terminal at r), or `null` when the aggregate is unavailable. It is there to
-show the old basis: for CRM it is the $37.57 of the first run (*my call*). The value-spread flag
+show the old return basis under the new rules; because the fade and the payout floor still apply, it is not the first run's value (CRM: $37.57 then; amended 2026-11-01 during the build) (*my call*). The value-spread flag
 reads the first three, as today.
 
 ### 5.7 The Mature Stable cross-check
