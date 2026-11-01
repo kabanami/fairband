@@ -206,8 +206,12 @@ reads the first three, as today.
 A Mature Stable row whose inputs allow the Mature Growth route (a positive NTM anchor, no refusal
 from the anchor or the path) also carries the growth-route value in its intermediates:
 `growth_route = {"value_per_share": x, "runway_return": {...as 5.1}, "path_steps": [...],
-"belief": {...}, "implied_growth": x | null, "refusal": null}`. When the growth route would
-refuse, `growth_route = {"refusal": "<reason>"}` and the other keys are absent.
+"belief": {...}, "implied_growth": x | null, "ntm_net_income": x, "runway": n, "fade_years": n,
+"terminal_roic": x, "charge_off": bool, "refusal": null}`. When the growth route would refuse,
+`growth_route = {"refusal": "<reason>"}` and the other keys are absent. The last five keys let a
+price refresh rebuild the growth path and the charge from the intermediates alone, so
+`implied_growth` moves with the price as the headline route's does (amended 2026-11-01 during
+the build; the first draft left it at the valuation price).
 
 The levels, the stance and the screen's value column stay on the stable-growth value. The drawer
 shows the growth-route value under the headline as "Growth-route cross-check: $x (implied growth
