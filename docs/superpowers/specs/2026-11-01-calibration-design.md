@@ -134,7 +134,7 @@ Cash to equity in year t = NI_t × max(0, 1 − g_{t+1} ÷ return_t), with retur
 for t < N and the terminal return for t = N. The timing convention is unchanged.
 
 When any year's payout is floored, the row is flagged "Growth above return" with the sentence
-"Year <t> growth of <g>% exceeds the <return>% return on new capital; the payout is floored at
+"Year <t+1> growth of <g>% exceeds the <return>% return on new capital; year <t>'s payout is floored at
 zero and the growth above the return is treated as efficiency growth, which costs nothing."
 
 Source: Damodaran, Investment Valuation ch. 11: a negative reinvestment rate is not forecast
