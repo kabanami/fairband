@@ -86,7 +86,7 @@ Every admitted company gets a `companies` row and a screen row. Every excluded l
 Two kinds, both started from the page (`design.md` 4.3, Proposed → adopted, *my call*):
 
 - **Full refresh.** Universe, then per company the data in 6.5, then deciles, classification, valuation, snapshots.
-- **Price refresh.** Quotes only, then the price-dependent fields of each current snapshot: price, price ÷ value, stance, price facts. It writes a new snapshot that cites the same inputs with a new price date.
+- **Price refresh.** Quotes only, then the price-dependent fields of each current snapshot: price, price ÷ value, stance, the implied growth and the expected return. It writes a new snapshot that cites the same inputs with a new price date. The price facts (the 52-week range, the price changes, the drawdown) need the price history, so they follow the full refresh (amended 2026-11-01).
 
 Rules:
 
@@ -136,7 +136,7 @@ Numbers in the drawer are rounded as `design.md` 9.2 says; the stored values kee
 
 ### 6.5 Data per company
 
-All from FMP unless named. Endpoint names are the FMP stable API's; the builder checks them against the current documentation and records the exact route and parameters with each stored response.
+All from FMP unless named. Endpoint names are the FMP stable API's; the builder checks them against the current documentation. Each stored response records a logical endpoint name (for example `income-annual`) and the logical parameters that identify the call; the adapter's route table maps the name to the vendor route (amended 2026-11-01).
 
 | Need | Endpoint | Depth |
 |---|---|---|
@@ -170,7 +170,7 @@ Numbers from vendors are parsed as decimals and stored as decimal text with thei
 
 - Each series ends at the last fiscal year on file. No trailing-twelve-month point in this cut.
 - The free cash flow for the sign check is the last fiscal year's operating cash flow less capital expenditure.
-- Growth needs at least two fiscal years (the CAGR runs over the span available); a slope needs at least three. A company with fewer than four years of revenue is classified from what exists and flagged "short history". A company with fewer than two years is unclassified: no phase badge, refusal reason "fewer than two fiscal years".
+- Growth needs at least two fiscal years (the CAGR runs over the span available); a slope needs at least three. A company with fewer than five fiscal years (the trend window, `design.md` 5.7) is classified from what exists and flagged "short history" (amended 2026-11-01; the first draft said four). A company with fewer than two years is unclassified: no phase badge, refusal reason "fewer than two fiscal years".
 - A revenue of zero now or three years ago is Start-up, as 5.3 says. A revenue three years ago that is unknown is not zero; it falls under the short-history rule.
 - For a negative margin, a trend slope of exactly zero means not improving: Young Growth. A margin of exactly zero counts as positive and is flagged.
 - The deciles are computed over the companies the engine values: the admitted universe minus the unclassified. The excluded sectors never enter.
