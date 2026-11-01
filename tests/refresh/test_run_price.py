@@ -31,6 +31,7 @@ from fairband.store.snapshots import SnapshotRow, insert_snapshot
 PRICE_DATE = date(2026, 10, 31)  # the new quotes' timestamp, a day after the fixtures'
 NEW_PRICES = {"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0, "NEWT": 60.0}
 POLICY_CHANGED = "policy changed: run a full refresh"
+METHOD_CHANGED = "method changed: run a revalue"
 
 
 def quote_rows(prices: dict[str, float]) -> list[dict[str, Any]]:
@@ -252,6 +253,34 @@ def test_price_refresh_policy_version_mismatch_fails_symbol(env_valued: Env) -> 
     ]
     assert env.snapshot("ACME") == acme
     assert (env.snapshot("AXLE").refresh_id, env.snapshot("AXLE").price) == (refresh_id, 30.0)
+
+
+def test_price_refresh_method_version_mismatch_fails_symbol(env_valued: Env) -> None:
+    """AXLE's latest snapshot was valued under method 0.1: the rebuild at the price reads
+    intermediates only method 0.2 stores, so AXLE takes a revalue, not a reprice. It keeps its
+    snapshot, and the run goes on."""
+    env = env_valued
+    with closing(env.connect()) as conn:
+        old = env.snapshot("AXLE")
+        stale = replace(old.result, method_version="fairband-mechanical/0.1")
+        insert_snapshot(conn, stale, old.refresh_id, clock=env.clock)
+    axle = env.snapshot("AXLE")
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+
+    refresh_id = env.refresh().run("price")
+
+    assert (env.last().status, env.last().calibration) == (
+        "done",
+        {"total": 4, "repriced": 3, "failed": 1, "skipped": 0},
+    )
+    assert env.items(refresh_id) == [
+        ("ACME", "repriced", None),
+        ("AXLE", "failed", METHOD_CHANGED),
+        ("MILD", "repriced", None),
+        ("NEWT", "repriced", None),
+    ]
+    assert env.snapshot("AXLE") == axle
+    assert (env.snapshot("MILD").refresh_id, env.snapshot("MILD").price) == (refresh_id, 10.0)
 
 
 def test_price_refresh_rate_limited(env_valued: Env, monkeypatch: pytest.MonkeyPatch) -> None:

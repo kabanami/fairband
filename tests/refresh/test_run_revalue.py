@@ -106,6 +106,24 @@ def test_revalue_refuses_a_company_without_facts(env_valued: Env) -> None:
     assert env.router.calls == Counter()
 
 
+def test_revalue_without_a_universe_values_every_snapshot(env_without_universe: Env) -> None:
+    """Before any full refresh, the companies a scoped refresh valued are the symbols, as the
+    price refresh takes them; with no deciles stored, each is the same refusal again."""
+    env = env_without_universe
+    scoped = env.run(["ACME", "BOLT"])  # no deciles yet: two refusals
+    env.router.calls.clear()
+    refresh_id = env.refresh().run("revalue")
+    row = env.last()
+    assert (row.id, row.kind, row.status) == (refresh_id, "revalue", "done")
+    assert refresh_id > scoped and env.router.calls == Counter()
+    assert env.items(refresh_id) == [("ACME", "valued", None), ("BOLT", "valued", None)]
+    for symbol in ("ACME", "BOLT"):
+        snapshot = env.snapshot(symbol)
+        assert (snapshot.refresh_id, snapshot.refusal) == (refresh_id, "no universe deciles yet")
+    assert row.calibration is not None and row.calibration["total"] == 2
+    assert row.calibration["refused"] == {"no universe deciles yet": 2}
+
+
 def test_revalue_without_an_fmp_client(env_valued: Env) -> None:
     env = env_valued
     refresh = Refresh(

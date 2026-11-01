@@ -21,9 +21,10 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   becomes the quote (its date and its row's stamps), and the stance, the price-dependent
   intermediates and the long-runway flag follow the price. A refusal takes the new price, its
   date and the price input only. A snapshot valued under another policy version is ``failed``,
-  "policy changed: run a full refresh": its levels come from that policy. An exception
-  (``reprice`` refuses a price that is not positive and finite) is ``failed``, "reprice failed:
-  <class>: <message>".
+  "policy changed: run a full refresh": its levels come from that policy. One valued under
+  another method version is ``failed``, "method changed: run a revalue": the rebuild at the price
+  reads intermediates only this method stores. An exception (``reprice`` refuses a price that is
+  not positive and finite) is ``failed``, "reprice failed: <class>: <message>".
 - ``done``: the totals, and the calibration ``{"total", "repriced", "failed", "skipped"}`` saved
   with the record.
 
@@ -45,6 +46,7 @@ from datetime import date, datetime
 from http import HTTPStatus
 from typing import Any
 
+from fairband.engine import METHOD_VERSION
 from fairband.engine.route import reprice
 from fairband.policy import Policy
 from fairband.refresh.fetch import unusable
@@ -68,6 +70,7 @@ QUOTE_BATCH = 100  # symbols a batch-quote call asks for
 NO_SNAPSHOT = "no snapshot to reprice"
 NO_QUOTE = "no quote price"
 POLICY_CHANGED = "policy changed: run a full refresh"
+METHOD_CHANGED = "method changed: run a revalue"
 RATE_LIMITED = "quote incomplete: rate limited"
 _NO_BATCH = (HTTPStatus.PAYMENT_REQUIRED, HTTPStatus.FORBIDDEN)  # the plan serves no batch-quote
 _PENDING = 0  # the response id the observations carry until their response is recorded
@@ -248,6 +251,8 @@ class PriceRefresh:
             reason = None
             if result.policy_version != self._policy.version:
                 reason = POLICY_CHANGED
+            elif result.method_version != METHOD_VERSION:
+                reason = METHOD_CHANGED
             else:
                 try:
                     new = reprice(

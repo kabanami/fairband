@@ -28,9 +28,10 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
 
 A revalue takes no symbols, makes no vendor call and needs no FMP client (calibration spec 5.9): it
 lists the latest universe's admitted companies (``latest_companies``) ``pending``, in symbol order,
-and runs the ``value`` stage on the facts the store holds, with the latest stored deciles, then
-``done``. A company the store holds no facts for gets the engine's refusal. It saves its
-``calibration`` like a full refresh, with no listing left out: it builds no universe.
+or, before any universe, every company with a snapshot (``latest_snapshots``), as the price
+refresh does; then it runs the ``value`` stage on the facts the store holds, with the latest
+stored deciles, then ``done``. A company the store holds no facts for gets the engine's refusal.
+It saves its ``calibration`` like a full refresh, with no listing left out: it builds no universe.
 
 A symbol's failure never stops the run: an exception from its fetch, assembly or valuation gives it
 a refusal snapshot ("data fetch failed: <class>: <message>" or "valuation failed: <class>:
@@ -103,7 +104,12 @@ from fairband.store.refreshes import (
     set_stage,
     upsert_item,
 )
-from fairband.store.snapshots import SnapshotRow, insert_snapshot, refresh_snapshots
+from fairband.store.snapshots import (
+    SnapshotRow,
+    insert_snapshot,
+    latest_snapshots,
+    refresh_snapshots,
+)
 from fairband.vendors.fmp import Fmp
 from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.scrub import scrub
@@ -285,7 +291,7 @@ class Refresh:
 
     def _revalue(self, conn: sqlite3.Connection, refresh_id: int) -> _Finish:
         """The stages of a revalue; the status, message and calibration to finish it with."""
-        symbols = tuple(company.symbol for company in latest_companies(conn))
+        symbols = _revalue_symbols(conn)
         self._list_pending(conn, refresh_id, symbols)
         valued = self._value_stage(conn, refresh_id, symbols)
         if valued is None:
@@ -464,6 +470,15 @@ class Refresh:
     ) -> None:
         if self._on_progress is not None:
             self._on_progress(Progress(refresh_id, stage, done, failed, remaining, current))
+
+
+def _revalue_symbols(conn: sqlite3.Connection) -> tuple[str, ...]:
+    """The latest universe's admitted companies; before any universe, every company with a
+    snapshot (as the price refresh takes them), in symbol order."""
+    admitted = latest_companies(conn)
+    if admitted or latest_companies(conn, eligible_only=False):
+        return tuple(company.symbol for company in admitted)
+    return tuple(snapshot.symbol for snapshot in latest_snapshots(conn))
 
 
 def calibration(
