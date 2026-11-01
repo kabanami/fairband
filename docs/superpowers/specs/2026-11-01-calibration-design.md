@@ -183,7 +183,7 @@ long-runway flag fires at a belief or an implied growth of 10% or more.
 The three-year expected return (method v1.7 Step 9) keeps its form. Its growth term reads the
 path as modeled: g_2, g_3 and the year-4 rate g_4 of 5.4, which is the faded rate when the fade
 applies and the belief otherwise (*my call*, from the builder check; 380 of the 658 valued
-Mature Growth rows have g_3 above the belief, and for Amazon the term moves from 18.6% to 24.7%).
+Mature Growth rows have g_3 above the belief, and for Amazon the term moves from 18.6% to about 24%).
 The price refresh recomputes it the same way.
 
 ### 5.5 Implied growth
@@ -289,7 +289,7 @@ not usable. Three-year aggregate 0.1458, `used = "three-year"`.
 terminal multiple is 13.2 and not 17.2.
 
 **Expected return.** Steps 25% and 26%, belief 5.3%: the growth term is
-((1.25)(1.26)(1.2186))^(1/3) − 1 = 24.7%; with steps 4% and 5% it is ((1.04)(1.05)(1.053))^(1/3)
+((1.25)(1.26)(1.2186))^(1/3) − 1 = 24.3%; with steps 4% and 5% it is ((1.04)(1.05)(1.053))^(1/3)
 − 1 = 4.8%.
 
 ## 8. Tests the builder must write
