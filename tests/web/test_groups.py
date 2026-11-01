@@ -4,8 +4,8 @@ price ÷ value and the share below the buy level.
 
 The universe of one full refresh admits six companies:
 
-- AAPL, BBB and CCC: the engine's Mature Growth company (value $113.70, buy $85.28) at $150, $80
-  and $100; Technology, the first mega cap, the others mid.
+- AAPL, BBB and CCC: the engine's Mature Growth company (value $133.37, buy $100.02) at $150, $80
+  and $120; Technology, the first mega cap, the others mid.
 - STBL: the engine's Mature Stable company at $40, above its $31.73 buy level; Industrials, mid.
 - AAL: the engine's Young Growth company, refused; Technology, mid.
 - NEWC: Industrials, no cap band, not valued yet (no snapshot, so no phase).
@@ -65,7 +65,7 @@ def results(policy: Policy) -> dict[str, ValuationResult]:
     return {
         "AAPL": aapl,
         "BBB": reprice(value(mature_growth_inputs(), "BBB"), 80.0, TODAY, policy),
-        "CCC": reprice(value(mature_growth_inputs(), "CCC"), 100.0, TODAY, policy),
+        "CCC": reprice(value(mature_growth_inputs(), "CCC"), 120.0, TODAY, policy),
         "STBL": value(mature_stable_inputs(), "STBL"),
         "AAL": value(young_growth_inputs(), "AAL"),
         "FIRB": value(mature_growth_inputs(), "FIRB"),
@@ -152,14 +152,14 @@ def test_groups_by_phase_median_and_share(
     client: TestClient, results: dict[str, ValuationResult]
 ) -> None:
     growth = [ratio(results, symbol) for symbol in ("AAPL", "BBB", "CCC")]
-    assert statistics.median(growth) == ratio(results, "CCC")  # $100 against the same value
+    assert statistics.median(growth) == ratio(results, "CCC")  # $120 against the same value
     assert groups(client, "phase") == [
         {
             "name": "Mature Growth",
             "count": 3,
             "valued": 3,
             "medianPriceToValue": pytest.approx(statistics.median(growth)),
-            "shareBelowBuy": pytest.approx(1 / 3),  # BBB alone, $80 under the $85.28 buy level
+            "shareBelowBuy": pytest.approx(1 / 3),  # BBB alone, $80 under the $100.02 buy level
         },
         {
             "name": "Mature Stable",

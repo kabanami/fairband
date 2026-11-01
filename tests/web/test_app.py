@@ -255,7 +255,7 @@ def test_screen_rows_and_default_sort(
         "flags": [f.word for f in valued.flags],
         "refusal": None,
         "stance3": "hold",
-        "stance5": "HOLD — above fair band",
+        "stance5": "HOLD",  # $150 within the $113.36 to $153.37 fair band
         "priceDate": "2026-10-30",
         "dataDate": "2026-10-30",
         "validUntil": "2027-01-28",

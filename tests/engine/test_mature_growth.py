@@ -142,6 +142,8 @@ def test_fade_path_rates_and_earnings() -> None:
         (1000.00, 1250.00, 1575.00, 1919.29, 2259.39, 2566.22, 2808.47, 2957.32, 3114.06),
         abs=0.01,
     )
+    # the last fade year lands on the belief exactly, as do the years after it
+    assert growth_rates(FADE)[6:] == (0.053,) * 13
 
 
 def test_value_with_the_fade_and_the_floor() -> None:

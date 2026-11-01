@@ -56,11 +56,11 @@ def growth_rates(path: GrowthPath) -> tuple[float, ...]:
 
 
 def _fade(g3: float, belief: float, years: int) -> tuple[float, ...]:
-    """The growth for years 4 to 3 + ``years``, in equal steps from ``g3`` down to the belief;
-    empty when ``g3`` is at or below the belief."""
+    """The growth for years 4 to 3 + ``years``, in equal steps from ``g3`` down to the belief,
+    the last on the belief exactly; empty when ``g3`` is at or below the belief."""
     if years <= 0 or g3 <= belief:
         return ()
-    return tuple(g3 - (g3 - belief) * k / years for k in range(1, years + 1))
+    return tuple(belief + (g3 - belief) * (years - k) / years for k in range(1, years + 1))
 
 
 def earnings_by_year(path: GrowthPath) -> tuple[float, ...]:

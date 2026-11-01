@@ -96,9 +96,10 @@ def stable_at_price(
     im: dict[str, Any], price: float, value: float, policy: Policy
 ) -> dict[str, Any]:
     """The intermediates that move with the price; growth runs at the terminal growth."""
+    g_t = policy.terminal_growth
     return {
         "multiples": multiples_at(price, im["eps"]),
-        "expected_return": expected(price, value, im, (None, None), policy.terminal_growth),
+        "expected_return": expected(price, value, im, (g_t, g_t, g_t)),
     }
 
 

@@ -24,33 +24,36 @@ assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``
 ``estimates_quarter``, ``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``gf_eps_ttm``,
 ``gf_eps_without_nri``, ``next_earnings``, ``tax_rate_latest``, ``closes``. A missing key cites
 the source "unknown". A DATA input named in ``CompanyInputs.estimate_methods`` is an estimate
-under that method (a tax rate carried forward, say), and so is ``aggregate_roic`` under the method
-``estimate_methods`` names ``intangibles`` (D17: invested capital took the issuer's as-reported
-intangibles total), with a note that says so; every other DATA input is observed. A DATA input
-named in ``CompanyInputs.notes`` carries that note unless the route writes its own (assembly's
-note on the tax rate names the country, the rate's year and its source). A RULE input cites the
-policy version.
+under that method (a tax rate carried forward, say), and so are ``aggregate_roic`` and
+``runway_return`` under the method ``estimate_methods`` names ``intangibles`` (D17: invested
+capital took the issuer's as-reported intangibles total), the first with a note that says so, the
+second keeping its note on the measure the charge used; every other DATA input is observed. A
+DATA input named in ``CompanyInputs.notes`` carries that note unless the route writes its own
+(assembly's note on the tax rate names the country, the rate's year and its source). A RULE input
+cites the policy version.
 
 Intermediates hold JSON values only. Totals are in USD, per-share figures in USD a share, rates
-as fractions. A sensitivity map is keyed by the runway in years ("5", "10", "20") or by the runway
-ROIC ("aggregate", then the policy's ``roic_sensitivity`` values, "0.15" and "0.09"); the
-aggregate entry is ``None`` when the aggregate ROIC is unavailable.
+as fractions. A sensitivity map is keyed by the runway in years ("5", "10", "20") or by the
+return of the charge: "runway", the row's own; the policy's ``roic_sensitivity`` values, "0.15"
+and "0.09", each as the runway return; then "ten-year", the ten-year aggregate ROIC as the runway
+return, ``None`` when it is unavailable or not positive. The value-spread flag reads the first
+three.
 
 - Mature Growth: ``anchor`` (ntm_eps_raw, sbc_adjustment_per_share, ntm_eps), ``sbc_basis``,
   ``ntm_net_income``, ``path`` (base_year, on_eps, analysts), ``path_steps``, ``belief`` (rate,
-  sales_class, median), ``moat``, ``runway``, ``roic`` (aggregate, years, by_year),
-  ``runway_roic``, ``terminal_roic``, ``charge_off``, ``shares``, ``value_total``,
-  ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``, ``eps`` (reported,
-  clean, forward), ``epv`` (a share), ``dividend_yield``, ``net_buyback_yield``,
-  ``income_basis``, ``price_facts``; at the price, ``implied_growth``,
+  sales_class, median), ``moat``, ``runway``, ``fade_years``, ``growth_rates`` (years 2 to the
+  runway), ``roic`` (aggregate, years, by_year), ``runway_return`` (used, marginal,
+  marginal_usable, three_year, ten_year, value), ``terminal_roic``, ``charge_off``, ``shares``,
+  ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
+  ``eps`` (reported, clean, forward), ``epv`` (a share), ``dividend_yield``,
+  ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price, ``implied_growth``,
   ``implied_growth_by_runway``, ``implied_by_roic``, ``multiples``, ``growth_share``,
   ``expected_return``.
 - Mature Stable: ``e_trailing``, ``nri_gap``, ``ttm_margin``, ``median_margin``,
-  ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``terminal_roic``, ``epv`` and
-  ``stable_growth`` (a share), ``epv_total`` and ``stable_growth_total``, ``shares``,
-  ``value_per_share``, ``eps``,
-  ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price,
-  ``multiples`` and ``expected_return``.
+  ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``runway_return``, ``terminal_roic``,
+  ``epv`` and ``stable_growth`` (a share), ``epv_total`` and ``stable_growth_total``, ``shares``,
+  ``value_per_share``, ``eps``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``,
+  ``price_facts``; at the price, ``multiples`` and ``expected_return``.
 """
 
 import math

@@ -1,14 +1,24 @@
-"""The Mature Growth route (spec 6.6, steps 1 to 11).
+"""The Mature Growth route (spec 6.6, steps 1 to 11, under the calibration spec 5).
 
-Year 1 is the NTM anchor, years 2 and 3 the consensus path, years 4 to N the belief; the value is
-the reverse DCF with the reinvestment charge at the company's aggregate ROIC, the terminal at the
-moat's terminal ROIC. The value is also computed at each policy runway and at each ROIC of the
-sensitivity (the company's, then the policy's ``roic_sensitivity``, each with the moat's terminal
-rule applied to it), and so is the implied growth at the price.
+Year 1 is the NTM anchor and years 2 and 3 the consensus path. When year 3's growth is above the
+belief, years 4 to 3 + the policy's ``fade_years`` fade from it to the belief; the other years to
+the runway N grow at the belief. The value is the reverse DCF with the reinvestment charge at the
+runway return in years 1 to N−1 and at the terminal return in year N and the terminal value
+(``RoicTerms``). A year whose next growth is above its return pays out nothing, never less; the
+first such year raises "growth above return", after the ROIC flags and before the trailing ones.
 
-``growth_at_price`` rebuilds the growth path and the charge from the intermediates alone, so a
-stored result moves to a new price without its inputs. The implied growth is solved between −50%
-and 200% a year; ``None`` means no growth in that range reaches the price.
+The value is also computed at each policy runway and at each return of the sensitivity, and so is
+the implied growth at the price. The sensitivity is keyed ``"runway"``, the row's own charge;
+then the policy's ``roic_sensitivity`` values, each as the runway return with the moat's terminal
+rule applied to it; then ``"ten-year"``, the ten-year aggregate ROIC as the runway return, not
+floored, with the moat's terminal rule applied to it, ``None`` when the aggregate is unavailable
+or not positive. The value-spread flag reads the first three.
+
+``growth_at_price`` rebuilds the growth path and the charges from the intermediates alone, so a
+stored result moves to a new price without its inputs. The implied growth is the belief at which
+the value equals the price, the fade moving with it; it is solved between −50% and 200% a year,
+and ``None`` means no growth in that range reaches the price. The expected return's growth reads
+the path's rates from year 2.
 """
 
 from dataclasses import replace
@@ -23,7 +33,14 @@ from fairband.engine.anchor import (
     path_steps,
 )
 from fairband.engine.flags import long_runway_flag, value_spread_flag
-from fairband.engine.mature_growth import Charge, GrowthPath, implied_growth, value_at_belief
+from fairband.engine.mature_growth import (
+    Charge,
+    GrowthPath,
+    floored_years,
+    growth_rates,
+    implied_growth,
+    value_at_belief,
+)
 from fairband.engine.multiples import epv, growth_share
 from fairband.engine.roic import terminal_roic
 from fairband.engine.route_steps import (
@@ -71,7 +88,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     moat = moat_class(i.moat_score, policy)
     runway = policy.runway_years[moat]
     roic = RoicTerms.of(i.capital_years, moat, policy)
-    growth = GrowthPath(anchor.ntm_net_income, path.steps, belief.rate, runway)
+    growth = GrowthPath(anchor.ntm_net_income, path.steps, belief.rate, runway, policy.fade_years)
     charge = _charge(roic.runway, roic.terminal, roic.charge_off, policy)
     value_total = value_at_belief(growth, charge)
     value = value_total / c.shares
@@ -81,7 +98,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     }
     by_roic = {
         key: None if ch is None else value_at_belief(growth, ch) / c.shares
-        for key, ch in _roic_charges(roic.usable, moat, policy).items()
+        for key, ch in _roic_charges(charge, roic.usable, moat, policy).items()
     }
     gap = nri_gap(i)
     e = eps(t, gap, anchor.ntm_eps)
@@ -98,8 +115,9 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "belief": {"rate": belief.rate, "sales_class": belief.sales_class, "median": belief.median},
         "moat": moat,
         "runway": runway,
+        "fade_years": growth.fade_years,
+        "growth_rates": list(growth_rates(growth)),
         **roic.intermediates(),
-        "runway_roic": roic.runway,
         "charge_off": roic.charge_off,
         "shares": c.shares,
         "value_total": value_total,
@@ -112,8 +130,14 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         **income(i.market_cap, t),
         "price_facts": price_facts_for(i.closes, c.price, c.today),
     }
-    flags = anchor.flags + path.flags + roic.flags + trailing_flags(i, t, gap, policy)
-    spread = present(value_spread_flag(list(by_roic.values()), policy)) + present(
+    flags = (
+        anchor.flags
+        + path.flags
+        + roic.flags
+        + present(_growth_above_return(growth, charge))
+        + trailing_flags(i, t, gap, policy)
+    )
+    spread = present(value_spread_flag(list(by_roic.values())[:3], policy)) + present(
         value_spread_flag(list(by_runway.values()), policy)
     )
     if value <= 0:
@@ -147,8 +171,9 @@ def growth_at_price(
 ) -> dict[str, Any]:
     """The intermediates that move with the price, from the value-side intermediates ``im``."""
     g2, g3 = im["path_steps"]
-    growth = GrowthPath(im["ntm_net_income"], (g2, g3), im["belief"]["rate"], im["runway"])
-    charge = _charge(im["runway_roic"], im["terminal_roic"], im["charge_off"], policy)
+    belief = im["belief"]["rate"]
+    growth = GrowthPath(im["ntm_net_income"], (g2, g3), belief, im["runway"], im["fade_years"])
+    charge = _charge(im["runway_return"]["value"], im["terminal_roic"], im["charge_off"], policy)
     target = price * im["shares"]
     aggregate = im["roic"]["aggregate"]
     usable = aggregate if aggregate is not None and aggregate > 0 else None
@@ -160,11 +185,11 @@ def growth_at_price(
         },
         "implied_by_roic": {
             key: None if ch is None else implied_growth(target, growth, ch, hi=_IMPLIED_HI)
-            for key, ch in _roic_charges(usable, im["moat"], policy).items()
+            for key, ch in _roic_charges(charge, usable, im["moat"], policy).items()
         },
         "multiples": multiples_at(price, im["eps"]),
         "growth_share": None if im["epv"] is None else growth_share(im["epv"], price),
-        "expected_return": expected(price, value, im, (g2, g3), im["belief"]["rate"]),
+        "expected_return": expected(price, value, im, growth_rates(growth)),
     }
 
 
@@ -177,14 +202,40 @@ def _charge(runway_roic: float, terminal: float, charge_off: bool, policy: Polic
     return Charge(runway_roic, terminal, policy.required_return, policy.terminal_growth, charge_off)
 
 
-def _roic_charges(usable: float | None, moat: Moat, policy: Policy) -> dict[str, Charge | None]:
-    """The charge at each runway ROIC of the sensitivity, as if the company's aggregate were that
-    ROIC: the aggregate itself (``None`` when unavailable), then the policy's values."""
-    cases = [("aggregate", usable), *((f"{x:g}", x) for x in policy.roic_sensitivity)]
+def _roic_charges(
+    own: Charge, ten_year: float | None, moat: Moat, policy: Policy
+) -> dict[str, Charge | None]:
+    """The charge at each return of the sensitivity, in order: the row's own; each of the policy's
+    values as the runway return; the usable ten-year aggregate as the runway return, not floored
+    (``None`` without one). All but the first take the moat's terminal rule on that return and
+    charge in every runway year."""
+
+    def at(x: float) -> Charge:
+        return _charge(x, terminal_roic(x, moat, policy), False, policy)
+
     return {
-        key: None if x is None else _charge(x, terminal_roic(x, moat, policy), False, policy)
-        for key, x in cases
+        "runway": own,
+        **{f"{x:g}": at(x) for x in policy.roic_sensitivity},
+        "ten-year": None if ten_year is None else at(ten_year),
     }
+
+
+def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:
+    """``growth-above-return`` on the first year whose payout the floor raised to zero, with the
+    growth it pays for (the next year's) and the return it pays at."""
+    floored = floored_years(growth, charge)
+    if not floored:
+        return None
+    t = floored[0]
+    g = (*growth_rates(growth), charge.g_t)[t - 1]
+    ret = charge.runway_roic if t < growth.runway else charge.terminal_roic
+    return Flag(
+        "growth-above-return",
+        "Growth above return",
+        f"Year {t} growth of {g:.1%} exceeds the {ret:.1%} return on new capital; the payout is "
+        "floored at zero and the growth above the return is treated as efficiency growth, which "
+        "costs nothing.",
+    )
 
 
 def _runways(policy: Policy) -> list[int]:

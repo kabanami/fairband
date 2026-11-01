@@ -9,10 +9,11 @@ import pytest
 from fairband.engine import METHOD_VERSION, route_mature_growth
 from fairband.engine.classifier import Deciles
 from fairband.engine.levels import levels_for, stance3, stance5
-from fairband.engine.mature_growth import Charge, GrowthPath, value_at_belief
+from fairband.engine.mature_growth import Charge, GrowthPath, growth_rates, value_at_belief
 from fairband.engine.price_facts import price_facts
-from fairband.engine.roic import aggregate_roic, runway_return, terminal_return
+from fairband.engine.roic import aggregate_roic, runway_return, terminal_return, terminal_roic
 from fairband.engine.route import CompanyInputs, refusal_result, reprice, value_company
+from fairband.engine.route_mature_growth import growth_at_price
 from fairband.engine.types import (
     Flag,
     Provenance,
@@ -24,10 +25,14 @@ from fairband.policy import Policy
 
 TODAY = date(2026, 10, 31)
 # At a return equal to r, growth up to r adds no value and the value is year-1 earnings over r;
-# years 1 and 2 pay for the 12% and 10% steps, above r, and the payout floor raises their cash
-# from below zero to zero, which adds it back.
+# years 1 to 3 pay for the 12% and 10% steps and year 4's 9.26% (the first fade step from 10% to
+# the 6.3% belief), above r, and the payout floor raises their cash from below zero to zero,
+# which adds it back.
 VALUE_AT_R = (
-    5.90 / 0.09 + 5.90 * (0.12 / 0.09 - 1) / 1.09 + 5.90 * 1.12 * (0.10 / 0.09 - 1) / 1.09**2
+    5.90 / 0.09
+    + 5.90 * (0.12 / 0.09 - 1) / 1.09
+    + 5.90 * 1.12 * (0.10 / 0.09 - 1) / 1.09**2
+    + 5.90 * 1.12 * 1.10 * (0.0926 / 0.09 - 1) / 1.09**3
 )
 
 MATURE_GROWTH_KEYS = {
@@ -40,10 +45,11 @@ MATURE_GROWTH_KEYS = {
     "moat",
     "runway",
     "roic",
-    "runway_roic",
     "runway_return",
     "terminal_roic",
     "charge_off",
+    "fade_years",
+    "growth_rates",
     "shares",
     "value_total",
     "value_per_share",
@@ -133,7 +139,8 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     r = value_company(mg_inputs, deciles, policy, TODAY)
     capital = mg_inputs.capital_years
     assert r.symbol == "MGCO" and r.phase.phase == "Mature Growth" and r.phase.checks == ()
-    # the value moves 73% between a 9% and the company's ten-year 22.7% ROIC on a 20-year runway
+    # the value moves 96% between a 9% return and the company's 43.1% marginal return on a
+    # 20-year runway
     assert codes(r) == ["value-spread"]
     assert (r.price, r.price_date, r.data_date) == (150.0, date(2026, 10, 30), date(2026, 10, 30))
     assert (r.policy_version, r.method_version) == (policy.version, METHOD_VERSION)
@@ -157,29 +164,49 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert im["roic"]["aggregate"] == aggregate_roic(capital).aggregate
     assert im["roic"]["aggregate"] == pytest.approx(0.227, abs=1e-3)
     # the charge reads the five-year marginal return; the terminal, the moat's rule on it
+    rr = im["runway_return"]
     expected = runway_return(aggregate_roic(capital), "Wide", policy)
-    assert im["runway_return"] == {
-        "used": "marginal",
+    assert rr == {
+        "used": expected.used,
         "marginal": expected.marginal,
-        "marginal_usable": True,
+        "marginal_usable": expected.marginal_usable,
         "three_year": expected.three_year,
-        "ten_year": im["roic"]["aggregate"],
+        "ten_year": expected.ten_year,
         "value": expected.value,
     }
-    assert im["runway_roic"] == expected.value == pytest.approx(0.4315, abs=1e-4)
-    assert im["terminal_roic"] == terminal_return(expected, "Wide", policy)
+    assert (rr["used"], rr["marginal_usable"], rr["ten_year"]) == (
+        "marginal",
+        True,
+        im["roic"]["aggregate"],
+    )
+    assert rr["value"] == pytest.approx(0.4315, abs=1e-4)
+    assert im["fade_years"] == 5 and im["terminal_roic"] == terminal_return(
+        expected, "Wide", policy
+    )
     assert im["terminal_roic"] == policy.wide_terminal_roic_cap and im["charge_off"] is False
 
-    # the value is the reverse DCF at the belief over the company's own runway and return
-    growth = GrowthPath(5_900e6, (0.12, 0.10), 0.063, 20)
-    charge = Charge(im["runway_roic"], 0.13, 0.09, 0.03)
+    # the value is the reverse DCF at the belief over the company's own runway and return, with
+    # year 3's 10% fading to the belief over years 4 to 8, the last of them on the belief exactly
+    growth = GrowthPath(5_900e6, (0.12, 0.10), 0.063, 20, fade_years=5)
+    charge = Charge(rr["value"], im["terminal_roic"], 0.09, 0.03)
+    assert im["growth_rates"] == pytest.approx(growth_rates(growth))
+    assert len(im["growth_rates"]) == 19 and im["growth_rates"][2] == pytest.approx(0.0926)
+    assert im["growth_rates"][6:] == [im["belief"]["rate"]] * 13
     assert im["value_total"] == pytest.approx(value_at_belief(growth, charge))
     assert r.value == im["value_per_share"] == pytest.approx(im["value_total"] / 1_000e6)
     assert im["value_by_runway"]["20"] == r.value
     assert im["value_by_runway"]["5"] < im["value_by_runway"]["10"] < r.value
-    # the sensitivity's "aggregate" is the ten-year aggregate, below the marginal return
+    # the sensitivity: the row's own return, the policy's two, then the ten-year aggregate as the
+    # runway return with the moat's terminal rule on it, below the marginal; the spread flag reads
+    # the first three
     by_roic = im["value_by_roic"]
-    assert by_roic["0.09"] < by_roic["0.15"] < by_roic["aggregate"] < r.value
+    assert list(by_roic) == ["runway", "0.15", "0.09", "ten-year"]
+    assert by_roic["runway"] == r.value
+    ten_year = Charge(
+        expected.ten_year, terminal_roic(expected.ten_year, "Wide", policy), 0.09, 0.03
+    )
+    assert by_roic["ten-year"] == pytest.approx(value_at_belief(growth, ten_year) / 1_000e6)
+    assert by_roic["0.09"] < by_roic["0.15"] < by_roic["ten-year"] < by_roic["runway"]
 
     # the implied growth is the belief at which the value equals the price
     implied = im["implied_growth"]
@@ -187,8 +214,9 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert at_price == pytest.approx(150.0, rel=1e-6)
     assert im["implied_growth_by_runway"]["20"] == implied
     assert set(im["implied_growth_by_runway"]) == {"5", "10", "20"}
-    assert set(im["implied_by_roic"]) == {"aggregate", "0.15", "0.09"}
-    assert implied < im["implied_by_roic"]["aggregate"] < im["implied_by_roic"]["0.15"]
+    assert list(im["implied_by_roic"]) == ["runway", "0.15", "0.09", "ten-year"]
+    assert im["implied_by_roic"]["runway"] == implied
+    assert implied < im["implied_by_roic"]["ten-year"] < im["implied_by_roic"]["0.15"]
     # at a ROIC equal to r growth up to r adds no value; only growth above r, which the payout
     # floor makes free, reaches the price
     assert im["value_by_roic"]["0.09"] == pytest.approx(VALUE_AT_R)
@@ -200,7 +228,7 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert im["implied_growth_by_runway"]["10"] > implied
     five = reprice(r, 170.0, date(2026, 11, 2), policy).intermediates["implied_growth_by_runway"]
     assert five["5"] > 0.5
-    at_five = value_at_belief(GrowthPath(5_900e6, (0.12, 0.10), five["5"], 5), charge) / 1_000e6
+    at_five = value_at_belief(replace(growth, belief=five["5"], runway=5), charge) / 1_000e6
     assert at_five == pytest.approx(170.0, rel=1e-6)
 
     assert im["nri_gap"] == pytest.approx(0.05)
@@ -217,7 +245,10 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert im["net_buyback_yield"] == pytest.approx((2_000e6 - 100e6) / 150_000e6)
     er = im["expected_return"]
     assert er["income"] == pytest.approx(1_900e6 / 150_000e6 + 1_000e6 / 150_000e6)
-    assert er["growth"] == pytest.approx((1.12 * 1.10 * 1.063) ** (1 / 3) - 1)
+    # the growth term reads the path as modeled: the two steps, then year 4's faded rate
+    assert er["growth"] == pytest.approx(
+        (1.12 * 1.10 * (1 + growth_rates(growth)[2])) ** (1 / 3) - 1
+    )
     assert er["repricing"] == pytest.approx(math.log(r.value / 150.0) / 3)
     assert im["price_facts"]["high_52w"] == pytest.approx(150.0)
     assert im["price_facts"]["change_1y"] is not None
@@ -317,7 +348,7 @@ def test_mature_growth_is_deterministic(
     first = result_to_json(value_company(mg_inputs, deciles, policy, TODAY))
     again = result_to_json(value_company(replace(mg_inputs), deciles, policy, TODAY))
     assert first == again
-    assert json.loads(first)["intermediates"]["value_by_roic"]["aggregate"] is not None
+    assert json.loads(first)["intermediates"]["value_by_roic"]["ten-year"] is not None
 
 
 def test_roic_not_positive_floors_the_runway_return(
@@ -329,8 +360,8 @@ def test_roic_not_positive_floors_the_runway_return(
     im = r.intermediates
     assert r.value is not None and im["roic"]["aggregate"] < 0
     assert im["runway_return"]["used"] == "floor" and im["runway_return"]["three_year"] < 0
-    assert im["runway_roic"] == im["terminal_roic"] == policy.required_return
-    assert im["value_by_roic"]["aggregate"] is None and im["implied_by_roic"]["aggregate"] is None
+    assert im["runway_return"]["value"] == im["terminal_roic"] == policy.required_return
+    assert im["value_by_roic"]["ten-year"] is None and im["implied_by_roic"]["ten-year"] is None
     assert "roic-unavailable" not in codes(r)
     floored = next(f for f in r.flags if f.code == "return-floored")
     assert floored.sentence.startswith("The three-year return of -")
@@ -342,7 +373,7 @@ def test_too_few_roic_years_uses_the_terminal_roic(
     short = replace(mg_inputs, capital_years=mg_inputs.capital_years[-4:])
     r = value_company(short, deciles, policy, TODAY)
     assert r.intermediates["roic"]["aggregate"] is None
-    assert r.intermediates["runway_roic"] == r.intermediates["terminal_roic"] == 0.09
+    assert r.intermediates["runway_return"]["value"] == r.intermediates["terminal_roic"] == 0.09
     assert codes(r).count("roic-unavailable") == 1
 
 
@@ -359,12 +390,31 @@ def test_capital_at_or_below_zero_zeroes_the_charge(
     assert "charge-zeroed" in codes(r) and "roic-unavailable" not in codes(r)
     assert "ten-year-roic-unavailable" in codes(r)
     # the terminal still charges, at the Wide cap
-    assert im["terminal_roic"] == im["runway_roic"] == policy.wide_terminal_roic_cap
+    assert im["terminal_roic"] == im["runway_return"]["value"] == policy.wide_terminal_roic_cap
     zeroed = next(f for f in r.flags if f.code == "charge-zeroed")
     assert zeroed.sentence.endswith("the terminal still charges at 13.0%.")
-    growth = GrowthPath(5_900e6, (0.12, 0.10), 0.063, 20)
-    off = Charge(im["runway_roic"], im["terminal_roic"], 0.09, 0.03, charge_off=True)
+    growth = GrowthPath(5_900e6, (0.12, 0.10), 0.063, 20, fade_years=5)
+    off = Charge(im["runway_return"]["value"], im["terminal_roic"], 0.09, 0.03, charge_off=True)
     assert r.value == pytest.approx(value_at_belief(growth, off) / 1_000e6)
+    # no runway charge, so no payout to floor
+    assert "growth-above-return" not in codes(r)
+
+
+def test_charge_off_row_keeps_the_terminal_charge(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    negative = tuple(
+        replace(y, total_current_liabilities=3 * (y.total_current_assets or 0))
+        for y in mg_inputs.capital_years
+    )
+    r = value_company(replace(mg_inputs, capital_years=negative), deciles, policy, TODAY)
+    im = r.intermediates
+    assert im["charge_off"] is True and im["runway_return"]["used"] == "off"
+    assert im["terminal_roic"] == 0.13  # Wide; the terminal multiple is 13.2, not 17.2
+    growth = GrowthPath(im["ntm_net_income"], tuple(im["path_steps"]), im["belief"]["rate"], 20, 5)
+    assert im["value_total"] == pytest.approx(
+        value_at_belief(growth, Charge(0.13, 0.13, 0.09, 0.03, charge_off=True))
+    )
 
 
 def test_runway_return_input_carries_its_note(
@@ -392,13 +442,16 @@ def test_flags_in_order_without_duplicates(
 ) -> None:
     assert mg_inputs.trailing is not None
     series = mg_inputs.series
+    base, second, third = (replace(a, analysts_net_income=3) for a in mg_inputs.annual_estimates)
     inputs = replace(
         mg_inputs,
         input_flags=(flag("trailing-on-fiscal-year"), flag("equity-raise")),
         series=(*series[:-1], replace(series[-1], cfo=1e9, capex=-2e9)),  # a negative FCF
         street_ttm_eps=None,  # the SBC basis is unknown
-        annual_estimates=tuple(
-            replace(a, analysts_net_income=3) for a in mg_inputs.annual_estimates
+        annual_estimates=(  # 50% a year, above the 43.1% marginal return
+            base,
+            replace(second, net_income=1.50 * base.net_income),
+            replace(third, net_income=1.50 * 1.50 * base.net_income),
         ),
         capital_years=mg_inputs.capital_years[-8:],  # ROIC on 7 years
         trailing=replace(
@@ -407,7 +460,7 @@ def test_flags_in_order_without_duplicates(
             equity_issued=5_000e6,  # an equity raise, which assembly already flagged
         ),
         gf_eps_without_nri=4.80,  # a non-recurring gain of 0.50 a share
-        price=400.0,  # an implied growth above 10% on a 20-year runway
+        price=700.0,  # an implied growth above 10% on a 20-year runway
     )
     r = value_company(inputs, deciles, policy, TODAY)
     assert codes(r) == [
@@ -417,6 +470,7 @@ def test_flags_in_order_without_duplicates(
         "sbc-basis-unknown",  # the anchor
         "few-analysts",  # the path
         "roic-on-n-years",  # the ROIC
+        "growth-above-return",  # the payout floor
         "margin-flag",
         "large-nri",
         "long-runway-high-growth",
@@ -450,12 +504,48 @@ def test_a_return_below_r_is_floored(
     r = value_company(replace(mg_inputs, capital_years=poor), deciles, policy, TODAY)
     im = r.intermediates
     assert im["runway_return"]["used"] == "floor" and im["runway_return"]["marginal_usable"]
-    assert im["runway_roic"] == im["terminal_roic"] == policy.required_return
+    assert im["runway_return"]["value"] == im["terminal_roic"] == policy.required_return
     assert r.refusal is None and r.value == pytest.approx(VALUE_AT_R)
     floored = next(f for f in r.flags if f.code == "return-floored")
     assert floored.sentence.startswith("The five-year marginal return of 2.0%")
     [note] = [i.note for i in r.inputs if i.name == "runway_return"]
     assert note == "floored at the required return; the five-year marginal was 2.0%"
+
+
+def test_growth_above_return_flag(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # consensus net income up 50% a year in fiscal 2028 and 2029, above the 43.1% marginal return:
+    # years 1 and 2 would reinvest more than they earn, so their payouts floor at zero
+    base, second, third = mg_inputs.annual_estimates
+    steep = replace(
+        mg_inputs,
+        annual_estimates=(
+            base,
+            replace(second, net_income=1.50 * base.net_income),
+            replace(third, net_income=1.50 * 1.50 * base.net_income),
+        ),
+    )
+    r = value_company(steep, deciles, policy, TODAY)
+    above = next(f for f in r.flags if f.code == "growth-above-return")
+    assert above.word == "Growth above return"
+    assert above.sentence == (
+        "Year 1 growth of 50.0% exceeds the 43.1% return on new capital; the payout is floored "
+        "at zero and the growth above the return is treated as efficiency growth, which costs "
+        "nothing."
+    )
+    assert r.value is not None and r.value > 0
+    assert "growth-above-return" not in codes(value_company(mg_inputs, deciles, policy, TODAY))
+
+
+def test_implied_growth_round_trip_with_fade(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    r = value_company(mg_inputs, deciles, policy, TODAY)
+    assert r.value is not None
+    im = r.intermediates
+    at_value = growth_at_price(im, r.value, r.value, policy)["implied_growth"]
+    assert at_value == pytest.approx(im["belief"]["rate"], abs=1e-6)
 
 
 def test_value_at_or_below_zero_is_refused(
