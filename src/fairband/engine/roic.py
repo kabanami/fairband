@@ -152,7 +152,7 @@ def aggregate_roic(years: Sequence[CapitalYear], min_years: int = 5) -> RoicResu
     flags.extend(
         Flag(
             f"line-not-presented:{name}",
-            "Line not presented",
+            f"Line not presented: {name}",
             f"A balance sheet in the ROIC years does not present {words}; it counted as nil "
             f"under method {_NIL_METHOD}.",
         )
