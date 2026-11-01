@@ -99,8 +99,8 @@ def test_scoped_refresh_without_deciles_writes_refusal_snapshots(env: Env) -> No
 
 
 def test_first_refresh_before_any_universe_says_no_deciles(env_without_universe: Env) -> None:
-    """Without a universe row the country is unknown, so assembly finds no tax rate; the missing
-    deciles are still the reason a first scoped refresh gives."""
+    """Before any universe there are no deciles: that is the reason a first scoped refresh
+    gives, whatever else assembly finds."""
     env = env_without_universe
     refresh_id = env.run(["ACME"])
     assert refresh_id == 1 and env.last().status == "done"
@@ -123,6 +123,9 @@ def test_scoped_refresh_with_stored_deciles_values(env_with_deciles: Env) -> Non
     # The synthetic company's invested capital takes the issuer's as-reported intangibles.
     [roic] = [i for i in acme.result.inputs if i.name == "aggregate_roic"]
     assert (roic.kind, roic.estimate_method) == ("estimate", "bs10-intangibles-total-v1")
+    # The drawer names the tax country, the FMP profile's.
+    [tax] = [i for i in acme.result.inputs if i.name == "tax_rate_latest"]
+    assert tax.note is not None and tax.note.startswith("US, the headquarters country in the FMP")
 
 
 def test_stop_after_first_then_continue(env: Env) -> None:

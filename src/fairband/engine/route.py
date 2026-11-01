@@ -26,8 +26,10 @@ assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``
 the source "unknown". A DATA input named in ``CompanyInputs.estimate_methods`` is an estimate
 under that method (a tax rate carried forward, say), and so is ``aggregate_roic`` under the method
 ``estimate_methods`` names ``intangibles`` (D17: invested capital took the issuer's as-reported
-intangibles total), with a note that says so; every other DATA input is observed. A RULE input
-cites the policy version.
+intangibles total), with a note that says so; every other DATA input is observed. A DATA input
+named in ``CompanyInputs.notes`` carries that note unless the route writes its own (assembly's
+note on the tax rate names the country, the rate's year and its source). A RULE input cites the
+policy version.
 
 Intermediates hold JSON values only. Totals are in USD, per-share figures in USD a share, rates
 as fractions. A sensitivity map is keyed by the runway in years ("5", "10", "20") or by the runway
@@ -78,7 +80,8 @@ _VALUE_SPREAD = "value-spread"
 @dataclass(frozen=True)
 class CompanyInputs:
     """Everything the engine reads for one company, as assembly built it from the store.
-    ``estimate_methods`` maps an input name to the method assembly estimated it by."""
+    ``estimate_methods`` maps an input name to the method assembly estimated it by, and
+    ``notes`` an input name to the note assembly wrote for it."""
 
     symbol: str
     name: str
@@ -106,6 +109,7 @@ class CompanyInputs:
     input_flags: tuple[Flag, ...]
     refusal: str | None
     estimate_methods: dict[str, str] = field(default_factory=dict)
+    notes: dict[str, str] = field(default_factory=dict)
 
 
 def value_company(

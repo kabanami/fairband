@@ -128,7 +128,6 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         data(i, "path_step_2", path.steps[0], "ratio", "estimates_annual"),
         data(i, "path_step_3", path.steps[1], "ratio", "estimates_annual"),
         data(i, "street_ttm_eps", i.street_ttm_eps, "USD a share"),
-        data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),
         *common_rules(policy, moat, roic),
         rule(policy, "runway_years", runway, "years", f"{moat} moat"),
         rule(

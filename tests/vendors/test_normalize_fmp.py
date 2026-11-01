@@ -18,6 +18,7 @@ from fairband.vendors.normalize_fmp import (
     earnings_observations,
     estimate_observations,
     price_closes,
+    profile_country,
     profile_observations,
     quote_observations,
     screener_rows,
@@ -375,6 +376,15 @@ def test_profile_observations_shapes() -> None:
         assert obs(rows, "profile", None, "market_cap").value is None
     for empty in ([], ["x"], None, "profile"):
         assert profile_observations(empty, "X", RID, OBSERVED, ENTERED) == []
+
+
+def test_profile_country() -> None:
+    """The headquarters country of the profile object (spec 6.6), from a list or a bare object;
+    ``None`` without a non-empty string."""
+    assert profile_country(load("profile.ACME")) == "US"
+    assert profile_country({"country": " TW "}) == "TW"
+    for missing in ([{}], [{"country": ""}], [{"country": None}], [{"country": 7}], [], None, "US"):
+        assert profile_country(missing) is None
 
 
 def test_price_closes() -> None:

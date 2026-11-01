@@ -25,7 +25,8 @@ label or a date:
 - ``profile``: ``is_adr`` (1 or 0 from the boolean ``isAdr``; no value when the flag is absent or
   not a boolean; unit ``None``) and ``market_cap`` (``marketCap``) from the profile object, which
   arrives as a one-item list or a bare object; ``period`` ``None``, ``as_of`` the observed date.
-  The screener carries no ``isAdr``, so the ADR flag is read from here.
+  The screener carries no ``isAdr``, so the ADR flag is read from here. The country is not an
+  observation: ``profile_country`` reads it from the stored payload.
 
 A row without a parseable ``date`` is skipped and records nothing; nothing here raises on vendor
 data.
@@ -170,7 +171,7 @@ def profile_observations(
 ) -> list[ObservationRow]:
     """``is_adr`` and ``market_cap`` from the profile object (the first one of a list); none when
     the payload holds no object."""
-    row = payload if isinstance(payload, dict) else next(objects(payload), None)
+    row = _profile(payload)
     if row is None:
         return []
     flag = row.get("isAdr")
@@ -182,6 +183,19 @@ def profile_observations(
         source.observation("profile", None, "is_adr", is_adr, None, as_of),
         source.observation("profile", None, "market_cap", market_cap, MONEY, as_of),
     ]
+
+
+def profile_country(payload: Any) -> str | None:
+    """The profile object's ``country``, the headquarters as FMP gives it (an ISO 3166-1 alpha-2
+    code), stripped; ``None`` without a non-empty string. Assembly reads it from the stored
+    payload, as it reads the closes."""
+    row = _profile(payload)
+    return None if row is None else text(row.get("country"))
+
+
+def _profile(payload: Any) -> dict[str, Any] | None:
+    """The profile object: a bare object, or the first object of a list."""
+    return payload if isinstance(payload, dict) else next(objects(payload), None)
 
 
 def price_closes(payload: Any) -> list[tuple[date, float]]:

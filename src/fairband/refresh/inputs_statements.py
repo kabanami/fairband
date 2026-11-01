@@ -94,7 +94,8 @@ class FiscalCalendar:
 class Statements:
     """The statement-side fields of ``CompanyInputs``; ``calendar`` is ``None`` and ``refusal`` is
     "no financial statements" when the store holds no annual income statement. ``tax_refusal``
-    names the first year with an operating income and no statutory tax rate."""
+    names the first year with an operating income and no statutory tax rate; ``tax_year`` is the
+    table year ``tax_rate_latest`` comes from, before the newest fiscal year when carried forward."""
 
     calendar: FiscalCalendar | None
     series: Series
@@ -110,6 +111,7 @@ class Statements:
     refusal: str | None
     tax_refusal: str | None = None
     estimate_methods: dict[str, str] = field(default_factory=dict)
+    tax_year: int | None = None
 
 
 @dataclass(frozen=True)
@@ -235,6 +237,7 @@ def statements_for(
         refusal=None,
         tax_refusal=_tax_refusal(country, capital),
         estimate_methods=methods,
+        tax_year=None if newest_rate is None else newest_rate.year_used,
     )
 
 

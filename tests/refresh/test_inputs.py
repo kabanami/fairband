@@ -227,14 +227,55 @@ def test_tax_rate_estimate_flag_and_refusal(
     [carried] = [f for f in inputs.input_flags if f.code == "tax-carried-forward"]
     assert "2024" in carried.sentence and "2025" in carried.sentence
     assert inputs.estimate_methods["tax_rate_latest"] == LATEST_YEAR_METHOD
+    assert "its 2024 statutory rate" in inputs.notes["tax_rate_latest"]  # the rate's own year
     assert inputs.refusal is None
 
     from_2017 = {("United States", y): 0.25 for y in range(2017, 2027)}
     late = TaxTable(from_2017, "t", {"US": "United States"})
     assert build(conn_with_company, late).refusal == "no statutory tax rate for US 2015"
 
-    add_company(conn_with_company, country="TW")  # a newer universe row, outside the table
-    assert build(conn_with_company).refusal == "no statutory tax rate for TW 2015"
+
+def test_a_profile_country_outside_the_tax_table_is_refused(store: Store) -> None:
+    profiles = [{"symbol": "ACME", "isAdr": False, "country": "TW"}]
+    conn = store(profile=profiles, **bodies())  # the universe row says US
+    inputs = build(conn)
+    assert (inputs.country, inputs.refusal) == ("TW", "no statutory tax rate for TW 2015")
+    assert inputs.notes == {}
+
+
+@pytest.mark.parametrize(
+    ("country", "listed", "expected", "origin"),
+    [
+        ("US", None, "US", "FMP profile"),  # a scoped ticker outside the universe
+        ("US", "TW", "US", "FMP profile"),  # the profile wins over the universe row
+        (None, "CA", "CA", "FMP company-screener"),  # a profile without a country
+    ],
+    ids=["profile", "profile-over-universe", "universe"],
+)
+def test_the_country_is_the_profiles(
+    store: Store, country: str | None, listed: str | None, expected: str, origin: str
+) -> None:
+    """The tax country is the FMP profile's (the headquarters, spec 6.6), else the universe
+    row's; the tax input's note names it, where it came from, and the rate's year and source."""
+    profiles = [{"symbol": "ACME", "isAdr": False, "marketCap": 5_000 * M, "country": country}]
+    conn = store(company=False, profile=profiles, **bodies())
+    if listed is not None:
+        add_company(conn, country=listed)
+    inputs = build(conn)
+    table = load_tax_table()
+    rate = table.rate_for(expected, 2025)
+    assert rate is not None and not rate.estimate
+    assert (inputs.country, inputs.refusal, inputs.tax_rate_latest) == (expected, None, rate.rate)
+    assert inputs.notes == {
+        "tax_rate_latest": f"{expected}, the headquarters country in the {origin}: its 2025 "
+        f"statutory rate, from {table.source}"
+    }
+
+
+def test_the_country_is_unknown_without_profile_or_universe_row(store: Store) -> None:
+    profiles = [{"symbol": "ACME", "isAdr": False}]
+    inputs = build(store(company=False, profile=profiles, **bodies()))
+    assert (inputs.country, inputs.refusal) == ("unknown", "no statutory tax rate for unknown 2015")
 
 
 @pytest.mark.parametrize(

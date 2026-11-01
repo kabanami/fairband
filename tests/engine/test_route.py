@@ -240,6 +240,20 @@ def test_an_input_assembly_estimated_is_tagged_as_an_estimate(
     assert (by_name["price"].kind, by_name["price"].estimate_method) == ("observed", None)
 
 
+def test_both_routes_carry_the_tax_rate_with_the_assembly_note(
+    mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The statutory rate feeds every NOPAT of the ROIC, and Mature Growth's anchor besides: both
+    routes carry it, with the note assembly wrote (the country, the rate's year and source)."""
+    note = "US, the headquarters country in the FMP profile: its 2025 statutory rate, from OECD"
+    for inputs in (mg_inputs, ms_inputs):
+        r = value_company(replace(inputs, notes={"tax_rate_latest": note}), deciles, policy, TODAY)
+        assert r.refusal is None
+        [tax] = [i for i in r.inputs if i.name == "tax_rate_latest"]
+        assert (tax.tag, tax.kind, tax.value, tax.note) == ("DATA", "observed", 0.25, note)
+        assert tax.provenance == inputs.provenance["tax_rate_latest"]
+
+
 def test_the_intangibles_estimate_reaches_the_aggregate_roic(
     mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

@@ -10,8 +10,10 @@ share count) is ``inputs_statements``; its docstring states those rules. ``build
   the four trailing quarter ends; ``None`` when one is missing or the trailing figures are a fiscal
   year, which leaves the SBC basis unknown (``mech/1.2``);
 - the price and its date from the ``quote``; the market cap from the quote, else the profile, else
-  the universe row; ``is_adr`` from the profile, else the universe row; the country is the
-  universe row's;
+  the universe row; ``is_adr`` from the profile, else the universe row;
+- the country, which picks the statutory tax rate: the ``country`` of the latest stored profile
+  payload (the headquarters, spec 6.6), else the universe row's, else ``"unknown"``. The tax
+  rate's note (``notes``) names the country, where it came from, and the rate's year and source;
 - the currency: the newest annual income statement's, else the universe row's, else ``"unknown"``
   flagged ``currency-unknown``. The route reads every currency but USD as a foreign filer, so an
   unknown one gets the foreign-filer refusal, which is the honest outcome;
@@ -48,7 +50,7 @@ from fairband.refresh.inputs_statements import (
 from fairband.store.companies import CompanyRow, latest_company
 from fairband.store.observations import ObservationRow, observations_for
 from fairband.store.vendor import latest_response, response_payload
-from fairband.vendors.normalize_fmp import price_closes, value_as_date
+from fairband.vendors.normalize_fmp import price_closes, profile_country, value_as_date
 
 __all__ = ["build_inputs", "latest_price", "series_for"]
 
@@ -85,7 +87,7 @@ def build_inputs(
     """Everything the engine reads for ``symbol``, from the store. No assembly rule reads the
     policy yet."""
     company = latest_company(conn, symbol)
-    country = company.country if company is not None and company.country else "unknown"
+    country, origin = _country(conn, symbol, company)
     stated = statements_for(conn, symbol, country, tax, today)
     provenance = dict(stated.provenance)
 
@@ -140,6 +142,7 @@ def build_inputs(
         input_flags=flags,
         refusal=stated.refusal or (None if foreign else stated.tax_refusal),
         estimate_methods=stated.estimate_methods,
+        notes=_tax_note(country, origin, stated),
     )
 
 
@@ -224,6 +227,37 @@ def _next_earnings(rows: Sequence[ObservationRow], today: date) -> _Cited[date |
     if row is None or row.value is None or value_as_date(row.value) < today:
         return None, None
     return value_as_date(row.value), _cite(_EARNINGS, [row])
+
+
+def _country(
+    conn: sqlite3.Connection, symbol: str, company: CompanyRow | None
+) -> tuple[str, str | None]:
+    """The company's country and where it came from: the latest usable profile's (the
+    headquarters, spec 6.6), else the universe row's; ``"unknown"`` from neither."""
+    response = latest_response(conn, "fmp", "profile", symbol, {"symbol": symbol})
+    text = None if response is None else response_payload(conn, response.id)
+    try:
+        country = None if text is None else profile_country(json.loads(text))
+    except ValueError:  # a payload that does not parse names no country
+        country = None
+    if country is not None:
+        return country, _PROFILE
+    if company is not None and company.country:
+        return company.country, _SCREENER
+    return "unknown", None
+
+
+def _tax_note(country: str, origin: str | None, stated: Statements) -> dict[str, str]:
+    """The tax rate's note, by input name: the country, where it came from, and the rate's year
+    and source; none without a rate."""
+    cited = stated.provenance.get("tax_rate_latest")
+    if origin is None or stated.tax_year is None or cited is None:
+        return {}
+    note = (
+        f"{country}, the headquarters country in the {origin}: its {stated.tax_year} statutory "
+        f"rate, from {cited.source}"
+    )
+    return {"tax_rate_latest": note}
 
 
 def _closes(conn: sqlite3.Connection, symbol: str) -> _Cited[_Closes]:

@@ -195,6 +195,7 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
         data(i, "buybacks_ttm", t.buybacks, "USD", "statements"),
         data(i, "equity_issued_ttm", t.equity_issued, "USD", "statements"),
         _aggregate_roic(i, roic),
+        data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),  # the newest ROIC year's rate
         data(i, "moat_score", i.moat_score, "score"),
         data(i, "gf_eps_ttm", i.gf_eps_ttm, "USD a share"),
         data(i, "gf_eps_without_nri", i.gf_eps_without_nri, "USD a share"),
@@ -231,12 +232,14 @@ def data(
     note: str | None = None,
 ) -> TaggedInput:
     """A DATA input citing ``provenance[source]`` (default: its own name), or the source
-    "unknown"; an estimate when ``estimate_methods`` names it, else observed. A value that is not a
-    finite number is stored as ``None``."""
+    "unknown"; an estimate when ``estimate_methods`` names it, else observed. Its note is
+    ``note``, else the one ``notes`` holds for it. A value that is not a finite number is stored
+    as ``None``."""
     provenance = i.provenance.get(source or name, _UNKNOWN)
     finite = None if value is None or not math.isfinite(value) else value
     method = i.estimate_methods.get(name)
     kind: Kind = "observed" if method is None else "estimate"
+    note = i.notes.get(name) if note is None else note
     return TaggedInput(name, finite, unit, "DATA", kind, provenance, method, note)
 
 
