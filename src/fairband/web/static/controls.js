@@ -42,6 +42,7 @@
       .then(function (body) {
         if (request !== latestPoll) return;
         var ended = (state.running !== null || started) && body.refresh === null;
+        if (state.notice && state.notice.fromPoll) state.notice = null; /* it answers again */
         state.running = body.refresh;
         if (body.refresh === null) state.last = body.last;
         if (ended) { /* the notice (already running, cancel asked) no longer holds */
@@ -55,13 +56,19 @@
       })
       .catch(function (err) {
         if (request !== latestPoll) return;
-        notify('The refresh status did not load: ' + err.message +
-          '. Reload the page to try again.', true);
+        /* While a run is alive, ask again: the buttons and the faded tables recover once the
+           server answers. With none alive there is nothing to follow. */
+        var alive = state.running !== null || started;
+        if (alive) timer = setTimeout(poll, POLL_MS);
+        notify('The refresh status did not load: ' + err.message + (alive
+          ? '. The page asks again every 2 seconds.' : '. Reload the page to try again.'), true,
+          true);
       });
   }
 
-  function notify(text, caution) {
-    state.notice = text ? { text: text, caution: caution } : null;
+  /* A notice under the status line; one from a failed poll clears when a poll answers. */
+  function notify(text, caution, fromPoll) {
+    state.notice = text ? { text: text, caution: caution, fromPoll: !!fromPoll } : null;
     render();
   }
 
@@ -146,14 +153,17 @@
     ].join(' · ');
   }
 
-  /* A full refresh's calibration: the totals, the phases with a company, and the refusals grouped
-     by the text before their first colon, the most frequent first. A price refresh's counts. */
+  /* A full refresh's calibration: the companies, those valued and those flagged, the phases with a
+     company, and the refusals grouped by the text before their first colon, the most frequent
+     first. A price refresh's counts. */
   function calibrationLine(c) {
     if (c.repriced != null) {
       return count(c.total) + ' companies · ' + count(c.repriced) + ' repriced, ' +
         count(c.failed) + ' failed, ' + count(c.skipped) + ' skipped';
     }
-    var parts = [count(c.total) + ' companies', count(c.valued) + ' valued'];
+    var parts = [
+      count(c.total) + ' companies', count(c.valued) + ' valued', count(c.flagged) + ' flagged'
+    ];
     var phases = Object.keys(c.phases || {})
       .filter(function (p) { return c.phases[p] > 0; })
       .map(function (p) { return phaseName(p) + ' ' + count(c.phases[p]); });

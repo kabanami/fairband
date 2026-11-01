@@ -266,10 +266,11 @@ def _snapshot_line(symbol: str, snapshot: SnapshotRow | None) -> str:
 
 
 def _calibration_lines(calibration: dict[str, Any]) -> list[str]:
-    """``1,812 companies · 1,540 valued``, a line per phase in life-cycle order, then each refusal
-    reason with its count, the most frequent first."""
+    """``1,812 companies · 1,540 valued · 1,204 flagged``, a line per phase in life-cycle order,
+    then each refusal reason with its count, the most frequent first."""
     phases, refused = calibration["phases"], calibration["refused"]
-    lines = [f"{calibration['total']:,} companies · {calibration['valued']:,} valued"]
+    total, valued, flagged = calibration["total"], calibration["valued"], calibration["flagged"]
+    lines = [f"{total:,} companies · {valued:,} valued · {flagged:,} flagged"]
     lines += [f"{phase}: {phases.get(phase, 0):,}" for phase in (*PHASE_NUMBER, UNCLASSIFIED)]
     by_count = sorted(refused.items(), key=lambda item: (-item[1], item[0]))
     lines += [f"{count:,} refused: {reason}" for reason, count in by_count]

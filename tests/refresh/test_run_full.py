@@ -429,7 +429,7 @@ def test_cli_full_refresh_prints_calibration(
     assert out[out.index("done: 4 done, 0 failed, 0 to go") :] == [
         "done: 4 done, 0 failed, 0 to go",
         "refresh 1: done",
-        "4 companies · 3 valued",
+        "4 companies · 3 valued · 4 flagged",
         "Start-up: 0",
         "Young Growth: 1",
         "High Growth: 0",

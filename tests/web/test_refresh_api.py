@@ -363,6 +363,16 @@ def test_app_js_posts_with_the_request_header() -> None:
     assert "'X-Fairband-Request': '1'" in script
 
 
+def test_controls_js_calibration_reads_flagged() -> None:
+    """The page's calibration caption names the companies flagged, after those valued (goal 7):
+    ``4 companies · 3 valued · 4 flagged · phases: …``. The browser check renders it."""
+    script = resources.files("fairband.web").joinpath("static", "controls.js").read_text("utf-8")
+    assert (
+        "count(c.total) + ' companies', count(c.valued) + ' valued', count(c.flagged) + ' flagged'"
+        in script
+    )
+
+
 # --- python -m fairband serve ----------------------------------------------------------------
 
 
