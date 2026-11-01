@@ -1,10 +1,10 @@
 /* The screen page: fetches /api/screen and renders the design system's ScreenTable, and beside it
    the detail drawer of the row the reader opens (spec 6.4), fetched from /api/companies/{symbol}.
    No JSX and no build step: React.createElement against window.Fairband. The server sorts and the
-   engine computes; this script asks for an order, remembers the chosen columns, narrows the
-   loaded rows to the reader's find and filters and lays out what the engine produced, rounded for
-   display only. The header, the status line and the group view are controls.js, loaded after
-   this script; it reaches the screen through window.FairbandPage. */
+   engine computes; this script asks for an order, remembers the chosen columns in the reader's
+   order, narrows the loaded rows to the reader's find and filters and lays out what the engine
+   produced, rounded for display only. The header, the status line and the group view are
+   controls.js, loaded after this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -40,9 +40,22 @@
   function loadColumns() {
     try {
       var saved = JSON.parse(window.localStorage.getItem(COLUMNS_KEY));
-      if (Array.isArray(saved)) return saved;
+      if (Array.isArray(saved)) return normalise(saved);
     } catch (e) { /* no storage, or not a list: the default */ }
     return F.DEFAULT_COLUMNS.slice();
+  }
+
+  /* A saved list's order is the table's. A list saved before the order mattered, or by an older
+     build, may name a column the bundle no longer has, repeat one, or lack a locked one: unknown
+     keys and repeats go, a missing Ticker goes first and a missing Price last, since neither can
+     be switched off. */
+  function normalise(columns) {
+    var kept = columns.filter(function (key, i) {
+      return F.COLUMN_KEYS.indexOf(key) !== -1 && columns.indexOf(key) === i;
+    });
+    if (kept.indexOf('ticker') === -1) kept.unshift('ticker');
+    if (kept.indexOf('price') === -1) kept.push('price');
+    return kept;
   }
 
   function setColumns(columns) {

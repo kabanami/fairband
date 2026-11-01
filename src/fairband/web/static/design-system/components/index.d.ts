@@ -401,7 +401,14 @@ export interface ScreenFilters {
 export interface ScreenTableProps {
   /** Already filtered and sorted. The component does neither. */
   rows: ScreenRow[];
-  /** Visible column keys. Defaults to DEFAULT_COLUMNS; ticker and price always show. */
+  /**
+   * Visible column keys. Defaults to DEFAULT_COLUMNS; ticker and price always show.
+   * fairband: ordered; the table renders in this order and a header drop calls `onColumnsChange`
+   * with the new order. Given `onColumnsChange`, each header cell is draggable; the dragged
+   * column takes the target's index. A locked column the list leaves out still shows, ticker
+   * first and price last; unknown keys are left out. The chooser lists the columns in this
+   * order, then the rest in catalog order.
+   */
   columns?: string[];
   /** Makes the chooser live. Without it the chooser renders inert. */
   onColumnsChange?: (columns: string[]) => void;
@@ -535,6 +542,8 @@ export declare function SensitivityGrid(props: SensitivityGridProps): unknown;
 export declare const PHASES: Record<Phase, string>;
 /** The screen's default eight columns. */
 export declare const DEFAULT_COLUMNS: string[];
+/** fairband: every column's key, in catalog order. */
+export declare const COLUMN_KEYS: string[];
 /** The four cap buckets, each with its word and the range it covers. */
 export declare const CAPS: { id: CapSize; word: string; note: string }[];
 /** The eleven GICS sectors, in GICS order. */

@@ -47,7 +47,10 @@
   .app-layout--drawer { grid-template-columns: minmax(0, 1fr) var(--detail-rail); }
   .app-main { min-height: 0; overflow: auto; }
   .app-note { margin: 0; color: var(--ink-muted); }
-  .fb-table thead th[tabindex], .fb-table tbody tr[tabindex] { cursor: pointer; }
+  /* A header that also drags keeps the bundle's grab cursor. */
+  .fb-table thead th[tabindex]:not([draggable="true"]), .fb-table tbody tr[tabindex] {
+    cursor: pointer;
+  }
   .fb-table thead th[tabindex]:focus-visible, .fb-table tbody tr[tabindex]:focus-visible {
     outline: 2px solid var(--focus-ring); outline-offset: -2px;
   }

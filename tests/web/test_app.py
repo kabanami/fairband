@@ -648,6 +648,15 @@ def test_app_js_filter_rule_handles_missing_fields() -> None:
     )
 
 
+def test_app_js_normalises_a_saved_column_list() -> None:
+    script = _static_file("app.js")
+    assert "function normalise(columns)" in script
+    assert "F.COLUMN_KEYS" in script
+    assert "if (kept.indexOf('ticker') === -1) kept.unshift('ticker');" in script
+    assert "if (kept.indexOf('price') === -1) kept.push('price');" in script
+    assert "if (Array.isArray(saved)) return normalise(saved);" in script
+
+
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
 EXTRA_COLUMN_HEADS = {
     "sector": "Sector",
@@ -698,7 +707,7 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 9
+    assert bundle.count("// fairband:") >= 17
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
     assert "Number(p.phase) || 1" not in bundle
     assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
@@ -719,6 +728,29 @@ def test_bundle_patches_marked() -> None:
     assert "role: p.onOpen" not in bundle
     assert "'aria-current': r.selected ? 'true' : null" in bundle
     assert "'aria-selected'" not in bundle
+    # The columns render in the list's order; a locked column the list lacks still shows, Ticker
+    # first and Price last. A drop's click does not sort; a press clears the flag first. The
+    # chooser lists the table's order, then the rest in catalog order.
+    assert "if (shown.indexOf(columnOf('ticker')) === -1) shown.unshift(columnOf('ticker'));" in (
+        bundle
+    )
+    assert "if (shown.indexOf(columnOf('price')) === -1) shown.push(columnOf('price'));" in bundle
+    assert "if (drag.current.dropped) { drag.current.dropped = false; return; }" in bundle
+    assert "onPointerDown: function () { drag.current.dropped = false; }" in bundle
+    assert "shown.concat(COLUMNS.filter(function (c) { return shown.indexOf(c) === -1; }))" in (
+        bundle
+    )
+
+
+def test_bundle_orders_columns_by_the_list() -> None:
+    bundle = _component_file("bundle.js")
+    assert "var shown = visible.map(function (key) {" in bundle
+    assert "draggable: p.onColumnsChange ? true : null" in bundle
+    assert "p.onColumnsChange(moved(visible, " in bundle
+    assert "COLUMN_KEYS: COLUMNS.map(function (c) { return c.key; })" in bundle
+    assert bundle.count("// fairband:") >= 10
+    css = _component_file("bundle.css")
+    assert "th.is-drop { box-shadow: inset 2px 0 0 var(--accent); }" in css
 
 
 def test_bundle_is_the_november_build() -> None:
@@ -766,6 +798,11 @@ def test_index_d_ts_declares_onOpen() -> None:
     props = re.search(r"export interface ScreenTableProps \{\n(.*?)\n\}", declarations, re.DOTALL)
     assert props is not None
     assert "onOpen?: (row: ScreenRow) => void;" in props.group(1)
+
+
+def test_index_d_ts_says_columns_are_ordered() -> None:
+    declarations = _component_file("index.d.ts")
+    assert "fairband: ordered" in declarations
 
 
 def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, policy: Policy) -> None:

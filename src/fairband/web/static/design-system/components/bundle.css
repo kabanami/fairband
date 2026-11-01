@@ -762,6 +762,10 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-table tbody tr.is-selected { background: var(--surface-selected); box-shadow: inset 2px 0 0 var(--accent); }
 .fb-sort { margin-left: var(--space-1); color: var(--accent); }
 .fb-table th.is-sorted { color: var(--ink); }
+/* fairband: a dragged column over another header marks that header's leading edge, the only
+   change during a drag; a header that drags shows the grab cursor. */
+.fb-table thead th.is-drop { box-shadow: inset 2px 0 0 var(--accent); }
+.fb-table thead th[draggable="true"] { cursor: grab; }
 /* The basis columns are named by their header, not by a chip per cell. */
 .fb-screen__basisg { color: var(--prov-derived); font-family: var(--font-mono); font-weight: 700; margin-right: 4px; }
 .fb-screen__ticker { color: var(--ink); }

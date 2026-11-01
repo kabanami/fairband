@@ -1020,15 +1020,78 @@
   var DEFAULT_COLUMNS = ['ticker', 'name', 'phase', 'band', 'mechanical',
                          'reviewed', 'price', 'stance'];
 
+  // fairband: a column's catalog entry by its key; null for a key the catalog does not know.
+  function columnOf(key) {
+    for (var i = 0; i < COLUMNS.length; i++) if (COLUMNS[i].key === key) return COLUMNS[i];
+    return null;
+  }
+
+  // fairband: the list with `from` taken out and put back at `to`'s index, so the dragged column
+  // stands where the target stood and the columns between shift by one.
+  function moved(list, from, to) {
+    var at = list.indexOf(to);
+    var next = list.filter(function (k) { return k !== from; });
+    next.splice(at, 0, from);
+    return next;
+  }
+
   function ScreenTable(props) {
     var p = props || {};
     var rows = p.rows || [];
     var open = React.useState(false);
     var fopen = React.useState(false);
+    // fairband: the drag in progress (the dragged key) and whether a drop just ended one, whose
+    // click must not sort; `over` is the header showing the drop edge.
+    var drag = React.useRef({ from: null, dropped: false });
+    var over = React.useState(null);
     var visible = p.columns || DEFAULT_COLUMNS;
-    var shown = COLUMNS.filter(function (c) {
-      return c.locked || visible.indexOf(c.key) !== -1;
-    });
+    // fairband: the columns render in the list's order, unknown keys and repeats left out. The
+    // lock is on visibility, not position: a locked column the list leaves out still shows,
+    // Ticker first and Price last. The chooser and a header drop work on this order.
+    var shown = visible.map(function (key) {
+      return columnOf(key);
+    }).filter(function (c, i, all) { return c && all.indexOf(c) === i; });
+    if (shown.indexOf(columnOf('ticker')) === -1) shown.unshift(columnOf('ticker'));
+    if (shown.indexOf(columnOf('price')) === -1) shown.push(columnOf('price'));
+    visible = shown.map(function (c) { return c.key; });
+
+    // fairband: given onColumnsChange, a header drags onto another and the dragged column takes
+    // the target's place. The target shows the drop edge; nothing else changes during the drag.
+    // A press clears the drop flag, so a click the browser sends after a drop is the only one
+    // that does not sort.
+    function dragHandlers(c) {
+      return {
+        onPointerDown: function () { drag.current.dropped = false; },
+        onDragStart: function (e) {
+          drag.current.from = c.key;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', c.key);
+        },
+        onDragOver: function (e) {
+          var from = drag.current.from;
+          if (from == null) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          over[1](from === c.key ? null : c.key);
+        },
+        onDragLeave: function (e) {
+          if (e.currentTarget.contains(e.relatedTarget)) return;
+          over[1](function (k) { return k === c.key ? null : k; });
+        },
+        onDrop: function (e) {
+          var from = drag.current.from;
+          if (from == null) return;
+          e.preventDefault();
+          drag.current.dropped = true;
+          over[1](null);
+          if (from !== c.key) p.onColumnsChange(moved(visible, from, c.key));
+        },
+        onDragEnd: function () {
+          drag.current.from = null;
+          over[1](null);
+        }
+      };
+    }
 
     function toggle(key) {
       if (!p.onColumnsChange) return;
@@ -1171,7 +1234,9 @@
             'aria-expanded': open[0] ? 'true' : 'false'
           }, 'Columns ▾'),
           open[0] ? h('div', { className: 'fb-menu' },
-            COLUMNS.map(function (c) {
+            // fairband: the chosen columns in the table's order, then the rest in catalog order.
+            shown.concat(COLUMNS.filter(function (c) { return shown.indexOf(c) === -1; }))
+            .map(function (c) {
               var on = c.locked || visible.indexOf(c.key) !== -1;
               return h('label', { key: c.key, className: cx('fb-menu__row control', c.locked && 'is-locked') },
                 h('input', {
@@ -1192,21 +1257,28 @@
       h('table', { className: 'fb-table' },
         h('thead', null, h('tr', null, shown.map(function (c) {
           var sorted = p.sort && p.sort.column === c.key;
-          return h('th', {
+          return h('th', Object.assign({
             key: c.key,
-            className: cx('label', c.num && 'fb-num', sorted && 'is-sorted'),
+            // fairband: is-drop marks the header a dragged column is over.
+            className: cx('label', c.num && 'fb-num', sorted && 'is-sorted',
+              over[0] === c.key && 'is-drop'),
             'aria-sort': sorted ? (p.sort.direction === 'desc' ? 'descending' : 'ascending') : null,
             // fairband: the cell names its column; given onSort, a click, Enter or Space asks
-            // the consumer to sort by it. The component still sorts nothing itself.
+            // the consumer to sort by it. The component still sorts nothing itself. The click
+            // that follows a drop is consumed, so a drop never sorts.
             'data-key': c.key,
             tabIndex: p.onSort ? 0 : null,
-            onClick: p.onSort ? function () { p.onSort(c.key); } : null,
+            onClick: p.onSort ? function () {
+              if (drag.current.dropped) { drag.current.dropped = false; return; }
+              p.onSort(c.key);
+            } : null,
             onKeyDown: p.onSort ? function (e) {
               if (e.key !== 'Enter' && e.key !== ' ') return;
               e.preventDefault();
               p.onSort(c.key);
-            } : null
-          },
+            } : null,
+            draggable: p.onColumnsChange ? true : null
+          }, p.onColumnsChange ? dragHandlers(c) : null),
             c.basis ? h('span', { className: 'fb-screen__basisg', 'aria-hidden': 'true' },
               GLYPH_DERIVED) : null,
             c.head,
@@ -1697,6 +1769,9 @@
     Button: Button,
     PHASES: PHASES,
     DEFAULT_COLUMNS: DEFAULT_COLUMNS,
+    // fairband: every column's key in catalog order, so a page can drop a saved key it no
+    // longer knows.
+    COLUMN_KEYS: COLUMNS.map(function (c) { return c.key; }),
     CAPS: CAPS,
     SECTORS: SECTORS,
     EMPTY_FILTERS: EMPTY_FILTERS,
