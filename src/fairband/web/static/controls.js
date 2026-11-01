@@ -153,16 +153,17 @@
     ].join(' · ');
   }
 
-  /* A full refresh's calibration: the companies, those valued and those flagged, the phases with a
-     company, and the refusals grouped by the text before their first colon, the most frequent
-     first. A price refresh's counts. */
+  /* A full refresh's calibration: the companies, those valued and those a classifier check
+     flagged, the phases with a company, and the refusals grouped by the text before their first
+     colon, the most frequent first. A price refresh's counts. */
   function calibrationLine(c) {
     if (c.repriced != null) {
       return count(c.total) + ' companies · ' + count(c.repriced) + ' repriced, ' +
         count(c.failed) + ' failed, ' + count(c.skipped) + ' skipped';
     }
     var parts = [
-      count(c.total) + ' companies', count(c.valued) + ' valued', count(c.flagged) + ' flagged'
+      count(c.total) + ' companies', count(c.valued) + ' valued',
+      count(c.flagged) + ' flagged by a classifier check'
     ];
     var phases = Object.keys(c.phases || {})
       .filter(function (p) { return c.phases[p] > 0; })

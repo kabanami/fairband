@@ -364,13 +364,12 @@ def test_app_js_posts_with_the_request_header() -> None:
 
 
 def test_controls_js_calibration_reads_flagged() -> None:
-    """The page's calibration caption names the companies flagged, after those valued (goal 7):
-    ``4 companies · 3 valued · 4 flagged · phases: …``. The browser check renders it."""
+    """The page's calibration caption names the companies a classifier check flagged, after those
+    valued (goal 7): ``4 companies · 3 valued · 3 flagged by a classifier check · phases: …``.
+    The browser check renders it."""
     script = resources.files("fairband.web").joinpath("static", "controls.js").read_text("utf-8")
-    assert (
-        "count(c.total) + ' companies', count(c.valued) + ' valued', count(c.flagged) + ' flagged'"
-        in script
-    )
+    assert "count(c.total) + ' companies', count(c.valued) + ' valued'," in script
+    assert "count(c.flagged) + ' flagged by a classifier check'" in script
 
 
 # --- python -m fairband serve ----------------------------------------------------------------

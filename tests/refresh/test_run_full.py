@@ -44,8 +44,10 @@ from fairband.web.app import create_app
 RATE_LIMITED = "data fetch incomplete: rate limited"
 NOT_BUILT = "Young Growth route not built yet"
 FOREIGN = "foreign filer: currency and share-unit handling not built yet"
-# The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused; every company
-# carries a flag (the synthetic company has no leases on its balance sheet, among others).
+# The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused. Every company
+# carries a flag (the synthetic company has no leases on its balance sheet, among others), but
+# only ACME, AXLE (margin direction) and NEWT (growth word, free cash flow) are flagged by a
+# classifier check.
 CALIBRATION = {
     "total": 4,
     "valued": 3,
@@ -59,7 +61,7 @@ CALIBRATION = {
         "Decline": 0,
         "unclassified": 0,
     },
-    "flagged": 4,
+    "flagged": 3,
     "flags": {
         "fcf-sign": 1,
         "growth-word-disagrees": 1,
@@ -449,7 +451,7 @@ def test_cli_full_refresh_prints_calibration(
     assert out[out.index("done: 4 done, 0 failed, 0 to go") :] == [
         "done: 4 done, 0 failed, 0 to go",
         "refresh 1: done",
-        "4 companies · 3 valued · 4 flagged",
+        "4 companies · 3 valued · 3 flagged by a classifier check",
         "Start-up: 0",
         "Young Growth: 1",
         "High Growth: 0",

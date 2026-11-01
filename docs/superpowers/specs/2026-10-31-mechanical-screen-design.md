@@ -34,7 +34,7 @@ Success for this cut: the founder opens the page, runs a refresh, and sees a val
 4. Every row explains itself: the classifier evidence, the tagged inputs, the flags, or the refusal reason, visible from the row.
 5. Every input carries its tag (DATA or RULE), its source, its as-of date, its observed date and its entered date. Every rule number comes from a versioned policy file with a source or an explicit "no source" note.
 6. The founder's keys stay in a private file outside the repository. No key appears in a URL, a log, the database, a test fixture or an error message.
-7. A calibration count after the first universe run: how many companies per phase, how many flagged, how many refused and why (`design.md` 5.8).
+7. A calibration count after the first universe run: how many companies per phase, how many flagged by a classifier check, how many refused and why (`design.md` 5.8).
 
 ## 4. Non-goals for this cut
 

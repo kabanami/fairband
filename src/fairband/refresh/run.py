@@ -438,10 +438,11 @@ class Refresh:
 
 
 def calibration(universe: UniverseResult, snapshots: Sequence[SnapshotRow]) -> dict[str, Any]:
-    """A full refresh's counts (goal 7, ``design.md`` 5.8) over the snapshots it wrote, one per
-    admitted company: the companies, those with a value, the refusals by reason, the phases
-    (``unclassified`` for none), the companies with any flag and each flag code's count, and what
-    the universe admitted and left out by reason. Numbers only: the record stores it as JSON."""
+    """A full refresh's counts (goal 7) over the snapshots it wrote, one per admitted company: the
+    companies, those with a value, the refusals by reason, the phases (``unclassified`` for none),
+    the companies flagged by a classifier check (``design.md`` 5.8: a non-empty
+    ``phase.checks``), each flag code's count over every flag, and what the universe admitted and
+    left out by reason. Numbers only: the record stores it as JSON."""
     phases = dict.fromkeys([*PHASE_NUMBER, UNCLASSIFIED], 0)
     refused: Counter[str] = Counter()
     flags: Counter[str] = Counter()
@@ -455,7 +456,7 @@ def calibration(universe: UniverseResult, snapshots: Sequence[SnapshotRow]) -> d
         "valued": sum(1 for snapshot in snapshots if snapshot.value is not None),
         "refused": dict(refused),
         "phases": phases,
-        "flagged": sum(1 for snapshot in snapshots if snapshot.flags),
+        "flagged": sum(1 for snapshot in snapshots if snapshot.result.phase.checks),
         "flags": dict(flags),
         "universe": {"admitted": len(universe.admitted), "excluded": dict(universe.excluded)},
     }
