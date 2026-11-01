@@ -78,6 +78,7 @@ REQUIRED = frozenset(
     {"income-annual", "balance-annual", "cashflow-annual", "quote", "estimates-quarter"}
 )
 NO_GF_KEY = "no GuruFocus key"
+_GF_ENDPOINTS = frozenset({"summary", "keyratios"})
 _DETAIL_CHARS = 80  # of an unusable payload, kept as its error
 _PENDING = 0  # the response id normalized rows carry until their response is recorded
 _STATEMENT_ENDPOINTS = frozenset(
@@ -178,6 +179,13 @@ def fetch_company(
     return FetchOutcome(symbol, calls, reused, tuple(failed), error, rate_limited)
 
 
+def provider_of(endpoint: str) -> Provider:
+    """The provider of an endpoint name this module stores (``FetchOutcome.failed``): the two
+    GuruFocus endpoints are its bare route names, ``summary`` and ``keyratios``; every other
+    endpoint is FMP's."""
+    return "gf" if endpoint in _GF_ENDPOINTS else "fmp"
+
+
 def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
     """The fourteen calls for ``symbol``, in fetch order."""
     start = _years_before(today, PRICE_YEARS)
@@ -198,6 +206,7 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
         return on_fmp(f"estimates-{period}", params, partial(fmp.estimates, symbol, period, limit))
 
     def on_gf(endpoint: str, send: Callable[[GuruFocus, str], VendorResponse]) -> _Call:
+        assert endpoint in _GF_ENDPOINTS, f"provider_of must name {endpoint} GuruFocus's"
         bound = None if gf is None else partial(send, gf, symbol)
         return _Call("gf", endpoint, {"symbol": symbol}, bound)
 

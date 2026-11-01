@@ -73,6 +73,10 @@ class Fmp:
         self._http = http
         self._api_key = api_key
 
+    def close(self) -> None:
+        """Close the HTTP client."""
+        self._http.close()
+
     def screener(self) -> VendorResponse:
         return self._get("company-screener", _SCREENER_PARAMS)
 

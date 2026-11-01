@@ -23,6 +23,10 @@ class GuruFocus:
         self._http = http
         self._token = token
 
+    def close(self) -> None:
+        """Close the HTTP client."""
+        self._http.close()
+
     def summary(self, symbol: str) -> VendorResponse:
         """``stock/{symbol}/summary``: the moat score, Altman Z″ and ADR ratio."""
         return self._get(symbol, "summary")

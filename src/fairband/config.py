@@ -81,10 +81,15 @@ class MissingKey(Exception):
         self.vendor: str = vendor
 
 
+def keys_path(settings: Settings) -> Path:
+    """The keys file: ``keys.toml`` in the config directory."""
+    return settings.config_dir / _KEYS_FILE
+
+
 def load_keys(settings: Settings, env: Mapping[str, str] | None = None) -> Keys:
     """Read ``keys.toml`` in the config directory if present; the environment overrides it."""
     env = os.environ if env is None else env
-    file_keys = _read_keys_file(settings.config_dir / _KEYS_FILE)
+    file_keys = _read_keys_file(keys_path(settings))
 
     def pick(vendor: Vendor) -> str | None:
         return env.get(_KEY_ENV_VARS[vendor], "").strip() or file_keys.get(vendor)

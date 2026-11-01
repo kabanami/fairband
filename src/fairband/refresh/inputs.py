@@ -50,7 +50,7 @@ from fairband.store.observations import ObservationRow, observations_for
 from fairband.store.vendor import latest_response, response_payload
 from fairband.vendors.normalize_fmp import price_closes, value_as_date
 
-__all__ = ["build_inputs", "series_for"]
+__all__ = ["build_inputs", "latest_price", "series_for"]
 
 _OBSERVATIONS = frozenset(
     {
@@ -141,6 +141,13 @@ def build_inputs(
         refusal=stated.refusal or (None if foreign else stated.tax_refusal),
         estimate_methods=stated.estimate_methods,
     )
+
+
+def latest_price(conn: sqlite3.Connection, symbol: str) -> tuple[float | None, date | None]:
+    """The price of the newest stored quote and its date, as ``build_inputs`` reads them;
+    ``(None, None)`` when the store holds no quote price for ``symbol``."""
+    row = _field(observations_for(conn, symbol, "quote"), "price")
+    return (None, None) if row is None else (_float(row), row.as_of)
 
 
 def _quarter_estimates(

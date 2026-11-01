@@ -4,6 +4,7 @@ The tests in this directory import it as ``vendor_double`` (pytest puts the dire
 ``conftest.py`` builds the clients over it. The keys are fake and exist only here.
 """
 
+import threading
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
@@ -36,27 +37,34 @@ class Router:
 
     FMP requests read ``fmp/<route>[.<period>][.<symbol>].json`` (a slash in the route becomes a
     dash), GuruFocus requests ``gurufocus/<route>.<symbol>.json``. ``calls`` counts the requests per
-    endpoint, named as the fetch stores them (``income-annual``, ``quote``, ``summary``); a retry
-    counts again, and ``requested`` keeps each endpoint's last query parameters, the key left out.
-    An endpoint in ``fail`` answers ``fail_status`` (HTTP 500 unless set); one in ``bodies``
-    answers 200 with that body instead of its fixture. A request with no fixture answers 404.
+    endpoint, named as the fetch stores them (``income-annual``, ``quote``, ``summary``), and
+    ``symbol_calls`` per symbol; a retry counts again, and ``requested`` keeps each endpoint's last
+    query parameters, the key left out. An endpoint in ``fail``, or any request for a symbol in
+    ``fail_symbols``, answers ``fail_status`` (HTTP 500 unless set); an endpoint in ``bodies``
+    answers 200 with that body instead of its fixture. A request with no fixture answers 404. The
+    fetch workers call it from several threads, so it counts under a lock.
     """
 
     def __init__(self) -> None:
         self.calls: Counter[str] = Counter()
+        self.symbol_calls: Counter[str] = Counter()
         self.fail: set[str] = set()
+        self.fail_symbols: set[str] = set()
         self.fail_status = 500
         self.requested: dict[str, dict[str, str]] = {}
         self.bodies: dict[str, bytes] = {}
         self.transport = httpx.MockTransport(self._handle)
+        self._lock = threading.Lock()
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
-        endpoint, fixture = _resolve(request)
-        self.calls[endpoint] += 1
-        self.requested[endpoint] = {
-            name: value for name, value in request.url.params.items() if name != "apikey"
-        }
-        if endpoint in self.fail:
+        endpoint, symbol, fixture = _resolve(request)
+        with self._lock:
+            self.calls[endpoint] += 1
+            self.symbol_calls[symbol] += 1
+            self.requested[endpoint] = {
+                name: value for name, value in request.url.params.items() if name != "apikey"
+            }
+        if endpoint in self.fail or symbol in self.fail_symbols:
             return httpx.Response(self.fail_status)
         body = self.bodies.get(endpoint)
         if body is None:
@@ -66,17 +74,18 @@ class Router:
         return httpx.Response(200, content=body, headers={"Content-Type": "application/json"})
 
 
-def _resolve(request: httpx.Request) -> tuple[str, Path]:
-    """The endpoint name and the fixture path for ``request``."""
+def _resolve(request: httpx.Request) -> tuple[str, str, Path]:
+    """The endpoint name, the symbol (``""`` for none) and the fixture path for ``request``."""
     if request.url.host == "api.gurufocus.com":
         *_, symbol, route = request.url.path.split("/")  # /public/user/<token>/stock/<s>/<route>
-        return route, FIXTURES / "gurufocus" / f"{route}.{symbol}.json"
+        return route, symbol, FIXTURES / "gurufocus" / f"{route}.{symbol}.json"
     route = request.url.path.removeprefix("/stable/")
     period = request.url.params.get("period")
+    symbol = request.url.params.get("symbol", "")
     name = _FMP_ENDPOINTS.get(route, route)
-    parts = (route.replace("/", "-"), period, request.url.params.get("symbol"))
+    parts = (route.replace("/", "-"), period, symbol)
     fixture = FIXTURES / "fmp" / (".".join(part for part in parts if part) + ".json")
-    return (f"{name}-{period}" if period else name), fixture
+    return (f"{name}-{period}" if period else name), symbol, fixture
 
 
 class Clock:
