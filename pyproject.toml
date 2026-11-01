@@ -26,12 +26,14 @@ packages = ["src/fairband"]
 
 [tool.ruff]
 line-length = 100
-# The documents under docs/ quote Python in Markdown; Ruff must not rewrite them.
-extend-exclude = ["docs"]
+# The documents under docs/ quote Python in Markdown; Ruff must not rewrite them. The design
+# system under web/static is a vendored copy, kept as exported (its token script included).
+extend-exclude = ["docs", "src/fairband/web/static"]
 
 [tool.mypy]
 strict = true
 python_version = "3.13"
+exclude = ["^src/fairband/web/static/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

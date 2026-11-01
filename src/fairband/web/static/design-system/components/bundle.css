@@ -1,0 +1,730 @@
+/* Fairband components. Every colour, space and radius comes from tokens.css;
+   every font size comes from a generated type-style class. Nothing here
+   restates a token value. */
+
+.fb-preview {
+  padding: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+.fb-preview--stack { flex-direction: column; align-items: stretch; }
+.fb-preview--wide { display: block; }
+.fb-preview__note { color: var(--ink-faint); margin: 0 0 var(--space-3); flex-basis: 100%; }
+
+/* ---------------------------------------------------------------- generic */
+
+.fb-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Dates are monospaced and right-align in a column, so the varying day width
+   does not ragged the edge. The ISO string lives in the datetime attribute. */
+time { font-variant-numeric: tabular-nums; }
+
+.fb-tag {
+  color: var(--ink-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  white-space: nowrap;
+}
+
+.fb-mark { display: inline-block; margin-left: var(--space-1); font-weight: 700; }
+.fb-mark--aging { color: var(--caution); }
+.fb-mark--expired { color: var(--critical); }
+
+/* The three stance words. Colour always rides with the word, never alone. */
+.fb-stance {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.fb-stance--buy { color: var(--stance-buy); }
+.fb-stance--hold { color: var(--stance-hold); }
+.fb-stance--trim { color: var(--stance-trim); }
+
+/* ---------------------------------------------------------------- Button */
+
+.fb-btn {
+  font-family: var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms linear, border-color 120ms linear, color 120ms linear;
+}
+.fb-btn--sm { padding: var(--space-1) var(--space-2); }
+.fb-btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.fb-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.fb-btn[disabled] { background: var(--surface-sunken); color: var(--ink-faint); cursor: not-allowed; }
+.fb-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.fb-btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.fb-btn--quiet { background: transparent; border-color: transparent; color: var(--accent); }
+.fb-btn--quiet:hover { background: var(--accent-quiet); border-color: transparent; }
+.fb-btn--danger { color: var(--critical); border-color: var(--border); }
+.fb-btn--danger:hover { background: var(--critical-quiet); border-color: var(--critical); }
+
+/* ------------------------------------------------------------ PhaseBadge */
+
+.fb-phase {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-raised);
+  white-space: nowrap;
+}
+.fb-phase__n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 var(--space-1);
+  font-weight: 700;
+  color: var(--ink-inverse);
+}
+.fb-phase__label {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  color: var(--ink);
+  text-transform: uppercase;
+}
+.fb-phase--sm .fb-phase__label { padding: 0 var(--space-1); }
+.fb-phase--1 .fb-phase__n { background: var(--phase-1); }
+.fb-phase--2 .fb-phase__n { background: var(--phase-2); }
+.fb-phase--3 .fb-phase__n { background: var(--phase-3); }
+.fb-phase--4 .fb-phase__n { background: var(--phase-4); }
+.fb-phase--5 .fb-phase__n { background: var(--phase-5); }
+.fb-phase--6 .fb-phase__n { background: var(--phase-6); }
+
+/* ------------------------------------------- PrincipalChip and BasisChip */
+/* One chip, one question. A ◆ chip names the principal; an ƒ chip names the
+   basis. Nothing here ever puts the two answers on one chip. */
+
+.fb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: var(--surface-raised);
+  white-space: nowrap;
+}
+.fb-chip--compact { padding: 0 var(--space-1); border-color: transparent; background: transparent; }
+.fb-chip__glyph { font-family: var(--font-mono); font-weight: 700; }
+.fb-chip__who { color: var(--ink); }
+/* The actor is a model identifier: mono, lower case, never uppercased. */
+.fb-chip__role { color: var(--ink-faint); }
+.fb-chip__at { color: var(--ink-faint); }
+
+.fb-chip--principal .fb-chip__glyph { color: var(--prov-input); }
+.fb-chip--principal.fb-chip--strong {
+  background: var(--prov-input-quiet);
+  border-color: var(--prov-input);
+}
+.fb-chip--principal.fb-chip--strong .fb-chip__who { color: var(--prov-input); }
+
+.fb-chip--basis .fb-chip__glyph { color: var(--prov-derived); }
+.fb-chip__basis { text-transform: uppercase; }
+.fb-chip--mechanical .fb-chip__basis { color: var(--ink-faint); }
+.fb-chip--reviewed .fb-chip__basis { color: var(--accent); }
+.fb-chip--reviewed:not(.fb-chip--compact) { border-color: var(--accent); }
+
+/* ------------------------------------------------------------- ValueCell */
+
+.fb-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  justify-content: flex-end;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.fb-value--left { justify-content: flex-start; }
+.fb-value__glyph { font-family: var(--font-mono); font-weight: 700; color: var(--prov-derived); }
+.fb-value__basis { text-transform: uppercase; }
+.fb-value__basis--mechanical { color: var(--ink-faint); }
+.fb-value__basis--reviewed { color: var(--accent); }
+.fb-value__dates { color: var(--ink-faint); font-family: var(--font-mono); }
+.fb-value--expired { text-decoration: underline dotted var(--critical); text-underline-offset: 3px; }
+
+/* ----------------------------------------------------------- ValueBridge */
+
+.fb-bridge__t { width: 100%; border-collapse: collapse; }
+.fb-bridge__t th {
+  text-align: left;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  padding: 0 var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.fb-bridge__t th.fb-num { text-align: right; }
+.fb-bridge__t td {
+  padding: var(--space-3) var(--space-3) var(--space-3) 0;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+}
+.fb-bridge__t td.fb-num { text-align: right; white-space: nowrap; }
+.fb-bridge__g {
+  width: 26px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-align: center;
+  padding-right: var(--space-2);
+}
+.fb-bridge__g--f { color: var(--prov-derived); }
+.fb-bridge__g--d { color: var(--prov-input); }
+.fb-bridge__chg { display: block; }
+.fb-bridge__from { color: var(--ink-faint); }
+.fb-bridge__reason { display: block; color: var(--ink-muted); margin-top: 2px; }
+.fb-bridge__noreason { color: var(--caution); }
+/* The reviewed row is the sum of the rows above it, so it wears a sum rule. */
+.fb-bridge__sum td { border-top: 1px solid var(--border-strong); border-bottom: none; }
+.fb-delta--up { color: var(--stance-buy); }
+.fb-delta--down { color: var(--stance-trim); }
+.fb-bridge__note { color: var(--ink-faint); margin: var(--space-3) 0 0; }
+
+/* ------------------------------------------------------------- BandMeter */
+
+.fb-band { color: var(--ink); }
+.fb-band__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+.fb-band__price { font-variant-numeric: tabular-nums; }
+.fb-band__gap { color: var(--ink-faint); }
+
+/* The band's own numbers, on their own tier above the track. */
+.fb-band__tier { position: relative; height: 20px; }
+.fb-band__tier > span { position: absolute; transform: translateX(-50%); white-space: nowrap; color: var(--ink-faint); }
+.fb-band__bracket {
+  position: absolute;
+  top: 15px;
+  height: 5px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.fb-band__track {
+  position: relative;
+  height: var(--zone-track);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+.fb-band__clip { position: absolute; inset: 0; border-radius: var(--radius-sm); overflow: hidden; }
+.fb-zone { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; }
+.fb-zone > span { padding: 0 var(--space-2); text-transform: uppercase; position: relative; z-index: 2; }
+.fb-zone--buy { background: var(--zone-buy); }
+.fb-zone--hold { background: var(--zone-hold); justify-content: flex-start; }
+.fb-zone--fair { background: var(--zone-fair); }
+.fb-zone--trim { background: var(--zone-trim); justify-content: flex-end; }
+.fb-zone--buy > span, .fb-zone--trim > span { color: var(--ink-inverse); }
+.fb-zone--hold > span { color: var(--ink-faint); }
+.fb-band__fairmark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink-muted);
+}
+
+/* The price marker overhangs the track so most of it sits on the ground, and
+   carries a 2px surface ring so one design survives every zone beneath it.
+   The ring is load-bearing: the ink fill alone does not clear 3:1 on the buy
+   zone. */
+.fb-band__price-mark {
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+  z-index: 3;
+}
+.fb-band__price-mark::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -6px;
+  width: 11px;
+  height: 11px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+
+.fb-band__scale { position: relative; height: 32px; margin-top: var(--space-3); }
+.fb-band__scale span {
+  position: absolute;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+.fb-band__scale em {
+  display: block;
+  font-style: normal;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.fb-band__caption { color: var(--ink-faint); margin-top: var(--space-3); }
+
+/* -------------------------------------------------------- ValidityWindow */
+
+.fb-window { color: var(--ink); }
+.fb-window__dates {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-3) 0 var(--space-4);
+}
+.fb-window__dates dt { color: var(--ink-muted); text-transform: uppercase; align-self: baseline; }
+.fb-window__dates dd { margin: 0; display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.fb-window__gloss { color: var(--ink-faint); }
+.fb-window__track {
+  position: relative;
+  height: var(--band-track);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.fb-window__fill { position: absolute; top: 0; bottom: 0; left: 0; background: var(--accent-quiet); }
+.fb-window--aging .fb-window__fill { background: var(--caution-quiet); }
+.fb-window--expired .fb-window__fill { background: var(--critical-quiet); }
+.fb-window__now {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+}
+.fb-window--aging .fb-window__now { background: var(--caution); }
+.fb-window--expired .fb-window__now { background: var(--critical); }
+.fb-window__ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  color: var(--ink-faint);
+}
+.fb-window__until.is-aging { color: var(--caution); }
+.fb-window__until.is-expired { color: var(--critical); }
+
+/* ----------------------------------------------------------- TaggedInput */
+
+.fb-input {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  padding: var(--space-3);
+}
+.fb-input__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.fb-input__label { color: var(--ink-muted); text-transform: uppercase; }
+.fb-input__field { display: flex; align-items: center; gap: var(--space-2); }
+.fb-input__control {
+  flex: 1 1 auto;
+  min-width: var(--figure-column);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--ink);
+  box-shadow: var(--shadow-well);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.fb-input__control:hover { border-color: var(--border-strong); }
+.fb-input__control:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.fb-input__control[readonly] { color: var(--ink-faint); cursor: not-allowed; }
+.fb-input__unit { color: var(--ink-faint); text-transform: uppercase; }
+.fb-input__foot { display: flex; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-2); }
+.fb-input__reason { margin: 0; color: var(--ink-muted); }
+.fb-input__reason--missing { color: var(--caution); }
+.fb-input--locked { background: var(--surface-sunken); }
+
+/* ======================================================== the three records
+   An override is applied, a report is published or rejected, a proposal is
+   held. Only a proposal ever asks the reader for anything, so only a proposal
+   has buttons. */
+
+.fb-rec {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  overflow: hidden;
+  color: var(--ink);
+}
+.fb-rec__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--hairline);
+}
+.fb-rec--applied .fb-rec__head { background: var(--accent-quiet); }
+.fb-rec--pending .fb-rec__head { background: var(--prov-input-quiet); }
+.fb-rec--refused .fb-rec__head { background: var(--critical-quiet); }
+.fb-rec--stale .fb-rec__head { background: var(--caution-quiet); }
+.fb-rec--pending { border-color: var(--record-pending); }
+.fb-rec--refused { border-color: var(--record-refused); }
+.fb-rec--stale { border-color: var(--record-stale); }
+
+.fb-rec__kind { color: var(--ink-muted); text-transform: uppercase; }
+.fb-rec__mode { color: var(--ink-faint); text-transform: uppercase; }
+.fb-rec__rev { color: var(--ink-faint); margin-left: auto; }
+.fb-rec__body { padding: var(--space-4); }
+
+.fb-rec__state {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.fb-rec__state--applied { color: var(--record-applied); }
+.fb-rec__state--pending { color: var(--record-pending); }
+.fb-rec__state--refused { color: var(--record-refused); }
+.fb-rec__state--stale { color: var(--record-stale); }
+
+.fb-rec__chg {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.fb-rec__from { color: var(--ink-faint); }
+.fb-rec__arrow { color: var(--ink-faint); }
+
+.fb-rec__f { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-4); margin: 0; }
+.fb-rec__f dt { color: var(--ink-muted); text-transform: uppercase; align-self: baseline; }
+.fb-rec__f dd { margin: 0; color: var(--ink); }
+.fb-rec__gloss { color: var(--ink-faint); }
+.fb-rec__period { color: var(--ink); }
+.fb-rec__effect { font-weight: 500; color: var(--stance-buy); }
+.fb-rec__msg { color: var(--ink-muted); margin: 0; }
+.fb-rec__outcome { margin: 0 0 var(--space-1); }
+.fb-rec__link { color: var(--accent); }
+.fb-rec__foot { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
+.fb-rec__pay { margin-top: var(--space-3); }
+.fb-rec__paylab { display: block; color: var(--ink-muted); text-transform: uppercase; margin-bottom: var(--space-2); }
+
+/* Evidence is required on an override, so it is never styled as an aside. */
+.fb-ev { color: var(--ink-muted); }
+.fb-ev__ref { color: var(--accent); }
+.fb-ev__note { color: var(--ink-faint); }
+
+/* The payload is shown exactly as the server will apply it. */
+.fb-payload {
+  background: var(--surface-sunken);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-well);
+}
+.fb-payload.is-muted { opacity: .55; }
+.fb-payload dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px var(--space-4); margin: 0; }
+.fb-payload dt { color: var(--ink-faint); }
+.fb-payload dd { margin: 0; color: var(--ink); }
+
+/* --------------------------------------------------------- ReportReader */
+
+.fb-report__cites { color: var(--ink-faint); margin: 0 0 var(--space-3); }
+.fb-report__unchanged { color: var(--caution); margin: 0 0 var(--space-3); }
+.fb-report__section { margin-bottom: var(--space-3); }
+.fb-report__section h4 { margin: 0 0 var(--space-1); color: var(--ink); }
+.fb-report__prose { margin: 0; max-width: 72ch; color: var(--ink); }
+.fb-report__appx { color: var(--ink-faint); margin: 0; }
+/* A cited number is the only kind a published report may contain, so the mark
+   is a quiet affordance rather than a warning. */
+.fb-cite { color: var(--accent); border-bottom: 1px dotted var(--accent); cursor: help; }
+
+.fb-report__findings { width: 100%; border-collapse: collapse; }
+.fb-report__findings th {
+  text-align: left;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  padding: 0 var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.fb-report__findings td {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: baseline;
+}
+.fb-report__where { color: var(--ink-muted); white-space: nowrap; }
+.fb-report__what { color: var(--record-refused); }
+.fb-report__detail { color: var(--ink-faint); }
+
+/* --------------------------------------------------------- ConfirmDialog */
+
+.fb-dlg {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-popover);
+  padding: var(--space-4);
+  max-width: 460px;
+  color: var(--ink);
+}
+.fb-dlg__title { margin: 0 0 var(--space-1); }
+.fb-dlg__warn-note { color: var(--ink-faint); margin: 0 0 var(--space-3); }
+.fb-dlg__stale { color: var(--record-stale); margin: var(--space-3) 0 0; }
+.fb-dlg .fb-rec__gloss { display: block; margin-top: var(--space-3); }
+.fb-dlg__foot { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
+
+/* ----------------------------------------------------------- ScreenTable */
+
+.fb-screen { color: var(--ink); }
+.fb-screen__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.fb-screen__count { color: var(--ink-faint); }
+.fb-screen__cols { position: relative; }
+.fb-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-1));
+  z-index: 10;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  padding: var(--space-2);
+  min-width: 200px;
+}
+.fb-menu__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-1);
+  color: var(--ink);
+  cursor: pointer;
+}
+.fb-menu__row:hover { background: var(--surface-hover); border-radius: var(--radius-sm); }
+.fb-menu__row.is-locked { color: var(--ink-faint); cursor: not-allowed; }
+.fb-menu input { accent-color: var(--accent); }
+.fb-menu hr { border: 0; border-top: 1px solid var(--hairline); margin: var(--space-2) 0; }
+.fb-menu__reset {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 3px var(--space-1);
+  font-family: var(--font-sans);
+  text-align: left;
+  width: 100%;
+}
+.fb-menu__reset:hover { text-decoration: underline; }
+
+.fb-table { width: 100%; border-collapse: collapse; font-family: var(--font-sans); }
+.fb-table th, .fb-table td {
+  text-align: left;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.fb-table thead th {
+  height: var(--row-height);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+.fb-table th.fb-num, .fb-table td.fb-num { text-align: right; font-variant-numeric: tabular-nums; }
+.fb-table tbody tr { height: var(--row-height); }
+.fb-screen--dense .fb-table tbody tr { height: var(--row-height-dense); }
+.fb-screen--dense .fb-table th, .fb-screen--dense .fb-table td { padding: 0 var(--space-2); }
+.fb-table tbody tr:hover { background: var(--surface-hover); }
+.fb-table tbody tr.is-selected { background: var(--surface-selected); box-shadow: inset 2px 0 0 var(--accent); }
+.fb-sort { margin-left: var(--space-1); color: var(--accent); }
+.fb-table th.is-sorted { color: var(--ink); }
+/* The basis columns are named by their header, not by a chip per cell. */
+.fb-screen__basisg { color: var(--prov-derived); font-family: var(--font-mono); font-weight: 700; margin-right: 4px; }
+.fb-screen__ticker { color: var(--ink); }
+.fb-screen__name { color: var(--ink-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.fb-screen__band { color: var(--ink-muted); min-width: var(--figure-column); }
+.fb-screen__mech { color: var(--ink-muted); }
+.fb-screen__none { color: var(--ink-faint); }
+.fb-screen__when { color: var(--ink-faint); }
+
+/* ---------------------------------------------------------------- charts */
+
+.fb-c { margin: 0; color: var(--ink); min-width: 0; }
+.fb-c__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+.fb-c__title { color: var(--ink); }
+.fb-c__sub { color: var(--ink-faint); }
+.fb-c__plot { position: relative; min-width: 0; }
+.fb-c__svg { display: block; overflow: visible; }
+
+.fb-c__grid line, .fb-c__axisline { stroke: var(--chart-grid); stroke-width: 1; }
+.fb-c__tick {
+  fill: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.fb-c__grid .fb-c__tick { text-anchor: end; }
+.fb-c__xaxis .fb-c__tick { text-anchor: middle; }
+.fb-c__xaxis .fb-c__tick--start { text-anchor: start; }
+.fb-c__xaxis .fb-c__tick--end { text-anchor: end; }
+.fb-c__stale--aging { fill: var(--caution); font-weight: 700; }
+.fb-c__stale--expired { fill: var(--critical); font-weight: 700; }
+.fb-c__zero { stroke: var(--border-strong); stroke-width: 1; }
+.fb-c__crosshair { stroke: var(--border); stroke-width: 1; }
+
+.fb-c__line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.fb-c__line--price { stroke: var(--ink); }
+.fb-c__line--1 { stroke: var(--chart-1); }
+.fb-c__line--context { stroke: var(--chart-context); }
+
+.fb-c__band { fill: var(--chart-band); }
+.fb-c__bandedge { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.fb-c__spread--pos { fill: var(--chart-pos-1); }
+.fb-c__spread--neg { fill: var(--chart-neg-1); }
+
+.fb-c__dot { stroke: var(--surface-raised); stroke-width: 2; }
+.fb-c__dot--price { fill: var(--ink); }
+.fb-c__dot--1 { fill: var(--chart-1); }
+
+.fb-c__endlabel, .fb-c__capvalue {
+  fill: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.fb-c__capvalue { text-anchor: middle; }
+.fb-c__endlabel--context { fill: var(--ink-faint); }
+
+.fb-c__bar { fill: var(--chart-1); transition: fill 120ms linear; }
+.fb-c__bar--pos { fill: var(--chart-pos-3); }
+.fb-c__bar--neg { fill: var(--chart-neg-3); }
+.fb-c__bar.is-hovered { fill: var(--accent-hover); }
+.fb-c__bar--neg.is-hovered { fill: var(--chart-neg-2); }
+
+.fb-c__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+}
+.fb-c__legend li { display: flex; align-items: center; gap: var(--space-1); }
+.fb-c__legend .label { color: var(--ink-muted); text-transform: uppercase; }
+.fb-c__key { display: inline-block; width: 14px; height: 3px; border-radius: var(--radius-pill); }
+.fb-c__key--1 { background: var(--chart-1); }
+.fb-c__key--context { background: var(--chart-context); }
+.fb-c__key--pos, .fb-c__key--neg, .fb-c__key--mid,
+.fb-c__key--pos3, .fb-c__key--neg3 { height: 12px; width: 12px; border-radius: var(--radius-sm); }
+.fb-c__key--pos { background: var(--chart-pos-1); }
+.fb-c__key--neg { background: var(--chart-neg-1); }
+.fb-c__key--mid { background: var(--chart-mid); border: 1px solid var(--border); }
+.fb-c__key--pos3 { background: var(--chart-pos-3); }
+.fb-c__key--neg3 { background: var(--chart-neg-3); }
+
+.fb-c__tip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.fb-c__tip .label { color: var(--ink-muted); text-transform: uppercase; }
+.fb-c__tip .figure-sm { color: var(--ink); }
+
+.fb-c__table { width: 100%; border-collapse: collapse; margin-top: var(--space-4); }
+.fb-c__table th, .fb-c__table td {
+  text-align: left;
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.fb-c__table th { color: var(--ink-muted); text-transform: uppercase; }
+.fb-c__table td { color: var(--ink); }
+.fb-c__table th.fb-num, .fb-c__table td.fb-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------- SensitivityGrid */
+
+.fb-sens__grid { border-collapse: separate; border-spacing: 2px; width: 100%; }
+.fb-sens__grid caption {
+  caption-side: bottom;
+  text-align: left;
+  color: var(--ink-faint);
+  padding-top: var(--space-2);
+}
+.fb-sens__grid th {
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  padding: var(--space-1) var(--space-2);
+  font-weight: 500;
+}
+.fb-sens__grid th.fb-num { text-align: right; }
+.fb-sens__cell {
+  text-align: right;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.fb-sens__cell--mid { background: var(--chart-mid); }
+.fb-sens__cell--pos-1 { background: var(--chart-pos-1); }
+.fb-sens__cell--pos-2 { background: var(--chart-pos-2); }
+.fb-sens__cell--neg-1 { background: var(--chart-neg-1); }
+.fb-sens__cell--neg-2 { background: var(--chart-neg-2); }
+/* Step 3 inverts: its fill is light in dark mode and dark in light mode. */
+.fb-sens__cell--pos-3 { background: var(--chart-pos-3); color: var(--ink-inverse); }
+.fb-sens__cell--neg-3 { background: var(--chart-neg-3); color: var(--ink-inverse); }
+.fb-sens__cell.is-current { box-shadow: inset 0 0 0 2px var(--border-strong); }
+.fb-sens__scale { margin: var(--space-3) 0 0; }
