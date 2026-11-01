@@ -169,7 +169,7 @@ every load and every change, with the design system's reference rule (the galler
 - `stance`: the row's stance from its price against its buy and trim levels, the same rule the
   stance column uses; a row without levels has no stance and drops out while a stance filter is
   active;
-- `phase`: the row's phase number (the page's `PHASE_NUMBER` of the engine's phase name); an
+- `phase`: the row's phase number (the server sends it as a number already); an
   unclassified row has none and drops out while a phase filter is active;
 - `cap`: the row's `capBand` lower-cased (`Mega` → `mega`, `Large` → `large`, `Mid` → `mid`);
   `small` is in the menu because the design system draws it, and never matches, since the
@@ -202,7 +202,7 @@ In the repository's copy of `ScreenTable` (a new `// fairband:` patch):
 - a header cell is draggable; dropping it on another header cell moves the dragged column to
   that column's position (removed from the list, inserted at the target's index), and the
   component calls `onColumnsChange` with the new list. The target header shows a 2px `accent`
-  inset edge on its leading side while a column is over it; nothing else moves, and there is no
+  inset edge on the side where the column will land (its leading edge for a drag from the right, its trailing edge for a drag from the left; amended 2026-11-02 during the build) while a column is over it; nothing else moves, and there is no
   animation. A click that does not move the pointer still sorts;
 - the `Columns ▾` menu lists the chosen columns in the table's order, then the unchosen ones in
   catalog order; `Reset to the default eight` restores the default list in its default order.
