@@ -2,7 +2,7 @@
 database: the stages, the per-symbol failures, the stops, the progress and the printed rows.
 
 ACME and BOLT are in the universe (the fixtures' companies; CRUX has no fixtures and is never
-reached). The default policy fetches on four workers; a test that pins the order of events runs on
+reached). The default policy fetches on sixteen workers; a test that pins the order of events runs on
 one.
 """
 

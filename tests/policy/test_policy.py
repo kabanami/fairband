@@ -25,7 +25,7 @@ def test_values_match_design() -> None:
     assert p.base_rates[0] == BaseRateClass(325, 0.085, "$0-325 Mn")
     assert p.base_rates[-1].median == 0.033 and p.inflation_addition == 0.02
     assert p.analyst_min == 5 and p.universe.cap_floor_usd == 2_000_000_000
-    assert p.refresh.reuse_hours == 24 and p.refresh.gf_reuse_days == 7 and p.refresh.workers == 4
+    assert p.refresh.reuse_hours == 24 and p.refresh.gf_reuse_days == 7 and p.refresh.workers == 16
 
 
 def test_every_value_has_a_source_line() -> None:

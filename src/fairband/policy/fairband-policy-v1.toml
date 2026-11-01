@@ -172,7 +172,10 @@ source = "research.md D13; spec 6.2"
 [values.refresh.value]
 reuse_hours = 24
 gf_reuse_days = 7
-workers = 4
+# 16 in flight: 12 FMP calls per company stay under the Ultimate plan's 3,000 calls a minute down
+# to about 0.4 s a call; a 429 after the retries ends the run, and the next run reuses what was
+# fetched. Decided with the founder 2026-11-01; was 4 (stocks mech/1.2).
+workers = 16
 connect_timeout_s = 5
 read_timeout_s = 15
 deadline_s = 30
