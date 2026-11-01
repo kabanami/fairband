@@ -1,7 +1,7 @@
 import json
 import math
 from dataclasses import asdict, replace
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -685,6 +685,34 @@ def test_reprice_updates_the_long_runway_flag(
     )
     assert "long-runway-high-growth" in codes(high)
     assert reprice(high, 150.0, date(2026, 11, 3), policy).flags == r.flags
+
+
+def test_reprice_moves_the_price_input(
+    mg_inputs: CompanyInputs,
+    ms_inputs: CompanyInputs,
+    young_growth_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+) -> None:
+    """The drawer reproduces a repriced row: its price input is the fresh quote, as of the new
+    price date and stamped as the quote was; its source and every other input stay. A refusal's
+    price input moves too."""
+    day = date(2026, 11, 2)
+    observed = datetime(2026, 11, 2, 21, 0, tzinfo=UTC)
+    entered = datetime(2026, 11, 2, 21, 5, tzinfo=UTC)
+    for inputs in (mg_inputs, ms_inputs, young_growth_inputs):
+        r = value_company(inputs, deciles, policy, TODAY)
+        p = reprice(r, 65.0, day, policy, observed_at=observed, entered_at=entered)
+        assert [i.name for i in p.inputs] == [i.name for i in r.inputs]
+        [price] = [i for i in p.inputs if i.name == "price"]
+        assert (p.price, price.value, price.tag, price.kind) == (65.0, 65.0, "DATA", "observed")
+        assert price.provenance == Provenance("FMP quote", day, observed, entered)
+        others = [i for i in p.inputs if i.name != "price"]
+        assert others == [i for i in r.inputs if i.name != "price"]
+        # Without the quote's stamps the price input keeps its own.
+        [kept] = [i for i in reprice(r, 65.0, day, policy).inputs if i.name == "price"]
+        assert kept.provenance == replace(inputs.provenance["price"], as_of=day)
+    assert p.refusal == "Young Growth route not built yet"
 
 
 def test_reprice_a_refusal_moves_only_the_price(policy: Policy) -> None:

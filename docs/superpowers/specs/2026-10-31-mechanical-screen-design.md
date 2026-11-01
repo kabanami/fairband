@@ -86,7 +86,7 @@ Every admitted company gets a `companies` row and a screen row. Every excluded l
 Two kinds, both started from the page (`design.md` 4.3, Proposed → adopted, *my call*):
 
 - **Full refresh.** Universe, then per company the data in 6.5, then deciles, classification, valuation, snapshots.
-- **Price refresh.** Quotes only, then the price-dependent fields of each current snapshot: price, price ÷ value, stance, the implied growth and the expected return. It writes a new snapshot that cites the same inputs with a new price date. The price facts (the 52-week range, the price changes, the drawdown) need the price history, so they follow the full refresh (amended 2026-11-01).
+- **Price refresh.** Quotes only, then the price-dependent fields of each current snapshot: price, price ÷ value, stance, the implied growth and the expected return. It writes a new snapshot that cites the same inputs, with the price input and the price date replaced by the fresh quote. The price facts (the 52-week range, the price changes, the drawdown) need the price history, so they follow the full refresh (amended 2026-11-01).
 
 Rules:
 

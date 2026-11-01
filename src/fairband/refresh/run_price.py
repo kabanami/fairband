@@ -17,11 +17,13 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   each call, those quoted are done.
 - ``reprice``: for each quoted symbol, one at a time, ``reprice`` of its latest snapshot at the new
   price and the quote's date, and ``insert_snapshot`` under this refresh; the symbol is
-  ``repriced``. The value, levels, inputs and validity stay; the stance, the price-dependent
-  intermediates and the long-runway flag follow the price. A refusal takes the new price and date
-  only. A snapshot valued under another policy version is ``failed``, "policy changed: run a full
-  refresh": its levels come from that policy. An exception (``reprice`` refuses a price that is
-  not positive and finite) is ``failed``, "reprice failed: <class>: <message>".
+  ``repriced``. The value, levels, validity and every input but the price stay; the price input
+  becomes the quote (its date and its row's stamps), and the stance, the price-dependent
+  intermediates and the long-runway flag follow the price. A refusal takes the new price, its
+  date and the price input only. A snapshot valued under another policy version is ``failed``,
+  "policy changed: run a full refresh": its levels come from that policy. An exception
+  (``reprice`` refuses a price that is not positive and finite) is ``failed``, "reprice failed:
+  <class>: <message>".
 - ``done``: the totals, and the calibration ``{"total", "repriced", "failed", "skipped"}`` saved
   with the record.
 
@@ -79,8 +81,12 @@ def rate_limited(provider: str, reached: int) -> str:
 
 @dataclass(frozen=True)
 class _Quote:
+    """A quote's price and date, and its price row's observation and entry stamps."""
+
     price: float
     as_of: date
+    observed_at: datetime
+    entered_at: datetime
 
 
 @dataclass(frozen=True)
@@ -244,7 +250,14 @@ class PriceRefresh:
                 reason = POLICY_CHANGED
             else:
                 try:
-                    new = reprice(result, quote.price, quote.as_of, self._policy)
+                    new = reprice(
+                        result,
+                        quote.price,
+                        quote.as_of,
+                        self._policy,
+                        observed_at=quote.observed_at,
+                        entered_at=quote.entered_at,
+                    )
                     with transaction(self._conn):
                         insert_snapshot(self._conn, new, self._id, clock=self._clock)
                         upsert_item(self._conn, self._id, symbol, "repriced", None, self._clock())
@@ -269,9 +282,9 @@ class PriceRefresh:
 
 
 def _price(rows: Sequence[ObservationRow], observed: date) -> _Quote | None:
-    """The quote's price and its date (the quote's own, else the day it was observed); ``None``
-    without a price."""
+    """The quote's price and its date (the quote's own, else the day it was observed), with the
+    price row's stamps; ``None`` without a price."""
     row = next((r for r in rows if r.field == "price" and r.value is not None), None)
     if row is None or row.value is None:
         return None
-    return _Quote(float(row.value), row.as_of or observed)
+    return _Quote(float(row.value), row.as_of or observed, row.observed_at, row.entered_at)

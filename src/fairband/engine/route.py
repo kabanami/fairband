@@ -16,8 +16,8 @@ Every result of ``value_company`` is valid until the next earnings date when tha
 data date, else for the policy's fallback days. Its flags are the assembly's, the classifier's
 checks and the route's, the first of each code kept. Its intermediates hold ``price_facts``, the
 price columns of spec 6.3, on a refusal too (``None`` for a row without a price). ``reprice``
-moves a result to a new price from its intermediates alone; ``refusal_result`` is the shape of
-every refusal.
+moves a result to a new price from its intermediates alone, its price input with it;
+``refusal_result`` is the shape of every refusal.
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
@@ -51,7 +51,7 @@ aggregate entry is ``None`` when the aggregate ROIC is unavailable.
 
 import math
 from dataclasses import dataclass, field, replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fairband.engine import METHOD_VERSION
@@ -189,11 +189,20 @@ def refusal_result(
 
 
 def reprice(
-    result: ValuationResult, price: float, price_date: date, policy: Policy
+    result: ValuationResult,
+    price: float,
+    price_date: date,
+    policy: Policy,
+    *,
+    observed_at: datetime | None = None,
+    entered_at: datetime | None = None,
 ) -> ValuationResult:
     """The result at a new price: the same value, levels and validity; the stance, the
     price-dependent intermediates and the long-runway flag recomputed from the intermediates.
     A result with no value only takes the new price and date; ``price_facts`` stay as they were.
+    Either way the ``price`` input becomes the new quote, so the drawer's arithmetic reproduces:
+    its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
+    ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
 
     A price that is not positive and finite raises ``ValueError``: the caller skips such a quote.
     The policy version is not checked: the caller passes the policy the result cites
@@ -201,8 +210,12 @@ def reprice(
     """
     if not _positive(price):
         raise ValueError(f"price {price} must be positive and finite")
+    inputs = tuple(
+        _quoted(i, price, price_date, observed_at, entered_at) if i.name == "price" else i
+        for i in result.inputs
+    )
     if result.value is None or result.levels is None:
-        return replace(result, price=price, price_date=price_date)
+        return replace(result, price=price, price_date=price_date, inputs=inputs)
     im, flags = dict(result.intermediates), result.flags
     if result.route == "mature-growth":
         im |= growth_at_price(im, price, result.value, policy)
@@ -215,9 +228,28 @@ def reprice(
         price_date=price_date,
         stance5=stance5(price, result.levels),
         stance3=stance3(price, result.levels),
+        inputs=inputs,
         intermediates=im,
         flags=flags,
     )
+
+
+def _quoted(
+    i: TaggedInput,
+    price: float,
+    price_date: date,
+    observed_at: datetime | None,
+    entered_at: datetime | None,
+) -> TaggedInput:
+    """The price input at a new quote, from the same source."""
+    p = i.provenance
+    provenance = replace(
+        p,
+        as_of=price_date,
+        observed_at=p.observed_at if observed_at is None else observed_at,
+        entered_at=p.entered_at if entered_at is None else entered_at,
+    )
+    return replace(i, value=price, provenance=provenance)
 
 
 def _valued(

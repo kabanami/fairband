@@ -21,6 +21,7 @@ from vendor_double import FIXTURES, FMP_KEY
 
 from fairband import __main__ as cli
 from fairband.engine.route import reprice
+from fairband.engine.types import Provenance
 from fairband.refresh import run_price
 from fairband.refresh.inputs import latest_price
 from fairband.refresh.run import Progress
@@ -119,8 +120,14 @@ def test_price_refresh_keeps_value_updates_stance(env_valued: Env) -> None:
     assert acme.stance5 != old.stance5
     implied = acme.result.intermediates["implied_growth"]
     assert implied != old.result.intermediates["implied_growth"]
-    assert acme.result.inputs == old.result.inputs  # the same inputs, cited as they were
-    assert acme.result == reprice(old.result, 20.0, PRICE_DATE, env.policy)
+    # The same inputs, cited as they were, but the price: the fresh quote, as of its date.
+    [price] = [i for i in acme.result.inputs if i.name == "price"]
+    quoted = Provenance("FMP quote", PRICE_DATE, env.clock.now, env.clock.now)
+    assert (price.value, price.provenance) == (20.0, quoted)
+    others = [i for i in acme.result.inputs if i.name != "price"]
+    assert others == [i for i in old.result.inputs if i.name != "price"]
+    stamps = {"observed_at": env.clock.now, "entered_at": env.clock.now}
+    assert acme.result == reprice(old.result, 20.0, PRICE_DATE, env.policy, **stamps)
     assert {s: (r.price, r.stance3) for s, r in after.items()} == {
         "ACME": (20.0, "buy"),
         "AXLE": (30.0, "hold"),
@@ -138,8 +145,8 @@ def test_price_refresh_keeps_value_updates_stance(env_valued: Env) -> None:
 
 
 def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
-    """NEWT's refusal is copied with the new price and price date only. ZERO, admitted with no
-    snapshot yet, is skipped and never quoted."""
+    """NEWT's refusal is copied with the new price, its date and the price input only. ZERO,
+    admitted with no snapshot yet, is skipped and never quoted."""
     env = env_valued
     with closing(env.connect()) as conn:
         acme = next(c for c in latest_companies(conn) if c.symbol == "ACME")
@@ -161,7 +168,13 @@ def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
     ]
     newt, old = env.snapshot("NEWT"), before["NEWT"]
     assert (newt.refresh_id, newt.price, newt.price_date) == (refresh_id, 60.0, PRICE_DATE)
-    assert newt.result == replace(old.result, price=60.0, price_date=PRICE_DATE)
+    quoted = Provenance("FMP quote", PRICE_DATE, env.clock.now, env.clock.now)
+    inputs = tuple(
+        replace(i, value=60.0, provenance=quoted) if i.name == "price" else i
+        for i in old.result.inputs
+    )
+    assert any(i.name == "price" for i in inputs)
+    assert newt.result == replace(old.result, price=60.0, price_date=PRICE_DATE, inputs=inputs)
     assert (newt.value, newt.stance3, newt.refusal) == (
         None,
         None,
