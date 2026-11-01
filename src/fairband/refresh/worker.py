@@ -4,9 +4,9 @@
 worker's progress sink) and runs it on a daemon thread named ``fairband-refresh``. It returns the
 refresh id once the run's record exists: ``Refresh.run`` hands it to ``on_started`` right after
 ``create_refresh``, and ``start`` waits for that, or for what the run raised before it, which it
-raises again: ``RefreshRunning`` while another process runs a refresh, ``ValueError`` or
-``NotImplementedError`` for a request the run refuses. What the run raises after it started is
-kept, scrubbed of the keys, as ``last_error`` and logged; the record carries the same message.
+raises again: ``RefreshRunning`` while another process runs a refresh, ``ValueError`` for a
+request the run refuses. What the run raises after it started is kept, scrubbed of the keys, as
+``last_error`` and logged; the record carries the same message.
 
 One refresh at a time: while the previous run's thread is alive, ``start`` raises
 ``RefreshRunning`` with its id at once. Once that thread has ended, ``start`` waits up to

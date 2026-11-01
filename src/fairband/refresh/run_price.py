@@ -1,0 +1,277 @@
+"""The price refresh: fresh quotes, then each company's latest snapshot at its new price (spec 6.2).
+
+``Refresh.run("price")`` records the refresh and hands its stages to ``PriceRefresh``, on the run's
+own connection. The symbols are the latest universe's admitted companies (``latest_companies``),
+or, before any universe, every company with a snapshot. Each is listed ``pending``; one with no
+snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. Then:
+
+- ``quotes``: the others' quotes, always called, never reused (the point is a fresh price), in
+  batches of up to ``QUOTE_BATCH`` symbols: ``Fmp.quote`` asks ``batch-quote`` for several and
+  ``quote`` for one. An account that does not serve ``batch-quote`` answers HTTP 402 or 403; that
+  batch then takes one ``quote`` call a symbol. Each response is stored as the fetch stores one:
+  its body scrubbed of the keys, with its ``quote_observations`` in one transaction (a batch's
+  under no symbol, with ``{"symbols": "A,B"}`` as its params); a failed call as its status and
+  scrubbed error. A symbol whose quote came is ``quoted``. Any other ``VendorError`` marks the
+  call's symbols ``failed`` ("quote failed: <class>: <message>") and the stage goes on; a symbol
+  the payload gives no row for is ``failed``, "no quote price". Progress counts symbols: after
+  each call, those quoted are done.
+- ``reprice``: for each quoted symbol, one at a time, ``reprice`` of its latest snapshot at the new
+  price and the quote's date, and ``insert_snapshot`` under this refresh; the symbol is
+  ``repriced``. The value, levels, inputs and validity stay; the stance, the price-dependent
+  intermediates and the long-runway flag follow the price. A refusal takes the new price and date
+  only. A snapshot valued under another policy version is ``failed``, "policy changed: run a full
+  refresh": its levels come from that policy. An exception (``reprice`` refuses a price that is
+  not positive and finite) is ``failed``, "reprice failed: <class>: <message>".
+- ``done``: the totals, and the calibration ``{"total", "repriced", "failed", "skipped"}`` saved
+  with the record.
+
+A failed or skipped symbol keeps the snapshot it had: no new row. A cancel, read before each call
+and each symbol, ends the run ``cancelled`` with no further stage; the quotes stored stay. An HTTP
+429 stops the quotes as it stops a full refresh's fetch: the call's symbols are ``failed``
+("quote incomplete: rate limited"), those never reached stay ``pending``, those quoted are still
+repriced, and the run ends ``failed``, "rate limited by FMP: stopped after <n> companies", n
+counting the symbols quoted or failed.
+"""
+
+import logging
+import sqlite3
+import threading
+from collections import deque
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import date, datetime
+from http import HTTPStatus
+from typing import Any
+
+from fairband.engine.route import reprice
+from fairband.policy import Policy
+from fairband.refresh.fetch import unusable
+from fairband.store.companies import latest_companies
+from fairband.store.db import transaction
+from fairband.store.observations import ObservationRow, insert_observations
+from fairband.store.refreshes import Finished, set_stage, upsert_item
+from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapshots
+from fairband.store.vendor import record_response
+from fairband.vendors.fmp import Fmp
+from fairband.vendors.http import VendorError
+from fairband.vendors.normalize_fmp import quote_observations
+from fairband.vendors.scrub import scrub
+
+logger = logging.getLogger("fairband.refresh")
+
+type Finish = tuple[Finished, str | None, dict[str, Any] | None]  # status, message, calibration
+type Report = Callable[[str, int, int, int], None]  # stage, done, failed, remaining
+
+QUOTE_BATCH = 100  # symbols a batch-quote call asks for
+NO_SNAPSHOT = "no snapshot to reprice"
+NO_QUOTE = "no quote price"
+POLICY_CHANGED = "policy changed: run a full refresh"
+RATE_LIMITED = "quote incomplete: rate limited"
+_NO_BATCH = (HTTPStatus.PAYMENT_REQUIRED, HTTPStatus.FORBIDDEN)  # the plan serves no batch-quote
+_PENDING = 0  # the response id the observations carry until their response is recorded
+
+
+def rate_limited(provider: str, reached: int) -> str:
+    """The message of a run a 429 stopped after ``reached`` companies."""
+    noun = "company" if reached == 1 else "companies"
+    return f"rate limited by {provider}: stopped after {reached} {noun}"
+
+
+@dataclass(frozen=True)
+class _Quote:
+    price: float
+    as_of: date
+
+
+@dataclass(frozen=True)
+class _Quoted:
+    """What the quotes stage left: each quoted symbol's quote, how many failed, and whether a
+    429 stopped it."""
+
+    quotes: dict[str, _Quote]
+    failed: int
+    limited: bool
+
+
+class PriceRefresh:
+    """The stages of one price refresh (see the module docstring). ``describe`` names an
+    exception with the keys scrubbed; ``report`` gets the stage and its counts."""
+
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        fmp: Fmp,
+        refresh_id: int,
+        policy: Policy,
+        clock: Callable[[], datetime],
+        cancel: threading.Event,
+        describe: Callable[[BaseException], str],
+        secrets: Sequence[str],
+        report: Report,
+    ) -> None:
+        self._conn = conn
+        self._fmp = fmp
+        self._id = refresh_id
+        self._policy = policy
+        self._clock = clock
+        self._cancel = cancel
+        self._describe = describe
+        self._secrets = tuple(secrets)
+        self._report = report
+
+    def run(self) -> Finish:
+        """The stages; the status, message and calibration to finish the record with."""
+        conn = self._conn
+        snapshots = {s.symbol: s for s in latest_snapshots(conn)}
+        symbols = self._symbols(snapshots)
+        quotable = [symbol for symbol in symbols if symbol in snapshots]
+        with transaction(conn):
+            for symbol in symbols:
+                if symbol in snapshots:
+                    upsert_item(conn, self._id, symbol, "pending", None, self._clock())
+                else:
+                    upsert_item(conn, self._id, symbol, "skipped", NO_SNAPSHOT, self._clock())
+        quoted = self._quote_stage(quotable)
+        if quoted.limited:
+            self._reprice_stage(quoted.quotes, snapshots)
+            return "failed", rate_limited("FMP", len(quoted.quotes) + quoted.failed), None
+        if self._cancel.is_set():
+            return "cancelled", None, None
+        repriced = self._reprice_stage(quoted.quotes, snapshots)
+        if repriced is None:
+            return "cancelled", None, None
+        failed = quoted.failed + len(quoted.quotes) - repriced
+        set_stage(conn, self._id, "done")
+        self._report("done", repriced, failed, 0)
+        calibration = {
+            "total": len(symbols),
+            "repriced": repriced,
+            "failed": failed,
+            "skipped": len(symbols) - len(quotable),
+        }
+        return "done", None, calibration
+
+    def _symbols(self, snapshots: Mapping[str, SnapshotRow]) -> list[str]:
+        """The latest universe's admitted companies; before any universe, every company with a
+        snapshot (as the screen lists them)."""
+        admitted = latest_companies(self._conn)
+        if admitted or latest_companies(self._conn, eligible_only=False):
+            return [company.symbol for company in admitted]
+        return list(snapshots)
+
+    def _quote_stage(self, symbols: Sequence[str]) -> _Quoted:
+        """Quote ``symbols`` until all are quoted or failed, a cancel or a 429."""
+        self._stage("quotes", len(symbols))
+        starts = range(0, len(symbols), QUOTE_BATCH)
+        calls = deque(list(symbols[start : start + QUOTE_BATCH]) for start in starts)
+        quotes: dict[str, _Quote] = {}
+        failed = 0
+        limited = False
+        while calls and not limited and not self._cancel.is_set():
+            group = calls.popleft()
+            outcome = self._call(group)
+            if isinstance(outcome, VendorError) and len(group) > 1 and outcome.status in _NO_BATCH:
+                calls.extendleft([symbol] for symbol in reversed(group))  # one call a symbol
+                continue
+            if isinstance(outcome, VendorError):
+                limited = outcome.status == HTTPStatus.TOO_MANY_REQUESTS
+                reason = RATE_LIMITED if limited else f"quote failed: {self._describe(outcome)}"
+                for symbol in group:
+                    self._fail(symbol, reason)
+                failed += len(group)
+            else:
+                for symbol in group:
+                    quote = outcome.get(symbol)
+                    if quote is None:
+                        self._fail(symbol, NO_QUOTE)
+                        failed += 1
+                    else:
+                        upsert_item(self._conn, self._id, symbol, "quoted", None, self._clock())
+                        quotes[symbol] = quote
+            self._report("quotes", len(quotes), failed, len(symbols) - len(quotes) - failed)
+        return _Quoted(quotes, failed, limited)
+
+    def _call(self, group: list[str]) -> dict[str, _Quote | None] | VendorError:
+        """One quote call for ``group``, stored; each symbol's quote, or the call's error."""
+        if len(group) == 1:
+            endpoint, params, symbol = "quote", {"symbol": group[0]}, group[0]
+        else:
+            endpoint, params, symbol = "batch-quote", {"symbols": ",".join(group)}, None
+        now = self._clock()
+        try:
+            response = self._fmp.quote(group)  # outside any transaction
+        except VendorError as exc:
+            message = scrub(str(exc), self._secrets)
+            record_response(
+                self._conn, "fmp", endpoint, params, symbol, exc.status, None, message, now
+            )
+            return exc
+        observed = response.observed_at
+        rows = {s: quote_observations(response.json, s, _PENDING, observed, now) for s in group}
+        payload = scrub(response.text, self._secrets)
+        error = None if any(rows.values()) else unusable(payload)
+        with transaction(self._conn):
+            response_id = record_response(
+                self._conn,
+                "fmp",
+                endpoint,
+                params,
+                symbol,
+                response.status,
+                payload,
+                error,
+                observed,
+            )
+            insert_observations(
+                self._conn,
+                [replace(row, response_id=response_id) for found in rows.values() for row in found],
+            )
+        return {s: _price(found, observed.date()) for s, found in rows.items()}
+
+    def _reprice_stage(
+        self, quotes: Mapping[str, _Quote], snapshots: Mapping[str, SnapshotRow]
+    ) -> int | None:
+        """Reprice each quoted symbol's latest snapshot; the number repriced, or ``None`` when a
+        cancel stopped the stage."""
+        self._stage("reprice", len(quotes))
+        repriced = failed = 0
+        for symbol, quote in quotes.items():
+            if self._cancel.is_set():
+                return None
+            result = snapshots[symbol].result
+            reason = None
+            if result.policy_version != self._policy.version:
+                reason = POLICY_CHANGED
+            else:
+                try:
+                    new = reprice(result, quote.price, quote.as_of, self._policy)
+                    with transaction(self._conn):
+                        insert_snapshot(self._conn, new, self._id, clock=self._clock)
+                        upsert_item(self._conn, self._id, symbol, "repriced", None, self._clock())
+                except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own
+                    reason = f"reprice failed: {self._describe(exc)}"
+            if reason is None:
+                repriced += 1
+            else:
+                self._fail(symbol, reason)
+                failed += 1
+            self._report("reprice", repriced, failed, len(quotes) - repriced - failed)
+        return repriced
+
+    def _fail(self, symbol: str, reason: str) -> None:
+        """Mark ``symbol`` failed; its snapshot stays as it was."""
+        logger.warning("%s: %s", symbol, reason)
+        upsert_item(self._conn, self._id, symbol, "failed", reason, self._clock())
+
+    def _stage(self, stage: str, total: int) -> None:
+        set_stage(self._conn, self._id, stage)
+        self._report(stage, 0, 0, total)
+
+
+def _price(rows: Sequence[ObservationRow], observed: date) -> _Quote | None:
+    """The quote's price and its date (the quote's own, else the day it was observed); ``None``
+    without a price."""
+    row = next((r for r in rows if r.field == "price" and r.value is not None), None)
+    if row is None or row.value is None:
+        return None
+    return _Quote(float(row.value), row.as_of or observed)

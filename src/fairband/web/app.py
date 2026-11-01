@@ -178,7 +178,7 @@ def create_app(
             refresh_id = worker.start(body.kind, body.symbols)
         except RefreshRunning as exc:
             return JSONResponse({"running": exc.refresh_id}, status_code=409)
-        except (ValueError, NotImplementedError) as exc:
+        except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
         return {"refreshId": refresh_id}
 

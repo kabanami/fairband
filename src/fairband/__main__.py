@@ -124,15 +124,16 @@ def _serve(args: argparse.Namespace) -> int:
 
 def _refresh(args: argparse.Namespace) -> int:
     """A refresh in the foreground with its progress lines, then, for a scoped refresh, one line
-    per symbol from its latest snapshot, and for a full one its calibration. A ``VendorError`` or
-    ``ValueError`` from the run (the screener failed or gave no rows) is one line, never a
-    traceback: ``refresh <id>: failed: <message>``, or ``refresh failed: <message>`` when the run
-    refused before its record existed. Exits 0 when the refresh is done, 1 when not, 2 when it
-    cannot start."""
+    per symbol from its latest snapshot, for a full one its calibration, and for a price one its
+    counts on the status line: ``refresh 7: done · 1,800 repriced, 3 failed, 9 skipped``. A
+    ``VendorError`` or ``ValueError`` from the run (the screener failed or gave no rows) is one
+    line, never a traceback: ``refresh <id>: failed: <message>``, or ``refresh failed:
+    <message>`` when the run refused before its record existed. Exits 0 when the refresh is done,
+    1 when not, 2 when it cannot start."""
     if args.symbols == []:
         return _usage("no symbols given: name them as AAPL,MSFT")
-    if args.kind == "price":
-        return _usage("a price refresh is not built yet")
+    if args.kind == "price" and args.symbols:
+        return _usage("a price refresh takes no symbols: name none, or leave out --kind price")
     if args.kind == "scoped" and not args.symbols:
         return _usage("a scoped refresh needs symbols, e.g. AAPL,MSFT")
     if args.kind == "full" and args.symbols:
@@ -181,9 +182,16 @@ def _refresh(args: argparse.Namespace) -> int:
     ours = last if last is not None and last.id == refresh_id else None
     status = "unknown" if ours is None else ours.status
     message = None if ours is None else ours.message
-    print(f"refresh {refresh_id}: {status}" + (f": {message}" if message else ""))
-    if ours is not None and ours.calibration is not None:
-        for line in _calibration_lines(ours.calibration):
+    calibration = None if ours is None else ours.calibration
+    line = f"refresh {refresh_id}: {status}" + (f": {message}" if message else "")
+    if args.kind == "price" and calibration is not None:
+        line += (
+            f" · {calibration['repriced']:,} repriced, {calibration['failed']:,} failed,"
+            f" {calibration['skipped']:,} skipped"
+        )
+    print(line)
+    if args.kind == "full" and calibration is not None:
+        for line in _calibration_lines(calibration):
             print(line)
     for symbol, snapshot in rows:
         print(_snapshot_line(symbol, snapshot))

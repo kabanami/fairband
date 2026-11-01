@@ -54,6 +54,9 @@ thread is simply not joined. What a given-up fetch still stores is a response li
 reused by the next run; ``fetches_in_flight`` counts the fetch threads not ended, so a long-lived
 caller (the server's worker) can wait for them before it starts another run.
 
+A price refresh takes no symbols; ``run_price.PriceRefresh`` runs its stages (``quotes``,
+``reprice``, ``done``) on the run's connection, and its module docstring says how.
+
 ``on_progress`` gets a ``Progress`` at each stage change and after each symbol, and ``on_started``
 the refresh id once the record exists; both run on the thread that called ``run``.
 """
@@ -67,6 +70,7 @@ from collections.abc import Callable, Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from typing import Any, Literal
 
 from fairband.config import MissingKey
@@ -78,6 +82,7 @@ from fairband.policy.tax import TaxTable
 from fairband.refresh.deciles import deciles_for_universe
 from fairband.refresh.fetch import FetchOutcome, fetch_company, provider_of
 from fairband.refresh.inputs import build_inputs, latest_price
+from fairband.refresh.run_price import PriceRefresh, rate_limited
 from fairband.refresh.universe import UniverseResult, build_universe
 from fairband.store.db import transaction
 from fairband.store.policy import record_policy
@@ -171,20 +176,18 @@ class Refresh:
         on_started: Callable[[int], None] | None = None,
     ) -> int:
         """Run a refresh of ``kind`` and return its id. Raises ``MissingKey`` without an FMP
-        client, ``NotImplementedError`` for a price refresh, and ``ValueError`` for a scoped
-        refresh without symbols or a full one with them, all before any work."""
+        client, and ``ValueError`` for a scoped refresh without symbols or a full or price one
+        with them, all before any work."""
         fmp = self._fmp
         if fmp is None:
             raise MissingKey("fmp")
-        if kind == "price":
-            raise NotImplementedError("the price refresh is built in a later task")
         names: list[str] | None = None
         if kind == "scoped":
             if not symbols:
                 raise ValueError("a scoped refresh needs symbols")
             names = list(dict.fromkeys(symbols))
         elif symbols:
-            raise ValueError("a full refresh takes no symbols")
+            raise ValueError(f"a {kind} refresh takes no symbols")
         with closing(self._conn_factory()) as conn:
             record_policy(conn, self._policy, self._clock())
             refresh_id = create_refresh(
@@ -193,7 +196,9 @@ class Refresh:
             try:
                 if on_started is not None:
                     on_started(refresh_id)
-                if names is None:
+                if kind == "price":
+                    status, message, counts = self._price(conn, fmp, refresh_id)
+                elif names is None:
                     status, message, counts = self._full(conn, fmp, refresh_id)
                 else:
                     status, message, counts = self._scoped(conn, fmp, refresh_id, names)
@@ -237,6 +242,21 @@ class Refresh:
         self._done(conn, refresh_id, fetched, valued)
         return "done", None, calibration(universe, refresh_snapshots(conn, refresh_id))
 
+    def _price(self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int) -> _Finish:
+        """The stages of a price refresh (``run_price``)."""
+        report = partial(self._report, refresh_id)
+        return PriceRefresh(
+            conn,
+            fmp,
+            refresh_id,
+            self._policy,
+            self._clock,
+            self._cancel,
+            self.describe,
+            self._secrets,
+            report,
+        ).run()
+
     def _scoped(
         self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int, symbols: list[str]
     ) -> _Finish:
@@ -268,9 +288,7 @@ class Refresh:
         if fetched.limited_by is not None:
             self._value_stage(conn, refresh_id, fetched.symbols)
             reached = len(fetched.symbols) + fetched.failed
-            noun = "company" if reached == 1 else "companies"
-            limited = f"rate limited by {fetched.limited_by}: stopped after {reached} {noun}"
-            return "failed", limited, None
+            return "failed", rate_limited(fetched.limited_by, reached), None
         if self._cancel.is_set():
             return "cancelled", None, None
         return None

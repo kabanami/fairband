@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Keys, MissingKey, Settings
 from fairband.engine import METHOD_VERSION
+from fairband.engine.route import refusal_result
 from fairband.policy import Policy, load_policy
 from fairband.policy.tax import load_tax_table
 from fairband.refresh import run as run_module
@@ -28,7 +29,8 @@ from fairband.refresh.fetch import FetchOutcome
 from fairband.refresh.run import Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.db import connect, migrate
-from fairband.store.refreshes import create_refresh, items, latest_refresh
+from fairband.store.refreshes import create_refresh, finish_refresh, items, latest_refresh
+from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.vendors import fmp as fmp_api
 from fairband.vendors.fmp import Fmp
 from fairband.vendors.http import VendorHttp
@@ -244,7 +246,7 @@ def test_api_second_refresh_refused_at_once(client_with_worker: TestClient, gate
         ({"kind": "weekly"}, "unknown refresh kind: weekly"),
         ({"kind": "scoped"}, "a scoped refresh needs symbols"),
         ({"kind": "scoped", "symbols": []}, "a scoped refresh needs symbols"),
-        ({"kind": "price"}, "the price refresh is built in a later task"),
+        ({"kind": "price", "symbols": ["ACME"]}, "a price refresh takes no symbols"),
         ({"kind": "full", "symbols": ["ACME"]}, "a full refresh takes no symbols"),
     ],
 )
@@ -288,6 +290,35 @@ def test_api_reports_the_last_error(client_with_worker: TestClient) -> None:
     assert body["last"]["id"] == refresh_id
     assert (body["last"]["status"], body["last"]["stage"]) == ("failed", "universe")
     assert body["last"]["message"] == body["error"] == "ValueError: screener returned no rows"
+
+
+def test_api_price_refresh_starts(client_with_worker: TestClient, db_path: Path) -> None:
+    """With no universe yet, the price refresh quotes every company with a snapshot. The mock
+    FMP answers the quote 404: ACME fails and keeps its snapshot, and the run is done."""
+    with closing(connect(db_path)) as conn:
+        scoped = create_refresh(conn, "scoped", ["ACME"], "fairband-policy-v1", METHOD_VERSION, NOW)
+        refused = refusal_result("ACME", "no universe deciles yet", load_policy(), NOW.date())
+        insert_snapshot(conn, refused, scoped, clock=lambda: NOW)
+        finish_refresh(conn, scoped, "done", NOW)
+    client = client_with_worker
+    response = start(client, kind="price")
+    assert (response.status_code, response.json()) == (200, {"refreshId": scoped + 1})
+    join_runs()
+    last = current(client)["last"]
+    assert (last["id"], last["kind"], last["status"], last["stage"]) == (
+        scoped + 1,
+        "price",
+        "done",
+        "done",
+    )
+    assert last["calibration"] == {"total": 1, "repriced": 0, "failed": 1, "skipped": 0}
+    with closing(connect(db_path)) as conn:
+        [item] = items(conn, scoped + 1)
+        snapshot = latest_snapshot(conn, "ACME")
+    assert (item.symbol, item.status) == ("ACME", "failed")
+    assert item.error is not None and item.error.startswith("quote failed: VendorError: GET ")
+    assert "404" in item.error and KEY not in item.error
+    assert snapshot is not None and snapshot.refresh_id == scoped  # no new row
 
 
 def test_api_without_worker_503(client_without_worker: TestClient) -> None:

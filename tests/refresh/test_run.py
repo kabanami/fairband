@@ -298,8 +298,8 @@ def test_run_refuses_before_any_work(env: Env) -> None:
             refresh.run("scoped", symbols)
     with pytest.raises(ValueError, match="a full refresh takes no symbols"):
         refresh.run("full", ["ACME"])
-    with pytest.raises(NotImplementedError, match="built in a later task"):
-        refresh.run("price")
+    with pytest.raises(ValueError, match="a price refresh takes no symbols"):
+        refresh.run("price", ["ACME"])
     assert env.last().id == env.universe_id
     assert env.router.calls == Counter() and env.progress == []
 
@@ -527,7 +527,7 @@ def test_cli_off_the_main_thread_leaves_sigint_alone(
     [
         (["refresh", ","], "no symbols given"),
         (["refresh", "ACME", "--kind", "full"], "a full refresh takes no symbols"),
-        (["refresh", "ACME", "--kind", "price"], "a price refresh is not built yet"),
+        (["refresh", "ACME", "--kind", "price"], "a price refresh takes no symbols"),
         (["refresh", "--kind", "scoped"], "a scoped refresh needs symbols"),
     ],
 )

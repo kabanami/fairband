@@ -170,9 +170,9 @@ def fetch_company(
                 rate_limited = True
                 break
             continue
-        unusable = _store(conn, call, symbol, response, now, secrets)
-        if unusable is not None:
-            _log_failure(symbol, call, unusable)
+        unusable_error = _store(conn, call, symbol, response, now, secrets)
+        if unusable_error is not None:
+            _log_failure(symbol, call, unusable_error)
             failed.append(call.endpoint)
     required = [endpoint for endpoint in failed if endpoint in REQUIRED]
     error = f"data fetch failed: {', '.join(required)}" if required else None
@@ -248,9 +248,7 @@ def _store(
     observed = response.observed_at
     payload = scrub(response.text, secrets)
     rows = _rows(call.endpoint, response.json, symbol, observed, now)
-    unusable = None
-    if rows is None:  # the payload was scrubbed before it is cut, so no part of a key is left
-        unusable = f"unusable payload: {' '.join(payload.split())[:_DETAIL_CHARS]}"
+    error = None if rows is not None else unusable(payload)
     with transaction(conn):
         response_id = record_response(
             conn,
@@ -260,14 +258,21 @@ def _store(
             symbol,
             response.status,
             payload,
-            unusable,
+            error,
             observed,
         )
         if rows is not None:
             facts, observations = rows
             insert_facts(conn, [replace(f, response_id=response_id) for f in facts])
             insert_observations(conn, [replace(o, response_id=response_id) for o in observations])
-    return unusable
+    return error
+
+
+def unusable(payload: str) -> str:
+    """The error stored with a payload that gives no rows: ``unusable payload: <the first 80
+    characters, whitespace collapsed>``. Pass the payload scrubbed: a key cut short would no
+    longer be scrubbed."""
+    return f"unusable payload: {' '.join(payload.split())[:_DETAIL_CHARS]}"
 
 
 def _rows(
