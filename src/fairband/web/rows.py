@@ -1,5 +1,6 @@
-"""The API's JSON shapes: a snapshot and its company as one screen row, and the company, snapshot
-and refresh records as the routes send them.
+"""The API's JSON shapes: a snapshot and its company as one screen row, an admitted company not yet
+valued as a placeholder row, and the company, snapshot, refresh and progress records as the routes
+send them.
 
 A screen row carries the ``ScreenRow`` keys of the design system's ``index.d.ts`` (``ticker`` to
 ``freshness``), so the page hands rows to ``ScreenTable`` as they come, and, in the same
@@ -13,9 +14,12 @@ from typing import Any
 
 from fairband.engine.levels import validity_state
 from fairband.engine.types import PHASE_NUMBER
+from fairband.refresh.run import Progress
 from fairband.store.companies import CompanyRow
 from fairband.store.refreshes import RefreshRow
 from fairband.store.snapshots import SnapshotRow
+
+NOT_YET_VALUED = "not yet valued"
 
 # The design system's ScreenRow keys.
 SCREEN_ROW_KEYS = (
@@ -138,6 +142,25 @@ def screen_row(
     }
 
 
+def placeholder_row(company: CompanyRow) -> dict[str, Any]:
+    """The row of an admitted company with no snapshot yet: its name, sector, cap band and
+    market cap, the refusal "not yet valued", freshness ``current`` and ``None`` elsewhere (no
+    override, as on every row of this cut)."""
+    row: dict[str, Any] = dict.fromkeys(ROW_KEYS)
+    market_cap = company.market_cap
+    row |= {
+        "ticker": company.symbol,
+        "name": company.name,
+        "overrides": 0,
+        "freshness": "current",
+        "sector": company.sector,
+        "capBand": company.cap_band,
+        "marketCap": None if market_cap is None else float(market_cap),
+        "refusal": NOT_YET_VALUED,
+    }
+    return row
+
+
 def sort_rows(rows: list[dict[str, Any]], key: str, descending: bool) -> list[dict[str, Any]]:
     """The rows ordered by ``key``, those where it is ``None`` last in either direction; ties
     keep their order."""
@@ -184,6 +207,17 @@ def refresh_json(refresh: RefreshRow) -> dict[str, Any]:
         "finishedAt": _iso(refresh.finished_at),
         "message": refresh.message,
         "calibration": refresh.calibration,
+    }
+
+
+def progress_json(progress: Progress) -> dict[str, Any]:
+    return {
+        "id": progress.refresh_id,
+        "stage": progress.stage,
+        "done": progress.done,
+        "failed": progress.failed,
+        "remaining": progress.remaining,
+        "current": progress.current,
     }
 
 

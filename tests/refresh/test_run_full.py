@@ -1,24 +1,39 @@
 """The full refresh over the six listings of ``fixture_universe`` and a migrated temporary database
 that holds no universe yet: the universe, the fetch, the deciles, the values and the calibration;
-the stops and the rerun that continues.
+the stops and the rerun that continues; the server's worker and the marking of a refresh a stop
+left running.
 """
 
+import logging
 import threading
 from collections import Counter
+from collections.abc import Callable
 from contextlib import closing
 from datetime import timedelta
+from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 from fixture_universe import ADMITTED, serve_universe
 from refresh_env import Env
 from vendor_double import FMP_KEY
 
+from fairband.config import DEFAULT_PORT, Settings
+from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
+from fairband.refresh import run as run_module
 from fairband.refresh.deciles import deciles_for_universe
-from fairband.refresh.run import Progress
+from fairband.refresh.run import Progress, Refresh
+from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import latest_companies
-from fairband.store.refreshes import current_refresh, latest_deciles
+from fairband.store.refreshes import (
+    RefreshRunning,
+    create_refresh,
+    current_refresh,
+    latest_deciles,
+)
 from fairband.vendors.http import VendorError
+from fairband.web.app import create_app
 
 RATE_LIMITED = "data fetch incomplete: rate limited"
 NOT_BUILT = "Young Growth route not built yet"
@@ -257,3 +272,75 @@ def test_deciles_leave_out_symbols_without_statements(env_fixture_universe: Env)
     with closing(env.connect()) as conn:
         assert deciles_for_universe(conn, [*ADMITTED, "NONE"], refresh_id) == saved
         assert deciles_for_universe(conn, ["NONE"], 99) == Deciles((), (), 0, 0, 99)
+
+
+# --- the server's worker and its startup -----------------------------------------------------
+
+
+def join_threads(prefix: str) -> None:
+    """Wait for the threads whose name starts with ``prefix``: no test leaves one running."""
+    for thread in threading.enumerate():
+        if thread.name.startswith(prefix):
+            thread.join(5)
+            assert not thread.is_alive(), thread.name
+
+
+def test_worker_waits_for_abandoned_fetches(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run that ends on an exception in its fetch stage gives up the fetches in flight; they may
+    still write. The worker starts no run until they end, waiting up to its limit, and keeps the
+    run's error."""
+    release = threading.Event()
+    fetch_company = run_module.fetch_company
+
+    def blocked_for_bolt(*args: Any) -> Any:
+        if "BOLT" in args:
+            release.wait(5)
+        return fetch_company(*args)
+
+    monkeypatch.setattr(run_module, "fetch_company", blocked_for_bolt)
+
+    raised: list[int] = []
+
+    def make_refresh(cancel: threading.Event, on_progress: Callable[[Progress], None]) -> Refresh:
+        def stop_after_acme(progress: Progress) -> None:  # the first run only
+            on_progress(progress)
+            if progress.stage == "fetch" and progress.done == 1 and not raised:
+                raised.append(progress.refresh_id)
+                raise RuntimeError(f"the sink is gone near {FMP_KEY}")
+
+        return env.refresh(cancel=cancel, then=stop_after_acme)
+
+    worker = RefreshWorker(make_refresh, wait_s=0.2)
+    first = worker.start("scoped", ["ACME", "BOLT"])
+    try:
+        join_threads("fairband-refresh")
+        assert (env.last().id, env.last().status) == (first, "failed")
+        assert worker.last_error == "RuntimeError: the sink is gone near <key>"
+        assert worker.status() is None
+        with pytest.raises(RefreshRunning) as running:
+            worker.start("scoped", ["ACME"])  # BOLT's given-up fetch is still in flight
+        assert running.value.refresh_id == first and env.last().id == first
+
+        releaser = threading.Timer(0.05, release.set)
+        releaser.start()
+        second = worker.start("scoped", ["ACME"])  # waits for BOLT's fetch to end
+        releaser.join()
+        join_threads("fairband-refresh")
+        assert (env.last().id, env.last().status) == (second, "done") and second == first + 1
+        assert worker.last_error is None
+    finally:
+        release.set()
+        join_threads("fairband-")
+
+
+def test_startup_marks_interrupted(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+    """A refresh a stopped server or command left running is marked when the server starts."""
+    with closing(env.connect()) as conn:
+        left = create_refresh(conn, "full", None, env.policy.version, METHOD_VERSION, env.clock())
+    env.clock.now += timedelta(hours=2)
+    settings = Settings(env.db_path.parent, env.db_path.parent, env.db_path, DEFAULT_PORT)
+    app = create_app(settings, env.policy, env.connect, clock=env.clock)
+    with caplog.at_level(logging.INFO), TestClient(app, base_url="http://127.0.0.1:8470"):
+        row = env.last()
+        assert (row.id, row.status, row.finished_at) == (left, "interrupted", env.clock.now)
+    assert "1 running refresh marked interrupted" in caplog.messages

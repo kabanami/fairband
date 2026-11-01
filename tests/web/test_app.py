@@ -40,7 +40,25 @@ CREATED = datetime(2026, 10, 31, 22, 15, tzinfo=UTC)
 FINISHED = datetime(2026, 10, 31, 22, 20, tzinfo=UTC)
 NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
 CALIBRATION = {"refused": 1, "valued": 1}
+HOST = "http://127.0.0.1:8470"  # a host the app trusts (D11)
 
+# The design system's ScreenRow keys.
+DESIGN_ROW_KEYS = [
+    "ticker",
+    "name",
+    "phase",
+    "fairLow",
+    "fairHigh",
+    "fairValue",
+    "buyLevel",
+    "trimLevel",
+    "price",
+    "mechanical",
+    "reviewed",
+    "overrides",
+    "enteredAt",
+    "freshness",
+]
 DESIGN_COLUMNS = [
     "ticker",
     "name",
@@ -154,7 +172,7 @@ def client_with_clock(
         app = create_app(
             _settings(tmp_path, db_path), policy, lambda: connect(db_path), clock=lambda: now
         )
-        clients.append(TestClient(app))
+        clients.append(TestClient(app, base_url=HOST))
         return clients[-1]
 
     yield make
@@ -319,6 +337,88 @@ def test_freshness_states(
     body = _screen(client_with_clock(now))
     assert body["today"] == now.date().isoformat()
     assert [row["freshness"] for row in body["rows"]] == [state, state]
+
+
+def _universe(db_path: Path, policy: Policy, *companies: tuple[str, str, int, bool]) -> None:
+    """A later full refresh whose universe lists ``companies``: symbol, name, market cap and
+    whether it is admitted."""
+    with closing(connect(db_path)) as conn:
+        refresh_id = create_refresh(conn, "full", None, policy.version, METHOD_VERSION, NOW)
+        rows = [
+            _company(symbol, refresh_id, name, Decimal(cap))
+            if admitted
+            else replace(
+                _company(symbol, refresh_id, name, Decimal(cap)),
+                cap_band=None,
+                eligible=False,
+                exclusion_reason="manual exclusion",
+            )
+            for symbol, name, cap, admitted in companies
+        ]
+        insert_companies(conn, rows)
+        finish_refresh(conn, refresh_id, "done", NOW)
+
+
+def test_screen_rows_follow_the_universe(db_path: Path, policy: Policy, client: TestClient) -> None:
+    """The rows are the latest universe's admitted companies, each with its latest snapshot: AAL,
+    no longer admitted, drops off, and NEWC, not valued yet, shows."""
+    _universe(
+        db_path,
+        policy,
+        ("AAPL", "Mature Growth Co", 150_000_000_000, True),
+        ("AAL", "Young Growth Co", 4_000_000_000, False),
+        ("NEWC", "New Co", 3_000_000_000, True),
+    )
+    rows = _screen(client)["rows"]
+    assert [(row["ticker"], row["refusal"]) for row in rows] == [
+        ("AAPL", None),
+        ("NEWC", "not yet valued"),
+    ]
+    assert rows[0]["fairValue"] is not None
+    assert rows[0]["enteredAt"] == "2026-10-31T22:15:00+00:00"  # the snapshot of the first refresh
+    assert _tickers(client, "?sort=fairValue&dir=desc") == ["AAPL", "NEWC"]
+    assert client.get("/api/companies/NEWC").status_code == 404  # no snapshot to show yet
+
+
+def test_screen_placeholder_row_not_yet_valued(
+    db_path: Path, policy: Policy, client: TestClient
+) -> None:
+    _universe(db_path, policy, ("NEWC", "New Co", 3_000_000_000, True))
+    [row] = _screen(client)["rows"]
+    assert set(row) == set(DESIGN_ROW_KEYS + EXTRA_COLUMNS)
+    assert {key: value for key, value in row.items() if value is not None} == {
+        "ticker": "NEWC",
+        "name": "New Co",
+        "overrides": 0,
+        "freshness": "current",
+        "sector": "Technology",
+        "capBand": "mid",
+        "marketCap": 3_000_000_000.0,
+        "refusal": "not yet valued",
+    }
+
+
+def test_screen_without_a_universe_shows_every_snapshot(
+    tmp_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Before any full refresh, the companies a scoped refresh valued are the rows."""
+    path = tmp_path / "bare.db"
+    with closing(connect(path)) as conn:
+        migrate(conn)
+        symbols = list(results)
+        refresh_id = create_refresh(
+            conn, "scoped", symbols, policy.version, METHOD_VERSION, STARTED
+        )
+        for result in results.values():
+            insert_snapshot(conn, result, refresh_id, clock=lambda: CREATED)
+        finish_refresh(conn, refresh_id, "done", FINISHED)
+    app = create_app(_settings(tmp_path, path), policy, lambda: connect(path), clock=lambda: NOW)
+    with TestClient(app, base_url=HOST) as c:
+        rows = _screen(c)["rows"]
+    assert [(row["ticker"], row["name"], row["refusal"]) for row in rows] == [
+        ("AAL", None, "Young Growth route not built yet"),
+        ("AAPL", None, None),
+    ]
 
 
 def test_company_detail(client: TestClient, results: dict[str, ValuationResult]) -> None:
@@ -496,10 +596,11 @@ def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, polic
         return opened[-1]
 
     app = create_app(_settings(tmp_path, db_path), policy, conn_factory, clock=lambda: NOW)
-    with TestClient(app) as c:
+    with TestClient(app, base_url=HOST) as c:
         for path in ("/api/screen", "/api/companies/AAPL", "/api/companies/NOPE", "/"):
             c.get(path)
-    assert len(opened) == 3
+    assert len(opened) == 4  # the startup's, which marks the refreshes left running, and three
+
     for conn in opened:
         with pytest.raises(sqlite3.ProgrammingError):
             conn.execute("SELECT 1")
@@ -519,6 +620,6 @@ def test_serve_cli_parses_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert kwargs == {"host": "127.0.0.1", "port": 9123, "log_level": "info"}
     with closing(connect(tmp_path / "data" / "fairband.db")) as conn:
         assert applied_versions(conn) == [1]
-    with TestClient(app) as c:
+    with TestClient(app, base_url=HOST) as c:
         body = c.get("/api/screen").json()
     assert body["rows"] == [] and body["refresh"] is None

@@ -46,10 +46,11 @@ ends ``failed`` and the exception propagates. A ``ThreadPoolExecutor``'s workers
 the interpreter exits, even after ``shutdown(wait=False)``, and ending the command with
 ``os._exit`` would skip its own cleanup (the signal handler, the clients, the output); a daemon
 thread is simply not joined. What a given-up fetch still stores is a response like any other,
-reused by the next run.
+reused by the next run; ``fetches_in_flight`` counts the fetch threads not ended, so a long-lived
+caller (the server's worker) can wait for them before it starts another run.
 
-``on_progress`` gets a ``Progress`` at each stage change and after each symbol; it runs on the
-thread that called ``run``.
+``on_progress`` gets a ``Progress`` at each stage change and after each symbol, and ``on_started``
+the refresh id once the record exists; both run on the thread that called ``run``.
 """
 
 import logging
@@ -153,8 +154,15 @@ class Refresh:
         self._cancel = cancel
         self._on_progress = on_progress
         self._secrets = tuple(secrets)
+        self._in_flight = 0
+        self._in_flight_lock = threading.Lock()
 
-    def run(self, kind: Kind, symbols: Sequence[str] | None = None) -> int:
+    def run(
+        self,
+        kind: Kind,
+        symbols: Sequence[str] | None = None,
+        on_started: Callable[[int], None] | None = None,
+    ) -> int:
         """Run a refresh of ``kind`` and return its id. Raises ``MissingKey`` without an FMP
         client, ``NotImplementedError`` for a price refresh, and ``ValueError`` for a scoped
         refresh without symbols or a full one with them, all before any work."""
@@ -176,15 +184,27 @@ class Refresh:
                 conn, kind, names, self._policy.version, METHOD_VERSION, self._clock()
             )
             try:
+                if on_started is not None:
+                    on_started(refresh_id)
                 if names is None:
                     status, message, counts = self._full(conn, fmp, refresh_id)
                 else:
                     status, message, counts = self._scoped(conn, fmp, refresh_id, names)
             except BaseException as exc:
-                finish_refresh(conn, refresh_id, "failed", self._clock(), self._describe(exc))
+                finish_refresh(conn, refresh_id, "failed", self._clock(), self.describe(exc))
                 raise
             finish_refresh(conn, refresh_id, status, self._clock(), message, counts)
         return refresh_id
+
+    def fetches_in_flight(self) -> int:
+        """The fetch threads not ended yet, those a stopped run gave up among them."""
+        with self._in_flight_lock:
+            return self._in_flight
+
+    def describe(self, exc: BaseException) -> str:
+        """``<class>: <message>``, or the class alone, with the keys scrubbed."""
+        text = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+        return scrub(text, self._secrets)
 
     def _full(self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int) -> _Finish:
         """The stages of a full refresh; the status, message and calibration to finish it with."""
@@ -279,7 +299,7 @@ class Refresh:
                 running.remove(symbol)
                 reason: str | None
                 if isinstance(result, Exception):
-                    reason = f"data fetch failed: {self._describe(result)}"
+                    reason = f"data fetch failed: {self.describe(result)}"
                 elif isinstance(result, BaseException):
                     raise result  # not the symbol's failure: SystemExit and the like
                 elif result.rate_limited:
@@ -323,7 +343,12 @@ class Refresh:
                 finished.put((symbol, exc))
             else:
                 finished.put((symbol, outcome))
+            finally:
+                with self._in_flight_lock:
+                    self._in_flight -= 1
 
+        with self._in_flight_lock:
+            self._in_flight += 1
         threading.Thread(target=fetch, name=f"fairband-fetch {symbol}", daemon=True).start()
 
     def _value_stage(
@@ -345,7 +370,7 @@ class Refresh:
                     insert_snapshot(conn, result, refresh_id, clock=self._clock)
                     upsert_item(conn, refresh_id, symbol, "valued", None, self._clock())
             except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own
-                self._fail(conn, refresh_id, symbol, f"valuation failed: {self._describe(exc)}")
+                self._fail(conn, refresh_id, symbol, f"valuation failed: {self.describe(exc)}")
                 failed += 1
             else:
                 valued += 1
@@ -381,11 +406,6 @@ class Refresh:
     ) -> None:
         if self._on_progress is not None:
             self._on_progress(Progress(refresh_id, stage, done, failed, remaining, current))
-
-    def _describe(self, exc: BaseException) -> str:
-        """``<class>: <message>``, or the class alone, with the keys scrubbed."""
-        text = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
-        return scrub(text, self._secrets)
 
 
 def calibration(universe: UniverseResult, snapshots: Sequence[SnapshotRow]) -> dict[str, Any]:

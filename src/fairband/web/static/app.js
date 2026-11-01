@@ -54,6 +54,23 @@
     });
   }
 
+  /* The server refuses a POST without the X-Fairband-Request header (D11): a cross-site form
+     cannot send it, nor a cross-origin script without a preflight the server never answers. The
+     refresh controls post through here; the promise gives the status and the parsed body. */
+  var api = {
+    post: function (url, body) {
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Fairband-Request': '1' },
+        body: JSON.stringify(body || {})
+      }).then(function (response) {
+        return response.json().then(function (json) {
+          return { ok: response.ok, status: response.status, body: json };
+        });
+      });
+    }
+  };
+
   function load() {
     var request = ++latest;
     var sort = state.sort;
