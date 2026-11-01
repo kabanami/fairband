@@ -3,11 +3,11 @@
 ``Refresh.run("scoped", symbols)`` records the policy, starts a ``running`` refresh (while another
 runs, ``create_refresh`` raises ``RefreshRunning``), lists each symbol ``pending`` and runs:
 
-- ``fetch``: ``fetch_company`` for each symbol on ``policy.refresh.workers`` threads, each call on a
-  connection of its own from ``conn_factory``. At most that many symbols are in flight, and the run
-  starts the next only after it has recorded a finished one. A symbol becomes ``fetching``, then
-  ``fetched``, or ``failed`` with the fetch's error and a refusal snapshot of that reason ("data
-  fetch failed: <endpoints>") that carries the price the store holds.
+- ``fetch``: ``fetch_company`` for each symbol on a daemon thread of its own, with a connection of
+  its own from ``conn_factory``. At most ``policy.refresh.workers`` symbols are in flight, and the
+  run starts the next only after it has recorded a finished one. A symbol becomes ``fetching``,
+  then ``fetched``, or ``failed`` with the fetch's error and a refusal snapshot of that reason
+  ("data fetch failed: <endpoints>") that carries the price the store holds.
 - ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs``,
   ``value_company`` with the latest stored deciles, ``insert_snapshot``; the symbol is ``valued``.
   Without stored deciles the snapshot is the refusal "no universe deciles yet" (spec 6.6).
@@ -21,20 +21,31 @@ The run stops early on two events. A cancel is read before each symbol starts, i
 symbols in flight finish and the run ends ``cancelled``, with no further stage: a fetched symbol
 keeps its stored responses, which the next run reuses within ``reuse_hours``, and a valued one its
 snapshot. An HTTP 429 (``FetchOutcome.rate_limited``) ends the fetching the same way; the symbol it
-hit goes back to ``pending``, the symbols fetched are still valued, and the run ends ``failed``
-with "rate limited by <provider>: stopped after <n> companies". An exception outside a symbol's
+hit gets the refusal "data fetch incomplete: rate limited" and is ``failed`` (spec 6.2: a failed
+fetch gets a row), the symbols never reached stay ``pending`` with no snapshot, the symbols
+fetched are still valued, and the run ends ``failed`` with "rate limited by <provider>: stopped
+after <n> companies", n counting the symbols fetched or failed. An exception outside a symbol's
 work ends the run ``failed`` with its class and message, and is raised again.
+
+Why daemon threads: an exception in the fetch stage (a second Ctrl-C in the command) must not wait
+for the fetches in flight, which on a stalled vendor run to minutes (14 calls of up to
+``deadline_s`` each). The run gives them up at once: their symbols go back to ``pending``, the run
+ends ``failed`` and the exception propagates. A ``ThreadPoolExecutor``'s workers are joined when
+the interpreter exits, even after ``shutdown(wait=False)``, and ending the command with
+``os._exit`` would skip its own cleanup (the signal handler, the clients, the output); a daemon
+thread is simply not joined. What a given-up fetch still stores is a response like any other,
+reused by the next run.
 
 ``on_progress`` gets a ``Progress`` at each stage change and after each symbol; it runs on the
 thread that called ``run``.
 """
 
 import logging
+import queue
 import sqlite3
 import threading
 from collections import deque
 from collections.abc import Callable, Sequence
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
@@ -53,6 +64,7 @@ from fairband.store.refreshes import (
     Finished,
     create_refresh,
     finish_refresh,
+    items,
     latest_deciles,
     set_stage,
     upsert_item,
@@ -65,8 +77,10 @@ from fairband.vendors.scrub import scrub
 logger = logging.getLogger("fairband.refresh")
 
 type Kind = Literal["full", "price", "scoped"]
+type _Result = tuple[str, FetchOutcome | BaseException]  # a symbol's fetch, as its thread ended
 
 _PROVIDER_NAMES = {"fmp": "FMP", "gf": "GuruFocus"}
+_RATE_LIMITED = "data fetch incomplete: rate limited"
 
 
 @dataclass(frozen=True)
@@ -170,15 +184,17 @@ class Refresh:
     def _fetch_stage(
         self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int, symbols: Sequence[str]
     ) -> _Fetched:
-        """Fetch ``symbols`` until all are fetched, a cancel or a 429."""
+        """Fetch ``symbols`` until all are fetched, a cancel or a 429. An exception here gives up
+        the fetches in flight and puts their symbols back to ``pending`` before it propagates."""
         self._stage(conn, refresh_id, "fetch", len(symbols))
         workers = self._policy.refresh.workers
         waiting = deque(symbols)
-        running: dict[Future[FetchOutcome], str] = {}
+        running: list[str] = []  # in the order started
+        finished: queue.Queue[_Result] = queue.Queue()
         fetched: list[str] = []
         failed = 0
         limited_by: str | None = None
-        with ThreadPoolExecutor(workers, thread_name_prefix="fairband-fetch") as pool:
+        try:
             while True:
                 while waiting and len(running) < workers:
                     if limited_by is not None or self._cancel.is_set():
@@ -186,39 +202,57 @@ class Refresh:
                     symbol = waiting.popleft()
                     now = self._clock()
                     upsert_item(conn, refresh_id, symbol, "fetching", None, now)
-                    running[pool.submit(self._fetch, fmp, symbol, now)] = symbol
+                    self._start_fetch(fmp, symbol, now, finished)
+                    running.append(symbol)
                 if not running:
                     break
-                finished, _ = wait(running, return_when=FIRST_COMPLETED)
-                for future in [f for f in running if f in finished]:  # in the order started
-                    symbol = running.pop(future)
-                    try:
-                        outcome = future.result()
-                    except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own
-                        reason = f"data fetch failed: {self._describe(exc)}"
-                        self._fail(conn, refresh_id, symbol, reason)
-                        failed += 1
-                    else:
-                        if outcome.rate_limited:
-                            provider = _PROVIDER_NAMES[provider_of(outcome.failed[-1])]
-                            limited_by = limited_by or provider
-                            message = f"rate limited by {provider}"
-                            upsert_item(conn, refresh_id, symbol, "pending", message, self._clock())
-                        elif outcome.error is not None:
-                            self._fail(conn, refresh_id, symbol, outcome.error)
-                            failed += 1
-                        else:
-                            upsert_item(conn, refresh_id, symbol, "fetched", None, self._clock())
-                            fetched.append(symbol)
-                    current = next(iter(running.values()), None)
-                    left = len(symbols) - len(fetched) - failed
-                    self._report(refresh_id, "fetch", len(fetched), failed, left, current)
+                symbol, result = finished.get()
+                running.remove(symbol)
+                reason: str | None
+                if isinstance(result, Exception):
+                    reason = f"data fetch failed: {self._describe(result)}"
+                elif isinstance(result, BaseException):
+                    raise result  # not the symbol's failure: SystemExit and the like
+                elif result.rate_limited:
+                    limited_by = limited_by or _PROVIDER_NAMES[provider_of(result.failed[-1])]
+                    reason = _RATE_LIMITED
+                else:
+                    reason = result.error
+                if reason is None:
+                    upsert_item(conn, refresh_id, symbol, "fetched", None, self._clock())
+                    fetched.append(symbol)
+                else:
+                    self._fail(conn, refresh_id, symbol, reason)
+                    failed += 1
+                left = len(symbols) - len(fetched) - failed
+                current = running[0] if running else None
+                self._report(refresh_id, "fetch", len(fetched), failed, left, current)
+        except BaseException:
+            with transaction(conn):
+                for item in items(conn, refresh_id):
+                    if item.status == "fetching":
+                        upsert_item(conn, refresh_id, item.symbol, "pending", None, self._clock())
+            raise
         return _Fetched(tuple(fetched), failed, limited_by)
 
-    def _fetch(self, fmp: Fmp, symbol: str, now: datetime) -> FetchOutcome:
-        """One symbol's fetch, on a worker thread with a connection of its own."""
-        with closing(self._conn_factory()) as conn:
-            return fetch_company(conn, fmp, self._gf, symbol, self._policy, now, self._secrets)
+    def _start_fetch(
+        self, fmp: Fmp, symbol: str, now: datetime, finished: queue.Queue[_Result]
+    ) -> None:
+        """Fetch ``symbol`` on a daemon thread of its own (module docstring), with a connection
+        of its own; the outcome, or what the fetch raised, goes to ``finished``."""
+
+        def fetch() -> None:
+            try:
+                with closing(self._conn_factory()) as conn:
+                    outcome = fetch_company(
+                        conn, fmp, self._gf, symbol, self._policy, now, self._secrets
+                    )
+            except BaseException as exc:  # noqa: BLE001 - handed to the run, which decides
+                finished.put((symbol, exc))
+            else:
+                finished.put((symbol, outcome))
+
+        threading.Thread(target=fetch, name=f"fairband-fetch {symbol}", daemon=True).start()
 
     def _value_stage(
         self, conn: sqlite3.Connection, refresh_id: int, symbols: Sequence[str]

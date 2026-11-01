@@ -11,6 +11,7 @@ import logging
 import signal
 import sqlite3
 import threading
+import time
 from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import closing
@@ -47,6 +48,7 @@ BOLT_FAILED = (
     "data fetch failed: income-annual, balance-annual, cashflow-annual, quote, estimates-quarter"
 )
 QUOTE_DATE = date(2026, 10, 30)  # both fixture quotes'
+RATE_LIMITED = "data fetch incomplete: rate limited"
 
 
 @dataclass
@@ -332,6 +334,7 @@ def test_exception_in_a_symbol_gives_it_a_refusal_row(
 
 
 def test_rate_limit_stops_the_fetch_and_values_what_was_fetched(env: Env) -> None:
+    """BOLT's fetch hits the 429: it gets a refusal row; CRUX is never reached and gets none."""
     env.router.fail_status = 429
     env.router.fail_symbols.add("BOLT")
     refresh_id = env.run(["ACME", "BOLT", "CRUX"], workers=1)
@@ -339,27 +342,30 @@ def test_rate_limit_stops_the_fetch_and_values_what_was_fetched(env: Env) -> Non
     assert (row.status, row.stage, row.message) == (
         "failed",
         "value",
-        "rate limited by FMP: stopped after 1 company",
+        "rate limited by FMP: stopped after 2 companies",
     )
     assert env.items(refresh_id) == [
         ("ACME", "valued", None),
-        ("BOLT", "pending", "rate limited by FMP"),
+        ("BOLT", "failed", RATE_LIMITED),
         ("CRUX", "pending", None),
     ]
-    assert env.snapshots() == [("ACME", refresh_id, "no universe deciles yet")]
+    assert env.snapshots() == [
+        ("BOLT", refresh_id, RATE_LIMITED),
+        ("ACME", refresh_id, "no universe deciles yet"),
+    ]
     assert env.router.symbol_calls == Counter({"ACME": 14, "BOLT": 3})  # three tries, then stop
 
 
 def test_rate_limit_names_the_provider(env: Env) -> None:
+    """ACME's GuruFocus call hits the 429 after its quote is stored: its refusal row has the
+    price."""
     env.router.fail_status = 429
     env.router.fail.add("summary")
     refresh_id = env.run(["ACME", "BOLT"], workers=1)
-    assert env.last().message == "rate limited by GuruFocus: stopped after 0 companies"
-    assert env.items(refresh_id) == [
-        ("ACME", "pending", "rate limited by GuruFocus"),
-        ("BOLT", "pending", None),
-    ]
-    assert env.snapshots() == []
+    assert env.last().message == "rate limited by GuruFocus: stopped after 1 company"
+    assert env.items(refresh_id) == [("ACME", "failed", RATE_LIMITED), ("BOLT", "pending", None)]
+    assert env.snapshots() == [("ACME", refresh_id, RATE_LIMITED)]
+    assert env.snapshot("ACME").price == 50.0
 
 
 def test_second_refresh_refused_while_running(env: Env) -> None:
@@ -476,8 +482,8 @@ def test_cli_exits_1_when_the_refresh_is_not_done(
     assert cli.main(["refresh", "ACME"]) == 1
     out = capsys.readouterr().out.splitlines()
     assert out[-2:] == [
-        f"refresh {env.universe_id + 1}: failed: rate limited by FMP: stopped after 0 companies",
-        "ACME  —  no snapshot yet",
+        f"refresh {env.universe_id + 1}: failed: rate limited by FMP: stopped after 1 company",
+        f"ACME  —  {RATE_LIMITED}",
     ]
 
 
@@ -532,6 +538,46 @@ def test_cli_second_ctrl_c_interrupts(
     assert on_progress.pressed[1] is signal.default_int_handler  # type: ignore[attr-defined]
     assert (env.last().status, env.last().message) == ("failed", "KeyboardInterrupt")
     assert signal.getsignal(signal.SIGINT) is before
+
+
+def test_cli_second_ctrl_c_does_not_wait_for_a_blocked_fetch(
+    env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Both fetches block, as on a stalled vendor; ACME's presses Ctrl-C twice, the way a
+    terminal does, by sending SIGINT to the main thread. The interrupt must not wait for them."""
+    use_cli(env, monkeypatch, tmp_path)
+    release = threading.Event()
+    second_press: list[float] = []
+
+    def ctrl_c() -> None:
+        signal.pthread_kill(threading.main_thread().ident or 0, signal.SIGINT)
+
+    def blocked_fetch(*args: Any) -> Any:
+        if "ACME" in args:
+            ctrl_c()
+            deadline = time.monotonic() + 5
+            while signal.getsignal(signal.SIGINT) is not signal.default_int_handler:
+                assert time.monotonic() < deadline, "the first Ctrl-C was not handled"
+                time.sleep(0.01)
+            second_press.append(time.monotonic())
+            ctrl_c()
+        release.wait(3)
+        raise RuntimeError("released")
+
+    monkeypatch.setattr(run_module, "fetch_company", blocked_fetch)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            cli.main(["refresh", "ACME,BOLT"])
+        surfaced_after = time.monotonic() - second_press[0]
+    finally:
+        release.set()
+        for thread in threading.enumerate():
+            if thread.name.startswith("fairband-fetch"):
+                thread.join(5)
+    assert surfaced_after < 1
+    row = env.last()
+    assert (row.status, row.message) == ("failed", "KeyboardInterrupt")
+    assert all(status == "pending" for _, status, _ in env.items(row.id))
 
 
 def test_cli_off_the_main_thread_leaves_sigint_alone(
