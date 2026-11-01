@@ -42,6 +42,7 @@ from fairband.store.refreshes import (
     save_deciles,
 )
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
+from fairband.store.vendor import record_response
 
 GROWTH_EDGES = (-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3)
 BOLT_FAILED = (
@@ -540,27 +541,43 @@ def test_cli_second_ctrl_c_interrupts(
     assert signal.getsignal(signal.SIGINT) is before
 
 
-def test_cli_second_ctrl_c_does_not_wait_for_a_blocked_fetch(
-    env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Both fetches block, as on a stalled vendor; ACME's presses Ctrl-C twice, the way a
-    terminal does, by sending SIGINT to the main thread. The interrupt must not wait for them."""
-    use_cli(env, monkeypatch, tmp_path)
-    release = threading.Event()
-    second_press: list[float] = []
+def ctrl_c_twice() -> float:
+    """Press Ctrl-C twice from a fetch thread, the way a terminal does, by sending SIGINT to the
+    main thread, the second after the first is handled; return the time of the second."""
 
     def ctrl_c() -> None:
         signal.pthread_kill(threading.main_thread().ident or 0, signal.SIGINT)
 
+    ctrl_c()
+    deadline = time.monotonic() + 5
+    while signal.getsignal(signal.SIGINT) is not signal.default_int_handler:
+        assert time.monotonic() < deadline, "the first Ctrl-C was not handled"
+        time.sleep(0.01)
+    second = time.monotonic()
+    ctrl_c()
+    return second
+
+
+def release_fetches(release: threading.Event) -> None:
+    """Let the given-up fetch doubles end, and wait for their threads."""
+    release.set()
+    for thread in threading.enumerate():
+        if thread.name.startswith("fairband-fetch"):
+            thread.join(5)
+
+
+def test_cli_second_ctrl_c_does_not_wait_for_a_blocked_fetch(
+    env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Both fetches block, as on a stalled vendor, and ACME's presses Ctrl-C twice. The
+    interrupt must not wait for them."""
+    use_cli(env, monkeypatch, tmp_path)
+    release = threading.Event()
+    second_press: list[float] = []
+
     def blocked_fetch(*args: Any) -> Any:
         if "ACME" in args:
-            ctrl_c()
-            deadline = time.monotonic() + 5
-            while signal.getsignal(signal.SIGINT) is not signal.default_int_handler:
-                assert time.monotonic() < deadline, "the first Ctrl-C was not handled"
-                time.sleep(0.01)
-            second_press.append(time.monotonic())
-            ctrl_c()
+            second_press.append(ctrl_c_twice())
         release.wait(3)
         raise RuntimeError("released")
 
@@ -570,14 +587,43 @@ def test_cli_second_ctrl_c_does_not_wait_for_a_blocked_fetch(
             cli.main(["refresh", "ACME,BOLT"])
         surfaced_after = time.monotonic() - second_press[0]
     finally:
-        release.set()
-        for thread in threading.enumerate():
-            if thread.name.startswith("fairband-fetch"):
-                thread.join(5)
+        release_fetches(release)
     assert surfaced_after < 1
     row = env.last()
     assert (row.status, row.message) == ("failed", "KeyboardInterrupt")
     assert all(status == "pending" for _, status, _ in env.items(row.id))
+
+
+def test_cli_second_ctrl_c_while_the_fetches_keep_writing(
+    env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The given-up fetches go on storing responses on their own connections while the run puts
+    their items back to ``pending``: that write must wait for its turn, not fail with "database
+    is locked". Five symbols on four workers, five rounds, to catch the race."""
+    use_cli(env, monkeypatch, tmp_path)
+    for _ in range(5):
+        release = threading.Event()
+
+        def writing_fetch(
+            conn: sqlite3.Connection, *args: Any, release: threading.Event = release
+        ) -> Any:
+            symbol, now = args[2], args[4]
+            if symbol == "ACME":
+                ctrl_c_twice()
+            while not release.is_set():
+                record_response(conn, "fmp", "quote", {}, symbol, 200, "[]", None, now)
+                release.wait(0.005)
+            raise RuntimeError("released")
+
+        monkeypatch.setattr(run_module, "fetch_company", writing_fetch)
+        try:
+            with pytest.raises(KeyboardInterrupt):
+                cli.main(["refresh", "ACME,BOLT,CRUX,DUNE,ECHO"])
+        finally:
+            release_fetches(release)
+        row = env.last()
+        assert (row.status, row.message) == ("failed", "KeyboardInterrupt")
+        assert {status for _, status, _ in env.items(row.id)} == {"pending"}
 
 
 def test_cli_off_the_main_thread_leaves_sigint_alone(

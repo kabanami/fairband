@@ -228,7 +228,10 @@ class Refresh:
                 current = running[0] if running else None
                 self._report(refresh_id, "fetch", len(fetched), failed, left, current)
         except BaseException:
-            with transaction(conn):
+            # It reads, then writes, while the given-up fetches still write: a deferred
+            # transaction could not upgrade its read (SQLITE_BUSY at once, no busy wait), so it
+            # takes the write lock first.
+            with transaction(conn, immediate=True):
                 for item in items(conn, refresh_id):
                     if item.status == "fetching":
                         upsert_item(conn, refresh_id, item.symbol, "pending", None, self._clock())
