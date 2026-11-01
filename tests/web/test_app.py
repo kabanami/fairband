@@ -619,6 +619,35 @@ def test_page_hands_the_design_system_local_time() -> None:
     assert "P.localIso(last.finishedAt)" in controls  # the last-refresh line
 
 
+def test_app_js_find_and_filters() -> None:
+    script = _static_file("app.js")
+    for prop in (
+        "query: state.query",
+        "onQueryChange:",
+        "filters: state.filters",
+        "onFiltersChange:",
+        "sectors: sectorsOf(state.rows)",
+        "total: state.rows.length",
+    ):
+        assert prop in script, prop
+    assert "footnote" not in script
+
+
+def test_app_js_query_is_trimmed_and_lower_cased() -> None:
+    script = _static_file("app.js")
+    assert "(query || '').trim().toLowerCase()" in script
+    assert "r.ticker.toLowerCase().indexOf(needle) === 0" in script
+    assert "(r.name || '').toLowerCase().indexOf(needle) !== -1" in script
+
+
+def test_app_js_filter_rule_handles_missing_fields() -> None:
+    script = _static_file("app.js")
+    assert "(r.capBand || '').toLowerCase()" in script
+    assert (
+        "if (r.price == null || r.buyLevel == null || r.trimLevel == null) return null;" in script
+    )
+
+
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
 EXTRA_COLUMN_HEADS = {
     "sector": "Sector",

@@ -1,9 +1,10 @@
 /* The screen page: fetches /api/screen and renders the design system's ScreenTable, and beside it
    the detail drawer of the row the reader opens (spec 6.4), fetched from /api/companies/{symbol}.
    No JSX and no build step: React.createElement against window.Fairband. The server sorts and the
-   engine computes; this script asks for an order, remembers the chosen columns and lays out what
-   the engine produced, rounded for display only. The header, the status line and the group view
-   are controls.js, loaded after this script; it reaches the screen through window.FairbandPage. */
+   engine computes; this script asks for an order, remembers the chosen columns, narrows the
+   loaded rows to the reader's find and filters and lays out what the engine produced, rounded for
+   display only. The header, the status line and the group view are controls.js, loaded after
+   this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -27,6 +28,10 @@
     error: null,
     sort: { column: 'ticker', direction: 'asc' },
     columns: loadColumns(),
+    /* The FIND text and the Filters menu's choice. Neither is saved: every page load starts
+       with the whole screen (screen-controls spec 4.4). */
+    query: '',
+    filters: F.EMPTY_FILTERS,
     drawer: null /* { symbol, body, loading, error } while open */
   };
   var latest = 0;
@@ -45,6 +50,16 @@
     try {
       window.localStorage.setItem(COLUMNS_KEY, JSON.stringify(columns));
     } catch (e) { /* no storage: the choice lasts until the page reloads */ }
+    render();
+  }
+
+  function setQuery(query) {
+    state.query = query;
+    render();
+  }
+
+  function setFilters(filters) {
+    state.filters = filters;
     render();
   }
 
@@ -166,8 +181,49 @@
     if (event.key === 'Escape' && state.drawer) close();
   });
 
-  function footnote(n) {
-    return n + (n === 1 ? ' company' : ' companies') + ' · $2 bn and up';
+  /* ------------------------------------------------------- find and filters */
+
+  /* The stance column's rule (the bundle's stanceOf with its fairband patch): a row without a
+     price or levels has no stance, so a stance filter drops it; else buy below the buy level,
+     trim at or above the trim level, hold between. */
+  function stanceOf(r) {
+    if (r.price == null || r.buyLevel == null || r.trimLevel == null) return null;
+    if (r.price < r.buyLevel) return 'buy';
+    if (r.price >= r.trimLevel) return 'trim';
+    return 'hold';
+  }
+
+  /* An empty group narrows nothing; a non-empty one keeps only the rows whose value it names. */
+  function within(list, value) { return !list.length || list.indexOf(value) !== -1; }
+
+  /* The design system's reference rule (the gallery's apply). ScreenTable narrows nothing, so the
+     page keeps the rows it loaded and draws the ones that pass; the server's order stands. The
+     ticker matches by prefix and the name anywhere. A field a row lacks matches no filter: a
+     placeholder has no stance or phase, and may have no sector or cap. The row's phase is
+     already the menu's number (the server maps the engine's phase name through PHASE_NUMBER),
+     and its cap band is the menu's id once lower-cased (Mega is mega); small never matches, the
+     universe's floor being $2 bn. */
+  function narrow(rows, query, filters) {
+    var needle = (query || '').trim().toLowerCase();
+    return rows.filter(function (r) {
+      var found = !needle || r.ticker.toLowerCase().indexOf(needle) === 0 ||
+        (r.name || '').toLowerCase().indexOf(needle) !== -1;
+      return found &&
+        within(filters.stance, stanceOf(r)) &&
+        within(filters.phase, r.phase) &&
+        within(filters.cap, (r.capBand || '').toLowerCase()) &&
+        within(filters.sector, r.sector) &&
+        (!filters.reviewedOnly || r.reviewed != null) &&
+        (!filters.hideExpired || r.freshness !== 'expired');
+    });
+  }
+
+  /* The menu's sectors: the screener's names found on the loaded rows, sorted, rather than the
+     GICS names the design system lists by default. */
+  function sectorsOf(rows) {
+    var seen = {};
+    rows.forEach(function (r) { if (r.sector != null) seen[r.sector] = true; });
+    return Object.keys(seen).sort();
   }
 
   function note(text) { return h('p', { className: 'body app-note' }, text); }
@@ -180,16 +236,24 @@
     } else if (state.rows && state.rows.length === 0) {
       main = note('No snapshots yet. Run a refresh.');
     } else if (state.rows) {
+      /* A narrowing that leaves no row still draws the table: its bar says 0 of the total and
+         offers Clear. The drawer stays open when its row is narrowed away. */
+      var rows = narrow(state.rows, state.query, state.filters);
       main = h(F.ScreenTable, {
-        rows: d ? state.rows.map(function (r) {
+        rows: d ? rows.map(function (r) {
           return r.ticker === d.symbol ? Object.assign({}, r, { selected: true }) : r;
-        }) : state.rows,
+        }) : rows,
+        total: state.rows.length,
+        query: state.query,
+        onQueryChange: setQuery,
+        filters: state.filters,
+        onFiltersChange: setFilters,
+        sectors: sectorsOf(state.rows),
         columns: state.columns,
         onColumnsChange: setColumns,
         sort: state.sort,
         onSort: sortBy,
         onOpen: open,
-        footnote: footnote(state.rows.length),
         chooser: true
       });
     }
