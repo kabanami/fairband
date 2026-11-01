@@ -396,12 +396,27 @@ def test_price_closes() -> None:
 
 def test_screener_rows_symbol_forms() -> None:
     rows = screener_rows(load("company-screener"))
-    assert [r.symbol for r in rows] == ["ACME", "BOLT", "BRK.B", "ACME-PA"]
+    assert [r.symbol for r in rows] == [
+        "ACME",
+        "BOLT",
+        "BRK.B",
+        "ACME-PA",
+        "CAPE",
+        "OTCX",
+        "FIRB",
+        "OFFR",
+        "BOLT-WS",
+        "NEWC.U",
+        "SMLL",
+        "BIGX",
+        "ADRX",
+        "ACME",
+    ]
 
 
 def test_screener_rows_fields() -> None:
-    rows = {r.symbol: r for r in screener_rows(load("company-screener"))}
-    assert rows["ACME"] == ScreenerRow(
+    first, bolt, *_ = screener_rows(load("company-screener"))
+    assert first == ScreenerRow(
         symbol="ACME",
         name="Acme Corp",
         exchange="NASDAQ",
@@ -415,7 +430,7 @@ def test_screener_rows_fields() -> None:
         is_actively_trading=True,
         is_adr=False,
     )
-    assert rows["BOLT"].exchange == "NYSE"
+    assert bolt.exchange == "NYSE"
     flagged = [{"symbol": "ADRX", "exchange": "NYSE", "isAdr": True, "currency": "USD"}]
     [adr] = screener_rows(flagged)
     assert (adr.is_adr, adr.exchange, adr.currency, adr.market_cap) == (True, "NYSE", "USD", None)
