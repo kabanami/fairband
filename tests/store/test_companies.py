@@ -50,6 +50,26 @@ def test_insert_companies_and_latest_companies(
     assert latest_companies(conn, eligible_only=False) == [aapl, bank, msft]
 
 
+def test_latest_companies_skip_a_refresh_that_admitted_none(
+    conn: sqlite3.Connection, new_refresh: Callable[[], int]
+) -> None:
+    """A full refresh whose screener admitted nobody recorded only excluded rows: the admitted
+    companies stay the newest refresh's that admitted any, while all the rows are its own."""
+    first, second = new_refresh(), new_refresh()
+    aapl, msft = _company("AAPL", first), _company("MSFT", first)
+    bank = _company("BANK", second, eligible=False)
+    insert_companies(conn, [aapl, msft])
+    insert_companies(conn, [bank])
+    assert latest_companies(conn) == [aapl, msft]
+    assert latest_companies(conn, eligible_only=False) == [bank]
+    assert latest_company(conn, "BANK") == bank and latest_company(conn, "AAPL") == aapl
+
+    third = new_refresh()  # a later universe that admits companies again replaces the first
+    xom = _company("XOM", third)
+    insert_companies(conn, [xom, _company("BANK", third, eligible=False)])
+    assert latest_companies(conn) == [xom]
+
+
 def test_latest_company_reads_the_newest_refresh_for_the_symbol(
     conn: sqlite3.Connection, new_refresh: Callable[[], int]
 ) -> None:

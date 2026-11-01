@@ -1,7 +1,10 @@
 """The universe: one row per admitted or excluded listing per refresh that built the universe.
 
-A full refresh writes the whole universe under its own ``refresh_id``; the latest universe is the
-rows of the greatest ``refresh_id`` present. ``market_cap`` is decimal text.
+A full refresh writes the whole universe under its own ``refresh_id``. The latest universe's
+admitted companies are the eligible rows of the greatest ``refresh_id`` that has one, so a refresh
+whose screener admitted nobody (it records only excluded listings, and fails) never empties the
+screen; its rows, excluded ones among them, are those of the greatest ``refresh_id`` present.
+``market_cap`` is decimal text.
 """
 
 import sqlite3
@@ -63,13 +66,19 @@ def insert_companies(conn: sqlite3.Connection, rows: Sequence[CompanyRow]) -> No
 
 
 def latest_companies(conn: sqlite3.Connection, eligible_only: bool = True) -> list[CompanyRow]:
-    """The latest universe, ordered by symbol; only the admitted listings unless told otherwise."""
-    rows = conn.execute(
-        "SELECT * FROM companies WHERE refresh_id = (SELECT MAX(refresh_id) FROM companies)"
-        " ORDER BY symbol"
-    )
-    companies = [_company(r) for r in rows]
-    return [c for c in companies if c.eligible or not eligible_only]
+    """The latest universe, ordered by symbol: the admitted listings of the newest refresh that
+    admitted any, or, with ``eligible_only`` false, every row of the newest refresh with a row."""
+    if eligible_only:
+        rows = conn.execute(
+            "SELECT * FROM companies WHERE eligible AND refresh_id ="
+            " (SELECT MAX(refresh_id) FROM companies WHERE eligible) ORDER BY symbol"
+        )
+    else:
+        rows = conn.execute(
+            "SELECT * FROM companies WHERE refresh_id = (SELECT MAX(refresh_id) FROM companies)"
+            " ORDER BY symbol"
+        )
+    return [_company(r) for r in rows]
 
 
 def latest_company(conn: sqlite3.Connection, symbol: str) -> CompanyRow | None:

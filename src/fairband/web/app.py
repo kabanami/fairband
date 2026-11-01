@@ -10,7 +10,9 @@ FastAPI's own documentation routes are off; they would load their scripts from a
 
 The screen's rows are the latest universe's admitted companies, each with its latest snapshot,
 or a placeholder row "not yet valued" before its first; a company the latest universe does not
-admit has no row. Before any universe exists, every company with a snapshot has its row.
+admit has no row. The latest universe is the newest that admitted a company
+(``latest_companies``), so a refresh whose screener admitted nobody leaves the screen as it was.
+Before any universe exists, every company with a snapshot has its row.
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
 command that stopped, and logs how many.
@@ -127,7 +129,8 @@ def create_app(
             raise HTTPException(400, f"dir must be asc or desc, not {direction}")
         today = clock().date()
         with closing(conn_factory()) as conn:
-            universe = latest_companies(conn, eligible_only=False)
+            admitted = latest_companies(conn)
+            listed = bool(admitted) or bool(latest_companies(conn, eligible_only=False))
             snapshots = {s.symbol: s for s in latest_snapshots(conn)}
             refresh = latest_refresh(conn)
 
@@ -137,8 +140,8 @@ def create_app(
                 return placeholder_row(company)
             return screen_row(snapshot, company, today, policy.aging_fraction)
 
-        if universe:
-            rows = [row(company) for company in universe if company.eligible]
+        if listed:
+            rows = [row(company) for company in admitted]
         else:
             rows = [screen_row(s, None, today, policy.aging_fraction) for s in snapshots.values()]
         return {

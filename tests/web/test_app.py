@@ -398,6 +398,15 @@ def test_screen_placeholder_row_not_yet_valued(
     }
 
 
+def test_screen_keeps_the_universe_when_a_refresh_admits_none(
+    db_path: Path, policy: Policy, client: TestClient
+) -> None:
+    """A later full refresh whose screener admitted nobody recorded only an excluded listing: the
+    screen keeps the last universe that admitted companies."""
+    _universe(db_path, policy, ("FIRB", "First Bank", 4_000_000_000, False))
+    assert _tickers(client, "") == ["AAL", "AAPL"]
+
+
 def test_screen_without_a_universe_shows_every_snapshot(
     tmp_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
