@@ -87,7 +87,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _serve(args: argparse.Namespace) -> int:
     """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. With
     an FMP key the server runs refreshes on its worker, whose thread alone calls the vendors;
-    without one it serves the screen and refuses refreshes."""
+    without one it serves the screen and refuses refreshes. When it starts, the app marks every
+    ``running`` refresh interrupted; with no process lock in this cut, that includes one a command
+    in another process is running at that moment."""
     settings = load_settings()
     policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
@@ -259,7 +261,8 @@ def _calibration_lines(calibration: dict[str, Any]) -> list[str]:
 
 def _migrate(args: argparse.Namespace) -> int:
     """Apply the pending migrations, then mark ``interrupted`` the refreshes a server or a
-    command that stopped left ``running``, as the server does when it starts."""
+    command that stopped left ``running``, as the server does when it starts. With no process
+    lock in this cut, it also marks one another process is running at that moment."""
     with closing(connect(load_settings().db_path)) as conn:
         applied = migrate(conn)
         interrupted = mark_interrupted(conn, utcnow())

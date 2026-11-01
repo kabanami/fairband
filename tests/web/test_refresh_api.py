@@ -5,6 +5,7 @@ stays in its fetch stage while the test looks."""
 
 import logging
 import threading
+import time
 from collections.abc import Callable, Iterator
 from contextlib import closing
 from datetime import UTC, datetime
@@ -122,7 +123,7 @@ def worker(db_path: Path, fmp: Fmp, policy: Policy, gate: Gate) -> Iterator[Refr
             [KEY],
         )
 
-    worker = RefreshWorker(make_refresh, wait_s=0.1)
+    worker = RefreshWorker(make_refresh)  # waits up to 5 s for a given-up fetch to end
     yield worker
     worker.cancel()
     gate.release.set()
@@ -222,6 +223,19 @@ def test_api_refuses_second_refresh(
         other = create_refresh(conn, "scoped", ["BOLT"], "fairband-policy-v1", METHOD_VERSION, NOW)
     response = start(client, kind="scoped", symbols=["ACME"])
     assert (response.status_code, response.json()) == (409, {"running": other})
+
+
+def test_api_second_refresh_refused_at_once(client_with_worker: TestClient, gate: Gate) -> None:
+    """During a live run the 409 comes at once: the worker's 5-second wait is only for the
+    fetches a run that already ended gave up."""
+    client = client_with_worker
+    first = start(client, kind="scoped", symbols=["ACME"]).json()["refreshId"]
+    gate.wait_entered(1)
+    began = time.monotonic()
+    response = start(client, kind="scoped", symbols=["BOLT"])
+    elapsed = time.monotonic() - began
+    assert (response.status_code, response.json()) == (409, {"running": first})
+    assert elapsed < 0.5
 
 
 @pytest.mark.parametrize(

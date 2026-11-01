@@ -8,9 +8,10 @@ raises again: ``RefreshRunning`` while another process runs a refresh, ``ValueEr
 ``NotImplementedError`` for a request the run refuses. What the run raises after it started is
 kept, scrubbed of the keys, as ``last_error`` and logged; the record carries the same message.
 
-One refresh at a time: before a run starts, ``start`` waits up to ``wait_s`` for the previous
-run's thread to end and for the fetches it gave up (``Refresh.fetches_in_flight``) to end, so no
-two runs fetch at once and no given-up fetch writes while the next run works; else it raises
+One refresh at a time: while the previous run's thread is alive, ``start`` raises
+``RefreshRunning`` with its id at once. Once that thread has ended, ``start`` waits up to
+``wait_s`` for the fetches the run gave up (``Refresh.fetches_in_flight``, after an exception in
+its fetch stage) to end, so no given-up fetch writes while the next run works; else it raises
 ``RefreshRunning`` with the previous run's id.
 
 ``status`` is the latest ``Progress`` while the run's thread is alive, else ``None``; the record
@@ -123,11 +124,12 @@ class RefreshWorker:
         self._progress = progress
 
     def _wait_for(self, run: _Run) -> None:
-        """Wait up to ``wait_s`` for ``run``'s thread and its fetches to end, else raise
-        ``RefreshRunning``."""
+        """Raise ``RefreshRunning`` at once while ``run``'s thread is alive; once it has ended,
+        wait up to ``wait_s`` for the fetches it gave up to end, else raise it."""
+        if run.thread.is_alive():
+            raise RefreshRunning(run.refresh_id)
         deadline = time.monotonic() + self._wait_s
-        run.thread.join(self._wait_s)
-        while run.thread.is_alive() or run.refresh.fetches_in_flight():
+        while run.refresh.fetches_in_flight():
             if time.monotonic() >= deadline:
                 raise RefreshRunning(run.refresh_id)
             time.sleep(_POLL_S)

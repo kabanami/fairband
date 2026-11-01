@@ -6,6 +6,7 @@ left running.
 
 import logging
 import threading
+import time
 from collections import Counter
 from collections.abc import Callable
 from contextlib import closing
@@ -288,19 +289,20 @@ def join_threads(prefix: str) -> None:
 
 
 def test_worker_waits_for_abandoned_fetches(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A run that ends on an exception in its fetch stage gives up the fetches in flight; they may
-    still write. The worker starts no run until they end, waiting up to its limit, and keeps the
-    run's error."""
-    release = threading.Event()
+    """While a run's thread is alive, a start is refused at once. A run that ends on an exception
+    in its fetch stage gives up the fetches in flight; they may still write. The worker starts no
+    run until they end, waiting up to its limit, and keeps the run's error."""
+    hold_acme, release = threading.Event(), threading.Event()
     fetch_company = run_module.fetch_company
 
-    def blocked_for_bolt(*args: Any) -> Any:
+    def blocked(*args: Any) -> Any:
         if "BOLT" in args:  # given up: what it returns is never read
             release.wait(5)
             raise RuntimeError("released")
+        hold_acme.wait(5)
         return fetch_company(*args)
 
-    monkeypatch.setattr(run_module, "fetch_company", blocked_for_bolt)
+    monkeypatch.setattr(run_module, "fetch_company", blocked)
 
     raised: list[int] = []
 
@@ -313,9 +315,15 @@ def test_worker_waits_for_abandoned_fetches(env: Env, monkeypatch: pytest.Monkey
 
         return env.refresh(cancel=cancel, then=stop_after_acme)
 
-    worker = RefreshWorker(make_refresh, wait_s=0.5)
+    worker = RefreshWorker(make_refresh, wait_s=1.0)
     first = worker.start("scoped", ["ACME", "BOLT"])
     try:
+        began = time.monotonic()
+        with pytest.raises(RefreshRunning) as running:
+            worker.start("scoped", ["ACME"])  # the run's thread is alive: no wait
+        assert running.value.refresh_id == first and time.monotonic() - began < 0.2
+
+        hold_acme.set()  # ACME is fetched and the run stops on its progress
         join_threads("fairband-refresh")
         assert (env.last().id, env.last().status) == (first, "failed")
         assert worker.last_error == "RuntimeError: the sink is gone near <key>"
@@ -332,6 +340,7 @@ def test_worker_waits_for_abandoned_fetches(env: Env, monkeypatch: pytest.Monkey
         assert (env.last().id, env.last().status) == (second, "done") and second == first + 1
         assert worker.last_error is None
     finally:
+        hold_acme.set()
         release.set()
         join_threads("fairband-")
 
