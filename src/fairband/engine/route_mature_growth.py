@@ -22,6 +22,8 @@ the path's rates from year 2.
 
 ``growth_cross_check`` runs the same anchor, path and charge for a Mature Stable row, on that
 row's moat and returns, so its value is the one this route would reach (calibration spec 5.7).
+It carries the keys the rebuild reads, so ``cross_check_at_price`` gives its implied growth at
+any price by the same solve, from the intermediates alone.
 """
 
 from dataclasses import asdict, replace
@@ -161,8 +163,9 @@ def value_mature_growth(c: Context) -> Valued | Refused:
 
 def growth_cross_check(c: Context, moat: Moat, roic: RoicTerms) -> dict[str, Any]:
     """The growth route's value a share for a Mature Stable row (calibration spec 5.7), from the
-    row's moat and returns: with the runway return, the path, the belief and the implied growth at
-    the price; or only the refusal the route would give."""
+    row's moat and returns, with what the value rests on: the anchor's net income, the path, the
+    belief, the runway and fade, and the returns of the charge; or only the refusal the route
+    would give. ``cross_check_at_price`` adds the implied growth at a price."""
     found = _anchor_and_path(c)
     if isinstance(found, Refused):
         return {"refusal": found.reason}
@@ -173,12 +176,28 @@ def growth_cross_check(c: Context, moat: Moat, roic: RoicTerms) -> dict[str, Any
         return {"refusal": _NOT_POSITIVE}
     return {
         "value_per_share": value,
-        "runway_return": roic.intermediates()["runway_return"],
+        "ntm_net_income": anchor.ntm_net_income,
         "path_steps": list(path.steps),
         "belief": asdict(belief),
-        "implied_growth": implied_growth(c.price * c.shares, growth, charge, hi=_IMPLIED_HI),
+        "runway": growth.runway,
+        "fade_years": growth.fade_years,
+        "runway_return": roic.intermediates()["runway_return"],
+        "terminal_roic": charge.terminal_roic,
+        "charge_off": charge.charge_off,
         "refusal": None,
     }
+
+
+def cross_check_at_price(
+    gr: dict[str, Any], price: float, shares: float, policy: Policy
+) -> dict[str, Any]:
+    """The cross-check ``gr`` with its implied growth at ``price`` on ``shares``, by the growth
+    route's solve on the path and charge rebuilt from ``gr``; a refused one as it is."""
+    if gr.get("value_per_share") is None:
+        return gr
+    growth, charge = _rebuilt(gr, policy)
+    target = price * shares
+    return gr | {"implied_growth": implied_growth(target, growth, charge, hi=_IMPLIED_HI)}
 
 
 def _anchor_and_path(c: Context) -> tuple[Anchor, Path, int, Belief] | Refused:
@@ -215,10 +234,7 @@ def growth_at_price(
     im: dict[str, Any], price: float, value: float, policy: Policy
 ) -> dict[str, Any]:
     """The intermediates that move with the price, from the value-side intermediates ``im``."""
-    g2, g3 = im["path_steps"]
-    belief = im["belief"]["rate"]
-    growth = GrowthPath(im["ntm_net_income"], (g2, g3), belief, im["runway"], im["fade_years"])
-    charge = _charge(im["runway_return"]["value"], im["terminal_roic"], im["charge_off"], policy)
+    growth, charge = _rebuilt(im, policy)
     target = price * im["shares"]
     aggregate = im["roic"]["aggregate"]
     usable = aggregate if aggregate is not None and aggregate > 0 else None
@@ -241,6 +257,16 @@ def growth_at_price(
 def long_runway(im: dict[str, Any], policy: Policy) -> Flag | None:
     """The long-runway flag at the price in ``im``."""
     return long_runway_flag(im["runway"], im["belief"]["rate"], im["implied_growth"], policy)
+
+
+def _rebuilt(im: dict[str, Any], policy: Policy) -> tuple[GrowthPath, Charge]:
+    """The growth path and the charge from intermediates: the route's own or a cross-check's,
+    which carry the same keys."""
+    g2, g3 = im["path_steps"]
+    belief = im["belief"]["rate"]
+    growth = GrowthPath(im["ntm_net_income"], (g2, g3), belief, im["runway"], im["fade_years"])
+    charge = _charge(im["runway_return"]["value"], im["terminal_roic"], im["charge_off"], policy)
+    return growth, charge
 
 
 def _charge(runway_roic: float, terminal: float, charge_off: bool, policy: Policy) -> Charge:

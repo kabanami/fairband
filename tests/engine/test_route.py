@@ -102,6 +102,21 @@ MATURE_STABLE_KEYS = {
     "multiples",
     "expected_return",
 }
+# A Mature Stable row's growth-route cross-check with a path: the value and the keys its implied
+# growth is rebuilt from at a new price.
+CROSS_CHECK_KEYS = {
+    "value_per_share",
+    "ntm_net_income",
+    "path_steps",
+    "belief",
+    "runway",
+    "fade_years",
+    "runway_return",
+    "terminal_roic",
+    "charge_off",
+    "implied_growth",
+    "refusal",
+}
 
 
 def codes(r: ValuationResult) -> list[str]:
@@ -724,14 +739,7 @@ def test_mature_stable_cross_check_present_with_a_path(
     r = value_company(inputs, deciles, policy, TODAY)
     gr = r.intermediates["growth_route"]
     assert gr["refusal"] is None and gr["value_per_share"] > 0
-    assert set(gr) == {
-        "value_per_share",
-        "runway_return",
-        "path_steps",
-        "belief",
-        "implied_growth",
-        "refusal",
-    }
+    assert set(gr) == CROSS_CHECK_KEYS
     assert r.value == r.intermediates["stable_growth"]  # the headline stays the stable value
     assert r.levels == levels_for(r.value, "Wide", policy)
     assert result_from_json(result_to_json(r)) == r
@@ -748,8 +756,9 @@ def test_mature_stable_cross_check_present_with_a_path(
         im = own.intermediates
         assert gr["value_per_share"] == own.value == pytest.approx(111.62, abs=0.01)
         assert gr["implied_growth"] == im["implied_growth"] == implied
-        assert gr["runway_return"] == im["runway_return"] == r.intermediates["runway_return"]
-        assert (gr["path_steps"], gr["belief"]) == (im["path_steps"], im["belief"])
+        assert gr["runway_return"] == r.intermediates["runway_return"]
+        for key in CROSS_CHECK_KEYS - {"value_per_share", "refusal"}:
+            assert gr[key] == im[key], key
 
 
 def test_mature_stable_cross_check_absent_with_a_refusal(
@@ -966,7 +975,7 @@ def test_reprice_keeps_value_changes_stance(
 def test_reprice_at_the_same_price_changes_nothing(
     mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    for inputs in (mg_inputs, ms_inputs):
+    for inputs in (mg_inputs, ms_inputs, _with_consensus(ms_inputs, mg_inputs)):
         r = value_company(inputs, deciles, policy, TODAY)
         assert r.price is not None and r.price_date is not None
         stored = result_from_json(result_to_json(r))
@@ -980,6 +989,31 @@ def test_reprice_mature_stable(ms_inputs: CompanyInputs, deciles: Deciles, polic
     assert p.value == r.value and p.stance5 == fresh.stance5 == "TRIM"
     assert p.intermediates["multiples"] == fresh.intermediates["multiples"]
     assert p.intermediates["expected_return"] == fresh.intermediates["expected_return"]
+    # a refused cross-check has no implied growth to move
+    assert p.intermediates["growth_route"] == {"refusal": "incomplete NTM consensus"}
+
+
+def test_reprice_moves_the_cross_check_implied_growth(
+    ms_inputs: CompanyInputs, mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    inputs = _with_consensus(ms_inputs, mg_inputs)
+    r = value_company(inputs, deciles, policy, TODAY)
+    stored = result_from_json(result_to_json(r))  # from the intermediates alone
+    gr = stored.intermediates["growth_route"]
+    assert gr["implied_growth"] is None  # at $40, below what any growth in the solve's range gives
+    # at a price equal to the cross-check's value, the implied growth is the belief
+    at_value = reprice(stored, gr["value_per_share"], date(2026, 11, 2), policy)
+    moved = at_value.intermediates["growth_route"]
+    assert moved["implied_growth"] == pytest.approx(gr["belief"]["rate"], abs=1e-6)
+    assert {k: v for k, v in moved.items() if k != "implied_growth"} == {
+        k: v for k, v in gr.items() if k != "implied_growth"
+    }
+    assert at_value.value == r.value == r.intermediates["stable_growth"]
+    # and a reprice reaches what a fresh valuation at that price gives
+    p = reprice(stored, 120.0, date(2026, 11, 2), policy)
+    fresh = value_company(replace(inputs, price=120.0), deciles, policy, TODAY)
+    assert p.intermediates["growth_route"] == fresh.intermediates["growth_route"]
+    assert p.intermediates["growth_route"]["implied_growth"] is not None
 
 
 def test_reprice_updates_the_long_runway_flag(

@@ -10,7 +10,7 @@ terminal return, and the row says so. EPV is shown as the no-growth value. ``epv
 
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
 5.7), or that route's refusal; the value, the levels and the stance stay on the stable-growth
-value.
+value. Its implied growth moves with the price, as the growth route's does.
 """
 
 from typing import Any
@@ -18,7 +18,7 @@ from typing import Any
 from fairband.engine.anchor import moat_class
 from fairband.engine.flags import margin_flag, median_margin
 from fairband.engine.mature_stable import mature_stable_values, normalize_for_margin
-from fairband.engine.route_mature_growth import growth_cross_check
+from fairband.engine.route_mature_growth import cross_check_at_price, growth_cross_check
 from fairband.engine.route_steps import (
     Context,
     Refused,
@@ -101,11 +101,13 @@ def value_mature_stable(c: Context) -> Valued | Refused:
 def stable_at_price(
     im: dict[str, Any], price: float, value: float, policy: Policy
 ) -> dict[str, Any]:
-    """The intermediates that move with the price; growth runs at the terminal growth."""
+    """The intermediates that move with the price; growth runs at the terminal growth. The
+    growth-route cross-check takes its implied growth at the price."""
     g_t = policy.terminal_growth
     return {
         "multiples": multiples_at(price, im["eps"]),
         "expected_return": expected(price, value, im, (g_t, g_t, g_t)),
+        "growth_route": cross_check_at_price(im["growth_route"], price, im["shares"], policy),
     }
 
 

@@ -340,10 +340,11 @@
      as a percentage; so do the fractions those endings miss (the implied-growth maps, the price
      changes, the drawdown, the path steps, the growth rates, the growth share). A dollar amount
      or a count whose key happens to end the same way (value_by_roic, stable_growth, roic's years)
-     does not. A map keyed by runway years or by ROIC values takes its own key's reading. */
+     does not. A map keyed by runway years or by ROIC values takes its own key's reading, and so
+     does a bare value (runway_return's). */
   var PERCENT = /(_growth|_yield|_return|margin|roic|belief)$/;
   var ALSO_PERCENT = /^(implied_|change_|drawdown|path_steps$|growth_rates$|growth_share$)/;
-  var NOT_PERCENT = /^(value|stable_growth|years?$)/;
+  var NOT_PERCENT = /^(value_|stable_growth|years?$)/;
   /* Counts and years read whole. P/E multiples to one decimal with x. A figure a share (EPV, the
      value, EPS, the non-recurring gap, the 52-week prices, the value maps by runway and by ROIC,
      whatever the entry's key) reads to cents; a total (NOPAT, invested capital, net income,
