@@ -16,8 +16,40 @@
     box-sizing: border-box; height: 100%; display: flex; flex-direction: column;
     padding: var(--space-4) var(--space-6);
   }
-  .app-name { margin: 0 0 var(--space-4); }
-  #screen { flex: 1; min-height: 0; }
+  .app-name { margin: 0 0 var(--space-3); }
+  #screen, #groups { flex: 1; min-height: 0; }
+  #groups { overflow: auto; }
+
+  /* The top bar: the tabs on the left, the refresh controls on the right, the status under them. */
+  .app-bar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+  }
+  .app-tabs, .app-actions { display: flex; align-items: center; gap: var(--space-2); }
+  .app-tab { color: var(--ink-muted); }
+  .app-tab[aria-selected="true"] {
+    color: var(--ink); background: var(--surface-selected);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .app-status { margin: var(--space-2) 0 0; color: var(--ink-muted); }
+  .app-status--caution { color: var(--caution); }
+  .app-top { margin-bottom: var(--space-3); }
+  /* A refresh is running: the old figures stay, at ink-faint, until the new ones land. No spinner,
+     no motion. A phase number keeps its colour on its fill. */
+  .is-recomputing .fb-table tbody td,
+  .is-recomputing .fb-table tbody td *:not(.fb-phase__n) { color: var(--ink-faint); }
+
+  .app-groups__bar { margin-bottom: var(--space-2); }
+  .app-by { color: var(--ink-muted); }
+  .app-select {
+    margin-left: var(--space-2); padding: var(--space-1) var(--space-2); color: var(--ink);
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  .app-select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-groups__table { width: auto; min-width: 50%; }
+  .app-groups__note { margin: var(--space-2) 0 0; }
+  .app-groups.is-loading .fb-table tbody td { color: var(--ink-faint); }
   .app-layout { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
   .app-layout--drawer { grid-template-columns: minmax(0, 1fr) var(--detail-rail); }
   .app-main { min-height: 0; overflow: auto; }
@@ -67,11 +99,14 @@
 <body>
 <main class="app-page">
   <h1 class="display app-name">Fairband</h1>
-  <div id="screen"></div>
+  <div id="controls"></div>
+  <div id="screen" role="tabpanel" aria-labelledby="tab-screen"></div>
+  <div id="groups" role="tabpanel" aria-labelledby="tab-groups" hidden></div>
 </main>
 <script src="/static/vendor/react.production.min.js"></script>
 <script src="/static/vendor/react-dom.production.min.js"></script>
 <script src="/static/design-system/components/bundle.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/controls.js"></script>
 </body>
 </html>

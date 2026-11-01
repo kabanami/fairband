@@ -1,6 +1,6 @@
 """The API's JSON shapes: a snapshot and its company as one screen row, an admitted company not yet
-valued as a placeholder row, and the company, snapshot, refresh and progress records as the routes
-send them.
+valued as a placeholder row, the rows grouped for the group view, and the company, snapshot,
+refresh and progress records as the routes send them.
 
 A screen row carries the ``ScreenRow`` keys of the design system's ``index.d.ts`` (``ticker`` to
 ``freshness``), so the page hands rows to ``ScreenTable`` as they come, and, in the same
@@ -9,17 +9,22 @@ timestamps are ISO text. Nothing is reviewed in this cut: ``reviewed`` is ``None
 is 0 and ``mechanical`` is the snapshot's value.
 """
 
+import statistics
+from collections.abc import Sequence
 from datetime import date
 from typing import Any
 
 from fairband.engine.levels import validity_state
 from fairband.engine.types import PHASE_NUMBER
-from fairband.refresh.run import Progress
+from fairband.refresh.run import UNCLASSIFIED, Progress
 from fairband.store.companies import CompanyRow
 from fairband.store.refreshes import RefreshRow
 from fairband.store.snapshots import SnapshotRow
 
 NOT_YET_VALUED = "not yet valued"
+GROUP_BY = ("sector", "phase", "cap")
+NONE = "none"  # the group of the rows with no sector, or no cap band
+_PHASE_NAMES = {number: name for name, number in PHASE_NUMBER.items()}
 
 # The design system's ScreenRow keys.
 SCREEN_ROW_KEYS = (
@@ -169,6 +174,41 @@ def sort_rows(rows: list[dict[str, Any]], key: str, descending: bool) -> list[di
     return sorted(present, key=lambda r: r[key], reverse=descending) + missing
 
 
+def group_rows(rows: Sequence[dict[str, Any]], by: str) -> list[dict[str, Any]]:
+    """The rows grouped by ``by`` (``GROUP_BY``), ordered by group name. A group's name is the
+    sector, the engine's phase name (``unclassified`` without a phase) or the cap band; ``none``
+    for a row without a sector or a cap band. Each group gives its row count, the rows with a
+    value (``valued``), the median of price ÷ value over the valued rows with a positive price,
+    and the share of the valued rows priced below their buy level; ``None`` for the last two
+    when they cover no row."""
+    named: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        named.setdefault(_group_name(row, by), []).append(row)
+    return [_group(name, members) for name, members in sorted(named.items())]
+
+
+def _group_name(row: dict[str, Any], by: str) -> str:
+    if by == "phase":
+        phase = row["phase"]
+        return UNCLASSIFIED if phase is None else _PHASE_NAMES[phase]
+    name = row["sector"] if by == "sector" else row["capBand"]
+    return NONE if name is None else str(name)
+
+
+def _group(name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    valued = [r for r in rows if r["mechanical"] is not None]
+    priced = [r for r in valued if r["price"] is not None and r["price"] > 0]
+    below = [r for r in priced if r["buyLevel"] is not None and r["price"] < r["buyLevel"]]
+    ratios = [r["price"] / r["mechanical"] for r in priced]
+    return {
+        "name": name,
+        "count": len(rows),
+        "valued": len(valued),
+        "medianPriceToValue": statistics.median(ratios) if ratios else None,
+        "shareBelowBuy": len(below) / len(valued) if valued else None,
+    }
+
+
 def company_json(company: CompanyRow) -> dict[str, Any]:
     return {
         "symbol": company.symbol,
@@ -210,9 +250,10 @@ def refresh_json(refresh: RefreshRow) -> dict[str, Any]:
     }
 
 
-def progress_json(progress: Progress) -> dict[str, Any]:
+def progress_json(progress: Progress, kind: str | None) -> dict[str, Any]:
     return {
         "id": progress.refresh_id,
+        "kind": kind,
         "stage": progress.stage,
         "done": progress.done,
         "failed": progress.failed,

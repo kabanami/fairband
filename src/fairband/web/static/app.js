@@ -2,7 +2,8 @@
    the detail drawer of the row the reader opens (spec 6.4), fetched from /api/companies/{symbol}.
    No JSX and no build step: React.createElement against window.Fairband. The server sorts and the
    engine computes; this script asks for an order, remembers the chosen columns and lays out what
-   the engine produced, rounded for display only. */
+   the engine produced, rounded for display only. The top bar and the group view are controls.js,
+   loaded after this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -70,6 +71,10 @@
       });
     }
   };
+
+  /* What controls.js uses: the screen's reload when a refresh ends, the POST helper, the GET
+     helper and the phase numbers. */
+  window.FairbandPage = { reload: load, api: api, getJson: getJson, PHASE_NUMBER: PHASE_NUMBER };
 
   function load() {
     var request = ++latest;

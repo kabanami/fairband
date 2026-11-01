@@ -1,5 +1,5 @@
-"""The FastAPI app: the screen page, the static files, the screen's JSON API and the refresh routes
-(spec 6.10).
+"""The FastAPI app: the screen page, the static files, the screen's JSON API, the group view and the
+refresh routes (spec 6.10).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -12,7 +12,8 @@ The screen's rows are the latest universe's admitted companies, each with its la
 or a placeholder row "not yet valued" before its first; a company the latest universe does not
 admit has no row. The latest universe is the newest that admitted a company
 (``latest_companies``), so a refresh whose screener admitted nobody leaves the screen as it was.
-Before any universe exists, every company with a snapshot has its row.
+Before any universe exists, every company with a snapshot has its row. The group view groups the
+same rows.
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
 command that stopped, and logs how many.
@@ -29,7 +30,7 @@ import logging
 import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, closing
-from datetime import datetime
+from datetime import date, datetime
 from importlib import resources
 from typing import Annotated, Any
 
@@ -46,12 +47,14 @@ from fairband.policy import Policy
 from fairband.refresh.run import KINDS
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import CompanyRow, latest_companies, latest_company
-from fairband.store.refreshes import RefreshRunning, latest_refresh, mark_interrupted
+from fairband.store.refreshes import RefreshRow, RefreshRunning, latest_refresh, mark_interrupted
 from fairband.store.snapshots import latest_snapshot, latest_snapshots
 from fairband.web.rows import (
     COLUMNS,
+    GROUP_BY,
     ROW_KEYS,
     company_json,
+    group_rows,
     placeholder_row,
     progress_json,
     refresh_json,
@@ -117,17 +120,9 @@ def create_app(
     def page() -> FileResponse:
         return FileResponse(str(_STATIC.joinpath("index.html")), media_type="text/html")
 
-    @app.get("/api/screen")
-    def screen(
-        sort: str = "ticker", direction: Annotated[str, Query(alias="dir")] = "asc"
-    ) -> dict[str, Any]:
-        """A row per admitted company of the latest universe (see the module docstring), ordered
-        by ``sort``; rows without a value for it come last."""
-        if sort not in ROW_KEYS:
-            raise HTTPException(400, f"unknown sort column: {sort}")
-        if direction not in ("asc", "desc"):
-            raise HTTPException(400, f"dir must be asc or desc, not {direction}")
-        today = clock().date()
+    def screen_rows(today: date) -> tuple[list[dict[str, Any]], RefreshRow | None]:
+        """A row per admitted company of the latest universe (see the module docstring), in
+        symbol order, its freshness judged on ``today``; and the latest refresh's record."""
         with closing(conn_factory()) as conn:
             admitted = latest_companies(conn)
             listed = bool(admitted) or bool(latest_companies(conn, eligible_only=False))
@@ -144,12 +139,33 @@ def create_app(
             rows = [row(company) for company in admitted]
         else:
             rows = [screen_row(s, None, today, policy.aging_fraction) for s in snapshots.values()]
+        return rows, refresh
+
+    @app.get("/api/screen")
+    def screen(
+        sort: str = "ticker", direction: Annotated[str, Query(alias="dir")] = "asc"
+    ) -> dict[str, Any]:
+        """The screen's rows, ordered by ``sort``; rows without a value for it come last."""
+        if sort not in ROW_KEYS:
+            raise HTTPException(400, f"unknown sort column: {sort}")
+        if direction not in ("asc", "desc"):
+            raise HTTPException(400, f"dir must be asc or desc, not {direction}")
+        today = clock().date()
+        rows, refresh = screen_rows(today)
         return {
             "rows": sort_rows(rows, sort, descending=direction == "desc"),
             "columns": list(COLUMNS),
             "today": today.isoformat(),
             "refresh": None if refresh is None else refresh_json(refresh),
         }
+
+    @app.get("/api/groups")
+    def groups(by: str) -> dict[str, Any]:
+        """The screen's rows grouped by sector, phase or cap band (``group_rows``)."""
+        if by not in GROUP_BY:
+            raise HTTPException(400, f"by must be sector, phase or cap, not {by}")
+        rows, _ = screen_rows(clock().date())
+        return {"by": by, "groups": group_rows(rows, by)}
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:
@@ -184,13 +200,14 @@ def create_app(
 
     @app.get("/api/refresh/current")
     def refresh_current() -> dict[str, Any]:
-        """The running refresh's progress; with none running, the last refresh's record and the
-        error its run raised, if any."""
+        """The running refresh's progress and kind; with none running, the last refresh's record
+        and the error its run raised, if any."""
         progress = None if worker is None else worker.status()
-        if progress is not None:
-            return {"refresh": progress_json(progress)}
         with closing(conn_factory()) as conn:
             last = latest_refresh(conn)
+        if progress is not None:
+            kind = last.kind if last is not None and last.id == progress.refresh_id else None
+            return {"refresh": progress_json(progress, kind)}
         return {
             "refresh": None,
             "last": None if last is None else refresh_json(last),

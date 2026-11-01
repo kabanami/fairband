@@ -498,6 +498,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/vendor/react-dom.production.min.js",
         "/static/design-system/components/bundle.js",
         "/static/app.js",
+        "/static/controls.js",
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url

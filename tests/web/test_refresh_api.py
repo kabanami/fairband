@@ -173,6 +173,7 @@ def test_api_start_status_cancel(client_with_worker: TestClient, gate: Gate, db_
     assert current(client) == {
         "refresh": {
             "id": 1,
+            "kind": "scoped",
             "stage": "fetch",
             "done": 0,
             "failed": 0,
