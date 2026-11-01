@@ -5,7 +5,9 @@ runs, ``create_refresh`` raises ``RefreshRunning``). A full refresh first runs:
 
 - ``universe``: ``build_universe`` records the screener's universe, called afresh or reused within
   ``reuse_hours``, under the refresh; the admitted symbols are the refresh's symbols. A
-  ``VendorError`` or an empty screener (``ValueError``) ends the run ``failed`` and is raised again.
+  ``VendorError`` or an empty screener (``ValueError``) ends the run ``failed`` and is raised again;
+  a universe that admits no company ends it ``failed``, "universe admitted no company", before
+  any fetch.
 
 A scoped refresh takes the symbols it is given. Both then list each symbol ``pending`` and run:
 
@@ -15,7 +17,9 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   then ``fetched``, or ``failed`` with the fetch's error and a refusal snapshot of that reason
   ("data fetch failed: <endpoints>") that carries the price the store holds.
 - ``deciles`` (full only): ``deciles_for_universe`` over every admitted symbol, from the statements
-  the store holds, saved under the refresh (spec 6.6).
+  the store holds, saved under the refresh (spec 6.6). When they rank no company on growth, the run
+  ends ``failed``, "deciles rank no company", and saves none: empty deciles would put every later
+  company in decile 1, and the last good universe's stay the ones a scoped refresh uses.
 - ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs``,
   ``value_company`` with the latest stored deciles (a full refresh's own), ``insert_snapshot``; the
   symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
@@ -31,7 +35,8 @@ symbols in flight finish and the run ends ``cancelled``, with no further stage: 
 keeps its stored responses, which the next run reuses within ``reuse_hours``, and a valued one its
 snapshot. So a full refresh cancelled while it fetches saves no deciles and values nothing, and the
 next one, a new record over a universe built again, fetches only the companies not fetched within
-``reuse_hours``: it continues. An HTTP 429 (``FetchOutcome.rate_limited``) ends the fetching the
+``reuse_hours``: it continues. A cancel that lands while the deciles are computed still saves them
+(they rank the whole universe); the value stage then values nothing. An HTTP 429 (``FetchOutcome.rate_limited``) ends the fetching the
 same way; the symbol it hit gets the refusal "data fetch incomplete: rate limited" and is
 ``failed`` (spec 6.2: a failed fetch gets a row), the symbols never reached stay ``pending`` with
 no snapshot, the symbols fetched are still valued (on the stored deciles: a full refresh saves
@@ -99,6 +104,8 @@ type _Finish = tuple[Finished, str | None, dict[str, Any] | None]  # status, mes
 
 KINDS: tuple[Kind, ...] = ("full", "price", "scoped")
 UNCLASSIFIED = "unclassified"  # the calibration's name for a company without a phase
+NO_COMPANY_ADMITTED = "universe admitted no company"
+NO_COMPANY_RANKED = "deciles rank no company"
 _PROVIDER_NAMES = {"fmp": "FMP", "gf": "GuruFocus"}
 _RATE_LIMITED = "data fetch incomplete: rate limited"
 
@@ -212,12 +219,16 @@ class Refresh:
         universe = build_universe(conn, fmp, self._policy, refresh_id, self._clock(), self._secrets)
         symbols = universe.admitted
         self._report(refresh_id, "universe", len(symbols), 0)
+        if not symbols:
+            return "failed", NO_COMPANY_ADMITTED, None
         fetched = self._fetch_pending(conn, fmp, refresh_id, symbols)
         stopped = self._stopped(conn, refresh_id, fetched)
         if stopped is not None:
             return stopped
         self._stage(conn, refresh_id, "deciles", len(symbols))
         deciles = deciles_for_universe(conn, symbols, refresh_id)
+        if deciles.n_growth == 0:
+            return "failed", NO_COMPANY_RANKED, None
         save_deciles(conn, refresh_id, deciles, self._clock())
         self._report(refresh_id, "deciles", len(symbols), 0)
         valued = self._value_stage(conn, refresh_id, fetched.symbols)

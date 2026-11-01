@@ -32,6 +32,7 @@ from importlib import resources
 from typing import Annotated, Any
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -103,6 +104,12 @@ def create_app(
 
     # Added last, so it runs first: an untrusted host is refused before anything else.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
+        """A request the routes' types refuse is a 400 like every other bad request, its detail
+        one line: ``<field>: <what is wrong>`` for each error."""
+        return JSONResponse({"detail": _validation_detail(exc)}, status_code=400)
 
     @app.get("/")
     def page() -> FileResponse:
@@ -195,3 +202,16 @@ def create_app(
         return {"cancelled": True}
 
     return app
+
+
+def _validation_detail(exc: RequestValidationError) -> str:
+    """Each error as ``<where>: <message>``, joined by ``; ``. ``<where>`` is the field's path
+    without its ``body`` or ``query`` root (``symbols.0``), or the root itself when the error is
+    about the whole of it: a missing body, or one that is not JSON (whose path ends in the
+    parser's position, not a field)."""
+    parts = []
+    for error in exc.errors():
+        loc = error["loc"]
+        field = "" if error["type"] == "json_invalid" else ".".join(str(p) for p in loc[1:])
+        parts.append(f"{field or loc[0]}: {error['msg']}")
+    return "; ".join(parts)

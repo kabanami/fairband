@@ -34,6 +34,7 @@ from fairband.refresh.worker import RefreshWorker
 from fairband.store.db import connect, migrate
 from fairband.store.refreshes import RefreshRunning, latest_refresh, mark_interrupted
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
+from fairband.vendors.http import VendorError
 from fairband.web.app import create_app
 
 logger = logging.getLogger("fairband")
@@ -123,8 +124,11 @@ def _serve(args: argparse.Namespace) -> int:
 
 def _refresh(args: argparse.Namespace) -> int:
     """A refresh in the foreground with its progress lines, then, for a scoped refresh, one line
-    per symbol from its latest snapshot, and for a full one its calibration. Exits 0 when the
-    refresh is done, 1 when not, 2 when it cannot start."""
+    per symbol from its latest snapshot, and for a full one its calibration. A ``VendorError`` or
+    ``ValueError`` from the run (the screener failed or gave no rows) is one line, never a
+    traceback: ``refresh <id>: failed: <message>``, or ``refresh failed: <message>`` when the run
+    refused before its record existed. Exits 0 when the refresh is done, 1 when not, 2 when it
+    cannot start."""
     if args.symbols == []:
         return _usage("no symbols given: name them as AAPL,MSFT")
     if args.kind == "price":
@@ -144,22 +148,27 @@ def _refresh(args: argparse.Namespace) -> int:
         migrate(conn)
     cancel = threading.Event()
     fmp, gf, secrets = build_clients(keys, policy)
+    started: list[int] = []
+    refresh = Refresh(
+        lambda: connect(settings.db_path),
+        fmp,
+        gf,
+        policy,
+        tax,
+        utcnow,
+        cancel,
+        _print_progress,
+        secrets,
+    )
     try:
-        refresh = Refresh(
-            lambda: connect(settings.db_path),
-            fmp,
-            gf,
-            policy,
-            tax,
-            utcnow,
-            cancel,
-            _print_progress,
-            secrets,
-        )
         with _ctrl_c_cancels(cancel):
-            refresh_id = refresh.run(args.kind, args.symbols)
+            refresh_id = refresh.run(args.kind, args.symbols, started.append)
     except RefreshRunning as exc:
         print(f"{exc}; try again when it has finished. {_WAY_OUT}", file=sys.stderr)
+        return 1
+    except (VendorError, ValueError) as exc:
+        reason = refresh.describe(exc)  # the record's message, when the record exists
+        print(f"refresh {started[0]}: failed: {reason}" if started else f"refresh failed: {reason}")
         return 1
     finally:
         fmp.close()

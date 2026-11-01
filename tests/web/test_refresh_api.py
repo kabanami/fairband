@@ -257,6 +257,27 @@ def test_api_refresh_bad_request_400(
         assert latest_refresh(conn) is None
 
 
+@pytest.mark.parametrize(
+    ("content", "detail"),
+    [
+        ('{"symbols": ["ACME"]}', "kind: Field required"),
+        ('{"kind": 3}', "kind: Input should be a valid string"),
+        ('{"kind": "scoped", "symbols": "ACME"}', "symbols: Input should be a valid list"),
+        ('{"kind": "scoped", "symbols": [3]}', "symbols.0: Input should be a valid string"),
+        ('{"kind": ', "body: JSON decode error"),
+        ("", "body: Field required"),
+    ],
+)
+def test_api_invalid_body_400(
+    client_with_worker: TestClient, db_path: Path, content: str, detail: str
+) -> None:
+    headers = {**POST, "Content-Type": "application/json"}
+    response = client_with_worker.post("/api/refresh", content=content, headers=headers)
+    assert (response.status_code, response.json()) == (400, {"detail": detail})
+    with closing(connect(db_path)) as conn:
+        assert latest_refresh(conn) is None
+
+
 def test_api_reports_the_last_error(client_with_worker: TestClient) -> None:
     """The mock screener answers no rows: the full refresh fails in its universe stage."""
     client = client_with_worker

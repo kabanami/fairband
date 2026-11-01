@@ -4,19 +4,21 @@ the stops and the rerun that continues; the server's worker and the marking of a
 left running.
 """
 
+import json
 import logging
 import threading
 import time
 from collections import Counter
 from collections.abc import Callable
 from contextlib import closing
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from fixture_universe import ADMITTED, serve_universe
+from fixture_universe import ADMITTED, SCREENER, serve_universe
 from refresh_env import Env, use_cli
 from vendor_double import FMP_KEY
 
@@ -29,6 +31,7 @@ from fairband.refresh.deciles import deciles_for_universe
 from fairband.refresh.run import Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import latest_companies
+from fairband.store.policy import record_policy
 from fairband.store.refreshes import (
     RefreshRunning,
     create_refresh,
@@ -267,6 +270,52 @@ def test_full_refresh_rate_limited_saves_no_deciles(env_fixture_universe: Env) -
     ]
 
 
+def test_full_refresh_admitting_no_company_fails(env_fixture_universe: Env) -> None:
+    """A screener that admits no company ends the refresh failed before any fetch, with no
+    deciles saved: the last good universe's deciles stay the ones a scoped refresh uses."""
+    env = env_fixture_universe
+    first = env.refresh().run("full")
+    env.clock.now += timedelta(hours=25)  # past the screener's reuse
+    env.router.bodies["screener"] = json.dumps([SCREENER[1], SCREENER[3]]).encode()  # FIRB, TINY
+    env.router.symbol_calls.clear()
+    second = env.refresh().run("full")
+    row = env.last()
+    assert (row.id, row.status, row.stage, row.message, row.calibration) == (
+        second,
+        "failed",
+        "universe",
+        "universe admitted no company",
+        None,
+    )
+    assert set(env.router.symbol_calls) == {""} and env.items(second) == []
+    saved = deciles(env)
+    assert saved is not None and saved.refresh_id == first
+
+    env.run(["ACME"])
+    acme = env.snapshot("ACME")
+    assert (acme.phase, acme.deciles_refresh_id) == ("Mature Growth", first)
+    assert acme.value is not None
+
+
+def test_full_refresh_whose_deciles_rank_no_company_fails(env_fixture_universe: Env) -> None:
+    """Every admitted company fails its income-statement fetch, so no series ranks: the refresh
+    fails in its deciles stage and saves none."""
+    env = env_fixture_universe
+    env.router.fail.add("income-annual")
+    refresh_id = env.refresh().run("full")
+    row = env.last()
+    assert (row.status, row.stage, row.message, row.calibration) == (
+        "failed",
+        "deciles",
+        "deciles rank no company",
+        None,
+    )
+    assert deciles(env) is None
+    reason = "data fetch failed: income-annual"
+    assert env.items(refresh_id) == [(symbol, "failed", reason) for symbol in ADMITTED]
+    assert sorted(env.snapshots()) == [(symbol, refresh_id, reason) for symbol in ADMITTED]
+
+
 def test_deciles_leave_out_symbols_without_statements(env_fixture_universe: Env) -> None:
     env = env_fixture_universe
     refresh_id = env.refresh().run("full")
@@ -418,3 +467,46 @@ def test_migrate_marks_an_interrupted_refresh(
     assert cli.main(["refresh", "ACME"]) == 0
     assert cli.main(["migrate"]) == 0
     assert capsys.readouterr().out.splitlines()[-1] == "No migrations to apply."
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "message"),
+    [(403, None, "VendorError: "), (200, b"[]", "ValueError: screener returned no rows")],
+)
+def test_cli_full_refresh_failure_prints_no_traceback(
+    env_fixture_universe: Env,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    status: int,
+    body: bytes | None,
+    message: str,
+) -> None:
+    env = env_fixture_universe
+    use_cli(env, monkeypatch, tmp_path)
+    if body is None:
+        env.router.fail.add("screener")
+        env.router.fail_status = status
+    else:
+        env.router.bodies["screener"] = body
+    assert cli.main(["refresh"]) == 1
+    out, err = capsys.readouterr()
+    last = out.splitlines()[-1]
+    assert last == f"refresh 1: failed: {env.last().message}"
+    assert last.startswith(f"refresh 1: failed: {message}")
+    assert "Traceback" not in out + err and FMP_KEY not in out + err
+
+
+def test_cli_refresh_that_cannot_start_prints_no_traceback(
+    env: Env, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The policy version is on record with another hash, so the run refuses before its record
+    exists: there is no refresh id to name."""
+    use_cli(env, monkeypatch, tmp_path)
+    with closing(env.connect()) as conn:
+        record_policy(conn, replace(env.policy, hash="0" * 64), env.clock())
+    assert cli.main(["refresh"]) == 1
+    out, err = capsys.readouterr()
+    refused = f"policy {env.policy.version} is recorded with hash {'0' * 64}, not {env.policy.hash}"
+    assert out.splitlines() == [f"refresh failed: ValueError: {refused}"]
+    assert "Traceback" not in out + err and env.last().id == env.universe_id
