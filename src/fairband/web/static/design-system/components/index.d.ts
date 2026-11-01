@@ -282,6 +282,33 @@ export interface ScreenRow {
   enteredAt?: string;
   freshness?: Freshness;
   selected?: boolean;
+  /**
+   * fairband: the extra columns (spec 6.3). Fractions (`impliedGrowth`, `expectedReturn`, the
+   * changes, `drawdown`) render as percentages; dates are ISO. `null` renders an em dash.
+   */
+  sector?: string | null;
+  capBand?: string | null;
+  marketCap?: number | null;
+  moat?: string | null;
+  impliedGrowth?: number | null;
+  expectedReturn?: number | null;
+  epv?: number | null;
+  peReported?: number | null;
+  peClean?: number | null;
+  peForward?: number | null;
+  high52w?: number | null;
+  low52w?: number | null;
+  change1y?: number | null;
+  change3y?: number | null;
+  change5y?: number | null;
+  drawdown?: number | null;
+  /** The flags' short words, joined by ` · `. */
+  flags?: string[];
+  /** The refusal reason; `null` when the engine gave a value, and the cell is then empty. */
+  refusal?: string | null;
+  priceDate?: string | null;
+  dataDate?: string;
+  validUntil?: string;
 }
 
 export interface ScreenTableProps {
@@ -302,6 +329,11 @@ export interface ScreenTableProps {
    * it the headers are inert. Each header cell carries its key in `data-key`.
    */
   onSort?: (column: string) => void;
+  /**
+   * fairband: called with the row when it is clicked, or focused and given Enter or Space. Given
+   * it, each row takes `tabindex="0"` and `role="button"`; without it the rows are inert.
+   */
+  onOpen?: (row: ScreenRow) => void;
   footnote?: string;
 }
 
@@ -402,3 +434,5 @@ export declare const DEFAULT_COLUMNS: string[];
 export declare function formatDate(iso: string): string;
 /** Number in, `$121.30` out. */
 export declare function formatMoney(value: number): string;
+/** fairband: a fraction in, `4.4%` out: one decimal, U+2212 for a minus, an em dash for null. */
+export declare function formatPercent(value: number | null): string;

@@ -8,12 +8,60 @@
 <link rel="stylesheet" href="/static/design-system/tokens/tokens.css">
 <link rel="stylesheet" href="/static/design-system/components/bundle.css">
 <style>
+  html, body { height: 100%; }
   body { margin: 0; background: var(--surface); color: var(--ink); font-family: var(--font-sans); }
-  .app-page { padding: var(--space-4) var(--space-6); }
+  /* The table and the drawer each scroll in their own column, so the table's header stays put
+     and the drawer stays beside whichever row opened it. */
+  .app-page {
+    box-sizing: border-box; height: 100%; display: flex; flex-direction: column;
+    padding: var(--space-4) var(--space-6);
+  }
   .app-name { margin: 0 0 var(--space-4); }
+  #screen { flex: 1; min-height: 0; }
+  .app-layout { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .app-layout--drawer { grid-template-columns: minmax(0, 1fr) var(--detail-rail); }
+  .app-main { min-height: 0; overflow: auto; }
   .app-note { margin: 0; color: var(--ink-muted); }
-  .fb-table thead th[tabindex] { cursor: pointer; }
-  .fb-table thead th[tabindex]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .fb-table thead th[tabindex], .fb-table tbody tr[tabindex] { cursor: pointer; }
+  .fb-table thead th[tabindex]:focus-visible, .fb-table tbody tr[tabindex]:focus-visible {
+    outline: 2px solid var(--focus-ring); outline-offset: -2px;
+  }
+
+  .app-drawer {
+    min-height: 0; overflow-y: auto; background: var(--surface-raised);
+    border: 1px solid var(--hairline); border-radius: var(--radius-lg);
+  }
+  .app-drawer__bar {
+    position: sticky; top: 0; z-index: 4; display: flex; justify-content: flex-end;
+    padding: var(--space-1) var(--space-2); background: var(--surface-raised);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .app-drawer__body { padding: var(--space-3) var(--space-4) var(--space-6); }
+  /* Loading: the previous company, faded, until the new one lands. No spinner, no motion. */
+  .app-drawer__body.is-loading { opacity: 0.5; }
+  .app-drawer__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .app-drawer__ticker { margin: 0; }
+  .app-drawer__name { margin: 0; flex-basis: 100%; color: var(--ink-muted); }
+  .app-section { margin: var(--space-6) 0 0; }
+  .app-section > h3 { margin: 0 0 var(--space-2); }
+  .app-pairs {
+    display: grid; grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-1) var(--space-3); margin: 0; align-items: baseline;
+  }
+  .app-pairs dt { color: var(--ink-muted); }
+  .app-pairs dd { margin: 0; overflow-wrap: anywhere; }
+  .app-group + .app-group { margin-top: var(--space-3); }
+  .app-group__head { margin: 0 0 var(--space-1); color: var(--ink-muted); }
+  .app-list { list-style: none; margin: 0; padding: 0; }
+  .app-list li + li { margin-top: var(--space-2); }
+  .app-list p { margin: 0; }
+  .app-inputs th, .app-inputs td { padding: var(--space-2) var(--space-1); }
+  .app-inputs td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
+  .app-inputs td.fb-num { white-space: nowrap; }
+  .app-line { display: block; }
+  .app-nowrap { white-space: nowrap; }
+  .app-muted { color: var(--ink-faint); }
+  .app-refusal { margin: 0; color: var(--caution); }
 </style>
 </head>
 <body>

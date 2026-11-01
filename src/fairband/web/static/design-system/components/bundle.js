@@ -670,6 +670,26 @@
 
   /* ----------------------------------------------------------- ScreenTable */
 
+  // fairband: the formats of the extra columns (spec 6.3). A fraction reads as a percentage to
+  // one decimal, a multiple to one decimal with x, a market cap in billions; a minus is U+2212.
+  function signed(s) { return /^-0?\.?0*$/.test(s) ? s.slice(1) : s.replace(/^-/, '−'); }
+  function percent(v) {
+    return v == null || isNaN(Number(v)) ? '—' : signed((Number(v) * 100).toFixed(1)) + '%';
+  }
+  function multiple(v) {
+    return v == null || isNaN(Number(v)) ? '—' : signed(Number(v).toFixed(1)) + 'x';
+  }
+  function billions(v) {
+    if (v == null || isNaN(Number(v))) return '—';
+    return '$' + (Number(v) / 1e9).toLocaleString('en-US',
+      { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' bn';
+  }
+  function figureCell(text) { return h('td', { className: 'fb-num figure' }, text); }
+  function wordCell(text) { return h('td', { className: 'body' }, text == null ? '—' : text); }
+  function dateCell(iso) {
+    return h('td', { className: 'fb-num figure' }, h(DateText, { value: iso }));
+  }
+
   var COLUMNS = [
     { key: 'ticker', head: 'Ticker', locked: true,
       cell: function (r) { return h('td', { className: 'fb-screen__ticker ticker' }, r.ticker); } },
@@ -723,7 +743,47 @@
           f === 'current' ? null : h('span', {
             className: 'fb-mark fb-mark--' + f, title: FRESHNESS[f].word
           }, FRESHNESS[f].mark));
-      } }
+      } },
+    // fairband: the extra columns of spec 6.3, each a plain figure, word or date from the row.
+    { key: 'sector', head: 'Sector', cell: function (r) { return wordCell(r.sector); } },
+    { key: 'capBand', head: 'Cap', cell: function (r) { return wordCell(r.capBand); } },
+    { key: 'marketCap', head: 'Market cap', num: true,
+      cell: function (r) { return figureCell(billions(r.marketCap)); } },
+    { key: 'moat', head: 'Moat', cell: function (r) { return wordCell(r.moat); } },
+    { key: 'impliedGrowth', head: 'Implied growth', num: true,
+      cell: function (r) { return figureCell(percent(r.impliedGrowth)); } },
+    { key: 'expectedReturn', head: 'Expected return', num: true,
+      cell: function (r) { return figureCell(percent(r.expectedReturn)); } },
+    { key: 'epv', head: 'EPV', num: true,
+      cell: function (r) { return figureCell(money(r.epv)); } },
+    { key: 'peReported', head: 'P/E', num: true,
+      cell: function (r) { return figureCell(multiple(r.peReported)); } },
+    { key: 'peClean', head: 'Clean P/E', num: true,
+      cell: function (r) { return figureCell(multiple(r.peClean)); } },
+    { key: 'peForward', head: 'Forward P/E', num: true,
+      cell: function (r) { return figureCell(multiple(r.peForward)); } },
+    { key: 'high52w', head: '52w high', num: true,
+      cell: function (r) { return figureCell(money(r.high52w)); } },
+    { key: 'low52w', head: '52w low', num: true,
+      cell: function (r) { return figureCell(money(r.low52w)); } },
+    { key: 'change1y', head: '1y', num: true,
+      cell: function (r) { return figureCell(percent(r.change1y)); } },
+    { key: 'change3y', head: '3y', num: true,
+      cell: function (r) { return figureCell(percent(r.change3y)); } },
+    { key: 'change5y', head: '5y', num: true,
+      cell: function (r) { return figureCell(percent(r.change5y)); } },
+    { key: 'drawdown', head: 'Drawdown', num: true,
+      cell: function (r) { return figureCell(percent(r.drawdown)); } },
+    { key: 'flags', head: 'Flags',
+      cell: function (r) { return h('td', { className: 'body' }, (r.flags || []).join(' · ')); } },
+    { key: 'refusal', head: 'Refusal',
+      cell: function (r) { return h('td', { className: 'caption' }, r.refusal || ''); } },
+    { key: 'priceDate', head: 'Price date', num: true,
+      cell: function (r) { return dateCell(r.priceDate); } },
+    { key: 'dataDate', head: 'Data date', num: true,
+      cell: function (r) { return dateCell(r.dataDate); } },
+    { key: 'validUntil', head: 'Valid until', num: true,
+      cell: function (r) { return dateCell(r.validUntil); } }
   ];
 
   var DEFAULT_COLUMNS = ['ticker', 'name', 'phase', 'band', 'mechanical',
@@ -801,7 +861,17 @@
           return h('tr', {
             key: r.ticker,
             className: cx(r.selected && 'is-selected'),
-            'aria-selected': r.selected ? 'true' : null
+            'aria-selected': r.selected ? 'true' : null,
+            // fairband: given onOpen, a row takes focus like a button and opens on a click,
+            // Enter or Space. Its only interactions stay hover, selection and opening.
+            tabIndex: p.onOpen ? 0 : null,
+            role: p.onOpen ? 'button' : null,
+            onClick: p.onOpen ? function () { p.onOpen(r); } : null,
+            onKeyDown: p.onOpen ? function (e) {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              p.onOpen(r);
+            } : null
           }, shown.map(function (c) {
             return h(React.Fragment, { key: c.key }, c.cell(r));
           }));
@@ -1268,6 +1338,8 @@
     PHASES: PHASES,
     DEFAULT_COLUMNS: DEFAULT_COLUMNS,
     formatDate: readable,
-    formatMoney: money
+    formatMoney: money,
+    // fairband: the extra columns' percentage, for the detail drawer.
+    formatPercent: percent
   };
 })(typeof window !== 'undefined' ? window : this);

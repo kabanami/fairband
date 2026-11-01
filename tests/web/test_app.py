@@ -32,6 +32,7 @@ from fairband.store.db import applied_versions, connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh, set_stage
 from fairband.store.snapshots import insert_snapshot
 from fairband.web.app import create_app
+from fairband.web.rows import EXTRA_KEYS
 
 TODAY = date(2026, 10, 31)  # the day the engine's test companies are valued
 STARTED = datetime(2026, 10, 31, 22, 0, tzinfo=UTC)
@@ -297,6 +298,11 @@ def test_screen_envelope_columns_and_today(client: TestClient) -> None:
     }
 
 
+def test_screen_envelope_has_today(client: TestClient) -> None:
+    """The drawer judges the validity window on the engine's day, never the browser's."""
+    assert _screen(client)["today"] == NOW.date().isoformat() == "2026-11-01"
+
+
 @pytest.mark.parametrize(
     ("now", "state"),
     [
@@ -398,11 +404,56 @@ def _component_file(name: str) -> str:
     return components.joinpath(name).read_text(encoding="utf-8")
 
 
+# The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
+EXTRA_COLUMN_HEADS = {
+    "sector": "Sector",
+    "capBand": "Cap",
+    "marketCap": "Market cap",
+    "moat": "Moat",
+    "impliedGrowth": "Implied growth",
+    "expectedReturn": "Expected return",
+    "epv": "EPV",
+    "peReported": "P/E",
+    "peClean": "Clean P/E",
+    "peForward": "Forward P/E",
+    "high52w": "52w high",
+    "low52w": "52w low",
+    "change1y": "1y",
+    "change3y": "3y",
+    "change5y": "5y",
+    "drawdown": "Drawdown",
+    "flags": "Flags",
+    "refusal": "Refusal",
+    "priceDate": "Price date",
+    "dataDate": "Data date",
+    "validUntil": "Valid until",
+}
+
+
+def test_bundle_has_extra_columns() -> None:
+    bundle = _component_file("bundle.js")
+    assert set(EXTRA_COLUMN_HEADS) <= set(EXTRA_KEYS)  # the API sends each one
+    for key, head in EXTRA_COLUMN_HEADS.items():
+        assert f"{{ key: '{key}', head: '{head}'," in bundle, key
+    default = re.search(r"var DEFAULT_COLUMNS = \[(.*?)\];", bundle, re.DOTALL)
+    assert default is not None
+    assert re.findall(r"'(\w+)'", default.group(1)) == [
+        "ticker",
+        "name",
+        "phase",
+        "band",
+        "mechanical",
+        "reviewed",
+        "price",
+        "stance",
+    ]
+
+
 def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 4
+    assert bundle.count("// fairband:") >= 5
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
     assert "Number(p.phase) || 1" not in bundle
     assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
@@ -414,6 +465,10 @@ def test_bundle_patches_marked() -> None:
     assert "'data-key': c.key" in bundle
     assert "tabIndex: p.onSort ? 0 : null" in bundle
     assert "p.onSort(c.key)" in bundle
+    # Given onOpen, a row is focusable and opens on a click, Enter or Space.
+    assert "tabIndex: p.onOpen ? 0 : null" in bundle
+    assert "role: p.onOpen ? 'button' : null" in bundle
+    assert "p.onOpen(r)" in bundle
 
 
 def test_index_d_ts_declares_onSort() -> None:
@@ -421,6 +476,13 @@ def test_index_d_ts_declares_onSort() -> None:
     props = re.search(r"export interface ScreenTableProps \{\n(.*?)\n\}", declarations, re.DOTALL)
     assert props is not None
     assert "onSort?: (column: string) => void;" in props.group(1)
+
+
+def test_index_d_ts_declares_onOpen() -> None:
+    declarations = _component_file("index.d.ts")
+    props = re.search(r"export interface ScreenTableProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None
+    assert "onOpen?: (row: ScreenRow) => void;" in props.group(1)
 
 
 def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, policy: Policy) -> None:
