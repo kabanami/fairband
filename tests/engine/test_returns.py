@@ -24,7 +24,7 @@ def test_growth_is_the_geometric_mean_of_the_rates() -> None:
 
 
 def test_growth_term_with_and_without_the_fade() -> None:
-    # calibration spec 7: ((1.25)(1.26)(1.2186))^(1/3) - 1 is 24.27%; the spec's "24.7%" misreads it
+    # calibration spec 7: ((1.25)(1.26)(1.2186))^(1/3) - 1 is 24.27%, the spec's 24.3%
     faded = expected_return(100.0, 120.0, 0.0, 0.0, (0.25, 0.26, 0.2186))
     assert faded.growth == pytest.approx(0.2427, abs=5e-4)
     plain = expected_return(100.0, 120.0, 0.0, 0.0, (0.04, 0.05, 0.053))

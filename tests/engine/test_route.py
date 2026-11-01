@@ -552,13 +552,47 @@ def test_growth_above_return_flag(
     r = value_company(steep, deciles, policy, TODAY)
     above = next(f for f in r.flags if f.code == "growth-above-return")
     assert above.word == "Growth above return"
+    # the first floored year is year 1, whose reinvestment pays for year 2's 50%
     assert above.sentence == (
-        "Year 1 growth of 50.0% exceeds the 43.1% return on new capital; the payout is floored "
-        "at zero and the growth above the return is treated as efficiency growth, which costs "
-        "nothing."
+        "Year 2 growth of 50.0% exceeds the 43.1% return on new capital; year 1's payout is "
+        "floored at zero and the growth above the return is treated as efficiency growth, which "
+        "costs nothing."
     )
     assert r.value is not None and r.value > 0
     assert "growth-above-return" not in codes(value_company(mg_inputs, deciles, policy, TODAY))
+
+
+def test_value_spread_leaves_out_the_ten_year_value(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # invested capital $10 bn at each year end to 2020, then up $2 bn a year to $20 bn in 2025;
+    # NOPAT $3 bn a year to 2020, then up $0.09 bn a year: a 5% marginal return, floored at r, and
+    # a 25.1% ten-year aggregate, so the ten-year value lies above the first three
+    capital = [10e9] * 6 + [12e9, 14e9, 16e9, 18e9, 20e9]  # the balance sheets of 2015 to 2025
+    nopat = [3e9] * 6 + [3e9 + 0.09e9 * k for k in range(1, 6)]
+    years = tuple(
+        _capital_year(2015 + k, n, ic) for k, (n, ic) in enumerate(zip(nopat, capital, strict=True))
+    )
+    inputs = replace(mg_inputs, capital_years=years)
+    im = value_company(inputs, deciles, policy, TODAY).intermediates
+    assert im["runway_return"]["used"] == "floor" and im["roic"]["aggregate"] == pytest.approx(
+        0.2508
+    )
+    by_roic = im["value_by_roic"]
+    first_three = [by_roic["runway"], by_roic["0.15"], by_roic["0.09"]]
+    low, high = min(first_three), max(first_three)
+    assert by_roic["ten-year"] > high
+    # at a return of r the value does not move with the runway: only the ROIC spread can fire
+    assert max(im["value_by_runway"].values()) == pytest.approx(min(im["value_by_runway"].values()))
+    # the first three span 51.8% and the ten-year value would make it 78.9%: at a 60% threshold
+    # the flag does not fire; at 40% the first three fire it alone, on their own range
+    assert (high - low) / low < 0.60 < (by_roic["ten-year"] - low) / low
+    wide = replace(policy, value_spread_flag=0.60)
+    assert "value-spread" not in codes(value_company(inputs, deciles, wide, TODAY))
+    narrow = replace(policy, value_spread_flag=0.40)
+    r = value_company(inputs, deciles, narrow, TODAY)
+    [spread] = [f for f in r.flags if f.code == "value-spread"]
+    assert spread.sentence.startswith(f"The value ranges from {low:,.2f} to {high:,.2f} ")
 
 
 def test_implied_growth_round_trip_with_fade(
@@ -701,6 +735,25 @@ def test_mature_stable_never_zeroes_the_charge(
     assert im["moat"] == "None" and im["terminal_roic"] == policy.required_return
     assert r.value == pytest.approx(im["epv"])
     assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
+
+
+def test_mature_stable_raises_no_return_floored_flag(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # operating income at a tenth: the three-year return of 1.8% floors at r; the stable route
+    # has no runway charge, so no flag says so and the runway-return input's note keeps the floor
+    poor = tuple(
+        replace(y, operating_income=(y.operating_income or 0) / 10) for y in ms_inputs.capital_years
+    )
+    for moat_score in (None, ms_inputs.moat_score):
+        inputs = replace(ms_inputs, capital_years=poor, moat_score=moat_score)
+        r = value_company(inputs, deciles, policy, TODAY)
+        im = r.intermediates
+        assert im["runway_return"]["used"] == "floor" and "return-floored" not in codes(r)
+        [note] = [i.note for i in r.inputs if i.name == "runway_return"]
+        assert note == "floored at the required return; the three-year was 1.8%"
+        if moat_score is None:  # a None moat values at r: the stable-growth value is EPV
+            assert im["moat"] == "None" and r.value == pytest.approx(im["epv"])
 
 
 def test_mature_stable_without_the_nri_gap(

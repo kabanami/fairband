@@ -11,8 +11,9 @@ earnings_t × max(0, 1 − g_{t+1} ÷ ROIC), at the runway ROIC for years 1 to N
 the terminal growth and the terminal ROIC. The floor at zero treats the growth above the return
 as efficiency growth, which costs nothing. The terminal value is earnings_N times the terminal
 multiple at the terminal ROIC, discounted N years. An infinite ROIC means no charge. ``charge_off``,
-when invested capital is zero or below, drops the charge in years 1 to N−1 only: year N and the
-terminal value still charge at the terminal ROIC.
+set when the marginal return is not usable and the three-year capital sum is at or below zero
+(spec 5.1 rule 4), drops the charge in years 1 to N−1 only: year N and the terminal value still
+charge at the terminal ROIC.
 """
 
 import math
@@ -111,11 +112,22 @@ def value_at_belief(path: GrowthPath, charge: Charge) -> float:
     return value + final * terminal_multiple(charge.terminal_roic, r, charge.g_t) / (1 + r) ** n
 
 
+def _floored(path: GrowthPath, charge: Charge) -> Iterator[_Year]:
+    """The years whose payout the floor raised to zero: growth above the return."""
+    return (y for y in _years(path, charge) if not y.charge_off and 1 - y.g_next / y.roic < 0)
+
+
 def floored_years(path: GrowthPath, charge: Charge) -> tuple[int, ...]:
     """The years, in order, whose payout the floor raised to zero: growth above the return."""
-    return tuple(
-        y.t for y in _years(path, charge) if not y.charge_off and 1 - y.g_next / y.roic < 0
-    )
+    return tuple(y.t for y in _floored(path, charge))
+
+
+def first_floored_year(path: GrowthPath, charge: Charge) -> tuple[int, float, float] | None:
+    """The first year whose payout the floor raised to zero as ``(t, g_next, roic)``: the year,
+    the growth its reinvestment pays for (year t + 1's) and the return it pays at; ``None`` when
+    no year floors."""
+    first = next(_floored(path, charge), None)
+    return None if first is None else (first.t, first.g_next, first.roic)
 
 
 def implied_growth(

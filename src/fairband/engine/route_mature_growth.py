@@ -44,7 +44,7 @@ from fairband.engine.flags import long_runway_flag, value_spread_flag
 from fairband.engine.mature_growth import (
     Charge,
     GrowthPath,
-    floored_years,
+    first_floored_year,
     growth_rates,
     implied_growth,
     value_at_belief,
@@ -292,20 +292,18 @@ def _roic_charges(
 
 
 def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:
-    """``growth-above-return`` on the first year whose payout the floor raised to zero, with the
-    growth it pays for (the next year's) and the return it pays at."""
-    floored = floored_years(growth, charge)
-    if not floored:
+    """``growth-above-return`` on the first year t whose payout the floor raised to zero: year
+    t + 1's growth, which year t's reinvestment pays for, and the return year t pays at."""
+    floored = first_floored_year(growth, charge)
+    if floored is None:
         return None
-    t = floored[0]
-    g = (*growth_rates(growth), charge.g_t)[t - 1]
-    ret = charge.runway_roic if t < growth.runway else charge.terminal_roic
+    t, g, ret = floored
     return Flag(
         "growth-above-return",
         "Growth above return",
-        f"Year {t} growth of {g:.1%} exceeds the {ret:.1%} return on new capital; the payout is "
-        "floored at zero and the growth above the return is treated as efficiency growth, which "
-        "costs nothing.",
+        f"Year {t + 1} growth of {g:.1%} exceeds the {ret:.1%} return on new capital; year {t}'s "
+        "payout is floored at zero and the growth above the return is treated as efficiency "
+        "growth, which costs nothing.",
     )
 
 

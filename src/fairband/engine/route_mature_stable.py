@@ -4,9 +4,11 @@ E is trailing net income less the non-recurring gap on the diluted shares; when 
 fires, E is scaled to the ten-year median operating margin. The value at belief is the
 stable-growth value at the moat's terminal return (``RoicTerms``), always: so it equals EPV for a
 Narrow or no moat and is about 15% above it for a Wide one (15.4% at r 9%, g_t 3% and the 13%
-cap). A capital sum at or below zero does not turn the charge off here: the value takes the moat's
-terminal return, and the row says so. EPV is shown as the no-growth value. ``epv`` and
-``stable_growth`` are a share; ``epv_total`` and ``stable_growth_total`` are the totals.
+cap). There is no runway charge here, so a runway return below r raises no flag: the runway-return
+input's note keeps the floor. A capital sum at or below zero does not turn the charge off either:
+the value takes the moat's terminal return, and the row says so. EPV is shown as the no-growth
+value. ``epv`` and ``stable_growth`` are a share; ``epv_total`` and ``stable_growth_total`` are
+the totals.
 
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
 5.7), or that route's refusal; the value, the levels and the stance stay on the stable-growth
@@ -112,11 +114,13 @@ def stable_at_price(
 
 
 def _roic_flags(roic: RoicTerms, policy: Policy) -> tuple[Flag, ...]:
-    """The ROIC flags as this route reads them. It never zeroes the charge, so a fallback capital
-    sum at or below zero is not "charge zeroed" here but an unavailable ROIC, in the same place;
-    the ten-year flag, about the ten-year figure shown, stays."""
+    """The ROIC flags as this route reads them. It has no runway charge, so "return floored" is
+    dropped (the runway-return input's note keeps the floor), and a fallback capital sum at or
+    below zero is not "charge zeroed" here but an unavailable ROIC, in the same place; the
+    ten-year flag, about the ten-year figure shown, stays."""
+    flags = tuple(f for f in roic.flags if f.code != "return-floored")
     if not roic.charge_off:
-        return roic.flags
+        return flags
     unavailable = Flag(
         "roic-unavailable",
         "ROIC unavailable",
@@ -124,4 +128,4 @@ def _roic_flags(roic: RoicTerms, policy: Policy) -> tuple[Flag, ...]:
         f"{policy.fallback_return_years} ROIC years and the marginal return is not usable, so the "
         "stable-growth value uses the moat's terminal return.",
     )
-    return tuple(unavailable if f.code == "charge-zeroed" else f for f in roic.flags)
+    return tuple(unavailable if f.code == "charge-zeroed" else f for f in flags)

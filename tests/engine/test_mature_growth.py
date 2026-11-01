@@ -8,6 +8,7 @@ from fairband.engine.mature_growth import (
     GrowthPath,
     cash_to_equity,
     earnings_by_year,
+    first_floored_year,
     floored_years,
     growth_rates,
     implied_growth,
@@ -173,3 +174,14 @@ def test_payout_floor() -> None:
     assert cash_to_equity(100.0, 0.25, 0.149) == 0.0  # -67.79 before the floor
     assert cash_to_equity(100.0, 0.053, 0.149) == pytest.approx(64.43, abs=0.01)
     assert floored_years(FADE, CHARGE) == (1, 2, 3, 4)  # growth above 14.9% in years 2 to 5
+
+
+def test_first_floored_year() -> None:
+    # year 1's reinvestment pays for year 2's 25% at the 14.9% runway return
+    assert first_floored_year(FADE, CHARGE) == (1, 0.25, 0.149)
+    path = GrowthPath(1000.0, (0.04, 0.05), 0.053, 20, fade_years=5)
+    assert floored_years(path, CHARGE) == () and first_floored_year(path, CHARGE) is None
+    # year N pays for g_t at the terminal return: one below g_t, which the engine never uses,
+    # floors year N alone
+    steep = Charge(0.149, 0.02, R, GT)
+    assert first_floored_year(path, steep) == (20, GT, 0.02)
