@@ -24,8 +24,10 @@ assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``
 ``estimates_quarter``, ``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``gf_eps_ttm``,
 ``gf_eps_without_nri``, ``next_earnings``, ``tax_rate_latest``, ``closes``. A missing key cites
 the source "unknown". A DATA input named in ``CompanyInputs.estimate_methods`` is an estimate
-under that method (a tax rate carried forward, say); every other DATA input is observed. A RULE
-input cites the policy version.
+under that method (a tax rate carried forward, say), and so is ``aggregate_roic`` under the method
+``estimate_methods`` names ``intangibles`` (D17: invested capital took the issuer's as-reported
+intangibles total), with a note that says so; every other DATA input is observed. A RULE input
+cites the policy version.
 
 Intermediates hold JSON values only. Totals are in USD, per-share figures in USD a share, rates
 as fractions. A sensitivity map is keyed by the runway in years ("5", "10", "20") or by the runway

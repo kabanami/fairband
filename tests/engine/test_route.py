@@ -240,6 +240,29 @@ def test_an_input_assembly_estimated_is_tagged_as_an_estimate(
     assert (by_name["price"].kind, by_name["price"].estimate_method) == ("observed", None)
 
 
+def test_the_intangibles_estimate_reaches_the_aggregate_roic(
+    mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Assembly took the issuer's as-reported intangibles total (D17) into invested capital: on
+    both routes the aggregate ROIC the drawer shows is an estimate under that method, and says
+    why. The snapshot keeps it."""
+    method = "bs10-intangibles-total-v1"
+    for inputs in (mg_inputs, ms_inputs):
+        r = value_company(inputs, deciles, policy, TODAY)
+        [plain] = [i for i in r.inputs if i.name == "aggregate_roic"]
+        assert (plain.kind, plain.estimate_method, plain.note) == ("observed", None, None)
+        r = value_company(
+            replace(inputs, estimate_methods={"intangibles": method}), deciles, policy, TODAY
+        )
+        [roic] = [i for i in r.inputs if i.name == "aggregate_roic"]
+        assert (roic.tag, roic.kind, roic.estimate_method) == ("DATA", "estimate", method)
+        assert (
+            roic.note == "invested capital uses the issuer's total intangibles excluding goodwill"
+        )
+        assert (roic.value, roic.provenance) == (plain.value, plain.provenance)
+        assert result_from_json(result_to_json(r)) == r
+
+
 def test_mature_growth_is_deterministic(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

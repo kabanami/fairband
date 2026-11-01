@@ -120,6 +120,9 @@ def test_scoped_refresh_with_stored_deciles_values(env_with_deciles: Env) -> Non
     assert acme.value is not None and acme.value > 0 and acme.stance5 is not None
     assert (acme.price, acme.price_date, acme.data_date) == (50.0, QUOTE_DATE, env.clock.now.date())
     assert env.items(refresh_id) == [("ACME", "valued", None)]
+    # The synthetic company's invested capital takes the issuer's as-reported intangibles.
+    [roic] = [i for i in acme.result.inputs if i.name == "aggregate_roic"]
+    assert (roic.kind, roic.estimate_method) == ("estimate", "bs10-intangibles-total-v1")
 
 
 def test_stop_after_first_then_continue(env: Env) -> None:

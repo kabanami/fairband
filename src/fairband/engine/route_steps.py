@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +32,10 @@ if TYPE_CHECKING:
     from fairband.engine.route import CompanyInputs
 
 _UNKNOWN = Provenance("unknown", None, None, None)
+# The ``estimate_methods`` key assembly sets when invested capital takes the issuer's as-reported
+# intangibles total; no input bears the name, so the aggregate ROIC carries the method.
+_INTANGIBLES = "intangibles"
+_INTANGIBLES_NOTE = "invested capital uses the issuer's total intangibles excluding goodwill"
 
 
 @dataclass(frozen=True)
@@ -190,11 +194,21 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
         data(i, "dividends_ttm", t.dividends, "USD", "statements"),
         data(i, "buybacks_ttm", t.buybacks, "USD", "statements"),
         data(i, "equity_issued_ttm", t.equity_issued, "USD", "statements"),
-        data(i, "aggregate_roic", roic.result.aggregate, "ratio", "statements"),
+        _aggregate_roic(i, roic),
         data(i, "moat_score", i.moat_score, "score"),
         data(i, "gf_eps_ttm", i.gf_eps_ttm, "USD a share"),
         data(i, "gf_eps_without_nri", i.gf_eps_without_nri, "USD a share"),
     )
+
+
+def _aggregate_roic(i: CompanyInputs, roic: RoicTerms) -> TaggedInput:
+    """The aggregate ROIC, an estimate under the intangibles method when assembly took the
+    issuer's as-reported intangibles total into invested capital (D17)."""
+    found = data(i, "aggregate_roic", roic.result.aggregate, "ratio", "statements")
+    method = i.estimate_methods.get(_INTANGIBLES)
+    if method is None:
+        return found
+    return replace(found, kind="estimate", estimate_method=method, note=_INTANGIBLES_NOTE)
 
 
 def common_rules(policy: Policy, moat: Moat, roic: RoicTerms) -> tuple[TaggedInput, ...]:
