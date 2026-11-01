@@ -588,6 +588,8 @@ def test_page_hands_the_design_system_local_time() -> None:
     assert "localIso: localIso" in app  # on window.FairbandPage, for controls.js
     assert "var local = localIso(iso);" in app  # when(): the drawer's observed and entered
     assert "enteredAt: localIso(body.snapshot.createdAt)" in app  # the ValidityWindow
+    assert "state.rows = body.rows.map(localRow);" in app  # the table's Entered cell
+    assert "{ enteredAt: localIso(r.enteredAt) }" in app
     controls = _static_file("controls.js")
     assert "engineRanAt: ran ? P.localIso(ran) : null" in controls
     assert "P.localIso(last.finishedAt)" in controls  # the last-refresh line

@@ -76,9 +76,9 @@
      hour and minute, so a UTC stamp would read as the reader's clock and be hours off. This is
      the same instant in the browser's offset (2026-10-31T22:20:00+00:00 is
      2026-11-01T01:20:00+03:00 at +03:00), so datetime stays true and the text reads as local
-     time: the header's engine stamp, the last-refresh line and the drawer's timestamps. A plain
-     date (no T) is a day, not an instant, and passes through; so does a string Date cannot
-     read. */
+     time: the header's engine stamp, the last-refresh line, the table's Entered dates and the
+     drawer's timestamps. A plain date (no T) is a day, not an instant, and passes through; so
+     does a string Date cannot read. */
   function localIso(iso) {
     if (!iso || String(iso).indexOf('T') < 0) return iso;
     var d = new Date(iso);
@@ -105,7 +105,7 @@
     getJson('/api/screen?sort=' + encodeURIComponent(key) + '&dir=' + sort.direction)
       .then(function (body) {
         if (request !== latest) return;
-        state.rows = body.rows;
+        state.rows = body.rows.map(localRow);
         state.error = null;
         render();
       })
@@ -114,6 +114,12 @@
         state.error = 'The screen did not load: ' + err.message + '. Reload the page to try again.';
         render();
       });
+  }
+
+  /* A row with its entered time in the reader's offset, so the Entered cell shows the local date
+     (the local-offset ISO in datetime) and agrees with the drawer's ValidityWindow. */
+  function localRow(r) {
+    return r.enteredAt ? Object.assign({}, r, { enteredAt: localIso(r.enteredAt) }) : r;
   }
 
   /* A header click, or Enter or Space on a focused header: the sorted column turns its
