@@ -2,8 +2,8 @@
    the detail drawer of the row the reader opens (spec 6.4), fetched from /api/companies/{symbol}.
    No JSX and no build step: React.createElement against window.Fairband. The server sorts and the
    engine computes; this script asks for an order, remembers the chosen columns and lays out what
-   the engine produced, rounded for display only. The top bar and the group view are controls.js,
-   loaded after this script; it reaches the screen through window.FairbandPage. */
+   the engine produced, rounded for display only. The header, the status line and the group view
+   are controls.js, loaded after this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -72,9 +72,31 @@
     }
   };
 
+  /* The server writes a timestamp in UTC (+00:00), and the design system prints a string's own
+     hour and minute, so a UTC stamp would read as the reader's clock and be hours off. This is
+     the same instant in the browser's offset (2026-10-31T22:20:00+00:00 is
+     2026-11-01T01:20:00+03:00 at +03:00), so datetime stays true and the text reads as local
+     time: the header's engine stamp, the last-refresh line and the drawer's timestamps. A plain
+     date (no T) is a day, not an instant, and passes through; so does a string Date cannot
+     read. */
+  function localIso(iso) {
+    if (!iso || String(iso).indexOf('T') < 0) return iso;
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    var offset = -d.getTimezoneOffset();
+    var abs = Math.abs(offset);
+    return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + 'T' +
+      two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds()) +
+      (offset < 0 ? '-' : '+') + two(Math.floor(abs / 60)) + ':' + two(abs % 60);
+  }
+
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+
   /* What controls.js uses: the screen's reload when a refresh ends, the POST helper, the GET
-     helper and the phase numbers. */
-  window.FairbandPage = { reload: load, api: api, getJson: getJson, PHASE_NUMBER: PHASE_NUMBER };
+     helper, the local-time helper and the phase numbers. */
+  window.FairbandPage = {
+    reload: load, api: api, getJson: getJson, localIso: localIso, PHASE_NUMBER: PHASE_NUMBER
+  };
 
   function load() {
     var request = ++latest;
@@ -207,7 +229,8 @@
       r.refusal ? section('refusal', 'Refusal',
         h('p', { className: 'body app-refusal' }, r.refusal)) : null,
       section('window', null, h(F.ValidityWindow, {
-        asOf: r.data_date, observedAt: r.data_date, enteredAt: body.snapshot.createdAt,
+        asOf: r.data_date, observedAt: r.data_date,
+        enteredAt: localIso(body.snapshot.createdAt),
         validFrom: r.data_date, validUntil: r.valid_until, today: body.today
       })),
       section('phase', 'Phase evidence', pairs(evidence(r.phase, phase))),
@@ -274,8 +297,11 @@
 
   /* ---------------------------------------------------------------- the inputs */
 
+  /* A date as it is; a timestamp in the reader's local time. */
   function when(iso) {
-    return iso ? h('time', { dateTime: iso, title: iso }, F.formatDate(iso)) : '—';
+    if (!iso) return '—';
+    var local = localIso(iso);
+    return h('time', { dateTime: local, title: local }, F.formatDate(local));
   }
 
   /* A minus is U+2212; a negative that rounds to zero loses its sign. */

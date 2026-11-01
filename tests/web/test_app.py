@@ -534,6 +534,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
     references = _References()
     references.feed(page)
     assert references.urls == [
+        "/static/design-system/assets/Logos/mark-on-dark.svg",
         "/static/design-system/fonts/fonts.css",
         "/static/design-system/tokens/tokens.css",
         "/static/design-system/components/bundle.css",
@@ -545,7 +546,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url
-    fonts = re.findall(r'url\("\./([^"]+)"\)', client.get(references.urls[0]).text)
+    fonts = re.findall(r'url\("\./([^"]+)"\)', client.get(references.urls[1]).text)
     assert len(fonts) == 6
     for font in fonts:
         assert client.get(f"/static/design-system/fonts/{font}").status_code == 200, font
@@ -555,6 +556,41 @@ def _component_file(name: str) -> str:
     """A file of the repository's design-system copy, as text."""
     components = resources.files("fairband.web").joinpath("static", "design-system", "components")
     return components.joinpath(name).read_text(encoding="utf-8")
+
+
+def _static_file(name: str) -> str:
+    """A file of the page's own static directory, as text."""
+    return resources.files("fairband.web").joinpath("static", name).read_text(encoding="utf-8")
+
+
+def test_index_mounts_the_header_and_the_favicon(client: TestClient) -> None:
+    page = client.get("/").text
+    assert "<h1" not in page and 'role="tab"' not in page
+    assert 'id="header"' in page
+    assert '<link rel="icon" href="/static/design-system/assets/Logos/mark-on-dark.svg"' in page
+
+
+def test_controls_js_mounts_app_header() -> None:
+    script = _static_file("controls.js")
+    assert "h(F.AppHeader, {" in script
+    assert "views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' }]" in script
+    assert "engineRanAt:" in script and "onViewChange: show" in script
+
+
+def test_page_hands_the_design_system_local_time() -> None:
+    """The server writes UTC (+00:00) and the design system prints a string's own hour and
+    minute, so every timestamp the page hands it is first put in the browser's offset; a plain
+    date passes through."""
+    app = _static_file("app.js")
+    assert "function localIso(iso) {" in app
+    assert "String(iso).indexOf('T') < 0" in app  # a plain date is a day, not an instant
+    assert "getTimezoneOffset()" in app
+    assert "localIso: localIso" in app  # on window.FairbandPage, for controls.js
+    assert "var local = localIso(iso);" in app  # when(): the drawer's observed and entered
+    assert "enteredAt: localIso(body.snapshot.createdAt)" in app  # the ValidityWindow
+    controls = _static_file("controls.js")
+    assert "engineRanAt: ran ? P.localIso(ran) : null" in controls
+    assert "P.localIso(last.finishedAt)" in controls  # the last-refresh line
 
 
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.

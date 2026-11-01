@@ -1,9 +1,10 @@
-/* The page's top bar and the group view, loaded after app.js. The bar holds the tabs (Screen,
-   Groups), the refresh controls and a caption line: the running refresh's progress, or how the
-   last one ended with its calibration. While a refresh runs, the bar asks /api/refresh/current
-   every 2 seconds, the Refresh buttons are disabled and the tables keep their old figures at
-   ink-faint; when it ends, the rows (and the groups, when that tab is open) load again. The group
-   view is one plain table from /api/groups (spec 6.3), with no chart. */
+/* The page's header, its status line and the group view, loaded after app.js. The header is the
+   design system's AppHeader: the views (Screen, Groups), the engine stamp and the refresh
+   controls. Under it, the status line: the running refresh's progress, or how the last one ended
+   with its calibration. While a refresh runs, the page asks /api/refresh/current every 2 seconds,
+   one Cancel stands where the Refresh buttons were, the stamp is gone and the tables keep their
+   old figures at ink-faint; when it ends, the rows (and the groups, when that view is open) load
+   again. The group view is one plain table from /api/groups (spec 6.3), with no chart. */
 (function () {
   'use strict';
 
@@ -18,6 +19,7 @@
     screen: document.getElementById('screen'),
     groups: document.getElementById('groups')
   };
+  var header = ReactDOM.createRoot(document.getElementById('header'));
   var bar = ReactDOM.createRoot(document.getElementById('controls'));
   var groupsRoot = ReactDOM.createRoot(panels.groups);
   var state = {
@@ -26,7 +28,8 @@
     groups: null, groupsLoading: false, groupsError: null,
     running: null, /* the progress, while a refresh runs */
     last: null, /* the last refresh's record */
-    notice: null /* { text, caution }: what the last request came to */
+    notice: null, /* { text, caution }: what the last request came to */
+    cancelAsked: false /* Cancel was accepted: it stays disabled until the run ends */
   };
   var timer = null;
   var latestPoll = 0;
@@ -48,6 +51,7 @@
         if (ended) { /* the notice (already running, cancel asked) no longer holds */
           started = false;
           state.notice = null;
+          state.cancelAsked = false;
           P.reload();
           if (state.tab === 'groups') loadGroups();
         }
@@ -99,6 +103,7 @@
 
   function cancel() {
     post('/api/refresh/cancel', {}, function () {
+      state.cancelAsked = true;
       notify('Cancel asked: the refresh stops after the companies in flight.', false);
     });
   }
@@ -181,13 +186,15 @@
     return parts.join(' · ');
   }
 
-  /* Last refresh: full done 1 Nov 2026 · <its message, or its calibration>. */
+  /* Last refresh: full done 1 Nov 2026, 01:20 · <its message, or its calibration>. The finish
+     reads in the reader's local time. */
   function lastLine(last) {
     if (!last) return ['No refresh has run yet.'];
     var after = last.message || (last.calibration ? calibrationLine(last.calibration) : null);
-    var when = last.finishedAt ? h('time', {
-      key: 'when', dateTime: last.finishedAt, title: last.finishedAt
-    }, F.formatDate(last.finishedAt)) : null;
+    var finished = last.finishedAt ? P.localIso(last.finishedAt) : null;
+    var when = finished ? h('time', {
+      key: 'when', dateTime: finished, title: finished
+    }, F.formatDate(finished)) : null;
     return ['Last refresh: ' + last.kind + ' ' + last.status + (when ? ' ' : ''), when,
       after ? ' · ' + after : null];
   }
@@ -198,31 +205,42 @@
     var alive = state.running !== null;
     panels.screen.classList.toggle(RECOMPUTING, alive);
     panels.groups.classList.toggle(RECOMPUTING, alive);
-    var tabs = [['screen', 'Screen'], ['groups', 'Groups']].map(function (t) {
-      return h('button', {
-        key: t[0], type: 'button', role: 'tab', id: 'tab-' + t[0], 'aria-controls': t[0],
-        'aria-selected': state.tab === t[0] ? 'true' : 'false',
-        className: 'fb-btn control fb-btn--quiet app-tab',
-        onClick: function () { show(t[0]); }
-      }, t[1]);
-    });
+    /* The stamp is the latest refresh's finish, whatever its status (the status line says how it
+       ended). While a run is alive, or before any refresh finished, there is none: an absent
+       stamp, never a placeholder. */
+    var ran = alive || !state.last ? null : state.last.finishedAt;
+    header.render(h(F.AppHeader, {
+      views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' }],
+      view: state.tab,
+      onViewChange: show,
+      engineRanAt: ran ? P.localIso(ran) : null,
+      children: actions(alive)
+    }));
     var status = alive ? [progressLine(state.running)] : lastLine(state.last);
     var notice = state.notice;
-    bar.render(h('div', { className: 'app-top' },
-      h('div', { className: 'app-bar' },
-        h('div', { className: 'app-tabs', role: 'tablist', 'aria-label': 'View' }, tabs),
-        h('div', { className: 'app-actions' },
-          h(F.Button, { disabled: alive, onClick: function () { start('price'); } },
-            'Refresh prices'),
-          h(F.Button, {
-            variant: 'primary', disabled: alive, onClick: function () { start('full'); }
-          }, 'Refresh all'),
-          alive ? h(F.Button, { variant: 'quiet', onClick: cancel }, 'Cancel') : null)),
+    bar.render(h('div', { className: 'app-bar' },
       h.apply(null, ['p', { className: 'caption app-status', role: 'status' }].concat(status)),
       notice ? h('p', {
         className: 'caption app-status' + (notice.caution ? ' app-status--caution' : '')
       }, notice.text) : null));
     if (state.tab === 'groups') groupsRoot.render(groupsView());
+  }
+
+  /* The refresh controls in the header, small: the two refreshes while no run is alive, else one
+     Cancel in their place, disabled once a cancel was asked until the run ends. */
+  function actions(alive) {
+    var buttons = alive ? [
+      h(F.Button, {
+        key: 'cancel', variant: 'quiet', size: 'sm', disabled: state.cancelAsked, onClick: cancel
+      }, 'Cancel')
+    ] : [
+      h(F.Button, { key: 'price', size: 'sm', onClick: function () { start('price'); } },
+        'Refresh prices'),
+      h(F.Button, {
+        key: 'full', variant: 'primary', size: 'sm', onClick: function () { start('full'); }
+      }, 'Refresh all')
+    ];
+    return h('div', { className: 'app-actions' }, buttons);
   }
 
   /* The table of the groups last loaded; while others load, it stays, faded. */
