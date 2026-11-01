@@ -465,10 +465,13 @@ def test_bundle_patches_marked() -> None:
     assert "'data-key': c.key" in bundle
     assert "tabIndex: p.onSort ? 0 : null" in bundle
     assert "p.onSort(c.key)" in bundle
-    # Given onOpen, a row is focusable and opens on a click, Enter or Space.
+    # Given onOpen, a row is focusable and opens on a click, Enter or Space. It stays a row: no
+    # role="button", whose cells would turn presentational; the open row is aria-current.
     assert "tabIndex: p.onOpen ? 0 : null" in bundle
-    assert "role: p.onOpen ? 'button' : null" in bundle
     assert "p.onOpen(r)" in bundle
+    assert "role: p.onOpen" not in bundle
+    assert "'aria-current': r.selected ? 'true' : null" in bundle
+    assert "'aria-selected'" not in bundle
 
 
 def test_index_d_ts_declares_onSort() -> None:

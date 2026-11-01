@@ -261,15 +261,15 @@
     return decimals(n, Number.isInteger(n) ? 0 : 2);
   }
 
+  /* A total in whole dollars, with separators: $5,900,000,000. */
+  function dollars(v) { return (v < 0 ? '−$' : '$') + decimals(Math.abs(v), 0); }
+
   /* By unit: a price to cents, a total to whole dollars, a ratio to one decimal of a percent.
      A price and a total share the unit USD; a price is under a million. */
   function inputValue(i) {
     if (i.value == null) return '—';
     if (i.unit === 'USD a share') return F.formatMoney(i.value);
-    if (i.unit === 'USD') {
-      return (i.value < 0 ? '−$' : '$') +
-        decimals(Math.abs(i.value), Math.abs(i.value) < 1e6 ? 2 : 0);
-    }
+    if (i.unit === 'USD') return Math.abs(i.value) < 1e6 ? F.formatMoney(i.value) : dollars(i.value);
     if (i.unit === 'ratio') return F.formatPercent(i.value);
     return plain(i.value);
   }
@@ -312,8 +312,24 @@
   var PERCENT = /(_growth|_yield|_return|margin|roic|belief)$/;
   var ALSO_PERCENT = /^(implied_|change_|drawdown|path_steps$|growth_share$)/;
   var NOT_PERCENT = /^(value|stable_growth|years?$)/;
-  /* Counts and years read whole; every other number to two decimals. */
+  /* Counts and years read whole. P/E multiples to one decimal with x. A figure a share (EPV, the
+     value, EPS, the non-recurring gap, the 52-week prices, the value maps by runway and by ROIC)
+     reads to cents; a total (NOPAT, invested capital, net income, earnings, anything at a
+     million or more) to whole dollars. Any other number to two decimals. */
   var COUNT = /^(years?|base_year|runway|analysts|shares)$/;
+  var MULTIPLE = /^pe_/;
+  var PER_SHARE = /^(epv|value_per_share|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
+  var PER_SHARE_GROUP = /^(eps$|value_by_)/;
+  var TOTAL = /(_total|nopat|average_capital|net_income)$|^e_/;
+
+  function figure(v, key, group) {
+    if (isPercent(key, group)) return F.formatPercent(v);
+    if (COUNT.test(key)) return plain(v);
+    if (MULTIPLE.test(key)) return decimals(v, 1) + 'x';
+    if (PER_SHARE.test(key) || PER_SHARE_GROUP.test(group || '')) return F.formatMoney(v);
+    if (TOTAL.test(key) || Math.abs(v) >= 1e6) return dollars(v);
+    return decimals(v, 2);
+  }
 
   function isPercent(key, group) {
     if (NOT_PERCENT.test(key)) return false;
@@ -327,10 +343,7 @@
      table a line, its year first), a deeper table inline. */
   function shown(v, key, group) {
     if (v == null) return '—';
-    if (typeof v === 'number') {
-      if (isPercent(key, group)) return F.formatPercent(v);
-      return COUNT.test(key) ? plain(v) : decimals(v, 2);
-    }
+    if (typeof v === 'number') return figure(v, key, group);
     if (Array.isArray(v)) {
       if (!v.some(isTable)) return v.map(function (x) { return shown(x, key, group); }).join(', ');
       return v.map(function (x, n) {

@@ -331,7 +331,8 @@ export interface ScreenTableProps {
   onSort?: (column: string) => void;
   /**
    * fairband: called with the row when it is clicked, or focused and given Enter or Space. Given
-   * it, each row takes `tabindex="0"` and `role="button"`; without it the rows are inert.
+   * it, each row takes `tabindex="0"` and stays a native row; without it the rows are inert. A
+   * row with `selected` carries `aria-current="true"`.
    */
   onOpen?: (row: ScreenRow) => void;
   footnote?: string;

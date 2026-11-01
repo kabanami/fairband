@@ -861,11 +861,11 @@
           return h('tr', {
             key: r.ticker,
             className: cx(r.selected && 'is-selected'),
-            'aria-selected': r.selected ? 'true' : null,
-            // fairband: given onOpen, a row takes focus like a button and opens on a click,
-            // Enter or Space. Its only interactions stay hover, selection and opening.
+            // fairband: the open row is marked aria-current, not aria-selected (an option's
+            // attribute). Given onOpen, a row takes focus and opens on a click, Enter or Space;
+            // it stays a native row, never role="button", whose cells would turn presentational.
+            'aria-current': r.selected ? 'true' : null,
             tabIndex: p.onOpen ? 0 : null,
-            role: p.onOpen ? 'button' : null,
             onClick: p.onOpen ? function () { p.onOpen(r); } : null,
             onKeyDown: p.onOpen ? function (e) {
               if (e.key !== 'Enter' && e.key !== ' ') return;
