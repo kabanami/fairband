@@ -39,3 +39,7 @@ exclude = ["^src/fairband/web/static/"]
 testpaths = ["tests"]
 # The shared test builders import as ``support``.
 pythonpath = ["tests"]
+filterwarnings = [
+    # Starlette's test client asks for httpx2; httpx, which the project already uses, still works.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]

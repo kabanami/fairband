@@ -9,8 +9,11 @@ from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from types import FrameType
 
+import uvicorn
+
 from fairband import __version__
 from fairband.config import (
+    DEFAULT_PORT,
     MissingKey,
     Settings,
     keys_path,
@@ -26,10 +29,11 @@ from fairband.refresh.run import Progress, Refresh
 from fairband.store.db import connect, migrate
 from fairband.store.refreshes import RefreshRunning, latest_refresh
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
+from fairband.web.app import create_app
 
 logger = logging.getLogger("fairband")
 
-DEFAULT_PORT = 8470
+_HOST = "127.0.0.1"  # the screen is for this machine only (D11)
 REFRESH_KINDS = ("full", "price", "scoped")
 _PRIVATE_BITS = 0o077  # group and other
 
@@ -73,7 +77,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _serve(args: argparse.Namespace) -> int:
-    raise NotImplementedError("serve is not built yet")
+    """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. No
+    key is read: serving calls no vendor."""
+    settings = load_settings()
+    policy = load_policy()
+    with closing(connect(settings.db_path)) as conn:
+        migrate(conn)
+    app = create_app(settings, policy, lambda: connect(settings.db_path))
+    uvicorn.run(app, host=_HOST, port=args.port, log_level="info")
+    return 0
 
 
 def _refresh(args: argparse.Namespace) -> int:

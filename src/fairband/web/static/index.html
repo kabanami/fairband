@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fairband</title>
+<link rel="stylesheet" href="/static/design-system/fonts/fonts.css">
+<link rel="stylesheet" href="/static/design-system/tokens/tokens.css">
+<link rel="stylesheet" href="/static/design-system/components/bundle.css">
+<style>
+  body { margin: 0; background: var(--surface); color: var(--ink); font-family: var(--font-sans); }
+  .app-page { padding: var(--space-4) var(--space-6); }
+  .app-name { margin: 0 0 var(--space-4); }
+  .app-note { margin: 0; color: var(--ink-muted); }
+  .fb-table thead th { cursor: pointer; }
+</style>
+</head>
+<body>
+<main class="app-page">
+  <h1 class="display app-name">Fairband</h1>
+  <div id="screen"></div>
+</main>
+<script src="/static/vendor/react.production.min.js"></script>
+<script src="/static/vendor/react-dom.production.min.js"></script>
+<script src="/static/design-system/components/bundle.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
