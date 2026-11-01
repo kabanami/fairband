@@ -1,10 +1,11 @@
 /* The page's header, its status line and the group view, loaded after app.js. The header is the
    design system's AppHeader: the views (Screen, Groups), the engine stamp and the refresh
-   controls. Under it, the status line: the running refresh's progress, or how the last one ended
-   with its calibration. While a refresh runs, the page asks /api/refresh/current every 2 seconds,
-   one Cancel stands where the Refresh buttons were, the stamp is gone and the tables keep their
-   old figures at ink-faint; when it ends, the rows (and the groups, when that view is open) load
-   again. The group view is one plain table from /api/groups (spec 6.3), with no chart. */
+   controls. Under it, the status line: the running refresh's one run bar (the design system's
+   RunProgress), or how the last one ended with its calibration. While a refresh runs, the page
+   asks /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons were,
+   the stamp is gone and the tables keep their old figures at ink-faint; when it ends, the rows
+   (and the groups, when that view is open) load again. The group view is one plain table from
+   /api/groups (spec 6.3), with no chart. */
 (function () {
   'use strict';
 
@@ -14,6 +15,11 @@
   var POLL_MS = 2000;
   var BY = { sector: 'Sector', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
+  /* The server's stage names as the run bar's lowercase verb phrases (spec 4.3). */
+  var STAGE_WORDS = {
+    universe: 'reading the universe', deciles: 'ranking', fetch: 'fetching', value: 'valuing',
+    quotes: 'fetching prices', reprice: 'repricing', done: 'finishing'
+  };
 
   var panels = {
     screen: document.getElementById('screen'),
@@ -152,10 +158,17 @@
   /* An engine phase name as the design system writes it: Mature growth. */
   function phaseName(name) { return F.PHASES[P.PHASE_NUMBER[name]] || name; }
 
-  function progressLine(r) {
-    return [r.kind ? 'Refreshing ' + r.kind : 'Refreshing', r.stage,
-      count(r.done) + ' done, ' + count(r.failed) + ' failed, ' + count(r.remaining) + ' remaining'
-    ].join(' · ');
+  /* The run bar's props from the poll's refresh body. The server's counts are per stage and add up
+     to the stage's symbols, so they make the total. In the universe and deciles stages the server
+     reports every symbol done, yet none is fetched or valued: nothing is done, and the word says
+     what is happening. An unknown stage name is shown as it is. */
+  function runProps(r) {
+    var total = r.done + r.failed + r.remaining;
+    var stage = STAGE_WORDS[r.stage] || r.stage;
+    if (r.stage === 'universe' || r.stage === 'deciles') {
+      return { total: total, done: 0, failed: r.failed, stage: stage };
+    }
+    return { total: total, done: r.done, failed: r.failed, stage: stage };
   }
 
   /* A full refresh's calibration: the companies, those valued and those a classifier check
@@ -216,10 +229,15 @@
       engineRanAt: ran ? P.localIso(ran) : null,
       children: actions(alive)
     }));
-    var status = alive ? [progressLine(state.running)] : lastLine(state.last);
+    /* The status line: during a run, the run bar, or the stage word alone while the stage reports
+       a total of 0 (the component draws nothing for it); else how the last refresh ended. A div,
+       since the bar is a block a p cannot hold. */
+    var run = alive ? runProps(state.running) : null;
+    var status = !run ? lastLine(state.last)
+      : [run.total > 0 ? h(F.RunProgress, runProps(state.running)) : run.stage];
     var notice = state.notice;
     bar.render(h('div', { className: 'app-bar' },
-      h.apply(null, ['p', { className: 'caption app-status', role: 'status' }].concat(status)),
+      h.apply(null, ['div', { className: 'caption app-status', role: 'status' }].concat(status)),
       notice ? h('p', {
         className: 'caption app-status' + (notice.caution ? ' app-status--caution' : '')
       }, notice.text) : null));

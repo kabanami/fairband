@@ -577,6 +577,30 @@ def test_controls_js_mounts_app_header() -> None:
     assert "engineRanAt:" in script and "onViewChange: show" in script
 
 
+def test_controls_js_run_bar() -> None:
+    script = _static_file("controls.js")
+    assert "h(F.RunProgress, runProps(state.running))" in script
+    for stage, word in (
+        ("universe", "reading the universe"),
+        ("deciles", "ranking"),
+        ("fetch", "fetching"),
+        ("value", "valuing"),
+        ("quotes", "fetching prices"),
+        ("reprice", "repricing"),
+        ("done", "finishing"),
+    ):
+        assert f"{stage}: '{word}'" in script, stage
+    assert "progressLine" not in script
+    # the header gets no run prop
+    assert "run:" not in script.split("h(F.AppHeader, {")[1].split("})")[0]
+
+
+def test_controls_js_handles_a_zero_total() -> None:
+    script = _static_file("controls.js")
+    assert "total > 0 ? h(F.RunProgress" in script or "props.total > 0 ? h(F.RunProgress" in script
+    assert "done: 0" in script  # the universe and deciles stages show nothing done
+
+
 def test_page_hands_the_design_system_local_time() -> None:
     """The server writes UTC (+00:00) and the design system prints a string's own hour and
     minute, so every timestamp the page hands it is first put in the browser's offset; a plain
