@@ -13,35 +13,24 @@ import sqlite3
 import threading
 import time
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from contextlib import closing
-from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
-from synthetic import add_company, bodies, estimates_quarter
-from vendor_double import FMP_KEY, GF_TOKEN, Clients, Clock, Router
+from refresh_env import Env, use_cli
+from synthetic import bodies, estimates_quarter
+from vendor_double import FMP_KEY, GF_TOKEN
 
 from fairband import __main__ as cli
-from fairband.config import Keys, MissingKey
+from fairband.config import MissingKey
 from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
-from fairband.policy import Policy
-from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh import run as run_module
 from fairband.refresh.run import Progress, Refresh
-from fairband.store.db import connect, migrate
-from fairband.store.refreshes import (
-    RefreshRow,
-    RefreshRunning,
-    current_refresh,
-    items,
-    latest_refresh,
-    save_deciles,
-)
-from fairband.store.snapshots import SnapshotRow, latest_snapshot
+from fairband.store.refreshes import RefreshRunning, current_refresh, save_deciles
 from fairband.store.vendor import record_response
 
 GROWTH_EDGES = (-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3)
@@ -50,99 +39,6 @@ BOLT_FAILED = (
 )
 QUOTE_DATE = date(2026, 10, 30)  # both fixture quotes'
 RATE_LIMITED = "data fetch incomplete: rate limited"
-
-
-@dataclass
-class Env:
-    """A migrated database whose universe lists ACME and BOLT, and the clients over the router.
-    ``progress`` collects every event of every refresh built by ``refresh``."""
-
-    db_path: Path
-    universe_id: int
-    clients: Clients
-    router: Router
-    clock: Clock
-    policy: Policy
-    tax: TaxTable
-    progress: list[Progress] = field(default_factory=list)
-
-    def connect(self) -> sqlite3.Connection:
-        return connect(self.db_path)
-
-    def refresh(
-        self,
-        workers: int | None = None,
-        cancel: threading.Event | None = None,
-        then: Callable[[Progress], None] | None = None,
-    ) -> Refresh:
-        policy = self.policy
-        if workers is not None:
-            policy = replace(policy, refresh=replace(policy.refresh, workers=workers))
-
-        def record(progress: Progress) -> None:
-            self.progress.append(progress)
-            if then is not None:
-                then(progress)
-
-        return Refresh(
-            self.connect,
-            self.clients.fmp,
-            self.clients.gf,
-            policy,
-            self.tax,
-            self.clock,
-            cancel or threading.Event(),
-            record,
-            self.clients.secrets,
-        )
-
-    def run(self, symbols: list[str], **refresh: Any) -> int:
-        return self.refresh(**refresh).run("scoped", symbols)
-
-    def last(self) -> RefreshRow:
-        with closing(self.connect()) as conn:
-            row = latest_refresh(conn)
-        assert row is not None
-        return row
-
-    def items(self, refresh_id: int) -> list[tuple[str, str, str | None]]:
-        with closing(self.connect()) as conn:
-            return [(i.symbol, i.status, i.error) for i in items(conn, refresh_id)]
-
-    def snapshot(self, symbol: str) -> SnapshotRow:
-        with closing(self.connect()) as conn:
-            row = latest_snapshot(conn, symbol)
-        assert row is not None
-        return row
-
-    def snapshots(self) -> list[tuple[str, int, str | None]]:
-        """Every snapshot, oldest first: symbol, refresh id and refusal."""
-        with closing(self.connect()) as conn:
-            rows = conn.execute("SELECT symbol, refresh_id, refusal FROM snapshots ORDER BY id")
-            return [(r["symbol"], r["refresh_id"], r["refusal"]) for r in rows]
-
-
-@pytest.fixture
-def env(
-    tmp_path: Path, clients: Clients, router: Router, clock: Clock, policy: Policy
-) -> Iterator[Env]:
-    db_path = tmp_path / "data" / "fairband.db"
-    with closing(connect(db_path)) as conn:
-        migrate(conn)
-        universe_id = add_company(conn, symbols=("ACME", "BOLT"))
-    yield Env(db_path, universe_id, clients, router, clock, policy, load_tax_table())
-
-
-@pytest.fixture
-def env_without_universe(
-    tmp_path: Path, clients: Clients, router: Router, clock: Clock, policy: Policy
-) -> Iterator[Env]:
-    """No refresh has run: no universe rows, no deciles (``universe_id`` 0, so the first
-    refresh is 1)."""
-    db_path = tmp_path / "data" / "fairband.db"
-    with closing(connect(db_path)) as conn:
-        migrate(conn)
-    yield Env(db_path, 0, clients, router, clock, policy, load_tax_table())
 
 
 @pytest.fixture
@@ -400,9 +296,10 @@ def test_run_refuses_before_any_work(env: Env) -> None:
     for symbols in ([], None):
         with pytest.raises(ValueError, match="a scoped refresh needs symbols"):
             refresh.run("scoped", symbols)
-    for kind in ("full", "price"):
-        with pytest.raises(NotImplementedError, match="built in a later task"):
-            refresh.run(kind)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="a full refresh takes no symbols"):
+        refresh.run("full", ["ACME"])
+    with pytest.raises(NotImplementedError, match="built in a later task"):
+        refresh.run("price")
     assert env.last().id == env.universe_id
     assert env.router.calls == Counter() and env.progress == []
 
@@ -422,21 +319,6 @@ def test_an_exception_outside_a_symbol_fails_the_run(env: Env) -> None:
 
 
 # --- python -m fairband refresh --------------------------------------------------------------
-
-
-def use_cli(env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Point the command at the env's database and clients; the keys come from the environment."""
-    monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    monkeypatch.setenv("FAIRBAND_FMP_KEY", FMP_KEY)
-    monkeypatch.setenv("FAIRBAND_GURUFOCUS_KEY", GF_TOKEN)
-
-    def clients(keys: Keys, policy: Policy) -> tuple[Any, Any, tuple[str, ...]]:
-        assert (keys.fmp, keys.gurufocus, policy.version) == (FMP_KEY, GF_TOKEN, env.policy.version)
-        return env.clients.fmp, env.clients.gf, env.clients.secrets
-
-    monkeypatch.setattr(cli, "build_clients", clients)
-    monkeypatch.setattr(cli, "utcnow", env.clock)
 
 
 def test_cli_refresh_prints_rows(

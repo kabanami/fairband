@@ -117,6 +117,14 @@ def latest_snapshot(conn: sqlite3.Connection, symbol: str) -> SnapshotRow | None
     return None if row is None else _snapshot(row)
 
 
+def refresh_snapshots(conn: sqlite3.Connection, refresh_id: int) -> list[SnapshotRow]:
+    """The snapshots refresh ``refresh_id`` wrote, ordered by symbol."""
+    rows = conn.execute(
+        "SELECT * FROM snapshots WHERE refresh_id = ? ORDER BY symbol, id", (refresh_id,)
+    )
+    return [_snapshot(r) for r in rows]
+
+
 def _snapshot(row: sqlite3.Row) -> SnapshotRow:
     return SnapshotRow(
         id=row["id"],

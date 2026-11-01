@@ -21,6 +21,7 @@ from fairband.store.snapshots import (
     insert_snapshot,
     latest_snapshot,
     latest_snapshots,
+    refresh_snapshots,
 )
 
 T0 = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
@@ -185,3 +186,18 @@ def test_latest_snapshots_one_per_symbol(
     ]
     assert rows[1] == latest_snapshot(conn, "MSFT")
     assert rows[1].created_at == datetime(2026, 11, 2, tzinfo=UTC)
+
+
+def test_refresh_snapshots_by_refresh(
+    conn: sqlite3.Connection, new_refresh: Callable[[], int]
+) -> None:
+    first, second = new_refresh(), new_refresh()
+    insert_snapshot(conn, _result("MSFT", 100.0), first, clock=_at())
+    insert_snapshot(conn, _result("AAPL", 200.0), first, clock=_at())
+    insert_snapshot(conn, _result("MSFT", 110.0), second, clock=_at())
+    assert [(r.symbol, r.value) for r in refresh_snapshots(conn, first)] == [
+        ("AAPL", 200.0),
+        ("MSFT", 100.0),
+    ]
+    assert [(r.symbol, r.value) for r in refresh_snapshots(conn, second)] == [("MSFT", 110.0)]
+    assert refresh_snapshots(conn, second + 1) == []

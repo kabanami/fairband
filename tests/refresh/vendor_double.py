@@ -40,9 +40,10 @@ class Router:
     endpoint, named as the fetch stores them (``income-annual``, ``quote``, ``summary``), and
     ``symbol_calls`` per symbol; a retry counts again, and ``requested`` keeps each endpoint's last
     query parameters, the key left out. An endpoint in ``fail``, or any request for a symbol in
-    ``fail_symbols``, answers ``fail_status`` (HTTP 500 unless set); an endpoint in ``bodies``
-    answers 200 with that body instead of its fixture. A request with no fixture answers 404. The
-    fetch workers call it from several threads, so it counts under a lock.
+    ``fail_symbols``, answers ``fail_status`` (HTTP 500 unless set). An endpoint and symbol in
+    ``symbol_bodies`` answer 200 with that body instead of the fixture, and so, for every symbol,
+    does an endpoint in ``bodies``; ``symbol_bodies`` comes first. A request with no fixture answers
+    404. The fetch workers call it from several threads, so it counts under a lock.
     """
 
     def __init__(self) -> None:
@@ -53,6 +54,7 @@ class Router:
         self.fail_status = 500
         self.requested: dict[str, dict[str, str]] = {}
         self.bodies: dict[str, bytes] = {}
+        self.symbol_bodies: dict[tuple[str, str], bytes] = {}  # by endpoint and symbol
         self.transport = httpx.MockTransport(self._handle)
         self._lock = threading.Lock()
 
@@ -66,7 +68,7 @@ class Router:
             }
         if endpoint in self.fail or symbol in self.fail_symbols:
             return httpx.Response(self.fail_status)
-        body = self.bodies.get(endpoint)
+        body = self.symbol_bodies.get((endpoint, symbol), self.bodies.get(endpoint))
         if body is None:
             if not fixture.is_file():
                 return httpx.Response(404, json={"Error Message": f"no fixture {fixture.name}"})

@@ -1,5 +1,6 @@
-"""Refresh fixtures: a migrated temporary database, the policy, and the vendor clients over the
-fixture router of ``vendor_double`` with a settable clock and no sleeping between retries."""
+"""Refresh fixtures: a migrated temporary database, the policy, the vendor clients over the
+fixture router of ``vendor_double`` with a settable clock and no sleeping between retries, and the
+``refresh_env.Env`` over them."""
 
 import sqlite3
 from collections.abc import Iterator
@@ -9,9 +10,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from refresh_env import Env
+from synthetic import add_company
 from vendor_double import FMP_KEY, GF_TOKEN, Clients, Clock, Router
 
 from fairband.policy import Policy, load_policy
+from fairband.policy.tax import load_tax_table
 from fairband.store.db import connect, migrate
 from fairband.vendors import fmp, gurufocus
 from fairband.vendors.fmp import Fmp
@@ -68,3 +72,27 @@ def clients_with_500_on_quote(clients: Clients, router: Router) -> Clients:
 @pytest.fixture
 def clients_no_gf(clients: Clients) -> Clients:
     return replace(clients, gf=None, secrets=(FMP_KEY,))
+
+
+@pytest.fixture
+def env(
+    tmp_path: Path, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> Iterator[Env]:
+    """A universe that lists ACME and BOLT, the fixtures' companies."""
+    db_path = tmp_path / "data" / "fairband.db"
+    with closing(connect(db_path)) as conn:
+        migrate(conn)
+        universe_id = add_company(conn, symbols=("ACME", "BOLT"))
+    yield Env(db_path, universe_id, clients, router, clock, policy, load_tax_table())
+
+
+@pytest.fixture
+def env_without_universe(
+    tmp_path: Path, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> Iterator[Env]:
+    """No refresh has run: no universe rows, no deciles (``universe_id`` 0, so the first
+    refresh is 1)."""
+    db_path = tmp_path / "data" / "fairband.db"
+    with closing(connect(db_path)) as conn:
+        migrate(conn)
+    yield Env(db_path, 0, clients, router, clock, policy, load_tax_table())
