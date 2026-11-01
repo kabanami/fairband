@@ -53,12 +53,12 @@
      day across a timezone. */
   function readable(iso) {
     if (!iso) return '—';
-    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
-    if (!m) return String(iso);
-    var rest = String(iso).slice(10).trim();
-    // fairband: a timestamp reads as its date; the full ISO stays in datetime and the title.
-    if (rest.charAt(0) === 'T') rest = '';
-    return Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1] + ' ' + m[1] + (rest ? ' ' + rest : '');
+    var s = String(iso);
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (!m) return s;
+    var day = Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1] + ' ' + m[1];
+    var t = /[T ](\d{2}:\d{2})/.exec(s);
+    return t ? day + ', ' + t[1] : day;
   }
 
   function DateText(props) {
@@ -69,6 +69,11 @@
       dateTime: String(iso),
       title: String(iso)
     }, readable(iso));
+  }
+
+  /* Counts are figures, so they group in threes like every other figure. */
+  function fmtCount(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
   /* One currency, so the symbol goes in the text rather than in a caption. */
@@ -107,6 +112,149 @@
       disabled: !!p.disabled,
       onClick: p.onClick
     }, p.children);
+  }
+
+  /* ------------------------------------------------------------------ Mark */
+
+  /* Three unequal bands crossed by a price marker: the cover's picture, cut to
+     the fewest parts that still read at 24px. Drawn inline rather than loaded
+     as an image so it follows the theme; assets/Logos/ holds the flat files for
+     everything outside the app. */
+  function Mark(props) {
+    var p = props || {};
+    var n = p.size || 24;
+    var labelled = p.label !== null;
+    return h('svg', {
+      className: cx('fb-logo', p.tone === 'ink' && 'fb-logo--ink', p.className),
+      width: n, height: n, viewBox: '0 0 32 32',
+      role: labelled ? 'img' : null,
+      'aria-hidden': labelled ? null : 'true',
+      'aria-label': labelled ? (p.label || 'Fairband') : null
+    },
+      h('rect', { className: 'fb-logo__b1', x: 7, y: 4, width: 25, height: 5, rx: 1.5 }),
+      h('rect', { className: 'fb-logo__b2', x: 0, y: 12, width: 32, height: 8, rx: 1.5 }),
+      h('rect', { className: 'fb-logo__b3', x: 11, y: 23, width: 21, height: 5, rx: 1.5 }),
+      h('rect', { className: 'fb-logo__pin', x: 18.6, y: 2, width: 2.8, height: 28, rx: 1.4 }),
+      h('circle', { className: 'fb-logo__pin', cx: 20, cy: 3.6, r: 2.8 })
+    );
+  }
+
+  /* ----------------------------------------------------------- RunProgress */
+
+  /* An engine run over the whole universe. Three states and no fourth: a company
+     is valued, it is waiting, or it failed. Determinate always — the engine knows
+     the universe before it starts, so there is never a reason to show motion in
+     place of a number. */
+  function RunProgress(props) {
+    var p = props || {};
+    var total = Math.max(0, Number(p.total) || 0);
+    if (!total) return null;
+
+    var done = Math.max(0, Math.min(total, Number(p.done) || 0));
+    var failed = Math.max(0, Math.min(total - done, Number(p.failed) || 0));
+    var settled = done + failed;
+    var pending = total - settled;
+    var stage = p.stage || 'valuing';
+
+    function n(v) { return h('span', { className: 'fb-run__n figure-sm' }, fmtCount(v)); }
+
+    var failedPart = failed
+      ? (p.onShowFailed
+          ? h('button', {
+              key: 'f', type: 'button', className: 'fb-run__failed control',
+              onClick: p.onShowFailed, title: 'Show the companies that failed'
+            }, n(failed), ' failed')
+          : h('span', { key: 'f', className: 'fb-run__failed' }, n(failed), ' failed'))
+      : null;
+
+    var track = h('div', {
+      className: 'fb-run__track',
+      role: 'progressbar',
+      'aria-valuemin': 0,
+      'aria-valuemax': total,
+      'aria-valuenow': settled,
+      'aria-label': stage + ', ' + fmtCount(settled) + ' of ' + fmtCount(total)
+        + (failed ? ', ' + fmtCount(failed) + ' failed' : '')
+    },
+      done ? h('div', {
+        className: 'fb-run__seg fb-run__seg--done',
+        style: { width: (done / total) * 100 + '%' }
+      }) : null,
+      failed ? h('div', {
+        className: 'fb-run__seg fb-run__seg--failed',
+        style: { width: (failed / total) * 100 + '%' }
+      }) : null
+    );
+
+    /* Every count that is zero is left out rather than printed as 0. */
+    var counts = [];
+    if (p.compact) {
+      counts.push(h('span', { key: 'o' }, n(settled), ' of ', n(total)));
+    } else {
+      if (done) counts.push(h('span', { key: 'd' }, n(done), ' done'));
+      if (pending) counts.push(h('span', { key: 'p' }, n(pending), ' pending'));
+    }
+    if (failedPart) counts.push(failedPart);
+
+    var joined = [];
+    counts.forEach(function (c, i) {
+      if (i) joined.push(h('span', { key: 's' + i, className: 'fb-run__sep' }, ' · '));
+      joined.push(c);
+    });
+
+    return h('div', {
+      className: cx('fb-run', p.compact && 'fb-run--compact', p.className)
+    },
+      h('span', { className: 'fb-run__stage label' }, stage.toUpperCase()),
+      track,
+      h('span', { className: 'fb-run__counts caption' }, joined)
+    );
+  }
+
+  /* ------------------------------------------------------------- AppHeader */
+
+  function AppHeader(props) {
+    var p = props || {};
+    var views = p.views || [];
+    return h('header', { className: cx('fb-hdr', p.className) },
+      h('span', { className: 'fb-hdr__lock' },
+        h(Mark, { size: 24, label: null }),
+        h('span', { className: 'fb-hdr__name' }, p.name || 'Fairband')),
+      views.length ? h('nav', { className: 'fb-hdr__nav', 'aria-label': 'Views' },
+        views.map(function (v) {
+          var on = v.id === p.view;
+          return h('button', {
+            key: v.id,
+            type: 'button',
+            className: cx('fb-hdr__view', 'control', on && 'is-on'),
+            'aria-current': on ? 'page' : null,
+            onClick: p.onViewChange ? function () { p.onViewChange(v.id); } : null
+          },
+            h('span', null, v.label),
+            v.count ? h('span', { className: 'fb-hdr__count figure-sm' }, v.count) : null
+          );
+        })
+      ) : null,
+      h('div', { className: 'fb-hdr__right' },
+        p.children,
+        /* A run in progress replaces the stamp: the stamp describes the last
+           finished run, and saying when that was while a new one is underway
+           reads as if the numbers below are current. */
+        p.run
+          ? h(RunProgress, {
+              compact: true,
+              total: p.run.total,
+              done: p.run.done,
+              failed: p.run.failed,
+              stage: p.run.stage,
+              onShowFailed: p.run.onShowFailed
+            })
+          : (p.engineRanAt
+              ? h('span', { className: 'fb-hdr__ran caption' },
+                  'engine ran ', h(DateText, { value: p.engineRanAt }))
+              : null)
+      )
+    );
   }
 
   /* ------------------------------------------------------------ PhaseBadge */
@@ -668,6 +816,81 @@
     );
   }
 
+  /* ------------------------------------------------------- screen filters */
+
+  /* Cap size is derived — price x shares, recomputed with everything else — so a
+     company moves between these on its own. The floor is the universe's floor,
+     not a bucket boundary. */
+  var CAPS = [
+    { id: 'mega',  word: 'Mega',  note: '$200B and above' },
+    { id: 'large', word: 'Large', note: '$10B to $200B' },
+    { id: 'mid',   word: 'Mid',   note: '$2B to $10B' },
+    { id: 'small', word: 'Small', note: 'below $2B, down to the size floor' }
+  ];
+
+  /* The eleven GICS sectors, in GICS order. A sector is a fact about the company,
+     not a judgement, so it gets no colour: eleven hues would be a categorical
+     palette, and Fairband does not have one. */
+  var SECTORS = [
+    'Communication Services', 'Consumer Discretionary', 'Consumer Staples',
+    'Energy', 'Financials', 'Health Care', 'Industrials',
+    'Information Technology', 'Materials', 'Real Estate', 'Utilities'
+  ];
+
+  var FILTER_GROUPS = ['stance', 'phase', 'cap', 'sector'];
+  var FILTER_FLAGS = ['reviewedOnly', 'hideExpired'];
+  var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired' };
+
+  var EMPTY_FILTERS = { stance: [], phase: [], cap: [], sector: [],
+                        reviewedOnly: false, hideExpired: false };
+
+  function listOf(f, key) { return (f && f[key]) || []; }
+
+  function capWord(id) {
+    for (var i = 0; i < CAPS.length; i++) if (CAPS[i].id === id) return CAPS[i].word;
+    return id;
+  }
+
+  /* Phases read as a run where they are one: 4, 5, 6 is "Phase 4-6". */
+  function phaseWord(list) {
+    var ns = list.slice().sort(function (a, b) { return a - b; });
+    if (ns.length === 1) return 'Phase ' + ns[0];
+    var run = true;
+    for (var i = 1; i < ns.length; i++) if (ns[i] !== ns[i - 1] + 1) run = false;
+    if (run) return 'Phase ' + ns[0] + '–' + ns[ns.length - 1];
+    if (ns.length <= 3) return 'Phase ' + ns.join(', ');
+    return ns.length + ' phases';
+  }
+
+  /* One chip per group, so the bar says what is on without growing with it. */
+  function summarise(f) {
+    var out = [];
+    if (!f) return out;
+    if (listOf(f, 'stance').length) {
+      out.push({ key: 'stance', word: f.stance.map(function (s) { return STANCE[s] || s; }).join(' + ') });
+    }
+    if (listOf(f, 'phase').length) out.push({ key: 'phase', word: phaseWord(f.phase) });
+    if (listOf(f, 'cap').length) {
+      out.push({ key: 'cap', word: f.cap.length > 2
+        ? f.cap.length + ' cap sizes'
+        : f.cap.map(capWord).join(' + ') + ' cap' });
+    }
+    if (listOf(f, 'sector').length) {
+      out.push({ key: 'sector', word: f.sector.length > 2
+        ? f.sector.length + ' sectors'
+        : f.sector.join(' + ') });
+    }
+    FILTER_FLAGS.forEach(function (k) {
+      if (f[k]) out.push({ key: k, word: FLAG_WORDS[k] });
+    });
+    return out;
+  }
+
+  function anyFilter(f, q) {
+    if (q) return true;
+    return summarise(f).length > 0;
+  }
+
   /* ----------------------------------------------------------- ScreenTable */
 
   // fairband: the formats of the extra columns (spec 6.3). A fraction reads as a percentage to
@@ -738,8 +961,12 @@
     { key: 'entered', head: 'Entered',
       cell: function (r) {
         var f = FRESHNESS[r.freshness] ? r.freshness : 'current';
+        // fairband: a table cell shows the entered date only (values-and-provenance), so a
+        // timestamp here reads as its date; the full ISO stays in datetime and the title.
+        var iso = r.enteredAt ? String(r.enteredAt) : '';
         return h('td', { className: 'fb-screen__when caption' },
-          h(DateText, { value: r.enteredAt }),
+          iso ? h('time', { dateTime: iso, title: iso }, readable(iso.slice(0, 10)))
+            : h(DateText, { value: iso }),
           f === 'current' ? null : h('span', {
             className: 'fb-mark fb-mark--' + f, title: FRESHNESS[f].word
           }, FRESHNESS[f].mark));
@@ -797,6 +1024,7 @@
     var p = props || {};
     var rows = p.rows || [];
     var open = React.useState(false);
+    var fopen = React.useState(false);
     var visible = p.columns || DEFAULT_COLUMNS;
     var shown = COLUMNS.filter(function (c) {
       return c.locked || visible.indexOf(c.key) !== -1;
@@ -810,10 +1038,134 @@
       p.onColumnsChange(next);
     }
 
+    var filters = p.filters || EMPTY_FILTERS;
+    var sectors = p.sectors || SECTORS;
+    var chips = summarise(p.filters);
+    var narrowed = anyFilter(p.filters, p.query);
+
+    function setGroup(key, value) {
+      if (!p.onFiltersChange) return;
+      var next = {};
+      FILTER_GROUPS.forEach(function (k) { next[k] = listOf(filters, k).slice(); });
+      FILTER_FLAGS.forEach(function (k) { next[k] = !!filters[k]; });
+      next[key] = value;
+      p.onFiltersChange(next);
+    }
+
+    function toggleIn(key, value) {
+      var list = listOf(filters, key);
+      setGroup(key, list.indexOf(value) === -1
+        ? list.concat([value])
+        : list.filter(function (v) { return v !== value; }));
+    }
+
+    function clearAll() {
+      if (p.onQueryChange) p.onQueryChange('');
+      if (p.onFiltersChange) {
+        p.onFiltersChange({ stance: [], phase: [], cap: [], sector: [],
+                            reviewedOnly: false, hideExpired: false });
+      }
+    }
+
+    function checkRow(key, on, onChange, label) {
+      return h('label', { key: key, className: 'fb-menu__row control' },
+        h('input', { type: 'checkbox', checked: on, onChange: onChange }),
+        label);
+    }
+
+    function count() {
+      if (p.total == null) return h('span', { className: 'fb-screen__count caption' }, p.footnote);
+      if (!narrowed) {
+        return h('span', { className: 'fb-screen__count caption' },
+          h('b', null, fmtCount(p.total)), ' companies');
+      }
+      return h('span', { className: 'fb-screen__count caption' },
+        h('b', null, fmtCount(rows.length)), ' of ', h('b', null, fmtCount(p.total)),
+        h('span', { className: 'fb-screen__sep' }, ' · '),
+        h('button', { type: 'button', className: 'fb-screen__clear control', onClick: clearAll },
+          'Clear'));
+    }
+
     return h('div', { className: cx('fb-screen', p.dense && 'fb-screen--dense') },
-      p.chooser === false ? null : h('div', { className: 'fb-screen__bar' },
-        h('span', { className: 'fb-screen__count caption' }, p.footnote),
-        h('div', { className: 'fb-screen__cols' },
+      p.chooser === false && !p.onQueryChange && !p.onFiltersChange
+        ? null
+        : h('div', { className: 'fb-screen__bar' },
+        h('div', { className: 'fb-screen__side' },
+          p.onQueryChange ? h('span', { className: 'fb-screen__find' },
+            h('label', { className: 'fb-screen__findlabel label', htmlFor: 'fb-q' }, 'FIND'),
+            h('input', {
+              id: 'fb-q', type: 'text', className: 'fb-screen__q',
+              placeholder: 'Ticker or company', value: p.query || '',
+              onChange: function (e) { p.onQueryChange(e.target.value); }
+            })) : null,
+          chips.length ? h('span', { className: 'fb-screen__chips' },
+            chips.map(function (c) {
+              return h('button', {
+                key: c.key, type: 'button', className: 'fb-screen__chip control',
+                title: 'Remove this filter',
+                onClick: function () {
+                  setGroup(c.key, FILTER_FLAGS.indexOf(c.key) === -1 ? [] : false);
+                }
+              }, c.word);
+            })) : null
+        ),
+        h('div', { className: 'fb-screen__side' },
+          count(),
+          p.onFiltersChange ? h('div', { className: 'fb-screen__cols' },
+            h(Button, {
+              size: 'sm', onClick: function () { fopen[1](!fopen[0]); },
+              'aria-expanded': fopen[0] ? 'true' : 'false'
+            }, 'Filters ▾'),
+            fopen[0] ? h('div', { className: 'fb-menu fb-menu--filters' },
+              h('div', { className: 'fb-menu__body' },
+                h('div', { className: 'fb-menu__sec' },
+                  h('span', { className: 'fb-menu__h label' }, 'STANCE'),
+                  ['buy', 'hold', 'trim'].map(function (k) {
+                    return checkRow(k, listOf(filters, 'stance').indexOf(k) !== -1,
+                      function () { toggleIn('stance', k); },
+                      h('span', null, STANCE[k]));
+                  })),
+                h('hr'),
+                h('div', { className: 'fb-menu__sec' },
+                  h('span', { className: 'fb-menu__h label' }, 'PHASE'),
+                  [1, 2, 3, 4, 5, 6].map(function (n) {
+                    return checkRow('p' + n, listOf(filters, 'phase').indexOf(n) !== -1,
+                      function () { toggleIn('phase', n); },
+                      h(PhaseBadge, { phase: n, size: 'sm' }));
+                  })),
+                h('hr'),
+                h('div', { className: 'fb-menu__sec' },
+                  h('span', { className: 'fb-menu__h label' }, 'CAP SIZE'),
+                  CAPS.map(function (c) {
+                    return checkRow(c.id, listOf(filters, 'cap').indexOf(c.id) !== -1,
+                      function () { toggleIn('cap', c.id); },
+                      h('span', null, c.word,
+                        h('span', { className: 'fb-menu__note caption' }, c.note)));
+                  })),
+                h('hr'),
+                h('div', { className: 'fb-menu__sec' },
+                  h('span', { className: 'fb-menu__h label' }, 'SECTOR'),
+                  sectors.map(function (name) {
+                    return checkRow(name, listOf(filters, 'sector').indexOf(name) !== -1,
+                      function () { toggleIn('sector', name); },
+                      h('span', null, name));
+                  })),
+                h('hr'),
+                h('div', { className: 'fb-menu__sec' },
+                  h('span', { className: 'fb-menu__h label' }, 'VALUE'),
+                  FILTER_FLAGS.map(function (k) {
+                    return checkRow(k, !!filters[k],
+                      function () { setGroup(k, !filters[k]); },
+                      h('span', null, FLAG_WORDS[k]));
+                  }))
+              ),
+              h('div', { className: 'fb-menu__foot' },
+                h('button', {
+                  type: 'button', className: 'fb-menu__reset control', onClick: clearAll
+                }, 'Clear all filters'))
+            ) : null
+          ) : null,
+          p.chooser === false ? null : h('div', { className: 'fb-screen__cols' },
           h(Button, {
             size: 'sm', onClick: function () { open[1](!open[0]); },
             'aria-expanded': open[0] ? 'true' : 'false'
@@ -834,6 +1186,7 @@
               onClick: function () { if (p.onColumnsChange) p.onColumnsChange(DEFAULT_COLUMNS.slice()); }
             }, 'Reset to the default eight')
           ) : null
+        )
         )
       ),
       h('table', { className: 'fb-table' },
@@ -1321,6 +1674,9 @@
   }
 
   global.Fairband = {
+    AppHeader: AppHeader,
+    Mark: Mark,
+    RunProgress: RunProgress,
     ScreenTable: ScreenTable,
     BandHistory: BandHistory,
     HistoryBars: HistoryBars,
@@ -1341,6 +1697,9 @@
     Button: Button,
     PHASES: PHASES,
     DEFAULT_COLUMNS: DEFAULT_COLUMNS,
+    CAPS: CAPS,
+    SECTORS: SECTORS,
+    EMPTY_FILTERS: EMPTY_FILTERS,
     formatDate: readable,
     formatMoney: money,
     // fairband: the extra columns' percentage, for the detail drawer.

@@ -28,6 +28,66 @@ export type Freshness = 'current' | 'aging' | 'expired';
 /** Derived from the price against the buy and trim levels. Never stored. */
 export type Stance = 'buy' | 'hold' | 'trim';
 
+export interface MarkProps {
+  /** Edge length in px. Square. Default 24. Below 20 the three bands fuse. */
+  size?: number;
+  /** `ink` draws it in one ink, for a ground the three colours cannot sit on. */
+  tone?: 'colour' | 'ink';
+  /** Accessible name. Pass `null` when a wordmark beside it already says it. */
+  label?: string | null;
+  className?: string;
+}
+
+export interface RunProgressProps {
+  /** Size of the universe this run covers. 0 renders nothing. */
+  total: number;
+  /** Companies valued so far. */
+  done: number;
+  /** Companies the run could not value. */
+  failed?: number;
+  /** Pending is derived: total - done - failed. Never passed in. */
+  /** A short lowercase verb phrase; `valuing` by default. */
+  stage?: string;
+  /** Makes the failed count a button. Wire it to showing those companies. */
+  onShowFailed?: () => void;
+  /** The header form: a fixed-width track and `2,841 of 4,112`. */
+  compact?: boolean;
+  className?: string;
+}
+
+/** What AppHeader needs to show a run in place of the engine stamp. */
+export interface AppHeaderRun {
+  total: number;
+  done: number;
+  failed?: number;
+  stage?: string;
+  onShowFailed?: () => void;
+}
+
+export interface AppHeaderView {
+  id: string;
+  label: string;
+  /** A waiting count, e.g. proposals in the inbox. Omit or 0 renders nothing. */
+  count?: number;
+}
+
+export interface AppHeaderProps {
+  views?: AppHeaderView[];
+  /** The `id` of the current view. */
+  view?: string;
+  onViewChange?: (id: string) => void;
+  /** ISO timestamp of the last engine run. Rendered `29 Oct 2026, 03:12`. */
+  engineRanAt?: string;
+  /** A run in progress. Replaces `engineRanAt` while it is set, because the
+      stamp describes the last finished run. */
+  run?: AppHeaderRun;
+  /** Overrides the wordmark. There is no reason to. */
+  name?: string;
+  /** Extra controls, placed left of the engine stamp. */
+  children?: unknown;
+  className?: string;
+}
+
 export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'quiet' | 'danger';
   size?: 'sm' | 'md';
@@ -279,14 +339,18 @@ export interface ScreenRow {
   reviewed: number | null;
   /** How many overrides are inside the reviewed value. */
   overrides?: number;
+  /** fairband: an ISO timestamp; the Entered cell shows its date, the full ISO in `datetime`. */
   enteredAt?: string;
   freshness?: Freshness;
   selected?: boolean;
+  /** Derived, like every value: price x shares at the last run. */
+  cap?: CapSize;
+  /** One of SECTORS. A fact about the company, not a judgement. fairband: `null` when unknown. */
+  sector?: string | null;
   /**
    * fairband: the extra columns (spec 6.3). Fractions (`impliedGrowth`, `expectedReturn`, the
    * changes, `drawdown`) render as percentages; dates are ISO. `null` renders an em dash.
    */
-  sector?: string | null;
   capBand?: string | null;
   marketCap?: number | null;
   moat?: string | null;
@@ -309,6 +373,29 @@ export interface ScreenRow {
   priceDate?: string | null;
   dataDate?: string;
   validUntil?: string;
+  /** Rows may carry anything else the caller filters or sorts on; the
+      component reads only the fields above. */
+  [key: string]: unknown;
+}
+
+/** The four buckets above the universe's size floor. */
+export type CapSize = 'mega' | 'large' | 'mid' | 'small';
+
+/**
+ * What the Filters menu holds. Empty arrays and false flags mean no narrowing;
+ * a non-empty array is a whitelist. The component never applies any of it —
+ * it reports changes and the caller filters `rows`.
+ */
+export interface ScreenFilters {
+  stance: Stance[];
+  phase: Phase[];
+  cap: CapSize[];
+  /** Sector names, as they appear in SECTORS. */
+  sector: string[];
+  /** Hide companies whose reviewed value is null. */
+  reviewedOnly: boolean;
+  /** Hide companies whose value is past its validity window. */
+  hideExpired: boolean;
 }
 
 export interface ScreenTableProps {
@@ -335,6 +422,20 @@ export interface ScreenTableProps {
    * row with `selected` carries `aria-current="true"`.
    */
   onOpen?: (row: ScreenRow) => void;
+  /** Free text, shown in the FIND field. Supplying `onQueryChange` is what
+      makes the field appear at all. */
+  query?: string;
+  onQueryChange?: (query: string) => void;
+  /** Current filter state. Supplying `onFiltersChange` is what makes the
+      Filters menu appear. */
+  filters?: ScreenFilters;
+  onFiltersChange?: (filters: ScreenFilters) => void;
+  /** Overrides the eleven GICS sectors in the menu. There is rarely a reason. */
+  sectors?: string[];
+  /** Size of the unfiltered universe. With it the bar says `41 of 4,112`
+      and offers Clear; without it the bar falls back to `footnote`. */
+  total?: number;
+  /** Free text for the count slot. Ignored when `total` is given. */
   footnote?: string;
 }
 
@@ -408,6 +509,9 @@ export interface SensitivityGridProps {
   subtitle?: string;
 }
 
+export declare function AppHeader(props: AppHeaderProps): unknown;
+export declare function Mark(props: MarkProps): unknown;
+export declare function RunProgress(props: RunProgressProps): unknown;
 export declare function Button(props: ButtonProps): unknown;
 export declare function PhaseBadge(props: PhaseBadgeProps): unknown;
 export declare function PrincipalChip(props: PrincipalChipProps): unknown;
@@ -431,7 +535,13 @@ export declare function SensitivityGrid(props: SensitivityGridProps): unknown;
 export declare const PHASES: Record<Phase, string>;
 /** The screen's default eight columns. */
 export declare const DEFAULT_COLUMNS: string[];
-/** ISO date or timestamp in, `3 Dec 2026` out; a timestamp reads as its date (fairband). */
+/** The four cap buckets, each with its word and the range it covers. */
+export declare const CAPS: { id: CapSize; word: string; note: string }[];
+/** The eleven GICS sectors, in GICS order. */
+export declare const SECTORS: string[];
+/** A ScreenFilters with nothing narrowed. Use it as the initial state. */
+export declare const EMPTY_FILTERS: ScreenFilters;
+/** ISO in, `3 Dec 2026` out — or `3 Dec 2026, 09:40` when the string carries a time. */
 export declare function formatDate(iso: string): string;
 /** Number in, `$121.30` out. */
 export declare function formatMoney(value: number): string;

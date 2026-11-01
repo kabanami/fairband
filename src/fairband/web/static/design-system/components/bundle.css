@@ -75,6 +75,133 @@ time { font-variant-numeric: tabular-nums; }
 .fb-btn--danger { color: var(--critical); border-color: var(--border); }
 .fb-btn--danger:hover { background: var(--critical-quiet); border-color: var(--critical); }
 
+/* ----------------------------------------------------------- RunProgress */
+
+/* Three states, each carrying its own word: accent for valued, critical for
+   failed, and the bare track for what has not been reached. The track is
+   band-track tall — the same thin bar ValidityWindow uses, because this is
+   also a bar with no room to label its regions from the inside. */
+.fb-run { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.fb-run__stage { color: var(--ink-muted); flex: none; }
+.fb-run__track {
+  flex: 1 1 auto;
+  min-width: 96px;
+  height: var(--band-track);
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
+}
+.fb-run__seg { height: 100%; transition: width 200ms linear; }
+.fb-run__seg--done { background: var(--accent); }
+/* One failure in four thousand is a third of a pixel. The floor keeps it
+   visible; the count beside the bar is the exact number, and always is. */
+.fb-run__seg--failed { background: var(--critical); min-width: 3px; }
+.fb-run__counts { flex: none; color: var(--ink-faint); white-space: nowrap; }
+.fb-run__n { color: var(--ink); }
+.fb-run__sep { color: var(--ink-faint); }
+
+/* A failure is never only a colour and never only a count: the word is there,
+   and where the caller can show them, the count is the way through. */
+.fb-run__failed { color: var(--critical); }
+button.fb-run__failed {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+button.fb-run__failed:hover { text-decoration: underline; }
+button.fb-run__failed:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+button.fb-run__failed .fb-run__n { color: var(--critical); }
+
+/* In the header the track is a fixed stub: the counts carry the detail. */
+.fb-run--compact { gap: var(--space-2); }
+.fb-run--compact .fb-run__track { flex: none; width: 88px; min-width: 0; }
+
+/* ------------------------------------------------- Mark and AppHeader */
+
+/* fb-logo, not fb-mark: `fb-mark` is already the freshness glyph in a screen row. */
+.fb-logo { display: block; flex: none; }
+.fb-logo__b1  { fill: var(--phase-1); }
+.fb-logo__b2  { fill: var(--accent); }
+.fb-logo__b3  { fill: var(--caution); }
+.fb-logo__pin { fill: var(--ink); }
+
+/* One ink, for a ground the three colours cannot sit on: a print, a favicon
+   mask, a disabled state. The bands keep their order by lightness alone. */
+.fb-logo--ink .fb-logo__b1,
+.fb-logo--ink .fb-logo__b3 { fill: var(--ink); opacity: 0.45; }
+.fb-logo--ink .fb-logo__b2 { fill: var(--ink); opacity: 0.8; }
+
+/* The header is chrome, so it is as short as a 24px mark allows and the
+   content below it starts immediately. */
+.fb-hdr {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-6);
+  height: var(--header-height);
+  padding: 0 var(--space-6);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--hairline);
+}
+.fb-hdr__lock { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; }
+.fb-hdr__name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.fb-hdr__nav { display: flex; align-items: stretch; gap: var(--space-4); }
+.fb-hdr__view {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.fb-hdr__view:hover { color: var(--ink); }
+.fb-hdr__view:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* The current view is never colour alone: it takes the ink weight and a 2px
+   accent edge on the header's own rule, the same pairing a selected row uses. */
+.fb-hdr__view.is-on { color: var(--ink); }
+.fb-hdr__view.is-on::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* A count is a number, so it is mono. radius-sm, not a pill: a pill in
+   Fairband means a point on a scale. */
+.fb-hdr__count {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--prov-input-quiet);
+  color: var(--prov-input);
+}
+.fb-hdr__right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.fb-hdr__ran { color: var(--ink-faint); white-space: nowrap; }
+
 /* ------------------------------------------------------------ PhaseBadge */
 
 .fb-phase {
@@ -515,7 +642,53 @@ time { font-variant-numeric: tabular-nums; }
   gap: var(--space-3);
   margin-bottom: var(--space-2);
 }
-.fb-screen__count { color: var(--ink-faint); }
+.fb-screen__count { color: var(--ink-faint); white-space: nowrap; }
+.fb-screen__count b { color: var(--ink); font-weight: inherit; font-family: var(--font-mono); }
+.fb-screen__sep { color: var(--ink-faint); }
+.fb-screen__clear,
+.fb-screen__chip {
+  appearance: none;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+.fb-screen__clear { background: none; border: 0; padding: 0; color: var(--accent); }
+.fb-screen__clear:hover { text-decoration: underline; }
+
+/* Both ends of the bar group their own controls, so the bar's space-between
+   keeps working however many of them there are. */
+.fb-screen__side { display: flex; align-items: center; gap: var(--space-3); }
+
+/* No icon set, so the field is named by a word in the column-header style
+   rather than by a glyph. */
+.fb-screen__find { display: inline-flex; align-items: center; gap: var(--space-2); }
+.fb-screen__findlabel { color: var(--ink-muted); }
+.fb-screen__q {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 16px;
+  width: 220px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
+  color: var(--ink);
+}
+.fb-screen__q::placeholder { color: var(--ink-faint); font-family: var(--font-sans); }
+.fb-screen__q:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+/* One chip per filter group: what is on, said in words, and clicking it clears
+   that group. Selected styling is the row's — accent border, not colour alone. */
+.fb-screen__chips { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.fb-screen__chip {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--surface-selected);
+  color: var(--ink);
+}
+.fb-screen__chip:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.fb-screen__chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .fb-screen__cols { position: relative; }
 .fb-menu {
   position: absolute;
@@ -541,6 +714,18 @@ time { font-variant-numeric: tabular-nums; }
 .fb-menu__row.is-locked { color: var(--ink-faint); cursor: not-allowed; }
 .fb-menu input { accent-color: var(--accent); }
 .fb-menu hr { border: 0; border-top: 1px solid var(--hairline); margin: var(--space-2) 0; }
+.fb-menu--filters { min-width: 252px; padding: 0; }
+.fb-menu__body { max-height: 368px; overflow-y: auto; padding: var(--space-2); }
+.fb-menu__sec { padding: 0 var(--space-1); }
+.fb-menu__h { display: block; color: var(--ink-muted); margin: var(--space-1) var(--space-2) var(--space-2); }
+.fb-menu__note { display: block; color: var(--ink-faint); }
+.fb-menu--filters .fb-menu__row { align-items: flex-start; }
+.fb-menu__foot {
+  border-top: 1px solid var(--hairline);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
 .fb-menu__reset {
   background: none;
   border: 0;

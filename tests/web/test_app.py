@@ -607,14 +607,16 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 5
+    assert bundle.count("// fairband:") >= 9
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
     assert "Number(p.phase) || 1" not in bundle
     assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
     # A row without levels has no stance: an em dash, never "Hold".
     assert "if (r.price == null || r.buyLevel == null || r.trimLevel == null) {" in bundle
-    # A timestamp reads as its date; the full ISO stays in the datetime attribute.
-    assert "if (rest.charAt(0) === 'T') rest = '';" in bundle
+    # A timestamp in the Entered cell reads as its date; the full ISO stays in the datetime
+    # attribute. formatDate itself keeps the time, which the header's engine stamp shows.
+    assert "iso ? h('time', { dateTime: iso, title: iso }, readable(iso.slice(0, 10)))" in bundle
+    assert "return t ? day + ', ' + t[1] : day;" in bundle
     # A header cell names its column and sorts through onSort, by click, Enter or Space.
     assert "'data-key': c.key" in bundle
     assert "tabIndex: p.onSort ? 0 : null" in bundle
@@ -626,6 +628,39 @@ def test_bundle_patches_marked() -> None:
     assert "role: p.onOpen" not in bundle
     assert "'aria-current': r.selected ? 'true' : null" in bundle
     assert "'aria-selected'" not in bundle
+
+
+def test_bundle_is_the_november_build() -> None:
+    bundle = _component_file("bundle.js")
+    for name in ("AppHeader", "RunProgress", "Mark", "CAPS", "SECTORS", "EMPTY_FILTERS"):
+        assert f"{name}: {name}" in bundle, name  # exported on window.Fairband
+    assert "'fb-logo" in bundle and "'fb-screen__find'" in bundle
+    tokens = (
+        resources.files("fairband.web")
+        .joinpath("static/design-system/tokens/tokens.css")
+        .read_text()
+    )
+    assert "--header-height: 44px;" in tokens
+
+
+def test_bundle_keeps_the_freshness_glyph_class() -> None:
+    bundle = _component_file("bundle.js")
+    assert "className: 'fb-mark fb-mark--' + f" in bundle
+    css = _component_file("bundle.css")
+    assert ".fb-mark--aging" in css and ".fb-logo" in css
+
+
+def test_logos_served(client: TestClient) -> None:
+    for name in (
+        "mark-on-dark.svg",
+        "mark-on-light.svg",
+        "mark-one-ink-on-dark.svg",
+        "mark-one-ink-on-light.svg",
+    ):
+        response = client.get(f"/static/design-system/assets/Logos/{name}")
+        assert response.status_code == 200 and response.headers["content-type"].startswith(
+            "image/svg"
+        ), name
 
 
 def test_index_d_ts_declares_onSort() -> None:

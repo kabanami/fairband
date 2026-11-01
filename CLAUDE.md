@@ -12,8 +12,8 @@ Package in `src/fairband/`; tests in `tests/`, mirroring the package.
 - Plan: `docs/superpowers/plans/2026-10-31-mechanical-screen.md`. The task order and the
   global constraints every task follows.
 - Brand book: `fairband-design-system/docs/brand-book.md` inside the archive
-  `docs/design-system/fairband-design-system_2.tar.gz`. Read it without unpacking:
-  `tar -xzOf docs/design-system/fairband-design-system_2.tar.gz fairband-design-system/docs/brand-book.md`
+  `docs/design-system/fairband-design-system_4.tar.gz`. Read it without unpacking:
+  `tar -xzOf docs/design-system/fairband-design-system_4.tar.gz fairband-design-system/docs/brand-book.md`
 
 ## Keys and data
 
