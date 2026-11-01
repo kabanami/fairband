@@ -526,7 +526,7 @@ def test_cli_off_the_main_thread_leaves_sigint_alone(
     ("argv", "message"),
     [
         (["refresh", ","], "no symbols given"),
-        (["refresh"], "a full refresh is not built yet"),
+        (["refresh", "ACME", "--kind", "full"], "a full refresh takes no symbols"),
         (["refresh", "ACME", "--kind", "price"], "a price refresh is not built yet"),
         (["refresh", "--kind", "scoped"], "a scoped refresh needs symbols"),
     ],

@@ -3,17 +3,20 @@
 import argparse
 import logging
 import signal
+import sqlite3
 import sys
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from types import FrameType
+from typing import Any
 
 import uvicorn
 
 from fairband import __version__
 from fairband.config import (
     DEFAULT_PORT,
+    Keys,
     MissingKey,
     Settings,
     keys_path,
@@ -22,20 +25,23 @@ from fairband.config import (
     require,
     utcnow,
 )
+from fairband.engine.types import PHASE_NUMBER
 from fairband.policy import load_policy
 from fairband.policy.tax import load_tax_table
 from fairband.refresh.clients import build_clients
-from fairband.refresh.run import Progress, Refresh
+from fairband.refresh.run import KINDS, UNCLASSIFIED, Progress, Refresh
+from fairband.refresh.worker import RefreshWorker
 from fairband.store.db import connect, migrate
-from fairband.store.refreshes import RefreshRunning, latest_refresh
+from fairband.store.refreshes import RefreshRunning, latest_refresh, mark_interrupted
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
 from fairband.web.app import create_app
 
 logger = logging.getLogger("fairband")
 
 _HOST = "127.0.0.1"  # the screen is for this machine only (D11)
-REFRESH_KINDS = ("full", "price", "scoped")
 _PRIVATE_BITS = 0o077  # group and other
+_NO_GF_KEY = "no GuruFocus key: the moat score and the GuruFocus EPS are not fetched"
+_WAY_OUT = "Start the server, or run migrate, to mark an interrupted refresh."
 
 
 def _symbol_list(text: str) -> list[str]:
@@ -61,11 +67,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     refresh.add_argument(
         "--kind",
-        choices=REFRESH_KINDS,
+        choices=KINDS,
         help="default: scoped when symbols are given, full otherwise",
     )
 
-    commands.add_parser("migrate", help="apply the database migrations")
+    commands.add_parser(
+        "migrate", help="apply the database migrations and mark interrupted refreshes"
+    )
     return parser
 
 
@@ -77,35 +85,58 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _serve(args: argparse.Namespace) -> int:
-    """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. No
-    key is read: serving calls no vendor."""
+    """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. With
+    an FMP key the server runs refreshes on its worker, whose thread alone calls the vendors;
+    without one it serves the screen and refuses refreshes."""
     settings = load_settings()
-    policy = load_policy()
+    policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
         migrate(conn)
-    app = create_app(settings, policy, lambda: connect(settings.db_path))
-    uvicorn.run(app, host=_HOST, port=args.port, log_level="info")
+
+    def conn_factory() -> sqlite3.Connection:
+        return connect(settings.db_path)
+
+    keys = _keys(settings)
+    worker = None
+    if keys.fmp is None:
+        logger.warning("%s; the screen is served without refreshes", MissingKey("fmp"))
+    else:
+        fmp, gf, secrets = build_clients(keys, policy)
+        worker = RefreshWorker(
+            lambda cancel, on_progress: Refresh(
+                conn_factory, fmp, gf, policy, tax, utcnow, cancel, on_progress, secrets
+            )
+        )
+    app = create_app(settings, policy, conn_factory, worker)
+    try:
+        uvicorn.run(app, host=_HOST, port=args.port, log_level="info")
+    finally:
+        # A run still alive holds the clients, so they close with the process, which ends now:
+        # closed here, they would fail the companies in flight. The cancel keeps the run from
+        # starting another meanwhile; the next start marks its record interrupted.
+        if worker is not None:
+            worker.cancel()
     return 0
 
 
 def _refresh(args: argparse.Namespace) -> int:
-    """A scoped refresh of the named symbols in the foreground, then one line per symbol from
-    its latest snapshot. Exits 0 when the refresh is done, 1 when not, 2 when it cannot start."""
+    """A refresh in the foreground with its progress lines, then, for a scoped refresh, one line
+    per symbol from its latest snapshot, and for a full one its calibration. Exits 0 when the
+    refresh is done, 1 when not, 2 when it cannot start."""
     if args.symbols == []:
         return _usage("no symbols given: name them as AAPL,MSFT")
-    if args.kind != "scoped":
-        return _usage(f"a {args.kind} refresh is not built yet")
-    if not args.symbols:
+    if args.kind == "price":
+        return _usage("a price refresh is not built yet")
+    if args.kind == "scoped" and not args.symbols:
         return _usage("a scoped refresh needs symbols, e.g. AAPL,MSFT")
+    if args.kind == "full" and args.symbols:
+        return _usage("a full refresh takes no symbols: name none, or add --kind scoped")
     settings = load_settings()
-    _warn_if_others_can_read_keys(settings)
-    keys = load_keys(settings)
+    keys = _keys(settings)
     try:
         require(keys, "fmp")
     except MissingKey as exc:
         return _usage(str(exc))
-    if keys.gurufocus is None:
-        logger.warning("no GuruFocus key: the moat score and the GuruFocus EPS are not fetched")
     policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
         migrate(conn)
@@ -124,9 +155,9 @@ def _refresh(args: argparse.Namespace) -> int:
             secrets,
         )
         with _ctrl_c_cancels(cancel):
-            refresh_id = refresh.run("scoped", args.symbols)
+            refresh_id = refresh.run(args.kind, args.symbols)
     except RefreshRunning as exc:
-        print(f"{exc}; try again when it has finished", file=sys.stderr)
+        print(f"{exc}; try again when it has finished. {_WAY_OUT}", file=sys.stderr)
         return 1
     finally:
         fmp.close()
@@ -134,11 +165,15 @@ def _refresh(args: argparse.Namespace) -> int:
             gf.close()
     with closing(connect(settings.db_path)) as conn:
         last = latest_refresh(conn)  # ours, unless another refresh has started since
-        rows = [(symbol, latest_snapshot(conn, symbol)) for symbol in dict.fromkeys(args.symbols)]
+        symbols = dict.fromkeys(args.symbols or ())
+        rows = [(symbol, latest_snapshot(conn, symbol)) for symbol in symbols]
     ours = last if last is not None and last.id == refresh_id else None
     status = "unknown" if ours is None else ours.status
     message = None if ours is None else ours.message
     print(f"refresh {refresh_id}: {status}" + (f": {message}" if message else ""))
+    if ours is not None and ours.calibration is not None:
+        for line in _calibration_lines(ours.calibration):
+            print(line)
     for symbol, snapshot in rows:
         print(_snapshot_line(symbol, snapshot))
     return 0 if status == "done" else 1
@@ -168,6 +203,16 @@ def _ctrl_c_cancels(cancel: threading.Event) -> Iterator[None]:
 def _usage(message: str) -> int:
     print(message, file=sys.stderr)
     return 2
+
+
+def _keys(settings: Settings) -> Keys:
+    """The vendor keys, read after a warning when others can read the keys file; a warning too
+    when an FMP key comes without a GuruFocus one."""
+    _warn_if_others_can_read_keys(settings)
+    keys = load_keys(settings)
+    if keys.fmp is not None and keys.gurufocus is None:
+        logger.warning(_NO_GF_KEY)
+    return keys
 
 
 def _warn_if_others_can_read_keys(settings: Settings) -> None:
@@ -201,13 +246,31 @@ def _snapshot_line(symbol: str, snapshot: SnapshotRow | None) -> str:
     return f"{symbol}  {phase}  value {snapshot.value:.2f}  stance {snapshot.stance5}"
 
 
+def _calibration_lines(calibration: dict[str, Any]) -> list[str]:
+    """``1,812 companies · 1,540 valued``, a line per phase in life-cycle order, then each refusal
+    reason with its count, the most frequent first."""
+    phases, refused = calibration["phases"], calibration["refused"]
+    lines = [f"{calibration['total']:,} companies · {calibration['valued']:,} valued"]
+    lines += [f"{phase}: {phases.get(phase, 0):,}" for phase in (*PHASE_NUMBER, UNCLASSIFIED)]
+    by_count = sorted(refused.items(), key=lambda item: (-item[1], item[0]))
+    lines += [f"{count:,} refused: {reason}" for reason, count in by_count]
+    return lines
+
+
 def _migrate(args: argparse.Namespace) -> int:
+    """Apply the pending migrations, then mark ``interrupted`` the refreshes a server or a
+    command that stopped left ``running``, as the server does when it starts."""
     with closing(connect(load_settings().db_path)) as conn:
         applied = migrate(conn)
+        interrupted = mark_interrupted(conn, utcnow())
     for filename in applied:
         print(f"Applied {filename}")
     if not applied:
         print("No migrations to apply.")
+    if interrupted:
+        print(
+            f"Marked {interrupted} running refresh{'' if interrupted == 1 else 'es'} interrupted."
+        )
     return 0
 
 

@@ -609,6 +609,8 @@ def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, polic
 def test_serve_cli_parses_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)  # no worker: test_refresh_api has it
+    monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
     calls: list[tuple[Any, dict[str, Any]]] = []
     monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append((app, kwargs)))
 

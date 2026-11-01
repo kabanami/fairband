@@ -69,10 +69,11 @@ def test_admits_and_excludes_each_fixture_case(
     result = build(conn, clients, policy, clock)
     # One common stock on each exchange, the BRK-B share class in the exchange form, the ADR.
     assert result.admitted == ("ACME", "BOLT", "BRK.B", "CAPE", "ADRX")
-    # The OTC listing, the listing below the floor, the ETF and the second ACME are skipped.
+    # The OTC listing, the listing below the floor, the ETF and the second ACME are skipped. The
+    # SPAC's units (NEWC.U) meet the industry rule before the symbol rule.
     assert result.excluded == {
-        "industry": 2,
-        "symbol pattern": 3,
+        "industry": 3,
+        "symbol pattern": 2,
         "manual exclusion": 0,
         "skipped": 4,
     }
@@ -86,7 +87,7 @@ def test_admits_and_excludes_each_fixture_case(
         "BRK.B": (True, None),
         "CAPE": (True, None),
         "FIRB": (False, "industry: Banks - Regional"),
-        "NEWC.U": (False, "symbol pattern"),
+        "NEWC.U": (False, "industry: Shell Companies"),
         "OFFR": (False, "industry: REIT - Office"),
     }
     assert rows["ACME"] == CompanyRow(
@@ -179,6 +180,11 @@ def test_stored_screener_response_is_scrubbed(
     build(conn, clients, policy, clock)
     [response] = screener_responses(conn)
     assert FMP_KEY not in response["payload"] and "<key>" in response["payload"]
+    # The rows come from the scrubbed text, called afresh or reused.
+    assert stored(conn)["ACME"].name == "Acme <key>"
+    clock.now += timedelta(hours=1)
+    build(conn, clients, policy, clock)
+    assert router.calls["screener"] == 1 and stored(conn)["ACME"].name == "Acme <key>"
 
 
 @pytest.mark.parametrize(
@@ -194,6 +200,7 @@ def test_stored_screener_response_is_scrubbed(
         "Insurance Brokers",  # no dash
         "Reit office",
         "REIT  -  Office",
+        "Shell Companies",  # SPACs (design.md 2)
     ],
 )
 def test_industry_excluded_whatever_its_case_and_dashes(

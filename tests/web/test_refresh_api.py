@@ -1,7 +1,9 @@
 """The refresh routes and the D11 guards through the app, on a temporary migrated database, with a
-``RefreshWorker`` over FMP on a mock transport. ``fetch_company`` is replaced by a gate that holds
-each fetch until the test releases it, so a run stays in its fetch stage while the test looks."""
+``RefreshWorker`` over FMP on a mock transport, and the ``serve`` command that builds them.
+``fetch_company`` is replaced by a gate that holds each fetch until the test releases it, so a run
+stays in its fetch stage while the test looks."""
 
+import logging
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import closing
@@ -12,9 +14,11 @@ from typing import Any
 
 import httpx
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 
-from fairband.config import DEFAULT_PORT, Settings
+from fairband import __main__ as cli
+from fairband.config import DEFAULT_PORT, Keys, MissingKey, Settings
 from fairband.engine import METHOD_VERSION
 from fairband.policy import Policy, load_policy
 from fairband.policy.tax import load_tax_table
@@ -285,3 +289,73 @@ def test_untrusted_host_400(client_with_worker: TestClient) -> None:
 def test_app_js_posts_with_the_request_header() -> None:
     script = resources.files("fairband.web").joinpath("static", "app.js").read_text("utf-8")
     assert "'X-Fairband-Request': '1'" in script
+
+
+# --- python -m fairband serve ----------------------------------------------------------------
+
+
+def serve_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[Any]:
+    """Point ``serve`` at a temporary data and config directory, with no key in the environment,
+    and stand in for uvicorn: while "serving", it starts a full refresh through the app and reads
+    the result; the list gets the response and the body."""
+    monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
+    monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
+    served: list[Any] = []
+
+    def run_app(app: Any, **kwargs: Any) -> None:
+        with TestClient(app, base_url=HOST) as client:
+            served.append(start(client, kind="full"))
+            join_runs()
+            served.append(current(client))
+
+    monkeypatch.setattr(uvicorn, "run", run_app)
+    return served
+
+
+def test_serve_without_an_fmp_key_has_no_worker(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The screen is served all the same; the keys file's mode is checked as the command does."""
+    served = serve_env(monkeypatch, tmp_path)
+    keys_file = tmp_path / "config" / "fairband" / "keys.toml"
+    keys_file.parent.mkdir(parents=True)
+    keys_file.write_text('[keys]\ngurufocus = "fakegfhalf:fakegfhalf2"\n')
+    keys_file.chmod(0o644)
+    with caplog.at_level(logging.WARNING):
+        assert cli.main(["serve"]) == 0
+    assert [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING] == [
+        f"{keys_file} has mode 0644: other users can read it; chmod 600 it",
+        f"{MissingKey('fmp')}; the screen is served without refreshes",
+    ]
+    response, body = served
+    assert response.status_code == 503
+    assert body == {"refresh": None, "last": None, "error": None}
+    assert "fakegfhalf" not in caplog.text
+
+
+def test_serve_builds_a_worker_with_the_keys(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture, fmp: Fmp
+) -> None:
+    served = serve_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FAIRBAND_FMP_KEY", KEY)
+    built: list[str | None] = []
+
+    def clients(keys: Keys, policy: Policy) -> tuple[Fmp, None, tuple[str, ...]]:
+        built.append(keys.fmp)
+        return fmp, None, (KEY,)
+
+    monkeypatch.setattr(cli, "build_clients", clients)
+    with caplog.at_level(logging.WARNING):
+        assert cli.main(["serve"]) == 0
+    assert built == [KEY]
+    assert [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING] == [
+        "no GuruFocus key: the moat score and the GuruFocus EPS are not fetched"
+    ]
+    response, body = served
+    assert (response.status_code, response.json()) == (200, {"refreshId": 1})
+    # The mock FMP's screener has no rows: the worker ran the refresh, and it failed on that.
+    assert body["last"]["status"] == "failed"
+    assert body["error"] == "ValueError: screener returned no rows"
+    assert KEY not in caplog.text

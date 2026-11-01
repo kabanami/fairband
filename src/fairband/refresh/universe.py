@@ -3,7 +3,8 @@
 ``build_universe`` refuses to run inside a transaction. It reads the newest screener response
 observed less than ``reuse_hours`` before ``now`` (stored as ``fetch`` stores a call: provider
 ``fmp``, endpoint ``screener``, params ``{}``, no symbol), else calls ``Fmp.screener`` and stores
-the response, its body scrubbed of ``secrets``. Then, per screener row in payload order:
+the response, its body scrubbed of ``secrets``. Either way the rows are parsed from the scrubbed
+text, so no key reaches a ``companies`` row. Then, per screener row in payload order:
 
 1. the exchange, upper-cased, is not one of ``policy.universe.exchanges`` (an OTC listing, or no
    exchange): skipped;
@@ -23,8 +24,9 @@ and market cap; ``is_adr`` is false and ``currency`` ``None`` because the screen
 them (the profile and the statements give them, ``refresh.inputs``); only an admitted row has a cap
 band. The rows go in one transaction, with ``observed_at`` the screener response's.
 
-The industry match: the policy lists FMP's industry strings for banks, insurers and REITs, taken
-from FMP's published vocabulary; without a live key, the live screener's strings are unconfirmed.
+The industry match: the policy lists FMP's industry strings for banks, insurers, REITs and shell
+companies (SPACs), taken from FMP's published vocabulary; without a live key, the live screener's
+strings are unconfirmed.
 So the industry and each entry are normalized (lower-cased, each hyphen, en dash and em dash made
 a space, whitespace collapsed), and an industry is excluded when it equals an entry or starts with
 an entry and a space. The bare ``Banks``, ``Insurance`` and ``REIT`` entries then also cover a
@@ -126,7 +128,7 @@ def _screener(
         hours=policy.refresh.reuse_hours
     ):
         stored = response_payload(conn, latest.id)
-        rows = screener_rows(json.loads(stored)) if stored is not None else []
+        rows = _rows(stored) if stored is not None else []
         if rows:
             return rows, latest.observed_at
     try:
@@ -136,7 +138,7 @@ def _screener(
         record_response(conn, PROVIDER, ENDPOINT, _PARAMS, None, exc.status, None, message, now)
         raise
     payload = scrub(response.text, secrets)
-    rows = screener_rows(response.json)
+    rows = _rows(payload)
     # The payload was scrubbed before it is cut, so no part of a key is left.
     error = None if rows else f"unusable payload: {' '.join(payload.split())[:_DETAIL_CHARS]}"
     record_response(
@@ -153,6 +155,14 @@ def _screener(
     if not rows:
         raise ValueError("screener returned no rows")
     return rows, response.observed_at
+
+
+def _rows(payload: str) -> list[ScreenerRow]:
+    """The screener rows of a scrubbed payload; none when it is not JSON."""
+    try:
+        return screener_rows(json.loads(payload))
+    except json.JSONDecodeError:
+        return []
 
 
 def _listed(row: ScreenerRow, universe: UniversePolicy, exchanges: set[str]) -> bool:

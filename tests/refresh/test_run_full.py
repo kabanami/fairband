@@ -10,14 +10,16 @@ from collections import Counter
 from collections.abc import Callable
 from contextlib import closing
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from fixture_universe import ADMITTED, serve_universe
-from refresh_env import Env
+from refresh_env import Env, use_cli
 from vendor_double import FMP_KEY
 
+from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Settings
 from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
@@ -344,3 +346,65 @@ def test_startup_marks_interrupted(env: Env, caplog: pytest.LogCaptureFixture) -
         row = env.last()
         assert (row.id, row.status, row.finished_at) == (left, "interrupted", env.clock.now)
     assert "1 running refresh marked interrupted" in caplog.messages
+
+
+# --- python -m fairband refresh | migrate ----------------------------------------------------
+
+
+def test_cli_full_refresh_prints_calibration(
+    env_fixture_universe: Env,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    env = env_fixture_universe
+    use_cli(env, monkeypatch, tmp_path)
+    assert cli.main(["refresh"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[:3] == [
+        "universe: 0 done, 0 failed, 0 to go",
+        "universe: 4 done, 0 failed, 0 to go",
+        "fetch: 0 done, 0 failed, 4 to go",
+    ]
+    assert "deciles: 4 done, 0 failed, 0 to go" in out
+    assert out[out.index("done: 4 done, 0 failed, 0 to go") :] == [
+        "done: 4 done, 0 failed, 0 to go",
+        "refresh 1: done",
+        "4 companies · 3 valued",
+        "Start-up: 0",
+        "Young Growth: 1",
+        "High Growth: 0",
+        "Mature Growth: 2",
+        "Mature Stable: 1",
+        "Decline: 0",
+        "unclassified: 0",
+        f"1 refused: {NOT_BUILT}",
+    ]
+    assert env.last().calibration == CALIBRATION
+
+
+def test_migrate_marks_an_interrupted_refresh(
+    env: Env,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A refresh a killed command left running blocks the next one; the message names the way
+    out, and ``migrate`` takes it without the server."""
+    use_cli(env, monkeypatch, tmp_path)
+    with closing(env.connect()) as conn:
+        left = create_refresh(conn, "scoped", ["ACME"], env.policy.version, "m", env.clock())
+    assert cli.main(["refresh", "ACME"]) == 1
+    assert capsys.readouterr().err.splitlines()[-1] == (
+        f"refresh {left} is running; try again when it has finished."
+        " Start the server, or run migrate, to mark an interrupted refresh."
+    )
+    assert cli.main(["migrate"]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "No migrations to apply.",
+        "Marked 1 running refresh interrupted.",
+    ]
+    assert (env.last().id, env.last().status) == (left, "interrupted")
+    assert cli.main(["refresh", "ACME"]) == 0
+    assert cli.main(["migrate"]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "No migrations to apply."

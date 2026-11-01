@@ -132,10 +132,11 @@ cap_floor_usd = 2e9
 # Lower bounds in USD, largest first.
 cap_bands = [[200e9, "Mega"], [10e9, "Large"], [2e9, "Mid"]]
 # Every FMP industry string for banks, insurance and REITs, from FMP's available-industries
-# vocabulary (checked 2026-10-31 against three published copies of that list). The universe build
-# compares them ignoring case and dash style, and also excludes an industry that starts with an
-# entry and a space, so the bare Banks, Insurance and REIT entries cover a string the list does
-# not name (Banks—Regional, Insurance Brokers).
+# vocabulary (checked 2026-10-31 against three published copies of that list), and Shell
+# Companies, FMP's industry for SPACs, which design.md 2 excludes as listings that are not
+# operating companies. The universe build compares them ignoring case and dash style, and also
+# excludes an industry that starts with an entry and a space, so the bare Banks, Insurance and
+# REIT entries cover a string the list does not name (Banks—Regional, Insurance Brokers).
 excluded_industries = [
   "Banks",
   "Banks - Diversified",
@@ -157,6 +158,7 @@ excluded_industries = [
   "REIT - Residential",
   "REIT - Retail",
   "REIT - Specialty",
+  "Shell Companies",
 ]
 # Regular expressions for preferred shares, warrants, units and rights, in FMP's dash form
 # (ACME-PA) and the exchange's dot form the screener rows come back in (XYZ-U becomes XYZ.U). A
