@@ -1041,7 +1041,7 @@
     var open = React.useState(false);
     var fopen = React.useState(false);
     // fairband: the drag in progress (the dragged key) and whether a drop just ended one, whose
-    // click must not sort; `over` is the header showing the drop edge.
+    // click must not sort; `over` is the header showing the drop edge and the side it shows on.
     var drag = React.useRef({ from: null, dropped: false });
     var over = React.useState(null);
     var visible = p.columns || DEFAULT_COLUMNS;
@@ -1072,11 +1072,17 @@
           if (from == null) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
-          over[1](from === c.key ? null : c.key);
+          // fairband: the edge shows where the column will land: a column from the left lands
+          // after the target (its trailing edge), one from the right before it (its leading edge).
+          var after = visible.indexOf(from) < visible.indexOf(c.key);
+          over[1](function (o) {
+            if (from === c.key) return null;
+            return o && o.key === c.key && o.after === after ? o : { key: c.key, after: after };
+          });
         },
         onDragLeave: function (e) {
           if (e.currentTarget.contains(e.relatedTarget)) return;
-          over[1](function (k) { return k === c.key ? null : k; });
+          over[1](function (o) { return o && o.key === c.key ? null : o; });
         },
         onDrop: function (e) {
           var from = drag.current.from;
@@ -1259,9 +1265,11 @@
           var sorted = p.sort && p.sort.column === c.key;
           return h('th', Object.assign({
             key: c.key,
-            // fairband: is-drop marks the header a dragged column is over.
+            // fairband: the header a dragged column is over carries the drop edge on the side
+            // where the column will land.
             className: cx('label', c.num && 'fb-num', sorted && 'is-sorted',
-              over[0] === c.key && 'is-drop'),
+              over[0] && over[0].key === c.key &&
+                (over[0].after ? 'is-drop-after' : 'is-drop-before')),
             'aria-sort': sorted ? (p.sort.direction === 'desc' ? 'descending' : 'ascending') : null,
             // fairband: the cell names its column; given onSort, a click, Enter or Space asks
             // the consumer to sort by it. The component still sorts nothing itself. The click

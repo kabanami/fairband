@@ -707,7 +707,7 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 17
+    assert bundle.count("// fairband:") >= 18
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
     assert "Number(p.phase) || 1" not in bundle
     assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
@@ -750,7 +750,11 @@ def test_bundle_orders_columns_by_the_list() -> None:
     assert "COLUMN_KEYS: COLUMNS.map(function (c) { return c.key; })" in bundle
     assert bundle.count("// fairband:") >= 10
     css = _component_file("bundle.css")
-    assert "th.is-drop { box-shadow: inset 2px 0 0 var(--accent); }" in css
+    assert "th.is-drop-before { box-shadow: inset 2px 0 0 var(--accent); }" in css
+    assert "th.is-drop-after { box-shadow: inset -2px 0 0 var(--accent); }" in css
+    # The edge is on the side where the column will land: after the target when it comes from
+    # the left.
+    assert "var after = visible.indexOf(from) < visible.indexOf(c.key);" in bundle
 
 
 def test_bundle_is_the_november_build() -> None:
