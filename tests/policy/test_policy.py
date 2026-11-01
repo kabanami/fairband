@@ -1,4 +1,5 @@
 import hashlib
+import re
 from importlib import resources
 from pathlib import Path
 
@@ -49,3 +50,26 @@ def test_missing_value_names_its_section(tmp_path: Path, section: str) -> None:
     copy.write_text(text.replace(f"[values.{section}", f"[values.renamed_{section}"))
     with pytest.raises(ValueError, match=rf"\[values\.{section}\]"):
         load_policy(copy)
+
+
+@pytest.mark.parametrize(
+    ("symbol", "excluded"),
+    [
+        ("BRK.B", False),
+        ("BF.A", False),
+        ("ACME", False),
+        ("XYZ.U", True),
+        ("XYZ-U", True),
+        ("ABC-PA", True),
+        ("ABC.PA", True),
+        ("DEF.WS", True),
+        ("DEF-WS", True),
+        ("GHI.R", True),
+        ("GHI-R", True),
+    ],
+)
+def test_symbol_patterns_match_both_vendor_forms(symbol: str, excluded: bool) -> None:
+    """FMP's dash and the exchange's dot (``screener_rows`` turns ``XYZ-U`` into ``XYZ.U``); a
+    share class such as ``BRK.B`` is not a preferred, warrant, unit or right."""
+    patterns = load_policy().universe.symbol_exclude_patterns
+    assert any(re.search(pattern, symbol) for pattern in patterns) is excluded

@@ -153,8 +153,10 @@ excluded_industries = [
   "REIT - Retail",
   "REIT - Specialty",
 ]
-# Regular expressions for preferred shares, warrants, units and rights.
-symbol_exclude_patterns = ['-P[A-Z]?$', '-W[ST]?$', '-U$', '-R$', '\.W[ST]$']
+# Regular expressions for preferred shares, warrants, units and rights, in FMP's dash form
+# (ACME-PA) and the exchange's dot form the screener rows come back in (XYZ-U becomes XYZ.U). A
+# share class (BRK.B, BF.A) has another letter after its dot and passes.
+symbol_exclude_patterns = ['[-.]P[A-Z]?$', '[-.]W[ST]?$', '[-.]U$', '[-.]R$']
 manual_exclusions = []
 
 [values.refresh]
