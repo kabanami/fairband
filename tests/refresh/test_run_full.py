@@ -295,8 +295,9 @@ def test_worker_waits_for_abandoned_fetches(env: Env, monkeypatch: pytest.Monkey
     fetch_company = run_module.fetch_company
 
     def blocked_for_bolt(*args: Any) -> Any:
-        if "BOLT" in args:
+        if "BOLT" in args:  # given up: what it returns is never read
             release.wait(5)
+            raise RuntimeError("released")
         return fetch_company(*args)
 
     monkeypatch.setattr(run_module, "fetch_company", blocked_for_bolt)
@@ -312,7 +313,7 @@ def test_worker_waits_for_abandoned_fetches(env: Env, monkeypatch: pytest.Monkey
 
         return env.refresh(cancel=cancel, then=stop_after_acme)
 
-    worker = RefreshWorker(make_refresh, wait_s=0.2)
+    worker = RefreshWorker(make_refresh, wait_s=0.5)
     first = worker.start("scoped", ["ACME", "BOLT"])
     try:
         join_threads("fairband-refresh")

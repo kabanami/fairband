@@ -42,16 +42,21 @@ MISSING_HEADER = {"detail": "missing X-Fairband-Request header"}
 
 class Gate:
     """Stands in for ``fetch_company``: each fetch waits for ``release``, then reports its symbol
-    fetched with nothing called. ``entered`` is set when the first fetch starts."""
+    fetched with nothing called."""
 
     def __init__(self) -> None:
-        self.entered = threading.Event()
+        self._entered = threading.Semaphore(0)
         self.release = threading.Event()
 
     def __call__(self, conn: Any, fmp: Any, gf: Any, symbol: str, *rest: Any) -> FetchOutcome:
-        self.entered.set()
+        self._entered.release()
         self.release.wait(5)
         return FetchOutcome(symbol, 0, 0, (), None)
+
+    def wait_entered(self, fetches: int) -> None:
+        """Wait until ``fetches`` fetches have started."""
+        for _ in range(fetches):
+            assert self._entered.acquire(timeout=5)
 
 
 def join_runs() -> None:
@@ -161,7 +166,7 @@ def test_api_start_status_cancel(client_with_worker: TestClient, gate: Gate, db_
     client = client_with_worker
     response = start(client, kind="scoped", symbols=["ACME", "BOLT"])
     assert (response.status_code, response.json()) == (200, {"refreshId": 1})
-    assert gate.entered.wait(5)
+    gate.wait_entered(2)  # both fetching: the run starts no other until one ends
     assert current(client) == {
         "refresh": {
             "id": 1,
@@ -205,7 +210,7 @@ def test_api_refuses_second_refresh(
 ) -> None:
     client = client_with_worker
     first = start(client, kind="scoped", symbols=["ACME"]).json()["refreshId"]
-    assert gate.entered.wait(5)
+    gate.wait_entered(1)
     response = start(client, kind="full")
     assert (response.status_code, response.json()) == (409, {"running": first})
     gate.release.set()
