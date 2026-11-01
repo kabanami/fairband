@@ -39,7 +39,8 @@ export interface ButtonProps {
 }
 
 export interface PhaseBadgeProps {
-  phase: Phase;
+  /** fairband: `null` when the engine could not classify the company; renders an em dash. */
+  phase: Phase | null;
   /** A shorter synonym only — never a different taxonomy. */
   label?: string;
   showLabel?: boolean;
@@ -263,12 +264,14 @@ export interface ConfirmDialogProps {
 export interface ScreenRow {
   ticker: string;
   name: string;
-  phase: Phase;
+  /** fairband: `null` when the engine could not classify the company. */
+  phase: Phase | null;
   fairLow: number;
   fairHigh: number;
   fairValue?: number;
-  buyLevel?: number;
-  trimLevel?: number;
+  /** fairband: `null` on a refusal; the stance cell then shows an em dash. */
+  buyLevel?: number | null;
+  trimLevel?: number | null;
   price: number;
   /** Computed from the system's own inputs only. */
   mechanical: number;
@@ -293,6 +296,12 @@ export interface ScreenTableProps {
   dense?: boolean;
   /** For the header indicator only; sorting happens in the engine. */
   sort?: { column: string; direction: 'asc' | 'desc' };
+  /**
+   * fairband: called with a column key when its header is clicked, or focused and given Enter or
+   * Space. The consumer asks the engine for the new order; the component sorts nothing. Without
+   * it the headers are inert. Each header cell carries its key in `data-key`.
+   */
+  onSort?: (column: string) => void;
   footnote?: string;
 }
 
@@ -389,7 +398,7 @@ export declare function SensitivityGrid(props: SensitivityGridProps): unknown;
 export declare const PHASES: Record<Phase, string>;
 /** The screen's default eight columns. */
 export declare const DEFAULT_COLUMNS: string[];
-/** ISO in, `3 Dec 2026` out. */
+/** ISO date or timestamp in, `3 Dec 2026` out; a timestamp reads as its date (fairband). */
 export declare function formatDate(iso: string): string;
 /** Number in, `$121.30` out. */
 export declare function formatMoney(value: number): string;

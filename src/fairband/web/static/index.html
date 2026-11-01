@@ -12,7 +12,8 @@
   .app-page { padding: var(--space-4) var(--space-6); }
   .app-name { margin: 0 0 var(--space-4); }
   .app-note { margin: 0; color: var(--ink-muted); }
-  .fb-table thead th { cursor: pointer; }
+  .fb-table thead th[tabindex] { cursor: pointer; }
+  .fb-table thead th[tabindex]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 </style>
 </head>
 <body>

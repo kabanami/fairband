@@ -56,6 +56,8 @@
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
     if (!m) return String(iso);
     var rest = String(iso).slice(10).trim();
+    // fairband: a timestamp reads as its date; the full ISO stays in datetime and the title.
+    if (rest.charAt(0) === 'T') rest = '';
     return Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1] + ' ' + m[1] + (rest ? ' ' + rest : '');
   }
 
@@ -111,7 +113,9 @@
 
   function PhaseBadge(props) {
     var p = props || {};
-    var n = Number(p.phase) || 1;
+    // fairband: a company with no phase has no badge, only an em dash; never "1 Start-up".
+    if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');
+    var n = Number(p.phase);
     var name = p.label || PHASES[n] || ('Phase ' + n);
     return h('span', {
       className: cx('fb-phase', 'fb-phase--' + n, p.size === 'sm' && 'fb-phase--sm'),
@@ -697,6 +701,10 @@
       cell: function (r) { return h('td', { className: 'fb-num figure' }, money(r.price)); } },
     { key: 'stance', head: 'Stance',
       cell: function (r) {
+        // fairband: a row without a price or levels (a refusal) has no stance; never "Hold".
+        if (r.price == null || r.buyLevel == null || r.trimLevel == null) {
+          return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));
+        }
         var s = stanceOf(r.price, r.buyLevel, r.trimLevel);
         return h('td', null,
           h('span', { className: cx('fb-stance', 'fb-stance--' + s, 'label') }, STANCE[s]));
@@ -770,7 +778,17 @@
           return h('th', {
             key: c.key,
             className: cx('label', c.num && 'fb-num', sorted && 'is-sorted'),
-            'aria-sort': sorted ? (p.sort.direction === 'desc' ? 'descending' : 'ascending') : null
+            'aria-sort': sorted ? (p.sort.direction === 'desc' ? 'descending' : 'ascending') : null,
+            // fairband: the cell names its column; given onSort, a click, Enter or Space asks
+            // the consumer to sort by it. The component still sorts nothing itself.
+            'data-key': c.key,
+            tabIndex: p.onSort ? 0 : null,
+            onClick: p.onSort ? function () { p.onSort(c.key); } : null,
+            onKeyDown: p.onSort ? function (e) {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              p.onSort(c.key);
+            } : null
           },
             c.basis ? h('span', { className: 'fb-screen__basisg', 'aria-hidden': 'true' },
               GLYPH_DERIVED) : null,

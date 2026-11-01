@@ -11,6 +11,7 @@ from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from html.parser import HTMLParser
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -389,6 +390,37 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
     assert len(fonts) == 6
     for font in fonts:
         assert client.get(f"/static/design-system/fonts/{font}").status_code == 200, font
+
+
+def _component_file(name: str) -> str:
+    """A file of the repository's design-system copy, as text."""
+    components = resources.files("fairband.web").joinpath("static", "design-system", "components")
+    return components.joinpath(name).read_text(encoding="utf-8")
+
+
+def test_bundle_patches_marked() -> None:
+    """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
+    a later export can be diffed against them."""
+    bundle = _component_file("bundle.js")
+    assert bundle.count("// fairband:") >= 4
+    # A null phase has no badge: an em dash, never phase 1 "Start-up".
+    assert "Number(p.phase) || 1" not in bundle
+    assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
+    # A row without levels has no stance: an em dash, never "Hold".
+    assert "if (r.price == null || r.buyLevel == null || r.trimLevel == null) {" in bundle
+    # A timestamp reads as its date; the full ISO stays in the datetime attribute.
+    assert "if (rest.charAt(0) === 'T') rest = '';" in bundle
+    # A header cell names its column and sorts through onSort, by click, Enter or Space.
+    assert "'data-key': c.key" in bundle
+    assert "tabIndex: p.onSort ? 0 : null" in bundle
+    assert "p.onSort(c.key)" in bundle
+
+
+def test_index_d_ts_declares_onSort() -> None:
+    declarations = _component_file("index.d.ts")
+    props = re.search(r"export interface ScreenTableProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None
+    assert "onSort?: (column: string) => void;" in props.group(1)
 
 
 def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, policy: Policy) -> None:

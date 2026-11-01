@@ -7,14 +7,6 @@
   var h = React.createElement;
   var COLUMNS_KEY = 'fairband.columns';
 
-  /* ScreenTable takes no sort callback and puts no column key on its header cells, so a click
-     on a header is read by the header's words. */
-  var HEADERS = {
-    'Ticker': 'ticker', 'Company': 'name', 'Phase': 'phase', 'Fair band': 'band',
-    'Fair value': 'fairValue', 'Buy level': 'buyLevel', 'Trim level': 'trimLevel',
-    'Mechanical': 'mechanical', 'Reviewed': 'reviewed', 'Price': 'price', 'Stance': 'stance',
-    'Overrides': 'overrides', 'Entered': 'entered'
-  };
   /* The columns that draw a row key under another name sort by that key. */
   var SORT_KEYS = { band: 'fairLow', stance: 'stance3', entered: 'enteredAt' };
 
@@ -83,34 +75,21 @@
         columns: state.columns,
         onColumnsChange: setColumns,
         sort: state.sort,
+        onSort: sortBy,
         footnote: footnote(state.rows.length),
         chooser: true
       }));
     }
   }
 
-  /* The header's own words: its text, leaving out the aria-hidden basis glyph and sort arrow. */
-  function headerWords(th) {
-    var words = '';
-    th.childNodes.forEach(function (node) {
-      if (node.nodeType === Node.TEXT_NODE || node.getAttribute('aria-hidden') !== 'true') {
-        words += node.textContent;
-      }
-    });
-    return words.trim();
-  }
-
-  /* One listener on the mount node outlives every re-render of the header cells. A click on the
-     sorted column turns its direction; a click on another column sorts it ascending. */
-  mount.addEventListener('click', function (event) {
-    var th = event.target.closest('th');
-    var column = th && mount.contains(th) ? HEADERS[headerWords(th)] : null;
-    if (!column) return;
+  /* A header click, or Enter or Space on a focused header: the sorted column turns its
+     direction; another column sorts ascending. */
+  function sortBy(column) {
     var turn = state.sort.column === column && state.sort.direction === 'asc';
     state.sort = { column: column, direction: turn ? 'desc' : 'asc' };
     render();
     load();
-  });
+  }
 
   render();
   load();
