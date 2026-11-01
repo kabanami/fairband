@@ -4,11 +4,13 @@ A route reads the company through a ``Context``, built by ``route.value_company`
 have passed: so with trailing figures, a positive price and a positive diluted share count. It
 returns ``Valued`` or ``Refused`` and ``route`` builds the result from it.
 
-``RoicTerms`` reads the aggregate ROIC as the charge takes it (spec 6.6, ROIC): an aggregate at or
-below zero counts as unavailable, so the runway years take the terminal ROIC and the row is
-flagged; a capital sum at or below zero turns Mature Growth's charge off. The income term of the
-expected return is the trailing flows over the market cap: FMP signs dividends and buybacks as
-outflows (negative) and stock issued as an inflow, and a missing flow counts as nil.
+``RoicTerms`` carries the returns of the charge to both routes (calibration spec 5.1 and 5.3): the
+runway return for the runway years, and the terminal return read from it. The ten-year aggregate
+ROIC is shown, and when positive it feeds the sensitivity; it never enters the charge. When the
+marginal return is not usable and the fallback years' capital sums to zero or below, Mature
+Growth's runway charge is off; the terminal still charges. The income term of the expected return
+is the trailing flows over the market cap: FMP signs dividends and buybacks as outflows
+(negative) and stock issued as an inflow, and a missing flow counts as nil.
 """
 
 from __future__ import annotations
@@ -24,7 +26,15 @@ from fairband.engine.flags import gate_flags, margin_flag, nri_flag
 from fairband.engine.multiples import multiples
 from fairband.engine.price_facts import price_facts
 from fairband.engine.returns import expected_return
-from fairband.engine.roic import CapitalYear, RoicResult, aggregate_roic, terminal_roic
+from fairband.engine.roic import (
+    CapitalYear,
+    RoicResult,
+    RunwayReturn,
+    aggregate_roic,
+    runway_note,
+    runway_return,
+    terminal_return,
+)
 from fairband.engine.types import Flag, Kind, Provenance, Route, TaggedInput
 from fairband.policy import Moat, Policy
 
@@ -73,10 +83,12 @@ class Refused:
 
 @dataclass(frozen=True)
 class RoicTerms:
-    """The aggregate ROIC, the usable (positive) aggregate, the runway and terminal ROIC of the
-    charge, whether the charge is off, and the ROIC flags."""
+    """The ten-year ROIC result, the runway return, the usable (positive) ten-year aggregate the
+    sensitivity reads, the runway and terminal returns of the charge, whether the runway charge
+    is off, and the ROIC flags: the ten-year ones, then the runway return's."""
 
     result: RoicResult
+    runway_return: RunwayReturn
     usable: float | None
     runway: float
     terminal: float
@@ -86,31 +98,28 @@ class RoicTerms:
     @classmethod
     def of(cls, years: Sequence[CapitalYear], moat: Moat, policy: Policy) -> RoicTerms:
         result = aggregate_roic(years)
+        rr = runway_return(result, moat, policy)
+        terminal = terminal_return(rr, moat, policy)
         aggregate = result.aggregate
         usable = aggregate if aggregate is not None and aggregate > 0 else None
-        terminal = terminal_roic(usable, moat, policy)
-        flags = result.flags
-        if aggregate is not None and usable is None:
-            flags += (
-                Flag(
-                    "roic-unavailable",
-                    "ROIC unavailable",
-                    f"The aggregate ROIC over {result.years_used} fiscal years is "
-                    f"{aggregate:.1%}, which is not positive, so the charge uses the terminal "
-                    "ROIC in every year.",
-                ),
-            )
-        charge_off = any(f.code == "charge-zeroed" for f in result.flags)
-        runway = terminal if usable is None else usable
-        return cls(result, usable, runway, terminal, charge_off, flags)
+        flags = result.flags + rr.flags
+        return cls(result, rr, usable, rr.value, terminal, rr.charge_off, flags)
 
     def intermediates(self) -> dict[str, Any]:
-        r = self.result
+        r, rr = self.result, self.runway_return
         return {
             "roic": {
                 "aggregate": r.aggregate,
                 "years": r.years_used,
                 "by_year": [asdict(y) for y in r.by_year],
+            },
+            "runway_return": {
+                "used": rr.used,
+                "marginal": rr.marginal,
+                "marginal_usable": rr.marginal_usable,
+                "three_year": rr.three_year,
+                "ten_year": rr.ten_year,
+                "value": rr.value,
             },
             "terminal_roic": self.terminal,
         }
@@ -195,6 +204,9 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
         data(i, "buybacks_ttm", t.buybacks, "USD", "statements"),
         data(i, "equity_issued_ttm", t.equity_issued, "USD", "statements"),
         _aggregate_roic(i, roic),
+        data(
+            i, "runway_return", roic.runway, "ratio", "statements", runway_note(roic.runway_return)
+        ),
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),  # the newest ROIC year's rate
         data(i, "moat_score", i.moat_score, "score"),
         data(i, "gf_eps_ttm", i.gf_eps_ttm, "USD a share"),

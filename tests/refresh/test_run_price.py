@@ -115,7 +115,7 @@ def test_price_refresh_keeps_value_updates_stance(env_valued: Env) -> None:
     unchanged += ("data_date", "valid_until", "deciles_refresh_id", "policy_version", "refusal")
     for name in unchanged:
         assert getattr(acme, name) == getattr(old, name), name
-    assert (old.price, old.price_date, old.stance3) == (50.0, date(2026, 10, 30), "trim")
+    assert (old.price, old.price_date, old.stance3) == (50.0, date(2026, 10, 30), "hold")
     assert (acme.price, acme.price_date, acme.stance3) == (20.0, PRICE_DATE, "buy")
     assert acme.stance5 != old.stance5
     implied = acme.result.intermediates["implied_growth"]
