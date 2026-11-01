@@ -532,6 +532,7 @@ def test_cli_off_the_main_thread_leaves_sigint_alone(
         (["refresh", ","], "no symbols given"),
         (["refresh", "ACME", "--kind", "full"], "a full refresh takes no symbols"),
         (["refresh", "ACME", "--kind", "price"], "a price refresh takes no symbols"),
+        (["refresh", "AAPL", "--kind", "revalue"], "a revalue takes no symbols"),
         (["refresh", "--kind", "scoped"], "a scoped refresh needs symbols"),
     ],
 )

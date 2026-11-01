@@ -26,6 +26,12 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   yet" (spec 6.6).
 - ``done``: the run's totals. A full refresh saves its ``calibration`` with the record (goal 7).
 
+A revalue takes no symbols, makes no vendor call and needs no FMP client (calibration spec 5.9): it
+lists the latest universe's admitted companies (``latest_companies``) ``pending``, in symbol order,
+and runs the ``value`` stage on the facts the store holds, with the latest stored deciles, then
+``done``. A company the store holds no facts for gets the engine's refusal. It saves its
+``calibration`` like a full refresh, with no listing left out: it builds no universe.
+
 A symbol's failure never stops the run: an exception from its fetch, assembly or valuation gives it
 a refusal snapshot ("data fetch failed: <class>: <message>" or "valuation failed: <class>:
 <message>", the keys scrubbed), marks it ``failed`` and is logged as a warning.
@@ -66,7 +72,7 @@ import queue
 import sqlite3
 import threading
 from collections import Counter, deque
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
@@ -83,7 +89,8 @@ from fairband.refresh.deciles import deciles_for_universe
 from fairband.refresh.fetch import FetchOutcome, fetch_company, provider_of
 from fairband.refresh.inputs import build_inputs, latest_price
 from fairband.refresh.run_price import PriceRefresh, rate_limited
-from fairband.refresh.universe import UniverseResult, build_universe
+from fairband.refresh.universe import build_universe
+from fairband.store.companies import latest_companies
 from fairband.store.db import transaction
 from fairband.store.policy import record_policy
 from fairband.store.refreshes import (
@@ -103,11 +110,11 @@ from fairband.vendors.scrub import scrub
 
 logger = logging.getLogger("fairband.refresh")
 
-type Kind = Literal["full", "price", "scoped"]
+type Kind = Literal["full", "price", "scoped", "revalue"]
 type _Result = tuple[str, FetchOutcome | BaseException]  # a symbol's fetch, as its thread ended
 type _Finish = tuple[Finished, str | None, dict[str, Any] | None]  # status, message, calibration
 
-KINDS: tuple[Kind, ...] = ("full", "price", "scoped")
+KINDS: tuple[Kind, ...] = ("full", "price", "scoped", "revalue")
 UNCLASSIFIED = "unclassified"  # the calibration's name for a company without a phase
 NO_COMPANY_ADMITTED = "universe admitted no company"
 NO_COMPANY_RANKED = "deciles rank no company"
@@ -176,10 +183,10 @@ class Refresh:
         on_started: Callable[[int], None] | None = None,
     ) -> int:
         """Run a refresh of ``kind`` and return its id. Raises ``MissingKey`` without an FMP
-        client, and ``ValueError`` for a scoped refresh without symbols or a full or price one
-        with them, all before any work."""
+        client for a kind that fetches (all but a revalue), and ``ValueError`` for a scoped
+        refresh without symbols or another kind with them, all before any work."""
         fmp = self._fmp
-        if fmp is None:
+        if kind != "revalue" and fmp is None:
             raise MissingKey("fmp")
         names: list[str] | None = None
         if kind == "scoped":
@@ -196,12 +203,16 @@ class Refresh:
             try:
                 if on_started is not None:
                     on_started(refresh_id)
-                if kind == "price":
-                    status, message, counts = self._price(conn, fmp, refresh_id)
-                elif names is None:
-                    status, message, counts = self._full(conn, fmp, refresh_id)
+                if kind == "revalue":
+                    status, message, counts = self._revalue(conn, refresh_id)
                 else:
-                    status, message, counts = self._scoped(conn, fmp, refresh_id, names)
+                    assert fmp is not None  # refused above, before the record
+                    if kind == "price":
+                        status, message, counts = self._price(conn, fmp, refresh_id)
+                    elif names is None:
+                        status, message, counts = self._full(conn, fmp, refresh_id)
+                    else:
+                        status, message, counts = self._scoped(conn, fmp, refresh_id, names)
             except BaseException as exc:
                 finish_refresh(conn, refresh_id, "failed", self._clock(), self.describe(exc))
                 raise
@@ -240,7 +251,8 @@ class Refresh:
         if valued is None:
             return "cancelled", None, None
         self._done(conn, refresh_id, fetched, valued)
-        return "done", None, calibration(universe, refresh_snapshots(conn, refresh_id))
+        snapshots = refresh_snapshots(conn, refresh_id)
+        return "done", None, calibration(universe.admitted, universe.excluded, snapshots)
 
     def _price(self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int) -> _Finish:
         """The stages of a price refresh (``run_price``)."""
@@ -271,14 +283,31 @@ class Refresh:
         self._done(conn, refresh_id, fetched, valued)
         return "done", None, None
 
+    def _revalue(self, conn: sqlite3.Connection, refresh_id: int) -> _Finish:
+        """The stages of a revalue; the status, message and calibration to finish it with."""
+        symbols = tuple(company.symbol for company in latest_companies(conn))
+        self._list_pending(conn, refresh_id, symbols)
+        valued = self._value_stage(conn, refresh_id, symbols)
+        if valued is None:
+            return "cancelled", None, None
+        # The store's facts stand in for a fetch: every company counts as fetched.
+        self._done(conn, refresh_id, _Fetched(symbols, 0, None), valued)
+        snapshots = refresh_snapshots(conn, refresh_id)
+        return "done", None, calibration(symbols, {}, snapshots)
+
     def _fetch_pending(
         self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int, symbols: Sequence[str]
     ) -> _Fetched:
         """List each symbol ``pending``, then fetch them."""
+        self._list_pending(conn, refresh_id, symbols)
+        return self._fetch_stage(conn, fmp, refresh_id, symbols)
+
+    def _list_pending(
+        self, conn: sqlite3.Connection, refresh_id: int, symbols: Sequence[str]
+    ) -> None:
         with transaction(conn):
             for symbol in symbols:
                 upsert_item(conn, refresh_id, symbol, "pending", None, self._clock())
-        return self._fetch_stage(conn, fmp, refresh_id, symbols)
 
     def _stopped(
         self, conn: sqlite3.Connection, refresh_id: int, fetched: _Fetched
@@ -437,12 +466,15 @@ class Refresh:
             self._on_progress(Progress(refresh_id, stage, done, failed, remaining, current))
 
 
-def calibration(universe: UniverseResult, snapshots: Sequence[SnapshotRow]) -> dict[str, Any]:
-    """A full refresh's counts (goal 7) over the snapshots it wrote, one per admitted company: the
-    companies, those with a value, the refusals by reason, the phases (``unclassified`` for none),
-    the companies flagged by a classifier check (``design.md`` 5.8: a non-empty
-    ``phase.checks``), each flag code's count over every flag, and what the universe admitted and
-    left out by reason. Numbers only: the record stores it as JSON."""
+def calibration(
+    admitted: Sequence[str], excluded: Mapping[str, int], snapshots: Sequence[SnapshotRow]
+) -> dict[str, Any]:
+    """A full refresh's or a revalue's counts (goal 7) over the snapshots it wrote, one per company
+    of ``admitted``: the companies, those with a value, the refusals by reason, the phases
+    (``unclassified`` for none), the companies flagged by a classifier check (``design.md`` 5.8: a
+    non-empty ``phase.checks``), each flag code's count over every flag, and how many companies
+    the universe admitted and the listings it left out by reason (``excluded``; none for a
+    revalue). Numbers only: the record stores it as JSON."""
     phases = dict.fromkeys([*PHASE_NUMBER, UNCLASSIFIED], 0)
     refused: Counter[str] = Counter()
     flags: Counter[str] = Counter()
@@ -452,11 +484,11 @@ def calibration(universe: UniverseResult, snapshots: Sequence[SnapshotRow]) -> d
             refused[snapshot.refusal] += 1
         flags.update(snapshot.flags)
     return {
-        "total": len(universe.admitted),
+        "total": len(admitted),
         "valued": sum(1 for snapshot in snapshots if snapshot.value is not None),
         "refused": dict(refused),
         "phases": phases,
         "flagged": sum(1 for snapshot in snapshots if snapshot.result.phase.checks),
         "flags": dict(flags),
-        "universe": {"admitted": len(universe.admitted), "excluded": dict(universe.excluded)},
+        "universe": {"admitted": len(admitted), "excluded": dict(excluded)},
     }

@@ -69,7 +69,8 @@ def _build_parser() -> argparse.ArgumentParser:
     refresh.add_argument(
         "--kind",
         choices=KINDS,
-        help="default: scoped when symbols are given, full otherwise",
+        help="default: scoped when symbols are given, full otherwise; revalue: value every"
+        " company again from the stored facts, with no vendor call",
     )
 
     commands.add_parser(
@@ -124,12 +125,13 @@ def _serve(args: argparse.Namespace) -> int:
 
 def _refresh(args: argparse.Namespace) -> int:
     """A refresh in the foreground with its progress lines, then, for a scoped refresh, one line
-    per symbol from its latest snapshot, for a full one its calibration, and for a price one its
-    counts on the status line: ``refresh 7: done · 1,800 repriced, 3 failed, 9 skipped``. A
-    ``VendorError`` or ``ValueError`` from the run (the screener failed or gave no rows) is one
-    line, never a traceback: ``refresh <id>: failed: <message>``, or ``refresh failed:
-    <message>`` when the run refused before its record existed. Exits 0 when the refresh is done,
-    1 when not, 2 when it cannot start."""
+    per symbol from its latest snapshot, for a full one or a revalue its calibration, and for a
+    price one its counts on the status line: ``refresh 7: done · 1,800 repriced, 3 failed, 9
+    skipped``. A revalue reads no key and builds no vendor client. A ``VendorError`` or
+    ``ValueError`` from the run (the screener failed or gave no rows) is one line, never a
+    traceback: ``refresh <id>: failed: <message>``, or ``refresh failed: <message>`` when the run
+    refused before its record existed. Exits 0 when the refresh is done, 1 when not, 2 when it
+    cannot start."""
     if args.symbols == []:
         return _usage("no symbols given: name them as AAPL,MSFT")
     if args.kind == "price" and args.symbols:
@@ -138,17 +140,20 @@ def _refresh(args: argparse.Namespace) -> int:
         return _usage("a scoped refresh needs symbols, e.g. AAPL,MSFT")
     if args.kind == "full" and args.symbols:
         return _usage("a full refresh takes no symbols: name none, or add --kind scoped")
+    if args.kind == "revalue" and args.symbols:
+        return _usage("a revalue takes no symbols: name none, or leave out --kind revalue")
     settings = load_settings()
-    keys = _keys(settings)
-    try:
-        require(keys, "fmp")
-    except MissingKey as exc:
-        return _usage(str(exc))
+    keys = None if args.kind == "revalue" else _keys(settings)
+    if keys is not None:
+        try:
+            require(keys, "fmp")
+        except MissingKey as exc:
+            return _usage(str(exc))
     policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
         migrate(conn)
     cancel = threading.Event()
-    fmp, gf, secrets = build_clients(keys, policy)
+    fmp, gf, secrets = (None, None, ()) if keys is None else build_clients(keys, policy)
     started: list[int] = []
     refresh = Refresh(
         lambda: connect(settings.db_path),
@@ -172,7 +177,8 @@ def _refresh(args: argparse.Namespace) -> int:
         print(f"refresh {started[0]}: failed: {reason}" if started else f"refresh failed: {reason}")
         return 1
     finally:
-        fmp.close()
+        if fmp is not None:
+            fmp.close()
         if gf is not None:
             gf.close()
     with closing(connect(settings.db_path)) as conn:
@@ -190,7 +196,7 @@ def _refresh(args: argparse.Namespace) -> int:
             f" {calibration['skipped']:,} skipped"
         )
     print(line)
-    if args.kind == "full" and calibration is not None:
+    if args.kind in ("full", "revalue") and calibration is not None:
         for line in _calibration_lines(calibration):
             print(line)
     for symbol, snapshot in rows:
