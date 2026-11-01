@@ -37,3 +37,5 @@ exclude = ["^src/fairband/web/static/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The shared test builders import as ``support``.
+pythonpath = ["tests"]
