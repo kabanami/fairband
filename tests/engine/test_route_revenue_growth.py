@@ -217,6 +217,18 @@ def test_refusal_order(high_growth_inputs: CompanyInputs, deciles: Deciles, poli
     q = hg.quarter_estimates
     gap = (*q[:3], replace(q[3], revenue=None))
     assert_refused(valued(replace(hg, quarter_estimates=gap)), "incomplete NTM consensus")
+    # an NTM window whose revenue means sum to zero, before a path that falls to zero
+    a = hg.annual_estimates
+    zero_ntm = tuple(replace(x, revenue=r) for x, r in zip(q, (1e9, -1e9, 0.0, 0.0), strict=True))
+    falls = (a[0], replace(a[1], revenue=0.0, analysts_revenue=15), a[2])
+    r = valued(replace(hg, quarter_estimates=zero_ntm, annual_estimates=falls, peers=()))
+    assert_refused(r, "no positive consensus revenue")
+    assert r.intermediates.keys() == {"price_facts"}
+    # an annual mean of zero with analysts is an estimate: year 2 falls 100%, before the margin
+    thin_falls = (a[0], replace(a[1], revenue=0.0, analysts_revenue=3), a[2])
+    r = valued(replace(hg, annual_estimates=thin_falls, peers=()))
+    assert_refused(r, "consensus revenue falls to zero or below within the path")
+    assert r.intermediates.keys() == {"price_facts"} and codes(r)[-1] == "few-analysts"
     r = valued(replace(hg, peers=hg.peers[:2]))
     assert_refused(r, "no target margin: 2 mature peers")
     assert r.intermediates["implied_margin"] is not None and "revenue_path" in r.intermediates
@@ -271,8 +283,8 @@ def test_path_held_flag_and_few_analysts(
     held = value_company(replace(hg, annual_estimates=a[:2]), deciles, policy, TODAY)
     g2 = 16_000 / 13_000 - 1
     assert sentence(held, "path-held") == (
-        f"The consensus has no revenue for fiscal 2029, so year 3 holds the {g2:.1%} of the year "
-        "before."
+        "The consensus revenue for fiscal 2029 is missing or not positive, so year 3 holds the "
+        f"{g2:.1%} of the year before."
     )
     assert held.intermediates["path"]["held"] == [False, True]
     assert held.intermediates["path_steps"] == pytest.approx([g2, g2])
@@ -282,10 +294,23 @@ def test_path_held_flag_and_few_analysts(
     both = value_company(replace(hg, annual_estimates=(a[0], a[2])), deciles, policy, TODAY)
     g1 = 12_400 / 10_000 - 1
     assert sentence(both, "path-held") == (
-        f"The consensus has no revenue for fiscal 2028, so year 2 holds the {g1:.1%} of the year "
-        f"before and year 3 holds the {g1:.1%} of the year before."
+        "The consensus revenue for fiscal 2028 is missing or not positive, so year 2 holds the "
+        f"{g1:.1%} of the year before and year 3 holds the {g1:.1%} of the year before."
     )
     assert both.intermediates["path"]["held"] == [True, True]
+    # a base year present but not positive is named, not the year after it
+    negative = (replace(a[0], revenue=-5e6), a[1], a[2])
+    r = value_company(replace(hg, annual_estimates=negative), deciles, policy, TODAY)
+    assert sentence(r, "path-held") == (
+        "The consensus revenue for fiscal 2027 is missing or not positive, so year 2 holds the "
+        f"{g1:.1%} of the year before."
+    )
+    # the base year and the next both missing: both are named
+    last = value_company(replace(hg, annual_estimates=a[2:]), deciles, policy, TODAY)
+    assert sentence(last, "path-held") == (
+        "The consensus revenue for fiscal 2027 and 2028 is missing or not positive, so year 2 "
+        f"holds the {g1:.1%} of the year before and year 3 holds the {g1:.1%} of the year before."
+    )
 
     thin = (a[0], replace(a[1], analysts_revenue=3), a[2])
     r = value_company(replace(hg, annual_estimates=thin), deciles, policy, TODAY)

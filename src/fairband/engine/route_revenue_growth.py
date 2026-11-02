@@ -18,8 +18,10 @@ when unknown. The value is discounted at r in every year.
 
 Refusals, in this order: no trailing revenue (missing or not positive); no trailing operating
 income, without which there is no trailing margin to start from; no statutory tax rate; an
-incomplete NTM consensus (no four consecutive quarters, or one without a revenue mean); no target
-margin, "no target margin: <n> mature peers", n counting the peers with a margin on enough years;
+incomplete NTM consensus (no four consecutive quarters, or one without a revenue mean); no
+positive consensus revenue (an NTM revenue at or below zero); consensus revenue that falls to zero
+or below within the path (g_2 or g_3 as resolved at or below −100%), with the path's flags; no
+target margin, "no target margin: <n> mature peers", n counting the peers with a margin on enough years;
 no sales-to-capital; a value a share at or below zero under the reinvestment charge. A row refused
 for the target margin keeps the rebuild keys below and ``implied_margin``, the margin the price
 needs (``None`` without a sales-to-capital); one refused for its value keeps every value-side
@@ -168,8 +170,12 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     ntm = _ntm_revenue(quarters)
     if quarters is None or ntm is None:
         return Refused("incomplete NTM consensus")
+    if ntm <= 0:
+        return Refused("no positive consensus revenue")
     base_year = base_fiscal_year(quarters)
     path, analysts, path_flags = _path(t.revenue, ntm, i.annual_estimates, base_year, policy)
+    if any(g <= -1 for g in resolved_steps(path)[0]):
+        return Refused("consensus revenue falls to zero or below within the path", path_flags)
     moat = moat_class(i.moat_score, policy)
     roic = RoicTerms.of(i.capital_years, moat, policy)
     s2c = _sales_to_capital(c, roic)
@@ -360,22 +366,28 @@ def _path(
 
 
 def _path_held(path: RevenuePath, values: list[float | None], base_year: int) -> Flag | None:
-    """``path-held`` naming the fiscal years with no usable revenue mean and the rate each held
-    step took: the missing later year, else the earlier one (missing or not positive)."""
+    """``path-held`` naming the fiscal years whose consensus revenue left a step missing, and the
+    rate each held step took. A step from year y to y + 1 is missing when y's mean is missing or
+    not positive, or y + 1's is missing; each such year is named."""
     (g2, _), held = resolved_steps(path)
     years: set[int] = set()
     clauses: list[str] = []
     for k, (was_held, rate) in enumerate(zip(held, (growth_rates(path)[0], g2), strict=True)):
-        if was_held:
-            years.add(base_year + k + 1 if values[k + 1] is None else base_year + k)
-            clauses.append(f"year {k + 2} holds the {rate:.1%} of the year before")
+        if not was_held:
+            continue
+        earlier, later = values[k], values[k + 1]
+        if earlier is None or earlier <= 0:
+            years.add(base_year + k)
+        if later is None:
+            years.add(base_year + k + 1)
+        clauses.append(f"year {k + 2} holds the {rate:.1%} of the year before")
     if not clauses:
         return None
     return Flag(
         "path-held",
         "Path held",
-        f"The consensus has no revenue for fiscal {' and '.join(map(str, sorted(years)))}, so "
-        f"{' and '.join(clauses)}.",
+        f"The consensus revenue for fiscal {' and '.join(map(str, sorted(years)))} is missing or "
+        f"not positive, so {' and '.join(clauses)}.",
     )
 
 
