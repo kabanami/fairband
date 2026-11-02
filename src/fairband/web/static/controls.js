@@ -1,7 +1,8 @@
 /* The page's header, its status line and the group view, loaded after app.js. The header is the
    design system's AppHeader: the views (Screen, Groups), the engine stamp and the refresh
    controls. Under it, the status line: the running refresh's one run bar (the design system's
-   RunProgress), or how the last one ended with its calibration. While a refresh runs, the page
+   RunProgress), or how the last one ended in one line, its calibration's breakdown behind
+   Details ▾ (growth-routes spec 6.1). While a refresh runs, the page
    asks /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons were,
    the stamp is gone and the tables keep their old figures at ink-faint; when it ends, the rows
    (and the groups, when that view is open) load again. The group view is one plain table from
@@ -15,6 +16,7 @@
   var POLL_MS = 2000;
   var BY = { sector: 'Sector', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
+  var UNCLASSIFIED = 'unclassified'; /* the calibration's name for a company without a phase */
   /* The server's stage names as the run bar's lowercase verb phrases (spec 4.3). */
   var STAGE_WORDS = {
     universe: 'reading the universe', deciles: 'ranking', fetch: 'fetching', value: 'valuing',
@@ -35,7 +37,8 @@
     running: null, /* the progress, while a refresh runs */
     last: null, /* the last refresh's record */
     notice: null, /* { text, caution }: what the last request came to */
-    cancelAsked: false /* Cancel was accepted: it stays disabled until the run ends */
+    cancelAsked: false, /* Cancel was accepted: it stays disabled until the run ends */
+    detailsOpen: false /* the last refresh's Details ▾ menu is open */
   };
   var timer = null;
   var latestPoll = 0;
@@ -53,6 +56,7 @@
         var ended = (state.running !== null || started) && body.refresh === null;
         if (state.notice && state.notice.fromPoll) state.notice = null; /* it answers again */
         state.running = body.refresh;
+        if (body.refresh !== null) state.detailsOpen = false; /* the run bar replaces the line */
         if (body.refresh === null) state.last = body.last;
         if (ended) { /* the notice (already running, cancel asked) no longer holds */
           started = false;
@@ -171,46 +175,77 @@
     return { total: total, done: r.done, failed: r.failed, stage: stage };
   }
 
-  /* A full refresh's calibration: the companies, those valued and those a classifier check
-     flagged, the phases with a company, and the refusals grouped by the text before their first
-     colon, the most frequent first. A price refresh's counts. */
-  function calibrationLine(c) {
-    if (c.repriced != null) {
-      return count(c.total) + ' companies · ' + count(c.repriced) + ' repriced, ' +
-        count(c.failed) + ' failed, ' + count(c.skipped) + ' skipped';
-    }
-    var parts = [
-      count(c.total) + ' companies', count(c.valued) + ' valued',
-      count(c.flagged) + ' flagged by a classifier check'
-    ];
+  /* Last refresh: full done 1 Nov 2026, 01:20 · 1,052 of 1,759 valued, then · 3 failed when the
+     calibration counts failed companies (a price refresh's does; it counts those repriced, and
+     those skipped for want of a snapshot). A record without a calibration, a run that failed,
+     was cancelled or was scoped, says its message instead. The finish reads in the reader's
+     local time. */
+  function lastLine(last) {
+    if (!last) return ['No refresh has run yet.'];
+    var c = last.calibration;
+    var finished = last.finishedAt ? P.localIso(last.finishedAt) : null;
+    var when = finished ? h('time', {
+      key: 'when', dateTime: finished, title: finished
+    }, F.formatDate(finished)) : null;
+    var line = ['Last refresh: ' + last.kind + ' ' + last.status + (when ? ' ' : ''), when];
+    if (!c) return line.concat(last.message ? [' · ' + last.message] : []);
+    line = line.concat(c.repriced != null
+      ? [' · ', count(c.repriced), ' of ', count(c.total), ' repriced']
+      : [' · ', count(c.valued), ' of ', count(c.total), ' valued']);
+    if (c.failed > 0) line = line.concat([' · ', count(c.failed), ' failed']);
+    if (c.skipped > 0) line = line.concat([' · ', count(c.skipped), ' skipped']);
+    return line;
+  }
+
+  /* Details ▾ beside the line of a full refresh or a revalue: in the bundle's sectioned menu (the
+     Filters menu's markup), the companies a classifier check flagged; the phases in phase order,
+     unclassified last, those with none left out; the refusals grouped by the text before their
+     first colon, the most frequent first. A press outside it or Escape closes it (spec 6.3). */
+  function detailsMenu(c) {
     var phases = Object.keys(c.phases || {})
       .filter(function (p) { return c.phases[p] > 0; })
-      .map(function (p) { return phaseName(p) + ' ' + count(c.phases[p]); });
-    if (phases.length) parts.push('phases: ' + phases.join(', '));
+      .sort(function (a, b) { return phaseOrder(a) - phaseOrder(b); });
     var reasons = {};
     Object.keys(c.refused || {}).forEach(function (reason) {
       var head = reason.split(':')[0];
       reasons[head] = (reasons[head] || 0) + c.refused[reason];
     });
     var refused = Object.keys(reasons)
-      .sort(function (a, b) { return reasons[b] - reasons[a] || (a < b ? -1 : a > b ? 1 : 0); })
-      .map(function (reason) { return reason + ' ' + count(reasons[reason]); });
-    if (refused.length) parts.push('refused: ' + refused.join(', '));
-    return parts.join(' · ');
+      .sort(function (a, b) { return reasons[b] - reasons[a] || (a < b ? -1 : a > b ? 1 : 0); });
+    return h('div', { className: 'fb-screen__cols app-details' },
+      h(F.Button, {
+        size: 'sm', onClick: function () { state.detailsOpen = !state.detailsOpen; render(); },
+        'aria-expanded': state.detailsOpen ? 'true' : 'false'
+      }, 'Details ▾'),
+      state.detailsOpen ? h('div', { className: 'fb-menu fb-menu--filters' },
+        h('div', { className: 'fb-menu__body' },
+          menuSection('FLAGGED', h('div', { className: 'body app-details__row' },
+            count(c.flagged) + ' flagged by a classifier check')),
+          h('hr'),
+          menuSection('PHASES', phases.length ? phases.map(function (p) {
+            return detailsRow(p, p === UNCLASSIFIED ? 'Unclassified' : phaseName(p), c.phases[p]);
+          }) : none()),
+          h('hr'),
+          menuSection('REFUSED', refused.length ? refused.map(function (reason) {
+            return detailsRow(reason, reason, reasons[reason]);
+          }) : none()))) : null);
   }
 
-  /* Last refresh: full done 1 Nov 2026, 01:20 · <its message, or its calibration>. The finish
-     reads in the reader's local time. */
-  function lastLine(last) {
-    if (!last) return ['No refresh has run yet.'];
-    var after = last.message || (last.calibration ? calibrationLine(last.calibration) : null);
-    var finished = last.finishedAt ? P.localIso(last.finishedAt) : null;
-    var when = finished ? h('time', {
-      key: 'when', dateTime: finished, title: finished
-    }, F.formatDate(finished)) : null;
-    return ['Last refresh: ' + last.kind + ' ' + last.status + (when ? ' ' : ''), when,
-      after ? ' · ' + after : null];
+  function none() { return h('div', { className: 'body app-details__row app-muted' }, 'none'); }
+
+  function menuSection(head, rows) {
+    return h('div', { className: 'fb-menu__sec' },
+      h('span', { className: 'fb-menu__h label' }, head), rows);
   }
+
+  /* A word and its count, the count in mono. */
+  function detailsRow(key, word, n) {
+    return h('div', { key: key, className: 'app-details__row' },
+      h('span', { className: 'body' }, word), h('span', { className: 'figure-sm' }, count(n)));
+  }
+
+  /* A phase's place in phase order; unclassified, and any name the page does not know, last. */
+  function phaseOrder(name) { return P.PHASE_NUMBER[name] || 7; }
 
   /* ------------------------------------------------------------------ render */
 
@@ -231,13 +266,18 @@
     }));
     /* The status line: during a run, the run bar, or the stage word alone while the stage reports
        a total of 0 (the component draws nothing for it); else how the last refresh ended. A div,
-       since the bar is a block a p cannot hold. */
+       since the bar is a block a p cannot hold. Details ▾ stands beside the line, outside the
+       status region, when the calibration has a breakdown; the run bar keeps the full width. */
     var run = alive ? runProps(state.running) : null;
     var status = !run ? lastLine(state.last)
       : [run.total > 0 ? h(F.RunProgress, runProps(state.running)) : run.stage];
+    var c = !run && state.last ? state.last.calibration : null;
+    var details = c && c.phases ? detailsMenu(c) : null;
     var notice = state.notice;
     bar.render(h('div', { className: 'app-bar' },
-      h.apply(null, ['div', { className: 'caption app-status', role: 'status' }].concat(status)),
+      h('div', { className: details ? 'app-statusline' : null },
+        h.apply(null, ['div', { className: 'caption app-status', role: 'status' }].concat(status)),
+        details),
       notice ? h('p', {
         className: 'caption app-status' + (notice.caution ? ' app-status--caution' : '')
       }, notice.text) : null));
@@ -302,6 +342,21 @@
           figure(row.shareBelowBuy, F.formatPercent(row.shareBelowBuy)));
       })));
   }
+
+  /* Details ▾ closes on a press outside it and on Escape, as the screen's menus do. Each menu
+     closes itself on a press outside it, so opening one closes the others (spec 6.3). Registered
+     once; each reads state.detailsOpen. */
+  document.addEventListener('pointerdown', function (event) {
+    if (!state.detailsOpen) return;
+    if (event.target instanceof Element && event.target.closest('.app-details')) return;
+    state.detailsOpen = false;
+    render();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' || !state.detailsOpen) return;
+    state.detailsOpen = false;
+    render();
+  });
 
   render();
   poll();

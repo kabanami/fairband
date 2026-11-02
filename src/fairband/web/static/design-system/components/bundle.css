@@ -653,6 +653,8 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 }
 .fb-screen__clear { background: none; border: 0; padding: 0; color: var(--accent); }
 .fb-screen__clear:hover { text-decoration: underline; }
+/* fairband: both Clear words, the count's and FIND's, take the focus ring every control has. */
+.fb-screen__clear:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Both ends of the bar group their own controls, so the bar's space-between
    keeps working however many of them there are. */

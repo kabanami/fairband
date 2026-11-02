@@ -193,8 +193,9 @@
     render();
   }
 
+  /* Escape closes the drawer, unless a menu is open: then Escape closes the menu first. */
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && state.drawer) close();
+    if (event.key === 'Escape' && state.drawer && !document.querySelector('.fb-menu')) close();
   });
 
   /* ------------------------------------------------------- find and filters */
@@ -444,7 +445,8 @@
         ['Value a share', F.formatMoney(im.value_per_share), true]
       ])),
       group('solves', 'At the price', pairs([
-        ['Implied growth held in ' + held, F.formatPercent(im.implied_growth), true],
+        [held ? 'Implied growth held in ' + held : 'Implied growth held after year 3',
+          F.formatPercent(im.implied_growth), true],
         ['Margin the price needs', F.formatPercent(im.implied_margin), true]
       ])));
   }
@@ -455,14 +457,17 @@
       .concat(Array.prototype.slice.call(arguments, 2)));
   }
 
-  /* The implied growth is held from year 4 to the last high-growth year, the row's RULE input. */
+  /* The implied growth is held from year 4 to the last high-growth year, the row's RULE input;
+     null when the row has none, and the label then says only where the hold starts. */
   function heldYears(last) {
+    if (last == null) return null;
     if (last === 4) return 'year 4';
     return last === 5 ? 'years 4 and 5' : 'years 4 to ' + last;
   }
 
   /* One row a year: the revenue, the margin, EBIT, tax, NOPAT, the reinvestment and the free cash
-     flow, totals to whole dollars. Wider than the rail, the table scrolls on its own. */
+     flow, totals to whole dollars. Wider than the rail, the table scrolls on its own, by keyboard
+     too: its box takes focus. */
   function yearsTable(im) {
     var columns = [
       ['Revenue', im.revenue_by_year, whole],
@@ -473,7 +478,7 @@
       ['Reinvestment', im.reinvestment_by_year, whole],
       ['Free cash flow', im.fcff_by_year, whole]
     ];
-    return h('div', { className: 'app-scroll' },
+    return h('div', { className: 'app-scroll', tabIndex: 0 },
       h('table', { className: 'fb-table app-figures' },
         h('thead', null, h('tr', null,
           h('th', { className: 'label fb-num' }, 'Year'),
@@ -492,7 +497,7 @@
   /* The mature peers counted for the target margin, each with its ten-year margin and its market
      cap. */
   function peersTable(peers) {
-    return h('div', { className: 'app-scroll' },
+    return h('div', { className: 'app-scroll', tabIndex: 0 },
       h('table', { className: 'fb-table app-figures' },
         h('thead', null, h('tr', null,
           h('th', { className: 'label' }, 'Peer'),

@@ -1051,6 +1051,25 @@
     // click must not sort; `over` is the header showing the drop edge and the side it shows on.
     var drag = React.useRef({ from: null, dropped: false });
     var over = React.useState(null);
+    // fairband: while a menu is open, a press outside the bar's menus or Escape closes both
+    // (growth-routes spec 6.3); the listeners live only while one is open.
+    var barRef = React.useRef(null);
+    React.useEffect(function () {
+      if (!open[0] && !fopen[0]) return undefined;
+      function close() { open[1](false); fopen[1](false); }
+      function onPointerDown(e) {
+        var cols = barRef.current ? barRef.current.querySelectorAll('.fb-screen__cols') : [];
+        for (var i = 0; i < cols.length; i++) if (cols[i].contains(e.target)) return;
+        close();
+      }
+      function onKeyDown(e) { if (e.key === 'Escape') close(); }
+      document.addEventListener('pointerdown', onPointerDown);
+      document.addEventListener('keydown', onKeyDown);
+      return function () {
+        document.removeEventListener('pointerdown', onPointerDown);
+        document.removeEventListener('keydown', onKeyDown);
+      };
+    }, [open[0], fopen[0]]);
     var visible = p.columns || DEFAULT_COLUMNS;
     // fairband: the columns render in the list's order, unknown keys and repeats left out. The
     // lock is on visibility, not position: a locked column the list leaves out still shows,
@@ -1167,7 +1186,8 @@
     return h('div', { className: cx('fb-screen', p.dense && 'fb-screen--dense') },
       p.chooser === false && !p.onQueryChange && !p.onFiltersChange
         ? null
-        : h('div', { className: 'fb-screen__bar' },
+        // fairband: the bar's ref, where the menus' outside-press check looks (spec 6.3).
+        : h('div', { className: 'fb-screen__bar', ref: barRef },
         h('div', { className: 'fb-screen__side' },
           p.onQueryChange ? h('span', { className: 'fb-screen__find' },
             h('label', { className: 'fb-screen__findlabel label', htmlFor: 'fb-q' }, 'FIND'),
@@ -1175,7 +1195,11 @@
               id: 'fb-q', type: 'text', className: 'fb-screen__q',
               placeholder: 'Ticker or company', value: p.query || '',
               onChange: function (e) { p.onQueryChange(e.target.value); }
-            })) : null,
+            }),
+            // fairband: Clear, a word, while the field has text; it empties the query only
+            // (growth-routes spec 6.4).
+            p.query ? h('button', { type: 'button', className: 'fb-screen__clear control',
+              onClick: function () { p.onQueryChange(''); } }, 'Clear') : null) : null,
           chips.length ? h('span', { className: 'fb-screen__chips' },
             chips.map(function (c) {
               return h('button', {
@@ -1191,7 +1215,8 @@
           count(),
           p.onFiltersChange ? h('div', { className: 'fb-screen__cols' },
             h(Button, {
-              size: 'sm', onClick: function () { fopen[1](!fopen[0]); },
+              // fairband: opening Filters closes Columns: one menu open at a time (spec 6.3).
+              size: 'sm', onClick: function () { fopen[1](!fopen[0]); open[1](false); },
               'aria-expanded': fopen[0] ? 'true' : 'false'
             }, 'Filters ▾'),
             fopen[0] ? h('div', { className: 'fb-menu fb-menu--filters' },
@@ -1245,7 +1270,8 @@
           ) : null,
           p.chooser === false ? null : h('div', { className: 'fb-screen__cols' },
           h(Button, {
-            size: 'sm', onClick: function () { open[1](!open[0]); },
+            // fairband: opening Columns closes Filters: one menu open at a time (spec 6.3).
+            size: 'sm', onClick: function () { open[1](!open[0]); fopen[1](false); },
             'aria-expanded': open[0] ? 'true' : 'false'
           }, 'Columns ▾'),
           open[0] ? h('div', { className: 'fb-menu' },

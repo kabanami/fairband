@@ -666,6 +666,22 @@ def test_controls_js_handles_a_zero_total() -> None:
     assert "done: 0" in script  # the universe and deciles stages show nothing done
 
 
+def test_controls_js_one_line_status_and_details_menu() -> None:
+    """Growth-routes spec 6.1: the last refresh is one line, the kind, the status, the finish and
+    the valued count, with the failed count when there is one; its breakdown is in Details ▾."""
+    script = _static_file("controls.js")
+    assert "calibrationLine" not in script
+    assert "' of '" in script and "' valued'" in script and "' failed'" in script
+    assert "'Details ▾'" in script and "state.detailsOpen" in script
+    for section in ("'FLAGGED'", "'PHASES'", "'REFUSED'"):
+        assert section in script, section
+    assert "'pointerdown'" in script and "'Escape'" in script
+    # the popover follows the bundle's menu markup, and a run closes it
+    assert "className: 'fb-screen__cols app-details'" in script
+    assert "'aria-expanded': state.detailsOpen ? 'true' : 'false'" in script
+    assert "if (body.refresh !== null) state.detailsOpen = false;" in script
+
+
 def test_page_hands_the_design_system_local_time() -> None:
     """The server writes UTC (+00:00) and the design system prints a string's own hour and
     minute, so every timestamp the page hands it is first put in the browser's offset; a plain
@@ -754,12 +770,30 @@ def test_app_js_names_the_revenue_route_and_draws_its_tables() -> None:
     assert "The value range is not computed in tier 1" in script
     assert "youngGrowth(im.failure_probability)" in script
     # the solves, and the one figure of a row refused for its target margin
-    assert "['Implied growth held in ' + held, F.formatPercent(im.implied_growth), true]" in script
+    assert "held ? 'Implied growth held in ' + held : 'Implied growth held after year 3'," in script
+    assert "if (last == null) return null;" in script  # no high_growth_years RULE input
     assert "['Margin the price needs', F.formatPercent(im.implied_margin), true]" in script
     assert "'implied_margin' in im ? pairs([" in script
     # a loss makes EPV negative and the growth share above 100%: the EPV line says why
     assert "key === 'epv' && v < 0" in script
     assert "'negative: trailing earnings are a loss'" in script
+
+
+def test_drawer_figure_tables_scroll_by_keyboard_with_the_year_in_view() -> None:
+    script = _static_file("app.js")
+    assert script.count("h('div', { className: 'app-scroll', tabIndex: 0 },") == 2
+    page = _static_file("index.html")
+    assert (
+        ".app-scroll:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }"
+        in (page)
+    )
+    assert ".app-figures th:first-child, .app-figures td:first-child {" in page
+    assert "position: sticky; left: 0; background: var(--surface-raised);" in page
+
+
+def test_app_js_escape_closes_an_open_menu_before_the_drawer() -> None:
+    script = _static_file("app.js")
+    assert "event.key === 'Escape' && state.drawer && !document.querySelector('.fb-menu')" in script
 
 
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
@@ -826,7 +860,7 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 21
+    assert bundle.count("// fairband:") >= 26
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
     assert "Number(p.phase) || 1" not in bundle
     assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
@@ -898,6 +932,40 @@ def test_bundle_keeps_the_freshness_glyph_class() -> None:
     assert "className: 'fb-mark fb-mark--' + f" in bundle
     css = _component_file("bundle.css")
     assert ".fb-mark--aging" in css and ".fb-logo" in css
+
+
+def test_bundle_menus_close_on_outside_click_and_escape() -> None:
+    """Growth-routes spec 6.3: a press outside the table's menus or Escape closes them, and
+    opening one closes the other."""
+    bundle = _component_file("bundle.js")
+    assert "document.addEventListener('pointerdown'" in bundle
+    assert "e.key === 'Escape'" in bundle
+    assert "fopen[1](!fopen[0]); open[1](false);" in bundle
+    assert "open[1](!open[0]); fopen[1](false);" in bundle
+    # the listeners live only while a menu is open, and a press inside one of the bar's menus
+    # keeps them open
+    assert "if (!open[0] && !fopen[0]) return undefined;" in bundle
+    assert "document.removeEventListener('pointerdown', onPointerDown);" in bundle
+    assert "document.removeEventListener('keydown', onKeyDown);" in bundle
+    assert "}, [open[0], fopen[0]]);" in bundle
+    assert "barRef.current.querySelectorAll('.fb-screen__cols')" in bundle
+    assert "h('div', { className: 'fb-screen__bar', ref: barRef }," in bundle
+
+
+def test_bundle_find_has_a_clear_word() -> None:
+    bundle = _component_file("bundle.js")
+    assert "p.query ? h('button', { type: 'button', className: 'fb-screen__clear control'" in bundle
+    assert "onClick: function () { p.onQueryChange(''); }" in bundle
+    css = _component_file("bundle.css")
+    assert (
+        ".fb-screen__clear:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }"
+        in (css)
+    )
+
+
+def test_index_gives_the_find_ring_room() -> None:
+    page = _static_file("index.html")
+    assert "/* fairband:" in page and ".app-main { padding-top: var(--space-1); }" in page
 
 
 def test_logos_served(client: TestClient) -> None:

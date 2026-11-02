@@ -364,11 +364,12 @@ def test_app_js_posts_with_the_request_header() -> None:
 
 
 def test_controls_js_calibration_reads_flagged() -> None:
-    """The page's calibration caption names the companies a classifier check flagged, after those
-    valued (goal 7): ``4 companies · 3 valued · 3 flagged by a classifier check · phases: …``.
-    The browser check renders it."""
+    """The page's status line counts the companies valued of those admitted (goal 7), and its
+    Details ▾ names those a classifier check flagged (growth-routes spec 6.1):
+    ``3 of 4 valued``, then ``3 flagged by a classifier check`` in the menu. The browser check
+    renders it."""
     script = resources.files("fairband.web").joinpath("static", "controls.js").read_text("utf-8")
-    assert "count(c.total) + ' companies', count(c.valued) + ' valued'," in script
+    assert "count(c.valued), ' of ', count(c.total), ' valued'" in script
     assert "count(c.flagged) + ' flagged by a classifier check'" in script
 
 
