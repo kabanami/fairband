@@ -151,7 +151,9 @@ This rule is shared by both routes (*my call*, from the builder check). The Matu
 stable-growth value reads the same terminal return, so a company has one return measure whatever
 its route. Eighteen Wide-moat stable rows of the first run had a ten-year aggregate under the 13%
 cap; their stable value can rise by up to 15% where the chosen measure is higher. The stable
-route's "ROIC unavailable" case reads the three-year capital sum of 5.1.
+route's "ROIC unavailable" case reads the three-year capital sum of 5.1. Amended 2026-11-02:
+the stable route also charges at the runway return through the runway, and its "ROIC
+unavailable" case is the growth route's charge-off (5.10).
 
 ### 5.4 The fade
 
@@ -240,6 +242,39 @@ snapshots, with no vendor call and no freshness window: `fairband refresh --reva
 builder's). It records a refresh of kind `revalue`, reuses the latest stored deciles, and values
 every company that has facts. The screen then shows the new snapshots. This is how the
 calibration readout of section 9 is produced on the first run's data.
+
+### 5.10 The Mature Stable charge (amended 2026-11-02)
+
+The stable-growth value charges reinvestment as the Mature Growth route does (5.1 to 5.3), through
+`RoicTerms.charge`, the one charge both routes build. Earnings grow at the terminal growth in
+every year from the trailing level (year 1 is E, with no (1 + g_T) factor, as before). The charge
+is at the runway return in years 1 to N−1 of the moat's runway (`runway_years`: 5, 10, 20), at
+the terminal return in year N and in the terminal value, and off in the runway years when rule 4
+of 5.1 turns it off. The value is `value_at_belief` on that path. The one-stage formula of the
+mechanical screen spec, E × (1 − g_T ÷ terminal ROIC) ÷ (r − g_T), is the case where the runway
+return equals the terminal return: a floored row still values at EPV under a Narrow or no moat.
+The route raises the ROIC flags the growth route raises ("return floored", "charge zeroed"); its
+own "ROIC unavailable" flag goes. The intermediates gain `runway` and the inputs the RULE
+`runway_years`. The cross-check of 5.7 is unchanged.
+
+Why. The one-stage formula applied the far-future return from the first year: a company earning
+44% on new capital today (QCOM) was charged as if that return had already fallen to the 13% cap,
+holding back 23% of earnings a year for 3% growth instead of 7%. Damodaran keeps the current
+return and fades it; McKinsey's return on new capital is a continuing-value input, after the
+explicit years (both in the literature report of section 12). And the two routes charged the
+same company differently, so the phase boundary was a cliff: a company crossing from "Moderate"
+to "Low" growth lost the runway charge at once.
+
+Effect on refresh 3's stored rows (recomputed from the snapshots on 2026-11-02): 181 of the 336
+valued Mature Stable rows move, all up, by a median 9.4% and at most 20%; the 132 floored and 12
+unavailable rows do not. The Mature Stable median value ÷ price goes from 0.557 to 0.584 and the
+share at or above the price from 16.1% to 18.5%; over all 1,052 valued rows, from 0.721 to 0.738
+and from 28.4% to 29.2%. Thirty-four rows move one stance up. QCOM: $111.43 to $127.01 (buy
+$95.25), still "HOLD — above fair band" at $164.79. AAPL: $112.33 to $134.51, still TRIM.
+
+Versions: the method version becomes `fairband-mechanical/0.3`; a price refresh marks the 0.2
+snapshots "method changed: run a revalue". The policy file is unchanged (no value changes), so
+`fairband-policy-v2` stays and its recorded hash still matches.
 
 ## 6. Policy values added or changed
 
@@ -398,3 +433,4 @@ phase/*.md`) and the stocks repo's (`docs/growth-duration-research.md`,
 | 2026-11-01 | The growth path fades from the year-3 rate to the belief over five years. Founder. |
 | 2026-11-01 | Return on invested capital stays; return on equity and the buyback adjustment are recorded and rejected. Founder. |
 | 2026-11-01 | r, terminal growth, the terminal cap, the belief and the classifier are unchanged in this piece. Founder. |
+| 2026-11-02 | The Mature Stable route charges as the Mature Growth route does: the runway return through the moat's runway, the terminal return in the last year and the terminal (5.10). Method 0.3. Founder. |

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.flags import gate_flags, margin_flag, nri_flag
+from fairband.engine.mature_growth import Charge
 from fairband.engine.multiples import multiples
 from fairband.engine.price_facts import price_facts
 from fairband.engine.returns import expected_return
@@ -123,6 +124,18 @@ class RoicTerms:
             },
             "terminal_roic": self.terminal,
         }
+
+    def charge(self, policy: Policy) -> Charge:
+        """The reinvestment charge both routes apply: the runway return in years 1 to N−1 and
+        the terminal return in year N and the terminal, off in the runway years when the
+        marginal return is not usable and the three-year capital sum is at or below zero."""
+        return Charge(
+            self.runway,
+            self.terminal,
+            policy.required_return,
+            policy.terminal_growth,
+            self.charge_off,
+        )
 
 
 def nri_gap(i: CompanyInputs) -> float | None:

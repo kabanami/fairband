@@ -87,6 +87,7 @@ MATURE_STABLE_KEYS = {
     "roic",
     "runway_return",
     "terminal_roic",
+    "runway",
     "epv",
     "epv_total",
     "stable_growth",
@@ -155,7 +156,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/0.2"
+    assert METHOD_VERSION == "fairband-mechanical/0.3"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -666,6 +667,26 @@ def test_mature_growth_refusals_on_the_consensus(
 # --- Mature Stable ------------------------------------------------------------------------------
 
 
+def _stable_dcf(
+    e: float, runway_roic: float, terminal_roic: float, n: int, off: bool = False
+) -> float:
+    """The stable-growth value summed by hand, as the growth route charges: earnings grow 3% a
+    year from ``e`` in year 1; each year pays out 1 − 3% ÷ the return it is charged at, the runway
+    return to year n − 1 (all of the earnings when the charge is off) and the terminal return in
+    year n; the terminal is year n's earnings × 1.03 × (1 − 3% ÷ terminal return) ÷ 6%; everything
+    discounted at 9%."""
+    value = 0.0
+    for t in range(1, n + 1):
+        ni = e * 1.03 ** (t - 1)
+        if t < n:
+            paid = ni if off else ni * (1 - 0.03 / runway_roic)
+        else:
+            paid = ni * (1 - 0.03 / terminal_roic)
+        value += paid / 1.09**t
+    final = e * 1.03 ** (n - 1)
+    return value + final * 1.03 * (1 - 0.03 / terminal_roic) / 0.06 / 1.09**n
+
+
 def test_mature_stable_end_to_end(
     ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
@@ -678,11 +699,16 @@ def test_mature_stable_end_to_end(
     assert im["stable_growth"] == pytest.approx(im["stable_growth_total"] / 1_000e6)
     assert im["e_trailing"] == pytest.approx(3_400e6 - 0.10 * 1_000e6)
     assert im["e_normalized"] == im["e_trailing"] and im["margin_scaled"] is False
-    assert im["moat"] == "Wide" and im["terminal_roic"] == 0.13
+    assert im["moat"] == "Wide" and im["terminal_roic"] == 0.13 and im["runway"] == 20
+    assert im["runway_return"]["used"] == "three-year"
+    assert im["runway_return"]["value"] == pytest.approx(0.1825, abs=1e-4)
     assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
     assert im["epv"] == pytest.approx(3.30 / 0.09)  # a share, as the screen's EPV column
-    assert im["stable_growth_total"] == pytest.approx(3_300e6 * (1 - 0.03 / 0.13) / 0.06)
-    assert im["stable_growth"] / im["epv"] == pytest.approx(1.154, abs=1e-3)  # about 15% above
+    # charged as the growth route charges: 3% growth paid for at 18.25% for 19 years and at
+    # 13% in year 20 and the terminal; the one-stage value at 13% was $42.31
+    runway_return = im["runway_return"]["value"]
+    assert im["stable_growth_total"] == pytest.approx(_stable_dcf(3_300e6, runway_return, 0.13, 20))
+    assert im["stable_growth"] == pytest.approx(44.714, abs=1e-3)
     assert im["median_margin"] == pytest.approx(0.20) and im["ttm_margin"] == pytest.approx(0.20)
     assert im["eps"] == {"reported": 3.40, "clean": pytest.approx(3.30), "forward": None}
     assert im["multiples"]["pe_forward"] is None
@@ -695,7 +721,7 @@ def test_mature_stable_end_to_end(
     assert {"net_income_ttm", "aggregate_roic", "terminal_roic", "moat_class", "belief"} <= set(
         by_name
     )
-    assert not {"runway_years", "ntm_net_income"} & set(by_name)
+    assert by_name["runway_years"].value == 20 and "ntm_net_income" not in by_name
     belief = by_name["belief"]
     assert (belief.tag, belief.value) == ("RULE", policy.terminal_growth)
     assert result_from_json(result_to_json(r)) == r
@@ -714,10 +740,11 @@ def test_mature_stable_scales_a_margin_above_history(
     assert im["epv"] == pytest.approx(im["epv_total"] / 1_000e6)
 
 
-def test_mature_stable_never_zeroes_the_charge(
+def test_mature_stable_zeroes_the_charge_like_the_growth_route(
     ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    # capital sums to zero or below and the moat is None: the stable-growth value is EPV
+    # capital sums to zero or below and the moat is None: no charge in years 1 to 4, the
+    # terminal's charge at r in year 5 and the terminal, so the value sits above EPV
     negative = tuple(
         replace(y, total_current_liabilities=3 * (y.total_current_assets or 0))
         for y in ms_inputs.capital_years
@@ -725,23 +752,27 @@ def test_mature_stable_never_zeroes_the_charge(
     inputs = replace(ms_inputs, capital_years=negative, moat_score=None)
     r = value_company(inputs, deciles, policy, TODAY)
     im = r.intermediates
-    assert "charge-zeroed" not in codes(r) and im["roic"]["aggregate"] is None
+    assert "roic-unavailable" not in codes(r) and im["roic"]["aggregate"] is None
     assert "ten-year-roic-unavailable" in codes(r)  # the shown ten-year figure, its own flag
-    unavailable = next(f for f in r.flags if f.code == "roic-unavailable")
-    assert unavailable.sentence == (
-        "Operating capital summed to zero or below over the last 3 ROIC years and the marginal "
-        "return is not usable, so the stable-growth value uses the moat's terminal return."
+    zeroed = next(f for f in r.flags if f.code == "charge-zeroed")
+    assert zeroed.sentence == (
+        "The marginal return is not usable and average invested capital sums to zero or below "
+        "over the last 3 ROIC years, so the runway charge is zero; the terminal still charges "
+        "at 9.0%."
     )
-    assert im["moat"] == "None" and im["terminal_roic"] == policy.required_return
-    assert r.value == pytest.approx(im["epv"])
+    assert im["moat"] == "None" and im["runway"] == 5
+    assert im["terminal_roic"] == policy.required_return
+    assert im["stable_growth_total"] == pytest.approx(_stable_dcf(3_300e6, 0.09, 0.09, 5, off=True))
+    assert r.value == pytest.approx(40.382, abs=1e-3) and r.value > im["epv"]
     assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
 
 
-def test_mature_stable_raises_no_return_floored_flag(
+def test_mature_stable_raises_the_return_floored_flag(
     ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    # operating income at a tenth: the three-year return of 1.8% floors at r; the stable route
-    # has no runway charge, so no flag says so and the runway-return input's note keeps the floor
+    # operating income at a tenth: the three-year return of 1.8% floors at r, and the route
+    # charges at it, so the flag shows as on the growth route; charged at r in every year, the
+    # value is EPV whatever the moat
     poor = tuple(
         replace(y, operating_income=(y.operating_income or 0) / 10) for y in ms_inputs.capital_years
     )
@@ -749,11 +780,11 @@ def test_mature_stable_raises_no_return_floored_flag(
         inputs = replace(ms_inputs, capital_years=poor, moat_score=moat_score)
         r = value_company(inputs, deciles, policy, TODAY)
         im = r.intermediates
-        assert im["runway_return"]["used"] == "floor" and "return-floored" not in codes(r)
+        assert im["runway_return"]["used"] == "floor" and "return-floored" in codes(r)
         [note] = [i.note for i in r.inputs if i.name == "runway_return"]
         assert note == "floored at the required return; the three-year was 1.8%"
-        if moat_score is None:  # a None moat values at r: the stable-growth value is EPV
-            assert im["moat"] == "None" and r.value == pytest.approx(im["epv"])
+        assert im["terminal_roic"] == policy.required_return
+        assert r.value == pytest.approx(im["epv"])
 
 
 def test_mature_stable_without_the_nri_gap(
@@ -844,8 +875,8 @@ def _capital_year(year: int, nopat: float, capital: float) -> CapitalYear:
 def test_mature_stable_reads_the_shared_terminal(
     ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    # a Wide stable row whose marginal return is above 13% and ten-year aggregate 10% values at
-    # 13%: invested capital is $10 bn at each year end to 2023 and $20 bn at the ends of 2024 and
+    # a Wide stable row whose marginal return is above 13% and ten-year aggregate 10% charges at
+    # 28% through the runway and at 13% after: invested capital is $10 bn at each year end to 2023 and $20 bn at the ends of 2024 and
     # 2025; NOPAT is $0.87 bn a year and $3.67 bn in 2025. Average capital rises $10 bn from 2020
     # to 2025 and NOPAT $2.8 bn, a 28% marginal return; $11.5 bn of NOPAT over $115 bn of average
     # capital is 10%.
@@ -859,8 +890,9 @@ def test_mature_stable_reads_the_shared_terminal(
     assert im["moat"] == "Wide" and im["runway_return"]["used"] == "marginal"
     assert im["runway_return"]["marginal"] == pytest.approx(0.28)
     assert im["roic"]["aggregate"] == pytest.approx(0.10)
-    assert r.intermediates["terminal_roic"] == 0.13
-    assert im["stable_growth_total"] == pytest.approx(3_300e6 * (1 - 0.03 / 0.13) / 0.06)
+    assert r.intermediates["terminal_roic"] == 0.13 and im["runway"] == 20
+    assert im["stable_growth_total"] == pytest.approx(_stable_dcf(3_300e6, 0.28, 0.13, 20))
+    assert im["stable_growth"] == pytest.approx(46.788, abs=1e-3)
 
 
 # --- Refusals before the route ------------------------------------------------------------------

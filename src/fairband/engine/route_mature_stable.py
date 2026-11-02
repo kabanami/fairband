@@ -1,14 +1,16 @@
-"""The Mature Stable route (spec 6.6): the stable-growth value on normalized trailing earnings.
+"""The Mature Stable route (spec 6.6, calibration spec 5.10): the stable-growth value on
+normalized trailing earnings, charged as the growth route charges.
 
 E is trailing net income less the non-recurring gap on the diluted shares; when the margin flag
 fires, E is scaled to the ten-year median operating margin. The value at belief is the
-stable-growth value at the moat's terminal return (``RoicTerms``), always: so it equals EPV for a
-Narrow or no moat and is about 15% above it for a Wide one (15.4% at r 9%, g_t 3% and the 13%
-cap). There is no runway charge here, so a runway return below r raises no flag: the runway-return
-input's note keeps the floor. A capital sum at or below zero does not turn the charge off either:
-the value takes the moat's terminal return, and the row says so. EPV is shown as the no-growth
-value. ``epv`` and ``stable_growth`` are a share; ``epv_total`` and ``stable_growth_total`` are
-the totals.
+stable-growth value: the reverse DCF of ``mature_growth`` on a path that grows at the terminal
+growth in every year, with the reinvestment charge of ``RoicTerms.charge``: the runway return in
+years 1 to N−1 of the moat's runway, the terminal return in year N and the terminal, and off in
+the runway years when the growth route's would be. A row whose runway return is the terminal
+return (a floored one, in particular) values at the one-stage perpetuity, which is EPV for a
+Narrow or no moat; a row whose runway return is above it is worth more, and more for a longer
+runway. EPV is shown as the no-growth value. ``epv`` and ``stable_growth`` are a share;
+``epv_total`` and ``stable_growth_total`` are the totals. The ROIC flags are the growth route's.
 
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
 5.7), or that route's refusal; the value, the levels and the stance stay on the stable-growth
@@ -40,7 +42,6 @@ from fairband.engine.route_steps import (
     trailing_flags,
     ttm_margin,
 )
-from fairband.engine.types import Flag
 from fairband.policy import Policy
 
 
@@ -59,9 +60,8 @@ def value_mature_stable(c: Context) -> Valued | Refused:
 
     moat = moat_class(i.moat_score, policy)
     roic = RoicTerms.of(i.capital_years, moat, policy)
-    epv_total, stable = mature_stable_values(
-        e_normalized, roic.terminal, policy.required_return, policy.terminal_growth
-    )
+    runway = policy.runway_years[moat]
+    epv_total, stable = mature_stable_values(e_normalized, roic.charge(policy), runway)
     value = stable / c.shares
     im: dict[str, Any] = {
         "e_trailing": e,
@@ -72,6 +72,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "e_normalized": e_normalized,
         "moat": moat,
         **roic.intermediates(),
+        "runway": runway,
         "epv": epv_total / c.shares,
         "epv_total": epv_total,
         "stable_growth": value,
@@ -88,6 +89,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         *common_inputs(i, t, roic),
         data(i, "net_income_ttm", t.net_income, "USD", "statements"),
         *common_rules(policy, moat, roic),
+        rule(policy, "runway_years", runway, "years", f"{moat} moat"),
         rule(
             policy,
             "belief",
@@ -96,7 +98,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
             "the terminal growth, the expected return's growth for a stable company",
         ),
     )
-    flags = _roic_flags(roic, policy) + trailing_flags(i, t, gap, policy)
+    flags = roic.flags + trailing_flags(i, t, gap, policy)
     return Valued("mature-stable", value, moat, im, inputs, flags)
 
 
@@ -111,21 +113,3 @@ def stable_at_price(
         "expected_return": expected(price, value, im, (g_t, g_t, g_t)),
         "growth_route": cross_check_at_price(im["growth_route"], price, im["shares"], policy),
     }
-
-
-def _roic_flags(roic: RoicTerms, policy: Policy) -> tuple[Flag, ...]:
-    """The ROIC flags as this route reads them. It has no runway charge, so "return floored" is
-    dropped (the runway-return input's note keeps the floor), and a fallback capital sum at or
-    below zero is not "charge zeroed" here but an unavailable ROIC, in the same place; the
-    ten-year flag, about the ten-year figure shown, stays."""
-    flags = tuple(f for f in roic.flags if f.code != "return-floored")
-    if not roic.charge_off:
-        return flags
-    unavailable = Flag(
-        "roic-unavailable",
-        "ROIC unavailable",
-        "Operating capital summed to zero or below over the last "
-        f"{policy.fallback_return_years} ROIC years and the marginal return is not usable, so the "
-        "stable-growth value uses the moat's terminal return.",
-    )
-    return tuple(unavailable if f.code == "charge-zeroed" else f for f in flags)

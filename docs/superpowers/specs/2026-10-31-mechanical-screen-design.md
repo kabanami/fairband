@@ -203,8 +203,8 @@ Numbers from vendors are parsed as decimals and stored as decimal text with thei
 **Mature Stable** (`design.md` 6.11; details *my calls*):
 
 - Normalized earnings E = trailing GAAP net income less the non-recurring gap. When the margin flag of section 6.7 fires, E is scaled by the ten-year median operating margin ÷ the trailing operating margin, and the row says so. This is the "margins at their 5- to 10-year norm" rule read as a proportional scaling; it is an approximation, written in the policy file as such.
-- EPV = E ÷ r. Stable-growth value = E × (1 − 3% ÷ terminal ROIC) ÷ (9% − 3%), with the ROIC rules above.
-- The value at belief for the levels is the stable-growth value. EPV is shown as the no-growth value. For Narrow and None the two are equal, since the terminal ROIC is 9%; for Wide the stable-growth value is at most 15% above EPV. This settles `design.md` 15.8 for the mechanical screen only; an agent may override later.
+- EPV = E ÷ r. Stable-growth value = E × (1 − 3% ÷ terminal ROIC) ÷ (9% − 3%), with the ROIC rules above. *Amended 2026-11-02* (calibration spec 5.10): the stable-growth value charges as the Mature Growth route does, at the runway return through the moat's runway and at the terminal return after; this one-stage formula is the case where the two returns are equal.
+- The value at belief for the levels is the stable-growth value. EPV is shown as the no-growth value. For Narrow and None the two are equal, since the terminal ROIC is 9%; for Wide the stable-growth value is at most 15% above EPV. *Amended 2026-11-02*: the two are equal when the runway return is r; a runway return above the terminal return lifts the stable-growth value under any moat (calibration spec 5.10). This settles `design.md` 15.8 for the mechanical screen only; an agent may override later.
 - The dividend-to-FCFE test and the control layer are out of this cut.
 
 **The other four phases.** The snapshot carries the phase, the classifier evidence and the refusal reason "<phase> route not built yet". Start-up rows say "Start-up: no value by design; the price-implied requirement comes with the Start-up route".

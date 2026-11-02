@@ -227,7 +227,7 @@ def _growth_and_charge(
     """The growth path to the moat's runway and the charge at the returns of ``roic``."""
     runway = policy.runway_years[moat]
     growth = GrowthPath(anchor.ntm_net_income, path.steps, belief.rate, runway, policy.fade_years)
-    return growth, _charge(roic.runway, roic.terminal, roic.charge_off, policy)
+    return growth, roic.charge(policy)
 
 
 def growth_at_price(

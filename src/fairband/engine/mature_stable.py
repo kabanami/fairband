@@ -1,18 +1,25 @@
-"""Mature Stable: the no-growth and stable-growth values (``design.md`` 6.11, spec 6.6).
+"""Mature Stable: the no-growth and stable-growth values (``design.md`` 6.11, spec 6.6, calibration
+spec 5.10).
 
 E is the normalized earnings, a total; both values come back in the unit of E. EPV is E ÷ r. The
-stable-growth value is the perpetuity on the current earnings level, E × (1 − g_t ÷ terminal
-ROIC) ÷ (r − g_t), with no (1 + g_t) factor: it is not the one-year-out terminal of Mature
-Growth. When the margin flag fires, E is scaled by the median operating margin ÷ the trailing
-operating margin, a proportional approximation of margins at their norm.
+stable-growth value is the reverse DCF of ``mature_growth`` on a path that grows at the terminal
+growth in every year from the current earnings level (year 1 is E, with no (1 + g_t) factor), with
+the reinvestment charge as the growth route applies it: at the runway return in years 1 to N−1 of
+the runway and at the terminal return in year N and the terminal. When the runway return is the
+terminal return, this is the one-stage perpetuity E × (1 − g_t ÷ terminal ROIC) ÷ (r − g_t). When
+the margin flag fires, E is scaled by the median operating margin ÷ the trailing operating margin,
+a proportional approximation of margins at their norm.
 """
 
+from fairband.engine.mature_growth import Charge, GrowthPath, value_at_belief
 
-def mature_stable_values(
-    e: float, terminal_roic: float, r: float, g_t: float
-) -> tuple[float, float]:
-    """``(epv, stable_growth)`` for normalized earnings ``e``."""
-    return e / r, e * (1 - g_t / terminal_roic) / (r - g_t)
+
+def mature_stable_values(e: float, charge: Charge, runway: int) -> tuple[float, float]:
+    """``(epv, stable_growth)`` for normalized earnings ``e`` under ``charge`` over ``runway``
+    years."""
+    g_t = charge.g_t
+    path = GrowthPath(e, (g_t, g_t), g_t, runway)
+    return e / charge.r, value_at_belief(path, charge)
 
 
 def normalize_for_margin(e: float, ttm_margin: float, median_margin: float, flagged: bool) -> float:

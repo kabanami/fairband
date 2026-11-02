@@ -6,7 +6,7 @@ The universe of one full refresh admits six companies:
 
 - AAPL, BBB and CCC: the engine's Mature Growth company (value $133.37, buy $100.02) at $150, $80
   and $120; Technology, the first mega cap, the others mid.
-- STBL: the engine's Mature Stable company at $40, above its $31.73 buy level; Industrials, mid.
+- STBL: the engine's Mature Stable company at $40, above its $33.54 buy level; Industrials, mid.
 - AAL: the engine's Young Growth company, refused; Technology, mid.
 - NEWC: Industrials, no cap band, not valued yet (no snapshot, so no phase).
 
