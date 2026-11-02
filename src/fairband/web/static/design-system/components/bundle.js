@@ -110,6 +110,8 @@
       className: cx('fb-btn', 'control', 'fb-btn--' + (p.variant || 'secondary'),
         p.size === 'sm' && 'fb-btn--sm', p.className),
       disabled: !!p.disabled,
+      // fairband: a menu's toggle says whether its menu is open (growth-routes spec 6.3).
+      'aria-expanded': p['aria-expanded'],
       onClick: p.onClick
     }, p.children);
   }
@@ -1051,22 +1053,24 @@
     // click must not sort; `over` is the header showing the drop edge and the side it shows on.
     var drag = React.useRef({ from: null, dropped: false });
     var over = React.useState(null);
-    // fairband: while a menu is open, a press outside the bar's menus or Escape closes both
-    // (growth-routes spec 6.3); the listeners live only while one is open.
+    // fairband: while a menu is open, a press or focus outside the bar's menus or Escape closes
+    // both (growth-routes spec 6.3); the listeners live only while one is open.
     var barRef = React.useRef(null);
     React.useEffect(function () {
       if (!open[0] && !fopen[0]) return undefined;
       function close() { open[1](false); fopen[1](false); }
-      function onPointerDown(e) {
+      function onOutside(e) {
         var cols = barRef.current ? barRef.current.querySelectorAll('.fb-screen__cols') : [];
         for (var i = 0; i < cols.length; i++) if (cols[i].contains(e.target)) return;
         close();
       }
       function onKeyDown(e) { if (e.key === 'Escape') close(); }
-      document.addEventListener('pointerdown', onPointerDown);
+      document.addEventListener('pointerdown', onOutside);
+      document.addEventListener('focusin', onOutside);
       document.addEventListener('keydown', onKeyDown);
       return function () {
-        document.removeEventListener('pointerdown', onPointerDown);
+        document.removeEventListener('pointerdown', onOutside);
+        document.removeEventListener('focusin', onOutside);
         document.removeEventListener('keydown', onKeyDown);
       };
     }, [open[0], fopen[0]]);

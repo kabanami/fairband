@@ -17,6 +17,8 @@
   var BY = { sector: 'Sector', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
   var UNCLASSIFIED = 'unclassified'; /* the calibration's name for a company without a phase */
+  /* The refusals the refresh writes for a company it failed, by the text they start with. */
+  var FAILED_REASONS = ['data fetch failed', 'data fetch incomplete', 'valuation failed'];
   /* The server's stage names as the run bar's lowercase verb phrases (spec 4.3). */
   var STAGE_WORDS = {
     universe: 'reading the universe', deciles: 'ranking', fetch: 'fetching', value: 'valuing',
@@ -175,11 +177,11 @@
     return { total: total, done: r.done, failed: r.failed, stage: stage };
   }
 
-  /* Last refresh: full done 1 Nov 2026, 01:20 · 1,052 of 1,759 valued, then · 3 failed when the
-     calibration counts failed companies (a price refresh's does; it counts those repriced, and
-     those skipped for want of a snapshot). A record without a calibration, a run that failed,
-     was cancelled or was scoped, says its message instead. The finish reads in the reader's
-     local time. */
+  /* The last refresh, from its kind (spec 6.1): full done 1 Nov 2026, 01:20 · 1,052 of 1,759
+     valued, then · 3 failed when the run failed companies. A price refresh counts those
+     repriced, and those skipped for want of a snapshot. A record without a calibration, a run
+     that failed, was cancelled or was scoped, says its message instead. The finish reads in the
+     reader's local time. */
   function lastLine(last) {
     if (!last) return ['No refresh has run yet.'];
     var c = last.calibration;
@@ -187,14 +189,26 @@
     var when = finished ? h('time', {
       key: 'when', dateTime: finished, title: finished
     }, F.formatDate(finished)) : null;
-    var line = ['Last refresh: ' + last.kind + ' ' + last.status + (when ? ' ' : ''), when];
+    var line = [last.kind + ' ' + last.status + (when ? ' ' : ''), when];
     if (!c) return line.concat(last.message ? [' · ' + last.message] : []);
     line = line.concat(c.repriced != null
       ? [' · ', count(c.repriced), ' of ', count(c.total), ' repriced']
       : [' · ', count(c.valued), ' of ', count(c.total), ' valued']);
-    if (c.failed > 0) line = line.concat([' · ', count(c.failed), ' failed']);
+    var failed = failedOf(c);
+    if (failed > 0) line = line.concat([' · ', count(failed), ' failed']);
     if (c.skipped > 0) line = line.concat([' · ', count(c.skipped), ' skipped']);
     return line;
+  }
+
+  /* The companies a run failed. A price refresh's calibration counts them; a full refresh's or a
+     revalue's does not, so they are its refusals of the three reasons the refresh itself writes
+     (refresh/run.py): a fetch that failed, one a rate limit stopped, a valuation that raised. */
+  function failedOf(c) {
+    if (c.failed != null) return c.failed;
+    return Object.keys(c.refused || {}).reduce(function (n, reason) {
+      return FAILED_REASONS.some(function (head) { return reason.indexOf(head) === 0; })
+        ? n + c.refused[reason] : n;
+    }, 0);
   }
 
   /* Details ▾ beside the line of a full refresh or a revalue: in the bundle's sectioned menu (the
@@ -343,15 +357,17 @@
       })));
   }
 
-  /* Details ▾ closes on a press outside it and on Escape, as the screen's menus do. Each menu
-     closes itself on a press outside it, so opening one closes the others (spec 6.3). Registered
-     once; each reads state.detailsOpen. */
-  document.addEventListener('pointerdown', function (event) {
+  /* Details ▾ closes on a press or focus outside it and on Escape, as the screen's menus do. Each
+     menu closes itself on a press or focus outside it, so opening one, by pointer or by keyboard,
+     closes the others (spec 6.3). Registered once; each reads state.detailsOpen. */
+  function closeDetailsOutside(event) {
     if (!state.detailsOpen) return;
     if (event.target instanceof Element && event.target.closest('.app-details')) return;
     state.detailsOpen = false;
     render();
-  });
+  }
+  document.addEventListener('pointerdown', closeDetailsOutside);
+  document.addEventListener('focusin', closeDetailsOutside);
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape' || !state.detailsOpen) return;
     state.detailsOpen = false;

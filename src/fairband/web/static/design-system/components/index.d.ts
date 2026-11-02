@@ -94,6 +94,8 @@ export interface ButtonProps {
   disabled?: boolean;
   type?: 'button' | 'submit' | 'reset';
   onClick?: (event: unknown) => void;
+  /** fairband: a menu's toggle passes whether its menu is open; it reaches the button. */
+  'aria-expanded'?: 'true' | 'false';
   className?: string;
   children?: unknown;
 }

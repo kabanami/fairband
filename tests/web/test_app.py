@@ -676,10 +676,22 @@ def test_controls_js_one_line_status_and_details_menu() -> None:
     for section in ("'FLAGGED'", "'PHASES'", "'REFUSED'"):
         assert section in script, section
     assert "'pointerdown'" in script and "'Escape'" in script
+    # focus moving outside closes it too, so a keyboard user opening another menu closes it
+    assert "document.addEventListener('focusin', closeDetailsOutside);" in script
     # the popover follows the bundle's menu markup, and a run closes it
     assert "className: 'fb-screen__cols app-details'" in script
     assert "'aria-expanded': state.detailsOpen ? 'true' : 'false'" in script
     assert "if (body.refresh !== null) state.detailsOpen = false;" in script
+    # the line starts at the kind, as spec 6.1 writes it
+    assert "Last refresh: " not in script
+    assert "var line = [last.kind + ' ' + last.status + (when ? ' ' : ''), when];" in script
+    # a full refresh's or a revalue's failed companies are its refusals of the three reasons the
+    # refresh writes; a price refresh's calibration counts them
+    assert (
+        "var FAILED_REASONS = ['data fetch failed', 'data fetch incomplete', 'valuation failed'];"
+        in (script)
+    )
+    assert "if (c.failed != null) return c.failed;" in script
 
 
 def test_page_hands_the_design_system_local_time() -> None:
@@ -860,7 +872,9 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 26
+    assert bundle.count("// fairband:") >= 27
+    # A menu's toggle says whether its menu is open: Button passes aria-expanded through.
+    assert "'aria-expanded': p['aria-expanded']," in bundle
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
     assert "Number(p.phase) || 1" not in bundle
     assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
@@ -935,17 +949,21 @@ def test_bundle_keeps_the_freshness_glyph_class() -> None:
 
 
 def test_bundle_menus_close_on_outside_click_and_escape() -> None:
-    """Growth-routes spec 6.3: a press outside the table's menus or Escape closes them, and
-    opening one closes the other."""
+    """Growth-routes spec 6.3: a press or focus outside the table's menus or Escape closes them,
+    and opening one closes the other."""
     bundle = _component_file("bundle.js")
     assert "document.addEventListener('pointerdown'" in bundle
     assert "e.key === 'Escape'" in bundle
     assert "fopen[1](!fopen[0]); open[1](false);" in bundle
     assert "open[1](!open[0]); fopen[1](false);" in bundle
+    # focus moving outside closes them too: Enter or Space on another menu's toggle sends a click
+    # with no pointerdown
+    assert "document.addEventListener('focusin', onOutside);" in bundle
+    assert "document.removeEventListener('focusin', onOutside);" in bundle
     # the listeners live only while a menu is open, and a press inside one of the bar's menus
     # keeps them open
     assert "if (!open[0] && !fopen[0]) return undefined;" in bundle
-    assert "document.removeEventListener('pointerdown', onPointerDown);" in bundle
+    assert "document.removeEventListener('pointerdown', onOutside);" in bundle
     assert "document.removeEventListener('keydown', onKeyDown);" in bundle
     assert "}, [open[0], fopen[0]]);" in bundle
     assert "barRef.current.querySelectorAll('.fb-screen__cols')" in bundle
