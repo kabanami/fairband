@@ -10,8 +10,8 @@ Admitted, with the revenue growth over the last three fiscal years that the deci
 - NEWT: revenue up $10 m a year at a -10% margin that does not improve (0.9%): Young Growth.
 
 Not admitted: FIRB, a regional bank (recorded, excluded by industry), and TINY, below the $2 bn
-floor (skipped). The quote, profile, closes, annual consensus and GuruFocus answers are ACME's
-fixtures with the symbol changed.
+floor (skipped). The quote, profile, closes, annual consensus, peers and GuruFocus answers are
+ACME's fixtures with the symbol changed.
 """
 
 import json
@@ -29,6 +29,7 @@ _FIXTURES = {
     "profile": "fmp/profile.ACME.json",
     "quote": "fmp/quote.ACME.json",
     "price-history": "fmp/historical-price-eod-full.ACME.json",
+    "peers": "fmp/stock-peers.ACME.json",
     "summary": "gurufocus/summary.ACME.json",
     "keyratios": "gurufocus/keyratios.ACME.json",
 }

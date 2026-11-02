@@ -195,7 +195,7 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
         ("NEWT", "pending", None),
     ]
     assert deciles(env) is None and env.snapshots() == []
-    assert env.router.symbol_calls == Counter({"": 1, "ACME": 14, "AXLE": 14})
+    assert env.router.symbol_calls == Counter({"": 1, "ACME": 15, "AXLE": 15})
 
     env.router.symbol_calls.clear()
     env.progress.clear()
@@ -203,7 +203,7 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
     second = env.refresh().run("full")
     row = env.last()
     assert (row.id, row.status) == (second, "done") and second == first + 1
-    assert env.router.symbol_calls == Counter({"MILD": 14, "NEWT": 14})  # no screener call
+    assert env.router.symbol_calls == Counter({"MILD": 15, "NEWT": 15})  # no screener call
     assert Progress(second, "fetch", 4, 0, 0, None) in env.progress
     assert env.items(second) == [(symbol, "valued", None) for symbol in ADMITTED]
     assert {refresh for refresh, _ in universe(env).values()} == {second}

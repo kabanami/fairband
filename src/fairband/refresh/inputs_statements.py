@@ -18,19 +18,26 @@ lease lines come from the as-reported balance sheet only. A balance sheet ending
 The tax rate is the OECD statutory rate for the company's country and fiscal year (D3, D9). A rate
 carried past the table's newest year flags ``tax-carried-forward`` and makes ``tax_rate_latest``
 an estimate. The first year with an operating income and no rate gives ``tax_refusal``; a year
-without a rate keeps a ``None`` rate.
+without a rate keeps a ``None`` rate. The country (``country_for``) is the ``country`` of the
+latest stored profile payload that parses (the headquarters, spec 6.6), else the universe row's,
+else ``"unknown"``.
 
 Trailing figures (spec 6.6): the sums of the last four quarters when each ends 80 to 100 days after
 the one before (the anchor's rule), joined to the quarterly cash flow by period end, a sum ``None``
 when any quarter lacks its part; else the last fiscal year, flagged ``trailing-on-fiscal-year``.
 The diluted share count is the newest quarter's weighted average, else the newest fiscal year's.
+
+``balance_lines`` reads the newest annual balance sheet's lines by FMP name, and
+``stored_payload`` a payload the store keeps whole (the profile's, the peers').
 """
 
+import json
 import sqlite3
 from calendar import monthrange
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import Any
 
 from fairband.engine.anchor import TrailingFigures, consecutive_quarters
 from fairband.engine.classifier import FiscalYear, Series
@@ -38,10 +45,15 @@ from fairband.engine.roic import CapitalYear
 from fairband.engine.types import Flag, Provenance
 from fairband.policy.tax import TaxRate, TaxTable
 from fairband.refresh.fetch import STATEMENT_YEARS
+from fairband.store.companies import CompanyRow
 from fairband.store.facts import FactRow, facts_for
+from fairband.store.vendor import latest_response, response_payload
+from fairband.vendors.normalize_fmp import profile_country
 
 INCOME_SOURCE = "FMP income-statement"
 STATEMENTS_SOURCE = "FMP income-statement, balance-sheet-statement, cash-flow-statement"
+PROFILE_SOURCE = "FMP profile"
+SCREENER_SOURCE = "FMP company-screener"
 
 _DATASETS = (
     "income-annual",
@@ -239,6 +251,37 @@ def statements_for(
         estimate_methods=methods,
         tax_year=None if newest_rate is None else newest_rate.year_used,
     )
+
+
+def country_for(
+    conn: sqlite3.Connection, symbol: str, company: CompanyRow | None
+) -> tuple[str, str | None]:
+    """The company's country and where it came from: the latest usable profile's (the
+    headquarters, spec 6.6), else the universe row's (``company``); ``"unknown"`` from neither."""
+    country = profile_country(stored_payload(conn, "profile", symbol))
+    if country is not None:
+        return country, PROFILE_SOURCE
+    if company is not None and company.country:
+        return company.country, SCREENER_SOURCE
+    return "unknown", None
+
+
+def balance_lines(conn: sqlite3.Connection, symbol: str) -> dict[str, float | None]:
+    """The newest annual balance sheet's lines by FMP name, ``None`` where it presents no value;
+    empty without a balance sheet."""
+    sheets = _periods(conn, symbol, "balance-annual")
+    return {} if not sheets else {name: sheets[-1].value(name) for name in sheets[-1].facts}
+
+
+def stored_payload(conn: sqlite3.Connection, endpoint: str, symbol: str) -> Any:
+    """The parsed payload of the latest usable FMP response to ``endpoint`` for ``symbol``, a call
+    whose only parameter is the symbol; ``None`` without one or when it does not parse."""
+    response = latest_response(conn, "fmp", endpoint, symbol, {"symbol": symbol})
+    text = None if response is None else response_payload(conn, response.id)
+    try:
+        return None if text is None else json.loads(text)
+    except ValueError:  # a payload that does not parse is none
+        return None
 
 
 def _series(years: _Years, cash: dict[date, _Period]) -> Series:

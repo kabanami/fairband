@@ -4,16 +4,18 @@ The statement side (``series_for``, the capital years, the tax rate, the trailin
 share count) is ``inputs_statements``; its docstring states those rules. ``build_inputs`` adds:
 
 - the consensus: one ``QuarterEstimate`` per ``estimate-quarter`` period and one ``AnnualEstimate``
-  per ``estimate-annual`` period, every row returned; the fiscal year is FMP's when stored, else
-  derived from the company's fiscal-year end (``FiscalCalendar``), and so is the quarter label;
+  per ``estimate-annual`` period, every row returned, an annual one with its EPS, net-income and
+  revenue analyst counts; the fiscal year is FMP's when stored, else derived from the company's
+  fiscal-year end (``FiscalCalendar``), and so is the quarter label;
 - the street's trailing EPS: the sum of the four ``street-actual`` values whose periods are exactly
   the four trailing quarter ends; ``None`` when one is missing or the trailing figures are a fiscal
   year, which leaves the SBC basis unknown (``mech/1.2``);
 - the price and its date from the ``quote``; the market cap from the quote, else the profile, else
   the universe row; ``is_adr`` from the profile, else the universe row;
 - the country, which picks the statutory tax rate: the ``country`` of the latest stored profile
-  payload (the headquarters, spec 6.6), else the universe row's, else ``"unknown"``. The tax
-  rate's note (``notes``) names the country, where it came from, and the rate's year and source;
+  payload (the headquarters, spec 6.6), else the universe row's, else ``"unknown"``
+  (``country_for``). The tax rate's note (``notes``) names the country, where it came from, and the
+  rate's year and source;
 - the currency: the newest annual income statement's, else the universe row's, else ``"unknown"``
   flagged ``currency-unknown``. The route reads every currency but USD as a foreign filer, so an
   unknown one gets the foreign-filer refusal, which is the honest outcome;
@@ -21,7 +23,12 @@ share count) is ``inputs_statements``; its docstring states those rules. ``build
   foreign filer (an ADR, or a currency other than USD), whose missing rates stay ``None`` so the
   route gives it the foreign-filer refusal of spec 11 with its phase;
 - the GuruFocus moat score and EPS, the next earnings date (``None`` when before ``today``) and the
-  closes of the latest price-history payload (none when it is absent or does not parse).
+  closes of the latest price-history payload (none when it is absent or does not parse);
+- the debt, short-term plus long-term debt, and the cash, cash and equivalents plus short-term
+  investments, from the newest annual balance sheet: a line it does not present counts as nil and
+  is named in the input's note (``"longTermDebt not presented"``), and with both lines missing the
+  figure is ``None``;
+- the peers: ``peers.peer_figures`` on the given deciles; none without them.
 
 ``provenance`` holds an entry under each key the route cites (``route`` module docstring) whose
 input the store supplied; an input it did not supply has none and cites "unknown". The source names
@@ -33,24 +40,30 @@ dataset name is a programming error and raises ``ValueError``.
 
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate
+from fairband.engine.classifier import Deciles
 from fairband.engine.route import CompanyInputs
 from fairband.engine.types import Flag, Provenance
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs_statements import (
+    PROFILE_SOURCE,
+    SCREENER_SOURCE,
     FiscalCalendar,
     Statements,
+    balance_lines,
+    country_for,
     series_for,
     statements_for,
 )
+from fairband.refresh.peers import peer_figures
 from fairband.store.companies import CompanyRow, latest_company
 from fairband.store.observations import ObservationRow, observations_for
 from fairband.store.vendor import latest_response, response_payload
-from fairband.vendors.normalize_fmp import price_closes, profile_country, value_as_date
+from fairband.vendors.normalize_fmp import price_closes, value_as_date
 
 __all__ = ["build_inputs", "latest_price", "series_for"]
 
@@ -66,7 +79,7 @@ _OBSERVATIONS = frozenset(
         "gf-ratio",
     }
 )
-_QUOTE, _PROFILE, _SCREENER = "FMP quote", "FMP profile", "FMP company-screener"
+_QUOTE, _PROFILE, _SCREENER = "FMP quote", PROFILE_SOURCE, SCREENER_SOURCE
 _ESTIMATES, _EARNINGS = "FMP analyst-estimates", "FMP earnings"
 _CLOSES = "FMP historical-price-eod/full"
 _SUMMARY, _KEYRATIOS = "GuruFocus summary", "GuruFocus keyratios"
@@ -77,17 +90,28 @@ _UNKNOWN_CURRENCY = Flag(
     "treated as a foreign filer.",
 )
 
+# The newest annual balance sheet's lines each figure sums, by input name.
+_BALANCE_SUMS = {
+    "debt": ("shortTermDebt", "longTermDebt"),
+    "cash": ("cashAndCashEquivalents", "shortTermInvestments"),
+}
+
 type _Cited[T] = tuple[T, Provenance | None]
 type _Closes = tuple[tuple[date, float], ...]
 
 
 def build_inputs(
-    conn: sqlite3.Connection, symbol: str, policy: Policy, tax: TaxTable, today: date
+    conn: sqlite3.Connection,
+    symbol: str,
+    policy: Policy,
+    tax: TaxTable,
+    today: date,
+    deciles: Deciles | None = None,
 ) -> CompanyInputs:
-    """Everything the engine reads for ``symbol``, from the store. No assembly rule reads the
-    policy yet."""
+    """Everything the engine reads for ``symbol``, from the store; ``deciles`` classify its peers,
+    and without them it has none. No assembly rule reads the policy yet."""
     company = latest_company(conn, symbol)
-    country, origin = _country(conn, symbol, company)
+    country, origin = country_for(conn, symbol, company)
     stated = statements_for(conn, symbol, country, tax, today)
     provenance = dict(stated.provenance)
 
@@ -115,6 +139,10 @@ def build_inputs(
     moat = cite("moat_score", _value(_field(read("gf-score"), "moat_score"), _SUMMARY))
     eps_ttm = cite("gf_eps_ttm", _value(_field(ratios, "eps_ttm"), _KEYRATIOS))
     eps_clean = cite("gf_eps_without_nri", _value(_field(ratios, "eps_without_nri"), _KEYRATIOS))
+    lines = balance_lines(conn, symbol)
+    sums = {name: _sum_lines(lines, names) for name, names in _BALANCE_SUMS.items()}
+    notes = _tax_note(country, origin, stated)
+    notes.update({name: note for name, (_, note) in sums.items() if note is not None})
     return CompanyInputs(
         symbol=symbol,
         name=company.name if company is not None and company.name else symbol,
@@ -142,7 +170,10 @@ def build_inputs(
         input_flags=flags,
         refusal=stated.refusal or (None if foreign else stated.tax_refusal),
         estimate_methods=stated.estimate_methods,
-        notes=_tax_note(country, origin, stated),
+        notes=notes,
+        peers=peer_figures(conn, symbol, deciles, policy, tax, today),
+        debt=sums["debt"][0],
+        cash=sums["cash"][0],
     )
 
 
@@ -187,6 +218,7 @@ def _annual_estimates(
             net_income=_float(fields.get("net_income_avg")),
             analysts_eps=_whole(fields.get("analysts_eps")),
             analysts_net_income=_whole(fields.get("analysts_net_income")),
+            analysts_revenue=_whole(fields.get("analysts_revenue")),
         )
         for period, fields in _by_period(rows).items()
     )
@@ -229,22 +261,15 @@ def _next_earnings(rows: Sequence[ObservationRow], today: date) -> _Cited[date |
     return value_as_date(row.value), _cite(_EARNINGS, [row])
 
 
-def _country(
-    conn: sqlite3.Connection, symbol: str, company: CompanyRow | None
-) -> tuple[str, str | None]:
-    """The company's country and where it came from: the latest usable profile's (the
-    headquarters, spec 6.6), else the universe row's; ``"unknown"`` from neither."""
-    response = latest_response(conn, "fmp", "profile", symbol, {"symbol": symbol})
-    text = None if response is None else response_payload(conn, response.id)
-    try:
-        country = None if text is None else profile_country(json.loads(text))
-    except ValueError:  # a payload that does not parse names no country
-        country = None
-    if country is not None:
-        return country, _PROFILE
-    if company is not None and company.country:
-        return company.country, _SCREENER
-    return "unknown", None
+def _sum_lines(
+    lines: Mapping[str, float | None], names: Sequence[str]
+) -> tuple[float | None, str | None]:
+    """The lines' sum, a missing line counting as nil, ``None`` with every line missing; and the
+    note naming the missing lines, ``None`` with none missing."""
+    missing = [name for name in names if lines.get(name) is None]
+    held = [value for name in names if (value := lines.get(name)) is not None]
+    note = f"{' and '.join(missing)} not presented" if missing else None
+    return (sum(held) if held else None), note
 
 
 def _tax_note(country: str, origin: str | None, stated: Statements) -> dict[str, str]:

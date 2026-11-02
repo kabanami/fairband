@@ -1,0 +1,8 @@
+[
+  {
+    "symbol": "ACME",
+    "companyName": "Acme Corp",
+    "price": 50.0,
+    "mktCap": 5000000000
+  }
+]

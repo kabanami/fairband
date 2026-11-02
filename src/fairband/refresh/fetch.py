@@ -1,4 +1,5 @@
-"""Fetch one company: the fourteen calls of spec 6.5, each reused while fresh and stored whole.
+"""Fetch one company: the fourteen calls of spec 6.5 and its peers (growth routes spec 5.5), each
+reused while fresh and stored whole.
 
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
@@ -15,6 +16,9 @@ FMP answers an unknown symbol with an empty list) is stored with the error ``"un
 <the first 80 characters, scrubbed, whitespace collapsed>"`` and counts as failed; a row with an
 error is never reused. The price history stores no rows: its closes stay in the stored payload,
 read back with ``response_payload`` and ``price_closes``, and it is usable when it holds a close.
+Nor do the peers: their symbols stay in the stored payload, read back with ``peer_symbols``, and
+the payload is usable when it is a list, an empty one included (a company with no peers has none,
+and that answer is reused like any other). The peers are not required.
 
 A ``VendorError`` is stored as a response row with the error, its HTTP status if one came back and
 no payload, in a transaction of its own, and the fetch goes on with the next endpoint, except after
@@ -188,7 +192,7 @@ def provider_of(endpoint: str) -> Provider:
 
 
 def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
-    """The fourteen calls for ``symbol``, in fetch order."""
+    """The fifteen calls for ``symbol``, in fetch order."""
     start = _years_before(today, PRICE_YEARS)
 
     def on_fmp(
@@ -231,6 +235,7 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
         on_fmp(
             "earnings", {"limit": str(EARNINGS_ROWS)}, partial(fmp.earnings, symbol, EARNINGS_ROWS)
         ),
+        on_fmp("peers", {}, partial(fmp.peers, symbol)),
         on_gf("summary", GuruFocus.summary),
         on_gf("keyratios", GuruFocus.keyratios),
     ]
@@ -280,8 +285,8 @@ def _rows(
     endpoint: str, payload: Any, symbol: str, observed: datetime, now: datetime
 ) -> _Rows | None:
     """The facts and observations one endpoint's parsed payload gives, citing ``_PENDING`` for
-    the response; ``None`` when it gives none. The price history gives no rows; its payload is
-    usable when it holds a close."""
+    the response; ``None`` when it gives none. The price history and the peers give no rows; the
+    one's payload is usable when it holds a close, the other's when it is a list."""
     source = (symbol, _PENDING, observed, now)
     facts: list[FactRow] = []
     observations: list[ObservationRow] = []
@@ -304,6 +309,8 @@ def _rows(
             )
         case "earnings":
             observations = earnings_observations(payload, *source, today=now.date())
+        case "peers":
+            return ([], []) if isinstance(payload, list) else None
         case "summary":
             observations = summary_observations(payload, *source)
         case "keyratios":

@@ -90,6 +90,7 @@ def balance_annual(years: Iterable[int]) -> Payload:
             totalCurrentAssets=(600 + 10 * (y - 2014)) * M,
             totalCurrentLiabilities=300 * M,
             shortTermDebt=20 * M,
+            longTermDebt=300 * M,
             propertyPlantEquipmentNet=400 * M,
             goodwill=0 if y == 2018 else 250 * M,
             intangibleAssets=260 * M,

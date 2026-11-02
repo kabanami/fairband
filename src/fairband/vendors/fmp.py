@@ -4,7 +4,8 @@ Each method makes one ``VendorHttp.get`` and returns the ``VendorResponse``; bui
 ``BASE_URL`` and the key among its secrets, so the key is scrubbed from everything it emits. The
 key travels as the ``apikey`` query parameter. Symbols arrive in the exchange form the store keeps
 (``BRK.B``) and leave in FMP's form (``BRK-B``); this class is the only place that converts them on
-the way out (``normalize_fmp.screener_rows`` converts screener symbols on the way back).
+the way out (``normalize_fmp.screener_rows`` and ``peer_symbols`` convert the screener's and the
+peers' symbols on the way back).
 
 Routes and parameters, checked on 2026-11-01 against the FMP stable documentation
 (https://site.financialmodelingprep.com/developer/docs/stable, each route's page and its
@@ -28,6 +29,9 @@ documented response example):
   2026-10-29, source-evidence DS-19), so a street actual is keyed by its fiscal quarter end.
 - ``historical-price-eod/full``: ``symbol``, ``from``, ``to``. Confirmed; ``to`` is left out, so
   the history runs to the latest close.
+- ``stock-peers``: ``symbol``; the answer is a list of objects, each with a ``symbol``. From the
+  growth routes spec (2026-11-02); not checked here, the documentation page refusing an automated
+  read.
 """
 
 from collections.abc import Mapping, Sequence
@@ -115,6 +119,9 @@ class Fmp:
     def price_history(self, symbol: str, start: date) -> VendorResponse:
         params = {"symbol": to_fmp_symbol(symbol), "from": start.isoformat()}
         return self._get("historical-price-eod/full", params)
+
+    def peers(self, symbol: str) -> VendorResponse:
+        return self._get("stock-peers", {"symbol": to_fmp_symbol(symbol)})
 
     def _get(self, route: str, params: Mapping[str, str]) -> VendorResponse:
         return self._http.get(route, {**params, "apikey": self._api_key})

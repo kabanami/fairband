@@ -69,6 +69,7 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
 from fairband.engine.classifier import Deciles, Series, classify
 from fairband.engine.levels import levels_for, stance3, stance5
+from fairband.engine.revenue_growth import PeerFigures
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route_mature_growth import growth_at_price, long_runway, value_mature_growth
 from fairband.engine.route_mature_stable import stable_at_price, value_mature_stable
@@ -88,7 +89,9 @@ _VALUE_SPREAD = "value-spread"
 class CompanyInputs:
     """Everything the engine reads for one company, as assembly built it from the store.
     ``estimate_methods`` maps an input name to the method assembly estimated it by, and
-    ``notes`` an input name to the note assembly wrote for it."""
+    ``notes`` an input name to the note assembly wrote for it. ``peers`` are the company's mature
+    peers with their figures, ``debt`` and ``cash`` the newest annual balance sheet's (``None``
+    unknown); the revenue-growth route reads them, and none is stored with a result."""
 
     symbol: str
     name: str
@@ -117,6 +120,9 @@ class CompanyInputs:
     refusal: str | None
     estimate_methods: dict[str, str] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
+    peers: tuple[PeerFigures, ...] = ()
+    debt: float | None = None
+    cash: float | None = None
 
 
 def value_company(

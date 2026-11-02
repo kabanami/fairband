@@ -20,9 +20,9 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   the store holds, saved under the refresh (spec 6.6). When they rank no company on growth, the run
   ends ``failed``, "deciles rank no company", and saves none: empty deciles would put every later
   company in decile 1, and the last good universe's stay the ones a scoped refresh uses.
-- ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs``,
-  ``value_company`` with the latest stored deciles (a full refresh's own), ``insert_snapshot``; the
-  symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
+- ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs`` and
+  ``value_company`` with the latest stored deciles (a full refresh's own; assembly classifies the
+  company's peers on them), ``insert_snapshot``; the symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
   yet" (spec 6.6).
 - ``done``: the run's totals. A full refresh saves its ``calibration`` with the record (goal 7).
 
@@ -52,7 +52,7 @@ n counting the symbols fetched or failed. An exception outside a symbol's
 work ends the run ``failed`` with its class and message, and is raised again.
 
 Why daemon threads: an exception in the fetch stage (a second Ctrl-C in the command) must not wait
-for the fetches in flight, which on a stalled vendor run to minutes (14 calls of up to
+for the fetches in flight, which on a stalled vendor run to minutes (15 calls of up to
 ``deadline_s`` each). The run gives them up at once: their symbols go back to ``pending``, the run
 ends ``failed`` and the exception propagates. A ``ThreadPoolExecutor``'s workers are joined when
 the interpreter exits, even after ``shutdown(wait=False)``, and ending the command with
@@ -428,7 +428,7 @@ class Refresh:
             if self._cancel.is_set():
                 return None
             try:
-                inputs = build_inputs(conn, symbol, self._policy, self._tax, today)
+                inputs = build_inputs(conn, symbol, self._policy, self._tax, today, deciles)
                 result = value_company(inputs, deciles, self._policy, today)
                 with transaction(conn):
                     insert_snapshot(conn, result, refresh_id, clock=self._clock)

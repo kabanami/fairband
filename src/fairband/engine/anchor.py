@@ -61,7 +61,8 @@ class QuarterEstimate:
 
 @dataclass(frozen=True)
 class AnnualEstimate:
-    """One fiscal year of consensus, with the analyst counts for EPS and for net income."""
+    """One fiscal year of consensus, with the analyst counts for EPS, for net income and for
+    revenue."""
 
     fiscal_year: int
     period_end: date
@@ -70,6 +71,7 @@ class AnnualEstimate:
     net_income: float | None
     analysts_eps: int | None
     analysts_net_income: int | None
+    analysts_revenue: int | None = None
 
 
 @dataclass(frozen=True)

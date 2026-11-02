@@ -86,6 +86,7 @@ ROUTES = [
         },
     ),
     _route("profile", lambda f: f.profile("BRK.B"), "profile", {"symbol": "BRK-B"}),
+    _route("peers", lambda f: f.peers("BRK.B"), "stock-peers", {"symbol": "BRK-B"}),
     _route("quote", lambda f: f.quote(["BRK.B"]), "quote", {"symbol": "BRK-B"}),
     _route(
         "batch-quote",

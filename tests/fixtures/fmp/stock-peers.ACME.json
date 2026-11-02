@@ -1,0 +1,32 @@
+[
+  {
+    "symbol": "BOLT",
+    "companyName": "Bolt Industries",
+    "price": 100.0,
+    "mktCap": 10000000000
+  },
+  {
+    "symbol": "ACME",
+    "companyName": "Acme Corp",
+    "price": 50.0,
+    "mktCap": 5000000000
+  },
+  {
+    "symbol": "ZZZZ",
+    "companyName": "Zzzz Holdings",
+    "price": 20.0,
+    "mktCap": 3000000000
+  },
+  {
+    "symbol": "NEWT",
+    "companyName": "Newt Corp",
+    "price": 12.0,
+    "mktCap": 2500000000
+  },
+  {
+    "symbol": "FIRB",
+    "companyName": "Firb Corp",
+    "price": 30.0,
+    "mktCap": 4000000000
+  }
+]

@@ -1,4 +1,4 @@
-"""FMP estimates, earnings, quotes, profiles, closes and screener rows to store rows.
+"""FMP estimates, earnings, quotes, profiles, closes, screener rows and peers to store rows.
 
 Observations carry ``unit`` ``currency``, ``per-share``, ``shares``, ``count``, or ``None`` for a
 label or a date:
@@ -27,6 +27,9 @@ label or a date:
   arrives as a one-item list or a bare object; ``period`` ``None``, ``as_of`` the observed date.
   The screener carries no ``isAdr``, so the ADR flag is read from here. The country is not an
   observation: ``profile_country`` reads it from the stored payload.
+
+The peers are not observations either: ``peer_symbols`` reads the ``stock-peers`` symbols from the
+stored payload, in the exchange form.
 
 A row without a parseable ``date`` is skipped and records nothing; nothing here raises on vendor
 data.
@@ -219,11 +222,9 @@ def screener_rows(payload: Any) -> list[ScreenerRow]:
         symbol = text(row.get("symbol"))
         if symbol is None:
             continue
-        if _SHARE_CLASS.fullmatch(symbol):
-            symbol = symbol.replace("-", ".")
         out.append(
             ScreenerRow(
-                symbol=symbol,
+                symbol=_exchange_form(symbol),
                 name=text(row.get("companyName")),
                 # ``exchange`` is the full name ("NASDAQ Global Select"); the policy lists the
                 # short name.
@@ -240,6 +241,27 @@ def screener_rows(payload: Any) -> list[ScreenerRow]:
             )
         )
     return out
+
+
+def peer_symbols(payload: Any, own: str) -> list[str]:
+    """The ``symbol`` of each object of a ``stock-peers`` payload, in payload order and the
+    exchange form (as ``screener_rows`` gives it), ``own`` and repeats dropped; empty when the
+    payload is not a list of objects."""
+    out: list[str] = []
+    for row in objects(payload):
+        symbol = text(row.get("symbol"))
+        if symbol is None:
+            continue
+        symbol = _exchange_form(symbol)
+        if symbol != own and symbol not in out:
+            out.append(symbol)
+    return out
+
+
+def _exchange_form(symbol: str) -> str:
+    """An FMP share-class symbol in the exchange form (``BRK-B`` → ``BRK.B``); any other dash
+    stays (``ACME-PA``)."""
+    return symbol.replace("-", ".") if _SHARE_CLASS.fullmatch(symbol) else symbol
 
 
 def value_as_date(value: Decimal) -> date:

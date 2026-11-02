@@ -17,12 +17,13 @@ from synthetic import (
     YEARS,
     M,
     add_company,
+    balance_annual,
     bodies,
     earnings,
     income_annual,
     statement,
 )
-from vendor_double import Clients, Clock, Router
+from vendor_double import FIXTURES, Clients, Clock, Router
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
 from fairband.engine.classifier import Deciles, FiscalYear
@@ -33,8 +34,10 @@ from fairband.policy import Policy, load_policy
 from fairband.policy.tax import LATEST_YEAR_METHOD, TaxTable, load_tax_table
 from fairband.refresh.fetch import fetch_company
 from fairband.refresh.inputs import build_inputs, series_for
+from fairband.refresh.peers import peer_figures
 
 TODAY = date(2026, 11, 1)
+DECILES = Deciles((-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3), (0.0,) * 9, 1, 1, 1)
 ROUTE_KEYS = {
     "price",
     "market_cap",
@@ -330,9 +333,9 @@ def test_consensus_and_market_values(conn_with_company: sqlite3.Connection) -> N
         QuarterEstimate(date(2027, 6, 30), 2027, "Q2", 0.56, 350 * M, 56 * M, 9),
     )
     assert inputs.annual_estimates == (
-        AnnualEstimate(2026, date(2026, 12, 31), 2.0, 1300 * M, 200 * M, 14, 14),
-        AnnualEstimate(2027, date(2027, 12, 31), 2.2, 1400 * M, 220 * M, 12, 12),
-        AnnualEstimate(2028, date(2028, 12, 31), 2.4, 1500 * M, 240 * M, 10, 10),
+        AnnualEstimate(2026, date(2026, 12, 31), 2.0, 1300 * M, 200 * M, 14, 14, 16),
+        AnnualEstimate(2027, date(2027, 12, 31), 2.2, 1400 * M, 220 * M, 12, 12, 14),
+        AnnualEstimate(2028, date(2028, 12, 31), 2.4, 1500 * M, 240 * M, 10, 10, 12),
     )
     assert (inputs.symbol, inputs.name, inputs.country, inputs.currency) == (
         "ACME",
@@ -445,3 +448,43 @@ def test_no_financial_statements_is_a_refusal(store: Store, router: Router) -> N
     assert (inputs.series, inputs.capital_years, inputs.trailing) == ((), (), None)
     assert inputs.data_date == TODAY
     assert inputs.price == 50.0  # the market side is still read
+
+
+def test_inputs_carry_peers_debt_cash_and_the_revenue_analysts(
+    store: Store, clients: Clients, clock: Clock, policy: Policy
+) -> None:
+    """Debt and cash from ACME's newest balance sheet. BOLT, fetched and listed, is ACME's mature
+    peer once there are deciles."""
+    conn = store(**bodies())
+    fetch_company(conn, clients.fmp, clients.gf, "BOLT", policy, clock(), clients.secrets)
+    add_company(conn, symbols=("BOLT",))
+    tax = load_tax_table()
+    i = build_inputs(conn, "ACME", policy, tax, TODAY, DECILES)
+    newest = balance_annual(YEARS)[-1]
+    assert i.debt == pytest.approx(newest["shortTermDebt"] + newest["longTermDebt"])
+    assert i.cash == pytest.approx(
+        newest["cashAndCashEquivalents"] + newest["shortTermInvestments"]
+    )
+    assert "debt" not in i.notes and "cash" not in i.notes
+    fixture = FIXTURES / "fmp" / "analyst-estimates.annual.ACME.json"
+    [first] = [r for r in json.loads(fixture.read_text()) if r["date"] == "2026-12-31"]
+    assert i.annual_estimates[0].analysts_revenue == first["numAnalystsRevenue"]
+    assert [p.symbol for p in i.peers] == ["BOLT"]
+    assert i.peers == peer_figures(conn, "ACME", DECILES, policy, tax, TODAY)
+    assert build_inputs(conn, "ACME", policy, tax, TODAY).peers == ()  # no deciles: no peers
+
+
+def test_debt_and_cash_read_the_newest_balance_sheet(store: Store) -> None:
+    """Each sum counts a missing line as nil; with both lines missing it is unknown. The note
+    names the missing lines."""
+    sheets = balance_annual(YEARS)
+    sheets[-1] = {
+        **sheets[-1],
+        "longTermDebt": None,
+        "cashAndCashEquivalents": None,
+        "shortTermInvestments": None,
+    }
+    inputs = build(store(**{**bodies(), "balance-annual": sheets}))
+    assert (inputs.debt, inputs.cash) == (20 * M, None)  # the older years' lines are not read
+    assert inputs.notes["debt"] == "longTermDebt not presented"
+    assert inputs.notes["cash"] == "cashAndCashEquivalents and shortTermInvestments not presented"

@@ -17,6 +17,7 @@ from fairband.vendors.normalize_fmp import (
     as_reported_balance_facts,
     earnings_observations,
     estimate_observations,
+    peer_symbols,
     price_closes,
     profile_country,
     profile_observations,
@@ -446,3 +447,18 @@ def test_screener_rows_fields() -> None:
     assert (adr.is_adr, adr.exchange, adr.currency, adr.market_cap) == (True, "NYSE", "USD", None)
     assert adr.is_actively_trading is False
     assert screener_rows([{"companyName": "no symbol"}, "x"]) == []
+
+
+def test_peer_symbols_drop_self_and_repeats_and_use_the_exchange_form() -> None:
+    payload = [
+        {"symbol": "BRK-B"},
+        {"symbol": "ACME"},
+        {"symbol": "BOLT"},
+        {"symbol": "BOLT"},
+        {"x": 1},
+        {"symbol": "ACME-PA"},
+    ]
+    assert peer_symbols(payload, "ACME") == ["BRK.B", "BOLT", "ACME-PA"]
+    assert peer_symbols(payload, "BRK.B") == ["ACME", "BOLT", "ACME-PA"]  # own in exchange form
+    assert peer_symbols({"symbol": "X"}, "ACME") == [] and peer_symbols("no", "ACME") == []
+    assert peer_symbols(load("stock-peers.ACME"), "ACME") == ["BOLT", "ZZZZ", "NEWT", "FIRB"]

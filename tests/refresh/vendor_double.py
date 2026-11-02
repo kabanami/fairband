@@ -29,6 +29,7 @@ _FMP_ENDPOINTS = {
     "analyst-estimates": "estimates",
     "historical-price-eod/full": "price-history",
     "company-screener": "screener",
+    "stock-peers": "peers",
 }
 
 
