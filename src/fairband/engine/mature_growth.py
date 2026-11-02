@@ -146,7 +146,22 @@ def implied_growth(
     def gap(g: float) -> float:
         return value_at_belief(replace(path, belief=g), charge) - target
 
-    n = max(1, round((hi - lo) / _SCAN_STEP))
+    return solve_root(gap, lo, hi, tol=tol)
+
+
+def solve_root(
+    gap: Callable[[float], float],
+    lo: float,
+    hi: float,
+    step: float = _SCAN_STEP,
+    tol: float = 1e-7,
+) -> float | None:
+    """The first root of ``gap`` in ``[lo, hi]``, or ``None`` when the scan finds no sign change.
+
+    Scans from ``lo`` to ``hi`` in equal steps of about ``step`` for the first sign change, then
+    bisects it to ``tol``.
+    """
+    n = max(1, round((hi - lo) / step))
     a, fa = lo, gap(lo)
     if fa == 0:
         return a

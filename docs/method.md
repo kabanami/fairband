@@ -183,7 +183,7 @@ Policies v1 and v2 stay in the package unchanged, because the snapshots valued u
 
 ### 4.1a Constants in code
 
-These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 8 and 3; the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7; the three-year horizon of the expected return; the lease-accounting date of 15 December 2019.
+These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 8 and 3; the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7; the implied-growth scan of the growth routes from −50% to 200%; the three-year horizon of the expected return; the lease-accounting date of 15 December 2019.
 
 ### 4.2 Trailing figures and the share count
 

@@ -12,6 +12,7 @@ from fairband.engine.mature_growth import (
     floored_years,
     growth_rates,
     implied_growth,
+    solve_root,
     terminal_multiple,
     value_at_belief,
 )
@@ -185,3 +186,8 @@ def test_first_floored_year() -> None:
     # floors year N alone
     steep = Charge(0.149, 0.02, R, GT)
     assert first_floored_year(path, steep) == (20, GT, 0.02)
+
+
+def test_solve_root_finds_the_first_sign_change() -> None:
+    assert solve_root(lambda x: x * x - 4, 0.0, 10.0) == pytest.approx(2.0, abs=1e-6)
+    assert solve_root(lambda x: x + 20, 0.0, 10.0) is None
