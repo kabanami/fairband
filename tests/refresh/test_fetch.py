@@ -381,15 +381,23 @@ def test_peers_payload_is_stored_and_not_required(
     assert responses(conn)["peers"]["http_status"] == 500
 
 
-def test_an_empty_peer_list_is_usable_and_an_object_is_not(
+def test_a_peer_list_or_an_empty_list_is_usable_and_nothing_else(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
-    """An object (FMP's error body) is unusable and called again. A company with no peers has no
-    peers: FMP's ``[]`` is stored and reused."""
+    """An object (FMP's error body) and a list of objects without a symbol are unusable and called
+    again. A company with no peers has no peers: FMP's ``[]`` is stored and reused. The fixture's
+    list, which names peers, is usable (``test_fetches_all_endpoints_and_stores``)."""
     router.bodies["peers"] = b'{"Error Message": "Limit Reach"}'
     outcome = fetch(conn, clients, policy, clock)
     assert (outcome.failed, outcome.error) == (("peers",), None)
     assert responses(conn)["peers"]["error"] == 'unusable payload: {"Error Message": "Limit Reach"}'
+
+    router.bodies["peers"] = b'[{"companyName": "Bolt Industries"}]'
+    outcome = fetch(conn, clients, policy, clock)
+    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 14, ("peers",))
+    assert responses(conn)["peers"]["error"] == (
+        'unusable payload: [{"companyName": "Bolt Industries"}]'
+    )
 
     router.bodies["peers"] = b"[]"
     outcome = fetch(conn, clients, policy, clock)

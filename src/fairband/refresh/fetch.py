@@ -17,8 +17,9 @@ FMP answers an unknown symbol with an empty list) is stored with the error ``"un
 error is never reused. The price history stores no rows: its closes stay in the stored payload,
 read back with ``response_payload`` and ``price_closes``, and it is usable when it holds a close.
 Nor do the peers: their symbols stay in the stored payload, read back with ``peer_symbols``, and
-the payload is usable when it is a list, an empty one included (a company with no peers has none,
-and that answer is reused like any other). The peers are not required.
+the payload is usable when it names a peer or is exactly the empty list (a company with no peers
+has none, and that answer is reused like any other); a list of objects without a ``symbol``, or
+anything but a list, is unusable. The peers are not required.
 
 A ``VendorError`` is stored as a response row with the error, its HTTP status if one came back and
 no payload, in a transaction of its own, and the fetch goes on with the next endpoint, except after
@@ -59,6 +60,7 @@ from fairband.vendors.normalize_fmp import (
     as_reported_balance_facts,
     earnings_observations,
     estimate_observations,
+    peer_symbols,
     price_closes,
     profile_observations,
     quote_observations,
@@ -79,8 +81,8 @@ EARNINGS_ROWS = 12
 
 # Without these the company cannot be valued; their failure sets ``FetchOutcome.error``. The
 # quarterly consensus is not among them: FMP answers ``[]`` for a company without quarterly
-# coverage (a foreign filer that reports twice a year, say), and only the Mature Growth route
-# reads it, which refuses an incomplete NTM consensus itself.
+# coverage (a foreign filer that reports twice a year, say), and the routes that read it, Mature
+# Growth and the revenue-growth route, refuse an incomplete NTM consensus themselves.
 REQUIRED = frozenset({"income-annual", "balance-annual", "cashflow-annual", "quote"})
 NO_GF_KEY = "no GuruFocus key"
 _GF_ENDPOINTS = frozenset({"summary", "keyratios"})
@@ -286,7 +288,8 @@ def _rows(
 ) -> _Rows | None:
     """The facts and observations one endpoint's parsed payload gives, citing ``_PENDING`` for
     the response; ``None`` when it gives none. The price history and the peers give no rows; the
-    one's payload is usable when it holds a close, the other's when it is a list."""
+    one's payload is usable when it holds a close, the other's when it names a peer or is exactly
+    ``[]``."""
     source = (symbol, _PENDING, observed, now)
     facts: list[FactRow] = []
     observations: list[ObservationRow] = []
@@ -310,7 +313,7 @@ def _rows(
         case "earnings":
             observations = earnings_observations(payload, *source, today=now.date())
         case "peers":
-            return ([], []) if isinstance(payload, list) else None
+            return ([], []) if peer_symbols(payload, symbol) or payload == [] else None
         case "summary":
             observations = summary_observations(payload, *source)
         case "keyratios":

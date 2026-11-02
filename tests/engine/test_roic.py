@@ -189,6 +189,11 @@ def test_fewer_than_five_years_unavailable() -> None:
     r = aggregate_roic(history(5))
     assert r.aggregate is None and r.years_used == 4 and len(r.by_year) == 4
     assert codes(r) == ("roic-unavailable",)
+    # the revenue-growth route's charge never reads it, so the sentence names the mature routes
+    assert r.flags[0].sentence == (
+        "Fewer than 5 fiscal years have the data for ROIC (4), so there is no aggregate ROIC; on "
+        "the mature routes the charge uses the terminal ROIC in every year."
+    )
     five = aggregate_roic(history(6))
     assert five.aggregate == pytest.approx(0.2) and five.flags[0].word == "ROIC on 5 years"
     assert aggregate_roic(history(5), min_years=4).aggregate == pytest.approx(0.2)

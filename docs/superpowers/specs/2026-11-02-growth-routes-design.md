@@ -156,8 +156,9 @@ Sales-to-capital, in this order (founder decision 2026-11-02):
    the average invested capital, revenue the fiscal year's. Usable when capital grew, by at least
    `marginal_capital_growth_min` (a fifth) of the first year's capital in size, and revenue grew.
    It needs six kept years.
-2. **The mature peers' median**, otherwise: each peer's last fiscal-year revenue ÷ its newest
-   average invested capital (the level ratio Damodaran's industry figure is), the median across
+2. **The mature peers' median**, otherwise: each peer's revenue ÷ its average invested capital,
+   both of its newest kept capital year (the level ratio Damodaran's industry figure is; amended
+   2026-11-03 during the build, the draft read the last fiscal year's revenue), the median across
    the same peers as 5.5, at least `peer_min` of them with a positive capital.
 3. Neither: the row is refused "no sales-to-capital".
 
@@ -297,7 +298,11 @@ matched ignoring case: `\bnotes?\b`, `\bdue 20\d\d\b`, `\d(\.\d+)?% `, `\bprefer
 `\bpreference\b`. ABXL, "Abacus Global Management, Inc. - 8.875% Fixed Rate Senior Notes due
 2028", is the known case. Warrants, units and rights carry symbol suffixes the symbol rule already
 catches, and "depositary" is left out because an ADR's name can carry "American Depositary
-Shares" and ADRs belong in the universe (*my call*, amended while planning).
+Shares" and ADRs belong in the universe (*my call*, amended while planning). The review of the
+first run found admitted listings the patterns missed, so `\bdebentures?\b` and `\bunits\b` (the
+plural only, so "Unit Corporation" passes) join them and the percent pattern becomes
+`\d(\.\d+)? ?%(\s|$)`, for "5.25 % Debentures" and a rate that ends the name (amended 2026-11-03
+during the build).
 
 ## 6. The four screen fixes
 

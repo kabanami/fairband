@@ -166,7 +166,8 @@ def aggregate_roic(years: Sequence[CapitalYear], min_years: int = _MIN_YEARS) ->
                 "roic-unavailable",
                 "ROIC unavailable",
                 f"Fewer than {min_years} fiscal years have the data for ROIC ({n}), so there is "
-                "no aggregate ROIC and the charge uses the terminal ROIC in every year.",
+                "no aggregate ROIC; on the mature routes the charge uses the terminal ROIC in "
+                "every year.",
             )
         )
     else:

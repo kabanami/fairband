@@ -16,9 +16,9 @@ Each kept peer's figures come from its stored statements:
 - its margin: the ten-year aggregate operating margin, Σ operating income ÷ Σ revenue over its last
   ten fiscal years with both and a positive revenue, and the count of those years; ``None`` with
   no such year (the route sets the fewest years a margin needs);
-- its sales-to-capital: its newest fiscal year's revenue ÷ the average invested capital of its
-  newest kept ROIC year (method.md 4.5); ``None`` without that revenue, without a kept year, or
-  with a capital at or below zero;
+- its sales-to-capital: the revenue of its newest kept ROIC year (method.md 4.5) ÷ that year's
+  average invested capital, both of one fiscal year; ``None`` without a kept year, without a
+  revenue for that year, or with a capital at or below zero;
 - its ROIC: the ten-year aggregate (method.md 4.5), ``None`` when unavailable;
 
 and its market cap is its latest universe row's. Invested capital and NOPAT are the company's own rules
@@ -105,8 +105,11 @@ def _margin(series: Series) -> tuple[float | None, int]:
 
 
 def _sales_to_capital(series: Series, kept: Sequence[RoicYear]) -> float | None:
-    """The newest fiscal year's revenue over the newest kept ROIC year's average capital."""
-    revenue = series[-1].revenue if series else None
-    if revenue is None or not kept or kept[-1].average_capital <= 0:
+    """The newest kept ROIC year's revenue over its average capital, both of that fiscal year."""
+    if not kept:
         return None
-    return revenue / kept[-1].average_capital
+    newest = kept[-1]
+    revenue = next((fy.revenue for fy in series if fy.year == newest.year), None)
+    if revenue is None or newest.average_capital <= 0:
+        return None
+    return revenue / newest.average_capital

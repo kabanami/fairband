@@ -318,8 +318,8 @@ def own_sales_to_capital(
 @dataclass(frozen=True)
 class PeerFigures:
     """A mature peer: its market cap; its ten-year aggregate operating margin and the years in
-    it; its last fiscal year's revenue over its newest average invested capital; its ten-year
-    aggregate ROIC. ``None`` is unknown."""
+    it; its revenue over its average invested capital, both of its newest kept ROIC year; its
+    ten-year aggregate ROIC. ``None`` is unknown."""
 
     symbol: str
     market_cap: float | None

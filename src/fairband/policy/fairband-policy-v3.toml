@@ -212,11 +212,21 @@ excluded_industries = [
 # (ACME-PA) and the exchange's dot form the screener rows come back in (XYZ-U becomes XYZ.U). A
 # share class (BRK.B, BF.A) has another letter after its dot and passes.
 symbol_exclude_patterns = ['[-.]P[A-Z]?$', '[-.]W[ST]?$', '[-.]U$', '[-.]R$']
-# Regular expressions on the listing's name, matched ignoring case, for notes and preferred
-# shares whose symbols carry no suffix (growth routes spec 5.17). ABXL, "... 8.875% Fixed Rate
-# Senior Notes due 2028", is the known case. Warrants, units and rights are caught by the
-# symbol patterns; "depositary" is not listed because an ADR's name can carry it.
-name_exclude_patterns = ['\bnotes?\b', '\bdue 20\d\d\b', '\d(\.\d+)?% ', '\bpreferred\b', '\bpreference\b']
+# Regular expressions on the listing's name, matched ignoring case, for notes, debentures,
+# preferred shares and units whose symbols carry no suffix (growth routes spec 5.17). ABXL, "...
+# 8.875% Fixed Rate Senior Notes due 2028", is the known case; a rate may have a space before its
+# percent sign ("5.25 % Debentures") or end the name ("... 5.625%"). Units match in the plural
+# only, so "Unit Corporation" passes. Warrants and rights are caught by the symbol patterns;
+# "depositary" is not listed because an ADR's name can carry it.
+name_exclude_patterns = [
+  '\bnotes?\b',
+  '\bdebentures?\b',
+  '\bdue 20\d\d\b',
+  '\d(\.\d+)? ?%(\s|$)',
+  '\bpreferred\b',
+  '\bpreference\b',
+  '\bunits\b',
+]
 manual_exclusions = []
 
 [values.refresh]

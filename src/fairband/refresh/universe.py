@@ -11,8 +11,9 @@ text, so no key reaches a ``companies`` row. Then, per screener row in payload o
 2. an ETF, a fund, or not actively trading: skipped;
 3. no market cap, or one below ``cap_floor_usd``: skipped;
 4. the industry is excluded (below): recorded, not eligible, ``"industry: <industry>"``;
-5. the name matches one of ``name_exclude_patterns`` (``re.search``, ignoring case), a note or a
-   preferred share whose symbol carries no suffix: recorded, not eligible, ``"name pattern"``;
+5. the name matches one of ``name_exclude_patterns`` (``re.search``, ignoring case), a note, a
+   debenture, a preferred share or units whose symbol carries no suffix: recorded, not eligible,
+   ``"name pattern"``;
 6. the symbol matches one of ``symbol_exclude_patterns`` (``re.search``): recorded, not eligible,
    ``"symbol pattern"``; or it is one of ``manual_exclusions``: ``"manual exclusion"``;
 7. else admitted, eligible, in the cap band of the largest floor at or below its market cap.

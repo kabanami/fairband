@@ -254,8 +254,15 @@ def test_name_pattern_excludes_notes_and_preferreds(
         ("Preference Shares", True),
         ("Senior Notes", True),
         ("due 2029", True),
-        # No name pattern covers units, rights or depositary shares: the symbol rule covers the
-        # first two, and an ADR's name can carry "American Depositary Shares".
+        # admitted by the first run: a space before the percent sign, a rate that ends the name,
+        # and units whose symbol carries no suffix
+        ("Acme Capital 5.25 % Debentures", True),
+        ("Acme Holdings Series B 5.625%", True),
+        ("Acme Acquisition Corp Units", True),
+        ("Junior Subordinated Debentures", True),  # the debenture pattern alone
+        ("Acme Holdings 5.25 % Series C", True),  # the percent pattern alone
+        # Units match in the plural only. No name pattern covers rights or depositary shares: the
+        # symbol rule covers the first, and an ADR's name can carry "American Depositary Shares".
         ("Unit Corporation", False),
         ("Rights Holdings Inc.", False),
         ("Taiwan Semiconductor American Depositary Shares", False),

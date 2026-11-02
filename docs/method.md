@@ -28,7 +28,7 @@ One FMP `company-screener` call per refresh, reused for 24 hours. A listing is a
 3. its market cap, in US dollars from the screener, is at least $2 billion;
 4. its FMP industry is not one of the excluded industries: banks, insurance and REITs in every FMP spelling, and Shell Companies (SPACs). The match ignores case and dash style, and an industry that starts with an entry and a space is excluded too, so `Banks—Regional` is out while `Banking Software` is in;
 5. its symbol does not match the preferred, warrant, unit or rights patterns (`[-.]P[A-Z]?$`, `[-.]W[ST]?$`, `[-.]U$`, `[-.]R$`) and is not on the manual exclusion list (empty today). A share class such as `BRK.B` passes;
-6. its name does not match the note and preferred-share patterns, compared ignoring case (`\bnotes?\b`, `\bdue 20\d\d\b`, `\d(\.\d+)?% `, `\bpreferred\b`, `\bpreference\b`). They catch the notes and preferreds whose symbols carry no suffix, such as ABXL, "Abacus Global Management, Inc. - 8.875% Fixed Rate Senior Notes due 2028". No name pattern covers units, rights or depositary shares: rule 5 covers the first two, and an ADR's name can carry "American Depositary Shares".
+6. its name does not match the note, debenture, preferred-share and unit patterns, compared ignoring case (`\bnotes?\b`, `\bdebentures?\b`, `\bdue 20\d\d\b`, `\d(\.\d+)? ?%(\s|$)`, `\bpreferred\b`, `\bpreference\b`, `\bunits\b`). They catch the notes, debentures, preferreds and units whose symbols carry no suffix, such as ABXL, "Abacus Global Management, Inc. - 8.875% Fixed Rate Senior Notes due 2028"; a rate may have a space before its percent sign ("5.25 % Debentures") or end the name ("5.625%"). Units match in the plural only, so "Unit Corporation" passes. No name pattern covers rights or depositary shares: rule 5 covers the first, and an ADR's name can carry "American Depositary Shares".
 
 A listing that fails rule 1, 2 or 3 is skipped and not recorded (the screener request already asks for these filters; the rules are applied again on the rows). A listing that fails rule 4, 5 or 6 is recorded with its reason (`industry: <industry>`, `name pattern`, `symbol pattern` or `manual exclusion`) and gets no screen row; one that fails more than one carries the first of the industry, the name and the symbol rule. A later row whose symbol is already recorded is skipped. An admitted listing gets a cap band: Mega from $200 billion, Large from $10 billion, Mid from $2 billion.
 
@@ -49,7 +49,7 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 | Quote: price, market cap | `quote` | current |
 | Profile: country, ADR flag | `profile` | current |
 | Daily closes | `historical-price-eod/full` | five years, for the price columns |
-| Peers | `stock-peers` | one call a company, reused for 24 hours; not required; a list is usable, an empty one included. The symbols stay in the stored payload; the peers' figures come from their own stored statements (5a.4) |
+| Peers | `stock-peers` | one call a company, reused for 24 hours; not required; usable when it names a peer other than the company or is exactly the empty list; a list of objects without a symbol, or anything but a list, is unusable. The symbols stay in the stored payload; the peers' figures come from their own stored statements (5a.4) |
 | Moat score | GuruFocus `summary` | current; reused for 7 days |
 | EPS trailing and EPS without non-recurring items | GuruFocus `keyratios` | current; reused for 7 days |
 | Statutory tax rate | the packaged OECD table `tax-rates-oecd-v1.toml` | by country and fiscal year |
@@ -430,7 +430,7 @@ A trailing margin above the target moves down the same line.
 **The mature peers.** The candidates are the symbols of the latest usable `stock-peers` response stored for the company (section 2), in its order, in the exchange form (`BRK.B`), the company itself and repeats dropped. A candidate is kept when the latest universe lists it (the admitted companies of the newest refresh that admitted any) and its stored fiscal years classify, on the spot, as Mature Growth or Mature Stable on the deciles the company is valued on (3.3). A candidate outside that universe, without statements, unclassified or in another phase is dropped. Without deciles or a stored response the company has no peers. No vendor call is made for a peer: its figures come from the statements stored for it, its invested capital and NOPAT built by 4.4 at the statutory rate of its own country (4.3):
 
 - its margin: the ten-year aggregate operating margin, Σ operating income ÷ Σ revenue over the last ten of its fiscal years that have both and a positive revenue, with the count of those years; none without such a year;
-- its sales-to-capital: its newest fiscal year's revenue ÷ the average invested capital of its newest kept ROIC year (4.5); none without that revenue or a kept year, or with that capital at or below zero;
+- its sales-to-capital: the revenue of its newest kept ROIC year (4.5) ÷ that year's average invested capital, both of the same fiscal year; none without a kept year, without a revenue for that year, or with that capital at or below zero;
 - its ROIC: its ten-year aggregate (4.5), none when unavailable;
 - its market cap: the one on its row in the latest universe.
 

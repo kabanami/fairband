@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 from fixture_universe import company
-from synthetic import YEARS, M, add_company, income_annual
+from synthetic import YEARS, M, add_company, balance_annual, balance_as_reported, income_annual
 from vendor_double import FIXTURES, Clients, Clock, Router
 
 from fairband.engine.classifier import Deciles
@@ -164,3 +164,37 @@ def test_a_peers_margin_takes_its_last_ten_years_with_both(
     newest = roic.by_year[-1]
     assert newest.year == 2025
     assert peer.sales_to_capital == pytest.approx(annual[-1]["revenue"] / newest.average_capital)
+
+
+def test_a_peers_sales_to_capital_reads_one_fiscal_year(
+    conn: sqlite3.Connection,
+    clients: Clients,
+    router: Router,
+    clock: Clock,
+    policy: Policy,
+    tax: TaxTable,
+) -> None:
+    """BOLT on the synthetic company without its 2025 balance sheets: its newest fiscal year is
+    2025 but its newest kept ROIC year 2024, so the ratio reads 2024's revenue, not 2025's."""
+    held = YEARS[:-1]
+    answers = {
+        **company("BOLT"),
+        "balance-annual": json.dumps(balance_annual(held)).replace("ACME", "BOLT").encode(),
+        "balance-asreported-annual": json.dumps(balance_as_reported(held))
+        .replace("ACME", "BOLT")
+        .encode(),
+    }
+    for endpoint, body in answers.items():
+        router.symbol_bodies[(endpoint, "BOLT")] = body
+    for symbol in ("ACME", "BOLT"):
+        fetch_company(conn, clients.fmp, clients.gf, symbol, policy, clock(), clients.secrets)
+    add_company(conn, symbols=("ACME", "BOLT"))
+
+    [peer] = peer_figures(conn, "ACME", DECILES, policy, tax, TODAY)
+    newest = aggregate_roic(statements_for(conn, "BOLT", "US", tax, TODAY).capital_years).by_year[
+        -1
+    ]
+    revenue = {int(row["fiscalYear"]): row["revenue"] for row in income_annual(YEARS)}
+    assert newest.year == 2024 and max(revenue) == 2025
+    assert peer.sales_to_capital == pytest.approx(revenue[2024] / newest.average_capital)
+    assert peer.sales_to_capital != pytest.approx(revenue[2025] / newest.average_capital)
