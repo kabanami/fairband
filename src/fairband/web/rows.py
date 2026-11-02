@@ -70,6 +70,8 @@ EXTRA_KEYS = (
     "validUntil",
     "route",
     "growthRouteValue",
+    "targetMargin",
+    "impliedMargin",
 )
 ROW_KEYS = SCREEN_ROW_KEYS + EXTRA_KEYS
 
@@ -97,7 +99,10 @@ def screen_row(
     snapshot: SnapshotRow, company: CompanyRow | None, today: date, aging_fraction: float
 ) -> dict[str, Any]:
     """The snapshot as a screen row; the name, sector, cap band and market cap come from
-    ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``."""
+    ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``. The moat
+    shows on a row with a value only: a growth refusal keeps the moat class for the price refresh,
+    not for the screen. ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the
+    price needs, a growth row's; a row refused for its target margin has the latter alone."""
     result = snapshot.result
     phase = result.phase.phase
     im = result.intermediates
@@ -124,7 +129,7 @@ def screen_row(
         "sector": None if company is None else company.sector,
         "capBand": None if company is None else company.cap_band,
         "marketCap": None if market_cap is None else float(market_cap),
-        "moat": im.get("moat"),
+        "moat": None if snapshot.value is None else im.get("moat"),
         "impliedGrowth": im.get("implied_growth"),
         "expectedReturn": _table(im, "expected_return").get("total"),
         "epv": im.get("epv"),
@@ -146,15 +151,18 @@ def screen_row(
         "validUntil": snapshot.valid_until.isoformat(),
         "route": snapshot.route,
         "growthRouteValue": _growth_route_value(snapshot),
+        "targetMargin": _table(im, "target_margin").get("value"),
+        "impliedMargin": im.get("implied_margin"),
     }
 
 
 def _growth_route_value(snapshot: SnapshotRow) -> float | None:
-    """The growth route's value a share: a Mature Growth row's own value, a Mature Stable row's
-    cross-check (calibration spec 5.7) when it has one; ``None`` elsewhere."""
+    """The growth route's value a share: a Mature Growth row's own value, a Mature Stable or
+    revenue-growth row's cross-check (calibration spec 5.7, growth-routes spec 5.12) when it has
+    one; ``None`` elsewhere."""
     if snapshot.route == "mature-growth":
         return snapshot.value
-    if snapshot.route == "mature-stable":
+    if snapshot.route in ("mature-stable", "revenue-growth"):
         return _table(snapshot.result.intermediates, "growth_route").get("value_per_share")
     return None
 

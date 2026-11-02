@@ -86,6 +86,11 @@
   .app-inputs th, .app-inputs td { padding: var(--space-2) var(--space-1); }
   .app-inputs td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
   .app-inputs td.fb-num { white-space: nowrap; }
+  /* A table of figures wider than the rail, the growth route's ten years, scrolls sideways on its
+     own; the drawer does not. */
+  .app-scroll { overflow-x: auto; }
+  .app-scroll + .app-pairs { margin-top: var(--space-2); }
+  .app-figures th, .app-figures td { padding: 0 var(--space-2); }
   .app-line { display: block; }
   .app-nowrap { white-space: nowrap; }
   .app-muted { color: var(--ink-faint); }

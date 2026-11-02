@@ -373,6 +373,12 @@ export interface ScreenRow {
   priceDate?: string | null;
   dataDate?: string;
   validUntil?: string;
+  /**
+   * fairband: a growth row's target margin and the margin its price needs, fractions rendered as
+   * percentages; a row refused for its target margin has `impliedMargin` alone.
+   */
+  targetMargin?: number | null;
+  impliedMargin?: number | null;
   /** Rows may carry anything else the caller filters or sorts on; the
       component reads only the fields above. */
   [key: string]: unknown;

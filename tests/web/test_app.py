@@ -1,7 +1,8 @@
-"""The web app through its routes, on a temporary migrated database with two snapshots from the
-engine's test companies: AAPL, valued on the Mature Growth route, and AAL, a Young Growth company
-with no mature peers, which the engine refuses for its target margin. Both are listed in the
-universe of one finished full refresh."""
+"""The web app through its routes, on a temporary migrated database with three snapshots from the
+engine's test companies: AAPL, valued on the Mature Growth route; AAL, a Young Growth company with
+no mature peers, which the engine refuses for its target margin; and HGCO, the High Growth company,
+valued on the revenue growth route. All three are listed in the universe of one finished full
+refresh."""
 
 import json
 import re
@@ -21,6 +22,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from support.engine_companies import (
+    annual,
+    high_growth_inputs,
     mature_growth_inputs,
     mature_stable_inputs,
     universe_deciles,
@@ -45,7 +48,7 @@ STARTED = datetime(2026, 10, 31, 22, 0, tzinfo=UTC)
 CREATED = datetime(2026, 10, 31, 22, 15, tzinfo=UTC)
 FINISHED = datetime(2026, 10, 31, 22, 20, tzinfo=UTC)
 NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
-CALIBRATION = {"refused": 1, "valued": 1}
+CALIBRATION = {"refused": 1, "valued": 2}
 HOST = "http://127.0.0.1:8470"  # a host the app trusts (D11)
 
 # The design system's ScreenRow keys.
@@ -106,6 +109,8 @@ EXTRA_COLUMNS = [
     "validUntil",
     "route",
     "growthRouteValue",
+    "targetMargin",
+    "impliedMargin",
 ]
 
 
@@ -120,8 +125,10 @@ def results(policy: Policy) -> dict[str, ValuationResult]:
     valued = value_company(replace(mature_growth_inputs(), symbol="AAPL"), deciles, policy, TODAY)
     no_peers = replace(young_growth_inputs(), symbol="AAL", peers=())
     refused = value_company(no_peers, deciles, policy, TODAY)
+    growth = value_company(high_growth_inputs(), deciles, policy, TODAY)
     assert valued.value is not None and refused.value is None
-    return {"AAPL": valued, "AAL": refused}
+    assert growth.symbol == "HGCO" and growth.route == "revenue-growth"
+    return {"AAPL": valued, "AAL": refused, "HGCO": growth}
 
 
 def _company(symbol: str, refresh_id: int, name: str, market_cap: Decimal) -> CompanyRow:
@@ -154,12 +161,13 @@ def db_path(tmp_path: Path, policy: Policy, results: dict[str, ValuationResult])
             [
                 _company("AAPL", refresh_id, "Mature Growth Co", Decimal(150_000_000_000)),
                 _company("AAL", refresh_id, "Young Growth Co", Decimal(4_000_000_000)),
+                _company("HGCO", refresh_id, "High Growth Co", Decimal(15_000_000_000)),
             ],
         )
         for result in results.values():
             insert_snapshot(conn, result, refresh_id, clock=lambda: CREATED)
         set_stage(conn, refresh_id, "done")
-        finish_refresh(conn, refresh_id, "done", FINISHED, "2 valued or refused", CALIBRATION)
+        finish_refresh(conn, refresh_id, "done", FINISHED, "3 valued or refused", CALIBRATION)
     return path
 
 
@@ -222,8 +230,8 @@ def test_screen_rows_and_default_sort(
     client: TestClient, results: dict[str, ValuationResult]
 ) -> None:
     rows = _screen(client)["rows"]
-    assert [row["ticker"] for row in rows] == ["AAL", "AAPL"]
-    aal, aapl = rows
+    assert [row["ticker"] for row in rows] == ["AAL", "AAPL", "HGCO"]
+    aal, aapl, _ = rows
 
     valued = results["AAPL"]
     assert valued.value is not None and valued.levels is not None
@@ -269,6 +277,8 @@ def test_screen_rows_and_default_sort(
         "validUntil": "2027-01-28",
         "route": "mature-growth",
         "growthRouteValue": valued.value,
+        "targetMargin": None,
+        "impliedMargin": None,
     }
 
     refused = results["AAL"]
@@ -279,8 +289,9 @@ def test_screen_rows_and_default_sort(
         assert aal[key] is None, key
     for key in ("impliedGrowth", "expectedReturn", "epv", "peClean", "stance3", "route"):
         assert aal[key] is None, key
-    # refused for its target margin, it keeps the moat class the margin the price needs reads
-    assert aal["moat"] == refused.intermediates["moat"] == "None"
+    # refused for its target margin, it keeps the moat class the margin the price needs reads,
+    # which the column shows only on a row with a value, as on the mature routes' refusals
+    assert refused.intermediates["moat"] == "None" and aal["moat"] is None
     assert aal["reviewed"] is None and aal["overrides"] == 0
     assert aal["price"] == 150.0
     assert aal["high52w"] == refused.intermediates["price_facts"]["high_52w"]
@@ -288,16 +299,16 @@ def test_screen_rows_and_default_sort(
 
 
 def test_screen_sort_nulls_last(client: TestClient) -> None:
-    assert _tickers(client, "?sort=fairValue&dir=desc") == ["AAPL", "AAL"]
-    assert _tickers(client, "?sort=fairValue&dir=asc") == ["AAPL", "AAL"]
-    assert _tickers(client, "?sort=phase&dir=asc") == ["AAL", "AAPL"]
-    assert _tickers(client, "?sort=phase&dir=desc") == ["AAPL", "AAL"]
-    assert _tickers(client, "?sort=marketCap&dir=desc") == ["AAPL", "AAL"]
-    assert _tickers(client, "?sort=ticker&dir=desc") == ["AAPL", "AAL"]
-    assert _tickers(client, "?sort=marketCap") == ["AAL", "AAPL"]  # ascending by default
+    assert _tickers(client, "?sort=fairValue&dir=desc") == ["HGCO", "AAPL", "AAL"]
+    assert _tickers(client, "?sort=fairValue&dir=asc") == ["AAPL", "HGCO", "AAL"]
+    assert _tickers(client, "?sort=phase&dir=asc") == ["AAL", "HGCO", "AAPL"]
+    assert _tickers(client, "?sort=phase&dir=desc") == ["AAPL", "HGCO", "AAL"]
+    assert _tickers(client, "?sort=marketCap&dir=desc") == ["AAPL", "HGCO", "AAL"]
+    assert _tickers(client, "?sort=ticker&dir=desc") == ["HGCO", "AAPL", "AAL"]
+    assert _tickers(client, "?sort=marketCap") == ["AAL", "HGCO", "AAPL"]  # ascending by default
     for key in _screen(client)["rows"][0]:
         for direction in ("asc", "desc"):
-            assert len(_tickers(client, f"?sort={key}&dir={direction}")) == 2, key
+            assert len(_tickers(client, f"?sort={key}&dir={direction}")) == 3, key
 
 
 def test_sort_unknown_key_400(client: TestClient) -> None:
@@ -322,7 +333,7 @@ def test_screen_envelope_columns_and_today(client: TestClient) -> None:
         "stage": "done",
         "startedAt": "2026-10-31T22:00:00+00:00",
         "finishedAt": "2026-10-31T22:20:00+00:00",
-        "message": "2 valued or refused",
+        "message": "3 valued or refused",
         "calibration": CALIBRATION,
     }
 
@@ -347,7 +358,7 @@ def test_freshness_states(
 ) -> None:
     body = _screen(client_with_clock(now))
     assert body["today"] == now.date().isoformat()
-    assert [row["freshness"] for row in body["rows"]] == [state, state]
+    assert [row["freshness"] for row in body["rows"]] == [state, state, state]
 
 
 def _universe(db_path: Path, policy: Policy, *companies: tuple[str, str, int, bool]) -> None:
@@ -445,13 +456,62 @@ def test_growth_route_value_on_mature_stable_rows(
     assert msnc["growthRouteValue"] is None and msnc["mechanical"] is not None
 
 
+def test_growth_route_columns(client: TestClient, results: dict[str, ValuationResult]) -> None:
+    """A row valued on the revenue growth route shows the peers' target margin and the margin the
+    price needs; a row refused for its target margin shows the margin the price needs alone, its
+    one figure; a mature row shows neither."""
+    body = _screen(client)
+    assert "targetMargin" in body["columns"] and "impliedMargin" in body["columns"]
+    rows = {row["ticker"]: row for row in body["rows"]}
+    row = rows["HGCO"]
+    im = results["HGCO"].intermediates
+    assert row["route"] == "revenue-growth"
+    assert row["targetMargin"] == pytest.approx(0.20) == im["target_margin"]["value"]
+    assert row["impliedMargin"] == im["implied_margin"] is not None
+    # no positive forward anchor, so no cross-check value
+    assert row["growthRouteValue"] == im["growth_route"].get("value_per_share") is None
+    assert row["moat"] == "None"  # a valued row shows its moat class
+
+    refused = rows["AAL"]
+    assert refused["targetMargin"] is None
+    assert refused["impliedMargin"] == results["AAL"].intermediates["implied_margin"] is not None
+    assert rows["AAPL"]["targetMargin"] is None and rows["AAPL"]["impliedMargin"] is None
+
+
+def test_growth_route_value_on_revenue_growth_rows(
+    db_path: Path, policy: Policy, client: TestClient
+) -> None:
+    """A growth row whose forward EPS anchor is positive shows the growth route's cross-check in
+    the column, while its value stays the revenue route's."""
+    hg = high_growth_inputs()
+    positive = replace(
+        hg,
+        symbol="HGPA",
+        quarter_estimates=tuple(replace(q, eps=0.60) for q in hg.quarter_estimates),
+        annual_estimates=(
+            annual(2027, 250e6, 2.50, 3, 13_000e6, 20),
+            annual(2028, 320e6, 3.20, 3, 16_000e6, 15),
+            annual(2029, 400e6, 4.00, 3, 19_200e6, 12),
+        ),
+    )
+    result = value_company(positive, universe_deciles(), policy, TODAY)
+    with closing(connect(db_path)) as conn:
+        insert_companies(conn, [_company("HGPA", 1, "High Growth Co", Decimal(15_000_000_000))])
+        insert_snapshot(conn, result, 1, clock=lambda: CREATED)
+    row = {row["ticker"]: row for row in _screen(client)["rows"]}["HGPA"]
+    cross_check = result.intermediates["growth_route"]["value_per_share"]
+    assert row["route"] == "revenue-growth" and cross_check is not None
+    assert row["growthRouteValue"] == cross_check != row["mechanical"]
+    assert row["mechanical"] == result.intermediates["value_per_share"]
+
+
 def test_screen_keeps_the_universe_when_a_refresh_admits_none(
     db_path: Path, policy: Policy, client: TestClient
 ) -> None:
     """A later full refresh whose screener admitted nobody recorded only an excluded listing: the
     screen keeps the last universe that admitted companies."""
     _universe(db_path, policy, ("FIRB", "First Bank", 4_000_000_000, False))
-    assert _tickers(client, "") == ["AAL", "AAPL"]
+    assert _tickers(client, "") == ["AAL", "AAPL", "HGCO"]
 
 
 def test_screen_without_a_universe_shows_every_snapshot(
@@ -474,6 +534,7 @@ def test_screen_without_a_universe_shows_every_snapshot(
     assert [(row["ticker"], row["name"], row["refusal"]) for row in rows] == [
         ("AAL", None, "no target margin: 0 mature peers"),
         ("AAPL", None, None),
+        ("HGCO", None, None),
     ]
 
 
@@ -662,6 +723,45 @@ def test_app_js_normalises_a_saved_column_list() -> None:
     assert "if (Array.isArray(saved)) return normalise(saved);" in script
 
 
+def test_app_js_names_the_revenue_route_and_draws_its_tables() -> None:
+    script = _static_file("app.js")
+    assert "'revenue-growth': 'Revenue growth route'" in script
+    for key in (
+        "revenue_by_year",
+        "margin_path",
+        "ebit_by_year",
+        "tax_by_year",
+        "nopat_by_year",
+        "reinvestment_by_year",
+        "fcff_by_year",
+        "target_margin",
+        "largest_margin",
+        "sales_to_capital",
+        "terminal_roic",
+        "terminal_value",
+        "firm_value",
+        "failure_probability",
+        "implied_growth",
+        "implied_margin",
+    ):
+        assert key in script, key
+    # spec 5.9: the flat required return, read from the row's RULE input, on every row of the
+    # route; spec 5.13: a Young Growth row has no range in tier 1
+    assert "'Discounted at the required return of ' +" in script
+    assert "' in every year; Damodaran\\'s template starts higher and falls to it ' +" in script
+    assert "ruleValue(inputs, 'required_return')" in script
+    assert "growth ? discountedAt(r.inputs) : null" in script
+    assert "The value range is not computed in tier 1" in script
+    assert "youngGrowth(im.failure_probability)" in script
+    # the solves, and the one figure of a row refused for its target margin
+    assert "['Implied growth held in ' + held, F.formatPercent(im.implied_growth), true]" in script
+    assert "['Margin the price needs', F.formatPercent(im.implied_margin), true]" in script
+    assert "'implied_margin' in im ? pairs([" in script
+    # a loss makes EPV negative and the growth share above 100%: the EPV line says why
+    assert "key === 'epv' && v < 0" in script
+    assert "'negative: trailing earnings are a loss'" in script
+
+
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
 EXTRA_COLUMN_HEADS = {
     "sector": "Sector",
@@ -686,6 +786,8 @@ EXTRA_COLUMN_HEADS = {
     "dataDate": "Data date",
     "validUntil": "Valid until",
     "growthRouteValue": "Growth-route value",
+    "targetMargin": "Target margin",
+    "impliedMargin": "Implied margin",
 }
 
 
@@ -708,11 +810,23 @@ def test_bundle_has_extra_columns() -> None:
     ]
 
 
+def test_bundle_has_the_margin_columns() -> None:
+    """The two margins of the growth routes, percentages as the other fractions are, after the
+    growth-route value in the catalog."""
+    bundle = _component_file("bundle.js")
+    assert "key: 'targetMargin'" in bundle and "key: 'impliedMargin'" in bundle
+    assert "figureCell(percent(r.targetMargin))" in bundle
+    assert "figureCell(percent(r.impliedMargin))" in bundle
+    order = [bundle.index(f"key: '{key}'") for key in EXTRA_KEYS[-3:]]
+    assert EXTRA_KEYS[-3:] == ("growthRouteValue", "targetMargin", "impliedMargin")
+    assert order == sorted(order)
+
+
 def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 18
+    assert bundle.count("// fairband:") >= 21
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
     assert "Number(p.phase) || 1" not in bundle
     assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
@@ -816,6 +930,14 @@ def test_index_d_ts_declares_onOpen() -> None:
 def test_index_d_ts_says_columns_are_ordered() -> None:
     declarations = _component_file("index.d.ts")
     assert "fairband: ordered" in declarations
+
+
+def test_index_d_ts_declares_the_margin_keys() -> None:
+    declarations = _component_file("index.d.ts")
+    row = re.search(r"export interface ScreenRow \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert row is not None
+    assert "targetMargin?: number | null;" in row.group(1)
+    assert "impliedMargin?: number | null;" in row.group(1)
 
 
 def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, policy: Policy) -> None:

@@ -1011,10 +1011,17 @@
       cell: function (r) { return dateCell(r.dataDate); } },
     { key: 'validUntil', head: 'Valid until', num: true,
       cell: function (r) { return dateCell(r.validUntil); } },
-    // fairband: the growth route's value a share, a Mature Stable row's cross-check (calibration
-    // spec 5.7).
+    // fairband: the growth route's value a share, a Mature Stable or growth row's cross-check
+    // (calibration spec 5.7, growth-routes spec 5.12).
     { key: 'growthRouteValue', head: 'Growth-route value', num: true,
-      cell: function (r) { return figureCell(money(r.growthRouteValue)); } }
+      cell: function (r) { return figureCell(money(r.growthRouteValue)); } },
+    // fairband: a growth row's target margin, the mature peers' median (growth-routes spec 5.5).
+    { key: 'targetMargin', head: 'Target margin', num: true,
+      cell: function (r) { return figureCell(percent(r.targetMargin)); } },
+    // fairband: the margin the price needs, a growth row's; the one figure of a row refused for
+    // its target margin (growth-routes spec 5.11).
+    { key: 'impliedMargin', head: 'Implied margin', num: true,
+      cell: function (r) { return figureCell(percent(r.impliedMargin)); } }
   ];
 
   var DEFAULT_COLUMNS = ['ticker', 'name', 'phase', 'band', 'mechanical',

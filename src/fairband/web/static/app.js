@@ -19,7 +19,10 @@
     'Start-up': 1, 'Young Growth': 2, 'High Growth': 3,
     'Mature Growth': 4, 'Mature Stable': 5, 'Decline': 6
   };
-  var ROUTES = { 'mature-growth': 'Mature growth route', 'mature-stable': 'Mature stable route' };
+  var ROUTES = {
+    'mature-growth': 'Mature growth route', 'mature-stable': 'Mature stable route',
+    'revenue-growth': 'Revenue growth route'
+  };
 
   var mount = document.getElementById('screen');
   var root = ReactDOM.createRoot(mount);
@@ -291,8 +294,10 @@
 
   function sections(body) {
     var r = body.result;
+    var im = r.intermediates;
     var phase = PHASE_NUMBER[r.phase.phase];
     var valued = r.value != null && r.levels != null && r.price != null;
+    var growth = r.route === 'revenue-growth';
     var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
@@ -305,18 +310,25 @@
           low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
           buyLevel: r.levels.buy, trimLevel: r.levels.trim, caption: ROUTES[r.route] || r.route
         }),
-        crossCheck(r.intermediates.growth_route),
+        youngGrowth(im.failure_probability),
+        crossCheck(im.growth_route),
         r.stance5 ? h('p', { className: 'caption app-muted' }, 'Five-step stance: ' + r.stance5)
-          : null) : null,
-      /* A refusal takes the band's place: it is the answer when there is no value. */
+          : null,
+        growth ? discountedAt(r.inputs) : null) : null,
+      /* A refusal takes the band's place: it is the answer when there is no value. A growth row
+         refused with its revenue path still shows the margin the price needs (spec 5.11). */
       r.refusal ? section('refusal', 'Refusal',
-        h('p', { className: 'body app-refusal' }, r.refusal)) : null,
+        h('p', { className: 'body app-refusal' }, r.refusal),
+        'implied_margin' in im ? pairs([
+          ['Margin the price needs', F.formatPercent(im.implied_margin), true]
+        ]) : null) : null,
       section('window', null, h(F.ValidityWindow, {
         asOf: r.data_date, observedAt: r.data_date,
         enteredAt: localIso(body.snapshot.createdAt),
         validFrom: r.data_date, validUntil: r.valid_until, today: body.today
       })),
       section('phase', 'Phase evidence', pairs(evidence(r.phase, phase))),
+      growth ? revenueRoute(r) : null,
       section('inputs', 'Inputs', inputsTable(r.inputs)),
       section('intermediates', 'Intermediate results', intermediates(r.intermediates)),
       section('flags', 'Flags', r.flags.length ? h('ul', { className: 'app-list' },
@@ -336,13 +348,43 @@
     ];
   }
 
-  /* A Mature Stable row's growth-route value, under the band (calibration spec 5.7); a refused
-     cross-check shows only among the intermediates. */
+  /* A Mature Stable or growth row's growth-route value, under the band (calibration spec 5.7,
+     growth-routes spec 5.12); a refused cross-check shows only among the intermediates. */
   function crossCheck(g) {
     if (!g || g.value_per_share == null) return null;
     return h('p', { className: 'caption app-muted' }, 'Growth-route cross-check: ' +
       F.formatMoney(g.value_per_share) + ' (implied growth ' + F.formatPercent(g.implied_growth) +
       ')');
+  }
+
+  /* A Young Growth row, under the band: the failure probability is unavailable in tier 1, with
+     its reason, and the value is one figure, not a range (growth-routes spec 5.13). */
+  function youngGrowth(failure) {
+    if (!failure) return null;
+    return h(React.Fragment, null,
+      h('p', { className: 'caption' }, 'Failure probability: ' +
+        (failure.value == null ? 'unavailable' : F.formatPercent(failure.value)) +
+        (failure.reason ? ' (' + failure.reason + ')' : '')),
+      h('p', { className: 'caption' }, 'The value range is not computed in tier 1'));
+  }
+
+  /* Every row of the revenue growth route discounts at the flat required return, the row's RULE
+     input, where Damodaran's template starts higher; the drawer says so (growth-routes spec
+     5.9). */
+  function discountedAt(inputs) {
+    var r = ruleValue(inputs, 'required_return');
+    if (r == null) return null;
+    return h('p', { className: 'caption app-muted' }, 'Discounted at the required return of ' +
+      F.formatPercent(r) + ' in every year; Damodaran\'s template starts higher and falls to it ' +
+      'by year 10');
+  }
+
+  /* The value of the row's RULE input `name`; null when the row has none. */
+  function ruleValue(inputs, name) {
+    for (var i = 0; i < inputs.length; i++) {
+      if (inputs[i].name === name && inputs[i].tag === 'RULE') return inputs[i].value;
+    }
+    return null;
   }
 
   function section(key, title) {
@@ -378,6 +420,118 @@
     ]);
   }
 
+  /* ---------------------------------------------------- the revenue growth route */
+
+  /* A row valued on the revenue DCF (growth-routes spec 5): the ten years, the peers that set
+     the target margin, the sales-to-capital, the terminal and the bridge to equity, then the two
+     solves at the price, so the arithmetic reproduces from the drawer. */
+  function revenueRoute(r) {
+    var im = r.intermediates;
+    var held = heldYears(ruleValue(r.inputs, 'high_growth_years'));
+    return section('revenue', ROUTES[r.route],
+      group('years', 'Ten years', yearsTable(im)),
+      group('peers', 'Target margin', peersTable(im.target_margin.peers),
+        pairs(peerSummary(im.target_margin))),
+      group('capital', 'Sales-to-capital', pairs(salesToCapital(im.sales_to_capital))),
+      group('bridge', 'Terminal and bridge to equity', pairs([
+        ['Terminal return', F.formatPercent(im.terminal_roic), true],
+        ['Terminal value', whole(im.terminal_value), true],
+        ['Firm value', whole(im.firm_value), true],
+        ['Less debt', whole(im.debt), true],
+        ['Plus cash', whole(im.cash), true],
+        ['Equity', whole(im.equity), true],
+        ['Shares', plain(im.shares), true],
+        ['Value a share', F.formatMoney(im.value_per_share), true]
+      ])),
+      group('solves', 'At the price', pairs([
+        ['Implied growth held in ' + held, F.formatPercent(im.implied_growth), true],
+        ['Margin the price needs', F.formatPercent(im.implied_margin), true]
+      ])));
+  }
+
+  function group(key, title) {
+    return h.apply(null, ['div', { key: key, className: 'app-group' },
+      h('h4', { className: 'label app-group__head' }, title)]
+      .concat(Array.prototype.slice.call(arguments, 2)));
+  }
+
+  /* The implied growth is held from year 4 to the last high-growth year, the row's RULE input. */
+  function heldYears(last) {
+    if (last === 4) return 'year 4';
+    return last === 5 ? 'years 4 and 5' : 'years 4 to ' + last;
+  }
+
+  /* One row a year: the revenue, the margin, EBIT, tax, NOPAT, the reinvestment and the free cash
+     flow, totals to whole dollars. Wider than the rail, the table scrolls on its own. */
+  function yearsTable(im) {
+    var columns = [
+      ['Revenue', im.revenue_by_year, whole],
+      ['Margin', im.margin_path.by_year, F.formatPercent],
+      ['EBIT', im.ebit_by_year, whole],
+      ['Tax', im.tax_by_year, whole],
+      ['NOPAT', im.nopat_by_year, whole],
+      ['Reinvestment', im.reinvestment_by_year, whole],
+      ['Free cash flow', im.fcff_by_year, whole]
+    ];
+    return h('div', { className: 'app-scroll' },
+      h('table', { className: 'fb-table app-figures' },
+        h('thead', null, h('tr', null,
+          h('th', { className: 'label fb-num' }, 'Year'),
+          columns.map(function (c) {
+            return h('th', { key: c[0], className: 'label fb-num' }, c[0]);
+          }))),
+        h('tbody', null, im.revenue_by_year.map(function (_, t) {
+          return h('tr', { key: t },
+            h('td', { className: 'fb-num figure-sm' }, plain(t + 1)),
+            columns.map(function (c) {
+              return h('td', { key: c[0], className: 'fb-num figure-sm' }, c[2](c[1][t]));
+            }));
+        }))));
+  }
+
+  /* The mature peers counted for the target margin, each with its ten-year margin and its market
+     cap. */
+  function peersTable(peers) {
+    return h('div', { className: 'app-scroll' },
+      h('table', { className: 'fb-table app-figures' },
+        h('thead', null, h('tr', null,
+          h('th', { className: 'label' }, 'Peer'),
+          h('th', { className: 'label fb-num' }, 'Margin'),
+          h('th', { className: 'label fb-num' }, 'Market cap'))),
+        h('tbody', null, peers.map(function (p) {
+          return h('tr', { key: p.symbol },
+            h('td', { className: 'figure-sm' }, p.symbol),
+            h('td', { className: 'fb-num figure-sm' }, F.formatPercent(p.margin)),
+            h('td', { className: 'fb-num figure-sm' }, whole(p.market_cap)));
+        }))));
+  }
+
+  /* The median is the target; the largest peer by market cap is the success scenario and sets
+     nothing (spec 5.5). */
+  function peerSummary(t) {
+    return [
+      ['Median, the target', F.formatPercent(t.value), true],
+      ['Peers counted', plain(t.count), true],
+      ['Largest peer', t.largest_symbol == null ? '—' : noted(t.largest_symbol + ' ' +
+        F.formatPercent(t.largest_margin), 'the success scenario'), true]
+    ];
+  }
+
+  /* The measure used, own or peers, and both figures (spec 5.6). */
+  function salesToCapital(s) {
+    return [
+      ['Measure used', s.used || 'none', false],
+      ['Own five-year marginal', s.own_usable ? times(s.own)
+        : noted(times(s.own), 'not usable'), true],
+      ['Mature peers\' median', times(s.peers), true]
+    ];
+  }
+
+  /* A figure with words after it, in sans and in brackets; the figure stays mono. */
+  function noted(text, note) {
+    return h(React.Fragment, null, text, h('span', { className: 'caption' }, ' (' + note + ')'));
+  }
+
   /* ---------------------------------------------------------------- the inputs */
 
   /* A date as it is; a timestamp in the reader's local time. */
@@ -404,6 +558,12 @@
 
   /* A total in whole dollars, with separators: $5,900,000,000. */
   function dollars(v) { return (v < 0 ? '−$' : '$') + decimals(Math.abs(v), 0); }
+
+  /* A total in whole dollars; an em dash for none. */
+  function whole(v) { return v == null ? '—' : dollars(v); }
+
+  /* A ratio of sales to capital, to two decimals with x: 1.38x; an em dash for none. */
+  function times(v) { return v == null ? '—' : decimals(v, 2) + 'x'; }
 
   /* By unit: a price to cents, a total to whole dollars, a ratio to one decimal of a percent.
      A price and a total share the unit USD; a price is under a million. */
@@ -501,12 +661,17 @@
     return String(v);
   }
 
-  /* One group per top-level key: a table's entries, with a nested table flattened one level. */
+  /* One group per top-level key: a table's entries, with a nested table flattened one level. EPV
+     below zero capitalises a trailing loss, which also puts the growth share above 100%; its line
+     says so, so the reader is not misled. */
   function intermediates(im) {
     return Object.keys(im).map(function (key) {
       var v = im[key];
       var rows = [];
-      if (!isTable(v)) {
+      if (key === 'epv' && v < 0) {
+        rows.push([key, noted(shown(v, key, null), 'negative: trailing earnings are a loss'),
+          true]);
+      } else if (!isTable(v)) {
         rows.push([key, shown(v, key, null), true]);
       } else {
         Object.keys(v).forEach(function (k) {
