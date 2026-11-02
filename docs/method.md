@@ -8,14 +8,14 @@
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
 
-The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec and the calibration spec under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
+The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec and the growth routes spec under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
 
 ## 0. How to read this document
 
-- **r** is the required return, **g_T** the terminal growth, **N** the runway in years. Rates are fractions. Totals are in US dollars; per-share figures in dollars a share.
+- **r** is the required return, **g_T** the terminal growth, **N** the runway in years (on the revenue-growth route, its explicit period, section 5a). Rates are fractions. Totals are in US dollars; per-share figures in dollars a share.
 - "Trailing" means the trailing twelve months: the last four reported quarters summed (section 4.2). "Fiscal years" means the annual series.
 - Every number the engine reads is either DATA (from a vendor, with its source and dates), RULE (from the policy file, with a source line) or an estimate under a named method. Every valuation constant that the literature or the founder set lives in the policy file (4.1); the code holds only the method's structural constants (4.1a).
-- A phase is one of Damodaran's six: Start-up, Young Growth, High Growth, Mature Growth, Mature Stable, Decline. A route is the valuation method for a phase. Two routes are built: Mature Growth and Mature Stable. The other four phases get a row, a phase and a refusal (section 7).
+- A phase is one of Damodaran's six: Start-up, Young Growth, High Growth, Mature Growth, Mature Stable, Decline. A route is the valuation method for a phase. Three routes are built: Mature Growth (section 5), the revenue-growth route that High Growth and Young Growth share (section 5a) and Mature Stable (section 6). Start-up and Decline get a row, a phase and a refusal (section 7).
 - A refusal is a result with no value and a reason. It is never an exception, and the row is never missing.
 - Determinism: the same inputs under the same policy and method version give the same result, bit for bit.
 
@@ -43,12 +43,13 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 | Income statement, balance sheet, cash flow, annual | `income-statement`, `balance-sheet-statement`, `cash-flow-statement` | 11 fiscal years: ten for the ROIC aggregate plus the opening balance |
 | As-reported balance sheet, annual | `balance-sheet-statement-as-reported` | 11 fiscal years; supplies the issuer's total intangibles excluding goodwill, and the lease lines |
 | Income statement and cash flow, quarterly | the same endpoints with `period=quarter` | 8 quarters, for the trailing figures |
-| Consensus EPS, revenue, net income with analyst counts | `analyst-estimates`, annual and quarterly | 6 annual rows and 40 quarterly rows; the engine picks periods by date, never by row order. FMP gives one analyst count, for EPS; the net-income count reads it too |
+| Consensus EPS, revenue, net income with analyst counts | `analyst-estimates`, annual and quarterly | 6 annual rows and 40 quarterly rows; the engine picks periods by date, never by row order. FMP gives two analyst counts, for EPS and for revenue; the net-income count reads the EPS count |
 | Street actual EPS by quarter | `earnings` | 12 rows, for the stock-compensation basis test |
 | Next earnings date | `earnings` | the same rows; the next date on or after today |
 | Quote: price, market cap | `quote` | current |
 | Profile: country, ADR flag | `profile` | current |
 | Daily closes | `historical-price-eod/full` | five years, for the price columns |
+| Peers | `stock-peers` | one call a company, reused for 24 hours; not required; a list is usable, an empty one included. The symbols stay in the stored payload; the peers' figures come from their own stored statements (5a.4) |
 | Moat score | GuruFocus `summary` | current; reused for 7 days |
 | EPS trailing and EPS without non-recurring items | GuruFocus `keyratios` | current; reused for 7 days |
 | Statutory tax rate | the packaged OECD table `tax-rates-oecd-v1.toml` | by country and fiscal year |
@@ -166,6 +167,11 @@ Every value comes from `fairband-policy-v3.toml` with a source line. The ones be
 | Marginal usability: capital grew by at least 20% | `marginal_capital_growth_min` | calibration spec 5.1; policy value |
 | Fallback return window 3 years | `fallback_return_years` | calibration spec 5.1; policy value |
 | Fade 5 years | `fade_years` | calibration spec 5.4; Damodaran's template |
+| High-growth years 5 | `high_growth_years` | growth routes spec 5.4; Damodaran's template H2, H3; policy value |
+| Margin convergence year 10 | `margin_convergence_year` | growth routes spec 5.5; Damodaran's template H2; policy value |
+| Peer minimum: 3 mature peers | `peer_min` | design.md 6.2 and 6.7; no source gives the number |
+| Peer margin: 5 fiscal years at least | `peer_margin_min_years` | growth routes spec 5.5; Damodaran H64; policy value |
+| Bounds of the margin the price needs: −50% to 100% | `implied_margin_bounds` | no source (growth routes spec 5.11) |
 | Return sensitivity 15% and 9% | `roic_sensitivity` | no source |
 | Thin consensus: fewer than 5 analysts | `analyst_min` | method v1.7 section 3 |
 | Large non-recurring item: 5% of trailing EPS | `nri_flag_share` | spec 6.7 |
@@ -183,7 +189,7 @@ Policies v1 and v2 stay in the package unchanged, because the snapshots valued u
 
 ### 4.1a Constants in code
 
-These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 8 and 3; the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7; the implied-growth scan of the growth routes from −50% to 200%; the three-year horizon of the expected return; the lease-accounting date of 15 December 2019.
+These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 8 and 3; the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7, on the Mature Growth and the revenue-growth routes alike, and the same step and tolerance for the margin the price needs within its policy bounds; the peers' ten-year margin window; the three-year horizon of the expected return; the lease-accounting date of 15 December 2019.
 
 ### 4.2 Trailing figures and the share count
 
@@ -193,7 +199,7 @@ The diluted share count is the newest quarter's weighted average diluted shares,
 
 ### 4.3 The tax rate
 
-NOPAT uses the statutory marginal rate: the OECD combined central and sub-central corporate rate for the company's country and the fiscal year. The country is the headquarters country of the FMP profile, else the universe row's. A fiscal year later than the newest year in the table takes the newest year's rate as an estimate under method `tax-rate-latest-oecd-year-v1`, flagged `tax-carried-forward`. An earlier missing year, or a country the table lacks, has no rate: the first fiscal year of the eleven-year span with an operating income and no rate refuses the company, "no statutory tax rate for <country> <year>". For a foreign filer, assembly withholds that refusal, so the route gives the foreign-filer refusal instead. The newest fiscal year's rate also converts stock compensation to after tax in the anchor (5.2).
+NOPAT uses the statutory marginal rate: the OECD combined central and sub-central corporate rate for the company's country and the fiscal year. The country is the headquarters country of the FMP profile, else the universe row's. A fiscal year later than the newest year in the table takes the newest year's rate as an estimate under method `tax-rate-latest-oecd-year-v1`, flagged `tax-carried-forward`. An earlier missing year, or a country the table lacks, has no rate: the first fiscal year of the eleven-year span with an operating income and no rate refuses the company, "no statutory tax rate for <country> <year>". For a foreign filer, assembly withholds that refusal, so the route gives the foreign-filer refusal instead. The newest fiscal year's rate also converts stock compensation to after tax in the anchor (5.2), and taxes every forecast year of the revenue-growth route (5a.6).
 
 ### 4.4 Invested capital and NOPAT
 
@@ -221,7 +227,7 @@ A ROIC year needs its NOPAT and both its opening and closing capital. Its averag
 - Five to nine: flag `roic-on-n-years`.
 - A capital sum at or below zero: no aggregate, flag `ten-year-roic-unavailable`.
 
-The aggregate is shown and feeds the "ten-year" sensitivity (5.8). It never enters the charge.
+The aggregate is shown and feeds the "ten-year" sensitivity (5.8). It never enters the charge. The kept years also give the revenue-growth route its own sales-to-capital (5a.5).
 
 ### 4.6 The runway return
 
@@ -242,7 +248,7 @@ The return in year N and in the terminal value.
 - Narrow or None moat: r.
 - Wide moat: the chosen measure of 4.6 before its floor, capped at 13% and never below r. When the runway charge is off: 13%. When the runway return is unavailable: r.
 
-The same rule, applied to a given return, gives the terminal return for each sensitivity value (5.8).
+The same rule, applied to a given return, gives the terminal return for each sensitivity value (5.8), and on the revenue-growth route for the return on new capital at the target margin (5a.7).
 
 ### 4.8 The charge and the value
 
@@ -259,7 +265,7 @@ The value a share is the total ÷ the diluted share count.
 
 ### 4.9 The moat class
 
-From the GuruFocus Moat Score: 8 or more Wide, 4 or more Narrow, below 4 or no score None. The moat enters in three places: the runway N, the terminal return and the margin of safety.
+From the GuruFocus Moat Score: 8 or more Wide, 4 or more Narrow, below 4 or no score None. The moat enters in three places: the runway N, the terminal return and the margin of safety. The revenue-growth route's explicit period does not read it, so there the moat enters the terminal return and the margin of safety only.
 
 ### 4.10 Levels, stance and validity
 
@@ -364,6 +370,182 @@ DATA: the fiscal years on file, price, diluted shares, next earnings date, daily
 
 The tests pin these. Terminal multiple at r 9%, g_T 3%, within 0.05: 17.2× at an infinite return, 15.5× (exactly 15.45) at 30%, 13.7× at 15%, 13.2× at 13%, 11.4× at 9%. The fade, the payout floor, the marginal return and the value figures of calibration spec section 7 (value 24,941.95 on its fade path at a 14.9% runway return and a 13% terminal; 19,699.10 without the fade; 20,520.66 with runway 5).
 
+## 5a. The revenue-growth route (High Growth and Young Growth)
+
+Damodaran's revenue DCF on the firm, one route for both phases: year 1 from the quarterly consensus revenue, years 2 and 3 from the annual consensus, the year-3 rate held to year 5 and faded to g_T by year 10; an operating margin that moves in a straight line to the mature peers' median; reinvestment at a sales-to-capital ratio; the free cash flow and the terminal discounted at r; then debt and cash to equity.
+
+Here N is the explicit period, the years forecast one by one before the terminal value: H + F = 10 years whatever the moat, with H = `high_growth_years` (5) and F = `fade_years` (5). C is `margin_convergence_year` (10).
+
+### 5a.1 Which rows, and the refusals
+
+A company the classifier puts in High Growth or Young Growth (3.5, rule 4), past the guards of 5.1. The result's route is `revenue-growth`; the phase says which of the two it is.
+
+The route's own refusals, in this order:
+
+1. "no trailing revenue": trailing revenue missing or not positive;
+2. "no trailing operating income": without it there is no trailing margin to start from (5a.4);
+3. "no statutory tax rate": no rate for the newest fiscal year (4.3);
+4. "incomplete NTM consensus" (5a.2);
+5. "no positive consensus revenue" (5a.2);
+6. "consensus revenue falls to zero or below within the path" (5a.2);
+7. "no target margin: <n> mature peers" (5a.4);
+8. "no sales-to-capital" (5a.5);
+9. "value not positive under the reinvestment charge" (5a.9).
+
+What a refusal keeps beside the price facts every result carries: refusals 1 to 5 nothing; refusal 6 the path's flags; refusal 7 the rebuild keys (5a.14), the margin the price needs (5a.10) and the path's, the capital build's and the bridge's flags (5a.13); refusal 8 those flags and no intermediates; refusal 9 every value-side intermediate, the margin the price needs and every flag of 5a.13. A row with neither a target margin nor a sales-to-capital gives refusal 7, its margin the price needs None.
+
+### 5a.2 Year 1 and the path
+
+Year 0 is trailing revenue (4.2). Year 1 is the NTM consensus revenue: the sum of the revenue means of the NTM quarters, picked as 5.2 picks them (the first four quarterly consensus periods ending after the trailing period end, by period end, each ending 80 to 100 days after the one before). Without four such quarters, or with one that lacks a revenue mean, the row is refused "incomplete NTM consensus"; the quarters' EPS means are not needed here. An NTM revenue at or below zero is refused "no positive consensus revenue".
+
+    g_1 = NTM revenue ÷ trailing revenue − 1
+
+The base year is 5.3's: the fiscal year that holds most of the four NTM quarters, a tie taking the later. The path reads the annual consensus revenue for the base year and the next two:
+
+- a revenue mean of zero whose revenue analyst count is missing or zero is no estimate;
+- step g_2 = revenue(base + 1) ÷ revenue(base) − 1, step g_3 = revenue(base + 2) ÷ revenue(base + 1) − 1; a step is missing when either year has no estimate or the earlier is not positive;
+- a missing step holds the rate of the year before: g_2 takes g_1, and g_3 takes g_2 as resolved. The row is flagged `path-held`, naming the fiscal years that left a step missing (a held step's earlier year when it has no estimate or is not positive, its later year when it has no estimate) and the rate each held year took;
+- a resolved g_2 or g_3 at or below −100% refuses the row "consensus revenue falls to zero or below within the path";
+- a present step whose landing year has fewer than 5 revenue analysts, or no count, flags `few-analysts`. The count is FMP's revenue analyst count. A held step lands on no consensus and is never thin.
+
+### 5a.3 Years 4 to 10
+
+Years 4 to H grow at the held rate: g_3 as resolved, or the rate the implied-growth solve tries (5a.10). Years H + 1 to N fade from the held rate to g_T in F equal steps,
+
+    g_t = g_T + (held rate − g_T) × (N − t) ÷ F, for t = H + 1 … N,
+
+so g_N = g_T exactly. With H = 5 and F = 5, years 4 and 5 hold and years 6 to 10 fade. A held rate below g_T rises to g_T on the same line.
+
+    revenue_1 = NTM revenue
+    revenue_t = revenue_{t−1} × (1 + g_t), for t = 2 … N
+
+### 5a.4 The margin path and the target margin
+
+The margin starts at the trailing operating margin, m_0 = trailing operating income ÷ trailing revenue, and moves in a straight line to the target margin m*, which it reaches in year C and keeps:
+
+    m_t = m_0 + (m* − m_0) × min(t, C) ÷ C, for t = 1 … N
+
+A trailing margin above the target moves down the same line.
+
+**The mature peers.** The candidates are the symbols of the latest usable `stock-peers` response stored for the company (section 2), in its order, in the exchange form (`BRK.B`), the company itself and repeats dropped. A candidate is kept when the latest universe lists it (the admitted companies of the newest refresh that admitted any) and its stored fiscal years classify, on the spot, as Mature Growth or Mature Stable on the deciles the company is valued on (3.3). A candidate outside that universe, without statements, unclassified or in another phase is dropped. Without deciles or a stored response the company has no peers. No vendor call is made for a peer: its figures come from the statements stored for it, its invested capital and NOPAT built by 4.4 at the statutory rate of its own country (4.3):
+
+- its margin: the ten-year aggregate operating margin, Σ operating income ÷ Σ revenue over the last ten of its fiscal years that have both and a positive revenue, with the count of those years; none without such a year;
+- its sales-to-capital: its newest fiscal year's revenue ÷ the average invested capital of its newest kept ROIC year (4.5); none without that revenue or a kept year, or with that capital at or below zero;
+- its ROIC: its ten-year aggregate (4.5), none when unavailable;
+- its market cap: the one on its row in the latest universe.
+
+**The target margin.** m* is the median margin of the peers with a margin on at least 5 fiscal years (`peer_margin_min_years`). With fewer than 3 such peers (`peer_min`), the row is refused "no target margin: <n> mature peers", n counting them. The row records those peers with their margins and market caps, their count, the lowest and the highest margin, and the largest of them by market cap with its margin (none when none has a market cap); the largest peer sets nothing.
+
+### 5a.5 Sales-to-capital and reinvestment
+
+Sales-to-capital is the revenue a dollar of new invested capital buys. The route takes, in this order:
+
+1. **The company's own five-year marginal measure**, over the kept ROIC years of 4.5: (revenue_last − revenue_first) ÷ (capital_last − capital_first), "last" the newest kept year and "first" the kept year 5 positions earlier (`marginal_return_span_years`), capital the average invested capital, revenue that fiscal year's. Used when it is usable: capital grew, by at least a fifth of the first year's capital in size (`marginal_capital_growth_min`), and revenue grew. There is no own measure with fewer than six kept years, with either year lacking a revenue, or with no change in capital.
+2. **The mature peers' median**: the median of the positive sales-to-capital among all the peers of 5a.4, when at least 3 (`peer_min`) are positive.
+3. Neither: the row is refused "no sales-to-capital".
+
+The row records the measure used ("own" or "peers", none when neither stands), the own measure and whether it is usable, the peers' median and the value used.
+
+Reinvestment in year t pays for year t + 1's revenue; year N pays for the terminal growth at the terminal return (5a.7), as the mature routes' year N does:
+
+    reinvestment_t = max(0, (revenue_{t+1} − revenue_t) ÷ sales-to-capital), for t = 1 … N − 1
+    reinvestment_N = NOPAT_N × g_T ÷ terminal return
+
+A year before a fall in revenue reinvests nothing, never a negative amount; year N has no floor.
+
+### 5a.6 Tax and NOPAT
+
+    EBIT_t = revenue_t × m_t
+
+The tax rate is the newest fiscal year's statutory rate (4.3), in every year. Tax is charged after the forecast's own losses, the carried loss starting at zero: a year whose EBIT is below zero pays no tax and adds its size to the carried loss; any other year pays
+
+    tax_t = max(0, EBIT_t − carried loss) × tax rate
+
+and reduces the carried loss by EBIT_t, not below zero.
+
+    NOPAT_t = EBIT_t − tax_t
+
+No history of tax losses is stored, so a forecast with a year whose EBIT is below zero is flagged `tax-loss-history-unknown`.
+
+### 5a.7 The free cash flow, the terminal and the firm value
+
+    FCFF_t = NOPAT_t − reinvestment_t, for t = 1 … N
+    terminal value = NOPAT_N × (1 + g_T) × (1 − g_T ÷ terminal return) ÷ (r − g_T)
+    firm value = Σ_{t=1..N} FCFF_t ÷ (1 + r)^t + terminal value ÷ (1 + r)^N
+
+The terminal multiple is 4.8's. A negative free cash flow is the method, not a refusal.
+
+The terminal return is 4.7's moat rule on the return on new capital at the target margin:
+
+    return on new capital = m* × (1 − tax rate) × sales-to-capital
+
+Narrow or None moat: r. Wide moat: that return, capped at 13% and never below r. The runway return of 4.6 does not enter this route's charge; the cross-check reads it (5a.11).
+
+### 5a.8 The required return
+
+r in every year and in the terminal. Under the band of every valued row on this route the drawer says so: "Discounted at the required return of <r> in every year; Damodaran's template starts higher and falls to it by year 10".
+
+### 5a.9 Equity and the value a share
+
+    equity = firm value − debt + cash
+    value a share = equity ÷ diluted shares
+
+From the newest annual balance sheet: debt is short-term plus long-term debt (`shortTermDebt`, `longTermDebt`), cash is cash and equivalents plus short-term investments (`cashAndCashEquivalents`, `shortTermInvestments`). No other line enters. A line without a value counts as nil, and assembly's note on the input names it ("longTermDebt not presented"); a figure with both its lines missing is unknown and counts as nil. Either case flags `line-not-presented:debt` or `line-not-presented:cash`, the sentence naming the missing lines.
+
+A value a share at or below zero refuses the row "value not positive under the reinvestment charge", which keeps its figures (5a.1). Otherwise the levels, the stance and the validity are 4.10's, with the moat's margin of safety.
+
+### 5a.10 What moves with the price
+
+- **The implied growth**: the held rate of years 4 to H at which the value a share equals the price, the fade recomputed from it; years 1 to 3, the margin path, the terminal return and the sales-to-capital stay. Solved as 5.7 solves: a scan from −50% to 200% in steps of 1% for the first sign change, then bisection to 1e-7; None when the scan finds no sign change.
+- **The margin the price needs**: the target margin at which the value a share equals the price, the margin path rebuilt from it and the terminal return re-read at each trial from the return on new capital there (5a.7). Solved the same way between the policy's bounds, −50% and 100% (`implied_margin_bounds`); None without a sales-to-capital or when the scan finds no sign change. It is computed on a valued row and on the two refusals that keep the rebuild keys, "no target margin" and "value not positive".
+- **The multiples and the growth share** of 5.9: trailing P/E reported and clean; the forward P/E on the anchor's NTM EPS (5.2) when the anchor stands, none when it refuses; a P/E only for a positive EPS; the growth share of price when EPV exists.
+- **The expected return** of 5.10, its growth term on the revenue path's own rates, ((1 + g_2)(1 + g_3)(1 + g_4))^(1/3) − 1.
+- **The cross-check's implied growth** (5a.11).
+
+The rebuild keys (5a.14), with the policy's r, g_T and margin convergence year (and, for the margin solve, its bounds and the wide-moat cap), rebuild the path, the margin path and the charge, so a price refresh moves each of these figures from the intermediates alone (section 10).
+
+### 5a.11 Sensitivities, the cross-check and the implied-return check
+
+- **By target margin**: the value a share at the lowest, the median and the highest margin of the counted peers, keys `low`, `median`, `high`, each with its own terminal return from the return on new capital at that margin. `median` is the row's value. The value-spread flag reads the three on 5.8's rule.
+- **The growth-route cross-check**: as on a Mature Stable row (6.4), `growth_route` carries the Mature Growth route's value a share under the row's own moat and returns, with the keys that rebuild it and its implied growth at the price, or only the reason that route would refuse. It sets nothing.
+- **The implied-return check**: the return on new capital at the target against the median ten-year aggregate ROIC of the peers of 5a.4 that have one. Above that median, the row is flagged `return-above-peers` with both figures. With no peer ROIC there is no check. It flags only.
+
+### 5a.12 Young Growth
+
+The same route: on the same inputs a Young Growth row has High Growth's value, levels and figures. Its intermediates add `failure_probability`, with no value and the reason "no survival table fits a listed company above $2 billion"; the value is the going-concern value, flagged `failure-not-charged`. The drawer shows the failure probability as unavailable with that reason, and says the value range is not computed in tier 1.
+
+### 5a.13 Flags
+
+In order: `sbc-basis-unknown`, when the cross-check has a value and its anchor's stock-compensation basis is unknown (5.2); the path's, `path-held` then `few-analysts`; the capital build's, the ROIC flags of 4.5 then the `line-not-presented:<field>` flags of the ROIC years (4.4); `line-not-presented:debt`, then `line-not-presented:cash`; `tax-loss-history-unknown`; `return-above-peers`; `failure-not-charged` on a Young Growth row; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`); `value-spread` over the three target margins. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
+
+Never raised here: `path-on-eps`, `charge-zeroed`, `return-floored`, `growth-above-return`, `long-runway-high-growth`, nor the cross-check's earnings-path flags. The charge does not read the runway return, and the path is on revenue.
+
+### 5a.14 Intermediates and tagged inputs
+
+Intermediates: `ntm_revenue`; `path` (base_year, the revenue analysts of the two landing years, which steps were held); `path_steps`, g_2 and g_3 as resolved; `growth_rates`, years 1 to N; `margin_path` (start, target, by_year); `target_margin` (value, count, low, high, largest_symbol, largest_margin, and the counted peers with each one's margin and market cap); `revenue_by_year`, `ebit_by_year`, `tax_by_year`, `nopat_by_year`, `reinvestment_by_year`, `fcff_by_year`; `terminal_roic`, `terminal_value`, `firm_value`, `equity`, `value_per_share`; `value_by_margin`; `return_on_new_capital`, `peer_roic_median`; `failure_probability` on Young Growth only; `eps`, `epv`, `dividend_yield`, `net_buyback_yield`, `income_basis`, `price_facts`, `growth_route`; the rebuild keys; and at the price `implied_growth`, `implied_margin`, `multiples`, `growth_share`, `expected_return` and the cross-check's `implied_growth`.
+
+The rebuild keys: `revenue_path` (revenue0, ntm_revenue, the consensus steps as found with None for a missing one, hold None, high_growth_years, fade_years), `margin_start`, `tax_rate`, `moat`, `debt`, `cash`, `shares` and `sales_to_capital` (used, own, own_usable, peers, value); on a valued row `margin_path`'s target and `terminal_roic` complete them. A refusal that keeps them keeps the moat class for the price refresh; the screen shows the moat on a valued row only.
+
+Tagged inputs. DATA: the fiscal years on file, price, diluted shares, next earnings date, daily closes; market cap, trailing revenue, operating income, EPS, dividends, buybacks and stock issued; the aggregate ROIC and the runway return, as in 5.12, though neither enters this route's charge; the newest tax rate; the moat score; GuruFocus EPS and EPS without non-recurring items; `ntm_revenue`, from the quarterly consensus; `path_step_2` and `path_step_3`, the annual consensus steps as found, a held one empty with the note "no consensus step: the year holds the rate of the year before"; `target_margin`, source "FMP stock-peers and the peers' statements", note "the median ten-year operating margin of <n> mature peers"; `sales_to_capital`, either the own measure cited to the statements (an estimate under the intangibles method when invested capital took the as-reported total, 4.4) with the note "the company's own five-year marginal measure", or the peers' median cited to the peers' source with the note "the mature peers' median; the own measure is not usable"; `debt` and `cash`, cited to the statements, with assembly's note naming a missing line. RULE: r, g_T, the moat class, the margin of safety, the terminal return, `high_growth_years`, `fade_years`, `margin_convergence_year`, `peer_min`.
+
+### 5a.15 Worked numbers
+
+The tests pin these, to 0.01 unless a tolerance is named. r 9%, g_T 3%, tax 21%, None moat (terminal return 9%); trailing revenue 1,000, NTM revenue 1,300, consensus steps 25% and 20%; trailing margin −10%, target margin 20%; sales-to-capital 2.0; debt 100, cash 300, 100 shares.
+
+- Growth, years 1 to 10: 30%, 25%, 20%, 20%, 20%, 16.6%, 13.2%, 9.8%, 6.4%, 3%.
+- Revenue: 1,300.00; 1,625.00; 1,950.00; 2,340.00; 2,808.00; 3,274.13; 3,706.31; 4,069.53; 4,329.98; 4,459.88.
+- Margins: −7%, −4%, −1%, 2%, 5%, 8%, 11%, 14%, 17%, 20%.
+- Tax on EBIT of −91.00; −65.00; −19.50; 46.80; 140.40; 261.93; 407.69; 569.73; 736.10; 891.98: 0; 0; 0; 0; 2.46; 55.01; 85.62; 119.64; 154.58; 187.32. NOPAT is −91.00 in year 1 and 137.94 in year 5.
+- Reinvestment: 162.50; 162.50; 195.00; 234.00; 233.06; 216.09; 181.61; 130.23; 64.95; 234.89, year 10 at the terminal return.
+- Free cash flow −253.50 in year 1 and 469.77 in year 10; terminal value 8,064.46; firm value 3,290.57; equity 3,490.57; value a share 34.91.
+- Value a share at target margins of 10% and 30%: 10.09 and 59.64; at a sales-to-capital of 3.0: 38.50; at a terminal return of 13%: 40.45.
+- Return on new capital at the target: 0.20 × 0.79 × 2.0 = 0.316.
+- At a price of 25.00, within 1e-5: implied growth 0.086275, margin the price needs 0.160014. At a price of 34.9057 both solves return 0.20 within 1e-4. With a Wide moat at 40.45 the margin solve returns 0.20 within 1e-3, the terminal at the 13% cap; at a 5% target the return on new capital is 7.9%, below r, so the terminal is r, and the solve at that target's value returns 0.05 within 1e-5.
+- Own sales-to-capital, kept years with revenue and average capital from (1,000, 400) to (2,500, 900) five positions later: 1,500 ÷ 500 = 3.0, usable. Capital from 400 to 420 instead: 75.0, not usable, capital grew 5%. Falling revenue: not usable. Five kept years, or a year without revenue: none.
+- Peers with margins of 10% on 10 years, 30% on 8, 20% on 6 and 40% on 3: target 20% on 3 peers, low 10%, high 30%, the largest by market cap the 30% peer; two peers give none. Peers' sales-to-capital 2.5, 1.5 and 3.0: median 2.5; two give none. Peers' ROIC 12%, 20% and 15%: median 15%.
+
+The route's tests pin the refusal order, the flag order, the `path-held` and `few-analysts` sentences, Young Growth's equality with High Growth, and a price refresh that rebuilds every price-side figure from the intermediates.
+
 ## 6. The Mature Stable route
 
 The stable-growth value on normalized trailing earnings, charged as the Mature Growth route charges.
@@ -411,23 +593,28 @@ A flag warns and never changes a value, a level or a stance. Each has a code, a 
 | `tax-carried-forward` | a fiscal year after the tax table's newest year took that year's rate |
 | `leases-not-on-balance-sheet` | a balance sheet before 15 December 2019 shows no lease assets |
 | `trailing-on-fiscal-year` | the quarters on file are not four consecutive quarters |
-| `sbc-basis-unknown` | the stock-compensation basis test lacked an input |
+| `sbc-basis-unknown` | the stock-compensation basis test lacked an input; on the revenue-growth route, only when the cross-check has a value |
 | `path-on-eps` | years 2 and 3 grow at the consensus EPS steps |
-| `few-analysts` | a path year with fewer than 5 analysts or no count |
+| `few-analysts` | a present path step lands on a year with fewer than 5 analysts or no count: the EPS count on the earnings path (5.3), the revenue count on the revenue path (5a.2) |
+| `path-held` | a consensus revenue step is missing, so its year holds the rate of the year before; names the fiscal years that left it missing and the rates held (5a.2) |
 | `roic-unavailable` | fewer than 5 ROIC years |
 | `roic-on-n-years` | 5 to 9 ROIC years |
 | `ten-year-roic-unavailable` | the ten-year capital sum is at or below zero |
-| `line-not-presented:<field>` | an optional balance-sheet line counted as nil in a ROIC year |
+| `line-not-presented:<field>` | an optional balance-sheet line counted as nil in a ROIC year (4.4) |
+| `line-not-presented:debt`, `line-not-presented:cash` | the bridge to equity counted a debt or cash line as nil: the figure is unknown, or assembly's note names a line the newest annual balance sheet does not present (5a.9) |
 | `charge-zeroed` | the runway charge is off, 4.6 rule 4 |
 | `return-floored` | the chosen return measure was below r |
 | `growth-above-return` | a year's next growth exceeds its return; its payout is floored at zero |
+| `tax-loss-history-unknown` | the revenue-growth forecast has a year whose EBIT is below zero; the tax carry starts at zero (5a.6) |
+| `return-above-peers` | the return on new capital at the target margin is above the mature peers' median ten-year ROIC (5a.11) |
+| `failure-not-charged` | a Young Growth row: the failure probability is unavailable and the value is the going-concern value (5a.12) |
 | `margin-flag` | the trailing operating margin is 1.5 × its ten-year median or more (a positive median), or above its ten-year high by 10% of the high's size or more; needs 6 fiscal years with a margin. The word is "Newly profitable" when the median is at or below zero, "Possible cycle peak" when the window holds a loss year, else "Margin above history" |
 | `equity-raise` | trailing stock issued is 1% of market cap or more |
 | `negative-fcf` | trailing operating cash flow plus capital spending is below zero |
 | `heavy-capex` | trailing capital spending is above 50% of a positive operating cash flow |
 | `large-nri` | the non-recurring gap is 5% of trailing EPS or more, in either direction |
 | `long-runway-high-growth` | a 20-year runway with a belief or an implied growth of 10% or more |
-| `value-spread` | the value spans 30% or more across the first three return keys or across the three runways |
+| `value-spread` | the value spans 30% or more across the first three return keys or across the three runways; on the revenue-growth route, across the three target margins (5a.11) |
 
 The three lease and line flags sit on nearly every valued row today; their redesign is a known item.
 
@@ -442,10 +629,15 @@ The three lease and line flags sit on nearly every valued row today; their redes
 | fewer than two fiscal years; no revenue for the last fiscal year; negative revenue; no measurable revenue growth; no operating margin | 3.8 |
 | Start-up: no value by design …; <phase> route not built yet | 7 |
 | no price; no diluted share count; no trailing figures | 5.1 |
-| no trailing revenue; no statutory tax rate | 5.1 |
-| incomplete NTM consensus; no positive forward anchor; forward P/E below 2: unit error | 5.2 |
+| no trailing revenue; no statutory tax rate | 5.1, 5a.1 |
+| no trailing operating income | 5a.1 |
+| incomplete NTM consensus | 5.2, 5a.2 |
+| no positive forward anchor; forward P/E below 2: unit error | 5.2 |
+| no positive consensus revenue; consensus revenue falls to zero or below within the path | 5a.2 |
+| no target margin: <n> mature peers | 5a.4 |
+| no sales-to-capital | 5a.5 |
 | consensus earnings turn negative within the path | 5.3 |
-| value not positive under the reinvestment charge | 5.6 |
+| value not positive under the reinvestment charge | 5.6, 5a.9 |
 | no positive trailing earnings | 6.1 |
 | data fetch failed: <the failed required endpoints> | the refresh, when an annual statement or the quote fails (section 2) |
 | data fetch failed: <error class>: <message>; data fetch incomplete: rate limited; valuation failed: <error class>: <message> | the refresh, when a company's fetch raises, is cut by an HTTP 429, or its valuation raises |
@@ -453,7 +645,7 @@ The three lease and line flags sit on nearly every valued row today; their redes
 ## 10. Refresh kinds and what moves
 
 - **Full refresh**: the universe, the data of section 2 for every admitted company, the deciles, then every company classified and valued, one snapshot per company. A company fetched within 24 hours is not fetched again.
-- **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the stance, the implied growth and its sensitivities, the margin the price needs (revenue-growth rows), the growth-route cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price and date, except a growth-route row refused for its target margin, whose margin the price needs is recomputed (as is that of a growth-route row refused for a value not positive, which keeps the same figures). The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
+- **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the stance, the implied growth and its sensitivities, the margin the price needs (revenue-growth rows), the growth-route cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price, its date and the price input, except a revenue-growth refusal whose intermediates carry `revenue_path`: the two refused for their target margin ("no target margin: <n> mature peers") or for a value not positive ("value not positive under the reinvestment charge"). Such a row also recomputes its margin the price needs from its rebuild keys (5a.10); its other figures stay. The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
 - **Revalue**: the engine on the stored facts of every company, with the latest stored deciles, no vendor call and no freshness window. New snapshots under the current method and policy versions.
 
 Snapshots are appended, never changed. The screen reads the latest snapshot per company.
@@ -465,7 +657,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.1 | 2026-10-31 | The mechanical screen as first built: the charge at the ten-year aggregate ROIC in the runway years, the terminal from the aggregate, a one-step drop from year 3 to the belief, no payout floor; Mature Stable on the one-stage formula at the terminal return. Policy v1. |
 | 0.2 | 2026-11-01 | The calibration: the runway return (4.6), the payout floor (4.8), the fade (5.5), the terminal from the runway return (4.7), the four return keys (5.8), the growth-route cross-check (6.4), the revalue kind. Policy v2 adds four values (the marginal span, the capital-growth test, the fallback window, the fade years) and the recorded decision to keep return on invested capital over return on equity. |
 | 0.3 | 2026-11-02 | Mature Stable charges as Mature Growth does (6.3): the runway return through the runway, the terminal return after. Policy unchanged. |
-| 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a); the name patterns on the universe. Policy v3 adds five values. |
+| 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a), with the `stock-peers` call (section 2); the name patterns on the universe (section 1). Policy v3 adds five values (4.1). |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
@@ -488,6 +680,13 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | The NTM anchor, the SBC basis test, the margin flag, the gate tests, the moat table | stocks mech/1.2 |
 | The levels, the stance, the expected return, EPV, the P/E bases | stocks method v1.7 Steps 3, 7, 9, 10 |
 | Mature Stable: the stable-growth value with the charge; a stable firm must behave like one | Damodaran H38; design.md 6.11; calibration spec 5.10 |
+| The revenue-growth route: a revenue DCF on margins and sales-to-capital, five high-growth years and five fading to g_T; high growth no longer than ten years, its length a judgment tier 1 fixes | Damodaran's template H2; H1; H3; G1, G44; design.md 6.10 |
+| The free cash flow as NOPAT less reinvestment | Damodaran H9 |
+| The margin moving to a target margin; the target as the mature peers' median ten-year margin, on five years at least | Damodaran H13, H64; design.md 6.7 |
+| Sales-to-capital: the company's own marginal measure, else the mature peers' | Damodaran H13, H14; D3c |
+| Reinvestment a year ahead of the revenue it buys, never negative | Damodaran H16, H17 |
+| The return on new capital against the peers' ROIC | Damodaran H15 |
+| Young Growth: the failure probability unavailable, with its reason | D3d; design.md 6.9 |
 | The validity window | design.md 8 |
 
 ## 13. Glossary
@@ -507,3 +706,9 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Growth word, margin direction | The classifier's reading of the deciles for revenue growth and for the margin trend |
 | Check | A classifier warning that never changes the phase |
 | Snapshot | One company's result under one refresh, with the versions that produced it |
+| Mature peers | The company's FMP `stock-peers` that the latest universe lists and the classifier puts in Mature Growth or Mature Stable |
+| Target margin | The operating margin the revenue-growth route moves to by year 10: the median ten-year margin of the mature peers |
+| Sales-to-capital | The revenue a dollar of invested capital buys: the company's change in revenue ÷ its change in capital, or a peer's revenue ÷ its capital. The revenue-growth route reinvests the next year's revenue increase ÷ sales-to-capital |
+| Margin the price needs | The target margin at which the revenue-growth value a share equals the price |
+| Return on new capital at the target | Target margin × (1 − tax rate) × sales-to-capital: the after-tax return on new capital once the margin reaches the target. It sets the terminal return by the moat's rule and is checked against the peers' ROIC |
+| Held rate | The growth the revenue path holds in years 4 and 5 before its fade: g_3 as resolved, or, for the implied growth, the rate at which the value equals the price. A held step is a missing consensus step that takes the rate of the year before |
