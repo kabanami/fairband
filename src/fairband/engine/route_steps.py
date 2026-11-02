@@ -7,10 +7,10 @@ returns ``Valued`` or ``Refused`` and ``route`` builds the result from it.
 ``RoicTerms`` carries the returns of the charge to both routes (calibration spec 5.1 and 5.3): the
 runway return for the runway years, and the terminal return read from it. The ten-year aggregate
 ROIC is shown, and when positive it feeds the sensitivity; it never enters the charge. When the
-marginal return is not usable and the fallback years' capital sums to zero or below, Mature
-Growth's runway charge is off; the terminal still charges. The income term of the expected return
-is the trailing flows over the market cap: FMP signs dividends and buybacks as outflows
-(negative) and stock issued as an inflow, and a missing flow counts as nil.
+marginal return is not usable and the fallback years' capital sums to zero or below, the
+runway charge is off, on either route; the terminal still charges. The income term of the
+expected return is the trailing flows over the market cap: FMP signs dividends and buybacks as
+outflows (negative) and stock issued as an inflow, and a missing flow counts as nil.
 """
 
 from __future__ import annotations
@@ -126,16 +126,16 @@ class RoicTerms:
         }
 
     def charge(self, policy: Policy) -> Charge:
-        """The reinvestment charge both routes apply: the runway return in years 1 to N−1 and
-        the terminal return in year N and the terminal, off in the runway years when the
-        marginal return is not usable and the three-year capital sum is at or below zero."""
-        return Charge(
-            self.runway,
-            self.terminal,
-            policy.required_return,
-            policy.terminal_growth,
-            self.charge_off,
-        )
+        """This row's charge, as both routes apply it: its runway and terminal returns, off in
+        the runway years when the marginal return is not usable and the three-year capital sum
+        is at or below zero."""
+        return charge_for(self.runway, self.terminal, self.charge_off, policy)
+
+
+def charge_for(runway_roic: float, terminal: float, charge_off: bool, policy: Policy) -> Charge:
+    """The reinvestment charge at these returns: ``runway_roic`` in years 1 to N−1, ``terminal``
+    in year N and the terminal, and none in years 1 to N−1 when ``charge_off``."""
+    return Charge(runway_roic, terminal, policy.required_return, policy.terminal_growth, charge_off)
 
 
 def nri_gap(i: CompanyInputs) -> float | None:

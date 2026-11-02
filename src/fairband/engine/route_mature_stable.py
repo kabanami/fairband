@@ -7,9 +7,10 @@ stable-growth value: the reverse DCF of ``mature_growth`` on a path that grows a
 growth in every year, with the reinvestment charge of ``RoicTerms.charge``: the runway return in
 years 1 to N−1 of the moat's runway, the terminal return in year N and the terminal, and off in
 the runway years when the growth route's would be. A row whose runway return is the terminal
-return (a floored one, in particular) values at the one-stage perpetuity, which is EPV for a
-Narrow or no moat; a row whose runway return is above it is worth more, and more for a longer
-runway. EPV is shown as the no-growth value. ``epv`` and ``stable_growth`` are a share;
+return, with the charge on, values at the one-stage perpetuity; a floored row, charged at r in
+every year, values at EPV under any moat; a row whose runway return is above the terminal return
+is worth more, and more for a longer runway; a charge-off row is worth more still, its runway
+years uncharged. EPV is shown as the no-growth value. ``epv`` and ``stable_growth`` are a share;
 ``epv_total`` and ``stable_growth_total`` are the totals. The ROIC flags are the growth route's.
 
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec

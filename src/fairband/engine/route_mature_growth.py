@@ -56,6 +56,7 @@ from fairband.engine.route_steps import (
     Refused,
     RoicTerms,
     Valued,
+    charge_for,
     common_inputs,
     common_rules,
     data,
@@ -265,12 +266,8 @@ def _rebuilt(im: dict[str, Any], policy: Policy) -> tuple[GrowthPath, Charge]:
     g2, g3 = im["path_steps"]
     belief = im["belief"]["rate"]
     growth = GrowthPath(im["ntm_net_income"], (g2, g3), belief, im["runway"], im["fade_years"])
-    charge = _charge(im["runway_return"]["value"], im["terminal_roic"], im["charge_off"], policy)
+    charge = charge_for(im["runway_return"]["value"], im["terminal_roic"], im["charge_off"], policy)
     return growth, charge
-
-
-def _charge(runway_roic: float, terminal: float, charge_off: bool, policy: Policy) -> Charge:
-    return Charge(runway_roic, terminal, policy.required_return, policy.terminal_growth, charge_off)
 
 
 def _roic_charges(
@@ -282,7 +279,7 @@ def _roic_charges(
     charge in every runway year."""
 
     def at(x: float) -> Charge:
-        return _charge(x, terminal_roic(x, moat, policy), False, policy)
+        return charge_for(x, terminal_roic(x, moat, policy), False, policy)
 
     return {
         "runway": own,

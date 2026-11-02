@@ -1,4 +1,5 @@
 import pytest
+from support.stable_value import stable_dcf
 
 from fairband.engine.mature_growth import Charge
 from fairband.engine.mature_stable import mature_stable_values, normalize_for_margin
@@ -6,25 +7,6 @@ from fairband.engine.mature_stable import mature_stable_values, normalize_for_ma
 
 def _charge(runway_roic: float, terminal_roic: float, off: bool = False) -> Charge:
     return Charge(runway_roic, terminal_roic, 0.09, 0.03, off)
-
-
-def _by_hand(
-    e: float, runway_roic: float, terminal_roic: float, n: int, off: bool = False
-) -> float:
-    """The stable-growth value summed by hand: earnings grow 3% a year from ``e`` in year 1; each
-    year pays out 1 − 3% ÷ the return it is charged at, the runway return to year n − 1 (all of
-    the earnings when the charge is off) and the terminal return in year n; the terminal is year
-    n's earnings × 1.03 × (1 − 3% ÷ terminal return) ÷ 6%; everything discounted at 9%."""
-    value = 0.0
-    for t in range(1, n + 1):
-        ni = e * 1.03 ** (t - 1)
-        if t < n:
-            paid = ni if off else ni * (1 - 0.03 / runway_roic)
-        else:
-            paid = ni * (1 - 0.03 / terminal_roic)
-        value += paid / 1.09**t
-    final = e * 1.03 ** (n - 1)
-    return value + final * 1.03 * (1 - 0.03 / terminal_roic) / 0.06 / 1.09**n
 
 
 def test_equal_to_epv_when_every_return_is_r() -> None:
@@ -43,7 +25,7 @@ def test_own_return_through_the_runway_then_the_terminal() -> None:
     # charged at 44% for 19 years and at 13% in year 20 and the terminal: between the one-stage
     # values at 13% ($115.38) and at 44% ($139.77)
     _, sg = mature_stable_values(9.0, _charge(0.44, 0.13), 20)
-    assert sg == pytest.approx(_by_hand(9.0, 0.44, 0.13, 20))
+    assert sg == pytest.approx(stable_dcf(9.0, 0.44, 0.13, 20))
     assert sg == pytest.approx(131.455, abs=1e-3)
     assert 9.0 * (1 - 0.03 / 0.13) / 0.06 < sg < 9.0 * (1 - 0.03 / 0.44) / 0.06
 
@@ -55,7 +37,7 @@ def test_a_longer_runway_at_a_return_above_the_terminal_is_worth_more() -> None:
 
 def test_charge_off_pays_all_earnings_before_the_terminal() -> None:
     _, sg = mature_stable_values(9.0, _charge(0.09, 0.09, off=True), 5)
-    assert sg == pytest.approx(_by_hand(9.0, 0.09, 0.09, 5, off=True))
+    assert sg == pytest.approx(stable_dcf(9.0, 0.09, 0.09, 5, off=True))
     assert sg == pytest.approx(110.133, abs=1e-3)  # above EPV: four years pay out in full
 
 

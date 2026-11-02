@@ -51,7 +51,8 @@ three.
   ``expected_return``.
 - Mature Stable: ``e_trailing``, ``nri_gap``, ``ttm_margin``, ``median_margin``,
   ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``runway_return``, ``terminal_roic``,
-  ``epv`` and ``stable_growth`` (a share), ``epv_total`` and ``stable_growth_total``, ``shares``,
+  ``runway``, ``epv`` and ``stable_growth`` (a share), ``epv_total`` and ``stable_growth_total``,
+  ``shares``,
   ``value_per_share``, ``eps``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``,
   ``price_facts``, ``growth_route`` (the growth route's cross-check: value_per_share,
   ntm_net_income, path_steps, belief, runway, fade_years, runway_return, terminal_roic,

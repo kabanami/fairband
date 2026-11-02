@@ -256,8 +256,8 @@ def test_price_refresh_policy_version_mismatch_fails_symbol(env_valued: Env) -> 
 
 
 def test_price_refresh_method_version_mismatch_fails_symbol(env_valued: Env) -> None:
-    """AXLE's latest snapshot was valued under method 0.1: the rebuild at the price reads
-    intermediates only method 0.2 stores, so AXLE takes a revalue, not a reprice. It keeps its
+    """AXLE's latest snapshot was valued under method 0.1: its value is that method's, and a
+    rebuild at the price would carry it, so AXLE takes a revalue, not a reprice. It keeps its
     snapshot, and the run goes on."""
     env = env_valued
     with closing(env.connect()) as conn:

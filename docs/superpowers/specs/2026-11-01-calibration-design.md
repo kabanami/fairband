@@ -252,8 +252,10 @@ is at the runway return in years 1 to N−1 of the moat's runway (`runway_years`
 the terminal return in year N and in the terminal value, and off in the runway years when rule 4
 of 5.1 turns it off. The value is `value_at_belief` on that path. The one-stage formula of the
 mechanical screen spec, E × (1 − g_T ÷ terminal ROIC) ÷ (r − g_T), is the case where the runway
-return equals the terminal return: a floored row still values at EPV under a Narrow or no moat.
-The route raises the ROIC flags the growth route raises ("return floored", "charge zeroed"); its
+return equals the terminal return and the charge is on: a floored row, charged at r in every
+year, values at EPV under any moat; a charge-off row is worth more than the formula gives, its
+runway years uncharged. The route raises the ROIC flags the growth route raises ("return
+floored", "charge zeroed"); its
 own "ROIC unavailable" flag goes. The intermediates gain `runway` and the inputs the RULE
 `runway_years`. The cross-check of 5.7 is unchanged.
 
@@ -266,8 +268,12 @@ same company differently, so the phase boundary was a cliff: a company crossing 
 to "Low" growth lost the runway charge at once.
 
 Effect on refresh 3's stored rows (recomputed from the snapshots on 2026-11-02): 181 of the 336
-valued Mature Stable rows move, all up, by a median 9.4% and at most 20%; the 132 floored and 12
-unavailable rows do not. The Mature Stable median value ÷ price goes from 0.557 to 0.584 and the
+valued Mature Stable rows move, all up, by a median 9.4% and at most 20%; the 132 floored rows,
+the 12 with no usable return and 11 Wide rows whose runway return is the cap do not. The 4
+charge-off rows (ALLY, BFH, PFG, ZM, all Narrow) move the most, +20%: their runway years are no
+longer charged; three of them are financials, whose operating-capital reading means little, and
+the universe filter is the next piece. The Mature Stable median value ÷ price goes from 0.557 to
+0.584 and the
 share at or above the price from 16.1% to 18.5%; over all 1,052 valued rows, from 0.721 to 0.738
 and from 28.4% to 29.2%. Thirty-four rows move one stance up. QCOM: $111.43 to $127.01 (buy
 $95.25), still "HOLD — above fair band" at $164.79. AAPL: $112.33 to $134.51, still TRIM.

@@ -22,9 +22,9 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   intermediates and the long-runway flag follow the price. A refusal takes the new price, its
   date and the price input only. A snapshot valued under another policy version is ``failed``,
   "policy changed: run a full refresh": its levels come from that policy. One valued under
-  another method version is ``failed``, "method changed: run a revalue": the rebuild at the price
-  reads intermediates only this method stores. An exception (``reprice`` refuses a price that is
-  not positive and finite) is ``failed``, "reprice failed: <class>: <message>".
+  another method version is ``failed``, "method changed: run a revalue": its value is the old
+  method's, and a rebuild at the price would carry it. An exception (``reprice`` refuses a price
+  that is not positive and finite) is ``failed``, "reprice failed: <class>: <message>".
 - ``done``: the totals, and the calibration ``{"total", "repriced", "failed", "skipped"}`` saved
   with the record.
 
