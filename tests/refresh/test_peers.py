@@ -106,6 +106,20 @@ def test_no_peers_without_deciles_or_payload(
     assert peer_figures(conn_with_peers, "NOPE", DECILES, policy, tax, TODAY) == ()
 
 
+def test_a_peer_outside_the_latest_universe_is_dropped(
+    conn_with_peers: sqlite3.Connection, policy: Policy, tax: TaxTable
+) -> None:
+    """A newer universe leaves BOLT out (its cap fell below the floor, say): its newest row is
+    still the older universe's eligible one, but it is no peer until a universe lists it again."""
+    conn = conn_with_peers
+    add_company(conn, symbols=("ACME", "NEWT"))
+    stale = latest_company(conn, "BOLT")
+    assert stale is not None and stale.eligible
+    assert peer_figures(conn, "ACME", DECILES, policy, tax, TODAY) == ()
+    add_company(conn, symbols=("ACME", "BOLT", "NEWT"))
+    assert [p.symbol for p in peer_figures(conn, "ACME", DECILES, policy, tax, TODAY)] == ["BOLT"]
+
+
 @pytest.mark.parametrize(
     ("gap", "years"),
     [(None, list(range(2016, 2026))), (2020, [y for y in range(2015, 2026) if y != 2020])],

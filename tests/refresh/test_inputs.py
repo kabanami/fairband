@@ -455,9 +455,9 @@ def test_inputs_carry_peers_debt_cash_and_the_revenue_analysts(
 ) -> None:
     """Debt and cash from ACME's newest balance sheet. BOLT, fetched and listed, is ACME's mature
     peer once there are deciles."""
-    conn = store(**bodies())
+    conn = store(company=False, **bodies())
     fetch_company(conn, clients.fmp, clients.gf, "BOLT", policy, clock(), clients.secrets)
-    add_company(conn, symbols=("BOLT",))
+    add_company(conn, symbols=("ACME", "BOLT"))  # one universe
     tax = load_tax_table()
     i = build_inputs(conn, "ACME", policy, tax, TODAY, DECILES)
     newest = balance_annual(YEARS)[-1]

@@ -1,12 +1,15 @@
 """Assembly: a company's mature peers and the three figures the revenue-growth route reads of each.
 
 The peers are the symbols of the latest usable ``stock-peers`` payload stored for the company, in
-its order, the company itself and repeats dropped (``peer_symbols``). A peer is kept when the latest
-universe that lists it admitted it (its newest universe row is ``eligible``) and the classifier puts
-its stored fiscal years in Mature Growth or Mature Stable on the given deciles (growth routes spec
-5.5: classified on the spot, so the order of companies within a refresh does not matter). A peer
-outside the universe, not admitted, without statements, unclassified or in another phase is
-dropped. Without deciles, a stored payload or a peer, the company has none.
+its order, the company itself and repeats dropped (``peer_symbols``). As growth routes spec 5.5
+words it, the peers kept are those in the latest universe that the classifier puts in Mature Growth
+or Mature Stable: a peer counts when the latest universe lists it, the admitted companies of the
+newest refresh that admitted any (``latest_companies``, read once per call), and its stored fiscal
+years classify as one of the two on the given deciles (on the spot, so the order of companies
+within a refresh does not matter). A peer the latest universe does not list (never listed, not
+admitted, or admitted only by an older universe, its newest row eligible but stale), without
+statements, unclassified or in another phase is dropped. Without deciles, a stored payload or a
+peer, the company has none.
 
 Each kept peer's figures come from its stored statements:
 
@@ -18,7 +21,7 @@ Each kept peer's figures come from its stored statements:
   with a capital at or below zero;
 - its ROIC: the ten-year aggregate (method.md 4.5), ``None`` when unavailable;
 
-and its market cap is its universe row's. Invested capital and NOPAT are the company's own rules
+and its market cap is its latest universe row's. Invested capital and NOPAT are the company's own rules
 (``statements_for``), taxed at the peer's country, found as the company's is (``country_for``).
 """
 
@@ -38,7 +41,7 @@ from fairband.refresh.inputs_statements import (
     statements_for,
     stored_payload,
 )
-from fairband.store.companies import CompanyRow, latest_company
+from fairband.store.companies import CompanyRow, latest_companies
 from fairband.vendors.normalize_fmp import peer_symbols
 
 _MATURE: frozenset[Phase | None] = frozenset({"Mature Growth", "Mature Stable"})
@@ -57,10 +60,12 @@ def peer_figures(
     reads the policy yet."""
     if deciles is None:
         return ()
+    peers = peer_symbols(stored_payload(conn, "peers", symbol), symbol)
+    universe = {company.symbol: company for company in latest_companies(conn)} if peers else {}
     kept = []
-    for peer in peer_symbols(stored_payload(conn, "peers", symbol), symbol):
-        company = latest_company(conn, peer)
-        if company is None or not company.eligible:
+    for peer in peers:
+        company = universe.get(peer)
+        if company is None:
             continue
         series = series_for(conn, peer)
         if classify(series, deciles).phase in _MATURE:
