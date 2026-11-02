@@ -339,6 +339,25 @@ def test_deciles_leave_out_symbols_without_statements(env_fixture_universe: Env)
         assert deciles_for_universe(conn, ["NONE"], 99) == Deciles((), (), 0, 0, 99)
 
 
+def test_a_growth_company_is_valued_on_its_mature_peers(env_fixture_universe: Env) -> None:
+    """The value stage hands the refresh's deciles to assembly, which classifies the peers on
+    them: NEWT's peers name the fixture universe's three mature companies (and NEWT itself, which
+    is dropped), so its revenue route has a target margin on three peers and a value. Without the
+    deciles NEWT would have no peers and be refused for its target margin."""
+    env = env_fixture_universe
+    peers = [{"symbol": symbol} for symbol in ("ACME", "NEWT", "AXLE", "MILD")]
+    env.router.symbol_bodies[("peers", "NEWT")] = json.dumps(peers).encode()
+    refresh_id = env.refresh().run("full")
+    assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
+    newt = env.snapshot("NEWT")
+    assert (newt.phase, newt.route, newt.refusal) == ("Young Growth", "revenue-growth", None)
+    assert newt.deciles_refresh_id == refresh_id
+    assert newt.value is not None and newt.value > 0
+    target = newt.result.intermediates["target_margin"]
+    assert target["count"] == 3
+    assert [p["symbol"] for p in target["peers"]] == ["ACME", "AXLE", "MILD"]
+
+
 def test_an_empty_quarterly_consensus_is_not_a_fetch_failure(env_fixture_universe: Env) -> None:
     """FMP answers ``[]`` for a company without quarterly coverage. AXLE reports in euros (a
     foreign filer, which reports twice a year) and gets the foreign-filer refusal with its phase;
