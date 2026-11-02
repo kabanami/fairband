@@ -299,10 +299,10 @@ matched ignoring case: `\bnotes?\b`, `\bdue 20\d\d\b`, `\d(\.\d+)?% `, `\bprefer
 2028", is the known case. Warrants, units and rights carry symbol suffixes the symbol rule already
 catches, and "depositary" is left out because an ADR's name can carry "American Depositary
 Shares" and ADRs belong in the universe (*my call*, amended while planning). The review of the
-first run found admitted listings the patterns missed, so `\bdebentures?\b` and `\bunits\b` (the
-plural only, so "Unit Corporation" passes) join them and the percent pattern becomes
-`\d(\.\d+)? ?%(\s|$)`, for "5.25 % Debentures" and a rate that ends the name (amended 2026-11-03
-during the build).
+first run found admitted listings the patterns missed, so `\bdebentures?\b` joins them and the
+percent pattern becomes `\d(\.\d+)? ?%(\s|$)`, for "5.25 % Debentures" and a rate that ends the
+name; units stay out of the name rule, because operating partnerships carry names ending in
+"Common Units" or "Limited Partnership Units" (amended 2026-11-03 during the build).
 
 ## 6. The four screen fixes
 
