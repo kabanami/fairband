@@ -449,9 +449,9 @@ The row records the measure used ("own" or "peers", none when neither stands), t
 Reinvestment in year t pays for year t + 1's revenue; year N pays for the terminal growth at the terminal return (5a.7), as the mature routes' year N does:
 
     reinvestment_t = max(0, (revenue_{t+1} − revenue_t) ÷ sales-to-capital), for t = 1 … N − 1
-    reinvestment_N = NOPAT_N × g_T ÷ terminal return
+    reinvestment_N = terminal NOPAT × g_T ÷ terminal return
 
-A year before a fall in revenue reinvests nothing, never a negative amount; year N has no floor.
+A year before a fall in revenue reinvests nothing, never a negative amount; year N has no floor. The terminal NOPAT is year N's at the full tax rate (5a.7).
 
 ### 5a.6 Tax and NOPAT
 
@@ -465,15 +465,16 @@ and reduces the carried loss by EBIT_t, not below zero.
 
     NOPAT_t = EBIT_t − tax_t
 
-No history of tax losses is stored, so a forecast with a year whose EBIT is below zero is flagged `tax-loss-history-unknown`.
+No history of tax losses is stored, so a forecast with a year whose EBIT is below zero, or a trailing margin m_0 below zero (a trailing loss implies losses the store does not hold), is flagged `tax-loss-history-unknown`.
 
 ### 5a.7 The free cash flow, the terminal and the firm value
 
     FCFF_t = NOPAT_t − reinvestment_t, for t = 1 … N
-    terminal value = NOPAT_N × (1 + g_T) × (1 − g_T ÷ terminal return) ÷ (r − g_T)
+    terminal NOPAT = EBIT_N × (1 − tax rate) when EBIT_N > 0, else EBIT_N
+    terminal value = terminal NOPAT × (1 + g_T) × (1 − g_T ÷ terminal return) ÷ (r − g_T)
     firm value = Σ_{t=1..N} FCFF_t ÷ (1 + r)^t + terminal value ÷ (1 + r)^N
 
-The terminal multiple is 4.8's. A negative free cash flow is the method, not a refusal.
+The terminal multiple is 4.8's. A negative free cash flow is the method, not a refusal. The terminal value and reinvestment_N read year N's operating income at the full statutory rate, untaxed when it is not positive: a carried loss that outlasts year N − 1 shields year N's own NOPAT, and so FCFF_N, but never the perpetuity. When the carry ends before year N, as in the worked numbers, the terminal NOPAT is NOPAT_N.
 
 The terminal return is 4.7's moat rule on the return on new capital at the target margin:
 
@@ -506,7 +507,7 @@ The rebuild keys (5a.14), with the policy's r, g_T and margin convergence year (
 
 ### 5a.11 Sensitivities, the cross-check and the implied-return check
 
-- **By target margin**: the value a share at the lowest, the median and the highest margin of the counted peers, keys `low`, `median`, `high`, each with its own terminal return from the return on new capital at that margin. `median` is the row's value. The value-spread flag reads the three on 5.8's rule.
+- **By target margin**: the value a share at the lowest, the median and the highest margin of the counted peers, keys `low`, `median`, `high`, each with its own terminal return from the return on new capital at that margin. `median` is the row's value. The value-spread flag reads the three on 5.8's rule, with one addition: when the value at the lowest margin is at or below zero and the median's is positive, where 5.8's rule is silent, the flag fires with "The value is at or below zero at the lowest mature-peer margin of <x.x%> and <y.yy> a share at the median, so the spread across the peers' margins is unbounded."
 - **The growth-route cross-check**: as on a Mature Stable row (6.4), `growth_route` carries the Mature Growth route's value a share under the row's own moat and returns, with the keys that rebuild it and its implied growth at the price, or only the reason that route would refuse. It sets nothing.
 - **The implied-return check**: the return on new capital at the target against the median ten-year aggregate ROIC of the peers of 5a.4 that have one. Above that median, the row is flagged `return-above-peers` with both figures. With no peer ROIC there is no check. It flags only.
 
@@ -516,13 +517,13 @@ The same route: on the same inputs a Young Growth row has High Growth's value, l
 
 ### 5a.13 Flags
 
-In order: `sbc-basis-unknown`, when the cross-check has a value and its anchor's stock-compensation basis is unknown (5.2); the path's, `path-held` then `few-analysts`; the capital build's, the ROIC flags of 4.5 then the `line-not-presented:<field>` flags of the ROIC years (4.4); `line-not-presented:debt`, then `line-not-presented:cash`; `tax-loss-history-unknown`; `return-above-peers`; `failure-not-charged` on a Young Growth row; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`); `value-spread` over the three target margins. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
+In order: `sbc-basis-unknown`, when the cross-check has a value and its anchor's stock-compensation basis is unknown (5.2); the path's, `path-held` then `few-analysts`; the capital build's, the ROIC flags of 4.5 then the `line-not-presented:<field>` flags of the ROIC years (4.4); `line-not-presented:debt`, then `line-not-presented:cash`; `tax-loss-history-unknown` (5a.6); `return-above-peers`; `failure-not-charged` on a Young Growth row; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`); `value-spread` over the three target margins (5a.11). The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
 
 Never raised here: `path-on-eps`, `charge-zeroed`, `return-floored`, `growth-above-return`, `long-runway-high-growth`, nor the cross-check's earnings-path flags. The charge does not read the runway return, and the path is on revenue.
 
 ### 5a.14 Intermediates and tagged inputs
 
-Intermediates: `ntm_revenue`; `path` (base_year, the revenue analysts of the two landing years, which steps were held); `path_steps`, g_2 and g_3 as resolved; `growth_rates`, years 1 to N; `margin_path` (start, target, by_year); `target_margin` (value, count, low, high, largest_symbol, largest_margin, and the counted peers with each one's margin and market cap); `revenue_by_year`, `ebit_by_year`, `tax_by_year`, `nopat_by_year`, `reinvestment_by_year`, `fcff_by_year`; `terminal_roic`, `terminal_value`, `firm_value`, `equity`, `value_per_share`; `value_by_margin`; `return_on_new_capital`, `peer_roic_median`; `failure_probability` on Young Growth only; `eps`, `epv`, `dividend_yield`, `net_buyback_yield`, `income_basis`, `price_facts`, `growth_route`; the rebuild keys; and at the price `implied_growth`, `implied_margin`, `multiples`, `growth_share`, `expected_return` and the cross-check's `implied_growth`.
+Intermediates: `ntm_revenue`; `path` (base_year, the revenue analysts of the two landing years, which steps were held); `path_steps`, g_2 and g_3 as resolved; `growth_rates`, years 1 to N; `margin_path` (start, target, by_year); `target_margin` (value, count, low, high, largest_symbol, largest_margin, and the counted peers with each one's margin and market cap); `revenue_by_year`, `ebit_by_year`, `tax_by_year`, `nopat_by_year`, `reinvestment_by_year`, `fcff_by_year`; `terminal_roic`, `terminal_nopat` (5a.7), `terminal_value`, `firm_value`, `equity`, `value_per_share`; `value_by_margin`; `return_on_new_capital`, `peer_roic_median`; `failure_probability` on Young Growth only; `eps`, `epv`, `dividend_yield`, `net_buyback_yield`, `income_basis`, `price_facts`, `growth_route`; the rebuild keys; and at the price `implied_growth`, `implied_margin`, `multiples`, `growth_share`, `expected_return` and the cross-check's `implied_growth`.
 
 The rebuild keys: `revenue_path` (revenue0, ntm_revenue, the consensus steps as found with None for a missing one, hold None, high_growth_years, fade_years), `margin_start`, `tax_rate`, `moat`, `debt`, `cash`, `shares` and `sales_to_capital` (used, own, own_usable, peers, value); on a valued row `margin_path`'s target and `terminal_roic` complete them. A refusal that keeps them keeps the moat class for the price refresh; the screen shows the moat on a valued row only.
 
@@ -535,12 +536,14 @@ The tests pin these, to 0.01 unless a tolerance is named. r 9%, g_T 3%, tax 21%,
 - Growth, years 1 to 10: 30%, 25%, 20%, 20%, 20%, 16.6%, 13.2%, 9.8%, 6.4%, 3%.
 - Revenue: 1,300.00; 1,625.00; 1,950.00; 2,340.00; 2,808.00; 3,274.13; 3,706.31; 4,069.53; 4,329.98; 4,459.88.
 - Margins: −7%, −4%, −1%, 2%, 5%, 8%, 11%, 14%, 17%, 20%.
-- Tax on EBIT of −91.00; −65.00; −19.50; 46.80; 140.40; 261.93; 407.69; 569.73; 736.10; 891.98: 0; 0; 0; 0; 2.46; 55.01; 85.62; 119.64; 154.58; 187.32. NOPAT is −91.00 in year 1 and 137.94 in year 5.
+- Tax on EBIT of −91.00; −65.00; −19.50; 46.80; 140.40; 261.93; 407.69; 569.73; 736.10; 891.98: 0; 0; 0; 0; 2.46; 55.01; 85.62; 119.64; 154.58; 187.32. NOPAT is −91.00 in year 1 and 137.94 in year 5. The carried loss of 175.50 is used up in year 5, so the terminal NOPAT, 891.98 × 0.79 = 704.66, is year 10's NOPAT.
+- The carry: EBIT of 100, −50, 80, 10 at a rate of 25% pays 25, 0, 7.5, 2.5.
 - Reinvestment: 162.50; 162.50; 195.00; 234.00; 233.06; 216.09; 181.61; 130.23; 64.95; 234.89, year 10 at the terminal return.
 - Free cash flow −253.50 in year 1 and 469.77 in year 10; terminal value 8,064.46; firm value 3,290.57; equity 3,490.57; value a share 34.91.
 - Value a share at target margins of 10% and 30%: 10.09 and 59.64; at a sales-to-capital of 3.0: 38.50; at a terminal return of 13%: 40.45.
+- From a trailing margin of −50% the losses outlast year 9: year 10 pays no tax on its EBIT of 891.98, so its NOPAT is 891.98 and its free cash flow 657.09, while the terminal NOPAT is 704.66, reinvestment_10 234.89 and the terminal value 8,064.46; value a share 9.32. At a target margin of −5%, EBIT_10 is −222.99 and the terminal reads it untaxed.
 - Return on new capital at the target: 0.20 × 0.79 × 2.0 = 0.316.
-- At a price of 25.00, within 1e-5: implied growth 0.086275, margin the price needs 0.160014. At a price of 34.9057 both solves return 0.20 within 1e-4. With a Wide moat at 40.45 the margin solve returns 0.20 within 1e-3, the terminal at the 13% cap; at a 5% target the return on new capital is 7.9%, below r, so the terminal is r, and the solve at that target's value returns 0.05 within 1e-5.
+- At a price of 25.00, within 1e-5: implied growth 0.086275, margin the price needs 0.160014. At a price of 34.9057 both solves return 0.20 within 1e-4. With a Wide moat at 40.45 the margin solve returns 0.20 within 1e-3, the terminal at the 13% cap; at a 5% target the return on new capital is 7.9%, below r, so the terminal is r, and, with cash 1,000 (at the stated cash of 300 the value at a 5% target is below zero), the solve at that target's value returns 0.05 within 1e-5.
 - Own sales-to-capital, kept years with revenue and average capital from (1,000, 400) to (2,500, 900) five positions later: 1,500 ÷ 500 = 3.0, usable. Capital from 400 to 420 instead: 75.0, not usable, capital grew 5%. Falling revenue: not usable. Five kept years, or a year without revenue: none.
 - Peers with margins of 10% on 10 years, 30% on 8, 20% on 6 and 40% on 3: target 20% on 3 peers, low 10%, high 30%, the largest by market cap the 30% peer; two peers give none. Peers' sales-to-capital 2.5, 1.5 and 3.0: median 2.5; two give none. Peers' ROIC 12%, 20% and 15%: median 15%.
 
@@ -605,7 +608,7 @@ A flag warns and never changes a value, a level or a stance. Each has a code, a 
 | `charge-zeroed` | the runway charge is off, 4.6 rule 4 |
 | `return-floored` | the chosen return measure was below r |
 | `growth-above-return` | a year's next growth exceeds its return; its payout is floored at zero |
-| `tax-loss-history-unknown` | the revenue-growth forecast has a year whose EBIT is below zero; the tax carry starts at zero (5a.6) |
+| `tax-loss-history-unknown` | the revenue-growth forecast has a year whose EBIT is below zero, or the trailing margin is below zero; the tax carry starts at zero and the terminal is taxed in full (5a.6, 5a.7) |
 | `return-above-peers` | the return on new capital at the target margin is above the mature peers' median ten-year ROIC (5a.11) |
 | `failure-not-charged` | a Young Growth row: the failure probability is unavailable and the value is the going-concern value (5a.12) |
 | `margin-flag` | the trailing operating margin is 1.5 × its ten-year median or more (a positive median), or above its ten-year high by 10% of the high's size or more; needs 6 fiscal years with a margin. The word is "Newly profitable" when the median is at or below zero, "Possible cycle peak" when the window holds a loss year, else "Margin above history" |
@@ -614,7 +617,7 @@ A flag warns and never changes a value, a level or a stance. Each has a code, a 
 | `heavy-capex` | trailing capital spending is above 50% of a positive operating cash flow |
 | `large-nri` | the non-recurring gap is 5% of trailing EPS or more, in either direction |
 | `long-runway-high-growth` | a 20-year runway with a belief or an implied growth of 10% or more |
-| `value-spread` | the value spans 30% or more across the first three return keys or across the three runways; on the revenue-growth route, across the three target margins (5a.11) |
+| `value-spread` | the value spans 30% or more across the first three return keys or across the three runways; on the revenue-growth route, across the three target margins, or the value at the lowest is at or below zero while the median's is positive (5a.11) |
 
 The three lease and line flags sit on nearly every valued row today; their redesign is a known item.
 

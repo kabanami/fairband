@@ -67,7 +67,8 @@ three.
   largest_symbol, largest_margin, peers), ``tax_rate``, ``moat``, ``sales_to_capital`` (used, own,
   own_usable, peers, value), ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``,
   ``nopat_by_year``, ``reinvestment_by_year``, ``fcff_by_year``, ``terminal_roic``,
-  ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
+  ``terminal_nopat`` (year 10's operating income at the full tax rate), ``terminal_value``,
+  ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
   ``value_per_share``, ``value_by_margin`` ("low", "median", "high": the peers' lowest, median
   and highest margins), ``return_on_new_capital``, ``peer_roic_median``, ``failure_probability``
   (Young Growth only), ``eps``, ``epv``, ``dividend_yield``, ``net_buyback_yield``,

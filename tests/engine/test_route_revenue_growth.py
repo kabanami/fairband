@@ -37,6 +37,7 @@ REVENUE_GROWTH_KEYS = {
     "reinvestment_by_year",
     "fcff_by_year",
     "terminal_roic",
+    "terminal_nopat",
     "terminal_value",
     "firm_value",
     "debt",
@@ -130,6 +131,8 @@ def test_high_growth_is_valued_on_the_revenue_route(
     }
     # no moat score: the terminal return is r
     assert im["moat"] == "None" and im["terminal_roic"] == policy.required_return
+    # the terminal reads year 10's operating income at the full 25%, whatever carry is left
+    assert im["terminal_nopat"] == pytest.approx(im["ebit_by_year"][-1] * 0.75)
     assert im["value_by_margin"].keys() == {"low", "median", "high"}
     assert im["value_by_margin"]["median"] == im["value_per_share"] == r.value
     assert im["equity"] == pytest.approx(im["firm_value"] - 1_000e6 + 3_000e6)
@@ -368,13 +371,19 @@ def test_tax_loss_flag_and_the_bridge(
     assert min(r.intermediates["ebit_by_year"]) < 0
     assert "tax-loss-history-unknown" in codes(r)
     assert sentence(r, "tax-loss-history-unknown") == (
-        "The forecast carries its own losses forward from zero; losses before it are not stored, "
-        "so taxes may start too early."
+        "The forecast carries its own losses forward from zero and the terminal value is taxed at "
+        "the full rate; losses before the forecast are not stored, so the carry is unknown in both "
+        "directions."
     )
     profitable = replace(hg, trailing=replace(t, operating_income=500e6))
     p = value_company(profitable, deciles, policy, TODAY)
     assert min(p.intermediates["ebit_by_year"]) > 0
     assert "tax-loss-history-unknown" not in codes(p)
+    # a trailing loss implies losses the store does not hold, though every forecast year profits
+    slight = replace(hg, trailing=replace(t, operating_income=-50e6))
+    s = value_company(slight, deciles, policy, TODAY)
+    assert s.intermediates["margin_start"] < 0 < min(s.intermediates["ebit_by_year"])
+    assert "tax-loss-history-unknown" in codes(s)
 
     im = r.intermediates
     assert (im["debt"], im["cash"]) == (1_000e6, 3_000e6)
@@ -438,6 +447,28 @@ def test_value_spread_flag_over_the_margins(
     )
     narrow = value_company(replace(high_growth_inputs, peers=close), deciles, policy, TODAY)
     assert narrow.value == r.value and "value-spread" not in codes(narrow)
+
+
+def test_value_spread_is_unbounded_when_the_lowest_margin_values_at_or_below_zero(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The mature routes' rule needs a positive lowest value; here a peer at a loss leaves the
+    value at its margin below zero while the median's is positive, and the flag says so."""
+    hg = high_growth_inputs
+    losing = (replace(hg.peers[0], margin=-0.30), *hg.peers[1:])
+    r = value_company(replace(hg, peers=losing), deciles, policy, TODAY)
+    by_margin = r.intermediates["value_by_margin"]
+    assert by_margin["low"] <= 0 < by_margin["median"] == r.value
+    assert sentence(r, "value-spread") == (
+        "The value is at or below zero at the lowest mature-peer margin of -30.0% and "
+        f"{by_margin['median']:,.2f} a share at the median, so the spread across the peers' "
+        "margins is unbounded."
+    )
+    # every margin at a loss: the median's value is not positive either, and nothing is flagged
+    all_losing = tuple(replace(p, margin=-0.05) for p in hg.peers)
+    refused = value_company(replace(hg, peers=all_losing), deciles, policy, TODAY)
+    assert refused.intermediates["value_by_margin"]["median"] <= 0
+    assert "value-spread" not in codes(refused)
 
 
 def test_value_not_positive_is_refused_with_the_figures(

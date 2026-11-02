@@ -17,16 +17,20 @@ year) ÷ convergence year. A margin above the target moves down the same line.
 Tax is charged after the forecast's own losses, the carried loss starting at zero because no
 history of tax losses is stored. A loss year adds its size to the carried loss and pays no tax; a
 profit year is taxed on what it earns above the carried loss and uses the carried loss up by its
-operating income, never below zero. NOPAT is operating income less tax.
+operating income, never below zero. NOPAT is operating income less tax. The terminal NOPAT is
+year N's operating income at the full tax rate, EBIT_N × (1 − tax rate), or EBIT_N untaxed when
+it is not positive: a carried loss the forecast leaves shields year N's own NOPAT, never the
+perpetuity.
 
 Reinvestment in year t pays for year t + 1's revenue at the sales-to-capital,
 (revenue_{t+1} − revenue_t) ÷ sales-to-capital, never below zero, for years 1 to N − 1. Year N
-pays for the terminal growth at the terminal return, NOPAT_N × g_T ÷ terminal return, as the
-mature routes' year N does; it has no floor. The free cash flow is NOPAT less reinvestment, and
-a negative one is the method, not a refusal. The terminal value is NOPAT_N times the mature
-routes' terminal multiple, (1 + g_T) × (1 − g_T ÷ terminal return) ÷ (r − g_T). The firm value is
-the free cash flows and the terminal value discounted at r, the terminal N years; equity is the
-firm value less debt plus cash, and the value a share is equity over the diluted share count.
+pays for the terminal growth at the terminal return, the terminal NOPAT × g_T ÷ terminal return,
+as the mature routes' year N does; it has no floor. The free cash flow is NOPAT less
+reinvestment, year N's on its NOPAT after the carried loss, and a negative one is the method, not
+a refusal. The terminal value is the terminal NOPAT times the mature routes' terminal multiple,
+(1 + g_T) × (1 − g_T ÷ terminal return) ÷ (r − g_T). The firm value is the free cash flows and
+the terminal value discounted at r, the terminal N years; equity is the firm value less debt plus
+cash, and the value a share is equity over the diluted share count.
 
 The return on new capital at the target margin is target × (1 − tax rate) × sales-to-capital;
 the terminal return is ``roic.terminal_roic`` on it. Two figures move with the price, each the
@@ -137,6 +141,12 @@ def tax_and_nopat(
     return tuple(tax), tuple(e - t for e, t in zip(ebit, tax, strict=True))
 
 
+def terminal_nopat(ebit_n: float, tax_rate: float) -> float:
+    """Year N's operating income at the full tax rate, the carried loss left out; untaxed when it
+    is not positive."""
+    return ebit_n * (1 - tax_rate) if ebit_n > 0 else ebit_n
+
+
 @dataclass(frozen=True)
 class RevenueCharge:
     """The required return, the terminal growth, the terminal return on new capital, and the
@@ -163,18 +173,19 @@ class Bridge:
 
 
 def reinvestment_by_year(
-    revenue: Sequence[float], nopat: Sequence[float], charge: RevenueCharge
+    revenue: Sequence[float], terminal_nopat: float, charge: RevenueCharge
 ) -> tuple[float, ...]:
     """Reinvestment for years 1 to N: years 1 to N − 1 pay for the next year's revenue at the
-    sales-to-capital, never below zero; year N pays for g_T at the terminal return."""
+    sales-to-capital, never below zero; year N pays for g_T on the terminal NOPAT at the terminal
+    return."""
     growth = (max(0.0, (nxt - cur) / charge.sales_to_capital) for cur, nxt in pairwise(revenue))
-    return (*growth, nopat[-1] * charge.g_t / charge.terminal_return)
+    return (*growth, terminal_nopat * charge.g_t / charge.terminal_return)
 
 
 @dataclass(frozen=True)
 class RevenueValuation:
-    """The tables for years 1 to N, the terminal value, the firm value, equity and the value a
-    share."""
+    """The tables for years 1 to N, year N's NOPAT at the full tax rate that the terminal reads,
+    the terminal value, the firm value, equity and the value a share."""
 
     revenue: tuple[float, ...]
     margins: tuple[float, ...]
@@ -183,6 +194,7 @@ class RevenueValuation:
     nopat: tuple[float, ...]
     reinvestment: tuple[float, ...]
     fcff: tuple[float, ...]
+    terminal_nopat: float
     terminal_value: float
     firm_value: float
     equity: float
@@ -197,10 +209,11 @@ def revenue_valuation(
     margins = margins_by_year(margin, len(revenue))
     ebit = tuple(rev * m for rev, m in zip(revenue, margins, strict=True))
     tax, nopat = tax_and_nopat(ebit, tax_rate)
-    reinvestment = reinvestment_by_year(revenue, nopat, charge)
+    taxed = terminal_nopat(ebit[-1], tax_rate)
+    reinvestment = reinvestment_by_year(revenue, taxed, charge)
     fcff = tuple(n - i for n, i in zip(nopat, reinvestment, strict=True))
     r = charge.r
-    terminal = nopat[-1] * terminal_multiple(charge.terminal_return, r, charge.g_t)
+    terminal = taxed * terminal_multiple(charge.terminal_return, r, charge.g_t)
     discounted = sum(f / (1 + r) ** t for t, f in enumerate(fcff, start=1))
     firm = discounted + terminal / (1 + r) ** len(fcff)
     equity = firm - bridge.debt + bridge.cash
@@ -212,6 +225,7 @@ def revenue_valuation(
         nopat,
         reinvestment,
         fcff,
+        taxed,
         terminal,
         firm,
         equity,

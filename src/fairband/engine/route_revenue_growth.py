@@ -11,7 +11,8 @@ holds the rate of the year before, and a present step landing on a year with few
 trailing margin to the target margin, the median ten-year margin of the mature peers
 (``revenue_growth.target_margin``). Sales-to-capital is the company's own five-year marginal measure
 over the kept ROIC years (``RoicTerms``) when it is usable, else the mature peers' median. Tax is
-the newest fiscal year's statutory rate, charged after the forecast's own losses. The terminal
+the newest fiscal year's statutory rate, charged after the forecast's own losses; the terminal
+reads year 10's operating income at the full rate (``revenue_growth.terminal_nopat``). The terminal
 return is the moat's rule (``roic.terminal_roic``) on the return on new capital at the target
 margin. Equity is the firm value less debt plus cash from the newest annual balance sheet, each nil
 when unknown. The value is discounted at r in every year.
@@ -34,7 +35,8 @@ count; low; high; largest_symbol and largest_margin, the largest counted peer by
 sets nothing; peers, each with its margin and market cap); ``sales_to_capital`` (used, "own" or
 "peers"; own; own_usable; peers; value); the tables ``revenue_by_year``, ``ebit_by_year``,
 ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``, ``fcff_by_year``; ``terminal_roic``,
-``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
+``terminal_nopat`` (year 10's operating income at the full tax rate), ``terminal_value``,
+``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
 ``value_per_share``; ``value_by_margin`` at the peers' lowest, median and highest margins (``low``,
 ``median``, ``high``), each with its own terminal return; ``return_on_new_capital`` and
 ``peer_roic_median``; ``failure_probability`` on a Young Growth row only; ``eps`` (the forward EPS
@@ -57,10 +59,11 @@ Flags, in order: ``sbc-basis-unknown`` when the cross-check has a value on an an
 unknown; the path's, ``path-held`` then ``few-analysts``; the capital build's, the ten-year ROIC
 flags and their line flags, then ``line-not-presented:debt`` and ``line-not-presented:cash`` when a
 figure is unknown or assembly's note names a line it lacks; ``tax-loss-history-unknown`` when the
-forecast has a loss year; ``return-above-peers`` when the return on new capital at the target is
-above the peers' median ROIC; ``failure-not-charged`` on a Young Growth row; the trailing flags;
-``value-spread`` over the three margins. The runway-return flags of the mature routes are not
-raised: this route's charge does not read the runway return.
+forecast has a loss year or the trailing margin is below zero; ``return-above-peers`` when the
+return on new capital at the target is above the peers' median ROIC; ``failure-not-charged`` on a
+Young Growth row; the trailing flags; ``value-spread`` over the three margins, unbounded when the
+value at the lowest margin is at or below zero and the median's is positive. The runway-return
+flags of the mature routes are not raised: this route's charge does not read the runway return.
 """
 
 from dataclasses import asdict, dataclass, replace
@@ -129,8 +132,9 @@ _MARGINS_TESTED = "the peers' lowest, median and highest target margins"
 _TAX_LOSS = Flag(
     "tax-loss-history-unknown",
     "Tax losses unknown",
-    "The forecast carries its own losses forward from zero; losses before it are not stored, so "
-    "taxes may start too early.",
+    "The forecast carries its own losses forward from zero and the terminal value is taxed at the "
+    "full rate; losses before the forecast are not stored, so the carry is unknown in both "
+    "directions.",
 )
 _FAILURE = Flag(
     "failure-not-charged",
@@ -235,6 +239,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "reinvestment_by_year": list(v.reinvestment),
         "fcff_by_year": list(v.fcff),
         "terminal_roic": terminal,
+        "terminal_nopat": v.terminal_nopat,
         "terminal_value": v.terminal_value,
         "firm_value": v.firm_value,
         "equity": v.equity,
@@ -255,11 +260,11 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     flags = (
         sbc
         + path_and_capital
-        + ((_TAX_LOSS,) if any(x < 0 for x in v.ebit) else ())
+        + ((_TAX_LOSS,) if start < 0 or any(x < 0 for x in v.ebit) else ())
         + present(_return_above_peers(new_capital, peer_roic))
         + ((_FAILURE,) if young else ())
         + trailing_flags(i, t, gap, policy)
-        + present(value_spread_flag(list(im["value_by_margin"].values()), policy, _MARGINS_TESTED))
+        + present(_value_spread(im["value_by_margin"], target, policy))
     )
     if value <= 0:
         return Refused(_NOT_POSITIVE, flags, im | implied_margin_at_price(im, c.price, policy))
@@ -464,6 +469,22 @@ def _return_above_peers(new_capital: float, peer_roic: float | None) -> Flag | N
         f"peers' median return of {peer_roic:.1%}; the sales-to-capital may be too high "
         "(Damodaran's check).",
     )
+
+
+def _value_spread(by_margin: dict[str, float], target: TargetMargin, policy: Policy) -> Flag | None:
+    """``value-spread`` over the three target margins: unbounded when the value at the lowest
+    margin is at or below zero and the median's is positive, where the mature routes' rule, which
+    needs a positive lowest value, would be silent; else that rule."""
+    low, median = by_margin["low"], by_margin["median"]
+    if low <= 0 < median:
+        return Flag(
+            "value-spread",
+            "Value spread",
+            f"The value is at or below zero at the lowest mature-peer margin of {target.low:.1%} "
+            f"and {median:,.2f} a share at the median, so the spread across the peers' margins is "
+            "unbounded.",
+        )
+    return value_spread_flag(list(by_margin.values()), policy, _MARGINS_TESTED)
 
 
 def _target_intermediates(target: TargetMargin) -> dict[str, Any]:

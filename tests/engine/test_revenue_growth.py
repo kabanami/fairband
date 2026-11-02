@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import pytest
 
+from fairband.engine.mature_growth import terminal_multiple
 from fairband.engine.revenue_growth import (
     Bridge,
     MarginPath,
@@ -21,6 +22,7 @@ from fairband.engine.revenue_growth import (
     revenue_valuation,
     target_margin,
     tax_and_nopat,
+    terminal_nopat,
 )
 from fairband.engine.roic import RoicYear, terminal_roic
 from fairband.policy import Policy
@@ -77,6 +79,18 @@ def test_tax_carries_the_forecast_losses() -> None:
     assert nopat[4] == pytest.approx(137.94, abs=0.01) and nopat[0] == pytest.approx(-91.0)
 
 
+def test_a_loss_after_profit_years_starts_a_new_carry() -> None:
+    tax, nopat = tax_and_nopat((100.0, -50.0, 80.0, 10.0), 0.25)
+    assert tax == pytest.approx((25.0, 0.0, 7.5, 2.5))
+    assert nopat == pytest.approx((75.0, -50.0, 72.5, 7.5))
+
+
+def test_terminal_nopat_is_taxed_in_full_and_a_loss_untaxed() -> None:
+    assert terminal_nopat(891.98, 0.21) == pytest.approx(704.66, abs=0.01)
+    assert terminal_nopat(-222.99, 0.21) == -222.99
+    assert terminal_nopat(0.0, 0.21) == 0.0
+
+
 def test_reinvestment_with_the_lag_and_the_terminal_year() -> None:
     v = revenue_valuation(PATH, MARGIN, 0.21, CHARGE, BRIDGE)
     assert v.reinvestment == pytest.approx(
@@ -100,6 +114,41 @@ def test_value_of_the_worked_example() -> None:
     assert v.firm_value == pytest.approx(3290.57, abs=0.01)
     assert v.equity == pytest.approx(3490.57, abs=0.01)
     assert v.value_per_share == pytest.approx(34.91, abs=0.01)
+
+
+def test_the_worked_examples_carry_ends_before_year_10() -> None:
+    """The carried loss of 175.50 is used up in year 5, so year 10's NOPAT after the carry is
+    already the one at the full rate that the terminal reads."""
+    v = revenue_valuation(PATH, MARGIN, 0.21, CHARGE, BRIDGE)
+    assert v.terminal_nopat == pytest.approx(v.nopat[9], rel=1e-12)
+    assert v.terminal_nopat == pytest.approx(v.ebit[9] * 0.79)
+    assert v.terminal_nopat == pytest.approx(704.66, abs=0.01)
+
+
+def test_a_carry_past_year_9_shields_year_10_but_not_the_terminal() -> None:
+    """From a trailing margin of -50% the forecast's losses outlast year 9: year 10 pays no tax
+    on its 891.98, but the terminal value and year 10's reinvestment read 891.98 × 0.79."""
+    v = revenue_valuation(PATH, replace(MARGIN, start=-0.50), 0.21, CHARGE, BRIDGE)
+    assert v.ebit[9] == pytest.approx(891.98, abs=0.01)
+    assert v.tax[9] == 0.0 and v.nopat[9] == v.ebit[9]
+    assert v.terminal_nopat == pytest.approx(v.ebit[9] * 0.79)
+    assert v.terminal_nopat == pytest.approx(704.66, abs=0.01)
+    multiple = terminal_multiple(0.09, 0.09, 0.03)
+    assert v.terminal_value == pytest.approx(v.terminal_nopat * multiple)
+    assert v.terminal_value == pytest.approx(8064.46, abs=0.01)
+    assert v.reinvestment[9] == pytest.approx(v.terminal_nopat * 0.03 / 0.09)
+    assert v.reinvestment[9] == pytest.approx(234.89, abs=0.01)
+    assert v.fcff[9] == pytest.approx(v.nopat[9] - v.reinvestment[9])  # the carried NOPAT
+    assert v.fcff[9] == pytest.approx(657.09, abs=0.01)
+    assert v.value_per_share == pytest.approx(9.32, abs=0.01)
+
+
+def test_a_loss_in_year_10_reaches_the_terminal_untaxed() -> None:
+    v = revenue_valuation(PATH, replace(MARGIN, target=-0.05), 0.21, CHARGE, BRIDGE)
+    assert v.ebit[9] == pytest.approx(-222.99, abs=0.01)
+    assert v.terminal_nopat == v.ebit[9] == v.nopat[9]
+    assert v.terminal_value == pytest.approx(v.ebit[9] * terminal_multiple(0.09, 0.09, 0.03))
+    assert v.reinvestment[9] == pytest.approx(v.ebit[9] * 0.03 / 0.09)
 
 
 def test_value_at_other_inputs() -> None:

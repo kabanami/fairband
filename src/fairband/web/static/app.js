@@ -436,6 +436,7 @@
       group('capital', 'Sales-to-capital', pairs(salesToCapital(im.sales_to_capital))),
       group('bridge', 'Terminal and bridge to equity', pairs([
         ['Terminal return', F.formatPercent(im.terminal_roic), true],
+        ['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat), true],
         ['Terminal value', whole(im.terminal_value), true],
         ['Firm value', whole(im.firm_value), true],
         ['Less debt', whole(im.debt), true],

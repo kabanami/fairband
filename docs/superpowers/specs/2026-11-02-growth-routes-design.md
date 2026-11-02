@@ -170,8 +170,9 @@ set between its own marginal ratio and the industry's, H14); D3c for the peer po
 EBIT_t = revenue_t × m_t. Tax is the statutory rate of method.md 4.3, the newest fiscal year's,
 charged on taxable income after the forecast's own losses: a loss year adds to a carried loss, a
 profit year uses the carried loss before it is taxed. The carried loss starts at zero, because no
-history of tax losses is stored; a row whose forecast has a loss year is flagged
-`tax-loss-history-unknown` (*my call*). NOPAT_t = EBIT_t − tax_t.
+history of tax losses is stored; a row whose forecast has a loss year, or whose trailing margin
+is below zero (amended 2026-11-03 during the build), is flagged `tax-loss-history-unknown` (*my
+call*). NOPAT_t = EBIT_t − tax_t.
 
 ### 5.8 The free cash flow and the firm value
 
@@ -179,7 +180,10 @@ history of tax losses is stored; a row whose forecast has a loss year is flagged
     terminal value = NOPAT_10 × (1 + g_T) × (1 − g_T ÷ terminal return) ÷ (r − g_T)
     firm value = Σ FCFF_t ÷ (1 + r)^t + terminal value ÷ (1 + r)^10
 
-Negative free cash flow in the early years is the method, not a refusal.
+Negative free cash flow in the early years is the method, not a refusal. The terminal value and
+reinvestment_10 read NOPAT_10 at the full statutory rate, EBIT_10 × (1 − tax rate) when EBIT_10
+is positive and EBIT_10 otherwise, so a carried loss that outlasts year 9 shields year 10's own
+free cash flow but never the perpetuity (amended 2026-11-03 during the build).
 
 The terminal return is method.md 4.7's rule with the chosen measure the return on new capital at
 the target: m* × (1 − tax rate) × sales-to-capital. Wide moat: that return capped at 13% and never
@@ -229,7 +233,8 @@ routes.
 
 - **By target margin**: the value at the lowest, the median and the highest mature-peer margin,
   keys `low`, `median`, `high`. The value-spread flag reads them, as it reads the mature route's
-  three returns (*my call*).
+  three returns (*my call*), and fires too when the value at the lowest margin is at or below zero
+  while the median's is positive, the spread then unbounded (amended 2026-11-03 during the build).
 - **The growth-route cross-check**: a row whose NTM EPS anchor is positive and whose earnings path
   has no refusal also carries the Mature Growth route's value as `growth_route`, exactly as a
   Mature Stable row does (calibration spec 5.7), with its implied growth at the price. A company

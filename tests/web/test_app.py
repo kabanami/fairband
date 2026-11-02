@@ -766,6 +766,7 @@ def test_app_js_names_the_revenue_route_and_draws_its_tables() -> None:
         "largest_margin",
         "sales_to_capital",
         "terminal_roic",
+        "terminal_nopat",
         "terminal_value",
         "firm_value",
         "failure_probability",
@@ -773,6 +774,8 @@ def test_app_js_names_the_revenue_route_and_draws_its_tables() -> None:
         "implied_margin",
     ):
         assert key in script, key
+    # the terminal value is the fully taxed year-10 NOPAT times the multiple: both lines show
+    assert "['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat), true]," in script
     # spec 5.9: the flat required return, read from the row's RULE input, on every row of the
     # route; spec 5.13: a Young Growth row has no range in tier 1
     assert "'Discounted at the required return of ' +" in script
