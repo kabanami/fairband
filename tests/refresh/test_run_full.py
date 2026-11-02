@@ -77,7 +77,13 @@ CALIBRATION = {
     },
     "universe": {
         "admitted": 4,
-        "excluded": {"industry": 1, "symbol pattern": 0, "manual exclusion": 0, "skipped": 1},
+        "excluded": {
+            "industry": 1,
+            "name pattern": 0,
+            "symbol pattern": 0,
+            "manual exclusion": 0,
+            "skipped": 1,
+        },
     },
 }
 

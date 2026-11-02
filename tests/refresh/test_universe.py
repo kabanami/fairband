@@ -70,17 +70,19 @@ def test_admits_and_excludes_each_fixture_case(
     # One common stock on each exchange, the BRK-B share class in the exchange form, the ADR.
     assert result.admitted == ("ACME", "BOLT", "BRK.B", "CAPE", "ADRX")
     # The OTC listing, the listing below the floor, the ETF and the second ACME are skipped. The
-    # SPAC's units (NEWC.U) meet the industry rule before the symbol rule.
+    # SPAC's units (NEWC.U) meet the industry rule before the symbol rule, and the preferred's name
+    # ("Acme Corp 5% Preferred Series A") meets the name rule before it.
     assert result.excluded == {
         "industry": 3,
-        "symbol pattern": 2,
+        "name pattern": 1,
+        "symbol pattern": 1,
         "manual exclusion": 0,
         "skipped": 4,
     }
     rows = stored(conn)
     assert {symbol: (row.eligible, row.exclusion_reason) for symbol, row in rows.items()} == {
         "ACME": (True, None),
-        "ACME-PA": (False, "symbol pattern"),
+        "ACME-PA": (False, "name pattern"),
         "ADRX": (True, None),
         "BOLT": (True, None),
         "BOLT-WS": (False, "symbol pattern"),
@@ -230,6 +232,49 @@ def test_industry_outside_the_list_is_admitted(
 ) -> None:
     serve(router, listing("ACME", industry=industry))
     assert build(conn, clients, policy, clock).admitted == ("ACME",)
+
+
+def test_name_pattern_excludes_notes_and_preferreds(
+    conn: sqlite3.Connection, clients: Clients, router: Router, policy: Policy, clock: Clock
+) -> None:
+    abxl = "Abacus Global Management, Inc. - 8.875% Fixed Rate Senior Notes due 2028"
+    serve(router, listing("ABXL", 3 * B, companyName=abxl), listing("ACME", 3 * B))
+    result = build(conn, clients, policy, clock)
+    assert result.admitted == ("ACME",)
+    assert result.excluded["name pattern"] == 1
+    abxl_row = stored(conn)["ABXL"]
+    assert (abxl_row.eligible, abxl_row.exclusion_reason) == (False, "name pattern")
+
+
+@pytest.mark.parametrize(
+    ("name", "excluded"),
+    [
+        ("5.00% Preferred Stock", True),
+        ("Acme Holdings 6.25% Series B", True),  # the percent pattern alone
+        ("Preference Shares", True),
+        ("Senior Notes", True),
+        ("due 2029", True),
+        # No name pattern covers units, rights or depositary shares: the symbol rule covers the
+        # first two, and an ADR's name can carry "American Depositary Shares".
+        ("Unit Corporation", False),
+        ("Rights Holdings Inc.", False),
+        ("Taiwan Semiconductor American Depositary Shares", False),
+    ],
+)
+def test_each_name_pattern_ignoring_case(
+    conn: sqlite3.Connection,
+    clients: Clients,
+    router: Router,
+    policy: Policy,
+    clock: Clock,
+    name: str,
+    excluded: bool,
+) -> None:
+    serve(router, listing("ACME", companyName=name))
+    result = build(conn, clients, policy, clock)
+    assert result.admitted == (() if excluded else ("ACME",))
+    assert result.excluded["name pattern"] == int(excluded)
+    assert stored(conn)["ACME"].exclusion_reason == ("name pattern" if excluded else None)
 
 
 def test_exchange_compared_case_insensitively(

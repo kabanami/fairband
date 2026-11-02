@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Method version | `fairband-mechanical/0.3` (`fairband.engine.METHOD_VERSION`) |
-| Policy version | `fairband-policy-v2` (`src/fairband/policy/fairband-policy-v2.toml`) |
+| Method version | `fairband-mechanical/0.4` (`fairband.engine.METHOD_VERSION`) |
+| Policy version | `fairband-policy-v3` (`src/fairband/policy/fairband-policy-v3.toml`) |
 | Status | The single statement of the method the engine runs. Written 2026-11-02 from the code and the specs. |
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
@@ -27,11 +27,12 @@ One FMP `company-screener` call per refresh, reused for 24 hours. A listing is a
 2. it is not an ETF or a fund, and it is actively trading;
 3. its market cap, in US dollars from the screener, is at least $2 billion;
 4. its FMP industry is not one of the excluded industries: banks, insurance and REITs in every FMP spelling, and Shell Companies (SPACs). The match ignores case and dash style, and an industry that starts with an entry and a space is excluded too, so `Banks—Regional` is out while `Banking Software` is in;
-5. its symbol does not match the preferred, warrant, unit or rights patterns (`[-.]P[A-Z]?$`, `[-.]W[ST]?$`, `[-.]U$`, `[-.]R$`) and is not on the manual exclusion list (empty today). A share class such as `BRK.B` passes.
+5. its symbol does not match the preferred, warrant, unit or rights patterns (`[-.]P[A-Z]?$`, `[-.]W[ST]?$`, `[-.]U$`, `[-.]R$`) and is not on the manual exclusion list (empty today). A share class such as `BRK.B` passes;
+6. its name does not match the note and preferred-share patterns, compared ignoring case (`\bnotes?\b`, `\bdue 20\d\d\b`, `\d(\.\d+)?% `, `\bpreferred\b`, `\bpreference\b`). They catch the notes and preferreds whose symbols carry no suffix, such as ABXL, "Abacus Global Management, Inc. - 8.875% Fixed Rate Senior Notes due 2028". No name pattern covers units, rights or depositary shares: rule 5 covers the first two, and an ADR's name can carry "American Depositary Shares".
 
-A listing that fails rule 1, 2 or 3 is skipped and not recorded (the screener request already asks for these filters; the rules are applied again on the rows). A listing that fails rule 4 or 5 is recorded with its reason and gets no screen row. A later row whose symbol is already recorded is skipped. An admitted listing gets a cap band: Mega from $200 billion, Large from $10 billion, Mid from $2 billion.
+A listing that fails rule 1, 2 or 3 is skipped and not recorded (the screener request already asks for these filters; the rules are applied again on the rows). A listing that fails rule 4, 5 or 6 is recorded with its reason (`industry: <industry>`, `name pattern`, `symbol pattern` or `manual exclusion`) and gets no screen row; one that fails more than one carries the first of the industry, the name and the symbol rule. A later row whose symbol is already recorded is skipped. An admitted listing gets a cap band: Mega from $200 billion, Large from $10 billion, Mid from $2 billion.
 
-Known gaps, for the next piece: some financials pass rule 4 under industries the list does not name (Capital Markets, Credit Services, Asset Management), and some notes and preferreds pass rule 5 because their symbols carry no suffix.
+Known gap, for the next piece: some financials pass rule 4 under industries the list does not name (Capital Markets, Credit Services, Asset Management).
 
 ## 2. The data the method reads
 
@@ -147,7 +148,7 @@ A company is unclassified, with the reason as its refusal, when its series has f
 
 ### 4.1 Policy values
 
-Every value comes from `fairband-policy-v2.toml` with a source line. The ones below are the ones the method reads; the universe and refresh values are in sections 1 and 2.
+Every value comes from `fairband-policy-v3.toml` with a source line. The ones below are the ones the method reads; the universe and refresh values are in sections 1 and 2.
 
 | Value | Policy name | Source |
 |---|---|---|
@@ -178,7 +179,7 @@ Every value comes from `fairband-policy-v2.toml` with a source line. The ones be
 | Validity fallback: 91 days | `validity_fallback_days` | design.md 8 |
 | Aging at 0.6667 of the window | `aging_fraction` | design system |
 
-Policy v1 stays in the package unchanged, because the snapshots of the first run cite its hash. The engine loads v2 only.
+Policies v1 and v2 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v3 only.
 
 ### 4.1a Constants in code
 
@@ -464,6 +465,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.1 | 2026-10-31 | The mechanical screen as first built: the charge at the ten-year aggregate ROIC in the runway years, the terminal from the aggregate, a one-step drop from year 3 to the belief, no payout floor; Mature Stable on the one-stage formula at the terminal return. Policy v1. |
 | 0.2 | 2026-11-01 | The calibration: the runway return (4.6), the payout floor (4.8), the fade (5.5), the terminal from the runway return (4.7), the four return keys (5.8), the growth-route cross-check (6.4), the revalue kind. Policy v2 adds four values (the marginal span, the capital-growth test, the fallback window, the fade years) and the recorded decision to keep return on invested capital over return on equity. |
 | 0.3 | 2026-11-02 | Mature Stable charges as Mature Growth does (6.3): the runway return through the runway, the terminal return after. Policy unchanged. |
+| 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a); the name patterns on the universe. Policy v3 adds five values. |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 

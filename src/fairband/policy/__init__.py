@@ -1,10 +1,11 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v2.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v3.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-file stays in the package byte for byte, because the snapshots valued under it cite its hash.
+and v2 files stay in the package byte for byte, because the snapshots valued under them cite their
+hashes.
 """
 
 import hashlib
@@ -17,7 +18,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v2.toml"
+_POLICY_FILE = "fairband-policy-v3.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -37,6 +38,7 @@ class UniversePolicy:
     cap_bands: tuple[tuple[float, str], ...]
     excluded_industries: tuple[str, ...]
     symbol_exclude_patterns: tuple[str, ...]
+    name_exclude_patterns: tuple[str, ...]
     manual_exclusions: tuple[str, ...]
 
 
@@ -71,6 +73,11 @@ class Policy:
     marginal_capital_growth_min: float
     fallback_return_years: int
     fade_years: int
+    high_growth_years: int
+    margin_convergence_year: int
+    peer_min: int
+    peer_margin_min_years: int
+    implied_margin_bounds: tuple[float, float]
     roic_sensitivity: tuple[float, float]
     analyst_min: int
     nri_flag_share: float
@@ -91,7 +98,7 @@ class Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v2 file) into a ``Policy``."""
+    """Parse the policy file (default: the packaged v3 file) into a ``Policy``."""
     if path is None:
         data = resources.files(__name__).joinpath(_POLICY_FILE).read_bytes()
     else:
@@ -135,6 +142,11 @@ def load_policy(path: Path | None = None) -> Policy:
         marginal_capital_growth_min=read("marginal_capital_growth_min", _num),
         fallback_return_years=read("fallback_return_years", _whole),
         fade_years=read("fade_years", _whole),
+        high_growth_years=read("high_growth_years", _whole),
+        margin_convergence_year=read("margin_convergence_year", _whole),
+        peer_min=read("peer_min", _whole),
+        peer_margin_min_years=read("peer_margin_min_years", _whole),
+        implied_margin_bounds=read("implied_margin_bounds", _pair),
         roic_sensitivity=read("roic_sensitivity", _pair),
         analyst_min=read("analyst_min", _whole),
         nri_flag_share=read("nri_flag_share", _num),
@@ -198,6 +210,7 @@ def _universe(t: Any) -> UniversePolicy:
         cap_bands=tuple((_num(bound), _text(label)) for bound, label in t["cap_bands"]),
         excluded_industries=_texts(t["excluded_industries"]),
         symbol_exclude_patterns=_texts(t["symbol_exclude_patterns"]),
+        name_exclude_patterns=_texts(t["name_exclude_patterns"]),
         manual_exclusions=_texts(t["manual_exclusions"]),
     )
 

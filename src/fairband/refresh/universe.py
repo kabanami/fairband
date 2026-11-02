@@ -11,13 +11,16 @@ text, so no key reaches a ``companies`` row. Then, per screener row in payload o
 2. an ETF, a fund, or not actively trading: skipped;
 3. no market cap, or one below ``cap_floor_usd``: skipped;
 4. the industry is excluded (below): recorded, not eligible, ``"industry: <industry>"``;
-5. the symbol matches one of ``symbol_exclude_patterns`` (``re.search``): recorded, not eligible,
+5. the name matches one of ``name_exclude_patterns`` (``re.search``, ignoring case), a note or a
+   preferred share whose symbol carries no suffix: recorded, not eligible, ``"name pattern"``;
+6. the symbol matches one of ``symbol_exclude_patterns`` (``re.search``): recorded, not eligible,
    ``"symbol pattern"``; or it is one of ``manual_exclusions``: ``"manual exclusion"``;
-6. else admitted, eligible, in the cap band of the largest floor at or below its market cap.
+7. else admitted, eligible, in the cap band of the largest floor at or below its market cap.
 
 A skipped row stores nothing (spec 6.1 records only the listings that fail the industry or symbol
-rule); ``UniverseResult.excluded`` counts it under ``"skipped"`` so the calibration can show it. A
-row whose symbol an earlier row already recorded is skipped too, so the first row recorded is kept.
+rule, and the growth routes spec 5.17 adds the name rule); ``UniverseResult.excluded`` counts it
+under ``"skipped"`` so the calibration can show it. A row whose symbol an earlier row already
+recorded is skipped too, so the first row recorded is kept.
 Symbols are in the exchange form ``screener_rows`` returns (``BRK.B``, ``XYZ.U``), and so are the
 manual exclusions. A recorded row carries the screener's name, exchange, sector, industry, country
 and market cap; ``is_adr`` is false and ``currency`` ``None`` because the screener does not carry
@@ -61,7 +64,7 @@ PROVIDER = "fmp"
 ENDPOINT = "screener"
 SKIPPED = "skipped"
 _PARAMS: dict[str, str] = {}
-_REASONS = ("industry", "symbol pattern", "manual exclusion", SKIPPED)
+_REASONS = ("industry", "name pattern", "symbol pattern", "manual exclusion", SKIPPED)
 _DETAIL_CHARS = 80  # of an unusable payload, kept as its error
 _DASHES = re.compile("[-\u2013\u2014]")  # hyphen, en dash, em dash
 
@@ -69,8 +72,8 @@ _DASHES = re.compile("[-\u2013\u2014]")  # hyphen, en dash, em dash
 @dataclass(frozen=True)
 class UniverseResult:
     """``admitted`` holds the admitted symbols in screener order. ``excluded`` counts the rows not
-    admitted by reason, every reason present: ``industry``, ``symbol pattern`` and ``manual
-    exclusion`` (recorded with that reason) and ``skipped`` (not recorded)."""
+    admitted by reason, every reason present: ``industry``, ``name pattern``, ``symbol pattern``
+    and ``manual exclusion`` (recorded with that reason) and ``skipped`` (not recorded)."""
 
     refresh_id: int
     admitted: tuple[str, ...]
@@ -96,7 +99,8 @@ def build_universe(
     rows, observed_at = _screener(conn, fmp, policy, now, secrets)
     universe = policy.universe
     exchanges = {exchange.upper() for exchange in universe.exchanges}
-    patterns = [re.compile(pattern) for pattern in universe.symbol_exclude_patterns]
+    names = [re.compile(pattern, re.IGNORECASE) for pattern in universe.name_exclude_patterns]
+    symbols = [re.compile(pattern) for pattern in universe.symbol_exclude_patterns]
     recorded: dict[str, CompanyRow] = {}
     admitted: list[str] = []
     excluded = dict.fromkeys(_REASONS, 0)
@@ -104,7 +108,7 @@ def build_universe(
         if row.symbol in recorded or not _listed(row, universe, exchanges):
             excluded[SKIPPED] += 1
             continue
-        reason = _exclusion(row, universe, patterns)
+        reason = _exclusion(row, universe, names, symbols)
         if reason is None:
             admitted.append(row.symbol)
         else:
@@ -178,12 +182,17 @@ def _listed(row: ScreenerRow, universe: UniversePolicy, exchanges: set[str]) -> 
 
 
 def _exclusion(
-    row: ScreenerRow, universe: UniversePolicy, patterns: Sequence[re.Pattern[str]]
+    row: ScreenerRow,
+    universe: UniversePolicy,
+    names: Sequence[re.Pattern[str]],
+    symbols: Sequence[re.Pattern[str]],
 ) -> str | None:
     """The reason a listing that passes the silent filters is not admitted, if any."""
     if row.industry is not None and _excluded_industry(row.industry, universe.excluded_industries):
         return f"industry: {row.industry}"
-    if any(pattern.search(row.symbol) for pattern in patterns):
+    if row.name is not None and any(pattern.search(row.name) for pattern in names):
+        return "name pattern"
+    if any(pattern.search(row.symbol) for pattern in symbols):
         return "symbol pattern"
     if row.symbol in universe.manual_exclusions:
         return "manual exclusion"
