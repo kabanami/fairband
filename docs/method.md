@@ -285,7 +285,7 @@ A reverse DCF on net income with the reinvestment charge: year 1 from the quarte
 
 ### 5.1 Guards and refusals
 
-Before any route, in this order: no universe deciles yet; the assembly's refusal ("no financial statements", or the missing tax rate of 4.3); a foreign filer (an ADR by the profile, or a reporting currency other than USD, an unknown currency included); an unclassified company (3.8); Start-up; a phase whose route is not built; no positive price; no positive diluted share count; no trailing figures.
+Before any route, in this order: no universe deciles yet; the assembly's refusal ("no financial statements", or the missing tax rate of 4.3); a foreign filer (an ADR by the profile, or a reporting currency other than USD, an unknown currency included); an unclassified company (3.8); Start-up; a phase whose route is not built, which is Decline (Mature Growth and Mature Stable have their routes, and High Growth and Young Growth share the revenue-growth route of section 5a); no positive price; no positive diluted share count; no trailing figures.
 
 Then the route's own, in this order: no trailing revenue; no statutory tax rate; an incomplete NTM consensus (5.2); no positive forward anchor; a forward P/E below 2 (a unit error); consensus earnings that turn negative within the path (a step at or below −100%); a value a share at or below zero under the charge (the intermediates are kept).
 
@@ -395,7 +395,7 @@ The expected return of 5.10 with g_T as each of the three rates. Trailing P/E re
 | Case | Refusal |
 |---|---|
 | Start-up | "Start-up: no value by design; the price-implied requirement comes with the Start-up route" |
-| Young Growth, High Growth, Decline | "<phase> route not built yet" |
+| Decline | "Decline route not built yet" |
 | Foreign filer: an ADR, or a reporting currency other than USD | "foreign filer: currency and share-unit handling not built yet" |
 
 Each keeps its phase, its classifier evidence, its price and its price columns. Assembly withholds the missing-tax-rate refusal from a foreign filer (4.3), so the route reaches the foreign-filer guard; "no financial statements" still refuses a foreign filer first.
@@ -453,7 +453,7 @@ The three lease and line flags sit on nearly every valued row today; their redes
 ## 10. Refresh kinds and what moves
 
 - **Full refresh**: the universe, the data of section 2 for every admitted company, the deciles, then every company classified and valued, one snapshot per company. A company fetched within 24 hours is not fetched again.
-- **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the stance, the implied growth and its sensitivities, the Mature Stable cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price and date. The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
+- **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the stance, the implied growth and its sensitivities, the margin the price needs (revenue-growth rows), the growth-route cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price and date, except a growth-route row refused for its target margin, whose margin the price needs is recomputed (as is that of a growth-route row refused for a value not positive, which keeps the same figures). The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
 - **Revalue**: the engine on the stored facts of every company, with the latest stored deciles, no vendor call and no freshness window. New snapshots under the current method and policy versions.
 
 Snapshots are appended, never changed. The screen reads the latest snapshot per company.

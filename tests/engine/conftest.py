@@ -1,4 +1,4 @@
-"""Engine fixtures: the policy, the universe deciles and the three companies of
+"""Engine fixtures: the policy, the universe deciles and the companies of
 ``support.engine_companies``."""
 
 import pytest
@@ -32,3 +32,13 @@ def ms_inputs() -> CompanyInputs:
 @pytest.fixture
 def young_growth_inputs() -> CompanyInputs:
     return engine_companies.young_growth_inputs()
+
+
+@pytest.fixture
+def high_growth_inputs() -> CompanyInputs:
+    return engine_companies.high_growth_inputs()
+
+
+@pytest.fixture
+def decline_inputs() -> CompanyInputs:
+    return engine_companies.decline_inputs()

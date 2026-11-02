@@ -1,4 +1,4 @@
-"""The steps the two mature routes share, below ``route`` and the two route modules.
+"""The steps the routes share, below ``route`` and the route modules.
 
 A route reads the company through a ``Context``, built by ``route.value_company`` once the guards
 have passed: so with trailing figures, a positive price and a positive diluted share count. It
@@ -204,7 +204,7 @@ def trailing_flags(
 
 
 def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tuple[TaggedInput, ...]:
-    """The DATA inputs both routes read, beyond the ones every result carries."""
+    """The DATA inputs every route reads, beyond the ones every result carries."""
     return (
         data(i, "market_cap", i.market_cap, "USD"),
         data(i, "revenue_ttm", t.revenue, "USD", "statements"),
@@ -213,8 +213,8 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
         data(i, "dividends_ttm", t.dividends, "USD", "statements"),
         data(i, "buybacks_ttm", t.buybacks, "USD", "statements"),
         data(i, "equity_issued_ttm", t.equity_issued, "USD", "statements"),
-        _from_capital(i, "aggregate_roic", roic.result.aggregate),
-        _from_capital(i, "runway_return", roic.runway, runway_note(roic.runway_return)),
+        from_capital(i, "aggregate_roic", roic.result.aggregate),
+        from_capital(i, "runway_return", roic.runway, runway_note(roic.runway_return)),
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),  # the newest ROIC year's rate
         data(i, "moat_score", i.moat_score, "score"),
         data(i, "gf_eps_ttm", i.gf_eps_ttm, "USD a share"),
@@ -222,12 +222,13 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
     )
 
 
-def _from_capital(
+def from_capital(
     i: CompanyInputs, name: str, value: float | None, note: str | None = None
 ) -> TaggedInput:
-    """A return read from invested capital, cited to the statements: an estimate under the
-    intangibles method when assembly took the issuer's as-reported intangibles total into
-    invested capital (D17). Its note is ``note``; without one, an estimate's note says why."""
+    """A ratio read from invested capital (a return, or sales-to-capital), cited to the
+    statements: an estimate under the intangibles method when assembly took the issuer's
+    as-reported intangibles total into invested capital (D17). Its note is ``note``; without
+    one, an estimate's note says why."""
     found = data(i, name, value, "ratio", "statements", note)
     method = i.estimate_methods.get(_INTANGIBLES)
     if method is None:
@@ -236,14 +237,14 @@ def _from_capital(
     return replace(found, kind="estimate", estimate_method=method, note=why)
 
 
-def common_rules(policy: Policy, moat: Moat, roic: RoicTerms) -> tuple[TaggedInput, ...]:
-    """The RULE inputs both routes use."""
+def common_rules(policy: Policy, moat: Moat, terminal: float) -> tuple[TaggedInput, ...]:
+    """The RULE inputs every route uses, with the route's terminal return."""
     return (
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "terminal_growth", policy.terminal_growth, "ratio"),
         rule(policy, "moat_class", None, "class", moat),
         rule(policy, "margin_of_safety", policy.margin_of_safety[moat], "ratio", f"{moat} moat"),
-        rule(policy, "terminal_roic", roic.terminal, "ratio", f"{moat} moat"),
+        rule(policy, "terminal_roic", terminal, "ratio", f"{moat} moat"),
     )
 
 

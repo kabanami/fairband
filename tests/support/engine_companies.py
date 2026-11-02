@@ -1,4 +1,6 @@
-"""The engine's test companies: the universe deciles and three small, complete companies.
+"""The engine's test companies: the universe deciles and small, complete companies, one for each
+phase the engine values (Mature Growth, Mature Stable, High Growth, Young Growth) and a Decline one
+it refuses.
 
 The engine tests take them as fixtures (``tests/engine/conftest.py``); the web tests value them
 and store the results. Money is in USD and shares in units. Fiscal years are calendar years 2015
@@ -11,6 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
 from fairband.engine.classifier import Deciles, FiscalYear, Series
+from fairband.engine.revenue_growth import PeerFigures
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route import CompanyInputs
 from fairband.engine.types import Provenance
@@ -89,12 +92,26 @@ def weekday_closes(
     return tuple((d, start + k * step) for k, d in enumerate(weekdays))
 
 
-def quarter(period_end: date, fiscal_year: int, period: str, eps: float) -> QuarterEstimate:
-    return QuarterEstimate(period_end, fiscal_year, period, eps, None, None, 20)
+def quarter(
+    period_end: date, fiscal_year: int, period: str, eps: float, revenue: float | None = None
+) -> QuarterEstimate:
+    """A consensus quarter of 20 analysts, with a revenue mean when ``revenue`` is given."""
+    return QuarterEstimate(period_end, fiscal_year, period, eps, revenue, None, 20)
 
 
-def annual(year: int, net_income: float, eps: float, analysts: int) -> AnnualEstimate:
-    return AnnualEstimate(year, date(year, 12, 31), eps, None, net_income, analysts, analysts)
+def annual(
+    year: int,
+    net_income: float,
+    eps: float,
+    analysts: int,
+    revenue: float | None = None,
+    analysts_revenue: int | None = None,
+) -> AnnualEstimate:
+    """A consensus fiscal year: ``analysts`` count the EPS and the net income, ``analysts_revenue``
+    the revenue."""
+    return AnnualEstimate(
+        year, date(year, 12, 31), eps, revenue, net_income, analysts, analysts, analysts_revenue
+    )
 
 
 def universe_deciles() -> Deciles:
@@ -207,16 +224,90 @@ def mature_stable_inputs() -> CompanyInputs:
     )
 
 
-def young_growth_inputs() -> CompanyInputs:
-    """A Young Growth company: revenue up 35% a year from $1 bn, the operating margin negative
-    and falling three points a year."""
-    series = fiscal_years(
-        [1_000e6 * 1.35**k for k in range(6)], [-0.05 - 0.03 * k for k in range(6)]
-    )
+def _growth_revenue() -> list[float]:
+    """The growth companies' revenue: up 35% a year from $1 bn, fiscal 2018 to 2025."""
+    return [1_000e6 * 1.35**k for k in range(8)]
+
+
+def high_growth_inputs() -> CompanyInputs:
+    """A High Growth company: revenue up 35% a year from $1 bn over eight fiscal years, the
+    operating margin negative and improving three points a year from -30% to -9%; no moat score,
+    100 m shares at $150. Trailing revenue is $10 bn at a -9% margin. The NTM consensus is $12.4 bn
+    of revenue (24% above trailing) at a loss a share; the annual revenue consensus from fiscal
+    2027 grows 23.1% then 20%, on 20, 15 and 12 revenue analysts and 3 EPS analysts. Three mature
+    peers at margins of 10%, 20% and 30%; debt $1 bn and cash $3 bn."""
+    series = fiscal_years(_growth_revenue(), [-0.30 + 0.03 * k for k in range(8)])
     return replace(
         mature_growth_inputs(),
+        symbol="HGCO",
+        name="High Growth Co",
+        market_cap=15_000e6,
+        shares_diluted=100e6,
+        series=series,
+        capital_years=capital_years(series),
+        trailing=TrailingFigures(
+            period_end=date(2026, 9, 30),
+            quarters=4,
+            on_fiscal_year=False,
+            revenue=10_000e6,
+            operating_income=-900e6,
+            net_income=-800e6,
+            eps_diluted=-8.00,
+            sbc=900e6,
+            cfo=-200e6,
+            capex=-500e6,
+            dividends=0.0,
+            buybacks=0.0,
+            equity_issued=300e6,
+        ),
+        quarter_estimates=(
+            quarter(date(2026, 12, 31), 2026, "Q4", -1.20, 2_800e6),
+            quarter(date(2027, 3, 31), 2027, "Q1", -1.00, 3_000e6),
+            quarter(date(2027, 6, 30), 2027, "Q2", -0.80, 3_200e6),
+            quarter(date(2027, 9, 30), 2027, "Q3", -0.60, 3_400e6),
+        ),
+        annual_estimates=(
+            annual(2027, -300e6, -3.00, 3, 13_000e6, 20),
+            annual(2028, -100e6, -1.00, 3, 16_000e6, 15),
+            annual(2029, 100e6, 1.00, 3, 19_200e6, 12),
+        ),
+        street_ttm_eps=None,
+        moat_score=None,
+        gf_eps_ttm=-8.00,
+        gf_eps_without_nri=-8.00,
+        peers=(
+            PeerFigures("PEER1", 10e9, 0.10, 10, 2.5, 0.12),
+            PeerFigures("PEER2", 50e9, 0.20, 10, 1.5, 0.20),
+            PeerFigures("PEER3", 20e9, 0.30, 10, 3.0, 0.15),
+        ),
+        debt=1_000e6,
+        cash=3_000e6,
+    )
+
+
+def young_growth_inputs() -> CompanyInputs:
+    """A Young Growth company: the High Growth company with an operating margin that falls three
+    points a year from -5% instead. Its revenue, invested capital, trailing figures, consensus and
+    peers are the High Growth company's, so the two value the same, the phase apart."""
+    series = fiscal_years(_growth_revenue(), [-0.05 - 0.03 * k for k in range(8)])
+    return replace(
+        high_growth_inputs(),
         symbol="YGCO",
         name="Young Growth Co",
+        series=series,
+        capital_years=capital_years(series),
+    )
+
+
+def decline_inputs() -> CompanyInputs:
+    """A Decline company, which no route values yet: revenue falling 6% a year from $5 bn over six
+    fiscal years at a 10% operating margin. (A 5% fall sits on the test deciles' -5% edge, which
+    ranks "Low".)"""
+    series = fiscal_years([5_000e6 * 0.94**k for k in range(6)], [0.10] * 6)
+    return replace(
+        mature_growth_inputs(),
+        symbol="DCCO",
+        name="Decline Co",
         series=series,
         capital_years=capital_years(series),
     )

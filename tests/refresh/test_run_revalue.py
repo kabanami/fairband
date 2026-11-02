@@ -2,8 +2,8 @@
 migrated temporary database: a new snapshot of each company from the facts the store holds, with
 no vendor call and no FMP client, and the command.
 
-The full refresh values ACME, AXLE and MILD and refuses NEWT (Young Growth); the revalue, on the
-same facts and deciles, gives the same calibration.
+The full refresh values ACME, AXLE and MILD and refuses NEWT (Young Growth, with no mature peer
+for a target margin); the revalue, on the same facts and deciles, gives the same calibration.
 """
 
 import threading
@@ -24,7 +24,7 @@ from fairband.refresh.run import Refresh
 from fairband.store.companies import CompanyRow, insert_companies
 from fairband.store.snapshots import SnapshotRow
 
-NOT_BUILT = "Young Growth route not built yet"
+NO_TARGET = "no target margin: 0 mature peers"
 NO_STATEMENTS = "no financial statements"
 
 
@@ -66,7 +66,7 @@ def test_revalue_writes_new_snapshots_without_a_vendor_call(env_valued: Env) -> 
             before[symbol].phase,
         )
     assert row.calibration is not None and row.calibration["total"] == len(ADMITTED)
-    assert row.calibration["valued"] == 3 and row.calibration["refused"] == {NOT_BUILT: 1}
+    assert row.calibration["valued"] == 3 and row.calibration["refused"] == {NO_TARGET: 1}
     assert row.calibration["universe"] == {"admitted": len(ADMITTED), "excluded": {}}
     # No universe, fetch or deciles stage: the value stage first, its start and each company.
     assert [p.stage for p in env.progress] == ["value"] * (1 + len(ADMITTED)) + ["done"]
@@ -102,7 +102,7 @@ def test_revalue_refuses_a_company_without_facts(env_valued: Env) -> None:
     assert env.snapshot("NOFACTS").value is None and env.snapshot("NOFACTS").refusal
     assert env.snapshot("ACME").refresh_id == refresh_id and env.snapshot("ACME").value is not None
     assert row.calibration is not None and row.calibration["total"] == len(ADMITTED) + 1
-    assert row.calibration["refused"] == {NOT_BUILT: 1, NO_STATEMENTS: 1}
+    assert row.calibration["refused"] == {NO_TARGET: 1, NO_STATEMENTS: 1}
     assert env.router.calls == Counter()
 
 
@@ -182,7 +182,7 @@ def test_cli_revalue_prints_calibration(
         "Mature Stable: 1",
         "Decline: 0",
         "unclassified: 0",
-        f"1 refused: {NOT_BUILT}",
+        f"1 refused: {NO_TARGET}",
     ]
     assert env.last().kind == "revalue"
     assert env.router.calls == Counter()

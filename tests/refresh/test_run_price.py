@@ -3,7 +3,8 @@ migrated temporary database: the quotes, in one batch or one call a symbol, then
 of each company at its new price; the rows it leaves as they were, and the command.
 
 The full refresh values ACME and AXLE (Mature Growth, buy $21.25, trim $49.03) and MILD (Mature
-Stable, buy $11.46) at $50, all three ``trim``, and refuses NEWT (Young Growth).
+Stable, buy $11.46) at $50, all three ``trim``, and refuses NEWT (Young Growth, with no mature
+peer for a target margin).
 """
 
 import json
@@ -146,8 +147,10 @@ def test_price_refresh_keeps_value_updates_stance(env_valued: Env) -> None:
 
 
 def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
-    """NEWT's refusal is copied with the new price, its date and the price input only. ZERO,
-    admitted with no snapshot yet, is skipped and never quoted."""
+    """NEWT's refusal is copied with the new price, its date and the price input only: refused
+    for its target margin, it would move the margin the price needs too, but it has no
+    sales-to-capital (its own measure is not usable and it has no peers), so that margin stays
+    ``None``. ZERO, admitted with no snapshot yet, is skipped and never quoted."""
     env = env_valued
     with closing(env.connect()) as conn:
         acme = next(c for c in latest_companies(conn) if c.symbol == "ACME")
@@ -179,8 +182,10 @@ def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
     assert (newt.value, newt.stance3, newt.refusal) == (
         None,
         None,
-        "Young Growth route not built yet",
+        "no target margin: 0 mature peers",
     )
+    assert "revenue_path" in newt.result.intermediates
+    assert newt.result.intermediates["implied_margin"] is None
     assert [s for s, _, _ in env.snapshots()].count("ZERO") == 0
 
 

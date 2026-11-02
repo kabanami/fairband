@@ -1,7 +1,7 @@
 import json
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
@@ -12,6 +12,7 @@ from fairband.engine.types import (
     Levels,
     PhaseEvidence,
     Provenance,
+    Route,
     TaggedInput,
     ValuationResult,
     result_from_json,
@@ -84,6 +85,12 @@ def sample_result() -> ValuationResult:
 
 def test_result_json_round_trip(sample_result: ValuationResult) -> None:
     assert result_from_json(result_to_json(sample_result)) == sample_result
+    revenue = replace(sample_result, route="revenue-growth")
+    assert result_from_json(result_to_json(revenue)) == revenue
+
+
+def test_routes() -> None:
+    assert get_args(Route) == ("mature-growth", "mature-stable", "revenue-growth")
 
 
 def test_refusal_json_round_trip(sample_result: ValuationResult) -> None:

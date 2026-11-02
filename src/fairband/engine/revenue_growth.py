@@ -140,12 +140,17 @@ def tax_and_nopat(
 @dataclass(frozen=True)
 class RevenueCharge:
     """The required return, the terminal growth, the terminal return on new capital, and the
-    revenue a unit of new capital buys."""
+    revenue a unit of new capital buys, which must be positive: the route takes it from a usable
+    own measure or the peers' positive ones."""
 
     r: float
     g_t: float
     terminal_return: float
     sales_to_capital: float
+
+    def __post_init__(self) -> None:
+        if not self.sales_to_capital > 0:
+            raise ValueError(f"sales-to-capital {self.sales_to_capital} must be positive")
 
 
 @dataclass(frozen=True)
@@ -325,11 +330,17 @@ class TargetMargin:
     peers: tuple[PeerFigures, ...]
 
 
-def target_margin(peers: Sequence[PeerFigures], policy: Policy) -> TargetMargin | None:
-    """The median margin of the peers with a margin on at least the policy's minimum years;
-    ``None`` below the policy's peer minimum."""
+def margin_peers(peers: Sequence[PeerFigures], policy: Policy) -> tuple[PeerFigures, ...]:
+    """The peers the target margin counts: those with a margin on at least the policy's minimum
+    years."""
     min_years = policy.peer_margin_min_years
-    counted = tuple(p for p in peers if p.margin is not None and p.margin_years >= min_years)
+    return tuple(p for p in peers if p.margin is not None and p.margin_years >= min_years)
+
+
+def target_margin(peers: Sequence[PeerFigures], policy: Policy) -> TargetMargin | None:
+    """The median margin of the peers ``margin_peers`` counts; ``None`` below the policy's peer
+    minimum."""
+    counted = margin_peers(peers, policy)
     if len(counted) < policy.peer_min:
         return None
     margins = [p.margin for p in counted if p.margin is not None]

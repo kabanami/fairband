@@ -42,16 +42,19 @@ from fairband.vendors.http import VendorError
 from fairband.web.app import create_app
 
 RATE_LIMITED = "data fetch incomplete: rate limited"
-NOT_BUILT = "Young Growth route not built yet"
+# NEWT is Young Growth: its peers list (ACME's, the symbol changed) names no mature company of the
+# fixture universe, so the revenue-growth route has no target margin.
+NO_TARGET = "no target margin: 0 mature peers"
 FOREIGN = "foreign filer: currency and share-unit handling not built yet"
 # The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused. Every company
 # carries a flag (the synthetic company has no leases on its balance sheet, among others), but
 # only ACME, AXLE (margin direction) and NEWT (growth word, free cash flow) are flagged by a
-# classifier check.
+# classifier check. NEWT's refusal for its target margin keeps the flags of its revenue path (the
+# annual consensus has no revenue for a path year, so the path holds) and of its capital build.
 CALIBRATION = {
     "total": 4,
     "valued": 3,
-    "refused": {NOT_BUILT: 1},
+    "refused": {NO_TARGET: 1},
     "phases": {
         "Start-up": 0,
         "Young Growth": 1,
@@ -67,10 +70,11 @@ CALIBRATION = {
         "growth-word-disagrees": 1,
         "large-nri": 3,
         "leases-not-on-balance-sheet": 4,
-        "line-not-presented:current_lease_liability": 3,
-        "line-not-presented:goodwill": 3,
-        "line-not-presented:lease_rou_asset": 3,
+        "line-not-presented:current_lease_liability": 4,
+        "line-not-presented:goodwill": 4,
+        "line-not-presented:lease_rou_asset": 4,
         "margin-direction-disagrees": 2,
+        "path-held": 1,
         "path-on-eps": 2,
         "sbc-basis-unknown": 2,
         "value-spread": 2,
@@ -149,7 +153,7 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
         valued = snapshots[symbol]
         assert valued.route == route and valued.refusal is None
         assert valued.value is not None and valued.value > 0
-    assert snapshots["NEWT"].refusal == NOT_BUILT and snapshots["NEWT"].value is None
+    assert snapshots["NEWT"].refusal == NO_TARGET and snapshots["NEWT"].value is None
 
     calibration = row.calibration
     assert calibration == CALIBRATION
@@ -465,7 +469,7 @@ def test_cli_full_refresh_prints_calibration(
         "Mature Stable: 1",
         "Decline: 0",
         "unclassified: 0",
-        f"1 refused: {NOT_BUILT}",
+        f"1 refused: {NO_TARGET}",
     ]
     assert env.last().calibration == CALIBRATION
 

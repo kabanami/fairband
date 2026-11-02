@@ -137,9 +137,14 @@ def long_runway_flag(
     )
 
 
-def value_spread_flag(values: Sequence[float | None], policy: Policy) -> Flag | None:
+def value_spread_flag(
+    values: Sequence[float | None],
+    policy: Policy,
+    tested: str = "the ROIC values or runways tested",
+) -> Flag | None:
     """``value-spread`` when the values (``None`` skipped) span ``value_spread_flag`` of the
-    lowest or more; ``None`` with fewer than two values or a lowest value at or below zero."""
+    lowest or more; ``None`` with fewer than two values or a lowest value at or below zero.
+    ``tested`` names what the values were computed across, for the sentence."""
     present = [v for v in values if v is not None]
     if len(present) < 2:
         return None
@@ -152,8 +157,8 @@ def value_spread_flag(values: Sequence[float | None], policy: Policy) -> Flag | 
     return Flag(
         "value-spread",
         "Value spread",
-        f"The value ranges from {low:,.2f} to {high:,.2f} across the ROIC values or runways "
-        f"tested, a spread of {spread:.1%}, at or above {policy.value_spread_flag:.1%}.",
+        f"The value ranges from {low:,.2f} to {high:,.2f} across {tested}, a spread of "
+        f"{spread:.1%}, at or above {policy.value_spread_flag:.1%}.",
     )
 
 

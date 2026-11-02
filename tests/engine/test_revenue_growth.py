@@ -145,6 +145,28 @@ def test_implied_margin_reads_the_terminal_from_the_trial_margin(policy: Policy)
     ) == pytest.approx(0.20, abs=1e-3)
 
 
+def test_implied_margin_reads_the_terminal_at_each_trial_margin(policy: Policy) -> None:
+    # Wide moat at a 5% target: the return on new capital is 7.9%, below r, so the terminal is r.
+    # The input target of 20% would give the 13% cap; a single read of it would solve near 4.5%.
+    terminal = terminal_roic(return_on_new_capital(0.05, 0.21, 2.0), "Wide", policy)
+    assert terminal == policy.required_return
+    bridge = replace(BRIDGE, cash=1_000.0)
+    at_five = replace(MARGIN, target=0.05)
+    price = revenue_valuation(
+        PATH, at_five, 0.21, replace(CHARGE, terminal_return=terminal), bridge
+    ).value_per_share
+    assert price > 0
+    assert implied_target_margin(
+        price, PATH, MARGIN, 0.21, 2.0, "Wide", policy, bridge
+    ) == pytest.approx(0.05, abs=1e-5)
+
+
+def test_sales_to_capital_must_be_positive() -> None:
+    for s2c in (0.0, -1.0):
+        with pytest.raises(ValueError, match="sales-to-capital"):
+            RevenueCharge(0.09, 0.03, 0.09, s2c)
+
+
 def test_negative_target_margin_values_below_zero(policy: Policy) -> None:
     charge = replace(
         CHARGE,

@@ -207,26 +207,39 @@ def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy)
     rows = [by_year.get(base_year + i) for i in range(3)]
     on_eps = not all(r is not None and r.net_income is not None and r.net_income > 0 for r in rows)
     points = [_point(r, on_eps) for r in rows]
-    values = [_estimate(mean, n) for mean, n in points]
-    steps = (_step(values[0], values[1]), _step(values[1], values[2]))
+    values = [consensus_value(mean, n) for mean, n in points]
+    steps = (growth_step(values[0], values[1]), growth_step(values[1], values[2]))
     analysts = (points[1][1], points[2][1])
 
     flags = [_PATH_ON_EPS] if on_eps else []
+    thin = few_analysts(base_year, steps, analysts, policy)
+    if thin is not None:
+        flags.append(thin)
+    return Path(steps=steps, on_eps=on_eps, analysts=analysts, flags=tuple(flags))
+
+
+def few_analysts(
+    base_year: int,
+    steps: tuple[float | None, float | None],
+    analysts: tuple[int | None, int | None],
+    policy: Policy,
+) -> Flag | None:
+    """``few-analysts`` when a present step from ``base_year`` lands on a year with fewer than
+    ``analyst_min`` analysts or no count; ``analysts`` are the counts of the years the two steps
+    land on."""
     thin = [
         str(base_year + 1 + i)
         for i, (step, n) in enumerate(zip(steps, analysts, strict=True))
         if step is not None and (n is None or n < policy.analyst_min)
     ]
-    if thin:
-        flags.append(
-            Flag(
-                "few-analysts",
-                "Few analysts",
-                f"The consensus for fiscal {' and '.join(thin)} has fewer than "
-                f"{policy.analyst_min} analysts or no count, so its step is thin evidence.",
-            )
-        )
-    return Path(steps=steps, on_eps=on_eps, analysts=analysts, flags=tuple(flags))
+    if not thin:
+        return None
+    return Flag(
+        "few-analysts",
+        "Few analysts",
+        f"The consensus for fiscal {' and '.join(thin)} has fewer than "
+        f"{policy.analyst_min} analysts or no count, so its step is thin evidence.",
+    )
 
 
 def belief_from_sales(revenue_ttm_musd: float, policy: Policy) -> Belief:
@@ -265,14 +278,14 @@ def _point(row: AnnualEstimate | None, on_eps: bool) -> tuple[float | None, int 
     return row.net_income, row.analysts_net_income
 
 
-def _estimate(mean: float | None, analysts: int | None) -> float | None:
+def consensus_value(mean: float | None, analysts: int | None) -> float | None:
     """The mean, or ``None`` when absent or a 0 with no analysts (no estimate at all)."""
     if mean is None or (mean == 0 and not analysts):
         return None
     return mean
 
 
-def _step(earlier: float | None, later: float | None) -> float | None:
+def growth_step(earlier: float | None, later: float | None) -> float | None:
     """The growth from one year to the next; ``None`` when either is missing or ``earlier`` is not
     positive, since growth from a base at or below zero has no meaning."""
     if earlier is None or later is None or earlier <= 0:

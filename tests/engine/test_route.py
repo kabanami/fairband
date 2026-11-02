@@ -956,16 +956,16 @@ def test_refuses_foreign_filer(mg_inputs: CompanyInputs, deciles: Deciles, polic
 
 
 def test_refuses_other_phases(
-    young_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    r = value_company(young_growth_inputs, deciles, policy, TODAY)
-    assert_refused(r, "Young Growth route not built yet")
-    assert r.phase.phase == "Young Growth" and r.price == 150.0
+    r = value_company(decline_inputs, deciles, policy, TODAY)
+    assert_refused(r, "Decline route not built yet")
+    assert r.phase.phase == "Decline" and r.price == 150.0
     names = [i.name for i in r.inputs]
     assert names == ["statements", "price", "shares_diluted", "next_earnings", "closes"]
     assert r.inputs[0].value == 6 and r.inputs[0].note == "fiscal 2020 to 2025"
     # the price columns are not value-based: a refused row has them too
-    facts = asdict(price_facts(young_growth_inputs.closes, TODAY))
+    facts = asdict(price_facts(decline_inputs.closes, TODAY))
     assert r.intermediates == {"price_facts": facts} and facts["high_52w"] == pytest.approx(150.0)
 
 
@@ -1138,6 +1138,7 @@ def test_reprice_moves_the_price_input(
     mg_inputs: CompanyInputs,
     ms_inputs: CompanyInputs,
     young_growth_inputs: CompanyInputs,
+    decline_inputs: CompanyInputs,
     deciles: Deciles,
     policy: Policy,
 ) -> None:
@@ -1147,8 +1148,9 @@ def test_reprice_moves_the_price_input(
     day = date(2026, 11, 2)
     observed = datetime(2026, 11, 2, 21, 0, tzinfo=UTC)
     entered = datetime(2026, 11, 2, 21, 5, tzinfo=UTC)
-    for inputs in (mg_inputs, ms_inputs, young_growth_inputs):
+    for inputs in (mg_inputs, ms_inputs, young_growth_inputs, decline_inputs):
         r = value_company(inputs, deciles, policy, TODAY)
+        assert r.route is not None or inputs is decline_inputs
         p = reprice(r, 65.0, day, policy, observed_at=observed, entered_at=entered)
         assert [i.name for i in p.inputs] == [i.name for i in r.inputs]
         [price] = [i for i in p.inputs if i.name == "price"]
@@ -1159,7 +1161,7 @@ def test_reprice_moves_the_price_input(
         # Without the quote's stamps the price input keeps its own.
         [kept] = [i for i in reprice(r, 65.0, day, policy).inputs if i.name == "price"]
         assert kept.provenance == replace(inputs.provenance["price"], as_of=day)
-    assert p.refusal == "Young Growth route not built yet"
+    assert p.refusal == "Decline route not built yet"
 
 
 def test_reprice_a_refusal_moves_only_the_price(policy: Policy) -> None:

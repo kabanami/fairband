@@ -1,0 +1,520 @@
+"""The revenue-growth route through ``value_company``: High Growth and Young Growth rows valued on
+Damodaran's revenue DCF, the refusals in order, the flags, the growth-route cross-check, and the
+price refresh rebuilding every price-side figure from the intermediates."""
+
+from dataclasses import replace
+from datetime import date
+
+import pytest
+from support.engine_companies import annual, capital_years, fiscal_years
+
+from fairband.engine.classifier import Deciles
+from fairband.engine.revenue_growth import PeerFigures
+from fairband.engine.route import CompanyInputs, reprice, value_company
+from fairband.engine.route_revenue_growth import implied_margin_at_price
+from fairband.engine.types import ValuationResult, result_from_json, result_to_json
+from fairband.policy import Policy
+
+TODAY = date(2026, 10, 31)
+REPRICED = date(2026, 11, 2)
+
+REVENUE_GROWTH_KEYS = {
+    "ntm_revenue",
+    "path",
+    "path_steps",
+    "revenue_path",
+    "growth_rates",
+    "margin_start",
+    "margin_path",
+    "target_margin",
+    "tax_rate",
+    "moat",
+    "sales_to_capital",
+    "revenue_by_year",
+    "ebit_by_year",
+    "tax_by_year",
+    "nopat_by_year",
+    "reinvestment_by_year",
+    "fcff_by_year",
+    "terminal_roic",
+    "terminal_value",
+    "firm_value",
+    "debt",
+    "cash",
+    "equity",
+    "shares",
+    "value_per_share",
+    "value_by_margin",
+    "return_on_new_capital",
+    "peer_roic_median",
+    "eps",
+    "epv",
+    "dividend_yield",
+    "net_buyback_yield",
+    "income_basis",
+    "price_facts",
+    "growth_route",
+    "implied_growth",
+    "implied_margin",
+    "multiples",
+    "growth_share",
+    "expected_return",
+}
+# What a row refused for its target margin keeps: the keys that rebuild the margin the price
+# needs, that margin, and the price facts every refusal carries.
+TARGET_REFUSAL_KEYS = {
+    "revenue_path",
+    "margin_start",
+    "tax_rate",
+    "moat",
+    "debt",
+    "cash",
+    "shares",
+    "sales_to_capital",
+    "implied_margin",
+    "price_facts",
+}
+PRICE_KEYS = (
+    "implied_growth",
+    "implied_margin",
+    "multiples",
+    "growth_share",
+    "expected_return",
+    "growth_route",
+)
+
+
+def codes(r: ValuationResult) -> list[str]:
+    return [f.code for f in r.flags]
+
+
+def sentence(r: ValuationResult, code: str) -> str:
+    [found] = [f.sentence for f in r.flags if f.code == code]
+    return found
+
+
+def assert_refused(r: ValuationResult, reason: str) -> None:
+    """A refusal is a full row with no value, never an exception."""
+    assert r.refusal == reason
+    assert (r.route, r.value, r.levels, r.stance5, r.stance3) == (None, None, None, None, None)
+    assert result_from_json(result_to_json(r)) == r
+
+
+def test_high_growth_is_valued_on_the_revenue_route(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    r = value_company(high_growth_inputs, deciles, policy, TODAY)
+    assert r.route == "revenue-growth" and r.value is not None and r.levels is not None
+    assert r.phase.phase == "High Growth" and r.refusal is None
+    im = r.intermediates
+    assert set(im) == REVENUE_GROWTH_KEYS
+    assert len(im["revenue_by_year"]) == 10 and len(im["margin_path"]["by_year"]) == 10
+    assert len(im["growth_rates"]) == 10 and im["growth_rates"][-1] == pytest.approx(0.03)
+    assert im["ntm_revenue"] == pytest.approx(12_400e6)
+    assert im["revenue_by_year"][0] == im["ntm_revenue"]
+    assert im["path"] == {"base_year": 2027, "analysts": [15, 12], "held": [False, False]}
+    assert im["path_steps"] == pytest.approx([16_000 / 13_000 - 1, 19_200 / 16_000 - 1])
+    assert im["margin_start"] == pytest.approx(-0.09)
+    assert im["margin_path"]["by_year"][-1] == pytest.approx(0.20)
+    assert im["target_margin"]["value"] == pytest.approx(0.20) and im["target_margin"]["count"] == 3
+    assert im["target_margin"]["largest_symbol"] == "PEER2"
+    assert [p["symbol"] for p in im["target_margin"]["peers"]] == ["PEER1", "PEER2", "PEER3"]
+    assert im["sales_to_capital"]["used"] in ("own", "peers")
+    # revenue up 35% a year on invested capital 0.83 × revenue: 2 × 1.35 ÷ (0.83 × 2.35)
+    assert im["sales_to_capital"] == {
+        "used": "own",
+        "own": pytest.approx(2 * 1.35 / (0.83 * 2.35)),
+        "own_usable": True,
+        "peers": pytest.approx(2.5),
+        "value": pytest.approx(2 * 1.35 / (0.83 * 2.35)),
+    }
+    # no moat score: the terminal return is r
+    assert im["moat"] == "None" and im["terminal_roic"] == policy.required_return
+    assert im["value_by_margin"].keys() == {"low", "median", "high"}
+    assert im["value_by_margin"]["median"] == im["value_per_share"] == r.value
+    assert im["equity"] == pytest.approx(im["firm_value"] - 1_000e6 + 3_000e6)
+    assert r.value == pytest.approx(im["equity"] / 100e6)
+    assert im["implied_growth"] is not None and im["implied_margin"] is not None
+    assert "failure-not-charged" not in [f.code for f in r.flags]
+    assert im["growth_route"] == {"refusal": "no positive forward anchor"}
+    names = [i.name for i in r.inputs]
+    for name in ("ntm_revenue", "path_step_2", "path_step_3", "target_margin", "sales_to_capital"):
+        assert name in names, name
+    for name in ("debt", "cash", "high_growth_years", "margin_convergence_year", "peer_min"):
+        assert name in names, name
+    [target] = [i for i in r.inputs if i.name == "target_margin"]
+    assert target.provenance.source == "FMP stock-peers and the peers' statements"
+    assert target.note is not None and "3 mature peers" in target.note
+
+
+def test_flags_follow_the_spec_order(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The path's, the capital build's, the tax carry, the implied-return check, the trailing
+    flags and the value spread, each code once."""
+    thin = (*high_growth_inputs.annual_estimates[:2],)  # fiscal 2029 missing: the path holds
+    inputs = replace(high_growth_inputs, annual_estimates=thin, cash=None)
+    r = value_company(inputs, deciles, policy, TODAY)
+    route_codes = [c for c in codes(r) if c not in {f.code for f in r.phase.checks}]
+    assert route_codes == [
+        "path-held",
+        "roic-on-n-years",
+        "line-not-presented:cash",
+        "tax-loss-history-unknown",
+        "return-above-peers",
+        "equity-raise",
+        "negative-fcf",
+        "value-spread",
+    ]
+    assert len(codes(r)) == len(set(codes(r)))
+
+
+def test_young_growth_values_like_high_growth_and_is_flagged(
+    young_growth_inputs: CompanyInputs,
+    high_growth_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+) -> None:
+    same = replace(
+        young_growth_inputs,
+        series=high_growth_inputs.series,
+        capital_years=high_growth_inputs.capital_years,
+    )
+    high = value_company(same, deciles, policy, TODAY)
+    assert high.phase.phase == "High Growth"
+    r = value_company(young_growth_inputs, deciles, policy, TODAY)
+    assert r.phase.phase == "Young Growth" and r.route == "revenue-growth"
+    # same inputs, the phase apart: identical value, levels and figures, one route
+    assert r.value == high.value and r.levels == high.levels
+    young = dict(r.intermediates)
+    assert young.pop("failure_probability") == {
+        "value": None,
+        "reason": "no survival table fits a listed company above $2 billion",
+    }
+    assert young == high.intermediates
+    assert [f.code for f in r.flags if f.code == "failure-not-charged"] == ["failure-not-charged"]
+    assert "failure-not-charged" not in codes(high)
+    # after the implied-return check, before the trailing flags
+    route = codes(r)
+    assert route.index("return-above-peers") < route.index("failure-not-charged")
+    assert route.index("failure-not-charged") < route.index("equity-raise")
+
+
+def test_refusal_order(high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
+    hg, t = high_growth_inputs, high_growth_inputs.trailing
+    assert t is not None
+
+    def valued(inputs: CompanyInputs) -> ValuationResult:
+        return value_company(inputs, deciles, policy, TODAY)
+
+    for revenue in (None, 0.0, -5.0):
+        no_revenue = replace(hg, trailing=replace(t, revenue=revenue), tax_rate_latest=None)
+        assert_refused(valued(no_revenue), "no trailing revenue")
+    no_income = replace(hg, trailing=replace(t, operating_income=None), tax_rate_latest=None)
+    assert_refused(valued(no_income), "no trailing operating income")
+    assert_refused(valued(replace(hg, tax_rate_latest=None, peers=())), "no statutory tax rate")
+    assert_refused(valued(replace(hg, quarter_estimates=(), peers=())), "incomplete NTM consensus")
+    q = hg.quarter_estimates
+    gap = (*q[:3], replace(q[3], revenue=None))
+    assert_refused(valued(replace(hg, quarter_estimates=gap)), "incomplete NTM consensus")
+    r = valued(replace(hg, peers=hg.peers[:2]))
+    assert_refused(r, "no target margin: 2 mature peers")
+    assert r.intermediates["implied_margin"] is not None and "revenue_path" in r.intermediates
+    assert set(r.intermediates) == TARGET_REFUSAL_KEYS
+    no_s2c = replace(hg, peers=(), capital_years=hg.capital_years[:3])
+    r = valued(no_s2c)
+    assert_refused(r, "no target margin: 0 mature peers")  # the margin refuses first
+    assert r.intermediates["sales_to_capital"]["value"] is None
+    assert r.intermediates["implied_margin"] is None
+    # a peer with too few years of margin is not counted
+    short = (*hg.peers[:2], replace(hg.peers[2], margin_years=4))
+    assert_refused(valued(replace(hg, peers=short)), "no target margin: 2 mature peers")
+
+
+def test_no_sales_to_capital_refuses(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    peers = tuple(replace(p, sales_to_capital=None) for p in high_growth_inputs.peers)
+    short = replace(
+        high_growth_inputs, peers=peers, capital_years=high_growth_inputs.capital_years[-4:]
+    )
+    r = value_company(short, deciles, policy, TODAY)
+    assert_refused(r, "no sales-to-capital")
+    assert r.intermediates.keys() == {"price_facts"}  # a plain refusal: nothing to reprice
+
+
+def test_peers_sales_to_capital_when_the_own_measure_is_not_usable(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    short = replace(high_growth_inputs, capital_years=high_growth_inputs.capital_years[-4:])
+    r = value_company(short, deciles, policy, TODAY)
+    assert r.intermediates["sales_to_capital"] == {
+        "used": "peers",
+        "own": None,
+        "own_usable": False,
+        "peers": pytest.approx(2.5),
+        "value": pytest.approx(2.5),
+    }
+    [s2c] = [i for i in r.inputs if i.name == "sales_to_capital"]
+    assert s2c.value == pytest.approx(2.5) and s2c.note is not None and "peers" in s2c.note
+
+
+def test_path_held_flag_and_few_analysts(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    hg = high_growth_inputs
+    a = hg.annual_estimates
+    r = value_company(hg, deciles, policy, TODAY)
+    # three EPS analysts a year, but the revenue path reads the revenue counts: not thin
+    assert "few-analysts" not in codes(r) and "path-held" not in codes(r)
+
+    held = value_company(replace(hg, annual_estimates=a[:2]), deciles, policy, TODAY)
+    g2 = 16_000 / 13_000 - 1
+    assert sentence(held, "path-held") == (
+        f"The consensus has no revenue for fiscal 2029, so year 3 holds the {g2:.1%} of the year "
+        "before."
+    )
+    assert held.intermediates["path"]["held"] == [False, True]
+    assert held.intermediates["path_steps"] == pytest.approx([g2, g2])
+    assert held.intermediates["growth_rates"][3:5] == pytest.approx([g2, g2])
+
+    # no fiscal 2028: neither step stands, year 2 holds year 1's growth and year 3 holds that
+    both = value_company(replace(hg, annual_estimates=(a[0], a[2])), deciles, policy, TODAY)
+    g1 = 12_400 / 10_000 - 1
+    assert sentence(both, "path-held") == (
+        f"The consensus has no revenue for fiscal 2028, so year 2 holds the {g1:.1%} of the year "
+        f"before and year 3 holds the {g1:.1%} of the year before."
+    )
+    assert both.intermediates["path"]["held"] == [True, True]
+
+    thin = (a[0], replace(a[1], analysts_revenue=3), a[2])
+    r = value_company(replace(hg, annual_estimates=thin), deciles, policy, TODAY)
+    assert "fiscal 2028" in sentence(r, "few-analysts")
+    assert r.intermediates["path"]["analysts"] == [3, 12]
+    uncounted = (a[0], a[1], replace(a[2], analysts_revenue=None))
+    r = value_company(replace(hg, annual_estimates=uncounted), deciles, policy, TODAY)
+    assert "fiscal 2029" in sentence(r, "few-analysts")
+    # a held step lands on no consensus, so it is never thin
+    assert "few-analysts" not in codes(held)
+
+
+def test_return_above_peers_flag(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    hg = high_growth_inputs
+    r = value_company(hg, deciles, policy, TODAY)
+    im = r.intermediates
+    # 20% × (1 − 25%) × the own 1.38 is 20.8%, above the peers' median of 15%
+    roc = im["return_on_new_capital"]
+    assert roc == pytest.approx(0.20 * 0.75 * im["sales_to_capital"]["value"])
+    assert im["peer_roic_median"] == pytest.approx(0.15) and roc > 0.15
+    assert sentence(r, "return-above-peers") == (
+        f"The return on new capital at the target margin, {roc:.1%}, is above the mature peers' "
+        "median return of 15.0%; the sales-to-capital may be too high (Damodaran's check)."
+    )
+
+    higher = tuple(replace(p, roic=0.40) for p in hg.peers)
+    r = value_company(replace(hg, peers=higher), deciles, policy, TODAY)
+    assert r.intermediates["peer_roic_median"] == pytest.approx(0.40)
+    assert "return-above-peers" not in codes(r)
+    unknown = tuple(replace(p, roic=None) for p in hg.peers)
+    r = value_company(replace(hg, peers=unknown), deciles, policy, TODAY)
+    assert r.intermediates["peer_roic_median"] is None and "return-above-peers" not in codes(r)
+
+    # invested capital near zero and growing: a huge own measure, usable, and the flag fires
+    small = [0.01 * fy.revenue for fy in hg.series if fy.revenue is not None]
+    tiny = capital_years(fiscal_years(small, [0.0] * 8))
+    r = value_company(replace(hg, capital_years=tiny), deciles, policy, TODAY)
+    s2c = r.intermediates["sales_to_capital"]
+    assert s2c["used"] == "own" and s2c["own_usable"] and s2c["value"] > 100
+    assert "return-above-peers" in codes(r)
+    # near zero and flat: not usable, so the peers' median serves
+    flat = capital_years(fiscal_years([10e6] * 8, [0.0] * 8))
+    r = value_company(replace(hg, capital_years=flat), deciles, policy, TODAY)
+    assert r.intermediates["sales_to_capital"]["used"] == "peers"
+
+
+def test_tax_loss_flag_and_the_bridge(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    hg, t = high_growth_inputs, high_growth_inputs.trailing
+    assert t is not None
+    r = value_company(hg, deciles, policy, TODAY)
+    assert min(r.intermediates["ebit_by_year"]) < 0
+    assert "tax-loss-history-unknown" in codes(r)
+    assert sentence(r, "tax-loss-history-unknown") == (
+        "The forecast carries its own losses forward from zero; losses before it are not stored, "
+        "so taxes may start too early."
+    )
+    profitable = replace(hg, trailing=replace(t, operating_income=500e6))
+    p = value_company(profitable, deciles, policy, TODAY)
+    assert min(p.intermediates["ebit_by_year"]) > 0
+    assert "tax-loss-history-unknown" not in codes(p)
+
+    im = r.intermediates
+    assert (im["debt"], im["cash"]) == (1_000e6, 3_000e6)
+    assert not [c for c in codes(r) if c in ("line-not-presented:debt", "line-not-presented:cash")]
+    no_debt = value_company(replace(hg, debt=None), deciles, policy, TODAY)
+    assert no_debt.intermediates["debt"] == 0.0 and "line-not-presented:debt" in codes(no_debt)
+    assert no_debt.intermediates["equity"] == pytest.approx(im["firm_value"] + 3_000e6)
+    assert no_debt.value is not None and r.value is not None and no_debt.value > r.value
+    no_cash = value_company(replace(hg, cash=None), deciles, policy, TODAY)
+    assert no_cash.intermediates["cash"] == 0.0 and "line-not-presented:cash" in codes(no_cash)
+    assert no_cash.intermediates["equity"] == pytest.approx(im["firm_value"] - 1_000e6)
+    # one of the two lines missing: assembly's note names it, the figure stands, the flag fires
+    note = "longTermDebt not presented"
+    noted = value_company(replace(hg, notes={"debt": note}), deciles, policy, TODAY)
+    assert noted.intermediates["debt"] == 1_000e6
+    assert note in sentence(noted, "line-not-presented:debt")
+    [debt] = [i for i in noted.inputs if i.name == "debt"]
+    assert (debt.value, debt.note) == (1_000e6, note)
+
+
+def test_cross_check_present_with_a_positive_anchor(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    hg = high_growth_inputs
+    r = value_company(hg, deciles, policy, TODAY)
+    assert r.intermediates["growth_route"] == {"refusal": "no positive forward anchor"}
+    assert "sbc-basis-unknown" not in codes(r)  # no cross-check value, no warning on its anchor
+    assert r.intermediates["eps"]["forward"] is None
+
+    positive = replace(
+        hg,
+        quarter_estimates=tuple(replace(q, eps=0.60) for q in hg.quarter_estimates),
+        annual_estimates=(
+            annual(2027, 250e6, 2.50, 3, 13_000e6, 20),
+            annual(2028, 320e6, 3.20, 3, 16_000e6, 15),
+            annual(2029, 400e6, 4.00, 3, 19_200e6, 12),
+        ),
+    )
+    p = value_company(positive, deciles, policy, TODAY)
+    gr = p.intermediates["growth_route"]
+    assert gr["value_per_share"] is not None and gr["refusal"] is None
+    assert "implied_growth" in gr and gr["path_steps"] == pytest.approx([0.28, 0.25])
+    assert p.value == r.value  # the cross-check never moves the value
+    assert p.intermediates["eps"]["forward"] == pytest.approx(2.40)
+    assert p.intermediates["multiples"]["pe_forward"] == pytest.approx(150 / 2.40)
+    # no street EPS: the cross-check's anchor is untested for stock compensation, and says so
+    assert codes(p)[len(p.phase.checks) :][0] == "sbc-basis-unknown"
+
+
+def test_value_spread_flag_over_the_margins(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    r = value_company(high_growth_inputs, deciles, policy, TODAY)
+    by_margin = r.intermediates["value_by_margin"]
+    assert by_margin["low"] < by_margin["median"] < by_margin["high"]
+    assert "value-spread" in codes(r) and "target margins" in sentence(r, "value-spread")
+    close = (
+        replace(high_growth_inputs.peers[0], margin=0.195),
+        high_growth_inputs.peers[1],
+        replace(high_growth_inputs.peers[2], margin=0.205),
+    )
+    narrow = value_company(replace(high_growth_inputs, peers=close), deciles, policy, TODAY)
+    assert narrow.value == r.value and "value-spread" not in codes(narrow)
+
+
+def test_value_not_positive_is_refused_with_the_figures(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    losing = tuple(replace(p, margin=-0.05) for p in high_growth_inputs.peers)
+    r = value_company(replace(high_growth_inputs, peers=losing), deciles, policy, TODAY)
+    assert_refused(r, "value not positive under the reinvestment charge")
+    assert r.intermediates["value_per_share"] <= 0
+    assert r.intermediates["implied_margin"] is not None
+    assert "implied_growth" not in r.intermediates
+
+
+def test_determinism_and_json_round_trip(
+    high_growth_inputs: CompanyInputs,
+    young_growth_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+) -> None:
+    for inputs in (
+        high_growth_inputs,
+        young_growth_inputs,
+        replace(high_growth_inputs, peers=()),
+    ):
+        first = value_company(inputs, deciles, policy, TODAY)
+        assert value_company(inputs, deciles, policy, TODAY) == first
+        assert result_from_json(result_to_json(first)) == first
+
+
+def test_reprice_moves_every_price_side_figure(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    r = value_company(high_growth_inputs, deciles, policy, TODAY)
+    assert r.price is not None and r.price_date is not None
+    stored = result_from_json(result_to_json(r))  # from the intermediates alone
+    assert reprice(stored, r.price, r.price_date, policy) == r
+    r2 = reprice(stored, r.price * 0.5, REPRICED, policy)
+    assert r2.value == r.value and r2.levels == r.levels
+    assert r2.intermediates["implied_growth"] != r.intermediates["implied_growth"]
+    assert r2.intermediates["implied_margin"] != r.intermediates["implied_margin"]
+    assert r2.intermediates["revenue_by_year"] == r.intermediates["revenue_by_year"]
+    fresh = value_company(replace(high_growth_inputs, price=r.price * 0.5), deciles, policy, TODAY)
+    for key in PRICE_KEYS:
+        assert r2.intermediates[key] == fresh.intermediates[key], key
+    assert (r2.stance5, r2.stance3) == (fresh.stance5, fresh.stance3)
+
+
+def test_reprice_moves_the_implied_margin_on_a_refused_row(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    r = value_company(replace(high_growth_inputs, peers=()), deciles, policy, TODAY)
+    assert r.price is not None
+    r2 = reprice(result_from_json(result_to_json(r)), r.price * 0.5, REPRICED, policy)
+    assert r2.refusal == r.refusal and r2.value is None and r2.route is None
+    assert r2.intermediates["implied_margin"] < r.intermediates["implied_margin"]
+    fresh = value_company(
+        replace(high_growth_inputs, peers=(), price=r.price * 0.5), deciles, policy, TODAY
+    )
+    assert r2.intermediates == fresh.intermediates
+    assert (r2.price, r2.price_date) == (r.price * 0.5, REPRICED)
+    plain = value_company(replace(high_growth_inputs, trailing=None), deciles, policy, TODAY)
+    assert reprice(plain, 10.0, REPRICED, policy).intermediates == plain.intermediates
+
+
+def test_implied_margin_needs_a_sales_to_capital(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    hg = high_growth_inputs
+    r = value_company(replace(hg, peers=()), deciles, policy, TODAY)
+    im = r.intermediates
+    assert implied_margin_at_price(im, 75.0, policy) == {
+        "implied_margin": reprice(r, 75.0, REPRICED, policy).intermediates["implied_margin"]
+    }
+    no_s2c = {**im, "sales_to_capital": {**im["sales_to_capital"], "value": None}}
+    assert implied_margin_at_price(no_s2c, 75.0, policy) == {"implied_margin": None}
+
+
+def test_peers_the_route_reads_are_the_inputs_peers(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The largest peer by market cap is recorded and sets nothing; a peer with no market cap
+    still counts for the median."""
+    peers = (*high_growth_inputs.peers, PeerFigures("PEER4", None, 0.40, 10, 2.0, 0.10))
+    r = value_company(replace(high_growth_inputs, peers=peers), deciles, policy, TODAY)
+    tm = r.intermediates["target_margin"]
+    assert tm["count"] == 4 and tm["value"] == pytest.approx(0.25)
+    assert (tm["low"], tm["high"]) == (0.10, 0.40)
+    assert (tm["largest_symbol"], tm["largest_margin"]) == ("PEER2", 0.20)
+    assert tm["peers"][3] == {"symbol": "PEER4", "margin": 0.40, "market_cap": None}
+
+
+def test_own_sales_to_capital_is_an_estimate_under_the_intangibles_method(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Like the returns read from invested capital, the own measure is an estimate when invested
+    capital took the issuer's as-reported intangibles total."""
+    r = value_company(high_growth_inputs, deciles, policy, TODAY)
+    [plain] = [i for i in r.inputs if i.name == "sales_to_capital"]
+    assert (plain.kind, plain.provenance.source) == ("observed", "FMP income-statement")
+    method = "bs10-intangibles-total-v1"
+    estimated = replace(high_growth_inputs, estimate_methods={"intangibles": method})
+    r = value_company(estimated, deciles, policy, TODAY)
+    [s2c] = [i for i in r.inputs if i.name == "sales_to_capital"]
+    assert (s2c.kind, s2c.estimate_method) == ("estimate", method)
+    assert s2c.note == "the company's own five-year marginal measure"

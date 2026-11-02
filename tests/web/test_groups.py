@@ -7,7 +7,8 @@ The universe of one full refresh admits six companies:
 - AAPL, BBB and CCC: the engine's Mature Growth company (value $133.37, buy $100.02) at $150, $80
   and $120; Technology, the first mega cap, the others mid.
 - STBL: the engine's Mature Stable company at $40, above its $33.54 buy level; Industrials, mid.
-- AAL: the engine's Young Growth company, refused; Technology, mid.
+- AAL: the engine's Young Growth company with no mature peers, refused for its target margin;
+  Technology, mid.
 - NEWC: Industrials, no cap band, not valued yet (no snapshot, so no phase).
 
 FIRB, valued like AAPL, is listed but not admitted: it has no row on the screen, so in no group.
@@ -67,7 +68,7 @@ def results(policy: Policy) -> dict[str, ValuationResult]:
         "BBB": reprice(value(mature_growth_inputs(), "BBB"), 80.0, TODAY, policy),
         "CCC": reprice(value(mature_growth_inputs(), "CCC"), 120.0, TODAY, policy),
         "STBL": value(mature_stable_inputs(), "STBL"),
-        "AAL": value(young_growth_inputs(), "AAL"),
+        "AAL": value(replace(young_growth_inputs(), peers=()), "AAL"),
         "FIRB": value(mature_growth_inputs(), "FIRB"),
     }
 

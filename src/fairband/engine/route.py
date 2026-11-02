@@ -2,21 +2,24 @@
 
 ``value_company`` refuses before any arithmetic, in this order: no universe deciles yet (whatever
 else assembly found, which the next run with deciles judges); the refusal assembly set; a foreign
-filer (spec 11); an unclassified company (the classifier's reason); a phase other than the two
-mature ones; no positive price; no positive diluted share count; no trailing figures. Then the
-phase's route runs (``route_mature_growth``, ``route_mature_stable``, on the shared
-``route_steps``) and refuses on its own guards. Mature Growth: no trailing revenue, no statutory
-tax rate, the anchor's refusals (an incomplete NTM consensus, no positive forward anchor, a
-forward P/E unit error), consensus earnings that turn negative within the path, a value a share at
-or below zero under the reinvestment charge (which keeps the value-side intermediates). Mature
-Stable: no positive trailing earnings. A refusal is a result with no value and a reason, never an
-exception.
+filer (spec 11); an unclassified company (the classifier's reason); Start-up; a phase without a
+route (Decline); no positive price; no positive diluted share count; no trailing figures. Then the
+phase's route runs (``route_mature_growth``, ``route_mature_stable``, and
+``route_revenue_growth`` for High Growth and Young Growth, on the shared ``route_steps``) and
+refuses on its own guards. Mature Growth: no trailing revenue, no statutory tax rate, the anchor's
+refusals (an incomplete NTM consensus, no positive forward anchor, a forward P/E unit error),
+consensus earnings that turn negative within the path, a value a share at or below zero under the
+reinvestment charge (which keeps the value-side intermediates). Mature Stable: no positive
+trailing earnings. Revenue growth: the refusals of its module docstring, in its order. A refusal
+is a result with no value and a reason, never an exception.
 
 Every result of ``value_company`` is valid until the next earnings date when that is after the
 data date, else for the policy's fallback days. Its flags are the assembly's, the classifier's
 checks and the route's, the first of each code kept. Its intermediates hold ``price_facts``, the
 price columns of spec 6.3, on a refusal too (``None`` for a row without a price). ``reprice``
-moves a result to a new price from its intermediates alone, its price input with it;
+moves a result to a new price from its intermediates alone, its price input with it; a refusal
+takes only the new price, except a revenue-growth row whose intermediates hold ``revenue_path``
+(refused for its target margin or its value), whose margin the price needs moves too.
 ``refusal_result`` is the shape of every refusal.
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
@@ -58,6 +61,21 @@ three.
   ntm_net_income, path_steps, belief, runway, fade_years, runway_return, terminal_roic,
   charge_off, refusal ``None``; or only its refusal); at the price, ``multiples``,
   ``expected_return`` and the cross-check's ``implied_growth``, rebuilt from its own keys.
+- Revenue growth (High Growth and Young Growth): ``ntm_revenue``, ``path`` (base_year, analysts,
+  held), ``path_steps``, ``revenue_path``, ``growth_rates`` (years 1 to 10), ``margin_start``,
+  ``margin_path`` (start, target, by_year), ``target_margin`` (value, count, low, high,
+  largest_symbol, largest_margin, peers), ``tax_rate``, ``moat``, ``sales_to_capital`` (used, own,
+  own_usable, peers, value), ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``,
+  ``nopat_by_year``, ``reinvestment_by_year``, ``fcff_by_year``, ``terminal_roic``,
+  ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
+  ``value_per_share``, ``value_by_margin`` ("low", "median", "high": the peers' lowest, median
+  and highest margins), ``return_on_new_capital``, ``peer_roic_median``, ``failure_probability``
+  (Young Growth only), ``eps``, ``epv``, ``dividend_yield``, ``net_buyback_yield``,
+  ``income_basis``, ``price_facts``, ``growth_route`` (the cross-check, as on a Mature Stable
+  row); at the price, ``implied_growth``, ``implied_margin``, ``multiples``, ``growth_share``,
+  ``expected_return`` and the cross-check's ``implied_growth``. A row refused for its target
+  margin holds only the rebuild keys (``revenue_path``, ``margin_start``, ``tax_rate``, ``moat``,
+  ``debt``, ``cash``, ``shares``, ``sales_to_capital``), ``implied_margin`` and ``price_facts``.
 """
 
 import math
@@ -73,8 +91,20 @@ from fairband.engine.revenue_growth import PeerFigures
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route_mature_growth import growth_at_price, long_runway, value_mature_growth
 from fairband.engine.route_mature_stable import stable_at_price, value_mature_stable
+from fairband.engine.route_revenue_growth import (
+    implied_margin_at_price,
+    revenue_at_price,
+    value_revenue_growth,
+)
 from fairband.engine.route_steps import Context, Refused, Valued, data, price_facts_for
-from fairband.engine.types import Flag, PhaseEvidence, Provenance, TaggedInput, ValuationResult
+from fairband.engine.types import (
+    Flag,
+    Phase,
+    PhaseEvidence,
+    Provenance,
+    TaggedInput,
+    ValuationResult,
+)
 from fairband.policy import Policy
 
 _FOREIGN = "foreign filer: currency and share-unit handling not built yet"
@@ -83,6 +113,7 @@ _START_UP = (
 )
 _LONG_RUNWAY = "long-runway-high-growth"
 _VALUE_SPREAD = "value-spread"
+_ROUTED: tuple[Phase, ...] = ("Mature Growth", "Mature Stable", "High Growth", "Young Growth")
 
 
 @dataclass(frozen=True)
@@ -149,7 +180,7 @@ def value_company(
         return refuse(phase.reason or "unclassified")
     if phase.phase == "Start-up":
         return refuse(_START_UP)
-    if phase.phase not in ("Mature Growth", "Mature Stable"):
+    if phase.phase not in _ROUTED:
         return refuse(f"{phase.phase} route not built yet")
     price, shares, trailing = inputs.price, inputs.shares_diluted, inputs.trailing
     if price is None or not _positive(price):
@@ -160,10 +191,20 @@ def value_company(
         return refuse("no trailing figures")
 
     c = Context(inputs, trailing, price, shares, policy, today)
-    outcome = value_mature_growth(c) if phase.phase == "Mature Growth" else value_mature_stable(c)
+    outcome = _route(c, phase.phase)
     if isinstance(outcome, Refused):
         return refuse(outcome.reason, outcome.flags, outcome.intermediates)
     return _valued(inputs, phase, price, policy, refresh_id, outcome)
+
+
+def _route(c: Context, phase: Phase) -> Valued | Refused:
+    """The phase's route: Mature Growth and Mature Stable their own, High Growth and Young Growth
+    the revenue-growth route."""
+    if phase == "Mature Growth":
+        return value_mature_growth(c)
+    if phase == "Mature Stable":
+        return value_mature_stable(c)
+    return value_revenue_growth(c, phase)
 
 
 def refusal_result(
@@ -218,7 +259,9 @@ def reprice(
 ) -> ValuationResult:
     """The result at a new price: the same value, levels and validity; the stance, the
     price-dependent intermediates and the long-runway flag recomputed from the intermediates.
-    A result with no value only takes the new price and date; ``price_facts`` stay as they were.
+    A result with no value only takes the new price and date, except that a revenue-growth
+    refusal whose intermediates hold ``revenue_path`` also moves its ``implied_margin``, the
+    margin the price needs; ``price_facts`` stay as they were.
     Either way the ``price`` input becomes the new quote, so the drawer's arithmetic reproduces:
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
@@ -234,11 +277,17 @@ def reprice(
         for i in result.inputs
     )
     if result.value is None or result.levels is None:
-        return replace(result, price=price, price_date=price_date, inputs=inputs)
+        moved = replace(result, price=price, price_date=price_date, inputs=inputs)
+        if "revenue_path" not in result.intermediates:
+            return moved
+        margin = implied_margin_at_price(result.intermediates, price, policy)
+        return replace(moved, intermediates=result.intermediates | margin)
     im, flags = dict(result.intermediates), result.flags
     if result.route == "mature-growth":
         im |= growth_at_price(im, price, result.value, policy)
         flags = _swap_long_runway(flags, long_runway(im, policy))
+    elif result.route == "revenue-growth":
+        im |= revenue_at_price(im, price, result.value, policy)
     else:
         im |= stable_at_price(im, price, result.value, policy)
     return replace(

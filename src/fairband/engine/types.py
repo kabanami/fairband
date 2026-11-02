@@ -18,7 +18,7 @@ Phase = Literal[
 ]
 Stance5 = Literal["BUY", "ACCUMULATE / HOLD", "HOLD", "HOLD — above fair band", "TRIM"]
 Stance3 = Literal["buy", "hold", "trim"]
-Route = Literal["mature-growth", "mature-stable"]
+Route = Literal["mature-growth", "mature-stable", "revenue-growth"]
 
 PHASE_NUMBER: dict[Phase, int] = {
     "Start-up": 1,

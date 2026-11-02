@@ -89,7 +89,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "net_income_ttm", t.net_income, "USD", "statements"),
-        *common_rules(policy, moat, roic),
+        *common_rules(policy, moat, roic.terminal),
         rule(policy, "runway_years", runway, "years", f"{moat} moat"),
         rule(
             policy,

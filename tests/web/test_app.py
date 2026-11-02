@@ -1,6 +1,7 @@
 """The web app through its routes, on a temporary migrated database with two snapshots from the
 engine's test companies: AAPL, valued on the Mature Growth route, and AAL, a Young Growth company
-the engine refuses. Both are listed in the universe of one finished full refresh."""
+with no mature peers, which the engine refuses for its target margin. Both are listed in the
+universe of one finished full refresh."""
 
 import json
 import re
@@ -117,7 +118,8 @@ def policy() -> Policy:
 def results(policy: Policy) -> dict[str, ValuationResult]:
     deciles = universe_deciles()
     valued = value_company(replace(mature_growth_inputs(), symbol="AAPL"), deciles, policy, TODAY)
-    refused = value_company(replace(young_growth_inputs(), symbol="AAL"), deciles, policy, TODAY)
+    no_peers = replace(young_growth_inputs(), symbol="AAL", peers=())
+    refused = value_company(no_peers, deciles, policy, TODAY)
     assert valued.value is not None and refused.value is None
     return {"AAPL": valued, "AAL": refused}
 
@@ -272,11 +274,13 @@ def test_screen_rows_and_default_sort(
     refused = results["AAL"]
     assert set(aal) == set(aapl)
     assert aal["phase"] == 2 and aal["name"] == "Young Growth Co"
-    assert aal["refusal"] == refused.refusal == "Young Growth route not built yet"
+    assert aal["refusal"] == refused.refusal == "no target margin: 0 mature peers"
     for key in ("fairLow", "fairHigh", "fairValue", "buyLevel", "trimLevel", "mechanical"):
         assert aal[key] is None, key
-    for key in ("moat", "impliedGrowth", "expectedReturn", "epv", "peClean", "stance3", "route"):
+    for key in ("impliedGrowth", "expectedReturn", "epv", "peClean", "stance3", "route"):
         assert aal[key] is None, key
+    # refused for its target margin, it keeps the moat class the margin the price needs reads
+    assert aal["moat"] == refused.intermediates["moat"] == "None"
     assert aal["reviewed"] is None and aal["overrides"] == 0
     assert aal["price"] == 150.0
     assert aal["high52w"] == refused.intermediates["price_facts"]["high_52w"]
@@ -468,7 +472,7 @@ def test_screen_without_a_universe_shows_every_snapshot(
     with TestClient(app, base_url=HOST) as c:
         rows = _screen(c)["rows"]
     assert [(row["ticker"], row["name"], row["refusal"]) for row in rows] == [
-        ("AAL", None, "Young Growth route not built yet"),
+        ("AAL", None, "no target margin: 0 mature peers"),
         ("AAPL", None, None),
     ]
 
