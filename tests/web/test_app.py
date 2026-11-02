@@ -976,7 +976,13 @@ def test_bundle_menus_close_on_outside_click_and_escape() -> None:
 def test_bundle_find_has_a_clear_word() -> None:
     bundle = _component_file("bundle.js")
     assert "p.query ? h('button', { type: 'button', className: 'fb-screen__clear control'" in bundle
-    assert "onClick: function () { p.onQueryChange(''); }" in bundle
+    # Clear unmounts with the text: it hands focus back to the field, not to the page body
+    clear = bundle.index("p.query ? h('button', { type: 'button', className: 'fb-screen__clear")
+    handler = bundle[clear : bundle.index("'Clear')", clear)]
+    assert "p.onQueryChange('');" in handler
+    assert "var q = document.getElementById('fb-q');" in handler
+    assert "if (q) q.focus();" in handler
+    assert handler.index("p.onQueryChange('');") < handler.index("q.focus()")
     css = _component_file("bundle.css")
     assert (
         ".fb-screen__clear:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }"

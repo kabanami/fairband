@@ -1201,9 +1201,14 @@
               onChange: function (e) { p.onQueryChange(e.target.value); }
             }),
             // fairband: Clear, a word, while the field has text; it empties the query only
-            // (growth-routes spec 6.4).
+            // (growth-routes spec 6.4), then hands focus back to the field, since the button
+            // unmounts with the text and focus would fall to the page.
             p.query ? h('button', { type: 'button', className: 'fb-screen__clear control',
-              onClick: function () { p.onQueryChange(''); } }, 'Clear') : null) : null,
+              onClick: function () {
+                p.onQueryChange('');
+                var q = document.getElementById('fb-q');
+                if (q) q.focus();
+              } }, 'Clear') : null) : null,
           chips.length ? h('span', { className: 'fb-screen__chips' },
             chips.map(function (c) {
               return h('button', {
