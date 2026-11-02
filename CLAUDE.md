@@ -5,8 +5,12 @@ Package in `src/fairband/`; tests in `tests/`, mirroring the package.
 
 ## Read first
 
-- Method: `docs/legacy/design.md`. The source for the valuation method; where the spec is
-  silent, it applies.
+- Method as built: `docs/method.md`. The single statement of the classifier, the routes, the
+  flags and the refusals the engine runs. Where it and any other document disagree, it
+  describes what runs. Change it in the same commit as any change to the engine, the
+  classifier, the universe rule or a policy value.
+- Design: `docs/legacy/design.md`. The original design and the reasons behind the method;
+  where `docs/method.md` and the specs are silent, it applies.
 - Spec: `docs/superpowers/specs/2026-10-31-mechanical-screen-design.md`. The mechanical
   screen; where it and a legacy document disagree, the spec wins.
 - Plan: `docs/superpowers/plans/2026-10-31-mechanical-screen.md`. The task order and the
