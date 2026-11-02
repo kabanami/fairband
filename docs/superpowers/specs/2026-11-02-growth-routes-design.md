@@ -1,6 +1,6 @@
 # The High Growth and Young Growth routes, and four screen fixes: design
 
-Status: draft of 2026-11-02, after a brainstorm with the founder, awaiting the founder's approval. The decisions in the log at the
+Status: approved by the founder on 2026-11-02, after a brainstorm. The decisions in the log at the
 end are the founder's. Items marked *my call* were settled by Claude while writing and can be
 overturned. Builder check done 2026-11-02: its two questions are settled in 5.3 and 5.11.
 
@@ -289,8 +289,10 @@ refresh", as it does today.
 A listing whose name matches one of `name_exclude_patterns` is recorded, not eligible, with the
 reason "name pattern" (*my call*; the first full refresh's calibration counts them). The patterns,
 matched ignoring case: `\bnotes?\b`, `\bdue 20\d\d\b`, `\d(\.\d+)?% `, `\bpreferred\b`,
-`\bpreference\b`, `\bdepositary\b`, `\bwarrants?\b`, `\bunits?\b`, `\brights\b`. ABXL,
-"Abacus Global Management, Inc. - 8.875% Fixed Rate Senior Notes due 2028", is the known case.
+`\bpreference\b`. ABXL, "Abacus Global Management, Inc. - 8.875% Fixed Rate Senior Notes due
+2028", is the known case. Warrants, units and rights carry symbol suffixes the symbol rule already
+catches, and "depositary" is left out because an ADR's name can carry "American Depositary
+Shares" and ADRs belong in the universe (*my call*, amended while planning).
 
 ## 6. The four screen fixes
 
