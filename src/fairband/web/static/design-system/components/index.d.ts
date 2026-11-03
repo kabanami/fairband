@@ -389,6 +389,20 @@ export interface ScreenRow {
   targetMargin?: number | null;
   impliedMargin?: number | null;
   /**
+   * fairband: a Start-up row's year-10 revenue the price needs, in dollars, and the years its
+   * cash covers the trailing burn (`null` when not burning); a Decline row's synthetic rating
+   * ("—" with no net debt), its ten-year default probability π and the decline rate its price
+   * implies, fractions rendered as percentages, its Altman Z″ and its Piotroski F ("6 of 9").
+   * `null` on every other row.
+   */
+  requiredRevenue?: number | null;
+  burnCover?: number | null;
+  rating?: string | null;
+  distressProbability?: number | null;
+  altmanZ?: number | null;
+  piotroskiF?: string | null;
+  impliedDeclineRate?: number | null;
+  /**
    * fairband: price ÷ value and its word; `null` on a refusal, a placeholder and a snapshot valued
    * before the designation, and the Price vs value cell then shows an em dash.
    */

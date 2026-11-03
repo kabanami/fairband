@@ -428,7 +428,8 @@
     },
       h('div', { className: 'fb-band__head' },
         h('span', { className: 'fb-band__price figure-lg' }, money(price)),
-        word ? h('span', { className: 'fb-designation label' }, word) : null,
+        // fairband: the word's chip in its band's colour, as the screen's column draws it.
+        word ? h('span', { className: 'fb-designation fb-designation--' + p.designation + ' label' }, word) : null,
         h('span', { className: 'fb-band__gap caption' },
           pct(Math.abs(toFair) * 100) + (toFair >= 0 ? ' below' : ' above') + ' fair value')
       ),
@@ -915,6 +916,13 @@
     return '$' + (Number(v) / 1e9).toLocaleString('en-US',
       { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' bn';
   }
+  // fairband: a span of years to one decimal with its unit; a score to `dp` decimals.
+  function years(v) {
+    return v == null || isNaN(Number(v)) ? '—' : signed(Number(v).toFixed(1)) + ' years';
+  }
+  function fixed(v, dp) {
+    return v == null || isNaN(Number(v)) ? '—' : signed(Number(v).toFixed(dp));
+  }
   function figureCell(text) { return h('td', { className: 'fb-num figure' }, text); }
   function wordCell(text) { return h('td', { className: 'body' }, text == null ? '—' : text); }
   function dateCell(iso) {
@@ -950,13 +958,15 @@
       } },
     { key: 'price', head: 'Price', num: true, locked: true,
       cell: function (r) { return h('td', { className: 'fb-num figure' }, money(r.price)); } },
-    // fairband: the row's price-vs-value word as a chip with no band colour (classifier-
-    // designation spec 7.3); a row without one shows an em dash, never a word from the levels.
+    // fairband: the row's price-vs-value word as a chip in its band's colour (classifier-
+    // designation spec 7.3, founder 2026-11-03); a row without one shows an em dash, never a
+    // word from the levels.
     { key: 'designation', head: 'Price vs value',
       cell: function (r) {
         var word = DESIGNATION[r.designation];
         if (!word) return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));
-        return h('td', null, h('span', { className: 'fb-designation label' }, word));
+        return h('td', null,
+          h('span', { className: 'fb-designation fb-designation--' + r.designation + ' label' }, word));
       } },
     { key: 'overrides', head: 'Overrides',
       cell: function (r) {
@@ -1027,7 +1037,24 @@
     // fairband: the margin the price needs, a growth row's; the one figure of a row refused for
     // its target margin (growth-routes spec 5.11).
     { key: 'impliedMargin', head: 'Implied margin', num: true,
-      cell: function (r) { return figureCell(percent(r.impliedMargin)); } }
+      cell: function (r) { return figureCell(percent(r.impliedMargin)); } },
+    // fairband: a Start-up row's year-10 revenue the price needs and the years its cash covers
+    // the trailing burn (start-up and decline spec 9.2, 9.4).
+    { key: 'requiredRevenue', head: 'Needs by yr 10', num: true,
+      cell: function (r) { return figureCell(billions(r.requiredRevenue)); } },
+    { key: 'burnCover', head: 'Cash cover', num: true,
+      cell: function (r) { return figureCell(years(r.burnCover)); } },
+    // fairband: a Decline row's synthetic rating, its ten-year probability of default π, Altman
+    // Z″, Piotroski F and the decline rate its price implies (spec 10.7 to 10.9).
+    { key: 'rating', head: 'Rating', cell: function (r) { return wordCell(r.rating); } },
+    { key: 'distressProbability', head: 'π', num: true,
+      cell: function (r) { return figureCell(percent(r.distressProbability)); } },
+    { key: 'altmanZ', head: 'Altman Z″', num: true,
+      cell: function (r) { return figureCell(fixed(r.altmanZ, 2)); } },
+    { key: 'piotroskiF', head: 'Piotroski F', num: true,
+      cell: function (r) { return figureCell(r.piotroskiF == null ? '—' : r.piotroskiF); } },
+    { key: 'impliedDeclineRate', head: 'Implied decline', num: true,
+      cell: function (r) { return figureCell(percent(r.impliedDeclineRate)); } }
   ];
 
   // fairband: the designation column ends the default list (classifier-designation spec 7.3).

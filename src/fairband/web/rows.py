@@ -72,6 +72,13 @@ EXTRA_KEYS = (
     "growthRouteValue",
     "targetMargin",
     "impliedMargin",
+    "requiredRevenue",
+    "burnCover",
+    "rating",
+    "distressProbability",
+    "altmanZ",
+    "piotroskiF",
+    "impliedDeclineRate",
 )
 ROW_KEYS = SCREEN_ROW_KEYS + EXTRA_KEYS
 
@@ -103,12 +110,21 @@ def screen_row(
     ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``. The moat
     shows on a row with a value only: a growth refusal keeps the moat class for the price refresh,
     not for the screen. ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the
-    price needs, a growth row's; a row refused for its target margin has the latter alone."""
+    price needs, a growth row's; a row refused for its target margin has the latter alone.
+
+    A Start-up row has ``requiredRevenue``, the year-10 revenue its price needs (``None`` when the
+    requirement has a reason), and ``burnCover``, the years its cash covers the trailing burn
+    (``None`` when not burning). A Decline row has its synthetic ``rating`` ("—" with no net debt,
+    ``None`` unavailable), ``distressProbability`` π, ``altmanZ``, ``piotroskiF`` ("6 of 9") and
+    the ``impliedDeclineRate``. A Decline row refused for a value at or below zero keeps them but
+    the last, and has no route: each is read from the intermediates, which no other route
+    writes."""
     result = snapshot.result
     phase = result.phase.phase
     im = result.intermediates
     multiples = _table(im, "multiples")
     facts = _table(im, "price_facts")
+    rating = _table(im, "rating")
     market_cap = None if company is None else company.market_cap
     return {
         "ticker": snapshot.symbol,
@@ -154,6 +170,13 @@ def screen_row(
         "growthRouteValue": _growth_route_value(snapshot),
         "targetMargin": _table(im, "target_margin").get("value"),
         "impliedMargin": im.get("implied_margin"),
+        "requiredRevenue": _table(im, "requirement").get("revenue_y10"),
+        "burnCover": _burn_cover(im),
+        "rating": rating.get("rating"),
+        "distressProbability": rating.get("pi"),
+        "altmanZ": _table(im, "altman_z").get("score"),
+        "piotroskiF": _piotroski_f(im),
+        "impliedDeclineRate": im.get("implied_decline_rate"),
     }
 
 
@@ -166,6 +189,20 @@ def _growth_route_value(snapshot: SnapshotRow) -> float | None:
     if snapshot.route in ("mature-stable", "revenue-growth"):
         return _table(snapshot.result.intermediates, "growth_route").get("value_per_share")
     return None
+
+
+def _burn_cover(im: dict[str, Any]) -> float | None:
+    """A Start-up row's years of cash at the trailing burn; ``None`` when it is not burning, has
+    no trailing cash flows, or is not a Start-up row."""
+    cover = im.get("burn_cover_years")
+    return cover if isinstance(cover, float) else None
+
+
+def _piotroski_f(im: dict[str, Any]) -> str | None:
+    """A Decline row's Piotroski F as its score of the signals read, "6 of 9"; ``None`` without a
+    score or with no signal read."""
+    f = _table(im, "piotroski_f")
+    return f"{f['score']} of {f['read']}" if f.get("read") else None
 
 
 def placeholder_row(company: CompanyRow) -> dict[str, Any]:

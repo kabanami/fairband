@@ -23,9 +23,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from support.engine_companies import (
     annual,
+    decline_inputs,
+    fiscal_years,
     high_growth_inputs,
     mature_growth_inputs,
     mature_stable_inputs,
+    start_up_inputs,
     universe_deciles,
     young_growth_inputs,
 )
@@ -111,7 +114,17 @@ EXTRA_COLUMNS = [
     "growthRouteValue",
     "targetMargin",
     "impliedMargin",
+    "requiredRevenue",
+    "burnCover",
+    "rating",
+    "distressProbability",
+    "altmanZ",
+    "piotroskiF",
+    "impliedDeclineRate",
 ]
+# The Start-up and Decline rows' figures, the last extra columns.
+START_UP_KEYS = ("requiredRevenue", "burnCover")
+DECLINE_KEYS = ("rating", "distressProbability", "altmanZ", "piotroskiF", "impliedDeclineRate")
 
 
 @pytest.fixture
@@ -279,6 +292,13 @@ def test_screen_rows_and_default_sort(
         "growthRouteValue": valued.value,
         "targetMargin": None,
         "impliedMargin": None,
+        "requiredRevenue": None,
+        "burnCover": None,
+        "rating": None,
+        "distressProbability": None,
+        "altmanZ": None,
+        "piotroskiF": None,
+        "impliedDeclineRate": None,
     }
 
     refused = results["AAL"]
@@ -518,6 +538,89 @@ def test_growth_route_value_on_revenue_growth_rows(
     assert row["route"] == "revenue-growth" and cross_check is not None
     assert row["growthRouteValue"] == cross_check != row["mechanical"]
     assert row["mechanical"] == result.intermediates["value_per_share"]
+
+
+def _add_snapshots(db_path: Path, *found: ValuationResult) -> None:
+    """Each result's company admitted in the first refresh's universe, with its snapshot."""
+    with closing(connect(db_path)) as conn:
+        companies = [_company(r.symbol, 1, f"{r.symbol} Co", Decimal(3_000_000_000)) for r in found]
+        insert_companies(conn, companies)
+        for result in found:
+            insert_snapshot(conn, result, 1, clock=lambda: CREATED)
+
+
+def test_screen_row_carries_the_decline_figures(
+    db_path: Path, policy: Policy, client: TestClient
+) -> None:
+    """Spec 13.1's Decline row: the rating, its ten-year π, Altman Z″ (3.07) and Piotroski F, and
+    the decline rate its price of $3.00 implies (−27.7%). A row refused for a value at or below
+    zero keeps them, though it has no route: a chronic loss-maker with net debt rated D, π 100%.
+    With net cash there is no rating ("—") and π is 0. No other row carries them, nor a Decline row
+    the Start-up figures."""
+    deciles = universe_deciles()
+    valued = value_company(decline_inputs(), deciles, policy, TODAY)
+    margins = [-0.02, -0.03, -0.03, -0.03, -0.03]
+    revenue = [fy.revenue for fy in decline_inputs().series if fy.revenue is not None]
+    chronic = replace(decline_inputs(), symbol="DCLM", series=fiscal_years(revenue, margins))
+    refused = value_company(chronic, deciles, policy, TODAY)
+    net_cash = value_company(
+        replace(decline_inputs(), symbol="DCNC", cash=250e6), deciles, policy, TODAY
+    )
+    assert (valued.route, refused.route, refused.refusal) == (
+        "decline",
+        None,
+        "value not positive in the run-off",
+    )
+    _add_snapshots(db_path, valued, refused, net_cash)
+    rows = {row["ticker"]: row for row in _screen(client)["rows"]}
+
+    row, im = rows["DCCO"], valued.intermediates
+    assert row["rating"] == "A-"
+    assert row["distressProbability"] == 0.05
+    assert row["altmanZ"] == pytest.approx(3.07, abs=5e-3) == im["altman_z"]["score"]
+    assert row["piotroskiF"] == "6 of 9"
+    assert row["impliedDeclineRate"] == pytest.approx(-0.277, abs=5e-4)
+    assert row["impliedDeclineRate"] == im["implied_decline_rate"]
+    assert all(row[key] is None for key in START_UP_KEYS)
+
+    row = rows["DCLM"]
+    assert (row["refusal"], row["rating"], row["distressProbability"]) == (
+        "value not positive in the run-off",
+        "D",
+        1.0,
+    )
+    assert row["altmanZ"] is not None and row["piotroskiF"] is not None
+    assert row["impliedDeclineRate"] is None  # a refusal has nothing at the price
+    assert (rows["DCNC"]["rating"], rows["DCNC"]["distressProbability"]) == ("—", 0.0)
+    for ticker in ("AAPL", "AAL", "HGCO"):
+        assert all(rows[ticker][key] is None for key in START_UP_KEYS + DECLINE_KEYS), ticker
+
+
+def test_screen_row_carries_the_start_up_requirement(
+    db_path: Path, policy: Policy, client: TestClient
+) -> None:
+    """Spec 13.2's Start-up row, a refusal with its figures: the year-10 revenue its price needs
+    (1,725.73) and the years its cash covers the burn (4.0). A row not burning has no cover, and
+    a row whose requirement has a reason no revenue; neither carries the Decline figures."""
+    deciles, inputs = universe_deciles(), start_up_inputs()
+    t = inputs.trailing
+    assert t is not None
+    found = value_company(inputs, deciles, policy, TODAY)
+    not_burning = replace(inputs, symbol="SUNB", trailing=replace(t, cfo=15.0))
+    no_peers = replace(inputs, symbol="SUNP", peers=())
+    others = [value_company(i, deciles, policy, TODAY) for i in (not_burning, no_peers)]
+    _add_snapshots(db_path, found, *others)
+    rows = {row["ticker"]: row for row in _screen(client)["rows"]}
+
+    row, req = rows["SUCO"], found.intermediates["requirement"]
+    assert (row["route"], row["refusal"]) == ("start-up", "Start-up: no value by design")
+    assert row["requiredRevenue"] == pytest.approx(1_725.73, abs=5e-3) == req["revenue_y10"]
+    assert row["burnCover"] == 4.0
+    assert all(row[key] is None for key in DECLINE_KEYS)
+    assert others[0].intermediates["burn_cover_years"] == "not burning"
+    assert rows["SUNB"]["burnCover"] is None and rows["SUNB"]["requiredRevenue"] is not None
+    assert others[1].intermediates["requirement"]["reason"] == "no target margin: 0 mature peers"
+    assert rows["SUNP"]["requiredRevenue"] is None and rows["SUNP"]["burnCover"] == 4.0
 
 
 def test_screen_keeps_the_universe_when_a_refresh_admits_none(
@@ -899,6 +1002,78 @@ def test_app_js_escape_closes_an_open_menu_before_the_drawer() -> None:
     assert "event.key === 'Escape' && state.drawer && !document.querySelector('.fb-menu')" in script
 
 
+def test_app_js_drawer_draws_the_run_off_table() -> None:
+    """Spec 10.10: a Decline row's drawer draws the run-off's ten years, a fall in revenue
+    releasing capital and a rise reinvesting it, then the terminal; the margin it holds; the
+    rating and π; the floor, the distress-sale value and the weighting; Z″ and F. A row refused
+    for a value at or below zero keeps its figures without a route, so the drawer reads its
+    intermediates."""
+    script = _static_file("app.js")
+    assert "'decline': 'Decline route'" in script
+    assert "'runoff_path' in im ? declineRoute(r) : null," in script
+    for text in (
+        "'Run-off'",
+        "['Release', im.release_by_year, whole],",
+        "['Reinvestment', im.reinvestment_by_year, whole],",
+        "['Free cash flow', im.fcff_by_year, whole]",
+        "['Terminal value', whole(im.terminal_value), true],",
+        "rows.push(['Implied decline rate', im.implied_decline_rate == null",
+        "'Normalized margin'",
+        "'Rating'",
+        "'no net debt'",
+        "'unavailable: no interest expense on file'",
+        "'π, ten-year default probability'",
+        "'Floor and distress'",
+        "'Going concern a share'",
+        "'NCAV a share'",
+        "'Distress-sale value a share'",
+        "'value = floored × (1 − π) + distress × π'",
+        "'Altman Z″'",
+        "'Piotroski F'",
+        "'✓'",
+        "'✗'",
+        "'not read'",
+    ):
+        assert text in script, text
+    # the marks come from a fallback font: each in its own box, so the signals' words line up
+    assert "h('span', { className: 'figure-sm app-mark', role: 'img', 'aria-label': mark[1]," in (
+        script
+    )
+    assert ".app-mark { display: inline-block; width: 2ch; }" in _static_file("index.html")
+    for key in (
+        "going_concern_per_share",
+        "ncav_per_share",
+        "floored_per_share",
+        "distress_per_share",
+        "altman_z",
+        "piotroski_f",
+        "implied_decline_rate",
+    ):
+        assert key in script, key
+
+
+def test_app_js_drawer_draws_the_requirement() -> None:
+    """Spec 9.2 and 9.4: a Start-up row's drawer, under its refusal, states the revenue its price
+    needs in year 10 (a multiple of the trailing revenue when there is one), the target margin
+    and the ramp behind it, the cash floor and the burn cover. A repriced row's market cap moved
+    with the price from the one its input read: both show."""
+    script = _static_file("app.js")
+    assert "'start-up': 'Start-up route'" in script
+    assert "'requirement' in im ? startUpRoute(r) : null," in script
+    for text in (
+        "'Revenue the price needs'",
+        "if (!req.reason && req.revenue_0 > 0) {",
+        "' × the trailing revenue'",
+        "'Cash floor'",
+        "'Net cash a share'",
+        "'Burn cover'",
+        "if (cover === 'not burning')",
+        "var read = dataValue(inputs, 'market_cap');",
+        "'The market cap moved with the price: '",
+    ):
+        assert text in script, text
+
+
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
 EXTRA_COLUMN_HEADS = {
     "sector": "Sector",
@@ -992,7 +1167,7 @@ def test_bundle_filter_menu_has_a_price_vs_value_section() -> None:
 
 
 def test_bundle_designation_column_head_and_chip() -> None:
-    """Spec 7.3: the column shows the row's word as a chip with no band colour; a row without one
+    """Spec 7.3: the column shows the row's word as a chip in its band's colour; a row without one
     (a refusal, a placeholder, a snapshot valued before the designation) shows an em dash, never a
     word derived from the levels."""
     bundle = _component_file("bundle.js")
@@ -1001,8 +1176,8 @@ def test_bundle_designation_column_head_and_chip() -> None:
     assert "if (!word) return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));" in (
         bundle
     )
-    # the column's cell and the band meter's head: the same chip
-    assert bundle.count("h('span', { className: 'fb-designation label' }, word)") == 2
+    # the column's cell and the band meter's head: the same chip, in its band's colour
+    assert bundle.count(".designation + ' label' }, word)") == 2
     assert "var word = DESIGNATION[p.designation];" in bundle  # the meter takes the row's word
     assert "Hold'" not in bundle and "STANCE" not in bundle  # never "Hold"
     css = _component_file("bundle.css")
@@ -1010,7 +1185,7 @@ def test_bundle_designation_column_head_and_chip() -> None:
     assert rule is not None
     assert "text-transform: uppercase;" in rule.group(1)
     assert "border: 1px solid currentColor;" in rule.group(1)
-    assert "color:" not in rule.group(1) and ".fb-designation--" not in css  # no band colour
+    assert "color:" not in rule.group(1)  # the band's modifier sets the colour
     assert ".fb-stance" not in css
     # the stance tokens stay for the delta and the recommendation's effect; the spread chart's
     # label takes the delta's classes in place of the stance chip's
@@ -1046,16 +1221,108 @@ def test_bundle_has_the_margin_columns() -> None:
     assert "key: 'targetMargin'" in bundle and "key: 'impliedMargin'" in bundle
     assert "figureCell(percent(r.targetMargin))" in bundle
     assert "figureCell(percent(r.impliedMargin))" in bundle
-    order = [bundle.index(f"key: '{key}'") for key in EXTRA_KEYS[-3:]]
-    assert EXTRA_KEYS[-3:] == ("growthRouteValue", "targetMargin", "impliedMargin")
+    margins = ("growthRouteValue", "targetMargin", "impliedMargin")
+    start = EXTRA_KEYS.index(margins[0])
+    assert EXTRA_KEYS[start : start + 3] == margins
+    order = [bundle.index(f"key: '{key}'") for key in margins]
     assert order == sorted(order)
+
+
+# The Start-up and Decline rows' columns, after the margins, with their heads.
+ROUTE_COLUMN_HEADS = {
+    "requiredRevenue": "Needs by yr 10",
+    "burnCover": "Cash cover",
+    "rating": "Rating",
+    "distressProbability": "π",
+    "altmanZ": "Altman Z″",
+    "piotroskiF": "Piotroski F",
+    "impliedDeclineRate": "Implied decline",
+}
+
+
+def test_bundle_catalog_has_the_route_columns() -> None:
+    """The figures of the Start-up and Decline rows as columns, each a row key the API sends,
+    after the margins in the catalog and off by default: the year-10 revenue in billions as the
+    market cap is, the cash cover in years to one decimal, π and the implied decline rate as
+    percentages, Z″ to two decimals, the rating and F as the row gives them."""
+    bundle = _component_file("bundle.js")
+    assert tuple(ROUTE_COLUMN_HEADS) == START_UP_KEYS + DECLINE_KEYS == EXTRA_KEYS[-7:]
+    for key, head in ROUTE_COLUMN_HEADS.items():
+        assert f"{{ key: '{key}', head: '{head}'," in bundle, key
+    order = [bundle.index(f"key: '{key}'") for key in ("impliedMargin", *ROUTE_COLUMN_HEADS)]
+    assert order == sorted(order)
+    default = re.search(r"var DEFAULT_COLUMNS = \[(.*?)\];", bundle, re.DOTALL)
+    assert default is not None
+    assert not set(ROUTE_COLUMN_HEADS) & set(re.findall(r"'(\w+)'", default.group(1)))
+    for cell in (
+        "figureCell(billions(r.requiredRevenue))",
+        "figureCell(years(r.burnCover))",
+        "wordCell(r.rating)",
+        "figureCell(percent(r.distressProbability))",
+        "figureCell(fixed(r.altmanZ, 2))",
+        "figureCell(r.piotroskiF == null ? '—' : r.piotroskiF)",
+        "figureCell(percent(r.impliedDeclineRate))",
+    ):
+        assert cell in bundle, cell
+    years = "return v == null || isNaN(Number(v)) ? '—' : signed(Number(v).toFixed(1)) + ' years';"
+    assert years in bundle
+    # π keeps its case in the header, where the label's upper case would make it Π
+    css = _component_file("bundle.css")
+    assert '.fb-table thead th[data-key="distressProbability"] { text-transform: none; }' in css
+    declarations = _component_file("index.d.ts")
+    row = re.search(r"export interface ScreenRow \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert row is not None
+    for declared in (
+        "requiredRevenue?: number | null;",
+        "burnCover?: number | null;",
+        "rating?: string | null;",
+        "distressProbability?: number | null;",
+        "altmanZ?: number | null;",
+        "piotroskiF?: string | null;",
+        "impliedDeclineRate?: number | null;",
+    ):
+        assert declared in row.group(1), declared
+
+
+def test_bundle_css_colours_the_five_designations() -> None:
+    """Spec 7.3 as amended (founder 2026-11-03): the chip's word takes one gradient from the
+    design system's scales, teal below the value through the muted ink to terracotta above it,
+    through tokens both themes define. The chip names its band's code, in the column's cell and
+    the band meter's head alike."""
+    colours = {
+        "well-below": "--chart-pos-3",
+        "below": "--chart-pos-2",
+        "near": "--ink-muted",
+        "above": "--chart-neg-2",
+        "well-above": "--chart-neg-3",
+    }
+    assert tuple(colours) == get_args(Designation)
+    css = _component_file("bundle.css")
+    marker = css.index("/* fairband: the five designations")
+    for code, token in colours.items():
+        rule = f".fb-designation--{code} {{ color: var({token}); }}"
+        assert rule in css, code
+        assert marker < css.index(rule) and css.index(".fb-designation {") < css.index(rule)
+    tokens = (
+        resources.files("fairband.web")
+        .joinpath("static/design-system/tokens/tokens.css")
+        .read_text()
+    )
+    for token in colours.values():
+        # the dark root, the light theme and the light preference
+        assert len(re.findall(rf"^\s*{token}: #", tokens, re.MULTILINE)) == 3, token
+    bundle = _component_file("bundle.js")
+    for name in ("r", "p"):
+        chip = f"h('span', {{ className: 'fb-designation fb-designation--' + {name}.designation"
+        assert chip + " + ' label' }, word)" in bundle, name
+    assert "className: 'fb-designation label'" not in bundle  # no chip without its band
 
 
 def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 38
+    assert bundle.count("// fairband:") >= 43
     # A menu's toggle says whether its menu is open: Button passes aria-expanded through.
     assert "'aria-expanded': p['aria-expanded']," in bundle
     # A null phase has no badge: an em dash, never phase 1 "Start-up".

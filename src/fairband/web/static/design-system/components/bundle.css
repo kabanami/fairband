@@ -37,8 +37,7 @@ time { font-variant-numeric: tabular-nums; }
 .fb-mark--expired { color: var(--critical); }
 
 /* fairband: the price-vs-value word (classifier-designation spec 7.3), an outlined uppercase
-   label in the text's own colour. No band takes a colour: the word reads the price, it never
-   says act. */
+   label in its band's colour. The word reads the price, it never says act. */
 .fb-designation {
   display: inline-block;
   padding: 1px var(--space-2);
@@ -47,6 +46,14 @@ time { font-variant-numeric: tabular-nums; }
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* fairband: the five designations on one gradient from the design system's scales (founder
+   2026-11-03): teal below the value, the muted ink near it, terracotta above it, through tokens
+   both themes define. */
+.fb-designation--well-below { color: var(--chart-pos-3); }
+.fb-designation--below { color: var(--chart-pos-2); }
+.fb-designation--near { color: var(--ink-muted); }
+.fb-designation--above { color: var(--chart-neg-2); }
+.fb-designation--well-above { color: var(--chart-neg-3); }
 
 /* ---------------------------------------------------------------- Button */
 
@@ -783,6 +790,8 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-table thead th.is-drop-before { box-shadow: inset 2px 0 0 var(--accent); }
 .fb-table thead th.is-drop-after { box-shadow: inset -2px 0 0 var(--accent); }
 .fb-table thead th[draggable="true"] { cursor: grab; }
+/* fairband: π, the Decline column's head, keeps its case: upper-cased it reads Π, a product. */
+.fb-table thead th[data-key="distressProbability"] { text-transform: none; }
 /* The basis columns are named by their header, not by a chip per cell. */
 .fb-screen__basisg { color: var(--prov-derived); font-family: var(--font-mono); font-weight: 700; margin-right: 4px; }
 .fb-screen__ticker { color: var(--ink); }

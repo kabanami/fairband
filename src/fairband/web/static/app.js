@@ -21,7 +21,8 @@
   };
   var ROUTES = {
     'mature-growth': 'Mature growth route', 'mature-stable': 'Mature stable route',
-    'revenue-growth': 'Revenue growth route'
+    'revenue-growth': 'Revenue growth route', 'decline': 'Decline route',
+    'start-up': 'Start-up route'
   };
 
   var mount = document.getElementById('screen');
@@ -377,6 +378,11 @@
       })),
       section('phase', 'Phase evidence', pairs(evidence(r.phase, phase))),
       growth ? revenueRoute(r) : null,
+      /* A Decline row refused for a value at or below zero keeps its figures but has no route,
+         and a Start-up row is always a refusal with its figures: each draws from the
+         intermediates only its route writes. */
+      'runoff_path' in im ? declineRoute(r) : null,
+      'requirement' in im ? startUpRoute(r) : null,
       section('inputs', 'Inputs', inputsTable(r.inputs)),
       section('intermediates', 'Intermediate results', intermediates(r.intermediates)),
       section('flags', 'Flags', r.flags.length ? h('ul', { className: 'app-list' },
@@ -467,9 +473,14 @@
   }
 
   /* The value of the row's RULE input `name`; null when the row has none. */
-  function ruleValue(inputs, name) {
+  function ruleValue(inputs, name) { return taggedValue(inputs, name, 'RULE'); }
+
+  /* The value of the row's DATA input `name`; null when the row has none. */
+  function dataValue(inputs, name) { return taggedValue(inputs, name, 'DATA'); }
+
+  function taggedValue(inputs, name, tag) {
     for (var i = 0; i < inputs.length; i++) {
-      if (inputs[i].name === name && inputs[i].tag === 'RULE') return inputs[i].value;
+      if (inputs[i].name === name && inputs[i].tag === tag) return inputs[i].value;
     }
     return null;
   }
@@ -553,10 +564,9 @@
   }
 
   /* One row a year: the revenue, the margin, EBIT, tax, NOPAT, the reinvestment and the free cash
-     flow, totals to whole dollars. Wider than the rail, the table scrolls on its own, by keyboard
-     too: its box takes focus. */
+     flow, totals to whole dollars. */
   function yearsTable(im) {
-    var columns = [
+    return figuresTable([
       ['Revenue', im.revenue_by_year, whole],
       ['Margin', im.margin_path.by_year, F.formatPercent],
       ['EBIT', im.ebit_by_year, whole],
@@ -564,7 +574,12 @@
       ['NOPAT', im.nopat_by_year, whole],
       ['Reinvestment', im.reinvestment_by_year, whole],
       ['Free cash flow', im.fcff_by_year, whole]
-    ];
+    ]);
+  }
+
+  /* A row a year from year 1, a column for each [head, the figures by year, their format]. Wider
+     than the rail, the table scrolls on its own, by keyboard too: its box takes focus. */
+  function figuresTable(columns) {
     return h('div', { className: 'app-scroll', tabIndex: 0 },
       h('table', { className: 'fb-table app-figures' },
         h('thead', null, h('tr', null,
@@ -572,7 +587,7 @@
           columns.map(function (c) {
             return h('th', { key: c[0], className: 'label fb-num' }, c[0]);
           }))),
-        h('tbody', null, im.revenue_by_year.map(function (_, t) {
+        h('tbody', null, columns[0][1].map(function (_, t) {
           return h('tr', { key: t },
             h('td', { className: 'fb-num figure-sm' }, plain(t + 1)),
             columns.map(function (c) {
@@ -622,6 +637,266 @@
   /* A figure with words after it, in sans and in brackets; the figure stays mono. */
   function noted(text, note) {
     return h(React.Fragment, null, text, h('span', { className: 'caption' }, ' (' + note + ')'));
+  }
+
+  /* A line in place of a figure the route could not compute, saying why. */
+  function missing(text) { return h('p', { className: 'caption app-muted' }, text); }
+
+  /* -------------------------------------------------------------- the Decline route */
+
+  /* A row valued on the run-off (spec 2026-11-03 section 10): the ten years, the margin held in
+     each, the rating that sets π, the floor and the distress weighting, then Altman Z″ and
+     Piotroski F, which decide nothing. A row refused for a value at or below zero shows all of
+     it but the decline rate at the price. */
+  function declineRoute(r) {
+    var im = r.intermediates;
+    return section('decline', ROUTES.decline,
+      group('runoff', 'Run-off', runoffTable(im), pairs(runoffSummary(im))),
+      group('margin', 'Normalized margin', pairs(normalizedMargin(im.margin))),
+      group('rating', 'Rating', pairs(rating(im.rating))),
+      group('floor', 'Floor and distress', pairs(floorAndDistress(im)), weighting(im)),
+      group('altman', 'Altman Z″', altmanZ(im.altman_z)),
+      group('piotroski', 'Piotroski F', piotroskiF(im.piotroski_f)));
+  }
+
+  /* A fall in revenue releases the capital it needed, recovered in part; a rise reinvests in
+     full; each in the year of the change, so no year has both (spec 10.4). */
+  function runoffTable(im) {
+    return figuresTable([
+      ['Revenue', im.revenue_by_year, whole],
+      ['EBIT', im.ebit_by_year, whole],
+      ['NOPAT', im.nopat_by_year, whole],
+      ['Release', im.release_by_year, whole],
+      ['Reinvestment', im.reinvestment_by_year, whole],
+      ['Free cash flow', im.fcff_by_year, whole]
+    ]);
+  }
+
+  /* The decline rate, from year 4 or in every year without a usable consensus; the
+     sales-to-capital the release and the reinvestment read; the terminal value, a perpetuity at
+     the decline rate, and the firm value; and, on a valued row, the decline rate at which the
+     value is the price. */
+  function runoffSummary(im) {
+    var path = im.runoff_path, s = im.sales_to_capital;
+    var rows = [
+      ['Decline rate', noted(F.formatPercent(path.d), path.ntm_revenue == null
+        ? 'every year: no usable consensus' : 'from year 4'), true],
+      ['Sales-to-capital', noted(times(s.value), s.used === 'own-latest'
+        ? 'own, newest year' : 'mature peers\' median'), true],
+      ['Terminal value', whole(im.terminal_value), true],
+      ['Firm value', whole(im.firm_value), true]
+    ];
+    if ('implied_decline_rate' in im) {
+      rows.push(['Implied decline rate', im.implied_decline_rate == null
+        ? noted('—', 'none from −50% to 0') : F.formatPercent(im.implied_decline_rate), true]);
+    }
+    return rows;
+  }
+
+  /* The one margin held (spec 10.3): the median of the last five fiscal years' margins when
+     three or more are read, else the trailing margin; the one used is marked. */
+  function normalizedMargin(m) {
+    function used(text, which) { return m.used === which ? noted(text, 'used') : text; }
+    return [
+      ['Median', used(m.median == null ? noted('—', 'fewer than three years')
+        : F.formatPercent(m.median), 'median'), true],
+      ['Trailing', used(F.formatPercent(m.trailing), 'trailing'), true],
+      ['Years read', m.years.length ? m.years.map(function (year, k) {
+        return year + ' ' + F.formatPercent(m.margins[k]);
+      }).join(' · ') : 'none', true]
+    ];
+  }
+
+  /* The synthetic rating on EBIT at the normalized margin over the trailing interest, and its
+     ten-year probability of default (spec 10.7): with no net debt there is nothing to default
+     on; with net debt and no interest expense on file, no rating and no π. */
+  function rating(g) {
+    var pi = 'π, ten-year default probability';
+    if (g.note === 'no net debt') {
+      return [['Rating', 'no net debt', false], [pi, F.formatPercent(g.pi), true]];
+    }
+    if (g.rating == null) {
+      return [['Rating', 'unavailable: no interest expense on file', false],
+        [pi, 'unavailable', false]];
+    }
+    return [
+      ['Rating', g.rating, false],
+      ['EBIT at the normalized margin', whole(g.ebit), true],
+      ['Interest expense, trailing', whole(g.interest), true],
+      ['Coverage', times(g.coverage), true],
+      [pi, F.formatPercent(g.pi), true]
+    ];
+  }
+
+  /* The firm value to the going-concern value a share; the net current asset value a share, which
+     floors it when above zero and above it (spec 10.6); the distress-sale value a share. */
+  function floorAndDistress(im) {
+    var bound = im.floored_per_share > im.going_concern_per_share;
+    return [
+      ['Less debt', whole(im.debt), true],
+      ['Plus cash', whole(im.cash), true],
+      ['Shares', plain(im.shares), true],
+      ['Going concern a share', F.formatMoney(im.going_concern_per_share), true],
+      ['NCAV a share', im.ncav_per_share == null ? noted('—', 'no floor')
+        : noted(F.formatMoney(im.ncav_per_share), bound ? 'the floor binds' : 'no floor'), true],
+      ['Distress-sale value a share', noted(F.formatMoney(im.distress_per_share),
+        F.formatPercent(im.distress_sale_fraction) + ' of firm value + cash − debt'), true]
+    ];
+  }
+
+  /* The value a share (spec 10.7): the floored value weighted against the distress-sale value at
+     π, or the floored value alone when π is unavailable. */
+  function weighting(im) {
+    var pi = im.pi.value;
+    var floored = F.formatMoney(im.floored_per_share);
+    if (pi == null) {
+      return h('p', { className: 'caption' }, 'π unavailable: the value is the floored value, ' +
+        floored);
+    }
+    return h('p', { className: 'caption' },
+      h('span', { className: 'app-line' }, 'value = floored × (1 − π) + distress × π'),
+      h('span', { className: 'app-line' }, '= ' + floored + ' × (1 − ' + F.formatPercent(pi) +
+        ') + ' + F.formatMoney(im.distress_per_share) + ' × ' + F.formatPercent(pi) + ' = ' +
+        F.formatMoney(im.value_per_share)));
+  }
+
+  /* Altman Z″ on the newest annual balance sheet (spec 10.8): its four ratios, the score and the
+     zone. */
+  function altmanZ(z) {
+    if (!z) {
+      return missing('No score: a line it reads is missing, or total assets or total ' +
+        'liabilities is not above zero');
+    }
+    return pairs([
+      ['Fiscal year', plain(z.year), true],
+      ['X1, working capital ÷ assets', decimals(z.x1, 3), true],
+      ['X2, retained earnings ÷ assets', decimals(z.x2, 3), true],
+      ['X3, operating income ÷ assets', decimals(z.x3, 3), true],
+      ['X4, equity ÷ liabilities', decimals(z.x4, 3), true],
+      ['Score', noted(decimals(z.score, 2), z.zone + ' zone'), true]
+    ]);
+  }
+
+  /* Piotroski's nine signals, the newest fiscal year against the one before (spec 10.8). */
+  var SIGNALS = {
+    roa_positive: 'Return on assets above zero',
+    cfo_positive: 'Operating cash flow above zero',
+    roa_up: 'Return on assets up',
+    accrual: 'Operating cash flow above net income',
+    leverage_down: 'Long-term debt to assets down',
+    liquidity_up: 'Current ratio up',
+    no_issuance: 'No common stock issued',
+    gross_margin_up: 'Gross margin up',
+    turnover_up: 'Asset turnover up'
+  };
+
+  /* The score of the signals read, then each signal met (✓), not met (✗) or not read for a
+     missing line (—), the mark named for a reader that does not see it. */
+  function piotroskiF(f) {
+    if (!f) return missing('No score: fewer than two annual balance sheets');
+    return h(React.Fragment, null,
+      pairs([
+        ['Fiscal year', plain(f.year) + ' against ' + plain(f.prior_year), true],
+        ['Score', f.score + ' of ' + f.read + (f.read < f.signals.length ? ' read' : ''), true]
+      ]),
+      h('ul', { className: 'app-list app-signals' }, f.signals.map(function (s) {
+        var mark = s.value === true ? ['✓', 'met'] : s.value === false ? ['✗', 'not met']
+          : ['—', 'not read'];
+        return h('li', { key: s.name },
+          h('span', { className: 'figure-sm app-mark', role: 'img', 'aria-label': mark[1],
+            title: mark[1] }, mark[0]),
+          h('span', { className: 'body' }, SIGNALS[s.name] || s.name));
+      })));
+  }
+
+  /* ------------------------------------------------------------- the Start-up route */
+
+  /* A Start-up row (spec 2026-11-03 section 9), a refusal by design: the revenue in year 10 the
+     price needs at the mature peers' margin, the net cash a share as a floor and the years the
+     cash covers the burn. */
+  function startUpRoute(r) {
+    var im = r.intermediates;
+    return section('start-up', ROUTES['start-up'],
+      group('requirement', 'Revenue the price needs', requirement(im.requirement),
+        movedCap(im, r.inputs)),
+      group('floor', 'Cash floor', pairs(cashFloor(im)), belowFloor(r)),
+      group('burn', 'Burn cover', pairs(burnCover(im))));
+  }
+
+  /* The year-10 revenue at which the straight ramp from today's revenue and operating income to
+     the target margin is worth the enterprise value the price implies (spec 9.2), and the ramp;
+     or the reason the requirement is not computed. */
+  function requirement(req) {
+    var target = req.target_margin, s = req.sales_to_capital;
+    var rows = req.reason ? [['Not computed', req.reason, false]]
+      : [['Year-10 revenue', whole(req.revenue_y10), true]];
+    if (!req.reason && req.revenue_0 > 0) {
+      rows.push(['Against today', h(React.Fragment, null,
+        decimals(req.revenue_y10 / req.revenue_0, 1),
+        h('span', { className: 'caption' }, ' × the trailing revenue')), true]);
+    }
+    rows = rows.concat([
+      ['Trailing revenue', whole(req.revenue_0), true],
+      ['Enterprise value at the price', req.ev_price != null && req.ev_price <= 0
+        ? noted(whole(req.ev_price), 'net cash covers the price') : whole(req.ev_price), true],
+      ['Target margin', target == null ? '—'
+        : noted(F.formatPercent(target.value), peersBehind(target)), true],
+      ['Sales-to-capital', s == null ? '—' : noted(times(s.value), 'mature peers\' median'), true]
+    ]);
+    return h(React.Fragment, null, pairs(rows), req.path ? figuresTable([
+      ['Revenue', req.path.revenue, whole],
+      ['EBIT', req.path.ebit, whole],
+      ['NOPAT', req.path.nopat, whole],
+      ['Reinvestment', req.path.reinvestment, whole],
+      ['Free cash flow', req.path.fcff, whole]
+    ]) : null, req.path ? pairs([
+      ['Terminal value', whole(req.terminal_value), true],
+      ['Terminal return', F.formatPercent(req.terminal_roic), true]
+    ]) : null);
+  }
+
+  /* The peers' count and where they came from: FMP's list, or the industry's on the fallback. */
+  function peersBehind(t) {
+    return 'median of ' + t.count + ' mature peers' + (t.source === 'industry'
+      ? ' of the ' + t.industry + ' industry' : ' on FMP\'s list');
+  }
+
+  /* A repriced row's market cap moved with the price at the share count it was read at (method
+     6b.5), while its market-cap input keeps the one read: both show when they differ. */
+  function movedCap(im, inputs) {
+    var read = dataValue(inputs, 'market_cap');
+    if (im.market_cap == null || read == null || im.market_cap === read) return null;
+    return h('p', { className: 'caption' }, 'The market cap moved with the price: ' +
+      dollars(im.market_cap) + ' at this price, ' + dollars(read) + ' as read');
+  }
+
+  /* The net cash a share (spec 9.4): (cash − debt) ÷ diluted shares. */
+  function cashFloor(im) {
+    return [
+      ['Net cash a share', F.formatMoney(im.cash_floor), true],
+      ['Cash', whole(im.cash), true],
+      ['Less debt', whole(im.debt), true],
+      ['Shares', plain(im.shares), true]
+    ];
+  }
+
+  function belowFloor(r) {
+    var floor = r.intermediates.cash_floor;
+    if (r.price == null || floor == null || r.price >= floor) return null;
+    return h('p', { className: 'caption' }, 'The price, ' + F.formatMoney(r.price) +
+      ', is below the net cash a share');
+  }
+
+  /* The years the cash covers the trailing burn (spec 9.4); "not burning" when the trailing free
+     cash flow is zero or above; none without the trailing cash flows. */
+  function burnCover(im) {
+    var cover = im.burn_cover_years;
+    if (cover === 'not burning') return [['Trailing burn', 'not burning', false]];
+    if (cover == null) return [['Trailing burn', noted('—', 'no trailing cash flows'), true]];
+    return [
+      ['Cash covers', decimals(cover, 1) + ' years', true],
+      ['Burn a year', whole(im.burn), true]
+    ];
   }
 
   /* ---------------------------------------------------------------- the inputs */
