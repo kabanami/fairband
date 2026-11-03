@@ -419,16 +419,19 @@ def test_the_cap_lowers_the_value(
 def test_a_year_3_consensus_at_the_cap_does_not_bind(
     high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    a = high_growth_inputs.annual_estimates
-    at_cap = (a[0], a[1], replace(a[2], revenue=18_400e6))  # 18.4 ÷ 16 is a 15.0% step
-    r = value_company(replace(high_growth_inputs, annual_estimates=at_cap), deciles, policy, TODAY)
+    """A cap equal to g_3 bit for bit does not bind: the rule is strictly above."""
+    g3 = 19_200 / 16_000 - 1
+    at_cap = replace(
+        policy, base_rates=tuple(replace(c, sales_p90_5y=g3) for c in policy.base_rates)
+    )
+    r = value_company(high_growth_inputs, deciles, at_cap, TODAY)
     im = r.intermediates
     assert "consensus-above-base-rate" not in codes(r)
     assert im["revenue_path"]["hold"] is None
-    assert im["path"]["sales_class"] == CLASS and im["path"]["cap"] == pytest.approx(CAP)
-    assert im["growth_rates"][3:5] == pytest.approx([CAP, CAP])  # g_3 itself, at the cap
+    assert im["path"]["sales_class"] == CLASS and im["path"]["cap"] == g3
+    assert im["growth_rates"][3:5] == [g3, g3]
     cap = input_named(r, "held_growth_cap")
-    assert cap.value == CAP
+    assert cap.value == g3
     assert cap.note == CAP_NOTE + "does not bind: the year-3 consensus is at or below it"
 
 
