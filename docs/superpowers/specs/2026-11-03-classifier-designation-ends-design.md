@@ -256,12 +256,15 @@ with ordinary statements.
 
 *My call,* and the cost is stated: the exclusion also drops Visa, Mastercard and American Express
 (Credit Services), BlackRock, T. Rowe Price and Blackstone (Asset Management) and the brokers.
-Visa and Mastercard have ordinary statements and the method values them well; they leave because
-FMP files them with the lenders and the rule is by industry. The manual exclusion list stays the
-place for a named company; a manual *admission* list for named companies inside an excluded
-industry (Visa, Mastercard, the pure asset managers) is a one-line policy addition the founder
-can ask for, and the readout names what left. The excluded rows are recorded with their reason
-as today (`industry: <industry>`), so nothing is lost from the store.
+Visa and Mastercard have ordinary statements and the method values them well; they would leave
+because FMP files them with the lenders and the rule is by industry. So the universe gains a
+**manual admission list** (`universe.manual_admissions`, the mirror of `manual_exclusions`): a
+listing whose symbol is on it passes rule 4 whatever its industry, and is recorded as admitted
+with the note "manual admission". The founder's rule for the list (2026-11-03): payment
+companies that do not lend. Today that is V (Visa), MA (Mastercard) and GPN (Global Payments, a
+merchant processor); American Express and PayPal lend and stay out. The rows of the six
+industries not on the list are recorded with their reason as today (`industry: <industry>`), so
+nothing is lost from the store, and the readout names what left.
 
 The universe rules apply when a universe is built, which only a full refresh does (method
 section 10; a revalue values the latest stored universe). So the exclusions take effect at the
@@ -753,6 +756,7 @@ engine loads v5 only; `tests/policy/test_policy.py` pins v4's hash as it pins v3
 | FMP pace 2,850 calls a minute | `refresh.fmp_calls_per_minute` | the founder's Ultimate plan, 3,000 a minute, less 5%; my call |
 | 429 hold 60 s | `refresh.rate_limit_hold_s` | one plan window; my call |
 | Excluded industries + the six of 6.4 | `universe.excluded_industries` | design.md 6.1; decision 2026-10-26; this spec 6.4 |
+| Manual admissions: V, MA, GPN | `universe.manual_admissions` | founder 2026-11-03: payment companies that do not lend; this spec 6.4 |
 | Designation edges 0.65, 0.85, 1.15, 1.50 | `designation_edges` | method v1.7 Step 10 (the fair band, the trim multiple, the Narrow margin of safety); this spec 7.1 |
 | Run-off horizon 10 years | `runoff_years` | Damodaran's ten-year template (H2) |
 | Divestiture recovery 0.6 | `runoff_recovery` | Damodaran 2009 Sears: 54% to 67% of the capital released; the midpoint |
@@ -869,7 +873,9 @@ its full `deadline_s` from t = 55.
   margin), the duration test's edge (fewer than three steps on file), `growth-word-disagrees`
   silent under rule 4a.
 - The universe: a row in each of the six industries excluded with `industry: <industry>`;
-  Data & Stock Exchanges admitted; the prefix match.
+  Data & Stock Exchanges admitted; the prefix match; a row on the admission list admitted from
+  an excluded industry with the note "manual admission"; a row on both lists follows the
+  exclusion (a test pins the order).
 - The designation: 13.3, the edges from policy, `None` on a refusal and on a Start-up row,
   the price refresh moving the word, the JSON round trip, a 0.5 snapshot with `stance5` and
   `stance3` read without error.
@@ -899,8 +905,8 @@ its full `deadline_s` from t = 55.
 1. A full refresh of the founder's database completes in one run at 16 workers, with the
    limiter's wait and no 429 in the log.
 2. After the revalue: NSP is Mature Growth with `loss-year`; EQT, NKE and EXPD are not
-   Decline and carry `revenue-falling`. After the full refresh: CRBG, COF, GS and BK are
-   excluded with their industry; V and MA are excluded and named in the readout.
+   Decline and carry `revenue-falling`. After the full refresh: CRBG, COF, GS, BK, AXP and PYPL
+   are excluded with their industry; V, MA and GPN are admitted by the list and valued.
 3. No row shows a stance; every valued row shows a designation word; the drawer shows the
    levels with the new labels and the ratio.
 4. The bar and the header stay in view while the table scrolls; the Top control appears past
@@ -984,6 +990,7 @@ its full `deadline_s` from t = 55.
 | 2026-11-03 | The designation is the pure price ÷ value comparison; the moat and the margin of safety stay as the row's levels, figures for the agent. Founder ("agreed"). |
 | 2026-11-03 | The table controls scroll with the table header; a control returns to the top. Founder. |
 | 2026-11-03 | The spec is written from what was settled, without the brainstorm's questions. Founder. The calls marked *my call*: the limiter's rate and hold; the established test (three of five); the duration test (three of four); the six excluded industries; the designation edges (0.65 in place of the 0.70 mentioned); the run-off's same-year release; the recovery 0.6; the distress-sale fraction 0.6 (choice (a), not design.md's earnings-power form); BB+ as BB; π = 0 with net cash; the burn cover flag at 2 years; the requirement as year-10 revenue on a straight ramp. |
+| 2026-11-03 | A manual admission list for payment companies that do not lend: Visa, Mastercard and Global Payments; American Express and PayPal lend and stay excluded. Founder. |
 | 2026-11-03 | After the builder check: the Decline margin is the five-year median (10.3) and the rating reads it (10.7), so a one-year loss does not refuse an established decliner; the π rules are ordered (net cash, no interest, D); the industry exclusions take effect at the full refresh (6.4); the backfill runs before every valuing refresh (11). Claude's calls. |
 
 Builder check: done 2026-11-03 on Claude Opus 5.5; its three questions are settled in 10.3 and
