@@ -732,3 +732,102 @@ Run: `uv run ruff check . && uv run ruff format --check . && uv run mypy src && 
 Expected: clean.
 
 - [ ] **Step 7: Commit**, one commit: `git add -A src tests docs/method.md && git commit -m "Cap the revenue-growth route's held rate at the sales class's base-rate 90th percentile and flag a consensus above it"` with the trailer of commit 5c7ba3f (`git show -s --format=%B 5c7ba3f`).
+
+### Task 10: The industry fallback for the peers, method 0.5 and policy v4
+
+**Files:**
+- Create: `src/fairband/policy/fairband-policy-v4.toml` (a copy of v3 with its header rewritten for v4 and one block added)
+- Modify: `src/fairband/policy/__init__.py` (`_POLICY_FILE`, the module docstring, `Policy.industry_peer_max`, its `read`)
+- Modify: `src/fairband/engine/__init__.py` (`METHOD_VERSION = "fairband-mechanical/0.5"`)
+- Modify: `src/fairband/engine/revenue_growth.py` (`PeerSource`, `Peers`)
+- Modify: `src/fairband/engine/route.py` (`CompanyInputs.peer_source`)
+- Modify: `src/fairband/refresh/peers.py` (the fallback; `peer_figures` returns `Peers`; the module docstring)
+- Modify: `src/fairband/refresh/inputs.py` (sets `peers` and `peer_source`)
+- Modify: `src/fairband/engine/route_revenue_growth.py` (the flag, the `target_margin` intermediate, the peer-cited inputs' provenance and notes, the module docstring's flag list)
+- Modify: `docs/method.md` (4.1, 5a.4, 5a.13, 5a.14, 8, 11, 12, 13), in the same commit as the engine
+- Test: `tests/policy/test_policy.py`, `tests/refresh/test_peers.py`, `tests/engine/test_route_revenue_growth.py`, and every test that names `fairband-policy-v3` or `fairband-mechanical/0.4` as the current version (`tests/engine/test_route.py`, `tests/engine/test_types.py`; grep for both strings)
+
+**Interfaces:**
+- Consumes: `peer_figures(conn, symbol, deciles, policy, tax, today)` and its helpers in `refresh/peers.py`; `latest_companies(conn)` and `latest_company(conn, symbol)` (`CompanyRow.industry`, `.market_cap`); `classify(series, deciles).phase`; `margin_peers(peers, policy)`, `target_margin`, `peer_sales_to_capital`, `peer_roic_median` in `engine/revenue_growth.py`; `CompanyInputs.peers: tuple[PeerFigures, ...] = ()`; the route's `_PEERS` provenance, `_from_peers`, `_sales_to_capital_input`, `_target_intermediates`, `path_and_capital` and the flag tuple in `value_revenue_growth`; `Flag(code, word, sentence)`, `present`.
+- Produces:
+  - `PeerSource` (frozen dataclass, `engine/revenue_growth.py`): `kind: Literal["fmp", "industry"]`, `industry: str | None`, `fmp_counted: int` (how many of FMP's kept peers count for the target margin, `margin_peers`' rule).
+  - `Peers` (frozen dataclass, same module): `figures: tuple[PeerFigures, ...]`, `source: PeerSource | None` (`None` when the company has no peers at all: no deciles, no stored payload and no industry fallback possible).
+  - `peer_figures(...) -> Peers`.
+  - `CompanyInputs.peer_source: PeerSource | None = None`, set by `build_inputs` beside `peers`.
+  - `Policy.industry_peer_max: int` (10).
+  - The flag `peers-from-industry`.
+  - `target_margin` intermediate gains `"source": "fmp" | "industry"` and `"industry": str | None`.
+
+**The rule** (spec 5.5, the paragraph "The industry fallback"; method.md 5a.4):
+
+1. Keep FMP's mature peers as today (in the latest universe, classified Mature Growth or Mature Stable on the deciles). Count those `margin_peers(kept, policy)` counts: `fmp_counted`.
+2. If `fmp_counted >= policy.peer_min`: `Peers(kept, PeerSource("fmp", None, fmp_counted))`. No fallback even when the industry would give more.
+3. Otherwise, the fallback: the company's latest universe row (`latest_company(conn, symbol)`); without one, or with `industry` `None`, return `Peers(kept, PeerSource("fmp", None, fmp_counted))` (no fallback). Else the candidates are every company in `latest_companies(conn)` with the same `industry`, the company itself excluded, whose series classify as Mature Growth or Mature Stable on the deciles (classified on the spot, as FMP's peers are). Sort by market cap descending, `None` last (stable sort by symbol within ties), take the first `policy.industry_peer_max`, build their figures with `_figures` as today. Return `Peers(those, PeerSource("industry", industry, fmp_counted))`. FMP's kept peers are dropped, not merged.
+4. Without deciles or without a stored peers payload the behaviour today is "no peers"; keep that for "without deciles" (`Peers((), None)`). Without a stored payload (or an unusable one), FMP's kept list is empty, `fmp_counted` is 0, and the fallback applies as in step 3 (a failed peers call no longer refuses the row by itself when the industry has peers).
+5. The route (`route_revenue_growth.py`):
+   - The flag, built when `i.peer_source` is not `None` and its kind is `"industry"`:
+     `Flag("peers-from-industry", "Industry peers", f"FMP's peer list leaves {n} mature peer{'' if n == 1 else 's'} with a margin on {policy.peer_margin_min_years} years or more, fewer than {policy.peer_min}, so the peers are the {k} largest mature companies of the {industry} industry in the universe.")` with n = `fmp_counted`, k = `len(i.peers)`. Position: appended to `path_and_capital` right after `_bridge_flags(c)`, so it sits after the capital build's and the bridge's flags and before `tax-loss-history-unknown`, on valued rows and on the rows refused for the target margin or the sales-to-capital alike.
+   - `_target_intermediates(target)` gains `"source"` and `"industry"`; pass the `PeerSource` (or its two fields) in. On the `"fmp"` source `industry` is `None`.
+   - The peer-cited inputs: on the industry source the provenance is `Provenance(f"the universe's {industry} industry and the peers' statements", None, None, None)` instead of `_PEERS`; the `target_margin` note becomes `f"the median ten-year operating margin of {target.count} mature peers of the {industry} industry"`; the sales-to-capital note on the peers' median becomes `f"the mature peers' median ({industry} industry); the own measure is not usable"`. On the `"fmp"` source both are unchanged.
+   - The refusal strings are unchanged: "no target margin: <n> mature peers" counts the peers after the fallback.
+6. Versions: `METHOD_VERSION = "fairband-mechanical/0.5"`. `fairband-policy-v4.toml` is v3 byte for byte plus (a) its header comment rewritten: "# Fairband policy v4: ..." and a paragraph "v4 is v3 with `industry_peer_max`, the bound on the industry fallback for the peers (growth routes spec 5.5, founder decision 2026-11-03); v1, v2 and v3 stay in the package unchanged, because the snapshots valued under them cite their hashes."; (b) `version = "fairband-policy-v4"` (or whatever key carries the version string in v3, changed the same way v2 became v3); (c) after the `[values.peer_min]` block:
+   ```
+   [values.industry_peer_max]
+   value = 10
+   source = "growth routes spec 5.5 (founder decision 2026-11-03): the industry fallback takes the largest mature companies of the company's FMP industry; a bound on the peer-figure cost, no source gives the number"
+   ```
+   `_POLICY_FILE = "fairband-policy-v4.toml"`; the loader reads `industry_peer_max` with `_whole`. `fairband-policy-v3.toml` stays byte-identical: sha256 `470f3dcfad5ff8d1179face5578b48df658cf3778d8440ee8694d5324056db9b`, pinned in `tests/policy/test_policy.py` the way v1 and v2 are. The growth routes plan's Global Constraints name v3 and 0.4; this task supersedes them for the current versions.
+
+**Figures that must not move.** Every value on the two mature routes. Every figure of a growth row whose FMP peers count `peer_min` or more. Spec section 8's worked numbers.
+
+- [ ] **Step 1: Write the failing tests**
+
+`tests/policy/test_policy.py`: v4 loads with `industry_peer_max == 10` and every v3 value; `load_policy().version == "fairband-policy-v4"` (whatever the version accessor is); v3's sha256 pinned beside v1's and v2's.
+
+`tests/refresh/test_peers.py`, on the synthetic store (`add_company`, `insert_companies`, `replace(CompanyRow, industry=..., market_cap=...)`), with `DECILES` and a policy whose `peer_min` and `industry_peer_max` you set with `replace(policy, ...)`:
+- FMP's list leaves fewer than `peer_min` countable peers and the industry has mature companies: `Peers.source.kind == "industry"`, `.industry` the company's, `.fmp_counted` right, the figures those companies' (symbols, in market-cap order), the company itself absent;
+- a company of the same industry that is not mature, or not in the latest universe (listed but not admitted, like FIRB), is not taken;
+- with three mature industry companies and `industry_peer_max` 2, the two largest by market cap are taken; a company without a market cap comes last;
+- FMP's list leaves `peer_min` or more countable peers: `source.kind == "fmp"`, FMP's peers kept, no industry company added even when the industry has more;
+- no universe row or no industry: FMP's kept peers and `source.kind == "fmp"`;
+- no stored peers payload but an industry with mature companies: the fallback applies;
+- without deciles: `Peers((), None)`.
+
+`tests/engine/test_route_revenue_growth.py`, on `high_growth_inputs()` with `peer_source=PeerSource("industry", "Specialty Industrial Machinery", 1)` via `replace`:
+- `"peers-from-industry"` in `codes(r)` with the exact sentence (n = 1, "peer", k = the fixture's peer count); its position right after the bridge flags and before `tax-loss-history-unknown`;
+- `im["target_margin"]["source"] == "industry"` and `["industry"]` the name; on the unchanged fixture `"fmp"` and `None`;
+- `input_named(r, "target_margin").provenance.source` is "the universe's Specialty Industrial Machinery industry and the peers' statements" and its note names the industry; the sales-to-capital input likewise when the peers' median is used;
+- a row refused "no target margin: n mature peers" with the industry source carries the flag;
+- the value of the fixture is unchanged between `peer_source` `"fmp"` and `"industry"` (the source changes words, not figures).
+
+Every test naming the current method or policy version: update to 0.5 and v4.
+
+- [ ] **Step 2: Run the tests to see them fail**
+
+Run: `uv run pytest tests/policy/test_policy.py tests/refresh/test_peers.py tests/engine/test_route_revenue_growth.py -q`
+Expected: failures on `industry_peer_max`, `Peers`, the flag.
+
+- [ ] **Step 3: Implement**: the policy file and loader; the version; `PeerSource` and `Peers`; the fallback in `peers.py` (keep `_figures`, `_margin`, `_sales_to_capital` as they are; the module docstring states the fallback); `build_inputs`; `CompanyInputs.peer_source`; the route's flag, intermediates and inputs.
+
+- [ ] **Step 4: Run the whole suite**
+
+Run: `uv run pytest -q`
+Expected: all pass.
+
+- [ ] **Step 5: `docs/method.md`**, in the same commit:
+- 4.1: "Every value comes from `fairband-policy-v3.toml`" becomes `fairband-policy-v4.toml`; after the "Peer minimum" row add `| Industry peers: at most 10 | `industry_peer_max` | growth routes spec 5.5; no source gives the number; founder decision 2026-11-03 |`; the closing sentence "Policies v1 and v2 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v3 only." becomes "Policies v1, v2 and v3 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v4 only."
+- Section 2's Peers row (`| Peers | `stock-peers` | ...`): append to the cell "; when the list leaves fewer than `peer_min` peers that count for the target margin, the company's FMP industry supplies them (5a.4)".
+- 5a.4, after the paragraph "**The mature peers.**" add: "**The industry fallback.** When the candidates kept leave fewer than `peer_min` peers with a margin on `peer_margin_min_years` years or more, the peers are instead the mature companies of the company's own FMP industry: every company of the latest universe whose row carries the same industry, the company itself excluded, whose fiscal years classify on the spot as Mature Growth or Mature Stable on the same deciles, the largest `industry_peer_max` of them by market cap (a company without one last), their figures read as above. The kept candidates are dropped, not merged. The row is flagged `peers-from-industry`, naming the count the candidates left, the industry and the count taken, whether the row is then valued or still refused for the target margin. A company without an industry on its universe row has no fallback. Without a stored response the candidates are none and the fallback applies."
+- 5a.13: insert "`peers-from-industry` (5a.4)" after "`line-not-presented:debt`, then `line-not-presented:cash`;" and before "`tax-loss-history-unknown`".
+- 5a.14, the tagged inputs: after `target_margin`'s source "FMP stock-peers and the peers' statements" add "(on the industry fallback, "the universe's <industry> industry and the peers' statements", the note naming the industry)"; the intermediates list: `target_margin` "(value, count, low, high, largest_symbol, largest_margin, and the counted peers ...)" gains ", source (fmp or industry) and industry".
+- Section 8, after the `consensus-above-base-rate` row: `| `peers-from-industry` | FMP's peers left fewer than `peer_min` that count for the target margin, so the peers are the largest `industry_peer_max` mature companies of the company's FMP industry in the universe (5a.4) |`.
+- Section 11: a new row `| 0.5 | 2026-11-03 | The industry fallback for the peers (5a.4). Policy v4 adds `industry_peer_max`. |`.
+- Section 12, after the "Sales-to-capital" row: `| The industry fallback for the peers: the sector averages beside the company's own data, the industry average as the template's default, margins and returns resting at the sector average | Damodaran H13, H16, H29; design.md 6.7; founder decision 2026-11-03 |`.
+- Section 13 (glossary), the "Mature peers" row: append "; when fewer than `peer_min` of them count, the largest mature companies of the company's FMP industry".
+
+- [ ] **Step 6: The checks**
+
+Run: `uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run pytest -q`
+Expected: clean.
+
+- [ ] **Step 7: Commit**, one commit: `git add -A src tests docs/method.md && git commit -m "Fall back to the largest mature companies of the company's industry when FMP's peers leave fewer than three that count, as method 0.5 and policy v4"` with the trailer of commit c359e58 (`git show -s --format=%B c359e58`: the `Co-Authored-By: Claude Opus 5.5` line and the `Claude-Session:` line, copied exactly).

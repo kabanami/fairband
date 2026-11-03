@@ -155,6 +155,24 @@ The peers call is one FMP `stock-peers` per company per refresh, stored and reus
 other call (24 hours). A failed peers call is not a required-endpoint failure; the row is refused
 for the target margin with the count it has.
 
+**The industry fallback (2026-11-03).** When FMP's list leaves fewer than `peer_min` peers that
+count for the target margin (mature, in the latest universe, with a margin on at least
+`peer_margin_min_years` years), the peers are instead the mature companies of the company's own
+FMP industry in the latest universe: every company whose universe row carries the same industry,
+the company itself excluded, that the classifier puts in Mature Growth or Mature Stable on this
+refresh's deciles, the largest `industry_peer_max` (10) of them by market cap, a company without
+a market cap last. Their figures are read as any peer's. FMP's peers are not kept beside them.
+The row is flagged `peers-from-industry`, naming FMP's count, the industry and the count taken,
+on a valued row and on a row still refused for the target margin (the industry's mature companies
+can also fall short; the refusal keeps its wording and counts them). The target margin, the
+sales-to-capital median and the ROIC median all read the same peers, and the row's
+`target_margin` intermediate and its peer-cited inputs name the source. Without an industry on
+the universe row there is no fallback. Source: Damodaran's template takes the industry average as
+the default sales-to-capital (H16), reads the sector averages beside the company's own data (H13)
+and rests margins and returns at the sector average (H29); design.md 6.7's peer default. The ten
+is a bound on the peer-figure cost (*my call*; no source gives a number). Founder decision
+2026-11-03, after the first full refresh refused 87 of 163 growth rows for want of three peers.
+
 ### 5.6 Sales-to-capital and reinvestment
 
 Reinvestment in year t pays for year t + 1's revenue, the template's one-year lag:
@@ -272,22 +290,25 @@ not computed in tier 1. Founder decision 2026-11-02.
 
 ### 5.14 Flags
 
-New: `path-held`, `consensus-above-base-rate` (5.4), `tax-loss-history-unknown`,
-`return-above-peers`, `failure-not-charged`. Kept
+New: `path-held`, `consensus-above-base-rate` (5.4), `peers-from-industry` (5.5),
+`tax-loss-history-unknown`, `return-above-peers`, `failure-not-charged`. Kept
 from the mature routes where they read inputs these routes have: `few-analysts`, `value-spread`,
 `sbc-basis-unknown` (the cross-check's anchor), the capital build's flags of method.md 4.4 and
 4.5 (the sales-to-capital reads invested capital), the gate flags and `large-nri`, the assembly's
 flags and the classifier's checks. The `margin-flag` needs a positive margin history and will
-seldom fire. Order: the path's, the capital build's, `tax-loss-history-unknown`,
-`return-above-peers`, `failure-not-charged`, the trailing flags, `value-spread`. Within the
-path's: `path-held`, `consensus-above-base-rate`, `few-analysts`.
+seldom fire. Order: the path's, the capital build's, the bridge's, `peers-from-industry`,
+`tax-loss-history-unknown`, `return-above-peers`, `failure-not-charged`, the trailing flags,
+`value-spread`. Within the path's: `path-held`, `consensus-above-base-rate`, `few-analysts`. A
+row refused for the target margin or the sales-to-capital carries the path's, the capital
+build's, the bridge's and `peers-from-industry`.
 
 ### 5.15 Intermediates and inputs
 
 Intermediates: `ntm_revenue`, `path` (base year, analysts, which steps were held, the sales
 class and its cap), `path_steps` (g_2, g_3 as resolved, uncapped),
 `growth_rates` (years 1 to 10), `margin_path` (m_0, m*, the ten margins), `target_margin`
-(value, the peers used with each one's margin and market cap, the median, the largest peer's),
+(value, the peers used with each one's margin and market cap, the median, the largest peer's,
+the source `fmp` or `industry` and the industry),
 `sales_to_capital` (used, own, own_usable, peers, value), `revenue_by_year`, `ebit_by_year`,
 `tax_by_year`, `nopat_by_year`, `reinvestment_by_year`, `fcff_by_year`, `terminal_roic`,
 `terminal_value`, `firm_value`, `debt`, `cash`, `equity`, `shares`, `value_per_share`,
@@ -297,8 +318,10 @@ class and its cap), `path_steps` (g_2, g_3 as resolved, uncapped),
 `implied_growth`, `implied_margin`, `multiples`, `growth_share`, `expected_return`.
 
 Inputs: the common DATA inputs of method.md 5.12; `ntm_revenue`, `path_step_2`, `path_step_3`
-(estimates), `target_margin` (DATA, source "FMP stock-peers and the peers' statements", with the
-peer count in its note), `sales_to_capital` (DATA, statements, with the measure in its note),
+(estimates), `target_margin` (DATA, source "FMP stock-peers and the peers' statements", or on the fallback
+"the universe's <industry> industry and the peers' statements", with the peer count in its
+note), `sales_to_capital` (DATA, statements, with the measure in its note; the peers' median
+cites the peers' source),
 `debt`, `cash`. RULE: r, g_T, the moat class, the margin of safety, the terminal return,
 `high_growth_years`, `held_growth_cap` (the class's cap, its note naming the class and whether
 it binds), `fade_years`, `margin_convergence_year`, `peer_min`.
@@ -306,7 +329,10 @@ it binds), `fade_years`, `margin_convergence_year`, `peer_min`.
 ### 5.16 Versions
 
 Method `fairband-mechanical/0.4`. Policy `fairband-policy-v3.toml` with section 7's values; v2
-stays in the package for the snapshots that cite it. After the merge the founder's database needs
+stays in the package for the snapshots that cite it. 2026-11-03, after the first full refresh
+under 0.4: the industry fallback of 5.5 makes method `fairband-mechanical/0.5` and policy
+`fairband-policy-v4.toml`, v3 plus `industry_peer_max`; v3 stays in the package for the
+snapshots of that refresh. The fallback reads the store, so a revalue suffices after its merge. After the merge the founder's database needs
 a full refresh, not a revalue: the peers are a new vendor call, and the 24-hour reuse covers the
 rest. Until then a price refresh refuses every v2 snapshot with "policy changed: run a full
 refresh", as it does today.
@@ -372,6 +398,7 @@ by words and reserves `×` for "expired" (*my call* on the form).
 | `peer_margin_min_years` | 5 | Damodaran H64, margins at "averages over the last five or ten years"; policy value |
 | `implied_margin_bounds` | [−0.5, 1.0] | no source: solve bounds |
 | `universe.name_exclude_patterns` | section 5.17 | design.md 2: listings that are not operating companies; policy value |
+| `industry_peer_max` (policy v4) | 10 | no source: a bound on the peer-figure cost; the industry fallback, 5.5; founder decision 2026-11-03 |
 | `base_rates`, a `sales_p90_5y` per class | 0.40, 0.45, then 0.20 for the five classes from $700 Mn to $7,000 Mn, then 0.15 for the four above | Base Rate Book, Sales Growth exhibit 4, printed pp. 24-26: the top of the five-year sales CAGR bucket where the class's cumulative share reaches 90%; the cap on the held rate, 5.4; founder decision 2026-11-03 |
 
 Unchanged and reused: `fade_years` (5), `marginal_return_span_years` (5),
@@ -417,6 +444,12 @@ All synthetic, to a tolerance of 0.01. r = 9%, g_T = 3%, tax 21%, None moat (ter
   below the uncapped value); an unbound row (no flag, hold `None`); a held step above the cap
   (both flags, in order); a price refresh of a bound row rebuilding the same rates; the
   `held_growth_cap` RULE input; `belief_from_sales` unchanged.
+- The industry fallback: it triggers below `peer_min` countable FMP peers and not at or above;
+  the company itself, non-mature companies and companies outside the latest universe excluded;
+  the largest `industry_peer_max` by market cap; no fallback without an industry; the flag's
+  text and position on a valued and on a refused row; the intermediates' source and industry;
+  the peer-cited inputs' provenance; v4 loads with every value and v3 keeps its hash; the
+  method version.
 - The margin path, both directions.
 - The tax carry within the forecast, section 8's figures.
 - Reinvestment with the floor, and year 10 at the terminal return.
@@ -500,6 +533,9 @@ decisions (D).
 - Base Rate Book (Mauboussin and Callahan 2016), Sales Growth exhibit 4, printed pp. 24-26: the
   90th-percentile cap on the held rate (5.4); design.md 7.3: a belief above the base-rate 90th
   percentile needs evidence.
+- H13, H16, H29: the sector averages beside the company's own data; the industry average as the
+  template's default sales-to-capital; margins and returns resting at the sector average. The
+  industry fallback for the peers (5.5).
 
 ## Decision log
 
@@ -513,3 +549,4 @@ decisions (D).
 | 2026-11-02 | The failure probability is reported as unavailable with the reason; the value is the going-concern value, flagged. A fitting source is a later research item. Founder. |
 | 2026-11-02 | The four screen fixes of section 6, and the notes and preferreds filter, ride along. Founder (the filter is my call). |
 | 2026-11-03 | The rate held in years 4 and 5 is capped at the Base Rate Book's 90th-percentile five-year sales growth for the sales class, flagged `consensus-above-base-rate`; the book's figures as printed; the consensus steps and the implied-growth solve stay uncapped. Founder, after the final review found one step running away on real data. |
+| 2026-11-03 | When FMP's peers leave fewer than `peer_min` that count for the target margin, the peers are the largest ten mature companies of the company's FMP industry in the universe, flagged `peers-from-industry`; method 0.5, policy v4. Founder, after the first full refresh refused 87 of 163 growth rows for the target margin. |
