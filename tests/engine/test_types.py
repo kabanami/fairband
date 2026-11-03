@@ -8,6 +8,7 @@ import pytest
 from fairband.engine import METHOD_VERSION
 from fairband.engine.types import (
     PHASE_NUMBER,
+    Designation,
     Flag,
     Levels,
     PhaseEvidence,
@@ -52,8 +53,8 @@ def sample_result() -> ValuationResult:
         route="mature-growth",
         value=100.0,
         levels=Levels(buy=75.0, fair_low=85.0, fair_high=115.0, trim=150.0),
-        stance5="HOLD — above fair band",
-        stance3="hold",
+        price_to_value=1.205,
+        designation="above",
         price=120.5,
         price_date=date(2026, 10, 30),
         data_date=date(2026, 10, 29),
@@ -93,14 +94,34 @@ def test_routes() -> None:
     assert get_args(Route) == ("mature-growth", "mature-stable", "revenue-growth")
 
 
+def test_designations() -> None:
+    assert get_args(Designation) == ("well-below", "below", "near", "above", "well-above")
+
+
+def test_the_json_carries_the_designation(sample_result: ValuationResult) -> None:
+    d = json.loads(result_to_json(sample_result))
+    assert (d["price_to_value"], d["designation"]) == (1.205, "above")
+    assert "stance5" not in d and "stance3" not in d
+
+
+def test_a_0_5_snapshot_reads_without_the_stance_keys(sample_result: ValuationResult) -> None:
+    """A snapshot valued under method 0.5 carries the stance and lacks the designation: it reads,
+    with ``None`` for the designation and its ratio, until a revalue replaces it."""
+    d = json.loads(result_to_json(sample_result))
+    del d["price_to_value"], d["designation"]
+    d |= {"stance5": "HOLD", "stance3": "hold"}
+    read = result_from_json(json.dumps(d, sort_keys=True))
+    assert read == replace(sample_result, price_to_value=None, designation=None)
+
+
 def test_refusal_json_round_trip(sample_result: ValuationResult) -> None:
     refusal = replace(
         sample_result,
         route=None,
         value=None,
         levels=None,
-        stance5=None,
-        stance3=None,
+        price_to_value=None,
+        designation=None,
         price=None,
         price_date=None,
         refusal="no diluted share count",

@@ -1,7 +1,8 @@
 # Fairband
 
 Fairband is a local valuation screen for a value investor: one page on your own machine
-with one row per company, carrying a mechanical value, the levels around it and the stance.
+with one row per company, carrying a mechanical value, the levels around it and where the price
+stands against the value.
 
 Install: `uv sync` (needs Python 3.13 or later).
 

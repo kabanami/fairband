@@ -1,12 +1,13 @@
 """The group view, ``GET /api/groups``, on a temporary migrated database: the screen's rows grouped
 by sector, phase or cap band, with each group's count, the companies with a value, the median
-price ÷ value and the share below the buy level.
+price ÷ value and the share below value (price ÷ value under the second designation edge, 0.85).
 
 The universe of one full refresh admits six companies:
 
-- AAPL, BBB and CCC: the engine's Mature Growth company (value $133.37, buy $100.02) at $150, $80
-  and $120; Technology, the first mega cap, the others mid.
-- STBL: the engine's Mature Stable company at $40, above its $33.54 buy level; Industrials, mid.
+- AAPL, BBB and CCC: the engine's Mature Growth company (value $133.37) at $150, $80 and $120
+  (1.12, 0.60 and 0.90 × the value); Technology, the first mega cap, the others mid.
+- STBL: the engine's Mature Stable company (value $44.71) at $40, 0.89 × the value; Industrials,
+  mid.
 - AAL: the engine's Young Growth company with no mature peers, refused for its target margin;
   Technology, mid.
 - NEWC: Industrials, no cap band, not valued yet (no snapshot, so no phase).
@@ -20,6 +21,7 @@ from contextlib import closing
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +48,7 @@ from fairband.web.app import create_app
 TODAY = date(2026, 10, 31)  # the day the engine's test companies are valued
 NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
 HOST = "http://127.0.0.1:8470"
-EMPTY = {"valued": 0, "medianPriceToValue": None, "shareBelowBuy": None}
+EMPTY = {"valued": 0, "medianPriceToValue": None, "shareBelowValue": None}
 
 
 @pytest.fixture
@@ -160,14 +162,14 @@ def test_groups_by_phase_median_and_share(
             "count": 3,
             "valued": 3,
             "medianPriceToValue": pytest.approx(statistics.median(growth)),
-            "shareBelowBuy": pytest.approx(1 / 3),  # BBB alone, $80 under the $100.02 buy level
+            "shareBelowValue": pytest.approx(1 / 3),  # BBB alone, at 0.60 × the value
         },
         {
             "name": "Mature Stable",
             "count": 1,
             "valued": 1,
             "medianPriceToValue": pytest.approx(ratio(results, "STBL")),
-            "shareBelowBuy": 0.0,
+            "shareBelowValue": 0.0,
         },
         {"name": "Young Growth", "count": 1, **EMPTY},
         {"name": "unclassified", "count": 1, **EMPTY},  # NEWC, with no snapshot yet
@@ -182,14 +184,14 @@ def test_groups_by_sector_and_cap(client: TestClient, results: dict[str, Valuati
             "count": 2,
             "valued": 1,
             "medianPriceToValue": pytest.approx(ratio(results, "STBL")),
-            "shareBelowBuy": 0.0,
+            "shareBelowValue": 0.0,
         },
         {
             "name": "Technology",
             "count": 4,
             "valued": 3,
             "medianPriceToValue": pytest.approx(growth),
-            "shareBelowBuy": pytest.approx(1 / 3),
+            "shareBelowValue": pytest.approx(1 / 3),
         },
     ]
     mid = statistics.median(ratio(results, symbol) for symbol in ("BBB", "CCC", "STBL"))
@@ -199,17 +201,49 @@ def test_groups_by_sector_and_cap(client: TestClient, results: dict[str, Valuati
             "count": 1,
             "valued": 1,
             "medianPriceToValue": pytest.approx(ratio(results, "AAPL")),
-            "shareBelowBuy": 0.0,
+            "shareBelowValue": 0.0,
         },
         {
             "name": "mid",
             "count": 4,
             "valued": 3,
             "medianPriceToValue": pytest.approx(mid),
-            "shareBelowBuy": pytest.approx(1 / 3),
+            "shareBelowValue": pytest.approx(1 / 3),
         },
         {"name": "none", "count": 1, **EMPTY},
     ]
+
+
+def test_share_below_value_reads_the_second_edge(tmp_path: Path, policy: Policy) -> None:
+    """LOW at 0.80 × the value is below value though above its Wide moat's buy level (0.75 ×);
+    HIGH at 0.90 × is not: the group's share is one half."""
+    deciles = universe_deciles()
+    valued = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    assert valued.value is not None and valued.levels is not None
+    assert valued.levels.buy == pytest.approx(0.75 * valued.value)
+    low = reprice(replace(valued, symbol="LOW"), 0.80 * valued.value, TODAY, policy)
+    high = reprice(replace(valued, symbol="HIGH"), 0.90 * valued.value, TODAY, policy)
+    assert (low.designation, high.designation) == ("below", "near")
+    assert policy.designation_edges[1] == 0.85
+    db_path = tmp_path / "data" / "fairband.db"
+    listed = [company("LOW", 1, "Technology", "mid"), company("HIGH", 1, "Technology", "mid")]
+    seed(db_path, policy, listed, [low, high])
+    with make_client(tmp_path, db_path, policy) as c:
+        [group] = groups(c, "sector")
+    assert group == {
+        "name": "Technology",
+        "count": 2,
+        "valued": 2,
+        "medianPriceToValue": pytest.approx(0.85),
+        "shareBelowValue": 0.5,
+    }
+
+
+def test_the_groups_page_reads_the_share_below_value() -> None:
+    script = resources.files("fairband.web").joinpath("static", "controls.js").read_text("utf-8")
+    assert "figure(row.shareBelowValue, F.formatPercent(row.shareBelowValue))" in script
+    assert "'Below value'" in script
+    assert "shareBelowBuy" not in script and "Below buy" not in script
 
 
 def test_groups_null_when_no_values(

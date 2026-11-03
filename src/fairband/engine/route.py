@@ -87,7 +87,8 @@ from typing import Any
 from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
 from fairband.engine.classifier import Deciles, Series, classify
-from fairband.engine.levels import levels_for, stance3, stance5
+from fairband.engine.designation import designation_for
+from fairband.engine.levels import levels_for
 from fairband.engine.revenue_growth import PeerFigures, PeerSource
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route_mature_growth import growth_at_price, long_runway, value_mature_growth
@@ -234,8 +235,8 @@ def refusal_result(
         route=None,
         value=None,
         levels=None,
-        stance5=None,
-        stance3=None,
+        price_to_value=None,
+        designation=None,
         price=price,
         price_date=price_date,
         data_date=data_date,
@@ -260,7 +261,7 @@ def reprice(
     observed_at: datetime | None = None,
     entered_at: datetime | None = None,
 ) -> ValuationResult:
-    """The result at a new price: the same value, levels and validity; the stance, the
+    """The result at a new price: the same value, levels and validity; the designation, the
     price-dependent intermediates and the long-runway flag recomputed from the intermediates.
     A result with no value only takes the new price and date, except that a revenue-growth
     refusal whose intermediates hold ``revenue_path`` also moves its ``implied_margin``, the
@@ -293,12 +294,13 @@ def reprice(
         im |= revenue_at_price(im, price, result.value, policy)
     else:
         im |= stable_at_price(im, price, result.value, policy)
+    price_to_value, designation = designation_for(price, result.value, policy.designation_edges)
     return replace(
         result,
         price=price,
         price_date=price_date,
-        stance5=stance5(price, result.levels),
-        stance3=stance3(price, result.levels),
+        price_to_value=price_to_value,
+        designation=designation,
         inputs=inputs,
         intermediates=im,
         flags=flags,
@@ -331,14 +333,14 @@ def _valued(
     refresh_id: int | None,
     v: Valued,
 ) -> ValuationResult:
-    levels = levels_for(v.value, v.moat, policy)
+    price_to_value, designation = designation_for(price, v.value, policy.designation_edges)
     return ValuationResult(
         symbol=i.symbol,
         route=v.route,
         value=v.value,
-        levels=levels,
-        stance5=stance5(price, levels),
-        stance3=stance3(price, levels),
+        levels=levels_for(v.value, v.moat, policy),
+        price_to_value=price_to_value,
+        designation=designation,
         price=price,
         price_date=i.price_date,
         data_date=i.data_date,

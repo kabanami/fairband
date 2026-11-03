@@ -1,4 +1,4 @@
-"""The warning flags of spec 6.7: each warns and never changes a value or a stance.
+"""The warning flags of spec 6.7: each warns and never changes a value, a level or a designation.
 
 The margin flag is ``mech/1.2``'s. The margin is operating income ÷ revenue for each fiscal year
 that has both and a positive revenue; the median and the high run over the last ten such years,

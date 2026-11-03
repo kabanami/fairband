@@ -2,7 +2,9 @@
 
 ``result`` holds the whole ``ValuationResult`` as ``result_to_json`` writes it. The other columns
 copy the fields the screen sorts and filters on: the value, the levels and the price as ``repr``
-text, so each float reads back exactly, and ``flags`` as a JSON list of the flag codes. The screen
+text, so each float reads back exactly, price ÷ value as a REAL (the double itself, also exact),
+the designation's word, and ``flags`` as a JSON list of the flag codes. The ``stance5`` and
+``stance3`` columns of method 0.5 are no longer written: a new row leaves them NULL. The screen
 reads the snapshot with the greatest id per symbol.
 """
 
@@ -41,8 +43,8 @@ class SnapshotRow:
     fair_high: float | None
     trim_level: float | None
     price: float | None
-    stance5: str | None
-    stance3: str | None
+    price_to_value: float | None
+    designation: str | None
     price_date: date | None
     data_date: date
     valid_until: date
@@ -78,8 +80,8 @@ def insert_snapshot(
         dump_float(None if levels is None else levels.fair_high),
         dump_float(None if levels is None else levels.trim),
         dump_float(result.price),
-        result.stance5,
-        result.stance3,
+        result.price_to_value,
+        result.designation,
         dump_date(result.price_date),
         dump_date(result.data_date),
         dump_date(result.valid_until),
@@ -92,9 +94,10 @@ def insert_snapshot(
     with transaction(conn):
         cursor = conn.execute(
             "INSERT INTO snapshots (symbol, refresh_id, deciles_refresh_id, created_at, phase,"
-            " route, value, buy_level, fair_low, fair_high, trim_level, price, stance5, stance3,"
-            " price_date, data_date, valid_until, flags, refusal, policy_version, method_version,"
-            " result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " route, value, buy_level, fair_low, fair_high, trim_level, price, price_to_value,"
+            " designation, price_date, data_date, valid_until, flags, refusal, policy_version,"
+            " method_version, result)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             row,
         )
     return inserted_id(cursor)
@@ -140,8 +143,8 @@ def _snapshot(row: sqlite3.Row) -> SnapshotRow:
         fair_high=load_float(row["fair_high"]),
         trim_level=load_float(row["trim_level"]),
         price=load_float(row["price"]),
-        stance5=row["stance5"],
-        stance3=row["stance3"],
+        price_to_value=row["price_to_value"],
+        designation=row["designation"],
         price_date=load_date(row["price_date"]),
         data_date=load_date(row["data_date"]),
         valid_until=load_date(row["valid_until"]),

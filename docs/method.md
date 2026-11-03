@@ -290,7 +290,7 @@ The value a share is the total ÷ the diluted share count.
 
 From the GuruFocus Moat Score: 8 or more Wide, 4 or more Narrow, below 4 or no score None. The moat enters in three places: the runway N, the terminal return and the margin of safety. The revenue-growth route's explicit period does not read it, so there the moat enters the terminal return and the margin of safety only.
 
-### 4.10 Levels, stance and validity
+### 4.10 Levels, designation and validity
 
 On the value at belief, each level the exact decimal product:
 
@@ -298,13 +298,17 @@ On the value at belief, each level the exact decimal product:
 - fair band = value × 0.85 to value × 1.15;
 - trim level = value × 1.5.
 
-| Price | Five-step stance | Screen word |
+The levels are computed once at valuation and shown as figures; nothing in the engine reads the price against them. On every valued row the engine reads the price against the value at belief, price ÷ value as a plain division, and gives it a word by the policy's designation edges e1 to e4 (0.65, 0.85, 1.15, 1.50; 4.1), comparing the ratio with each edge as written:
+
+| price ÷ value | Code | Screen word |
 |---|---|---|
-| below the buy level | BUY | buy |
-| from the buy level, below the fair band | ACCUMULATE / HOLD | hold |
-| inside the fair band, ends included | HOLD | hold |
-| above the fair band, below the trim level | HOLD — above fair band | hold |
-| at or above the trim level | TRIM | trim |
+| below e1 | `well-below` | Well below |
+| from e1, below e2 | `below` | Below |
+| from e2 to e3, ends included | `near` | Near |
+| above e3, below e4 | `above` | Above |
+| at or above e4 | `well-above` | Well above |
+
+The word is the band's, never an action. The designation is a fact about the price: a price refresh recomputes it; a refusal and a Start-up row have none. A snapshot valued under method 0.5 carries a stance and no designation; it reads with none until a revalue replaces it.
 
 The data date is the date of the newest observation among the company's stored statement facts (today, when it has none). A result is valid until the next earnings date when that date is after the data date, else 91 days after the data date. It is current until 0.6667 of the window has passed, then aging, then expired after the window's end. An expired row keeps its figures.
 
@@ -518,7 +522,7 @@ r in every year and in the terminal. Under the band of every valued row on this 
 
 From the newest annual balance sheet: debt is short-term plus long-term debt (`shortTermDebt`, `longTermDebt`), cash is cash and equivalents plus short-term investments (`cashAndCashEquivalents`, `shortTermInvestments`). No other line enters. A line without a value counts as nil, and assembly's note on the input names it ("longTermDebt not presented"); a figure with both its lines missing is unknown and counts as nil. Either case flags `line-not-presented:debt` or `line-not-presented:cash`, the sentence naming the missing lines.
 
-A value a share at or below zero refuses the row "value not positive under the reinvestment charge", which keeps its figures (5a.1). Otherwise the levels, the stance and the validity are 4.10's, with the moat's margin of safety.
+A value a share at or below zero refuses the row "value not positive under the reinvestment charge", which keeps its figures (5a.1). Otherwise the levels, the designation and the validity are 4.10's, with the moat's margin of safety.
 
 ### 5a.10 What moves with the price
 
@@ -594,7 +598,7 @@ EPV = E ÷ r is shown as the no-growth value. The levels sit on the stable-growt
 
 ### 6.4 The growth-route cross-check
 
-When the row's inputs allow the Mature Growth route (a positive anchor, a path without refusal), the intermediates carry that route's value a share under the row's own moat and returns, with the keys that rebuild its path, and its implied growth at the price. When the growth route would refuse, only its reason is carried. The levels and the stance never read it.
+When the row's inputs allow the Mature Growth route (a positive anchor, a path without refusal), the intermediates carry that route's value a share under the row's own moat and returns, with the keys that rebuild its path, and its implied growth at the price. When the growth route would refuse, only its reason is carried. The levels and the designation never read it.
 
 ### 6.5 Expected return, multiples, flags and inputs
 
@@ -612,7 +616,7 @@ Each keeps its phase, its classifier evidence, its price and its price columns. 
 
 ## 8. The flags
 
-A flag warns and never changes a value, a level or a stance. Each has a code, a short word for the column and one sentence for the drawer.
+A flag warns and never changes a value, a level or a designation. Each has a code, a short word for the column and one sentence for the drawer.
 
 | Code | Rule |
 |---|---|
@@ -675,7 +679,7 @@ The three lease and line flags sit on nearly every valued row today; their redes
 ## 10. Refresh kinds and what moves
 
 - **Full refresh**: the universe, the data of section 2 for every admitted company, the deciles, then every company classified and valued, one snapshot per company. A company fetched within 24 hours is not fetched again.
-- **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the stance, the implied growth and its sensitivities, the margin the price needs (revenue-growth rows), the growth-route cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price, its date and the price input, except a revenue-growth refusal whose intermediates carry `revenue_path`: the two refused for their target margin ("no target margin: <n> mature peers") or for a value not positive ("value not positive under the reinvestment charge"). Such a row also recomputes its margin the price needs from its rebuild keys (5a.10); its other figures stay. The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
+- **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the designation, the implied growth and its sensitivities, the margin the price needs (revenue-growth rows), the growth-route cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price, its date and the price input, except a revenue-growth refusal whose intermediates carry `revenue_path`: the two refused for their target margin ("no target margin: <n> mature peers") or for a value not positive ("value not positive under the reinvestment charge"). Such a row also recomputes its margin the price needs from its rebuild keys (5a.10); its other figures stay. The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
 - **Revalue**: the engine on the stored facts of every company, with the latest stored deciles, no vendor call and no freshness window. New snapshots under the current method and policy versions.
 
 Snapshots are appended, never changed. The screen reads the latest snapshot per company.
@@ -689,7 +693,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.3 | 2026-11-02 | Mature Stable charges as Mature Growth does (6.3): the runway return through the runway, the terminal return after. Policy unchanged. |
 | 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a), the held rate capped at the sales class's base-rate 90th percentile (5a.3), with the `stock-peers` call (section 2); the name patterns on the universe (section 1). Policy v3 adds five values and the `sales_p90_5y` column of `base_rates` (4.1). |
 | 0.5 | 2026-11-03 | The industry fallback for the peers (5a.4). Policy v4 adds `industry_peer_max`. |
-| 0.6 | 2026-11-03 | The FMP pace (section 2); the established company with a loss year (3.5 rule 4a) and the Decline duration test (rule 2). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
+| 0.6 | 2026-11-03 | The FMP pace (section 2); the established company with a loss year (3.5 rule 4a) and the Decline duration test (rule 2); the stance leaves the engine; the designation on price ÷ value (4.10). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
@@ -711,7 +715,8 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | The belief: the base-rate median for the sales class | Base Rate Book (Mauboussin and Callahan 2016), exhibit 4; D6 |
 | The cap on the held rate: the sales class's 90th-percentile five-year sales growth | Base Rate Book (Mauboussin and Callahan 2016), Sales Growth exhibit 4; design.md 7.3 (a belief above the base-rate 90th percentile needs evidence); founder decision 2026-11-03 |
 | The NTM anchor, the SBC basis test, the margin flag, the gate tests, the moat table | stocks mech/1.2 |
-| The levels, the stance, the expected return, EPV, the P/E bases | stocks method v1.7 Steps 3, 7, 9, 10 |
+| The levels, the expected return, EPV, the P/E bases | stocks method v1.7 Steps 3, 7, 9, 10 |
+| The designation on price ÷ value in five bands, in place of a stance | founder decision 2026-11-03; spec 2026-11-03 7.1; the edges from method v1.7 Step 10 |
 | Mature Stable: the stable-growth value with the charge; a stable firm must behave like one | Damodaran H38; design.md 6.11; calibration spec 5.10 |
 | The revenue-growth route: a revenue DCF on margins and sales-to-capital, five high-growth years and five fading to g_T; high growth no longer than ten years, its length a judgment tier 1 fixes | Damodaran's template H2; H1; H3; G1, G44; design.md 6.10 |
 | The free cash flow as NOPAT less reinvestment | Damodaran H9 |
@@ -736,6 +741,7 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Charge off | The runway years are not charged, because measured capital is at or below zero |
 | Fade | The five equal steps from the year-3 consensus growth down to the belief |
 | EPV | Earnings power value: clean trailing earnings ÷ r, the value with no growth |
+| Designation | Where the price stands against the value at belief: one of five bands on price ÷ value (4.10); a fact about the price, never an action |
 | Non-recurring gap | GuruFocus EPS trailing less EPS without non-recurring items |
 | Growth word, margin direction | The classifier's reading of the deciles for revenue growth and for the margin trend |
 | Check | A classifier warning that never changes the phase |

@@ -14,7 +14,7 @@ years uncharged. EPV is shown as the no-growth value. ``epv`` and ``stable_growt
 ``epv_total`` and ``stable_growth_total`` are the totals. The ROIC flags are the growth route's.
 
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
-5.7), or that route's refusal; the value, the levels and the stance stay on the stable-growth
+5.7), or that route's refusal; the value, the levels and the designation stay on the stable-growth
 value. Its implied growth moves with the price, as the growth route's does.
 """
 

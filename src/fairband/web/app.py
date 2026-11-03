@@ -165,7 +165,7 @@ def create_app(
         if by not in GROUP_BY:
             raise HTTPException(400, f"by must be sector, phase or cap, not {by}")
         rows, _ = screen_rows(clock().date())
-        return {"by": by, "groups": group_rows(rows, by)}
+        return {"by": by, "groups": group_rows(rows, by, policy.designation_edges)}
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:

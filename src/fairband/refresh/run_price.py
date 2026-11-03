@@ -18,7 +18,7 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
 - ``reprice``: for each quoted symbol, one at a time, ``reprice`` of its latest snapshot at the new
   price and the quote's date, and ``insert_snapshot`` under this refresh; the symbol is
   ``repriced``. The value, levels, validity and every input but the price stay; the price input
-  becomes the quote (its date and its row's stamps), and the stance, the price-dependent
+  becomes the quote (its date and its row's stamps), and the designation, the price-dependent
   intermediates and the long-runway flag follow the price. A refusal takes the new price, its
   date and the price input only, except a growth-route refusal that carries ``revenue_path``
   (refused for its target margin or for a value not positive), which also recomputes the margin

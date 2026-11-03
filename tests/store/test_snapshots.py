@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from fairband.engine import METHOD_VERSION
+from fairband.engine.designation import designation_for
 from fairband.engine.route import refusal_result
 from fairband.engine.types import (
     Flag,
@@ -32,13 +33,14 @@ def _at(when: datetime = T0) -> Callable[[], datetime]:
 
 
 def _result(symbol: str, value: float = 100.0) -> ValuationResult:
+    price_to_value, designation = designation_for(120.5, value, (0.65, 0.85, 1.15, 1.50))
     return ValuationResult(
         symbol=symbol,
         route="mature-growth",
         value=value,
         levels=Levels(buy=0.65 * value, fair_low=0.85 * value, fair_high=1.15 * value, trim=150.0),
-        stance5="HOLD",
-        stance3="hold",
+        price_to_value=price_to_value,
+        designation=designation,
         price=120.5,
         price_date=date(2026, 10, 30),
         data_date=date(2026, 10, 29),
@@ -92,8 +94,8 @@ def test_insert_snapshot_and_latest_snapshot(
         fair_high=1.15 * 100.0,
         trim_level=150.0,
         price=120.5,
-        stance5="HOLD",
-        stance3="hold",
+        price_to_value=1.205,
+        designation="above",
         price_date=date(2026, 10, 30),
         data_date=date(2026, 10, 29),
         valid_until=date(2027, 1, 28),
@@ -116,6 +118,10 @@ def test_snapshot_columns_keep_exact_floats(
         "value": "0.30000000000000004",
         "fair_high": repr(1.15 * (0.1 + 0.2)),
         "price": "120.5",
+        "price_to_value": 120.5 / (0.1 + 0.2),
+        "designation": "well-above",
+        "stance5": None,
+        "stance3": None,
         "phase": "Mature Growth",
         "flags": '["few-analysts", "value-spread"]',
         "created_at": "2026-11-01T09:30:00+00:00",
@@ -127,6 +133,9 @@ def test_snapshot_columns_keep_exact_floats(
     assert {k: row[k] for k in expected} == expected
     stored = latest_snapshot(conn, "MSFT")
     assert stored is not None and stored.value == 0.1 + 0.2
+    # price ÷ value is a REAL column: the double itself, read back exactly
+    assert conn.execute("select typeof(price_to_value) from snapshots").fetchone()[0] == "real"
+    assert stored.price_to_value == 120.5 / (0.1 + 0.2) == result.price_to_value
 
 
 def test_refusal_snapshot_keeps_nulls(
@@ -144,7 +153,9 @@ def test_refusal_snapshot_keeps_nulls(
     row = latest_snapshot(conn, "BANK")
     assert row is not None and row.result == refusal
     assert (row.value, row.buy_level, row.fair_low, row.fair_high, row.trim_level) == (None,) * 5
-    assert (row.phase, row.route, row.stance5, row.stance3) == (None,) * 4
+    assert (row.phase, row.route, row.price_to_value, row.designation) == (None,) * 4
+    raw = conn.execute("select price_to_value, designation, stance5, stance3 from snapshots")
+    assert tuple(raw.fetchone()) == (None,) * 4
     assert (row.refusal, row.price, row.flags) == ("no positive forward anchor", 41.0, ())
 
 

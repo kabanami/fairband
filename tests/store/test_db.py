@@ -49,7 +49,8 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
-    assert migrate(conn) == ["001_initial.sql"] and applied_versions(conn) == [1]
+    assert migrate(conn) == ["001_initial.sql", "002_designation.sql"]
+    assert applied_versions(conn) == [1, 2]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -78,6 +79,20 @@ def test_initial_indexes(conn: sqlite3.Connection) -> None:
     assert indexed("facts") == [["symbol", "dataset", "period_end", "field"]]
     assert indexed("observations") == [["symbol", "dataset", "period", "field"]]
     assert indexed("snapshots") == [["symbol", "id"]]
+
+
+def test_designation_columns_join_a_database_at_001(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 001 gains price ÷ value and the designation on the snapshots; the stance
+    columns stay, no longer written."""
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
+        assert migrate(conn) == ["001_initial.sql"]
+    assert migrate(conn) == ["002_designation.sql"] and applied_versions(conn) == [1, 2]
+    columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
+    assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
+    assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -119,9 +134,9 @@ def test_applied_version_missing_from_package_refuses(conn: sqlite3.Connection) 
     migrate(conn)
     with conn:
         conn.execute(
-            "insert into schema_versions values (2, '002_gone.sql', 'abc', '2026-11-01T00:00:00Z')"
+            "insert into schema_versions values (99, '099_gone.sql', 'abc', '2026-11-01T00:00:00Z')"
         )
-    with pytest.raises(ValueError, match="002_gone.sql"):
+    with pytest.raises(ValueError, match="099_gone.sql"):
         migrate(conn)
 
 
@@ -181,7 +196,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
 
     first = run()
     assert first.returncode == 0, first.stderr
-    assert first.stdout.splitlines() == ["Applied 001_initial.sql"]
+    assert first.stdout.splitlines() == ["Applied 001_initial.sql", "Applied 002_designation.sql"]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()
     assert second.returncode == 0 and second.stdout.splitlines() == ["No migrations to apply."]

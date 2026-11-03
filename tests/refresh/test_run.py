@@ -117,7 +117,7 @@ def test_scoped_refresh_with_stored_deciles_values(env_with_deciles: Env) -> Non
         env.universe_id,
     )
     assert (acme.phase, acme.route) == ("Mature Growth", "mature-growth")
-    assert acme.value is not None and acme.value > 0 and acme.stance5 is not None
+    assert acme.value is not None and acme.value > 0 and acme.designation is not None
     assert (acme.price, acme.price_date, acme.data_date) == (50.0, QUOTE_DATE, env.clock.now.date())
     assert env.items(refresh_id) == [("ACME", "valued", None)]
     # The synthetic company's invested capital takes the issuer's as-reported intangibles.
@@ -355,9 +355,11 @@ def test_cli_prints_the_value_line(
     use_cli(env, monkeypatch, tmp_path)
     assert cli.main(["refresh", "ACME"]) == 0
     acme = env.snapshot("ACME")
-    assert acme.value is not None and acme.stance5 is not None
+    assert acme.value is not None and acme.price_to_value is not None
+    assert acme.designation == "above"
     line = capsys.readouterr().out.splitlines()[-1]
-    assert line == f"ACME  Mature Growth  value {acme.value:.2f}  stance {acme.stance5}"
+    value, ratio = f"{acme.value:.2f}", f"{acme.price_to_value:.2f}"
+    assert line == f"ACME  Mature Growth  value {value}  above ({ratio} × value)"
 
 
 def test_cli_exits_1_when_the_refresh_is_not_done(

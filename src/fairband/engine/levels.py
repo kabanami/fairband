@@ -1,4 +1,4 @@
-"""Levels, stance and validity state (``design.md`` 6.3 and 8).
+"""Levels and validity state (``design.md`` 6.3 and 8).
 
 The buy level is the value times one less the moat's margin of safety; the fair band and the trim
 level are the value times the policy's factors. Each level is the exact decimal product of the
@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from fairband.engine.types import Levels, Stance3, Stance5
+from fairband.engine.types import Levels
 from fairband.policy import Moat, Policy
 
 
@@ -22,29 +22,6 @@ def levels_for(value: float, moat: Moat, policy: Policy) -> Levels:
         fair_high=_times(value, _decimal(high)),
         trim=_times(value, _decimal(policy.trim_multiple)),
     )
-
-
-def stance5(price: float, levels: Levels) -> Stance5:
-    if price < levels.buy:
-        return "BUY"
-    if price < levels.fair_low:
-        return "ACCUMULATE / HOLD"
-    if price <= levels.fair_high:
-        return "HOLD"
-    if price < levels.trim:
-        return "HOLD — above fair band"
-    return "TRIM"
-
-
-def stance3(price: float, levels: Levels) -> Stance3:
-    """The screen's three words: the middle three steps of ``stance5`` all read ``hold``."""
-    match stance5(price, levels):
-        case "BUY":
-            return "buy"
-        case "TRIM":
-            return "trim"
-        case _:
-            return "hold"
 
 
 def validity_state(

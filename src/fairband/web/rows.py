@@ -63,8 +63,8 @@ EXTRA_KEYS = (
     "drawdown",
     "flags",
     "refusal",
-    "stance3",
-    "stance5",
+    "priceToValue",
+    "designation",
     "priceDate",
     "dataDate",
     "validUntil",
@@ -75,8 +75,8 @@ EXTRA_KEYS = (
 )
 ROW_KEYS = SCREEN_ROW_KEYS + EXTRA_KEYS
 
-# ScreenTable's thirteen column keys, in its order. Three draw a row key under another name:
-# band (fairLow to fairHigh), stance (from the price and the levels) and entered (enteredAt).
+# ScreenTable's thirteen column keys, in its order. Two draw a row key under another name: band
+# (fairLow to fairHigh) and entered (enteredAt). The designation draws its own extra key.
 DESIGN_COLUMNS = (
     "ticker",
     "name",
@@ -88,11 +88,12 @@ DESIGN_COLUMNS = (
     "mechanical",
     "reviewed",
     "price",
-    "stance",
+    "designation",
     "overrides",
     "entered",
 )
-COLUMNS = DESIGN_COLUMNS + EXTRA_KEYS
+# Each column once: an extra key that is also a design column keeps its design place.
+COLUMNS = DESIGN_COLUMNS + tuple(key for key in EXTRA_KEYS if key not in DESIGN_COLUMNS)
 
 
 def screen_row(
@@ -144,8 +145,8 @@ def screen_row(
         "drawdown": facts.get("drawdown_from_peak"),
         "flags": [f.word for f in result.flags],
         "refusal": snapshot.refusal,
-        "stance3": snapshot.stance3,
-        "stance5": snapshot.stance5,
+        "priceToValue": snapshot.price_to_value,
+        "designation": snapshot.designation,
         "priceDate": _iso(snapshot.price_date),
         "dataDate": snapshot.data_date.isoformat(),
         "validUntil": snapshot.valid_until.isoformat(),
@@ -194,17 +195,20 @@ def sort_rows(rows: list[dict[str, Any]], key: str, descending: bool) -> list[di
     return sorted(present, key=lambda r: r[key], reverse=descending) + missing
 
 
-def group_rows(rows: Sequence[dict[str, Any]], by: str) -> list[dict[str, Any]]:
+def group_rows(
+    rows: Sequence[dict[str, Any]], by: str, edges: tuple[float, float, float, float]
+) -> list[dict[str, Any]]:
     """The rows grouped by ``by`` (``GROUP_BY``), ordered by group name. A group's name is the
     sector, the engine's phase name (``unclassified`` without a phase) or the cap band; ``none``
     for a row without a sector or a cap band. Each group gives its row count, the rows with a
     value (``valued``), the median of price ÷ value over the valued rows with a positive price,
-    and the share of the valued rows priced below their buy level; ``None`` for the last two
-    when they cover no row."""
+    and the share of the valued rows whose price ÷ value is below the second designation edge
+    (``edges[1]``: the ``below`` and ``well-below`` bands); ``None`` for the last two when they
+    cover no row."""
     named: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         named.setdefault(_group_name(row, by), []).append(row)
-    return [_group(name, members) for name, members in sorted(named.items())]
+    return [_group(name, members, edges[1]) for name, members in sorted(named.items())]
 
 
 def _group_name(row: dict[str, Any], by: str) -> str:
@@ -215,17 +219,17 @@ def _group_name(row: dict[str, Any], by: str) -> str:
     return NONE if name is None else str(name)
 
 
-def _group(name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _group(name: str, rows: list[dict[str, Any]], below_value: float) -> dict[str, Any]:
     valued = [r for r in rows if r["mechanical"] is not None]
     priced = [r for r in valued if r["price"] is not None and r["price"] > 0]
-    below = [r for r in priced if r["buyLevel"] is not None and r["price"] < r["buyLevel"]]
     ratios = [r["price"] / r["mechanical"] for r in priced]
+    below = [x for x in ratios if x < below_value]
     return {
         "name": name,
         "count": len(rows),
         "valued": len(valued),
         "medianPriceToValue": statistics.median(ratios) if ratios else None,
-        "shareBelowBuy": len(below) / len(valued) if valued else None,
+        "shareBelowValue": len(below) / len(valued) if valued else None,
     }
 
 

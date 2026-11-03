@@ -261,14 +261,17 @@ def _print_progress(progress: Progress) -> None:
 
 
 def _snapshot_line(symbol: str, snapshot: SnapshotRow | None) -> str:
-    """``AAPL  Mature Growth  value 189.40  stance HOLD``, or the phase (``—`` without one) and
-    the refusal reason."""
+    """``AAPL  Mature Growth  value 189.40  near (1.05 × value)``, or the phase (``—`` without
+    one) and the refusal reason."""
     if snapshot is None:
         return f"{symbol}  —  no snapshot yet"
     phase = snapshot.phase or "—"
     if snapshot.value is None:
         return f"{symbol}  {phase}  {snapshot.refusal}"
-    return f"{symbol}  {phase}  value {snapshot.value:.2f}  stance {snapshot.stance5}"
+    line = f"{symbol}  {phase}  value {snapshot.value:.2f}"
+    if snapshot.designation is None or snapshot.price_to_value is None:
+        return line
+    return f"{line}  {snapshot.designation} ({snapshot.price_to_value:.2f} × value)"
 
 
 def _calibration_lines(calibration: dict[str, Any]) -> list[str]:

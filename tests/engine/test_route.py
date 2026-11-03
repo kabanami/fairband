@@ -9,7 +9,8 @@ from support.stable_value import stable_dcf
 
 from fairband.engine import METHOD_VERSION, route_mature_growth
 from fairband.engine.classifier import Deciles
-from fairband.engine.levels import levels_for, stance3, stance5
+from fairband.engine.designation import designation_for
+from fairband.engine.levels import levels_for
 from fairband.engine.mature_growth import Charge, GrowthPath, growth_rates, value_at_belief
 from fairband.engine.price_facts import price_facts
 from fairband.engine.roic import (
@@ -132,7 +133,7 @@ def flag(code: str) -> Flag:
 def assert_refused(r: ValuationResult, reason: str) -> None:
     """A refusal is a full row with no value, never an exception."""
     assert r.refusal == reason
-    assert (r.route, r.value, r.levels, r.stance5, r.stance3) == (None, None, None, None, None)
+    assert (r.route, r.value, r.levels, r.price_to_value, r.designation) == (None,) * 5
     assert result_from_json(result_to_json(r)) == r
 
 
@@ -146,7 +147,10 @@ def test_mature_growth_end_to_end(
     assert r.route == "mature-growth" and r.refusal is None and r.value is not None
     assert r.price is not None
     assert r.levels == levels_for(r.value, r.intermediates["moat"], policy)
-    assert r.stance5 == stance5(r.price, r.levels)
+    assert (r.price_to_value, r.designation) == designation_for(
+        r.price, r.value, policy.designation_edges
+    )
+    assert not hasattr(r, "stance5") and not hasattr(r, "stance3")
     assert {i.name for i in r.inputs} >= {
         "ntm_net_income",
         "required_return",
@@ -170,7 +174,9 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert (r.price, r.price_date, r.data_date) == (150.0, date(2026, 10, 30), date(2026, 10, 30))
     assert (r.policy_version, r.method_version) == (policy.version, METHOD_VERSION)
     assert r.deciles_refresh_id == deciles.refresh_id
-    assert r.levels is not None and r.stance3 == stance3(150.0, r.levels)
+    # $150 on a value of $133.37: 1.125 × the value, inside 0.85 to 1.15
+    assert r.value is not None and r.value == pytest.approx(133.37, abs=0.005)
+    assert (r.price_to_value, r.designation) == (150.0 / r.value, "near")
     im = r.intermediates
     assert set(im) == MATURE_GROWTH_KEYS
     assert im["anchor"] == {"ntm_eps_raw": 5.90, "sbc_adjustment_per_share": 0.0, "ntm_eps": 5.90}
@@ -697,7 +703,9 @@ def test_mature_stable_end_to_end(
     assert er["growth"] == pytest.approx(0.03)
     assert er["income"] == pytest.approx((1_500e6 + 500e6) / 40_000e6)
     assert r.levels == levels_for(r.value, "Wide", policy)
-    assert r.stance5 == stance5(40.0, r.levels)
+    assert (r.price_to_value, r.designation) == designation_for(
+        40.0, r.value, policy.designation_edges
+    )
     by_name = {i.name: i for i in r.inputs}
     assert {"net_income_ttm", "aggregate_roic", "terminal_roic", "moat_class", "belief"} <= set(
         by_name
@@ -1047,12 +1055,12 @@ def test_fallback_validity(mg_inputs: CompanyInputs, deciles: Deciles, policy: P
 # --- Reprice ------------------------------------------------------------------------------------
 
 
-def test_reprice_keeps_value_changes_stance(
+def test_reprice_keeps_value_changes_designation(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
     assert r.value is not None and r.levels is not None
-    low = r.levels.buy * 0.9
+    low = r.levels.buy * 0.9  # 0.675 × the value: Wide's buy level is 0.75 × the value
     p = reprice(r, low, date(2026, 11, 2), policy)
     assert (p.value, p.levels, p.valid_until, p.data_date) == (
         r.value,
@@ -1060,8 +1068,8 @@ def test_reprice_keeps_value_changes_stance(
         r.valid_until,
         r.data_date,
     )
-    assert (p.price, p.price_date, p.stance5, p.stance3) == (low, date(2026, 11, 2), "BUY", "buy")
-    assert r.stance5 != "BUY"
+    assert (p.price, p.price_date, p.designation) == (low, date(2026, 11, 2), "below")
+    assert p.price_to_value == low / r.value and r.designation == "near"
     fresh = value_company(
         replace(mg_inputs, price=low, price_date=date(2026, 11, 2)), deciles, policy, TODAY
     )
@@ -1091,7 +1099,8 @@ def test_reprice_mature_stable(ms_inputs: CompanyInputs, deciles: Deciles, polic
     r = value_company(ms_inputs, deciles, policy, TODAY)
     p = reprice(r, 80.0, date(2026, 11, 2), policy)
     fresh = value_company(replace(ms_inputs, price=80.0), deciles, policy, TODAY)
-    assert p.value == r.value and p.stance5 == fresh.stance5 == "TRIM"
+    assert p.value == r.value and p.designation == fresh.designation == "well-above"
+    assert p.price_to_value == fresh.price_to_value
     assert p.intermediates["multiples"] == fresh.intermediates["multiples"]
     assert p.intermediates["expected_return"] == fresh.intermediates["expected_return"]
     # a refused cross-check has no implied growth to move
@@ -1162,6 +1171,34 @@ def test_reprice_moves_the_price_input(
         [kept] = [i for i in reprice(r, 65.0, day, policy).inputs if i.name == "price"]
         assert kept.provenance == replace(inputs.provenance["price"], as_of=day)
     assert p.refusal == "Decline route not built yet"
+
+
+def test_reprice_moves_the_designation_and_leaves_the_levels(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 13.3: on a value of 100, a price refresh from 70 to 120 moves the word from below to
+    above; the levels stay."""
+    r = value_company(mg_inputs, deciles, policy, TODAY)
+    at_100 = replace(r, value=100.0, levels=levels_for(100.0, "Wide", policy))
+    before = reprice(at_100, 70.0, date(2026, 11, 2), policy)
+    after = reprice(before, 120.0, date(2026, 11, 3), policy)
+    assert (before.price_to_value, before.designation) == (0.7, "below")
+    assert (after.price_to_value, after.designation) == (1.2, "above")
+    assert after.levels == before.levels == levels_for(100.0, "Wide", policy)
+    assert after.value == 100.0
+
+
+def test_the_designation_reads_the_policy_edges(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """At 1.125 × the value the row is near under v5's edges; with the third edge at 1.10 it is
+    above, at valuation and at a price refresh alike."""
+    assert value_company(mg_inputs, deciles, policy, TODAY).designation == "near"
+    narrow = replace(policy, designation_edges=(0.65, 0.85, 1.10, 1.50))
+    r = value_company(mg_inputs, deciles, narrow, TODAY)
+    assert r.designation == "above"
+    assert r.price is not None and r.price_date is not None
+    assert reprice(r, r.price, r.price_date, policy).designation == "near"
 
 
 def test_reprice_a_refusal_moves_only_the_price(policy: Policy) -> None:

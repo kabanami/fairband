@@ -2,9 +2,9 @@
 migrated temporary database: the quotes, in one batch or one call a symbol, then a new snapshot
 of each company at its new price; the rows it leaves as they were, and the command.
 
-The full refresh values ACME and AXLE (Mature Growth, buy $21.25, trim $49.03) and MILD (Mature
-Stable, buy $11.46) at $50, all three ``trim``, and refuses NEWT (Young Growth, with no mature
-peer for a target margin).
+The full refresh values ACME and AXLE (Mature Growth, $33.42 a share) and MILD (Mature Stable,
+$19.25) at $50: ACME and AXLE ``above`` (1.496 × the value), MILD ``well-above`` (2.60 ×). It
+refuses NEWT (Young Growth, with no mature peer for a target margin).
 """
 
 import json
@@ -80,7 +80,7 @@ def last_response_id(env: Env) -> int:
         return int(conn.execute("SELECT MAX(id) FROM vendor_responses").fetchone()[0])
 
 
-def test_price_refresh_keeps_value_updates_stance(env_valued: Env) -> None:
+def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
     env = env_valued
     before = snapshots_of(env)
     env.router.bodies["batch-quote"] = batch(NEW_PRICES)
@@ -117,9 +117,10 @@ def test_price_refresh_keeps_value_updates_stance(env_valued: Env) -> None:
     unchanged += ("data_date", "valid_until", "deciles_refresh_id", "policy_version", "refusal")
     for name in unchanged:
         assert getattr(acme, name) == getattr(old, name), name
-    assert (old.price, old.price_date, old.stance3) == (50.0, date(2026, 10, 30), "hold")
-    assert (acme.price, acme.price_date, acme.stance3) == (20.0, PRICE_DATE, "buy")
-    assert acme.stance5 != old.stance5
+    assert (old.price, old.price_date, old.designation) == (50.0, date(2026, 10, 30), "above")
+    assert (acme.price, acme.price_date, acme.designation) == (20.0, PRICE_DATE, "well-below")
+    assert acme.value is not None and acme.price_to_value == 20.0 / acme.value
+    assert acme.result.designation == acme.designation  # the column copies the result
     implied = acme.result.intermediates["implied_growth"]
     assert implied != old.result.intermediates["implied_growth"]
     # The same inputs, cited as they were, but the price: the fresh quote, as of its date.
@@ -130,10 +131,11 @@ def test_price_refresh_keeps_value_updates_stance(env_valued: Env) -> None:
     assert others == [i for i in old.result.inputs if i.name != "price"]
     stamps = {"observed_at": env.clock.now, "entered_at": env.clock.now}
     assert acme.result == reprice(old.result, 20.0, PRICE_DATE, env.policy, **stamps)
-    assert {s: (r.price, r.stance3) for s, r in after.items()} == {
-        "ACME": (20.0, "buy"),
-        "AXLE": (30.0, "hold"),
-        "MILD": (10.0, "buy"),
+    # $20 and $30 on $33.42 (0.60 and 0.90 × the value), $10 on $19.25 (0.52 ×)
+    assert {s: (r.price, r.designation) for s, r in after.items()} == {
+        "ACME": (20.0, "well-below"),
+        "AXLE": (30.0, "near"),
+        "MILD": (10.0, "well-below"),
         "NEWT": (60.0, None),
     }
 
@@ -179,7 +181,8 @@ def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
     )
     assert any(i.name == "price" for i in inputs)
     assert newt.result == replace(old.result, price=60.0, price_date=PRICE_DATE, inputs=inputs)
-    assert (newt.value, newt.stance3, newt.refusal) == (
+    assert (newt.value, newt.price_to_value, newt.designation, newt.refusal) == (
+        None,
         None,
         None,
         "no target margin: 0 mature peers",

@@ -332,8 +332,8 @@
       h('div', { className: 'app-groups__bar' }, picker),
       body,
       g && g.groups.length ? h('p', { className: 'caption app-muted app-groups__note' },
-        'The median and the share count the companies with a value; below buy is a price under ' +
-        'the buy level.') : null);
+        'The median and the share count the companies with a value; below value is a price in ' +
+        'the Below or Well below band.') : null);
   }
 
   function groupsTable(g) {
@@ -346,14 +346,14 @@
         h('th', { className: 'label fb-num' }, 'Companies'),
         h('th', { className: 'label fb-num' }, 'Valued'),
         h('th', { className: 'label fb-num' }, 'Median price ÷ value'),
-        h('th', { className: 'label fb-num' }, 'Below buy'))),
+        h('th', { className: 'label fb-num' }, 'Below value'))),
       h('tbody', null, g.groups.map(function (row) {
         return h('tr', { key: row.name },
           h('td', { className: 'body' }, g.by === 'phase' ? phaseName(row.name) : row.name),
           figure(row.count, count(row.count)),
           figure(row.valued, count(row.valued)),
           figure(row.medianPriceToValue, F.formatPercent(row.medianPriceToValue)),
-          figure(row.shareBelowBuy, F.formatPercent(row.shareBelowBuy)));
+          figure(row.shareBelowValue, F.formatPercent(row.shareBelowValue)));
       })));
   }
 

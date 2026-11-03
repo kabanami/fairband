@@ -124,7 +124,7 @@ def input_named(r: ValuationResult, name: str) -> TaggedInput:
 def assert_refused(r: ValuationResult, reason: str) -> None:
     """A refusal is a full row with no value, never an exception."""
     assert r.refusal == reason
-    assert (r.route, r.value, r.levels, r.stance5, r.stance3) == (None, None, None, None, None)
+    assert (r.route, r.value, r.levels, r.price_to_value, r.designation) == (None,) * 5
     assert result_from_json(result_to_json(r)) == r
 
 
@@ -736,7 +736,7 @@ def test_reprice_moves_every_price_side_figure(
     fresh = value_company(replace(high_growth_inputs, price=r.price * 0.5), deciles, policy, TODAY)
     for key in PRICE_KEYS:
         assert r2.intermediates[key] == fresh.intermediates[key], key
-    assert (r2.stance5, r2.stance3) == (fresh.stance5, fresh.stance3)
+    assert (r2.price_to_value, r2.designation) == (fresh.price_to_value, fresh.designation)
 
 
 def test_reprice_moves_the_implied_margin_on_a_refused_row(

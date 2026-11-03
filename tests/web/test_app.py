@@ -79,7 +79,7 @@ DESIGN_COLUMNS = [
     "mechanical",
     "reviewed",
     "price",
-    "stance",
+    "designation",
     "overrides",
     "entered",
 ]
@@ -102,8 +102,8 @@ EXTRA_COLUMNS = [
     "drawdown",
     "flags",
     "refusal",
-    "stance3",
-    "stance5",
+    "priceToValue",
+    "designation",
     "priceDate",
     "dataDate",
     "validUntil",
@@ -270,8 +270,8 @@ def test_screen_rows_and_default_sort(
         "drawdown": facts["drawdown_from_peak"],
         "flags": [f.word for f in valued.flags],
         "refusal": None,
-        "stance3": "hold",
-        "stance5": "HOLD",  # $150 within the $113.36 to $153.37 fair band
+        "priceToValue": 150.0 / valued.value,  # $150 on the value $133.37: 1.125
+        "designation": "near",  # from 0.85 to 1.15 × the value
         "priceDate": "2026-10-30",
         "dataDate": "2026-10-30",
         "validUntil": "2027-01-28",
@@ -287,8 +287,9 @@ def test_screen_rows_and_default_sort(
     assert aal["refusal"] == refused.refusal == "no target margin: 0 mature peers"
     for key in ("fairLow", "fairHigh", "fairValue", "buyLevel", "trimLevel", "mechanical"):
         assert aal[key] is None, key
-    for key in ("impliedGrowth", "expectedReturn", "epv", "peClean", "stance3", "route"):
+    for key in ("impliedGrowth", "expectedReturn", "epv", "peClean", "route"):
         assert aal[key] is None, key
+    assert (aal["priceToValue"], aal["designation"]) == (None, None)
     # refused for its target margin, it keeps the moat class the margin the price needs reads,
     # which the column shows only on a row with a value, as on the mature routes' refusals
     assert refused.intermediates["moat"] == "None" and aal["moat"] is None
@@ -311,11 +312,22 @@ def test_screen_sort_nulls_last(client: TestClient) -> None:
             assert len(_tickers(client, f"?sort={key}&dir={direction}")) == 3, key
 
 
+def test_screen_sorts_by_price_to_value(client: TestClient) -> None:
+    """HGCO at 0.63 × its value, AAPL at 1.125, AAL refused with none: last either way."""
+    rows = {row["ticker"]: row for row in _screen(client)["rows"]}
+    assert rows["HGCO"]["priceToValue"] == pytest.approx(0.632, abs=5e-4)
+    assert rows["HGCO"]["designation"] == "well-below"
+    assert _tickers(client, "?sort=priceToValue&dir=asc") == ["HGCO", "AAPL", "AAL"]
+    assert _tickers(client, "?sort=priceToValue&dir=desc") == ["AAPL", "HGCO", "AAL"]
+
+
 def test_sort_unknown_key_400(client: TestClient) -> None:
     response = client.get("/api/screen?sort=fair_value")
     assert response.status_code == 400
     assert response.json() == {"detail": "unknown sort column: fair_value"}
     assert client.get("/api/screen?sort=band").status_code == 400  # a column, not a row key
+    for gone in ("stance", "stance3", "stance5"):
+        assert client.get(f"/api/screen?sort={gone}").status_code == 400, gone
     response = client.get("/api/screen?sort=ticker&dir=down")
     assert response.status_code == 400
     assert response.json() == {"detail": "dir must be asc or desc, not down"}
@@ -324,7 +336,10 @@ def test_sort_unknown_key_400(client: TestClient) -> None:
 def test_screen_envelope_columns_and_today(client: TestClient) -> None:
     body = _screen(client)
     assert set(body) == {"rows", "columns", "today", "refresh"}
-    assert body["columns"] == DESIGN_COLUMNS + EXTRA_COLUMNS
+    # the designation is a design column and a row key: listed once, in its design place
+    extra = [key for key in EXTRA_COLUMNS if key not in DESIGN_COLUMNS]
+    assert extra == [key for key in EXTRA_COLUMNS if key != "designation"]
+    assert body["columns"] == DESIGN_COLUMNS + extra
     assert body["today"] == "2026-11-01"
     assert body["refresh"] == {
         "id": 1,
@@ -1068,7 +1083,7 @@ def test_serve_cli_parses_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert isinstance(app, FastAPI)
     assert kwargs == {"host": "127.0.0.1", "port": 9123, "log_level": "info"}
     with closing(connect(tmp_path / "data" / "fairband.db")) as conn:
-        assert applied_versions(conn) == [1]
+        assert applied_versions(conn) == [1, 2]
     with TestClient(app, base_url=HOST) as c:
         body = c.get("/api/screen").json()
     assert body["rows"] == [] and body["refresh"] is None

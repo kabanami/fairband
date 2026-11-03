@@ -4,6 +4,10 @@
 ``YYYY-MM-DD``; timestamps are UTC RFC 3339, and a timestamp without a time zone is refused.
 ``intermediates`` is written as it stands, so it must hold JSON values only. A NaN or infinity
 anywhere is refused, since RFC 8259 JSON has no such number.
+
+``result_from_json`` also reads a snapshot valued under method 0.5, which carries ``stance5`` and
+``stance3`` and no designation: it drops the two stance keys and reads ``None`` for
+``price_to_value`` and ``designation``.
 """
 
 import json
@@ -16,8 +20,7 @@ Kind = Literal["observed", "estimate", "rule"]
 Phase = Literal[
     "Start-up", "Young Growth", "High Growth", "Mature Growth", "Mature Stable", "Decline"
 ]
-Stance5 = Literal["BUY", "ACCUMULATE / HOLD", "HOLD", "HOLD — above fair band", "TRIM"]
-Stance3 = Literal["buy", "hold", "trim"]
+Designation = Literal["well-below", "below", "near", "above", "well-above"]
 Route = Literal["mature-growth", "mature-stable", "revenue-growth"]
 
 PHASE_NUMBER: dict[Phase, int] = {
@@ -90,8 +93,8 @@ class ValuationResult:
     route: Route | None
     value: float | None
     levels: Levels | None
-    stance5: Stance5 | None
-    stance3: Stance3 | None
+    price_to_value: float | None
+    designation: Designation | None
     price: float | None
     price_date: date | None
     data_date: date
@@ -112,8 +115,13 @@ def result_to_json(r: ValuationResult) -> str:
 
 
 def result_from_json(s: str) -> ValuationResult:
-    """The result ``result_to_json`` wrote, with its dates, tuples and nested types restored."""
+    """The result ``result_to_json`` wrote, with its dates, tuples and nested types restored; a
+    0.5 snapshot's stance keys dropped and its missing designation ``None``."""
     d = json.loads(s)
+    d.pop("stance5", None)
+    d.pop("stance3", None)
+    d.setdefault("price_to_value", None)
+    d.setdefault("designation", None)
     return ValuationResult(
         **{
             **d,
