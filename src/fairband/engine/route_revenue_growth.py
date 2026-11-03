@@ -308,6 +308,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         rule(policy, "fade_years", policy.fade_years, "years"),
         rule(policy, "margin_convergence_year", policy.margin_convergence_year, "year"),
         rule(policy, "peer_min", policy.peer_min, "peers"),
+        *_industry_peer_max_input(policy, industry),
     )
     return Valued("revenue-growth", value, moat, im, inputs, flags)
 
@@ -504,6 +505,14 @@ def _peer_industry(c: Context) -> str | None:
     """The industry the peers came from on the industry fallback; ``None`` on FMP's list."""
     source = c.inputs.peer_source
     return source.industry if source is not None and source.kind == "industry" else None
+
+
+def _industry_peer_max_input(policy: Policy, industry: str | None) -> tuple[TaggedInput, ...]:
+    """The bound on the industry fallback's peers, cited only on a row whose peers it bounded."""
+    if industry is None:
+        return ()
+    note = f"the largest mature companies of the {industry} industry taken, at most"
+    return (rule(policy, "industry_peer_max", policy.industry_peer_max, "peers", note),)
 
 
 def _from_industry(c: Context) -> Flag | None:

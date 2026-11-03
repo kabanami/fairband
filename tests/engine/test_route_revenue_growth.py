@@ -353,6 +353,13 @@ def test_peers_from_the_industry_change_words_not_figures(
     assert target.value == fmp_target.value
     # the own measure is the statements', whatever the peers' source
     assert input_named(r, "sales_to_capital") == input_named(fmp, "sales_to_capital")
+    # the bound on the fallback is cited only where it bounded the peers
+    bound = input_named(r, "industry_peer_max")
+    assert (bound.value, bound.unit, bound.tag) == (policy.industry_peer_max, "peers", "RULE")
+    assert bound.note == (
+        "the largest mature companies of the Specialty Industrial Machinery industry taken, at most"
+    )
+    assert "industry_peer_max" not in [i.name for i in fmp.inputs + unchanged.inputs]
 
 
 def test_the_peers_sales_to_capital_names_the_industry(
@@ -703,6 +710,8 @@ def test_determinism_and_json_round_trip(
         high_growth_inputs,
         young_growth_inputs,
         replace(high_growth_inputs, peers=()),
+        replace(high_growth_inputs, peer_source=FROM_INDUSTRY),
+        replace(high_growth_inputs, peers=(), peer_source=PeerSource("industry", INDUSTRY, 0)),
     ):
         first = value_company(inputs, deciles, policy, TODAY)
         assert value_company(inputs, deciles, policy, TODAY) == first

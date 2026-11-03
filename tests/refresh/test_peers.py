@@ -361,3 +361,25 @@ def test_without_a_stored_payload_the_industry_applies(
     peers = peer_figures(conn, "NOPE", DECILES, policy, tax, TODAY)
     assert peers.source == PeerSource("industry", INDUSTRY, 0)
     assert symbols(peers) == ["GEAR", "COGS", "AXLE"]
+
+
+def test_a_peers_answer_that_is_the_empty_list_falls_back_to_the_industry(
+    conn_with_industry: sqlite3.Connection,
+    clients: Clients,
+    router: Router,
+    clock: Clock,
+    policy: Policy,
+    tax: TaxTable,
+) -> None:
+    """LONE's stored peers answer is exactly the empty list, a usable answer naming no peer: FMP's
+    list leaves none and the industry supplies the peers."""
+    conn = conn_with_industry
+    for endpoint, body in company("LONE").items():
+        router.symbol_bodies[(endpoint, "LONE")] = body
+    router.symbol_bodies[("peers", "LONE")] = b"[]"
+    fetch_company(conn, clients.fmp, clients.gf, "LONE", policy, clock(), clients.secrets)
+    universe(conn, {"LONE": 2_500, "AXLE": 3_000, "COGS": 6_000, "GEAR": 8_000})
+    assert stored_payload(conn, "peers", "LONE") == []
+    peers = peer_figures(conn, "LONE", DECILES, policy, tax, TODAY)
+    assert peers.source == PeerSource("industry", INDUSTRY, 0)
+    assert symbols(peers) == ["GEAR", "COGS", "AXLE"]
