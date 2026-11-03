@@ -1,5 +1,5 @@
-"""Fetch one company: the fourteen calls of spec 6.5 and its peers (growth routes spec 5.5), each
-reused while fresh and stored whole.
+"""Fetch one company: thirteen FMP calls and two GuruFocus calls (spec 6.5, and the peers of growth
+routes spec 5.5), each reused while fresh and stored whole.
 
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
@@ -194,7 +194,7 @@ def provider_of(endpoint: str) -> Provider:
 
 
 def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
-    """The fifteen calls for ``symbol``, in fetch order."""
+    """The calls for ``symbol``, thirteen FMP and two GuruFocus, in fetch order."""
     start = _years_before(today, PRICE_YEARS)
 
     def on_fmp(

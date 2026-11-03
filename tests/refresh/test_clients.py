@@ -1,6 +1,8 @@
 """``build_clients``: each key travels with its own vendor client and is a secret of that client,
 so the client scrubs it from the URL it reports. The keys here are fake."""
 
+from datetime import timedelta
+
 import httpx
 import pytest
 
@@ -34,6 +36,18 @@ def test_each_key_is_a_secret_of_its_own_client(policy: Policy) -> None:
     ]
     assert quote.url == "https://financialmodelingprep.com/stable/quote?symbol=ACME&apikey=<key>"
     assert summary.url == "https://api.gurufocus.com/public/user/<key>/stock/ACME/summary"
+
+
+def test_fmp_is_paced_and_gurufocus_is_not(policy: Policy) -> None:
+    fmp, gf, _ = build_clients(Keys(FMP_KEY, GF_TOKEN), policy)
+    assert gf is not None
+    fmp.close()
+    gf.close()
+    fmp_limiter, gf_limiter = fmp._http.limiter, gf._http.limiter
+    pace = policy.refresh.fmp_calls_per_minute
+    assert fmp_limiter.calls_per_minute == pace == 2850
+    assert fmp_limiter.interval == timedelta(seconds=60 / pace)
+    assert gf_limiter.calls_per_minute == 0 and gf_limiter.interval == timedelta(0)
 
 
 def test_without_a_gurufocus_token(policy: Policy) -> None:

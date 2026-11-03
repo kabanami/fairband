@@ -285,6 +285,26 @@ def test_full_refresh_rate_limited_saves_no_deciles(env_fixture_universe: Env) -
     ]
 
 
+def test_a_single_429_does_not_end_the_run(env_fixture_universe: Env, sleeps: list[float]) -> None:
+    """ACME's quote answers 429 once: the call holds, retries and succeeds, and the run, with
+    sixteen workers, fetches and values every company and saves its deciles."""
+    env = env_fixture_universe
+    env.router.fail_status = 429
+    env.router.fail_once[("quote", "ACME")] = 1
+    refresh_id = env.refresh(workers=16).run("full")
+    row = env.last()
+    assert (row.id, row.status, row.message) == (refresh_id, "done", None)
+    assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
+    saved = deciles(env)
+    assert saved is not None and saved.refresh_id == refresh_id
+    # The quote is asked once a company, ACME's twice; every other call once.
+    assert env.router.calls["quote"] == len(ADMITTED) + 1
+    assert env.router.symbol_calls == Counter(
+        {"": 1, "ACME": 16, "AXLE": 15, "MILD": 15, "NEWT": 15}
+    )
+    assert sleeps == [env.policy.refresh.rate_limit_hold_s]  # the one hold, and no other sleep
+
+
 def test_full_refresh_admitting_no_company_fails(env_fixture_universe: Env) -> None:
     """A screener that admits no company ends the refresh failed before any fetch, with no
     deciles saved: the last good universe's deciles stay the ones a scoped refresh uses."""

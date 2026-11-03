@@ -1,6 +1,6 @@
 """Refresh fixtures: a migrated temporary database, the policy, the vendor clients over the
-fixture router of ``vendor_double`` with a settable clock and no sleeping between retries, and the
-``refresh_env.Env`` over them."""
+fixture router of ``vendor_double`` with a settable clock and a sleep that records the seconds in
+``sleeps`` and does not sleep, and the ``refresh_env.Env`` over them. The clients are not paced."""
 
 import sqlite3
 from collections.abc import Iterator
@@ -48,14 +48,19 @@ def clock() -> Clock:
 
 
 @pytest.fixture
-def clients(router: Router, clock: Clock, policy: Policy) -> Iterator[Clients]:
+def sleeps() -> list[float]:
+    return []
+
+
+@pytest.fixture
+def clients(router: Router, clock: Clock, policy: Policy, sleeps: list[float]) -> Iterator[Clients]:
     def http(base_url: str, secret: str) -> VendorHttp:
         return VendorHttp(
             base_url,
             [secret],
             policy.refresh,
             transport=router.transport,
-            sleep=lambda _: None,
+            sleep=sleeps.append,
             clock=clock,
         )
 

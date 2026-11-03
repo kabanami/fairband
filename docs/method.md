@@ -54,7 +54,7 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 | EPS trailing and EPS without non-recurring items | GuruFocus `keyratios` | current; reused for 7 days |
 | Statutory tax rate | the packaged OECD table `tax-rates-oecd-v1.toml` | by country and fiscal year |
 
-A company's vendor data observed within the last 24 hours is reused, not fetched again. Every response is stored as received with any key scrubbed; normalized facts cite the response they came from. Vendor numbers are stored as decimal text; the engine computes in floats.
+A company's vendor data observed within the last 24 hours is reused, not fetched again. FMP calls are paced to `fmp_calls_per_minute`, one pace shared by every worker; a 429 answer holds every worker for the vendor's numeric `Retry-After` or `rate_limit_hold_s`, and the call retries after the hold. The retry counts and the run's 429 path are unchanged. Every response is stored as received with any key scrubbed; normalized facts cite the response they came from. Vendor numbers are stored as decimal text; the engine computes in floats.
 
 Four endpoints are required: the three annual statements and the quote. When one of them fails, the company's row is the refusal "data fetch failed: <the failed required endpoints>". A failure of any other call leaves the company valued on what it has.
 
@@ -683,7 +683,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.3 | 2026-11-02 | Mature Stable charges as Mature Growth does (6.3): the runway return through the runway, the terminal return after. Policy unchanged. |
 | 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a), the held rate capped at the sales class's base-rate 90th percentile (5a.3), with the `stock-peers` call (section 2); the name patterns on the universe (section 1). Policy v3 adds five values and the `sales_p90_5y` column of `base_rates` (4.1). |
 | 0.5 | 2026-11-03 | The industry fallback for the peers (5a.4). Policy v4 adds `industry_peer_max`. |
-| 0.6 | 2026-11-03 | Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
+| 0.6 | 2026-11-03 | The FMP pace (section 2). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 

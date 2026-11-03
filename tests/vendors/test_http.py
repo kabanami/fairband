@@ -14,7 +14,7 @@ import httpx
 import pytest
 
 from fairband.policy import RefreshPolicy, load_policy
-from fairband.vendors.http import VendorError, VendorHttp
+from fairband.vendors.http import VendorError, VendorHttp, VendorResponse
 
 T0 = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
 FMP_BASE = "https://fmp.example/stable"
@@ -109,10 +109,17 @@ def _client(
     time: FakeTime | None = None,
     base_url: str = FMP_BASE,
     secrets: Sequence[str] = ("SECRET123",),
+    calls_per_minute: float = 0.0,
 ) -> VendorHttp:
     time = time or script.time or FakeTime()
     return VendorHttp(
-        base_url, secrets, policy, transport=script.transport, sleep=time.sleep, clock=time.clock
+        base_url,
+        secrets,
+        policy,
+        transport=script.transport,
+        sleep=time.sleep,
+        clock=time.clock,
+        calls_per_minute=calls_per_minute,
     )
 
 
@@ -270,9 +277,10 @@ def test_retries_then_succeeds(caplog: pytest.LogCaptureFixture, policy: Refresh
         response = http.get("/quote", FMP_PARAMS)
     assert response.status == 200 and response.json == [1] and response.text == "[1]"
     assert response.attempts == 3 and len(script.requests) == 3
-    assert time.sleeps == [2, 4]
-    # The third attempt starts after two 0.25 s requests and the 2 s and 4 s sleeps.
-    assert response.observed_at == T0 + timedelta(seconds=6.5)
+    # The 429 holds for the policy's 60 s; the 503 backs off the second step's 4 s.
+    assert time.sleeps == [policy.rate_limit_hold_s, 4] == [60, 4]
+    # The third attempt starts after two 0.25 s requests and the 60 s and 4 s sleeps.
+    assert response.observed_at == T0 + timedelta(seconds=64.5)
     url = "https://fmp.example/stable/quote?symbol=AAPL&apikey=<key>"
     assert response.url == url
     lines = _vendor_lines(caplog)
@@ -402,11 +410,114 @@ def test_slow_drip_body_cut_at_the_deadline(policy: RefreshPolicy) -> None:
 def test_retry_after_honored_within_deadline(
     policy: RefreshPolicy, retry_after: str, slept: float
 ) -> None:
+    # On a retryable status other than 429 (which holds instead; see below), a numeric
+    # Retry-After replaces the backoff when it ends within the deadline.
     time = FakeTime()
-    script = Script(httpx.Response(429, headers={"Retry-After": retry_after}), 200)
+    script = Script(httpx.Response(503, headers={"Retry-After": retry_after}), 200)
     with _client(script, policy, time) as http:
         assert http.get("/quote", FMP_PARAMS).attempts == 2
     assert time.sleeps == [slept]
+
+
+def test_every_try_takes_a_slot(policy: RefreshPolicy) -> None:
+    # At 60 a minute the first try takes the slot at t = 0 and answers 500. The retry sleeps the
+    # 2 s backoff, past the slot at t = 1, and takes the slot at t = 2; so the next call waits
+    # for t = 3, one slot after the retry's.
+    time = FakeTime()
+    script = Script(500, 200, time=time)
+    with _client(script, policy, calls_per_minute=60) as http:
+        first = http.get("/quote", FMP_PARAMS)
+        second = http.get("/quote", FMP_PARAMS)
+    assert first.attempts == 2 and first.observed_at == T0 + timedelta(seconds=2)
+    assert second.attempts == 1 and second.observed_at == T0 + timedelta(seconds=3)
+    assert time.sleeps == [2, 1]
+
+
+def test_a_429_holds_the_limiter_for_the_policy_hold(policy: RefreshPolicy) -> None:
+    # At 60 a minute the first try answers 429 at t = 0 with no Retry-After: the limiter is held
+    # for the policy's hold and the retry sleeps it. Another worker's call arrives 10 s into the
+    # hold and waits out the rest; it takes the hold's first slot and the retry the one after.
+    hold = policy.rate_limit_hold_s
+    time = FakeTime()
+    script = Script(429, 200, time=time)
+    meanwhile: list[VendorResponse] = []
+
+    def sleep(seconds: float) -> None:
+        wake = time.now + timedelta(seconds=seconds)
+        time.sleeps.append(seconds)
+        if len(time.sleeps) == 1:  # the hold: the other worker calls while it runs
+            time.now += timedelta(seconds=10)
+            meanwhile.append(http.get("/quote", FMP_PARAMS))
+        time.now = max(time.now, wake)
+
+    with VendorHttp(
+        FMP_BASE,
+        ["SECRET123"],
+        policy,
+        transport=script.transport,
+        sleep=sleep,
+        clock=time.clock,
+        calls_per_minute=60,
+    ) as http:
+        response = http.get("/quote", FMP_PARAMS)
+    assert time.sleeps == [hold, hold - 10, 1]
+    assert [other.observed_at for other in meanwhile] == [T0 + timedelta(seconds=hold)]
+    assert response.attempts == 2 and response.observed_at == T0 + timedelta(seconds=hold + 1)
+    assert len(script.requests) == 3
+
+
+@pytest.mark.parametrize("seconds", [7, 120], ids=["within-deadline", "past-deadline"])
+def test_a_429_with_a_numeric_retry_after_holds_that_long(
+    policy: RefreshPolicy, seconds: int
+) -> None:
+    # The hold extends the deadline by its length, so one past the 30 s still gets its retry.
+    time = FakeTime()
+    reply = httpx.Response(429, headers={"Retry-After": str(seconds)})
+    script = Script(reply, 200, time=time)
+    with _client(script, policy, calls_per_minute=60) as http:
+        response = http.get("/quote", FMP_PARAMS)
+    assert response.attempts == 2 and response.observed_at == T0 + timedelta(seconds=seconds)
+    assert time.sleeps == [seconds]
+
+
+def test_a_429_with_an_http_date_retry_after_holds_the_default(policy: RefreshPolicy) -> None:
+    time = FakeTime()
+    reply = httpx.Response(429, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"})
+    script = Script(reply, 200, time=time)
+    with _client(script, policy, calls_per_minute=60) as http:
+        response = http.get("/quote", FMP_PARAMS)
+    hold = policy.rate_limit_hold_s
+    assert response.attempts == 2 and response.observed_at == T0 + timedelta(seconds=hold)
+    assert time.sleeps == [hold]
+
+
+def test_limiter_waits_do_not_count_against_the_deadline(policy: RefreshPolicy) -> None:
+    # Another worker's 429 has held the limiter to t = 55. The call is admitted then with its
+    # whole deadline ahead: each try gets the policy's full timeouts, and a 429 with
+    # Retry-After: 1 is retried at t = 56, long after the 30 s from the call's start.
+    time = FakeTime()
+    script = Script(httpx.Response(429, headers={"Retry-After": "1"}), 200, time=time)
+    with _client(script, policy, calls_per_minute=60) as http:
+        http.limiter.hold(55)
+        response = http.get("/quote", FMP_PARAMS)
+    assert response.attempts == 2 and response.observed_at == T0 + timedelta(seconds=56)
+    assert time.sleeps == [55, 1]
+    full = {"connect": 5, "read": 15, "write": 5, "pool": 5}
+    assert [r.extensions["timeout"] for r in script.requests] == [full, full]
+
+
+def test_three_429s_still_fail_the_call(policy: RefreshPolicy) -> None:
+    time = FakeTime()
+    script = Script(429, time=time)
+    with (
+        _client(script, policy, calls_per_minute=60) as http,
+        pytest.raises(VendorError) as caught,
+    ):
+        http.get("/quote", FMP_PARAMS)
+    assert caught.value.status == 429 and caught.value.retryable is True
+    assert "429 Too Many Requests (attempt 3/3)" in str(caught.value)
+    hold = policy.rate_limit_hold_s
+    assert len(script.requests) == 3 and time.sleeps == [hold, hold]
 
 
 @pytest.mark.parametrize(

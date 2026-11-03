@@ -1,17 +1,21 @@
 """The one HTTP client both vendor adapters use: bounded in time, redirect-refusing, key-scrubbing.
 
-``VendorHttp.get`` makes up to ``policy.attempts`` tries. It retries a transport error and the
-statuses 408, 429, 500, 502, 503 and 504, sleeping the policy's backoff between tries (or a numeric
-``Retry-After`` smaller than the time left). Any other failure, a redirect included, is final on
-the first try: a redirect is refused before it can carry a credential anywhere.
+``VendorHttp.get`` makes up to ``policy.attempts`` tries, each in a slot of the client's
+``RateLimiter``, which every thread calling through the client shares (``calls_per_minute``; 0 is
+no pacing). It retries a transport error and the statuses 408, 429, 500, 502, 503 and 504. After a
+429 it holds the limiter, so that every thread waits, for the numeric ``Retry-After`` or else
+``policy.rate_limit_hold_s``, and sleeps that hold before the retry; after the others it sleeps the
+policy's backoff (or a numeric ``Retry-After`` smaller than the time left). Any other failure, a
+redirect included, is final on the first try: a redirect is refused before it can carry a
+credential anywhere.
 
-The deadline (``policy.deadline_s`` from the start of the call) bounds the whole call. No sleep is
-made that would leave under 0.1 s, no try is sent with under 0.1 s left, each try's timeouts are
-capped at the time left, and the body is read in chunks with the clock checked after each one.
-httpx's timeouts still apply per phase and per socket read, so a call can overrun: by one capped
-read window while a body drips in, by one capped window per slow phase (connect, send, headers) of
-its last try, and without a bound here if a server drips its headers. The refresh layer's per-item
-bound is the last resort.
+The deadline (``policy.deadline_s`` from the start of the call, extended by each wait for a slot
+and each hold) bounds the whole call. No sleep is made that would leave under 0.1 s, no try is
+sent with under 0.1 s left, each try's timeouts are capped at the time left, and the body is read
+in chunks with the clock checked after each one. httpx's timeouts still apply per phase and per
+socket read, so a call can overrun: by one capped read window while a body drips in, by one capped
+window per slow phase (connect, send, headers) of its last try, and without a bound here if a
+server drips its headers. The refresh layer's per-item bound is the last resort.
 
 Every URL, log line and ``VendorError`` message this module makes passes through ``scrub``. httpx
 and httpcore log raw URLs and headers themselves; a filter on each of their loggers scrubs the
@@ -28,6 +32,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from http import HTTPStatus
 from types import TracebackType
 from typing import Any, Self
 
@@ -35,6 +40,7 @@ import httpx
 
 from fairband.config import utcnow
 from fairband.policy import RefreshPolicy
+from fairband.vendors.limiter import RateLimiter
 from fairband.vendors.scrub import scrub
 
 logger = logging.getLogger("fairband.vendors")
@@ -129,8 +135,9 @@ class VendorHttp:
 
     One ``httpx.Client`` per instance: redirects are not followed, TLS is verified and the
     environment (proxies, certificates, netrc) is ignored. ``secrets`` are scrubbed from everything
-    this client emits, and from httpx's and httpcore's log records until ``close``. Close it, or
-    use it as a context manager.
+    this client emits, and from httpx's and httpcore's log records until ``close``. ``limiter``
+    paces the tries at ``calls_per_minute`` on the client's clock and sleep. Close it, or use it as
+    a context manager.
     """
 
     def __init__(
@@ -141,11 +148,13 @@ class VendorHttp:
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], datetime] = utcnow,
+        calls_per_minute: float = 0.0,
     ) -> None:
         self._secrets = tuple(secret for secret in secrets if secret)
         self._policy = policy
         self._sleep = sleep
         self._clock = clock
+        self.limiter = RateLimiter(calls_per_minute, clock, sleep)
         self._client = httpx.Client(
             base_url=base_url,
             transport=transport,
@@ -181,7 +190,9 @@ class VendorHttp:
 
     def get(self, path: str, params: Mapping[str, str]) -> VendorResponse:
         """GET ``path`` with ``params``; raises ``VendorError`` when no try succeeds in time."""
+        # A wait for a slot or a hold is not the call's time: each extends the deadline.
         deadline = self._clock() + timedelta(seconds=self._policy.deadline_s)
+        deadline += timedelta(seconds=self.limiter.acquire())
         attempt = 1
         outcome = self._attempt(path, params, attempt, deadline)
         while not isinstance(outcome, VendorResponse):
@@ -191,9 +202,15 @@ class VendorHttp:
             if not failure.retryable or attempt >= self._policy.attempts:
                 raise failure
             remaining = self._seconds_left(deadline)
-            delay = self._backoff(attempt)
-            if retry_after is not None and retry_after < remaining:
-                delay = retry_after
+            if failure.status == HTTPStatus.TOO_MANY_REQUESTS:
+                delay = self._policy.rate_limit_hold_s if retry_after is None else retry_after
+                self.limiter.hold(delay)
+                deadline += timedelta(seconds=delay)
+                remaining += delay
+            else:
+                delay = self._backoff(attempt)
+                if retry_after is not None and retry_after < remaining:
+                    delay = retry_after
             if remaining - delay < _MIN_WINDOW_S:
                 raise self._out_of_time(failure)
             self._log(logging.WARNING, f"{failure}; retrying in {delay:g} s")
@@ -201,6 +218,7 @@ class VendorHttp:
             if self._seconds_left(deadline) < _MIN_WINDOW_S:  # the sleep overran
                 raise self._out_of_time(failure)
             attempt += 1
+            deadline += timedelta(seconds=self.limiter.acquire())
             outcome = self._attempt(path, params, attempt, deadline)
         return outcome
 
