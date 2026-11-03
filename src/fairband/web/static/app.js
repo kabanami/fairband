@@ -882,18 +882,28 @@
     ];
   }
 
+  /* The caption reads the row's `below-net-cash` flag, the one test (method 6b.4): the market
+     cap at or below the net cash, which is the price at or below the cash floor only when the
+     market cap is the price times the diluted shares. */
   function belowFloor(r) {
-    var floor = r.intermediates.cash_floor;
-    if (r.price == null || floor == null || r.price >= floor) return null;
-    return h('p', { className: 'caption' }, 'The price, ' + F.formatMoney(r.price) +
-      ', is below the net cash a share');
+    var below = r.flags.some(function (f) { return f.code === 'below-net-cash'; });
+    if (!below) return null;
+    return h('p', { className: 'caption' },
+      'The price is covered by net cash: the market cap is at or below the cash less the debt');
   }
 
   /* The years the cash covers the trailing burn (spec 9.4); "not burning" when the trailing free
-     cash flow is zero or above; none without the trailing cash flows. */
+     cash flow is zero or above; none without the trailing cash flows, or without a cash figure,
+     when the burn shows and the cover is unknown. */
   function burnCover(im) {
     var cover = im.burn_cover_years;
     if (cover === 'not burning') return [['Trailing burn', 'not burning', false]];
+    if (cover == null && im.burn != null && im.cash_known === false) {
+      return [
+        ['Cash covers', 'unknown: no cash line on file', false],
+        ['Burn a year', whole(im.burn), true]
+      ];
+    }
     if (cover == null) return [['Trailing burn', noted('—', 'no trailing cash flows'), true]];
     return [
       ['Cash covers', decimals(cover, 1) + ' years', true],

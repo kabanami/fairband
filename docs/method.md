@@ -771,7 +771,7 @@ R0 is trailing revenue, 0 without one. E0 is trailing operating income, else the
 
 - Tax and NOPAT by 5a.6 at the newest fiscal year's statutory rate (4.3), the carried loss starting at zero.
 - Reinvestment by 5a.5 at the sales-to-capital of 6b.3: reinvestment_t = max(0, (R_{t+1} − R_t) ÷ sales-to-capital) for t = 1 … 9, and reinvestment_10 = terminal NOPAT × g_T ÷ terminal return.
-- The free cash flow, the terminal NOPAT, the terminal value and the firm value by 5a.7, at r in every year (5a.8). The terminal return is 5a.7's, 4.7's moat rule on the return on new capital at the target margin, m* × (1 − tax rate) × sales-to-capital: r for a Narrow or None moat; for a Wide moat that return capped at 13% and never below r. It is built from the peers' figures, not the company's, which has no return on capital to read.
+- The free cash flow, the terminal NOPAT, the terminal value and the firm value by 5a.7, at r in every year (5a.8). The terminal return is 5a.7's, 4.7's moat rule on the return on new capital at the target margin, m* × (1 − tax rate) × sales-to-capital: r for a Narrow or None moat; for a Wide moat that return capped at 13% and never below r. It reads the peers' margin and sales-to-capital and the company's statutory rate; the company has no return on capital to read.
 
 EV(R10) is that firm value. R10 is the least revenue in [0, 10^13] at which EV(R10) is at or above EV_price: 0 when EV(0) already is, else found by bisection to a relative tolerance of 1e-9 (4.1a). EV rises with R10 for sensible inputs, the terminal dominating; when EV(10^13) is below EV_price, as at a target margin at or below zero or a sales-to-capital so low that reinvestment outruns the margin, there is none.
 
@@ -787,7 +787,7 @@ The target margin is 5a.4's: the median ten-year margin of the mature peers with
 
 the net cash a share, debt and cash as 6b.2 reads them. The `below-net-cash` flag of 6b.2 is the cash floor's test in total: the market cap at or below the net cash, the price at or below the cash floor when the market cap is the price times the diluted shares.
 
-The burn is −(trailing operating cash flow + trailing capital spending) when that sum is below zero. The burn cover is cash ÷ the burn, in years; "not burning" when the sum is zero or above; none without both trailing figures. Below `burn_cover_flag_years` (2) the row is flagged `burn-cover-short`, "Cash covers <x> years of the trailing burn of <y> a year."
+The burn is −(trailing operating cash flow + trailing capital spending) when that sum is below zero. The burn cover is cash ÷ the burn, in years; "not burning" when the sum is zero or above; none without both trailing figures or without a cash figure (an unknown cash is not a cash of nil: the burn shows, the cover does not, `cash_known` is false and no flag is raised). A cover below `burn_cover_flag_years` (2) flags `burn-cover-short`, "Cash covers <x> years of the trailing burn of <y> a year."
 
 ### 6b.5 What moves with the price
 
@@ -797,7 +797,7 @@ The market cap moves with the price: the market cap the row read × the new pric
 
 Flags, in order: `line-not-presented:debt`, `line-not-presented:cash`; `peers-from-industry`; `tax-loss-history-unknown` when the requirement's ramp starts from an operating loss or has a year whose EBIT is below zero, as a loss-maker's always does; `below-net-cash`; `burn-cover-short`. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code. Never raised here: the ROIC flags of 4.5 and 4.6, `return-above-peers`, `few-analysts` and the trailing flags; no path reads the consensus or the company's return.
 
-Intermediates: `requirement` (`reason`, none when it is computed; `revenue_y10`; `ev_price`; `revenue_0`; `operating_income_0`; `target_margin`, 5a.14's record of the peers and their source; `sales_to_capital`, 5a.14's record with `used` "peers"; `tax_rate`; `terminal_roic`; `path`, the ten years of revenue, EBIT, tax, NOPAT, reinvestment and free cash flow; `terminal_value`; none where a reason leaves a figure uncomputed), `cash_floor`, `burn_cover_years`, `burn` (none when not burning), `debt`, `cash`, `shares`, `market_cap` and `price_facts`.
+Intermediates: `requirement` (`reason`, none when it is computed; `revenue_y10`; `ev_price`; `revenue_0`; `operating_income_0`; `target_margin`, 5a.14's record of the peers and their source; `sales_to_capital`, 5a.14's record with `used` "peers"; `tax_rate`; `terminal_roic`; `path`, the ten years of revenue, EBIT, tax, NOPAT, reinvestment and free cash flow; `terminal_value`; none where a reason leaves a figure uncomputed), `cash_floor`, `burn_cover_years`, `burn` (none when not burning), `debt`, `cash`, `cash_known` (false when no cash figure is on file, `cash` then the nil the floor and the requirement count), `shares`, `market_cap` and `price_facts`.
 
 The rebuild keys: the requirement's `revenue_0`, `operating_income_0`, `target_margin`'s value, `sales_to_capital`'s value, `tax_rate` and `terminal_roic`.
 
@@ -862,7 +862,7 @@ A flag warns and never changes a value, a level or a designation. Each has a cod
 | `f-score-low` | Piotroski F is at or below `f_score_low` (1), with a signal read (6a.8) |
 | `reinvesting-in-decline` | trailing capital spending is above trailing depreciation and amortization in size while the run-off's revenue falls (6a.8) |
 | `below-net-cash` | a Start-up row's market cap is at or below its net cash, so EV_price is at or below zero and the price needs no revenue (6b.2, 6b.4) |
-| `burn-cover-short` | a Start-up row's cash covers fewer than `burn_cover_flag_years` (2) years of its trailing burn (6b.4) |
+| `burn-cover-short` | a Start-up row's cash covers fewer than `burn_cover_flag_years` (2) years of its trailing burn; never without a cash figure (6b.4) |
 | `margin-flag` | the trailing operating margin is 1.5 × its ten-year median or more (a positive median), or above its ten-year high by 10% of the high's size or more; needs 6 fiscal years with a margin. The word is "Newly profitable" when the median is at or below zero, "Possible cycle peak" when the window holds a loss year, else "Margin above history" |
 | `equity-raise` | trailing stock issued is 1% of market cap or more |
 | `negative-fcf` | trailing operating cash flow plus capital spending is below zero |

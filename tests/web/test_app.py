@@ -1060,7 +1060,9 @@ def test_app_js_drawer_draws_the_requirement() -> None:
     """Spec 9.2 and 9.4: a Start-up row's drawer, under its refusal, states the revenue its price
     needs in year 10 (a multiple of the trailing revenue when there is one), the target margin
     and the ramp behind it, the cash floor and the burn cover. A repriced row's market cap moved
-    with the price from the one its input read: both show."""
+    with the price from the one its input read: both show. The caption under the cash floor reads
+    the row's ``below-net-cash`` flag, the one test (method 6b.4), never the price against the
+    cash floor; a burn without a cash figure has no cover."""
     script = _static_file("app.js")
     assert "'start-up': 'Start-up route'" in script
     assert "'requirement' in im ? startUpRoute(r) : null," in script
@@ -1074,8 +1076,13 @@ def test_app_js_drawer_draws_the_requirement() -> None:
         "if (cover === 'not burning')",
         "var read = dataValue(inputs, 'market_cap');",
         "'The market cap moved with the price: '",
+        "var below = r.flags.some(function (f) { return f.code === 'below-net-cash'; });",
+        "'The price is covered by net cash: the market cap is at or below the cash less the debt'",
+        "if (cover == null && im.burn != null && im.cash_known === false) {",
+        "['Cash covers', 'unknown: no cash line on file', false],",
     ):
         assert text in script, text
+    assert "r.price >= floor" not in script and "is below the net cash a share" not in script
 
 
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.

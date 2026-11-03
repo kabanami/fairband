@@ -22,7 +22,9 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   intermediates and the long-runway flag follow the price. A refusal takes the new price, its
   date and the price input only, except a growth-route refusal that carries ``revenue_path``
   (refused for its target margin or for a value not positive), which also recomputes the margin
-  the price needs. A snapshot valued under another policy version is ``failed``,
+  the price needs, and a Start-up refusal, which moves its market cap with the price (the one it
+  read × the new price ÷ the price it was read at), recomputes its requirement at it and
+  re-reads ``below-net-cash``. A snapshot valued under another policy version is ``failed``,
   "policy changed: run a full refresh": its levels come from that policy. One valued under
   another method version is ``failed``, "method changed: run a revalue": its value is the old
   method's, and a rebuild at the price would carry it. An exception (``reprice`` refuses a price

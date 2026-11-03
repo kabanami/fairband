@@ -31,6 +31,7 @@ START_UP_KEYS = {
     "price_facts",
     "debt",
     "cash",
+    "cash_known",
     "shares",
     "market_cap",
 }
@@ -283,6 +284,15 @@ def test_the_burn_cover(start_up_inputs: CompanyInputs, deciles: Deciles, policy
         r = valued(replace(su, trailing=missing))
         assert (r.intermediates["burn"], r.intermediates["burn_cover_years"]) == (None, None)
         assert "burn-cover-short" not in codes(r)
+    # nor without a cash figure: an unknown cash is not a cash of nil, so the burn of 75 has no
+    # cover and no flag; the floor and the requirement count the cash as nil, as flagged
+    unknown = valued(replace(su, cash=None))
+    im = unknown.intermediates
+    assert (im["burn"], im["burn_cover_years"], im["cash_known"]) == (75.0, None, False)
+    assert (im["cash"], im["cash_floor"]) == (0.0, 0.0)
+    assert "burn-cover-short" not in codes(unknown)
+    assert route_codes(unknown) == ["line-not-presented:cash", "tax-loss-history-unknown"]
+    assert r.intermediates["cash_known"] is True
 
 
 def test_a_start_up_without_trailing_figures_still_runs(

@@ -18,23 +18,26 @@ peers' median ten-year margin (``revenue_growth.target_margin``, on the industry
 assembly fell back to them), at the peers' median sales-to-capital (a Start-up's own measure
 never stands), the newest fiscal year's statutory tax rate, r and g_T in every year, and the
 terminal return of the revenue-growth route: the moat's rule (``roic.terminal_roic``) on the
-return on new capital at the target margin, m* × (1 − tax rate) × sales-to-capital, which is the
-peers' and not the company's (r without all three inputs, when there is no requirement anyway).
+return on new capital at the target margin, m* × (1 − tax rate) × sales-to-capital. It reads the
+peers' margin and sales-to-capital and the company's statutory rate; the company has no return
+on capital to read (r without all three inputs, when there is no requirement anyway).
 The requirement's reasons, the first that applies: "no target margin: <n> mature peers", "no
 sales-to-capital", "no statutory tax rate", "no market cap", "no revenue reaches the price".
 
 The cash floor and the burn cover. ``cash_floor`` = (cash − debt) ÷ diluted shares. The burn is
 −(trailing operating cash flow + trailing capital spending) when that sum is below zero;
 ``burn_cover_years`` is cash over the burn, "not burning" when the sum is zero or above, ``None``
-without both trailing figures.
+without both trailing figures or without a cash figure, and then never ``burn-cover-short``: an
+unknown cash is not a cash of nil.
 
 Intermediates: ``requirement`` (reason, ``None`` when it is computed; revenue_y10; ev_price;
 revenue_0; operating_income_0; target_margin, the revenue-growth route's record of the peers;
 sales_to_capital, used "peers", own ``None``, own_usable false, peers, value; tax_rate;
 terminal_roic; path, the ten years' revenue, ebit, tax, nopat, reinvestment and fcff;
 terminal_value; ``None`` where the reason leaves a figure uncomputed), ``cash_floor``,
-``burn_cover_years``, ``burn`` (``None`` when not burning), ``debt``, ``cash``, ``shares``,
-``market_cap``; ``route`` adds ``price_facts``.
+``burn_cover_years``, ``burn`` (``None`` when not burning), ``debt``, ``cash``, ``cash_known``
+(false when no cash figure is on file: ``cash`` is then the nil the floor and the requirement
+count), ``shares``, ``market_cap``; ``route`` adds ``price_facts``.
 
 The rebuild keys: the requirement's revenue_0, operating_income_0, target_margin's value,
 sales_to_capital's value, tax_rate and terminal_roic, with the policy's r and g_T.
@@ -111,7 +114,7 @@ def value_start_up(c: StartUpContext) -> Refused:
         "terminal_roic": terminal,
     }
     requirement = _requirement(found, i.market_cap, debt, cash, policy)
-    burn, cover = _burn(t, cash)
+    burn, cover = _burn(t, i.cash)
     im: dict[str, Any] = {
         "requirement": requirement,
         "cash_floor": (cash - debt) / c.shares,
@@ -119,6 +122,7 @@ def value_start_up(c: StartUpContext) -> Refused:
         "burn": burn,
         "debt": debt,
         "cash": cash,
+        "cash_known": i.cash is not None,
         "shares": c.shares,
         "market_cap": i.market_cap,
     }
@@ -238,16 +242,16 @@ def _operating_income_0(
     return nil(last.operating_income), last
 
 
-def _burn(t: TrailingFigures | None, cash: float) -> tuple[float | None, float | str | None]:
+def _burn(t: TrailingFigures | None, cash: float | None) -> tuple[float | None, float | str | None]:
     """The yearly burn and the years the cash covers it: (``None``, "not burning") when the
     trailing free cash flow is zero or above; ``None`` and ``None`` without both trailing
-    figures."""
+    figures; the burn and ``None`` without a cash figure."""
     if t is None or t.cfo is None or t.capex is None:
         return None, None
     flow = t.cfo + t.capex
     if flow >= 0:
         return None, _NOT_BURNING
-    return -flow, cash / -flow
+    return -flow, None if cash is None else cash / -flow
 
 
 def _cover_short(burn: float | None, cover: float | str | None, policy: Policy) -> Flag | None:
