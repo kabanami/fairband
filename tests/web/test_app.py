@@ -15,7 +15,7 @@ from decimal import Decimal
 from html.parser import HTMLParser
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 import uvicorn
@@ -34,7 +34,7 @@ from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Settings
 from fairband.engine import METHOD_VERSION
 from fairband.engine.route import value_company
-from fairband.engine.types import ValuationResult, result_to_json
+from fairband.engine.types import Designation, ValuationResult, result_to_json
 from fairband.policy import Policy, load_policy
 from fairband.store.companies import CompanyRow, insert_companies
 from fairband.store.db import applied_versions, connect, migrate
@@ -749,12 +749,42 @@ def test_app_js_query_is_trimmed_and_lower_cased() -> None:
     assert "(r.name || '').toLowerCase().indexOf(needle) !== -1" in script
 
 
-def test_app_js_filter_rule_handles_missing_fields() -> None:
+def test_app_js_sorts_designation_by_the_ratio() -> None:
+    """Spec 7.3: the designation column asks the server for the price-to-value order."""
     script = _static_file("app.js")
-    assert "(r.capBand || '').toLowerCase()" in script
     assert (
-        "if (r.price == null || r.buyLevel == null || r.trimLevel == null) return null;" in script
+        "var SORT_KEYS = { band: 'fairLow', designation: 'priceToValue', entered: 'enteredAt' };"
+        in script
     )
+
+
+def test_app_js_narrows_on_the_designation() -> None:
+    """The word is the row's, never derived on the page: a row without one (a refusal, a
+    placeholder) matches no designation filter, as a row without a cap band matches no cap."""
+    script = _static_file("app.js")
+    assert "within(filters.designation, r.designation) &&" in script
+    assert "(r.capBand || '').toLowerCase()" in script
+
+
+def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
+    """Spec 7.3: the band meter's caption says the word and the price ÷ value to two decimals;
+    the levels below it read Margin of safety (the value less the moat's margin), Fair band and
+    1.5 × value, and the meter's own scale, whose words would collide in the rail, is off."""
+    script = _static_file("app.js")
+    assert "buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation," in script
+    assert "showScale: false, caption: standing(r)" in script
+    assert "var word = F.DESIGNATION[r.designation];" in script
+    assert "if (!word || r.price_to_value == null) return null;" in script
+    assert "return word + ': the price is ' + r.price_to_value.toFixed(2) + ' × the value';" in (
+        script
+    )
+    assert "var margin = Math.round((1 - r.levels.buy / r.value) * 100);" in script
+    assert "['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy)," in script
+    assert "'value less the ' + moat + ' moat\\'s ' + margin + '%'" in script
+    assert "['Fair band', F.formatMoney(r.levels.fair_low) + ' – ' +" in script
+    assert "['1.5 × value', F.formatMoney(r.levels.trim), true]" in script
+    # the route's name, the meter's caption before, keeps a line of its own under the levels
+    assert "h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route)," in script
 
 
 def test_app_js_normalises_a_saved_column_list() -> None:
@@ -860,6 +890,12 @@ def test_bundle_has_extra_columns() -> None:
     assert set(EXTRA_COLUMN_HEADS) <= set(EXTRA_KEYS)  # the API sends each one
     for key, head in EXTRA_COLUMN_HEADS.items():
         assert f"{{ key: '{key}', head: '{head}'," in bundle, key
+
+
+def test_bundle_default_columns_end_with_designation() -> None:
+    """Spec 7.3's default columns. A list saved before carries `stance`, which the bundle no
+    longer has; the page's normalise drops it."""
+    bundle = _component_file("bundle.js")
     default = re.search(r"var DEFAULT_COLUMNS = \[(.*?)\];", bundle, re.DOTALL)
     assert default is not None
     assert re.findall(r"'(\w+)'", default.group(1)) == [
@@ -870,8 +906,88 @@ def test_bundle_has_extra_columns() -> None:
         "mechanical",
         "reviewed",
         "price",
-        "stance",
+        "designation",
     ]
+
+
+def test_bundle_has_the_five_designation_words() -> None:
+    """The five words in band order, keyed by the engine's codes, and exported for the drawer."""
+    bundle = _component_file("bundle.js")
+    words = re.search(r"var DESIGNATION = \{(.*?)\};", bundle, re.DOTALL)
+    assert words is not None
+    assert re.findall(r"'([\w-]+)': '([^']+)'", words.group(1)) == [
+        ("well-below", "Well below"),
+        ("below", "Below"),
+        ("near", "Near"),
+        ("above", "Above"),
+        ("well-above", "Well above"),
+    ]
+    assert [code for code, _ in re.findall(r"'([\w-]+)': '([^']+)'", words.group(1))] == list(
+        get_args(Designation)
+    )
+    assert "DESIGNATION: DESIGNATION," in bundle
+
+
+def test_bundle_filter_menu_has_a_price_vs_value_section() -> None:
+    """Spec 7.3: PRICE VS VALUE stands where STANCE stood, its five words in band order, each a
+    checkbox as PHASE's are; the chip names the chosen words in band order."""
+    bundle = _component_file("bundle.js")
+    assert "var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector'];" in bundle
+    assert "var EMPTY_FILTERS = { designation: [], phase: [], cap: [], sector: []," in bundle
+    assert "p.onFiltersChange({ designation: [], phase: [], cap: [], sector: []," in bundle
+    assert "h('span', { className: 'fb-menu__h label' }, 'PRICE VS VALUE')," in bundle
+    assert "Object.keys(DESIGNATION).map(function (k) {" in bundle
+    assert "return checkRow(k, listOf(filters, 'designation').indexOf(k) !== -1," in bundle
+    assert "function () { toggleIn('designation', k); }," in bundle
+    assert "h('span', null, DESIGNATION[k]));" in bundle
+    assert bundle.index("'PRICE VS VALUE'") < bundle.index("'PHASE'")
+    # the chip: "Price vs value: Below + Near", whatever order the boxes were ticked in
+    assert "out.push({ key: 'designation', word: 'Price vs value: ' + Object.keys(DESIGNATION)" in (
+        bundle
+    )
+    assert ".filter(function (k) { return f.designation.indexOf(k) !== -1; })" in bundle
+
+
+def test_bundle_designation_column_head_and_chip() -> None:
+    """Spec 7.3: the column shows the row's word as a chip with no band colour; a row without one
+    (a refusal, a placeholder, a snapshot valued before the designation) shows an em dash, never a
+    word derived from the levels."""
+    bundle = _component_file("bundle.js")
+    assert "{ key: 'designation', head: 'Price vs value'," in bundle
+    assert "var word = DESIGNATION[r.designation];" in bundle
+    assert "if (!word) return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));" in (
+        bundle
+    )
+    # the column's cell and the band meter's head: the same chip
+    assert bundle.count("h('span', { className: 'fb-designation label' }, word)") == 2
+    assert "var word = DESIGNATION[p.designation];" in bundle  # the meter takes the row's word
+    assert "Hold'" not in bundle and "STANCE" not in bundle  # never "Hold"
+    css = _component_file("bundle.css")
+    rule = re.search(r"\.fb-designation \{(.*?)\}", css, re.DOTALL)
+    assert rule is not None
+    assert "text-transform: uppercase;" in rule.group(1)
+    assert "border: 1px solid currentColor;" in rule.group(1)
+    assert "color:" not in rule.group(1) and ".fb-designation--" not in css  # no band colour
+    assert ".fb-stance" not in css
+    # the stance tokens stay for the delta and the recommendation's effect; the spread chart's
+    # label takes the delta's classes in place of the stance chip's
+    assert ".fb-delta--up { color: var(--stance-buy); }" in css
+    assert ".fb-rec__effect { font-weight: 500; color: var(--stance-buy); }" in css
+    assert "cur.roic >= cur.wacc ? 'fb-delta--up' : 'fb-delta--down'" in bundle
+
+
+def test_no_stance_word_remains() -> None:
+    """Spec 7.2: the engine gives no stance, and the page derives none, names none and declares
+    none. Only the CSS keeps the --stance-* tokens, for the delta's colours."""
+    for name, text in (
+        ("app.js", _static_file("app.js")),
+        ("controls.js", _static_file("controls.js")),
+        ("bundle.js", _component_file("bundle.js")),
+        ("index.d.ts", _component_file("index.d.ts")),
+    ):
+        for gone in ("stanceOf", "STANCE[", "Five-step", "stance5", "stance3"):
+            assert gone not in text, (name, gone)
+        assert re.search(r"\bstance", text, re.IGNORECASE) is None, name
 
 
 def test_bundle_has_the_margin_columns() -> None:
@@ -890,14 +1006,12 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 27
+    assert bundle.count("// fairband:") >= 38
     # A menu's toggle says whether its menu is open: Button passes aria-expanded through.
     assert "'aria-expanded': p['aria-expanded']," in bundle
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
     assert "Number(p.phase) || 1" not in bundle
     assert "if (p.phase == null) return h('span', { className: 'fb-screen__none' }, '—');" in bundle
-    # A row without levels has no stance: an em dash, never "Hold".
-    assert "if (r.price == null || r.buyLevel == null || r.trimLevel == null) {" in bundle
     # A timestamp in the Entered cell reads as its date; the full ISO stays in the datetime
     # attribute. formatDate itself keeps the time, which the header's engine stamp shows.
     assert "iso ? h('time', { dateTime: iso, title: iso }, readable(iso.slice(0, 10)))" in bundle
@@ -1040,6 +1154,25 @@ def test_index_d_ts_declares_onOpen() -> None:
 def test_index_d_ts_says_columns_are_ordered() -> None:
     declarations = _component_file("index.d.ts")
     assert "fairband: ordered" in declarations
+
+
+def test_index_d_ts_declares_the_designation() -> None:
+    """The row's word and ratio, the filter group and the meter's word, typed by the engine's
+    codes; no stance type is left."""
+    declarations = _component_file("index.d.ts")
+    codes = " | ".join(f"'{code}'" for code in get_args(Designation))
+    assert f"export type Designation = {codes};" in declarations
+    row = re.search(r"export interface ScreenRow \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert row is not None
+    assert "priceToValue?: number | null;" in row.group(1)
+    assert "designation?: Designation | null;" in row.group(1)
+    filters = re.search(r"export interface ScreenFilters \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert filters is not None
+    assert "designation: Designation[];" in filters.group(1)
+    meter = re.search(r"export interface BandMeterProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert meter is not None
+    assert "designation?: Designation | null;" in meter.group(1)
+    assert "export declare const DESIGNATION: Record<Designation, string>;" in declarations
 
 
 def test_index_d_ts_declares_the_margin_keys() -> None:

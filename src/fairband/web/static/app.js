@@ -13,7 +13,7 @@
   var COLUMNS_KEY = 'fairband.columns';
 
   /* The columns that draw a row key under another name sort by that key. */
-  var SORT_KEYS = { band: 'fairLow', stance: 'stance3', entered: 'enteredAt' };
+  var SORT_KEYS = { band: 'fairLow', designation: 'priceToValue', entered: 'enteredAt' };
   /* The engine's phase names, as PhaseBadge's numbers. */
   var PHASE_NUMBER = {
     'Start-up': 1, 'Young Growth': 2, 'High Growth': 3,
@@ -200,23 +200,14 @@
 
   /* ------------------------------------------------------- find and filters */
 
-  /* The stance column's rule (the bundle's stanceOf with its fairband patch): a row without a
-     price or levels has no stance, so a stance filter drops it; else buy below the buy level,
-     trim at or above the trim level, hold between. */
-  function stanceOf(r) {
-    if (r.price == null || r.buyLevel == null || r.trimLevel == null) return null;
-    if (r.price < r.buyLevel) return 'buy';
-    if (r.price >= r.trimLevel) return 'trim';
-    return 'hold';
-  }
-
   /* An empty group narrows nothing; a non-empty one keeps only the rows whose value it names. */
   function within(list, value) { return !list.length || list.indexOf(value) !== -1; }
 
   /* The design system's reference rule (the gallery's apply). ScreenTable narrows nothing, so the
      page keeps the rows it loaded and draws the ones that pass; the server's order stands. The
      ticker matches by prefix and the name anywhere. A field a row lacks matches no filter: a
-     placeholder has no stance or phase, and may have no sector or cap. The row's phase is
+     placeholder has no designation or phase, and may have no sector or cap; a refusal has no
+     designation, which is the row's own, never derived here. The row's phase is
      already the menu's number (the server maps the engine's phase name through PHASE_NUMBER),
      and its cap band is the menu's id once lower-cased (Mega is mega); small never matches, the
      universe's floor being $2 bn. */
@@ -226,7 +217,7 @@
       var found = !needle || r.ticker.toLowerCase().indexOf(needle) === 0 ||
         (r.name || '').toLowerCase().indexOf(needle) !== -1;
       return found &&
-        within(filters.stance, stanceOf(r)) &&
+        within(filters.designation, r.designation) &&
         within(filters.phase, r.phase) &&
         within(filters.cap, (r.capBand || '').toLowerCase()) &&
         within(filters.sector, r.sector) &&
@@ -309,12 +300,13 @@
       valued ? section('band', null,
         h(F.BandMeter, {
           low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
-          buyLevel: r.levels.buy, trimLevel: r.levels.trim, caption: ROUTES[r.route] || r.route
+          buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
+          showScale: false, caption: standing(r)
         }),
+        levels(r),
+        h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route),
         youngGrowth(im.failure_probability),
         crossCheck(im.growth_route),
-        r.stance5 ? h('p', { className: 'caption app-muted' }, 'Five-step stance: ' + r.stance5)
-          : null,
         growth ? discountedAt(r.inputs) : null) : null,
       /* A refusal takes the band's place: it is the answer when there is no value. A growth row
          refused with its revenue path still shows the margin the price needs (spec 5.11). */
@@ -347,6 +339,31 @@
       h('p', { key: 'versions', className: 'caption app-muted app-section' },
         'Policy ' + r.policy_version + ' · method ' + r.method_version)
     ];
+  }
+
+  /* The band meter's caption: the row's word and its price ÷ value to two decimals
+     (classifier-designation spec 7.3). A row valued before the designation has neither. */
+  function standing(r) {
+    var word = F.DESIGNATION[r.designation];
+    if (!word || r.price_to_value == null) return null;
+    return word + ': the price is ' + r.price_to_value.toFixed(2) + ' × the value';
+  }
+
+  /* The levels under the band meter, each named for what sets it (spec 7.3): the value less the
+     moat's margin of safety, the fair band, 1.5 × the value. The meter's own scale is off: in the
+     drawer's rail these names would run into each other. */
+  function levels(r) {
+    var moat = r.intermediates.moat;
+    var margin = Math.round((1 - r.levels.buy / r.value) * 100);
+    return h('div', { className: 'app-levels' }, pairs([
+      ['Fair value', F.formatMoney(r.value), true],
+      ['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy),
+        moat ? h('span', { className: 'caption app-muted app-line' },
+          'value less the ' + moat + ' moat\'s ' + margin + '%') : null), true],
+      ['Fair band', F.formatMoney(r.levels.fair_low) + ' – ' +
+        F.formatMoney(r.levels.fair_high), true],
+      ['1.5 × value', F.formatMoney(r.levels.trim), true]
+    ]));
   }
 
   /* A Mature Stable or growth row's growth-route value, under the band (calibration spec 5.7,

@@ -25,8 +25,11 @@ export type Basis = 'mechanical' | 'reviewed';
 /** Where today sits relative to the value's validity window. */
 export type Freshness = 'current' | 'aging' | 'expired';
 
-/** Derived from the price against the buy and trim levels. Never stored. */
-export type Stance = 'buy' | 'hold' | 'trim';
+/**
+ * fairband: the price against the value at belief, in five bands (classifier-designation spec
+ * 7.1). The engine's word, carried on the row; a component never derives it.
+ */
+export type Designation = 'well-below' | 'below' | 'near' | 'above' | 'well-above';
 
 export interface MarkProps {
   /** Edge length in px. Square. Default 24. Below 20 the three bands fuse. */
@@ -172,7 +175,7 @@ export interface BandMeterProps {
   /** The fair band, per share. */
   low: number;
   high: number;
-  /** The market price, per share. The component derives the stance. */
+  /** The market price, per share. */
   price: number;
   /** The point estimate inside the band. Defaults to the band's midpoint. */
   fairValue?: number;
@@ -183,6 +186,8 @@ export interface BandMeterProps {
   /** `false` hides the three threshold labels below the track. */
   showScale?: boolean;
   caption?: string;
+  /** fairband: the row's word, shown in the head; `null` or absent shows none. */
+  designation?: Designation | null;
 }
 
 export interface ValidityWindowProps {
@@ -331,7 +336,7 @@ export interface ScreenRow {
   fairLow: number;
   fairHigh: number;
   fairValue?: number;
-  /** fairband: `null` on a refusal; the stance cell then shows an em dash. */
+  /** fairband: `null` on a refusal. */
   buyLevel?: number | null;
   trimLevel?: number | null;
   price: number;
@@ -381,6 +386,12 @@ export interface ScreenRow {
    */
   targetMargin?: number | null;
   impliedMargin?: number | null;
+  /**
+   * fairband: price ÷ value and its word; `null` on a refusal, a placeholder and a snapshot valued
+   * before the designation, and the Price vs value cell then shows an em dash.
+   */
+  priceToValue?: number | null;
+  designation?: Designation | null;
   /** Rows may carry anything else the caller filters or sorts on; the
       component reads only the fields above. */
   [key: string]: unknown;
@@ -395,7 +406,8 @@ export type CapSize = 'mega' | 'large' | 'mid' | 'small';
  * it reports changes and the caller filters `rows`.
  */
 export interface ScreenFilters {
-  stance: Stance[];
+  /** fairband: the price-vs-value words; a row without one matches none. */
+  designation: Designation[];
   phase: Phase[];
   cap: CapSize[];
   /** Sector names, as they appear in SECTORS. */
@@ -548,6 +560,8 @@ export declare function SensitivityGrid(props: SensitivityGridProps): unknown;
 
 /** Phase number to Damodaran's name for it. */
 export declare const PHASES: Record<Phase, string>;
+/** fairband: the five words by code, in band order. */
+export declare const DESIGNATION: Record<Designation, string>;
 /** The screen's default eight columns. */
 export declare const DEFAULT_COLUMNS: string[];
 /** fairband: every column's key, in catalog order. */

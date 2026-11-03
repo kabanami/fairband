@@ -40,7 +40,10 @@
     expired: { word: 'Expired — past the end of its validity window', mark: '×' }
   };
 
-  var STANCE = { buy: 'Buy', hold: 'Hold', trim: 'Trim' };
+  // fairband: the price against the value in five bands, in band order, keyed by the engine's
+  // codes (classifier-designation spec 7.1). A fact about the price, never an action.
+  var DESIGNATION = { 'well-below': 'Well below', 'below': 'Below', 'near': 'Near',
+                      'above': 'Above', 'well-above': 'Well above' };
 
   /* ------------------------------------------------------------- formatting */
 
@@ -90,12 +93,6 @@
   }
 
   function pct(v, dp) { return v.toFixed(dp === undefined ? 1 : dp) + '%'; }
-
-  function stanceOf(price, buyLevel, trimLevel) {
-    if (buyLevel != null && price < buyLevel) return 'buy';
-    if (trimLevel != null && price >= trimLevel) return 'trim';
-    return 'hold';
-  }
 
   function markFor(freshness) {
     return FRESHNESS[freshness] && freshness !== 'current' ? FRESHNESS[freshness].mark : '';
@@ -414,10 +411,10 @@
     var min = lo - pad, max = hi + pad;
     var at = function (v) { return ((v - min) / (max - min)) * 100; };
 
-    var stance = stanceOf(price, buy, trim);
+    // fairband: the caller's price-vs-value word, never derived here from the levels
+    // (classifier-designation spec 7.3); without one the head shows the price and its gap.
+    var word = DESIGNATION[p.designation];
     var toFair = fair ? (fair - price) / fair : 0;
-    var toLevel = stance === 'buy' && buy ? (buy - price) / buy
-      : stance === 'trim' && trim ? (price - trim) / trim : 0;
 
     var holdFrom = buy == null ? 0 : at(buy);
     var holdTo = trim == null ? 100 : at(trim);
@@ -428,11 +425,9 @@
     },
       h('div', { className: 'fb-band__head' },
         h('span', { className: 'fb-band__price figure-lg' }, money(price)),
-        h('span', { className: cx('fb-stance', 'fb-stance--' + stance, 'label') }, STANCE[stance]),
+        word ? h('span', { className: 'fb-designation label' }, word) : null,
         h('span', { className: 'fb-band__gap caption' },
-          pct(Math.abs(toFair) * 100) + (toFair >= 0 ? ' below' : ' above') + ' fair value',
-          toLevel ? ' · ' + pct(Math.abs(toLevel) * 100) + ' ' +
-            (stance === 'buy' ? 'below the buy level' : 'above the trim level') : null)
+          pct(Math.abs(toFair) * 100) + (toFair >= 0 ? ' below' : ' above') + ' fair value')
       ),
 
       /* the band's own numbers, on their own tier above the track */
@@ -448,27 +443,30 @@
       ),
 
       h('div', { className: 'fb-band__track' },
+        // fairband: the zones keep their fills and lose the three action words; the caller
+        // names the levels (classifier-designation spec 7.3).
         h('div', { className: 'fb-band__clip' },
           h('div', {
             className: 'fb-zone fb-zone--hold',
             style: { left: holdFrom + '%', width: (holdTo - holdFrom) + '%' }
-          }, h('span', { className: 'label' }, STANCE.hold)),
+          }),
           h('div', {
             className: 'fb-zone fb-zone--fair',
             style: { left: at(low) + '%', width: (at(high) - at(low)) + '%' }
           }),
           buy == null ? null : h('div', {
             className: 'fb-zone fb-zone--buy', style: { left: 0, width: at(buy) + '%' }
-          }, h('span', { className: 'label' }, STANCE.buy)),
+          }),
           trim == null ? null : h('div', {
             className: 'fb-zone fb-zone--trim', style: { left: at(trim) + '%', right: 0 }
-          }, h('span', { className: 'label' }, STANCE.trim)),
+          }),
           h('div', { className: 'fb-band__fairmark', style: { left: at(fair) + '%' } })
         ),
         h('div', {
           className: 'fb-band__price-mark',
           style: { left: at(price) + '%' },
-          title: 'Price ' + money(price) + ' — ' + STANCE[stance]
+          // fairband: the price and its word, when the caller gave one.
+          title: 'Price ' + money(price) + (word ? ' — ' + word : '')
         })
       ),
 
@@ -839,11 +837,13 @@
     'Information Technology', 'Materials', 'Real Estate', 'Utilities'
   ];
 
-  var FILTER_GROUPS = ['stance', 'phase', 'cap', 'sector'];
+  // fairband: the price-vs-value words lead the groups (classifier-designation spec 7.3); the page
+  // filters on the row's own word.
+  var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector'];
   var FILTER_FLAGS = ['reviewedOnly', 'hideExpired'];
   var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired' };
 
-  var EMPTY_FILTERS = { stance: [], phase: [], cap: [], sector: [],
+  var EMPTY_FILTERS = { designation: [], phase: [], cap: [], sector: [],
                         reviewedOnly: false, hideExpired: false };
 
   function listOf(f, key) { return (f && f[key]) || []; }
@@ -868,8 +868,11 @@
   function summarise(f) {
     var out = [];
     if (!f) return out;
-    if (listOf(f, 'stance').length) {
-      out.push({ key: 'stance', word: f.stance.map(function (s) { return STANCE[s] || s; }).join(' + ') });
+    // fairband: "Price vs value: Below + Near", the chosen words in band order.
+    if (listOf(f, 'designation').length) {
+      out.push({ key: 'designation', word: 'Price vs value: ' + Object.keys(DESIGNATION)
+        .filter(function (k) { return f.designation.indexOf(k) !== -1; })
+        .map(function (k) { return DESIGNATION[k]; }).join(' + ') });
     }
     if (listOf(f, 'phase').length) out.push({ key: 'phase', word: phaseWord(f.phase) });
     if (listOf(f, 'cap').length) {
@@ -944,15 +947,13 @@
       } },
     { key: 'price', head: 'Price', num: true, locked: true,
       cell: function (r) { return h('td', { className: 'fb-num figure' }, money(r.price)); } },
-    { key: 'stance', head: 'Stance',
+    // fairband: the row's price-vs-value word as a chip with no band colour (classifier-
+    // designation spec 7.3); a row without one shows an em dash, never a word from the levels.
+    { key: 'designation', head: 'Price vs value',
       cell: function (r) {
-        // fairband: a row without a price or levels (a refusal) has no stance; never "Hold".
-        if (r.price == null || r.buyLevel == null || r.trimLevel == null) {
-          return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));
-        }
-        var s = stanceOf(r.price, r.buyLevel, r.trimLevel);
-        return h('td', null,
-          h('span', { className: cx('fb-stance', 'fb-stance--' + s, 'label') }, STANCE[s]));
+        var word = DESIGNATION[r.designation];
+        if (!word) return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));
+        return h('td', null, h('span', { className: 'fb-designation label' }, word));
       } },
     { key: 'overrides', head: 'Overrides',
       cell: function (r) {
@@ -1026,8 +1027,9 @@
       cell: function (r) { return figureCell(percent(r.impliedMargin)); } }
   ];
 
+  // fairband: the designation column ends the default list (classifier-designation spec 7.3).
   var DEFAULT_COLUMNS = ['ticker', 'name', 'phase', 'band', 'mechanical',
-                         'reviewed', 'price', 'stance'];
+                         'reviewed', 'price', 'designation'];
 
   // fairband: a column's catalog entry by its key; null for a key the catalog does not know.
   function columnOf(key) {
@@ -1163,7 +1165,8 @@
     function clearAll() {
       if (p.onQueryChange) p.onQueryChange('');
       if (p.onFiltersChange) {
-        p.onFiltersChange({ stance: [], phase: [], cap: [], sector: [],
+        // fairband: the designation group leads, as in EMPTY_FILTERS.
+        p.onFiltersChange({ designation: [], phase: [], cap: [], sector: [],
                             reviewedOnly: false, hideExpired: false });
       }
     }
@@ -1230,12 +1233,14 @@
             }, 'Filters ▾'),
             fopen[0] ? h('div', { className: 'fb-menu fb-menu--filters' },
               h('div', { className: 'fb-menu__body' },
+                // fairband: PRICE VS VALUE leads the menu, the five words in band order
+                // (classifier-designation spec 7.3).
                 h('div', { className: 'fb-menu__sec' },
-                  h('span', { className: 'fb-menu__h label' }, 'STANCE'),
-                  ['buy', 'hold', 'trim'].map(function (k) {
-                    return checkRow(k, listOf(filters, 'stance').indexOf(k) !== -1,
-                      function () { toggleIn('stance', k); },
-                      h('span', null, STANCE[k]));
+                  h('span', { className: 'fb-menu__h label' }, 'PRICE VS VALUE'),
+                  Object.keys(DESIGNATION).map(function (k) {
+                    return checkRow(k, listOf(filters, 'designation').indexOf(k) !== -1,
+                      function () { toggleIn('designation', k); },
+                      h('span', null, DESIGNATION[k]));
                   })),
                 h('hr'),
                 h('div', { className: 'fb-menu__sec' },
@@ -1726,7 +1731,8 @@
           h('span', { className: 'label' }, cur ? cur.period : ''),
           cur ? h('span', { className: 'figure-sm' }, 'ROIC ' + pct(cur.roic)) : null,
           cur ? h('span', { className: 'figure-sm' }, 'WACC ' + pct(cur.wacc)) : null,
-          cur ? h('span', { className: cx('label', cur.roic >= cur.wacc ? 'fb-stance--buy' : 'fb-stance--trim') },
+          // fairband: the spread's sign in the delta's colours (classifier-designation spec 7.3).
+          cur ? h('span', { className: cx('label', cur.roic >= cur.wacc ? 'fb-delta--up' : 'fb-delta--down') },
             (cur.roic >= cur.wacc ? '+' : '') + pct(cur.roic - cur.wacc) + ' spread') : null
         )
       ),
@@ -1820,6 +1826,8 @@
     TaggedInput: TaggedInput,
     Button: Button,
     PHASES: PHASES,
+    // fairband: the five price-vs-value words, for the drawer's caption.
+    DESIGNATION: DESIGNATION,
     DEFAULT_COLUMNS: DEFAULT_COLUMNS,
     // fairband: every column's key in catalog order, so a page can drop a saved key it no
     // longer knows.

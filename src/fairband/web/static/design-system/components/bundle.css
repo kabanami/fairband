@@ -36,8 +36,10 @@ time { font-variant-numeric: tabular-nums; }
 .fb-mark--aging { color: var(--caution); }
 .fb-mark--expired { color: var(--critical); }
 
-/* The three stance words. Colour always rides with the word, never alone. */
-.fb-stance {
+/* fairband: the price-vs-value word (classifier-designation spec 7.3), an outlined uppercase
+   label in the text's own colour. No band takes a colour: the word reads the price, it never
+   says act. */
+.fb-designation {
   display: inline-block;
   padding: 1px var(--space-2);
   border-radius: var(--radius-sm);
@@ -45,9 +47,6 @@ time { font-variant-numeric: tabular-nums; }
   text-transform: uppercase;
   white-space: nowrap;
 }
-.fb-stance--buy { color: var(--stance-buy); }
-.fb-stance--hold { color: var(--stance-hold); }
-.fb-stance--trim { color: var(--stance-trim); }
 
 /* ---------------------------------------------------------------- Button */
 
