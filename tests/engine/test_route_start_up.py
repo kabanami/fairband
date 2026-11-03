@@ -140,10 +140,20 @@ def test_the_route_is_always_the_refusal_with_figures(
     assert (im["debt"], im["cash"], im["shares"], im["market_cap"]) == (0.0, 300.0, 100.0, 2_000.0)
     # a loss-maker's path has a loss year; nothing else is flagged
     assert route_codes(r) == ["tax-loss-history-unknown"]
-    # a Wide moat changes nothing: a Start-up reads no return on capital, so the terminal is r
+    # a Wide moat: the return on new capital at the target, 0.25 × 0.75 × 1.5 = 0.28125, capped at
+    # 13%, as on the revenue-growth route; the terminal multiple rises and the price needs less
     wide = value_company(replace(start_up_inputs, moat_score=9.0), deciles, policy, TODAY)
-    assert requirement(wide) == req
+    wide_req = requirement(wide)
+    assert wide_req["terminal_roic"] == 0.13
+    assert wide_req["revenue_y10"] == pytest.approx(1_514.51, abs=0.01)
+    assert wide_req["ev_price"] == 1_700.0
+    terminal = input_named(wide, "terminal_roic")
+    assert (terminal.value, terminal.note) == (0.13, "Wide moat")
     assert input_named(wide, "moat_class").note == "Wide"
+    # a Wide moat whose return on new capital is below r takes r
+    thin = tuple(replace(p, sales_to_capital=0.4) for p in start_up_inputs.peers)
+    wide_thin = replace(start_up_inputs, moat_score=9.0, peers=thin)
+    assert requirement(value_company(wide_thin, deciles, policy, TODAY))["terminal_roic"] == 0.09
 
 
 def test_each_requirement_reason(
@@ -396,7 +406,7 @@ def test_the_flag_order_and_inputs(
     rules = {i.name: i for i in r.inputs if i.tag == "RULE"}
     assert (rules["terminal_roic"].value, rules["terminal_roic"].note) == (
         0.09,
-        "None moat; r: a Start-up reads no return on capital",
+        "None moat",
     )
     assert (rules["burn_cover_flag_years"].value, rules["peer_margin_min_years"].value) == (2, 5)
     assert all(i.provenance.source == f"policy {policy.version}" for i in rules.values())

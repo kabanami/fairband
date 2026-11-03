@@ -273,7 +273,7 @@ The return in year N and in the terminal value.
 - Narrow or None moat: r.
 - Wide moat: the chosen measure of 4.6 before its floor, capped at 13% and never below r. When the runway charge is off: 13%. When the runway return is unavailable: r.
 
-The same rule, applied to a given return, gives the terminal return for each sensitivity value (5.8), and on the revenue-growth route for the return on new capital at the target margin (5a.7). The Start-up route reads no return on capital, so its terminal return is r whatever the moat (6b.2).
+The same rule, applied to a given return, gives the terminal return for each sensitivity value (5.8), and on the revenue-growth and Start-up routes for the return on new capital at the target margin (5a.7, 6b.2).
 
 ### 4.8 The charge and the value
 
@@ -290,7 +290,7 @@ The value a share is the total ÷ the diluted share count.
 
 ### 4.9 The moat class
 
-From the GuruFocus Moat Score: 8 or more Wide, 4 or more Narrow, below 4 or no score None. The moat enters in three places: the runway N, the terminal return and the margin of safety. The revenue-growth route's explicit period does not read it, so there the moat enters the terminal return and the margin of safety only. On the Decline route it enters the margin of safety only (6a.5). On the Start-up route it enters nothing: there are no levels, and the terminal return is r (6b.2).
+From the GuruFocus Moat Score: 8 or more Wide, 4 or more Narrow, below 4 or no score None. The moat enters in three places: the runway N, the terminal return and the margin of safety. The revenue-growth route's explicit period does not read it, so there the moat enters the terminal return and the margin of safety only. On the Decline route it enters the margin of safety only (6a.5). On the Start-up route it enters the terminal return only (6b.2): a Start-up row has no levels.
 
 ### 4.10 Levels, designation and validity
 
@@ -769,7 +769,7 @@ R0 is trailing revenue, 0 without one. E0 is trailing operating income, else the
 
 - Tax and NOPAT by 5a.6 at the newest fiscal year's statutory rate (4.3), the carried loss starting at zero.
 - Reinvestment by 5a.5 at the sales-to-capital of 6b.3: reinvestment_t = max(0, (R_{t+1} − R_t) ÷ sales-to-capital) for t = 1 … 9, and reinvestment_10 = terminal NOPAT × g_T ÷ terminal return.
-- The free cash flow, the terminal NOPAT, the terminal value and the firm value by 5a.7, at r in every year (5a.8). The terminal return is r whatever the moat: the route reads no return on capital, so 4.7's Wide rule finds the runway return unavailable.
+- The free cash flow, the terminal NOPAT, the terminal value and the firm value by 5a.7, at r in every year (5a.8). The terminal return is 5a.7's, 4.7's moat rule on the return on new capital at the target margin, m* × (1 − tax rate) × sales-to-capital: r for a Narrow or None moat; for a Wide moat that return capped at 13% and never below r. It is built from the peers' figures, not the company's, which has no return on capital to read.
 
 EV(R10) is that firm value. R10 is the least revenue in [0, 10^13] at which EV(R10) is at or above EV_price: 0 when EV(0) already is, else found by bisection to a relative tolerance of 1e-9 (4.1a). EV rises with R10 for sensible inputs, the terminal dominating; when EV(10^13) is below EV_price, as at a target margin at or below zero or a sales-to-capital so low that reinvestment outruns the margin, there is none.
 
@@ -793,13 +793,13 @@ The market cap moves with the price: the market cap the row read × the new pric
 
 ### 6b.6 Flags, intermediates and inputs
 
-Flags, in order: `line-not-presented:debt`, `line-not-presented:cash`; `peers-from-industry`; `tax-loss-history-unknown` when the requirement's ramp starts from an operating loss or has a year whose EBIT is below zero, as a loss-maker's always does; `below-net-cash`; `burn-cover-short`. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code. Never raised here: the ROIC flags of 4.5 and 4.6, `return-above-peers`, `few-analysts` and the trailing flags; no path reads the consensus or a return.
+Flags, in order: `line-not-presented:debt`, `line-not-presented:cash`; `peers-from-industry`; `tax-loss-history-unknown` when the requirement's ramp starts from an operating loss or has a year whose EBIT is below zero, as a loss-maker's always does; `below-net-cash`; `burn-cover-short`. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code. Never raised here: the ROIC flags of 4.5 and 4.6, `return-above-peers`, `few-analysts` and the trailing flags; no path reads the consensus or the company's return.
 
 Intermediates: `requirement` (`reason`, none when it is computed; `revenue_y10`; `ev_price`; `revenue_0`; `operating_income_0`; `target_margin`, 5a.14's record of the peers and their source; `sales_to_capital`, 5a.14's record with `used` "peers"; `tax_rate`; `terminal_roic`; `path`, the ten years of revenue, EBIT, tax, NOPAT, reinvestment and free cash flow; `terminal_value`; none where a reason leaves a figure uncomputed), `cash_floor`, `burn_cover_years`, `burn` (none when not burning), `debt`, `cash`, `shares`, `market_cap` and `price_facts`.
 
 The rebuild keys: the requirement's `revenue_0`, `operating_income_0`, `target_margin`'s value, `sales_to_capital`'s value, `tax_rate` and `terminal_roic`.
 
-Tagged inputs. DATA: the fiscal years on file, price, diluted shares, next earnings date, daily closes; market cap; trailing revenue and operating income when there are trailing figures, and the last fiscal year's operating income (`operating_income_fy`, noted with its fiscal year) when E0 reads it; trailing operating cash flow and capital spending when there are trailing figures; the newest tax rate; the moat score; `target_margin` and `sales_to_capital` as 5a.14 cites them, when found, the latter noted "the mature peers' median; a Start-up reads no own measure"; `debt` and `cash`. RULE: r, g_T, the moat class, the terminal return (noted "r: a Start-up reads no return on capital"), `peer_min`, `peer_margin_min_years`, `industry_peer_max` on the industry fallback, `burn_cover_flag_years`.
+Tagged inputs. DATA: the fiscal years on file, price, diluted shares, next earnings date, daily closes; market cap; trailing revenue and operating income when there are trailing figures, and the last fiscal year's operating income (`operating_income_fy`, noted with its fiscal year) when E0 reads it; trailing operating cash flow and capital spending when there are trailing figures; the newest tax rate; the moat score; `target_margin` and `sales_to_capital` as 5a.14 cites them, when found, the latter noted "the mature peers' median; a Start-up reads no own measure"; `debt` and `cash`. RULE: r, g_T, the moat class, the terminal return (noted with the moat), `peer_min`, `peer_margin_min_years`, `industry_peer_max` on the industry fallback, `burn_cover_flag_years`.
 
 ### 6b.7 Worked numbers
 
@@ -810,6 +810,7 @@ The tests pin these (spec 2026-11-03 13.2), to 0.01 unless a tolerance is named.
 - Trailing operating cash flow −60 and capital spending −15: a burn of 75 a year and a burn cover of 4.0 years, no flag; cash 120 covers 1.6 years, `burn-cover-short`. Operating cash flow 15 is not burning.
 - Cash floor 3.00 a share. A market cap of 250 gives EV_price −50, the requirement 0 and `below-net-cash`, "market cap 250 against net cash 300".
 - At twice the price the market cap moves to 4,000, EV_price to 3,700 and R10 to 3,616.66, what a valuation at that market cap gives.
+- With a Wide moat the return on new capital at the target is 0.25 × 0.75 × 1.5 = 0.28125, so the terminal return is the 13% cap and R10 is 1,514.51.
 
 ## 7. Foreign filers
 

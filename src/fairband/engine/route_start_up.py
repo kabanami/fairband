@@ -16,11 +16,12 @@ EV_price (``requirement.required_revenue``): from R0, trailing revenue (0 withou
 trailing operating income (else the last fiscal year's, else 0), to the target margin, the mature
 peers' median ten-year margin (``revenue_growth.target_margin``, on the industry's peers when
 assembly fell back to them), at the peers' median sales-to-capital (a Start-up's own measure
-never stands), the newest fiscal year's statutory tax rate, r and g_T in every year, and a
-terminal return of r: the route reads no return on capital, so method 4.7's rule gives r whatever
-the moat. The requirement's reasons, the first that applies: "no target margin: <n> mature
-peers", "no sales-to-capital", "no statutory tax rate", "no market cap", "no revenue reaches the
-price".
+never stands), the newest fiscal year's statutory tax rate, r and g_T in every year, and the
+terminal return of the revenue-growth route: the moat's rule (``roic.terminal_roic``) on the
+return on new capital at the target margin, m* × (1 − tax rate) × sales-to-capital, which is the
+peers' and not the company's (r without all three inputs, when there is no requirement anyway).
+The requirement's reasons, the first that applies: "no target margin: <n> mature peers", "no
+sales-to-capital", "no statutory tax rate", "no market cap", "no revenue reaches the price".
 
 The cash floor and the burn cover. ``cash_floor`` = (cash − debt) ÷ diluted shares. The burn is
 −(trailing operating cash flow + trailing capital spending) when that sum is below zero;
@@ -44,7 +45,7 @@ Flags, in order: ``line-not-presented:debt`` and ``:cash``; ``peers-from-industr
 are the industry's; ``tax-loss-history-unknown`` when the requirement's ramp starts from a loss or
 has a loss year; ``below-net-cash`` when EV_price is at or below zero; ``burn-cover-short`` below
 ``burn_cover_flag_years``. Never the ROIC flags, ``return-above-peers``, ``few-analysts`` or the
-trailing flags: no path reads the consensus or a return.
+trailing flags: no path reads the consensus or the company's return.
 """
 
 from typing import Any
@@ -56,8 +57,10 @@ from fairband.engine.revenue_growth import (
     TargetMargin,
     margin_peers,
     peer_sales_to_capital,
+    return_on_new_capital,
     target_margin,
 )
+from fairband.engine.roic import terminal_roic
 from fairband.engine.route_revenue_growth import (
     TAX_LOSS,
     bridge_flags,
@@ -87,19 +90,24 @@ def value_start_up(c: StartUpContext) -> Refused:
     i, t, policy = c.inputs, c.trailing, c.policy
     debt, cash = nil(i.debt), nil(i.cash)
     moat = moat_class(i.moat_score, policy)
-    terminal = policy.required_return
     target = target_margin(i.peers, policy)
     s2c = peer_sales_to_capital(i.peers, policy)
+    tax = i.tax_rate_latest
+    terminal = (
+        policy.required_return
+        if target is None or s2c is None or tax is None
+        else terminal_roic(return_on_new_capital(target.value, tax, s2c), moat, policy)
+    )
     revenue0 = 0.0 if t is None or t.revenue is None else t.revenue
     ebit0, fiscal = _operating_income_0(i.series, t)
     found: dict[str, Any] = {
-        "reason": _input_reason(target, s2c, i.tax_rate_latest, c),
+        "reason": _input_reason(target, s2c, tax, c),
         **_UNSOLVED,
         "revenue_0": revenue0,
         "operating_income_0": ebit0,
         "target_margin": None if target is None else target_intermediates(target, i.peer_source),
         "sales_to_capital": None if s2c is None else _s2c_record(s2c),
-        "tax_rate": i.tax_rate_latest,
+        "tax_rate": tax,
         "terminal_roic": terminal,
     }
     requirement = _requirement(found, i.market_cap, debt, cash, policy)
@@ -333,13 +341,7 @@ def _inputs(
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "terminal_growth", policy.terminal_growth, "ratio"),
         rule(policy, "moat_class", None, "class", moat),
-        rule(
-            policy,
-            "terminal_roic",
-            terminal,
-            "ratio",
-            f"{moat} moat; r: a Start-up reads no return on capital",
-        ),
+        rule(policy, "terminal_roic", terminal, "ratio", f"{moat} moat"),
         rule(policy, "peer_min", policy.peer_min, "peers"),
         rule(policy, "peer_margin_min_years", policy.peer_margin_min_years, "years"),
         *industry_peer_max_input(policy, industry),
