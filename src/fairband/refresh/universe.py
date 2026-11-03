@@ -10,27 +10,34 @@ text, so no key reaches a ``companies`` row. Then, per screener row in payload o
    exchange): skipped;
 2. an ETF, a fund, or not actively trading: skipped;
 3. no market cap, or one below ``cap_floor_usd``: skipped;
-4. the industry is excluded (below): recorded, not eligible, ``"industry: <industry>"``;
-5. the name matches one of ``name_exclude_patterns`` (``re.search``, ignoring case), a note, a
+4. the symbol is one of ``manual_exclusions``: recorded, not eligible, ``"manual exclusion"``,
+   whatever the rules below say;
+5. the symbol is one of ``manual_admissions``: admitted as in rule 9, whatever its industry, name
+   or symbol, so the rules below are not checked;
+6. the industry is excluded (below): recorded, not eligible, ``"industry: <industry>"``;
+7. the name matches one of ``name_exclude_patterns`` (``re.search``, ignoring case), a note, a
    debenture or a preferred share whose symbol carries no suffix: recorded, not eligible,
    ``"name pattern"``;
-6. the symbol matches one of ``symbol_exclude_patterns`` (``re.search``): recorded, not eligible,
-   ``"symbol pattern"``; or it is one of ``manual_exclusions``: ``"manual exclusion"``;
-7. else admitted, eligible, in the cap band of the largest floor at or below its market cap.
+8. the symbol matches one of ``symbol_exclude_patterns`` (``re.search``): recorded, not eligible,
+   ``"symbol pattern"``;
+9. else admitted, eligible, in the cap band of the largest floor at or below its market cap.
 
 A skipped row stores nothing (spec 6.1 records only the listings that fail the industry or symbol
 rule, and the growth routes spec 5.17 adds the name rule); ``UniverseResult.excluded`` counts it
 under ``"skipped"`` so the calibration can show it. A row whose symbol an earlier row already
 recorded is skipped too, so the first row recorded is kept.
 Symbols are in the exchange form ``screener_rows`` returns (``BRK.B``, ``XYZ.U``), and so are the
-manual exclusions. A recorded row carries the screener's name, exchange, sector, industry, country
-and market cap; ``is_adr`` is false and ``currency`` ``None`` because the screener does not carry
-them (the profile and the statements give them, ``refresh.inputs``); only an admitted row has a cap
-band. The rows go in one transaction, with ``observed_at`` the screener response's.
+manual exclusions and admissions, matched exactly. The symbols rule 5 admits are logged in one
+INFO line in screener order, ``manual admission: V, MA``, when there are any. A recorded row
+carries the screener's name, exchange, sector, industry, country and market cap; ``is_adr`` is
+false and ``currency`` ``None`` because the screener does not carry them (the profile and the
+statements give them, ``refresh.inputs``); only an admitted row has a cap band. The rows go in one
+transaction, with ``observed_at`` the screener response's.
 
 The industry match: the policy lists FMP's industry strings for banks, insurers, REITs and shell
-companies (SPACs), taken from FMP's published vocabulary; without a live key, the live screener's
-strings are unconfirmed.
+companies (SPACs), and six financial industries FMP files lenders, insurers and investment banks
+under, taken from FMP's published vocabulary; without a live key, the live screener's strings are
+unconfirmed.
 So the industry and each entry are normalized (lower-cased, each hyphen, en dash and em dash made
 a space, whitespace collapsed), and an industry is excluded when it equals an entry or starts with
 an entry and a space. The bare ``Banks``, ``Insurance`` and ``REIT`` entries then also cover a
@@ -46,6 +53,7 @@ message, no payload) and propagates. A payload that gives no rows is stored with
 """
 
 import json
+import logging
 import re
 import sqlite3
 from collections.abc import Sequence
@@ -60,6 +68,8 @@ from fairband.vendors.fmp import Fmp
 from fairband.vendors.http import VendorError
 from fairband.vendors.normalize_fmp import ScreenerRow, screener_rows
 from fairband.vendors.scrub import scrub
+
+logger = logging.getLogger("fairband.refresh")
 
 PROVIDER = "fmp"
 ENDPOINT = "screener"
@@ -116,6 +126,9 @@ def build_universe(
             excluded[reason.partition(":")[0]] += 1
         recorded[row.symbol] = _company(row, refresh_id, observed_at, reason, universe)
     insert_companies(conn, list(recorded.values()))
+    by_list = [symbol for symbol in admitted if symbol in universe.manual_admissions]
+    if by_list:
+        logger.info("manual admission: %s", ", ".join(by_list))
     return UniverseResult(refresh_id, tuple(admitted), excluded)
 
 
@@ -188,15 +201,18 @@ def _exclusion(
     names: Sequence[re.Pattern[str]],
     symbols: Sequence[re.Pattern[str]],
 ) -> str | None:
-    """The reason a listing that passes the silent filters is not admitted, if any."""
+    """The reason a listing that passes the silent filters is not admitted, if any. The manual
+    exclusions come first, then the manual admissions, which pass whatever the other rules say."""
+    if row.symbol in universe.manual_exclusions:
+        return "manual exclusion"
+    if row.symbol in universe.manual_admissions:
+        return None
     if row.industry is not None and _excluded_industry(row.industry, universe.excluded_industries):
         return f"industry: {row.industry}"
     if row.name is not None and any(pattern.search(row.name) for pattern in names):
         return "name pattern"
     if any(pattern.search(row.symbol) for pattern in symbols):
         return "symbol pattern"
-    if row.symbol in universe.manual_exclusions:
-        return "manual exclusion"
     return None
 
 

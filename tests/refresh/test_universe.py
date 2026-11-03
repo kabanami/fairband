@@ -2,6 +2,7 @@
 database: which screener rows are admitted, recorded as excluded or skipped, and the reuse."""
 
 import json
+import logging
 import sqlite3
 from dataclasses import replace
 from datetime import timedelta
@@ -322,6 +323,106 @@ def test_manual_exclusion(
     result = build(conn, clients, excluding, clock)
     assert "BOLT" not in result.admitted and result.excluded["manual exclusion"] == 1
     assert stored(conn)["BOLT"].exclusion_reason == "manual exclusion"
+
+
+@pytest.mark.parametrize(
+    "industry",
+    [
+        "Asset Management",
+        "Financial - Capital Markets",
+        "Financial - Credit Services",
+        "Financial - Mortgages",
+        "Financial - Conglomerates",
+        "Investment - Banking & Investment Services",
+    ],
+)
+def test_the_six_financial_industries_are_excluded(
+    conn: sqlite3.Connection,
+    clients: Clients,
+    router: Router,
+    policy: Policy,
+    clock: Clock,
+    industry: str,
+) -> None:
+    serve(router, listing("ACME", industry=industry))
+    result = build(conn, clients, policy, clock)
+    assert result.admitted == () and result.excluded["industry"] == 1
+    assert stored(conn)["ACME"].exclusion_reason == f"industry: {industry}"
+
+
+def test_data_and_stock_exchanges_stay_admitted(
+    conn: sqlite3.Connection, clients: Clients, router: Router, policy: Policy, clock: Clock
+) -> None:
+    serve(router, listing("SPGI", industry="Financial - Data & Stock Exchanges"))
+    result = build(conn, clients, policy, clock)
+    assert result.admitted == ("SPGI",) and result.excluded["industry"] == 0
+    assert stored(conn)["SPGI"].eligible
+
+
+def test_the_admission_list_admits_a_symbol_from_an_excluded_industry(
+    conn: sqlite3.Connection,
+    clients: Clients,
+    router: Router,
+    policy: Policy,
+    clock: Clock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    assert "V" in policy.universe.manual_admissions
+    serve(
+        router,
+        listing("V", industry="Financial - Credit Services"),
+        listing("COF", industry="Financial - Credit Services"),
+    )
+    caplog.set_level(logging.INFO, logger="fairband.refresh")
+    result = build(conn, clients, policy, clock)
+    assert result.admitted == ("V",) and result.excluded["industry"] == 1
+    v = stored(conn)["V"]
+    assert (v.eligible, v.exclusion_reason, v.cap_band) == (True, None, "Mid")
+    assert stored(conn)["COF"].exclusion_reason == "industry: Financial - Credit Services"
+    assert "manual admission: V" in caplog.messages
+
+
+def test_the_admission_list_matches_the_exchange_form_exactly(
+    conn: sqlite3.Connection,
+    clients: Clients,
+    router: Router,
+    policy: Policy,
+    clock: Clock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    admitting = replace(policy, universe=replace(policy.universe, manual_admissions=("V", "BRK.B")))
+    serve(
+        router,
+        listing("v", industry="Financial - Credit Services"),
+        listing("V.X", industry="Financial - Credit Services"),
+        # FMP's dash form, which the screener rows give back in the exchange form
+        listing("BRK-B", industry="Insurance - Diversified"),
+    )
+    caplog.set_level(logging.INFO, logger="fairband.refresh")
+    result = build(conn, clients, admitting, clock)
+    assert result.admitted == ("BRK.B",) and result.excluded["industry"] == 2
+    rows = stored(conn)
+    assert rows["v"].exclusion_reason == "industry: Financial - Credit Services"
+    assert rows["V.X"].exclusion_reason == "industry: Financial - Credit Services"
+    assert [m for m in caplog.messages if "manual admission" in m] == ["manual admission: BRK.B"]
+
+
+def test_a_symbol_on_both_lists_is_excluded(
+    conn: sqlite3.Connection,
+    clients: Clients,
+    router: Router,
+    policy: Policy,
+    clock: Clock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    both = replace(policy, universe=replace(policy.universe, manual_exclusions=("V",)))
+    assert "V" in both.universe.manual_admissions
+    serve(router, listing("V", industry="Financial - Credit Services"))
+    caplog.set_level(logging.INFO, logger="fairband.refresh")
+    result = build(conn, clients, both, clock)
+    assert result.admitted == () and result.excluded["manual exclusion"] == 1
+    assert stored(conn)["V"].exclusion_reason == "manual exclusion"
+    assert not any("manual admission" in m for m in caplog.messages)  # none admitted by the list
 
 
 def test_screener_failure_propagates(
