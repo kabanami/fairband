@@ -1,11 +1,11 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v3.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v4.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
-cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-and v2 files stay in the package byte for byte, because the snapshots valued under them cite their
-hashes.
+cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1,
+v2 and v3 files stay in the package byte for byte, because the snapshots valued under them cite
+their hashes.
 """
 
 import hashlib
@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v3.toml"
+_POLICY_FILE = "fairband-policy-v4.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -79,6 +79,7 @@ class Policy:
     high_growth_years: int
     margin_convergence_year: int
     peer_min: int
+    industry_peer_max: int
     peer_margin_min_years: int
     implied_margin_bounds: tuple[float, float]
     roic_sensitivity: tuple[float, float]
@@ -101,7 +102,7 @@ class Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v3 file) into a ``Policy``."""
+    """Parse the policy file (default: the packaged v4 file) into a ``Policy``."""
     if path is None:
         data = resources.files(__name__).joinpath(_POLICY_FILE).read_bytes()
     else:
@@ -148,6 +149,7 @@ def load_policy(path: Path | None = None) -> Policy:
         high_growth_years=read("high_growth_years", _whole),
         margin_convergence_year=read("margin_convergence_year", _whole),
         peer_min=read("peer_min", _whole),
+        industry_peer_max=read("industry_peer_max", _whole),
         peer_margin_min_years=read("peer_margin_min_years", _whole),
         implied_margin_bounds=read("implied_margin_bounds", _pair),
         roic_sensitivity=read("roic_sensitivity", _pair),

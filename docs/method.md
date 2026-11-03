@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Method version | `fairband-mechanical/0.4` (`fairband.engine.METHOD_VERSION`) |
-| Policy version | `fairband-policy-v3` (`src/fairband/policy/fairband-policy-v3.toml`) |
+| Method version | `fairband-mechanical/0.5` (`fairband.engine.METHOD_VERSION`) |
+| Policy version | `fairband-policy-v4` (`src/fairband/policy/fairband-policy-v4.toml`) |
 | Status | The single statement of the method the engine runs. Written 2026-11-02 from the code and the specs. |
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
@@ -49,7 +49,7 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 | Quote: price, market cap | `quote` | current |
 | Profile: country, ADR flag | `profile` | current |
 | Daily closes | `historical-price-eod/full` | five years, for the price columns |
-| Peers | `stock-peers` | one call a company, reused for 24 hours; not required; usable when it names a peer other than the company or is exactly the empty list; a list of objects without a symbol, or anything but a list, is unusable. The symbols stay in the stored payload; the peers' figures come from their own stored statements (5a.4) |
+| Peers | `stock-peers` | one call a company, reused for 24 hours; not required; usable when it names a peer other than the company or is exactly the empty list; a list of objects without a symbol, or anything but a list, is unusable. The symbols stay in the stored payload; the peers' figures come from their own stored statements (5a.4); when the list leaves fewer than `peer_min` peers that count for the target margin, the company's FMP industry supplies them (5a.4) |
 | Moat score | GuruFocus `summary` | current; reused for 7 days |
 | EPS trailing and EPS without non-recurring items | GuruFocus `keyratios` | current; reused for 7 days |
 | Statutory tax rate | the packaged OECD table `tax-rates-oecd-v1.toml` | by country and fiscal year |
@@ -149,7 +149,7 @@ A company is unclassified, with the reason as its refusal, when its series has f
 
 ### 4.1 Policy values
 
-Every value comes from `fairband-policy-v3.toml` with a source line. The ones below are the ones the method reads; the universe and refresh values are in sections 1 and 2.
+Every value comes from `fairband-policy-v4.toml` with a source line. The ones below are the ones the method reads; the universe and refresh values are in sections 1 and 2.
 
 | Value | Policy name | Source |
 |---|---|---|
@@ -171,6 +171,7 @@ Every value comes from `fairband-policy-v3.toml` with a source line. The ones be
 | High-growth years 5 | `high_growth_years` | growth routes spec 5.4; Damodaran's template H2, H3; policy value |
 | Margin convergence year 10 | `margin_convergence_year` | growth routes spec 5.5; Damodaran's template H2; policy value |
 | Peer minimum: 3 mature peers | `peer_min` | design.md 6.2 and 6.7; no source gives the number |
+| Industry peers: at most 10 | `industry_peer_max` | growth routes spec 5.5; no source gives the number; founder decision 2026-11-03 |
 | Peer margin: 5 fiscal years at least | `peer_margin_min_years` | growth routes spec 5.5; Damodaran H64; policy value |
 | Bounds of the margin the price needs: −50% to 100% | `implied_margin_bounds` | no source (growth routes spec 5.11) |
 | Return sensitivity 15% and 9% | `roic_sensitivity` | no source |
@@ -186,7 +187,7 @@ Every value comes from `fairband-policy-v3.toml` with a source line. The ones be
 | Validity fallback: 91 days | `validity_fallback_days` | design.md 8 |
 | Aging at 0.6667 of the window | `aging_fraction` | design system |
 
-Policies v1 and v2 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v3 only.
+Policies v1, v2 and v3 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v4 only.
 
 ### 4.1a Constants in code
 
@@ -393,7 +394,7 @@ The route's own refusals, in this order:
 8. "no sales-to-capital" (5a.5);
 9. "value not positive under the reinvestment charge" (5a.9).
 
-What a refusal keeps beside the price facts every result carries: refusals 1 to 5 nothing; refusal 6 the path's flags; refusal 7 the rebuild keys (5a.14), the margin the price needs (5a.10) and the path's, the capital build's and the bridge's flags (5a.13); refusal 8 those flags and no intermediates; refusal 9 every value-side intermediate, the margin the price needs and every flag of 5a.13. A row with neither a target margin nor a sales-to-capital gives refusal 7, its margin the price needs None.
+What a refusal keeps beside the price facts every result carries: refusals 1 to 5 nothing; refusal 6 the path's flags; refusal 7 the rebuild keys (5a.14), the margin the price needs (5a.10) and the path's, the capital build's and the bridge's flags and `peers-from-industry` (5a.13); refusal 8 those flags and no intermediates; refusal 9 every value-side intermediate, the margin the price needs and every flag of 5a.13. A row with neither a target margin nor a sales-to-capital gives refusal 7, its margin the price needs None.
 
 ### 5a.2 Year 1 and the path
 
@@ -428,12 +429,14 @@ The margin starts at the trailing operating margin, m_0 = trailing operating inc
 
 A trailing margin above the target moves down the same line.
 
-**The mature peers.** The candidates are the symbols of the latest usable `stock-peers` response stored for the company (section 2), in its order, in the exchange form (`BRK.B`), the company itself and repeats dropped. A candidate is kept when the latest universe lists it (the admitted companies of the newest refresh that admitted any) and its stored fiscal years classify, on the spot, as Mature Growth or Mature Stable on the deciles the company is valued on (3.3). A candidate outside that universe, without statements, unclassified or in another phase is dropped. Without deciles or a stored response the company has no peers. No vendor call is made for a peer: its figures come from the statements stored for it, its invested capital and NOPAT built by 4.4 at the statutory rate of its own country (4.3):
+**The mature peers.** The candidates are the symbols of the latest usable `stock-peers` response stored for the company (section 2), in its order, in the exchange form (`BRK.B`), the company itself and repeats dropped. A candidate is kept when the latest universe lists it (the admitted companies of the newest refresh that admitted any) and its stored fiscal years classify, on the spot, as Mature Growth or Mature Stable on the deciles the company is valued on (3.3). A candidate outside that universe, without statements, unclassified or in another phase is dropped. Without deciles the company has no peers, and without a stored response no candidates. No vendor call is made for a peer: its figures come from the statements stored for it, its invested capital and NOPAT built by 4.4 at the statutory rate of its own country (4.3):
 
 - its margin: the ten-year aggregate operating margin, Σ operating income ÷ Σ revenue over the last ten of its fiscal years that have both and a positive revenue, with the count of those years; none without such a year;
 - its sales-to-capital: the revenue of its newest kept ROIC year (4.5) ÷ that year's average invested capital, both of the same fiscal year; none without a kept year, without a revenue for that year, or with that capital at or below zero;
 - its ROIC: its ten-year aggregate (4.5), none when unavailable;
 - its market cap: the one on its row in the latest universe.
+
+**The industry fallback.** When the candidates kept leave fewer than `peer_min` peers with a margin on `peer_margin_min_years` years or more, the peers are instead the mature companies of the company's own FMP industry: every company of the latest universe whose row carries the same industry, the company itself excluded, whose fiscal years classify on the spot as Mature Growth or Mature Stable on the same deciles, the largest `industry_peer_max` of them by market cap (a company without one last), their figures read as above. The kept candidates are dropped, not merged. The row is flagged `peers-from-industry`, naming the count the candidates left, the industry and the count taken, whether the row is then valued or still refused for the target margin. A company without an industry on its universe row has no fallback. Without a stored response the candidates are none and the fallback applies.
 
 **The target margin.** m* is the median margin of the peers with a margin on at least 5 fiscal years (`peer_margin_min_years`). With fewer than 3 such peers (`peer_min`), the row is refused "no target margin: <n> mature peers", n counting them. The row records those peers with their margins and market caps, their count, the lowest and the highest margin, and the largest of them by market cap with its margin (none when none has a market cap); the largest peer sets nothing.
 
@@ -518,17 +521,17 @@ The same route: on the same inputs a Young Growth row has High Growth's value, l
 
 ### 5a.13 Flags
 
-In order: `sbc-basis-unknown`, when the cross-check has a value and its anchor's stock-compensation basis is unknown (5.2); the path's, `path-held`, `consensus-above-base-rate` (5a.3), then `few-analysts`; the capital build's, the ROIC flags of 4.5 then the `line-not-presented:<field>` flags of the ROIC years (4.4); `line-not-presented:debt`, then `line-not-presented:cash`; `tax-loss-history-unknown` (5a.6); `return-above-peers`; `failure-not-charged` on a Young Growth row; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`); `value-spread` over the three target margins (5a.11). The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
+In order: `sbc-basis-unknown`, when the cross-check has a value and its anchor's stock-compensation basis is unknown (5.2); the path's, `path-held`, `consensus-above-base-rate` (5a.3), then `few-analysts`; the capital build's, the ROIC flags of 4.5 then the `line-not-presented:<field>` flags of the ROIC years (4.4); `line-not-presented:debt`, then `line-not-presented:cash`; `peers-from-industry` (5a.4); `tax-loss-history-unknown` (5a.6); `return-above-peers`; `failure-not-charged` on a Young Growth row; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`); `value-spread` over the three target margins (5a.11). The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
 
 Never raised here: `path-on-eps`, `charge-zeroed`, `return-floored`, `growth-above-return`, `long-runway-high-growth`, nor the cross-check's earnings-path flags. The charge does not read the runway return, and the path is on revenue.
 
 ### 5a.14 Intermediates and tagged inputs
 
-Intermediates: `ntm_revenue`; `path` (base_year, the revenue analysts of the two landing years, which steps were held, the sales class and its cap); `path_steps`, g_2 and g_3 as resolved; `growth_rates`, years 1 to N; `margin_path` (start, target, by_year); `target_margin` (value, count, low, high, largest_symbol, largest_margin, and the counted peers with each one's margin and market cap); `revenue_by_year`, `ebit_by_year`, `tax_by_year`, `nopat_by_year`, `reinvestment_by_year`, `fcff_by_year`; `terminal_roic`, `terminal_nopat` (5a.7), `terminal_value`, `firm_value`, `equity`, `value_per_share`; `value_by_margin`; `return_on_new_capital`, `peer_roic_median`; `failure_probability` on Young Growth only; `eps`, `epv`, `dividend_yield`, `net_buyback_yield`, `income_basis`, `price_facts`, `growth_route`; the rebuild keys; and at the price `implied_growth`, `implied_margin`, `multiples`, `growth_share`, `expected_return` and the cross-check's `implied_growth`.
+Intermediates: `ntm_revenue`; `path` (base_year, the revenue analysts of the two landing years, which steps were held, the sales class and its cap); `path_steps`, g_2 and g_3 as resolved; `growth_rates`, years 1 to N; `margin_path` (start, target, by_year); `target_margin` (value, count, low, high, largest_symbol, largest_margin, the counted peers with each one's margin and market cap, source (fmp or industry) and industry); `revenue_by_year`, `ebit_by_year`, `tax_by_year`, `nopat_by_year`, `reinvestment_by_year`, `fcff_by_year`; `terminal_roic`, `terminal_nopat` (5a.7), `terminal_value`, `firm_value`, `equity`, `value_per_share`; `value_by_margin`; `return_on_new_capital`, `peer_roic_median`; `failure_probability` on Young Growth only; `eps`, `epv`, `dividend_yield`, `net_buyback_yield`, `income_basis`, `price_facts`, `growth_route`; the rebuild keys; and at the price `implied_growth`, `implied_margin`, `multiples`, `growth_share`, `expected_return` and the cross-check's `implied_growth`.
 
 The rebuild keys: `revenue_path` (revenue0, ntm_revenue, the consensus steps as found with None for a missing one, hold None, or the cap when it binds, high_growth_years, fade_years), `margin_start`, `tax_rate`, `moat`, `debt`, `cash`, `shares` and `sales_to_capital` (used, own, own_usable, peers, value); on a valued row `margin_path`'s target and `terminal_roic` complete them. A refusal that keeps them keeps the moat class for the price refresh; the screen shows the moat on a valued row only.
 
-Tagged inputs. DATA: the fiscal years on file, price, diluted shares, next earnings date, daily closes; market cap, trailing revenue, operating income, EPS, dividends, buybacks and stock issued; the aggregate ROIC and the runway return, as in 5.12, though neither enters this route's charge; the newest tax rate; the moat score; GuruFocus EPS and EPS without non-recurring items; `ntm_revenue`, from the quarterly consensus; `path_step_2` and `path_step_3`, the annual consensus steps as found, a held one empty with the note "no consensus step: the year holds the rate of the year before"; `target_margin`, source "FMP stock-peers and the peers' statements", note "the median ten-year operating margin of <n> mature peers"; `sales_to_capital`, either the own measure cited to the statements (an estimate under the intangibles method when invested capital took the as-reported total, 4.4) with the note "the company's own five-year marginal measure", or the peers' median cited to the peers' source with the note "the mature peers' median; the own measure is not usable"; `debt` and `cash`, cited to the statements, with assembly's note naming a missing line. RULE: r, g_T, the moat class, the margin of safety, the terminal return, `high_growth_years`, `held_growth_cap` with the class and whether it binds in its note, `fade_years`, `margin_convergence_year`, `peer_min`.
+Tagged inputs. DATA: the fiscal years on file, price, diluted shares, next earnings date, daily closes; market cap, trailing revenue, operating income, EPS, dividends, buybacks and stock issued; the aggregate ROIC and the runway return, as in 5.12, though neither enters this route's charge; the newest tax rate; the moat score; GuruFocus EPS and EPS without non-recurring items; `ntm_revenue`, from the quarterly consensus; `path_step_2` and `path_step_3`, the annual consensus steps as found, a held one empty with the note "no consensus step: the year holds the rate of the year before"; `target_margin`, source "FMP stock-peers and the peers' statements" (on the industry fallback, "the universe's <industry> industry and the peers' statements", the note naming the industry), note "the median ten-year operating margin of <n> mature peers"; `sales_to_capital`, either the own measure cited to the statements (an estimate under the intangibles method when invested capital took the as-reported total, 4.4) with the note "the company's own five-year marginal measure", or the peers' median cited to the peers' source with the note "the mature peers' median; the own measure is not usable" (on the industry fallback, "the mature peers' median (<industry> industry); the own measure is not usable"); `debt` and `cash`, cited to the statements, with assembly's note naming a missing line. RULE: r, g_T, the moat class, the margin of safety, the terminal return, `high_growth_years`, `held_growth_cap` with the class and whether it binds in its note, `fade_years`, `margin_convergence_year`, `peer_min`.
 
 ### 5a.15 Worked numbers
 
@@ -602,6 +605,7 @@ A flag warns and never changes a value, a level or a stance. Each has a code, a 
 | `few-analysts` | a present path step lands on a year with fewer than 5 analysts or no count: the EPS count on the earnings path (5.3), the revenue count on the revenue path (5a.2) |
 | `path-held` | a consensus revenue step is missing, so its year holds the rate of the year before; names the fiscal years that left it missing and the rates held (5a.2) |
 | `consensus-above-base-rate` | the year-3 consensus revenue growth is above the sales class's 90th-percentile five-year sales growth, so years 4 and 5 hold the cap and the fade starts from it (5a.3) |
+| `peers-from-industry` | FMP's peers left fewer than `peer_min` that count for the target margin, so the peers are the largest `industry_peer_max` mature companies of the company's FMP industry in the universe (5a.4) |
 | `roic-unavailable` | fewer than 5 ROIC years |
 | `roic-on-n-years` | 5 to 9 ROIC years |
 | `ten-year-roic-unavailable` | the ten-year capital sum is at or below zero |
@@ -663,6 +667,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.2 | 2026-11-01 | The calibration: the runway return (4.6), the payout floor (4.8), the fade (5.5), the terminal from the runway return (4.7), the four return keys (5.8), the growth-route cross-check (6.4), the revalue kind. Policy v2 adds four values (the marginal span, the capital-growth test, the fallback window, the fade years) and the recorded decision to keep return on invested capital over return on equity. |
 | 0.3 | 2026-11-02 | Mature Stable charges as Mature Growth does (6.3): the runway return through the runway, the terminal return after. Policy unchanged. |
 | 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a), the held rate capped at the sales class's base-rate 90th percentile (5a.3), with the `stock-peers` call (section 2); the name patterns on the universe (section 1). Policy v3 adds five values and the `sales_p90_5y` column of `base_rates` (4.1). |
+| 0.5 | 2026-11-03 | The industry fallback for the peers (5a.4). Policy v4 adds `industry_peer_max`. |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
@@ -690,6 +695,7 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | The free cash flow as NOPAT less reinvestment | Damodaran H9 |
 | The margin moving to a target margin; the target as the mature peers' median ten-year margin, on five years at least | Damodaran H13, H64; design.md 6.7 |
 | Sales-to-capital: the company's own marginal measure, else the mature peers' | Damodaran H13, H14; D3c |
+| The industry fallback for the peers: the sector averages beside the company's own data, the industry average as the template's default, margins and returns resting at the sector average | Damodaran H13, H16, H29; design.md 6.7; founder decision 2026-11-03 |
 | Reinvestment a year ahead of the revenue it buys, never negative | Damodaran H16, H17 |
 | The return on new capital against the peers' ROIC | Damodaran H15 |
 | Young Growth: the failure probability unavailable, with its reason | D3d; design.md 6.9 |
@@ -712,7 +718,7 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Growth word, margin direction | The classifier's reading of the deciles for revenue growth and for the margin trend |
 | Check | A classifier warning that never changes the phase |
 | Snapshot | One company's result under one refresh, with the versions that produced it |
-| Mature peers | The company's FMP `stock-peers` that the latest universe lists and the classifier puts in Mature Growth or Mature Stable |
+| Mature peers | The company's FMP `stock-peers` that the latest universe lists and the classifier puts in Mature Growth or Mature Stable; when fewer than `peer_min` of them count, the largest mature companies of the company's FMP industry |
 | Target margin | The operating margin the revenue-growth route moves to by year 10: the median ten-year margin of the mature peers |
 | Sales-to-capital | The revenue a dollar of invested capital buys: the company's change in revenue ÷ its change in capital, or a peer's revenue ÷ its capital. The revenue-growth route reinvests the next year's revenue increase ÷ sales-to-capital |
 | Margin the price needs | The target margin at which the revenue-growth value a share equals the price |

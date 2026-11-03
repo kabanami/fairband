@@ -7,7 +7,8 @@ Admitted, with the revenue growth over the last three fiscal years that the deci
   year at a 20% operating margin (5.3%). The two highest, so decile 10, "Very High": Mature Growth,
   valued on the synthetic NTM consensus.
 - MILD: revenue up $30 m a year at 20% (2.4%). Decile 4, "Low": Mature Stable.
-- NEWT: revenue up $10 m a year at a -10% margin that does not improve (0.9%): Young Growth.
+- NEWT: revenue up $10 m a year at a -10% margin that does not improve (0.9%): Young Growth. It
+  lists in an industry of its own, so the industry fallback for its peers finds no mature company.
 
 Not admitted: FIRB, a regional bank (recorded, excluded by industry), and TINY, below the $2 bn
 floor (skipped). The quote, profile, closes, annual consensus, peers and GuruFocus answers are
@@ -60,7 +61,7 @@ SCREENER = [
     listing("AXLE", 12 * B),
     listing("TINY", 1 * B),
     listing("MILD", 3 * B),
-    listing("NEWT", 2.5 * B),
+    listing("NEWT", 2.5 * B, industry="Electrical Equipment & Parts"),
 ]
 
 

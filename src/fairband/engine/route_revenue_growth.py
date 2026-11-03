@@ -34,7 +34,8 @@ Intermediates: ``ntm_revenue``; ``path`` (base_year, the revenue analysts of the
 steps land on, which step was held, the sales class and its cap); ``path_steps``, g_2 and g_3 as
 resolved; ``growth_rates`` for years 1 to 10; ``margin_path`` (start, target, by_year);
 ``target_margin`` (value, the median; count; low; high; largest_symbol and largest_margin, the
-largest counted peer by market cap, which sets nothing; peers, each with its margin and market cap);
+largest counted peer by market cap, which sets nothing; peers, each with its margin and market cap;
+source, "fmp" or "industry", and industry, the industry's name on the fallback);
 ``sales_to_capital`` (used, "own" or "peers"; own; own_usable; peers; value); the tables
 ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``,
 ``fcff_by_year``; ``terminal_roic``, ``terminal_nopat`` (year 10's operating income at the full tax
@@ -61,7 +62,9 @@ Flags, in order: ``sbc-basis-unknown`` when the cross-check has a value on an an
 unknown; the path's, ``path-held``, ``consensus-above-base-rate`` when the year-3 consensus is above
 the cap, then ``few-analysts``; the capital build's, the ten-year ROIC flags and their line flags,
 then ``line-not-presented:debt`` and ``line-not-presented:cash`` when a figure is unknown or
-assembly's note names a line it lacks; ``tax-loss-history-unknown`` when the forecast has a loss
+assembly's note names a line it lacks; ``peers-from-industry`` when the peers are the industry
+fallback's (``CompanyInputs.peer_source``), on a row refused for the target margin or the
+sales-to-capital too; ``tax-loss-history-unknown`` when the forecast has a loss
 year or the trailing margin is below zero; ``return-above-peers`` when the return on new capital at
 the target is above the peers' median ROIC; ``failure-not-charged`` on a Young Growth row; the
 trailing flags; ``value-spread`` over the three margins, unbounded when the value at the lowest
@@ -89,6 +92,7 @@ from fairband.engine.multiples import epv, growth_share
 from fairband.engine.revenue_growth import (
     Bridge,
     MarginPath,
+    PeerSource,
     RevenueCharge,
     RevenuePath,
     RevenueValuation,
@@ -205,7 +209,9 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "shares": c.shares,
         "sales_to_capital": asdict(s2c),
     }
-    path_and_capital = path_flags + roic.result.flags + _bridge_flags(c)
+    path_and_capital = (
+        path_flags + roic.result.flags + _bridge_flags(c) + present(_from_industry(c))
+    )
     target = target_margin(i.peers, policy)
     if target is None:
         counted = len(margin_peers(i.peers, policy))
@@ -241,7 +247,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "path_steps": [g2, g3],
         "growth_rates": list(growth_rates(path)),
         "margin_path": {"start": start, "target": target.value, "by_year": list(v.margins)},
-        "target_margin": _target_intermediates(target),
+        "target_margin": _target_intermediates(target, i.peer_source),
         **rebuild,
         "revenue_by_year": list(v.revenue),
         "ebit_by_year": list(v.ebit),
@@ -280,6 +286,8 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     if value <= 0:
         return Refused(_NOT_POSITIVE, flags, im | implied_margin_at_price(im, c.price, policy))
     im |= revenue_at_price(im, c.price, value, policy)
+    industry = _peer_industry(c)
+    of_industry = "" if industry is None else f" of the {industry} industry"
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "ntm_revenue", ntm, "USD", "estimates_quarter"),
@@ -289,7 +297,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
             c,
             "target_margin",
             target.value,
-            f"the median ten-year operating margin of {target.count} mature peers",
+            f"the median ten-year operating margin of {target.count} mature peers{of_industry}",
         ),
         _sales_to_capital_input(c, s2c),
         data(i, "debt", i.debt, "USD", "statements"),
@@ -492,6 +500,29 @@ def _bridge_flags(c: Context) -> tuple[Flag, ...]:
     )
 
 
+def _peer_industry(c: Context) -> str | None:
+    """The industry the peers came from on the industry fallback; ``None`` on FMP's list."""
+    source = c.inputs.peer_source
+    return source.industry if source is not None and source.kind == "industry" else None
+
+
+def _from_industry(c: Context) -> Flag | None:
+    """``peers-from-industry`` when the peers are the industry fallback's, naming FMP's count, the
+    industry and the count taken."""
+    source, policy = c.inputs.peer_source, c.policy
+    if source is None or source.kind != "industry":
+        return None
+    n, k = source.fmp_counted, len(c.inputs.peers)
+    return Flag(
+        "peers-from-industry",
+        "Industry peers",
+        f"FMP's peer list leaves {n} mature peer{'' if n == 1 else 's'} with a margin on "
+        f"{policy.peer_margin_min_years} years or more, fewer than {policy.peer_min}, so the "
+        f"peers are the {k} largest mature companies of the {source.industry} industry in the "
+        "universe.",
+    )
+
+
 def _return_above_peers(new_capital: float, peer_roic: float | None) -> Flag | None:
     """``return-above-peers`` when the return on new capital at the target is above the peers'
     median ROIC (Damodaran's implied-ROIC check); ``None`` without a median."""
@@ -522,7 +553,9 @@ def _value_spread(by_margin: dict[str, float], target: TargetMargin, policy: Pol
     return value_spread_flag(list(by_margin.values()), policy, _MARGINS_TESTED)
 
 
-def _target_intermediates(target: TargetMargin) -> dict[str, Any]:
+def _target_intermediates(target: TargetMargin, source: PeerSource | None) -> dict[str, Any]:
+    """The target margin's figures, its counted peers, and the peers' source: ``"fmp"`` with no
+    industry unless they are the industry fallback's."""
     return {
         "value": target.value,
         "count": target.count,
@@ -534,6 +567,8 @@ def _target_intermediates(target: TargetMargin) -> dict[str, Any]:
             {"symbol": p.symbol, "margin": p.margin, "market_cap": p.market_cap}
             for p in target.peers
         ],
+        "source": "fmp" if source is None else source.kind,
+        "industry": None if source is None else source.industry,
     }
 
 
@@ -558,8 +593,17 @@ def _cap_input(policy: Policy, sales: BaseRateClass, binds: bool) -> TaggedInput
 
 
 def _from_peers(c: Context, name: str, value: float | None, note: str) -> TaggedInput:
-    """A DATA input read from the mature peers' figures, cited to the peers call and statements."""
-    return replace(data(c.inputs, name, value, "ratio", note=note), provenance=_PEERS)
+    """A DATA input read from the mature peers' figures, cited to the peers call and statements, or
+    on the industry fallback to the universe's industry and the peers' statements."""
+    industry = _peer_industry(c)
+    provenance = (
+        _PEERS
+        if industry is None
+        else Provenance(
+            f"the universe's {industry} industry and the peers' statements", None, None, None
+        )
+    )
+    return replace(data(c.inputs, name, value, "ratio", note=note), provenance=provenance)
 
 
 def _sales_to_capital_input(c: Context, s2c: _SalesToCapital) -> TaggedInput:
@@ -569,9 +613,9 @@ def _sales_to_capital_input(c: Context, s2c: _SalesToCapital) -> TaggedInput:
         return from_capital(
             c.inputs, "sales_to_capital", s2c.value, "the company's own five-year marginal measure"
         )
-    return _from_peers(
-        c, "sales_to_capital", s2c.value, "the mature peers' median; the own measure is not usable"
-    )
+    industry = _peer_industry(c)
+    median = "the mature peers' median" + ("" if industry is None else f" ({industry} industry)")
+    return _from_peers(c, "sales_to_capital", s2c.value, f"{median}; the own measure is not usable")
 
 
 def _rebuilt_path(im: dict[str, Any], policy: Policy) -> RevenuePath:

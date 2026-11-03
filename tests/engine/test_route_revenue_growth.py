@@ -4,6 +4,7 @@ price refresh rebuilding every price-side figure from the intermediates."""
 
 from dataclasses import replace
 from datetime import date
+from typing import Any
 
 import pytest
 from support.engine_companies import annual, capital_years, fiscal_years
@@ -13,6 +14,7 @@ from fairband.engine.revenue_growth import (
     Bridge,
     MarginPath,
     PeerFigures,
+    PeerSource,
     RevenueCharge,
     RevenuePath,
     revenue_valuation,
@@ -90,6 +92,11 @@ CAP_NOTE = (
     "the Base Rate Book's 90th-percentile five-year sales growth for the $7,000-12,000 Mn sales "
     "class; "
 )
+# The fixture's three peers as the industry fallback's, FMP's list having left one that counts.
+INDUSTRY = "Specialty Industrial Machinery"
+FROM_INDUSTRY = PeerSource("industry", INDUSTRY, 1)
+INDUSTRY_SOURCE = "the universe's Specialty Industrial Machinery industry and the peers' statements"
+FMP_SOURCE = "FMP stock-peers and the peers' statements"
 PRICE_KEYS = (
     "implied_growth",
     "implied_margin",
@@ -179,10 +186,12 @@ def test_high_growth_is_valued_on_the_revenue_route(
 def test_flags_follow_the_spec_order(
     high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    """The path's, the capital build's, the tax carry, the implied-return check, the trailing
-    flags and the value spread, each code once."""
+    """The path's, the capital build's, the bridge's, the industry peers, the tax carry, the
+    implied-return check, the trailing flags and the value spread, each code once."""
     thin = (*high_growth_inputs.annual_estimates[:2],)  # fiscal 2029 missing: the path holds
-    inputs = replace(high_growth_inputs, annual_estimates=thin, cash=None)
+    inputs = replace(
+        high_growth_inputs, annual_estimates=thin, cash=None, peer_source=FROM_INDUSTRY
+    )
     r = value_company(inputs, deciles, policy, TODAY)
     route_codes = [c for c in codes(r) if c not in {f.code for f in r.phase.checks}]
     assert route_codes == [
@@ -190,6 +199,7 @@ def test_flags_follow_the_spec_order(
         "consensus-above-base-rate",
         "roic-on-n-years",
         "line-not-presented:cash",
+        "peers-from-industry",
         "tax-loss-history-unknown",
         "return-above-peers",
         "equity-raise",
@@ -299,6 +309,89 @@ def test_peers_sales_to_capital_when_the_own_measure_is_not_usable(
     }
     [s2c] = [i for i in r.inputs if i.name == "sales_to_capital"]
     assert s2c.value == pytest.approx(2.5) and s2c.note is not None and "peers" in s2c.note
+
+
+def _without_source(im: dict[str, Any]) -> dict[str, Any]:
+    target = {k: v for k, v in im["target_margin"].items() if k not in ("source", "industry")}
+    return {**im, "target_margin": target}
+
+
+def test_peers_from_the_industry_change_words_not_figures(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The fixture's peers as the industry's: the row is flagged, and its target margin and the
+    peer-cited inputs name the industry; every figure is the one FMP's peers give."""
+    unchanged = value_company(high_growth_inputs, deciles, policy, TODAY)
+    from_fmp = replace(high_growth_inputs, peer_source=PeerSource("fmp", None, 3))
+    fmp = value_company(from_fmp, deciles, policy, TODAY)
+    r = value_company(
+        replace(high_growth_inputs, peer_source=FROM_INDUSTRY), deciles, policy, TODAY
+    )
+    assert sentence(r, "peers-from-industry") == (
+        "FMP's peer list leaves 1 mature peer with a margin on 5 years or more, fewer than 3, so "
+        "the peers are the 3 largest mature companies of the Specialty Industrial Machinery "
+        "industry in the universe."
+    )
+    assert [f.word for f in r.flags if f.code == "peers-from-industry"] == ["Industry peers"]
+    assert "peers-from-industry" not in codes(fmp) + codes(unchanged)
+    tm = r.intermediates["target_margin"]
+    assert (tm["source"], tm["industry"]) == ("industry", INDUSTRY)
+    for row in (unchanged, fmp):
+        tm = row.intermediates["target_margin"]
+        assert (tm["source"], tm["industry"]) == ("fmp", None)
+    # the source changes words, not figures
+    assert r.value == fmp.value == unchanged.value and r.levels == fmp.levels
+    assert _without_source(r.intermediates) == _without_source(fmp.intermediates)
+    target, fmp_target = input_named(r, "target_margin"), input_named(fmp, "target_margin")
+    assert target.provenance.source == INDUSTRY_SOURCE
+    assert target.note == (
+        "the median ten-year operating margin of 3 mature peers of the Specialty Industrial "
+        "Machinery industry"
+    )
+    assert fmp_target.provenance.source == FMP_SOURCE
+    assert fmp_target.note == "the median ten-year operating margin of 3 mature peers"
+    assert target.value == fmp_target.value
+    # the own measure is the statements', whatever the peers' source
+    assert input_named(r, "sales_to_capital") == input_named(fmp, "sales_to_capital")
+
+
+def test_the_peers_sales_to_capital_names_the_industry(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    short = replace(high_growth_inputs, capital_years=high_growth_inputs.capital_years[-4:])
+    fmp = value_company(short, deciles, policy, TODAY)
+    r = value_company(replace(short, peer_source=FROM_INDUSTRY), deciles, policy, TODAY)
+    s2c, fmp_s2c = input_named(r, "sales_to_capital"), input_named(fmp, "sales_to_capital")
+    assert s2c.provenance.source == INDUSTRY_SOURCE
+    assert s2c.note == (
+        "the mature peers' median (Specialty Industrial Machinery industry); the own measure is "
+        "not usable"
+    )
+    assert fmp_s2c.provenance.source == FMP_SOURCE
+    assert fmp_s2c.note == "the mature peers' median; the own measure is not usable"
+    assert s2c.value == fmp_s2c.value == pytest.approx(2.5) and r.value == fmp.value
+
+
+def test_rows_refused_on_industry_peers_carry_the_flag(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The industry's mature companies can fall short too: the refusal keeps its wording and
+    counts them, and the row is flagged, as is a row refused for its sales-to-capital."""
+    hg = high_growth_inputs
+    two = replace(hg, peers=hg.peers[:2], peer_source=PeerSource("industry", INDUSTRY, 0))
+    r = value_company(two, deciles, policy, TODAY)
+    assert_refused(r, "no target margin: 2 mature peers")
+    assert codes(r)[-1] == "peers-from-industry"
+    assert sentence(r, "peers-from-industry") == (
+        "FMP's peer list leaves 0 mature peers with a margin on 5 years or more, fewer than 3, so "
+        "the peers are the 2 largest mature companies of the Specialty Industrial Machinery "
+        "industry in the universe."
+    )
+    peers = tuple(replace(p, sales_to_capital=None) for p in hg.peers)
+    short = replace(hg, peers=peers, capital_years=hg.capital_years[-4:])
+    r = value_company(replace(short, peer_source=FROM_INDUSTRY), deciles, policy, TODAY)
+    assert_refused(r, "no sales-to-capital")
+    assert codes(r)[-1] == "peers-from-industry"
 
 
 def test_path_held_flag_and_few_analysts(

@@ -28,7 +28,7 @@ share count) is ``inputs_statements``; its docstring states those rules. ``build
   investments, from the newest annual balance sheet: a line it does not present counts as nil and
   is named in the input's note (``"longTermDebt not presented"``), and with both lines missing the
   figure is ``None``;
-- the peers: ``peers.peer_figures`` on the given deciles; none without them.
+- the peers and their source: ``peers.peer_figures`` on the given deciles; none without them.
 
 ``provenance`` holds an entry under each key the route cites (``route`` module docstring) whose
 input the store supplied; an input it did not supply has none and cites "unknown". The source names
@@ -109,7 +109,7 @@ def build_inputs(
     deciles: Deciles | None = None,
 ) -> CompanyInputs:
     """Everything the engine reads for ``symbol``, from the store; ``deciles`` classify its peers,
-    and without them it has none. No assembly rule reads the policy yet."""
+    and without them it has none. Only the peers read the policy, for the industry fallback."""
     company = latest_company(conn, symbol)
     country, origin = country_for(conn, symbol, company)
     stated = statements_for(conn, symbol, country, tax, today)
@@ -143,6 +143,7 @@ def build_inputs(
     sums = {name: _sum_lines(lines, names) for name, names in _BALANCE_SUMS.items()}
     notes = _tax_note(country, origin, stated)
     notes.update({name: note for name, (_, note) in sums.items() if note is not None})
+    peers = peer_figures(conn, symbol, deciles, policy, tax, today)
     return CompanyInputs(
         symbol=symbol,
         name=company.name if company is not None and company.name else symbol,
@@ -171,7 +172,8 @@ def build_inputs(
         refusal=stated.refusal or (None if foreign else stated.tax_refusal),
         estimate_methods=stated.estimate_methods,
         notes=notes,
-        peers=peer_figures(conn, symbol, deciles, policy, tax, today),
+        peers=peers.figures,
+        peer_source=peers.source,
         debt=sums["debt"][0],
         cash=sums["cash"][0],
     )

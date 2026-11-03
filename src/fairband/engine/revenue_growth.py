@@ -49,13 +49,15 @@ The peer figures are the mature peers'. The target margin is the median of the t
 aggregate operating margins of the peers with at least the policy's minimum years of margin, with
 the lowest, the highest and the largest such peer's by market cap; there is none below the
 policy's peer minimum. The peers' sales-to-capital is the median of the positive ones, none below
-the peer minimum; the peers' ROIC is the median of those known.
+the peer minimum; the peers' ROIC is the median of those known. ``Peers`` holds the figures with
+their source, FMP's list or the company's industry (``PeerSource``).
 """
 
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from itertools import accumulate, pairwise
+from typing import Literal
 
 from fairband.engine.mature_growth import solve_root, terminal_multiple
 from fairband.engine.roic import RoicYear, terminal_roic
@@ -327,6 +329,26 @@ class PeerFigures:
     margin_years: int
     sales_to_capital: float | None
     roic: float | None
+
+
+@dataclass(frozen=True)
+class PeerSource:
+    """Where the peers came from: FMP's ``stock-peers`` list (``"fmp"``, ``industry`` ``None``) or
+    the company's FMP industry (``"industry"``, named), and how many of FMP's kept peers count for
+    the target margin (``margin_peers``' rule)."""
+
+    kind: Literal["fmp", "industry"]
+    industry: str | None
+    fmp_counted: int
+
+
+@dataclass(frozen=True)
+class Peers:
+    """A company's mature peers with their figures, and their source (``None`` without deciles to
+    classify any)."""
+
+    figures: tuple[PeerFigures, ...]
+    source: PeerSource | None
 
 
 @dataclass(frozen=True)

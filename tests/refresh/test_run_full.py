@@ -43,14 +43,15 @@ from fairband.web.app import create_app
 
 RATE_LIMITED = "data fetch incomplete: rate limited"
 # NEWT is Young Growth: its peers list (ACME's, the symbol changed) names no mature company of the
-# fixture universe, so the revenue-growth route has no target margin.
+# fixture universe, nor has its industry one, so the revenue-growth route has no target margin.
 NO_TARGET = "no target margin: 0 mature peers"
 FOREIGN = "foreign filer: currency and share-unit handling not built yet"
 # The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused. Every company
 # carries a flag (the synthetic company has no leases on its balance sheet, among others), but
 # only ACME, AXLE (margin direction) and NEWT (growth word, free cash flow) are flagged by a
 # classifier check. NEWT's refusal for its target margin keeps the flags of its revenue path (the
-# annual consensus has no revenue for a path year, so the path holds) and of its capital build.
+# annual consensus has no revenue for a path year, so the path holds), of its capital build, and
+# of the industry fallback for its peers.
 CALIBRATION = {
     "total": 4,
     "valued": 3,
@@ -76,6 +77,7 @@ CALIBRATION = {
         "margin-direction-disagrees": 2,
         "path-held": 1,
         "path-on-eps": 2,
+        "peers-from-industry": 1,
         "sbc-basis-unknown": 2,
         "value-spread": 2,
     },

@@ -64,9 +64,9 @@ three.
 - Revenue growth (High Growth and Young Growth): ``ntm_revenue``, ``path`` (base_year, analysts,
   held, sales_class, cap), ``path_steps``, ``revenue_path``, ``growth_rates`` (years 1 to 10),
   ``margin_start``, ``margin_path`` (start, target, by_year), ``target_margin`` (value, count, low,
-  high, largest_symbol, largest_margin, peers), ``tax_rate``, ``moat``, ``sales_to_capital`` (used,
-  own, own_usable, peers, value), ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``,
-  ``nopat_by_year``, ``reinvestment_by_year``, ``fcff_by_year``, ``terminal_roic``,
+  high, largest_symbol, largest_margin, peers, source, industry), ``tax_rate``, ``moat``,
+  ``sales_to_capital`` (used, own, own_usable, peers, value), ``revenue_by_year``, ``ebit_by_year``,
+  ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``, ``fcff_by_year``, ``terminal_roic``,
   ``terminal_nopat`` (year 10's operating income at the full tax rate), ``terminal_value``,
   ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``, ``value_per_share``,
   ``value_by_margin`` ("low", "median", "high": the peers' lowest, median and highest margins),
@@ -88,7 +88,7 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
 from fairband.engine.classifier import Deciles, Series, classify
 from fairband.engine.levels import levels_for, stance3, stance5
-from fairband.engine.revenue_growth import PeerFigures
+from fairband.engine.revenue_growth import PeerFigures, PeerSource
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route_mature_growth import growth_at_price, long_runway, value_mature_growth
 from fairband.engine.route_mature_stable import stable_at_price, value_mature_stable
@@ -122,8 +122,9 @@ class CompanyInputs:
     """Everything the engine reads for one company, as assembly built it from the store.
     ``estimate_methods`` maps an input name to the method assembly estimated it by, and
     ``notes`` an input name to the note assembly wrote for it. ``peers`` are the company's mature
-    peers with their figures, ``debt`` and ``cash`` the newest annual balance sheet's (``None``
-    unknown); the revenue-growth route reads them, and none is stored with a result."""
+    peers with their figures and ``peer_source`` where they came from, ``debt`` and ``cash`` the
+    newest annual balance sheet's (``None`` unknown); the revenue-growth route reads them, and
+    none is stored with a result."""
 
     symbol: str
     name: str
@@ -153,6 +154,7 @@ class CompanyInputs:
     estimate_methods: dict[str, str] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
     peers: tuple[PeerFigures, ...] = ()
+    peer_source: PeerSource | None = None
     debt: float | None = None
     cash: float | None = None
 

@@ -8,10 +8,19 @@ newest refresh that admitted any (``latest_companies``, read once per call), and
 years classify as one of the two on the given deciles (on the spot, so the order of companies
 within a refresh does not matter). A peer the latest universe does not list (never listed, not
 admitted, or admitted only by an older universe, its newest row eligible but stale), without
-statements, unclassified or in another phase is dropped. Without deciles, a stored payload or a
-peer, the company has none.
+statements, unclassified or in another phase is dropped. Without deciles the company has none.
 
-Each kept peer's figures come from its stored statements:
+The industry fallback (growth routes spec 5.5): when FMP's kept peers leave fewer than
+``peer_min`` that count for the target margin (``margin_peers``), the peers are instead the
+largest ``industry_peer_max`` companies of the latest universe whose row carries the company's own
+industry, the company itself excluded, that classify on the spot as Mature Growth or Mature Stable;
+the largest by market cap first, a company without one last, ties in symbol order. FMP's kept
+peers are dropped, not merged. The industry is the company's latest universe row's
+(``latest_company``); without that row or an industry on it there is no fallback. Without a stored
+payload FMP's list is empty and the fallback applies. ``Peers.source`` names the list taken and
+FMP's count.
+
+Each peer's figures, FMP's or the industry's, come from its stored statements:
 
 - its margin: the ten-year aggregate operating margin, Σ operating income ÷ Σ revenue over its last
   ten fiscal years with both and a positive revenue, and the count of those years; ``None`` with
@@ -30,7 +39,7 @@ from collections.abc import Sequence
 from datetime import date
 
 from fairband.engine.classifier import Deciles, Series, classify
-from fairband.engine.revenue_growth import PeerFigures
+from fairband.engine.revenue_growth import PeerFigures, Peers, PeerSource, margin_peers
 from fairband.engine.roic import RoicYear, aggregate_roic
 from fairband.engine.types import Phase
 from fairband.policy import Policy
@@ -41,7 +50,7 @@ from fairband.refresh.inputs_statements import (
     statements_for,
     stored_payload,
 )
-from fairband.store.companies import CompanyRow, latest_companies
+from fairband.store.companies import CompanyRow, latest_companies, latest_company
 from fairband.vendors.normalize_fmp import peer_symbols
 
 _MATURE: frozenset[Phase | None] = frozenset({"Mature Growth", "Mature Stable"})
@@ -55,22 +64,46 @@ def peer_figures(
     policy: Policy,
     tax: TaxTable,
     today: date,
-) -> tuple[PeerFigures, ...]:
-    """``symbol``'s mature peers with their figures, in the stored payload's order. No rule here
-    reads the policy yet."""
+) -> Peers:
+    """``symbol``'s mature peers with their figures and their source: FMP's, in the stored
+    payload's order, unless they leave fewer than ``peer_min`` that count for the target margin;
+    then the industry's."""
     if deciles is None:
-        return ()
-    peers = peer_symbols(stored_payload(conn, "peers", symbol), symbol)
-    universe = {company.symbol: company for company in latest_companies(conn)} if peers else {}
+        return Peers((), None)
+    universe = latest_companies(conn)
+    by_symbol = {company.symbol: company for company in universe}
     kept = []
-    for peer in peers:
-        company = universe.get(peer)
+    for peer in peer_symbols(stored_payload(conn, "peers", symbol), symbol):
+        company = by_symbol.get(peer)
         if company is None:
             continue
         series = series_for(conn, peer)
         if classify(series, deciles).phase in _MATURE:
             kept.append(_figures(conn, company, series, tax, today))
-    return tuple(kept)
+    counted = len(margin_peers(kept, policy))
+    fmp = Peers(tuple(kept), PeerSource("fmp", None, counted))
+    if counted >= policy.peer_min:
+        return fmp
+    own = latest_company(conn, symbol)
+    if own is None or own.industry is None:
+        return fmp
+    candidates = sorted(
+        (c for c in universe if c.industry == own.industry and c.symbol != symbol), key=_by_size
+    )
+    taken: list[PeerFigures] = []
+    for company in candidates:  # classified in size order, until enough are taken
+        if len(taken) == policy.industry_peer_max:
+            break
+        series = series_for(conn, company.symbol)
+        if classify(series, deciles).phase in _MATURE:
+            taken.append(_figures(conn, company, series, tax, today))
+    return Peers(tuple(taken), PeerSource("industry", own.industry, counted))
+
+
+def _by_size(company: CompanyRow) -> tuple[bool, float, str]:
+    """The largest market cap first, a company without one last, ties in symbol order."""
+    cap = company.market_cap
+    return (cap is None, 0.0 if cap is None else -float(cap), company.symbol)
 
 
 def _figures(

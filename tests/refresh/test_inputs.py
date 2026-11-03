@@ -470,8 +470,10 @@ def test_inputs_carry_peers_debt_cash_and_the_revenue_analysts(
     [first] = [r for r in json.loads(fixture.read_text()) if r["date"] == "2026-12-31"]
     assert i.annual_estimates[0].analysts_revenue == first["numAnalystsRevenue"]
     assert [p.symbol for p in i.peers] == ["BOLT"]
-    assert i.peers == peer_figures(conn, "ACME", DECILES, policy, tax, TODAY)
-    assert build_inputs(conn, "ACME", policy, tax, TODAY).peers == ()  # no deciles: no peers
+    peers = peer_figures(conn, "ACME", DECILES, policy, tax, TODAY)
+    assert (i.peers, i.peer_source) == (peers.figures, peers.source)
+    no_deciles = build_inputs(conn, "ACME", policy, tax, TODAY)
+    assert (no_deciles.peers, no_deciles.peer_source) == ((), None)  # no deciles: no peers
 
 
 def test_debt_and_cash_read_the_newest_balance_sheet(store: Store) -> None:
