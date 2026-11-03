@@ -83,7 +83,7 @@ already in the stored statements (section 11).
 
 ## 4. Anti-goals
 
-- A designation that embeds a judgment: no moat, no margin of safety, no colour that says "act".
+- A designation that embeds a judgment: no moat, no margin of safety, no verdict colour. A colour on one gradient from well below to well above is a scale, not a verdict (founder 2026-11-03, section 7.3).
 - A distress-sale value above the going-concern value: the distress weighting must never raise
   a value.
 - A classifier that reads age, a founding date or a listing date: the phases stay Damodaran's,
@@ -331,7 +331,7 @@ under 0.5, read by the screen until the revalue replaces them) and ignores them.
 ### 7.3 The screen
 
 - The `stance` column becomes the `designation` column: head "Price vs value", the word as a
-  chip in the design system's chip style with no stance colour (anti-goal 1); sortable, the sort
+  chip in the design system's chip style, coloured on one gradient from the design system's scales (founder 2026-11-03): well below `--chart-pos-3`, below `--chart-pos-2`, near `--ink-muted`, above `--chart-neg-2`, well above `--chart-neg-3`, the same in both themes through the tokens; sortable, the sort
   key `priceToValue` ascending by the ratio, rows without one last. Default columns: `ticker`,
   `name`, `phase`, `band`, `mechanical`, `reviewed`, `price`, `designation`.
 - The filter menu's STANCE section becomes PRICE VS VALUE with the five words.
@@ -1002,6 +1002,7 @@ its full `deadline_s` from t = 55.
 | 2026-11-03 | The table controls scroll with the table header; a control returns to the top. Founder. |
 | 2026-11-03 | The spec is written from what was settled, without the brainstorm's questions. Founder. The calls marked *my call*: the limiter's rate and hold; the established test (three of five); the duration test (three of four); the six excluded industries; the designation edges (0.65 in place of the 0.70 mentioned); the run-off's same-year release; the recovery 0.6; the distress-sale fraction 0.6 (choice (a), not design.md's earnings-power form); BB+ as BB; π = 0 with net cash; the burn cover flag at 2 years; the requirement as year-10 revenue on a straight ramp. |
 | 2026-11-03 | A manual admission list for payment companies that do not lend: Visa, Mastercard and Global Payments; American Express and PayPal lend and stay excluded. Founder. |
+| 2026-11-03 | The five designations are colour coded on one gradient of the design system's teal and terracotta scales, near in muted grey (7.3). Founder, after the first screen under 0.6; built in plan B's drawer task. |
 | 2026-11-03 | Two plans: method 0.6 for the limiter, the classifier, the designation and the controls; 0.7 for the routes; policy v5 for both. Claude's call at planning. |
 | 2026-11-03 | After the builder check: the Decline margin is the five-year median (10.3) and the rating reads it (10.7), so a one-year loss does not refuse an established decliner; the π rules are ordered (net cash, no interest, D); the industry exclusions take effect at the full refresh (6.4); the backfill runs before every valuing refresh (11). Claude's calls. |
 | 2026-11-03 | The 429 hold is capped at `rate_limit_hold_s` (the final review found an unbounded vendor value could hold every worker or overflow the clock). Claude's call. |
