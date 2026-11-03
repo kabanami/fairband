@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 
-from fairband.store.facts import FactRow, facts_for, insert_facts
+from fairband.store.facts import FactRow, facts_for, fields_stored, insert_facts
 
 T0 = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
 T1 = datetime(2026, 11, 1, 9, 31, tzinfo=UTC)
@@ -100,3 +100,19 @@ def test_insert_facts_is_one_transaction(
         )
     assert not conn.in_transaction
     assert facts_for(conn, "AAPL", "income-annual") == []
+
+
+def test_fields_stored(conn: sqlite3.Connection, new_response: Callable[[], int]) -> None:
+    first, second = new_response(), new_response()
+    insert_facts(
+        conn,
+        [
+            _fact(first, FY24, "revenue", "1"),
+            _fact(first, FY25, "revenue", "2"),
+            _fact(first, FY25, "eps", None),  # a field without a value is stored too
+            _fact(second, FY25, "netIncome", "3"),
+        ],
+    )
+    assert fields_stored(conn, first) == {"revenue", "eps"}
+    assert fields_stored(conn, second) == {"netIncome"}
+    assert fields_stored(conn, second + 1) == set()

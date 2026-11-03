@@ -1,4 +1,5 @@
-"""The statement side of assembly: fiscal years, capital years, the tax rate and trailing figures.
+"""The statement side of assembly: fiscal years, capital years, balance years, the tax rate and
+trailing figures.
 
 Fiscal years run from the newest annual income period back, at most eleven (spec 6.5), one per
 fiscal year with none skipped: a year the vendor data lacks keeps its place with no values, so the
@@ -15,6 +16,10 @@ lease lines come from the as-reported balance sheet only. A balance sheet ending
 2019, when lease accounting (ASC 842) put operating leases on it, without lease assets flags
 ``leases-not-on-balance-sheet``; nothing is reconstructed (D3a's limitation, stated).
 
+Balance years (spec 2026-11-03 10.6 and 10.8): one per fiscal year of the series with an annual
+balance sheet, oldest first, its lines by FMP name beside that fiscal year's income statement and
+cash flow; a year without a balance sheet has none.
+
 The tax rate is the OECD statutory rate for the company's country and fiscal year (D3, D9). A rate
 carried past the table's newest year flags ``tax-carried-forward`` and makes ``tax_rate_latest``
 an estimate. The first year with an operating income and no rate gives ``tax_refusal``; a year
@@ -25,6 +30,9 @@ else ``"unknown"``.
 Trailing figures (spec 6.6): the sums of the last four quarters when each ends 80 to 100 days after
 the one before (the anchor's rule), joined to the quarterly cash flow by period end, a sum ``None``
 when any quarter lacks its part; else the last fiscal year, flagged ``trailing-on-fiscal-year``.
+The interest expense and the depreciation and amortization (spec 2026-11-03 section 11) sum the
+same periods but only those that present the line, ``None`` when none does; the interest expense
+counts each period by its size, as FMP signs it either way.
 The diluted share count is the newest quarter's weighted average, else the newest fiscal year's.
 
 ``balance_lines`` reads the newest annual balance sheet's lines by FMP name, and
@@ -40,6 +48,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from fairband.engine.anchor import TrailingFigures, consecutive_quarters
+from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import FiscalYear, Series
 from fairband.engine.roic import CapitalYear
 from fairband.engine.types import Flag, Provenance
@@ -112,6 +121,7 @@ class Statements:
     calendar: FiscalCalendar | None
     series: Series
     capital_years: tuple[CapitalYear, ...]
+    balance_years: tuple[BalanceYear, ...]
     tax_rate_latest: float | None
     trailing: TrailingFigures | None
     trailing_quarter_ends: tuple[date, ...]  # empty on the fiscal-year fallback
@@ -193,6 +203,7 @@ def statements_for(
             calendar=None,
             series=(),
             capital_years=(),
+            balance_years=(),
             tax_rate_latest=None,
             trailing=None,
             trailing_quarter_ends=(),
@@ -238,6 +249,7 @@ def statements_for(
         calendar=years.calendar,
         series=_series(years, cash),
         capital_years=capital,
+        balance_years=_balance_years(years, balance, cash),
         tax_rate_latest=None if newest_rate is None else newest_rate.rate,
         trailing=trailing,
         trailing_quarter_ends=quarter_ends,
@@ -346,6 +358,38 @@ def _capital_years(
     return tuple(rows), methods
 
 
+def _balance_years(
+    years: _Years, balance: dict[int, _Period], cash: dict[date, _Period]
+) -> tuple[BalanceYear, ...]:
+    rows = []
+    for year in years.span:
+        sheet = balance.get(year)
+        if sheet is None:
+            continue
+        income = years.income.get(year, _NONE)
+        flows = cash.get(income.end, _NONE)
+        rows.append(
+            BalanceYear(
+                year=year,
+                period_end=sheet.end,
+                total_current_assets=sheet.value("totalCurrentAssets"),
+                total_current_liabilities=sheet.value("totalCurrentLiabilities"),
+                total_assets=sheet.value("totalAssets"),
+                total_liabilities=sheet.value("totalLiabilities"),
+                retained_earnings=sheet.value("retainedEarnings"),
+                equity=sheet.value("totalStockholdersEquity"),
+                long_term_debt=sheet.value("longTermDebt"),
+                revenue=income.value("revenue"),
+                gross_profit=income.value("grossProfit"),
+                operating_income=income.value("operatingIncome"),
+                net_income=income.value("netIncome"),
+                cfo=flows.value(_CFO),
+                stock_issued=flows.value("commonStockIssuance"),
+            )
+        )
+    return tuple(rows)
+
+
 def _trailing(
     years: _Years,
     cash: dict[date, _Period],
@@ -374,6 +418,8 @@ def _trailing(
         dividends=_total(flows, "netDividendsPaid"),
         buybacks=_total(flows, "commonStockRepurchased"),
         equity_issued=_total(flows, "commonStockIssuance"),
+        interest_expense=_presented(incomes, "interestExpense", size=True),
+        depreciation=_presented(flows, "depreciationAndAmortization"),
     )
     return figures, () if on_fiscal_year else tuple(q.end for q in incomes)
 
@@ -475,6 +521,13 @@ def _total(periods: Sequence[_Period], name: str) -> float | None:
     """The sum over the periods; ``None`` when any of them lacks the value."""
     values = [v for p in periods if (v := p.value(name)) is not None]
     return sum(values) if len(values) == len(periods) else None
+
+
+def _presented(periods: Sequence[_Period], name: str, size: bool = False) -> float | None:
+    """The sum over the periods that present a value, each by its size with ``size``; ``None``
+    when none does."""
+    values = [abs(v) if size else v for p in periods if (v := p.value(name)) is not None]
+    return sum(values) if values else None
 
 
 def _carried(currencies: Sequence[str | None]) -> list[str]:

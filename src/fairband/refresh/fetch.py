@@ -84,13 +84,14 @@ EARNINGS_ROWS = 12
 # coverage (a foreign filer that reports twice a year, say), and the routes that read it, Mature
 # Growth and the revenue-growth route, refuse an incomplete NTM consensus themselves.
 REQUIRED = frozenset({"income-annual", "balance-annual", "cashflow-annual", "quote"})
+# The five statements; each endpoint is named as the dataset its facts are stored under.
+STATEMENT_ENDPOINTS = frozenset(
+    {"income-annual", "balance-annual", "cashflow-annual", "income-quarter", "cashflow-quarter"}
+)
 NO_GF_KEY = "no GuruFocus key"
 _GF_ENDPOINTS = frozenset({"summary", "keyratios"})
 _DETAIL_CHARS = 80  # of an unusable payload, kept as its error
 _PENDING = 0  # the response id normalized rows carry until their response is recorded
-_STATEMENT_ENDPOINTS = frozenset(
-    {"income-annual", "balance-annual", "cashflow-annual", "income-quarter", "cashflow-quarter"}
-)
 
 type _Rows = tuple[list[FactRow], list[ObservationRow]]
 
@@ -294,7 +295,7 @@ def _rows(
     facts: list[FactRow] = []
     observations: list[ObservationRow] = []
     match endpoint:
-        case _ if endpoint in _STATEMENT_ENDPOINTS:  # the endpoint names the statement dataset
+        case _ if endpoint in STATEMENT_ENDPOINTS:
             facts = statement_facts(payload, symbol, endpoint, _PENDING, observed, now)
         case "balance-asreported-annual":
             facts = as_reported_balance_facts(payload, *source)

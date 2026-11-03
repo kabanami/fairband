@@ -20,6 +20,7 @@
     "totalCurrentLiabilities": 300000000,
     "longTermDebt": 350000000,
     "totalLiabilities": 810000000,
+    "retainedEarnings": 450000000,
     "totalStockholdersEquity": 700000000,
     "totalEquity": 700000000
   },
@@ -44,6 +45,7 @@
     "totalCurrentLiabilities": 290000000,
     "longTermDebt": 360000000,
     "totalLiabilities": 810000000,
+    "retainedEarnings": 400000000,
     "totalStockholdersEquity": 650000000,
     "totalEquity": 650000000
   },
@@ -68,6 +70,7 @@
     "totalCurrentLiabilities": 280000000,
     "longTermDebt": 370000000,
     "totalLiabilities": 810000000,
+    "retainedEarnings": 350000000,
     "totalStockholdersEquity": 600000000,
     "totalEquity": 600000000
   }

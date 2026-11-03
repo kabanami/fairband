@@ -8,6 +8,7 @@ from fairband.store.vendor import (
     latest_response,
     record_response,
     response_payload,
+    responses_with_payload,
 )
 
 T0 = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
@@ -81,6 +82,33 @@ def test_response_payload(conn: sqlite3.Connection) -> None:
     assert response_payload(conn, ok) == '[{"revenue": 1}]'
     assert response_payload(conn, failed) is None
     assert response_payload(conn, failed + 1) is None
+
+
+def test_responses_with_payload(conn: sqlite3.Connection) -> None:
+    """Every usable response to the endpoints, by id: HTTP 200, no error, a payload."""
+    usable = _ok(conn, T0)
+    unusable = "unusable payload: []"
+    record_response(conn, "fmp", "income-statement", ANNUAL, "AAPL", 200, "[]", unusable, T0)
+    record_response(conn, "fmp", "income-statement", ANNUAL, "AAPL", 200, None, None, T0)
+    record_response(conn, "fmp", "income-statement", ANNUAL, "AAPL", 500, "oops", None, T0)
+    record_response(conn, "fmp", "income-statement", ANNUAL, "AAPL", None, None, "timeout", T0)
+    later = T0 + timedelta(hours=1)
+    other = record_response(conn, "fmp", "balance", ANNUAL, "MSFT", 200, "[]", None, later)
+    profile = {"symbol": "AAPL"}
+    record_response(conn, "fmp", "profile", profile, "AAPL", 200, "[]", None, T0)
+    found = list(responses_with_payload(conn, ["income-statement", "balance"]))
+    assert [r.id for r in found] == [usable, other]
+    assert found[1] == ResponseRow(
+        id=other,
+        provider="fmp",
+        endpoint="balance",
+        params=ANNUAL,
+        symbol="MSFT",
+        http_status=200,
+        observed_at=later,
+        error=None,
+    )
+    assert list(responses_with_payload(conn, [])) == []
 
 
 def test_observed_at_is_stored_in_utc(conn: sqlite3.Connection) -> None:

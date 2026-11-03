@@ -19,13 +19,17 @@ from synthetic import (
     add_company,
     balance_annual,
     bodies,
+    cashflow_annual,
+    cashflow_quarter,
     earnings,
     income_annual,
+    income_quarter,
     statement,
 )
 from vendor_double import FIXTURES, Clients, Clock, Router
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
+from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Deciles, FiscalYear
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route import CompanyInputs, value_company
@@ -181,6 +185,8 @@ def test_trailing_from_four_consecutive_quarters(conn_with_company: sqlite3.Conn
         dividends=-40 * M,
         buybacks=-60 * M,
         equity_issued=4 * M,
+        interest_expense=16 * M,  # four quarters of -$4 m, summed by size
+        depreciation=(16 + 17 + 18 + 19) * M,
     )
     assert inputs.street_ttm_eps == pytest.approx(0.51 + 0.52 + 0.53 + 0.54)
     assert inputs.shares_diluted == 104 * M  # the newest quarter's
@@ -213,10 +219,77 @@ def test_trailing_falls_back_when_quarters_not_consecutive(
         dividends=-40 * M,
         buybacks=-60 * M,
         equity_issued=5 * M,
+        interest_expense=10 * M,  # the annual lines
+        depreciation=105 * M,
     )
     assert inputs.street_ttm_eps is None  # the SBC basis stays unknown
     assert "trailing-on-fiscal-year" in codes(inputs)
     assert inputs.shares_diluted == 104 * M
+
+
+def test_interest_expense_is_summed_as_its_size(store: Store) -> None:
+    """FMP signs the interest expense either way: each quarter counts by its size, never netted."""
+    quarters = income_quarter(QUARTERS)
+    for row, interest in zip(quarters[1:], (-5, 5, -5, 5), strict=True):
+        row["interestExpense"] = interest
+    inputs = build(store(**{**bodies(), "income-quarter": quarters}))
+    assert inputs.trailing is not None and inputs.trailing.quarters == 4
+    assert inputs.trailing.interest_expense == 20
+
+
+def test_interest_and_depreciation_sum_the_quarters_that_present_them(store: Store) -> None:
+    """A quarter without the line adds nothing; with every quarter lacking it, the figure is
+    unknown."""
+    quarters = income_quarter(QUARTERS)
+    for row in quarters:
+        del row["interestExpense"]
+    flows = cashflow_quarter(QUARTERS)
+    flows[2]["depreciationAndAmortization"] = None  # the quarter ending 2026-03-31
+    inputs = build(store(**{**bodies(), "income-quarter": quarters, "cashflow-quarter": flows}))
+    assert inputs.trailing is not None and inputs.trailing.quarters == 4
+    assert inputs.trailing.interest_expense is None
+    assert inputs.trailing.depreciation == (16 + 18 + 19) * M
+
+
+def test_balance_years_read_the_lines_by_name(conn_with_company: sqlite3.Connection) -> None:
+    inputs = build(conn_with_company)
+    assert [y.year for y in inputs.balance_years] == list(range(2015, 2026))
+    assert inputs.balance_years[-1] == BalanceYear(
+        year=2025,
+        period_end=date(2025, 12, 31),
+        total_current_assets=710 * M,
+        total_current_liabilities=300 * M,
+        total_assets=1610 * M,
+        total_liabilities=800 * M,
+        retained_earnings=510 * M,
+        equity=810 * M,
+        long_term_debt=300 * M,
+        revenue=2100 * M,
+        gross_profit=840 * M,
+        operating_income=420 * M,
+        net_income=315 * M,
+        cfo=525 * M,
+        stock_issued=5 * M,
+    )
+
+
+def test_balance_years_one_per_fiscal_year_with_a_balance_sheet(store: Store) -> None:
+    """2020 has no balance sheet: no row. 2019 has one but no income statement or cash flow: its
+    balance lines, and none of the others."""
+    payloads = bodies()
+    payloads["balance-annual"] = balance_annual(y for y in YEARS if y != 2020)
+    payloads["income-annual"] = income_annual(y for y in YEARS if y != 2019)
+    payloads["cashflow-annual"] = cashflow_annual(y for y in YEARS if y != 2019)
+    years = {y.year: y for y in build(store(**payloads)).balance_years}
+    assert list(years) == [y for y in range(2015, 2026) if y != 2020]
+    gap = years[2019]
+    assert (gap.period_end, gap.total_assets, gap.retained_earnings) == (
+        date(2019, 12, 31),
+        1550 * M,
+        450 * M,
+    )
+    assert (gap.revenue, gap.gross_profit, gap.operating_income, gap.net_income) == (None,) * 4
+    assert (gap.cfo, gap.stock_issued) == (None, None)
 
 
 def test_tax_rate_estimate_flag_and_refusal(
@@ -446,6 +519,7 @@ def test_no_financial_statements_is_a_refusal(store: Store, router: Router) -> N
     inputs = build(conn)
     assert inputs.refusal == "no financial statements"
     assert (inputs.series, inputs.capital_years, inputs.trailing) == ((), (), None)
+    assert inputs.balance_years == ()
     assert inputs.data_date == TODAY
     assert inputs.price == 50.0  # the market side is still read
 

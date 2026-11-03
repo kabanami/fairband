@@ -55,7 +55,9 @@ def obs(rows: list[ObservationRow], dataset: str, period: str | None, field: str
 
 INCOME = {
     "revenue",
+    "grossProfit",
     "operatingIncome",
+    "interestExpense",
     "netIncome",
     "eps",
     "epsDiluted",
@@ -74,6 +76,9 @@ BALANCE = {
     "intangibleAssets",
     "longTermDebt",
     "totalStockholdersEquity",
+    "totalAssets",
+    "totalLiabilities",
+    "retainedEarnings",
 }
 CASHFLOW = {
     "netCashProvidedByOperatingActivities",
@@ -84,12 +89,13 @@ CASHFLOW = {
     "netDividendsPaid",
     "commonStockRepurchased",
     "commonStockIssuance",
+    "depreciationAndAmortization",
 }
 
 
 def test_income_annual_facts() -> None:
     rows = facts("income-statement.annual.ACME", "ACME", "income-annual")
-    assert len(rows) == 3 * 8
+    assert len(rows) == 3 * 10
     assert {r.field for r in rows} == INCOME
     revenue = fact(rows, "2025-12-31", "revenue")
     assert revenue == FactRow(
@@ -129,7 +135,7 @@ def test_null_statement_field_recorded_absent() -> None:
 
 def test_income_quarter_facts_carry_the_fiscal_labels() -> None:
     rows = facts("income-statement.quarter.BOLT", "BOLT", "income-quarter")
-    assert len(rows) == 2 * 8
+    assert len(rows) == 2 * 10
     first = fact(rows, "2026-09-30", "netIncome")
     assert (first.fiscal_year, first.fiscal_period, first.value) == (2027, "Q1", Decimal(123000000))
     assert first.dataset == "income-quarter"
@@ -137,7 +143,7 @@ def test_income_quarter_facts_carry_the_fiscal_labels() -> None:
 
 def test_balance_annual_facts() -> None:
     rows = facts("balance-sheet-statement.annual.ACME", "ACME", "balance-annual")
-    assert len(rows) == 3 * 10
+    assert len(rows) == 3 * 13
     assert {r.field for r in rows} == BALANCE
     goodwill = fact(rows, "2024-12-31", "goodwill")
     assert (goodwill.value, goodwill.missing_reason) == (Decimal(250000000), None)
@@ -146,7 +152,7 @@ def test_balance_annual_facts() -> None:
 
 def test_vendor_zero_goodwill_becomes_not_presented() -> None:
     rows = facts("balance-sheet-statement.annual.BOLT", "BOLT", "balance-annual")
-    assert len(rows) == 2 * 10
+    assert len(rows) == 2 * 13
     for period_end in ("2026-06-30", "2025-06-30"):
         for field in ("goodwill", "intangibleAssets"):
             row = fact(rows, period_end, field)
@@ -160,15 +166,47 @@ def test_vendor_zero_goodwill_becomes_not_presented() -> None:
 
 def test_cashflow_facts_keep_the_vendor_sign_and_real_zeros() -> None:
     annual = facts("cash-flow-statement.annual.ACME", "ACME", "cashflow-annual")
-    assert len(annual) == 3 * 8
+    assert len(annual) == 3 * 9
     assert {r.field for r in annual} == CASHFLOW
     assert fact(annual, "2025-12-31", "capitalExpenditure").value == Decimal(-90000000)
     issued = fact(annual, "2024-12-31", "commonStockIssuance")
     assert (issued.value, issued.missing_reason) == (Decimal(0), None)
     quarter = facts("cash-flow-statement.quarter.ACME", "ACME", "cashflow-quarter")
-    assert len(quarter) == 3 * 8
+    assert len(quarter) == 3 * 9
     assert fact(quarter, "2026-06-30", "stockBasedCompensation").value == Decimal(6000000)
     assert fact(quarter, "2026-06-30", "stockBasedCompensation").fiscal_period == "Q2"
+
+
+def test_the_six_lines_the_decline_and_start_up_routes_read() -> None:
+    """Gross profit and interest expense on both income statements, total assets, total
+    liabilities and retained earnings on the balance sheet, depreciation and amortization on both
+    cash flows; the interest expense keeps the vendor's sign."""
+    income = facts("income-statement.annual.ACME", "ACME", "income-annual")
+    assert fact(income, "2025-12-31", "grossProfit").value == Decimal(480000000)
+    interest = fact(income, "2025-12-31", "interestExpense")
+    assert (interest.value, interest.unit, interest.dataset) == (
+        Decimal(12000000),
+        "currency",
+        "income-annual",
+    )
+    quarter = facts("income-statement.quarter.ACME", "ACME", "income-quarter")
+    assert fact(quarter, "2026-09-30", "grossProfit").value == Decimal(132000000)
+    assert fact(quarter, "2026-09-30", "interestExpense").value == Decimal(3000000)
+    balance = facts("balance-sheet-statement.annual.ACME", "ACME", "balance-annual")
+    assert fact(balance, "2025-12-31", "totalAssets").value == Decimal(1510000000)
+    assert fact(balance, "2025-12-31", "totalLiabilities").value == Decimal(810000000)
+    assert fact(balance, "2025-12-31", "retainedEarnings").value == Decimal(450000000)
+    annual = facts("cash-flow-statement.annual.ACME", "ACME", "cashflow-annual")
+    assert fact(annual, "2025-12-31", "depreciationAndAmortization").value == Decimal(70000000)
+    flows = facts("cash-flow-statement.quarter.ACME", "ACME", "cashflow-quarter")
+    assert fact(flows, "2026-09-30", "depreciationAndAmortization").value == Decimal(18000000)
+    # BOLT's payloads do not present the retained earnings: no value, the reason null.
+    bolt = facts("balance-sheet-statement.annual.BOLT", "BOLT", "balance-annual")
+    missing = fact(bolt, "2026-06-30", "retainedEarnings")
+    assert (missing.value, missing.missing_reason) == (None, "null")
+    row = {"date": "2025-12-31", "interestExpense": -7}
+    signed = statement_facts([row], "ACME", "income-annual", RID, OBSERVED, ENTERED)
+    assert fact(signed, "2025-12-31", "interestExpense").value == Decimal(-7)
 
 
 def test_unparseable_values_and_malformed_rows() -> None:
@@ -180,7 +218,7 @@ def test_unparseable_values_and_malformed_rows() -> None:
         "not a row",
     ]
     rows = statement_facts(payload, "ACME", "income-annual", RID, OBSERVED, ENTERED)
-    assert len(rows) == 8
+    assert len(rows) == 10
     assert {r.period_end for r in rows} == {date(2025, 12, 31)}
     assert fact(rows, "2025-12-31", "revenue").missing_reason == "unparseable"
     assert fact(rows, "2025-12-31", "operatingIncome").value == Decimal("125.5")

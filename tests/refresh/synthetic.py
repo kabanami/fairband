@@ -24,6 +24,16 @@ QUARTERS = (
     date(2026, 6, 30),
     date(2026, 9, 30),
 )
+# The statement lines the normalizer kept from 2026-11-03: a test drops their facts to stand for a
+# store from before.
+SIX_LINES = (
+    "grossProfit",
+    "interestExpense",
+    "totalAssets",
+    "totalLiabilities",
+    "retainedEarnings",
+    "depreciationAndAmortization",
+)
 
 
 type Payload = list[dict[str, Any]]
@@ -41,14 +51,17 @@ def statement(day: date, fiscal_year: int, period: str, **fields: Any) -> dict[s
 
 
 def income_annual(years: Iterable[int]) -> Payload:
-    """Revenue $1,000 m in 2014, up $100 m a year; the operating margin 20%."""
+    """Revenue $1,000 m in 2014, up $100 m a year; the gross margin 40%, the operating margin
+    20%; an interest expense of $10 m a year."""
     return [
         statement(
             date(y, 12, 31),
             y,
             "FY",
             revenue=(1000 + 100 * k) * M,
+            grossProfit=(400 + 40 * k) * M,
             operatingIncome=(200 + 20 * k) * M,
+            interestExpense=10 * M,
             netIncome=(150 + 15 * k) * M,
             epsDiluted=1.5 + 0.15 * k,
             weightedAverageShsOutDil=100 * M,
@@ -68,6 +81,7 @@ def cashflow_annual(years: Iterable[int]) -> Payload:
             netCashProvidedByInvestingActivities=-(100 + 10 * k) * M,
             netCashProvidedByFinancingActivities=-(120 + 12 * k) * M,
             capitalExpenditure=-(60 + 6 * k) * M,
+            depreciationAndAmortization=(50 + 5 * k) * M,
             stockBasedCompensation=20 * M,
             netDividendsPaid=-40 * M,
             commonStockRepurchased=-60 * M,
@@ -79,7 +93,9 @@ def cashflow_annual(years: Iterable[int]) -> Payload:
 
 
 def balance_annual(years: Iterable[int]) -> Payload:
-    """No short-term investments in 2017; a vendor-zero goodwill in 2018."""
+    """No short-term investments in 2017; a vendor-zero goodwill in 2018. Total assets $1,500 m in
+    2014, up $10 m a year with the current assets, retained earnings and equity; the total
+    liabilities $800 m."""
     return [
         statement(
             date(y, 12, 31),
@@ -87,15 +103,20 @@ def balance_annual(years: Iterable[int]) -> Payload:
             "FY",
             cashAndCashEquivalents=200 * M,
             shortTermInvestments=None if y == 2017 else 50 * M,
-            totalCurrentAssets=(600 + 10 * (y - 2014)) * M,
+            totalCurrentAssets=(600 + 10 * k) * M,
             totalCurrentLiabilities=300 * M,
             shortTermDebt=20 * M,
             longTermDebt=300 * M,
             propertyPlantEquipmentNet=400 * M,
             goodwill=0 if y == 2018 else 250 * M,
             intangibleAssets=260 * M,
+            totalAssets=(1500 + 10 * k) * M,
+            totalLiabilities=800 * M,
+            retainedEarnings=(400 + 10 * k) * M,
+            totalStockholdersEquity=(700 + 10 * k) * M,
         )
         for y in years
+        if (k := y - 2014) >= 0
     ]
 
 
@@ -118,14 +139,17 @@ def balance_as_reported(years: Iterable[int]) -> Payload:
 
 
 def income_quarter(ends: Iterable[date]) -> Payload:
-    """Quarter i of ``QUARTERS``: revenue $300 m + $10 m × i; diluted shares 100 m + 1 m × i."""
+    """Quarter i of ``QUARTERS``: revenue $300 m + $10 m × i; diluted shares 100 m + 1 m × i; an
+    interest expense of $4 m, signed negative (FMP signs it either way)."""
     return [
         statement(
             end,
             end.year,
             f"Q{(end.month + 2) // 3}",
             revenue=(300 + 10 * i) * M,
+            grossProfit=(120 + 4 * i) * M,
             operatingIncome=(60 + 2 * i) * M,
+            interestExpense=-4 * M,
             netIncome=(45 + i) * M,
             epsDiluted=0.45 + 0.01 * i,
             weightedAverageShsOutDil=(100 + i) * M,
@@ -136,7 +160,8 @@ def income_quarter(ends: Iterable[date]) -> Payload:
 
 
 def cashflow_quarter(ends: Iterable[date]) -> Payload:
-    """The third quarter has no stock compensation."""
+    """The third quarter has no stock compensation; depreciation and amortization $15 m + $1 m × i
+    in quarter i."""
     return [
         statement(
             end,
@@ -144,6 +169,7 @@ def cashflow_quarter(ends: Iterable[date]) -> Payload:
             f"Q{(end.month + 2) // 3}",
             netCashProvidedByOperatingActivities=(70 + i) * M,
             capitalExpenditure=-(20 + i) * M,
+            depreciationAndAmortization=(15 + i) * M,
             stockBasedCompensation=None if i == 2 else 5 * M,
             netDividendsPaid=-10 * M,
             commonStockRepurchased=-15 * M,

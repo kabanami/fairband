@@ -22,6 +22,10 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   the store holds, saved under the refresh (spec 6.6). When they rank no company on growth, the run
   ends ``failed``, "deciles rank no company", and saves none: empty deciles would put every later
   company in decile 1, and the last good universe's stay the ones a scoped refresh uses.
+- ``backfill``: ``backfill_statement_facts`` on the run's own connection writes the facts of the
+  statement lines the normalizer gained after their responses were stored, from the stored
+  payloads (spec 2026-11-03 section 11): the fetch reuses a response observed within
+  ``reuse_hours`` without a call, so it may predate a line. The stage reports its start alone.
 - ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs`` and
   ``value_company`` with the latest stored deciles (a full refresh's own; assembly classifies the
   company's peers on them), ``insert_snapshot``; the symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
@@ -31,9 +35,10 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
 A revalue takes no symbols, makes no vendor call and needs no FMP client (calibration spec 5.9): it
 lists the latest universe's admitted companies (``latest_companies``) ``pending``, in symbol order,
 or, before any universe, every company with a snapshot (``latest_snapshots``), as the price
-refresh does; then it runs the ``value`` stage on the facts the store holds, with the latest
-stored deciles, then ``done``. A company the store holds no facts for gets the engine's refusal.
-It saves its ``calibration`` like a full refresh, with no listing left out: it builds no universe.
+refresh does; then it runs the ``backfill`` and the ``value`` stage on the facts the store holds,
+with the latest stored deciles, then ``done``. A company the store holds no facts for gets the
+engine's refusal. It saves its ``calibration`` like a full refresh, with no listing left out: it
+builds no universe.
 
 A symbol's failure never stops the run: an exception from its fetch, assembly or valuation gives it
 a refusal snapshot ("data fetch failed: <class>: <message>" or "valuation failed: <class>:
@@ -50,8 +55,9 @@ same way; the symbol it hit gets the refusal "data fetch incomplete: rate limite
 ``failed`` (spec 6.2: a failed fetch gets a row), the symbols never reached stay ``pending`` with
 no snapshot, the symbols fetched are still valued (on the stored deciles: a full refresh saves
 none), and the run ends ``failed`` with "rate limited by <provider>: stopped after <n> companies",
-n counting the symbols fetched or failed. An exception outside a symbol's
-work ends the run ``failed`` with its class and message, and is raised again.
+n counting the symbols fetched or failed; the backfill runs before that value stage too. An
+exception outside a symbol's work ends the run ``failed`` with its class and message, and is
+raised again.
 
 Why daemon threads: an exception in the fetch stage (a second Ctrl-C in the command) must not wait
 for the fetches in flight, which on a stalled vendor run to minutes (13 FMP and 2 GuruFocus calls,
@@ -65,7 +71,8 @@ counts the fetch threads not ended, so a long-lived caller (the server's worker)
 before it starts another run.
 
 A price refresh takes no symbols; ``run_price.PriceRefresh`` runs its stages (``quotes``,
-``reprice``, ``done``) on the run's connection, and its module docstring says how.
+``reprice``, ``done``) on the run's connection, and its module docstring says how. It values
+nothing and runs no backfill.
 
 ``on_progress`` gets a ``Progress`` at each stage change and after each symbol, and ``on_started``
 the refresh id once the record exists; both run on the thread that called ``run``.
@@ -89,6 +96,7 @@ from fairband.engine.route import refusal_result, value_company
 from fairband.engine.types import PHASE_NUMBER
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
+from fairband.refresh.backfill import backfill_statement_facts
 from fairband.refresh.deciles import deciles_for_universe
 from fairband.refresh.fetch import FetchOutcome, fetch_company, provider_of
 from fairband.refresh.inputs import build_inputs, latest_price
@@ -256,6 +264,7 @@ class Refresh:
             return "failed", NO_COMPANY_RANKED, None
         save_deciles(conn, refresh_id, deciles, self._clock())
         self._report(refresh_id, "deciles", len(symbols), 0)
+        self._backfill(conn, refresh_id)
         valued = self._value_stage(conn, refresh_id, fetched.symbols)
         if valued is None:
             return "cancelled", None, None
@@ -286,6 +295,7 @@ class Refresh:
         stopped = self._stopped(conn, refresh_id, fetched)
         if stopped is not None:
             return stopped
+        self._backfill(conn, refresh_id)
         valued = self._value_stage(conn, refresh_id, fetched.symbols)
         if valued is None:
             return "cancelled", None, None
@@ -296,6 +306,7 @@ class Refresh:
         """The stages of a revalue; the status, message and calibration to finish it with."""
         symbols = _revalue_symbols(conn)
         self._list_pending(conn, refresh_id, symbols)
+        self._backfill(conn, refresh_id)
         valued = self._value_stage(conn, refresh_id, symbols)
         if valued is None:
             return "cancelled", None, None
@@ -324,6 +335,7 @@ class Refresh:
         """How the run ends when the fetch stage stopped early, else ``None``: after a 429 the
         symbols fetched are valued and the run fails; after a cancel it is cancelled."""
         if fetched.limited_by is not None:
+            self._backfill(conn, refresh_id)
             self._value_stage(conn, refresh_id, fetched.symbols)
             reached = len(fetched.symbols) + fetched.failed
             return "failed", rate_limited(fetched.limited_by, reached), None
@@ -425,6 +437,11 @@ class Refresh:
         with self._in_flight_lock:
             self._in_flight += 1
         threading.Thread(target=fetch, name=f"fairband-fetch {symbol}", daemon=True).start()
+
+    def _backfill(self, conn: sqlite3.Connection, refresh_id: int) -> None:
+        """The ``backfill`` stage: the statement facts missing from the stored responses."""
+        self._stage(conn, refresh_id, "backfill", 0)
+        backfill_statement_facts(conn, self._clock())
 
     def _value_stage(
         self, conn: sqlite3.Connection, refresh_id: int, symbols: Sequence[str]

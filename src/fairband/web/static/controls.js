@@ -21,7 +21,8 @@
   var FAILED_REASONS = ['data fetch failed', 'data fetch incomplete', 'valuation failed'];
   /* The server's stage names as the run bar's lowercase verb phrases (spec 4.3). */
   var STAGE_WORDS = {
-    universe: 'reading the universe', deciles: 'ranking', fetch: 'fetching', value: 'valuing',
+    universe: 'reading the universe', deciles: 'ranking', fetch: 'fetching',
+    backfill: 'reading stored statements', value: 'valuing',
     quotes: 'fetching prices', reprice: 'repricing', done: 'finishing'
   };
 

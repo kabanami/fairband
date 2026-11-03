@@ -40,9 +40,9 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 
 | Need | Source | Depth |
 |---|---|---|
-| Income statement, balance sheet, cash flow, annual | `income-statement`, `balance-sheet-statement`, `cash-flow-statement` | 11 fiscal years: ten for the ROIC aggregate plus the opening balance |
+| Income statement, balance sheet, cash flow, annual | `income-statement`, `balance-sheet-statement`, `cash-flow-statement` | 11 fiscal years: ten for the ROIC aggregate plus the opening balance. Among the lines kept, for the Decline and Start-up routes: `grossProfit` and `interestExpense` (income statement), `totalAssets`, `totalLiabilities` and `retainedEarnings` (balance sheet), `depreciationAndAmortization` (cash flow) |
 | As-reported balance sheet, annual | `balance-sheet-statement-as-reported` | 11 fiscal years; supplies the issuer's total intangibles excluding goodwill, and the lease lines |
-| Income statement and cash flow, quarterly | the same endpoints with `period=quarter` | 8 quarters, for the trailing figures |
+| Income statement and cash flow, quarterly | the same endpoints with `period=quarter` | 8 quarters, for the trailing figures; `interestExpense` and `depreciationAndAmortization` among the lines kept |
 | Consensus EPS, revenue, net income with analyst counts | `analyst-estimates`, annual and quarterly | 6 annual rows and 40 quarterly rows; the engine picks periods by date, never by row order. FMP gives two analyst counts, for EPS and for revenue; the net-income count reads the EPS count |
 | Street actual EPS by quarter | `earnings` | 12 rows, for the stock-compensation basis test |
 | Next earnings date | `earnings` | the same rows; the next date on or after today |
@@ -217,6 +217,8 @@ These set the method's structure, not a valuation judgment, and live in the code
 ### 4.2 Trailing figures and the share count
 
 The trailing figures are the sums of the last four quarterly income statements when there are four and each ends 80 to 100 days after the one before, joined to the quarterly cash-flow statements by period end: revenue, operating income, net income, diluted EPS, stock compensation, operating cash flow, capital spending, dividends, buybacks and stock issued. A sum is missing when any quarter lacks its part. Otherwise the trailing figures are the last fiscal year's, flagged `trailing-on-fiscal-year`.
+
+Two more trailing figures sum the same quarters, or read the same fiscal year: the interest expense and the depreciation and amortization (the cash flow's). Each sums the quarters that present the line and is missing only when none does. The interest expense counts each quarter by its size, never netted, since FMP signs it either way across companies; the depreciation keeps FMP's sign.
 
 The diluted share count is the newest quarter's weighted average diluted shares, else the newest fiscal year's. One share count serves every year of every route.
 
@@ -681,6 +683,8 @@ The three lease and line flags sit on nearly every valued row today; their redes
 - **Full refresh**: the universe, the data of section 2 for every admitted company, the deciles, then every company classified and valued, one snapshot per company. A company fetched within 24 hours is not fetched again.
 - **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the designation, the implied growth and its sensitivities, the margin the price needs (revenue-growth rows), the growth-route cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price, its date and the price input, except a revenue-growth refusal whose intermediates carry `revenue_path`: the two refused for their target margin ("no target margin: <n> mature peers") or for a value not positive ("value not positive under the reinvestment charge"). Such a row also recomputes its margin the price needs from its rebuild keys (5a.10); its other figures stay. The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
 - **Revalue**: the engine on the stored facts of every company, with the latest stored deciles, no vendor call and no freshness window. New snapshots under the current method and policy versions.
+
+Every refresh that values (full, scoped, revalue) first backfills the facts of lines added since the payloads were stored, reading the stored responses; a price refresh does not.
 
 Snapshots are appended, never changed. The screen reads the latest snapshot per company.
 

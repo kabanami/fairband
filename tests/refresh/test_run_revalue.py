@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from fixture_universe import ADMITTED, serve_universe
 from refresh_env import Env
+from synthetic import SIX_LINES
 
 from fairband import __main__ as cli
 from fairband.engine import METHOD_VERSION
@@ -68,10 +69,36 @@ def test_revalue_writes_new_snapshots_without_a_vendor_call(env_valued: Env) -> 
     assert row.calibration is not None and row.calibration["total"] == len(ADMITTED)
     assert row.calibration["valued"] == 3 and row.calibration["refused"] == {NO_TARGET: 1}
     assert row.calibration["universe"] == {"admitted": len(ADMITTED), "excluded": {}}
-    # No universe, fetch or deciles stage: the value stage first, its start and each company.
-    assert [p.stage for p in env.progress] == ["value"] * (1 + len(ADMITTED)) + ["done"]
+    # No universe, fetch or deciles stage: the backfill, then the value stage, its start and
+    # each company.
+    assert [p.stage for p in env.progress] == (
+        ["backfill"] + ["value"] * (1 + len(ADMITTED)) + ["done"]
+    )
     last = env.progress[-1]
     assert (last.stage, last.done, last.failed, last.remaining) == ("done", 4, 0, 0)
+
+
+def test_revalue_backfills_the_six_lines_before_valuing(env_valued: Env) -> None:
+    """The store as it was before the normalizer kept the six lines: the revalue writes them
+    again from the stored payloads, each citing its payload's response, with no vendor call."""
+    env = env_valued
+    lines = ", ".join(f"'{field}'" for field in SIX_LINES)
+    with closing(env.connect()) as conn:
+        kept = conn.execute(
+            f"SELECT symbol, dataset, period_end, field, response_id FROM facts"
+            f" WHERE field IN ({lines}) ORDER BY 1, 2, 3, 4, 5"
+        ).fetchall()
+        assert kept
+        with conn:
+            conn.execute(f"DELETE FROM facts WHERE field IN ({lines})")
+    env.refresh().run("revalue")
+    with closing(env.connect()) as conn:
+        written = conn.execute(
+            f"SELECT symbol, dataset, period_end, field, response_id FROM facts"
+            f" WHERE field IN ({lines}) ORDER BY 1, 2, 3, 4, 5"
+        ).fetchall()
+    assert [tuple(row) for row in written] == [tuple(row) for row in kept]
+    assert env.router.calls == Counter()
 
 
 def test_revalue_refuses_a_company_without_facts(env_valued: Env) -> None:
@@ -167,6 +194,7 @@ def test_cli_revalue_prints_calibration(
     monkeypatch.setattr(cli, "utcnow", env.clock)
     assert cli.main(["refresh", "--kind", "revalue"]) == 0
     assert capsys.readouterr().out.splitlines() == [
+        "backfill: 0 done, 0 failed, 0 to go",
         "value: 0 done, 0 failed, 4 to go",
         "value: 1 done, 0 failed, 3 to go",
         "value: 2 done, 0 failed, 2 to go",

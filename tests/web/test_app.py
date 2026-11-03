@@ -665,6 +665,7 @@ def test_controls_js_run_bar() -> None:
     for stage, word in (
         ("universe", "reading the universe"),
         ("deciles", "ranking"),
+        ("backfill", "reading stored statements"),
         ("fetch", "fetching"),
         ("value", "valuing"),
         ("quotes", "fetching prices"),
@@ -1391,7 +1392,7 @@ def test_serve_cli_parses_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert isinstance(app, FastAPI)
     assert kwargs == {"host": "127.0.0.1", "port": 9123, "log_level": "info"}
     with closing(connect(tmp_path / "data" / "fairband.db")) as conn:
-        assert applied_versions(conn) == [1, 2]
+        assert applied_versions(conn) == [1, 2, 3]
     with TestClient(app, base_url=HOST) as c:
         body = c.get("/api/screen").json()
     assert body["rows"] == [] and body["refresh"] is None

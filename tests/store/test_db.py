@@ -49,8 +49,8 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
-    assert migrate(conn) == ["001_initial.sql", "002_designation.sql"]
-    assert applied_versions(conn) == [1, 2]
+    assert migrate(conn) == ["001_initial.sql", "002_designation.sql", "003_facts_by_response.sql"]
+    assert applied_versions(conn) == [1, 2, 3]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -76,7 +76,10 @@ def test_initial_indexes(conn: sqlite3.Connection) -> None:
         return [[c["name"] for c in conn.execute(f"pragma index_info({n})")] for n in names]
 
     assert indexed("vendor_responses") == [["provider", "endpoint", "symbol", "observed_at"]]
-    assert indexed("facts") == [["symbol", "dataset", "period_end", "field"]]
+    assert indexed("facts") == [
+        ["response_id", "field"],  # 003: the fields a response's facts hold
+        ["symbol", "dataset", "period_end", "field"],
+    ]
     assert indexed("observations") == [["symbol", "dataset", "period", "field"]]
     assert indexed("snapshots") == [["symbol", "id"]]
 
@@ -89,7 +92,8 @@ def test_designation_columns_join_a_database_at_001(
     with monkeypatch.context() as patched:
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
-    assert migrate(conn) == ["002_designation.sql"] and applied_versions(conn) == [1, 2]
+    assert migrate(conn) == ["002_designation.sql", "003_facts_by_response.sql"]
+    assert applied_versions(conn) == [1, 2, 3]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -196,7 +200,11 @@ def test_cli_migrate(tmp_path: Path) -> None:
 
     first = run()
     assert first.returncode == 0, first.stderr
-    assert first.stdout.splitlines() == ["Applied 001_initial.sql", "Applied 002_designation.sql"]
+    assert first.stdout.splitlines() == [
+        "Applied 001_initial.sql",
+        "Applied 002_designation.sql",
+        "Applied 003_facts_by_response.sql",
+    ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()
     assert second.returncode == 0 and second.stdout.splitlines() == ["No migrations to apply."]

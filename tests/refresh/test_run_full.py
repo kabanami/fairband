@@ -6,6 +6,7 @@ left running.
 
 import json
 import logging
+import sqlite3
 import threading
 import time
 from collections import Counter
@@ -20,17 +21,22 @@ import pytest
 from fastapi.testclient import TestClient
 from fixture_universe import ADMITTED, SCREENER, serve_universe
 from refresh_env import Env, use_cli
+from synthetic import SIX_LINES
 from vendor_double import FMP_KEY
 
 from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Settings
 from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
+from fairband.engine.route import CompanyInputs
+from fairband.refresh import fetch as fetch_module
 from fairband.refresh import run as run_module
 from fairband.refresh.deciles import deciles_for_universe
+from fairband.refresh.fetch import fetch_company
 from fairband.refresh.run import Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import latest_companies
+from fairband.store.facts import FactRow, facts_for
 from fairband.store.policy import record_policy
 from fairband.store.refreshes import (
     RefreshRunning,
@@ -166,6 +172,7 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
         "universe",
         "fetch",
         "deciles",
+        "backfill",
         "value",
         "done",
     ]
@@ -178,6 +185,45 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
     ]
     assert env.router.calls["screener"] == 1
     assert set(env.router.symbol_calls) == {"", *ADMITTED}  # FIRB and TINY are never fetched
+
+
+def test_a_reused_response_from_before_the_six_lines_is_backfilled_before_valuing(
+    env_fixture_universe: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ACME's statements, fetched an hour before by the normalizer that kept none of the six
+    lines, are reused by the full refresh without a call; the backfill writes the lines from the
+    stored payloads before the value stage, which reads the trailing interest expense."""
+    env = env_fixture_universe
+    normalize = fetch_module.statement_facts
+
+    def before_the_change(*args: Any) -> list[FactRow]:
+        return [f for f in normalize(*args) if f.field not in SIX_LINES]
+
+    monkeypatch.setattr(fetch_module, "statement_facts", before_the_change)
+    with closing(env.connect()) as conn:
+        clients = env.clients
+        fetch_company(
+            conn, clients.fmp, clients.gf, "ACME", env.policy, env.clock(), clients.secrets
+        )
+        stored = facts_for(conn, "ACME", "income-quarter")
+    assert stored and not {f.field for f in stored} & set(SIX_LINES)
+    monkeypatch.setattr(fetch_module, "statement_facts", normalize)
+    env.router.calls.clear()
+    env.clock.now += timedelta(hours=1)
+
+    valued: dict[str, CompanyInputs] = {}
+    build = run_module.build_inputs
+
+    def recorded(conn: sqlite3.Connection, symbol: str, *args: Any) -> CompanyInputs:
+        valued[symbol] = build(conn, symbol, *args)
+        return valued[symbol]
+
+    monkeypatch.setattr(run_module, "build_inputs", recorded)
+    assert env.refresh().run("full") > 0 and env.last().status == "done"
+    assert env.router.calls["income-quarter"] == len(ADMITTED) - 1  # ACME's is reused
+    trailing = valued["ACME"].trailing
+    assert trailing is not None and trailing.interest_expense == 16_000_000
+    assert [y.total_assets for y in valued["ACME"].balance_years][-1] == 1_610_000_000
 
 
 def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
@@ -259,8 +305,8 @@ def test_full_refresh_screener_failure_finishes_failed(
 
 
 def test_full_refresh_rate_limited_saves_no_deciles(env_fixture_universe: Env) -> None:
-    """As in a scoped refresh, a 429 stops the fetch and what was fetched is valued, here with no
-    deciles stored: the run saves none from part of the universe."""
+    """As in a scoped refresh, a 429 stops the fetch and what was fetched is valued, after the
+    backfill, here with no deciles stored: the run saves none from part of the universe."""
     env = env_fixture_universe
     env.router.fail_status = 429
     env.router.fail_symbols.add("MILD")
@@ -282,6 +328,12 @@ def test_full_refresh_rate_limited_saves_no_deciles(env_fixture_universe: Env) -
         ("ACME", refresh_id, "no universe deciles yet"),
         ("AXLE", refresh_id, "no universe deciles yet"),
         ("MILD", refresh_id, RATE_LIMITED),
+    ]
+    assert list(dict.fromkeys(p.stage for p in env.progress)) == [
+        "universe",
+        "fetch",
+        "backfill",
+        "value",
     ]
 
 

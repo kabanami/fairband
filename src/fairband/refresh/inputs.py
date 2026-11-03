@@ -1,7 +1,8 @@
 """Assembly: one company's stored facts and observations to the engine's ``CompanyInputs``.
 
-The statement side (``series_for``, the capital years, the tax rate, the trailing figures and the
-share count) is ``inputs_statements``; its docstring states those rules. ``build_inputs`` adds:
+The statement side (``series_for``, the capital years, the balance years, the tax rate, the
+trailing figures and the share count) is ``inputs_statements``; its docstring states those rules.
+``build_inputs`` adds:
 
 - the consensus: one ``QuarterEstimate`` per ``estimate-quarter`` period and one ``AnnualEstimate``
   per ``estimate-annual`` period, every row returned, an annual one with its EPS, net-income and
@@ -176,6 +177,7 @@ def build_inputs(
         peer_source=peers.source,
         debt=sums["debt"][0],
         cash=sums["cash"][0],
+        balance_years=stated.balance_years,
     )
 
 

@@ -86,6 +86,7 @@ from typing import Any
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
+from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Deciles, Series, classify
 from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
@@ -125,7 +126,8 @@ class CompanyInputs:
     ``notes`` an input name to the note assembly wrote for it. ``peers`` are the company's mature
     peers with their figures and ``peer_source`` where they came from, ``debt`` and ``cash`` the
     newest annual balance sheet's (``None`` unknown); the revenue-growth route reads them, and
-    none is stored with a result."""
+    none is stored with a result. ``balance_years`` holds one ``BalanceYear`` per fiscal year of
+    ``series`` with an annual balance sheet, oldest first."""
 
     symbol: str
     name: str
@@ -158,6 +160,7 @@ class CompanyInputs:
     peer_source: PeerSource | None = None
     debt: float | None = None
     cash: float | None = None
+    balance_years: tuple[BalanceYear, ...] = ()
 
 
 def value_company(

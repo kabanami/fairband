@@ -3,11 +3,15 @@
 The caller scrubs secrets before a response reaches this module. ``params`` is stored as canonical
 JSON (sorted keys), so a lookup matches the same parameters in any order. ``ResponseRow`` leaves
 out the payload, which can be large; ``response_payload`` reads it by id.
+
+A usable response is an HTTP 200 stored without an error; ``latest_response`` returns the newest
+one to a call, and ``responses_with_payload`` lists every one to some endpoints that holds a
+payload.
 """
 
 import json
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -78,8 +82,34 @@ def latest_response(
         " ORDER BY observed_at DESC, id DESC LIMIT 1",
         (provider, endpoint, symbol, _canonical(params)),
     ).fetchone()
-    if row is None:
-        return None
+    return None if row is None else _response_row(row)
+
+
+def responses_with_payload(
+    conn: sqlite3.Connection, endpoints: Sequence[str]
+) -> Iterator[ResponseRow]:
+    """Every usable response to one of ``endpoints`` that holds a payload, of any provider and
+    symbol, by id; the payload, left out as always, is ``response_payload``'s."""
+    marks = ", ".join("?" * len(endpoints))
+    rows = conn.execute(
+        "SELECT id, provider, endpoint, params, symbol, http_status, observed_at, error"
+        f" FROM vendor_responses WHERE endpoint IN ({marks})"
+        " AND http_status = 200 AND error IS NULL AND payload IS NOT NULL ORDER BY id",
+        tuple(endpoints),
+    )
+    for row in rows:
+        yield _response_row(row)
+
+
+def response_payload(conn: sqlite3.Connection, response_id: int) -> str | None:
+    """The payload text of the response, or ``None`` when it has none or does not exist."""
+    row = conn.execute(
+        "SELECT payload FROM vendor_responses WHERE id = ?", (response_id,)
+    ).fetchone()
+    return None if row is None else row["payload"]
+
+
+def _response_row(row: sqlite3.Row) -> ResponseRow:
     return ResponseRow(
         id=row["id"],
         provider=row["provider"],
@@ -90,14 +120,6 @@ def latest_response(
         observed_at=load_stamp(row["observed_at"]),
         error=row["error"],
     )
-
-
-def response_payload(conn: sqlite3.Connection, response_id: int) -> str | None:
-    """The payload text of the response, or ``None`` when it has none or does not exist."""
-    row = conn.execute(
-        "SELECT payload FROM vendor_responses WHERE id = ?", (response_id,)
-    ).fetchone()
-    return None if row is None else row["payload"]
 
 
 def _canonical(params: Mapping[str, str]) -> str:

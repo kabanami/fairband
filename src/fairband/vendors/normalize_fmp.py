@@ -21,7 +21,11 @@ from fairband.vendors.normalize_fmp_observations import (
     screener_rows,
     value_as_date,
 )
-from fairband.vendors.normalize_fmp_statements import as_reported_balance_facts, statement_facts
+from fairband.vendors.normalize_fmp_statements import (
+    as_reported_balance_facts,
+    statement_facts,
+    statement_fields,
+)
 
 __all__ = [
     "ScreenerRow",
@@ -35,5 +39,6 @@ __all__ = [
     "quote_observations",
     "screener_rows",
     "statement_facts",
+    "statement_fields",
     "value_as_date",
 ]

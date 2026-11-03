@@ -2,7 +2,8 @@
 
 ``value`` is decimal text; a field that is absent, null or rejected has no value and a
 ``missing_reason``. A later response restating a period adds rows; ``facts_for`` reads, for each
-period and field, the row from the newest response (by response id, then row id).
+period and field, the row from the newest response (by response id, then row id), and
+``fields_stored`` the fields one response's rows hold.
 """
 
 import sqlite3
@@ -105,3 +106,9 @@ def facts_for(conn: sqlite3.Connection, symbol: str, dataset: str) -> list[FactR
         )
         for r in rows
     ]
+
+
+def fields_stored(conn: sqlite3.Connection, response_id: int) -> set[str]:
+    """The fields of the rows citing the response, with a value or without; empty for none."""
+    rows = conn.execute("SELECT DISTINCT field FROM facts WHERE response_id = ?", (response_id,))
+    return {row["field"] for row in rows}

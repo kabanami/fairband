@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 from fixture_universe import ADMITTED, serve_universe
 from refresh_env import Env, use_cli
+from synthetic import SIX_LINES
 from vendor_double import FIXTURES, FMP_KEY
 
 from fairband import __main__ as cli
@@ -146,6 +147,22 @@ def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
         Progress(refresh_id, "done", 4, 0, 0, None),
     ]
     assert Progress(refresh_id, "reprice", 4, 0, 0, None) in env.progress
+
+
+def test_price_refresh_runs_no_backfill(env_valued: Env) -> None:
+    """A price refresh values nothing, so it does not backfill: the store as it was before the
+    normalizer kept the six lines stays so."""
+    env = env_valued
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+    lines = ", ".join(f"'{field}'" for field in SIX_LINES)
+    with closing(env.connect()) as conn, conn:
+        conn.execute(f"DELETE FROM facts WHERE field IN ({lines})")
+    env.refresh().run("price")
+    assert env.last().status == "done"
+    assert "backfill" not in {p.stage for p in env.progress}
+    with closing(env.connect()) as conn:
+        count = conn.execute(f"SELECT count(*) FROM facts WHERE field IN ({lines})").fetchone()
+    assert count[0] == 0
 
 
 def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:

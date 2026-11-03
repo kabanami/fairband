@@ -8,7 +8,10 @@ source-evidence "R1 statement field binding" and match the documented examples, 
 has no value and the reason ``null``; a value that is not a number, ``unparseable``. A normalized
 balance-sheet zero for ``goodwill`` or ``intangibleAssets`` has no value and the reason
 ``vendor-zero`` (D17 rule Z: the issuer's as-reported balance sheet decides); every other zero is a
-real zero.
+real zero. ``statement_fields`` names a statement's fields. Six joined on 2026-11-03 (spec
+2026-11-03 section 11): ``grossProfit`` and ``interestExpense``, kept as FMP signs them, on the
+income statements, ``totalAssets``, ``totalLiabilities`` and ``retainedEarnings`` on the balance
+sheet, and ``depreciationAndAmortization`` on the cash flows.
 
 ``as_reported_balance_facts`` (dataset ``balance-asreported-annual``) reads the issuer's XBRL tags
 in lower case. The documented response nests them under ``data`` (as source-evidence T055 also
@@ -44,6 +47,8 @@ _INCOME: _Fields = (
     ("weightedAverageShsOutDil", SHARES),
     ("incomeTaxExpense", MONEY),
     ("incomeBeforeTax", MONEY),
+    ("grossProfit", MONEY),
+    ("interestExpense", MONEY),
 )
 _BALANCE: _Fields = tuple(
     (name, MONEY)
@@ -58,6 +63,9 @@ _BALANCE: _Fields = tuple(
         "intangibleAssets",
         "longTermDebt",
         "totalStockholdersEquity",
+        "totalAssets",
+        "totalLiabilities",
+        "retainedEarnings",
     )
 )
 _CASHFLOW: _Fields = tuple(
@@ -71,6 +79,7 @@ _CASHFLOW: _Fields = tuple(
         "netDividendsPaid",
         "commonStockRepurchased",
         "commonStockIssuance",
+        "depreciationAndAmortization",
     )
 )
 _STATEMENTS: dict[str, _Fields] = {
@@ -117,6 +126,14 @@ def statement_facts(
                 value, reason = None, "vendor-zero"
             out.append(source.fact(row, dataset, period_end, name, value, unit, reason))
     return out
+
+
+def statement_fields(dataset: str) -> frozenset[str]:
+    """The fields ``statement_facts`` stores for every period of ``dataset``; any dataset but the
+    five statements raises ``ValueError``."""
+    if dataset not in _STATEMENTS:
+        raise ValueError(f"not an FMP statement dataset: {dataset}")
+    return frozenset(name for name, _ in _STATEMENTS[dataset])
 
 
 def as_reported_balance_facts(
