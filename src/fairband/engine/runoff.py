@@ -39,8 +39,10 @@ from itertools import accumulate, pairwise
 from fairband.engine.mature_growth import solve_root
 from fairband.engine.revenue_growth import tax_and_nopat, terminal_nopat
 
-# The implied decline rate's scan: from −50% to 0 in steps of 0.1%, bisected to 1e-7 (4.1a).
-_IMPLIED_DECLINE_BOUNDS = (-0.5, 0.0)
+# The implied decline rate's scan: from −50% to 0 in steps of 0.1%, bisected to 1e-7 (4.1a). Its
+# lower bound also floors the decline rate the Decline route runs off at (method 6a.2).
+DECLINE_FLOOR = -0.5
+_IMPLIED_DECLINE_BOUNDS = (DECLINE_FLOOR, 0.0)
 _IMPLIED_DECLINE_STEP = 0.001
 _IMPLIED_DECLINE_TOL = 1e-7
 

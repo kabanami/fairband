@@ -36,7 +36,7 @@ from fairband.engine.roic import (
     runway_return,
     terminal_return,
 )
-from fairband.engine.types import Flag, Kind, Provenance, Route, TaggedInput
+from fairband.engine.types import Flag, Kind, PhaseEvidence, Provenance, Route, TaggedInput
 from fairband.policy import Moat, Policy
 
 if TYPE_CHECKING:
@@ -51,7 +51,8 @@ _INTANGIBLES_NOTE = "invested capital uses the issuer's total intangibles exclud
 
 @dataclass(frozen=True)
 class Context:
-    """A company past the guards of ``route.value_company``."""
+    """A company past the guards of ``route.value_company``, with the classifier's evidence that
+    put it in its phase (the Decline route reads its revenue trend)."""
 
     inputs: CompanyInputs
     trailing: TrailingFigures
@@ -59,6 +60,7 @@ class Context:
     shares: float
     policy: Policy
     today: date
+    evidence: PhaseEvidence | None = None
 
 
 @dataclass(frozen=True)

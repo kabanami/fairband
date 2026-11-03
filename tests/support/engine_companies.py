@@ -1,6 +1,5 @@
 """The engine's test companies: the universe deciles and small, complete companies, one for each
-phase the engine values (Mature Growth, Mature Stable, High Growth, Young Growth) and a Decline one
-it refuses.
+phase the engine values (Mature Growth, Mature Stable, High Growth, Young Growth, Decline).
 
 The engine tests take them as fixtures (``tests/engine/conftest.py``); the web tests value them
 and store the results. Money is in USD and shares in units. Fiscal years are calendar years 2015
@@ -12,6 +11,7 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
+from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Deciles, FiscalYear, Series
 from fairband.engine.revenue_growth import PeerFigures
 from fairband.engine.roic import CapitalYear
@@ -300,14 +300,113 @@ def young_growth_inputs() -> CompanyInputs:
 
 
 def decline_inputs() -> CompanyInputs:
-    """A Decline company, which no route values yet: revenue falling 6% a year from $5 bn over six
-    fiscal years at a 10% operating margin. (A 5% fall sits on the test deciles' -5% edge, which
-    ranks "Low".)"""
-    series = fiscal_years([5_000e6 * 0.94**k for k in range(6)], [0.10] * 6)
+    """Spec 13.1's Decline row, money in USD millions and 100 m shares, so a share's figures are
+    the spec's: five fiscal years from 2021 with revenue 1,125, 1,200, 1,120, 1,050 and 1,000 (a
+    five-year slope of −40 a year, so d = −4%; growth −5.9% a year, "Close to zero or negative" on
+    the test deciles; three falls in four steps) at operating margins of 7%, 8%, 8%, 9% and 8%;
+    trailing revenue 1,000 and operating income 80; a kept ROIC year (2025) with revenue 1,000 on
+    an average invested capital of 500; the NTM consensus revenue 970 and the annual consensus
+    falling 3% a year from fiscal 2027; interest 20 over the four quarters, debt 200, cash 100;
+    two balance sheets, the newest with current assets 300 and total liabilities 500 (Altman Z″
+    3.07, safe; Piotroski F 6 of 9); price $3.00. The value is $4.3180 a share, rating A−."""
+    series = fiscal_years(
+        [1_125e6, 1_200e6, 1_120e6, 1_050e6, 1_000e6], [0.07, 0.08, 0.08, 0.09, 0.08]
+    )
+    capital = tuple(
+        CapitalYear(
+            year=year,
+            operating_income=income,
+            tax_rate=0.25,
+            total_current_assets=300e6,
+            cash_and_investments=100e6,
+            total_current_liabilities=200e6,
+            short_term_debt=20e6,
+            current_lease_liability=0.0,
+            net_ppe=480e6,  # invested capital: (300 − 100) − (200 − 20) + 480 = 500
+            lease_rou_asset=0.0,
+            goodwill=0.0,
+            intangibles=0.0,
+        )
+        for year, income in ((2024, 94.5e6), (2025, 80e6))
+    )
     return replace(
         mature_growth_inputs(),
         symbol="DCCO",
         name="Decline Co",
+        market_cap=300e6,
+        price=3.0,
+        shares_diluted=100e6,
         series=series,
-        capital_years=capital_years(series),
+        capital_years=capital,
+        trailing=TrailingFigures(
+            period_end=date(2026, 9, 30),
+            quarters=4,
+            on_fiscal_year=False,
+            revenue=1_000e6,
+            operating_income=80e6,
+            net_income=45e6,
+            eps_diluted=0.45,
+            sbc=5e6,
+            cfo=100e6,
+            capex=-30e6,
+            dividends=-20e6,
+            buybacks=0.0,
+            equity_issued=0.0,
+            interest_expense=20e6,
+            depreciation=40e6,
+        ),
+        quarter_estimates=(
+            quarter(date(2026, 12, 31), 2026, "Q4", 0.11, 245e6),
+            quarter(date(2027, 3, 31), 2027, "Q1", 0.11, 243e6),
+            quarter(date(2027, 6, 30), 2027, "Q2", 0.11, 242e6),
+            quarter(date(2027, 9, 30), 2027, "Q3", 0.11, 240e6),
+        ),
+        annual_estimates=(
+            annual(2027, 43e6, 0.43, 8, 1_000e6, 10),
+            annual(2028, 41e6, 0.41, 7, 970e6, 8),
+            annual(2029, 39e6, 0.39, 6, 940.9e6, 6),
+        ),
+        street_ttm_eps=None,
+        moat_score=None,
+        gf_eps_ttm=0.45,
+        gf_eps_without_nri=0.45,
+        closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 4.0, 3.0),
+        debt=200e6,
+        cash=100e6,
+        balance_years=(
+            BalanceYear(
+                year=2024,
+                period_end=date(2024, 12, 31),
+                total_current_assets=310e6,
+                total_current_liabilities=210e6,
+                total_assets=900e6,
+                total_liabilities=480e6,
+                retained_earnings=240e6,
+                equity=420e6,
+                long_term_debt=200e6,
+                revenue=1_050e6,
+                gross_profit=360e6,
+                operating_income=94.5e6,
+                net_income=55e6,
+                cfo=105e6,
+                stock_issued=0.0,
+            ),
+            BalanceYear(
+                year=2025,
+                period_end=date(2025, 12, 31),
+                total_current_assets=300e6,
+                total_current_liabilities=200e6,
+                total_assets=900e6,
+                total_liabilities=500e6,
+                retained_earnings=250e6,
+                equity=400e6,
+                long_term_debt=180e6,
+                revenue=1_000e6,
+                gross_profit=340e6,
+                operating_income=80e6,
+                net_income=45e6,
+                cfo=100e6,
+                stock_issued=0.0,
+            ),
+        ),
     )

@@ -317,6 +317,21 @@ def own_sales_to_capital(
     return delta_revenue / delta_capital, usable
 
 
+def newest_sales_to_capital(
+    kept: Sequence[RoicYear], revenue_by_fiscal_year: Mapping[int, float]
+) -> float | None:
+    """The newest kept year's revenue over its average capital, both of that fiscal year: a mature
+    peer's measure, and the Decline route's own. ``None`` without a kept year, without a revenue
+    for it, or with that capital at or below zero."""
+    if not kept:
+        return None
+    newest = kept[-1]
+    revenue = revenue_by_fiscal_year.get(newest.year)
+    if revenue is None or newest.average_capital <= 0:
+        return None
+    return revenue / newest.average_capital
+
+
 @dataclass(frozen=True)
 class PeerFigures:
     """A mature peer: its market cap; its ten-year aggregate operating margin and the years in

@@ -39,7 +39,13 @@ from collections.abc import Sequence
 from datetime import date
 
 from fairband.engine.classifier import Deciles, Series, classify
-from fairband.engine.revenue_growth import PeerFigures, Peers, PeerSource, margin_peers
+from fairband.engine.revenue_growth import (
+    PeerFigures,
+    Peers,
+    PeerSource,
+    margin_peers,
+    newest_sales_to_capital,
+)
 from fairband.engine.roic import RoicYear, aggregate_roic
 from fairband.engine.types import Phase
 from fairband.policy import Policy
@@ -139,10 +145,5 @@ def _margin(series: Series) -> tuple[float | None, int]:
 
 def _sales_to_capital(series: Series, kept: Sequence[RoicYear]) -> float | None:
     """The newest kept ROIC year's revenue over its average capital, both of that fiscal year."""
-    if not kept:
-        return None
-    newest = kept[-1]
-    revenue = next((fy.revenue for fy in series if fy.year == newest.year), None)
-    if revenue is None or newest.average_capital <= 0:
-        return None
-    return revenue / newest.average_capital
+    revenue = {fy.year: fy.revenue for fy in series if fy.revenue is not None}
+    return newest_sales_to_capital(kept, revenue)

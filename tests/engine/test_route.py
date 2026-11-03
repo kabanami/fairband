@@ -161,7 +161,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/0.6"
+    assert METHOD_VERSION == "fairband-mechanical/0.7"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -963,18 +963,21 @@ def test_refuses_foreign_filer(mg_inputs: CompanyInputs, deciles: Deciles, polic
         assert r.phase.phase == "Mature Growth"
 
 
-def test_refuses_other_phases(
+def test_a_decline_row_takes_its_route(
     decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
+    """Decline is no longer refused "route not built yet": the run-off values it
+    (``test_route_decline.py``), behind the shared guards."""
     r = value_company(decline_inputs, deciles, policy, TODAY)
-    assert_refused(r, "Decline route not built yet")
-    assert r.phase.phase == "Decline" and r.price == 150.0
+    assert (r.phase.phase, r.route, r.refusal) == ("Decline", "decline", None)
     names = [i.name for i in r.inputs]
-    assert names == ["statements", "price", "shares_diluted", "next_earnings", "closes"]
-    assert r.inputs[0].value == 6 and r.inputs[0].note == "fiscal 2020 to 2025"
-    # the price columns are not value-based: a refused row has them too
-    facts = asdict(price_facts(decline_inputs.closes, TODAY))
-    assert r.intermediates == {"price_facts": facts} and facts["high_52w"] == pytest.approx(150.0)
+    assert names[:5] == ["statements", "price", "shares_diluted", "next_earnings", "closes"]
+    assert r.inputs[0].value == 5 and r.inputs[0].note == "fiscal 2021 to 2025"
+    assert r.intermediates["price_facts"] == asdict(price_facts(decline_inputs.closes, TODAY))
+    assert_refused(
+        value_company(replace(decline_inputs, trailing=None), deciles, policy, TODAY),
+        "no trailing figures",
+    )
 
 
 def test_refusals_carry_the_price_facts(
@@ -1159,7 +1162,7 @@ def test_reprice_moves_the_price_input(
     entered = datetime(2026, 11, 2, 21, 5, tzinfo=UTC)
     for inputs in (mg_inputs, ms_inputs, young_growth_inputs, decline_inputs):
         r = value_company(inputs, deciles, policy, TODAY)
-        assert r.route is not None or inputs is decline_inputs
+        assert r.route is not None
         p = reprice(r, 65.0, day, policy, observed_at=observed, entered_at=entered)
         assert [i.name for i in p.inputs] == [i.name for i in r.inputs]
         [price] = [i for i in p.inputs if i.name == "price"]
@@ -1170,7 +1173,12 @@ def test_reprice_moves_the_price_input(
         # Without the quote's stamps the price input keeps its own.
         [kept] = [i for i in reprice(r, 65.0, day, policy).inputs if i.name == "price"]
         assert kept.provenance == replace(inputs.provenance["price"], as_of=day)
-    assert p.refusal == "Decline route not built yet"
+    refused = value_company(replace(decline_inputs, tax_rate_latest=None), deciles, policy, TODAY)
+    p = reprice(refused, 65.0, day, policy, observed_at=observed, entered_at=entered)
+    assert p.refusal == "no statutory tax rate"
+    [price] = [i for i in p.inputs if i.name == "price"]
+    assert (p.price, price.value) == (65.0, 65.0)
+    assert price.provenance == Provenance("FMP quote", day, observed, entered)
 
 
 def test_reprice_moves_the_designation_and_leaves_the_levels(
@@ -1202,7 +1210,7 @@ def test_the_designation_reads_the_policy_edges(
 
 
 def test_reprice_a_refusal_moves_only_the_price(policy: Policy) -> None:
-    r = refusal_result("X", "Decline route not built yet", policy, date(2026, 10, 31), price=10.0)
+    r = refusal_result("X", "no trailing figures", policy, date(2026, 10, 31), price=10.0)
     p = reprice(r, 12.0, date(2026, 11, 2), policy)
     assert p == replace(r, price=12.0, price_date=date(2026, 11, 2))
     with pytest.raises(ValueError, match="positive"):

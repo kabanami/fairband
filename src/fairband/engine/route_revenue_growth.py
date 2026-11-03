@@ -137,7 +137,7 @@ from fairband.policy import BaseRateClass, Moat, Policy
 _NOT_POSITIVE = "value not positive under the reinvestment charge"
 _PEERS = Provenance("FMP stock-peers and the peers' statements", None, None, None)
 _MARGINS_TESTED = "the peers' lowest, median and highest target margins"
-_TAX_LOSS = Flag(
+TAX_LOSS = Flag(
     "tax-loss-history-unknown",
     "Tax losses unknown",
     "The forecast carries its own losses forward from zero and the terminal value is taxed at the "
@@ -179,14 +179,16 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     if tax is None:
         return Refused("no statutory tax rate")
     quarters = ntm_quarters(i.quarter_estimates, t.period_end)
-    ntm = _ntm_revenue(quarters)
+    ntm = ntm_revenue(quarters)
     if quarters is None or ntm is None:
         return Refused("incomplete NTM consensus")
     if ntm <= 0:
         return Refused("no positive consensus revenue")
     base_year = base_fiscal_year(quarters)
     sales = sales_class(t.revenue / 1e6, policy)
-    path, analysts, path_flags = _path(t.revenue, ntm, i.annual_estimates, base_year, sales, policy)
+    path, analysts, path_flags = revenue_path_for(
+        t.revenue, ntm, i.annual_estimates, base_year, sales, policy
+    )
     if any(g <= -1 for g in resolved_steps(path)[0]):
         return Refused("consensus revenue falls to zero or below within the path", path_flags)
     moat = moat_class(i.moat_score, policy)
@@ -209,9 +211,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "shares": c.shares,
         "sales_to_capital": asdict(s2c),
     }
-    path_and_capital = (
-        path_flags + roic.result.flags + _bridge_flags(c) + present(_from_industry(c))
-    )
+    path_and_capital = path_flags + roic.result.flags + bridge_flags(c) + present(from_industry(c))
     target = target_margin(i.peers, policy)
     if target is None:
         counted = len(margin_peers(i.peers, policy))
@@ -277,7 +277,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     flags = (
         sbc
         + path_and_capital
-        + ((_TAX_LOSS,) if start < 0 or any(x < 0 for x in v.ebit) else ())
+        + ((TAX_LOSS,) if start < 0 or any(x < 0 for x in v.ebit) else ())
         + present(_return_above_peers(new_capital, peer_roic))
         + ((_FAILURE,) if young else ())
         + trailing_flags(i, t, gap, policy)
@@ -286,14 +286,14 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     if value <= 0:
         return Refused(_NOT_POSITIVE, flags, im | implied_margin_at_price(im, c.price, policy))
     im |= revenue_at_price(im, c.price, value, policy)
-    industry = _peer_industry(c)
+    industry = peer_industry(c)
     of_industry = "" if industry is None else f" of the {industry} industry"
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "ntm_revenue", ntm, "USD", "estimates_quarter"),
-        _step_input(c, "path_step_2", path.steps[0], held[0]),
-        _step_input(c, "path_step_3", path.steps[1], held[1]),
-        _from_peers(
+        step_input(c, "path_step_2", path.steps[0], held[0]),
+        step_input(c, "path_step_3", path.steps[1], held[1]),
+        from_peers(
             c,
             "target_margin",
             target.value,
@@ -308,7 +308,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         rule(policy, "fade_years", policy.fade_years, "years"),
         rule(policy, "margin_convergence_year", policy.margin_convergence_year, "year"),
         rule(policy, "peer_min", policy.peer_min, "peers"),
-        *_industry_peer_max_input(policy, industry),
+        *industry_peer_max_input(policy, industry),
     )
     return Valued("revenue-growth", value, moat, im, inputs, flags)
 
@@ -351,7 +351,7 @@ def implied_margin_at_price(im: dict[str, Any], price: float, policy: Policy) ->
     return {"implied_margin": implied}
 
 
-def _ntm_revenue(quarters: tuple[QuarterEstimate, ...] | None) -> float | None:
+def ntm_revenue(quarters: tuple[QuarterEstimate, ...] | None) -> float | None:
     """The sum of the NTM quarters' revenue means; ``None`` without the quarters or with one that
     lacks its mean."""
     if quarters is None:
@@ -360,18 +360,19 @@ def _ntm_revenue(quarters: tuple[QuarterEstimate, ...] | None) -> float | None:
     return sum(means) if len(means) == len(quarters) else None
 
 
-def _path(
+def revenue_path_for(
     revenue0: float,
     ntm: float,
     annual: tuple[AnnualEstimate, ...],
     base_year: int,
-    sales: BaseRateClass,
+    sales: BaseRateClass | None,
     policy: Policy,
 ) -> tuple[RevenuePath, tuple[int | None, int | None], tuple[Flag, ...]]:
     """The revenue path from the annual consensus revenue of the base year and the next two, its
     held rate the sales class's cap when g_3 as resolved is above it, the revenue analysts of the
     years the two steps land on, and the path's flags: ``path-held``,
-    ``consensus-above-base-rate``, then ``few-analysts``."""
+    ``consensus-above-base-rate``, then ``few-analysts``. Without a sales class nothing is capped
+    or flagged above the base rate: the Decline route reads only years 1 to 3 of the path."""
     by_year = {x.fiscal_year: x for x in annual}
     rows = [by_year.get(base_year + k) for k in range(3)]
     points = [(None, None) if r is None else (r.revenue, r.analysts_revenue) for r in rows]
@@ -388,11 +389,12 @@ def _path(
         policy.terminal_growth,
     )
     (_, g3), _ = resolved_steps(found)
-    cap = sales.sales_p90_5y
-    path = replace(found, hold=cap) if g3 > cap else found
+    path = found
+    if sales is not None and g3 > sales.sales_p90_5y:
+        path = replace(found, hold=sales.sales_p90_5y)
     flags = (
         present(_path_held(path, values, base_year))
-        + present(_above_base_rate(path, sales))
+        + (() if sales is None else present(_above_base_rate(path, sales)))
         + present(few_analysts(base_year, steps, analysts, policy))
     )
     return path, analysts, flags
@@ -480,7 +482,7 @@ def _at_margin(
     return revenue_valuation(path, margin, tax, charge, bridge), terminal
 
 
-def _bridge_flags(c: Context) -> tuple[Flag, ...]:
+def bridge_flags(c: Context) -> tuple[Flag, ...]:
     """``line-not-presented:debt`` and ``:cash`` for a figure the bridge counts as nil in part or
     in full: unknown, or with a line assembly's note names as not presented."""
     i = c.inputs
@@ -501,13 +503,13 @@ def _bridge_flags(c: Context) -> tuple[Flag, ...]:
     )
 
 
-def _peer_industry(c: Context) -> str | None:
+def peer_industry(c: Context) -> str | None:
     """The industry the peers came from on the industry fallback; ``None`` on FMP's list."""
     source = c.inputs.peer_source
     return source.industry if source is not None and source.kind == "industry" else None
 
 
-def _industry_peer_max_input(policy: Policy, industry: str | None) -> tuple[TaggedInput, ...]:
+def industry_peer_max_input(policy: Policy, industry: str | None) -> tuple[TaggedInput, ...]:
     """The bound on the industry fallback's peers, cited only on a row whose peers it bounded."""
     if industry is None:
         return ()
@@ -515,7 +517,7 @@ def _industry_peer_max_input(policy: Policy, industry: str | None) -> tuple[Tagg
     return (rule(policy, "industry_peer_max", policy.industry_peer_max, "peers", note),)
 
 
-def _from_industry(c: Context) -> Flag | None:
+def from_industry(c: Context) -> Flag | None:
     """``peers-from-industry`` when the peers are the industry fallback's, naming FMP's count, the
     industry and the count taken, the sentence's end worded by that count."""
     source, policy = c.inputs.peer_source, c.policy
@@ -588,7 +590,7 @@ def _target_intermediates(target: TargetMargin, source: PeerSource | None) -> di
     }
 
 
-def _step_input(c: Context, name: str, step: float | None, held: bool) -> TaggedInput:
+def step_input(c: Context, name: str, step: float | None, held: bool) -> TaggedInput:
     """A consensus revenue step as found; a held one is missing, and its note says so."""
     note = "no consensus step: the year holds the rate of the year before" if held else None
     return data(c.inputs, name, step, "ratio", "estimates_annual", note)
@@ -608,10 +610,10 @@ def _cap_input(policy: Policy, sales: BaseRateClass, binds: bool) -> TaggedInput
     return rule(policy, "held_growth_cap", sales.sales_p90_5y, "ratio", note)
 
 
-def _from_peers(c: Context, name: str, value: float | None, note: str) -> TaggedInput:
+def from_peers(c: Context, name: str, value: float | None, note: str) -> TaggedInput:
     """A DATA input read from the mature peers' figures, cited to the peers call and statements, or
     on the industry fallback to the universe's industry and the peers' statements."""
-    industry = _peer_industry(c)
+    industry = peer_industry(c)
     provenance = (
         _PEERS
         if industry is None
@@ -629,9 +631,9 @@ def _sales_to_capital_input(c: Context, s2c: _SalesToCapital) -> TaggedInput:
         return from_capital(
             c.inputs, "sales_to_capital", s2c.value, "the company's own five-year marginal measure"
         )
-    industry = _peer_industry(c)
+    industry = peer_industry(c)
     median = "the mature peers' median" + ("" if industry is None else f" ({industry} industry)")
-    return _from_peers(c, "sales_to_capital", s2c.value, f"{median}; the own measure is not usable")
+    return from_peers(c, "sales_to_capital", s2c.value, f"{median}; the own measure is not usable")
 
 
 def _rebuilt_path(im: dict[str, Any], policy: Policy) -> RevenuePath:

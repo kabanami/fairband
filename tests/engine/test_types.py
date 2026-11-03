@@ -91,7 +91,7 @@ def test_result_json_round_trip(sample_result: ValuationResult) -> None:
 
 
 def test_routes() -> None:
-    assert get_args(Route) == ("mature-growth", "mature-stable", "revenue-growth")
+    assert get_args(Route) == ("mature-growth", "mature-stable", "revenue-growth", "decline")
 
 
 def test_designations() -> None:
@@ -176,4 +176,4 @@ def test_phase_numbers_and_method_version() -> None:
         ("Mature Stable", 5),
         ("Decline", 6),
     ]
-    assert METHOD_VERSION == "fairband-mechanical/0.6"
+    assert METHOD_VERSION == "fairband-mechanical/0.7"

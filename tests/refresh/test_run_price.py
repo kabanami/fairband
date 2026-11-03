@@ -18,11 +18,12 @@ from typing import Any
 import pytest
 from fixture_universe import ADMITTED, serve_universe
 from refresh_env import Env, use_cli
+from support.engine_companies import decline_inputs, universe_deciles
 from synthetic import SIX_LINES
 from vendor_double import FIXTURES, FMP_KEY
 
 from fairband import __main__ as cli
-from fairband.engine.route import reprice
+from fairband.engine.route import reprice, value_company
 from fairband.engine.types import Provenance
 from fairband.refresh import run_price
 from fairband.refresh.inputs import latest_price
@@ -207,6 +208,44 @@ def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
     assert "revenue_path" in newt.result.intermediates
     assert newt.result.intermediates["implied_margin"] is None
     assert [s for s, _, _ in env.snapshots()].count("ZERO") == 0
+
+
+def test_price_refresh_reprices_a_decline_row(env_valued: Env) -> None:
+    """A Decline row (spec 13.1: $4.3180 a share, valued at $3.00, "below") reprices from its
+    stored intermediates alone: the value and the levels stay; the designation ("near" at $4.00),
+    the implied decline rate, the multiples and the expected return move to the quote, as the
+    engine's ``reprice`` moves them."""
+    env = env_valued
+    decline = value_company(decline_inputs(), universe_deciles(), env.policy, date(2026, 10, 31))
+    assert (decline.route, decline.designation) == ("decline", "below")
+    with closing(env.connect()) as conn:
+        acme = next(c for c in latest_companies(conn) if c.symbol == "ACME")
+        insert_companies(conn, [replace(acme, symbol="DCCO", name="Decline Co")])
+        insert_snapshot(conn, decline, 1, clock=env.clock)
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES | {"DCCO": 4.0})
+
+    refresh_id = env.refresh().run("price")
+
+    assert env.last().calibration == {"total": 5, "repriced": 5, "failed": 0, "skipped": 0}
+    dcco = env.snapshot("DCCO")
+    assert (dcco.refresh_id, dcco.route, dcco.price, dcco.designation) == (
+        refresh_id,
+        "decline",
+        4.0,
+        "near",
+    )
+    assert decline.levels is not None
+    assert (dcco.value, dcco.buy_level, dcco.trim_level) == (
+        decline.value,
+        decline.levels.buy,
+        decline.levels.trim,
+    )
+    now = env.clock.now
+    assert dcco.result == reprice(
+        decline, 4.0, PRICE_DATE, env.policy, observed_at=now, entered_at=now
+    )
+    moved = dcco.result.intermediates["implied_decline_rate"]
+    assert moved is not None and moved != decline.intermediates["implied_decline_rate"]
 
 
 def test_price_refresh_batch_fallback_per_symbol(env_valued: Env) -> None:

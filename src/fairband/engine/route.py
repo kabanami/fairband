@@ -3,15 +3,16 @@
 ``value_company`` refuses before any arithmetic, in this order: no universe deciles yet (whatever
 else assembly found, which the next run with deciles judges); the refusal assembly set; a foreign
 filer (spec 11); an unclassified company (the classifier's reason); Start-up; a phase without a
-route (Decline); no positive price; no positive diluted share count; no trailing figures. Then the
-phase's route runs (``route_mature_growth``, ``route_mature_stable``, and
-``route_revenue_growth`` for High Growth and Young Growth, on the shared ``route_steps``) and
-refuses on its own guards. Mature Growth: no trailing revenue, no statutory tax rate, the anchor's
-refusals (an incomplete NTM consensus, no positive forward anchor, a forward P/E unit error),
-consensus earnings that turn negative within the path, a value a share at or below zero under the
-reinvestment charge (which keeps the value-side intermediates). Mature Stable: no positive
-trailing earnings. Revenue growth: the refusals of its module docstring, in its order. A refusal
-is a result with no value and a reason, never an exception.
+route (none today); no positive price; no positive diluted share count; no trailing figures. Then
+the phase's route runs (``route_mature_growth``, ``route_mature_stable``, ``route_decline``, and
+``route_revenue_growth`` for High Growth and Young Growth, on the shared ``route_steps``, with the
+classifier's evidence on the ``Context``) and refuses on its own guards. Mature Growth: no trailing
+revenue, no statutory tax rate, the anchor's refusals (an incomplete NTM consensus, no positive
+forward anchor, a forward P/E unit error), consensus earnings that turn negative within the path,
+a value a share at or below zero under the reinvestment charge (which keeps the value-side
+intermediates). Mature Stable: no positive trailing earnings. Revenue growth and Decline: the
+refusals of their module docstrings, in their order. A refusal is a result with no value and a
+reason, never an exception.
 
 Every result of ``value_company`` is valid until the next earnings date when that is after the
 data date, else for the policy's fallback days. Its flags are the assembly's, the classifier's
@@ -77,6 +78,16 @@ three.
   ``implied_growth``. A row refused for its target margin holds only the rebuild keys
   (``revenue_path``, ``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares``,
   ``sales_to_capital``), ``implied_margin`` and ``price_facts``.
+- Decline: the rebuild keys (``runoff_path``, ``margin``, ``tax_rate``, ``sales_to_capital``,
+  ``runoff_recovery``, ``debt``, ``cash``, ``shares``, ``ncav``, ``pi``,
+  ``distress_sale_fraction``), ``moat``, ``growth_rates`` (years 1 to 10), the run-off tables
+  (``revenue_by_year`` to ``fcff_by_year``, with ``release_by_year``), ``terminal_value``,
+  ``firm_value``, ``equity``, ``going_concern_per_share``, ``ncav_per_share``,
+  ``floored_per_share``, ``rating``, ``distress_proceeds``, ``distress_per_share``,
+  ``value_per_share``, ``altman_z``, ``piotroski_f``, ``capex_vs_depreciation``, ``eps``,
+  ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the
+  price, ``implied_decline_rate``, ``multiples`` and ``expected_return``, rebuilt from the
+  rebuild keys. A row refused for its value keeps all but the three at the price.
 """
 
 import math
@@ -92,6 +103,7 @@ from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
 from fairband.engine.revenue_growth import PeerFigures, PeerSource
 from fairband.engine.roic import CapitalYear
+from fairband.engine.route_decline import decline_at_price, value_decline
 from fairband.engine.route_mature_growth import growth_at_price, long_runway, value_mature_growth
 from fairband.engine.route_mature_stable import stable_at_price, value_mature_stable
 from fairband.engine.route_revenue_growth import (
@@ -116,7 +128,13 @@ _START_UP = (
 )
 _LONG_RUNWAY = "long-runway-high-growth"
 _VALUE_SPREAD = "value-spread"
-_ROUTED: tuple[Phase, ...] = ("Mature Growth", "Mature Stable", "High Growth", "Young Growth")
+_ROUTED: tuple[Phase, ...] = (
+    "Mature Growth",
+    "Mature Stable",
+    "High Growth",
+    "Young Growth",
+    "Decline",
+)
 
 
 @dataclass(frozen=True)
@@ -125,9 +143,9 @@ class CompanyInputs:
     ``estimate_methods`` maps an input name to the method assembly estimated it by, and
     ``notes`` an input name to the note assembly wrote for it. ``peers`` are the company's mature
     peers with their figures and ``peer_source`` where they came from, ``debt`` and ``cash`` the
-    newest annual balance sheet's (``None`` unknown); the revenue-growth route reads them, and
-    none is stored with a result. ``balance_years`` holds one ``BalanceYear`` per fiscal year of
-    ``series`` with an annual balance sheet, oldest first."""
+    newest annual balance sheet's (``None`` unknown); the revenue-growth and Decline routes read
+    them, and none is stored with a result. ``balance_years`` holds one ``BalanceYear`` per fiscal
+    year of ``series`` with an annual balance sheet, oldest first; the Decline route reads them."""
 
     symbol: str
     name: str
@@ -197,7 +215,7 @@ def value_company(
     if trailing is None:
         return refuse("no trailing figures")
 
-    c = Context(inputs, trailing, price, shares, policy, today)
+    c = Context(inputs, trailing, price, shares, policy, today, phase)
     outcome = _route(c, phase.phase)
     if isinstance(outcome, Refused):
         return refuse(outcome.reason, outcome.flags, outcome.intermediates)
@@ -205,12 +223,14 @@ def value_company(
 
 
 def _route(c: Context, phase: Phase) -> Valued | Refused:
-    """The phase's route: Mature Growth and Mature Stable their own, High Growth and Young Growth
-    the revenue-growth route."""
+    """The phase's route: Mature Growth, Mature Stable and Decline their own, High Growth and
+    Young Growth the revenue-growth route."""
     if phase == "Mature Growth":
         return value_mature_growth(c)
     if phase == "Mature Stable":
         return value_mature_stable(c)
+    if phase == "Decline":
+        return value_decline(c)
     return value_revenue_growth(c, phase)
 
 
@@ -295,6 +315,8 @@ def reprice(
         flags = _swap_long_runway(flags, long_runway(im, policy))
     elif result.route == "revenue-growth":
         im |= revenue_at_price(im, price, result.value, policy)
+    elif result.route == "decline":
+        im |= decline_at_price(im, price, result.value, policy)
     else:
         im |= stable_at_price(im, price, result.value, policy)
     price_to_value, designation = designation_for(price, result.value, policy.designation_edges)
