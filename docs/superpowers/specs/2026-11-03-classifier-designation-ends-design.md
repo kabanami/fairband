@@ -34,9 +34,11 @@ Five pieces, in the build order the founder agreed on 2026-11-03:
    method). Start-up rows (45 today) show what the price needs, not a value. Decline rows (253
    today, 118 after the classifier fix) get Damodaran's run-off DCF with a distress weighting.
 
-Method `fairband-mechanical/0.6` and policy `fairband-policy-v5.toml`. A revalue applies every
-engine piece; no vendor call is needed, because every new field the routes read is already in
-the stored statements (section 11).
+Policy `fairband-policy-v5.toml` carries every value from the start. The work is two plans
+(2026-11-03): the first (the limiter, the classifier, the designation, the controls) lands as
+method `fairband-mechanical/0.6`, the second (the two routes) as `fairband-mechanical/0.7`.
+A revalue applies each; no vendor call is needed, because every new field the routes read is
+already in the stored statements (section 11).
 
 ## 2. Goals
 
@@ -991,6 +993,7 @@ its full `deadline_s` from t = 55.
 | 2026-11-03 | The table controls scroll with the table header; a control returns to the top. Founder. |
 | 2026-11-03 | The spec is written from what was settled, without the brainstorm's questions. Founder. The calls marked *my call*: the limiter's rate and hold; the established test (three of five); the duration test (three of four); the six excluded industries; the designation edges (0.65 in place of the 0.70 mentioned); the run-off's same-year release; the recovery 0.6; the distress-sale fraction 0.6 (choice (a), not design.md's earnings-power form); BB+ as BB; π = 0 with net cash; the burn cover flag at 2 years; the requirement as year-10 revenue on a straight ramp. |
 | 2026-11-03 | A manual admission list for payment companies that do not lend: Visa, Mastercard and Global Payments; American Express and PayPal lend and stay excluded. Founder. |
+| 2026-11-03 | Two plans: method 0.6 for the limiter, the classifier, the designation and the controls; 0.7 for the routes; policy v5 for both. Claude's call at planning. |
 | 2026-11-03 | After the builder check: the Decline margin is the five-year median (10.3) and the rating reads it (10.7), so a one-year loss does not refuse an established decliner; the π rules are ordered (net cash, no interest, D); the industry exclusions take effect at the full refresh (6.4); the backfill runs before every valuing refresh (11). Claude's calls. |
 
 Builder check: done 2026-11-03 on Claude Opus 5.5; its three questions are settled in 10.3 and
