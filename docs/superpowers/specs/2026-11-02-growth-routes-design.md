@@ -113,6 +113,23 @@ Source: Damodaran's template (H2: years 2 to 5 at one rate, years 6 to 10 steppi
 terminal rate); his warning against growth periods over ten years (H1); the split of the period
 into a constant half and a transition half (H3). Founder decision 2026-11-02.
 
+**The cap on the held rate (2026-11-03).** The rate held in years 4 and 5 is the lower of g_3
+and the Base Rate Book's 90th-percentile five-year sales growth for the company's sales class;
+the fade above starts from the held rate. The class is the one the belief uses (method.md 5.4):
+the first `base_rates` class whose upper bound is at or above trailing revenue in current
+dollars, no index applied. The percentile is the top of the five-point growth bucket in which the
+class's cumulative share of companies reaches 90% in the book's Sales Growth exhibit 4 (1950 to
+2015): $0-325 Mn 40%, $325-700 Mn 45%, $700 Mn to $7,000 Mn 20%, above $7,000 Mn 15% (section 7
+holds all eleven classes). When the cap binds, the row is flagged `consensus-above-base-rate`
+naming both rates and the class, and the rebuild keys carry the cap as the path's hold, so a
+price refresh rebuilds the same path. The consensus steps of years 2 and 3 are not capped, and the
+implied-growth solve of 5.11 is not capped: it reports the rate the price needs. Reason: one
+consensus step held through year 5 with no bound ran away on the founder's data (CBRS, a 157%
+step: $3,842 a share against a $109 price; $214 capped at 45%), and design.md 7.3 names a belief
+above the base-rate 90th percentile as an input that needs evidence, which tier 1 has none of.
+The book's figures stand as printed, the smallest class's 40% below the next class's 45%
+included. Founder decision 2026-11-03.
+
 ### 5.5 The margin path and the target margin
 
 The operating margin moves in a straight line from the trailing margin m_0 to the target m* by
@@ -255,17 +272,20 @@ not computed in tier 1. Founder decision 2026-11-02.
 
 ### 5.14 Flags
 
-New: `path-held`, `tax-loss-history-unknown`, `return-above-peers`, `failure-not-charged`. Kept
+New: `path-held`, `consensus-above-base-rate` (5.4), `tax-loss-history-unknown`,
+`return-above-peers`, `failure-not-charged`. Kept
 from the mature routes where they read inputs these routes have: `few-analysts`, `value-spread`,
 `sbc-basis-unknown` (the cross-check's anchor), the capital build's flags of method.md 4.4 and
 4.5 (the sales-to-capital reads invested capital), the gate flags and `large-nri`, the assembly's
 flags and the classifier's checks. The `margin-flag` needs a positive margin history and will
 seldom fire. Order: the path's, the capital build's, `tax-loss-history-unknown`,
-`return-above-peers`, `failure-not-charged`, the trailing flags, `value-spread`.
+`return-above-peers`, `failure-not-charged`, the trailing flags, `value-spread`. Within the
+path's: `path-held`, `consensus-above-base-rate`, `few-analysts`.
 
 ### 5.15 Intermediates and inputs
 
-Intermediates: `ntm_revenue`, `path` (base year, analysts), `path_steps` (g_2, g_3, held flags),
+Intermediates: `ntm_revenue`, `path` (base year, analysts, which steps were held, the sales
+class and its cap), `path_steps` (g_2, g_3 as resolved, uncapped),
 `growth_rates` (years 1 to 10), `margin_path` (m_0, m*, the ten margins), `target_margin`
 (value, the peers used with each one's margin and market cap, the median, the largest peer's),
 `sales_to_capital` (used, own, own_usable, peers, value), `revenue_by_year`, `ebit_by_year`,
@@ -280,7 +300,8 @@ Inputs: the common DATA inputs of method.md 5.12; `ntm_revenue`, `path_step_2`, 
 (estimates), `target_margin` (DATA, source "FMP stock-peers and the peers' statements", with the
 peer count in its note), `sales_to_capital` (DATA, statements, with the measure in its note),
 `debt`, `cash`. RULE: r, g_T, the moat class, the margin of safety, the terminal return,
-`high_growth_years`, `fade_years`, `margin_convergence_year`, `peer_min`.
+`high_growth_years`, `held_growth_cap` (the class's cap, its note naming the class and whether
+it binds), `fade_years`, `margin_convergence_year`, `peer_min`.
 
 ### 5.16 Versions
 
@@ -351,6 +372,7 @@ by words and reserves `×` for "expired" (*my call* on the form).
 | `peer_margin_min_years` | 5 | Damodaran H64, margins at "averages over the last five or ten years"; policy value |
 | `implied_margin_bounds` | [−0.5, 1.0] | no source: solve bounds |
 | `universe.name_exclude_patterns` | section 5.17 | design.md 2: listings that are not operating companies; policy value |
+| `base_rates`, a `sales_p90_5y` per class | 0.40, 0.45, then 0.20 for the five classes from $700 Mn to $7,000 Mn, then 0.15 for the four above | Base Rate Book, Sales Growth exhibit 4, printed pp. 24-26: the top of the five-year sales CAGR bucket where the class's cumulative share reaches 90%; the cap on the held rate, 5.4; founder decision 2026-11-03 |
 
 Unchanged and reused: `fade_years` (5), `marginal_return_span_years` (5),
 `marginal_capital_growth_min` (0.20), `required_return`, `terminal_growth`,
@@ -389,6 +411,12 @@ All synthetic, to a tolerance of 0.01. r = 9%, g_T = 3%, tax 21%, None moat (ter
 
 - The revenue path: the three steps, the hold, the fade, the rise when g_3 < g_T, the held step
   and its flag, the refusal without four quarters.
+- The cap on the held rate: the class from trailing revenue (the bounds inclusive at the top);
+  a bound row (its flag and sentence, the cap in `path` and as the rebuild keys' hold, years 4
+  and 5 at the cap and year 6 on the fade from it, the value equal to the core's at the cap and
+  below the uncapped value); an unbound row (no flag, hold `None`); a held step above the cap
+  (both flags, in order); a price refresh of a bound row rebuilding the same rates; the
+  `held_growth_cap` RULE input; `belief_from_sales` unchanged.
 - The margin path, both directions.
 - The tax carry within the forecast, section 8's figures.
 - Reinvestment with the floor, and year 10 at the terminal return.
@@ -469,6 +497,9 @@ decisions (D).
 - G1, G44: the length of high growth is a judgment set by competitive advantage.
 - D3c: the mature-peer population for sales-to-capital; D3d: the failure-probability fallback.
 - design.md 6.7: the target-margin default; design.md 6.10: the High Growth method.
+- Base Rate Book (Mauboussin and Callahan 2016), Sales Growth exhibit 4, printed pp. 24-26: the
+  90th-percentile cap on the held rate (5.4); design.md 7.3: a belief above the base-rate 90th
+  percentile needs evidence.
 
 ## Decision log
 
@@ -481,3 +512,4 @@ decisions (D).
 | 2026-11-02 | The required return is a flat 9%; the departure from the year-specific path is stated. Founder. |
 | 2026-11-02 | The failure probability is reported as unavailable with the reason; the value is the going-concern value, flagged. A fitting source is a later research item. Founder. |
 | 2026-11-02 | The four screen fixes of section 6, and the notes and preferreds filter, ride along. Founder (the filter is my call). |
+| 2026-11-03 | The rate held in years 4 and 5 is capped at the Base Rate Book's 90th-percentile five-year sales growth for the sales class, flagged `consensus-above-base-rate`; the book's figures as printed; the consensus steps and the implied-growth solve stay uncapped. Founder, after the final review found one step running away on real data. |

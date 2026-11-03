@@ -654,3 +654,81 @@ Raise `test_bundle_patches_marked`'s floor by the number of new patches (three i
 - [ ] **Step 5: The full refresh** on the founder's database (`~/.local/share/fairband/fairband.db`, backed up first as `fairband-before-v4-<date>.db`): `uv run python -m fairband refresh --kind full` or the page's `Refresh all`. The peers call is new; every other endpoint is reused within 24 hours of its last fetch, else fetched again.
 
 - [ ] **Step 6: The readout**, written for the founder (spec section 10, item 3): over the High Growth and the Young Growth rows, the counts valued and refused by reason; the median value ÷ price and the share at or above price per phase; the count flagged `return-above-peers`; the peer-count distribution (how many rows had 0, 1, 2, 3 or more mature peers); the universe's `name pattern` count; and five named rows with their value, price and the peers used. No row's figure is changed by hand.
+
+### Task 9: The cap on the held growth rate
+
+**Files:**
+- Modify: `src/fairband/policy/fairband-policy-v3.toml` (`[values.base_rates]`)
+- Modify: `src/fairband/policy/__init__.py` (`BaseRateClass`, `_base_rates`)
+- Modify: `src/fairband/engine/anchor.py` (`belief_from_sales`, new `sales_class`)
+- Modify: `src/fairband/engine/route_revenue_growth.py` (`_path`, the `path` intermediate, the RULE inputs, the module docstring's lines on years 4 to 10 and on `hold`)
+- Modify: `docs/method.md` (4.1, 5a.3, 5a.13, 5a.14, 8, 11, 12), in the same commit as the engine
+- Test: `tests/policy/test_policy.py`, `tests/engine/test_anchor.py`, `tests/engine/test_route_revenue_growth.py`
+
+**Interfaces:**
+- Consumes: `RevenuePath.hold` (`None` means g_3 as resolved; a number is the rate of years 4 to H and the start of the fade), `resolved_steps(path)`, `growth_rates(path)`, `belief_from_sales(revenue_ttm_musd, policy)` in `anchor.py`, `rule(policy, name, value, unit, note)` and `present(flag)` in `route_steps.py`, `Flag(code, word, sentence)`, `_rebuilt_path(im, policy)` (reads `revenue_path.hold`; unchanged).
+- Produces: `BaseRateClass(upper_musd, median, label, sales_p90_5y)`, the new field last; `sales_class(revenue_ttm_musd: float, policy: Policy) -> BaseRateClass` in `anchor.py`: the first `policy.base_rates` row whose `upper_musd` is at or above the revenue (`belief_from_sales` calls it; its figures do not change); the flag `consensus-above-base-rate`; the intermediate `path` gains `sales_class` (the label) and `cap` (the fraction); `revenue_path.hold` carries the cap when it binds, else `None`; the RULE input `held_growth_cap`.
+
+**The rule** (spec 5.4, the paragraph "The cap on the held rate"; method.md 5a.3):
+
+- The sales class is `sales_class(revenue0 / 1e6, policy)`: trailing revenue is in dollars, the bounds in USD millions (2015 dollars, no index, as the belief does).
+- cap = that class's `sales_p90_5y`.
+- With g_3 as resolved (`resolved_steps(path)[0][1]`): when g_3 > cap, the path's `hold` is the cap and the row is flagged; otherwise `hold` stays `None`. The consensus steps g_2 and g_3 are not capped. `implied_hold_growth` is not touched: the solve reports the rate the price needs, above the cap or not.
+- The flag, built in `route_revenue_growth.py` beside `_path_held`:
+  `Flag("consensus-above-base-rate", "Above base rate", f"The year-3 consensus growth of {g3:.1%} is above {cap:.1%}, the Base Rate Book's 90th-percentile five-year sales growth for the {label} sales class, so years 4 and 5 hold {cap:.1%} and the fade starts from it.")`
+  Order within the path's flags: `path-held`, then `consensus-above-base-rate`, then `few-analysts`.
+- Intermediates: `path` = `{"base_year": ..., "analysts": [...], "held": [...], "sales_class": label, "cap": cap}`. `path_steps` stays `[g_2, g_3]` as resolved. `revenue_path.hold` is the cap when bound, else `None`, so `_rebuilt_path` rebuilds the same path on a price refresh.
+- RULE input, after `high_growth_years`: `rule(policy, "held_growth_cap", cap, "rate", note)` with note `f"the Base Rate Book's 90th-percentile five-year sales growth for the {label} sales class; binds: the year-3 consensus is above it"` when bound, else `f"...; does not bind: the year-3 consensus is at or below it"` (same first clause).
+
+**The policy table.** Each `[values.base_rates]` row gains `sales_p90_5y`, in the order of the rows: 0.40, 0.45, 0.20, 0.20, 0.20, 0.20, 0.20, 0.15, 0.15, 0.15, 0.15 (so `$0-325 Mn` 0.40, `$325-700 Mn` 0.45, the five classes from `$700-1,250 Mn` to `$4,500-7,000 Mn` 0.20, the four from `$7,000-12,000 Mn` up 0.15). The `source` line gains `; growth routes spec 5.4 (founder decision 2026-11-03): sales_p90_5y caps the held rate of the revenue-growth route`. The `attribution` gains `; Sales Growth Exhibit 4, printed pp. 24-26`. The `note` gains: `sales_p90_5y is the top of the five-year sales CAGR bucket (five-point buckets) in which the class's cumulative share of companies reaches 90% in the Sales Growth exhibit; a fraction. The book's figures stand as printed, the smallest class's 40% below the next class's 45% included.` `fairband-policy-v1.toml` and `fairband-policy-v2.toml` stay byte-identical (their hash tests exist); the engine loads v3 only. If any test loads v2 through `_base_rates`, say so in the report rather than making the field optional.
+
+**Figures that must not move.** Spec section 8's worked numbers (trailing revenue 1,000 dollars is 0.000001 USD millions, class `$0-325 Mn`, cap 40%, g_3 20%: not bound). Every Mature Growth and Mature Stable figure. `belief_from_sales` figures.
+
+**The fixture binds.** `high_growth_inputs()` has trailing revenue $10 bn (class `$7,000-12,000 Mn`, cap 15%) and consensus steps 23.1% then 20%: g_3 is above the cap, so the fixture's hold is 15% and the row flags. Existing assertions that read the hold from g_3 (for example the held-step test's `growth_rates[3:5] == [g2, g2]`, where g2 = 23.1% is also above the cap) change to the cap. `young_growth_inputs()` shares the figures, so the Young Growth equality test holds as it is.
+
+- [ ] **Step 1: Write the failing tests**
+
+`tests/policy/test_policy.py`: `p.base_rates[0] == BaseRateClass(325, 0.085, "$0-325 Mn", 0.40)`; `p.base_rates[1].sales_p90_5y == 0.45`; `p.base_rates[2].sales_p90_5y == 0.20`; `p.base_rates[-1].sales_p90_5y == 0.15`; `[c.sales_p90_5y for c in p.base_rates] == [0.40, 0.45, 0.20, 0.20, 0.20, 0.20, 0.20, 0.15, 0.15, 0.15, 0.15]`.
+
+`tests/engine/test_anchor.py`: `sales_class(324.9, p).label == "$0-325 Mn"`, `sales_class(325.0, p).label == "$0-325 Mn"`, `sales_class(325.1, p).label == "$325-700 Mn"`, `sales_class(1e9, p).label == ">$50,000 Mn"`; `belief_from_sales(10_000, p)` returns the same `Belief` as before this task (pin its rate, class and median from the current table: median 0.044 for `$7,000-12,000 Mn`).
+
+`tests/engine/test_route_revenue_growth.py`, on `high_growth_inputs()` valued as the existing tests value it:
+- `"consensus-above-base-rate" in codes(r)` and the flag's sentence equals the text above with g3 = 20.0%, cap 15.0%, label `$7,000-12,000 Mn`;
+- `im["path"]["sales_class"] == "$7,000-12,000 Mn"` and `im["path"]["cap"] == pytest.approx(0.15)`;
+- `im["revenue_path"]["hold"] == pytest.approx(0.15)`;
+- `im["path_steps"] == pytest.approx([16_000 / 13_000 - 1, 19_200 / 16_000 - 1])` (unchanged);
+- `im["growth_rates"][3:5] == pytest.approx([0.15, 0.15])` and `im["growth_rates"][5] == pytest.approx(0.03 + 0.12 * 4 / 5)`;
+- the value equals the core's at the cap: build by hand `RevenuePath(10_000e6, 12_400e6, (g2, g3), 0.15, 5, 5, 0.03)`, `MarginPath(-0.09, 0.20, 10)`, `RevenueCharge(0.09, 0.03, im["terminal_roic"], im["sales_to_capital"]["value"])`, `Bridge(1_000e6, 3_000e6, 100e6)` and assert `revenue_valuation(...).value_per_share == pytest.approx(r.value)` (read the exact `revenue_valuation` signature and the tax argument from `revenue_growth.py`);
+- the capped value is below the uncapped: value the same inputs with `replace(policy, base_rates=tuple(replace(c, sales_p90_5y=10.0) for c in policy.base_rates))` and assert no flag, `im["revenue_path"]["hold"] is None`, `growth_rates[3:5] == [g3, g3]`, and that value greater than `r.value`;
+- an unbound row: `replace` the fiscal 2029 annual estimate's revenue to 18_400e6 (a 15.0% step, equal to the cap: not bound): no flag, hold `None`, no `cap` binding note;
+- the held-step test: with the step held from g_2 (23.1%) and the cap 15%, `growth_rates[3:5] == [0.15, 0.15]` and `codes` has `path-held` before `consensus-above-base-rate`;
+- the RULE input `held_growth_cap` is present with value 0.15, unit `rate`, the "binds" note; on the unbound row the "does not bind" note;
+- a price refresh (`reprice`) of the bound row at another price keeps `growth_rates` and `revenue_path` equal and rebuilds `implied_growth` and `implied_margin` (extend the existing price-refresh test).
+
+- [ ] **Step 2: Run the tests to see them fail**
+
+Run: `uv run pytest tests/policy/test_policy.py tests/engine/test_anchor.py tests/engine/test_route_revenue_growth.py -q`
+Expected: failures on the new field, `sales_class`, the flag and the hold.
+
+- [ ] **Step 3: Implement**: the policy rows and loader; `sales_class` and `belief_from_sales` on it; `_path` capping the hold and returning the flag in order; the `path` intermediate; the RULE input; the docstrings that say the hold is g_3 or `None`.
+
+- [ ] **Step 4: Run the whole suite**
+
+Run: `uv run pytest -q`
+Expected: all pass, including the two mature routes' tests untouched.
+
+- [ ] **Step 5: `docs/method.md`**, in the same commit, these edits and nothing else:
+- 4.1 table, after the "Base-rate medians by sales class" row: `| Held-rate cap by sales class: the 90th-percentile five-year sales growth (eleven classes) | `base_rates`, `sales_p90_5y` | Base Rate Book, Sales Growth exhibit 4; growth routes spec 5.4; founder decision 2026-11-03 |`
+- 5a.3, replace the first sentence "Years 4 to H grow at the held rate: g_3 as resolved, or the rate the implied-growth solve tries (5a.10)." with: "Years 4 to H grow at the held rate: g_3 as resolved, capped at the sales class's 90th-percentile five-year sales growth (the class as 5.4 picks it from trailing revenue; the cap is the class's `sales_p90_5y`), or the rate the implied-growth solve tries (5a.10), which the cap does not touch. When g_3 is above the cap, the row is flagged `consensus-above-base-rate` naming both rates and the class, and `revenue_path.hold` carries the cap so a price refresh rebuilds the same path; the consensus steps g_2 and g_3 are not capped."
+- 5a.13, "the path's, `path-held` then `few-analysts`" becomes "the path's, `path-held`, `consensus-above-base-rate` (5a.3), then `few-analysts`".
+- 5a.14, "`path` (base_year, the revenue analysts of the two landing years, which steps were held)" gains ", the sales class and its cap"; the rebuild keys' "hold None" becomes "hold None, or the cap when it binds"; the RULE list gains `held_growth_cap` after `high_growth_years`, "with the class and whether it binds in its note".
+- Section 8, after the `path-held` row: `| `consensus-above-base-rate` | the year-3 consensus revenue growth is above the sales class's 90th-percentile five-year sales growth, so years 4 and 5 hold the cap and the fade starts from it (5a.3) |`
+- Section 11, the 0.4 row: after "(section 5a)" add ", the held rate capped at the sales class's base-rate 90th percentile (5a.3)"; "Policy v3 adds five values (4.1)" becomes "Policy v3 adds five values and the `sales_p90_5y` column of `base_rates` (4.1)".
+- Section 12, after the belief row: `| The cap on the held rate: the sales class's 90th-percentile five-year sales growth | Base Rate Book (Mauboussin and Callahan 2016), Sales Growth exhibit 4; design.md 7.3 (a belief above the base-rate 90th percentile needs evidence); founder decision 2026-11-03 |`
+
+- [ ] **Step 6: The checks**
+
+Run: `uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run pytest -q`
+Expected: clean.
+
+- [ ] **Step 7: Commit**, one commit: `git add -A src tests docs/method.md && git commit -m "Cap the revenue-growth route's held rate at the sales class's base-rate 90th percentile and flag a consensus above it"` with the trailer of commit 5c7ba3f (`git show -s --format=%B 5c7ba3f`).
