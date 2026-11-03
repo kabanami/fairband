@@ -1026,20 +1026,23 @@ def test_app_js_drawer_draws_the_run_off_table() -> None:
         "'Floor and distress'",
         "'Going concern a share'",
         "'NCAV a share'",
+        "var floor = ncav == null || ncav <= 0 ? 'no floor'",
+        ": im.floored_per_share > im.going_concern_per_share ? 'the floor binds'",
+        ": 'the floor does not bind';",
         "'Distress-sale value a share'",
         "'value = floored × (1 − π) + distress × π'",
         "'Altman Z″'",
         "'Piotroski F'",
-        "'✓'",
-        "'✗'",
-        "'not read'",
+        "var mark = s.value === true ? 'met' : s.value === false ? 'not met' : 'not read';",
+        "h('span', { className: 'caption app-mark' }, mark),",
     ):
         assert text in script, text
-    # the marks come from a fallback font: each in its own box, so the signals' words line up
-    assert "h('span', { className: 'figure-sm app-mark', role: 'img', 'aria-label': mark[1]," in (
-        script
-    )
-    assert ".app-mark { display: inline-block; width: 2ch; }" in _static_file("index.html")
+    # each signal's outcome in words, in a box so the signals line up: no dingbat the vendored
+    # Plex subset lacks, and nothing like the × that means expired (the brand book's glyph rules)
+    assert "✓" not in script and "✗" not in script
+    page = _static_file("index.html")
+    assert ".app-signals li { display: flex; align-items: baseline; }" in page
+    assert ".app-mark { flex: none; min-width: 8ch; }" in page
     for key in (
         "going_concern_per_share",
         "ncav_per_share",

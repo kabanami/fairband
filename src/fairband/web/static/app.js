@@ -729,16 +729,19 @@
   }
 
   /* The firm value to the going-concern value a share; the net current asset value a share, which
-     floors it when above zero and above it (spec 10.6); the distress-sale value a share. */
+     floors it when above zero and above it (spec 10.6): no floor without one or at or below zero,
+     and above zero a floor that binds or does not; the distress-sale value a share. */
   function floorAndDistress(im) {
-    var bound = im.floored_per_share > im.going_concern_per_share;
+    var ncav = im.ncav_per_share;
+    var floor = ncav == null || ncav <= 0 ? 'no floor'
+      : im.floored_per_share > im.going_concern_per_share ? 'the floor binds'
+        : 'the floor does not bind';
     return [
       ['Less debt', whole(im.debt), true],
       ['Plus cash', whole(im.cash), true],
       ['Shares', plain(im.shares), true],
       ['Going concern a share', F.formatMoney(im.going_concern_per_share), true],
-      ['NCAV a share', im.ncav_per_share == null ? noted('—', 'no floor')
-        : noted(F.formatMoney(im.ncav_per_share), bound ? 'the floor binds' : 'no floor'), true],
+      ['NCAV a share', noted(ncav == null ? '—' : F.formatMoney(ncav), floor), true],
       ['Distress-sale value a share', noted(F.formatMoney(im.distress_per_share),
         F.formatPercent(im.distress_sale_fraction) + ' of firm value + cash − debt'), true]
     ];
@@ -790,8 +793,8 @@
     turnover_up: 'Asset turnover up'
   };
 
-  /* The score of the signals read, then each signal met (✓), not met (✗) or not read for a
-     missing line (—), the mark named for a reader that does not see it. */
+  /* The score of the signals read, then each signal, met, not met or not read for a missing line,
+     the word in a box of its own so the signals line up. */
   function piotroskiF(f) {
     if (!f) return missing('No score: fewer than two annual balance sheets');
     return h(React.Fragment, null,
@@ -800,11 +803,9 @@
         ['Score', f.score + ' of ' + f.read + (f.read < f.signals.length ? ' read' : ''), true]
       ]),
       h('ul', { className: 'app-list app-signals' }, f.signals.map(function (s) {
-        var mark = s.value === true ? ['✓', 'met'] : s.value === false ? ['✗', 'not met']
-          : ['—', 'not read'];
+        var mark = s.value === true ? 'met' : s.value === false ? 'not met' : 'not read';
         return h('li', { key: s.name },
-          h('span', { className: 'figure-sm app-mark', role: 'img', 'aria-label': mark[1],
-            title: mark[1] }, mark[0]),
+          h('span', { className: 'caption app-mark' }, mark),
           h('span', { className: 'body' }, SIGNALS[s.name] || s.name));
       })));
   }

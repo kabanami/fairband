@@ -119,11 +119,12 @@
   .app-list { list-style: none; margin: 0; padding: 0; }
   .app-list li + li { margin-top: var(--space-2); }
   .app-list p { margin: 0; }
-  /* Piotroski's signals, a line each; each mark in a box of its own, so the words line up
-     whichever font draws ✓ and ✗, which the vendored Plex subset lacks. */
+  /* Piotroski's signals, a line each, each led by met, not met or not read in a box as wide as
+     the longest, so the signals' names line up, a name that wraps included. */
   .app-signals { margin-top: var(--space-2); }
+  .app-signals li { display: flex; align-items: baseline; }
   .app-signals li + li { margin-top: 0; }
-  .app-mark { display: inline-block; width: 2ch; }
+  .app-mark { flex: none; min-width: 8ch; }
   .app-inputs th, .app-inputs td { padding: var(--space-2) var(--space-1); }
   .app-inputs td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
   .app-inputs td.fb-num { white-space: nowrap; }
