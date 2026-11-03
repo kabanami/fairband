@@ -390,7 +390,7 @@ def test_the_held_rate_is_capped_at_the_sales_class_ninetieth_percentile(
     )
     assert core.value_per_share == pytest.approx(r.value)
     cap = input_named(r, "held_growth_cap")
-    assert (cap.value, cap.unit, cap.tag) == (CAP, "rate", "RULE")
+    assert (cap.value, cap.unit, cap.tag) == (CAP, "ratio", "RULE")
     assert cap.note == CAP_NOTE + "binds: the year-3 consensus is above it"
     names = [i.name for i in r.inputs]
     assert names.index("high_growth_years") + 1 == names.index("held_growth_cap")

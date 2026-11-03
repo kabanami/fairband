@@ -554,7 +554,7 @@ def _cap_input(policy: Policy, sales: BaseRateClass, binds: bool) -> TaggedInput
         "the Base Rate Book's 90th-percentile five-year sales growth for the "
         f"{sales.label} sales class; {whether}"
     )
-    return rule(policy, "held_growth_cap", sales.sales_p90_5y, "rate", note)
+    return rule(policy, "held_growth_cap", sales.sales_p90_5y, "ratio", note)
 
 
 def _from_peers(c: Context, name: str, value: float | None, note: str) -> TaggedInput:
