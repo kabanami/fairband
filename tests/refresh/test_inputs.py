@@ -237,18 +237,47 @@ def test_interest_expense_is_summed_as_its_size(store: Store) -> None:
     assert inputs.trailing.interest_expense == 20
 
 
-def test_interest_and_depreciation_sum_the_quarters_that_present_them(store: Store) -> None:
-    """A quarter without the line adds nothing; with every quarter lacking it, the figure is
-    unknown."""
-    quarters = income_quarter(QUARTERS)
-    for row in quarters:
-        del row["interestExpense"]
-    flows = cashflow_quarter(QUARTERS)
-    flows[2]["depreciationAndAmortization"] = None  # the quarter ending 2026-03-31
-    inputs = build(store(**{**bodies(), "income-quarter": quarters, "cashflow-quarter": flows}))
-    assert inputs.trailing is not None and inputs.trailing.quarters == 4
-    assert inputs.trailing.interest_expense is None
-    assert inputs.trailing.depreciation == (16 + 18 + 19) * M
+def _lacking(payload: list[dict[str, Any]], index: int, line: str) -> list[dict[str, Any]]:
+    """The payload with its row ``index`` not presenting ``line``."""
+    del payload[index][line]
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("payloads", "expected"),
+    [
+        (
+            {
+                "income-quarter": _lacking(income_quarter(QUARTERS), 2, "interestExpense"),
+                "cashflow-quarter": _lacking(
+                    cashflow_quarter(QUARTERS), 3, "depreciationAndAmortization"
+                ),
+            },
+            (None, None),
+        ),
+        ({}, (4 * 4 * M, (16 + 17 + 18 + 19) * M)),  # four quarters of -$4 m: by size
+        (
+            {
+                "income-annual": _lacking(income_annual(YEARS), -1, "interestExpense"),
+                "income-quarter": income_quarter(q for q in QUARTERS if q != date(2026, 3, 31)),
+            },
+            (None, (50 + 5 * 11) * M),  # fiscal 2025's lines
+        ),
+    ],
+    ids=["a-quarter-lacks-the-line", "four-quarters", "fiscal-year"],
+)
+def test_interest_and_depreciation_are_missing_when_a_quarter_lacks_the_line(
+    store: Store,
+    payloads: dict[str, Any],
+    expected: tuple[float | None, float | None],
+) -> None:
+    """As every trailing figure: a quarter without the line leaves the sum missing, never a sum of
+    fewer quarters standing for twelve months. Four quarters give the interest as the sum of their
+    sizes and the depreciation as the plain sum; the fiscal-year fallback reads the annual lines,
+    missing when the year lacks one."""
+    inputs = build(store(**{**bodies(), **payloads}))
+    assert inputs.trailing is not None
+    assert (inputs.trailing.interest_expense, inputs.trailing.depreciation) == expected
 
 
 def test_balance_years_read_the_lines_by_name(conn_with_company: sqlite3.Connection) -> None:

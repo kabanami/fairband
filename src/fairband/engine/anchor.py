@@ -77,9 +77,9 @@ class AnnualEstimate:
 @dataclass(frozen=True)
 class TrailingFigures:
     """The trailing twelve months: the last four quarters summed, or the last fiscal year when
-    ``on_fiscal_year``. ``interest_expense`` sums each period's interest expense by its size (FMP
-    signs it either way) and ``depreciation`` the cash flow's depreciation and amortization as
-    signed; each sums the periods that present the line, ``None`` when none does."""
+    ``on_fiscal_year``; a figure is ``None`` when any of the periods lacks it.
+    ``interest_expense`` sums each period's interest expense by its size (FMP signs it either way)
+    and ``depreciation`` the cash flow's depreciation and amortization as signed."""
 
     period_end: date
     quarters: int

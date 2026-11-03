@@ -30,9 +30,9 @@ else ``"unknown"``.
 Trailing figures (spec 6.6): the sums of the last four quarters when each ends 80 to 100 days after
 the one before (the anchor's rule), joined to the quarterly cash flow by period end, a sum ``None``
 when any quarter lacks its part; else the last fiscal year, flagged ``trailing-on-fiscal-year``.
-The interest expense and the depreciation and amortization (spec 2026-11-03 section 11) sum the
-same periods but only those that present the line, ``None`` when none does; the interest expense
-counts each period by its size, as FMP signs it either way.
+The interest expense and the depreciation and amortization (spec 2026-11-03 section 11) are
+summed the same way; the interest expense counts each period by its size, as FMP signs it either
+way.
 The diluted share count is the newest quarter's weighted average, else the newest fiscal year's.
 
 ``balance_lines`` reads the newest annual balance sheet's lines by FMP name, and
@@ -418,8 +418,8 @@ def _trailing(
         dividends=_total(flows, "netDividendsPaid"),
         buybacks=_total(flows, "commonStockRepurchased"),
         equity_issued=_total(flows, "commonStockIssuance"),
-        interest_expense=_presented(incomes, "interestExpense", size=True),
-        depreciation=_presented(flows, "depreciationAndAmortization"),
+        interest_expense=_total(incomes, "interestExpense", size=True),
+        depreciation=_total(flows, "depreciationAndAmortization"),
     )
     return figures, () if on_fiscal_year else tuple(q.end for q in incomes)
 
@@ -517,17 +517,11 @@ def _by_end(periods: Sequence[_Period]) -> dict[date, _Period]:
     return {p.end: p for p in periods}
 
 
-def _total(periods: Sequence[_Period], name: str) -> float | None:
-    """The sum over the periods; ``None`` when any of them lacks the value."""
-    values = [v for p in periods if (v := p.value(name)) is not None]
-    return sum(values) if len(values) == len(periods) else None
-
-
-def _presented(periods: Sequence[_Period], name: str, size: bool = False) -> float | None:
-    """The sum over the periods that present a value, each by its size with ``size``; ``None``
-    when none does."""
+def _total(periods: Sequence[_Period], name: str, size: bool = False) -> float | None:
+    """The sum over the periods, each by its size with ``size``; ``None`` when any of them lacks
+    the value."""
     values = [abs(v) if size else v for p in periods if (v := p.value(name)) is not None]
-    return sum(values) if values else None
+    return sum(values) if len(values) == len(periods) else None
 
 
 def _carried(currencies: Sequence[str | None]) -> list[str]:

@@ -218,7 +218,7 @@ These set the method's structure, not a valuation judgment, and live in the code
 
 The trailing figures are the sums of the last four quarterly income statements when there are four and each ends 80 to 100 days after the one before, joined to the quarterly cash-flow statements by period end: revenue, operating income, net income, diluted EPS, stock compensation, operating cash flow, capital spending, dividends, buybacks and stock issued. A sum is missing when any quarter lacks its part. Otherwise the trailing figures are the last fiscal year's, flagged `trailing-on-fiscal-year`.
 
-Two more trailing figures sum the same quarters, or read the same fiscal year: the interest expense and the depreciation and amortization (the cash flow's). Each sums the quarters that present the line and is missing only when none does. The interest expense counts each quarter by its size, never netted, since FMP signs it either way across companies; the depreciation keeps FMP's sign.
+Two more trailing figures sum the same quarters, or read the same fiscal year: the interest expense and the depreciation and amortization (the cash flow's). As every trailing figure, each is missing when any quarter lacks its line, or, on the fiscal-year fallback, when the year lacks it; a sum of fewer quarters never stands for twelve months. The interest expense counts each quarter by its size, never netted, since FMP signs it either way across companies; the depreciation keeps FMP's sign.
 
 The diluted share count is the newest quarter's weighted average diluted shares, else the newest fiscal year's. One share count serves every year of every route.
 
