@@ -52,10 +52,12 @@
   /* A saved list's order is the table's. A list saved before the order mattered, or by an older
      build, may name a column the bundle no longer has, repeat one, or lack a locked one: unknown
      keys and repeats go, a missing Ticker goes first and a missing Price last, since neither can
-     be switched off. */
+     be switched off. A list saved under method 0.5 names the column Price vs value replaced by
+     its old key: Price vs value takes that key's place. */
   function normalise(columns) {
-    var kept = columns.filter(function (key, i) {
-      return F.COLUMN_KEYS.indexOf(key) !== -1 && columns.indexOf(key) === i;
+    var named = columns.map(function (key) { return key === 'stance' ? 'designation' : key; });
+    var kept = named.filter(function (key, i) {
+      return F.COLUMN_KEYS.indexOf(key) !== -1 && named.indexOf(key) === i;
     });
     if (kept.indexOf('ticker') === -1) kept.unshift('ticker');
     if (kept.indexOf('price') === -1) kept.push('price');
@@ -245,13 +247,16 @@
      --scroller-width, the scroller's width less its scrollbar, which follows the window and the
      drawer; a scroller made taller can leave Top's threshold behind without a scroll, so the
      observer asks again. The observer lives as long as the table; without ResizeObserver the
-     header takes the bar's one-line height and the bar the screen's width. */
+     header takes the bar's one-line height and the bar the screen's width. The Groups view hides
+     the screen, whose scroller then measures 0 wide: the observer keeps the last measures, and
+     takes new ones when the screen shows again. */
   function Screen(props) {
     React.useEffect(function () {
       var bar = document.querySelector('.fb-screen__bar');
       if (!bar || typeof ResizeObserver === 'undefined') return undefined;
       var main = bar.closest('.app-main');
       var observer = new ResizeObserver(function () {
+        if (main.clientWidth === 0) return;
         main.style.setProperty('--bar-height', bar.offsetHeight + 'px');
         main.style.setProperty('--scroller-width', main.clientWidth + 'px');
         pastFirstScreen(main);
@@ -351,7 +356,7 @@
         h(F.BandMeter, {
           low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
           buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
-          showScale: false, caption: standing(r)
+          showScale: false, caption: standing(r, body.designationEdges)
         }),
         levels(r),
         h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route),
@@ -391,12 +396,25 @@
     ];
   }
 
-  /* The band meter's caption: the row's word and its price ÷ value to two decimals
-     (classifier-designation spec 7.3). A row valued before the designation has neither. */
-  function standing(r) {
+  /* The band meter's caption: the row's word and its price ÷ value (classifier-designation spec
+     7.3). A row valued before the designation has neither. */
+  function standing(r, edges) {
     var word = F.DESIGNATION[r.designation];
     if (!word || r.price_to_value == null) return null;
-    return word + ': the price is ' + r.price_to_value.toFixed(2) + ' × the value';
+    return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × the value';
+  }
+
+  /* Price ÷ value to two decimals, unless they would land on one of the policy's designation
+     edges the ratio is not on: 0.8499 would read 0.85, where Near starts, beside the word Below.
+     Then three decimals, kept a thousandth off the edge (0.849, and 1.151 for 1.1501), so the
+     figure stays inside the word's band. The CLI's line does the same (__main__.py). */
+  function ratioFigure(ratio, edges) {
+    var two = ratio.toFixed(2);
+    var edge = Number(two);
+    if (ratio === edge || (edges || []).indexOf(edge) === -1) return two;
+    var three = Number(ratio.toFixed(3));
+    three = ratio < edge ? Math.min(three, edge - 0.001) : Math.max(three, edge + 0.001);
+    return three.toFixed(3);
   }
 
   /* The levels under the band meter, each named for what sets it (spec 7.3): the value less the
@@ -405,11 +423,12 @@
   function levels(r) {
     var moat = r.intermediates.moat;
     var margin = Math.round((1 - r.levels.buy / r.value) * 100);
+    var basis = moat === 'None' ? 'value less the ' + margin + '% margin for no moat'
+      : 'value less the ' + moat + ' moat\'s ' + margin + '%';
     return h('div', { className: 'app-levels' }, pairs([
       ['Fair value', F.formatMoney(r.value), true],
       ['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy),
-        moat ? h('span', { className: 'caption app-muted app-line' },
-          'value less the ' + moat + ' moat\'s ' + margin + '%') : null), true],
+        moat ? h('span', { className: 'caption app-muted app-line' }, basis) : null), true],
       ['Fair band', F.formatMoney(r.levels.fair_low) + ' – ' +
         F.formatMoney(r.levels.fair_high), true],
       ['1.5 × value', F.formatMoney(r.levels.trim), true]

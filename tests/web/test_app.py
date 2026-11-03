@@ -557,7 +557,9 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
     response = client.get("/api/companies/AAPL")
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"company", "snapshot", "result", "today"}
+    assert set(body) == {"company", "snapshot", "result", "today", "designationEdges"}
+    # The policy's edges, by which the drawer keeps its price ÷ value figure inside the band.
+    assert body["designationEdges"] == [0.65, 0.85, 1.15, 1.5]
     result = body["result"]
     assert result == json.loads(result_to_json(results["AAPL"]))
     assert result["route"] == "mature-growth"
@@ -767,16 +769,17 @@ def test_app_js_narrows_on_the_designation() -> None:
 
 
 def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
-    """Spec 7.3: the band meter's caption says the word and the price ÷ value to two decimals;
-    the levels below it read Margin of safety (the value less the moat's margin), Fair band and
-    1.5 × value, and the meter's own scale, whose words would collide in the rail, is off."""
+    """Spec 7.3: the band meter's caption says the word and the price ÷ value; the levels below
+    it read Margin of safety (the value less the moat's margin), Fair band and 1.5 × value, and
+    the meter's own scale, whose words would collide in the rail, is off."""
     script = _static_file("app.js")
     assert "buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation," in script
-    assert "showScale: false, caption: standing(r)" in script
+    assert "showScale: false, caption: standing(r, body.designationEdges)" in script
     assert "var word = F.DESIGNATION[r.designation];" in script
     assert "if (!word || r.price_to_value == null) return null;" in script
-    assert "return word + ': the price is ' + r.price_to_value.toFixed(2) + ' × the value';" in (
-        script
+    assert (
+        "return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × the value';"
+        in script
     )
     assert "var margin = Math.round((1 - r.levels.buy / r.value) * 100);" in script
     assert "['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy)," in script
@@ -787,10 +790,49 @@ def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
     assert "h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route)," in script
 
 
+def test_app_js_keeps_the_ratio_figure_inside_the_band() -> None:
+    """The caption's two decimals would contradict the word at an edge the ratio is not on
+    (0.8499 reads 0.85, where Near starts, beside Below): then a third decimal, kept a thousandth
+    off the edge, on the policy's edges from the drawer's body. The CLI's line does the same;
+    tests/refresh/test_run.py runs it at the edges."""
+    script = _static_file("app.js")
+    helper = script[script.index("function ratioFigure(ratio, edges) {") :]
+    helper = helper[: helper.index("\n  }\n")]
+    assert "var two = ratio.toFixed(2);" in helper
+    assert "var edge = Number(two);" in helper
+    assert "if (ratio === edge || (edges || []).indexOf(edge) === -1) return two;" in helper
+    assert "var three = Number(ratio.toFixed(3));" in helper
+    assert (
+        "three = ratio < edge ? Math.min(three, edge - 0.001) : Math.max(three, edge + 0.001);"
+        in helper
+    )
+    assert "return three.toFixed(3);" in helper
+    assert "r.price_to_value.toFixed(2)" not in script
+
+
+def test_app_js_words_the_margin_for_no_moat() -> None:
+    """The moat class "None" is no moat: its margin reads "value less the 45% margin for no
+    moat", not "the None moat's 45%"; a Wide or Narrow moat keeps the moat's own wording."""
+    script = _static_file("app.js")
+    assert (
+        "var basis = moat === 'None' ? 'value less the ' + margin + '% margin for no moat'"
+        in script
+    )
+    assert "moat ? h('span', { className: 'caption app-muted app-line' }, basis) : null" in script
+    assert "None moat" not in script
+
+
 def test_app_js_normalises_a_saved_column_list() -> None:
+    """A saved list keeps its order; a list saved under method 0.5 names the Stance column,
+    and Price vs value takes its place, where `stance` stood."""
     script = _static_file("app.js")
     assert "function normalise(columns)" in script
     assert "F.COLUMN_KEYS" in script
+    assert (
+        "var named = columns.map(function (key) { return key === 'stance' ? 'designation' : key; });"
+        in script
+    )
+    assert "return F.COLUMN_KEYS.indexOf(key) !== -1 && named.indexOf(key) === i;" in script
     assert "if (kept.indexOf('ticker') === -1) kept.unshift('ticker');" in script
     assert "if (kept.indexOf('price') === -1) kept.push('price');" in script
     assert "if (Array.isArray(saved)) return normalise(saved);" in script
@@ -894,7 +936,7 @@ def test_bundle_has_extra_columns() -> None:
 
 def test_bundle_default_columns_end_with_designation() -> None:
     """Spec 7.3's default columns. A list saved before carries `stance`, which the bundle no
-    longer has; the page's normalise drops it."""
+    longer has; the page's normalise puts `designation` in its place."""
     bundle = _component_file("bundle.js")
     default = re.search(r"var DEFAULT_COLUMNS = \[(.*?)\];", bundle, re.DOTALL)
     assert default is not None
@@ -987,6 +1029,12 @@ def test_no_stance_word_remains() -> None:
     ):
         for gone in ("stanceOf", "STANCE[", "Five-step", "stance5", "stance3"):
             assert gone not in text, (name, gone)
+        if name == "app.js":
+            # The one mention: a column list saved under method 0.5 carries the old key, which
+            # normalise maps to the designation's.
+            legacy = "key === 'stance' ? 'designation' : key"
+            assert text.count(legacy) == 1
+            text = text.replace(legacy, "")
         assert re.search(r"\bstance", text, re.IGNORECASE) is None, name
 
 
@@ -1169,6 +1217,19 @@ def test_app_js_measures_the_bar() -> None:
     assert "main = h(Screen, {" in script
 
 
+def test_app_js_keeps_the_measures_while_the_screen_is_hidden() -> None:
+    """The Groups view hides the screen, whose scroller then measures 0 wide: the observer
+    writes neither 0px measure nor asks after Top until the screen shows again."""
+    script = _static_file("app.js")
+    observer = script[script.index("new ResizeObserver(function () {") :]
+    observer = observer[: observer.index("});")]
+    guard = "if (main.clientWidth === 0) return;"
+    assert guard in observer
+    assert observer.index(guard) < observer.index("--bar-height")
+    assert observer.index(guard) < observer.index("--scroller-width")
+    assert observer.index(guard) < observer.index("pastFirstScreen(main);")
+
+
 def test_index_keeps_the_bar_in_view_sideways() -> None:
     """A table wider than the scroller scrolls sideways under the bar, which stays in view at no
     more than the scroller's width, so no row shows beside it; a table that fits keeps the
@@ -1281,6 +1342,11 @@ def test_index_d_ts_declares_the_designation() -> None:
     meter = re.search(r"export interface BandMeterProps \{\n(.*?)\n\}", declarations, re.DOTALL)
     assert meter is not None
     assert "designation?: Designation | null;" in meter.group(1)
+    # The price's comment, edited when the word left it, carries the marker as every patch does.
+    assert (
+        "/** The market price, per share. fairband: no word is derived from it; see `designation`."
+        in meter.group(1)
+    )
     assert "export declare const DESIGNATION: Record<Designation, string>;" in declarations
 
 

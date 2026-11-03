@@ -15,6 +15,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from contextlib import closing
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -358,8 +359,43 @@ def test_cli_prints_the_value_line(
     assert acme.value is not None and acme.price_to_value is not None
     assert acme.designation == "above"
     line = capsys.readouterr().out.splitlines()[-1]
-    value, ratio = f"{acme.value:.2f}", f"{acme.price_to_value:.2f}"
-    assert line == f"ACME  Mature Growth  value {value}  above ({ratio} × value)"
+    # ACME's price is about 1.496 × its value: to two decimals 1.50, the edge where well-above
+    # starts, so the line gives the third decimal that keeps the figure in its band.
+    assert f"{acme.price_to_value:.2f}" == "1.50" and f"{acme.price_to_value:.3f}" == "1.496"
+    assert line == f"ACME  Mature Growth  value {acme.value:.2f}  above (1.496 × value)"
+
+
+def test_cli_line_keeps_the_ratio_inside_its_band(env_with_deciles: Env) -> None:
+    """Two decimals that would land on a designation edge the ratio is not on would print the
+    next band's figure beside the word (0.8499 as 0.85, where near starts): the line gives a
+    third decimal, kept a thousandth off the edge. A ratio on an edge, or whose two decimals land
+    on no edge, prints as before; a snapshot without a designation ends at its value."""
+    env = env_with_deciles
+    env.run(["ACME"])
+    acme = env.snapshot("ACME")
+    assert acme.value is not None
+    edges = env.policy.designation_edges
+    assert edges == (0.65, 0.85, 1.15, 1.50)
+    value = f"{acme.value:.2f}"
+
+    def line(ratio: float | None, designation: str | None) -> str:
+        row = replace(acme, price_to_value=ratio, designation=designation)
+        return cli._snapshot_line("ACME", row, edges)
+
+    assert line(0.8499, "below") == f"ACME  Mature Growth  value {value}  below (0.849 × value)"
+    assert line(1.1501, "above") == f"ACME  Mature Growth  value {value}  above (1.151 × value)"
+    assert line(0.6499, "well-below").endswith("well-below (0.649 × value)")
+    assert line(1.4999, "above").endswith("above (1.499 × value)")
+    # A third decimal that rounds onto the edge too is kept a thousandth off it.
+    assert line(0.84996, "below").endswith("below (0.849 × value)")
+    assert line(1.15002, "above").endswith("above (1.151 × value)")
+    # On an edge, and off every edge, two decimals as before.
+    assert line(85 / 100, "near").endswith("near (0.85 × value)")
+    assert line(150 / 100, "well-above").endswith("well-above (1.50 × value)")
+    assert line(0.7512, "below").endswith("below (0.75 × value)")
+    assert line(1.0468, "near").endswith("near (1.05 × value)")
+    # A snapshot valued before the designation (method 0.5) has a value and no word.
+    assert line(None, None) == f"ACME  Mature Growth  value {value}"
 
 
 def test_cli_exits_1_when_the_refresh_is_not_done(

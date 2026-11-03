@@ -6,7 +6,7 @@ import signal
 import sqlite3
 import sys
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing, contextmanager
 from types import FrameType
 from typing import Any
@@ -200,7 +200,7 @@ def _refresh(args: argparse.Namespace) -> int:
         for line in _calibration_lines(calibration):
             print(line)
     for symbol, snapshot in rows:
-        print(_snapshot_line(symbol, snapshot))
+        print(_snapshot_line(symbol, snapshot, policy.designation_edges))
     return 0 if status == "done" else 1
 
 
@@ -260,9 +260,10 @@ def _print_progress(progress: Progress) -> None:
     )
 
 
-def _snapshot_line(symbol: str, snapshot: SnapshotRow | None) -> str:
+def _snapshot_line(symbol: str, snapshot: SnapshotRow | None, edges: Sequence[float]) -> str:
     """``AAPL  Mature Growth  value 189.40  near (1.05 × value)``, or the phase (``—`` without
-    one) and the refusal reason."""
+    one) and the refusal reason. A snapshot valued before the designation ends at its value. The
+    ratio is ``_ratio_figure``'s, on the policy's designation ``edges``."""
     if snapshot is None:
         return f"{symbol}  —  no snapshot yet"
     phase = snapshot.phase or "—"
@@ -271,7 +272,22 @@ def _snapshot_line(symbol: str, snapshot: SnapshotRow | None) -> str:
     line = f"{symbol}  {phase}  value {snapshot.value:.2f}"
     if snapshot.designation is None or snapshot.price_to_value is None:
         return line
-    return f"{line}  {snapshot.designation} ({snapshot.price_to_value:.2f} × value)"
+    ratio = _ratio_figure(snapshot.price_to_value, edges)
+    return f"{line}  {snapshot.designation} ({ratio} × value)"
+
+
+def _ratio_figure(ratio: float, edges: Sequence[float]) -> str:
+    """Price ÷ value to two decimals, unless they would land on one of the designation ``edges``
+    the ratio is not on (0.8499 would read 0.85, where ``near`` starts, beside ``below``); then
+    three decimals, kept a thousandth off the edge (0.849, and 1.151 for 1.1501), so the figure
+    stays inside the word's band. The drawer's caption does the same (``app.js``)."""
+    two = f"{ratio:.2f}"
+    edge = float(two)
+    if ratio == edge or edge not in edges:
+        return two
+    three = float(f"{ratio:.3f}")
+    three = min(three, edge - 0.001) if ratio < edge else max(three, edge + 0.001)
+    return f"{three:.3f}"
 
 
 def _calibration_lines(calibration: dict[str, Any]) -> list[str]:

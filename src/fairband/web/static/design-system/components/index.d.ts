@@ -177,7 +177,7 @@ export interface BandMeterProps {
   /** The fair band, per share. */
   low: number;
   high: number;
-  /** The market price, per share. */
+  /** The market price, per share. fairband: no word is derived from it; see `designation`. */
   price: number;
   /** The point estimate inside the band. Defaults to the band's midpoint. */
   fairValue?: number;

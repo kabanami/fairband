@@ -169,7 +169,9 @@ def create_app(
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:
-        """The company's latest snapshot in full, with its latest universe row."""
+        """The company's latest snapshot in full, with its latest universe row and the policy's
+        designation edges, by which the drawer keeps its price ÷ value figure inside the word's
+        band."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
@@ -181,6 +183,7 @@ def create_app(
             "snapshot": snapshot_json(snapshot),
             "result": json.loads(result_to_json(snapshot.result)),
             "today": today.isoformat(),
+            "designationEdges": list(policy.designation_edges),
         }
 
     @app.post("/api/refresh", response_model=None)
