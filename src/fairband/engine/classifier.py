@@ -1,10 +1,13 @@
 """Damodaran's six life-cycle phases from revenue growth and operating margin (``design.md`` 5).
 
-The rules run in the order of 5.5 and the first that fits decides the phase: a zero revenue now
-or three years back is Start-up; growth "Close to zero or negative" with a falling five-year
-revenue trend is Decline; a negative margin is Young Growth, or High Growth when its trend
-improves; a positive margin is Mature Growth or Mature Stable by the growth word. A margin of
-exactly zero counts as positive. The checks flag a company but never change its phase.
+The rules run in the order of ``method.md`` 3.5 and the first that fits decides the phase: a zero
+revenue now or three years back is Start-up; growth "Close to zero or negative" with a falling
+five-year revenue trend and revenue that fell in at least three of the last four year-over-year
+steps is Decline; a negative margin of an established company (an operating margin above zero in
+at least three of the last five fiscal years) takes the growth word's phase as a positive margin
+would, and any other negative margin is Young Growth, or High Growth when its trend improves; a
+positive margin is Mature Growth or Mature Stable by the growth word. A margin of exactly zero
+counts as positive. The checks flag a company but never change its phase.
 
 A data gap leaves the phase ``None`` with a reason: fewer than two fiscal years, no revenue or a
 negative revenue for the last fiscal year, no measurable revenue growth, or no operating margin
@@ -21,6 +24,7 @@ years after it keep their place. The margin sign comes from the last of those fi
 has a margin. Fewer than five fiscal years, or a shortened growth span, is "short history".
 """
 
+import itertools
 import statistics
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -31,6 +35,10 @@ from fairband.engine.types import Flag, Phase, PhaseEvidence
 _GROWTH_SPAN = 3
 _TREND_WINDOW = 5
 _TREND_MIN_POINTS = 3
+
+ESTABLISHED_YEARS = 3
+DECLINE_FALLS = 3
+DECLINE_STEPS = 4
 
 GROWTH_WORDS = ("Close to zero or negative", "Low", "Moderate", "High", "Very High")
 
@@ -123,6 +131,34 @@ def operating_margin(fy: FiscalYear) -> float | None:
     return fy.operating_income / fy.revenue
 
 
+def established(series: Series) -> tuple[bool, int]:
+    """Whether the company is established, and the count of years that decides it.
+
+    Established: at least three of the last five fiscal years have an operating margin above
+    zero. A year without a margin counts for nothing.
+    """
+    count = sum(
+        1 for fy in series[-_TREND_WINDOW:] if (m := operating_margin(fy)) is not None and m > 0
+    )
+    return count >= ESTABLISHED_YEARS, count
+
+
+def falling_steps(series: Series) -> tuple[int, int]:
+    """The falls and the steps among the last four year-over-year steps.
+
+    A step counts only when both years have a revenue; it is a fall when the later revenue is
+    below the earlier.
+    """
+    falls = steps = 0
+    for earlier, later in itertools.pairwise(fy.revenue for fy in series[-DECLINE_STEPS - 1 :]):
+        if earlier is None or later is None:
+            continue
+        steps += 1
+        if later < earlier:
+            falls += 1
+    return falls, steps
+
+
 def compute_deciles(
     series_by_symbol: Mapping[str, Series], refresh_id: int | None = None
 ) -> Deciles:
@@ -178,7 +214,7 @@ def dickinson(fy: FiscalYear) -> str | None:
 
 
 def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
-    """The phase by the rules of ``design.md`` 5.5, with the evidence and the checks.
+    """The phase by the rules of ``method.md`` 3.5, with the evidence and the checks.
 
     A data gap, or no operating margin in any year when the margin must decide, leaves the phase
     ``None`` with the reason.
@@ -208,20 +244,29 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
     g_decile = None if g3 is None else decile(g3, deciles.growth_edges)
     g_word = None if g_decile is None else GROWTH_WORDS[(g_decile - 1) // 2]
     rev_slope = _trend(series, lambda fy: fy.revenue)
-    margin, m_slope = _last_margin(series), _trend(series, operating_margin)
+    deciding = _deciding_year(series)
+    margin = None if deciding is None else operating_margin(deciding)
+    m_slope = _trend(series, operating_margin)
     direction = _margin_direction(margin, m_slope, deciles.margin_slope_edges)
     fcf = _fcf_sign(series[-1])
+    is_established, positive_years = established(series)
+    falls, _ = falling_steps(series)
 
     phase: Phase | None
     if is_startup(series):
         phase = "Start-up"
-    elif g_word == GROWTH_WORDS[0] and rev_slope is not None and rev_slope < 0:
+    elif (
+        g_word == GROWTH_WORDS[0]
+        and rev_slope is not None
+        and rev_slope < 0
+        and falls >= DECLINE_FALLS
+    ):
         phase = "Decline"
     elif margin is None:
         phase = None
-    elif margin < 0:
+    elif margin < 0 and not is_established:
         phase = "High Growth" if m_slope is not None and m_slope > 0 else "Young Growth"
-    elif g_word in ("Very High", "High", "Moderate"):
+    elif g_word in ("Very High", "High", "Moderate"):  # rule 5, and rule 4a's loss year
         phase = "Mature Growth"
     else:
         phase = "Mature Stable"
@@ -240,7 +285,22 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
         fcf_sign=fcf,
         dickinson=dickinson(series[-1]),
         checks=(
-            () if phase is None else _checks(series, phase, span, g_word, margin, direction, fcf)
+            ()
+            if phase is None
+            else _checks(
+                series,
+                phase,
+                span,
+                g_word,
+                rev_slope,
+                margin,
+                None if deciding is None else deciding.year,
+                direction,
+                fcf,
+                is_established,
+                positive_years,
+                falls,
+            )
         ),
     )
 
@@ -287,12 +347,17 @@ def _checks(
     phase: Phase,
     span: int | None,
     g_word: str | None,
+    rev_slope: float | None,
     margin: float | None,
+    margin_year: int | None,
     direction: str | None,
     fcf: str | None,
+    is_established: bool,
+    positive_years: int,
+    falls: int,
 ) -> tuple[Flag, ...]:
     checks: list[Flag] = []
-    if margin is not None and margin < 0 and g_word is not None:
+    if margin is not None and margin < 0 and not is_established and g_word is not None:
         pointed = _GROWTH_WORD_PHASE[g_word]
         if pointed != phase:
             checks.append(
@@ -303,6 +368,36 @@ def _checks(
                     f"while the margin rule gave {phase}.",
                 )
             )
+    # rule 4a: only an established company's loss year reaches a mature phase with a negative margin
+    if (
+        margin is not None
+        and margin < 0
+        and is_established
+        and phase in ("Mature Growth", "Mature Stable")
+    ):
+        checks.append(
+            Flag(
+                "loss-year",
+                "Loss year",
+                f"The operating margin is negative in fiscal {margin_year} after a positive "
+                f"margin in {positive_years} of the last five fiscal years; "
+                "the phase follows the growth word.",
+            )
+        )
+    if (
+        g_word == GROWTH_WORDS[0]
+        and rev_slope is not None
+        and rev_slope < 0
+        and falls < DECLINE_FALLS
+    ):
+        checks.append(
+            Flag(
+                "revenue-falling",
+                "Revenue falling",
+                f"Revenue fell in {falls} of the last four fiscal years with a falling "
+                "five-year trend; the Decline rule needs three.",
+            )
+        )
     if direction is not None:
         pointed = _DIRECTION_PHASE[direction]
         if pointed != phase:
@@ -389,10 +484,16 @@ def _trend(series: Series, value: Callable[[FiscalYear], float | None]) -> float
     return statistics.linear_regression(positions, values).slope
 
 
+def _deciding_year(series: Series) -> FiscalYear | None:
+    """The last of the last five fiscal years that has an operating margin; its margin decides."""
+    window = series[-_TREND_WINDOW:]
+    return next((fy for fy in reversed(window) if operating_margin(fy) is not None), None)
+
+
 def _last_margin(series: Series) -> float | None:
     """The margin of the last of the last five fiscal years that has one."""
-    window = series[-_TREND_WINDOW:]
-    return next((m for fy in reversed(window) if (m := operating_margin(fy)) is not None), None)
+    deciding = _deciding_year(series)
+    return None if deciding is None else operating_margin(deciding)
 
 
 def _margin_direction(

@@ -109,10 +109,14 @@ The margin direction exists for a margin at or above zero with a trend. The posi
 The first rule that fits decides the phase.
 
 1. A Start-up (3.2) is **Start-up**.
-2. A growth word of "Close to zero or negative" with a falling five-year revenue trend is **Decline**, whatever the margin.
+2. A growth word of "Close to zero or negative" with a falling five-year revenue trend and revenue that fell in at least three of the last four year-over-year steps is **Decline**, whatever the margin. The steps are those between the last five fiscal years; a step is a fall when both years have a revenue and the later is below the earlier, and a step with a missing year is not a fall. With fewer than three steps on file the rule cannot fire.
 3. With no operating margin in the last five fiscal years, the company is unclassified ("no operating margin").
-4. A negative margin is **High Growth** when the margin trend is above zero, else **Young Growth** (a missing trend or a slope of exactly zero counts as not improving).
+4. A negative margin:
+   - (4a) of an established company takes rule 5's phase by the growth word, as if the margin were positive, and is flagged `loss-year`;
+   - (4b) of any other company is **High Growth** when the margin trend is above zero, else **Young Growth** (a missing trend or a slope of exactly zero counts as not improving).
 5. A margin at or above zero with a growth word of "Very High", "High" or "Moderate" is **Mature Growth**; with "Low" or "Close to zero or negative" it is **Mature Stable**. A margin of exactly zero counts as positive and is flagged.
+
+A company is **established** when at least three of the last five fiscal years on file have an operating margin above zero; a year without a margin counts for nothing.
 
 ### 3.6 The checks
 
@@ -120,7 +124,9 @@ A check flags the company and never changes its phase.
 
 | Check | Flag code | When it fires |
 |---|---|---|
-| Growth word | `growth-word-disagrees` | Negative margin only. The growth word points to another phase: Very High → Young Growth, High → High Growth, Moderate → Mature Growth, Low → Mature Stable, Close to zero or negative → Decline. |
+| Growth word | `growth-word-disagrees` | Negative margin of a company that is not established (rule 4b). The growth word points to another phase: Very High → Young Growth, High → High Growth, Moderate → Mature Growth, Low → Mature Stable, Close to zero or negative → Decline. |
+| Loss year | `loss-year` | Rule 4a decides the phase: a negative margin of an established company. The sentence names the fiscal year of the deciding margin and how many of the last five fiscal years have a margin above zero. |
+| Revenue falling | `revenue-falling` | A growth word of "Close to zero or negative" with a falling five-year revenue trend, and revenue that fell in fewer than three of the last four year-over-year steps (rule 2). The sentence names the falls. |
 | Margin direction | `margin-direction-disagrees` | Margin at or above zero with a direction. The direction points to another phase: Rising → Mature Growth, Stable → Mature Stable, Declining → Decline. |
 | Free cash flow sign | `fcf-sign` | The last fiscal year's operating cash flow plus capital spending is negative in Mature Growth, Mature Stable or Decline, or positive in Start-up, Young Growth or High Growth. A zero does not fire. |
 | Short history | `short-history` | Fewer than five fiscal years on file, or a growth span shorter than three years. |
@@ -206,7 +212,7 @@ Policies v1 to v4 stay in the package unchanged, because the snapshots valued un
 
 ### 4.1a Constants in code
 
-These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 8 and 3; the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7, on the Mature Growth and the revenue-growth routes alike, and the same step and tolerance for the margin the price needs within its policy bounds; the peers' ten-year margin window; the three-year horizon of the expected return; the lease-accounting date of 15 December 2019.
+These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 8 and 3; the established company's three of the last five fiscal years with a margin above zero (3.5); the Decline rule's three falls in the last four year-over-year steps (3.5); the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7, on the Mature Growth and the revenue-growth routes alike, and the same step and tolerance for the margin the price needs within its policy bounds; the peers' ten-year margin window; the three-year horizon of the expected return; the lease-accounting date of 15 December 2019.
 
 ### 4.2 Trailing figures and the share count
 
@@ -395,7 +401,7 @@ Here N is the explicit period, the years forecast one by one before the terminal
 
 ### 5a.1 Which rows, and the refusals
 
-A company the classifier puts in High Growth or Young Growth (3.5, rule 4), past the guards of 5.1. The result's route is `revenue-growth`; the phase says which of the two it is.
+A company the classifier puts in High Growth or Young Growth (3.5, rule 4b), past the guards of 5.1. The result's route is `revenue-growth`; the phase says which of the two it is.
 
 The route's own refusals, in this order:
 
@@ -610,7 +616,7 @@ A flag warns and never changes a value, a level or a stance. Each has a code, a 
 
 | Code | Rule |
 |---|---|
-| `growth-word-disagrees`, `margin-direction-disagrees`, `fcf-sign`, `short-history`, `margin-zero`, `currency-change` | the classifier checks, 3.6 |
+| `growth-word-disagrees`, `loss-year`, `revenue-falling`, `margin-direction-disagrees`, `fcf-sign`, `short-history`, `margin-zero`, `currency-change` | the classifier checks, 3.6 |
 | `currency-unknown` | no annual income statement gives the reporting currency (the screener row never carries one); the company is treated as a foreign filer |
 | `tax-carried-forward` | a fiscal year after the tax table's newest year took that year's rate |
 | `leases-not-on-balance-sheet` | a balance sheet before 15 December 2019 shows no lease assets |
@@ -683,7 +689,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.3 | 2026-11-02 | Mature Stable charges as Mature Growth does (6.3): the runway return through the runway, the terminal return after. Policy unchanged. |
 | 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a), the held rate capped at the sales class's base-rate 90th percentile (5a.3), with the `stock-peers` call (section 2); the name patterns on the universe (section 1). Policy v3 adds five values and the `sales_p90_5y` column of `base_rates` (4.1). |
 | 0.5 | 2026-11-03 | The industry fallback for the peers (5a.4). Policy v4 adds `industry_peer_max`. |
-| 0.6 | 2026-11-03 | The FMP pace (section 2). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
+| 0.6 | 2026-11-03 | The FMP pace (section 2); the established company with a loss year (3.5 rule 4a) and the Decline duration test (rule 2). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
