@@ -39,6 +39,7 @@ from datetime import date
 from typing import Literal
 
 from fairband.vendors.http import VendorHttp, VendorResponse
+from fairband.vendors.limiter import RateLimiter
 
 BASE_URL = "https://financialmodelingprep.com/stable"
 
@@ -80,6 +81,11 @@ class Fmp:
     def close(self) -> None:
         """Close the HTTP client."""
         self._http.close()
+
+    @property
+    def limiter(self) -> RateLimiter:
+        """The HTTP client's limiter, which paces every call this adapter makes."""
+        return self._http.limiter
 
     def screener(self) -> VendorResponse:
         return self._get("company-screener", _SCREENER_PARAMS)

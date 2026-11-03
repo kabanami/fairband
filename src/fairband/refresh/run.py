@@ -15,7 +15,9 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   its own from ``conn_factory``. At most ``policy.refresh.workers`` symbols are in flight, and the
   run starts the next only after it has recorded a finished one. A symbol becomes ``fetching``,
   then ``fetched``, or ``failed`` with the fetch's error and a refusal snapshot of that reason
-  ("data fetch failed: <endpoints>") that carries the price the store holds.
+  ("data fetch failed: <endpoints>") that carries the price the store holds. The stage ends with
+  one INFO line on the FMP limiter's share of it: "FMP pace: waited <s> s over <n> calls, <h>
+  holds".
 - ``deciles`` (full only): ``deciles_for_universe`` over every admitted symbol, from the statements
   the store holds, saved under the refresh (spec 6.6). When they rank no company on growth, the run
   ends ``failed``, "deciles rank no company", and saves none: empty deciles would put every later
@@ -52,14 +54,15 @@ n counting the symbols fetched or failed. An exception outside a symbol's
 work ends the run ``failed`` with its class and message, and is raised again.
 
 Why daemon threads: an exception in the fetch stage (a second Ctrl-C in the command) must not wait
-for the fetches in flight, which on a stalled vendor run to minutes (15 calls of up to
-``deadline_s`` each). The run gives them up at once: their symbols go back to ``pending``, the run
-ends ``failed`` and the exception propagates. A ``ThreadPoolExecutor``'s workers are joined when
-the interpreter exits, even after ``shutdown(wait=False)``, and ending the command with
-``os._exit`` would skip its own cleanup (the signal handler, the clients, the output); a daemon
-thread is simply not joined. What a given-up fetch still stores is a response like any other,
-reused by the next run; ``fetches_in_flight`` counts the fetch threads not ended, so a long-lived
-caller (the server's worker) can wait for them before it starts another run.
+for the fetches in flight, which on a stalled vendor run to minutes (13 FMP and 2 GuruFocus calls,
+each up to ``deadline_s`` and an FMP call longer by its waits in the limiter). The run gives them up
+at once: their symbols go back to ``pending``, the run ends ``failed`` and the exception propagates.
+A ``ThreadPoolExecutor``'s workers are joined when the interpreter exits, even after
+``shutdown(wait=False)``, and ending the command with ``os._exit`` would skip its own cleanup (the
+signal handler, the clients, the output); a daemon thread is simply not joined. What a given-up
+fetch still stores is a response like any other, reused by the next run; ``fetches_in_flight``
+counts the fetch threads not ended, so a long-lived caller (the server's worker) can wait for them
+before it starts another run.
 
 A price refresh takes no symbols; ``run_price.PriceRefresh`` runs its stages (``quotes``,
 ``reprice``, ``done``) on the run's connection, and its module docstring says how.
@@ -340,6 +343,7 @@ class Refresh:
         """Fetch ``symbols`` until all are fetched, a cancel or a 429. An exception here gives up
         the fetches in flight and puts their symbols back to ``pending`` before it propagates."""
         self._stage(conn, refresh_id, "fetch", len(symbols))
+        pace = fmp.limiter.totals()
         workers = self._policy.refresh.workers
         waiting = deque(symbols)
         running: list[str] = []  # in the order started
@@ -389,6 +393,13 @@ class Refresh:
                     if item.status == "fetching":
                         upsert_item(conn, refresh_id, item.symbol, "pending", None, self._clock())
             raise
+        paced = fmp.limiter.totals().since(pace)
+        logger.info(
+            "FMP pace: waited %.1f s over %d calls, %d holds",
+            paced.waited_s,
+            paced.calls,
+            paced.holds,
+        )
         return _Fetched(tuple(fetched), failed, limited_by)
 
     def _start_fetch(

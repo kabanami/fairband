@@ -258,6 +258,20 @@ def test_rate_limit_stops_the_fetch_and_values_what_was_fetched(env: Env) -> Non
     assert env.router.symbol_calls == Counter({"ACME": 15, "BOLT": 3})  # three tries, then stop
 
 
+def test_the_fetch_stage_logs_the_fmp_pace(env: Env, caplog: pytest.LogCaptureFixture) -> None:
+    """One INFO line at the fetch stage's end gives the FMP limiter's share of the stage: the
+    fixtures' FMP client is not paced, so 13 calls a company with no wait and no hold. A second
+    run within the reuse window fetches nothing, and its line counts its own stage only."""
+    with caplog.at_level(logging.INFO, logger="fairband.refresh"):
+        env.run(["ACME", "BOLT"])
+        env.run(["ACME", "BOLT"])
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("FMP pace")]
+    assert lines == [
+        "FMP pace: waited 0.0 s over 26 calls, 0 holds",
+        "FMP pace: waited 0.0 s over 0 calls, 0 holds",
+    ]
+
+
 def test_rate_limit_names_the_provider(env: Env) -> None:
     """ACME's GuruFocus call hits the 429 after its quote is stored: its refusal row has the
     price."""

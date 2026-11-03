@@ -313,16 +313,18 @@ source = "research.md D13; spec 6.2; fmp_calls_per_minute: the founder's Ultimat
 [values.refresh.value]
 reuse_hours = 24
 gf_reuse_days = 7
-# 16 in flight: 13 FMP calls per company stay under the Ultimate plan's 3,000 calls a minute down
-# to about 0.4 s a call; a 429 after the retries ends the run, and the next run reuses what was
-# fetched. Decided with the founder 2026-11-01; was 4 (stocks mech/1.2).
+# 16 companies in flight, 13 FMP and 2 GuruFocus calls each. The worker count sets the
+# concurrency only: the FMP limiter (fmp_calls_per_minute) paces the calls. A 429 after the
+# retries ends the run, and the next run reuses what was fetched. Decided with the founder
+# 2026-11-01; was 4 (stocks mech/1.2).
 workers = 16
 connect_timeout_s = 5
 read_timeout_s = 15
 deadline_s = 30
 attempts = 3
 backoff_s = [2, 4]
-# Every FMP call waits for its slot in one pace the workers share; a 429 holds them all for
-# rate_limit_hold_s seconds, or for the vendor's numeric Retry-After (spec 2026-11-03 section 5.2).
+# Every FMP call waits for its slot in one pace the workers share; a 429 holds them all for the
+# vendor's numeric Retry-After capped at rate_limit_hold_s seconds, else for rate_limit_hold_s
+# (spec 2026-11-03 section 5.2). A GuruFocus 429 sleeps the same hold and holds no other worker.
 fmp_calls_per_minute = 2850
 rate_limit_hold_s = 60

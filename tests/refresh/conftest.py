@@ -1,6 +1,7 @@
 """Refresh fixtures: a migrated temporary database, the policy, the vendor clients over the
 fixture router of ``vendor_double`` with a settable clock and a sleep that records the seconds in
-``sleeps`` and does not sleep, and the ``refresh_env.Env`` over them. The clients are not paced."""
+``sleeps`` and does not sleep, and the ``refresh_env.Env`` over them. The GuruFocus client is not
+paced, nor the FMP client unless a test parametrizes ``fmp_calls_per_minute``."""
 
 import sqlite3
 from collections.abc import Iterator
@@ -53,8 +54,16 @@ def sleeps() -> list[float]:
 
 
 @pytest.fixture
-def clients(router: Router, clock: Clock, policy: Policy, sleeps: list[float]) -> Iterator[Clients]:
-    def http(base_url: str, secret: str) -> VendorHttp:
+def fmp_calls_per_minute() -> float:
+    """The FMP client's pace: 0, none, unless a test parametrizes it."""
+    return 0.0
+
+
+@pytest.fixture
+def clients(
+    router: Router, clock: Clock, policy: Policy, sleeps: list[float], fmp_calls_per_minute: float
+) -> Iterator[Clients]:
+    def http(base_url: str, secret: str, pace: float = 0.0) -> VendorHttp:
         return VendorHttp(
             base_url,
             [secret],
@@ -62,9 +71,13 @@ def clients(router: Router, clock: Clock, policy: Policy, sleeps: list[float]) -
             transport=router.transport,
             sleep=sleeps.append,
             clock=clock,
+            calls_per_minute=pace,
         )
 
-    with http(fmp.BASE_URL, FMP_KEY) as fmp_http, http(gurufocus.BASE_URL, GF_TOKEN) as gf_http:
+    with (
+        http(fmp.BASE_URL, FMP_KEY, fmp_calls_per_minute) as fmp_http,
+        http(gurufocus.BASE_URL, GF_TOKEN) as gf_http,
+    ):
         yield Clients(Fmp(fmp_http, FMP_KEY), GuruFocus(gf_http, GF_TOKEN), (FMP_KEY, GF_TOKEN))
 
 

@@ -3,7 +3,7 @@
 import threading
 from datetime import UTC, datetime, timedelta
 
-from fairband.vendors.limiter import RateLimiter
+from fairband.vendors.limiter import PaceTotals, RateLimiter
 
 T0 = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
 
@@ -92,3 +92,30 @@ def test_a_late_arrival_starts_from_now_not_from_the_last_slot() -> None:
     time.at(100)
     assert limiter.acquire() == 1
     assert time.sleeps == [1]
+
+
+def test_the_totals_count_calls_waits_and_holds() -> None:
+    # Three callers at t = 0 wait 0, 1 and 2 s; a hold at t = 2 to t = 62 and one more call,
+    # which waits 60 s. The totals since a mark are the counts after it.
+    time = FakeTime()
+    limiter = RateLimiter(60, time.clock, time.sleep)
+    assert limiter.totals() == PaceTotals(0, 0.0, 0)
+    for _ in range(3):
+        time.at(0)
+        limiter.acquire()
+    mark = limiter.totals()
+    assert mark == PaceTotals(3, 3.0, 0)
+    limiter.hold(60)
+    assert limiter.acquire() == 60
+    assert limiter.totals() == PaceTotals(4, 63.0, 1)
+    assert limiter.totals().since(mark) == PaceTotals(1, 60.0, 1)
+
+
+def test_an_unpaced_limiter_counts_its_calls_and_holds() -> None:
+    time = FakeTime()
+    limiter = RateLimiter(0, time.clock, time.sleep)
+    for _ in range(5):
+        limiter.acquire()
+    limiter.hold(60)
+    assert limiter.totals() == PaceTotals(5, 0.0, 1)
+    assert time.sleeps == []

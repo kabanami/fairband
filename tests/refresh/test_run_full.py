@@ -305,6 +305,38 @@ def test_a_single_429_does_not_end_the_run(env_fixture_universe: Env, sleeps: li
     assert sleeps == [env.policy.refresh.rate_limit_hold_s]  # the one hold, and no other sleep
 
 
+@pytest.mark.parametrize("fmp_calls_per_minute", [60.0])
+def test_a_single_429_holds_every_worker_on_a_paced_run(
+    env_fixture_universe: Env, sleeps: list[float], caplog: pytest.LogCaptureFixture
+) -> None:
+    """Spec 14: the FMP client paced at 60 calls a minute, slots one second apart, and two
+    workers. The fixtures' clock stands still and the sleep only records, so each call's wait is
+    its slot's distance from the start. ACME's quote answers 429 once: the hold moves the next
+    slot to 60 s, so every call admitted after it, the other worker's and the retry alike, waits
+    for the hold, and the run completes."""
+    env = env_fixture_universe
+    env.router.fail_status = 429
+    env.router.fail_once[("quote", "ACME")] = 1
+    with caplog.at_level(logging.INFO, logger="fairband.refresh"):
+        refresh_id = env.refresh(workers=2).run("full")
+    row = env.last()
+    assert (row.id, row.status, row.message) == (refresh_id, "done", None)
+    assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
+    hold = int(env.policy.refresh.rate_limit_hold_s)
+    assert hold == env.policy.refresh.rate_limit_hold_s == 60
+    gf_calls = env.router.calls["summary"] + env.router.calls["keyratios"]
+    fmp_calls = sum(env.router.symbol_calls.values()) - gf_calls
+    assert fmp_calls == 1 + 13 * len(ADMITTED) + 1  # the screener, 13 a company, ACME's retry
+    # k calls took the slots at 0 to k - 1 s before the hold (the first slot is now: no sleep);
+    # the retry slept the hold; the hold put every later call at 60 s or after, one a second.
+    k = len([s for s in sleeps if s < hold]) + 1
+    assert sorted(sleeps) == sorted([*range(1, k), hold, *range(hold, hold + fmp_calls - k)])
+    # The fetch stage's line: its calls (all but the screener's, which waited none), their waits
+    # (every sleep but the retry's hold) and the one hold.
+    waited = sum(sleeps) - hold
+    assert f"FMP pace: waited {waited:.1f} s over {fmp_calls - 1} calls, 1 holds" in caplog.text
+
+
 def test_full_refresh_admitting_no_company_fails(env_fixture_universe: Env) -> None:
     """A screener that admits no company ends the refresh failed before any fetch, with no
     deciles saved: the last good universe's deciles stay the ones a scoped refresh uses."""
