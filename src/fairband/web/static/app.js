@@ -709,14 +709,15 @@
 
   /* The synthetic rating on EBIT at the normalized margin over the trailing interest, and its
      ten-year probability of default (spec 10.7): with no net debt there is nothing to default
-     on; with net debt and no interest expense on file, no rating and no π. */
+     on; with no debt line on file, or net debt and no interest expense on file, no rating and
+     no π, the note saying which. */
   function rating(g) {
     var pi = 'π, ten-year default probability';
     if (g.note === 'no net debt') {
       return [['Rating', 'no net debt', false], [pi, F.formatPercent(g.pi), true]];
     }
     if (g.rating == null) {
-      return [['Rating', 'unavailable: no interest expense on file', false],
+      return [['Rating', 'unavailable: ' + (g.note || 'no interest expense on file'), false],
         [pi, 'unavailable', false]];
     }
     return [

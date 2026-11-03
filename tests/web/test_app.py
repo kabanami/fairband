@@ -1021,7 +1021,8 @@ def test_app_js_drawer_draws_the_run_off_table() -> None:
         "'Normalized margin'",
         "'Rating'",
         "'no net debt'",
-        "'unavailable: no interest expense on file'",
+        # no rating says why: no debt line on file, or no interest expense on file
+        "['Rating', 'unavailable: ' + (g.note || 'no interest expense on file'), false],",
         "'π, ten-year default probability'",
         "'Floor and distress'",
         "'Going concern a share'",

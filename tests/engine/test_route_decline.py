@@ -272,7 +272,7 @@ def test_a_chronic_loss_is_refused_with_its_figures(
     """Ruling 3 on spec 13.1: fiscal margins of −2% and four of −3% (m_n = −3%, EBIT_n = −30) rate
     the company D, π = 100%; the firm value is −140.53, so with net debt the distress-sale value
     is max(0, 0.6 × −140.53 + 100 − 200) = 0, and with cash 250 π is 0 and the going-concern
-    value −0.9053 a share. Both refuse and keep every figure."""
+    value −0.9053 a share. Both refuse and keep every figure, and the inputs that gave them."""
     chronic = with_margins(decline_inputs, [-0.02, -0.03, -0.03, -0.03, -0.03])
     r = value_company(chronic, deciles, policy, TODAY)
     assert_refused(r, NOT_POSITIVE)
@@ -285,6 +285,30 @@ def test_a_chronic_loss_is_refused_with_its_figures(
     assert im["distress_per_share"] == 0.0 and im["value_per_share"] == 0.0
     assert im["altman_z"] is not None and im["piotroski_f"]["read"] == 9
     assert "tax-loss-history-unknown" in codes(r)
+    # the refusal cites the route's inputs as a valued row does: the base inputs first, then the
+    # interest, the balance lines, the run-off's rules, the rating's row and π
+    names = [i.name for i in r.inputs]
+    assert len(names) == len(set(names))
+    assert names[:5] == ["statements", "price", "shares_diluted", "next_earnings", "closes"]
+    valued = value_company(decline_inputs, deciles, policy, TODAY)
+    assert names == [i.name for i in valued.inputs]
+    assert input_named(r, "interest_expense").value == 20 * M
+    tca, tl = input_named(r, "total_current_assets"), input_named(r, "total_liabilities")
+    assert (tca.value, tl.value, tca.note) == (300 * M, 500 * M, "fiscal 2025")
+    assert input_named(r, "total_assets_prior").value == 900 * M
+    assert (
+        input_named(r, "runoff_recovery").value,
+        input_named(r, "distress_sale_fraction").value,
+    ) == (
+        0.6,
+        0.6,
+    )
+    rating, pi = input_named(r, "synthetic_rating"), input_named(r, "default_probability_10y")
+    assert (rating.value, rating.note) == (
+        None,
+        "the D row: an interest coverage below 0.2; the company's is -1.50",
+    )
+    assert (pi.value, pi.note) == (1.0, "the ten-year probability of default of the D rating")
     net_cash = value_company(replace(chronic, cash=250 * M), deciles, policy, TODAY)
     assert_refused(net_cash, NOT_POSITIVE)
     im = net_cash.intermediates
@@ -324,21 +348,44 @@ def test_the_distress_variants(
         assert r.value == pytest.approx(GOING_CONCERN, abs=1e-9)  # spec 4.4265
         assert sentence(r, "distress-not-charged") == (
             "No interest expense on file: the distress probability is unavailable and the value "
-            "is the going-concern value."
+            "is the floored going-concern value."
         )
         assert r.intermediates["pi"] == {"value": None, "rating": None, "coverage": None}
         assert r.intermediates["rating"]["note"] == "no interest expense on file"
+        assert input_named(r, "synthetic_rating").note == "no rating: no interest expense on file"
     # with net cash, no interest is no matter: π is 0
     r = valued(replace(dc, cash=250 * M, trailing=replace(t, interest_expense=None)))
     assert r.intermediates["pi"]["value"] == 0.0 and "distress-not-charged" not in codes(r)
+    # unknown debt is not "no net debt": with both debt lines missing there is no rating, even
+    # against cash 250, and the value is the going concern with the debt counted as nil
+    for cash in (100 * M, 250 * M):
+        r = valued(replace(dc, debt=None, cash=cash))
+        assert r.intermediates["pi"] == {"value": None, "rating": None, "coverage": None}
+        assert r.intermediates["rating"]["note"] == "no debt line on file"
+        assert r.intermediates["debt"] == 0.0
+        assert r.value == pytest.approx(r.intermediates["going_concern_per_share"], abs=1e-12)
+        assert r.value == pytest.approx((FIRM + cash) / (100 * M), abs=1e-9)
+        assert sentence(r, "distress-not-charged") == (
+            "No debt line on file: the distress probability is unavailable and the value is the "
+            "floored going-concern value."
+        )
+        assert route_codes(r) == ["line-not-presented:debt", "distress-not-charged"]
+        rating, pi = input_named(r, "synthetic_rating"), input_named(r, "default_probability_10y")
+        assert (rating.value, rating.note) == (None, "no rating: no debt line on file")
+        assert (pi.value, pi.note) == (None, "no rating: π unavailable")
     # the floor: current assets 1,100 give NCAV 600, 6.00 a share, above the run-off's 4.4265
     newest = replace(dc.balance_years[-1], total_current_assets=1_100 * M)
-    r = valued(replace(dc, balance_years=(dc.balance_years[0], newest)))
+    floored = replace(dc, balance_years=(dc.balance_years[0], newest))
+    r = valued(floored)
     assert r.value == pytest.approx(5.812795684824877, abs=1e-9)  # spec 5.8128
     assert r.intermediates["floored_per_share"] == pytest.approx(6.0)
     assert sentence(r, "ncav-floor") == (
-        "The value is the net current asset value 6.00 a share; the run-off gives 4.43."
+        "The floored value is the net current asset value 6.00 a share; the run-off gives 4.43."
     )
+    # π unavailable: the floored value is the value, and the floor is flagged
+    r = valued(replace(floored, trailing=replace(t, interest_expense=None)))
+    assert r.value == pytest.approx(6.0, abs=1e-12)
+    assert route_codes(r) == ["ncav-floor", "distress-not-charged"]
     # the coverage reads EBIT_n: a normalized margin of 10% on trailing revenue 1,000 covers the
     # interest of 20 five times (A), where the trailing 80 would cover it four times (A−)
     r = valued(with_margins(dc, [0.08, 0.10, 0.10, 0.12, 0.10]))
@@ -346,6 +393,35 @@ def test_the_distress_variants(
         "A",
         pytest.approx(5.0),
     )
+
+
+def test_the_floor_has_no_weight_at_a_pi_of_one(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """A company rated D defaults: π = 100% and the value is the distress-sale value alone, so an
+    NCAV above zero and above the going concern floors a value that has no weight, and
+    ``ncav-floor`` is not raised (spec 10.6, 10.11)."""
+    dc = decline_inputs
+    newest = replace(dc.balance_years[-1], total_current_assets=1_100 * M)  # NCAV 6.00 a share
+    rich = replace(dc, balance_years=(dc.balance_years[0], newest))
+    # a normalized margin of −1%: EBIT_n −10, rated D; the release outweighs the loss, so the firm
+    # value is above zero, and with cash 199 against debt 200 the distress-sale value is too
+    thin = with_margins(replace(rich, cash=199 * M), [-0.02, -0.01, -0.01, -0.01, -0.01])
+    r = value_company(thin, deciles, policy, TODAY)
+    assert r.route == "decline" and r.value is not None
+    im = r.intermediates
+    assert (im["rating"]["rating"], im["pi"]["value"]) == ("D", 1.0)
+    assert im["floored_per_share"] == pytest.approx(6.0)
+    assert im["floored_per_share"] > im["going_concern_per_share"]
+    assert r.value == im["distress_per_share"]
+    assert r.value == pytest.approx((0.6 * im["firm_value"] + 199 * M - 200 * M) / (100 * M))
+    assert "ncav-floor" not in codes(r)
+    # the chronic loss at −3%: refused, the floor computed and not flagged
+    chronic = with_margins(rich, [-0.02, -0.03, -0.03, -0.03, -0.03])
+    r = value_company(chronic, deciles, policy, TODAY)
+    assert_refused(r, NOT_POSITIVE)
+    assert r.intermediates["floored_per_share"] == pytest.approx(6.0)
+    assert r.intermediates["pi"]["value"] == 1.0 and "ncav-floor" not in codes(r)
 
 
 def test_no_consensus_takes_the_trend_and_flags_path_on_trend(
@@ -364,7 +440,7 @@ def test_no_consensus_takes_the_trend_and_flags_path_on_trend(
     }
     assert im["growth_rates"] == pytest.approx([-0.04] * 10)
     assert sentence(r, "path-on-trend") == (
-        "No usable consensus: every year shrinks at the five-year trend's 4.0%."
+        "No usable consensus: every year shrinks at the decline rate, −4.0%."
     )
     assert [f.word for f in r.flags if f.code == "path-on-trend"] == ["Path on trend"]
     assert "path-held" not in codes(r) and "few-analysts" not in codes(r)
@@ -415,7 +491,7 @@ def test_a_rising_step_flags_consensus_recovery(
     rising = (a[0], replace(a[1], revenue=1_020 * M), replace(a[2], revenue=1_020 * M * 0.97))
     r = value_company(replace(dc, annual_estimates=rising), deciles, policy, TODAY)
     assert sentence(r, "consensus-recovery") == (
-        "The consensus has revenue growing 2.0% in year 2 while the five-year trend falls 4.0%."
+        "The consensus has revenue growing 2.0% in year 2 while the decline rate is −4.0%."
     )
     assert [f.word for f in r.flags if f.code == "consensus-recovery"] == ["Consensus recovery"]
     im = r.intermediates
@@ -428,8 +504,8 @@ def test_a_rising_step_flags_consensus_recovery(
     both = replace(dc, quarter_estimates=up, annual_estimates=rising)
     r = value_company(both, deciles, policy, TODAY)
     assert sentence(r, "consensus-recovery") == (
-        "The consensus has revenue growing 6.7% in year 1 and 2.0% in year 2 while the five-year "
-        "trend falls 4.0%."
+        "The consensus has revenue growing 6.7% in year 1 and 2.0% in year 2 while the decline "
+        "rate is −4.0%."
     )
 
 
@@ -437,7 +513,8 @@ def test_a_steep_trend_is_floored_at_minus_half(
     decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """Revenue 4,000, 3,500, 3,000, 2,000 and 600: the slope is −830 a year, −138% of the last
-    revenue; the run-off shrinks at −50%."""
+    revenue; the run-off shrinks at −50%, and the path's sentences name the decline rate as used,
+    never the trend's own −138%."""
     series = fiscal_years([4_000 * M, 3_500 * M, 3_000 * M, 2_000 * M, 600 * M], [0.08] * 5)
     steep = replace(
         decline_inputs,
@@ -454,8 +531,27 @@ def test_a_steep_trend_is_floored_at_minus_half(
     assert [f.word for f in r.flags if f.code == "decline-rate-floored"] == ["Decline rate floored"]
     assert route_codes(r)[:2] == ["decline-rate-floored", "path-on-trend"]
     assert sentence(r, "path-on-trend") == (
-        "No usable consensus: every year shrinks at the five-year trend's 50.0%."
+        "No usable consensus: every year shrinks at the decline rate, −50.0%."
     )
+    # with the consensus and fiscal 2029 missing from it: the held step first, then the floor;
+    # the NTM revenue of 970 is above the trailing 600, so year 1 grows against the floored rate
+    held = replace(
+        steep,
+        quarter_estimates=decline_inputs.quarter_estimates,
+        annual_estimates=decline_inputs.annual_estimates[:2],
+    )
+    r = value_company(held, deciles, policy, TODAY)
+    assert r.intermediates["runoff_path"]["d"] == -0.5
+    assert route_codes(r)[:3] == ["path-held", "decline-rate-floored", "consensus-recovery"]
+    assert "path-on-trend" not in codes(r)
+    assert sentence(r, "path-held") == (
+        "The consensus revenue for fiscal 2029 is missing or not positive, so year 3 holds the "
+        "-3.0% of the year before."
+    )
+    assert sentence(r, "consensus-recovery") == (
+        "The consensus has revenue growing 61.7% in year 1 while the decline rate is −50.0%."
+    )
+    assert r.intermediates["growth_rates"][2:4] == pytest.approx([-0.03, -0.5])
 
 
 def test_sales_to_capital_falls_back_to_the_peers(

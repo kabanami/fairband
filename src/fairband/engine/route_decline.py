@@ -21,27 +21,29 @@ when unknown), floored by the net current asset value of the newest annual balan
 when it lacks total liabilities), weighted against the distress-sale value at π, the ten-year
 probability of default of the synthetic rating (``distress.rate``) on EBIT_n, trailing revenue
 times the normalized margin, over the trailing interest expense: 0 with no net debt; unavailable
-with net debt and no interest expense on file, when the floored value stands.
+with no debt line on file (both debt lines missing: unknown debt is not "no net debt"), or with
+net debt and no interest expense on file, when the floored value stands.
 
 Refusals, in this order, after the shared guards: no trailing revenue (missing or not positive);
 no trailing operating income; no statutory tax rate; consensus revenue that falls to zero or below
 within the path (g_2 or g_3 as resolved at or below −100%), with the path's flags; no
 sales-to-capital, with the path's and the balance sheet's flags; a value a share at or below zero
 after the weighting, "value not positive in the run-off", which keeps every value-side
-intermediate and every flag.
+intermediate, every flag and the route's inputs.
 
 Intermediates: the rebuild keys below; ``moat``; ``growth_rates`` for years 1 to N; the tables
 ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``,
 ``release_by_year``, ``fcff_by_year``; ``terminal_value``, ``firm_value``, ``equity`` (the
 going-concern equity), ``going_concern_per_share``, ``ncav_per_share``, ``floored_per_share``;
 ``rating`` (rating, ebit, interest, coverage, pi, row, the coverage range of the table's row as
-coverage_from and coverage_below, ``None`` at an open end; note, "no net debt" or "no interest
-expense on file"); ``distress_proceeds``, ``distress_per_share``, ``value_per_share``;
-``altman_z`` (year, x1 to x4, score, zone; ``None`` without a score) and ``piotroski_f`` (year,
-prior_year, the nine signals by name with their values, score, read; ``None`` with fewer than two
-balance sheets); ``capex_vs_depreciation``; ``eps`` (no forward EPS), ``epv``, ``dividend_yield``,
-``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price, ``implied_decline_rate``,
-``multiples`` and ``expected_return``, its growth term d in each of the three years.
+coverage_from and coverage_below, ``None`` at an open end; note, "no net debt", "no debt line on
+file" or "no interest expense on file"); ``distress_proceeds``, ``distress_per_share``,
+``value_per_share``; ``altman_z`` (year, x1 to x4, score, zone; ``None`` without a score) and
+``piotroski_f`` (year, prior_year, the nine signals by name with their values, score, read;
+``None`` with fewer than two balance sheets); ``capex_vs_depreciation``; ``eps`` (no forward
+EPS), ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at
+the price, ``implied_decline_rate``, ``multiples`` and ``expected_return``, its growth term d in
+each of the three years.
 
 The rebuild keys: ``runoff_path`` (revenue0, ntm_revenue, ``None`` without a usable consensus, the
 steps as found with ``None`` for a missing one, d, runoff_years); ``margin`` (value, used,
@@ -55,8 +57,11 @@ scan from −50% to 0 finds (``runoff.implied_decline_rate``); the value need no
 Flags, in order: ``path-held``, ``decline-rate-floored``, ``path-on-trend``,
 ``consensus-recovery``, ``few-analysts``; ``line-not-presented:debt``, ``:cash`` and
 ``:totalLiabilities``; ``peers-from-industry`` when the industry's peers gave the sales-to-capital;
-``tax-loss-history-unknown``; ``ncav-floor``; ``distress-not-charged``; ``z-distress``;
-``f-score-low``; ``reinvesting-in-decline``; the trailing flags. Never the ROIC flags.
+``tax-loss-history-unknown``; ``ncav-floor`` when the floor binds and π is not 1 (at π = 1 the
+floor has no weight); ``distress-not-charged``; ``z-distress``; ``f-score-low``;
+``reinvesting-in-decline``; the trailing flags. Never the ROIC flags. ``path-on-trend`` and
+``consensus-recovery`` name the decline rate d as used, so a floored row names −50%, not the
+trend's own figure.
 """
 
 import math
@@ -123,13 +128,10 @@ _MARGIN_MIN = 3
 # The common inputs the run-off does not read: its charge is the release, not the runway return.
 _NOT_READ = frozenset({"aggregate_roic", "runway_return"})
 _NO_CONSENSUS = "no usable consensus: every year shrinks at the decline rate"
-_NO_INTEREST = "no rating: no interest expense on file"
-_NOT_CHARGED = Flag(
-    "distress-not-charged",
-    "Distress not charged",
-    "No interest expense on file: the distress probability is unavailable and the value is the "
-    "going-concern value.",
-)
+# Why a row has no rating, so no π: no debt line on file (unknown debt is not "no net debt"), or
+# net debt and no interest expense on file.
+_NO_DEBT = "no debt line on file"
+_NO_INTEREST = "no interest expense on file"
 # The newest balance sheet's lines Z″, F and NCAV read, by the input names that cite them (a flow
 # line of the fiscal year ends in _fy), and the year before's that F reads.
 _BALANCE_INPUTS = {
@@ -202,7 +204,9 @@ def value_decline(c: Context) -> Valued | Refused:
     margin = _margin(i.series, t.operating_income / revenue0)
     ebit_n = revenue0 * margin["value"]
     debt, cash = nil(i.debt), nil(i.cash)
-    found = rate(ebit_n, t.interest_expense, debt, cash, policy)
+    # Unknown debt is not "no net debt": without a debt line there is no rating.
+    found = None if i.debt is None else rate(ebit_n, t.interest_expense, debt, cash, policy)
+    unrated = _NO_DEBT if i.debt is None else _NO_INTEREST
     rebuild: dict[str, Any] = {
         "runoff_path": {
             "revenue0": revenue0,
@@ -250,7 +254,7 @@ def value_decline(c: Context) -> Valued | Refused:
         "going_concern_per_share": e.gc_per_share,
         "ncav_per_share": e.ncav_per_share,
         "floored_per_share": e.floored_per_share,
-        "rating": _rating(found, ebit_n, t.interest_expense, policy),
+        "rating": _rating(found, unrated, ebit_n, t.interest_expense, policy),
         "distress_proceeds": policy.distress_sale_fraction * v.firm_value + cash,
         "distress_per_share": e.distress_per_share,
         "value_per_share": e.value_per_share,
@@ -266,17 +270,13 @@ def value_decline(c: Context) -> Valued | Refused:
         lines
         + (present(from_industry(c)) if used == "peers" else ())
         + ((TAX_LOSS,) if margin["trailing"] < 0 or any(x < 0 for x in v.ebit) else ())
-        + present(_ncav_floor(e.floor_bound, e.ncav_per_share, e.gc_per_share))
-        + ((_NOT_CHARGED,) if found is None else ())
+        + present(_ncav_floor(e, rebuild["pi"]["value"]))
+        + present(_not_charged(found, unrated))
         + present(_z_distress(z, policy))
         + present(_f_score_low(f, policy))
         + present(_reinvesting(t, v.revenue[-1] < revenue0))
         + trailing_flags(i, t, gap, policy)
     )
-    value = e.value_per_share
-    if value <= 0:
-        return Refused(_NOT_POSITIVE, flags, im)
-    im |= decline_at_price(im, c.price, value, policy)
     inputs = (
         *(x for x in common_inputs(i, t, roic) if x.name not in _NOT_READ),
         *_path_inputs(c, path),
@@ -309,7 +309,7 @@ def value_decline(c: Context) -> Valued | Refused:
             "ratio",
             "the share of the firm value a distress sale recovers",
         ),
-        *_rating_inputs(found, policy),
+        *_rating_inputs(found, unrated, policy),
         rule(policy, "z_distress", policy.z_distress, "score"),
         rule(policy, "z_safe", policy.z_safe, "score"),
         rule(policy, "f_score_low", policy.f_score_low, "score"),
@@ -317,6 +317,10 @@ def value_decline(c: Context) -> Valued | Refused:
         rule(policy, "margin_of_safety", policy.margin_of_safety[moat], "ratio", f"{moat} moat"),
         *_peer_rules(c, used),
     )
+    value = e.value_per_share
+    if value <= 0:
+        return Refused(_NOT_POSITIVE, flags, im, inputs)
+    im |= decline_at_price(im, c.price, value, policy)
     return Valued("decline", value, moat, im, inputs, flags)
 
 
@@ -446,9 +450,10 @@ def _sales_to_capital(c: Context, roic: RoicTerms) -> tuple[_Used, float] | None
 
 
 def _rating(
-    found: Rating | None, ebit: float, interest: float | None, policy: Policy
+    found: Rating | None, unrated: str, ebit: float, interest: float | None, policy: Policy
 ) -> dict[str, Any]:
-    """The rating's figures; its row is the coverage range of the table row it came from."""
+    """The rating's figures; its row is the coverage range of the table row it came from. Without
+    a rating the note says why (``unrated``)."""
     if found is None:
         return {
             "rating": None,
@@ -457,7 +462,7 @@ def _rating(
             "coverage": None,
             "pi": None,
             "row": None,
-            "note": "no interest expense on file",
+            "note": unrated,
         }
     row = None if found.coverage is None else _row(found.rating, policy)
     return {
@@ -503,16 +508,19 @@ def _floored() -> Flag:
 
 
 def _on_trend(d: float) -> Flag:
+    """``path-on-trend``, naming the decline rate as used: on a floored row, −50%, not the trend's
+    own figure."""
     return Flag(
         "path-on-trend",
         "Path on trend",
-        f"No usable consensus: every year shrinks at the five-year trend's {-d:.1%}.",
+        f"No usable consensus: every year shrinks at the decline rate, {_signed(d)}.",
     )
 
 
 def _recovery(rates: tuple[float | None, ...], d: float) -> Flag | None:
-    """``consensus-recovery`` naming each consensus year, 1 to 3, that grows; a held step is not
-    the consensus's and is not named."""
+    """``consensus-recovery`` naming each consensus year, 1 to 3, that grows, and the decline rate
+    as used (on a floored row, −50%, not the trend's own figure); a held step is not the
+    consensus's and is not named."""
     rising = [
         f"{g:.1%} in year {t}" for t, g in enumerate(rates, start=1) if g is not None and g > 0
     ]
@@ -521,9 +529,14 @@ def _recovery(rates: tuple[float | None, ...], d: float) -> Flag | None:
     return Flag(
         "consensus-recovery",
         "Consensus recovery",
-        f"The consensus has revenue growing {' and '.join(rising)} while the five-year trend "
-        f"falls {-d:.1%}.",
+        f"The consensus has revenue growing {' and '.join(rising)} while the decline rate is "
+        f"{_signed(d)}.",
     )
+
+
+def _signed(x: float) -> str:
+    """A rate as a percent to one decimal, a negative one with the minus sign."""
+    return f"{x:.1%}".replace("-", "−")
 
 
 def _liabilities_flag(newest: BalanceYear | None) -> Flag | None:
@@ -544,14 +557,29 @@ def _liabilities_flag(newest: BalanceYear | None) -> Flag | None:
     )
 
 
-def _ncav_floor(bound: bool, ncav_per_share: float | None, gc: float) -> Flag | None:
-    if not bound or ncav_per_share is None:
+def _ncav_floor(e: Equity, pi: float | None) -> Flag | None:
+    """``ncav-floor`` when the net current asset value floors the going-concern value and π is not
+    1 (an unavailable π included): at π = 1 the value is the distress-sale value alone and the
+    floor has no weight."""
+    if not e.floor_bound or e.ncav_per_share is None or pi == 1:
         return None
     return Flag(
         "ncav-floor",
         "NCAV floor",
-        f"The value is the net current asset value {ncav_per_share:,.2f} a share; the run-off "
-        f"gives {gc:,.2f}.",
+        f"The floored value is the net current asset value {e.ncav_per_share:,.2f} a share; the "
+        f"run-off gives {e.gc_per_share:,.2f}.",
+    )
+
+
+def _not_charged(found: Rating | None, unrated: str) -> Flag | None:
+    """``distress-not-charged`` when there is no rating, saying why (``unrated``)."""
+    if found is not None:
+        return None
+    return Flag(
+        "distress-not-charged",
+        "Distress not charged",
+        f"{unrated[0].upper()}{unrated[1:]}: the distress probability is unavailable and the "
+        "value is the floored going-concern value.",
     )
 
 
@@ -655,11 +683,13 @@ def _balance_inputs(c: Context) -> tuple[TaggedInput, ...]:
     return tuple(found)
 
 
-def _rating_inputs(found: Rating | None, policy: Policy) -> tuple[TaggedInput, TaggedInput]:
+def _rating_inputs(
+    found: Rating | None, unrated: str, policy: Policy
+) -> tuple[TaggedInput, TaggedInput]:
     """The synthetic rating's row and the default probability used, or why there is none."""
     if found is None:
         return (
-            rule(policy, "synthetic_rating", None, "coverage", _NO_INTEREST),
+            rule(policy, "synthetic_rating", None, "coverage", f"no rating: {unrated}"),
             rule(
                 policy, "default_probability_10y", None, "probability", "no rating: π unavailable"
             ),
