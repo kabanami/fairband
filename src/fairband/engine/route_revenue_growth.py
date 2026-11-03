@@ -115,6 +115,7 @@ from fairband.engine.route_steps import (
     Context,
     Refused,
     RoicTerms,
+    StartUpContext,
     Valued,
     common_inputs,
     common_rules,
@@ -247,7 +248,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "path_steps": [g2, g3],
         "growth_rates": list(growth_rates(path)),
         "margin_path": {"start": start, "target": target.value, "by_year": list(v.margins)},
-        "target_margin": _target_intermediates(target, i.peer_source),
+        "target_margin": target_intermediates(target, i.peer_source),
         **rebuild,
         "revenue_by_year": list(v.revenue),
         "ebit_by_year": list(v.ebit),
@@ -482,7 +483,7 @@ def _at_margin(
     return revenue_valuation(path, margin, tax, charge, bridge), terminal
 
 
-def bridge_flags(c: Context) -> tuple[Flag, ...]:
+def bridge_flags(c: Context | StartUpContext) -> tuple[Flag, ...]:
     """``line-not-presented:debt`` and ``:cash`` for a figure the bridge counts as nil in part or
     in full: unknown, or with a line assembly's note names as not presented."""
     i = c.inputs
@@ -503,7 +504,7 @@ def bridge_flags(c: Context) -> tuple[Flag, ...]:
     )
 
 
-def peer_industry(c: Context) -> str | None:
+def peer_industry(c: Context | StartUpContext) -> str | None:
     """The industry the peers came from on the industry fallback; ``None`` on FMP's list."""
     source = c.inputs.peer_source
     return source.industry if source is not None and source.kind == "industry" else None
@@ -517,7 +518,7 @@ def industry_peer_max_input(policy: Policy, industry: str | None) -> tuple[Tagge
     return (rule(policy, "industry_peer_max", policy.industry_peer_max, "peers", note),)
 
 
-def from_industry(c: Context) -> Flag | None:
+def from_industry(c: Context | StartUpContext) -> Flag | None:
     """``peers-from-industry`` when the peers are the industry fallback's, naming FMP's count, the
     industry and the count taken, the sentence's end worded by that count."""
     source, policy = c.inputs.peer_source, c.policy
@@ -571,7 +572,7 @@ def _value_spread(by_margin: dict[str, float], target: TargetMargin, policy: Pol
     return value_spread_flag(list(by_margin.values()), policy, _MARGINS_TESTED)
 
 
-def _target_intermediates(target: TargetMargin, source: PeerSource | None) -> dict[str, Any]:
+def target_intermediates(target: TargetMargin, source: PeerSource | None) -> dict[str, Any]:
     """The target margin's figures, its counted peers, and the peers' source: ``"fmp"`` with no
     industry unless they are the industry fallback's."""
     return {
@@ -610,7 +611,9 @@ def _cap_input(policy: Policy, sales: BaseRateClass, binds: bool) -> TaggedInput
     return rule(policy, "held_growth_cap", sales.sales_p90_5y, "ratio", note)
 
 
-def from_peers(c: Context, name: str, value: float | None, note: str) -> TaggedInput:
+def from_peers(
+    c: Context | StartUpContext, name: str, value: float | None, note: str
+) -> TaggedInput:
     """A DATA input read from the mature peers' figures, cited to the peers call and statements, or
     on the industry fallback to the universe's industry and the peers' statements."""
     industry = peer_industry(c)

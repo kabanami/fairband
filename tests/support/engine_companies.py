@@ -1,5 +1,6 @@
 """The engine's test companies: the universe deciles and small, complete companies, one for each
-phase the engine values (Mature Growth, Mature Stable, High Growth, Young Growth, Decline).
+phase the engine routes (Mature Growth, Mature Stable, High Growth, Young Growth, Decline,
+Start-up).
 
 The engine tests take them as fixtures (``tests/engine/conftest.py``); the web tests value them
 and store the results. Money is in USD and shares in units. Fiscal years are calendar years 2015
@@ -409,4 +410,57 @@ def decline_inputs() -> CompanyInputs:
                 stock_issued=0.0,
             ),
         ),
+    )
+
+
+def start_up_inputs() -> CompanyInputs:
+    """Spec 13.2's Start-up row, money in USD as the spec states it: five fiscal years from 2021
+    with no revenue and an operating loss of 50 a year; trailing revenue 0 and operating income
+    −50; trailing operating cash flow −60 and capital spending −15, a burn of 75 a year; three
+    mature peers at margins of 20%, 25% and 30% (target 25%) and sales-to-capital of 1.0, 1.5 and
+    2.0 (median 1.5); tax 25%; no moat score; no kept ROIC year; a market cap of 2,000 on 100
+    diluted shares at $20; debt 0 and cash 300. EV_price is 1,700, the year-10 revenue the price
+    needs 1,725.73, the cash floor $3.00 a share and the burn cover 4.0 years."""
+    series = tuple(
+        replace(fy, operating_income=-50.0, cfo=-60.0, cfi=-15.0, cff=0.0, capex=-15.0)
+        for fy in fiscal_years([0.0] * 5, [0.0] * 5)
+    )
+    return replace(
+        mature_growth_inputs(),
+        symbol="SUCO",
+        name="Start-up Co",
+        market_cap=2_000.0,
+        price=20.0,
+        shares_diluted=100.0,
+        series=series,
+        capital_years=(),
+        trailing=TrailingFigures(
+            period_end=date(2026, 9, 30),
+            quarters=4,
+            on_fiscal_year=False,
+            revenue=0.0,
+            operating_income=-50.0,
+            net_income=-48.0,
+            eps_diluted=-0.48,
+            sbc=5.0,
+            cfo=-60.0,
+            capex=-15.0,
+            dividends=0.0,
+            buybacks=0.0,
+            equity_issued=0.0,
+        ),
+        quarter_estimates=(),
+        annual_estimates=(),
+        street_ttm_eps=None,
+        moat_score=None,
+        gf_eps_ttm=-0.48,
+        gf_eps_without_nri=-0.48,
+        closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 25.0, 20.0),
+        peers=(
+            PeerFigures("PEER1", 10e9, 0.20, 10, 1.0, 0.12),
+            PeerFigures("PEER2", 50e9, 0.25, 10, 1.5, 0.20),
+            PeerFigures("PEER3", 20e9, 0.30, 10, 2.0, 0.15),
+        ),
+        debt=0.0,
+        cash=300.0,
     )

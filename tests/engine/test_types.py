@@ -91,7 +91,13 @@ def test_result_json_round_trip(sample_result: ValuationResult) -> None:
 
 
 def test_routes() -> None:
-    assert get_args(Route) == ("mature-growth", "mature-stable", "revenue-growth", "decline")
+    assert get_args(Route) == (
+        "mature-growth",
+        "mature-stable",
+        "revenue-growth",
+        "decline",
+        "start-up",
+    )
 
 
 def test_designations() -> None:

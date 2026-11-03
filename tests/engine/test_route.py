@@ -994,17 +994,26 @@ def test_refusals_carry_the_price_facts(
     assert r.intermediates == {"price_facts": None}
 
 
-def test_refuses_start_up_and_unclassified(
+def test_a_start_up_row_takes_its_route_and_an_unclassified_row_is_refused(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
+    """A Start-up row is the Start-up route's refusal with its figures
+    (``test_route_start_up.py``): here, revenue zero three years back and no peers, so the
+    requirement carries its reason. An unclassified row keeps the classifier's reason."""
     series = mg_inputs.series
     start_up = (*series[:-4], replace(series[-4], revenue=0.0), *series[-3:])
     r = value_company(replace(mg_inputs, series=start_up), deciles, policy, TODAY)
-    assert_refused(
-        r,
-        "Start-up: no value by design; the price-implied requirement comes with the Start-up route",
+    assert (r.phase.phase, r.route, r.refusal) == (
+        "Start-up",
+        "start-up",
+        "Start-up: no value by design",
     )
-    assert r.phase.phase == "Start-up"
+    assert (r.value, r.levels, r.price_to_value, r.designation) == (None,) * 4
+    assert r.intermediates["requirement"]["reason"] == "no target margin: 0 mature peers"
+    names = [i.name for i in r.inputs]
+    assert names[:5] == ["statements", "price", "shares_diluted", "next_earnings", "closes"]
+    assert r.valid_until == mg_inputs.next_earnings
+    assert result_from_json(result_to_json(r)) == r
     r = value_company(replace(mg_inputs, series=series[-1:]), deciles, policy, TODAY)
     assert_refused(r, "fewer than two fiscal years")
     assert r.phase.phase is None

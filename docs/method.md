@@ -15,7 +15,7 @@ The reasons behind the rules are not restated here. They live in `docs/legacy/de
 - **r** is the required return, **g_T** the terminal growth, **N** the runway in years (on the revenue-growth route, its explicit period, section 5a; on the Decline route, the run-off's horizon, section 6a). Rates are fractions. Totals are in US dollars; per-share figures in dollars a share.
 - "Trailing" means the trailing twelve months: the last four reported quarters summed (section 4.2). "Fiscal years" means the annual series.
 - Every number the engine reads is either DATA (from a vendor, with its source and dates), RULE (from the policy file, with a source line) or an estimate under a named method. Every valuation constant that the literature or the founder set lives in the policy file (4.1); the code holds only the method's structural constants (4.1a).
-- A phase is one of Damodaran's six: Start-up, Young Growth, High Growth, Mature Growth, Mature Stable, Decline. A route is the valuation method for a phase. Three routes are built: Mature Growth (section 5), the revenue-growth route that High Growth and Young Growth share (section 5a) and Mature Stable (section 6). Start-up and Decline get a row, a phase and a refusal (section 7).
+- A phase is one of Damodaran's six: Start-up, Young Growth, High Growth, Mature Growth, Mature Stable, Decline. A route is the valuation method for a phase, and every phase has one: Mature Growth (section 5), the revenue-growth route that High Growth and Young Growth share (section 5a), Mature Stable (section 6), Decline (section 6a) and Start-up (section 6b), which gives no value by design: its row is always a refusal that keeps its figures. A foreign filer gets a refusal (section 7).
 - A refusal is a result with no value and a reason. It is never an exception, and the row is never missing.
 - Determinism: the same inputs under the same policy and method version give the same result, bit for bit.
 
@@ -40,7 +40,7 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 
 | Need | Source | Depth |
 |---|---|---|
-| Income statement, balance sheet, cash flow, annual | `income-statement`, `balance-sheet-statement`, `cash-flow-statement` | 11 fiscal years: ten for the ROIC aggregate plus the opening balance. Among the lines kept, for the Decline and Start-up routes: `grossProfit` and `interestExpense` (income statement), `totalAssets`, `totalLiabilities` and `retainedEarnings` (balance sheet), `depreciationAndAmortization` (cash flow) |
+| Income statement, balance sheet, cash flow, annual | `income-statement`, `balance-sheet-statement`, `cash-flow-statement` | 11 fiscal years: ten for the ROIC aggregate plus the opening balance. Among the lines kept, for the Decline route: `grossProfit` and `interestExpense` (income statement), `totalAssets`, `totalLiabilities` and `retainedEarnings` (balance sheet), `depreciationAndAmortization` (cash flow) |
 | As-reported balance sheet, annual | `balance-sheet-statement-as-reported` | 11 fiscal years; supplies the issuer's total intangibles excluding goodwill, and the lease lines |
 | Income statement and cash flow, quarterly | the same endpoints with `period=quarter` | 8 quarters, for the trailing figures; `interestExpense` and `depreciationAndAmortization` among the lines kept |
 | Consensus EPS, revenue, net income with analyst counts | `analyst-estimates`, annual and quarterly | 6 annual rows and 40 quarterly rows; the engine picks periods by date, never by row order. FMP gives two analyst counts, for EPS and for revenue; the net-income count reads the EPS count |
@@ -206,13 +206,13 @@ Every value comes from `fairband-policy-v5.toml` with a source line. The ones be
 | Piotroski F low group: 1 or below | `f_score_low` | Piotroski 2000, the 0 to 1 group |
 | Burn cover flag: below 2 years | `burn_cover_flag_years` | no source |
 
-The run-off, distress-sale, rating, default-probability, Z″ and F values are read by the Decline route (section 6a); the burn-cover value by the Start-up route, which is not built yet.
+The run-off, distress-sale, rating, default-probability, Z″ and F values are read by the Decline route (section 6a); the burn-cover value by the Start-up route (section 6b).
 
 Policies v1 to v4 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v5 only.
 
 ### 4.1a Constants in code
 
-These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 8 and 3; the established company's three of the last five fiscal years with a margin above zero (3.5); the Decline rule's three falls in the last four year-over-year steps (3.5); the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7, on the Mature Growth and the revenue-growth routes alike, and the same step and tolerance for the margin the price needs within its policy bounds; the peers' ten-year margin window; the three-year horizon of the expected return; the lease-accounting date of 15 December 2019; the Altman Z″ coefficients of the non-manufacturer form, 6.56, 3.26, 6.72 and 1.05 (Altman 2000), and Piotroski's nine F signals (Piotroski 2000), both for the Decline route's distress signals (6a.8); the Decline route's implied decline rate, scanned from −50% to 0 in steps of 0.1% to a tolerance of 1e-7, and the scan's lower bound, −50%, as the floor of the decline rate (6a.2); the normalized margin's window, the last five fiscal years with at least three margins (6a.3).
+These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 8 and 3; the established company's three of the last five fiscal years with a margin above zero (3.5); the Decline rule's three falls in the last four year-over-year steps (3.5); the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7, on the Mature Growth and the revenue-growth routes alike, and the same step and tolerance for the margin the price needs within its policy bounds; the peers' ten-year margin window; the three-year horizon of the expected return; the lease-accounting date of 15 December 2019; the Altman Z″ coefficients of the non-manufacturer form, 6.56, 3.26, 6.72 and 1.05 (Altman 2000), and Piotroski's nine F signals (Piotroski 2000), both for the Decline route's distress signals (6a.8); the Decline route's implied decline rate, scanned from −50% to 0 in steps of 0.1% to a tolerance of 1e-7, and the scan's lower bound, −50%, as the floor of the decline rate (6a.2); the normalized margin's window, the last five fiscal years with at least three margins (6a.3); the Start-up requirement's ramp of ten years and its solve, bisection on [0, 10^13] to a relative tolerance of 1e-9 (6b.2).
 
 ### 4.2 Trailing figures and the share count
 
@@ -273,7 +273,7 @@ The return in year N and in the terminal value.
 - Narrow or None moat: r.
 - Wide moat: the chosen measure of 4.6 before its floor, capped at 13% and never below r. When the runway charge is off: 13%. When the runway return is unavailable: r.
 
-The same rule, applied to a given return, gives the terminal return for each sensitivity value (5.8), and on the revenue-growth route for the return on new capital at the target margin (5a.7).
+The same rule, applied to a given return, gives the terminal return for each sensitivity value (5.8), and on the revenue-growth route for the return on new capital at the target margin (5a.7). The Start-up route reads no return on capital, so its terminal return is r whatever the moat (6b.2).
 
 ### 4.8 The charge and the value
 
@@ -290,7 +290,7 @@ The value a share is the total ÷ the diluted share count.
 
 ### 4.9 The moat class
 
-From the GuruFocus Moat Score: 8 or more Wide, 4 or more Narrow, below 4 or no score None. The moat enters in three places: the runway N, the terminal return and the margin of safety. The revenue-growth route's explicit period does not read it, so there the moat enters the terminal return and the margin of safety only. On the Decline route it enters the margin of safety only (6a.5).
+From the GuruFocus Moat Score: 8 or more Wide, 4 or more Narrow, below 4 or no score None. The moat enters in three places: the runway N, the terminal return and the margin of safety. The revenue-growth route's explicit period does not read it, so there the moat enters the terminal return and the margin of safety only. On the Decline route it enters the margin of safety only (6a.5). On the Start-up route it enters nothing: there are no levels, and the terminal return is r (6b.2).
 
 ### 4.10 Levels, designation and validity
 
@@ -320,7 +320,7 @@ A reverse DCF on net income with the reinvestment charge: year 1 from the quarte
 
 ### 5.1 Guards and refusals
 
-Before any route, in this order: no universe deciles yet; the assembly's refusal ("no financial statements", or the missing tax rate of 4.3); a foreign filer (an ADR by the profile, or a reporting currency other than USD, an unknown currency included); an unclassified company (3.8); Start-up; a phase whose route is not built, which is none today (Mature Growth and Mature Stable have their routes, High Growth and Young Growth share the revenue-growth route of section 5a, and Decline runs off on the route of section 6a); no positive price; no positive diluted share count; no trailing figures.
+Before any route, in this order: no universe deciles yet; the assembly's refusal ("no financial statements", or the missing tax rate of 4.3); a foreign filer (an ADR by the profile, or a reporting currency other than USD, an unknown currency included); an unclassified company (3.8); no positive price; no positive diluted share count. A Start-up row then takes its route (6b), which no missing trailing figure refuses; every other row is refused without trailing figures. Every phase has a route: Mature Growth and Mature Stable their own, High Growth and Young Growth the revenue-growth route of section 5a, Decline the run-off of section 6a and Start-up the requirement of section 6b.
 
 Then the route's own, in this order: no trailing revenue; no statutory tax rate; an incomplete NTM consensus (5.2); no positive forward anchor; a forward P/E below 2 (a unit error); consensus earnings that turn negative within the path (a step at or below −100%); a value a share at or below zero under the charge (the intermediates are kept).
 
@@ -744,14 +744,82 @@ The tests pin these (spec 2026-11-03 13.1), to 1e-9 a share. Trailing revenue 1,
 - Cash 250: π = 0 and 5.9265. No interest expense with net debt: 4.4265, `distress-not-charged`. Current assets 1,100 (NCAV 600): the floor 6.00, `ncav-floor`, value 5.8128. A trailing margin of −1% on the same fiscal margins: the same value and rating. Fiscal margins −2%, −3%, −3%, −3%, −3%: D, firm value −140.53, value 0, refused; with cash 250, −0.9053 a share, refused.
 - At a price of 3.00 the implied decline rate is −27.7%; at 4.3180, −4%.
 
-## 7. Phases without a route, and foreign filers
+## 6b. The Start-up route
+
+No value by design (design.md 6.8): a Start-up row is a refusal that keeps its figures. What the price needs is stated as one number, the revenue in year 10 that, at the mature peers' margin, makes the company worth its price today; beside it, the net cash a share as a floor and the years the cash covers the trailing burn. The market and the share that would reach that revenue are the agent's to judge.
+
+### 6b.1 Which rows, and the result
+
+A company the classifier puts in Start-up (3.5 rule 1), past the guards of 5.1 that come before its route: no universe deciles, the assembly's refusal, a foreign filer, no positive price, no positive diluted share count. "No trailing figures" does not refuse a Start-up row: a pre-revenue company may lack them, and the route reads what exists.
+
+Every Start-up row is the refusal "Start-up: no value by design", its route `start-up`, with no value, no levels and no designation (4.10), and with the intermediates and inputs of 6b.6. A figure the route cannot compute carries its own reason inside the intermediates; nothing refuses further.
+
+### 6b.2 The price-implied requirement
+
+    EV_price = market cap + debt − cash
+
+The market cap is section 2's: the quote's, else the profile's, else the screener row's. Debt and cash are 5a.9's, each line nil when missing and flagged `line-not-presented:debt` or `line-not-presented:cash`. When EV_price is at or below zero the requirement is 0, the net cash covering the price, and the row is flagged `below-net-cash`, "The price is covered by net cash: market cap <x> against net cash <y>."
+
+Otherwise the requirement is R10, the year-10 revenue at which a ten-year ramp is worth EV_price:
+
+    R_t = R0 + (R10 − R0) × t ÷ 10
+    EBIT_t = E0 + (m* × R10 − E0) × t ÷ 10, for t = 1 … 10
+
+R0 is trailing revenue, 0 without one. E0 is trailing operating income, else the last fiscal year's, else 0. m* is the target margin (6b.3). A pre-revenue company has no margin, so operating income moves in dollars, not as a margin.
+
+- Tax and NOPAT by 5a.6 at the newest fiscal year's statutory rate (4.3), the carried loss starting at zero.
+- Reinvestment by 5a.5 at the sales-to-capital of 6b.3: reinvestment_t = max(0, (R_{t+1} − R_t) ÷ sales-to-capital) for t = 1 … 9, and reinvestment_10 = terminal NOPAT × g_T ÷ terminal return.
+- The free cash flow, the terminal NOPAT, the terminal value and the firm value by 5a.7, at r in every year (5a.8). The terminal return is r whatever the moat: the route reads no return on capital, so 4.7's Wide rule finds the runway return unavailable.
+
+EV(R10) is that firm value. R10 is the least revenue in [0, 10^13] at which EV(R10) is at or above EV_price: 0 when EV(0) already is, else found by bisection to a relative tolerance of 1e-9 (4.1a). EV rises with R10 for sensible inputs, the terminal dominating; when EV(10^13) is below EV_price, as at a target margin at or below zero or a sales-to-capital so low that reinvestment outruns the margin, there is none.
+
+The requirement's reasons, the first that applies, each leaving R10 and the ramp uncomputed: "no target margin: <n> mature peers" (6b.3), "no sales-to-capital" (6b.3), "no statutory tax rate", "no market cap", "no revenue reaches the price". A reason is inside the intermediates; the row's refusal stays "Start-up: no value by design".
+
+### 6b.3 The target margin and sales-to-capital
+
+The target margin is 5a.4's: the median ten-year margin of the mature peers with a margin on `peer_margin_min_years` or more, at least `peer_min` of them, with its industry fallback, its record and its flag `peers-from-industry` as there. Sales-to-capital is 5a.5's step 2 only, the median of the peers' positive measures when at least `peer_min` are positive: a Start-up has no usable own measure, so step 1 is not read and the record says "peers".
+
+### 6b.4 The cash floor and the burn cover
+
+    cash floor = (cash − debt) ÷ diluted shares
+
+the net cash a share, debt and cash as 6b.2 reads them. The `below-net-cash` flag of 6b.2 is the cash floor's test in total: the market cap at or below the net cash, the price at or below the cash floor when the market cap is the price times the diluted shares.
+
+The burn is −(trailing operating cash flow + trailing capital spending) when that sum is below zero. The burn cover is cash ÷ the burn, in years; "not burning" when the sum is zero or above; none without both trailing figures. Below `burn_cover_flag_years` (2) the row is flagged `burn-cover-short`, "Cash covers <x> years of the trailing burn of <y> a year."
+
+### 6b.5 What moves with the price
+
+The market cap moves with the price: the market cap the row read × the new price ÷ the price it was read at, the quote's market cap at an unchanged share count. EV_price, the requirement and its ramp are rebuilt at it from the rebuild keys (6b.6) with the policy's r and g_T, and `below-net-cash` is read again. A requirement whose reason is one of its inputs (the target margin, the sales-to-capital, the tax rate, the market cap) stays. The cash floor, the burn cover and every other flag stay.
+
+### 6b.6 Flags, intermediates and inputs
+
+Flags, in order: `line-not-presented:debt`, `line-not-presented:cash`; `peers-from-industry`; `tax-loss-history-unknown` when the requirement's ramp starts from an operating loss or has a year whose EBIT is below zero, as a loss-maker's always does; `below-net-cash`; `burn-cover-short`. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code. Never raised here: the ROIC flags of 4.5 and 4.6, `return-above-peers`, `few-analysts` and the trailing flags; no path reads the consensus or a return.
+
+Intermediates: `requirement` (`reason`, none when it is computed; `revenue_y10`; `ev_price`; `revenue_0`; `operating_income_0`; `target_margin`, 5a.14's record of the peers and their source; `sales_to_capital`, 5a.14's record with `used` "peers"; `tax_rate`; `terminal_roic`; `path`, the ten years of revenue, EBIT, tax, NOPAT, reinvestment and free cash flow; `terminal_value`; none where a reason leaves a figure uncomputed), `cash_floor`, `burn_cover_years`, `burn` (none when not burning), `debt`, `cash`, `shares`, `market_cap` and `price_facts`.
+
+The rebuild keys: the requirement's `revenue_0`, `operating_income_0`, `target_margin`'s value, `sales_to_capital`'s value, `tax_rate` and `terminal_roic`.
+
+Tagged inputs. DATA: the fiscal years on file, price, diluted shares, next earnings date, daily closes; market cap; trailing revenue and operating income when there are trailing figures, and the last fiscal year's operating income (`operating_income_fy`, noted with its fiscal year) when E0 reads it; trailing operating cash flow and capital spending when there are trailing figures; the newest tax rate; the moat score; `target_margin` and `sales_to_capital` as 5a.14 cites them, when found, the latter noted "the mature peers' median; a Start-up reads no own measure"; `debt` and `cash`. RULE: r, g_T, the moat class, the terminal return (noted "r: a Start-up reads no return on capital"), `peer_min`, `peer_margin_min_years`, `industry_peer_max` on the industry fallback, `burn_cover_flag_years`.
+
+### 6b.7 Worked numbers
+
+The tests pin these (spec 2026-11-03 13.2), to 0.01 unless a tolerance is named. Trailing revenue 0 and operating income −50; target margin 25%, the peers at 20%, 25% and 30%; the peers' sales-to-capital 1.5; tax 25%; r 9%, g_T 3%; no moat score (terminal return r, terminal multiple 11.4444); market cap 2,000, debt 0, cash 300, so EV_price 1,700; 100 diluted shares.
+
+- EV(0) = −166.93: the loss shrinks by 5 a year to nothing in year 10, untaxed, with no reinvestment and no terminal value. EV(1,000) = 931.91.
+- R10 = 1,725.73, with EV(R10) = 1,700.00 within 1e-4.
+- Trailing operating cash flow −60 and capital spending −15: a burn of 75 a year and a burn cover of 4.0 years, no flag; cash 120 covers 1.6 years, `burn-cover-short`. Operating cash flow 15 is not burning.
+- Cash floor 3.00 a share. A market cap of 250 gives EV_price −50, the requirement 0 and `below-net-cash`, "market cap 250 against net cash 300".
+- At twice the price the market cap moves to 4,000, EV_price to 3,700 and R10 to 3,616.66, what a valuation at that market cap gives.
+
+## 7. Foreign filers
 
 | Case | Refusal |
 |---|---|
-| Start-up | "Start-up: no value by design; the price-implied requirement comes with the Start-up route" |
 | Foreign filer: an ADR, or a reporting currency other than USD | "foreign filer: currency and share-unit handling not built yet" |
 
-Each keeps its phase, its classifier evidence, its price and its price columns. Assembly withholds the missing-tax-rate refusal from a foreign filer (4.3), so the route reaches the foreign-filer guard; "no financial statements" still refuses a foreign filer first.
+It keeps its phase, its classifier evidence, its price and its price columns. Assembly withholds the missing-tax-rate refusal from a foreign filer (4.3), so the route reaches the foreign-filer guard; "no financial statements" still refuses a foreign filer first.
+
+Every phase has a route. A Start-up row's refusal is its route's, "Start-up: no value by design" (6b), in place of method 0.6's "Start-up: no value by design; the price-implied requirement comes with the Start-up route".
 
 ## 8. The flags
 
@@ -772,17 +840,17 @@ A flag warns and never changes a value, a level or a designation. Each has a cod
 | `decline-rate-floored` | the five-year trend shrinks revenue faster than 50% a year, so the run-off uses −50% (6a.2) |
 | `consensus-recovery` | a consensus year of a Decline row grows while the five-year trend falls; names each such year and its rate (6a.2) |
 | `consensus-above-base-rate` | the year-3 consensus revenue growth is above the sales class's 90th-percentile five-year sales growth, so years 4 and 5 hold the cap and the fade starts from it (5a.3) |
-| `peers-from-industry` | FMP's peers left fewer than `peer_min` that count for the target margin, so the peers are the largest `industry_peer_max` mature companies of the company's FMP industry in the universe (5a.4); on a Decline row, only when they gave the sales-to-capital (6a.4) |
+| `peers-from-industry` | FMP's peers left fewer than `peer_min` that count for the target margin, so the peers are the largest `industry_peer_max` mature companies of the company's FMP industry in the universe (5a.4, 6b.3); on a Decline row, only when they gave the sales-to-capital (6a.4) |
 | `roic-unavailable` | fewer than 5 ROIC years |
 | `roic-on-n-years` | 5 to 9 ROIC years |
 | `ten-year-roic-unavailable` | the ten-year capital sum is at or below zero |
 | `line-not-presented:<field>` | an optional balance-sheet line counted as nil in a ROIC year (4.4) |
-| `line-not-presented:debt`, `line-not-presented:cash` | the bridge to equity counted a debt or cash line as nil: the figure is unknown, or assembly's note names a line the newest annual balance sheet does not present (5a.9, 6a.5) |
+| `line-not-presented:debt`, `line-not-presented:cash` | the bridge to equity counted a debt or cash line as nil: the figure is unknown, or assembly's note names a line the newest annual balance sheet does not present (5a.9, 6a.5, 6b.2) |
 | `line-not-presented:totalLiabilities` | the newest annual balance sheet of a Decline row lacks total liabilities, or none is on file, so no net-current-asset floor is applied (6a.6) |
 | `charge-zeroed` | the runway charge is off, 4.6 rule 4 |
 | `return-floored` | the chosen return measure was below r |
 | `growth-above-return` | a year's next growth exceeds its return; its payout is floored at zero |
-| `tax-loss-history-unknown` | the revenue-growth forecast or the run-off has a year whose EBIT is below zero, or the trailing margin is below zero; the tax carry starts at zero and the terminal is taxed in full (5a.6, 5a.7, 6a.3) |
+| `tax-loss-history-unknown` | the revenue-growth forecast, the run-off or the Start-up ramp has a year whose EBIT is below zero, or the trailing margin (the ramp's starting operating income) is below zero; the tax carry starts at zero and the terminal is taxed in full (5a.6, 5a.7, 6a.3, 6b.6) |
 | `return-above-peers` | the return on new capital at the target margin is above the mature peers' median ten-year ROIC (5a.11) |
 | `failure-not-charged` | a Young Growth row: the failure probability is unavailable and the value is the going-concern value (5a.12) |
 | `ncav-floor` | the net current asset value a share is above zero and above the run-off's going-concern value, and floors it (6a.6) |
@@ -790,6 +858,8 @@ A flag warns and never changes a value, a level or a designation. Each has a cod
 | `z-distress` | Altman Z″ is below `z_distress` (1.1) (6a.8) |
 | `f-score-low` | Piotroski F is at or below `f_score_low` (1), with a signal read (6a.8) |
 | `reinvesting-in-decline` | trailing capital spending is above trailing depreciation and amortization in size while the run-off's revenue falls (6a.8) |
+| `below-net-cash` | a Start-up row's market cap is at or below its net cash, so EV_price is at or below zero and the price needs no revenue (6b.2, 6b.4) |
+| `burn-cover-short` | a Start-up row's cash covers fewer than `burn_cover_flag_years` (2) years of its trailing burn (6b.4) |
 | `margin-flag` | the trailing operating margin is 1.5 × its ten-year median or more (a positive median), or above its ten-year high by 10% of the high's size or more; needs 6 fiscal years with a margin. The word is "Newly profitable" when the median is at or below zero, "Possible cycle peak" when the window holds a loss year, else "Margin above history" |
 | `equity-raise` | trailing stock issued is 1% of market cap or more |
 | `negative-fcf` | trailing operating cash flow plus capital spending is below zero |
@@ -809,8 +879,9 @@ The three lease and line flags sit on nearly every valued row today; their redes
 | no statutory tax rate for <country> <year> | 4.3 |
 | foreign filer: currency and share-unit handling not built yet | 7 |
 | fewer than two fiscal years; no revenue for the last fiscal year; negative revenue; no measurable revenue growth; no operating margin | 3.8 |
-| Start-up: no value by design … | 7 |
-| no price; no diluted share count; no trailing figures | 5.1 |
+| no price; no diluted share count | 5.1 |
+| Start-up: no value by design | 6b.1 |
+| no trailing figures (never a Start-up row) | 5.1 |
 | no trailing revenue; no statutory tax rate | 5.1, 5a.1, 6a.1 |
 | no trailing operating income | 5a.1, 6a.1 |
 | incomplete NTM consensus | 5.2, 5a.2 |
@@ -823,13 +894,14 @@ The three lease and line flags sit on nearly every valued row today; their redes
 | value not positive under the reinvestment charge | 5.6, 5a.9 |
 | value not positive in the run-off | 6a.7, 6a.11 |
 | no positive trailing earnings | 6.1 |
+| inside a Start-up row's `requirement`, not the row's refusal: no target margin: <n> mature peers; no sales-to-capital; no statutory tax rate; no market cap; no revenue reaches the price | 6b.2 |
 | data fetch failed: <the failed required endpoints> | the refresh, when an annual statement or the quote fails (section 2) |
 | data fetch failed: <error class>: <message>; data fetch incomplete: rate limited; valuation failed: <error class>: <message> | the refresh, when a company's fetch raises, is cut by an HTTP 429, or its valuation raises |
 
 ## 10. Refresh kinds and what moves
 
 - **Full refresh**: the universe, the data of section 2 for every admitted company, the deciles, then every company classified and valued, one snapshot per company. A company fetched within 24 hours is not fetched again.
-- **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the designation, the implied growth and its sensitivities, the margin the price needs (revenue-growth rows), the implied decline rate (Decline rows, 6a.9), the growth-route cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price, its date and the price input, except a revenue-growth refusal whose intermediates carry `revenue_path`: the two refused for their target margin ("no target margin: <n> mature peers") or for a value not positive ("value not positive under the reinvestment charge"). Such a row also recomputes its margin the price needs from its rebuild keys (5a.10); its other figures stay. The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
+- **Price refresh**: fresh quotes for the latest universe's admitted companies (before any universe, every company with a snapshot), then each latest snapshot repriced from its intermediates alone: the value, the levels and the validity window stay; the designation, the implied growth and its sensitivities, the margin the price needs (revenue-growth rows), the implied decline rate (Decline rows, 6a.9), the growth-route cross-check's implied growth, the multiples, the growth share, the expected return and the long-runway flag are recomputed; the price input becomes the new quote. A refusal snapshot takes only the new price, its date and the price input, except a revenue-growth refusal whose intermediates carry `revenue_path`: the two refused for their target margin ("no target margin: <n> mature peers") or for a value not positive ("value not positive under the reinvestment charge"). Such a row also recomputes its margin the price needs from its rebuild keys (5a.10); its other figures stay. A Start-up row moves its market cap with the price and rebuilds its requirement and its `below-net-cash` flag at it (6b.5); its other figures stay. The price columns (section 2, daily closes) do not move. A snapshot valued under another policy version is not repriced, "policy changed: run a full refresh"; under another method version, "method changed: run a revalue".
 - **Revalue**: the engine on the stored facts of every company, with the latest stored deciles, no vendor call and no freshness window. New snapshots under the current method and policy versions.
 
 Every refresh that values (full, scoped, revalue) first backfills the facts of lines added since the payloads were stored, reading the stored responses; a price refresh does not.
@@ -846,7 +918,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a), the held rate capped at the sales class's base-rate 90th percentile (5a.3), with the `stock-peers` call (section 2); the name patterns on the universe (section 1). Policy v3 adds five values and the `sales_p90_5y` column of `base_rates` (4.1). |
 | 0.5 | 2026-11-03 | The industry fallback for the peers (5a.4). Policy v4 adds `industry_peer_max`. |
 | 0.6 | 2026-11-03 | The FMP pace (section 2); the universe's six excluded financial industries, its manual admission list, and the manual exclusion checked before every other rule (section 1); the established company with a loss year (3.5 rule 4a) and the Decline duration test (rule 2); the stance leaves the engine; the designation on price ÷ value (4.10). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
-| 0.7 | 2026-11-03 | The Decline route (section 6a): the run-off on the consensus path and the five-year trend's decline rate, floored at −50%; the normalized margin; the capital release; the perpetuity at the decline rate; the net-current-asset floor; the distress-sale value weighted by the synthetic rating's ten-year default probability; Altman Z″, Piotroski F and the reinvesting-in-decline flag; the implied decline rate at the price. Policy v5 unchanged. |
+| 0.7 | 2026-11-03 | The Decline route (section 6a): the run-off on the consensus path and the five-year trend's decline rate, floored at −50%; the normalized margin; the capital release; the perpetuity at the decline rate; the net-current-asset floor; the distress-sale value weighted by the synthetic rating's ten-year default probability; Altman Z″, Piotroski F and the reinvesting-in-decline flag; the implied decline rate at the price. The Start-up route (section 6b): no value by design, the refusal "Start-up: no value by design" with the year-10 revenue the price needs on a ten-year ramp to the mature peers' margin, the cash floor and the burn cover; the requirement rebuilt at the price. Policy v5 unchanged. |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
@@ -893,6 +965,9 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Altman Z″, the non-manufacturer form, and its zones (6a.8) | Altman (2000) |
 | Piotroski's nine F signals and the low group (6a.8) | Piotroski (2000) |
 | Reinvesting in decline (6a.8) | Damodaran 2009 (declining firms are cheap "only if their managers don't try too hard"); spec 2026-11-03 10.8 |
+| The Start-up route: no tier-1 value, the price-implied requirement and a floor at cash (6b) | design.md 6.8; spec 2026-11-03 9.1 |
+| The requirement as the revenue in year 10 at the mature peers' margin: value built from a market, a share and a target margin, the screen stating the revenue they must reach (6b.2) | Damodaran 2009, "Valuing Young, Start-up and Growth Companies" (Secure Mail); spec 2026-11-03 9.2 |
+| The burn cover: what the market prices at the Start-up phase is capital access (6b.4) | Damodaran, *The Corporate Life Cycle* ch. 9 s.11; the 2-year flag a policy value with no source; spec 2026-11-03 9.4 |
 
 ## 13. Glossary
 
@@ -924,3 +999,6 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Synthetic rating | The bond rating that a company's interest coverage, EBIT_n over the trailing interest expense, reads off Damodaran's table; its ten-year default probability is π (6a.7) |
 | Distress-sale value | What equity gets in a distress sale: 60% of the firm value plus cash, less debt, not below zero, a share (6a.7) |
 | NCAV | Graham's net current asset value: total current assets less total liabilities; the run-off's floor when above zero (6a.6) |
+| Requirement | A Start-up row's price-implied requirement: the revenue in year 10 at which a ten-year ramp to the mature peers' margin is worth the market cap plus debt less cash (6b.2) |
+| Cash floor | A Start-up row's net cash a share, (cash − debt) ÷ diluted shares (6b.4) |
+| Burn cover | The years a Start-up row's cash covers its trailing burn, the trailing operating cash flow plus capital spending when below zero; "not burning" otherwise (6b.4) |

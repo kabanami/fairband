@@ -21,7 +21,7 @@ Phase = Literal[
     "Start-up", "Young Growth", "High Growth", "Mature Growth", "Mature Stable", "Decline"
 ]
 Designation = Literal["well-below", "below", "near", "above", "well-above"]
-Route = Literal["mature-growth", "mature-stable", "revenue-growth", "decline"]
+Route = Literal["mature-growth", "mature-stable", "revenue-growth", "decline", "start-up"]
 
 PHASE_NUMBER: dict[Phase, int] = {
     "Start-up": 1,

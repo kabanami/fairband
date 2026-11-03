@@ -2,17 +2,19 @@
 
 ``value_company`` refuses before any arithmetic, in this order: no universe deciles yet (whatever
 else assembly found, which the next run with deciles judges); the refusal assembly set; a foreign
-filer (spec 11); an unclassified company (the classifier's reason); Start-up; a phase without a
-route (none today); no positive price; no positive diluted share count; no trailing figures. Then
-the phase's route runs (``route_mature_growth``, ``route_mature_stable``, ``route_decline``, and
-``route_revenue_growth`` for High Growth and Young Growth, on the shared ``route_steps``, with the
-classifier's evidence on the ``Context``) and refuses on its own guards. Mature Growth: no trailing
-revenue, no statutory tax rate, the anchor's refusals (an incomplete NTM consensus, no positive
-forward anchor, a forward P/E unit error), consensus earnings that turn negative within the path,
-a value a share at or below zero under the reinvestment charge (which keeps the value-side
-intermediates). Mature Stable: no positive trailing earnings. Revenue growth and Decline: the
-refusals of their module docstrings, in their order. A refusal is a result with no value and a
-reason, never an exception.
+filer (spec 11); an unclassified company (the classifier's reason); no positive price; no positive
+diluted share count. A Start-up row then takes its route (``route_start_up``, on a
+``StartUpContext`` whose trailing figures may be missing), always the refusal "Start-up: no value
+by design" with its route ``start-up``, its figures and its inputs. Every other row is refused
+without trailing figures; then the phase's route runs (``route_mature_growth``,
+``route_mature_stable``, ``route_decline``, and ``route_revenue_growth`` for High Growth and Young
+Growth, on the shared ``route_steps``, with the classifier's evidence on the ``Context``) and
+refuses on its own guards. Mature Growth: no trailing revenue, no statutory tax rate, the anchor's
+refusals (an incomplete NTM consensus, no positive forward anchor, a forward P/E unit error),
+consensus earnings that turn negative within the path, a value a share at or below zero under the
+reinvestment charge (which keeps the value-side intermediates). Mature Stable: no positive
+trailing earnings. Revenue growth and Decline: the refusals of their module docstrings, in their
+order. A refusal is a result with no value and a reason, never an exception.
 
 Every result of ``value_company`` is valid until the next earnings date when that is after the
 data date, else for the policy's fallback days. Its flags are the assembly's, the classifier's
@@ -20,8 +22,9 @@ checks and the route's, the first of each code kept. Its intermediates hold ``pr
 price columns of spec 6.3, on a refusal too (``None`` for a row without a price). ``reprice``
 moves a result to a new price from its intermediates alone, its price input with it; a refusal
 takes only the new price, except a revenue-growth row whose intermediates hold ``revenue_path``
-(refused for its target margin or its value), whose margin the price needs moves too.
-``refusal_result`` is the shape of every refusal.
+(refused for its target margin or its value), whose margin the price needs moves too, and a
+Start-up row, whose market cap moves with the price and whose requirement and ``below-net-cash``
+flag are rebuilt at it. ``refusal_result`` is the shape of every refusal.
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
@@ -88,6 +91,11 @@ three.
   ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the
   price, ``implied_decline_rate``, ``multiples`` and ``expected_return``, rebuilt from the
   rebuild keys. A row refused for its value keeps all but the three at the price.
+- Start-up (always a refusal): ``requirement`` (reason, revenue_y10, ev_price, revenue_0,
+  operating_income_0, target_margin, sales_to_capital, tax_rate, terminal_roic, path,
+  terminal_value), ``cash_floor``, ``burn_cover_years``, ``burn``, ``debt``, ``cash``, ``shares``,
+  ``market_cap``, ``price_facts``; at the price, ``market_cap`` and ``requirement``, rebuilt from
+  the requirement's rebuild keys.
 """
 
 import math
@@ -111,7 +119,20 @@ from fairband.engine.route_revenue_growth import (
     revenue_at_price,
     value_revenue_growth,
 )
-from fairband.engine.route_steps import Context, Refused, Valued, data, price_facts_for
+from fairband.engine.route_start_up import (
+    below_net_cash,
+    market_cap_at,
+    start_up_at_price,
+    value_start_up,
+)
+from fairband.engine.route_steps import (
+    Context,
+    Refused,
+    StartUpContext,
+    Valued,
+    data,
+    price_facts_for,
+)
 from fairband.engine.types import (
     Flag,
     Phase,
@@ -123,18 +144,10 @@ from fairband.engine.types import (
 from fairband.policy import Policy
 
 _FOREIGN = "foreign filer: currency and share-unit handling not built yet"
-_START_UP = (
-    "Start-up: no value by design; the price-implied requirement comes with the Start-up route"
-)
 _LONG_RUNWAY = "long-runway-high-growth"
 _VALUE_SPREAD = "value-spread"
-_ROUTED: tuple[Phase, ...] = (
-    "Mature Growth",
-    "Mature Stable",
-    "High Growth",
-    "Young Growth",
-    "Decline",
-)
+_BELOW_NET_CASH = "below-net-cash"
+_BURN_COVER_SHORT = "burn-cover-short"
 
 
 @dataclass(frozen=True)
@@ -188,14 +201,13 @@ def value_company(
     assert policy.required_return > policy.terminal_growth, "policy: r must exceed g_t"
     assert min(policy.runway_years.values()) >= 1, "policy: a runway is a year or more"
     if deciles is None:
-        return _refuse(inputs, policy, today, "no universe deciles yet", None, None)
+        return _refuse(inputs, policy, today, Refused("no universe deciles yet"), None, None)
     phase = classify(inputs.series, deciles)
     refresh_id = deciles.refresh_id
 
-    def refuse(
-        reason: str, flags: tuple[Flag, ...] = (), intermediates: dict[str, Any] | None = None
-    ) -> ValuationResult:
-        return _refuse(inputs, policy, today, reason, phase, refresh_id, flags, intermediates)
+    def refuse(outcome: str | Refused) -> ValuationResult:
+        found = Refused(outcome) if isinstance(outcome, str) else outcome
+        return _refuse(inputs, policy, today, found, phase, refresh_id)
 
     if inputs.refusal is not None:
         return refuse(inputs.refusal)
@@ -203,28 +215,27 @@ def value_company(
         return refuse(_FOREIGN)
     if phase.phase is None:
         return refuse(phase.reason or "unclassified")
-    if phase.phase == "Start-up":
-        return refuse(_START_UP)
-    if phase.phase not in _ROUTED:
-        return refuse(f"{phase.phase} route not built yet")
     price, shares, trailing = inputs.price, inputs.shares_diluted, inputs.trailing
     if price is None or not _positive(price):
         return refuse("no price")
     if shares is None or not _positive(shares):
         return refuse("no diluted share count")
+    if phase.phase == "Start-up":
+        start_up = StartUpContext(inputs, trailing, price, shares, policy, today)
+        return replace(refuse(value_start_up(start_up)), route="start-up")
     if trailing is None:
         return refuse("no trailing figures")
 
     c = Context(inputs, trailing, price, shares, policy, today, phase)
     outcome = _route(c, phase.phase)
     if isinstance(outcome, Refused):
-        return refuse(outcome.reason, outcome.flags, outcome.intermediates)
+        return refuse(outcome)
     return _valued(inputs, phase, price, policy, refresh_id, outcome)
 
 
 def _route(c: Context, phase: Phase) -> Valued | Refused:
     """The phase's route: Mature Growth, Mature Stable and Decline their own, High Growth and
-    Young Growth the revenue-growth route."""
+    Young Growth the revenue-growth route. A Start-up row never reaches it."""
     if phase == "Mature Growth":
         return value_mature_growth(c)
     if phase == "Mature Stable":
@@ -288,7 +299,9 @@ def reprice(
     price-dependent intermediates and the long-runway flag recomputed from the intermediates.
     A result with no value only takes the new price and date, except that a revenue-growth
     refusal whose intermediates hold ``revenue_path`` also moves its ``implied_margin``, the
-    margin the price needs; ``price_facts`` stay as they were.
+    margin the price needs, and a Start-up row, whose intermediates hold ``requirement``, moves
+    its market cap with the price (``route_start_up.market_cap_at``), rebuilds its requirement at
+    it and re-reads its ``below-net-cash`` flag; ``price_facts`` stay as they were.
     Either way the ``price`` input becomes the new quote, so the drawer's arithmetic reproduces:
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
@@ -305,14 +318,22 @@ def reprice(
     )
     if result.value is None or result.levels is None:
         moved = replace(result, price=price, price_date=price_date, inputs=inputs)
-        if "revenue_path" not in result.intermediates:
+        im = result.intermediates
+        if "requirement" in im:
+            market_cap = market_cap_at(im["market_cap"], result.price, price)
+            net_cash = below_net_cash(market_cap, im["debt"], im["cash"])
+            return replace(
+                moved,
+                intermediates=im | start_up_at_price(im, market_cap, policy),
+                flags=_swap(result.flags, _BELOW_NET_CASH, net_cash, _BURN_COVER_SHORT),
+            )
+        if "revenue_path" not in im:
             return moved
-        margin = implied_margin_at_price(result.intermediates, price, policy)
-        return replace(moved, intermediates=result.intermediates | margin)
+        return replace(moved, intermediates=im | implied_margin_at_price(im, price, policy))
     im, flags = dict(result.intermediates), result.flags
     if result.route == "mature-growth":
         im |= growth_at_price(im, price, result.value, policy)
-        flags = _swap_long_runway(flags, long_runway(im, policy))
+        flags = _swap(flags, _LONG_RUNWAY, long_runway(im, policy), _VALUE_SPREAD)
     elif result.route == "revenue-growth":
         im |= revenue_at_price(im, price, result.value, policy)
     elif result.route == "decline":
@@ -385,30 +406,28 @@ def _refuse(
     i: CompanyInputs,
     policy: Policy,
     today: date,
-    reason: str,
+    found: Refused,
     phase: PhaseEvidence | None,
     refresh_id: int | None,
-    flags: tuple[Flag, ...] = (),
-    intermediates: dict[str, Any] | None = None,
 ) -> ValuationResult:
     """A refusal from ``value_company``: the company's price when it is one, its price facts
-    beside any intermediates the route computed, the base inputs, the flags so far and the
-    validity window of every result."""
+    beside any intermediates the route computed, the base inputs and any the route cites, the
+    flags so far and the validity window of every result."""
     price = i.price if i.price is not None and _positive(i.price) else None
     checks = () if phase is None else phase.checks
     result = refusal_result(
         i.symbol,
-        reason,
+        found.reason,
         policy,
         i.data_date,
         price=price,
         price_date=None if price is None else i.price_date,
         phase=phase,
-        inputs=_base_inputs(i),
-        flags=_unique(i.input_flags + checks + flags),
+        inputs=_base_inputs(i) + found.inputs,
+        flags=_unique(i.input_flags + checks + found.flags),
         deciles_refresh_id=refresh_id,
         intermediates={
-            **(intermediates or {}),
+            **found.intermediates,
             "price_facts": price_facts_for(i.closes, price, today),
         },
     )
@@ -445,12 +464,14 @@ def _unique(flags: tuple[Flag, ...]) -> tuple[Flag, ...]:
     return tuple(first.values())
 
 
-def _swap_long_runway(flags: tuple[Flag, ...], new: Flag | None) -> tuple[Flag, ...]:
-    """``flags`` with the long-runway flag replaced by ``new`` in its place, just before the
-    value-spread flag as ``value_company`` orders them, or dropped for ``None``."""
-    kept = [f for f in flags if f.code != _LONG_RUNWAY]
+def _swap(flags: tuple[Flag, ...], code: str, new: Flag | None, before: str) -> tuple[Flag, ...]:
+    """``flags`` with the flag of ``code`` replaced by ``new`` in its place, just before the flag
+    of ``before`` as ``value_company`` orders them (at the end without one), or dropped for
+    ``None``: the long-runway flag before the value-spread flag, the net-cash flag before the
+    short burn cover."""
+    kept = [f for f in flags if f.code != code]
     if new is not None:
-        at = next((k for k, f in enumerate(kept) if f.code == _VALUE_SPREAD), len(kept))
+        at = next((k for k, f in enumerate(kept) if f.code == before), len(kept))
         kept.insert(at, new)
     return tuple(kept)
 

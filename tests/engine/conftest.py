@@ -42,3 +42,8 @@ def high_growth_inputs() -> CompanyInputs:
 @pytest.fixture
 def decline_inputs() -> CompanyInputs:
     return engine_companies.decline_inputs()
+
+
+@pytest.fixture
+def start_up_inputs() -> CompanyInputs:
+    return engine_companies.start_up_inputs()

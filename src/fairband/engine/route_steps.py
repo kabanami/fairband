@@ -1,8 +1,9 @@
 """The steps the routes share, below ``route`` and the route modules.
 
 A route reads the company through a ``Context``, built by ``route.value_company`` once the guards
-have passed: so with trailing figures, a positive price and a positive diluted share count. It
-returns ``Valued`` or ``Refused`` and ``route`` builds the result from it.
+have passed: so with trailing figures, a positive price and a positive diluted share count. The
+Start-up route reads a ``StartUpContext``, the same with the trailing figures when there are any.
+A route returns ``Valued`` or ``Refused`` and ``route`` builds the result from it.
 
 ``RoicTerms`` carries the returns of the charge to both routes (calibration spec 5.1 and 5.3): the
 runway return for the runway years, and the terminal return read from it. The ten-year aggregate
@@ -64,6 +65,20 @@ class Context:
 
 
 @dataclass(frozen=True)
+class StartUpContext:
+    """A Start-up company past the guards ``route.value_company`` runs before its route: a
+    positive price and diluted share count, and the trailing figures when there are any, since a
+    pre-revenue company may lack them."""
+
+    inputs: CompanyInputs
+    trailing: TrailingFigures | None
+    price: float
+    shares: float
+    policy: Policy
+    today: date
+
+
+@dataclass(frozen=True)
 class Valued:
     """A route's value a share and what ``route`` needs to build the result around it."""
 
@@ -77,11 +92,13 @@ class Valued:
 
 @dataclass(frozen=True)
 class Refused:
-    """A route's refusal, with the flags it had raised and the intermediates it had computed."""
+    """A route's refusal, with the flags it had raised, the intermediates it had computed and the
+    inputs it cites beyond the ones every result carries (the Start-up route's)."""
 
     reason: str
     flags: tuple[Flag, ...] = ()
     intermediates: dict[str, Any] = field(default_factory=dict)
+    inputs: tuple[TaggedInput, ...] = ()
 
 
 @dataclass(frozen=True)
