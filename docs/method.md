@@ -54,7 +54,7 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 | EPS trailing and EPS without non-recurring items | GuruFocus `keyratios` | current; reused for 7 days |
 | Statutory tax rate | the packaged OECD table `tax-rates-oecd-v1.toml` | by country and fiscal year |
 
-A company's vendor data observed within the last 24 hours is reused, not fetched again. FMP calls are paced to `fmp_calls_per_minute`, one pace shared by every worker; a 429 answer holds every worker for the vendor's numeric `Retry-After` or `rate_limit_hold_s`, and the call retries after the hold. The retry counts and the run's 429 path are unchanged. Every response is stored as received with any key scrubbed; normalized facts cite the response they came from. Vendor numbers are stored as decimal text; the engine computes in floats.
+A company's vendor data observed within the last 24 hours is reused, not fetched again. FMP calls are paced to `fmp_calls_per_minute`, one pace shared by every worker; a 429 holds every FMP worker for the vendor's numeric `Retry-After` capped at `rate_limit_hold_s`, else `rate_limit_hold_s`, and the call retries after the hold. A GuruFocus 429 sleeps the same hold before its retry and holds no other worker. The retry counts and the run's 429 path are unchanged. Every response is stored as received with any key scrubbed; normalized facts cite the response they came from. Vendor numbers are stored as decimal text; the engine computes in floats.
 
 Four endpoints are required: the three annual statements and the quote. When one of them fails, the company's row is the refusal "data fetch failed: <the failed required endpoints>". A failure of any other call leaves the company valued on what it has.
 

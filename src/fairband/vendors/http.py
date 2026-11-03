@@ -3,11 +3,11 @@
 ``VendorHttp.get`` makes up to ``policy.attempts`` tries, each in a slot of the client's
 ``RateLimiter``, which every thread calling through the client shares (``calls_per_minute``; 0 is
 no pacing). It retries a transport error and the statuses 408, 429, 500, 502, 503 and 504. After a
-429 it holds the limiter, so that every thread waits, for the numeric ``Retry-After`` or else
-``policy.rate_limit_hold_s``, and sleeps that hold before the retry; after the others it sleeps the
-policy's backoff (or a numeric ``Retry-After`` smaller than the time left). Any other failure, a
-redirect included, is final on the first try: a redirect is refused before it can carry a
-credential anywhere.
+429 it holds the limiter, so that every thread waits, for the numeric ``Retry-After`` capped at
+``policy.rate_limit_hold_s``, or else for ``rate_limit_hold_s``, and sleeps that hold before the
+retry; after the others it sleeps the policy's backoff (or a numeric ``Retry-After`` smaller than
+the time left). Any other failure, a redirect included, is final on the first try: a redirect is
+refused before it can carry a credential anywhere.
 
 The deadline (``policy.deadline_s`` from the start of the call, extended by each wait for a slot
 and each hold) bounds the whole call. No sleep is made that would leave under 0.1 s, no try is
@@ -203,7 +203,10 @@ class VendorHttp:
                 raise failure
             remaining = self._seconds_left(deadline)
             if failure.status == HTTPStatus.TOO_MANY_REQUESTS:
-                delay = self._policy.rate_limit_hold_s if retry_after is None else retry_after
+                # Capped, so nothing a vendor sends holds the shared limiter past one hold.
+                delay = self._policy.rate_limit_hold_s
+                if retry_after is not None:
+                    delay = min(retry_after, delay)
                 self.limiter.hold(delay)
                 deadline += timedelta(seconds=delay)
                 remaining += delay

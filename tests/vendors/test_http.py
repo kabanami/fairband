@@ -466,11 +466,12 @@ def test_a_429_holds_the_limiter_for_the_policy_hold(policy: RefreshPolicy) -> N
     assert len(script.requests) == 3
 
 
-@pytest.mark.parametrize("seconds", [7, 120], ids=["within-deadline", "past-deadline"])
+@pytest.mark.parametrize("seconds", [7, 45], ids=["within-deadline", "past-deadline"])
 def test_a_429_with_a_numeric_retry_after_holds_that_long(
     policy: RefreshPolicy, seconds: int
 ) -> None:
-    # The hold extends the deadline by its length, so one past the 30 s still gets its retry.
+    # Both under the 60 s cap. The hold extends the deadline by its length, so one past the 30 s
+    # still gets its retry.
     time = FakeTime()
     reply = httpx.Response(429, headers={"Retry-After": str(seconds)})
     script = Script(reply, 200, time=time)
@@ -478,6 +479,24 @@ def test_a_429_with_a_numeric_retry_after_holds_that_long(
         response = http.get("/quote", FMP_PARAMS)
     assert response.attempts == 2 and response.observed_at == T0 + timedelta(seconds=seconds)
     assert time.sleeps == [seconds]
+
+
+@pytest.mark.parametrize("retry_after", ["3600", "1e14"], ids=["an-hour", "past-any-date"])
+def test_a_long_retry_after_is_capped_at_the_policy_hold(
+    policy: RefreshPolicy, retry_after: str
+) -> None:
+    # The retry sleeps the policy's hold, the limiter is held no longer (the retry takes its
+    # slot at once), and the next call waits only the interval after the retry's slot.
+    hold = policy.rate_limit_hold_s
+    time = FakeTime()
+    reply = httpx.Response(429, headers={"Retry-After": retry_after})
+    script = Script(reply, 200, time=time)
+    with _client(script, policy, calls_per_minute=60) as http:
+        response = http.get("/quote", FMP_PARAMS)
+        after = http.get("/quote", FMP_PARAMS)
+    assert response.attempts == 2 and response.observed_at == T0 + timedelta(seconds=hold)
+    assert after.observed_at == T0 + timedelta(seconds=hold + 1)
+    assert time.sleeps == [hold, 1]
 
 
 def test_a_429_with_an_http_date_retry_after_holds_the_default(policy: RefreshPolicy) -> None:
