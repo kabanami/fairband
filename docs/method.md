@@ -26,13 +26,13 @@ One FMP `company-screener` call per refresh, reused for 24 hours. A listing is a
 1. the exchange is NYSE, NASDAQ or AMEX;
 2. it is not an ETF or a fund, and it is actively trading;
 3. its market cap, in US dollars from the screener, is at least $2 billion;
-4. its FMP industry is not one of the excluded industries: banks, insurance and REITs in every FMP spelling, and Shell Companies (SPACs). The match ignores case and dash style, and an industry that starts with an entry and a space is excluded too, so `Banks—Regional` is out while `Banking Software` is in;
+4. its FMP industry is not one of the excluded industries: banks, insurance and REITs in every FMP spelling, Shell Companies (SPACs), and `Asset Management`, `Financial - Capital Markets`, `Financial - Credit Services`, `Financial - Mortgages`, `Financial - Conglomerates` and `Investment - Banking & Investment Services`. `Financial - Data & Stock Exchanges` stays admitted. The match ignores case and dash style, and an industry that starts with an entry and a space is excluded too, so `Banks—Regional` is out while `Banking Software` is in;
 5. its symbol does not match the preferred, warrant, unit or rights patterns (`[-.]P[A-Z]?$`, `[-.]W[ST]?$`, `[-.]U$`, `[-.]R$`) and is not on the manual exclusion list (empty today). A share class such as `BRK.B` passes;
 6. its name does not match the note, debenture and preferred-share patterns, compared ignoring case (`\bnotes?\b`, `\bdebentures?\b`, `\bdue 20\d\d\b`, `\d(\.\d+)? ?%(\s|$)`, `\bpreferred\b`, `\bpreference\b`). They catch the notes, debentures and preferreds whose symbols carry no suffix, such as ABXL, "Abacus Global Management, Inc. - 8.875% Fixed Rate Senior Notes due 2028"; a rate may have a space before its percent sign ("5.25 % Debentures") or end the name ("5.625%"). No name pattern covers units, rights or depositary shares: rule 5 covers the first two, a partnership's name can carry "Common Units" or "Limited Partnership Units", and an ADR's name can carry "American Depositary Shares".
 
 A listing that fails rule 1, 2 or 3 is skipped and not recorded (the screener request already asks for these filters; the rules are applied again on the rows). A listing that fails rule 4, 5 or 6 is recorded with its reason (`industry: <industry>`, `name pattern`, `symbol pattern` or `manual exclusion`) and gets no screen row; one that fails more than one carries the first of the industry, the name and the symbol rule. A later row whose symbol is already recorded is skipped. An admitted listing gets a cap band: Mega from $200 billion, Large from $10 billion, Mid from $2 billion.
 
-Known gap, for the next piece: some financials pass rule 4 under industries the list does not name (Capital Markets, Credit Services, Asset Management).
+The policy lists a manual admission list (`manual_admissions`: V, MA, GPN, payment companies that do not lend) that the universe does not yet read; Task 3 of the 2026-11-03 plan applies it.
 
 ## 2. The data the method reads
 
