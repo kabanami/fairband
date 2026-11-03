@@ -241,10 +241,11 @@
 
   /* The design system's ScreenTable, its bar measured. The bar sticks at the top of the scroller
      and the header cells stick under it at --bar-height, which follows the bar's height as its
-     chips wrap (classifier-designation spec 8.2). Sideways, the bar stays in view at
+     chips wrap (classifier-designation spec 8.2). Sideways, the bar stays in view within
      --scroller-width, the scroller's width less its scrollbar, which follows the window and the
-     drawer. The observer lives as long as the table; without ResizeObserver the header takes the
-     bar's one-line height and the bar the screen's width. */
+     drawer; a scroller made taller can leave Top's threshold behind without a scroll, so the
+     observer asks again. The observer lives as long as the table; without ResizeObserver the
+     header takes the bar's one-line height and the bar the screen's width. */
   function Screen(props) {
     React.useEffect(function () {
       var bar = document.querySelector('.fb-screen__bar');
@@ -253,6 +254,7 @@
       var observer = new ResizeObserver(function () {
         main.style.setProperty('--bar-height', bar.offsetHeight + 'px');
         main.style.setProperty('--scroller-width', main.clientWidth + 'px');
+        pastFirstScreen(main);
       });
       observer.observe(bar);
       observer.observe(main);
@@ -261,10 +263,11 @@
     return h(F.ScreenTable, props);
   }
 
-  /* Top shows while the scroller is more than one screen down (spec 8.3); the page draws again
-     only when that changes, not on every scroll. */
-  function scrolled(event) {
-    var main = event.currentTarget;
+  function scrolled(event) { pastFirstScreen(event.currentTarget); }
+
+  /* Top shows while the scroller is more than one screen down, and only then (spec 8.3); the
+     page draws again only when that changes, not on every scroll. */
+  function pastFirstScreen(main) {
     var past = main.scrollTop > main.clientHeight;
     if (past === state.pastFirstScreen) return;
     state.pastFirstScreen = past;

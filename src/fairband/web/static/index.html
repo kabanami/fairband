@@ -63,19 +63,22 @@
   /* No padding: a sticky child stops at the scroller's padding edge, so rows would show above
      the table's bar. The room FIND's focus ring needs at the top is the bar's own padding. */
   .app-main { min-height: 0; overflow: auto; }
-  /* A table wider than the scroller scrolls sideways under its bar, which stays in view at the
-     scroller's width less its scrollbar (--scroller-width, which the page measures), so no row
-     shows beside it. The screen grows with a table that cannot shrink to the scroller, for the
-     bar to slide along; a table that can still takes the scroller's width. */
+  /* A table wider than the scroller scrolls sideways under its bar, which stays in view at no
+     more than the scroller's width less its scrollbar (--scroller-width, which the page
+     measures), so no row shows beside it. The screen grows with a table that cannot shrink to the
+     scroller, for the bar to slide along; a table that can still takes the scroller's width. A
+     cap, not a width: a width the scroller has just outgrown would hold the screen wide for a
+     frame, and the scrollbar it brings and takes away again is a ResizeObserver loop. */
   .app-main .fb-screen { width: fit-content; min-width: 100%; }
-  .app-main .fb-screen__bar { left: 0; width: var(--scroller-width, 100%); }
+  .app-main .fb-screen__bar { left: 0; max-width: var(--scroller-width, none); }
   /* Top, past one screen of the table: at the bottom right of the table's own grid cell (both
      lines named, since an absolute child's auto line is the grid's edge), over the table, so the
      drawer rail beside it never covers it. On the raised surface, as the bar and the header are,
-     so a wide table's cells do not show through the quiet button. */
+     so a wide table's cells do not show through the quiet button. Above the table, below the
+     bar (5) and so below its Filters and Columns menus in a short window. */
   .app-top {
     position: absolute; grid-area: 1 / 1 / 2 / 2; right: var(--space-4); bottom: var(--space-4);
-    z-index: 6; background: var(--surface-raised);
+    z-index: 4; background: var(--surface-raised);
   }
   .app-note { margin: 0; color: var(--ink-muted); }
   /* A header that also drags keeps the bundle's grab cursor. */

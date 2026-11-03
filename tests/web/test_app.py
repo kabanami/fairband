@@ -1170,11 +1170,14 @@ def test_app_js_measures_the_bar() -> None:
 
 
 def test_index_keeps_the_bar_in_view_sideways() -> None:
-    """A table wider than the scroller scrolls sideways under the bar, which stays in view at the
-    scroller's width, so no row shows beside it; a table that fits keeps the scroller's width."""
+    """A table wider than the scroller scrolls sideways under the bar, which stays in view at no
+    more than the scroller's width, so no row shows beside it; a table that fits keeps the
+    scroller's width. The width is a cap: a width the scroller has just outgrown would widen the
+    screen for a frame, and the scrollbar that brings and takes away is a ResizeObserver loop."""
     page = _static_file("index.html")
     assert ".app-main .fb-screen { width: fit-content; min-width: 100%; }" in page
-    assert ".app-main .fb-screen__bar { left: 0; width: var(--scroller-width, 100%); }" in page
+    assert ".app-main .fb-screen__bar { left: 0; max-width: var(--scroller-width, none); }" in page
+    assert " width: var(--scroller-width" not in page
 
 
 def test_app_js_back_to_top() -> None:
@@ -1183,12 +1186,25 @@ def test_app_js_back_to_top() -> None:
     top."""
     script = _static_file("app.js")
     assert "h('div', { className: 'app-main', onScroll: scrolled }, main)" in script
+    assert "function scrolled(event) { pastFirstScreen(event.currentTarget); }" in script
     assert "var past = main.scrollTop > main.clientHeight;" in script
+    # A scroller made taller can leave the threshold behind without a scroll: the observer asks
+    # again, so Top goes then too.
+    observer = script[script.index("new ResizeObserver(function () {") :]
+    assert "pastFirstScreen(main);" in observer[: observer.index("});")]
     assert "state.pastFirstScreen ? h(F.Button, {" in script
     assert (
         "variant: 'quiet', size: 'sm', 'aria-label': 'Back to top', className: 'app-top'," in script
     )
     assert "}, 'Top ↑') : null" in script
+    # Top after the table and before the drawer, so Shift+Tab from the drawer reaches it.
+    render = script[script.index("function render() {") :]
+    render = render[: render.index("\n  }\n")]
+    assert (
+        render.index("className: 'app-main'")
+        < render.index("state.pastFirstScreen ?")
+        < render.index("d ? drawer(d)")
+    )
     handler = script[script.index("function toTop() {") :]
     handler = handler[: handler.index("\n  }\n")]
     assert "main.scrollTop = 0;" in handler
@@ -1211,7 +1227,9 @@ def test_index_positions_the_top_control() -> None:
     # Both lines named: an absolute grid child's auto end line is the grid's edge, past the rail.
     assert "position: absolute;" in top and "grid-area: 1 / 1 / 2 / 2;" in top
     assert "right: var(--space-4);" in top and "bottom: var(--space-4);" in top
-    assert "z-index: 6;" in top and "background: var(--surface-raised);" in top
+    # Above the table, below the bar (z-index 5) and so below its Filters and Columns menus.
+    assert "z-index: 4;" in top and "background: var(--surface-raised);" in top
+    assert "z-index: 5;" in _rule(_component_file("bundle.css"), ".fb-screen__bar {")
     assert "transition" not in top
 
 
