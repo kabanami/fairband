@@ -421,7 +421,8 @@ The enterprise value the price implies:
     EV_price = market cap + debt − cash
 
 with debt and cash as 5a.9 reads them (a missing line nil, flagged `line-not-presented:<field>`).
-Market cap is the quote's (section 2). When EV_price is at or below zero the requirement is
+Market cap is section 2's: the quote's, else the profile's, else the screener row's. When
+EV_price is at or below zero the requirement is
 zero: the net cash covers the price; the row is flagged `below-net-cash` ("The price is covered
 by net cash: market cap {x} against net cash {y}").
 
@@ -438,14 +439,16 @@ Otherwise the route solves for R10, the year-10 revenue, on a ten-year path:
   reinvestment_t = max(0, (R_{t+1} − R_t) ÷ sales-to-capital) for t = 1 … 9, and year 10's
   = terminal NOPAT × g_T ÷ terminal return;
 - the free cash flow, the terminal and the firm value by 5a.7 at r in every year (5a.8), the
-  terminal return by 4.7 (the moat from the GuruFocus score as 4.9; a Start-up without a score
-  is None and takes r).
+  terminal return by 4.7's moat rule on the return on new capital at the target margin, m* ×
+  (1 − tax rate) × sales-to-capital, as 5a.7: r for a Narrow or None moat (a Start-up without
+  a score included); for a Wide moat that return capped at 13% and never below r.
 
 EV(R10) is the firm value so built. The solve finds R10 ≥ 0 with EV(R10) = EV_price by
 bisection on [0, 10^13] to a relative tolerance of 1e-9 (the scan bounds and tolerance are
 structural constants, 4.1a). EV(R10) rises with R10 for every sensible input (the terminal
-dominates); the solve checks EV(10^13) ≥ EV_price and otherwise records "no revenue reaches
-the price". The intermediates record `requirement`: `revenue_y10`, `ev_price`, `revenue_0`,
+dominates); when EV(10^13) is below EV_price, as at a target margin at or below zero or a
+return on new capital so low that reinvestment outruns the margin, the reason is "no revenue
+reaches the price". The intermediates record `requirement`: `revenue_y10`, `ev_price`, `revenue_0`,
 `operating_income_0`, `target_margin` (with 5a.4's record of the peers and the source),
 `sales_to_capital` (as 5a.5 records it), `path` (the ten years of revenue, EBIT, tax, NOPAT,
 reinvestment, free cash flow), `terminal_value`, or `reason` when it cannot be computed: "no
@@ -467,11 +470,13 @@ own measure (no six kept ROIC years with revenue), so step 1 never stands and th
 
 Two figures the drawer shows and a row column can carry:
 
-- `cash_floor`: (cash − debt) ÷ diluted shares, the net cash a share. When the price is below
-  it the row is flagged `below-net-cash` (9.2).
+- `cash_floor`: (cash − debt) ÷ diluted shares, the net cash a share. When the market cap is
+  at or below the net cash the row is flagged `below-net-cash` (9.2); that is the price at or
+  below the cash floor when the market cap is the price times the diluted shares.
 - `burn_cover_years`: cash ÷ the yearly burn, the burn = −(trailing operating cash flow +
   trailing capital spending) when that sum is below zero; "not burning" when it is zero or
-  above; none without trailing figures. Below `burn_cover_flag_years` the row is flagged
+  above; none without both trailing figures or without a cash figure. Below
+  `burn_cover_flag_years` the row is flagged
   `burn-cover-short`: word "Cash cover short", sentence "Cash covers {x} years of the trailing
   burn of {y} a year." *My call:* 2 years; no source gives a number; Damodaran's Start-up
   pricing table names "capital access" as what the market prices at this phase (CLC ch. 9,
@@ -494,10 +499,11 @@ spending, `target_margin` and `sales_to_capital` as 5a.14 cites them, `debt` and
 r, g_T, the moat class, the terminal return, `peer_min`, `peer_margin_min_years`,
 `industry_peer_max` on a fallback row, `burn_cover_flag_years`.
 
-The price refresh: a Start-up row recomputes `requirement.revenue_y10` and `ev_price` from the
-new quote's market cap and its stored path inputs (the rebuild keys: `revenue_0`,
-`operating_income_0`, `target_margin.value`, `sales_to_capital.value`, `tax_rate`, the terminal
-return), `cash_floor`'s flag and nothing else.
+The price refresh: a Start-up row moves its market cap with the price (the market cap it read ×
+the new price ÷ the price it was read at), recomputes `requirement.revenue_y10` and `ev_price`
+at it from the rebuild keys (`revenue_0`, `operating_income_0`, `target_margin.value`,
+`sales_to_capital.value`, `tax_rate`, the terminal return), and re-reads `below-net-cash`;
+nothing else.
 
 ## 10. The Decline route
 
@@ -507,7 +513,7 @@ A company the classifier puts in Decline (6.3). The result's route is `decline`.
 guards of 5.1 apply in their order. Then the route's own, in this order: no trailing revenue;
 no trailing operating income; no statutory tax rate; no sales-to-capital (10.4); a value a share
 at or below zero after the distress weighting, "value not positive in the run-off", which keeps
-the figures.
+the figures and its inputs.
 
 ### 10.2 The revenue path
 
@@ -520,31 +526,34 @@ consensus revenue, years 2 and 3 the annual consensus steps, a missing step hold
 the year before (`path-held`), thin landing years `few-analysts`. The departures: an incomplete
 NTM consensus or a non-positive NTM revenue does not refuse; every year then takes the decline
 rate, and the row is flagged `path-on-trend` ("No usable consensus: every year shrinks at the
-five-year trend's {d}"). A step at or below −100% refuses "consensus revenue falls to zero or
+decline rate, {d}."). A step at or below −100% refuses "consensus revenue falls to zero or
 below within the path" as 5a.2.
 
 Years 4 to N (N = `runoff_years`, 10) shrink at the decline rate:
 
-    d = min(0, five-year revenue slope ÷ revenue of the last fiscal year)
+    d = max(−50%, min(0, five-year revenue slope ÷ revenue of the last fiscal year))
 
 the slope the classifier's least-squares trend (3.4), in dollars a year, over the last fiscal
 year's revenue, so d is the trend as a fraction of today's size. The Decline rule makes the slope
-negative, so d is below zero on every row; the min guards the definition. No fade and no floor:
-the terminal continues at d.
+negative, so d is below zero on every row; the min guards the definition. A trend that shrinks
+revenue faster than 50% a year takes −50%, flagged `decline-rate-floored`: "The five-year trend
+shrinks revenue faster than 50% a year; the run-off uses −50%." No fade: the terminal continues
+at d.
 
     revenue_t = revenue_{t−1} × (1 + d), for t = 4 … N
 
 A consensus step above zero on a Decline row flags `consensus-recovery`: "The consensus has
-revenue growing {g} in year {t} while the five-year trend falls {d}." (Damodaran: declining
-firms "look cheap" when forward numbers assume good health.)
+revenue growing {g} in year {t} while the decline rate is {d}." (Damodaran: declining
+firms "look cheap" when forward numbers assume good health.) Both sentences name d as used,
+signed, so a floored row says −50%, not the trend's own figure.
 
 ### 10.3 Margin, tax and NOPAT
 
 The operating margin held in every year is the **normalized margin** m_n: the median of the
 operating margins of the last five fiscal years that have one (3.4's margins), when at least
-three exist; else the trailing margin m_0 = trailing operating income ÷ trailing revenue.
-Damodaran's Sears model holds one margin through the run-off; his Las Vegas Sands earnings
-power took a four-year average "as a reasonable measure of earnings from existing assets"; the
+three exist; else the trailing margin m_0 = trailing operating income ÷ trailing revenue. A row
+with fewer than three fiscal margins holds the trailing margin. Damodaran's Sears model holds
+one margin through the run-off; his Las Vegas Sands earnings power took a four-year average "as a reasonable measure of earnings from existing assets"; the
 Mature Stable route normalizes its earnings the same way (6.2). A one-year loss at an
 established decliner (Intel, CarMax) does not zero its run-off; a chronic loss-maker's median is
 below zero and the run-off says so. *My call,* after the builder check: the first draft held
@@ -586,7 +595,7 @@ The terminal is a perpetuity at d, Damodaran's negative-growth perpetuity (Myth 
 asset sales the terminal value rises because reinvestment turns negative):
 
     revenue_{N+1} = revenue_N × (1 + d)
-    NOPAT_{N+1} = revenue_{N+1} × m_0 × (1 − tax rate), when m_0 is above zero, else revenue_{N+1} × m_0
+    NOPAT_{N+1} = revenue_{N+1} × m_n × (1 − tax rate), when m_n is above zero, else revenue_{N+1} × m_n
     FCFF_{N+1} = NOPAT_{N+1} + max(0, (revenue_N − revenue_{N+1}) ÷ sales-to-capital) × runoff_recovery
     terminal value_N = FCFF_{N+1} ÷ (r − d)
 
@@ -606,9 +615,11 @@ balance sheet:
     NCAV = total current assets − total liabilities
     floored value a share = max(going-concern value a share, NCAV ÷ diluted shares)
 
-The floor binds only when NCAV is above zero and above the going-concern equity; a bound row
-is flagged `ncav-floor`: "The value is the net current asset value {x} a share; the run-off
-gives {y}." `totalLiabilities` missing counts as nil and flags `line-not-presented:totalLiabilities`,
+The floor binds only when NCAV is above zero and above the going-concern equity. When NCAV a
+share is above zero and above the going-concern value a share and π is below 100%, the row is
+flagged `ncav-floor`: "The floored value is the net current asset value {x} a share; the run-off
+gives {y}." (An unavailable π counts as below 100%; at π = 100% the floored value has no weight,
+10.11.) `totalLiabilities` missing counts as nil and flags `line-not-presented:totalLiabilities`,
 and then no floor is applied (a nil liability would overstate it).
 
 ### 10.7 The distress probability and the distress-sale value
@@ -620,12 +631,15 @@ Damodaran keeps distress out of the discount rate and weighs it once:
 **π** is the ten-year cumulative probability of default of the company's synthetic rating.
 The rules, the first that fits deciding:
 
-1. a company whose cash is at or above its debt has π = 0: there is no debt to default on. The
-   intermediates say "no net debt";
+1. a company whose cash is at or above its debt on file has π = 0: there is no debt to default
+   on. The intermediates say "no net debt";
 2. a company with net debt and no interest expense on file (the line not presented, or zero
    over the four trailing quarters) has no rating: π is unavailable, the value is the floored
    going-concern value, flagged `distress-not-charged` ("No interest expense on file: the
-   distress probability is unavailable and the value is the going-concern value");
+   distress probability is unavailable and the value is the floored going-concern value."); a
+   company whose debt lines are both missing is treated the same, whatever its cash, since
+   unknown debt is not "no net debt", with "No debt line on file: the distress probability is
+   unavailable and the value is the floored going-concern value.";
 3. otherwise the coverage is the route's own EBIT over the interest: EBIT_n ÷ trailing interest
    expense, with EBIT_n = trailing revenue × m_n (10.3) and the expense as its size (FMP signs
    it either way), over the same four quarters. A one-year loss does not rate an established
@@ -652,7 +666,8 @@ agent may replace the fraction with an asset-by-asset estimate in tier 2.
 
 ### 10.8 The distress signals
 
-Shown on every Decline row, never deciding the value:
+Shown on every Decline row valued or refused for its value, never deciding the value (the
+earlier refusals carry none):
 
 - **Altman Z″**, the non-manufacturer form: 6.56 × X1 + 3.26 × X2 + 6.72 × X3 + 1.05 × X4,
   with X1 = working capital ÷ total assets (current assets − current liabilities), X2 =
@@ -667,9 +682,10 @@ Shown on every Decline row, never deciding the value:
   assets higher than the year before's; operating cash flow above net income; long-term debt ÷
   total assets lower than the year before's; the current ratio higher; no common stock issued
   (`commonStockIssuance` at or below zero); gross margin higher; asset turnover (revenue ÷ total
-  assets) higher. A signal whose line is missing scores nothing and the score says how many
-  signals it read. Below or at `f_score_low` (1) the row is flagged `f-score-low`: "Piotroski F
-  is {f} of {n}: the low group of Piotroski (2000)."
+  assets) higher. A signal whose line is missing (a missing stock-issued line included), or
+  whose ratio has a zero denominator, is not read and scores nothing, and the score says how
+  many signals it read. Below or at `f_score_low` (1), with at least one signal read, the row is
+  flagged `f-score-low`: "Piotroski F is {f} of {n}: the low group of Piotroski (2000)."
 - **Reinvesting in decline**: trailing capital spending above trailing depreciation and
   amortization in size while the revenue path falls flags `reinvesting-in-decline` ("Capital
   spending {x} exceeds depreciation {y} while revenue falls: Damodaran's denial"). The flag is
@@ -680,8 +696,10 @@ Shown on every Decline row, never deciding the value:
 
 As 5a.10 for the shape: the levels and the validity stay; the designation, the implied decline
 rate (the d at which the going-concern path, floored and weighted as built, equals the price,
-scanned from −50% to 0 in steps of 0.1% to 1e-7; "none" when the price is above the value at d
-= 0 or below the value at −50%), the multiples of 5.9 (trailing P/E reported and clean, no
+scanned from −50% to 0 in steps of 0.1% and bisected to 1e-7: the first root the scan finds
+scanning up from −50%; none when the scan finds no sign change. The value need not rise with d
+(it falls when m_n(1 − t)(1 + r) < r × runoff_recovery ÷ sales-to-capital), so no reading
+assumes the direction), the multiples of 5.9 (trailing P/E reported and clean, no
 forward P/E) and the expected return of 5.10 with g_T replaced by d. The rebuild keys:
 `runoff_path` (revenue_0, ntm_revenue, the consensus steps as found, d, runoff_years),
 `margin`, `tax_rate`, `sales_to_capital` (used, value), `runoff_recovery`, `debt`, `cash`,
@@ -689,9 +707,10 @@ forward P/E) and the expected return of 5.10 with g_T replaced by d. The rebuild
 
 ### 10.10 Flags, intermediates and inputs
 
-Flags, in order: the assembly's and the classifier's checks; `path-held`, `path-on-trend`,
-`consensus-recovery`, `few-analysts`; `line-not-presented:debt`, `line-not-presented:cash`,
-`line-not-presented:totalLiabilities`; `peers-from-industry` when the peers served;
+Flags, in order: the assembly's and the classifier's checks; `path-held`,
+`decline-rate-floored`, `path-on-trend`, `consensus-recovery`, `few-analysts`;
+`line-not-presented:debt`, `line-not-presented:cash`, `line-not-presented:totalLiabilities`;
+`peers-from-industry` when the industry's peers gave the sales-to-capital;
 `tax-loss-history-unknown`; `ncav-floor`; `distress-not-charged`; `z-distress`; `f-score-low`;
 `reinvesting-in-decline`; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`,
 `heavy-capex`, `large-nri`). Never the ROIC flags, `return-above-peers`, `value-spread`,
@@ -716,7 +735,8 @@ annual statements), `depreciation` (trailing). RULE: r, `runoff_years`, `runoff_
 `distress_sale_fraction`, `synthetic_rating` (the row used, noted), `default_probability_10y`
 (the figure used), `z_distress`, `z_safe`, `f_score_low`, `peer_min` and `industry_peer_max`
 when the peers served, the moat class (the margin of safety for the levels only; the route's
-terminal is at d, not the terminal return).
+terminal is at d, not the terminal return). The kept figures of a value refusal ("value not
+positive in the run-off") include its inputs: the same tagged inputs a valued row cites.
 
 ### 10.11 Young Growth and the shared table
 
@@ -750,9 +770,10 @@ with its count. It runs first in every refresh that values: the revalue, the ful
 the scoped refresh, before their value stage. A full refresh is not exempt: it reuses any
 response observed within 24 hours without a fetch, and those responses carry no new facts until
 the backfill writes them (the builder check caught this). The price refresh does not value and
-does not run it. The trailing figures (4.2) gain `interest_expense` and `depreciation`, summed
-over the same four quarters as the rest; `CapitalYear` or a new per-year balance record carries
-the annual lines the Z″, the F-score and NCAV read.
+does not run it. The trailing figures (4.2) gain `interest_expense`, each quarter by its size,
+and `depreciation`, summed over the same four quarters as the rest and missing when any quarter
+lacks the line; on the fiscal-year fallback, the year's lines. `CapitalYear` or a new per-year
+balance record carries the annual lines the Z″, the F-score and NCAV read.
 
 The method's section 2 table gains the six lines and section 10 one sentence: every refresh
 that values runs the facts backfill first.
@@ -831,10 +852,10 @@ Variants the tests pin: cash 250 (net cash) gives π = 0 and the value 4.4265 + 
 and 4.4265; NCAV 600 (current assets 1,100) gives the floor 6.00 a share, `ncav-floor`, and the
 value 6.00 × 0.95 + 2.2559 × 0.05 = 5.8128; a trailing margin of −1% with the same five
 fiscal margins gives the same run-off and rating (m_n = 8%) and records both margins; fiscal
-margins −2%, −1%, −1%, −1%, −1% (m_n = −1%, EBIT_n = −10) give rating D, π = 100%, a firm value
-below zero, a distress-sale value of max(0, 0.6 × firm value + 100 − 200) = 0 and the refusal
+margins −2%, −3%, −3%, −3%, −3% (m_n = −3%, EBIT_n = −30) give rating D, π = 100%, a firm value
+of −140.53, a distress-sale value of max(0, 0.6 × −140.53 + 100 − 200) = 0 and the refusal
 "value not positive in the run-off" with the figures kept; the same with cash 250 gives π = 0
-and the floored going-concern value, below zero, so the same refusal; three fiscal margins on
+and the going-concern value −0.9053 a share, so the same refusal; three fiscal margins on
 file use their median, two fall back to the trailing margin; a consensus step of +2% in year 2
 flags `consensus-recovery` and reinvests (R_2 − R_1) ÷ 2.0 in full.
 
@@ -923,8 +944,8 @@ its full `deadline_s` from t = 55.
 4. The bar and the header stay in view while the table scrolls; the Top control appears past
    one screen, returns to the top and focuses FIND.
 5. Every Start-up row shows the requirement or its reason, the cash floor and the burn cover;
-   every Decline row shows a value or a refusal naming the missing input, π with its rating,
-   Z″ and F.
+   every Decline row shows a value or a refusal naming the missing input, and every Decline row
+   valued or refused for its value shows π with its rating, Z″ and F.
 6. The readout, written up for the founder: the phase counts before and after; the growth,
    Mature Growth and Mature Stable rows moved by the classifier and their outcomes; the
    designation counts by band; the Start-up requirements' distribution (the multiple of
@@ -1006,6 +1027,7 @@ its full `deadline_s` from t = 55.
 | 2026-11-03 | Two plans: method 0.6 for the limiter, the classifier, the designation and the controls; 0.7 for the routes; policy v5 for both. Claude's call at planning. |
 | 2026-11-03 | After the builder check: the Decline margin is the five-year median (10.3) and the rating reads it (10.7), so a one-year loss does not refuse an established decliner; the π rules are ordered (net cash, no interest, D); the industry exclusions take effect at the full refresh (6.4); the backfill runs before every valuing refresh (11). Claude's calls. |
 | 2026-11-03 | The 429 hold is capped at `rate_limit_hold_s` (the final review found an unbounded vendor value could hold every worker or overflow the clock). Claude's call. |
+| 2026-11-04 | Rulings during the build: the four-quarter rule for the trailing interest and depreciation; a missing stock-issued line unread; the decline rate floored at −50% with `decline-rate-floored`; m_n in the terminal; the chronic-loss example at −3%; the implied decline rate as the first root; the Start-up terminal return through 4.7 on the peers' return on new capital; the repriced Start-up market cap moved with the price; unknown debt rated unavailable; the signals on rows valued or refused for their value; the Piotroski words met / not met / not read. Claude's calls. |
 
 Builder check: done 2026-11-03 on Claude Opus 5.5; its three questions are settled in 10.3 and
 10.7, 6.4 and 11. It recomputed the worked numbers of 13.1 and 13.2 from the formulas and they

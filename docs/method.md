@@ -42,7 +42,7 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 |---|---|---|
 | Income statement, balance sheet, cash flow, annual | `income-statement`, `balance-sheet-statement`, `cash-flow-statement` | 11 fiscal years: ten for the ROIC aggregate plus the opening balance. Among the lines kept, for the Decline route: `grossProfit` and `interestExpense` (income statement), `totalAssets`, `totalLiabilities` and `retainedEarnings` (balance sheet), `depreciationAndAmortization` (cash flow) |
 | As-reported balance sheet, annual | `balance-sheet-statement-as-reported` | 11 fiscal years; supplies the issuer's total intangibles excluding goodwill, and the lease lines |
-| Income statement and cash flow, quarterly | the same endpoints with `period=quarter` | 8 quarters, for the trailing figures; `interestExpense` and `depreciationAndAmortization` among the lines kept |
+| Income statement and cash flow, quarterly | the same endpoints with `period=quarter` | 8 quarters, for the trailing figures; `grossProfit`, `interestExpense` and `depreciationAndAmortization` among the lines kept |
 | Consensus EPS, revenue, net income with analyst counts | `analyst-estimates`, annual and quarterly | 6 annual rows and 40 quarterly rows; the engine picks periods by date, never by row order. FMP gives two analyst counts, for EPS and for revenue; the net-income count reads the EPS count |
 | Street actual EPS by quarter | `earnings` | 12 rows, for the stock-compensation basis test |
 | Next earnings date | `earnings` | the same rows; the next date on or after today |
@@ -252,7 +252,7 @@ A ROIC year needs its NOPAT and both its opening and closing capital. Its averag
 - Five to nine: flag `roic-on-n-years`.
 - A capital sum at or below zero: no aggregate, flag `ten-year-roic-unavailable`.
 
-The aggregate is shown and feeds the "ten-year" sensitivity (5.8). It never enters the charge. The kept years also give the revenue-growth route its own sales-to-capital (5a.5).
+The aggregate is shown and feeds the "ten-year" sensitivity (5.8). It never enters the charge. The kept years also give the revenue-growth route its own sales-to-capital (5a.5) and the Decline route its own-latest measure (6a.4).
 
 ### 4.6 The runway return
 
@@ -991,8 +991,8 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Check | A classifier warning that never changes the phase |
 | Snapshot | One company's result under one refresh, with the versions that produced it |
 | Mature peers | The company's FMP `stock-peers` that the latest universe lists and the classifier puts in Mature Growth or Mature Stable; when fewer than `peer_min` of them count, the largest mature companies of the company's FMP industry |
-| Target margin | The operating margin the revenue-growth route moves to by year 10: the median ten-year margin of the mature peers |
-| Sales-to-capital | The revenue a dollar of invested capital buys: the company's change in revenue ÷ its change in capital, or a peer's revenue ÷ its capital. The revenue-growth route reinvests the next year's revenue increase ÷ sales-to-capital |
+| Target margin | The operating margin the revenue-growth route moves to by year 10, and the Start-up ramp reaches in year 10: the median ten-year margin of the mature peers |
+| Sales-to-capital | The revenue a dollar of invested capital buys: the company's change in revenue ÷ its change in capital, its newest kept year's revenue ÷ that year's capital (6a.4), or a peer's revenue ÷ its capital. The revenue-growth route reinvests the next year's revenue increase ÷ sales-to-capital |
 | Margin the price needs | The target margin at which the revenue-growth value a share equals the price |
 | Return on new capital at the target | Target margin × (1 − tax rate) × sales-to-capital: the after-tax return on new capital once the margin reaches the target. It sets the terminal return by the moat's rule and is checked against the peers' ROIC |
 | Held rate | The growth the revenue path holds in years 4 and 5 before its fade: g_3 as resolved, or, for the implied growth, the rate at which the value equals the price. A held step is a missing consensus step that takes the rate of the year before |
