@@ -122,9 +122,8 @@ def piotroski_f(this: BalanceYear, last: BalanceYear) -> FScore:
     at or below zero), ``gross_margin_up`` (gross profit ÷ revenue higher) and ``turnover_up``
     (revenue ÷ total assets higher).
 
-    A signal whose line is missing, or whose ratio has a zero denominator, is ``None``. The
-    exception is ``no_issuance``: a missing stock-issued line reads as no issuance recorded, so
-    the signal is ``True`` and always read."""
+    A signal whose line is missing, or whose ratio has a zero denominator, is ``None``: it
+    scores nothing and is not read (a missing stock-issued line included)."""
     roa = _ratio(this.net_income, this.total_assets)
     signals = (
         ("roa_positive", _above(roa, 0.0)),
@@ -145,7 +144,7 @@ def piotroski_f(this: BalanceYear, last: BalanceYear) -> FScore:
                 _ratio(last.total_current_assets, last.total_current_liabilities),
             ),
         ),
-        ("no_issuance", this.stock_issued is None or this.stock_issued <= 0),
+        ("no_issuance", None if this.stock_issued is None else this.stock_issued <= 0),
         (
             "gross_margin_up",
             _above(

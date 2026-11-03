@@ -166,8 +166,10 @@ def test_piotroski_f_counts_true_signals_and_reads_missing_as_none() -> None:
     assert (no_income.score, no_income.read) == (4, 6)
 
 
-def test_piotroski_no_issuance_reads_a_missing_line_as_none_issued() -> None:
-    assert dict(piotroski_f(replace(YEAR, stock_issued=None), LAST).signals)["no_issuance"] is True
+def test_piotroski_no_issuance_is_unread_when_the_line_is_missing() -> None:
+    no_line = piotroski_f(replace(YEAR, stock_issued=None), LAST)
+    assert dict(no_line.signals)["no_issuance"] is None
+    assert (no_line.score, no_line.read) == (5, 8)
     assert dict(piotroski_f(replace(YEAR, stock_issued=-5.0), LAST).signals)["no_issuance"] is True
     assert dict(piotroski_f(replace(YEAR, stock_issued=5.0), LAST).signals)["no_issuance"] is False
 
