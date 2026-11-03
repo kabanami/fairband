@@ -634,12 +634,21 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 /* ----------------------------------------------------------- ScreenTable */
 
 .fb-screen { color: var(--ink); }
+/* fairband: the bar sticks at the top of the table's scroller, on the raised surface above the
+   header cells, which stick under it at its height (classifier-designation spec 8.2). Its space
+   below is padding rather than margin, so no row shows between the bar and the header. Its space
+   above is the room FIND's focus ring (2px, offset 1px) needs at the scroller's top edge, which
+   was the scroller's padding before the bar stuck. */
 .fb-screen__bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-2);
+  padding: var(--space-1) 0 var(--space-2);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface-raised);
 }
 .fb-screen__count { color: var(--ink-faint); white-space: nowrap; }
 .fb-screen__count b { color: var(--ink); font-weight: inherit; font-family: var(--font-mono); }
@@ -755,6 +764,11 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   position: sticky;
   top: 0;
 }
+/* fairband: the screen's header cells stick under its bar, at the height the page measures and
+   sets as --bar-height, or the bar's one-line height until it is measured: 38px, the space-1 and
+   space-2 padding round a 26px control (classifier-designation spec 8.2). Every other table, the
+   groups' and the drawer's, keeps its header at the top. */
+.fb-screen .fb-table thead th { top: var(--bar-height, 38px); }
 .fb-table th.fb-num, .fb-table td.fb-num { text-align: right; font-variant-numeric: tabular-nums; }
 .fb-table tbody tr { height: var(--row-height); }
 .fb-screen--dense .fb-table tbody tr { height: var(--row-height-dense); }

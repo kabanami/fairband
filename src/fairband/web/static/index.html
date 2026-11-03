@@ -55,11 +55,28 @@
   .app-groups__table { width: auto; min-width: 50%; }
   .app-groups__note { margin: var(--space-2) 0 0; }
   .app-groups.is-loading .fb-table tbody td { color: var(--ink-faint); }
-  .app-layout { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .app-layout {
+    position: relative; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
   .app-layout--drawer { grid-template-columns: minmax(0, 1fr) var(--detail-rail); }
+  /* No padding: a sticky child stops at the scroller's padding edge, so rows would show above
+     the table's bar. The room FIND's focus ring needs at the top is the bar's own padding. */
   .app-main { min-height: 0; overflow: auto; }
-  /* fairband: the FIND field's focus ring (2px, offset 1px) was clipped by the scroll container's top edge */
-  .app-main { padding-top: var(--space-1); }
+  /* A table wider than the scroller scrolls sideways under its bar, which stays in view at the
+     scroller's width less its scrollbar (--scroller-width, which the page measures), so no row
+     shows beside it. The screen grows with a table that cannot shrink to the scroller, for the
+     bar to slide along; a table that can still takes the scroller's width. */
+  .app-main .fb-screen { width: fit-content; min-width: 100%; }
+  .app-main .fb-screen__bar { left: 0; width: var(--scroller-width, 100%); }
+  /* Top, past one screen of the table: at the bottom right of the table's own grid cell (both
+     lines named, since an absolute child's auto line is the grid's edge), over the table, so the
+     drawer rail beside it never covers it. On the raised surface, as the bar and the header are,
+     so a wide table's cells do not show through the quiet button. */
+  .app-top {
+    position: absolute; grid-area: 1 / 1 / 2 / 2; right: var(--space-4); bottom: var(--space-4);
+    z-index: 6; background: var(--surface-raised);
+  }
   .app-note { margin: 0; color: var(--ink-muted); }
   /* A header that also drags keeps the bundle's grab cursor. */
   .fb-table thead th[tabindex]:not([draggable="true"]), .fb-table tbody tr[tabindex] {

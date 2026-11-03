@@ -1119,9 +1119,100 @@ def test_bundle_find_has_a_clear_word() -> None:
     )
 
 
-def test_index_gives_the_find_ring_room() -> None:
+def _rule(css: str, selector: str) -> str:
+    """The declarations of the one rule whose line opens with ``selector``."""
+    starts = [m.start() for m in re.finditer(r"(?m)^[ \t]*" + re.escape(selector), css)]
+    assert len(starts) == 1, selector
+    return css[starts[0] : css.index("}", starts[0])]
+
+
+def test_the_bar_gives_the_find_ring_room() -> None:
+    """FIND's focus ring (2px, offset 1px) needs room at the scroller's top edge. That room was
+    the scroller's padding; with the bar sticky it is the bar's own padding, since a sticky child
+    stops at the scroller's padding edge and rows would show above the bar."""
+    css = _component_file("bundle.css")
+    assert "padding: var(--space-1) 0 var(--space-2);" in _rule(css, ".fb-screen__bar {")
+    assert "the room FIND's focus ring (2px, offset 1px) needs" in css
     page = _static_file("index.html")
-    assert "/* fairband:" in page and ".app-main { padding-top: var(--space-1); }" in page
+    assert "padding" not in _rule(page, ".app-main {")
+
+
+def test_bundle_css_bar_is_sticky_and_the_header_sits_under_it() -> None:
+    """Classifier-designation spec 8.2: the FIND, filter and columns bar sticks at the top of the
+    table's scroller, on the raised surface above the header cells, and the screen's header cells
+    stick under it at its measured height, the bar's one-line height until it is measured. Its
+    space below is padding, so no row shows between the bar and the header. The groups' and the
+    drawer's tables keep their header at the top."""
+    css = _component_file("bundle.css")
+    bar = _rule(css, ".fb-screen__bar {")
+    assert "position: sticky;" in bar and "top: 0;" in bar
+    assert "z-index: 5;" in bar and "background: var(--surface-raised);" in bar
+    assert "margin" not in bar
+    assert css.index("/* fairband: the bar sticks") < css.index(".fb-screen__bar {")
+    # 38px: the bar's one line, a 26px control in space-1 above and space-2 below.
+    assert ".fb-screen .fb-table thead th { top: var(--bar-height, 38px); }" in css
+    head = _rule(css, ".fb-table thead th {")
+    assert "position: sticky;" in head and "top: 0;" in head
+
+
+def test_app_js_measures_the_bar() -> None:
+    """The header cells' top follows the bar's height as its chips wrap, and the bar's width the
+    scroller's less its scrollbar: an observer on the bar and the scroller sets --bar-height and
+    --scroller-width on the scroller, and goes when the table does."""
+    script = _static_file("app.js")
+    assert "if (!bar || typeof ResizeObserver === 'undefined') return undefined;" in script
+    assert "var bar = document.querySelector('.fb-screen__bar');" in script
+    assert "main.style.setProperty('--bar-height', bar.offsetHeight + 'px');" in script
+    assert "main.style.setProperty('--scroller-width', main.clientWidth + 'px');" in script
+    assert "observer.observe(bar);" in script and "observer.observe(main);" in script
+    assert "return function () { observer.disconnect(); };" in script
+    assert "main = h(Screen, {" in script
+
+
+def test_index_keeps_the_bar_in_view_sideways() -> None:
+    """A table wider than the scroller scrolls sideways under the bar, which stays in view at the
+    scroller's width, so no row shows beside it; a table that fits keeps the scroller's width."""
+    page = _static_file("index.html")
+    assert ".app-main .fb-screen { width: fit-content; min-width: 100%; }" in page
+    assert ".app-main .fb-screen__bar { left: 0; width: var(--scroller-width, 100%); }" in page
+
+
+def test_app_js_back_to_top() -> None:
+    """Spec 8.3: past one screen of the table's scroller, a quiet small Top control; it returns
+    the scroller to its start at once and hands focus to FIND, since the control goes at the
+    top."""
+    script = _static_file("app.js")
+    assert "h('div', { className: 'app-main', onScroll: scrolled }, main)" in script
+    assert "var past = main.scrollTop > main.clientHeight;" in script
+    assert "state.pastFirstScreen ? h(F.Button, {" in script
+    assert (
+        "variant: 'quiet', size: 'sm', 'aria-label': 'Back to top', className: 'app-top'," in script
+    )
+    assert "}, 'Top ↑') : null" in script
+    handler = script[script.index("function toTop() {") :]
+    handler = handler[: handler.index("\n  }\n")]
+    assert "main.scrollTop = 0;" in handler
+    assert "document.getElementById('fb-q').focus();" in handler
+    assert handler.index("main.scrollTop = 0;") < handler.index("focus()")
+    assert "behavior" not in script and "scrollTo(" not in script  # no smooth scrolling
+    # The design system's Button passes the name through to the button element.
+    bundle = _component_file("bundle.js")
+    assert "'aria-label': p['aria-label']," in bundle
+    declarations = _component_file("index.d.ts")
+    assert "'aria-label'?: string;" in declarations
+
+
+def test_index_positions_the_top_control() -> None:
+    """The Top control sits at the bottom right of the table's column, over the table, so the
+    drawer rail never covers it."""
+    page = _static_file("index.html")
+    assert "position: relative;" in _rule(page, ".app-layout {")
+    top = _rule(page, ".app-top {")
+    # Both lines named: an absolute grid child's auto end line is the grid's edge, past the rail.
+    assert "position: absolute;" in top and "grid-area: 1 / 1 / 2 / 2;" in top
+    assert "right: var(--space-4);" in top and "bottom: var(--space-4);" in top
+    assert "z-index: 6;" in top and "background: var(--surface-raised);" in top
+    assert "transition" not in top
 
 
 def test_logos_served(client: TestClient) -> None:

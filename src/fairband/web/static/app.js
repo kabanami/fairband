@@ -35,7 +35,8 @@
        with the whole screen (screen-controls spec 4.4). */
     query: '',
     filters: F.EMPTY_FILTERS,
-    drawer: null /* { symbol, body, loading, error } while open */
+    drawer: null, /* { symbol, body, loading, error } while open */
+    pastFirstScreen: false /* the table is scrolled more than one screen down: Top shows */
   };
   var latest = 0;
   var latestDetail = 0;
@@ -236,6 +237,47 @@
 
   function note(text) { return h('p', { className: 'body app-note' }, text); }
 
+  /* ------------------------------------------------------- the sticky bar and Top */
+
+  /* The design system's ScreenTable, its bar measured. The bar sticks at the top of the scroller
+     and the header cells stick under it at --bar-height, which follows the bar's height as its
+     chips wrap (classifier-designation spec 8.2). Sideways, the bar stays in view at
+     --scroller-width, the scroller's width less its scrollbar, which follows the window and the
+     drawer. The observer lives as long as the table; without ResizeObserver the header takes the
+     bar's one-line height and the bar the screen's width. */
+  function Screen(props) {
+    React.useEffect(function () {
+      var bar = document.querySelector('.fb-screen__bar');
+      if (!bar || typeof ResizeObserver === 'undefined') return undefined;
+      var main = bar.closest('.app-main');
+      var observer = new ResizeObserver(function () {
+        main.style.setProperty('--bar-height', bar.offsetHeight + 'px');
+        main.style.setProperty('--scroller-width', main.clientWidth + 'px');
+      });
+      observer.observe(bar);
+      observer.observe(main);
+      return function () { observer.disconnect(); };
+    }, []);
+    return h(F.ScreenTable, props);
+  }
+
+  /* Top shows while the scroller is more than one screen down (spec 8.3); the page draws again
+     only when that changes, not on every scroll. */
+  function scrolled(event) {
+    var main = event.currentTarget;
+    var past = main.scrollTop > main.clientHeight;
+    if (past === state.pastFirstScreen) return;
+    state.pastFirstScreen = past;
+    render();
+  }
+
+  /* Back to the top at once, no smooth scrolling, and focus to FIND, since Top goes there. */
+  function toTop() {
+    var main = document.querySelector('.app-main');
+    main.scrollTop = 0;
+    document.getElementById('fb-q').focus();
+  }
+
   function render() {
     var d = state.drawer;
     var main = null;
@@ -247,7 +289,7 @@
       /* A narrowing that leaves no row still draws the table: its bar says 0 of the total and
          offers Clear. The drawer stays open when its row is narrowed away. */
       var rows = narrow(state.rows, state.query, state.filters);
-      main = h(F.ScreenTable, {
+      main = h(Screen, {
         rows: d ? rows.map(function (r) {
           return r.ticker === d.symbol ? Object.assign({}, r, { selected: true }) : r;
         }) : rows,
@@ -265,8 +307,13 @@
         chooser: true
       });
     }
+    /* Top comes after the table and before the drawer, so Shift+Tab from the drawer reaches it. */
     root.render(h('div', { className: d ? 'app-layout app-layout--drawer' : 'app-layout' },
-      h('div', { className: 'app-main' }, main),
+      h('div', { className: 'app-main', onScroll: scrolled }, main),
+      state.pastFirstScreen ? h(F.Button, {
+        variant: 'quiet', size: 'sm', 'aria-label': 'Back to top', className: 'app-top',
+        onClick: toTop
+      }, 'Top ↑') : null,
       d ? drawer(d) : null));
   }
 

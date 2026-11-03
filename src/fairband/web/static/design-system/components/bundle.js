@@ -109,6 +109,9 @@
       disabled: !!p.disabled,
       // fairband: a menu's toggle says whether its menu is open (growth-routes spec 6.3).
       'aria-expanded': p['aria-expanded'],
+      // fairband: a control can name itself in full, as Top ↑ is "Back to top"
+      // (classifier-designation spec 8.3).
+      'aria-label': p['aria-label'],
       onClick: p.onClick
     }, p.children);
   }

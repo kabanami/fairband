@@ -99,6 +99,8 @@ export interface ButtonProps {
   onClick?: (event: unknown) => void;
   /** fairband: a menu's toggle passes whether its menu is open; it reaches the button. */
   'aria-expanded'?: 'true' | 'false';
+  /** fairband: the control's name in full, where its text is short (Top ↑ is "Back to top"). */
+  'aria-label'?: string;
   className?: string;
   children?: unknown;
 }
