@@ -9,10 +9,17 @@ import pytest
 from support.engine_companies import annual, capital_years, fiscal_years
 
 from fairband.engine.classifier import Deciles
-from fairband.engine.revenue_growth import PeerFigures
+from fairband.engine.revenue_growth import (
+    Bridge,
+    MarginPath,
+    PeerFigures,
+    RevenueCharge,
+    RevenuePath,
+    revenue_valuation,
+)
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.route_revenue_growth import implied_margin_at_price
-from fairband.engine.types import ValuationResult, result_from_json, result_to_json
+from fairband.engine.types import TaggedInput, ValuationResult, result_from_json, result_to_json
 from fairband.policy import Policy
 
 TODAY = date(2026, 10, 31)
@@ -75,6 +82,14 @@ TARGET_REFUSAL_KEYS = {
     "implied_margin",
     "price_facts",
 }
+# The fixture's sales class from its $10 bn of trailing revenue, and that class's cap on the held
+# rate; the year-3 consensus of 20% is above it.
+CLASS = "$7,000-12,000 Mn"
+CAP = 0.15
+CAP_NOTE = (
+    "the Base Rate Book's 90th-percentile five-year sales growth for the $7,000-12,000 Mn sales "
+    "class; "
+)
 PRICE_KEYS = (
     "implied_growth",
     "implied_margin",
@@ -91,6 +106,11 @@ def codes(r: ValuationResult) -> list[str]:
 
 def sentence(r: ValuationResult, code: str) -> str:
     [found] = [f.sentence for f in r.flags if f.code == code]
+    return found
+
+
+def input_named(r: ValuationResult, name: str) -> TaggedInput:
+    [found] = [i for i in r.inputs if i.name == name]
     return found
 
 
@@ -113,7 +133,13 @@ def test_high_growth_is_valued_on_the_revenue_route(
     assert len(im["growth_rates"]) == 10 and im["growth_rates"][-1] == pytest.approx(0.03)
     assert im["ntm_revenue"] == pytest.approx(12_400e6)
     assert im["revenue_by_year"][0] == im["ntm_revenue"]
-    assert im["path"] == {"base_year": 2027, "analysts": [15, 12], "held": [False, False]}
+    assert im["path"] == {
+        "base_year": 2027,
+        "analysts": [15, 12],
+        "held": [False, False],
+        "sales_class": CLASS,
+        "cap": pytest.approx(CAP),
+    }
     assert im["path_steps"] == pytest.approx([16_000 / 13_000 - 1, 19_200 / 16_000 - 1])
     assert im["margin_start"] == pytest.approx(-0.09)
     assert im["margin_path"]["by_year"][-1] == pytest.approx(0.20)
@@ -161,6 +187,7 @@ def test_flags_follow_the_spec_order(
     route_codes = [c for c in codes(r) if c not in {f.code for f in r.phase.checks}]
     assert route_codes == [
         "path-held",
+        "consensus-above-base-rate",
         "roic-on-n-years",
         "line-not-presented:cash",
         "tax-loss-history-unknown",
@@ -291,7 +318,13 @@ def test_path_held_flag_and_few_analysts(
     )
     assert held.intermediates["path"]["held"] == [False, True]
     assert held.intermediates["path_steps"] == pytest.approx([g2, g2])
-    assert held.intermediates["growth_rates"][3:5] == pytest.approx([g2, g2])
+    # g_3 holds g_2's 23.1%, above the class's cap: years 4 and 5 hold the cap, both flagged
+    assert held.intermediates["growth_rates"][3:5] == pytest.approx([CAP, CAP])
+    assert held.intermediates["revenue_path"]["hold"] == pytest.approx(CAP)
+    assert codes(held).index("path-held") < codes(held).index("consensus-above-base-rate")
+    assert "The year-3 consensus growth of 23.1% is above 15.0%" in sentence(
+        held, "consensus-above-base-rate"
+    )
 
     # no fiscal 2028: neither step stands, year 2 holds year 1's growth and year 3 holds that
     both = value_company(replace(hg, annual_estimates=(a[0], a[2])), deciles, policy, TODAY)
@@ -324,6 +357,79 @@ def test_path_held_flag_and_few_analysts(
     assert "fiscal 2029" in sentence(r, "few-analysts")
     # a held step lands on no consensus, so it is never thin
     assert "few-analysts" not in codes(held)
+
+
+def test_the_held_rate_is_capped_at_the_sales_class_ninetieth_percentile(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """$10 bn of trailing revenue is the $7,000-12,000 Mn class, whose 90th-percentile five-year
+    sales growth is 15%; the year-3 consensus of 20% is above it, so years 4 and 5 hold 15% and
+    the fade starts from it. The consensus steps stand as found."""
+    r = value_company(high_growth_inputs, deciles, policy, TODAY)
+    im = r.intermediates
+    assert sentence(r, "consensus-above-base-rate") == (
+        "The year-3 consensus growth of 20.0% is above 15.0%, the Base Rate Book's 90th-percentile "
+        "five-year sales growth for the $7,000-12,000 Mn sales class, so years 4 and 5 hold 15.0% "
+        "and the fade starts from it."
+    )
+    assert im["path"]["sales_class"] == CLASS and im["path"]["cap"] == pytest.approx(CAP)
+    assert im["revenue_path"]["hold"] == pytest.approx(CAP)
+    g2, g3 = 16_000 / 13_000 - 1, 19_200 / 16_000 - 1
+    assert im["path_steps"] == pytest.approx([g2, g3])
+    assert im["growth_rates"][1:3] == pytest.approx([g2, g3])
+    assert im["growth_rates"][3:5] == pytest.approx([CAP, CAP])
+    assert im["growth_rates"][5] == pytest.approx(0.03 + 0.12 * 4 / 5)
+    # the value is the core's at the cap
+    assert im["tax_rate"] == 0.25
+    core = revenue_valuation(
+        RevenuePath(10_000e6, 12_400e6, (g2, g3), CAP, 5, 5, 0.03),
+        MarginPath(-0.09, 0.20, 10),
+        0.25,
+        RevenueCharge(0.09, 0.03, im["terminal_roic"], im["sales_to_capital"]["value"]),
+        Bridge(1_000e6, 3_000e6, 100e6),
+    )
+    assert core.value_per_share == pytest.approx(r.value)
+    cap = input_named(r, "held_growth_cap")
+    assert (cap.value, cap.unit, cap.tag) == (CAP, "rate", "RULE")
+    assert cap.note == CAP_NOTE + "binds: the year-3 consensus is above it"
+    names = [i.name for i in r.inputs]
+    assert names.index("high_growth_years") + 1 == names.index("held_growth_cap")
+
+
+def test_the_cap_lowers_the_value(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """With every class's cap out of reach, years 4 and 5 hold the 20% of year 3 and the value is
+    higher."""
+    capped = value_company(high_growth_inputs, deciles, policy, TODAY)
+    loose = replace(
+        policy, base_rates=tuple(replace(c, sales_p90_5y=10.0) for c in policy.base_rates)
+    )
+    r = value_company(high_growth_inputs, deciles, loose, TODAY)
+    im = r.intermediates
+    assert "consensus-above-base-rate" not in codes(r)
+    assert im["revenue_path"]["hold"] is None
+    g3 = 19_200 / 16_000 - 1
+    assert im["growth_rates"][3:5] == pytest.approx([g3, g3])
+    assert r.value is not None and capped.value is not None and r.value > capped.value
+    # the implied-growth solve tries its own held rate, so the cap does not touch it
+    assert im["implied_growth"] == capped.intermediates["implied_growth"]
+
+
+def test_a_year_3_consensus_at_the_cap_does_not_bind(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    a = high_growth_inputs.annual_estimates
+    at_cap = (a[0], a[1], replace(a[2], revenue=18_400e6))  # 18.4 ÷ 16 is a 15.0% step
+    r = value_company(replace(high_growth_inputs, annual_estimates=at_cap), deciles, policy, TODAY)
+    im = r.intermediates
+    assert "consensus-above-base-rate" not in codes(r)
+    assert im["revenue_path"]["hold"] is None
+    assert im["path"]["sales_class"] == CLASS and im["path"]["cap"] == pytest.approx(CAP)
+    assert im["growth_rates"][3:5] == pytest.approx([CAP, CAP])  # g_3 itself, at the cap
+    cap = input_named(r, "held_growth_cap")
+    assert cap.value == CAP
+    assert cap.note == CAP_NOTE + "does not bind: the year-3 consensus is at or below it"
 
 
 def test_return_above_peers_flag(
@@ -503,10 +609,13 @@ def test_reprice_moves_every_price_side_figure(
 ) -> None:
     r = value_company(high_growth_inputs, deciles, policy, TODAY)
     assert r.price is not None and r.price_date is not None
+    assert r.intermediates["revenue_path"]["hold"] == pytest.approx(CAP)  # a bound row
     stored = result_from_json(result_to_json(r))  # from the intermediates alone
     assert reprice(stored, r.price, r.price_date, policy) == r
     r2 = reprice(stored, r.price * 0.5, REPRICED, policy)
     assert r2.value == r.value and r2.levels == r.levels
+    assert r2.intermediates["growth_rates"] == r.intermediates["growth_rates"]
+    assert r2.intermediates["revenue_path"] == r.intermediates["revenue_path"]
     assert r2.intermediates["implied_growth"] != r.intermediates["implied_growth"]
     assert r2.intermediates["implied_margin"] != r.intermediates["implied_margin"]
     assert r2.intermediates["revenue_by_year"] == r.intermediates["revenue_by_year"]
@@ -521,6 +630,7 @@ def test_reprice_moves_the_implied_margin_on_a_refused_row(
 ) -> None:
     r = value_company(replace(high_growth_inputs, peers=()), deciles, policy, TODAY)
     assert r.price is not None
+    assert r.intermediates["revenue_path"]["hold"] == pytest.approx(CAP)  # the cap rebuilds too
     r2 = reprice(result_from_json(result_to_json(r)), r.price * 0.5, REPRICED, policy)
     assert r2.refusal == r.refusal and r2.value is None and r2.route is None
     assert r2.intermediates["implied_margin"] < r.intermediates["implied_margin"]

@@ -23,7 +23,7 @@ from itertools import pairwise
 from typing import Literal
 
 from fairband.engine.types import Flag
-from fairband.policy import Moat, Policy
+from fairband.policy import BaseRateClass, Moat, Policy
 
 SbcBasis = Literal["excludes-sbc", "includes-sbc", "unknown"]
 
@@ -242,10 +242,16 @@ def few_analysts(
     )
 
 
+def sales_class(revenue_ttm_musd: float, policy: Policy) -> BaseRateClass:
+    """The sales class of trailing revenue in USD millions: the first whose upper bound is at or
+    above it. The revenue is in current dollars and the bounds in 2015 dollars (D6)."""
+    return next(c for c in policy.base_rates if revenue_ttm_musd <= c.upper_musd)
+
+
 def belief_from_sales(revenue_ttm_musd: float, policy: Policy) -> Belief:
-    """The belief for trailing revenue in USD millions: the first sales class whose upper bound is
-    at or above it. The revenue is in current dollars and the bounds in 2015 dollars (D6)."""
-    c = next(c for c in policy.base_rates if revenue_ttm_musd <= c.upper_musd)
+    """The belief for trailing revenue in USD millions: its sales class's median plus the
+    inflation addition."""
+    c = sales_class(revenue_ttm_musd, policy)
     return Belief(rate=c.median + policy.inflation_addition, sales_class=c.label, median=c.median)
 
 

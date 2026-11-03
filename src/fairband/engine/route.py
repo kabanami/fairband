@@ -62,21 +62,21 @@ three.
   charge_off, refusal ``None``; or only its refusal); at the price, ``multiples``,
   ``expected_return`` and the cross-check's ``implied_growth``, rebuilt from its own keys.
 - Revenue growth (High Growth and Young Growth): ``ntm_revenue``, ``path`` (base_year, analysts,
-  held), ``path_steps``, ``revenue_path``, ``growth_rates`` (years 1 to 10), ``margin_start``,
-  ``margin_path`` (start, target, by_year), ``target_margin`` (value, count, low, high,
-  largest_symbol, largest_margin, peers), ``tax_rate``, ``moat``, ``sales_to_capital`` (used, own,
-  own_usable, peers, value), ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``,
+  held, sales_class, cap), ``path_steps``, ``revenue_path``, ``growth_rates`` (years 1 to 10),
+  ``margin_start``, ``margin_path`` (start, target, by_year), ``target_margin`` (value, count, low,
+  high, largest_symbol, largest_margin, peers), ``tax_rate``, ``moat``, ``sales_to_capital`` (used,
+  own, own_usable, peers, value), ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``,
   ``nopat_by_year``, ``reinvestment_by_year``, ``fcff_by_year``, ``terminal_roic``,
   ``terminal_nopat`` (year 10's operating income at the full tax rate), ``terminal_value``,
-  ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
-  ``value_per_share``, ``value_by_margin`` ("low", "median", "high": the peers' lowest, median
-  and highest margins), ``return_on_new_capital``, ``peer_roic_median``, ``failure_probability``
-  (Young Growth only), ``eps``, ``epv``, ``dividend_yield``, ``net_buyback_yield``,
-  ``income_basis``, ``price_facts``, ``growth_route`` (the cross-check, as on a Mature Stable
-  row); at the price, ``implied_growth``, ``implied_margin``, ``multiples``, ``growth_share``,
-  ``expected_return`` and the cross-check's ``implied_growth``. A row refused for its target
-  margin holds only the rebuild keys (``revenue_path``, ``margin_start``, ``tax_rate``, ``moat``,
-  ``debt``, ``cash``, ``shares``, ``sales_to_capital``), ``implied_margin`` and ``price_facts``.
+  ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``, ``value_per_share``,
+  ``value_by_margin`` ("low", "median", "high": the peers' lowest, median and highest margins),
+  ``return_on_new_capital``, ``peer_roic_median``, ``failure_probability`` (Young Growth only),
+  ``eps``, ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``,
+  ``growth_route`` (the cross-check, as on a Mature Stable row); at the price, ``implied_growth``,
+  ``implied_margin``, ``multiples``, ``growth_share``, ``expected_return`` and the cross-check's
+  ``implied_growth``. A row refused for its target margin holds only the rebuild keys
+  (``revenue_path``, ``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares``,
+  ``sales_to_capital``), ``implied_margin`` and ``price_facts``.
 """
 
 import math

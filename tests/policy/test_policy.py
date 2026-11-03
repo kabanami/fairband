@@ -25,7 +25,7 @@ def test_values_match_design() -> None:
     assert p.wide_terminal_roic_cap == 0.13
     assert p.moat_wide_min == 8 and p.moat_narrow_min == 4
     assert len(p.base_rates) == 11
-    assert p.base_rates[0] == BaseRateClass(325, 0.085, "$0-325 Mn")
+    assert p.base_rates[0] == BaseRateClass(325, 0.085, "$0-325 Mn", 0.40)
     assert p.base_rates[-1].median == 0.033 and p.inflation_addition == 0.02
     assert p.analyst_min == 5 and p.universe.cap_floor_usd == 2_000_000_000
     assert p.refresh.reuse_hours == 24 and p.refresh.gf_reuse_days == 7 and p.refresh.workers == 16
@@ -47,6 +47,28 @@ def test_v3_is_the_default_and_carries_the_growth_route_values() -> None:
     assert p.implied_margin_bounds == (-0.5, 1.0)
     assert p.fade_years == 5 and p.marginal_return_span_years == 5  # reused, unchanged
     assert p.universe.name_exclude_patterns[0] == r"\bnotes?\b"
+
+
+def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
+    """The cap on the revenue-growth route's held rate, by sales class, as the book prints it:
+    the smallest class's 40% below the next class's 45%."""
+    p = load_policy()
+    assert p.base_rates[1].sales_p90_5y == 0.45
+    assert p.base_rates[2].sales_p90_5y == 0.20
+    assert p.base_rates[-1].sales_p90_5y == 0.15
+    assert [c.sales_p90_5y for c in p.base_rates] == [
+        0.40,
+        0.45,
+        0.20,
+        0.20,
+        0.20,
+        0.20,
+        0.20,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+    ]
 
 
 def test_v2_file_is_unchanged() -> None:

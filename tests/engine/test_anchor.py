@@ -14,6 +14,7 @@ from fairband.engine.anchor import (
     ntm_anchor,
     ntm_quarters,
     path_steps,
+    sales_class,
     sbc_basis,
 )
 from fairband.engine.types import Flag
@@ -274,6 +275,19 @@ def test_belief_from_sales(policy: Policy) -> None:
     assert belief_from_sales(100, policy).sales_class == "$0-325 Mn"
     assert belief_from_sales(325, policy).sales_class == "$0-325 Mn"
     assert belief_from_sales(325.5, policy).sales_class == "$325-700 Mn"
+    # The cap on the revenue-growth route's held rate reads the same class and leaves the belief
+    # as it was; 0.044 + 0.02 is 0.064 to within binary floating point.
+    assert belief_from_sales(10_000, policy) == Belief(
+        pytest.approx(0.064), "$7,000-12,000 Mn", 0.044
+    )
+
+
+def test_sales_class_is_the_first_whose_upper_bound_holds_the_revenue(policy: Policy) -> None:
+    assert sales_class(324.9, policy).label == "$0-325 Mn"
+    assert sales_class(325.0, policy).label == "$0-325 Mn"
+    assert sales_class(325.1, policy).label == "$325-700 Mn"
+    assert sales_class(1e9, policy).label == ">$50,000 Mn"
+    assert sales_class(10_000, policy) == policy.base_rates[7]
 
 
 def test_moat_class(policy: Policy) -> None:

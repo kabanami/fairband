@@ -53,21 +53,21 @@ value = 4
 source = "stocks mech/1.2 (design.md 6.13): GuruFocus Moat Score 4 to 7 is Narrow, 0 to 3 None"
 
 [values.base_rates]
-source = "research.md D6; stocks mech/1.2 (design.md 6.13): the growth belief for years 4 to N is the median for the company's sales class"
-attribution = "Michael J. Mauboussin, Dan Callahan and Darius Majd, The Base Rate Book: Integrating the Past to Better Anticipate the Future, Credit Suisse Global Financial Strategies, 2016-09-26, Earnings Growth Exhibit 4, printed pp. 72-73"
-note = "Median ten-year CAGR of net income before extraordinary items by starting annual sales. The class bounds are in 2015 dollars; Fairband reads current-dollar trailing revenue, and no inflation index is attributed to the source (D6). The source's top decile (above $25,000 Mn) and its largest-company class (above $50,000 Mn) overlap; as in mech/1.2, the first reads up to $50,000 Mn here and the second takes everything above. upper_musd is the class's upper bound in USD millions; median is a fraction."
+source = "research.md D6; stocks mech/1.2 (design.md 6.13): the growth belief for years 4 to N is the median for the company's sales class; growth routes spec 5.4 (founder decision 2026-11-03): sales_p90_5y caps the held rate of the revenue-growth route"
+attribution = "Michael J. Mauboussin, Dan Callahan and Darius Majd, The Base Rate Book: Integrating the Past to Better Anticipate the Future, Credit Suisse Global Financial Strategies, 2016-09-26, Earnings Growth Exhibit 4, printed pp. 72-73; Sales Growth Exhibit 4, printed pp. 24-26"
+note = "Median ten-year CAGR of net income before extraordinary items by starting annual sales. The class bounds are in 2015 dollars; Fairband reads current-dollar trailing revenue, and no inflation index is attributed to the source (D6). The source's top decile (above $25,000 Mn) and its largest-company class (above $50,000 Mn) overlap; as in mech/1.2, the first reads up to $50,000 Mn here and the second takes everything above. upper_musd is the class's upper bound in USD millions; median is a fraction. sales_p90_5y is the top of the five-year sales CAGR bucket (five-point buckets) in which the class's cumulative share of companies reaches 90% in the Sales Growth exhibit; a fraction. The book's figures stand as printed, the smallest class's 40% below the next class's 45% included."
 value = [
-  { upper_musd = 325, median = 0.085, label = "$0-325 Mn" },
-  { upper_musd = 700, median = 0.060, label = "$325-700 Mn" },
-  { upper_musd = 1250, median = 0.053, label = "$700-1,250 Mn" },
-  { upper_musd = 2000, median = 0.050, label = "$1,250-2,000 Mn" },
-  { upper_musd = 3000, median = 0.042, label = "$2,000-3,000 Mn" },
-  { upper_musd = 4500, median = 0.043, label = "$3,000-4,500 Mn" },
-  { upper_musd = 7000, median = 0.043, label = "$4,500-7,000 Mn" },
-  { upper_musd = 12000, median = 0.044, label = "$7,000-12,000 Mn" },
-  { upper_musd = 25000, median = 0.043, label = "$12,000-25,000 Mn" },
-  { upper_musd = 50000, median = 0.041, label = ">$25,000 Mn" },
-  { upper_musd = inf, median = 0.033, label = ">$50,000 Mn" },
+  { upper_musd = 325, median = 0.085, label = "$0-325 Mn", sales_p90_5y = 0.40 },
+  { upper_musd = 700, median = 0.060, label = "$325-700 Mn", sales_p90_5y = 0.45 },
+  { upper_musd = 1250, median = 0.053, label = "$700-1,250 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 2000, median = 0.050, label = "$1,250-2,000 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 3000, median = 0.042, label = "$2,000-3,000 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 4500, median = 0.043, label = "$3,000-4,500 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 7000, median = 0.043, label = "$4,500-7,000 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 12000, median = 0.044, label = "$7,000-12,000 Mn", sales_p90_5y = 0.15 },
+  { upper_musd = 25000, median = 0.043, label = "$12,000-25,000 Mn", sales_p90_5y = 0.15 },
+  { upper_musd = 50000, median = 0.041, label = ">$25,000 Mn", sales_p90_5y = 0.15 },
+  { upper_musd = inf, median = 0.033, label = ">$50,000 Mn", sales_p90_5y = 0.15 },
 ]
 
 [values.inflation_addition]

@@ -24,11 +24,14 @@ _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 @dataclass(frozen=True)
 class BaseRateClass:
-    """A Base Rate Book sales class: upper bound in USD millions (2015 dollars) and median CAGR."""
+    """A Base Rate Book sales class: upper bound in USD millions (2015 dollars), median CAGR,
+    label, and the 90th-percentile five-year sales CAGR that caps the revenue-growth route's held
+    rate."""
 
     upper_musd: float
     median: float
     label: str
+    sales_p90_5y: float
 
 
 @dataclass(frozen=True)
@@ -199,7 +202,10 @@ def _pair(x: Any) -> tuple[float, float]:
 
 def _base_rates(rows: Any) -> tuple[BaseRateClass, ...]:
     return tuple(
-        BaseRateClass(_num(r["upper_musd"]), _num(r["median"]), _text(r["label"])) for r in rows
+        BaseRateClass(
+            _num(r["upper_musd"]), _num(r["median"]), _text(r["label"]), _num(r["sales_p90_5y"])
+        )
+        for r in rows
     )
 
 

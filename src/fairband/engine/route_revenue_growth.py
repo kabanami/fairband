@@ -7,15 +7,17 @@ and 3 grow at the annual consensus revenue steps from the base year (``anchor.ba
 a mean of zero with no analyst count being no estimate (``anchor.consensus_value``); a missing step
 holds the rate of the year before, and a present step landing on a year with fewer than
 ``analyst_min`` revenue analysts, or no count, is thin. Years 4 to 10 hold and fade as
-``revenue_growth.growth_rates`` says. The operating margin moves in a straight line from the
-trailing margin to the target margin, the median ten-year margin of the mature peers
+``revenue_growth.growth_rates`` says, the held rate g_3 as resolved capped at the 90th-percentile
+five-year sales growth of the sales class (``anchor.sales_class`` on trailing revenue, the class's
+``sales_p90_5y``); the consensus steps are not capped. The operating margin moves in a straight line
+from the trailing margin to the target margin, the median ten-year margin of the mature peers
 (``revenue_growth.target_margin``). Sales-to-capital is the company's own five-year marginal measure
 over the kept ROIC years (``RoicTerms``) when it is usable, else the mature peers' median. Tax is
-the newest fiscal year's statutory rate, charged after the forecast's own losses; the terminal
-reads year 10's operating income at the full rate (``revenue_growth.terminal_nopat``). The terminal
-return is the moat's rule (``roic.terminal_roic``) on the return on new capital at the target
-margin. Equity is the firm value less debt plus cash from the newest annual balance sheet, each nil
-when unknown. The value is discounted at r in every year.
+the newest fiscal year's statutory rate, charged after the forecast's own losses; the terminal reads
+year 10's operating income at the full rate (``revenue_growth.terminal_nopat``). The terminal return
+is the moat's rule (``roic.terminal_roic``) on the return on new capital at the target margin.
+Equity is the firm value less debt plus cash from the newest annual balance sheet, each nil when
+unknown. The value is discounted at r in every year.
 
 Refusals, in this order: no trailing revenue (missing or not positive); no trailing operating
 income, without which there is no trailing margin to start from; no statutory tax rate; an
@@ -29,14 +31,14 @@ needs (``None`` without a sales-to-capital); one refused for its value keeps eve
 intermediate and ``implied_margin``; the others keep nothing.
 
 Intermediates: ``ntm_revenue``; ``path`` (base_year, the revenue analysts of the years the two
-steps land on, and which step was held); ``path_steps``, g_2 and g_3 as resolved; ``growth_rates``
-for years 1 to 10; ``margin_path`` (start, target, by_year); ``target_margin`` (value, the median;
-count; low; high; largest_symbol and largest_margin, the largest counted peer by market cap, which
-sets nothing; peers, each with its margin and market cap); ``sales_to_capital`` (used, "own" or
-"peers"; own; own_usable; peers; value); the tables ``revenue_by_year``, ``ebit_by_year``,
-``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``, ``fcff_by_year``; ``terminal_roic``,
-``terminal_nopat`` (year 10's operating income at the full tax rate), ``terminal_value``,
-``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
+steps land on, which step was held, the sales class and its cap); ``path_steps``, g_2 and g_3 as
+resolved; ``growth_rates`` for years 1 to 10; ``margin_path`` (start, target, by_year);
+``target_margin`` (value, the median; count; low; high; largest_symbol and largest_margin, the
+largest counted peer by market cap, which sets nothing; peers, each with its margin and market cap);
+``sales_to_capital`` (used, "own" or "peers"; own; own_usable; peers; value); the tables
+``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``,
+``fcff_by_year``; ``terminal_roic``, ``terminal_nopat`` (year 10's operating income at the full tax
+rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
 ``value_per_share``; ``value_by_margin`` at the peers' lowest, median and highest margins (``low``,
 ``median``, ``high``), each with its own terminal return; ``return_on_new_capital`` and
 ``peer_roic_median``; ``failure_probability`` on a Young Growth row only; ``eps`` (the forward EPS
@@ -46,24 +48,25 @@ Mature Stable row carries it; at the price, ``implied_growth``, ``implied_margin
 ``growth_share``, ``expected_return`` (its growth term the revenue path's years 2 to 4).
 
 The rebuild keys: ``revenue_path`` (revenue0, ntm_revenue, the consensus steps as found with
-``None`` for a missing one, hold ``None``, high_growth_years, fade_years), ``margin_start``,
-``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares`` and ``sales_to_capital``; a valued row adds
-``margin_path``'s target and ``terminal_roic``. With the policy's r, g_T and convergence year they
-rebuild the path, the margin and the charge, so ``revenue_at_price`` moves a stored row to a new
-price from its intermediates alone, and ``implied_margin_at_price`` moves the margin the price needs
-on any row that carries ``revenue_path``. The implied growth is the rate held in years 4 to the
-last high-growth year, the fade recomputed from it; the implied margin is the target margin, the
-terminal return re-read at each trial.
+``None`` for a missing one, hold ``None``, or the cap when it binds, high_growth_years, fade_years),
+``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares`` and ``sales_to_capital``; a
+valued row adds ``margin_path``'s target and ``terminal_roic``. With the policy's r, g_T and
+convergence year they rebuild the path, the margin and the charge, so ``revenue_at_price`` moves a
+stored row to a new price from its intermediates alone, and ``implied_margin_at_price`` moves the
+margin the price needs on any row that carries ``revenue_path``. The implied growth is the rate held
+in years 4 to the last high-growth year, the fade recomputed from it, the cap not applied; the
+implied margin is the target margin, the terminal return re-read at each trial.
 
 Flags, in order: ``sbc-basis-unknown`` when the cross-check has a value on an anchor whose basis is
-unknown; the path's, ``path-held`` then ``few-analysts``; the capital build's, the ten-year ROIC
-flags and their line flags, then ``line-not-presented:debt`` and ``line-not-presented:cash`` when a
-figure is unknown or assembly's note names a line it lacks; ``tax-loss-history-unknown`` when the
-forecast has a loss year or the trailing margin is below zero; ``return-above-peers`` when the
-return on new capital at the target is above the peers' median ROIC; ``failure-not-charged`` on a
-Young Growth row; the trailing flags; ``value-spread`` over the three margins, unbounded when the
-value at the lowest margin is at or below zero and the median's is positive. The runway-return
-flags of the mature routes are not raised: this route's charge does not read the runway return.
+unknown; the path's, ``path-held``, ``consensus-above-base-rate`` when the year-3 consensus is above
+the cap, then ``few-analysts``; the capital build's, the ten-year ROIC flags and their line flags,
+then ``line-not-presented:debt`` and ``line-not-presented:cash`` when a figure is unknown or
+assembly's note names a line it lacks; ``tax-loss-history-unknown`` when the forecast has a loss
+year or the trailing margin is below zero; ``return-above-peers`` when the return on new capital at
+the target is above the peers' median ROIC; ``failure-not-charged`` on a Young Growth row; the
+trailing flags; ``value-spread`` over the three margins, unbounded when the value at the lowest
+margin is at or below zero and the median's is positive. The runway-return flags of the mature
+routes are not raised: this route's charge does not read the runway return.
 """
 
 from dataclasses import asdict, dataclass, replace
@@ -79,6 +82,7 @@ from fairband.engine.anchor import (
     moat_class,
     ntm_anchor,
     ntm_quarters,
+    sales_class,
 )
 from fairband.engine.flags import value_spread_flag
 from fairband.engine.multiples import epv, growth_share
@@ -124,7 +128,7 @@ from fairband.engine.route_steps import (
     trailing_flags,
 )
 from fairband.engine.types import Flag, Phase, Provenance, TaggedInput
-from fairband.policy import Moat, Policy
+from fairband.policy import BaseRateClass, Moat, Policy
 
 _NOT_POSITIVE = "value not positive under the reinvestment charge"
 _PEERS = Provenance("FMP stock-peers and the peers' statements", None, None, None)
@@ -177,7 +181,8 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     if ntm <= 0:
         return Refused("no positive consensus revenue")
     base_year = base_fiscal_year(quarters)
-    path, analysts, path_flags = _path(t.revenue, ntm, i.annual_estimates, base_year, policy)
+    sales = sales_class(t.revenue / 1e6, policy)
+    path, analysts, path_flags = _path(t.revenue, ntm, i.annual_estimates, base_year, sales, policy)
     if any(g <= -1 for g in resolved_steps(path)[0]):
         return Refused("consensus revenue falls to zero or below within the path", path_flags)
     moat = moat_class(i.moat_score, policy)
@@ -226,7 +231,13 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     (g2, g3), held = resolved_steps(path)
     im: dict[str, Any] = {
         "ntm_revenue": ntm,
-        "path": {"base_year": base_year, "analysts": list(analysts), "held": list(held)},
+        "path": {
+            "base_year": base_year,
+            "analysts": list(analysts),
+            "held": list(held),
+            "sales_class": sales.label,
+            "cap": sales.sales_p90_5y,
+        },
         "path_steps": [g2, g3],
         "growth_rates": list(growth_rates(path)),
         "margin_path": {"start": start, "target": target.value, "by_year": list(v.margins)},
@@ -285,6 +296,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         data(i, "cash", i.cash, "USD", "statements"),
         *common_rules(policy, moat, terminal),
         rule(policy, "high_growth_years", policy.high_growth_years, "years"),
+        _cap_input(policy, sales, path.hold is not None),
         rule(policy, "fade_years", policy.fade_years, "years"),
         rule(policy, "margin_convergence_year", policy.margin_convergence_year, "year"),
         rule(policy, "peer_min", policy.peer_min, "peers"),
@@ -344,18 +356,20 @@ def _path(
     ntm: float,
     annual: tuple[AnnualEstimate, ...],
     base_year: int,
+    sales: BaseRateClass,
     policy: Policy,
 ) -> tuple[RevenuePath, tuple[int | None, int | None], tuple[Flag, ...]]:
-    """The revenue path from the annual consensus revenue of the base year and the next two, the
-    revenue analysts of the years the two steps land on, and the path's flags: ``path-held``, then
-    ``few-analysts``."""
+    """The revenue path from the annual consensus revenue of the base year and the next two, its
+    held rate the sales class's cap when g_3 as resolved is above it, the revenue analysts of the
+    years the two steps land on, and the path's flags: ``path-held``,
+    ``consensus-above-base-rate``, then ``few-analysts``."""
     by_year = {x.fiscal_year: x for x in annual}
     rows = [by_year.get(base_year + k) for k in range(3)]
     points = [(None, None) if r is None else (r.revenue, r.analysts_revenue) for r in rows]
     values = [consensus_value(mean, n) for mean, n in points]
     steps = (growth_step(values[0], values[1]), growth_step(values[1], values[2]))
     analysts = (points[1][1], points[2][1])
-    path = RevenuePath(
+    found = RevenuePath(
         revenue0,
         ntm,
         steps,
@@ -364,8 +378,13 @@ def _path(
         policy.fade_years,
         policy.terminal_growth,
     )
-    flags = present(_path_held(path, values, base_year)) + present(
-        few_analysts(base_year, steps, analysts, policy)
+    (_, g3), _ = resolved_steps(found)
+    cap = sales.sales_p90_5y
+    path = replace(found, hold=cap) if g3 > cap else found
+    flags = (
+        present(_path_held(path, values, base_year))
+        + present(_above_base_rate(path, sales))
+        + present(few_analysts(base_year, steps, analysts, policy))
     )
     return path, analysts, flags
 
@@ -393,6 +412,22 @@ def _path_held(path: RevenuePath, values: list[float | None], base_year: int) ->
         "Path held",
         f"The consensus revenue for fiscal {' and '.join(map(str, sorted(years)))} is missing or "
         f"not positive, so {' and '.join(clauses)}.",
+    )
+
+
+def _above_base_rate(path: RevenuePath, sales: BaseRateClass) -> Flag | None:
+    """``consensus-above-base-rate`` when the path holds the sales class's cap, g_3 as resolved
+    being above it; naming both rates and the class."""
+    if path.hold is None:
+        return None
+    (_, g3), _ = resolved_steps(path)
+    cap = path.hold
+    return Flag(
+        "consensus-above-base-rate",
+        "Above base rate",
+        f"The year-3 consensus growth of {g3:.1%} is above {cap:.1%}, the Base Rate Book's "
+        f"90th-percentile five-year sales growth for the {sales.label} sales class, so years 4 "
+        f"and 5 hold {cap:.1%} and the fade starts from it.",
     )
 
 
@@ -506,6 +541,20 @@ def _step_input(c: Context, name: str, step: float | None, held: bool) -> Tagged
     """A consensus revenue step as found; a held one is missing, and its note says so."""
     note = "no consensus step: the year holds the rate of the year before" if held else None
     return data(c.inputs, name, step, "ratio", "estimates_annual", note)
+
+
+def _cap_input(policy: Policy, sales: BaseRateClass, binds: bool) -> TaggedInput:
+    """The cap on the held rate, its note naming the sales class and whether it binds."""
+    whether = (
+        "binds: the year-3 consensus is above it"
+        if binds
+        else "does not bind: the year-3 consensus is at or below it"
+    )
+    note = (
+        "the Base Rate Book's 90th-percentile five-year sales growth for the "
+        f"{sales.label} sales class; {whether}"
+    )
+    return rule(policy, "held_growth_cap", sales.sales_p90_5y, "rate", note)
 
 
 def _from_peers(c: Context, name: str, value: float | None, note: str) -> TaggedInput:
