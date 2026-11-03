@@ -8,7 +8,7 @@
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
 
-The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec and the growth routes spec under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
+The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec, the growth routes spec and the 2026-11-03 spec of the rate limiter, the classifier fixes and the designation (`2026-11-03-classifier-designation-ends-design.md`) under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
 
 ## 0. How to read this document
 
@@ -693,7 +693,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.3 | 2026-11-02 | Mature Stable charges as Mature Growth does (6.3): the runway return through the runway, the terminal return after. Policy unchanged. |
 | 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a), the held rate capped at the sales class's base-rate 90th percentile (5a.3), with the `stock-peers` call (section 2); the name patterns on the universe (section 1). Policy v3 adds five values and the `sales_p90_5y` column of `base_rates` (4.1). |
 | 0.5 | 2026-11-03 | The industry fallback for the peers (5a.4). Policy v4 adds `industry_peer_max`. |
-| 0.6 | 2026-11-03 | The FMP pace (section 2); the established company with a loss year (3.5 rule 4a) and the Decline duration test (rule 2); the stance leaves the engine; the designation on price ÷ value (4.10). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
+| 0.6 | 2026-11-03 | The FMP pace (section 2); the universe's six excluded financial industries, its manual admission list, and the manual exclusion checked before every other rule (section 1); the established company with a loss year (3.5 rule 4a) and the Decline duration test (rule 2); the stance leaves the engine; the designation on price ÷ value (4.10). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
@@ -704,6 +704,8 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Rule | Source |
 |---|---|
 | The six phases, the two deciding variables, the decile grid, the duration test for Decline | Damodaran, *The Corporate Life Cycle* ch. 2 and 3; design.md 5 |
+| The established company: a negative margin after a margin above zero in three of the last five fiscal years takes the growth word's phase (3.5 rule 4a) | Damodaran, *The Corporate Life Cycle* ch. 3 (the phases marked by the direction of the numbers); spec 2026-11-03 6.2 |
+| The Decline duration test: revenue fell in three of the last four year-over-year steps (3.5 rule 2) | Damodaran, *The Corporate Life Cycle* ch. 2 s.20 (one or two years of falling revenue can be explained away; a string of years is decay); spec 2026-11-03 6.3 |
 | Dickinson's stages | Dickinson (2011), *The Accounting Review* 86(6), Table 1 |
 | The reinvestment charge, earnings × (1 − g ÷ return) | McKinsey value-driver formula (V99); design.md 6.5 change 1 |
 | One share count, net income not EPS | design.md 6.5 change 2 |
@@ -727,6 +729,8 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | The return on new capital against the peers' ROIC | Damodaran H15 |
 | Young Growth: the failure probability unavailable, with its reason | D3d; design.md 6.9 |
 | The validity window | design.md 8 |
+| The six excluded financial industries; the manual admission list, payment companies that do not lend (section 1) | design.md 6.1 (banks, insurers and REITs need methods of their own); decision 2026-10-26; spec 2026-11-03 6.4; founder decision 2026-11-03 (the admission list) |
+| The FMP pace and the 429 hold (section 2) | the founder's FMP plan (Ultimate, 3,000 calls a minute) less 5%; one plan window for the hold; spec 2026-11-03 5 |
 
 ## 13. Glossary
 

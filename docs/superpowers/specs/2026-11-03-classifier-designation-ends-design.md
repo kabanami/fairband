@@ -117,10 +117,11 @@ A pacer, one per vendor, shared by every thread that uses that vendor's client:
   `calls_per_minute` of 0 is no pacing: `acquire()` returns at once.
 - `hold(seconds)`: under the lock, the next slot moves to max(next slot, now + seconds). Every
   thread's next `acquire()` waits for it.
-- `VendorHttp.get` calls `acquire()` before every try, retries included. When a try answers
-  429, it calls `hold` with the numeric `Retry-After` when the answer carries one, else
-  `rate_limit_hold_s`, and the retry's sleep is that hold instead of the backoff. A try that
-  answers 429 after the last attempt raises as today.
+- `VendorHttp.get` calls `acquire()` before every try, retries included. When a try answers 429,
+  it calls `hold` with the numeric `Retry-After` capped at `rate_limit_hold_s` when the answer
+  carries one, else `rate_limit_hold_s`, and the retry's sleep is that hold instead of the
+  backoff. A GuruFocus 429 sleeps that hold before its retry and holds no other worker: its
+  limiter does not pace. A try that answers 429 after the last attempt raises as today.
 - The time a call spends waiting in the limiter does not count against its `deadline_s`: the
   deadline clock runs from the first try's start, and each wait in `acquire()` or a hold
   extends it by the time waited.
@@ -141,12 +142,14 @@ takes at least eight minutes, which the plan sets, not the code.
 ### 5.3 What stays
 
 The retry counts, the backoff for the other retryable statuses, the 429 path through
-`fetch_company` and the run (section 9 and 10 of the method) all stay as the safety net: a
-run still ends failed when a call answers 429 three times. The worker count stays 16. Price and
+`fetch_company` and the run (section 9 and 10 of the method) all stay as the safety net: a run
+still ends failed when a call answers 429 three times. The worker count stays 16. Price and
 scoped refreshes use the same client and so the same pacer. The method's section 2 gains one
-sentence: "FMP calls are paced to `fmp_calls_per_minute`, shared by every worker; a 429 holds
-every worker for `rate_limit_hold_s` or the vendor's `Retry-After`." The policy comment on the
-worker count is corrected to 13 FMP calls, and the module docstrings with it.
+sentence: "FMP calls are paced to `fmp_calls_per_minute`, one pace shared by every worker; a 429
+holds every FMP worker for the vendor's numeric `Retry-After` capped at `rate_limit_hold_s`,
+else `rate_limit_hold_s`, and the call retries after the hold. A GuruFocus 429 sleeps the same
+hold before its retry and holds no other worker." The policy comment on the worker count is
+corrected to 13 FMP calls, and the module docstrings with it.
 
 ## 6. The classifier
 
@@ -256,17 +259,19 @@ case-insensitive, dash-insensitive, prefix-and-space matching as the list today.
 Data & Stock Exchanges` stays admitted: S&P Global, Moody's, MSCI, CME and ICE are fee businesses
 with ordinary statements.
 
-*My call,* and the cost is stated: the exclusion also drops Visa, Mastercard and American Express
-(Credit Services), BlackRock, T. Rowe Price and Blackstone (Asset Management) and the brokers.
-Visa and Mastercard have ordinary statements and the method values them well; they would leave
-because FMP files them with the lenders and the rule is by industry. So the universe gains a
-**manual admission list** (`universe.manual_admissions`, the mirror of `manual_exclusions`): a
-listing whose symbol is on it passes rule 4 whatever its industry, and is recorded as admitted
-with the note "manual admission". The founder's rule for the list (2026-11-03): payment
-companies that do not lend. Today that is V (Visa), MA (Mastercard) and GPN (Global Payments, a
-merchant processor); American Express and PayPal lend and stay out. The rows of the six
-industries not on the list are recorded with their reason as today (`industry: <industry>`), so
-nothing is lost from the store, and the readout names what left.
+*My call,* and the cost is stated: the exclusion also drops Visa, Mastercard and American
+Express (Credit Services), BlackRock, T. Rowe Price and Blackstone (Asset Management) and the
+brokers. Visa and Mastercard have ordinary statements and the method values them well; they
+would leave because FMP files them with the lenders and the rule is by industry. So the universe
+gains a **manual admission list** (`universe.manual_admissions`, the mirror of
+`manual_exclusions`): a listing whose symbol is on it passes rule 4 whatever its industry and is
+recorded as admitted like any other; the universe logs one INFO line
+`manual admission: <symbols>`, and nothing is stored on the companies row. The founder's rule
+for the list (2026-11-03): payment companies that do not lend. Today that is V (Visa), MA
+(Mastercard) and GPN (Global Payments, a merchant processor); American Express and PayPal lend
+and stay out. The rows of the six industries not on the list are recorded with their reason as
+today (`industry: <industry>`), so nothing is lost from the store, and the readout names what
+left.
 
 The universe rules apply when a universe is built, which only a full refresh does (method
 section 10; a revalue values the latest stored universe). So the exclusions take effect at the
@@ -330,11 +335,15 @@ under 0.5, read by the screen until the revalue replaces them) and ignores them.
   key `priceToValue` ascending by the ratio, rows without one last. Default columns: `ticker`,
   `name`, `phase`, `band`, `mechanical`, `reviewed`, `price`, `designation`.
 - The filter menu's STANCE section becomes PRICE VS VALUE with the five words.
-- The drawer's band meter marks the price and the levels as today; its caption says the word
-  and the ratio ("Below: the price is 0.72 × the value"); the "Five-step stance" caption goes.
-  The level labels read "Margin of safety" (the buy level: "value less the {moat} moat's 35%"),
-  "Fair band" and "1.5 × value" (the trim level); the data keys `buyLevel` and `trimLevel`
-  keep their names.
+- The drawer's band meter marks the price on the band, with its scale off; the level labels sit
+  in a list under the meter: "Fair value", "Margin of safety" (the buy level: "value less the
+  {moat} moat's 35%", or "value less the 45% margin for no moat"), "Fair band" and "1.5 × value"
+  (the trim level); the data keys `buyLevel` and `trimLevel` keep their names. The designation's
+  chip sits in the meter's head, and the meter's caption states the word and the ratio ("Below:
+  the price is 0.72 × the value"; two decimals, or three kept off the edge where two would land
+  on a designation edge the ratio is not on); the "Five-step stance" caption goes. The zones
+  keep their fills without words. (The Task 6 departure, ruled acceptable: on the scale, in the
+  drawer's 288px rail, the labels collide; the zone words are the founder's design-system call.)
 - The groups view's "Below buy" share becomes "Below value": the share of valued rows whose
   price ÷ value is below e2 (the `below` and `well-below` bands).
 - The API row carries `priceToValue` and `designation`; `stance3` and `stance5` leave
@@ -764,7 +773,7 @@ engine loads v5 only; `tests/policy/test_policy.py` pins v4's hash as it pins v3
 | Divestiture recovery 0.6 | `runoff_recovery` | Damodaran 2009 Sears: 54% to 67% of the capital released; the midpoint |
 | Distress-sale fraction 0.6 | `distress_sale_fraction` | Damodaran 2009, "Estimating Distress Sale Proceeds", choice (a), the illustration's $3 billion of $5 billion |
 | Synthetic rating table, 15 rows | `synthetic_rating` | Damodaran, ratings.html, "For large non-financial service firms", January 2026 |
-| Ten-year default probability by rating, 16 rows | `default_probability_10y` | Damodaran 2009, Table 5 (Altman, 1971 to 2007); D 100%; BB+ as BB (my call) |
+| Ten-year default probability by rating, 15 rows | `default_probability_10y` | Damodaran 2009, Table 5 (Altman, 1971 to 2007); D 100%; BB+ as BB (my call) |
 | Z″ zones 1.1 and 2.6 | `z_distress`, `z_safe` | Altman 2000 |
 | Piotroski low group: 1 | `f_score_low` | Piotroski 2000, the 0 to 1 group |
 | Burn cover flag 2 years | `burn_cover_flag_years` | no source; my call |
@@ -874,10 +883,10 @@ its full `deadline_s` from t = 55.
   established rule), the established test's edge (exactly three of five; a year without a
   margin), the duration test's edge (fewer than three steps on file), `growth-word-disagrees`
   silent under rule 4a.
-- The universe: a row in each of the six industries excluded with `industry: <industry>`;
-  Data & Stock Exchanges admitted; the prefix match; a row on the admission list admitted from
-  an excluded industry with the note "manual admission"; a row on both lists follows the
-  exclusion (a test pins the order).
+- The universe: a row in each of the six industries excluded with `industry: <industry>`; Data &
+  Stock Exchanges admitted; the prefix match; a row on the admission list admitted from an
+  excluded industry, with the one INFO line `manual admission: <symbols>` and nothing stored on
+  the companies row; a row on both lists follows the exclusion (a test pins the order).
 - The designation: 13.3, the edges from policy, `None` on a refusal and on a Start-up row,
   the price refresh moving the word, the JSON round trip, a 0.5 snapshot with `stance5` and
   `stance3` read without error.
@@ -995,6 +1004,7 @@ its full `deadline_s` from t = 55.
 | 2026-11-03 | A manual admission list for payment companies that do not lend: Visa, Mastercard and Global Payments; American Express and PayPal lend and stay excluded. Founder. |
 | 2026-11-03 | Two plans: method 0.6 for the limiter, the classifier, the designation and the controls; 0.7 for the routes; policy v5 for both. Claude's call at planning. |
 | 2026-11-03 | After the builder check: the Decline margin is the five-year median (10.3) and the rating reads it (10.7), so a one-year loss does not refuse an established decliner; the π rules are ordered (net cash, no interest, D); the industry exclusions take effect at the full refresh (6.4); the backfill runs before every valuing refresh (11). Claude's calls. |
+| 2026-11-03 | The 429 hold is capped at `rate_limit_hold_s` (the final review found an unbounded vendor value could hold every worker or overflow the clock). Claude's call. |
 
 Builder check: done 2026-11-03 on Claude Opus 5.5; its three questions are settled in 10.3 and
 10.7, 6.4 and 11. It recomputed the worked numbers of 13.1 and 13.2 from the formulas and they
