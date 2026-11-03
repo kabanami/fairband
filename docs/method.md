@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Method version | `fairband-mechanical/0.5` (`fairband.engine.METHOD_VERSION`) |
-| Policy version | `fairband-policy-v4` (`src/fairband/policy/fairband-policy-v4.toml`) |
+| Method version | `fairband-mechanical/0.6` (`fairband.engine.METHOD_VERSION`) |
+| Policy version | `fairband-policy-v5` (`src/fairband/policy/fairband-policy-v5.toml`) |
 | Status | The single statement of the method the engine runs. Written 2026-11-02 from the code and the specs. |
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
@@ -149,7 +149,7 @@ A company is unclassified, with the reason as its refusal, when its series has f
 
 ### 4.1 Policy values
 
-Every value comes from `fairband-policy-v4.toml` with a source line. The ones below are the ones the method reads; the universe and refresh values are in sections 1 and 2.
+Every value comes from `fairband-policy-v5.toml` with a source line. The ones below are the ones the method reads; the universe and refresh values are in sections 1 and 2, and the ones policy v5 adds are listed here as well.
 
 | Value | Policy name | Source |
 |---|---|---|
@@ -186,8 +186,23 @@ Every value comes from `fairband-policy-v4.toml` with a source line. The ones be
 | Forward P/E unit error: below 2 | `forward_pe_unit_error` | mech/1.2 |
 | Validity fallback: 91 days | `validity_fallback_days` | design.md 8 |
 | Aging at 0.6667 of the window | `aging_fraction` | design system |
+| FMP pace: 2,850 calls a minute | `refresh.fmp_calls_per_minute` | the founder's Ultimate plan, 3,000 a minute, less 5%; spec 2026-11-03 5.2; policy value |
+| 429 hold: 60 seconds | `refresh.rate_limit_hold_s` | one plan window; spec 2026-11-03 5.2; policy value |
+| Excluded industries: banks, insurance, REITs and Shell Companies (section 1), and six financial ones: `Asset Management`, `Financial - Capital Markets`, `Financial - Credit Services`, `Financial - Mortgages`, `Financial - Conglomerates`, `Investment - Banking & Investment Services` | `universe.excluded_industries` | design.md 6.1; decision 2026-10-26; spec 2026-11-03 6.4 |
+| Manual admissions: V, MA, GPN | `universe.manual_admissions` | founder 2026-11-03: payment companies that do not lend; spec 2026-11-03 6.4 |
+| Designation edges: 0.65, 0.85, 1.15, 1.50 × value | `designation_edges` | method v1.7 Step 10 (the fair band, the trim multiple, the Narrow margin of safety); spec 2026-11-03 7.1 |
+| Run-off horizon: 10 years | `runoff_years` | Damodaran's ten-year template (H2) |
+| Divestiture recovery: 60% of the capital released | `runoff_recovery` | Damodaran 2009 Sears: 54% to 67% of the capital released; the midpoint; policy value |
+| Distress-sale fraction: 60% of the firm value | `distress_sale_fraction` | Damodaran 2009, "Estimating Distress Sale Proceeds", choice (a), the illustration's $3 billion of $5 billion; policy value |
+| Synthetic rating by interest coverage: 15 rows, D to AAA | `synthetic_rating` | Damodaran, ratings.html, "For large non-financial service firms", January 2026 |
+| Ten-year default probability by rating: 15 ratings | `default_probability_10y` | Damodaran 2009, Table 5 (Altman, 1971 to 2007); D 100%; BB+ as BB (policy value) |
+| Altman Z″ zones: distress below 1.1, safe above 2.6 | `z_distress`, `z_safe` | Altman 2000 |
+| Piotroski F low group: 1 or below | `f_score_low` | Piotroski 2000, the 0 to 1 group |
+| Burn cover flag: below 2 years | `burn_cover_flag_years` | no source |
 
-Policies v1, v2 and v3 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v4 only.
+The run-off, distress-sale, rating, default-probability, Z″, F and burn-cover values are read by the Decline and Start-up routes, which come with method 0.7 (section 11).
+
+Policies v1 to v4 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v5 only.
 
 ### 4.1a Constants in code
 
@@ -668,6 +683,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.3 | 2026-11-02 | Mature Stable charges as Mature Growth does (6.3): the runway return through the runway, the terminal return after. Policy unchanged. |
 | 0.4 | 2026-11-02 | The High Growth and Young Growth routes (section 5a), the held rate capped at the sales class's base-rate 90th percentile (5a.3), with the `stock-peers` call (section 2); the name patterns on the universe (section 1). Policy v3 adds five values and the `sales_p90_5y` column of `base_rates` (4.1). |
 | 0.5 | 2026-11-03 | The industry fallback for the peers (5a.4). Policy v4 adds `industry_peer_max`. |
+| 0.6 | 2026-11-03 | Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
 
 A snapshot names the method and policy versions that produced it. A price refresh refuses to reprice a snapshot from another method version.
 

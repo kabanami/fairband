@@ -1,11 +1,11 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v4.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v5.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
-cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1,
-v2 and v3 files stay in the package byte for byte, because the snapshots valued under them cite
-their hashes.
+cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
+to v4 files stay in the package byte for byte, because the snapshots valued under them cite their
+hashes.
 """
 
 import hashlib
@@ -13,12 +13,13 @@ import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import resources
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v4.toml"
+_POLICY_FILE = "fairband-policy-v5.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -35,6 +36,15 @@ class BaseRateClass:
 
 
 @dataclass(frozen=True)
+class RatingRow:
+    """A synthetic rating row: an interest coverage at or above ``coverage_min`` and below the next
+    row's takes ``rating``. The first row's ``coverage_min`` is minus infinity."""
+
+    coverage_min: float
+    rating: str
+
+
+@dataclass(frozen=True)
 class UniversePolicy:
     exchanges: tuple[str, ...]
     cap_floor_usd: float
@@ -43,6 +53,7 @@ class UniversePolicy:
     symbol_exclude_patterns: tuple[str, ...]
     name_exclude_patterns: tuple[str, ...]
     manual_exclusions: tuple[str, ...]
+    manual_admissions: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -55,6 +66,8 @@ class RefreshPolicy:
     deadline_s: float
     attempts: int
     backoff_s: tuple[float, ...]
+    fmp_calls_per_minute: int
+    rate_limit_hold_s: float
 
 
 @dataclass(frozen=True)
@@ -96,13 +109,23 @@ class Policy:
     forward_pe_unit_error: float
     validity_fallback_days: int
     aging_fraction: float
+    designation_edges: tuple[float, float, float, float]
+    runoff_years: int
+    runoff_recovery: float
+    distress_sale_fraction: float
+    synthetic_rating: tuple[RatingRow, ...]
+    default_probability_10y: dict[str, float]
+    z_distress: float
+    z_safe: float
+    f_score_low: int
+    burn_cover_flag_years: float
     universe: UniversePolicy
     refresh: RefreshPolicy
     raw: dict[str, Any]
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v4 file) into a ``Policy``."""
+    """Parse the policy file (default: the packaged v5 file) into a ``Policy``."""
     if path is None:
         data = resources.files(__name__).joinpath(_POLICY_FILE).read_bytes()
     else:
@@ -166,6 +189,16 @@ def load_policy(path: Path | None = None) -> Policy:
         forward_pe_unit_error=read("forward_pe_unit_error", _num),
         validity_fallback_days=read("validity_fallback_days", _whole),
         aging_fraction=read("aging_fraction", _num),
+        designation_edges=read("designation_edges", _edges),
+        runoff_years=read("runoff_years", _whole),
+        runoff_recovery=read("runoff_recovery", _num),
+        distress_sale_fraction=read("distress_sale_fraction", _num),
+        synthetic_rating=read("synthetic_rating", _synthetic_rating),
+        default_probability_10y=read("default_probability_10y", _probabilities),
+        z_distress=read("z_distress", _num),
+        z_safe=read("z_safe", _num),
+        f_score_low=read("f_score_low", _whole),
+        burn_cover_flag_years=read("burn_cover_flag_years", _num),
         universe=read("universe", _universe),
         refresh=read("refresh", _refresh),
         raw=raw,
@@ -202,6 +235,47 @@ def _pair(x: Any) -> tuple[float, float]:
     return (_num(x[0]), _num(x[1]))
 
 
+def _edges(x: Any) -> tuple[float, float, float, float]:
+    if not isinstance(x, list) or len(x) != 4:
+        raise TypeError(f"{x!r} is not four numbers")
+    return (_num(x[0]), _num(x[1]), _num(x[2]), _num(x[3]))
+
+
+def _synthetic_rating(rows: Any) -> tuple[RatingRow, ...]:
+    """The rating rows, ascending strictly by ``coverage_min`` from minus infinity, which the file
+    writes as the string ``"-inf"`` (the only string a bound may be)."""
+    if not isinstance(rows, list) or not rows:
+        raise TypeError(f"{rows!r} is not a list of rows")
+    table = tuple(RatingRow(_bound(r["coverage_min"]), _text(r["rating"])) for r in rows)
+    if table[0].coverage_min != float("-inf"):
+        raise ValueError(f"the first row's coverage_min is {table[0].coverage_min}, not -inf")
+    for low, high in pairwise(table):
+        if not high.coverage_min > low.coverage_min:
+            raise ValueError(f"coverage_min does not ascend strictly at {high.rating}")
+    return table
+
+
+def _bound(x: Any) -> float:
+    if isinstance(x, str):
+        if x != "-inf":
+            raise ValueError(f'{x!r} is not a number or "-inf"')
+        return float("-inf")
+    return _num(x)
+
+
+def _probabilities(t: Any) -> dict[str, float]:
+    """Rating to probability of default, each a fraction from 0 to 1; D's must be 1."""
+    if not isinstance(t, dict):
+        raise TypeError(f"{t!r} is not a table")
+    table = {_text(rating): _num(p) for rating, p in t.items()}
+    for rating, p in table.items():
+        if not 0 <= p <= 1:
+            raise ValueError(f"the probability of {rating}, {p}, is outside 0 to 1")
+    if table["D"] != 1.0:
+        raise ValueError(f"the probability of D must be 1.0, not {table['D']}")
+    return table
+
+
 def _base_rates(rows: Any) -> tuple[BaseRateClass, ...]:
     return tuple(
         BaseRateClass(
@@ -220,6 +294,7 @@ def _universe(t: Any) -> UniversePolicy:
         symbol_exclude_patterns=_texts(t["symbol_exclude_patterns"]),
         name_exclude_patterns=_texts(t["name_exclude_patterns"]),
         manual_exclusions=_texts(t["manual_exclusions"]),
+        manual_admissions=_texts(t["manual_admissions"]),
     )
 
 
@@ -233,4 +308,6 @@ def _refresh(t: Any) -> RefreshPolicy:
         deadline_s=_num(t["deadline_s"]),
         attempts=_whole(t["attempts"]),
         backoff_s=tuple(_num(s) for s in t["backoff_s"]),
+        fmp_calls_per_minute=_whole(t["fmp_calls_per_minute"]),
+        rate_limit_hold_s=_num(t["rate_limit_hold_s"]),
     )

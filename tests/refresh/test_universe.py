@@ -220,7 +220,8 @@ def test_industry_excluded_whatever_its_case_and_dashes(
 
 
 @pytest.mark.parametrize(
-    "industry", ["Real Estate Services", "Asset Management", "Banking Software", None]
+    "industry",
+    ["Real Estate Services", "Financial - Data & Stock Exchanges", "Banking Software", None],
 )
 def test_industry_outside_the_list_is_admitted(
     conn: sqlite3.Connection,
