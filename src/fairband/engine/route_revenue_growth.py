@@ -508,18 +508,25 @@ def _peer_industry(c: Context) -> str | None:
 
 def _from_industry(c: Context) -> Flag | None:
     """``peers-from-industry`` when the peers are the industry fallback's, naming FMP's count, the
-    industry and the count taken."""
+    industry and the count taken, the sentence's end worded by that count."""
     source, policy = c.inputs.peer_source, c.policy
     if source is None or source.kind != "industry":
         return None
-    n, k = source.fmp_counted, len(c.inputs.peers)
+    n, k, industry = source.fmp_counted, len(c.inputs.peers), source.industry
+    if k == 0:
+        taken = f"and the {industry} industry has no mature company in the universe either."
+    elif k == 1:
+        taken = f"so the peer is the one mature company of the {industry} industry in the universe."
+    else:
+        taken = (
+            f"so the peers are the {k} largest mature companies of the {industry} industry in "
+            "the universe."
+        )
     return Flag(
         "peers-from-industry",
         "Industry peers",
         f"FMP's peer list leaves {n} mature peer{'' if n == 1 else 's'} with a margin on "
-        f"{policy.peer_margin_min_years} years or more, fewer than {policy.peer_min}, so the "
-        f"peers are the {k} largest mature companies of the {source.industry} industry in the "
-        "universe.",
+        f"{policy.peer_margin_min_years} years or more, fewer than {policy.peer_min}, {taken}",
     )
 
 

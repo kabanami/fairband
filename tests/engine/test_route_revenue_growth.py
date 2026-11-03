@@ -376,17 +376,26 @@ def test_rows_refused_on_industry_peers_carry_the_flag(
     high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """The industry's mature companies can fall short too: the refusal keeps its wording and
-    counts them, and the row is flagged, as is a row refused for its sales-to-capital."""
+    counts them, and the row is flagged, the sentence by the count taken, as is a row refused for
+    its sales-to-capital."""
     hg = high_growth_inputs
-    two = replace(hg, peers=hg.peers[:2], peer_source=PeerSource("industry", INDUSTRY, 0))
-    r = value_company(two, deciles, policy, TODAY)
-    assert_refused(r, "no target margin: 2 mature peers")
-    assert codes(r)[-1] == "peers-from-industry"
-    assert sentence(r, "peers-from-industry") == (
-        "FMP's peer list leaves 0 mature peers with a margin on 5 years or more, fewer than 3, so "
-        "the peers are the 2 largest mature companies of the Specialty Industrial Machinery "
-        "industry in the universe."
-    )
+    zero_from_fmp = PeerSource("industry", INDUSTRY, 0)
+    first = "FMP's peer list leaves 0 mature peers with a margin on 5 years or more, fewer than 3, "
+    taken = {
+        2: "so the peers are the 2 largest mature companies of the Specialty Industrial Machinery "
+        "industry in the universe.",
+        1: "so the peer is the one mature company of the Specialty Industrial Machinery industry "
+        "in the universe.",
+        0: "and the Specialty Industrial Machinery industry has no mature company in the universe "
+        "either.",
+    }
+    for k, rest in taken.items():
+        r = value_company(
+            replace(hg, peers=hg.peers[:k], peer_source=zero_from_fmp), deciles, policy, TODAY
+        )
+        assert_refused(r, f"no target margin: {k} mature peers")
+        assert codes(r)[-1] == "peers-from-industry"
+        assert sentence(r, "peers-from-industry") == first + rest
     peers = tuple(replace(p, sales_to_capital=None) for p in hg.peers)
     short = replace(hg, peers=peers, capital_years=hg.capital_years[-4:])
     r = value_company(replace(short, peer_source=FROM_INDUSTRY), deciles, policy, TODAY)
