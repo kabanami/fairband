@@ -3,20 +3,26 @@
 universe of one finished full refresh started at ``STARTED``."""
 
 import json
+from collections.abc import Callable
 from contextlib import closing
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
 from support.engine_companies import universe_deciles
-from support.web import HEADER, HOST, NOW, STARTED, _settings
+from support.web import HEADER, HOST, NOW, STARTED, _company, _settings
 
 from fairband.engine import METHOD_VERSION
+from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH, SETTINGS, settings_hash
+from fairband.store.companies import insert_companies
 from fairband.store.db import connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh, save_deciles
+from fairband.store.snapshots import insert_snapshot
 from fairband.web.app import create_app
 
 R_SOURCE = "design.md 6.2 (stocks method v1.7 section 3): required return r = 9%"
@@ -166,6 +172,67 @@ def test_a_universe_setting_changed_after_the_full_refresh(
         finish_refresh(conn, refresh_id, "done", later)
     under = client.get("/api/settings").json()["valuedUnder"]
     assert (under["fullRefreshAt"], under["universeChanged"]) == (later.isoformat(), False)
+
+
+def test_a_universe_setting_reset_after_the_full_refresh(
+    client_with_clock: Callable[[datetime], TestClient], db_path: Path, policy: Policy
+) -> None:
+    """The universe was built under the floor the reset removes; a reset deletes the row, so the
+    change log, not the overlay, tells; a save back to the default does the same."""
+    t1 = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
+    floor = {"changes": {"universe.cap_floor_usd": 3e9}}
+    assert client_with_clock(t1).put("/api/settings", json=floor, headers=HEADER).status_code == 200
+    _full_refresh(db_path, policy, t1 + timedelta(hours=1))
+    client = client_with_clock(t1 + timedelta(hours=2))
+    assert client.get("/api/settings").json()["valuedUnder"]["universeChanged"] is False
+    r = client.post(
+        "/api/settings/reset", json={"names": ["universe.cap_floor_usd"]}, headers=HEADER
+    )
+    assert r.json()["valuedUnder"]["universeChanged"] is True
+    assert not _setting(r.json(), "universe.cap_floor_usd")["changed"]  # no row left
+
+    client.put("/api/settings", json=floor, headers=HEADER)
+    _full_refresh(db_path, policy, t1 + timedelta(hours=3))
+    client = client_with_clock(t1 + timedelta(hours=4))
+    back = {"changes": {"universe.cap_floor_usd": 2e9}}  # the default: the row goes
+    r = client.put("/api/settings", json=back, headers=HEADER)
+    assert r.json()["valuedUnder"]["universeChanged"] is True
+    other = client.put("/api/settings", json={"changes": {"fade_years": 3}}, headers=HEADER)
+    assert other.json()["valuedUnder"]["universeChanged"] is True  # still, until a full refresh
+
+
+def test_valued_under_counts_the_screens_snapshots_only(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """A full refresh under a higher floor admits AAPL alone; AAL and HGCO keep their snapshots
+    under the old hash, two to one. A revalue under r = 10% values AAPL, the screen's one row,
+    and the notice clears: the companies the universe dropped do not vote."""
+    r = client.put("/api/settings", json={"changes": {"required_return": 0.1}}, headers=HEADER)
+    current = r.json()["current"]["settingsHash"]
+    later = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    with closing(connect(db_path)) as conn:
+        full = _full_refresh(db_path, policy, later)
+        insert_companies(
+            conn, [_company("AAPL", full, "Mature Growth Co", Decimal(150_000_000_000))]
+        )
+        revalue = create_refresh(
+            conn, "revalue", None, policy.version, METHOD_VERSION, later, current
+        )
+        insert_snapshot(conn, replace(results["AAPL"], settings_hash=current), revalue)
+        finish_refresh(conn, revalue, "done", later)
+    assert [row["ticker"] for row in client.get("/api/screen").json()["rows"]] == ["AAPL"]
+    under = client.get("/api/settings").json()["valuedUnder"]
+    assert (under["policyVersion"], under["settingsHash"]) == (policy.version, current)
+
+
+def _full_refresh(db_path: Path, policy: Policy, at: datetime) -> int:
+    """A full refresh started and finished ``at``; its id."""
+    with closing(connect(db_path)) as conn:
+        refresh_id = create_refresh(
+            conn, "full", None, policy.version, METHOD_VERSION, at, EMPTY_SETTINGS_HASH
+        )
+        finish_refresh(conn, refresh_id, "done", at)
+    return refresh_id
 
 
 def test_valued_under_before_any_snapshot_or_full_refresh(tmp_path: Path, policy: Policy) -> None:

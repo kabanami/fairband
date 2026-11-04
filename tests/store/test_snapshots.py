@@ -246,3 +246,16 @@ def test_latest_versions_most_of_the_newest_snapshots_cite(
         "fairband-policy-v5",
         EMPTY_SETTINGS_HASH,
     )  # the newest on a tie
+
+
+def test_latest_versions_among_the_given_symbols(
+    conn: sqlite3.Connection, new_refresh: Callable[[], int]
+) -> None:
+    """Only the named companies' newest snapshots vote: the screen's, not every company's."""
+    first, second = new_refresh(), new_refresh()
+    for symbol in ("AAPL", "KO", "PEP"):
+        insert_snapshot(conn, _result(symbol), first, clock=_at())
+    insert_snapshot(conn, replace(_result("MSFT"), settings_hash="abc"), second, clock=_at())
+    assert latest_versions(conn) == ("fairband-policy-v1", EMPTY_SETTINGS_HASH)
+    assert latest_versions(conn, ["MSFT", "NEWC"]) == ("fairband-policy-v1", "abc")
+    assert latest_versions(conn, ["NEWC"]) is None and latest_versions(conn, []) is None

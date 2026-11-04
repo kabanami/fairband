@@ -9,13 +9,16 @@ the sentence that names it (``effective``), rather than show figures under a pol
 or fail with a 500. Each answers with the form as ``GET`` serves it.
 
 ``valuedUnder`` says what the screen's figures were valued under: the policy version and settings
-hash most of the newest snapshots cite, the start of the latest full refresh that finished, and
-whether a universe setting changed after that start (the overlay's rows only: a reset leaves no
-row to compare).
+hash most of the screen's snapshots cite, the start of the latest full refresh that finished, and
+whether a universe setting changed after that start. The screen's snapshots are those of the
+latest universe's admitted companies, the ones a revalue values; a company the universe dropped
+keeps its old snapshot and would otherwise outvote them. A universe change is read from the
+change log, so a reset or a save back to the default counts too: it deletes the setting's row,
+but the universe was built under the value it removed.
 """
 
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from contextlib import closing
 from datetime import datetime
 from typing import Any
@@ -24,9 +27,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from fairband.policy import Policy
-from fairband.policy.settings import SETTINGS
+from fairband.store.companies import latest_companies
 from fairband.store.refreshes import latest_full_refresh
 from fairband.store.settings import (
+    changes,
     effective_policy,
     overlay_changed_at,
     read_overlay,
@@ -35,8 +39,6 @@ from fairband.store.settings import (
 )
 from fairband.store.snapshots import latest_versions
 from fairband.web.policy_rows import settings_json
-
-_UNIVERSE = frozenset(s.name for s in SETTINGS if s.group == "universe")
 
 
 class SettingsPut(BaseModel):
@@ -56,19 +58,33 @@ def effective(conn: sqlite3.Connection, base: Policy) -> Policy:
         raise HTTPException(409, str(exc)) from None
 
 
-def valued_under(conn: sqlite3.Connection, changed_at: Mapping[str, datetime]) -> dict[str, Any]:
-    """What the newest snapshots were valued under, and whether a universe setting changed after
-    the latest full refresh began; before any full refresh, whether one changed at all."""
-    versions = latest_versions(conn)
+def valued_under(conn: sqlite3.Connection) -> dict[str, Any]:
+    """What the screen's snapshots were valued under, and whether a save or a reset changed a
+    universe setting after the latest full refresh began; before any full refresh, whether one
+    ever changed."""
+    versions = latest_versions(conn, _screen_symbols(conn))
     full = latest_full_refresh(conn)
     start = None if full is None else full.started_at
-    universe = [at for name, at in changed_at.items() if name in _UNIVERSE]
+    universe_changed = any(
+        any(entry["name"].startswith("universe.") for entry in change.changes)
+        for change in changes(conn)
+        if start is None or change.changed_at > start
+    )
     return {
         "policyVersion": None if versions is None else versions[0],
         "settingsHash": None if versions is None else versions[1],
         "fullRefreshAt": None if start is None else start.isoformat(),
-        "universeChanged": any(start is None or at > start for at in universe),
+        "universeChanged": universe_changed,
     }
+
+
+def _screen_symbols(conn: sqlite3.Connection) -> list[str] | None:
+    """The symbols the screen shows and a revalue values: the latest universe's admitted
+    companies; ``None``, every company with a snapshot, before any universe."""
+    admitted = latest_companies(conn)
+    if admitted or latest_companies(conn, eligible_only=False):
+        return [company.symbol for company in admitted]
+    return None
 
 
 def add_settings_routes(
@@ -81,9 +97,9 @@ def add_settings_routes(
 
     def form(conn: sqlite3.Connection) -> dict[str, Any]:
         current = effective(conn, policy)
-        changed_at = overlay_changed_at(conn)
         overlay = read_overlay(conn)
-        return settings_json(current, policy, overlay, changed_at, valued_under(conn, changed_at))
+        changed_at = overlay_changed_at(conn)
+        return settings_json(current, policy, overlay, changed_at, valued_under(conn))
 
     @app.get("/api/settings")
     def get_settings() -> dict[str, Any]:
