@@ -9,3 +9,6 @@ keys.toml
 .ruff_cache/
 .pytest_cache/
 dist/
+
+# The subagent-driven-development workspace: scratch, never committed.
+.superpowers/
