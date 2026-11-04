@@ -245,8 +245,9 @@
      designation, which is the row's own, never derived here. The row's phase is
      already the menu's number (the server maps the engine's phase name through PHASE_NUMBER),
      and its cap band is the menu's id once lower-cased (Mega is mega); small never matches, the
-     universe's floor being $2 bn. A row on any chosen watchlist matches; Clean keeps the rows
-     whose quality warnings count 0, a placeholder's among them (spec 2026-11-04 9.4, 9.5). */
+     universe's floor being $2 bn. A row on any chosen watchlist matches; Clean keeps the valued
+     rows whose quality warnings count 0: a refusal or a placeholder has no value to be cheap on,
+     so it is never clean (spec 2026-11-04 9.4, 9.5). */
   function narrow(rows, query, filters) {
     var needle = (query || '').trim().toLowerCase();
     return rows.filter(function (r) {
@@ -260,7 +261,7 @@
         within(filters.watchlist, r.watchlists || []) &&
         (!filters.reviewedOnly || r.reviewed != null) &&
         (!filters.hideExpired || r.freshness !== 'expired') &&
-        (!filters.cleanOnly || r.flagCount === 0);
+        (!filters.cleanOnly || (r.flagCount === 0 && r.fairValue != null));
     });
   }
 

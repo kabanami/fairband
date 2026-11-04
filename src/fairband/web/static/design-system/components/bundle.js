@@ -843,9 +843,9 @@
 
   // fairband: the price-vs-value words lead the groups (classifier-designation spec 7.3); the page
   // filters on the row's own word.
-  // fairband: the watchlist group, list ids, follows the sector; the clean flag keeps the rows with
-  // no quality warning. Its chip reads Clean, its menu row "No warning flag" (spec 2026-11-04 9.4,
-  // 9.5).
+  // fairband: the watchlist group, list ids, follows the sector; the clean flag keeps the valued
+  // rows with no quality warning. Its chip reads Clean, its menu row "No warning flag" (spec
+  // 2026-11-04 9.4, 9.5).
   var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector', 'watchlist'];
   var FILTER_FLAGS = ['reviewedOnly', 'hideExpired', 'cleanOnly'];
   var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired', cleanOnly: 'Clean' };
@@ -1049,9 +1049,9 @@
       cell: function (r) { return figureCell(percent(r.drawdown)); } },
     { key: 'flags', head: 'Flags',
       cell: function (r) { return h('td', { className: 'body' }, (r.flags || []).join(' · ')); } },
-    // fairband: the count of the row's quality warnings, a figure (spec 2026-11-04 9.5); the words
-    // stay in the column above.
-    { key: 'flagCount', head: 'Flags', num: true,
+    // fairband: the count of the row's quality warnings, a figure headed Warnings, so it never
+    // shares a name with Flags, the words above (spec 2026-11-04 9.5).
+    { key: 'flagCount', head: 'Warnings', num: true,
       cell: function (r) { return figureCell(r.flagCount == null ? '—' : r.flagCount); } },
     // fairband: the names of the lists the company is on, in the lists' order, joined by ` · `; an
     // em dash for none (spec 2026-11-04 9.4).

@@ -378,7 +378,7 @@ export interface ScreenRow {
   /** The flags' short words, joined by ` · `. */
   flags?: string[];
   /**
-   * fairband: the number of the row's quality warnings, drawn in the Flags count column; 0 on a
+   * fairband: the number of the row's quality warnings, drawn in the Warnings column; 0 on a
    * placeholder (spec 2026-11-04 9.5).
    */
   flagCount?: number;
@@ -446,7 +446,10 @@ export interface ScreenFilters {
   hideExpired: boolean;
   /** fairband: watchlist ids; a row on any of them matches (spec 2026-11-04 9.4). */
   watchlist: number[];
-  /** fairband: keep the rows with no quality warning, a `flagCount` of 0 (spec 2026-11-04 9.5). */
+  /**
+   * fairband: keep the valued rows with no quality warning, a `flagCount` of 0; a refusal or a
+   * placeholder is never clean (spec 2026-11-04 9.5).
+   */
   cleanOnly: boolean;
 }
 

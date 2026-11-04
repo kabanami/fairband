@@ -895,7 +895,9 @@ def test_app_js_narrows_on_the_designation() -> None:
 
 def test_app_js_narrows_on_watchlist_and_clean() -> None:
     js = _static_file("app.js")
-    assert "(!filters.cleanOnly || r.flagCount === 0)" in js
+    # Clean keeps the valued rows with no quality warning: a refusal or a placeholder has no
+    # value to be cheap on, so it is never clean.
+    assert "(!filters.cleanOnly || (r.flagCount === 0 && r.fairValue != null))" in js
     assert "'/api/watchlists/memberships/' + encodeURIComponent(symbol)" in js
 
 
@@ -1235,7 +1237,7 @@ def test_bundle_has_the_watch_mark_and_the_two_filters() -> None:
     assert "'aria-pressed': r.watched ? 'true' : 'false'" in bundle
     assert "watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false" in bundle
     assert "'WATCHLISTS'" in bundle and "'No warning flag'" in bundle
-    assert "{ key: 'flagCount', head: 'Flags', num: true" in bundle
+    assert "{ key: 'flagCount', head: 'Warnings', num: true" in bundle
     assert "{ key: 'watchlists', head: 'Watchlists'" in bundle
     dts = _component_file("index.d.ts")
     assert "onWatch?: (row: ScreenRow) => void;" in dts and "cleanOnly: boolean;" in dts
@@ -1276,11 +1278,15 @@ def test_bundle_filters_on_watchlists_and_clean() -> None:
 
 
 def test_bundle_draws_the_watchlist_and_count_columns() -> None:
-    """Spec 2026-11-04 9.4: the list names joined by ` · `, an em dash for none; the count after
-    the flags' words, a figure."""
+    """Spec 2026-11-04 9.4: the list names joined by ` · `, an em dash for none; the count of
+    the quality warnings after the flags' words, a figure headed Warnings (the controller's
+    ruling), so no two columns share a name."""
     bundle = _component_file("bundle.js")
     assert "return wordCell(names.length ? names.join(' · ') : null);" in bundle
     assert bundle.index("{ key: 'flags', head: 'Flags'") < bundle.index("{ key: 'flagCount'")
+    # every column has a head of its own, so the chooser never offers two boxes with one name
+    heads = re.findall(r"\{ key: '\w+', head: '([^']+)'", bundle)
+    assert len(heads) == len(set(heads))
     assert "return figureCell(r.flagCount == null ? '—' : r.flagCount);" in bundle
 
 
