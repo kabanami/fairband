@@ -151,6 +151,65 @@
     justify-content: center; padding: 15vh var(--space-4) var(--space-4);
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
+  /* The Settings view (spec 2026-11-04 8.5): one form, its five groups each a heading over its
+     rows. A row is the label and its captions at the left; at the right the fields, right-aligned
+     and mono in the control style on surface-sunken, the word changed in accent and Reset beside
+     them, the range and a refused save's sentence under them. The text keeps at least 16rem and
+     the fields wrap; under 600px they go under the text. The notice leads the form; Reason and
+     Save stay at the foot of the panel as it scrolls. */
+  #settings { padding-bottom: 0; }
+  .app-set { max-width: 64rem; padding: var(--space-2) 0 0; }
+  .app-set__notice {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-3); background: var(--surface-raised);
+    border: 1px solid var(--hairline); border-radius: var(--radius-lg);
+  }
+  .app-set__notice p { margin: 0; }
+  .app-set__started { color: var(--caution); }
+  .app-set__head { margin: var(--space-6) 0 var(--space-2); }
+  .app-set__row {
+    display: grid; grid-template-columns: minmax(16rem, 1fr) auto;
+    gap: var(--space-2) var(--space-6);
+    padding: var(--space-3) 0; border-top: 1px solid var(--hairline);
+  }
+  .app-set__label { display: block; }
+  .app-set__what { margin: var(--space-1) 0 0; color: var(--ink-muted); }
+  .app-set__meta { margin: var(--space-1) 0 0; color: var(--ink-faint); overflow-wrap: anywhere; }
+  .app-set__edit { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
+  .app-set__fields {
+    display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
+    gap: var(--space-2);
+  }
+  .app-set__part { display: inline-flex; align-items: center; gap: var(--space-1); }
+  .app-set__partname { color: var(--ink-muted); text-transform: uppercase; }
+  .app-set__num { width: 5.5rem; font-family: var(--font-mono); text-align: right; }
+  .app-set__list { width: 16rem; font-family: var(--font-mono); }
+  .app-set__num[aria-invalid="true"], .app-set__list[aria-invalid="true"] {
+    border-color: var(--caution);
+  }
+  .app-set__unit { color: var(--ink-muted); white-space: pre; }
+  .app-set__end { min-width: 3.5rem; }
+  .app-set__changed { color: var(--accent); }
+  .app-set__check { display: inline-flex; align-items: center; gap: var(--space-1); }
+  .app-set__check input { margin: 0; accent-color: var(--accent); }
+  .app-set__check input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-set__range { margin: var(--space-1) 0 0; color: var(--ink-faint); text-align: right; }
+  .app-set__range, .app-set__edit .app-set__error { max-width: 28rem; text-align: right; }
+  .app-set__error { margin: var(--space-1) 0 0; color: var(--caution); }
+  .app-set__save {
+    position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center;
+    gap: var(--space-2) var(--space-3); margin-top: var(--space-4);
+    padding: var(--space-3) 0 var(--space-4); background: var(--surface);
+    border-top: 1px solid var(--hairline);
+  }
+  .app-set__saveerror { flex-basis: 100%; margin: 0; }
+  .app-set__refused { margin: var(--space-2) 0 var(--space-3); color: var(--caution); }
+  @media (width < 600px) {
+    .app-set__row { grid-template-columns: minmax(0, 1fr); }
+    .app-set__edit { align-items: flex-start; }
+    .app-set__fields { justify-content: flex-start; }
+    .app-set__range, .app-set__edit .app-set__error { text-align: left; }
+  }
   /* A header that also drags keeps the bundle's grab cursor. */
   .fb-table thead th[tabindex]:not([draggable="true"]), .fb-table tbody tr[tabindex] {
     cursor: pointer;
@@ -232,5 +291,6 @@
 <script src="/static/app.js"></script>
 <script src="/static/controls.js"></script>
 <script src="/static/watchlists.js"></script>
+<script src="/static/settings.js"></script>
 </body>
 </html>

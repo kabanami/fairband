@@ -690,6 +690,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/app.js",
         "/static/controls.js",
         "/static/watchlists.js",
+        "/static/settings.js",
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url
@@ -1033,6 +1034,67 @@ def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
     view = view[: view.index("}));")]
     assert "confirmVariant: 'danger'," in view
     assert "targetRevision" not in view and "onReject" not in view
+
+
+def test_settings_view_form_and_notices() -> None:
+    js = _static_file("settings.js")
+    assert "'Your settings changed since the last valuation.'" in js
+    assert "'Revalue now'" in js and "P.api.post('/api/refresh', { kind: 'revalue' }" in js
+    assert "'A universe setting changed since the last full refresh: run Refresh all.'" in js
+    assert "'takes effect at the next revalue'" in js and "'takes effect at once'" in js
+    assert "h(F.ConfirmDialog, {" in js and "payload: payload" in js
+    assert "'Reset'" in js and "'Save'" in js and "placeholder: 'Reason (optional)'" in js
+    assert (
+        "UNITS = { fraction: '%', points: ' points', years: ' years', times: '×', days: ' days', seconds: ' s', hours: ' h', count: '', usd: '$' }"
+        in js
+    )
+
+
+def test_settings_view_saves_through_the_dialog_and_follows_the_run() -> None:
+    """Spec 2026-11-04 8.5: the view loads from GET /api/settings as it opens; Save confirms the
+    changes, old to new, and sends them with the reason in one PUT; a 400's "<name>: <rule>" stands
+    beside that setting's field. A stored setting the policy refuses makes GET answer 409: the view
+    shows the sentence and Reset all settings, a reset with no names. Revalue now posts a revalue
+    the header then follows; the view asks FairbandPage.running() while it is open, so the button
+    turns off for a run and the notice is read again when the run ends."""
+    js = _static_file("settings.js")
+    for text in (
+        "P.onShow.settings = function () {",
+        "fetch('/api/settings')",
+        "title: 'Change ' + n + ' setting' + (n === 1 ? '' : 's'),",
+        "state: state.saving ? 'confirming' : 'open',",
+        "P.api.put('/api/settings', { changes: changes, reason: reason })",
+        "state.error[name] = detail;",
+        "'Reset all settings'",
+        "P.api.post('/api/settings/reset', {})",
+        "disabled: state.starting || P.running(),",
+        "if (r.status === 409) state.started = 'A refresh is already running.';",
+        "P.followRefresh();",
+        "if (panel.hidden) {",
+        "P.running()",
+        "'takes effect at the next full refresh'",
+        "'takes effect at the next refresh'",
+        "['NYSE', 'NASDAQ', 'AMEX']",
+        "['Mega', 'Large', 'Mid']",
+    ):
+        assert text in js, text
+    # the notice: a version or a hash unlike the current one, and only once a snapshot exists
+    assert "v.settingsHash != null && (v.settingsHash !== c.settingsHash ||" in js
+    assert "v.policyVersion !== c.policyVersion)" in js
+    controls = _static_file("controls.js")
+    assert "P.followRefresh = function () { started = true; poll(); };" in controls
+    page = _static_file("index.html")
+    assert '<script src="/static/settings.js"></script>' in page
+    assert page.index("/static/watchlists.js") < page.index("/static/settings.js")
+    for text in (
+        ".app-set__changed { color: var(--accent); }",
+        ".app-set__error { margin: var(--space-1) 0 0; color: var(--caution); }",
+        ".app-set__notice {",
+    ):
+        assert text in page, text
+    num = page[page.index(".app-set__num {") :]
+    num = num[: num.index("}")]
+    assert "font-family: var(--font-mono);" in num and "text-align: right;" in num
 
 
 def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:

@@ -395,11 +395,14 @@
 
   /* What the later views use: show opens a view; each view registers its loader in onShow, and
      onShow[tab]() runs each time that view opens; section is the Methodology section a hash
-     named; running() is true while a refresh runs. */
+     named; running() is true while a refresh runs; followRefresh() follows a refresh another view
+     started (the Settings view's revalue) as the header follows its own: the run bar while it
+     runs, the rows loaded again when it ends. */
   P.show = show;
   P.onShow = {};
   P.section = null;
   P.running = function () { return state.running !== null; };
+  P.followRefresh = function () { started = true; poll(); };
 
   window.addEventListener('hashchange', fromHash);
   /* The first view opens once the page's later scripts have run and registered their loaders. */
