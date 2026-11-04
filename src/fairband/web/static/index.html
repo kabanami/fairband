@@ -98,6 +98,59 @@
   .app-watch__name::placeholder { color: var(--ink-faint); }
   .app-watch__name:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   .app-watch__error { margin: var(--space-2) 0 0; color: var(--caution); }
+  /* The Watchlists view (spec 2026-11-04 9.6): the New watchlist field and Create above the
+     lists; each list a section on the raised surface, its head the name, the count and the date,
+     Rename and Delete; under it the Add a company field, its matches a column of buttons under
+     it, then the list's table, which scrolls sideways on its own. No bar stands above a list's
+     table, so its header cells keep the table's top; a company with no row has no name, and its
+     Company cell shows an em dash as every other empty cell does. Delete's dialog stands over
+     the page. */
+  .app-lists { padding: var(--space-2) 0 var(--space-4); }
+  .app-lists__new { display: flex; align-items: center; gap: var(--space-2); }
+  .app-lists__empty { margin-top: var(--space-4); }
+  .app-field {
+    width: 16rem; max-width: 100%; box-sizing: border-box; padding: var(--space-1) var(--space-2);
+    color: var(--ink); background: var(--surface-sunken); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-well);
+  }
+  .app-field::placeholder { color: var(--ink-faint); }
+  .app-field:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-lists__new .app-field { padding: var(--space-2) var(--space-3); }
+  .app-wl {
+    margin-top: var(--space-4); padding: var(--space-3) var(--space-4) var(--space-4);
+    background: var(--surface-raised); border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+  }
+  .app-wl__head {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+  }
+  .app-wl__title { margin: 0; overflow-wrap: anywhere; }
+  .app-wl__meta { margin: 0; color: var(--ink-muted); }
+  .app-wl__actions { display: flex; gap: var(--space-2); margin-left: auto; }
+  .app-wl__error { margin: var(--space-2) 0 0; color: var(--caution); }
+  .app-wl__add { margin-top: var(--space-3); }
+  .app-wl__matches {
+    list-style: none; width: 24rem; max-width: 100%; margin: var(--space-1) 0 0; padding: 0;
+  }
+  .app-wl__match {
+    display: flex; align-items: baseline; gap: var(--space-3); width: 100%;
+    padding: var(--space-1) var(--space-2); color: var(--ink); text-align: left;
+    background: none; border: 0; border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .app-wl__match:hover { background: var(--surface-hover); }
+  .app-wl__match:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-wl__matchname {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .app-wl__hint, .app-wl__none { margin: var(--space-2) 0 0; }
+  .app-wl__table { margin-top: var(--space-3); overflow-x: auto; }
+  #watchlists .fb-screen { --bar-height: 0px; }
+  #watchlists .fb-screen__name:empty::before { content: '—'; color: var(--ink-faint); }
+  .app-dialog {
+    position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-start;
+    justify-content: center; padding: 15vh var(--space-4) var(--space-4);
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
   /* A header that also drags keeps the bundle's grab cursor. */
   .fb-table thead th[tabindex]:not([draggable="true"]), .fb-table tbody tr[tabindex] {
     cursor: pointer;
@@ -178,5 +231,6 @@
 <script src="/static/design-system/components/bundle.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/controls.js"></script>
+<script src="/static/watchlists.js"></script>
 </body>
 </html>

@@ -106,8 +106,8 @@
 
   /* The server refuses a write without the X-Fairband-Request header (D11): a cross-site form
      cannot send it, nor a cross-origin script without a preflight the server never answers. The
-     refresh controls post through here and the watchlist popup posts and puts; the promise gives
-     the status and the parsed body. */
+     refresh controls post through here, the watchlist popup posts and puts, and the Watchlists
+     view also renames and deletes; the promise gives the status and the parsed body. */
   function send(method, url, body) {
     return fetch(url, {
       method: method,
@@ -122,7 +122,9 @@
 
   var api = {
     post: function (url, body) { return send('POST', url, body); },
-    put: function (url, body) { return send('PUT', url, body); }
+    put: function (url, body) { return send('PUT', url, body); },
+    patch: function (url, body) { return send('PATCH', url, body); },
+    del: function (url) { return send('DELETE', url); }
   };
 
   /* The server writes a timestamp in UTC (+00:00), and the design system prints a string's own
@@ -148,13 +150,19 @@
   /* What controls.js uses: the screen's reload when a refresh ends, the write helpers, the GET
      helper, the local-time helper and the phase numbers; and the later views, find, the lists
      (null until they load), their reload, which settles once they are in, and watch, the marks'
-     onWatch, which opens the popup. controls.js adds show, onShow, section and running. */
+     onWatch, which opens the popup; the loaded rows (null until they load), the chosen columns and
+     openRow, which opens a row's drawer. controls.js adds show, onShow, section and running; a
+     view drawn from the rows or the lists sets onRender, which runs after each draw of the
+     screen, so it draws again as they load and change. */
   window.FairbandPage = {
     reload: load, api: api, getJson: getJson, localIso: localIso, PHASE_NUMBER: PHASE_NUMBER,
     find: find,
     watchlists: function () { return state.watchlists; },
     reloadWatchlists: reloadWatchlists,
-    watch: watch
+    watch: watch,
+    rows: function () { return state.rows; },
+    columns: function () { return state.columns; },
+    openRow: openRow
   };
 
   function load() {
@@ -215,6 +223,13 @@
         };
         render();
       });
+  }
+
+  /* A row from another view (a watchlist's): its drawer opens as a click on the row opens it, and
+     the Screen view shows, since the drawer stands beside the screen's table. */
+  function openRow(symbol) {
+    open({ ticker: symbol });
+    window.FairbandPage.show('screen');
   }
 
   function close() {
@@ -567,6 +582,8 @@
       }, 'Top ↑') : null,
       d ? drawer(d) : null));
     renderWatch();
+    var page = window.FairbandPage;
+    if (page.onRender) page.onRender();
   }
 
   /* ------------------------------------------------------------------ the drawer */

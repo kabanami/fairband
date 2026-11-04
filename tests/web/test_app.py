@@ -689,6 +689,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/design-system/components/bundle.js",
         "/static/app.js",
         "/static/controls.js",
+        "/static/watchlists.js",
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url
@@ -923,6 +924,68 @@ def test_app_js_opens_the_watchlist_popup() -> None:
         "reloadWatchlists: reloadWatchlists,",
     ):
         assert text in js, text
+
+
+def test_watchlists_view_creates_renames_deletes_and_adds() -> None:
+    js = _static_file("watchlists.js")
+    assert (
+        "'No watchlists yet. Create one here, or press the mark beside a ticker on the screen.'"
+        in js
+    )
+    assert "P.api.post('/api/watchlists', { name: name })" in js
+    assert "method: 'PATCH'" in js and "method: 'DELETE'" in js
+    assert "h(F.ConfirmDialog, {" in js  # Delete confirms with the name and the count
+    assert "chooser: false, dense: true" in js  # each list is a ScreenTable of the screen's rows
+    assert "placeholder: 'Add a company'" in js and ".slice(0, 8)" in js
+    html = _static_file("index.html")
+    assert '<script src="/static/watchlists.js"></script>' in html
+
+
+def test_watchlists_view_draws_the_screen_rows_and_a_symbol_without_one() -> None:
+    """Spec 2026-11-04 9.6: a list's rows are the screen's loaded rows joined by symbol, in the
+    list's order, each watched, under the screen's columns; a symbol with no row (it left the
+    universe, or has no snapshot) stays, its ticker alone with an em dash in every other cell. A
+    row opens the drawer and its mark the screen's popup. The view draws as it opens and again
+    whenever the screen draws, so it follows the rows and the lists as they load. Its writes go
+    through FairbandPage.api, which gains PATCH and DELETE beside POST and PUT."""
+    js = _static_file("watchlists.js")
+    assert (
+        "{ ticker: symbol, name: null, price: null, mechanical: null, reviewed: null, "
+        "phase: null, fairLow: null, fairHigh: null, watched: true }"
+    ) in " ".join(js.split())
+    for text in (
+        "Object.assign({}, row, { watched: true })",
+        "columns: P.columns(),",
+        "onOpen: function (row) { P.openRow(row.ticker); },",
+        "onWatch: P.watch,",
+        "P.onShow.watchlists = render;",
+        "P.onRender = function () { if (!panel.hidden) render(); };",
+        "title: 'Delete ' + d.name,",
+        "payload: { name: d.name, companies: d.count },",
+        "/^[A-Za-z0-9.-]{1,10}$/",
+        "P.api.patch('/api/watchlists/' + id, { name: name })",
+        "P.api.del('/api/watchlists/' + d.id)",
+        "P.reload();",
+        "return P.reloadWatchlists();",
+    ):
+        assert text in js, text
+    app = _static_file("app.js")
+    for text in (
+        "patch: function (url, body) { return send('PATCH', url, body); },",
+        "del: function (url) { return send('DELETE', url); }",
+        "rows: function () { return state.rows; },",
+        "columns: function () { return state.columns; },",
+        "openRow: openRow",
+        "if (page.onRender) page.onRender();",
+    ):
+        assert text in app, text
+    open_row = app[app.index("function openRow(symbol) {") :]
+    open_row = open_row[: open_row.index("\n  }\n")]
+    assert "open({ ticker: symbol });" in open_row
+    assert "window.FairbandPage.show('screen');" in open_row
+    # the lists' tables keep their header cells at the top: no bar stands above them
+    page = _static_file("index.html")
+    assert "#watchlists .fb-screen { --bar-height: 0px; }" in page
 
 
 def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
