@@ -111,6 +111,6 @@ def stable_at_price(
     g_t = policy.terminal_growth
     return {
         "multiples": multiples_at(price, im["eps"]),
-        "expected_return": expected(price, value, im, (g_t, g_t, g_t)),
+        "expected_return": expected(price, value, im, (), policy.repricing_horizon_years, g_t),
         "growth_route": cross_check_at_price(im["growth_route"], price, im["shares"], policy),
     }

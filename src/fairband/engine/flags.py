@@ -11,6 +11,11 @@ zero, "Possible cycle peak" for a loss year in the window, else "Margin above hi
 The gate flags are the three ``mech/1.2`` gate tests on the trailing figures, kept as flags. The
 cash-flow statement signs capital spending as an outflow, so ``capex`` is negative for spending:
 free cash flow is ``cfo + capex`` and the spending is ``-capex``.
+
+``QUALITY_WARNINGS`` are the eleven flags that say the value may be wrong because the business or
+its figures are unusual (spec 2026-11-04 9.5); ``flag_count`` counts them on a row. Every other
+flag is a note: the classifier checks, the thin-consensus flags, the unknown inputs, the engine's
+mechanics and the bookkeeping flags. A note is shown and never counted.
 """
 
 import statistics
@@ -22,6 +27,27 @@ from fairband.engine.types import Flag
 from fairband.policy import Policy
 
 _MARGIN_WINDOW = 10  # mech/1.2: the median and the high over the last ten fiscal years
+
+QUALITY_WARNINGS: frozenset[str] = frozenset(
+    {
+        "large-nri",
+        "value-spread",
+        "margin-flag",
+        "z-distress",
+        "f-score-low",
+        "reinvesting-in-decline",
+        "equity-raise",
+        "negative-fcf",
+        "heavy-capex",
+        "burn-cover-short",
+        "consensus-recovery",
+    }
+)
+
+
+def flag_count(flags: Sequence[Flag]) -> int:
+    """The number of the row's quality warnings; notes do not count."""
+    return sum(1 for f in flags if f.code in QUALITY_WARNINGS)
 
 
 def median_margin(series: Series, window: int = _MARGIN_WINDOW) -> float | None:

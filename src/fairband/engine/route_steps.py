@@ -201,13 +201,23 @@ def income(market_cap: float | None, t: TrailingFigures) -> dict[str, Any]:
 
 
 def expected(
-    price: float, value: float, im: dict[str, Any], rates: Sequence[float]
+    price: float,
+    value: float,
+    im: dict[str, Any],
+    rates: Sequence[float],
+    horizon: int,
+    terminal: float,
 ) -> dict[str, float] | None:
-    """The Step 9 expected return on the income in ``im`` and the route's growth ``rates`` for
-    years 2 onwards; ``None`` for a value at or below zero, which has no rate."""
+    """The Step 9 expected return over ``horizon`` years on the income in ``im`` and the route's
+    growth ``rates`` for years 2 onwards; past the rates the path grows at ``terminal``, the
+    route's rate after its runway, so a horizon longer than the path never raises. ``None`` for a
+    value at or below zero, which has no rate."""
     if value <= 0:
         return None
-    er = expected_return(price, value, im["dividend_yield"], im["net_buyback_yield"], rates)
+    padded = tuple(rates[:horizon]) + (terminal,) * max(horizon - len(rates), 0)
+    er = expected_return(
+        price, value, im["dividend_yield"], im["net_buyback_yield"], padded, horizon=horizon
+    )
     return asdict(er)
 
 

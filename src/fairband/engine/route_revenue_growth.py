@@ -46,7 +46,8 @@ rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``equity``, ``sha
 is the earnings anchor's when it stands), ``epv``, ``dividend_yield``, ``net_buyback_yield``,
 ``income_basis``, ``price_facts``; ``growth_route``, the Mature Growth route's cross-check as a
 Mature Stable row carries it; at the price, ``implied_growth``, ``implied_margin``, ``multiples``,
-``growth_share``, ``expected_return`` (its growth term the revenue path's years 2 to 4).
+``growth_share``, ``expected_return`` (its growth term the revenue path's years 2 to H + 1, H the
+policy's repricing horizon, g_T past the path).
 
 The rebuild keys: ``revenue_path`` (revenue0, ntm_revenue, the consensus steps as found with
 ``None`` for a missing one, hold ``None``, or the cap when it binds, high_growth_years, fade_years),
@@ -319,7 +320,7 @@ def revenue_at_price(
 ) -> dict[str, Any]:
     """The intermediates that move with the price, from the value-side intermediates ``im``: the
     implied growth and margin, the multiples, the growth share, the expected return on the revenue
-    path's years 2 to 4, and the cross-check's implied growth."""
+    path's years 2 to H + 1, and the cross-check's implied growth."""
     s2c = im["sales_to_capital"]["value"]
     margin = MarginPath(
         im["margin_start"], im["margin_path"]["target"], policy.margin_convergence_year
@@ -331,7 +332,14 @@ def revenue_at_price(
         **implied_margin_at_price(im, price, policy),
         "multiples": multiples_at(price, im["eps"]),
         "growth_share": None if im["epv"] is None else growth_share(im["epv"], price),
-        "expected_return": expected(price, value, im, im["growth_rates"][1:]),
+        "expected_return": expected(
+            price,
+            value,
+            im,
+            im["growth_rates"][1:],
+            policy.repricing_horizon_years,
+            policy.terminal_growth,
+        ),
         "growth_route": cross_check_at_price(im["growth_route"], price, im["shares"], policy),
     }
 

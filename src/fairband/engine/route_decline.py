@@ -43,7 +43,7 @@ file" or "no interest expense on file"); ``distress_proceeds``, ``distress_per_s
 ``None`` with fewer than two balance sheets); ``capex_vs_depreciation``; ``eps`` (no forward
 EPS), ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at
 the price, ``implied_decline_rate``, ``multiples`` and ``expected_return``, its growth term d in
-each of the three years.
+each year of the policy's repricing horizon.
 
 The rebuild keys: ``runoff_path`` (revenue0, ntm_revenue, ``None`` without a usable consensus, the
 steps as found with ``None`` for a missing one, d, runoff_years); ``margin`` (value, used,
@@ -339,7 +339,7 @@ def decline_at_price(
     return {
         "implied_decline_rate": implied_decline_rate(value_at, price),
         "multiples": multiples_at(price, im["eps"]),
-        "expected_return": expected(price, value, im, (d, d, d)),
+        "expected_return": expected(price, value, im, (), policy.repricing_horizon_years, d),
     }
 
 

@@ -19,6 +19,7 @@ from fairband.engine.types import (
     result_from_json,
     result_to_json,
 )
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 
 
 @pytest.fixture
@@ -80,6 +81,7 @@ def sample_result() -> ValuationResult:
         refusal=None,
         policy_version="fairband-policy-v1",
         method_version=METHOD_VERSION,
+        settings_hash=EMPTY_SETTINGS_HASH,
         deciles_refresh_id=3,
     )
 
@@ -118,6 +120,16 @@ def test_a_0_5_snapshot_reads_without_the_stance_keys(sample_result: ValuationRe
     d |= {"stance5": "HOLD", "stance3": "hold"}
     read = result_from_json(json.dumps(d, sort_keys=True))
     assert read == replace(sample_result, price_to_value=None, designation=None)
+
+
+def test_a_0_7_result_reads_with_the_empty_settings_hash(sample_result: ValuationResult) -> None:
+    """A result valued before method 0.8 carries no settings hash: it was valued under the policy
+    file alone, so it reads with the empty overlay's hash."""
+    custom = replace(sample_result, settings_hash="ab" * 32)
+    d = json.loads(result_to_json(custom))
+    del d["settings_hash"]
+    assert result_from_json(json.dumps(d, sort_keys=True)) == sample_result
+    assert result_from_json(result_to_json(custom)) == custom
 
 
 def test_refusal_json_round_trip(sample_result: ValuationResult) -> None:
@@ -182,4 +194,4 @@ def test_phase_numbers_and_method_version() -> None:
         ("Mature Stable", 5),
         ("Decline", 6),
     ]
-    assert METHOD_VERSION == "fairband-mechanical/0.7"
+    assert METHOD_VERSION == "fairband-mechanical/0.8"

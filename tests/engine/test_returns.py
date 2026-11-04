@@ -41,6 +41,12 @@ def test_repricing_over_the_horizon() -> None:
     assert er.growth == pytest.approx(0.05)
 
 
+def test_horizon_beyond_the_rates_is_padded_by_the_caller() -> None:
+    # expected_return itself still raises; route_steps.expected pads (tests/engine/test_route.py)
+    with pytest.raises(ValueError, match="2 growth rates for a 3-year horizon"):
+        expected_return(100, 120, 0.0, 0.0, (0.1, 0.1), horizon=3)
+
+
 def test_growth_through_a_loss_is_refused() -> None:
     # A step below -100% takes earnings negative; the geometric mean has no real value.
     with pytest.raises(ValueError, match="growth"):

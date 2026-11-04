@@ -6,6 +6,8 @@ import pytest
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import FiscalYear, Series
 from fairband.engine.flags import (
+    QUALITY_WARNINGS,
+    flag_count,
     gate_flags,
     long_runway_flag,
     margin_flag,
@@ -275,3 +277,29 @@ def test_value_spread_flag_needs_two_positive_values(policy: Policy) -> None:
     assert value_spread_flag([], policy) is None
     assert value_spread_flag([0.0, 131.0], policy) is None
     assert value_spread_flag([-10.0, 131.0], policy) is None
+
+
+def test_flag_count_counts_the_eleven_quality_warnings_only() -> None:
+    flags = (
+        Flag("leases-not-on-balance-sheet", "", ""),
+        Flag("few-analysts", "", ""),
+        Flag("margin-direction-disagrees", "", ""),
+        Flag("line-not-presented:cash", "", ""),
+    )
+    assert flag_count(flags) == 0
+    assert flag_count(flags + (Flag("large-nri", "", ""), Flag("value-spread", "", ""))) == 2
+    assert QUALITY_WARNINGS == frozenset(
+        {
+            "large-nri",
+            "value-spread",
+            "margin-flag",
+            "z-distress",
+            "f-score-low",
+            "reinvesting-in-decline",
+            "equity-raise",
+            "negative-fcf",
+            "heavy-capex",
+            "burn-cover-short",
+            "consensus-recovery",
+        }
+    )

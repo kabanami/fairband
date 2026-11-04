@@ -22,7 +22,7 @@ from fairband.engine.roic import (
 )
 from fairband.engine.route import CompanyInputs, refusal_result, reprice, value_company
 from fairband.engine.route_mature_growth import growth_at_price
-from fairband.engine.route_steps import Context, Valued
+from fairband.engine.route_steps import Context, Valued, expected
 from fairband.engine.types import (
     Flag,
     Provenance,
@@ -31,6 +31,7 @@ from fairband.engine.types import (
     result_to_json,
 )
 from fairband.policy import Policy
+from fairband.policy.settings import EMPTY_SETTINGS_HASH, apply_overlay
 
 TODAY = date(2026, 10, 31)
 # At a return equal to r, growth up to r adds no value and the value is year-1 earnings over r;
@@ -161,7 +162,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/0.7"
+    assert METHOD_VERSION == "fairband-mechanical/0.8"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -1224,3 +1225,56 @@ def test_reprice_a_refusal_moves_only_the_price(policy: Policy) -> None:
     assert p == replace(r, price=12.0, price_date=date(2026, 11, 2))
     with pytest.raises(ValueError, match="positive"):
         reprice(r, 0.0, date(2026, 11, 2), policy)
+
+
+def test_result_cites_the_settings_hash(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    r = value_company(mg_inputs, deciles, policy, TODAY)
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/0.8"
+    custom = apply_overlay(policy, {"required_return": 0.1})
+    valued = value_company(mg_inputs, deciles, custom, TODAY)
+    assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH
+    refused = value_company(replace(mg_inputs, price=None), deciles, custom, TODAY)
+    assert refused.refusal is not None and refused.settings_hash == custom.settings_hash
+    # a reprice does not revalue: the result keeps the hash it was valued under, whatever policy
+    # the caller passes
+    assert valued.price is not None
+    assert reprice(valued, valued.price, TODAY, policy).settings_hash == custom.settings_hash
+
+
+def test_expected_pads_the_rates_at_the_terminal_rate() -> None:
+    # route_steps.expected: two rates, a horizon of 4, padded with the terminal 3%
+    im = {"dividend_yield": 0.01, "net_buyback_yield": 0.0}
+    er = expected(100.0, 120.0, im, (0.1, 0.05), 4, 0.03)
+    assert er is not None
+    assert er["growth"] == pytest.approx((1.1 * 1.05 * 1.03 * 1.03) ** (1 / 4) - 1)
+    assert er["repricing"] == pytest.approx(math.log(1.2) / 4)
+    assert er["income"] == 0.01
+    # a horizon shorter than the rates reads only the first ones
+    short = expected(100.0, 120.0, im, (0.1, 0.05, 0.5), 2, 0.03)
+    assert short is not None and short["growth"] == pytest.approx((1.1 * 1.05) ** (1 / 2) - 1)
+
+
+def test_long_horizon_never_raises_on_a_short_runway(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # every runway 4 gives the Mature Growth path three rates; a horizon of 6 is padded, not refused
+    custom = apply_overlay(
+        policy,
+        {"repricing_horizon_years": 6, "runway_years": {"None": 4, "Narrow": 4, "Wide": 4}},
+    )
+    r = value_company(mg_inputs, deciles, custom, TODAY)
+    assert r.value is not None and r.price is not None and r.refusal is None
+    er = r.intermediates["expected_return"]
+    assert er["repricing"] == pytest.approx(math.log(r.value / r.price) / 6)
+
+
+def test_repricing_horizon_moves_the_expected_return(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    base = value_company(ms_inputs, deciles, policy, TODAY).intermediates["expected_return"]
+    five = value_company(
+        ms_inputs, deciles, apply_overlay(policy, {"repricing_horizon_years": 5}), TODAY
+    ).intermediates["expected_return"]
+    assert five["repricing"] == pytest.approx(base["repricing"] * 3 / 5)

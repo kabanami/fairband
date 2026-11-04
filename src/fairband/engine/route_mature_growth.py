@@ -251,7 +251,14 @@ def growth_at_price(
         },
         "multiples": multiples_at(price, im["eps"]),
         "growth_share": None if im["epv"] is None else growth_share(im["epv"], price),
-        "expected_return": expected(price, value, im, growth_rates(growth)),
+        "expected_return": expected(
+            price,
+            value,
+            im,
+            growth_rates(growth),
+            policy.repricing_horizon_years,
+            policy.terminal_growth,
+        ),
     }
 
 

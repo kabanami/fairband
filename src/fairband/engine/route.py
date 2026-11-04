@@ -16,15 +16,16 @@ reinvestment charge (which keeps the value-side intermediates). Mature Stable: n
 trailing earnings. Revenue growth and Decline: the refusals of their module docstrings, in their
 order. A refusal is a result with no value and a reason, never an exception.
 
-Every result of ``value_company`` is valid until the next earnings date when that is after the
-data date, else for the policy's fallback days. Its flags are the assembly's, the classifier's
-checks and the route's, the first of each code kept. Its intermediates hold ``price_facts``, the
-price columns of spec 6.3, on a refusal too (``None`` for a row without a price). ``reprice``
-moves a result to a new price from its intermediates alone, its price input with it; a refusal
-takes only the new price, except a revenue-growth row whose intermediates hold ``revenue_path``
-(refused for its target margin or its value), whose margin the price needs moves too, and a
-Start-up row, whose market cap moves with the price and whose requirement and ``below-net-cash``
-flag are rebuilt at it. ``refusal_result`` is the shape of every refusal.
+Every result of ``value_company`` cites the policy's version and its settings hash, and is valid
+until the next earnings date when that is after the data date, else for the policy's fallback
+days. Its flags are the assembly's, the classifier's checks and the route's, the first of each
+code kept. Its intermediates hold ``price_facts``, the price columns of spec 6.3, on a refusal
+too (``None`` for a row without a price). ``reprice`` moves a result to a new price from its
+intermediates alone, its price input with it; a refusal takes only the new price, except a
+revenue-growth row whose intermediates hold ``revenue_path`` (refused for its target margin or
+its value), whose margin the price needs moves too, and a Start-up row, whose market cap moves
+with the price and whose requirement and ``below-net-cash`` flag are rebuilt at it.
+``refusal_result`` is the shape of every refusal.
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
@@ -282,6 +283,7 @@ def refusal_result(
         refusal=reason,
         policy_version=policy.version,
         method_version=METHOD_VERSION,
+        settings_hash=policy.settings_hash,
         deciles_refresh_id=deciles_refresh_id,
     )
 
@@ -308,7 +310,9 @@ def reprice(
 
     A price that is not positive and finite raises ``ValueError``: the caller skips such a quote.
     The policy version is not checked: the caller passes the policy the result cites
-    (``result.policy_version``), since r, g_t, the runways and the ROIC sensitivity come from it.
+    (``result.policy_version`` and ``result.settings_hash``), since r, g_t, the runways, the ROIC
+    sensitivity and the repricing horizon come from it. The result keeps its own settings hash:
+    a reprice does not revalue.
     """
     if not _positive(price):
         raise ValueError(f"price {price} must be positive and finite")
@@ -398,6 +402,7 @@ def _valued(
         refusal=None,
         policy_version=policy.version,
         method_version=METHOD_VERSION,
+        settings_hash=policy.settings_hash,
         deciles_refresh_id=refresh_id,
     )
 

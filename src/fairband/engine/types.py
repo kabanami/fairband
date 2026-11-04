@@ -7,13 +7,17 @@ anywhere is refused, since RFC 8259 JSON has no such number.
 
 ``result_from_json`` also reads a snapshot valued under method 0.5, which carries ``stance5`` and
 ``stance3`` and no designation: it drops the two stance keys and reads ``None`` for
-``price_to_value`` and ``designation``.
+``price_to_value`` and ``designation``. A result valued before method 0.8 carries no
+``settings_hash``; it was valued under the policy file alone, so it reads the empty overlay's
+hash.
 """
 
 import json
 from dataclasses import dataclass, fields, is_dataclass
 from datetime import UTC, date, datetime
 from typing import Any, Literal
+
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 
 Tag = Literal["DATA", "RULE"]
 Kind = Literal["observed", "estimate", "rule"]
@@ -106,6 +110,7 @@ class ValuationResult:
     refusal: str | None
     policy_version: str
     method_version: str
+    settings_hash: str
     deciles_refresh_id: int | None
 
 
@@ -116,12 +121,14 @@ def result_to_json(r: ValuationResult) -> str:
 
 def result_from_json(s: str) -> ValuationResult:
     """The result ``result_to_json`` wrote, with its dates, tuples and nested types restored; a
-    0.5 snapshot's stance keys dropped and its missing designation ``None``."""
+    0.5 snapshot's stance keys dropped and its missing designation ``None``; a missing settings
+    hash the empty overlay's."""
     d = json.loads(s)
     d.pop("stance5", None)
     d.pop("stance3", None)
     d.setdefault("price_to_value", None)
     d.setdefault("designation", None)
+    d.setdefault("settings_hash", EMPTY_SETTINGS_HASH)
     return ValuationResult(
         **{
             **d,

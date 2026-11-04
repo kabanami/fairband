@@ -7,6 +7,8 @@ consensus steps and year 4's rate, the faded one when the fade applies and the b
 for Mature Stable the terminal growth each year. At H = 3 it is
 ((1 + g2)(1 + g3)(1 + g4))^(1/3) − 1. Repricing is ln(value ÷ price) ÷ H, the fair forward
 multiple against the current one on the same year-1 earnings. The total is the sum of the three.
+The routes pass H, the policy's ``repricing_horizon_years``, through ``route_steps.expected``,
+which pads the rates past the route's path at its terminal rate.
 """
 
 import math

@@ -17,6 +17,7 @@ from fairband.engine.types import (
     result_to_json,
 )
 from fairband.policy import load_policy
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.snapshots import (
     SnapshotRow,
     insert_snapshot,
@@ -69,6 +70,7 @@ def _result(symbol: str, value: float = 100.0) -> ValuationResult:
         refusal=None,
         policy_version="fairband-policy-v1",
         method_version=METHOD_VERSION,
+        settings_hash=EMPTY_SETTINGS_HASH,
         deciles_refresh_id=None,
     )
 
