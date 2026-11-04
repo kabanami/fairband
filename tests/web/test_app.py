@@ -691,6 +691,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/controls.js",
         "/static/watchlists.js",
         "/static/settings.js",
+        "/static/methodology.js",
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url
@@ -739,8 +740,9 @@ def test_page_opens_the_view_the_hash_names() -> None:
     """Spec 2026-11-04 6: the hash follows the view, none for the Screen, and names the view on
     load and when a link changes it; #methodology/<section-id> opens the Methodology view and
     keeps the section for its script to scroll to; a hash naming no view is the Screen. Each view
-    loads through FairbandPage.onShow as it opens, every panel fades while a refresh runs, and
-    FairbandPage.find puts a symbol in FIND with the filters cleared and opens the Screen."""
+    loads through FairbandPage.onShow as it opens, every panel but the Methodology view's fades
+    while a refresh runs, and FairbandPage.find puts a symbol in FIND with the filters cleared and
+    opens the Screen."""
     js = _static_file("controls.js")
     assert "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings'];" in js
     show = js[js.index("function show(tab, section) {") :]
@@ -758,9 +760,9 @@ def test_page_opens_the_view_the_hash_names() -> None:
     assert "document.addEventListener('DOMContentLoaded', fromHash);" in js
     assert "P.show = show;" in js and "P.onShow = {};" in js and "P.section = null;" in js
     assert "P.running = function () { return state.running !== null; };" in js
-    assert "VIEWS.forEach(function (id) { panels[id].classList.toggle(RECOMPUTING, alive); });" in (
-        js
-    )
+    # every panel but the Methodology view's, whose examples are figures as of a named date
+    assert "VIEWS.forEach(function (id) {\n" in js
+    assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);" in js
     app = _static_file("app.js")
     assert "find: find" in app  # on window.FairbandPage
     find = app[app.index("function find(symbol) {") :]

@@ -8,7 +8,9 @@ Package in `src/fairband/`; tests in `tests/`, mirroring the package.
 - Method as built: `docs/method.md`. The single statement of the classifier, the routes, the
   flags and the refusals the engine runs. Where it and any other document disagree, it
   describes what runs. Change it in the same commit as any change to the engine, the
-  classifier, the universe rule or a policy value.
+  classifier, the universe rule or a policy value. The Methodology page
+  (`src/fairband/web/static/methodology.html`) changes in the same commit, and a change of
+  method version re-reads its examples' figures.
 - Design: `docs/legacy/design.md`. The original design and the reasons behind the method;
   where `docs/method.md` and the specs are silent, it applies.
 - Spec: `docs/superpowers/specs/2026-10-31-mechanical-screen-design.md`. The mechanical

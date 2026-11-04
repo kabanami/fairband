@@ -283,7 +283,11 @@
 
   function render() {
     var alive = state.running !== null;
-    VIEWS.forEach(function (id) { panels[id].classList.toggle(RECOMPUTING, alive); });
+    /* Every panel's tables fade while a run is alive, but the Methodology view's: its examples
+       are figures as of a named date, not the running refresh's. */
+    VIEWS.forEach(function (id) {
+      if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);
+    });
     /* The stamp is the latest refresh's finish, whatever its status (the status line says how it
        ended). While a run is alive, or before any refresh finished, there is none: an absent
        stamp, never a placeholder. */

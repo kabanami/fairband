@@ -151,9 +151,10 @@
      helper, the local-time helper and the phase numbers; and the later views, find, the lists
      (null until they load), their reload, which settles once they are in, and watch, the marks'
      onWatch, which opens the popup; the loaded rows (null until they load), the chosen columns and
-     openRow, which opens a row's drawer. controls.js adds show, onShow, section and running; a
-     view drawn from the rows or the lists sets onRender, which runs after each draw of the
-     screen, so it draws again as they load and change. */
+     openRow, which opens a row's drawer. controls.js adds show, onShow, section and running, and
+     methodology.js adds methodologySection, which the drawer's link reads; a view drawn from the
+     rows or the lists sets onRender, which runs after each draw of the screen, so it draws again
+     as they load and change. */
   window.FairbandPage = {
     reload: load, api: api, getJson: getJson, localIso: localIso, PHASE_NUMBER: PHASE_NUMBER,
     find: find,
@@ -638,7 +639,8 @@
         enteredAt: localIso(body.snapshot.createdAt),
         validFrom: r.data_date, validUntil: r.valid_until, today: body.today
       })),
-      section('phase', 'Phase evidence', pairs(evidence(r.phase, phase))),
+      section('phase', 'Phase evidence', pairs(evidence(r.phase, phase)),
+        methodologyLink(r, phase)),
       growth ? revenueRoute(r) : null,
       /* A Decline row refused for a value at or below zero keeps its figures but has no route,
          and a Start-up row is always a refusal with its figures: each draws from the
@@ -760,6 +762,16 @@
         h('dt', { className: 'caption' }, row[0]),
         h('dd', { className: row[2] ? 'figure-sm' : 'body' }, row[1]));
     }));
+  }
+
+  /* Under the phase evidence, the link to the Methodology view's section on the row's route,
+     named by its phase (spec 2026-11-04 7.7). A row refused before its route has none. */
+  function methodologyLink(r, phase) {
+    var P = window.FairbandPage;
+    if (!r.route || !phase) return null;
+    return h('p', { className: 'caption app-more' }, h('a', {
+      className: 'app-link', href: '#methodology/' + P.methodologySection(r.route)
+    }, 'How Fairband values a ' + r.phase.phase + ' company'));
   }
 
   function evidence(p, phase) {

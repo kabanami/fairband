@@ -210,6 +210,61 @@
     .app-set__fields { justify-content: flex-start; }
     .app-set__range, .app-set__edit .app-set__error { text-align: left; }
   }
+  /* The Methodology view (spec 2026-11-04 7): prose at a measure of about 70 characters, its
+     headings in title and heading, its text in body, its tables in fb-table, their text cells
+     free to wrap and their header cells not sticky, since many tables share one scroller; a
+     table wider than the panel, at phone width, scrolls sideways on its own. The diagram takes
+     up to its own 960 units; under it, the plain list of the phases and their counts. Every live
+     figure is mono with a dotted rule under it, in accent when it is a setting the reader
+     changed. A link is in accent. The fragment's section ids are the hash's words, so one
+     repeats a panel's (settings): the panel rules on #settings are undone for that section. */
+  .app-prose { padding: var(--space-2) 0 var(--space-8); }
+  .app-prose > section > p, .app-prose > section > ol, .app-prose > section > ul,
+  .app-prose > section > h2, .app-prose > section > h3, .app-prose__wide,
+  .app-prose > p, .app-prose .app-toc { max-width: 70ch; }
+  .app-prose__wide { overflow-x: auto; }
+  #methodology #settings { padding: 0; overflow: visible; }
+  .app-prose h2 { margin: var(--space-8) 0 var(--space-3); }
+  .app-prose > section:first-child > h2 { margin-top: var(--space-2); }
+  .app-prose h3 { margin: var(--space-6) 0 var(--space-2); }
+  .app-prose p { margin: 0 0 var(--space-3); }
+  .app-prose ol, .app-prose ul { margin: 0 0 var(--space-3); padding-left: var(--space-6); }
+  .app-prose li + li { margin-top: var(--space-1); }
+  .app-prose a { color: var(--accent); }
+  .app-prose a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-prose .fb-table { width: 100%; margin: var(--space-2) 0 var(--space-3); }
+  .app-prose .fb-table thead th { position: static; }
+  .app-prose .fb-table td { white-space: normal; padding-top: var(--space-1);
+    padding-bottom: var(--space-1); }
+  .app-prose .fb-table td.fb-num { white-space: nowrap; }
+  .app-prose .fb-table caption { padding-bottom: var(--space-1); text-align: left;
+    color: var(--ink-muted); }
+  .app-prose__note { color: var(--caution); }
+  .app-prose__asof { color: var(--ink-muted); }
+  .app-prose__row { margin-top: var(--space-2); }
+  .app-prose span[data-policy], .app-prose span[data-count], .app-prose span[data-decile],
+  .app-prose span[data-policy-version] {
+    font-family: var(--font-mono); font-size: 0.92em;
+    text-decoration: underline dotted var(--ink-faint); text-underline-offset: 3px;
+  }
+  .app-prose .is-changed { color: var(--accent); text-decoration-color: var(--accent); }
+  .app-life { max-width: 960px; margin: var(--space-4) 0 var(--space-3); }
+  .app-life__svg { display: block; width: 100%; height: auto; }
+  .app-prose .app-life__list {
+    display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4);
+    margin: var(--space-2) 0 0; padding: 0; list-style: none; color: var(--ink-muted);
+  }
+  .app-life__list li + li { margin-top: 0; }
+  .app-toc ol { columns: 2 16rem; column-gap: var(--space-6); }
+  .app-prose .app-phases { padding-left: 0; list-style: none; }
+  .app-phases h3 { margin-top: var(--space-4); }
+  .app-phases p { margin-bottom: var(--space-1); }
+  .app-prose .app-flags { padding-left: 0; list-style: none; }
+  .app-flags li + li { margin-top: var(--space-3); }
+  .app-flags__what { display: block; margin-top: var(--space-1); }
+  .app-link { color: var(--accent); }
+  .app-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-more { margin: var(--space-2) 0 0; }
   /* A header that also drags keeps the bundle's grab cursor. */
   .fb-table thead th[tabindex]:not([draggable="true"]), .fb-table tbody tr[tabindex] {
     cursor: pointer;
@@ -292,5 +347,6 @@
 <script src="/static/controls.js"></script>
 <script src="/static/watchlists.js"></script>
 <script src="/static/settings.js"></script>
+<script src="/static/methodology.js"></script>
 </body>
 </html>

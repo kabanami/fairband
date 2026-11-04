@@ -1,0 +1,932 @@
+<!-- The Methodology view (spec 2026-11-04 7), written from docs/method.md for a reader who has not
+     read it. methodology.js inserts this fragment into the view's panel on its first open and fills
+     every span marked data-policy (from GET /api/policy), data-count (GET /api/groups?by=phase and
+     the screen's size) and data-decile (GET /api/deciles); each starts as an em dash. The worked
+     examples' figures are typed from the drawer of each company's snapshot valued under method 0.8
+     on 4 Nov 2026, and change with the next method version (CLAUDE.md, "Read first"). -->
+<article class="app-prose">
+<p class="caption app-prose__note" data-live-note hidden></p>
+
+<section id="what">
+<h2 class="title">What Fairband does</h2>
+<p class="body">Fairband gives a value a share to every company of a useful size, or says why it
+cannot. A useful size means a listing on <span data-policy="universe.exchanges">—</span> with a
+market value of at least <span data-policy="universe.cap_floor_usd">—</span>. Banks, insurers,
+property trusts and similar financial companies are left out, because they need methods of their
+own. The latest run holds <span data-count="universe">—</span> companies.</p>
+
+<figure class="app-life">
+<svg class="app-life__svg" viewBox="0 0 960 320" role="img" aria-labelledby="life-cycle-title">
+<title id="life-cycle-title">The life cycle of a company: revenue and earnings across the six phases</title>
+<desc>Time runs from left to right through six bands, one for each phase. Revenue rises from near
+zero through Start-up, Young Growth and High Growth, slows in Mature Growth, stays flat in Mature
+Stable and falls in Decline. Earnings sit below zero in Start-up and Young Growth, cross zero in
+High Growth, peak in Mature Stable and fall in Decline. Under each band are the phase's name and
+its count of companies in the latest run.</desc>
+<rect x="0" y="0" width="160" height="280" fill="var(--phase-1)" fill-opacity="0.18"/>
+<rect x="160" y="0" width="160" height="280" fill="var(--phase-2)" fill-opacity="0.18"/>
+<rect x="320" y="0" width="160" height="280" fill="var(--phase-3)" fill-opacity="0.18"/>
+<rect x="480" y="0" width="160" height="280" fill="var(--phase-4)" fill-opacity="0.18"/>
+<rect x="640" y="0" width="160" height="280" fill="var(--phase-5)" fill-opacity="0.18"/>
+<rect x="800" y="0" width="160" height="280" fill="var(--phase-6)" fill-opacity="0.18"/>
+<line x1="0" y1="200" x2="960" y2="200" stroke="var(--chart-grid)" stroke-width="2"/>
+<text class="caption" x="952" y="216" text-anchor="end" fill="var(--ink-muted)">zero</text>
+<path d="M 0 198 C 80 198, 140 194, 200 182 C 260 170, 300 140, 360 115 C 420 90, 470 68, 540 55 C 610 42, 680 40, 760 42 C 840 44, 900 70, 960 100" fill="none" stroke="var(--chart-1)" stroke-width="3"/>
+<path d="M 0 202 C 60 215, 120 240, 200 248 C 270 254, 320 236, 360 218 C 395 202, 420 195, 440 188 C 500 165, 570 125, 640 112 C 700 102, 760 102, 800 108 C 860 118, 910 145, 960 172" fill="none" stroke="var(--ink-muted)" stroke-width="3" stroke-dasharray="10 6"/>
+<text class="caption" x="548" y="40" fill="var(--chart-1)">Revenue</text>
+<text class="caption" x="548" y="150" fill="var(--ink-muted)">Earnings</text>
+<text class="caption" x="80" y="300" text-anchor="middle" fill="var(--ink)">Start-up</text>
+<text class="caption" x="240" y="300" text-anchor="middle" fill="var(--ink)">Young Growth</text>
+<text class="caption" x="400" y="300" text-anchor="middle" fill="var(--ink)">High Growth</text>
+<text class="caption" x="560" y="300" text-anchor="middle" fill="var(--ink)">Mature Growth</text>
+<text class="caption" x="720" y="300" text-anchor="middle" fill="var(--ink)">Mature Stable</text>
+<text class="caption" x="880" y="300" text-anchor="middle" fill="var(--ink)">Decline</text>
+<text data-count="Start-up" class="figure-sm" x="80" y="316" text-anchor="middle" fill="var(--ink-muted)">—</text>
+<text data-count="Young Growth" class="figure-sm" x="240" y="316" text-anchor="middle" fill="var(--ink-muted)">—</text>
+<text data-count="High Growth" class="figure-sm" x="400" y="316" text-anchor="middle" fill="var(--ink-muted)">—</text>
+<text data-count="Mature Growth" class="figure-sm" x="560" y="316" text-anchor="middle" fill="var(--ink-muted)">—</text>
+<text data-count="Mature Stable" class="figure-sm" x="720" y="316" text-anchor="middle" fill="var(--ink-muted)">—</text>
+<text data-count="Decline" class="figure-sm" x="880" y="316" text-anchor="middle" fill="var(--ink-muted)">—</text>
+</svg>
+<figcaption>
+<ul class="app-life__list caption">
+<li>Start-up: <span data-count="Start-up">—</span></li>
+<li>Young Growth: <span data-count="Young Growth">—</span></li>
+<li>High Growth: <span data-count="High Growth">—</span></li>
+<li>Mature Growth: <span data-count="Mature Growth">—</span></li>
+<li>Mature Stable: <span data-count="Mature Stable">—</span></li>
+<li>Decline: <span data-count="Decline">—</span></li>
+<li>Unclassified: <span data-count="unclassified">—</span></li>
+</ul>
+</figcaption>
+</figure>
+
+<nav class="app-toc" aria-label="Contents">
+<ol class="body">
+<li><a href="#methodology/what">What Fairband does</a></li>
+<li><a href="#methodology/life-cycle">The life cycle</a></li>
+<li><a href="#methodology/classifier">How a company gets its phase</a></li>
+<li><a href="#methodology/value">What a value means here</a></li>
+<li><a href="#methodology/mature-growth">Mature Growth</a></li>
+<li><a href="#methodology/mature-stable">Mature Stable</a></li>
+<li><a href="#methodology/growth">High Growth and Young Growth</a></li>
+<li><a href="#methodology/decline">Decline</a></li>
+<li><a href="#methodology/start-up">Start-up</a></li>
+<li><a href="#methodology/flags">The flags</a></li>
+<li><a href="#methodology/sources">Sources</a></li>
+<li><a href="#methodology/settings">Your settings</a></li>
+</ol>
+</nav>
+
+<p class="caption app-prose__asof">Each route section ends with a worked example on a real company.
+Figures as of the full refresh of <time datetime="2026-11-03">3 Nov 2026</time>, valued under
+method 0.8 on <time datetime="2026-11-04">4 Nov 2026</time>. Prices are the closes of
+<time datetime="2026-11-02">2 Nov 2026</time>. Each example links to today's row, whose figures
+may differ.</p>
+
+<p class="body">One engine values every company, with one route per phase (a route is the method
+for one stage of a company's life). The inputs change with the phase, because a young company and
+an old one show different facts. The arithmetic does not change. Every route sums the cash a
+company can give its owners, year by year. It discounts that cash at the hurdle rate (the yearly
+return you require), <span data-policy="required_return">—</span>.</p>
+<p class="body">A value here is what the business can earn, less what its growth costs, discounted
+at the hurdle rate. It is not a prediction of the price. A price can stay far from the value for
+years. The screen says where the price stands against the value; what to do about it is your
+decision.</p>
+</section>
+
+<section id="life-cycle">
+<h2 class="title">The life cycle</h2>
+<p class="body">Aswath Damodaran describes a company's life in six phases
+<a class="app-cite" href="#methodology/src-clc">[Damodaran 2024]</a>. Two figures place a company:
+how fast its revenue grows, and whether it makes an operating profit. In each phase, the market
+prices a different thing. Under each phase is its count of companies in the latest run.</p>
+<ol class="app-phases">
+<li>
+<h3 class="heading">Start-up</h3>
+<p class="body">An idea is becoming a business. Revenue is small or nil, and the company spends to
+build its product. What matters most: the size of the potential market and access to capital.</p>
+<p class="caption">Companies in the latest run: <span data-count="Start-up">—</span></p>
+</li>
+<li>
+<h3 class="heading">Young Growth</h3>
+<p class="body">The product has found buyers, and revenue grows fast. Losses go on, because
+building the business costs more than it brings in. What matters most: revenue growth and gross
+margins.</p>
+<p class="caption">Companies in the latest run: <span data-count="Young Growth">—</span></p>
+</li>
+<li>
+<h3 class="heading">High Growth</h3>
+<p class="body">Revenue still grows fast, and the business earns its first operating profit.
+Margins widen as it grows. What matters most: revenue growth and operating margins.</p>
+<p class="caption">Companies in the latest run: <span data-count="High Growth">—</span></p>
+</li>
+<li>
+<h3 class="heading">Mature Growth</h3>
+<p class="body">Growth slows but stays above the economy's. Profits are large, and earnings grow
+with revenue. What matters most: earnings growth.</p>
+<p class="caption">Companies in the latest run: <span data-count="Mature Growth">—</span></p>
+</li>
+<li>
+<h3 class="heading">Mature Stable</h3>
+<p class="body">Revenue grows with the economy, or a little more slowly. Profits are steady, and
+cash goes back to the owners. What matters most: the stability of earnings.</p>
+<p class="caption">Companies in the latest run: <span data-count="Mature Stable">—</span></p>
+</li>
+<li>
+<h3 class="heading">Decline</h3>
+<p class="body">Revenue shrinks year after year, and margins come under pressure. The company sells
+assets, returns cash, or both. What matters most: book value (what the company owns, as its
+balance sheet records it).</p>
+<p class="caption">Companies in the latest run: <span data-count="Decline">—</span></p>
+</li>
+</ol>
+<p class="body"><span data-count="unclassified">—</span> companies have no phase in the latest
+run. Their figures cannot support one, as the next section explains.</p>
+</section>
+
+<section id="classifier">
+<h2 class="title">How a company gets its phase</h2>
+<p class="body">The classifier (the part of the engine that assigns the phase) reads the
+fiscal-year statements. It looks at revenue growth first, then at the operating margin. These are
+Damodaran's two deciding figures
+<a class="app-cite" href="#methodology/src-clc">[Damodaran 2024]</a>.</p>
+
+<h3 class="heading">Revenue growth and the growth word</h3>
+<p class="body">Revenue growth is the compound yearly rate over the last three fiscal years. At each
+full refresh, Fairband ranks every company's growth against the universe (all the companies the
+screen covers). The ranking cuts the companies into ten groups of equal size, called deciles. Each
+pair of deciles has a growth word.</p>
+<div class="app-prose__wide">
+<table class="fb-table">
+<thead><tr><th class="label">Growth word</th><th class="label">Deciles</th><th class="label fb-num">Revenue growth</th></tr></thead>
+<tbody>
+<tr><td class="body">Very High</td><td class="body">9 and 10</td><td class="figure fb-num"><span data-decile="8">—</span> or more</td></tr>
+<tr><td class="body">High</td><td class="body">7 and 8</td><td class="figure fb-num"><span data-decile="6">—</span> to below <span data-decile="8">—</span></td></tr>
+<tr><td class="body">Moderate</td><td class="body">5 and 6</td><td class="figure fb-num"><span data-decile="4">—</span> to below <span data-decile="6">—</span></td></tr>
+<tr><td class="body">Low</td><td class="body">3 and 4</td><td class="figure fb-num"><span data-decile="2">—</span> to below <span data-decile="4">—</span></td></tr>
+<tr><td class="body">Close to zero or negative</td><td class="body">1 and 2</td><td class="figure fb-num">below <span data-decile="2">—</span></td></tr>
+</tbody>
+</table>
+</div>
+<p class="caption">The edges come from the latest full refresh, which ranked
+<span data-decile="n">—</span> companies.</p>
+
+<h3 class="heading">The margin and its direction</h3>
+<p class="body">The operating margin is operating income divided by revenue. The margin that decides
+is the newest one among the last five fiscal years. Its trend is the slope of the yearly margins
+over those five years. The slopes of the companies with a positive margin are ranked into deciles
+too. A rising slope in the top three deciles reads Rising. A falling slope in the bottom three
+reads Declining. Any other slope reads Stable.</p>
+
+<h3 class="heading">The rules</h3>
+<p class="body">The first rule that fits decides the phase.</p>
+<ol class="body">
+<li>A company with no revenue now, or none three years ago, is a Start-up.</li>
+<li>A company is in Decline when three things hold. Its growth word is Close to zero or negative.
+Its five-year revenue trend falls. Its revenue fell in at least three of its last four years.</li>
+<li>A company with no operating margin in its last five fiscal years stays unclassified.</li>
+<li>A company with a negative margin is High Growth when its margin trend rises, else Young Growth.
+The exception is an established company (one with a positive margin in at least three of its last
+five years). It goes on to rule 5 as if its margin were positive, with a warning that names the
+loss year.</li>
+<li>A company with a margin of zero or more is Mature Growth when its growth word is Very High,
+High or Moderate. It is Mature Stable when the word is Low or Close to zero or negative.</li>
+</ol>
+
+<h3 class="heading">Warnings that do not change the phase</h3>
+<p class="body">Some checks warn and never change the phase. They show in the drawer's phase
+evidence.</p>
+<ul class="body">
+<li>The growth word points to another phase than the margin rule gave a loss-making company.</li>
+<li>The margin direction points elsewhere: Rising to Mature Growth, Stable to Mature Stable,
+Declining to Decline.</li>
+<li>Free cash flow has the unusual sign for the phase, such as positive in Young Growth.</li>
+<li>Revenue fell over five years, but in too few years to make a Decline.</li>
+<li>An established company had a loss year and was placed as if it were profitable.</li>
+<li>The history is short, the margin is exactly zero, or the reporting currency changed.</li>
+</ul>
+
+<h3 class="heading">The cash-flow stage</h3>
+<p class="body">Beside the phase, the drawer shows the Dickinson stage (a life-cycle reading of the
+signs of three cash flows) <a class="app-cite" href="#methodology/src-dickinson">[Dickinson 2011]</a>.
+It reads the last fiscal year's operating, investing and financing cash flows. It never decides the
+phase and never warns.</p>
+<div class="app-prose__wide">
+<table class="fb-table">
+<thead><tr><th class="label">Operating</th><th class="label">Investing</th><th class="label">Financing</th><th class="label">Stage</th></tr></thead>
+<tbody>
+<tr><td class="body">cash out</td><td class="body">cash in</td><td class="body">either</td><td class="body">Decline</td></tr>
+<tr><td class="body">cash out</td><td class="body">cash out</td><td class="body">cash in</td><td class="body">Introduction</td></tr>
+<tr><td class="body">cash in</td><td class="body">cash out</td><td class="body">cash in</td><td class="body">Growth</td></tr>
+<tr><td class="body">cash in</td><td class="body">cash out</td><td class="body">cash out</td><td class="body">Mature</td></tr>
+<tr><td class="body" colspan="3">any other pattern</td><td class="body">Shake-out</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 class="heading">When a company stays unclassified</h3>
+<p class="body">A company stays unclassified when its figures cannot support a phase. That happens
+with fewer than two fiscal years, no positive revenue in the last year, no measurable growth, or no
+operating margin. An unclassified company gets no value; its row gives the reason instead.</p>
+
+<h3 class="heading">Worked example: Microsoft</h3>
+<div class="app-prose__wide">
+<table class="fb-table app-example">
+<caption class="caption">Microsoft (MSFT), phase evidence as of 3 Nov 2026</caption>
+<thead><tr><th class="label">Evidence</th><th class="label fb-num">Reading</th></tr></thead>
+<tbody>
+<tr><td class="body">Revenue growth, 3 years</td><td class="figure fb-num">16.1%</td></tr>
+<tr><td class="body">Growth word</td><td class="body fb-num">High · decile 8</td></tr>
+<tr><td class="body">Operating margin</td><td class="figure fb-num">46.8%</td></tr>
+<tr><td class="body">Margin trend</td><td class="body fb-num">1.3 points a year · Stable</td></tr>
+<tr><td class="body">Free cash flow</td><td class="body fb-num">positive</td></tr>
+<tr><td class="body">Dickinson stage</td><td class="body fb-num">Mature</td></tr>
+<tr><td class="body">Checks</td><td class="body fb-num">Margin direction disagrees</td></tr>
+<tr><td class="body">Phase</td><td class="body fb-num">Mature Growth</td></tr>
+</tbody>
+</table>
+</div>
+<p class="body">Microsoft's revenue grew 16.1% a year over its last three fiscal years. That ranks
+in decile 8, so its growth word is High. Its operating margin is 46.8%, above zero, so rule 5 gives
+Mature Growth. Its margin rose 1.3 points a year, which ranks as Stable. Stable points to Mature
+Stable, so the drawer warns that the direction disagrees. The phase stays Mature Growth, and the
+cash-flow stage, Mature, agrees.</p>
+<p class="body app-prose__row"><a href="#" data-find="MSFT">Open today's row</a></p>
+</section>
+
+<section id="value">
+<h2 class="title">What a value means here</h2>
+
+<h3 class="heading">The hurdle rate and terminal growth</h3>
+<p class="body">Every route discounts at the hurdle rate, <span data-policy="required_return">—</span>.
+Terminal growth (the rate a company is assumed to grow at forever, after the forecast years) is
+<span data-policy="terminal_growth">—</span>. Terminal growth must stay below the hurdle rate, or
+the value would have no limit.</p>
+
+<h3 class="heading">The reinvestment charge</h3>
+<p class="body">Growth costs money: a company must invest to grow. The reinvestment charge (the
+share of earnings held back to pay for growth) is growth divided by the return on new
+capital <a class="app-cite" href="#methodology/src-mckinsey">[McKinsey]</a>. What is left is cash
+the owners can take. Here is the arithmetic for one year.</p>
+<ol class="body app-prose__sum">
+<li>Earnings this year are 100.</li>
+<li>Next year's growth is 6.0%, and new capital earns 15.0%.</li>
+<li>The charge is 6.0% ÷ 15.0% = 40.0%, so the company reinvests 40 and keeps 60.</li>
+<li>The route discounts the 60 kept, not the 100 earned, at the hurdle rate of
+<span data-policy="required_return">—</span>.</li>
+</ol>
+<p class="body">When new capital earns only the hurdle rate, growth adds nothing to the value. When
+it earns more, growth adds value. A company with a lasting edge earns more for longer.</p>
+
+<h3 class="heading">The moat and the runway</h3>
+<p class="body">A moat is a lasting edge over competitors
+<a class="app-cite" href="#methodology/src-moat">[Mauboussin and Callahan 2016]</a>. Fairband reads
+it from the GuruFocus Moat Score. A score of
+<span data-policy="moat_wide_min">—</span> or more is Wide, <span data-policy="moat_narrow_min">—</span>
+or more is Narrow, and any lower score is None. The moat sets the runway (the years a company keeps
+growing faster than terminal growth). The runway is <span data-policy="runway_years.None">—</span>
+with no moat, <span data-policy="runway_years.Narrow">—</span> with a Narrow moat and
+<span data-policy="runway_years.Wide">—</span> with a Wide moat. The runway sets the forecast's
+length on the Mature Growth and Mature Stable routes.</p>
+<p class="body">After the runway, new capital earns the hurdle rate. A company with a Wide moat may
+earn up to <span data-policy="wide_terminal_roic_spread">—</span> more, so at most
+<span data-policy="wide_terminal_roic_cap">—</span>.</p>
+
+<h3 class="heading">The levels</h3>
+<p class="body">The margin of safety (the discount to the value you ask before you buy) also follows
+the moat. It is <span data-policy="margin_of_safety.None">—</span> with no moat,
+<span data-policy="margin_of_safety.Narrow">—</span> with a Narrow moat and
+<span data-policy="margin_of_safety.Wide">—</span> with a Wide moat. The buy level is the value
+less the margin of safety. The fair band runs from <span data-policy="fair_band.0">—</span> to
+<span data-policy="fair_band.1">—</span> the value. The trim level is
+<span data-policy="trim_multiple">—</span> the value.</p>
+
+<h3 class="heading">The designation</h3>
+<p class="body">The designation (the word for where the price stands against the value) reads the
+price divided by the value.</p>
+<div class="app-prose__wide">
+<table class="fb-table">
+<thead><tr><th class="label">Word</th><th class="label fb-num">Price ÷ value</th></tr></thead>
+<tbody>
+<tr><td class="body">Well below</td><td class="figure fb-num">below <span data-policy="designation_edges.0">—</span></td></tr>
+<tr><td class="body">Below</td><td class="figure fb-num">from <span data-policy="designation_edges.0">—</span> to below <span data-policy="designation_edges.1">—</span></td></tr>
+<tr><td class="body">Near</td><td class="figure fb-num">from <span data-policy="designation_edges.1">—</span> to <span data-policy="designation_edges.2">—</span></td></tr>
+<tr><td class="body">Above</td><td class="figure fb-num">above <span data-policy="designation_edges.2">—</span> to below <span data-policy="designation_edges.3">—</span></td></tr>
+<tr><td class="body">Well above</td><td class="figure fb-num"><span data-policy="designation_edges.3">—</span> or more</td></tr>
+</tbody>
+</table>
+</div>
+<p class="body">The first edge is one less the Narrow margin of safety. The other three are the fair
+band's two ends and the trim level's multiple. So the edges follow your settings. The word is about
+the price, never an action. A refusal and a Start-up row carry no word.</p>
+
+<h3 class="heading">The validity window</h3>
+<p class="body">A value holds until the company's next earnings date. Without a known date, it holds
+for <span data-policy="validity_fallback_days">—</span> after the statements were last read. It
+reads current until <span data-policy="aging_fraction">—</span> of that window has passed, then
+aging. It reads expired after the window ends, and keeps its figures until the next refresh.</p>
+
+<h3 class="heading">Refusals</h3>
+<p class="body">A refusal (a row with no value and a stated reason) is an answer, not an error. The
+row stays on the screen with its price and the figures the engine reached. These are the reasons,
+in words.</p>
+<ul class="body">
+<li>No ranking yet: no full refresh has ranked the universe.</li>
+<li>No phase: the company's figures cannot support one.</li>
+<li>A foreign filer: the company reports in another currency, or its shares trade as depositary
+receipts.</li>
+<li>Missing figures: no price, no share count, no trailing revenue or earnings, or no tax rate for
+the country.</li>
+<li>Incomplete forecasts: the analysts' forecasts miss part of the next twelve months, or turn
+negative.</li>
+<li>Too few peers: not enough mature companies to compare the company with.</li>
+<li>No positive value: the route's value comes to zero or less.</li>
+<li>Start-up: no value by design, as the Start-up section explains.</li>
+<li>A failed fetch: the data vendor did not deliver a required statement or the price.</li>
+</ul>
+</section>
+
+<section id="mature-growth">
+<h2 class="title">Mature Growth</h2>
+<p class="body">In Mature Growth, the market prices earnings growth
+<a class="app-cite" href="#methodology/src-clc">[Damodaran 2024]</a>. The route forecasts net
+income year by year. Each year pays for the growth of the year after.</p>
+
+<h3 class="heading">The steps</h3>
+<ol class="body">
+<li>Year 1 is the analysts' consensus (their average forecast) of earnings for the next twelve
+months.</li>
+<li>Years 2 and 3 grow at the consensus growth for the next two fiscal years.</li>
+<li>From year 4, growth fades in equal steps over <span data-policy="fade_years">—</span> to the
+belief (the long-run growth the engine assumes).</li>
+<li>The belief is the median ten-year earnings growth of companies with similar sales
+<a class="app-cite" href="#methodology/src-base-rate">[Base Rate Book]</a>. It adds
+<span data-policy="inflation_addition">—</span> for inflation.</li>
+<li>The belief holds to the end of the runway.</li>
+<li>Each year's earnings pay the reinvestment charge at the runway return (the company's own return
+on new capital, at least the hurdle rate).</li>
+<li>After the runway, earnings grow at terminal growth, charged at the terminal return (the hurdle
+rate, or more for a Wide moat).</li>
+<li>Each year's cash and the terminal value are discounted at the hurdle rate and summed. The sum
+divided by the diluted share count is the value a share.</li>
+</ol>
+<p class="body">The runway return is the return on the capital added over five years. When that
+measure is unreliable, it is the average return of the last three years.</p>
+
+<h3 class="heading">What the price needs</h3>
+<p class="body">The implied growth is the belief at which the value equals today's price. Set it
+beside the belief. A price that needs far more growth than similar companies achieve asks a lot. One
+that needs less leaves room for error.</p>
+<p class="body">The drawer also shows the value at runways of
+<span data-policy="runway_years.None">—</span>, <span data-policy="runway_years.Narrow">—</span>
+and <span data-policy="runway_years.Wide">—</span>. It shows the value at returns of
+<span data-policy="roic_sensitivity.0">—</span> and <span data-policy="roic_sensitivity.1">—</span>
+too. A wide spread means the value depends heavily on those choices.</p>
+
+<h3 class="heading">Flags on this route</h3>
+<p class="body">A consensus year with fewer than <span data-policy="analyst_min">—</span> analysts
+behind it gets a note. A year whose growth exceeds its return gets a note, and pays out nothing.
+A value that moves by <span data-policy="value_spread_flag">—</span> or more across the runways or
+returns gets a warning. A runway of <span data-policy="runway_years.Wide">—</span> with growth of
+<span data-policy="long_runway_growth_flag">—</span> or more gets a note.</p>
+
+<h3 class="heading">Worked example: Microsoft</h3>
+<div class="app-prose__wide">
+<table class="fb-table app-example">
+<caption class="caption">Microsoft (MSFT), Mature Growth, as of 3 Nov 2026</caption>
+<thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
+<tbody>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$507.12</td></tr>
+<tr><td class="body">Net income, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$154.6 billion</td></tr>
+<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.6%, 23.2%</td></tr>
+<tr><td class="body">Belief: sales above $50 billion, 3.3% plus 2.0%</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">5.3%</td></tr>
+<tr><td class="body">Moat, from a score of 9</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
+<tr><td class="body">Runway</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">20 years</td></tr>
+<tr><td class="body">Runway return, five-year marginal</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.4%</td></tr>
+<tr><td class="body">Terminal return</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
+<tr><td class="body">Hurdle rate</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">9.0%</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$516</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">0.98 · Near</td></tr>
+<tr><td class="body">Implied growth</td><td></td><td class="figure fb-num">5.1%</td></tr>
+</tbody>
+</table>
+</div>
+<p class="body">Analysts expect Microsoft to earn $154.6 billion over the next twelve months. They
+see earnings growing 20.6% and then 23.2% in the next two fiscal years. The engine fades that
+growth to the belief of 5.3% and holds it for a 20-year runway. Each year it holds back earnings at
+Microsoft's own 20.4% return on new capital. The value is $516 a share against a price of $507.12,
+so the word is Near. The price needs a belief of 5.1%, close to what the engine assumes.</p>
+<p class="body app-prose__row"><a href="#" data-find="MSFT">Open today's row</a></p>
+</section>
+
+<section id="mature-stable">
+<h2 class="title">Mature Stable</h2>
+<p class="body">In Mature Stable, the market prices the stability of earnings
+<a class="app-cite" href="#methodology/src-clc">[Damodaran 2024]</a>. The route starts from today's
+earnings and grows them slowly.</p>
+<ol class="body">
+<li>Normalized earnings (trailing earnings with one-off items removed) are the starting
+point.</li>
+<li>When the trailing margin stands far above its history, earnings are scaled down to the
+ten-year median margin.</li>
+<li>Earnings grow at terminal growth, <span data-policy="terminal_growth">—</span>, in every
+year.</li>
+<li>Through the runway, the reinvestment charge uses the runway return. After it, the charge uses
+the terminal return.</li>
+<li>The cash, discounted at the hurdle rate and divided by the shares, is the value a share.</li>
+</ol>
+<p class="body">EPV (earnings power value: earnings divided by the hurdle rate, the value with no
+growth) stands beside the value. A company whose new capital earns more than the hurdle rate is
+worth more than its EPV.</p>
+<p class="body">The drawer also shows what the Mature Growth route would give, as a cross-check. The
+cross-check never sets the levels or the word.</p>
+
+<h3 class="heading">Worked example: Coca-Cola</h3>
+<div class="app-prose__wide">
+<table class="fb-table app-example">
+<caption class="caption">Coca-Cola (KO), Mature Stable, as of 3 Nov 2026</caption>
+<thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
+<tbody>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$95.83</td></tr>
+<tr><td class="body">Trailing net income</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$14.6 billion</td></tr>
+<tr><td class="body">Normalized earnings</td><td></td><td class="figure fb-num">$15.2 billion</td></tr>
+<tr><td class="body">Growth in every year</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">3.0%</td></tr>
+<tr><td class="body">Moat, from a score of 10</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
+<tr><td class="body">Runway</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">20 years</td></tr>
+<tr><td class="body">Runway return, three-year average</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">30.5%</td></tr>
+<tr><td class="body">Terminal return</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
+<tr><td class="body">EPV a share</td><td></td><td class="figure fb-num">$39</td></tr>
+<tr><td class="body">Mature Growth cross-check</td><td></td><td class="figure fb-num">$63</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$50</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">1.90 · Well above</td></tr>
+</tbody>
+</table>
+</div>
+<p class="body">Coca-Cola earned $15.2 billion over the last twelve months, once one-off items are
+removed. The engine grows that at 3.0% a year. It charges the growth at Coca-Cola's own 30.5%
+return through a 20-year runway, then at 13.0%. The value is $50 a share against a price of
+$95.83, so the word is Well above. The Mature Growth route gives $63; it would need a belief of
+10.4% to reach the price.</p>
+<p class="body app-prose__row"><a href="#" data-find="KO">Open today's row</a></p>
+</section>
+
+<section id="growth">
+<h2 class="title">High Growth and Young Growth</h2>
+<p class="body">In High Growth, the market prices revenue growth and operating margins. In Young
+Growth, it prices revenue growth and gross margins
+<a class="app-cite" href="#methodology/src-clc">[Damodaran 2024]</a>. Earnings here are small or
+negative, so the route forecasts revenue and margins instead
+<a class="app-cite" href="#methodology/src-template">[Damodaran templates]</a>.</p>
+
+<h3 class="heading">The revenue path</h3>
+<ol class="body">
+<li>Year 1 is the consensus revenue for the next twelve months.</li>
+<li>Years 2 and 3 grow at the consensus growth for the next two fiscal years.</li>
+<li>The year-3 rate, the held rate, goes on until the high-growth period of
+<span data-policy="high_growth_years">—</span> ends.</li>
+<li>The held rate is capped at the 90th percentile of five-year sales growth for companies of
+similar size <a class="app-cite" href="#methodology/src-base-rate">[Base Rate Book]</a>.</li>
+<li>Growth then fades in equal steps over <span data-policy="fade_years">—</span> to terminal
+growth.</li>
+</ol>
+
+<h3 class="heading">The margin and the peers</h3>
+<p class="body">The operating margin moves in a straight line from today's to the target margin (the
+margin a mature company of the same kind earns). It reaches the target after
+<span data-policy="margin_convergence_year">—</span> and keeps it. The target is the median
+ten-year margin of the mature peers (the company's peers that the classifier puts in a mature
+phase). The peers come from the data vendor's peer list. At least
+<span data-policy="peer_min">—</span> peers need <span data-policy="peer_margin_min_years">—</span>
+of margins each. With too few, the route takes the largest
+<span data-policy="industry_peer_max">—</span> mature companies of the company's own industry.</p>
+
+<h3 class="heading">Reinvestment, tax and cash</h3>
+<p class="body">Sales-to-capital (the revenue a dollar of new capital buys) sets what growth costs.
+Each year, the company invests next year's extra revenue divided by sales-to-capital. Fairband uses
+the company's own five-year measure when it is reliable, else the peers' median. Operating profit
+is taxed at the country's statutory rate, after any losses earlier in the forecast
+<a class="app-cite" href="#methodology/src-oecd">[OECD]</a>. Free cash flow is the profit after tax
+less the reinvestment.</p>
+<p class="body">After the last forecast year, a terminal value grows at terminal growth, charged at
+the terminal return. The terminal return is the hurdle rate. A company with a Wide moat may earn
+more on new capital, up to <span data-policy="wide_terminal_roic_cap">—</span>. The cash and the
+terminal value, discounted at the hurdle rate, give the firm value. Cash is added, debt is taken
+off, and the result is divided by the shares.</p>
+
+<h3 class="heading">What the price needs</h3>
+<p class="body">The margin the price needs is the target margin at which the value equals today's
+price. Set it beside the peers' margins. A price that needs a margin above every peer's asks a lot.
+Fairband looks for it between <span data-policy="implied_margin_bounds.0">—</span> and
+<span data-policy="implied_margin_bounds.1">—</span>. The drawer also shows the growth the price
+needs in the held years.</p>
+
+<h3 class="heading">Flags on this route</h3>
+<p class="body">A held rate cut by the cap gets a note. Peers taken from the industry get a note. A
+return on new capital above the peers' median return gets a note. A value that moves by
+<span data-policy="value_spread_flag">—</span> or more across the peers' margins gets a
+warning.</p>
+
+<h3 class="heading">Young Growth</h3>
+<p class="body">Young Growth uses the same route and gives the same value on the same inputs.
+Damodaran also charges a young company for the chance that it fails
+<a class="app-cite" href="#methodology/src-young">[Damodaran 2009b]</a>. No survival table fits a
+listed company worth more than <span data-policy="universe.cap_floor_usd">—</span>, so Fairband
+leaves that chance out. The value is then the going-concern value (the value if the company
+survives), and the drawer says so.</p>
+
+<h3 class="heading">Worked example: CrowdStrike</h3>
+<div class="app-prose__wide">
+<table class="fb-table app-example">
+<caption class="caption">CrowdStrike (CRWD), High Growth, as of 3 Nov 2026</caption>
+<thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
+<tbody>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$241.81</td></tr>
+<tr><td class="body">Trailing revenue</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$5.4 billion</td></tr>
+<tr><td class="body">Revenue, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$6.7 billion</td></tr>
+<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">22.3%, 16.7%</td></tr>
+<tr><td class="body">Cap on the held rate</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">20.0%</td></tr>
+<tr><td class="body">Target margin, 5 mature peers</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">22.8%</td></tr>
+<tr><td class="body">Sales-to-capital, own five-year measure</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">8.74</td></tr>
+<tr><td class="body">Terminal return, Wide moat</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
+<tr><td class="body">Trailing operating margin</td><td></td><td class="figure fb-num">−2.2%</td></tr>
+<tr><td class="body">Firm value</td><td></td><td class="figure fb-num">$24.3 billion</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$28</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">8.73 · Well above</td></tr>
+<tr><td class="body">Growth the price needs, held years</td><td></td><td class="figure fb-num">104.6%</td></tr>
+<tr><td class="body">Margin the price needs</td><td></td><td class="body fb-num">none up to 100.0%</td></tr>
+</tbody>
+</table>
+</div>
+<p class="body">Analysts expect CrowdStrike's revenue to grow from $5.4 billion to $6.7 billion over
+the next twelve months. They see 22.3% and then 16.7% in the next two fiscal years. The engine
+holds 16.7%, under the 20.0% cap, then fades it to 3.0%. The margin climbs from −2.2% to the
+peers' 22.8% by year 10. The value is $28 a share against a price of $241.81, so the word is Well
+above. The price would need 104.6% growth a year in the held years.</p>
+<p class="body app-prose__row"><a href="#" data-find="CRWD">Open today's row</a></p>
+
+<h3 class="heading">Worked example: Roku</h3>
+<div class="app-prose__wide">
+<table class="fb-table app-example">
+<caption class="caption">Roku (ROKU), Young Growth, as of 3 Nov 2026</caption>
+<thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
+<tbody>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$155.52</td></tr>
+<tr><td class="body">Revenue, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$6.2 billion</td></tr>
+<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">14.0%, 7.8%</td></tr>
+<tr><td class="body">Target margin, 10 Entertainment peers</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">11.5%</td></tr>
+<tr><td class="body">Sales-to-capital, peers' median</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">1.20</td></tr>
+<tr><td class="body">Failure probability</td><td></td><td class="body fb-num">unavailable</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$49</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">3.17 · Well above</td></tr>
+<tr><td class="body">Margin the price needs</td><td></td><td class="figure fb-num">38.0%</td></tr>
+</tbody>
+</table>
+</div>
+<p class="body">Roku's own peer list held too few mature companies, so ten Entertainment companies
+set its target margin. Its margin moves from 7.8% today to their median of 11.5%. The value is $49
+a share against a price of $155.52, Well above. The price needs a margin of 38.0%, above the highest
+peer's 23.4%. The failure probability is unavailable, so the value assumes Roku survives.</p>
+<p class="body app-prose__row"><a href="#" data-find="ROKU">Open today's row</a></p>
+</section>
+
+<section id="decline">
+<h2 class="title">Decline</h2>
+<p class="body">In Decline, the market prices book value
+<a class="app-cite" href="#methodology/src-clc">[Damodaran 2024]</a>. The route values a run-off (a
+business that shrinks year by year and frees capital as it shrinks)
+<a class="app-cite" href="#methodology/src-distress">[Damodaran 2009a]</a>.</p>
+
+<h3 class="heading">The run-off</h3>
+<ol class="body">
+<li>Years 1 to 3 follow the consensus revenue, as on the growth route.</li>
+<li>From year 4, revenue shrinks at the decline rate: the five-year revenue trend, as a share of
+last year's revenue. The decline rate never takes away more than half the revenue in a year.</li>
+<li>One operating margin holds in every year: the median of the last five fiscal margins.</li>
+<li>Each fall in revenue frees the capital that revenue needed. A sale recovers
+<span data-policy="runoff_recovery">—</span> of it.</li>
+<li>After <span data-policy="runoff_years">—</span>, a terminal value keeps shrinking at the decline
+rate.</li>
+<li>The cash, discounted at the hurdle rate, plus cash on hand less debt, is the going-concern
+value.</li>
+</ol>
+
+<h3 class="heading">The floor and distress</h3>
+<p class="body">The liquidation floor is the net current asset value (current assets less all
+liabilities) a share <a class="app-cite" href="#methodology/src-graham">[Graham]</a>. When it is
+above zero and above the going-concern value, it replaces that value. Interest cover is operating
+profit divided by interest expense. It gives a synthetic rating (the bond rating such cover usually
+earns) <a class="app-cite" href="#methodology/src-ratings">[Damodaran ratings]</a>. Each rating
+carries a ten-year chance of default <a class="app-cite" href="#methodology/src-distress">[Damodaran
+2009a]</a>. In distress, a forced sale recovers <span data-policy="distress_sale_fraction">—</span>
+of the firm value. The value weights the going-concern value and the forced-sale value by that
+chance.</p>
+
+<h3 class="heading">What the price needs</h3>
+<p class="body">The implied decline rate is the decline rate at which the value equals today's price.
+Set it beside the decline rate the trend gives. A price that needs revenue to shrink more slowly
+than it has asks for a turnaround.</p>
+
+<h3 class="heading">Three distress signals</h3>
+<p class="body">Three signals warn and never change the value.</p>
+<ul class="body">
+<li>Altman's Z″ (a score of bankruptcy risk from four balance-sheet ratios) below
+<span data-policy="z_distress">—</span> is in the distress zone
+<a class="app-cite" href="#methodology/src-altman">[Altman 2000]</a>. Above
+<span data-policy="z_safe">—</span>, it is in the safe zone.</li>
+<li>Piotroski's F (nine tests of financial health, one point each) at
+<span data-policy="f_score_low">—</span> or below is in the weakest group
+<a class="app-cite" href="#methodology/src-piotroski">[Piotroski 2000]</a>.</li>
+<li>Capital spending above depreciation while revenue shrinks is reinvesting in decline.</li>
+</ul>
+
+<h3 class="heading">Worked example: 3M</h3>
+<div class="app-prose__wide">
+<table class="fb-table app-example">
+<caption class="caption">3M (MMM), Decline, as of 3 Nov 2026</caption>
+<thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
+<tbody>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$178.36</td></tr>
+<tr><td class="body">Trailing revenue</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$25.2 billion</td></tr>
+<tr><td class="body">Revenue, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$26.3 billion</td></tr>
+<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">4.1%, 5.2%</td></tr>
+<tr><td class="body">Sales-to-capital, own newest year</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">1.54</td></tr>
+<tr><td class="body">Recovery of freed capital</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">60.0%</td></tr>
+<tr><td class="body">Rating, from an interest cover of 10.6</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">AAA</td></tr>
+<tr><td class="body">Chance of default</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">0.1%</td></tr>
+<tr><td class="body">Decline rate from year 4</td><td></td><td class="figure fb-num">−12.2%</td></tr>
+<tr><td class="body">Margin, median of five years</td><td></td><td class="figure fb-num">18.3%</td></tr>
+<tr><td class="body">Net current asset value a share</td><td></td><td class="figure fb-num">−$32</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$35</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">5.12 · Well above</td></tr>
+<tr><td class="body">Implied decline rate</td><td></td><td class="body fb-num">none</td></tr>
+</tbody>
+</table>
+</div>
+<p class="body">3M's revenue fell 10.0% a year over three years, so it is in Decline. Analysts expect
+revenue to grow for the next three years, so the drawer warns of a consensus recovery. From year 4
+the run-off shrinks revenue 12.2% a year, as the five-year trend does. The margin holds at 18.3%,
+and an AAA rating makes distress unlikely. The value is $35 a share against a price of $178.36,
+Well above. No decline rate reaches the price: even revenue that stops shrinking falls short of
+it.</p>
+<p class="body app-prose__row"><a href="#" data-find="MMM">Open today's row</a></p>
+</section>
+
+<section id="start-up">
+<h2 class="title">Start-up</h2>
+<p class="body">In a Start-up, the market prices the potential market and access to capital
+<a class="app-cite" href="#methodology/src-clc">[Damodaran 2024]</a>. Fairband gives a Start-up no
+value. The inputs that would make one, the market's size and the company's share of it, are
+judgments. The engine holds no judgments, so the row is always a refusal that keeps its
+figures.</p>
+
+<h3 class="heading">What the price needs</h3>
+<p class="body">Instead, the route states the revenue in year ten that makes the company worth its
+price today <a class="app-cite" href="#methodology/src-young">[Damodaran 2009b]</a>. Revenue rises
+in a straight line from today's to that figure. Operating profit rises in a straight line to the
+mature peers' median margin on it. The peers, tax, reinvestment and the terminal value work as on
+the growth route. The price here is the market value plus debt, less cash.</p>
+
+<h3 class="heading">Cash</h3>
+<p class="body">The cash floor (net cash a share) is what the balance sheet alone gives an owner. The
+burn cover (the years cash lasts at the trailing cash burn) says how long the company can go without
+new money. A cover under <span data-policy="burn_cover_flag_years">—</span> gets a warning.</p>
+
+<h3 class="heading">Worked example: Revolution Medicines</h3>
+<div class="app-prose__wide">
+<table class="fb-table app-example">
+<caption class="caption">Revolution Medicines (RVMD), Start-up, as of 3 Nov 2026</caption>
+<thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
+<tbody>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$188.17</td></tr>
+<tr><td class="body">Market value</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$40.3 billion</td></tr>
+<tr><td class="body">Trailing revenue</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$0</td></tr>
+<tr><td class="body">Trailing operating income</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">−$1.6 billion</td></tr>
+<tr><td class="body">Target margin, 10 Biotechnology peers</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">19.8%</td></tr>
+<tr><td class="body">Sales-to-capital, peers' median</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">2.81</td></tr>
+<tr><td class="body">Price less net cash</td><td></td><td class="figure fb-num">$38.4 billion</td></tr>
+<tr><td class="body">Revenue the price needs in year 10</td><td></td><td class="figure fb-num">$45.7 billion</td></tr>
+<tr><td class="body">Cash floor a share</td><td></td><td class="figure fb-num">$9</td></tr>
+<tr><td class="body">Burn cover</td><td></td><td class="figure fb-num">1.6 years</td></tr>
+</tbody>
+</table>
+</div>
+<p class="body">Revolution Medicines has no revenue yet and lost $1.6 billion of operating income
+over the last year. At $188.17 a share, the market values the business at $38.4 billion net of cash
+and debt. To be worth that, it needs $45.7 billion of revenue in year 10 at its peers' 19.8%
+margin. Its cash covers 1.6 years of the current burn, so the drawer warns. Net cash is $9 a share,
+a floor far under the price.</p>
+<p class="body app-prose__row"><a href="#" data-find="RVMD">Open today's row</a></p>
+</section>
+
+<section id="flags">
+<h2 class="title">The flags</h2>
+<p class="body">A flag warns and never changes a value, a level or the word. Each has a short word
+for the screen and one sentence in the drawer. Eleven flags are quality warnings (signs that the
+value may be wrong because the business or its figures are unusual). The Flags column counts them,
+and the Clean filter keeps the rows with none. Every other flag is a note: shown, never
+counted.</p>
+
+<h3 class="heading">Quality warnings</h3>
+<ul class="body app-flags">
+<li><span class="label">Large non-recurring item</span> <code class="fb-tag figure-sm">large-nri</code>
+<span class="body app-flags__what">Reported earnings differ from earnings without one-off items by
+<span data-policy="nri_flag_share">—</span> or more.</span></li>
+<li><span class="label">Value spread</span> <code class="fb-tag figure-sm">value-spread</code>
+<span class="body app-flags__what">The value moves by <span data-policy="value_spread_flag">—</span>
+or more across the runways, returns or peer margins tested.</span></li>
+<li><span class="label">Margin above history</span> <code class="fb-tag figure-sm">margin-flag</code>
+<span class="body app-flags__what">The trailing margin is <span data-policy="margin_flag_ratio">—</span>
+its ten-year median or more. It also fires on a margin above the ten-year high by
+<span data-policy="margin_flag_above_high">—</span> of the high. It needs
+<span data-policy="margin_flag_min_years">—</span> of margins. Its word reads Newly profitable or
+Possible cycle peak where that fits better.</span></li>
+<li><span class="label">Z″ distress</span> <code class="fb-tag figure-sm">z-distress</code>
+<span class="body app-flags__what">A Decline company's Altman Z″ is below
+<span data-policy="z_distress">—</span>.</span></li>
+<li><span class="label">Low F-score</span> <code class="fb-tag figure-sm">f-score-low</code>
+<span class="body app-flags__what">A Decline company's Piotroski F is
+<span data-policy="f_score_low">—</span> or lower.</span></li>
+<li><span class="label">Reinvesting in decline</span> <code class="fb-tag figure-sm">reinvesting-in-decline</code>
+<span class="body app-flags__what">A Decline company spends more on capital than its depreciation
+while revenue shrinks.</span></li>
+<li><span class="label">Equity raise</span> <code class="fb-tag figure-sm">equity-raise</code>
+<span class="body app-flags__what">Shares issued over the last year come to
+<span data-policy="equity_raise_share">—</span> of the market value or more.</span></li>
+<li><span class="label">Negative free cash flow</span> <code class="fb-tag figure-sm">negative-fcf</code>
+<span class="body app-flags__what">Operating cash flow less capital spending was below zero over the
+last year.</span></li>
+<li><span class="label">Heavy capex</span> <code class="fb-tag figure-sm">heavy-capex</code>
+<span class="body app-flags__what">Capital spending over the last year was above
+<span data-policy="capex_ocf_flag">—</span> of operating cash flow.</span></li>
+<li><span class="label">Cash cover short</span> <code class="fb-tag figure-sm">burn-cover-short</code>
+<span class="body app-flags__what">A Start-up's cash covers less than
+<span data-policy="burn_cover_flag_years">—</span> of its burn.</span></li>
+<li><span class="label">Consensus recovery</span> <code class="fb-tag figure-sm">consensus-recovery</code>
+<span class="body app-flags__what">A Decline company's consensus has revenue growing while the
+run-off shrinks it.</span></li>
+</ul>
+
+<h3 class="heading" id="flags-notes">Notes</h3>
+<p class="body">Notes say how a figure was reached. They show in the Flags column and the drawer,
+and never count.</p>
+<ul class="body app-flags">
+<li><span class="label">Growth word disagrees</span> <code class="fb-tag figure-sm">growth-word-disagrees</code>
+<span class="body app-flags__what">The growth word points to another phase than the margin rule
+gave.</span></li>
+<li><span class="label">Loss year</span> <code class="fb-tag figure-sm">loss-year</code>
+<span class="body app-flags__what">An established company had a loss year and was placed as if it
+were profitable.</span></li>
+<li><span class="label">Revenue falling</span> <code class="fb-tag figure-sm">revenue-falling</code>
+<span class="body app-flags__what">Revenue fell over five years, but in too few years to make a
+Decline.</span></li>
+<li><span class="label">Margin direction disagrees</span> <code class="fb-tag figure-sm">margin-direction-disagrees</code>
+<span class="body app-flags__what">The margin's direction points to another phase.</span></li>
+<li><span class="label">Free cash flow disagrees</span> <code class="fb-tag figure-sm">fcf-sign</code>
+<span class="body app-flags__what">Free cash flow has the unusual sign for the phase.</span></li>
+<li><span class="label">Short history</span> <code class="fb-tag figure-sm">short-history</code>
+<span class="body app-flags__what">Fewer than five fiscal years are on file, or growth spans fewer
+than three.</span></li>
+<li><span class="label">Zero margin</span> <code class="fb-tag figure-sm">margin-zero</code>
+<span class="body app-flags__what">The deciding margin is exactly zero, and counts as
+positive.</span></li>
+<li><span class="label">Currency change</span> <code class="fb-tag figure-sm">currency-change</code>
+<span class="body app-flags__what">The reporting currency changed between fiscal years.</span></li>
+<li><span class="label">Currency unknown</span> <code class="fb-tag figure-sm">currency-unknown</code>
+<span class="body app-flags__what">No statement gives the reporting currency, so the company is
+treated as a foreign filer.</span></li>
+<li><span class="label">Tax rate carried forward</span> <code class="fb-tag figure-sm">tax-carried-forward</code>
+<span class="body app-flags__what">A fiscal year newer than the tax table takes the table's newest
+rate.</span></li>
+<li><span class="label">Leases not on balance sheet</span> <code class="fb-tag figure-sm">leases-not-on-balance-sheet</code>
+<span class="body app-flags__what">A balance sheet from before the current lease rules shows no
+lease assets.</span></li>
+<li><span class="label">Trailing on fiscal year</span> <code class="fb-tag figure-sm">trailing-on-fiscal-year</code>
+<span class="body app-flags__what">The last four quarters on file do not follow each other, so the
+last fiscal year stands in.</span></li>
+<li><span class="label">SBC basis unknown</span> <code class="fb-tag figure-sm">sbc-basis-unknown</code>
+<span class="body app-flags__what">Fairband could not tell whether the consensus counts stock
+compensation as a cost.</span></li>
+<li><span class="label">Path on EPS</span> <code class="fb-tag figure-sm">path-on-eps</code>
+<span class="body app-flags__what">Years 2 and 3 grow at the consensus earnings a share, not net
+income.</span></li>
+<li><span class="label">Few analysts</span> <code class="fb-tag figure-sm">few-analysts</code>
+<span class="body app-flags__what">A consensus year has fewer than
+<span data-policy="analyst_min">—</span> analysts behind it.</span></li>
+<li><span class="label">Path held</span> <code class="fb-tag figure-sm">path-held</code>
+<span class="body app-flags__what">A consensus year is missing, so it holds the rate of the year
+before.</span></li>
+<li><span class="label">Path on trend</span> <code class="fb-tag figure-sm">path-on-trend</code>
+<span class="body app-flags__what">A Decline company without a usable consensus shrinks at the
+decline rate from year 1.</span></li>
+<li><span class="label">Decline rate floored</span> <code class="fb-tag figure-sm">decline-rate-floored</code>
+<span class="body app-flags__what">The trend takes away more than half the revenue a year, so the
+run-off uses that floor.</span></li>
+<li><span class="label">Above base rate</span> <code class="fb-tag figure-sm">consensus-above-base-rate</code>
+<span class="body app-flags__what">The year-3 consensus growth is above the cap, so the held years
+take the cap.</span></li>
+<li><span class="label">Industry peers</span> <code class="fb-tag figure-sm">peers-from-industry</code>
+<span class="body app-flags__what">Too few listed peers were mature, so the peers come from the
+company's industry.</span></li>
+<li><span class="label">ROIC unavailable</span> <code class="fb-tag figure-sm">roic-unavailable</code>
+<span class="body app-flags__what">Fewer than five years of return on capital are on file.</span></li>
+<li><span class="label">ROIC on fewer years</span> <code class="fb-tag figure-sm">roic-on-n-years</code>
+<span class="body app-flags__what">Five to nine years of return on capital are on file, not
+ten.</span></li>
+<li><span class="label">Ten-year ROIC unavailable</span> <code class="fb-tag figure-sm">ten-year-roic-unavailable</code>
+<span class="body app-flags__what">The ten years' capital sums to zero or less.</span></li>
+<li><span class="label">Line not presented</span> <code class="fb-tag figure-sm">line-not-presented:…</code>
+<span class="body app-flags__what">A balance-sheet line is missing and counts as nil.</span></li>
+<li><span class="label">Charge zeroed</span> <code class="fb-tag figure-sm">charge-zeroed</code>
+<span class="body app-flags__what">Measured capital is zero or less, so the runway years carry no
+charge.</span></li>
+<li><span class="label">Return floored</span> <code class="fb-tag figure-sm">return-floored</code>
+<span class="body app-flags__what">The company's return on new capital was below the hurdle rate,
+so the hurdle rate replaced it.</span></li>
+<li><span class="label">Growth above return</span> <code class="fb-tag figure-sm">growth-above-return</code>
+<span class="body app-flags__what">A year's growth exceeds its return, so that year pays out
+nothing.</span></li>
+<li><span class="label">Tax losses unknown</span> <code class="fb-tag figure-sm">tax-loss-history-unknown</code>
+<span class="body app-flags__what">The forecast has a loss year, and past tax losses are not on
+file.</span></li>
+<li><span class="label">Return above peers</span> <code class="fb-tag figure-sm">return-above-peers</code>
+<span class="body app-flags__what">The return on new capital at the target margin is above the
+peers' median return.</span></li>
+<li><span class="label">Failure not charged</span> <code class="fb-tag figure-sm">failure-not-charged</code>
+<span class="body app-flags__what">A Young Growth value assumes the company survives.</span></li>
+<li><span class="label">NCAV floor</span> <code class="fb-tag figure-sm">ncav-floor</code>
+<span class="body app-flags__what">The net current asset value is above the run-off's value, and
+sets the floor.</span></li>
+<li><span class="label">Distress not charged</span> <code class="fb-tag figure-sm">distress-not-charged</code>
+<span class="body app-flags__what">No interest expense or no debt line is on file, so no chance of
+default applies.</span></li>
+<li><span class="label">Below net cash</span> <code class="fb-tag figure-sm">below-net-cash</code>
+<span class="body app-flags__what">A Start-up's market value is at or below its net cash.</span></li>
+<li><span class="label">Long runway, high growth</span> <code class="fb-tag figure-sm">long-runway-high-growth</code>
+<span class="body app-flags__what">A runway of <span data-policy="runway_years.Wide">—</span>
+carries a belief or implied growth of <span data-policy="long_runway_growth_flag">—</span> or
+more.</span></li>
+</ul>
+</section>
+
+<section id="sources">
+<h2 class="title">Sources</h2>
+<p class="body">Each bracketed source on this page links to its entry here.</p>
+<ul class="body app-sources">
+<li id="src-clc">Damodaran, <cite>The Corporate Life Cycle</cite> (2024): the
+<a href="https://pages.stern.nyu.edu/~adamodar/New_Home_Page/CLC.htm" target="_blank" rel="noreferrer">book's page</a>
+and the slides for chapters
+<a href="https://pages.stern.nyu.edu/~adamodar/pdfiles/CLC/slides/Ch2.pdf" target="_blank" rel="noreferrer">2</a>,
+<a href="https://pages.stern.nyu.edu/~adamodar/pdfiles/CLC/slides/Ch3.pdf" target="_blank" rel="noreferrer">3</a>
+and <a href="https://pages.stern.nyu.edu/~adamodar/pdfiles/CLC/slides/Ch9.pdf" target="_blank" rel="noreferrer">9</a>.
+The six phases, the two deciding figures and what the market prices in each.</li>
+<li id="src-template">Damodaran, the
+<a href="https://pages.stern.nyu.edu/~adamodar/New_Home_Page/spreadsh.htm" target="_blank" rel="noreferrer">valuation templates and spreadsheets</a>.
+The ten-year forecast, the fade, sales-to-capital and the margin moving to a target.</li>
+<li id="src-distress">Damodaran, “Valuing Distressed and Declining Companies” (2009),
+<a href="https://pages.stern.nyu.edu/~adamodar/pdfiles/papers/NewDistress.pdf" target="_blank" rel="noreferrer">the paper</a>.
+The run-off, the share of freed capital recovered, the chance of default by rating and the
+forced-sale value.</li>
+<li id="src-young">Damodaran, “Valuing Young, Start-up and Growth Companies” (2009),
+<a href="https://pages.stern.nyu.edu/~adamodar/pdfiles/papers/younggrowth.pdf" target="_blank" rel="noreferrer">the paper</a>.
+The chance of failure and the revenue a Start-up's price needs.</li>
+<li id="src-ratings">Damodaran, the
+<a href="https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ratings.html" target="_blank" rel="noreferrer">ratings table</a>
+for large non-financial companies. The synthetic rating from interest cover.</li>
+<li id="src-dickinson">Dickinson, “Cash Flow Patterns as a Proxy for Firm Life Cycle”,
+<cite>The Accounting Review</cite> 86(6), 2011,
+<a href="https://doi.org/10.2308/accr-10130" target="_blank" rel="noreferrer">the article</a>.
+The cash-flow stage.</li>
+<li id="src-altman">Altman, “Predicting Financial Distress of Companies: Revisiting the Z-Score and
+ZETA Models” (2000), NYU Stern. The Z″ score and its zones.</li>
+<li id="src-piotroski">Piotroski, “Value Investing: The Use of Historical Financial Statement
+Information to Separate Winners from Losers”, <cite>Journal of Accounting Research</cite> 38, 2000,
+<a href="https://doi.org/10.2307/2672906" target="_blank" rel="noreferrer">the article</a>. The F
+score.</li>
+<li id="src-moat">Mauboussin and Callahan, “Measuring the Moat” (Credit Suisse, 2016). What a moat
+is and where it comes from.</li>
+<li id="src-base-rate">Mauboussin, Callahan and Majd, <cite>The Base Rate Book</cite> (Credit Suisse,
+2016). The growth belief and the cap on the held rate. It is cited by name only, because the book
+is not redistributed.</li>
+<li id="src-mckinsey">McKinsey, <cite>Valuation: Measuring and Managing the Value of
+Companies</cite>,
+<a href="https://www.wiley.com/en-us/Valuation%3A+Measuring+and+Managing+the+Value+of+Companies%2C+8th+Edition-p-9781394302871" target="_blank" rel="noreferrer">the publisher's page</a>.
+The value-driver formula behind the reinvestment charge.</li>
+<li id="src-graham">Graham, <cite>Security Analysis</cite>. The net current asset value.</li>
+<li id="src-oecd">OECD, Corporate Tax Statistics, the combined statutory rates, at
+<a href="https://www.oecd.org/" target="_blank" rel="noreferrer">oecd.org</a>. The tax rate by
+country and year.</li>
+<li id="src-method">Fairband's own method, docs/method.md in the repository. It states every rule on
+this page in full.</li>
+</ul>
+</section>
+
+<section id="settings">
+<h2 class="title">Your settings</h2>
+<p class="body">A figure with a dotted line under it is live: it comes from the policy's defaults
+or from your settings. A live figure you changed reads in the accent colour. Change them on the
+<a href="#settings">Settings</a> view. The worked examples keep their figures as of their date.
+The policy file is <span data-policy-version>—</span>.</p>
+<p class="body" data-policy-changed hidden></p>
+</section>
+</article>
