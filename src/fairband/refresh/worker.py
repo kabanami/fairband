@@ -5,14 +5,17 @@ worker's progress sink) and runs it on a daemon thread named ``fairband-refresh`
 refresh id once the run's record exists: ``Refresh.run`` hands it to ``on_started`` right after
 ``create_refresh``, and ``start`` waits for that, or for what the run raised before it, which it
 raises again: ``RefreshRunning`` while another process runs a refresh, ``ValueError`` for a
-request the run refuses. What the run raises after it started is kept, scrubbed of the keys, as
-``last_error`` and logged; the record carries the same message.
+request the run refuses. What ``make_refresh`` raises (the server's: stored settings the policy
+no longer accepts) ``start`` raises as it comes. What the run raises after it started is kept,
+scrubbed of the keys, as ``last_error`` and logged; the record carries the same message.
 
 One refresh at a time: while the previous run's thread is alive, ``start`` raises
 ``RefreshRunning`` with its id at once. Once that thread has ended, ``start`` waits up to
 ``wait_s`` for the fetches the run gave up (``Refresh.fetches_in_flight``, after an exception in
 its fetch stage) to end, so no given-up fetch writes while the next run works; else it raises
-``RefreshRunning`` with the previous run's id.
+``RefreshRunning`` with the previous run's id. Then it closes the previous run's clients
+(``Refresh.close``): each run holds clients of its own, built for it by ``make_refresh``, until
+the next start. A run refused before its record closes its own at once.
 
 ``status`` is the latest ``Progress`` while the run's thread is alive, else ``None``; the record
 says how the last run ended. The run writes its progress to the record as it goes
@@ -63,6 +66,7 @@ class RefreshWorker:
         with self._lock:
             if self._run is not None:
                 self._wait_for(self._run)
+                self._run.refresh.close()
             cancel = threading.Event()
             refresh = self._make_refresh(cancel, self._record)
             first: queue.Queue[int | BaseException] = queue.Queue()
@@ -76,6 +80,7 @@ class RefreshWorker:
             outcome = first.get()
             if isinstance(outcome, BaseException):
                 thread.join()
+                refresh.close()
                 raise outcome
             self._run = _Run(outcome, refresh, thread, cancel)
             return outcome

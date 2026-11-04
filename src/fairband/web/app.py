@@ -5,7 +5,8 @@ refresh routes (spec 6.10).
 and closes it before it answers. The static files are the package's ``web/static`` directory:
 the page, its script, the design system copy and the vendored React, so the page renders with
 no network. Nothing here reads a key or calls a vendor: the refresh routes hand the work to the
-``RefreshWorker``, whose thread calls the vendors; without one (no FMP key) they answer 503.
+``RefreshWorker``, whose thread calls the vendors; without one they answer 503. ``serve`` always
+passes one; without an FMP key its runs refuse every kind but a revalue, and a refusal is a 400.
 FastAPI's own documentation routes are off; they would load their scripts from a CDN.
 
 The screen's rows are the latest universe's admitted companies, each with its latest snapshot,

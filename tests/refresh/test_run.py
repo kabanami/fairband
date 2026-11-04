@@ -8,6 +8,7 @@ one.
 
 import json
 import logging
+import re
 import signal
 import sqlite3
 import threading
@@ -310,7 +311,7 @@ def test_run_refuses_before_any_work(env: Env) -> None:
         env.clock,
         threading.Event(),
     )
-    with pytest.raises(MissingKey, match="no fmp key"):
+    with pytest.raises(ValueError, match="no fmp key"):
         no_fmp.run("scoped", ["ACME"])
     refresh = env.refresh()
     for symbols in ([], None):
@@ -322,6 +323,22 @@ def test_run_refuses_before_any_work(env: Env) -> None:
         refresh.run("price", ["ACME"])
     assert env.last().id == env.universe_id
     assert env.router.calls == Counter() and env.progress == []
+
+
+def test_refresh_without_fmp_refuses_every_kind_but_revalue(env: Env) -> None:
+    """Without an FMP client (the server's worker without a key), a kind that fetches is a
+    ``ValueError`` naming the keys file, before its record exists; a revalue runs."""
+    refresh = Refresh(
+        env.connect, None, None, env.policy, env.tax, env.clock, threading.Event(), None, ()
+    )
+    for kind, symbols in (("full", None), ("price", None), ("scoped", ["ACME"])):
+        with pytest.raises(ValueError, match=re.escape(str(MissingKey("fmp")))):
+            refresh.run(kind, symbols)
+    assert env.last().id == env.universe_id
+    refresh_id = refresh.run("revalue")
+    row = env.last()
+    assert (row.id, row.kind, row.status) == (env.universe_id + 1, "revalue", "done")
+    assert refresh_id == row.id and env.router.calls == Counter()
 
 
 def test_an_exception_outside_a_symbol_fails_the_run(env: Env) -> None:

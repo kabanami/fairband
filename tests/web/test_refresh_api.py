@@ -4,6 +4,7 @@
 stays in its fetch stage while the test looks."""
 
 import logging
+import sqlite3
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -31,6 +32,7 @@ from fairband.refresh.run import Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.db import connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh, items, latest_refresh
+from fairband.store.settings import write_settings
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.vendors import fmp as fmp_api
 from fairband.vendors.fmp import Fmp
@@ -336,6 +338,149 @@ def test_api_without_worker_503(client_without_worker: TestClient) -> None:
     assert client.post("/api/refresh/cancel", headers=POST).json() == {"cancelled": True}
 
 
+def test_make_refresh_reads_the_overlay_per_run(db_path: Path) -> None:
+    """The server's worker builds each run under the effective policy read as it starts: a
+    setting saved between two runs is the second's. Without keys it builds no client."""
+    tax = load_tax_table()
+
+    def conn_factory() -> sqlite3.Connection:
+        return connect(db_path)
+
+    first = cli.make_refresh(conn_factory, None, tax, threading.Event(), lambda p: None)
+    with closing(connect(db_path)) as conn:
+        saved = write_settings(conn, {"required_return": 0.1}, None, NOW)
+    second = cli.make_refresh(conn_factory, None, tax, threading.Event(), lambda p: None)
+    assert first._policy.settings_hash == EMPTY_SETTINGS_HASH
+    assert second._policy.settings_hash == saved.settings_hash != EMPTY_SETTINGS_HASH
+    assert (first._policy.required_return, second._policy.required_return) == (0.09, 0.1)
+    assert (second._fmp, second._gf, second._secrets) == (None, None, ())
+    second.close()  # no client to close
+
+
+def test_make_refresh_builds_the_clients_from_the_effective_policy(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With an FMP key each run builds clients of its own, from the policy it runs under (the
+    pace is a setting), and ``Refresh.close`` closes them, once."""
+    closed: list[str] = []
+
+    class Client:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def close(self) -> None:
+            closed.append(self.name)
+
+    built: list[tuple[Keys, Policy]] = []
+
+    def clients(keys: Keys, policy: Policy) -> tuple[Any, Any, tuple[str, ...]]:
+        built.append((keys, policy))
+        return Client("fmp"), Client("gf"), (KEY,)
+
+    monkeypatch.setattr(cli, "build_clients", clients)
+    with closing(connect(db_path)) as conn:
+        saved = write_settings(conn, {"required_return": 0.1}, None, NOW)
+    keys = Keys(fmp=KEY, gurufocus=None)
+    refresh = cli.make_refresh(
+        lambda: connect(db_path), keys, load_tax_table(), threading.Event(), lambda p: None
+    )
+    [(given, policy)] = built
+    assert given is keys and policy == refresh._policy
+    assert policy.settings_hash == saved.settings_hash
+    assert refresh._secrets == (KEY,) and closed == []
+    refresh.close()
+    refresh.close()
+    assert closed == ["fmp", "gf"]
+
+
+def test_start_full_without_a_key_is_400_not_503(
+    tmp_path: Path, db_path: Path, policy: Policy
+) -> None:
+    """The server builds its worker without an FMP key too: a refresh that fetches is a 400 that
+    names the keys file, before any record; a revalue runs, keyless."""
+    tax = load_tax_table()
+    worker = RefreshWorker(
+        lambda cancel, on_progress: cli.make_refresh(
+            lambda: connect(db_path), None, tax, cancel, on_progress
+        )
+    )
+    with make_client(tmp_path, db_path, policy, worker) as client:
+        response = start(client, kind="full")
+        assert (response.status_code, response.json()) == (400, {"detail": str(MissingKey("fmp"))})
+        assert response.json()["detail"].startswith("no fmp key")
+        with closing(connect(db_path)) as conn:
+            assert latest_refresh(conn) is None
+        response = start(client, kind="revalue")
+        assert (response.status_code, response.json()) == (200, {"refreshId": 1})
+        join_runs()
+        body = current(client)
+    last = body["last"]
+    assert (last["kind"], last["status"], body["error"]) == ("revalue", "done", None)
+
+
+def test_start_under_settings_the_policy_no_longer_knows_is_400(
+    tmp_path: Path, db_path: Path, policy: Policy
+) -> None:
+    """A stored setting the policy file does not know: the worker cannot build the run's policy,
+    so the start is a 400 naming the setting, before any record, and the server stays up."""
+    tax = load_tax_table()
+    with closing(connect(db_path)) as conn, conn:
+        conn.execute(
+            "INSERT INTO settings (name, value, changed_at) VALUES ('gone', '1', ?)",
+            (NOW.isoformat(),),
+        )
+    worker = RefreshWorker(
+        lambda cancel, on_progress: cli.make_refresh(
+            lambda: connect(db_path), None, tax, cancel, on_progress
+        )
+    )
+    with make_client(tmp_path, db_path, policy, worker) as client:
+        response = start(client, kind="revalue")
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail.startswith("settings: gone: ") and "reset it on the Settings page" in detail
+        assert current(client) == {"refresh": None, "last": None, "error": None}
+
+
+def test_start_closes_the_previous_runs_clients(db_path: Path, policy: Policy) -> None:
+    """Each run holds its own clients until the next start closes them, once the run's thread
+    has ended, and closes them once; a run refused at its start closes its own at once."""
+    tax = load_tax_table()
+    closed: list[int] = []
+    made: list[Refresh] = []
+
+    def make_refresh(cancel: threading.Event, on_progress: Callable[[Progress], None]) -> Refresh:
+        number = len(made) + 1
+        refresh = Refresh(
+            lambda: connect(db_path),
+            None,
+            None,
+            policy,
+            tax,
+            lambda: NOW,
+            cancel,
+            on_progress,
+            (),
+            lambda: closed.append(number),
+        )
+        made.append(refresh)
+        return refresh
+
+    worker = RefreshWorker(make_refresh)
+    assert worker.start("revalue") == 1
+    join_runs()
+    assert closed == []
+    with pytest.raises(ValueError, match="no fmp key"):
+        worker.start("full")  # the first run's clients close; the second, refused, closes its own
+    assert closed == [1, 2]
+    assert worker.start("revalue") == 2  # the third Refresh; the first's are closed already
+    join_runs()
+    assert closed == [1, 2]
+    assert worker.start("revalue") == 3
+    join_runs()
+    assert (closed, len(made)) == ([1, 2, 3], 4)
+
+
 def test_post_without_the_request_header_403(client_with_worker: TestClient, db_path: Path) -> None:
     """D11: a cross-site form cannot send a custom header, nor a cross-origin script without a
     CORS preflight the app never answers."""
@@ -401,23 +546,29 @@ def serve_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[Any]:
     return served
 
 
-def test_serve_without_an_fmp_key_has_no_worker(
+def test_serve_without_an_fmp_key_runs_a_revalue_only(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The screen is served all the same; the keys file's mode is checked as the command does."""
+    """The screen is served all the same, with a worker that refuses a full refresh (400) and
+    builds no client; the keys file's mode is checked as the command does."""
     served = serve_env(monkeypatch, tmp_path)
     keys_file = tmp_path / "config" / "fairband" / "keys.toml"
     keys_file.parent.mkdir(parents=True)
     keys_file.write_text('[keys]\ngurufocus = "fakegfhalf:fakegfhalf2"\n')
     keys_file.chmod(0o644)
+
+    def no_clients(*args: Any) -> Any:
+        raise AssertionError("no FMP key: the worker builds no vendor client")
+
+    monkeypatch.setattr(cli, "build_clients", no_clients)
     with caplog.at_level(logging.WARNING):
         assert cli.main(["serve"]) == 0
     assert [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING] == [
         f"{keys_file} has mode 0644: other users can read it; chmod 600 it",
-        f"{MissingKey('fmp')}; the screen is served without refreshes",
+        f"{MissingKey('fmp')}; the server runs a revalue only",
     ]
     response, body = served
-    assert response.status_code == 503
+    assert (response.status_code, response.json()) == (400, {"detail": str(MissingKey("fmp"))})
     assert body == {"refresh": None, "last": None, "error": None}
     assert "fakegfhalf" not in caplog.text
 

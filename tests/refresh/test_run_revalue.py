@@ -21,8 +21,10 @@ from synthetic import SIX_LINES
 
 from fairband import __main__ as cli
 from fairband.engine import METHOD_VERSION
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.refresh.run import Refresh
 from fairband.store.companies import CompanyRow, insert_companies
+from fairband.store.settings import effective_policy, write_settings
 from fairband.store.snapshots import SnapshotRow
 
 NO_TARGET = "no target margin: 0 mature peers"
@@ -168,6 +170,41 @@ def test_revalue_without_an_fmp_client(env_valued: Env) -> None:
     assert env.last().status == "done"
 
 
+def test_revalue_runs_under_the_overlay(env_valued: Env) -> None:
+    """A hurdle rate of 10% saved over the file's 9%: the revalue runs under the effective policy,
+    so the record and every new snapshot carry the overlay's hash, and a Mature Growth value
+    moves."""
+    env = env_valued
+    before = snapshots_of(env)
+    with closing(env.connect()) as conn:
+        write_settings(conn, {"required_return": 0.1}, None, env.clock())
+        policy = effective_policy(conn)
+    assert policy.required_return == 0.1
+    assert policy.settings_hash != EMPTY_SETTINGS_HASH == before["ACME"].settings_hash
+    refresh = Refresh(
+        env.connect,
+        None,
+        None,
+        policy,
+        env.tax,
+        env.clock,
+        threading.Event(),
+        env.progress.append,
+        (),
+    )
+    refresh_id = refresh.run("revalue")
+    row = env.last()
+    assert (row.id, row.status, row.settings_hash) == (refresh_id, "done", policy.settings_hash)
+    after = snapshots_of(env)
+    for symbol in ADMITTED:
+        assert after[symbol].refresh_id == refresh_id
+        assert after[symbol].settings_hash == policy.settings_hash
+        assert after[symbol].result.settings_hash == policy.settings_hash
+    assert before["ACME"].phase == after["ACME"].phase == "Mature Growth"
+    assert before["ACME"].value is not None and after["ACME"].value is not None
+    assert after["ACME"].value < before["ACME"].value  # a higher hurdle, a lower value
+
+
 def test_revalue_takes_no_symbols(env_valued: Env) -> None:
     with pytest.raises(ValueError, match="takes no symbols"):
         env_valued.refresh().run("revalue", ["ACME"])
@@ -214,3 +251,46 @@ def test_cli_revalue_prints_calibration(
     ]
     assert env.last().kind == "revalue"
     assert env.router.calls == Counter()
+
+
+def test_cli_revalue_runs_under_the_overlay(
+    env_valued: Env,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The command reads the effective policy from the database when it starts: the settings the
+    page saved are the run's."""
+    env = env_valued
+    monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setattr(cli, "utcnow", env.clock)
+    with closing(env.connect()) as conn:
+        saved = write_settings(conn, {"required_return": 0.1}, None, env.clock())
+    assert saved.settings_hash != EMPTY_SETTINGS_HASH
+    assert cli.main(["refresh", "--kind", "revalue"]) == 0
+    assert "refresh 2: done" in capsys.readouterr().out.splitlines()
+    assert (env.last().id, env.last().settings_hash) == (2, saved.settings_hash)
+    assert {env.snapshot(symbol).settings_hash for symbol in ADMITTED} == {saved.settings_hash}
+
+
+def test_cli_refuses_settings_the_policy_no_longer_knows(
+    env_valued: Env,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A stored setting the policy file does not know is one line naming it, before any record,
+    never a traceback."""
+    env = env_valued
+    monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    with closing(env.connect()) as conn, conn:
+        conn.execute(
+            "INSERT INTO settings (name, value, changed_at) VALUES ('gone', '1', ?)",
+            (env.clock().isoformat(),),
+        )
+    assert cli.main(["refresh", "--kind", "revalue"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("settings: gone: ") and "reset it on the Settings page" in err
+    assert env.last().id == 1

@@ -25,10 +25,14 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   the price needs, and a Start-up refusal, which moves its market cap with the price (the one it
   read × the new price ÷ the price it was read at), recomputes its requirement at it and
   re-reads ``below-net-cash``. A snapshot valued under another policy version is ``failed``,
-  "policy changed: run a full refresh": its levels come from that policy. One valued under
+  "policy changed: run a revalue": its levels come from that policy. One valued under other
+  settings (its settings hash unlike the run's, spec 2026-11-04 8.4) is ``failed``, "settings
+  changed: run a revalue": its value and levels come from those settings. One valued under
   another method version is ``failed``, "method changed: run a revalue": its value is the old
-  method's, and a rebuild at the price would carry it. An exception (``reprice`` refuses a price
-  that is not positive and finite) is ``failed``, "reprice failed: <class>: <message>".
+  method's, and a rebuild at the price would carry it. The checks run in that order, so a
+  snapshot unlike the run on several counts reads the first. A revalue writes the current
+  versions and hash. An exception (``reprice`` refuses a price that is not positive and finite)
+  is ``failed``, "reprice failed: <class>: <message>".
 - ``done``: the totals, and the calibration ``{"total", "repriced", "failed", "skipped"}`` saved
   with the record.
 
@@ -73,7 +77,8 @@ type Report = Callable[[str, int, int, int], None]  # stage, done, failed, remai
 QUOTE_BATCH = 100  # symbols a batch-quote call asks for
 NO_SNAPSHOT = "no snapshot to reprice"
 NO_QUOTE = "no quote price"
-POLICY_CHANGED = "policy changed: run a full refresh"
+POLICY_CHANGED = "policy changed: run a revalue"
+SETTINGS_CHANGED = "settings changed: run a revalue"
 METHOD_CHANGED = "method changed: run a revalue"
 RATE_LIMITED = "quote incomplete: rate limited"
 _NO_BATCH = (HTTPStatus.PAYMENT_REQUIRED, HTTPStatus.FORBIDDEN)  # the plan serves no batch-quote
@@ -255,6 +260,8 @@ class PriceRefresh:
             reason = None
             if result.policy_version != self._policy.version:
                 reason = POLICY_CHANGED
+            elif result.settings_hash != self._policy.settings_hash:
+                reason = SETTINGS_CHANGED
             elif result.method_version != METHOD_VERSION:
                 reason = METHOD_CHANGED
             else:

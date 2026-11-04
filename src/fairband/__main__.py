@@ -27,12 +27,13 @@ from fairband.config import (
 )
 from fairband.engine.types import PHASE_NUMBER
 from fairband.policy import load_policy
-from fairband.policy.tax import load_tax_table
+from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.clients import build_clients
 from fairband.refresh.run import KINDS, UNCLASSIFIED, Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.db import connect, migrate
 from fairband.store.refreshes import RefreshRunning, latest_refresh, mark_interrupted
+from fairband.store.settings import effective_policy
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
 from fairband.vendors.http import VendorError
 from fairband.web.app import create_app
@@ -86,12 +87,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def make_refresh(
+    conn_factory: Callable[[], sqlite3.Connection],
+    keys: Keys | None,
+    tax: TaxTable,
+    cancel: threading.Event,
+    on_progress: Callable[[Progress], None],
+) -> Refresh:
+    """The server worker's next run: under the effective policy read now (the file and the stored
+    overlay, spec 2026-11-04 8.8), so a setting saved since the last run is this one's, with
+    vendor clients of its own built from that policy (the pace is a setting). Without an FMP key
+    it builds no client and the run refuses every kind but a revalue. ``Refresh.close`` closes
+    the clients. Raises ``ValueError`` when the stored settings no longer apply to the file."""
+    with closing(conn_factory()) as conn:
+        policy = effective_policy(conn)
+    if keys is not None and keys.fmp is not None:
+        fmp, gf, secrets = build_clients(keys, policy)
+    else:
+        fmp, gf, secrets = None, None, ()
+
+    def close() -> None:
+        if fmp is not None:
+            fmp.close()
+        if gf is not None:
+            gf.close()
+
+    return Refresh(conn_factory, fmp, gf, policy, tax, utcnow, cancel, on_progress, secrets, close)
+
+
 def _serve(args: argparse.Namespace) -> int:
-    """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. With
-    an FMP key the server runs refreshes on its worker, whose thread alone calls the vendors;
-    without one it serves the screen and refuses refreshes. When it starts, the app marks every
-    ``running`` refresh interrupted; with no process lock in this cut, that includes one a command
-    in another process is running at that moment."""
+    """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. The
+    server runs refreshes on its worker, whose thread alone calls the vendors; each run reads the
+    effective policy and builds its clients as it starts (``make_refresh``). Without an FMP key
+    the worker runs a revalue only and refuses the other kinds. The app reads the policy file as
+    its base. When it starts, the app marks every ``running`` refresh interrupted; with no
+    process lock in this cut, that includes one a command in another process is running at that
+    moment."""
     settings = load_settings()
     policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
@@ -101,16 +132,11 @@ def _serve(args: argparse.Namespace) -> int:
         return connect(settings.db_path)
 
     keys = _keys(settings)
-    worker = None
     if keys.fmp is None:
-        logger.warning("%s; the screen is served without refreshes", MissingKey("fmp"))
-    else:
-        fmp, gf, secrets = build_clients(keys, policy)
-        worker = RefreshWorker(
-            lambda cancel, on_progress: Refresh(
-                conn_factory, fmp, gf, policy, tax, utcnow, cancel, on_progress, secrets
-            )
-        )
+        logger.warning("%s; the server runs a revalue only", MissingKey("fmp"))
+    worker = RefreshWorker(
+        lambda cancel, on_progress: make_refresh(conn_factory, keys, tax, cancel, on_progress)
+    )
     app = create_app(settings, policy, conn_factory, worker)
     try:
         uvicorn.run(app, host=_HOST, port=args.port, log_level="info")
@@ -118,8 +144,7 @@ def _serve(args: argparse.Namespace) -> int:
         # A run still alive holds the clients, so they close with the process, which ends now:
         # closed here, they would fail the companies in flight. The cancel keeps the run from
         # starting another meanwhile; the next start marks its record interrupted.
-        if worker is not None:
-            worker.cancel()
+        worker.cancel()
     return 0
 
 
@@ -130,8 +155,9 @@ def _refresh(args: argparse.Namespace) -> int:
     skipped``. A revalue reads no key and builds no vendor client. A ``VendorError`` or
     ``ValueError`` from the run (the screener failed or gave no rows) is one line, never a
     traceback: ``refresh <id>: failed: <message>``, or ``refresh failed: <message>`` when the run
-    refused before its record existed. Exits 0 when the refresh is done, 1 when not, 2 when it
-    cannot start."""
+    refused before its record existed. The run reads the effective policy (the file and the
+    stored overlay) as it starts; stored settings that no longer apply to the file are one line
+    naming the setting. Exits 0 when the refresh is done, 1 when not, 2 when it cannot start."""
     if args.symbols == []:
         return _usage("no symbols given: name them as AAPL,MSFT")
     if args.kind == "price" and args.symbols:
@@ -149,9 +175,13 @@ def _refresh(args: argparse.Namespace) -> int:
             require(keys, "fmp")
         except MissingKey as exc:
             return _usage(str(exc))
-    policy, tax = load_policy(), load_tax_table()
+    base, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
         migrate(conn)
+        try:
+            policy = effective_policy(conn, base)
+        except ValueError as exc:
+            return _usage(str(exc))
     cancel = threading.Event()
     fmp, gf, secrets = (None, None, ()) if keys is None else build_clients(keys, policy)
     started: list[int] = []

@@ -32,6 +32,9 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   yet" (spec 6.6).
 - ``done``: the run's totals. A full refresh saves its ``calibration`` with the record (goal 7).
 
+Every kind but a revalue fetches, so without an FMP client (the server's worker without a key)
+``run`` refuses it with a ``ValueError`` naming the keys file, before the record exists.
+
 A revalue takes no symbols, makes no vendor call and needs no FMP client (calibration spec 5.9): it
 lists the latest universe's admitted companies (``latest_companies``) ``pending``, in symbol order,
 or, before any universe, every company with a snapshot (``latest_snapshots``), as the price
@@ -74,8 +77,12 @@ A price refresh takes no symbols; ``run_price.PriceRefresh`` runs its stages (``
 ``reprice``, ``done``) on the run's connection, and its module docstring says how. It values
 nothing and runs no backfill.
 
+The record carries the policy's version and its settings hash (spec 2026-11-04, 8.4): the run
+values under the policy it was built with, the effective one its caller read when it started.
+
 ``on_progress`` gets a ``Progress`` at each stage change and after each symbol, and ``on_started``
-the refresh id once the record exists; both run on the thread that called ``run``.
+the refresh id once the record exists; both run on the thread that called ``run``. ``close`` closes
+the clients the run was built with; the server's worker calls it before its next run.
 """
 
 import logging
@@ -167,7 +174,8 @@ class _Fetched:
 class Refresh:
     """One refresh run (see the module docstring). ``conn_factory`` opens a connection to the
     store: ``run`` opens one for itself and each fetch one of its own. ``secrets`` are the vendor
-    keys, scrubbed from what the fetch stores and from every message the run writes."""
+    keys, scrubbed from what the fetch stores and from every message the run writes. ``close``
+    closes the run's clients, when its caller hands it the clients to close."""
 
     def __init__(
         self,
@@ -180,6 +188,7 @@ class Refresh:
         cancel: threading.Event,
         on_progress: Callable[[Progress], None] | None = None,
         secrets: Sequence[str] = (),
+        close: Callable[[], None] | None = None,
     ) -> None:
         self._conn_factory = conn_factory
         self._fmp = fmp
@@ -190,6 +199,7 @@ class Refresh:
         self._cancel = cancel
         self._on_progress = on_progress
         self._secrets = tuple(secrets)
+        self._close = close
         self._in_flight = 0
         self._in_flight_lock = threading.Lock()
 
@@ -199,12 +209,12 @@ class Refresh:
         symbols: Sequence[str] | None = None,
         on_started: Callable[[int], None] | None = None,
     ) -> int:
-        """Run a refresh of ``kind`` and return its id. Raises ``MissingKey`` without an FMP
-        client for a kind that fetches (all but a revalue), and ``ValueError`` for a scoped
-        refresh without symbols or another kind with them, all before any work."""
+        """Run a refresh of ``kind`` and return its id. Raises ``ValueError`` without an FMP
+        client for a kind that fetches (all but a revalue), with ``MissingKey``'s text, and for a
+        scoped refresh without symbols or another kind with them, all before any work."""
         fmp = self._fmp
         if kind != "revalue" and fmp is None:
-            raise MissingKey("fmp")
+            raise ValueError(str(MissingKey("fmp")))
         names: list[str] | None = None
         if kind == "scoped":
             if not symbols:
@@ -241,6 +251,13 @@ class Refresh:
                 raise
             finish_refresh(conn, refresh_id, status, self._clock(), message, counts)
         return refresh_id
+
+    def close(self) -> None:
+        """Close the clients the run was built with, once; nothing when it was given none to
+        close. The caller closes them only once the run and its fetches have ended."""
+        close, self._close = self._close, None
+        if close is not None:
+            close()
 
     def fetches_in_flight(self) -> int:
         """The fetch threads not ended yet, those a stopped run gave up among them."""

@@ -25,6 +25,7 @@ from vendor_double import FIXTURES, FMP_KEY
 from fairband import __main__ as cli
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import Provenance
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.refresh import run_price
 from fairband.refresh.inputs import latest_price
 from fairband.refresh.run import Progress
@@ -33,7 +34,8 @@ from fairband.store.snapshots import SnapshotRow, insert_snapshot
 
 PRICE_DATE = date(2026, 10, 31)  # the new quotes' timestamp, a day after the fixtures'
 NEW_PRICES = {"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0, "NEWT": 60.0}
-POLICY_CHANGED = "policy changed: run a full refresh"
+POLICY_CHANGED = "policy changed: run a revalue"
+SETTINGS_CHANGED = "settings changed: run a revalue"
 METHOD_CHANGED = "method changed: run a revalue"
 
 
@@ -345,6 +347,73 @@ def test_price_refresh_method_version_mismatch_fails_symbol(env_valued: Env) -> 
     ]
     assert env.snapshot("AXLE") == axle
     assert (env.snapshot("MILD").refresh_id, env.snapshot("MILD").price) == (refresh_id, 10.0)
+
+
+def test_price_refresh_refuses_another_settings_hash_and_reprices_the_empty_one(
+    env_valued: Env,
+) -> None:
+    """ACME's latest snapshot was valued under other settings: its value and levels come from
+    them, so it takes a revalue and keeps its snapshot. The others carry the empty overlay's hash,
+    as every snapshot valued before the overlay existed does, and the overlay is empty: they
+    reprice, under the same hash."""
+    env = env_valued
+    assert env.policy.settings_hash == EMPTY_SETTINGS_HASH
+    with closing(env.connect()) as conn, conn:
+        conn.execute(
+            "UPDATE snapshots SET settings_hash = 'other',"
+            " result = json_set(result, '$.settings_hash', 'other') WHERE id = ?",
+            (env.snapshot("ACME").id,),
+        )
+    acme = env.snapshot("ACME")
+    assert acme.settings_hash == acme.result.settings_hash == "other"
+    others = ("AXLE", "MILD", "NEWT")
+    assert {env.snapshot(symbol).settings_hash for symbol in others} == {EMPTY_SETTINGS_HASH}
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+
+    refresh_id = env.refresh().run("price")
+
+    assert (env.last().status, env.last().calibration) == (
+        "done",
+        {"total": 4, "repriced": 3, "failed": 1, "skipped": 0},
+    )
+    assert env.items(refresh_id) == [
+        ("ACME", "failed", SETTINGS_CHANGED),
+        ("AXLE", "repriced", None),
+        ("MILD", "repriced", None),
+        ("NEWT", "repriced", None),
+    ]
+    assert env.snapshot("ACME") == acme
+    for symbol in others:
+        row = env.snapshot(symbol)
+        assert (row.refresh_id, row.price) == (refresh_id, NEW_PRICES[symbol])
+        assert row.settings_hash == row.result.settings_hash == EMPTY_SETTINGS_HASH
+
+
+def test_price_refresh_checks_the_policy_then_the_settings_then_the_method(
+    env_valued: Env,
+) -> None:
+    """A snapshot unlike the current run on several counts reads the first: the policy version,
+    then the settings hash, then the method version."""
+    env = env_valued
+    stale = {
+        "ACME": {"policy_version": "fairband-policy-v0", "settings_hash": "other"},
+        "AXLE": {"settings_hash": "other", "method_version": "fairband-mechanical/0.1"},
+        "MILD": {"method_version": "fairband-mechanical/0.1"},
+    }
+    with closing(env.connect()) as conn:
+        for symbol, fields in stale.items():
+            old = env.snapshot(symbol)
+            insert_snapshot(conn, replace(old.result, **fields), old.refresh_id, clock=env.clock)
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+
+    refresh_id = env.refresh().run("price")
+
+    assert env.items(refresh_id) == [
+        ("ACME", "failed", POLICY_CHANGED),
+        ("AXLE", "failed", SETTINGS_CHANGED),
+        ("MILD", "failed", METHOD_CHANGED),
+        ("NEWT", "repriced", None),
+    ]
 
 
 def test_price_refresh_rate_limited(env_valued: Env, monkeypatch: pytest.MonkeyPatch) -> None:
