@@ -74,7 +74,7 @@ its count of companies in the latest run.</desc>
 <li><a href="#methodology/start-up">Start-up</a></li>
 <li><a href="#methodology/flags">The flags</a></li>
 <li><a href="#methodology/sources">Sources</a></li>
-<li><a href="#methodology/settings">Your settings</a></li>
+<li><a href="#methodology/your-settings">Your settings</a></li>
 </ol>
 </nav>
 
@@ -110,7 +110,7 @@ build its product. What matters most: the size of the potential market and acces
 </li>
 <li>
 <h3 class="heading">Young Growth</h3>
-<p class="body">The product has found buyers, and revenue grows fast. Losses go on, because
+<p class="body">The product has found buyers, and revenue grows fast. Losses continue, because
 building the business costs more than it brings in. What matters most: revenue growth and gross
 margins.</p>
 <p class="caption">Companies in the latest run: <span data-count="Young Growth">—</span></p>
@@ -118,7 +118,9 @@ margins.</p>
 <li>
 <h3 class="heading">High Growth</h3>
 <p class="body">Revenue still grows fast, and the business earns its first operating profit.
-Margins widen as it grows. What matters most: revenue growth and operating margins.</p>
+Margins widen as it grows. Fairband puts a company here while its operating margin is still below
+zero but rising. Once the margin is positive, the company is Mature Growth or Mature Stable. What
+matters most: revenue growth and operating margins.</p>
 <p class="caption">Companies in the latest run: <span data-count="High Growth">—</span></p>
 </li>
 <li>
@@ -135,7 +137,7 @@ cash goes back to the owners. What matters most: the stability of earnings.</p>
 </li>
 <li>
 <h3 class="heading">Decline</h3>
-<p class="body">Revenue shrinks year after year, and margins come under pressure. The company sells
+<p class="body">Revenue shrinks year after year, and margins shrink with it. The company sells
 assets, returns cash, or both. What matters most: book value (what the company owns, as its
 balance sheet records it).</p>
 <p class="caption">Companies in the latest run: <span data-count="Decline">—</span></p>
@@ -188,15 +190,15 @@ Its five-year revenue trend falls. Its revenue fell in at least three of its las
 <li>A company with no operating margin in its last five fiscal years stays unclassified.</li>
 <li>A company with a negative margin is High Growth when its margin trend rises, else Young Growth.
 The exception is an established company (one with a positive margin in at least three of its last
-five years). It goes on to rule 5 as if its margin were positive, with a warning that names the
-loss year.</li>
+five years). It moves to rule 5 as if its margin were positive, with a note that names the loss
+year.</li>
 <li>A company with a margin of zero or more is Mature Growth when its growth word is Very High,
 High or Moderate. It is Mature Stable when the word is Low or Close to zero or negative.</li>
 </ol>
 
-<h3 class="heading">Warnings that do not change the phase</h3>
-<p class="body">Some checks warn and never change the phase. They show in the drawer's phase
-evidence.</p>
+<h3 class="heading">Notes that do not change the phase</h3>
+<p class="body">Some checks add a note and never change the phase. The notes show in the drawer's
+phase evidence.</p>
 <ul class="body">
 <li>The growth word points to another phase than the margin rule gave a loss-making company.</li>
 <li>The margin direction points elsewhere: Rising to Mature Growth, Stable to Mature Stable,
@@ -211,7 +213,7 @@ Declining to Decline.</li>
 <p class="body">Beside the phase, the drawer shows the Dickinson stage (a life-cycle reading of the
 signs of three cash flows) <a class="app-cite" href="#methodology/src-dickinson">[Dickinson 2011]</a>.
 It reads the last fiscal year's operating, investing and financing cash flows. It never decides the
-phase and never warns.</p>
+phase and adds no note.</p>
 <div class="app-prose__wide">
 <table class="fb-table">
 <thead><tr><th class="label">Operating</th><th class="label">Investing</th><th class="label">Financing</th><th class="label">Stage</th></tr></thead>
@@ -250,7 +252,7 @@ operating margin. An unclassified company gets no value; its row gives the reaso
 <p class="body">Microsoft's revenue grew 16.1% a year over its last three fiscal years. That ranks
 in decile 8, so its growth word is High. Its operating margin is 46.8%, above zero, so rule 5 gives
 Mature Growth. Its margin rose 1.3 points a year, which ranks as Stable. Stable points to Mature
-Stable, so the drawer warns that the direction disagrees. The phase stays Mature Growth, and the
+Stable, so the drawer notes that the direction disagrees. The phase stays Mature Growth, and the
 cash-flow stage, Mature, agrees.</p>
 <p class="body app-prose__row"><a href="#" data-find="MSFT">Open today's row</a></p>
 </section>
@@ -376,8 +378,9 @@ measure is unreliable, it is the average return of the last three years.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The implied growth is the belief at which the value equals today's price. Set it
-beside the belief. A price that needs far more growth than similar companies achieve asks a lot. One
-that needs less leaves room for error.</p>
+beside the belief. If the price needs far more growth than similar companies usually reach, it
+assumes the company is an exception. If it needs less, the value covers the price even when growth
+falls below the belief, down to the implied growth.</p>
 <p class="body">The drawer also shows the value at runways of
 <span data-policy="runway_years.None">—</span>, <span data-policy="runway_years.Narrow">—</span>
 and <span data-policy="runway_years.Wide">—</span>. It shows the value at returns of
@@ -483,7 +486,7 @@ negative, so the route forecasts revenue and margins instead
 <ol class="body">
 <li>Year 1 is the consensus revenue for the next twelve months.</li>
 <li>Years 2 and 3 grow at the consensus growth for the next two fiscal years.</li>
-<li>The year-3 rate, the held rate, goes on until the high-growth period of
+<li>The year-3 rate, the held rate, continues until the high-growth period of
 <span data-policy="high_growth_years">—</span> ends.</li>
 <li>The held rate is capped at the 90th percentile of five-year sales growth for companies of
 similar size <a class="app-cite" href="#methodology/src-base-rate">[Base Rate Book]</a>.</li>
@@ -516,7 +519,8 @@ off, and the result is divided by the shares.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The margin the price needs is the target margin at which the value equals today's
-price. Set it beside the peers' margins. A price that needs a margin above every peer's asks a lot.
+price. Set it beside the peers' margins. A price that needs a margin above every peer's assumes
+the company will beat all of them.
 Fairband looks for it between <span data-policy="implied_margin_bounds.0">—</span> and
 <span data-policy="implied_margin_bounds.1">—</span>. The drawer also shows the growth the price
 needs in the held years.</p>
@@ -619,21 +623,22 @@ profit divided by interest expense. It gives a synthetic rating (the bond rating
 earns) <a class="app-cite" href="#methodology/src-ratings">[Damodaran ratings]</a>. Each rating
 carries a ten-year chance of default <a class="app-cite" href="#methodology/src-distress">[Damodaran
 2009a]</a>. In distress, a forced sale recovers <span data-policy="distress_sale_fraction">—</span>
-of the firm value. The value weights the going-concern value and the forced-sale value by that
+of the firm value. The floored value is the going-concern value or the net current asset value,
+whichever the floor gives. The value weights the floored value and the forced-sale value by that
 chance.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The implied decline rate is the decline rate at which the value equals today's price.
 Set it beside the decline rate the trend gives. A price that needs revenue to shrink more slowly
-than it has asks for a turnaround.</p>
+than it has assumes a turnaround.</p>
 
 <h3 class="heading">Three distress signals</h3>
 <p class="body">Three signals warn and never change the value.</p>
 <ul class="body">
-<li>Altman's Z″ (a score of bankruptcy risk from four balance-sheet ratios) below
-<span data-policy="z_distress">—</span> is in the distress zone
-<a class="app-cite" href="#methodology/src-altman">[Altman 2000]</a>. Above
-<span data-policy="z_safe">—</span>, it is in the safe zone.</li>
+<li>Altman's Z″ is a score of bankruptcy risk, built from four ratios from the balance sheet and
+the income statement <a class="app-cite" href="#methodology/src-altman">[Altman 2000]</a>. Below
+<span data-policy="z_distress">—</span> it is in the distress zone, and above
+<span data-policy="z_safe">—</span> in the safe zone.</li>
 <li>Piotroski's F (nine tests of financial health, one point each) at
 <span data-policy="f_score_low">—</span> or below is in the weakest group
 <a class="app-cite" href="#methodology/src-piotroski">[Piotroski 2000]</a>.</li>
@@ -646,6 +651,9 @@ than it has asks for a turnaround.</p>
 <caption class="caption">3M (MMM), Decline, as of 3 Nov 2026</caption>
 <thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
 <tbody>
+<tr><td class="body">Revenue growth, 3 years</td><td></td><td class="figure fb-num">−10.0% · decile 1</td></tr>
+<tr><td class="body">Five-year revenue trend</td><td></td><td class="figure fb-num">−$3.0 billion a year</td></tr>
+<tr><td class="body">Falls in revenue, last four years</td><td></td><td class="figure fb-num">3</td></tr>
 <tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$178.36</td></tr>
 <tr><td class="body">Trailing revenue</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$25.2 billion</td></tr>
 <tr><td class="body">Revenue, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$26.3 billion</td></tr>
@@ -663,12 +671,13 @@ than it has asks for a turnaround.</p>
 </tbody>
 </table>
 </div>
-<p class="body">3M's revenue fell 10.0% a year over three years, so it is in Decline. Analysts expect
-revenue to grow for the next three years, so the drawer warns of a consensus recovery. From year 4
-the run-off shrinks revenue 12.2% a year, as the five-year trend does. The margin holds at 18.3%,
-and an AAA rating makes distress unlikely. The value is $35 a share against a price of $178.36,
-Well above. No decline rate reaches the price: even revenue that stops shrinking falls short of
-it.</p>
+<p class="body">3M's revenue fell 10.0% a year over three years, decile 1, so its growth word is
+Close to zero or negative. Its five-year trend falls $3.0 billion a year, and revenue fell in three
+of its last four years: rule 2 gives Decline. Analysts expect revenue to grow for the next three
+years, so the drawer warns of a consensus recovery. From year 4 the run-off shrinks revenue 12.2% a
+year, as the trend does, at a margin of 18.3%. The value is $35 a share against a price of $178.36,
+Well above. No decline rate reaches the price: the price is above the value even when revenue stops
+shrinking.</p>
 <p class="body app-prose__row"><a href="#" data-find="MMM">Open today's row</a></p>
 </section>
 
@@ -689,8 +698,8 @@ the growth route. The price here is the market value plus debt, less cash.</p>
 
 <h3 class="heading">Cash</h3>
 <p class="body">The cash floor (net cash a share) is what the balance sheet alone gives an owner. The
-burn cover (the years cash lasts at the trailing cash burn) says how long the company can go without
-new money. A cover under <span data-policy="burn_cover_flag_years">—</span> gets a warning.</p>
+burn cover (the years cash lasts at the trailing cash burn) says how long the company can last
+without raising money. A cover under <span data-policy="burn_cover_flag_years">—</span> gets a warning.</p>
 
 <h3 class="heading">Worked example: Revolution Medicines</h3>
 <div class="app-prose__wide">
@@ -921,7 +930,7 @@ this page in full.</li>
 </ul>
 </section>
 
-<section id="settings">
+<section id="your-settings">
 <h2 class="title">Your settings</h2>
 <p class="body">A figure with a dotted line under it is live: it comes from the policy's defaults
 or from your settings. A live figure you changed reads in the accent colour. Change them on the

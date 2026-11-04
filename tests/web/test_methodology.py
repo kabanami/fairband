@@ -23,7 +23,20 @@ SECTIONS = [
     "start-up",
     "flags",
     "sources",
-    "settings",
+    "your-settings",
+]
+# The page's own panels: no id in the fragment may repeat one (controller ruling, task 10 review).
+PANELS = {"header", "controls", "screen", "groups", "watchlists", "methodology", "settings"}
+# Idioms the review found, and their kin; spec 7.1 asks for plain words.
+IDIOMS = [
+    "asks a lot",
+    "room for error",
+    "falls short",
+    "under pressure",
+    "goes on",
+    "go on",
+    "go without",
+    "asks for",
 ]
 PHASES = ["Start-up", "Young Growth", "High Growth", "Mature Growth", "Mature Stable", "Decline"]
 EXAMPLES = ("MSFT", "KO", "CRWD", "ROKU", "MMM", "RVMD")
@@ -62,6 +75,37 @@ def test_fragment_sections_diagram_and_examples() -> None:
     assert "Figures as of" in html
     for symbol in EXAMPLES:
         assert f'data-find="{symbol}"' in html
+
+
+def test_no_fragment_id_repeats_a_panel_s() -> None:
+    html = _static_file("methodology.html")
+    ids = set(re.findall(r'\bid="([^"]+)"', html))
+    assert ids & PANELS == set()
+    assert '<a href="#methodology/your-settings">Your settings</a>' in html
+
+
+def test_the_page_says_what_the_method_does() -> None:
+    """The review's findings: Fairband's High Growth has a margin below zero (method 3.5 rule 4b);
+    the Decline example names rule 2's three conditions; the run-off's value weights the floored
+    value (6a.7); Z″ reads the income statement too (6a.8); the classifier's checks are notes,
+    the word the flags section uses; no idiom."""
+    html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
+    life = _section(html, "life-cycle")
+    high = life[life.index(">High Growth</h3>") : life.index(">Mature Growth</h3>")]
+    assert "operating margin is still below zero but rising" in high
+    classifier = _section(html, "classifier")
+    assert "warn" not in classifier.lower()
+    assert "Notes that do not change the phase" in classifier
+    decline = _section(html, "decline")
+    example = decline[decline.index("Worked example: 3M") :]
+    reading = example[example.index("</table>") :]
+    for condition in ("decile 1", "Close to zero or negative", "$3.0 billion a year", "three of"):
+        assert condition in reading, condition
+    assert "weights the floored value and the forced-sale value" in decline
+    assert "four ratios from the balance sheet and the income statement" in decline
+    prose = " ".join(_sentences(html)).lower()
+    for idiom in IDIOMS:
+        assert idiom not in prose, idiom
 
 
 def test_diagram_draws_six_bands_two_curves_and_the_counts() -> None:
