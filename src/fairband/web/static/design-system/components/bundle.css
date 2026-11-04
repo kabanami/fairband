@@ -207,6 +207,16 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   gap: var(--space-4);
 }
 .fb-hdr__ran { color: var(--ink-faint); white-space: nowrap; }
+/* fairband: at phone width the views wrap to a line of their own under the lockup, in the same
+   type style, and the header grows by that line (and by one more where the refresh controls do
+   not fit beside the lockup). The views' line is the last, so the current view's accent edge
+   stays on the header's rule; its narrower gap keeps the five words inside the page's margins
+   at 375px (spec 2026-11-04 6). */
+@media (width < 600px) {
+  .fb-hdr { flex-wrap: wrap; height: auto; row-gap: 0; }
+  .fb-hdr__lock { height: var(--header-height); }
+  .fb-hdr__nav { order: 1; flex-basis: 100%; height: var(--header-height); gap: var(--space-3); }
+}
 
 /* ------------------------------------------------------------ PhaseBadge */
 

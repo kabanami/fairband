@@ -83,6 +83,15 @@
     render();
   }
 
+  /* A symbol's row from another view (the Methodology page's examples, a watchlist): the symbol
+     in FIND, the filters cleared so nothing hides its row, and the Screen view open. */
+  function find(symbol) {
+    state.query = symbol;
+    state.filters = F.EMPTY_FILTERS;
+    render();
+    window.FairbandPage.show('screen');
+  }
+
   function getJson(url) {
     return fetch(url).then(function (response) {
       if (!response.ok) throw new Error('the server answered ' + response.status);
@@ -128,9 +137,11 @@
   function two(n) { return (n < 10 ? '0' : '') + n; }
 
   /* What controls.js uses: the screen's reload when a refresh ends, the POST helper, the GET
-     helper, the local-time helper and the phase numbers. */
+     helper, the local-time helper and the phase numbers; and the later views, find. controls.js
+     adds show, onShow, section and running. */
   window.FairbandPage = {
-    reload: load, api: api, getJson: getJson, localIso: localIso, PHASE_NUMBER: PHASE_NUMBER
+    reload: load, api: api, getJson: getJson, localIso: localIso, PHASE_NUMBER: PHASE_NUMBER,
+    find: find
   };
 
   function load() {

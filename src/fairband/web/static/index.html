@@ -14,12 +14,14 @@
   /* The header runs edge to edge and does not stick: its hairline rule is the separation. What
      is under it keeps the page's margins. The table and the drawer each scroll in their own
      column, so the table's header stays put and the drawer stays beside whichever row opened
-     it. */
+     it. Each other view scrolls as one panel. */
   .app-page { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; }
   #header { flex: none; }
   #controls { padding: var(--space-2) var(--space-6) 0; }
-  #screen, #groups { flex: 1; min-height: 0; padding: 0 var(--space-6) var(--space-4); }
-  #groups { overflow: auto; }
+  #screen, #groups, #watchlists, #methodology, #settings {
+    flex: 1; min-height: 0; padding: 0 var(--space-6) var(--space-4);
+  }
+  #groups, #watchlists, #methodology, #settings { overflow: auto; }
 
   /* The refresh controls, in the header's right slot beside the engine stamp. */
   .app-actions { display: flex; align-items: center; gap: var(--space-2); }
@@ -150,8 +152,11 @@
 <main class="app-page">
   <div id="header"></div>
   <div id="controls"></div>
-  <div id="screen"></div>
-  <div id="groups" hidden></div>
+  <section id="screen"></section>
+  <section id="groups" hidden></section>
+  <section id="watchlists" hidden></section>
+  <section id="methodology" hidden></section>
+  <section id="settings" hidden></section>
 </main>
 <script src="/static/vendor/react.production.min.js"></script>
 <script src="/static/vendor/react-dom.production.min.js"></script>

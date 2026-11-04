@@ -708,8 +708,70 @@ def test_index_mounts_the_header_and_the_favicon(client: TestClient) -> None:
 def test_controls_js_mounts_app_header() -> None:
     script = _static_file("controls.js")
     assert "h(F.AppHeader, {" in script
-    assert "views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' }]" in script
     assert "engineRanAt:" in script and "onViewChange: show" in script
+
+
+def test_header_has_the_five_views() -> None:
+    js = _static_file("controls.js")
+    assert (
+        "views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },\n"
+        "        { id: 'watchlists', label: 'Watchlists' }, "
+        "{ id: 'methodology', label: 'Methodology' },\n"
+        "        { id: 'settings', label: 'Settings' }]"
+    ) in js
+    assert "location.hash" in js and "history.replaceState" in js
+    html = _static_file("index.html")
+    for panel in ("watchlists", "methodology", "settings"):
+        assert f'<section id="{panel}" hidden' in html
+
+
+def test_page_opens_the_view_the_hash_names() -> None:
+    """Spec 2026-11-04 6: the hash follows the view, none for the Screen, and names the view on
+    load and when a link changes it; #methodology/<section-id> opens the Methodology view and
+    keeps the section for its script to scroll to; a hash naming no view is the Screen. Each view
+    loads through FairbandPage.onShow as it opens, every panel fades while a refresh runs, and
+    FairbandPage.find puts a symbol in FIND with the filters cleared and opens the Screen."""
+    js = _static_file("controls.js")
+    assert "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings'];" in js
+    show = js[js.index("function show(tab, section) {") :]
+    show = show[: show.index("\n  }\n")]
+    assert "if (VIEWS.indexOf(tab) === -1) tab = 'screen';" in show
+    assert "P.section = tab === 'methodology' && section ? section : null;" in show
+    assert "history.replaceState(null, '', tab === 'screen' ? location.pathname" in show
+    assert ": '#' + tab + (P.section ? '/' + P.section : ''));" in show
+    assert "VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });" in show
+    assert "if (P.onShow[tab]) P.onShow[tab]();" in show
+    assert "var parts = location.hash.slice(1).split('/');" in js
+    assert "show(parts[0], parts[1]);" in js
+    assert "window.addEventListener('hashchange', fromHash);" in js
+    # the first view opens once the later scripts have registered their loaders
+    assert "document.addEventListener('DOMContentLoaded', fromHash);" in js
+    assert "P.show = show;" in js and "P.onShow = {};" in js and "P.section = null;" in js
+    assert "P.running = function () { return state.running !== null; };" in js
+    assert "VIEWS.forEach(function (id) { panels[id].classList.toggle(RECOMPUTING, alive); });" in (
+        js
+    )
+    app = _static_file("app.js")
+    assert "find: find" in app  # on window.FairbandPage
+    find = app[app.index("function find(symbol) {") :]
+    find = find[: find.index("\n  }\n")]
+    assert "state.query = symbol;" in find and "state.filters = F.EMPTY_FILTERS;" in find
+    assert "window.FairbandPage.show('screen');" in find
+
+
+def test_index_scrolls_the_new_panels_and_the_header_wraps_at_phone_width() -> None:
+    """The three new panels scroll as the groups' does; under 600px the views take a second line
+    under the lockup and the header grows by it (spec 2026-11-04 6)."""
+    page = _static_file("index.html")
+    assert "#screen, #groups, #watchlists, #methodology, #settings {" in page
+    assert "#groups, #watchlists, #methodology, #settings { overflow: auto; }" in page
+    css = _component_file("bundle.css")
+    patch = css[css.index("/* fairband: at phone width") :]
+    assert "(spec 2026-11-04 6)" in patch[: patch.index("*/")]
+    patch = patch[: patch.index("\n}\n")]
+    assert "@media (width < 600px) {" in patch
+    assert ".fb-hdr { flex-wrap: wrap; height: auto; row-gap: 0; }" in patch
+    assert ".fb-hdr__nav { order: 1; flex-basis: 100%;" in patch
 
 
 def test_controls_js_run_bar() -> None:

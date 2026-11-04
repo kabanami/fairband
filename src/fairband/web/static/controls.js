@@ -1,12 +1,12 @@
 /* The page's header, its status line and the group view, loaded after app.js. The header is the
-   design system's AppHeader: the views (Screen, Groups), the engine stamp and the refresh
-   controls. Under it, the status line: the running refresh's one run bar (the design system's
-   RunProgress), or how the last one ended in one line, its calibration's breakdown behind
-   Details ▾ (growth-routes spec 6.1). While a refresh runs, the page
-   asks /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons were,
-   the stamp is gone and the tables keep their old figures at ink-faint; when it ends, the rows
-   (and the groups, when that view is open) load again. The group view is one plain table from
-   /api/groups (spec 6.3), with no chart. */
+   design system's AppHeader: the five views (Screen, Groups, Watchlists, Methodology, Settings),
+   the engine stamp and the refresh controls; the URL hash names the open view. Under it, the
+   status line: the running refresh's one run bar (the design system's RunProgress), or how the
+   last one ended in one line, its calibration's breakdown behind Details ▾ (growth-routes spec
+   6.1). While a refresh runs, the page asks /api/refresh/current every 2 seconds, one Cancel
+   stands where the Refresh buttons were, the stamp is gone and the tables keep their old figures
+   at ink-faint; when it ends, the rows (and the groups, when that view is open) load again. The
+   group view is one plain table from /api/groups (spec 6.3), with no chart. */
 (function () {
   'use strict';
 
@@ -26,10 +26,10 @@
     quotes: 'fetching prices', reprice: 'repricing', done: 'finishing'
   };
 
-  var panels = {
-    screen: document.getElementById('screen'),
-    groups: document.getElementById('groups')
-  };
+  /* The views in the header's order, each with its panel, a section of the page. */
+  var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings'];
+  var panels = {};
+  VIEWS.forEach(function (id) { panels[id] = document.getElementById(id); });
   var header = ReactDOM.createRoot(document.getElementById('header'));
   var bar = ReactDOM.createRoot(document.getElementById('controls'));
   var groupsRoot = ReactDOM.createRoot(panels.groups);
@@ -144,13 +144,30 @@
       });
   }
 
-  function show(tab) {
-    if (state.tab === tab) return;
+  /* Opens a view: its panel shows and the others hide, the hash names it (the Screen has none)
+     and its loader runs, the groups' here and each later view's through P.onShow. A view the page
+     does not know is the Screen. A section of the Methodology view stays in P.section for that
+     view's script to scroll to; one named while the view is open runs its loader again
+     (spec 2026-11-04 6). */
+  function show(tab, section) {
+    if (VIEWS.indexOf(tab) === -1) tab = 'screen';
+    var opened = state.tab !== tab;
+    P.section = tab === 'methodology' && section ? section : null;
+    history.replaceState(null, '', tab === 'screen' ? location.pathname
+      : '#' + tab + (P.section ? '/' + P.section : ''));
+    if (!opened && !P.section) return;
     state.tab = tab;
-    panels.screen.hidden = tab !== 'screen';
-    panels.groups.hidden = tab !== 'groups';
+    VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });
     if (tab === 'groups') loadGroups();
+    if (P.onShow[tab]) P.onShow[tab]();
     render();
+  }
+
+  /* The view a hash names, on load and when a link changes it: #watchlists, #methodology,
+     #settings, or #methodology/<section-id>, the Methodology view at that section. */
+  function fromHash() {
+    var parts = location.hash.slice(1).split('/');
+    show(parts[0], parts[1]);
   }
 
   function groupBy(event) {
@@ -266,14 +283,15 @@
 
   function render() {
     var alive = state.running !== null;
-    panels.screen.classList.toggle(RECOMPUTING, alive);
-    panels.groups.classList.toggle(RECOMPUTING, alive);
+    VIEWS.forEach(function (id) { panels[id].classList.toggle(RECOMPUTING, alive); });
     /* The stamp is the latest refresh's finish, whatever its status (the status line says how it
        ended). While a run is alive, or before any refresh finished, there is none: an absent
        stamp, never a placeholder. */
     var ran = alive || !state.last ? null : state.last.finishedAt;
     header.render(h(F.AppHeader, {
-      views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' }],
+      views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },
+        { id: 'watchlists', label: 'Watchlists' }, { id: 'methodology', label: 'Methodology' },
+        { id: 'settings', label: 'Settings' }],
       view: state.tab,
       onViewChange: show,
       engineRanAt: ran ? P.localIso(ran) : null,
@@ -374,6 +392,18 @@
     state.detailsOpen = false;
     render();
   });
+
+  /* What the later views use: show opens a view; each view registers its loader in onShow, and
+     onShow[tab]() runs each time that view opens; section is the Methodology section a hash
+     named; running() is true while a refresh runs. */
+  P.show = show;
+  P.onShow = {};
+  P.section = null;
+  P.running = function () { return state.running !== null; };
+
+  window.addEventListener('hashchange', fromHash);
+  /* The first view opens once the page's later scripts have run and registered their loaders. */
+  document.addEventListener('DOMContentLoaded', fromHash);
 
   render();
   poll();
