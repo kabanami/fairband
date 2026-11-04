@@ -843,12 +843,16 @@
 
   // fairband: the price-vs-value words lead the groups (classifier-designation spec 7.3); the page
   // filters on the row's own word.
-  var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector'];
-  var FILTER_FLAGS = ['reviewedOnly', 'hideExpired'];
-  var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired' };
+  // fairband: the watchlist group, list ids, follows the sector; the clean flag keeps the rows with
+  // no quality warning. Its chip reads Clean, its menu row "No warning flag" (spec 2026-11-04 9.4,
+  // 9.5).
+  var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector', 'watchlist'];
+  var FILTER_FLAGS = ['reviewedOnly', 'hideExpired', 'cleanOnly'];
+  var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired', cleanOnly: 'Clean' };
+  var FLAG_ROWS = { cleanOnly: 'No warning flag' };
 
   var EMPTY_FILTERS = { designation: [], phase: [], cap: [], sector: [],
-                        reviewedOnly: false, hideExpired: false };
+                        watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false };
 
   function listOf(f, key) { return (f && f[key]) || []; }
 
@@ -869,7 +873,8 @@
   }
 
   /* One chip per group, so the bar says what is on without growing with it. */
-  function summarise(f) {
+  // fairband: `lists` are the watchlists, [{ id, name }], whose names the watchlist chip reads.
+  function summarise(f, lists) {
     var out = [];
     if (!f) return out;
     // fairband: "Price vs value: Below + Near", the chosen words in band order.
@@ -888,6 +893,16 @@
       out.push({ key: 'sector', word: f.sector.length > 2
         ? f.sector.length + ' sectors'
         : f.sector.join(' + ') });
+    }
+    // fairband: one or two chosen lists by name, more than two by their count (spec 2026-11-04
+    // 9.4); a list whose name is not at hand yet reads in the count.
+    if (listOf(f, 'watchlist').length) {
+      var n = f.watchlist.length;
+      var names = (lists || []).filter(function (w) { return f.watchlist.indexOf(w.id) !== -1; })
+        .map(function (w) { return w.name; });
+      out.push({ key: 'watchlist', word: n <= 2 && names.length === n
+        ? names.join(' + ')
+        : n + (n === 1 ? ' watchlist' : ' watchlists') });
     }
     FILTER_FLAGS.forEach(function (k) {
       if (f[k]) out.push({ key: k, word: FLAG_WORDS[k] });
@@ -930,8 +945,23 @@
   }
 
   var COLUMNS = [
+    // fairband: the watchlist mark (spec 2026-11-04 9.4), at the left of the Ticker cell given
+    // onWatch: ▶ in accent when the company is on a list, ▸ in ink-faint when on none. A click,
+    // Enter or Space on it asks the consumer to open its popup and never opens the row.
     { key: 'ticker', head: 'Ticker', locked: true,
-      cell: function (r) { return h('td', { className: 'fb-screen__ticker ticker' }, r.ticker); } },
+      cell: function (r, p) {
+        return h('td', { className: 'fb-screen__ticker ticker' },
+          p.onWatch ? h('button', {
+            type: 'button', className: cx('fb-watch control', r.watched && 'fb-watch--on'),
+            'aria-label': 'Watchlists for ' + r.ticker,
+            'aria-pressed': r.watched ? 'true' : 'false',
+            onClick: function (e) { e.stopPropagation(); p.onWatch(r); },
+            onKeyDown: function (e) {
+              if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+            }
+          }, r.watched ? '▶' : '▸') : null,
+          r.ticker);
+      } },
     { key: 'name', head: 'Company',
       cell: function (r) { return h('td', { className: 'fb-screen__name body' }, r.name); } },
     { key: 'phase', head: 'Phase',
@@ -1019,6 +1049,19 @@
       cell: function (r) { return figureCell(percent(r.drawdown)); } },
     { key: 'flags', head: 'Flags',
       cell: function (r) { return h('td', { className: 'body' }, (r.flags || []).join(' · ')); } },
+    // fairband: the count of the row's quality warnings, a figure (spec 2026-11-04 9.5); the words
+    // stay in the column above.
+    { key: 'flagCount', head: 'Flags', num: true,
+      cell: function (r) { return figureCell(r.flagCount == null ? '—' : r.flagCount); } },
+    // fairband: the names of the lists the company is on, in the lists' order, joined by ` · `; an
+    // em dash for none (spec 2026-11-04 9.4).
+    { key: 'watchlists', head: 'Watchlists',
+      cell: function (r, p) {
+        var names = (p.watchlists || []).filter(function (w) {
+          return (r.watchlists || []).indexOf(w.id) !== -1;
+        }).map(function (w) { return w.name; });
+        return wordCell(names.length ? names.join(' · ') : null);
+      } },
     { key: 'refusal', head: 'Refusal',
       cell: function (r) { return h('td', { className: 'caption' }, r.refusal || ''); } },
     { key: 'priceDate', head: 'Price date', num: true,
@@ -1173,7 +1216,10 @@
 
     var filters = p.filters || EMPTY_FILTERS;
     var sectors = p.sectors || SECTORS;
-    var chips = summarise(p.filters);
+    // fairband: the user's watchlists, [{ id, name }], for the menu and the chip (spec 2026-11-04
+    // 9.4).
+    var lists = p.watchlists || [];
+    var chips = summarise(p.filters, lists);
     var narrowed = anyFilter(p.filters, p.query);
 
     function setGroup(key, value) {
@@ -1195,9 +1241,10 @@
     function clearAll() {
       if (p.onQueryChange) p.onQueryChange('');
       if (p.onFiltersChange) {
-        // fairband: the designation group leads, as in EMPTY_FILTERS.
+        // fairband: the designation group leads, as in EMPTY_FILTERS; the watchlist group and the
+        // clean flag clear with the rest (spec 2026-11-04 9.4).
         p.onFiltersChange({ designation: [], phase: [], cap: [], sector: [],
-                            reviewedOnly: false, hideExpired: false });
+                            watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false });
       }
     }
 
@@ -1297,13 +1344,25 @@
                       function () { toggleIn('sector', name); },
                       h('span', null, name));
                   })),
+                // fairband: the user's lists by name, after SECTOR; a row on any chosen list
+                // matches. Without a list there is no section (spec 2026-11-04 9.4).
+                lists.length ? h('hr') : null,
+                lists.length ? h('div', { className: 'fb-menu__sec' },
+                  h('span', { className: 'fb-menu__h label' }, 'WATCHLISTS'),
+                  lists.map(function (w) {
+                    return checkRow('w' + w.id, listOf(filters, 'watchlist').indexOf(w.id) !== -1,
+                      function () { toggleIn('watchlist', w.id); },
+                      h('span', null, w.name));
+                  })) : null,
                 h('hr'),
                 h('div', { className: 'fb-menu__sec' },
                   h('span', { className: 'fb-menu__h label' }, 'VALUE'),
                   FILTER_FLAGS.map(function (k) {
+                    // fairband: a flag's menu row may read otherwise than its chip: the clean
+                    // flag's row is "No warning flag" (spec 2026-11-04 9.4).
                     return checkRow(k, !!filters[k],
                       function () { setGroup(k, !filters[k]); },
-                      h('span', null, FLAG_WORDS[k]));
+                      h('span', null, FLAG_ROWS[k] || FLAG_WORDS[k]));
                   }))
               ),
               h('div', { className: 'fb-menu__foot' },
@@ -1389,7 +1448,8 @@
               p.onOpen(r);
             } : null
           }, shown.map(function (c) {
-            return h(React.Fragment, { key: c.key }, c.cell(r));
+            // fairband: the cell sees the props (spec 2026-11-04 9.4).
+            return h(React.Fragment, { key: c.key }, c.cell(r, p));
           }));
         }))
       )

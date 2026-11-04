@@ -893,6 +893,36 @@ def test_app_js_narrows_on_the_designation() -> None:
     assert "(r.capBand || '').toLowerCase()" in script
 
 
+def test_app_js_narrows_on_watchlist_and_clean() -> None:
+    js = _static_file("app.js")
+    assert "(!filters.cleanOnly || r.flagCount === 0)" in js
+    assert "'/api/watchlists/memberships/' + encodeURIComponent(symbol)" in js
+
+
+def test_app_js_opens_the_watchlist_popup() -> None:
+    """Spec 2026-11-04 9.4: the screen passes onWatch and the lists' names; a row is watched when
+    it is on a list; the popup creates a list and puts the company on it in one step, writes a
+    change at once and closes on Escape or a press or focus outside it. The lists load on page
+    load and after every write, and the later views read them."""
+    js = _static_file("app.js")
+    for text in (
+        "within(filters.watchlist, r.watchlists || [])",
+        "watched: (r.watchlists || []).length > 0",
+        "onWatch: watch,",
+        "watchlists: state.watchlists || [],",
+        "put: function (url, body) { return send('PUT', url, body); }",
+        "api.post('/api/watchlists', { name: name })",
+        "placeholder: 'New watchlist'",
+        "h(F.Button, { type: 'submit', size: 'sm', disabled: !w.name.trim() }, 'Add')",
+        "document.addEventListener('pointerdown', closeWatchOutside);",
+        "document.addEventListener('focusin', closeWatchOutside);",
+        "if (event.key !== 'Escape' || !state.watch) return;",
+        "watchlists: function () { return state.watchlists; },",
+        "reloadWatchlists: reloadWatchlists,",
+    ):
+        assert text in js, text
+
+
 def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
     """Spec 7.3: the band meter's caption says the word and the price ÷ value; the levels below
     it read Margin of safety (the value less the moat's margin), Fair band and 1.5 × value, and
@@ -1182,7 +1212,7 @@ def test_bundle_filter_menu_has_a_price_vs_value_section() -> None:
     """Spec 7.3: PRICE VS VALUE stands where STANCE stood, its five words in band order, each a
     checkbox as PHASE's are; the chip names the chosen words in band order."""
     bundle = _component_file("bundle.js")
-    assert "var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector'];" in bundle
+    assert "var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector', 'watchlist'];" in bundle
     assert "var EMPTY_FILTERS = { designation: [], phase: [], cap: [], sector: []," in bundle
     assert "p.onFiltersChange({ designation: [], phase: [], cap: [], sector: []," in bundle
     assert "h('span', { className: 'fb-menu__h label' }, 'PRICE VS VALUE')," in bundle
@@ -1196,6 +1226,62 @@ def test_bundle_filter_menu_has_a_price_vs_value_section() -> None:
         bundle
     )
     assert ".filter(function (k) { return f.designation.indexOf(k) !== -1; })" in bundle
+
+
+def test_bundle_has_the_watch_mark_and_the_two_filters() -> None:
+    bundle = _component_file("bundle.js")
+    assert "// fairband: the watchlist mark (spec 2026-11-04 9.4)" in bundle
+    assert "onClick: function (e) { e.stopPropagation(); p.onWatch(r); }" in bundle
+    assert "'aria-pressed': r.watched ? 'true' : 'false'" in bundle
+    assert "watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false" in bundle
+    assert "'WATCHLISTS'" in bundle and "'No warning flag'" in bundle
+    assert "{ key: 'flagCount', head: 'Flags', num: true" in bundle
+    assert "{ key: 'watchlists', head: 'Watchlists'" in bundle
+    dts = _component_file("index.d.ts")
+    assert "onWatch?: (row: ScreenRow) => void;" in dts and "cleanOnly: boolean;" in dts
+
+
+def test_bundle_draws_the_mark_only_given_onWatch() -> None:
+    """Spec 2026-11-04 9.4: the mark is a button at the left of the Ticker cell, named for its
+    ticker, filled when the company is on a list; Enter and Space on it never open the row; a
+    table without onWatch draws none. The cells see the props, for the mark and the list names."""
+    bundle = _component_file("bundle.js")
+    assert "p.onWatch ? h('button', {" in bundle
+    assert "className: cx('fb-watch control', r.watched && 'fb-watch--on')," in bundle
+    assert "'aria-label': 'Watchlists for ' + r.ticker," in bundle
+    assert "if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();" in bundle
+    assert "}, r.watched ? '▶' : '▸') : null," in bundle
+    assert "return h(React.Fragment, { key: c.key }, c.cell(r, p));" in bundle
+    css = _component_file("bundle.css")
+    assert ".fb-watch--on { color: var(--accent); }" in css
+    ring = "outline: 2px solid var(--focus-ring); outline-offset: 2px;"
+    assert f".fb-watch:focus-visible {{ {ring} }}" in css
+
+
+def test_bundle_filters_on_watchlists_and_clean() -> None:
+    """Spec 2026-11-04 9.4 and 9.5: WATCHLISTS follows SECTOR in the menu, one row per list by
+    name; the clean row stands in VALUE as "No warning flag" and its chip reads Clean; a chosen
+    list's chip is its name, more than two their count; Clear all empties both."""
+    bundle = _component_file("bundle.js")
+    assert "var FILTER_FLAGS = ['reviewedOnly', 'hideExpired', 'cleanOnly'];" in bundle
+    assert "cleanOnly: 'Clean'" in bundle
+    assert bundle.index("'SECTOR'") < bundle.index("'WATCHLISTS'") < bundle.index("'VALUE'")
+    assert "function () { toggleIn('watchlist', w.id); }," in bundle
+    assert "h('span', null, FLAG_ROWS[k] || FLAG_WORDS[k])" in bundle
+    assert "var chips = summarise(p.filters, lists);" in bundle
+    assert "word: n <= 2 && names.length === n" in bundle
+    assert "n + (n === 1 ? ' watchlist' : ' watchlists')" in bundle
+    clear = bundle[bundle.index("function clearAll() {") : bundle.index("function checkRow")]
+    assert "watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false });" in clear
+
+
+def test_bundle_draws_the_watchlist_and_count_columns() -> None:
+    """Spec 2026-11-04 9.4: the list names joined by ` · `, an em dash for none; the count after
+    the flags' words, a figure."""
+    bundle = _component_file("bundle.js")
+    assert "return wordCell(names.length ? names.join(' · ') : null);" in bundle
+    assert bundle.index("{ key: 'flags', head: 'Flags'") < bundle.index("{ key: 'flagCount'")
+    assert "return figureCell(r.flagCount == null ? '—' : r.flagCount);" in bundle
 
 
 def test_bundle_designation_column_head_and_chip() -> None:
@@ -1354,7 +1440,7 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 43
+    assert bundle.count("// fairband:") >= 53
     # A menu's toggle says whether its menu is open: Button passes aria-expanded through.
     assert "'aria-expanded': p['aria-expanded']," in bundle
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
@@ -1656,6 +1742,22 @@ def test_index_d_ts_declares_the_margin_keys() -> None:
     assert row is not None
     assert "targetMargin?: number | null;" in row.group(1)
     assert "impliedMargin?: number | null;" in row.group(1)
+
+
+def test_index_d_ts_declares_the_watchlist_keys() -> None:
+    declarations = _component_file("index.d.ts")
+    row = re.search(r"export interface ScreenRow \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert row is not None
+    for key in ("watched?: boolean;", "watchlists?: number[];", "flagCount?: number;"):
+        assert key in row.group(1), key
+    filters = re.search(r"export interface ScreenFilters \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert filters is not None
+    assert "watchlist: number[];" in filters.group(1)
+    assert "cleanOnly: boolean;" in filters.group(1)
+    props = re.search(r"export interface ScreenTableProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None
+    assert "onWatch?: (row: ScreenRow) => void;" in props.group(1)
+    assert "watchlists?: { id: number; name: string }[];" in props.group(1)
 
 
 def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, policy: Policy) -> None:

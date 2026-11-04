@@ -3,8 +3,10 @@
    No JSX and no build step: React.createElement against window.Fairband. The server sorts and the
    engine computes; this script asks for an order, remembers the chosen columns in the reader's
    order, narrows the loaded rows to the reader's find and filters and lays out what the engine
-   produced, rounded for display only. The header, the status line and the group view are
-   controls.js, loaded after this script; it reaches the screen through window.FairbandPage. */
+   produced, rounded for display only. Each row's watchlist mark opens a popup that puts the
+   company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4). The header, the
+   status line and the group view are controls.js, loaded after this script; it reaches the screen
+   through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -37,6 +39,9 @@
     query: '',
     filters: F.EMPTY_FILTERS,
     drawer: null, /* { symbol, body, loading, error } while open */
+    watchlists: null, /* the reader's lists, by name, once loaded: [{ id, name, symbols, … }] */
+    watchlistsError: null,
+    watch: null, /* { symbol, anchor, ids, name, error } while a mark's popup is open */
     pastFirstScreen: false /* the table is scrolled more than one screen down: Top shows */
   };
   var latest = 0;
@@ -99,21 +104,25 @@
     });
   }
 
-  /* The server refuses a POST without the X-Fairband-Request header (D11): a cross-site form
+  /* The server refuses a write without the X-Fairband-Request header (D11): a cross-site form
      cannot send it, nor a cross-origin script without a preflight the server never answers. The
-     refresh controls post through here; the promise gives the status and the parsed body. */
-  var api = {
-    post: function (url, body) {
-      return fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Fairband-Request': '1' },
-        body: JSON.stringify(body || {})
-      }).then(function (response) {
-        return response.json().then(function (json) {
-          return { ok: response.ok, status: response.status, body: json };
-        });
+     refresh controls post through here and the watchlist popup posts and puts; the promise gives
+     the status and the parsed body. */
+  function send(method, url, body) {
+    return fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json', 'X-Fairband-Request': '1' },
+      body: JSON.stringify(body || {})
+    }).then(function (response) {
+      return response.json().then(function (json) {
+        return { ok: response.ok, status: response.status, body: json };
       });
-    }
+    });
+  }
+
+  var api = {
+    post: function (url, body) { return send('POST', url, body); },
+    put: function (url, body) { return send('PUT', url, body); }
   };
 
   /* The server writes a timestamp in UTC (+00:00), and the design system prints a string's own
@@ -136,12 +145,16 @@
 
   function two(n) { return (n < 10 ? '0' : '') + n; }
 
-  /* What controls.js uses: the screen's reload when a refresh ends, the POST helper, the GET
-     helper, the local-time helper and the phase numbers; and the later views, find. controls.js
-     adds show, onShow, section and running. */
+  /* What controls.js uses: the screen's reload when a refresh ends, the write helpers, the GET
+     helper, the local-time helper and the phase numbers; and the later views, find, the lists
+     (null until they load), their reload, which settles once they are in, and watch, the marks'
+     onWatch, which opens the popup. controls.js adds show, onShow, section and running. */
   window.FairbandPage = {
     reload: load, api: api, getJson: getJson, localIso: localIso, PHASE_NUMBER: PHASE_NUMBER,
-    find: find
+    find: find,
+    watchlists: function () { return state.watchlists; },
+    reloadWatchlists: reloadWatchlists,
+    watch: watch
   };
 
   function load() {
@@ -163,9 +176,11 @@
   }
 
   /* A row with its entered time in the reader's offset, so the Entered cell shows the local date
-     (the local-offset ISO in datetime) and agrees with the drawer's ValidityWindow. */
+     (the local-offset ISO in datetime) and agrees with the drawer's ValidityWindow; watched when
+     the company is on a list, which fills its mark. */
   function localRow(r) {
-    return r.enteredAt ? Object.assign({}, r, { enteredAt: localIso(r.enteredAt) }) : r;
+    var row = Object.assign({}, r, { watched: (r.watchlists || []).length > 0 });
+    return r.enteredAt ? Object.assign(row, { enteredAt: localIso(r.enteredAt) }) : row;
   }
 
   /* A header click, or Enter or Space on a focused header: the sorted column turns its
@@ -215,8 +230,13 @@
 
   /* ------------------------------------------------------- find and filters */
 
-  /* An empty group narrows nothing; a non-empty one keeps only the rows whose value it names. */
-  function within(list, value) { return !list.length || list.indexOf(value) !== -1; }
+  /* An empty group narrows nothing; a non-empty one keeps only the rows whose value it names, or,
+     where the row holds several (its watchlists), one of them. */
+  function within(list, value) {
+    if (!list.length) return true;
+    if (Array.isArray(value)) return value.some(function (v) { return list.indexOf(v) !== -1; });
+    return list.indexOf(value) !== -1;
+  }
 
   /* The design system's reference rule (the gallery's apply). ScreenTable narrows nothing, so the
      page keeps the rows it loaded and draws the ones that pass; the server's order stands. The
@@ -225,7 +245,8 @@
      designation, which is the row's own, never derived here. The row's phase is
      already the menu's number (the server maps the engine's phase name through PHASE_NUMBER),
      and its cap band is the menu's id once lower-cased (Mega is mega); small never matches, the
-     universe's floor being $2 bn. */
+     universe's floor being $2 bn. A row on any chosen watchlist matches; Clean keeps the rows
+     whose quality warnings count 0, a placeholder's among them (spec 2026-11-04 9.4, 9.5). */
   function narrow(rows, query, filters) {
     var needle = (query || '').trim().toLowerCase();
     return rows.filter(function (r) {
@@ -236,8 +257,10 @@
         within(filters.phase, r.phase) &&
         within(filters.cap, (r.capBand || '').toLowerCase()) &&
         within(filters.sector, r.sector) &&
+        within(filters.watchlist, r.watchlists || []) &&
         (!filters.reviewedOnly || r.reviewed != null) &&
-        (!filters.hideExpired || r.freshness !== 'expired');
+        (!filters.hideExpired || r.freshness !== 'expired') &&
+        (!filters.cleanOnly || r.flagCount === 0);
     });
   }
 
@@ -250,6 +273,211 @@
   }
 
   function note(text) { return h('p', { className: 'body app-note' }, text); }
+
+  /* ------------------------------------------------------- the watchlist popup */
+
+  /* The popup has a root of its own at the end of the page, so it opens over whichever view's
+     table holds the mark (the Watchlists view's too) and over the drawer. */
+  var watchMount = document.body.appendChild(document.createElement('div'));
+  var watchRoot = ReactDOM.createRoot(watchMount);
+  var latestLists = 0;
+  var writes = Promise.resolve();
+
+  /* The mark a click last landed on, by pointer, Enter or Space, read before ScreenTable hands
+     onWatch the row alone: the popup opens under it. */
+  var pressedMark = null;
+  document.addEventListener('click', function (event) {
+    pressedMark = event.target instanceof Element ? event.target.closest('.fb-watch') : null;
+  }, true);
+
+  /* The lists, on load and after every write; the screen draws again for the menu's names, the
+     chip and the Watchlists column, and a chosen list that is gone leaves the filter. The promise
+     settles once they are in or their failure is noted; it never rejects. */
+  function reloadWatchlists() {
+    var request = ++latestLists;
+    return getJson('/api/watchlists')
+      .then(function (lists) {
+        if (request !== latestLists) return;
+        state.watchlists = lists;
+        state.watchlistsError = null;
+        var ids = lists.map(function (w) { return w.id; });
+        var kept = state.filters.watchlist.filter(function (id) { return ids.indexOf(id) !== -1; });
+        if (kept.length < state.filters.watchlist.length) {
+          state.filters = Object.assign({}, state.filters, { watchlist: kept });
+        }
+        render();
+      })
+      .catch(function (err) {
+        if (request !== latestLists) return;
+        state.watchlistsError = 'The watchlists did not load: ' + err.message +
+          '. Reload the page to try again.';
+        render();
+      });
+  }
+
+  /* The ids of the lists a company is on, from the lists; before they load, from its row. */
+  function membersOf(symbol, row) {
+    if (!state.watchlists) return ((row && row.watchlists) || []).slice();
+    return state.watchlists.filter(function (w) {
+      return w.symbols.some(function (s) { return s.symbol === symbol; });
+    }).map(function (w) { return w.id; });
+  }
+
+  /* onWatch: a mark opens its popup, or closes it when the popup is its own. */
+  function watch(row) {
+    var anchor = pressedMark;
+    if (!anchor || (state.watch && state.watch.anchor === anchor)) {
+      closeWatch();
+      return;
+    }
+    state.watch = {
+      symbol: row.ticker, anchor: anchor, ids: membersOf(row.ticker, row), name: '', error: null
+    };
+    renderWatch();
+  }
+
+  function closeWatch() {
+    state.watch = null;
+    renderWatch();
+  }
+
+  function renderWatch() {
+    watchRoot.render(state.watch ? h(WatchMenu, {
+      watch: state.watch, lists: state.watchlists || [], error: state.watchlistsError
+    }) : null);
+  }
+
+  function putMemberships(symbol, ids) {
+    return api.put('/api/watchlists/memberships/' + encodeURIComponent(symbol), { ids: ids });
+  }
+
+  /* A box changed: the company's lists as the boxes now stand, written at once. */
+  function toggleList(w, id) {
+    w.ids = w.ids.indexOf(id) === -1 ? w.ids.concat([id])
+      : w.ids.filter(function (held) { return held !== id; });
+    var ids = w.ids;
+    queue(w, function () {
+      return putMemberships(w.symbol, ids).then(function (r) { return refusal('Not saved', r); });
+    });
+  }
+
+  /* Add: the list is created, then the company put on it beside the lists it is on, one step. */
+  function addList(w) {
+    var name = w.name.trim();
+    if (!name) return;
+    queue(w, function () {
+      return api.post('/api/watchlists', { name: name }).then(function (r) {
+        if (!r.ok) return refusal('Not created', r);
+        w.name = '';
+        w.ids = w.ids.concat([r.body.id]);
+        return putMemberships(w.symbol, w.ids).then(function (put) {
+          return refusal('Not saved', put);
+        });
+      });
+    });
+  }
+
+  /* A refused write's sentence, with the server's reason; null for a write it took. */
+  function refusal(head, r) {
+    if (r.ok) return null;
+    return head + ': ' + (r.body && r.body.detail ? String(r.body.detail)
+      : 'the server answered ' + r.status) + '.';
+  }
+
+  /* The popup's writes run one after another in the order made, so a quick second change never
+     lands before the first. After each, the rows and the lists load again and the mark follows;
+     a refused write shows its sentence and puts the boxes back as the server has them. */
+  function queue(w, step) {
+    w.error = null;
+    renderWatch();
+    writes = writes.then(step).catch(function (err) {
+      return 'Not saved: ' + err.message + '.';
+    }).then(function (error) {
+      w.error = error;
+      load();
+      return reloadWatchlists();
+    }).then(function () {
+      if (w.error) w.ids = membersOf(w.symbol, null);
+      renderWatch();
+    });
+  }
+
+  /* The popup, in the bundle's menu style as Details ▾ draws it: a box per list, ticked where the
+     company is on it, then the New watchlist field and Add. Fixed under the mark, or over it when
+     the mark sits low in the window; it follows the mark as the page scrolls and closes when the
+     mark is gone (its row narrowed away) or hidden. It stands at the end of the page, away from
+     the mark, so focus moves into it as it opens. */
+  function WatchMenu(props) {
+    var w = props.watch;
+    var ref = React.useRef(null);
+    React.useLayoutEffect(function () {
+      if (!w.anchor.getClientRects().length) { /* gone, or its view hidden */
+        closeWatch();
+        return;
+      }
+      var rect = w.anchor.getBoundingClientRect();
+      var style = ref.current.style;
+      var below = rect.bottom < window.innerHeight * 0.6;
+      style.left = Math.max(0, Math.min(rect.left,
+        window.innerWidth - ref.current.offsetWidth)) + 'px';
+      style.top = below ? rect.bottom + 4 + 'px' : 'auto';
+      style.bottom = below ? 'auto' : window.innerHeight - rect.top + 4 + 'px';
+    });
+    React.useEffect(function () {
+      var first = ref.current.querySelector('input');
+      if (first) first.focus();
+    }, [w.anchor]);
+    var lists = props.lists;
+    var error = w.error || props.error;
+    return h('div', {
+      ref: ref, className: 'fb-menu fb-menu--filters app-watch', role: 'group',
+      'aria-label': 'Watchlists for ' + w.symbol
+    },
+      h('div', { className: 'fb-menu__body' },
+        h('div', { className: 'fb-menu__sec' },
+          h('span', { className: 'fb-menu__h label' }, 'WATCHLISTS'),
+          lists.length ? lists.map(function (list) {
+            return h('label', { key: list.id, className: 'fb-menu__row control' },
+              h('input', {
+                type: 'checkbox', checked: w.ids.indexOf(list.id) !== -1,
+                onChange: function () { toggleList(w, list.id); }
+              }),
+              h('span', null, list.name));
+          }) : h('div', { className: 'body app-muted app-watch__none' }, 'none'))),
+      h('div', { className: 'fb-menu__foot' },
+        h('form', {
+          className: 'app-watch__new',
+          onSubmit: function (event) { event.preventDefault(); addList(w); }
+        },
+          h('input', {
+            type: 'text', className: 'control app-watch__name', placeholder: 'New watchlist',
+            'aria-label': 'New watchlist', maxLength: 60, value: w.name,
+            onChange: function (event) { w.name = event.target.value; renderWatch(); }
+          }),
+          h(F.Button, { type: 'submit', size: 'sm', disabled: !w.name.trim() }, 'Add')),
+        error ? h('p', { className: 'caption app-watch__error' }, error) : null));
+  }
+
+  /* The popup closes on a press or focus outside it and its mark, and on Escape, which hands
+     focus back to the mark: the three listeners controls.js gives Details ▾. A press on its own
+     mark belongs to the mark, which closes it through onWatch. It follows its mark when anything
+     scrolls and when the window resizes. */
+  function closeWatchOutside(event) {
+    var w = state.watch;
+    if (!w || !(event.target instanceof Node)) return;
+    if (watchMount.contains(event.target) || w.anchor.contains(event.target)) return;
+    closeWatch();
+  }
+  document.addEventListener('pointerdown', closeWatchOutside);
+  document.addEventListener('focusin', closeWatchOutside);
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' || !state.watch) return;
+    var anchor = state.watch.anchor;
+    closeWatch();
+    if (anchor.isConnected) anchor.focus();
+  });
+  document.addEventListener('scroll', function () { if (state.watch) renderWatch(); }, true);
+  window.addEventListener('resize', function () { if (state.watch) renderWatch(); });
 
   /* ------------------------------------------------------- the sticky bar and Top */
 
@@ -324,6 +552,8 @@
         sort: state.sort,
         onSort: sortBy,
         onOpen: open,
+        onWatch: watch,
+        watchlists: state.watchlists || [],
         chooser: true
       });
     }
@@ -335,6 +565,7 @@
         onClick: toTop
       }, 'Top ↑') : null,
       d ? drawer(d) : null));
+    renderWatch();
   }
 
   /* ------------------------------------------------------------------ the drawer */
@@ -1079,4 +1310,5 @@
 
   render();
   load();
+  reloadWatchlists();
 })();

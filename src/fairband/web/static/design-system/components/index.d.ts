@@ -377,6 +377,18 @@ export interface ScreenRow {
   drawdown?: number | null;
   /** The flags' short words, joined by ` · `. */
   flags?: string[];
+  /**
+   * fairband: the number of the row's quality warnings, drawn in the Flags count column; 0 on a
+   * placeholder (spec 2026-11-04 9.5).
+   */
+  flagCount?: number;
+  /**
+   * fairband: the ids of the watchlists the company is on; the Watchlists column names them from
+   * the `watchlists` prop. `watched` fills the mark: true when the company is on one or more
+   * (spec 2026-11-04 9.4).
+   */
+  watchlists?: number[];
+  watched?: boolean;
   /** The refusal reason; `null` when the engine gave a value, and the cell is then empty. */
   refusal?: string | null;
   priceDate?: string | null;
@@ -432,6 +444,10 @@ export interface ScreenFilters {
   reviewedOnly: boolean;
   /** Hide companies whose value is past its validity window. */
   hideExpired: boolean;
+  /** fairband: watchlist ids; a row on any of them matches (spec 2026-11-04 9.4). */
+  watchlist: number[];
+  /** fairband: keep the rows with no quality warning, a `flagCount` of 0 (spec 2026-11-04 9.5). */
+  cleanOnly: boolean;
 }
 
 export interface ScreenTableProps {
@@ -465,6 +481,17 @@ export interface ScreenTableProps {
    * row with `selected` carries `aria-current="true"`.
    */
   onOpen?: (row: ScreenRow) => void;
+  /**
+   * fairband: called with the row when its watchlist mark is clicked, or focused and given Enter
+   * or Space; the row does not open. Given it, the Ticker cell leads with the mark, filled when
+   * the row is `watched`; without it there is no mark (spec 2026-11-04 9.4).
+   */
+  onWatch?: (row: ScreenRow) => void;
+  /**
+   * fairband: the user's watchlists, whose names the Filters menu's WATCHLISTS section, the
+   * watchlist chip and the Watchlists column read. Without it the menu has no such section.
+   */
+  watchlists?: { id: number; name: string }[];
   /** Free text, shown in the FIND field. Supplying `onQueryChange` is what
       makes the field appear at all. */
   query?: string;
