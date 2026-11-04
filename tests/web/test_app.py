@@ -1097,6 +1097,54 @@ def test_settings_view_saves_through_the_dialog_and_follows_the_run() -> None:
     assert "font-family: var(--font-mono);" in num and "text-align: right;" in num
 
 
+def test_settings_view_shows_each_figure_at_its_own_precision() -> None:
+    """A field and the confirm show a figure as the server holds it, never rounded: the decimal
+    point moves in the number's own text, both ways, so 8.25% reads 8.25 and is 0.0825, and 8.3%
+    can be typed after it."""
+    js = _static_file("settings.js")
+    for text in (
+        "return Number(parts[0] + 'e' + (Number(parts[1] || 0) + places));",
+        "if (unit === 'fraction' || unit === 'points') return String(shift(n, 2));",
+        "if (unit === 'usd') return String(shift(n, -9));",
+        "return grouped(unit === 'fraction' || unit === 'points' ? shift(n, 2) : n);",
+        "if (unit === 'fraction' || unit === 'points') return Number(t + 'e-2');",
+        "if (unit === 'usd') return Number(t + 'e9');",
+    ):
+        assert text in js, text
+    assert "toFixed" not in js and "toLocaleString" not in js  # nothing rounds a figure
+
+
+def test_settings_view_labels_each_single_field() -> None:
+    """Only a table by moat has three fields: a symbol list, an array, is one field, which the
+    row's label names through htmlFor."""
+    js = _static_file("settings.js")
+    assert "return !!s.value && typeof s.value === 'object' && !Array.isArray(s.value);" in js
+    assert "if (byMoat(s)) return { names: MOATS, unit: s.unit };" in js
+    assert "h('label', { className: 'body app-set__label', htmlFor: 'set-' + s.name }" in js
+
+
+def test_settings_view_keeps_one_primary_and_a_true_note() -> None:
+    """One primary at a time: Revalue now is primary until the form holds a change, then Save is
+    the one. The confirm says what is true of a setting, that Reset undoes it, through the
+    dialog's note (spec 2026-11-04 8.5)."""
+    js = _static_file("settings.js")
+    assert "variant: n ? 'secondary' : 'primary', size: 'sm'," in js
+    assert "notice(state.body, n)" in js
+    assert "note: 'Reset returns any setting to its default.'," in js
+    bundle = _component_file("bundle.js")
+    dialog = bundle[bundle.index("  function ConfirmDialog(props) {") :]
+    dialog = dialog[: dialog.index("\n  }\n")]
+    assert "(spec 2026-11-04 8.5)" in dialog
+    assert (
+        "h('p', { className: 'fb-dlg__warn-note caption' }, "
+        "p.note == null ? 'This cannot be undone.' : p.note),"
+    ) in dialog
+    declarations = _component_file("index.d.ts")
+    props = re.search(r"export interface ConfirmDialogProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None
+    assert "note?: string;" in props.group(1)
+
+
 def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
     """Spec 7.3: the band meter's caption says the word and the price ÷ value; the levels below
     it read Margin of safety (the value less the moat's margin), Fair band and 1.5 × value, and
@@ -1624,7 +1672,7 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 54
+    assert bundle.count("// fairband:") >= 55
     # A menu's toggle says whether its menu is open: Button passes aria-expanded through.
     assert "'aria-expanded': p['aria-expanded']," in bundle
     # A null phase has no badge: an em dash, never phase 1 "Start-up".

@@ -120,26 +120,31 @@
     }) : [];
   }
 
+  /* A table by moat: an object that is not a list (a symbol list is one field). */
+  function byMoat(s) {
+    return !!s.value && typeof s.value === 'object' && !Array.isArray(s.value);
+  }
+
   /* A numeric setting's fields: one, two for a pair, three by moat or for the cap bands, each
-     with its name and the unit its figure is in. */
+     with its name and the unit its figure is in; a list's one field has no name. */
   function partsOf(s) {
     if (s.unit === 'cap_bands') return { names: BANDS, unit: 'usd' };
     if (PAIRS[s.name]) return { names: PAIRS[s.name], unit: s.unit };
-    if (s.value && typeof s.value === 'object') return { names: MOATS, unit: s.unit };
+    if (byMoat(s)) return { names: MOATS, unit: s.unit };
     return { names: [null], unit: s.unit };
   }
 
   function partOf(s, v, i) {
     if (s.unit === 'cap_bands') return v[i][0];
     if (PAIRS[s.name]) return v[i];
-    if (v && typeof v === 'object') return v[MOATS[i]];
+    if (byMoat(s)) return v[MOATS[i]];
     return v;
   }
 
   function fromParts(s, figures) {
     if (s.unit === 'cap_bands') return BANDS.map(function (b, i) { return [figures[i], b]; });
     if (PAIRS[s.name]) return figures;
-    if (s.value && typeof s.value === 'object') {
+    if (byMoat(s)) {
       var table = {};
       MOATS.forEach(function (m, i) { table[m] = figures[i]; });
       return table;
@@ -147,19 +152,24 @@
     return figures[0];
   }
 
-  function trim(n, places) { return String(Number(n.toFixed(places))); }
+  /* A number with its decimal point moved by places, in the decimal it is written as: 0.0825
+     moved 2 is 8.25, never 8.250000000000002, and nothing is rounded. */
+  function shift(n, places) {
+    var parts = String(n).split('e');
+    return Number(parts[0] + 'e' + (Number(parts[1] || 0) + places));
+  }
 
-  /* A figure as its field holds it: a fraction as a percentage to one decimal (9.0), points as
-     the number of points (4 for 0.04), a dollar amount in billions. */
+  /* A figure as its field holds it, at its own precision: a fraction as its percentage (9 for
+     0.09, 8.25 for 0.0825), points as the number of points (4 for 0.04), a dollar amount in
+     billions. */
   function fieldText(unit, n) {
-    if (unit === 'fraction') return (n * 100).toFixed(1);
-    if (unit === 'points') return trim(n * 100, 2);
-    if (unit === 'usd') return trim(n / 1e9, 3);
+    if (unit === 'fraction' || unit === 'points') return String(shift(n, 2));
+    if (unit === 'usd') return String(shift(n, -9));
     return String(n);
   }
 
   /* A field's text as the figure it stands for; null when it is not a number. The decimal point
-     moves in the text, so 66.7% is 0.667 exactly. */
+     moves in the text, so 66.7% is 0.667 exactly, and the field shows it back as 66.7. */
   function fromField(unit, text) {
     var t = text.trim();
     if (!NUMBER.test(t)) return null;
@@ -168,15 +178,19 @@
     return Number(t);
   }
 
+  /* A figure as a caption and the confirm show it: as its field does, the thousands grouped. */
   function figure(unit, n) {
-    if (unit === 'fraction') n = Number((n * 100).toFixed(1));
-    if (unit === 'points') n = Number((n * 100).toFixed(2));
-    return n.toLocaleString('en-US', { maximumFractionDigits: 4 });
+    return grouped(unit === 'fraction' || unit === 'points' ? shift(n, 2) : n);
+  }
+
+  function grouped(n) {
+    var parts = String(n).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
   }
 
   function amount(n) {
-    return n < 1e9 ? '$' + figure('count', Number((n / 1e6).toFixed(1))) + ' m'
-      : '$' + figure('count', Number((n / 1e9).toFixed(3))) + ' bn';
+    return n < 1e9 ? '$' + grouped(shift(n, -6)) + ' m' : '$' + grouped(shift(n, -9)) + ' bn';
   }
 
   /* A value as the captions and the confirm show it: 9%, 4 points, 5, 10, 20 years, 0.85×,
@@ -385,8 +399,9 @@
   /* One of three notices: none while the screen's figures were valued under the current policy
      version and settings hash, or before any was valued; else the revalue's, with Revalue now,
      off while a refresh runs; else the universe's, when a universe setting changed since the
-     latest full refresh began. */
-  function notice(body) {
+     latest full refresh began. Revalue now is the primary button until the form holds n changes,
+     when Save is the one. */
+  function notice(body, n) {
     var c = body.current;
     var v = body.valuedUnder;
     if (v.settingsHash != null && (v.settingsHash !== c.settingsHash ||
@@ -394,8 +409,8 @@
       return h('div', { className: 'app-set__notice' },
         h('p', { className: 'caption' }, 'Your settings changed since the last valuation.'),
         h(F.Button, {
-          variant: 'primary', size: 'sm', disabled: state.starting || P.running(),
-          onClick: revalue
+          variant: n ? 'secondary' : 'primary', size: 'sm',
+          disabled: state.starting || P.running(), onClick: revalue
         }, 'Revalue now'),
         P.running() ? h('p', { className: 'caption app-muted' }, 'A refresh is running.') : null,
         state.started ? h('p', { className: 'caption app-set__started' }, state.started) : null);
@@ -513,7 +528,8 @@
   }
 
   /* Save's dialog, over the page: each change by its policy name, old to new, as the server will
-     apply it, and the reason when there is one. Escape, a press beside it and Cancel close it. */
+     apply it, and the reason when there is one. Its note says what is true of a setting, that
+     Reset undoes it. Escape, a press beside it and Cancel close it. */
   function dialog() {
     var n = state.confirm.length;
     var payload = state.confirm.map(function (c) {
@@ -533,6 +549,7 @@
     },
       h(F.ConfirmDialog, {
         title: 'Change ' + n + ' setting' + (n === 1 ? '' : 's'),
+        note: 'Reset returns any setting to its default.',
         payload: payload,
         state: state.saving ? 'confirming' : 'open',
         onConfirm: save,
@@ -573,7 +590,7 @@
       className: 'app-set', noValidate: true,
       onSubmit: function (event) { event.preventDefault(); openConfirm(); }
     },
-      notice(state.body),
+      notice(state.body, n),
       state.failed ? h('p', { className: 'caption app-set__error' }, state.failed) : null,
       state.body.groups.map(group),
       h('div', { className: 'app-set__save' },

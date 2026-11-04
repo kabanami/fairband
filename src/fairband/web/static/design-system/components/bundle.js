@@ -801,7 +801,9 @@
     // is the danger one (spec 2026-11-04 9.6).
     return h('div', { className: cx('fb-dlg', 'fb-dlg--' + state), role: 'dialog', 'aria-modal': 'true' },
       h('h4', { className: 'fb-dlg__title title' }, p.title || 'Confirm this change'),
-      h('p', { className: 'fb-dlg__warn-note caption' }, 'This cannot be undone.'),
+      // fairband: note replaces the sentence under the title, for a write the reader can undo, as a
+      // setting is by Reset; without it the sentence stays (spec 2026-11-04 8.5).
+      h('p', { className: 'fb-dlg__warn-note caption' }, p.note == null ? 'This cannot be undone.' : p.note),
       p.payload ? h(Payload, { payload: p.payload, muted: stale }) : null,
       stale
         ? h('p', { className: 'fb-dlg__stale body' },

@@ -332,6 +332,9 @@ export interface ConfirmDialogProps {
    * write is a delete. Without `targetRevision` the dialog shows no revision line, and without
    * `onReject` no Reject. */
   confirmVariant?: 'primary' | 'danger';
+  /** fairband: the sentence under the title, in place of "This cannot be undone." for a write
+   * the reader can undo, as a setting is by Reset (spec 2026-11-04 8.5). */
+  note?: string;
 }
 
 export interface ScreenRow {
