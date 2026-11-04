@@ -259,7 +259,7 @@
     "as_of": null,
     "entered_at": null,
     "observed_at": null,
-    "source": "policy fairband-policy-v5"
+    "source": "policy"
    },
    "tag": "RULE",
    "unit": "ratio",
@@ -274,7 +274,7 @@
     "as_of": null,
     "entered_at": null,
     "observed_at": null,
-    "source": "policy fairband-policy-v5"
+    "source": "policy"
    },
    "tag": "RULE",
    "unit": "ratio",
@@ -289,7 +289,7 @@
     "as_of": null,
     "entered_at": null,
     "observed_at": null,
-    "source": "policy fairband-policy-v5"
+    "source": "policy"
    },
    "tag": "RULE",
    "unit": "class",
@@ -304,7 +304,7 @@
     "as_of": null,
     "entered_at": null,
     "observed_at": null,
-    "source": "policy fairband-policy-v5"
+    "source": "policy"
    },
    "tag": "RULE",
    "unit": "ratio",
@@ -319,7 +319,7 @@
     "as_of": null,
     "entered_at": null,
     "observed_at": null,
-    "source": "policy fairband-policy-v5"
+    "source": "policy"
    },
    "tag": "RULE",
    "unit": "peers",
@@ -334,7 +334,7 @@
     "as_of": null,
     "entered_at": null,
     "observed_at": null,
-    "source": "policy fairband-policy-v5"
+    "source": "policy"
    },
    "tag": "RULE",
    "unit": "years",
@@ -349,7 +349,7 @@
     "as_of": null,
     "entered_at": null,
     "observed_at": null,
-    "source": "policy fairband-policy-v5"
+    "source": "policy"
    },
    "tag": "RULE",
    "unit": "years",

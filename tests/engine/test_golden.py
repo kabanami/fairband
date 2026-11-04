@@ -1,6 +1,7 @@
 """The six engine fixtures under the packaged policy at its defaults, against the result dicts
 captured from method 0.7 and policy v5 before the settings build (spec 2026-11-04, 2 and 11).
-The version fields are masked: the dict's figures are what must not move."""
+The version fields are masked, and so is the policy name a RULE input cites in its provenance:
+the dict's figures are what must not move."""
 
 import json
 from datetime import date
@@ -39,6 +40,9 @@ def golden_dict(result: ValuationResult) -> dict[str, Any]:
     d: dict[str, Any] = json.loads(result_to_json(result))
     for key in MASKED:
         d.pop(key, None)
+    for tagged in d["inputs"]:
+        if tagged["provenance"]["source"].startswith("policy "):
+            tagged["provenance"]["source"] = "policy"
     return d
 
 
