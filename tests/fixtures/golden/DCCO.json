@@ -1,0 +1,1126 @@
+{
+ "data_date": "2026-10-30",
+ "deciles_refresh_id": 1,
+ "designation": "below",
+ "flags": [
+  {
+   "code": "margin-direction-disagrees",
+   "sentence": "The operating margin trend is \"Stable\", which points to Mature Stable, while the rules gave Decline.",
+   "word": "Margin direction disagrees"
+  }
+ ],
+ "inputs": [
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "statements",
+   "note": "fiscal 2021 to 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "fiscal years",
+   "value": 5.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "price",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP quote"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 3.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "shares_diluted",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "shares",
+   "value": 100000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "next_earnings",
+   "note": "2027-01-28",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP earnings-calendar"
+   },
+   "tag": "DATA",
+   "unit": "date",
+   "value": null
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "closes",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP historical-price-eod"
+   },
+   "tag": "DATA",
+   "unit": "daily closes",
+   "value": 522.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "market_cap",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP quote"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 300000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "revenue_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 1000000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "operating_income_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 80000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "eps_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD a share",
+   "value": 0.45
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "dividends_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": -20000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "buybacks_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "equity_issued_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "tax_rate_latest",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "OECD corporate tax statistics"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": 0.25
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "moat_score",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "GuruFocus summary"
+   },
+   "tag": "DATA",
+   "unit": "score",
+   "value": null
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "gf_eps_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "GuruFocus keyratios"
+   },
+   "tag": "DATA",
+   "unit": "USD a share",
+   "value": 0.45
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "gf_eps_without_nri",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "GuruFocus keyratios"
+   },
+   "tag": "DATA",
+   "unit": "USD a share",
+   "value": 0.45
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "ntm_revenue",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP analyst-estimates"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 970000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "path_step_2",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP analyst-estimates"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": -0.030000000000000027
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "path_step_3",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP analyst-estimates"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": -0.030000000000000027
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "interest_expense",
+   "note": "trailing twelve months, each period's expense by its size",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 20000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "sales_to_capital",
+   "note": "the company's own newest year: revenue over average invested capital",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": 2.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "debt",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 200000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "cash",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 100000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "total_current_assets",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 300000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "total_current_liabilities",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 200000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "total_assets",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 900000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "total_liabilities",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 500000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "retained_earnings",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 250000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "equity",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 400000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "long_term_debt",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 180000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "revenue_fy",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 1000000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "gross_profit_fy",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 340000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "operating_income_fy",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 80000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "net_income_fy",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 45000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "cfo_fy",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 100000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "stock_issued_fy",
+   "note": "fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 0.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "total_current_assets_prior",
+   "note": "fiscal 2024",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 310000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "total_current_liabilities_prior",
+   "note": "fiscal 2024",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 210000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "total_assets_prior",
+   "note": "fiscal 2024",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 900000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "long_term_debt_prior",
+   "note": "fiscal 2024",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 200000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "revenue_fy_prior",
+   "note": "fiscal 2024",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 1050000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "gross_profit_fy_prior",
+   "note": "fiscal 2024",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 360000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "net_income_fy_prior",
+   "note": "fiscal 2024",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 55000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "depreciation",
+   "note": "trailing twelve months",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 40000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "required_return",
+   "note": null,
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.09
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "runoff_years",
+   "note": null,
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "years",
+   "value": 10
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "runoff_recovery",
+   "note": "the share of the capital a fall in revenue releases that a divestiture recovers",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.6
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "distress_sale_fraction",
+   "note": "the share of the firm value a distress sale recovers",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.6
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "synthetic_rating",
+   "note": "the A- row: an interest coverage from 3 to below 4.25; the company's is 4.00",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "coverage",
+   "value": 3.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "default_probability_10y",
+   "note": "the ten-year probability of default of the A- rating",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "probability",
+   "value": 0.05
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "z_distress",
+   "note": null,
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "score",
+   "value": 1.1
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "z_safe",
+   "note": null,
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "score",
+   "value": 2.6
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "f_score_low",
+   "note": null,
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "score",
+   "value": 1
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "moat_class",
+   "note": "None",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "class",
+   "value": null
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "margin_of_safety",
+   "note": "None moat",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy fairband-policy-v5"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.45
+  }
+ ],
+ "intermediates": {
+  "altman_z": {
+   "score": 3.071777777777778,
+   "x1": 0.1111111111111111,
+   "x2": 0.2777777777777778,
+   "x3": 0.08888888888888889,
+   "x4": 0.8,
+   "year": 2025,
+   "zone": "safe"
+  },
+  "capex_vs_depreciation": {
+   "capex": -30000000.0,
+   "depreciation": 40000000.0
+  },
+  "cash": 100000000.0,
+  "debt": 200000000.0,
+  "distress_per_share": 2.255913696497558,
+  "distress_proceeds": 425591369.6497558,
+  "distress_sale_fraction": 0.6,
+  "dividend_yield": 0.06666666666666667,
+  "ebit_by_year": [
+   77600000.0,
+   75272000.0,
+   73013840.0,
+   70093286.4,
+   67289554.94399999,
+   64597972.74624,
+   62014053.83639039,
+   59533491.68293477,
+   57152152.01561738,
+   54866065.934992686
+  ],
+  "eps": {
+   "clean": 0.45,
+   "forward": null,
+   "reported": 0.45
+  },
+  "epv": 5.0,
+  "equity": 442652282.749593,
+  "expected_return": {
+   "growth": -0.040000000000000036,
+   "income": 0.06666666666666667,
+   "repricing": 0.1213927588734204,
+   "total": 0.14805942554008703
+  },
+  "fcff_by_year": [
+   67200000.0,
+   65184000.0,
+   63228480.0,
+   63522040.800000004,
+   60981159.168000005,
+   58541912.80128,
+   56200236.28922882,
+   53952226.83765965,
+   51794137.76415325,
+   49722372.25358713
+  ],
+  "firm_value": 542652282.749593,
+  "floored_per_share": 4.42652282749593,
+  "going_concern_per_share": 4.42652282749593,
+  "growth_rates": [
+   -0.030000000000000027,
+   -0.030000000000000027,
+   -0.030000000000000027,
+   -0.04,
+   -0.04,
+   -0.04,
+   -0.04,
+   -0.04,
+   -0.04,
+   -0.04
+  ],
+  "implied_decline_rate": -0.2772790222167969,
+  "income_basis": "flows over market cap",
+  "margin": {
+   "margins": [
+    0.07,
+    0.08,
+    0.08,
+    0.09,
+    0.08
+   ],
+   "median": 0.08,
+   "trailing": 0.08,
+   "used": "median",
+   "value": 0.08,
+   "years": [
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+   ]
+  },
+  "moat": "None",
+  "multiples": {
+   "pe_clean": 6.666666666666666,
+   "pe_forward": null,
+   "pe_reported": 6.666666666666666
+  },
+  "ncav": -200000000.0,
+  "ncav_per_share": -2.0,
+  "net_buyback_yield": -0.0,
+  "nopat_by_year": [
+   58200000.0,
+   56454000.0,
+   54760380.0,
+   52569964.800000004,
+   50467166.20799999,
+   48448479.55968,
+   46510540.3772928,
+   44650118.76220108,
+   42864114.011713035,
+   41149549.45124452
+  ],
+  "pi": {
+   "coverage": 4.0,
+   "rating": "A-",
+   "value": 0.05
+  },
+  "piotroski_f": {
+   "prior_year": 2024,
+   "read": 9,
+   "score": 6,
+   "signals": [
+    {
+     "name": "roa_positive",
+     "value": true
+    },
+    {
+     "name": "cfo_positive",
+     "value": true
+    },
+    {
+     "name": "roa_up",
+     "value": false
+    },
+    {
+     "name": "accrual",
+     "value": true
+    },
+    {
+     "name": "leverage_down",
+     "value": true
+    },
+    {
+     "name": "liquidity_up",
+     "value": true
+    },
+    {
+     "name": "no_issuance",
+     "value": true
+    },
+    {
+     "name": "gross_margin_up",
+     "value": false
+    },
+    {
+     "name": "turnover_up",
+     "value": false
+    }
+   ],
+   "year": 2025
+  },
+  "price_facts": {
+   "change_1y": -0.14262205156335717,
+   "change_3y": null,
+   "change_5y": null,
+   "drawdown_from_peak": -0.25,
+   "high_52w": 3.497120921305182,
+   "low_52w": 3.0
+  },
+  "rating": {
+   "coverage": 4.0,
+   "ebit": 80000000.0,
+   "interest": 20000000.0,
+   "note": null,
+   "pi": 0.05,
+   "rating": "A-",
+   "row": {
+    "coverage_below": 4.25,
+    "coverage_from": 3.0
+   }
+  },
+  "reinvestment_by_year": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "release_by_year": [
+   9000000.0,
+   8730000.0,
+   8468100.0,
+   10952076.0,
+   10513992.960000014,
+   10093433.241600001,
+   9689695.91193602,
+   9302108.075458573,
+   8930023.752440214,
+   8572822.802342605
+  ],
+  "revenue_by_year": [
+   970000000.0,
+   940900000.0,
+   912673000.0,
+   876166080.0,
+   841119436.8,
+   807474659.328,
+   775175672.9548799,
+   744168646.0366846,
+   714401900.1952173,
+   685825824.1874086
+  ],
+  "runoff_path": {
+   "d": -0.04,
+   "ntm_revenue": 970000000.0,
+   "revenue0": 1000000000.0,
+   "runoff_years": 10,
+   "steps": [
+    -0.030000000000000027,
+    -0.030000000000000027
+   ]
+  },
+  "runoff_recovery": 0.6,
+  "sales_to_capital": {
+   "used": "own-latest",
+   "value": 2.0
+  },
+  "shares": 100000000.0,
+  "tax_by_year": [
+   19400000.0,
+   18818000.0,
+   18253460.0,
+   17523321.6,
+   16822388.735999998,
+   16149493.18656,
+   15503513.459097598,
+   14883372.920733692,
+   14288038.003904345,
+   13716516.483748171
+  ],
+  "tax_rate": 0.25,
+  "terminal_value": 367180595.1034127,
+  "value_per_share": 4.317992370946011
+ },
+ "levels": {
+  "buy": 2.374895804020306,
+  "fair_high": 4.9656912265879125,
+  "fair_low": 3.670293515304109,
+  "trim": 6.476988556419016
+ },
+ "phase": {
+  "checks": [
+   {
+    "code": "margin-direction-disagrees",
+    "sentence": "The operating margin trend is \"Stable\", which points to Mature Stable, while the rules gave Decline.",
+    "word": "Margin direction disagrees"
+   }
+  ],
+  "dickinson": "Mature",
+  "fcf_sign": "positive",
+  "growth_3y": -0.05896397111897145,
+  "growth_decile": 2,
+  "growth_word": "Close to zero or negative",
+  "margin": 0.08,
+  "margin_direction": "Stable",
+  "margin_slope": 0.0029999999999999983,
+  "phase": "Decline",
+  "reason": null,
+  "revenue_slope": -40000000.0,
+  "years_used": 5
+ },
+ "price": 3.0,
+ "price_date": "2026-10-30",
+ "price_to_value": 0.6947673229313146,
+ "refusal": null,
+ "route": "decline",
+ "symbol": "DCCO",
+ "valid_until": "2027-01-28",
+ "value": 4.317992370946011
+}
