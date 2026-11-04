@@ -398,16 +398,20 @@
 
   /* One of three notices: none while the screen's figures were valued under the current policy
      version and settings hash, or before any was valued; else the revalue's, with Revalue now,
-     off while a refresh runs; else the universe's, when a universe setting changed since the
-     latest full refresh began. Revalue now is the primary button until the form holds n changes,
-     when Save is the one. */
+     off while a refresh runs, which names what changed: the user's settings when the hash
+     differs, else the policy file's version; else the universe's, when a universe setting
+     changed since the latest full refresh began. Revalue now is the primary button until the
+     form holds n changes, when Save is the one. */
   function notice(body, n) {
     var c = body.current;
     var v = body.valuedUnder;
     if (v.settingsHash != null && (v.settingsHash !== c.settingsHash ||
         v.policyVersion !== c.policyVersion)) {
+      var sentence = v.settingsHash !== c.settingsHash
+        ? 'Your settings changed since the last valuation.'
+        : 'The policy changed since the last valuation.';
       return h('div', { className: 'app-set__notice' },
-        h('p', { className: 'caption' }, 'Your settings changed since the last valuation.'),
+        h('p', { className: 'caption' }, sentence),
         h(F.Button, {
           variant: n ? 'secondary' : 'primary', size: 'sm',
           disabled: state.starting || P.running(), onClick: revalue

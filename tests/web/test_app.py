@@ -353,6 +353,16 @@ def test_groups_and_the_drawer_read_the_edges_of_the_settings(client: TestClient
     assert after["shareBelowValue"] == 0.0
 
 
+def test_the_drawer_reads_the_aging_fraction_of_the_settings(client: TestClient) -> None:
+    """The drawer's validity window turns aging where the screen's Freshness column does: the
+    route serves the effective ``aging_fraction``, a setting that takes effect at once (spec
+    2026-11-04 8.2)."""
+    assert client.get("/api/companies/AAPL").json()["agingFraction"] == 0.6667
+    r = client.put("/api/settings", json={"changes": {"aging_fraction": 0.1}}, headers=HEADER)
+    assert r.status_code == 200, r.text
+    assert client.get("/api/companies/AAPL").json()["agingFraction"] == 0.1
+
+
 def _universe(db_path: Path, policy: Policy, *companies: tuple[str, str, int, bool]) -> None:
     """A later full refresh whose universe lists ``companies``: symbol, name, market cap and
     whether it is admitted."""
@@ -621,9 +631,18 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
     response = client.get("/api/companies/AAPL")
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"company", "snapshot", "result", "today", "designationEdges"}
+    assert set(body) == {
+        "company",
+        "snapshot",
+        "result",
+        "today",
+        "designationEdges",
+        "agingFraction",
+    }
     # The policy's edges, by which the drawer keeps its price ÷ value figure inside the band.
     assert body["designationEdges"] == [0.65, 0.85, 1.15, 1.5]
+    # The fraction of the window from which the drawer's validity window reads aging.
+    assert body["agingFraction"] == 0.6667
     result = body["result"]
     assert result == json.loads(result_to_json(results["AAPL"]))
     assert result["route"] == "mature-growth"
@@ -1038,9 +1057,47 @@ def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
     assert "targetRevision" not in view and "onReject" not in view
 
 
+def test_the_drawer_window_judges_aging_as_the_screen_does() -> None:
+    """ValidityWindow takes ``agingFraction``, 0.6667 by default, and judges its state by the
+    server's rule (``validity_state``): on whole days, aging from that fraction of the window,
+    expired after its last day. The drawer passes the route's figure, so after a change of
+    ``aging_fraction`` a row reads the same in the drawer as in the Freshness column (spec
+    2026-11-04 8.2)."""
+    bundle = _component_file("bundle.js")
+    window = bundle[bundle.index("  function ValidityWindow(props) {") :]
+    window = window[: window.index("\n  }\n")]
+    assert (
+        "// fairband: the state as the screen's Freshness column judges it (spec 2026-11-04 8.2)"
+        in (window)
+    )
+    for text in (
+        "var fraction = p.agingFraction == null ? 0.6667 : p.agingFraction;",
+        "var day = function (iso) { return Date.parse(String(iso).slice(0, 10)) / 864e5; };",
+        "var elapsed = day(p.today || p.enteredAt || p.validFrom) - day(p.validFrom);",
+        "var length = day(p.validUntil) - day(p.validFrom);",
+        "var state = elapsed > length ? 'expired' : elapsed >= fraction * length ? 'aging'",
+    ):
+        assert text in window, text
+    assert "0.6667 ?" not in window and "ratio > 1" not in window
+    declarations = _component_file("index.d.ts")
+    props = re.search(
+        r"export interface ValidityWindowProps \{\n(.*?)\n\}", declarations, re.DOTALL
+    )
+    assert props is not None
+    assert "agingFraction?: number;" in props.group(1)
+    assert "(spec 2026-11-04 8.2)" in props.group(1)
+    script = _static_file("app.js")
+    assert "validFrom: r.data_date, validUntil: r.valid_until, today: body.today," in script
+    assert "agingFraction: body.agingFraction" in script
+
+
 def test_settings_view_form_and_notices() -> None:
     js = _static_file("settings.js")
-    assert "'Your settings changed since the last valuation.'" in js
+    # the notice names what changed: the user's settings (the hash), else the policy's version
+    assert "var sentence = v.settingsHash !== c.settingsHash" in js
+    assert "? 'Your settings changed since the last valuation.'" in js
+    assert ": 'The policy changed since the last valuation.';" in js
+    assert "h('p', { className: 'caption' }, sentence)," in js
     assert "'Revalue now'" in js and "P.api.post('/api/refresh', { kind: 'revalue' }" in js
     assert "'A universe setting changed since the last full refresh: run Refresh all.'" in js
     assert "'takes effect at the next revalue'" in js and "'takes effect at once'" in js
@@ -1149,8 +1206,10 @@ def test_settings_view_keeps_one_primary_and_a_true_note() -> None:
 
 def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
     """Spec 7.3: the band meter's caption says the word and the price ÷ value; the levels below
-    it read Margin of safety (the value less the moat's margin), Fair band and 1.5 × value, and
-    the meter's own scale, whose words would collide in the rail, is off."""
+    it read Margin of safety (the value less the moat's margin), Fair band and the trim multiple
+    × value, the multiple read from the levels as the margin is, so 1.75 under a setting of 1.75
+    and 1.5 at the default; and the meter's own scale, whose words would collide in the rail, is
+    off."""
     script = _static_file("app.js")
     assert "buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation," in script
     assert "showScale: false, caption: standing(r, body.designationEdges)" in script
@@ -1164,7 +1223,9 @@ def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
     assert "['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy)," in script
     assert "'value less the ' + moat + ' moat\\'s ' + margin + '%'" in script
     assert "['Fair band', F.formatMoney(r.levels.fair_low) + ' – ' +" in script
-    assert "['1.5 × value', F.formatMoney(r.levels.trim), true]" in script
+    assert "var multiple = Number((r.levels.trim / r.value).toFixed(2));" in script
+    assert "[multiple + ' × value', F.formatMoney(r.levels.trim), true]" in script
+    assert "'1.5 × value'" not in script
     # the route's name, the meter's caption before, keeps a line of its own under the levels
     assert "h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route)," in script
 
@@ -1674,7 +1735,7 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 55
+    assert bundle.count("// fairband:") >= 56
     # A menu's toggle says whether its menu is open: Button passes aria-expanded through.
     assert "'aria-expanded': p['aria-expanded']," in bundle
     # A null phase has no badge: an em dash, never phase 1 "Start-up".
@@ -1803,6 +1864,18 @@ def test_the_bar_gives_the_find_ring_room() -> None:
     assert "the room FIND's focus ring (2px, offset 1px) needs" in css
     page = _static_file("index.html")
     assert "padding" not in _rule(page, ".app-main {")
+
+
+def test_the_columns_menu_scrolls_inside_the_window() -> None:
+    """Columns ▾ lists all 48 columns, taller than a 900px window: a menu of the screen's bar
+    stops 12rem short of the window's height and scrolls, so the last rows, the Warnings column
+    among them, can be reached (spec 2026-11-04 9.4)."""
+    css = _component_file("bundle.css")
+    menu = _rule(css, ".fb-screen__cols > .fb-menu {")
+    assert "max-height: calc(100vh - 12rem);" in menu and "overflow-y: auto;" in menu
+    patch = css[: css.index(".fb-screen__cols > .fb-menu {")]
+    patch = patch[patch.rindex("/* fairband:") :]
+    assert "(spec 2026-11-04 9.4)" in patch
 
 
 def test_bundle_css_bar_is_sticky_and_the_header_sits_under_it() -> None:

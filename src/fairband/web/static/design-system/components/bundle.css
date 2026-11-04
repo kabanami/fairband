@@ -730,6 +730,11 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   padding: var(--space-2);
   min-width: 200px;
 }
+/* fairband: a menu of the screen's bar stops 12rem short of the window's height and scrolls
+   (spec 2026-11-04 9.4). Columns ▾ lists every column, 48 of them, taller than a 900px window,
+   and its last rows, Warnings among them, sat below the window. The Filters menu's own body
+   scrolls at 368px, so the rule changes it only in a short window. */
+.fb-screen__cols > .fb-menu { max-height: calc(100vh - 12rem); overflow-y: auto; }
 .fb-menu__row {
   display: flex;
   align-items: center;

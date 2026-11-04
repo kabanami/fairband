@@ -496,7 +496,16 @@
     var span = Math.max(until - from, 1);
     var ratio = (now - from) / span;
     var pos = Math.min(Math.max(ratio, 0), 1) * 100;
-    var state = ratio > 1 ? 'expired' : ratio > 0.6667 ? 'aging' : 'current';
+    // fairband: the state as the screen's Freshness column judges it (spec 2026-11-04 8.2): on
+    // whole days, each date read as its calendar day; aging once agingFraction of the window has
+    // passed, the effective aging_fraction the caller passes (0.6667 by default); expired after
+    // the window's last day.
+    var fraction = p.agingFraction == null ? 0.6667 : p.agingFraction;
+    var day = function (iso) { return Date.parse(String(iso).slice(0, 10)) / 864e5; };
+    var elapsed = day(p.today || p.enteredAt || p.validFrom) - day(p.validFrom);
+    var length = day(p.validUntil) - day(p.validFrom);
+    var state = elapsed > length ? 'expired' : elapsed >= fraction * length ? 'aging'
+      : 'current';
     var rows = [
       ['As of', p.asOf, 'the period this fact describes'],
       ['Observed', p.observedAt, 'read from its source'],

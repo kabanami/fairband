@@ -20,8 +20,9 @@ same rows. Each row carries the ids of the watchlists the company is on.
 
 Each request that reads a policy value reads the effective policy, the file's values with the
 user's settings over them, so a changed setting shows at the next request: the aging fraction of
-the rows' freshness, the designation edges of the groups and the drawer. A stored setting the
-policy refuses makes those routes answer 409 naming it, until it is reset (``settings_api``).
+the rows' freshness and the drawer's validity window, the designation edges of the groups and the
+drawer. A stored setting the policy refuses makes those routes answer 409 naming it, until it is
+reset (``settings_api``).
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
 command that stopped, and logs how many.
@@ -201,14 +202,15 @@ def create_app(
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:
-        """The company's latest snapshot in full, with its latest universe row and the effective
-        policy's designation edges, by which the drawer keeps its price ÷ value figure inside the
-        word's band."""
+        """The company's latest snapshot in full, with its latest universe row and two of the
+        effective policy's values: the designation edges, by which the drawer keeps its price ÷
+        value figure inside the word's band, and ``aging_fraction``, by which its validity window
+        reads aging where the screen's Freshness column does."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
             listed = latest_company(conn, symbol)
-            edges = current(conn).designation_edges
+            read_under = current(conn)
         if snapshot is None:
             raise HTTPException(404, f"no snapshot for {symbol}")
         return {
@@ -216,7 +218,8 @@ def create_app(
             "snapshot": snapshot_json(snapshot),
             "result": json.loads(result_to_json(snapshot.result)),
             "today": today.isoformat(),
-            "designationEdges": list(edges),
+            "designationEdges": list(read_under.designation_edges),
+            "agingFraction": read_under.aging_fraction,
         }
 
     @app.get("/api/policy")

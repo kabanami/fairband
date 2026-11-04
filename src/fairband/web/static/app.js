@@ -634,10 +634,13 @@
         'implied_margin' in im ? pairs([
           ['Margin the price needs', F.formatPercent(im.implied_margin), true]
         ]) : null) : null,
+      /* The window reads aging from the effective aging_fraction, as the Freshness column does
+         (spec 2026-11-04 8.2). */
       section('window', null, h(F.ValidityWindow, {
         asOf: r.data_date, observedAt: r.data_date,
         enteredAt: localIso(body.snapshot.createdAt),
-        validFrom: r.data_date, validUntil: r.valid_until, today: body.today
+        validFrom: r.data_date, validUntil: r.valid_until, today: body.today,
+        agingFraction: body.agingFraction
       })),
       section('phase', 'Phase evidence', pairs(evidence(r.phase, phase)),
         methodologyLink(r, phase)),
@@ -688,11 +691,14 @@
   }
 
   /* The levels under the band meter, each named for what sets it (spec 7.3): the value less the
-     moat's margin of safety, the fair band, 1.5 × the value. The meter's own scale is off: in the
-     drawer's rail these names would run into each other. */
+     moat's margin of safety, the fair band, the trim multiple × the value. The margin and the
+     multiple are read from the levels, so each follows the settings the row was valued under:
+     1.5 × value at the default, 1.75 × value under a trim multiple of 1.75. The meter's own scale
+     is off: in the drawer's rail these names would run into each other. */
   function levels(r) {
     var moat = r.intermediates.moat;
     var margin = Math.round((1 - r.levels.buy / r.value) * 100);
+    var multiple = Number((r.levels.trim / r.value).toFixed(2));
     var basis = moat === 'None' ? 'value less the ' + margin + '% margin for no moat'
       : 'value less the ' + moat + ' moat\'s ' + margin + '%';
     return h('div', { className: 'app-levels' }, pairs([
@@ -701,7 +707,7 @@
         moat ? h('span', { className: 'caption app-muted app-line' }, basis) : null), true],
       ['Fair band', F.formatMoney(r.levels.fair_low) + ' – ' +
         F.formatMoney(r.levels.fair_high), true],
-      ['1.5 × value', F.formatMoney(r.levels.trim), true]
+      [multiple + ' × value', F.formatMoney(r.levels.trim), true]
     ]));
   }
 

@@ -201,6 +201,12 @@ export interface ValidityWindowProps {
   /** The engine's clock, never the browser's. Defaults to `enteredAt`. */
   today?: string;
   tag?: string;
+  /**
+   * fairband: the fraction of the window after which the value reads aging, the effective
+   * `aging_fraction` setting (spec 2026-11-04 8.2); 0.6667 by default. The state is judged on
+   * whole days, as the screen's Freshness column is.
+   */
+  agingFraction?: number;
 }
 
 export interface TaggedInputProps {

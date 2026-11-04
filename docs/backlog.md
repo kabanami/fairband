@@ -52,6 +52,9 @@ file or theme, before the workspace is deleted.
 | B-19 | Designation: the groups' share recomputes price ÷ value against the edge instead of reading the row's `priceToValue`; the drawer's in-band figure reads the current policy's edges, not the snapshot's; the meter's own "% below fair value" figure (bundle.js, about line 433) rounds across a band edge | debt | plan A, final review | one figure reads 15.0% at a ratio of 0.8499 |
 | B-20 | Peers: computed for every company, not only the growth phases (about 28 s a value stage); a per-stage memo symbol → PeerFigures; the drawer does not list the peers behind the sales-to-capital and ROIC medians; `path.cap` and `revenue_path.hold` show as 0.15, not 15%, in the drawer's generic list | debt | growth routes, Task 4 and final review | |
 | B-47 | A flag for a large price fall with no change in the consensus, read against the consensus stored at the previous refresh; no new endpoint | feature | design.md 4.2 | the top of a screen collects errors; a fall with a revision is a different row from a fall without one |
+| B-75 | A rule between two settings names one the user did not touch: lowering r under a stored g_T names `terminal_growth`; a Narrow margin of safety above 1 − the band's low names `fair_band`; resetting the size floor under stored cap bands names `universe.cap_bands`; the confirm of a changed size floor omits the Mid band it carries | fix | final review, 2026-11-04 | |
+| B-76 | `policy/settings.py`: only 4 of the 40 catalogue rows are pinned against spec 8.2 (a table-driven test would lock the rest); `check()`'s docstring misstates a cross-field rule's order; a 401-digit integer in `PUT /api/settings` raises `OverflowError` (a 500) in `_num`; `universe.exchanges` is compared with its default in order | debt | final review, 2026-11-04 | |
+| B-77 | `returns.py` keeps `horizon: int = 3` though spec 8.3 says the policy value replaces it; `docs/method.md` uses H for both the repricing horizon and `high_growth_years` | debt | final review, 2026-11-04 | |
 
 ### Tier 2 and agent access (new files; B-9 is the umbrella)
 
@@ -89,6 +92,7 @@ file or theme, before the workspace is deleted.
 | B-26 | Ultimate-only FMP content (earnings call transcripts, for one) is unused; the legacy design assumed the Premium plan | feature | 2026-11-01 | |
 | B-63 | Refresh scope by cap band (all Mega, or Mega and Large) as a CLI option and an MCP argument, not a page control | feature | FC-06; founder 2026-10-27 and 2026-11-04 | the page has full, price and revalue; a symbol list covers the rest |
 | B-64 | Point-in-time: as-of reads over the stored observations, which are dated and appended, so a revalue can run as of a past date; a backtest command only once B-56 has data | feature | FC-04; design.md 11.5 | |
+| B-85 | Refresh tests read `Refresh`'s private `_fmp`, `_gf` and `_secrets`; nothing tests a reset of a name with no row or a write over a stale row | debt | final review, 2026-11-04 | |
 
 ### Universe and data
 
@@ -107,7 +111,7 @@ file or theme, before the workspace is deleted.
 |---|---|---|---|---|
 | B-31 | FIND re-renders and re-lays out the whole table on every keystroke: 0.1 to 0.3 s on 1,759 rows, measured headless. Debounce the narrowing or virtualise the body | fix | screen controls, 2026-11-02 | |
 | B-32 | Industry filter (121 names) and the failed-count button; the page counts a full refresh's failures from refusal prefixes | feature | first live run, 2026-11-01 | |
-| B-33 | Drawer: the "π" head needs a case override (the glyph is outside the font subset) and the "Needs by yr 10" wording; the Rating column's "—" for no net debt looks null and sorts alphabetically; Z″'s "No score" reason is wrong without balance years; the Decline sales-to-capital note always says "mature peers' median" (the industry fallback too); `app.js` is 1,071 lines; tests do not pin the drawer's `im.*` keys to the routes' intermediates nor `SIGNALS` to `piotroski_f`'s names; no row test for an unavailable rating | debt | plan B, Task 6 review | |
+| B-33 | Drawer: the "π" head needs a case override (the glyph is outside the font subset) and the "Needs by yr 10" wording; the Rating column's "—" for no net debt looks null and sorts alphabetically; Z″'s "No score" reason is wrong without balance years; the Decline sales-to-capital note always says "mature peers' median" (the industry fallback too); `app.js` is 1,352 lines; tests do not pin the drawer's `im.*` keys to the routes' intermediates nor `SIGNALS` to `piotroski_f`'s names; no row test for an unavailable rating | debt | plan B, Task 6 review | |
 | B-34 | Meter head: the chip, the "% below fair value" figure and the caption state one fact up to four times; dead CSS `.fb-zone > span`; the bundle's default scale still prints Buy and Trim (unused); the margin % is recomputed from the levels, not read from the rule input | debt | plan A, Task 6 review | |
 | B-35 | Sticky bar: a browser without ResizeObserver loses the sideways behaviour; while `#screen` is hidden (Groups view) the observer writes `--scroller-width: 0px` and the first frame back can raise the loop error (skip the writes when `main.clientWidth === 0`) | debt | plan A, Task 7 review | |
 | B-36 | Chooser: reorders its rows while open (the spec asks for table order first); the drop flag lasts until the next press; Clear on FIND drops focus to body | fix | screen controls and growth routes reviews | |
@@ -117,13 +121,20 @@ file or theme, before the workspace is deleted.
 | B-70 | The phase multiples the stored data gives: EV/Sales, EV/forward sales, PEG, EV/EBITDA, P/B; not EV/TAM, EV/users, EV/subscribers or EV/liquidation value | feature | FC-19; design.md 9.5; founder 2026-11-04 | the three P/E, EPV and the growth share exist; the NCAV figure stands in for liquidation |
 | B-71 | Ownership evidence in the drawer: institutional ownership, guru holdings and their quarterly moves, insider transactions, each with its as-of date; evidence only, never a value or a designation | feature | FC-49; founder 2026-10-27 | |
 | B-72 | Recent picks across the universe: guru buys and sells and insider buys from FMP's or GuruFocus's endpoints, joined to the row's value and designation; no filing parsing | feature | FC-50; founder 2026-11-04 | |
+| B-78 | `watchlists_api.py`'s `_refusals` maps any `KeyError` to a 404 (a `NoWatchlist` error would be safer); `app.js`'s `getJson` drops a 409's sentence, so a refused stored setting reads "the server answered 409. Reload the page" on the screen, groups and drawer | debt | final review, 2026-11-04 | |
+| B-79 | The watchlist popup in `app.js`: the boxes can disagree with the server after a failed write followed by a quick change; focus is lost after Add creates a list; it copies `menuSection`'s markup and finds its mark through a global capture listener because `onWatch` passes no element | debt | final review, 2026-11-04 | |
+| B-80 | The Watchlists view: Delete's dialog does not hold focus; a failed load of the lists or the rows leaves the view silent; the old name flashes after a rename; focus falls to body after a popup removal or after Create when its target is not drawn yet; `refusal()` and `found()` copy `app.js` | debt | final review, 2026-11-04 | |
+| B-81 | The Settings view: a revalue shorter than the first poll leaves the notice up; Revalue now re-enables for a moment after a 200; errors have no `aria-describedby`; focus can fall to body after a save; a server detail ending in a period doubles it; the 409 and 503 sentences are copied from `controls.js`; a stale `typeIn` comment; a duplicated CSS rule; the disabled primary Save keeps a teal border; the drawer clamps price ÷ value with the current edges while the word was set under the snapshot's settings | debt | final review, 2026-11-04 | |
+| B-82 | At 375 to 414px the header grows by two lines, not one; at 320px the page scrolls sideways by 27px; the Methodology diagram's labels render about 4px tall at 375px. Options: shorten the stamp or the buttons at phone width; accept | question | final review, 2026-11-04 | |
+| B-83 | "Open today's row" matches the symbol inside company names, so KO lands among 16 rows; `find()` clears the filters and leaves an open drawer on another symbol; the Watchlists column sorts by list ids, not names | fix | final review, 2026-11-04 | |
+| B-84 | The Methodology page: the High Growth entry's "once the margin is positive" sentence leaves out rule 2 and rule 4a; the 3M table's layout differs from MSFT's; no test checks that each cited unit has a formatter; the page test copies `QUALITY_WARNINGS` and the panel ids instead of importing them; the deciles 404 is read from the error text | debt | final review, 2026-11-04 | |
 
 ### Design system (the external artifact; patched copies live in `web/static/design-system/`)
 
 | ID | Item | Type | Origin | Why |
 |---|---|---|---|---|
 | B-39 | The header renders 45px (`.fb-hdr` sets 44px plus a 1px border without `box-sizing`); the FIND focus ring is clipped by the scroll container; `F.Button` drops `aria-expanded` | fix | screen controls and growth routes | |
-| B-40 | A new export needs the 43 `// fairband:` patches re-applied by hand; a patch script would remove the hand work | debt | since 2026-11-01 | |
+| B-40 | A new export needs the `fairband:` patches re-applied by hand, 56 in `bundle.js`, 10 in `bundle.css` and 30 in `index.d.ts`; a patch script would remove the hand work | debt | since 2026-11-01 | |
 
 ### Documents
 
