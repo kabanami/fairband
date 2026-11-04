@@ -1,6 +1,7 @@
 # Methodology page, settings and watchlists: design
 
-**Date:** 2026-11-04. **Founder:** Khalid Abanami. **Status:** draft for the builder check.
+**Date:** 2026-11-04. **Founder:** Khalid Abanami. **Status:** built on the branch
+methodology-settings-watchlists, 2026-11-04; awaiting merge.
 
 Three pieces in one plan, chosen by the founder on 2026-11-04 from `docs/backlog.md`: the
 Methodology page (B-73), settings (B-2, closing B-24) and watchlists (B-67) with the flag-count
@@ -113,7 +114,7 @@ the only configuration there is". The founder overrides it on 2026-11-04: settin
 named by the word, not a gear. The `count` of a view is not used in this piece; the inbox will
 use it.
 
-At phone width the five views wrap to a second line under the lockup, in the same type style;
+Below 840px the five views wrap to a second line under the lockup, in the same type style;
 the header grows by one line there. *My call.* The 44px budget holds at desktop width: five
 words in `control` type fit beside the mark and the engine stamp.
 
@@ -193,8 +194,8 @@ Each section has an `id` for the hash (7.7). The sections and what each must cov
     flag-count column (9.5), and the notes that do not, each with its short word, its code in a
     code chip and one sentence from `docs/method.md` section 8 rewritten for the reader.
 11. **Sources** (`sources`). The list of 7.6 with links.
-12. **Your settings** (`settings`). One paragraph: the figures above marked as live come from
-    the policy defaults or the reader's settings; a link to the Settings view; the policy
+12. **Your settings** (`your-settings`). One paragraph: the figures above marked as live come
+    from the policy defaults or the reader's settings; a link to the Settings view; the policy
     version and, when settings differ from the defaults, the sentence "n settings differ from
     the defaults".
 
@@ -528,7 +529,7 @@ range; both are checked in `store/settings.py` and again in `load_policy`.
 
 ### 8.8 Who reads the overlay
 
-`load_policy` keeps reading the file. A new `effective_policy(conn)` in `fairband.policy`
+`load_policy` keeps reading the file. A new `effective_policy(conn)` in `fairband.store.settings`
 reads the file, applies the overlay from `settings`, checks the ranges and returns a `Policy`
 with `settings_hash` set. The server builds the effective policy per request where it reads
 policy values (`rows.py` reads `aging_fraction` and the edges) and per run in the worker; the
@@ -616,7 +617,7 @@ stay on a list; its row then shows no snapshot figures).
   two become `3 watchlists`; the clean row's chip reads `Clean`. Both are patches to the
   bundle's menu and chip code.
 - **The columns.** The chooser gains two columns: `Watchlists` (the names joined by ` · `, em
-  dash for none) and `Flags` (the count, right-aligned mono; the existing `flags` column keeps
+  dash for none) and `Warnings` (the count, right-aligned mono; the existing `flags` column keeps
   the words). The brand book's rule that a filter is also a column holds.
 
 ### 9.5 The flag count and the clean filter
@@ -639,8 +640,9 @@ The list is a constant in `engine/flags.py` (structure, 4.1a), and section 8 of 
 gains a column "Counts" saying which flags do. A refusal row has a count too (its flags are
 kept).
 
-`Flags` sorts as a number. `cleanOnly` keeps the rows whose count is zero. "Cheap and clean" is
-then the screen sorted by price ÷ value with `Clean` on, and nothing composite is scored.
+`Warnings` sorts as a number. `cleanOnly` keeps the valued rows whose count is zero. "Cheap and
+clean" is then the screen sorted by price ÷ value with `Clean` on, and nothing composite is
+scored.
 
 ### 9.6 The Watchlists view
 
@@ -749,7 +751,7 @@ Python, in the folders that mirror the package:
 - On the screen, pressing the mark beside MSFT opens the popup; creating "Quality" there puts
   MSFT on it and fills the mark; Filters ▾ → Quality narrows the screen to MSFT; the Watchlists
   view shows Quality with MSFT's row; unchecking there empties the mark on the screen.
-- `Flags` sorts by count; `Clean` leaves only rows with a zero count; a row with only
+- `Warnings` sorts by count; `Clean` leaves only valued rows with a zero count; a row with only
   `leases-not-on-balance-sheet`, `few-analysts` and `margin-direction-disagrees` counts zero,
   and one with `large-nri` counts one.
 - The checks command passes; the method and the backlog are updated in the same commits.
@@ -770,3 +772,31 @@ Python, in the folders that mirror the package:
 | 2026-11-04 | Both ways into the work inbox exist later: the button and the expiry rule for watchlist companies. Founder. Not built here. |
 | 2026-11-04 | The flag count counts the eleven quality warnings of 9.5 and Clean is a zero count; every other flag is a note. Claude's recommendation from the run's figures, founder chose it over a count of every warning with an "at most N" filter. |
 | 2026-11-04 | The reviewer's three other questions settled by Claude: `aging_fraction` out of the settings hash; the expected return's path grows at g_T past the runway; 38 settings over 40 names. |
+| 2026-11-04 | Built as the rows above decided: the designation edges and the Wide cap derived (8.3); the settings hash over groups A and B and `validity_fallback_days`, not `aging_fraction` (8.4); the expected return's path at g_T past the runway (8.3); B-2's 429 mode and probe dropped (3). The 38 settings are 40 policy names, and the Settings view shows one row per name, so the margin flag's three names are three rows (8.5). Claude, during the build. |
+| 2026-11-04 | The header's five views wrap below 840px, not at phone width (6): a 600px wrap left the page scrolling sideways from 600 to about 810px. At 375 to 414px the header grows by two lines, not one, because the refresh buttons and the stamp take their own line; the founder may want that otherwise. Claude, during the build. |
+| 2026-11-04 | The Methodology page's last section id is `your-settings`: `settings` is the Settings view's panel, and a duplicate id is invalid HTML. 7.2 now says so. Claude, during the build. |
+| 2026-11-04 | A size floor changed on its own carries the Mid band's floor with it; cap bands set explicitly are checked as given (8.2). Two checks beyond 8.9 stand: the bands are labelled exactly Mega, Large and Mid, and no exchange repeats. Claude, during the build. |
+| 2026-11-04 | `Revalue now` is primary while the form holds no unsaved change and secondary while it holds one, so one primary button shows at a time, as the brand book asks (8.5 said primary). Claude, during the build. |
+| 2026-11-04 | Each Settings field and the confirm show a value at its own precision, trailing zeros trimmed and never rounded, so what is shown is what the server applies (8.5). The Methodology page keeps 7.4's one decimal. Claude, during the build. |
+| 2026-11-04 | `valuedUnder` reads the latest snapshots of the screen's admitted companies only, so the revalue notice clears after a size-floor change. `universeChanged` reads the `settings_changes` log for any `universe.*` entry after the latest full refresh began, resets included, not the overlay rows' `changed_at` (8.5, 8.7). Claude, during the build. |
+| 2026-11-04 | A save writes only the entries whose value changes. An unchanged save writes no `settings_changes` row and drops its reason, and a value equal to its default is stored as no row. So a save that changes nothing never moves the settings hash or a `changed_at` (8.6). Claude, during the build. |
+| 2026-11-04 | `changed` on a setting means the user holds a stored row for it, not that its value differs from the default (8.7). The cap bands a changed size floor carries read unchanged, since Reset would do nothing there. Claude, during the build. |
+| 2026-11-04 | A stored setting the policy refuses, such as a name a later file dropped, makes every route that reads the policy answer 409 with "settings: <name>: <rule>; reset it on the Settings page", never a 500. The reset route works without the policy, and the Settings view shows the sentence with `Reset all settings`. A refresh started from the page answers 400 with it, and the CLI stops on it in one line (exit 2). Claude, during the build. |
+| 2026-11-04 | `effective_policy` lives in `fairband.store.settings`, not `fairband.policy`: the policy package must not import the store. 8.8 now says so. Claude, during the build. |
+| 2026-11-04 | The fair band's low must be above 1 − the Narrow margin of safety, so the four designation edges ascend under any setting the page accepts; 8.9 carries the rule. Claude, during the build. |
+| 2026-11-04 | The count column is headed `Warnings`, not `Flags` (9.4, 9.5, 13). The words column keeps `Flags`, two columns with one head could not be told apart in the chooser, and 9.5's word for the eleven is quality warnings. Claude, during the build. |
+| 2026-11-04 | `Clean` keeps the valued rows whose count is zero, not every row with a zero count (9.5, 13). A refusal has no value for the price to be cheap against, so it is never clean. Claude, during the build. |
+| 2026-11-04 | Opening a row in the Watchlists view switches to the Screen view, where the drawer lives, until B-33 splits the drawer out (9.6). Claude, during the build. |
+| 2026-11-04 | `ConfirmDialog` gains `// fairband:` patches: no "target · review" gloss without `targetRevision`, no Reject without `onReject`, `confirmVariant` so a delete's one affirmative button is the danger one, and a `note` in place of the fixed "This cannot be undone." Settings sets the note to "Reset returns any setting to its default." Claude, during the build. |
+| 2026-11-04 | The drawer's Escape acts only while the Screen view is shown, so Escape in another view's field never closes the hidden drawer. Claude, during the build. |
+| 2026-11-04 | The golden files mask the policy name in each rule input's provenance as well as the version fields, so the 0.7 baseline survives the switch to v6 (11). Claude, during the build. |
+| 2026-11-04 | The build did not revalue the live database (12). Another session's server held port 8470, and a server on the older method fails on newer snapshots (B-44). The examples were read from a scratch copy revalued under 0.8; the figures are deterministic. The founder runs the live revalue after the merge, copying the database to `fairband-before-v6-<date>.db` first. Claude, during the build. |
+| 2026-11-04 | Hand check of section 13 on a copy of the live database, revalued under 0.8 at the defaults and served from the branch on port 8471. The live database and port 8470 were not touched, and the copy was deleted after. Claude, during the build. |
+| 2026-11-04 | Hand check: the header, `#methodology/decline` and the drawer's link — pass. The five views show in order and each sets its hash; `#methodology/decline` opens the Decline section at the top; MMM's drawer link "How Fairband values a Decline company" opens it, and MSFT's opens Mature Growth. Claude, during the build. |
+| 2026-11-04 | Hand check: the Methodology page — pass, with one deviation. The diagram has six bands and the live counts 44, 50, 100, 811, 490 and 112, as `/api/groups` gives; the twelve sections, the six examples and the "Figures as of" line are there. Ten source links answer 200; the journal's DOI and oecd.org answer a headless browser with a bot check (403), so they are live. With r at 10%, every live r read 10.0% and the Wide cap 14.0%; the 9.0% left are the low return sensitivity, a decile edge shown twice and MSFT's example as of its date. The deviation: at 375px the diagram's labels render about 4px tall, against 7.3; the list under the diagram carries the counts. Claude, during the build. |
+| 2026-11-04 | Hand check: r to 10%, the revalue, the price refresh, r at 2% and Reset — pass, with the expected deviation. The confirm read `required_return 9% → 10%`; Revalue now ran 152 s and the notice cleared on its own. 1,202 of the 1,207 rows valued both times changed value. The five that kept theirs are Decline rows on the NCAV floor (GME, KYMR, MRNA, RGTI, ROIV), so the line holds for every row whose value reads r. Refresh prices then repriced 1,626 of 1,626; one run before the revalue had failed all 1,626 with "settings changed: run a revalue". At 2% the 400 "required_return: must be from 4% to 20%" stood under the field and nothing was written; Reset put 9% back, and the revalue notice returned. Claude, during the build. |
+| 2026-11-04 | Hand check: the defaults after the v6 revalue — pass. Against the v5 revalue of 2026-11-03, all 1,626 rows keep their phase, route, value, levels, designation, flags, refusal and price ÷ value, bit for bit; 1,209 of them are valued. Claude, during the build. |
+| 2026-11-04 | Hand check: the CLI revalue after a page-side change — pass. With r set to 11% on the Settings view and the server stopped, `refresh --kind revalue` wrote 1,626 snapshots under the overlay's new hash, as its refresh row records; on restart the Settings view showed no notice. Claude, during the build. |
+| 2026-11-04 | Hand check: the mark on MSFT and the Quality list — pass. The mark opened the popup without opening the row; Add with "Quality" made the list with MSFT on it and filled the mark. Filters ▾ → Quality narrowed 1,626 rows to MSFT under a `Quality` chip; the Watchlists view showed Quality with MSFT's row; unchecking it there emptied the mark on the screen. Claude, during the build. |
+| 2026-11-04 | Hand check: `Warnings` and `Clean` — pass. Warnings sorts by number both ways (0 to 7). Clean left 174 rows, all valued with a zero count, as the API counts them, and every row's count equals its snapshot's quality warnings. AME, with only the three notes and two line notes, counts zero; A, with `large-nri` and notes, counts one. The Warnings row of Columns ▾ sits below a 900px window (a deferred minor), so the walk used a taller one. Claude, during the build. |
+| 2026-11-04 | Hand check: the checks and the documents — pass. The checks command passes (1,221 tests); `docs/method.md` changed in the policy, engine and refresh commits; the backlog moves to Done in this closing commit, as the plan's last task sets. Claude, during the build. |

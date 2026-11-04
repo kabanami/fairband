@@ -18,10 +18,6 @@ file or theme, before the workspace is deleted.
 
 | ID | Item | Type | Origin | Why |
 |---|---|---|---|---|
-| B-73 | Methodology page: a header link to a page that teaches a reader how the classifier puts a company in a phase and how each phase's route values it, in plain words, with one real company per phase worked through as of a named refresh date, a life-cycle diagram in inline SVG with the live phase counts, and each rule's source linked where one can be; reads the live policy values; changes in the commit that changes the method | feature | founder, 2026-11-04 | users must understand the method they are trusting; `docs/method.md` is written for an auditor |
-| B-2 | Settings and parametization | feature | founder, 2026-11-01 and 2026-11-03 | Per-user settings for the values now in the policy or hard-coded: the hurdle rate, the time horizon, the FMP worker count and pace, 429 handling (show the user a 429; probe the plan limit first), the runway years, the stable route's 3-year horizon in `stable_at_price`. Load-time checks for the ranges the code assumes (runway under 4 years raises; `high_growth_years` below 3; `convergence_year` 0; `rate_limit_hold_s` accepts nan, inf and negatives; `designation_edges` not checked to ascend). |
-| B-67 | Watchlists: named lists, a company in several, each entry dated; a watchlist filter on the screen; the lists readable over MCP | feature | FC-26; founder 2026-11-04 | a membership list, not idea tracking; B-58 posts work for its expired companies |
-| B-69 | A flag-count column that sorts and a "clean" filter (no warning flag); no composite score | feature | FC-22; design.md 4.2 | rank by "cheap and clean": the Filters menu has stance, phase, cap and sector only |
 | B-1 | Gentler Decline route | feature | founder, 2026-11-04 | 69 of 77 valued decliners are well above value (median price ÷ value 3.13); the consensus has revenue growing on 87 of 112 rows; 21 refused "value not positive in the run-off". Levers: the decline rate (consensus years 1–3, then the trend, held ten years) and the held margin. Candidates: fade the rate toward zero over the run-off; use the consensus where it reaches past year 3; let an investment-grade row with a recovery consensus keep part of it. Method 6a and a revalue of the Decline rows. |
 
 ## Questions
@@ -89,7 +85,6 @@ file or theme, before the workspace is deleted.
 | B-21 | Limiter: the 16-thread test cannot detect a missing lock (a yielding fake clock would); no run-level test with a paced client; the wall clock stalls acquires on a backward clock step; `run.py`'s docstring says only an FMP call runs past `deadline_s` (a GuruFocus 429 does too); GuruFocus is unpaced by design | debt | plan A, Task 2 review | |
 | B-22 | Backfill: branches untested (unparseable payload, partial fields, no symbol); every valuing refresh scans all statement responses, one `fields_stored` query each; the stage cannot be cancelled and reports no progress; it also runs on the 429-stopped path | debt | plan B, Task 1 review | |
 | B-23 | `run.py`: a revalue on a store with no universe reports `universe.admitted` as the count of companies with snapshots; no revalue-specific cancel or failing-company tests; `inputs_statements.py` (491 lines) holds `country_for` and `stored_payload` to avoid an import cycle | debt | calibration and growth routes reviews | |
-| B-24 | `run_price.py` says "policy changed: run a full refresh" where a revalue would do | fix | calibration, 2026-11-02 | |
 | B-25 | A `--force` flag to refetch inside the 24-hour reuse window | feature | offered 2026-11-03, not requested | |
 | B-26 | Ultimate-only FMP content (earnings call transcripts, for one) is unused; the legacy design assumed the Premium plan | feature | 2026-11-01 | |
 | B-63 | Refresh scope by cap band (all Mega, or Mega and Large) as a CLI option and an MCP argument, not a page control | feature | FC-06; founder 2026-10-27 and 2026-11-04 | the page has full, price and revalue; a symbol list covers the rest |
@@ -143,9 +138,14 @@ file or theme, before the workspace is deleted.
 |---|---|---|---|---|
 | B-43 | The limiter's proof at full load: the next full refresh after the 24-hour reuse window (2026-11-05 or later) must finish in one run | question | plan A, refresh 13 (163 calls, 0 holds) | |
 | B-44 | Starting the server marks a running CLI refresh interrupted, and a server on an older method fails on newer JSON: stop the server before a CLI refresh. A guard (the server refuses to start while a refresh runs) would remove the rule | debt | growth routes, 2026-11-03 | |
-| B-45 | A revalue from the web API needs the FMP key (the server builds its worker only with one); the CLI revalue needs none | debt | calibration, 2026-11-02 | |
 
 ## Done
 
 | ID | Item | Closed by |
 |---|---|---|
+| B-73 | Methodology page: the life-cycle diagram with the live phase counts, the classifier and each route in plain words with the live policy values, one worked example per route as of a named refresh date, and the sources | 60c8335, 1a02c35 |
+| B-2 | Settings and parametization: the 40 policy names of spec 2026-11-04 8.2 on a Settings view, stored as an overlay over the policy file, checked at the write and at the load, with the settings hash on every snapshot | 5cbe67f, a135f31, 66bf1c3, 1512156, c557110, cfc20bd |
+| B-67 | Watchlists: named lists, a company on several, the mark and its popup on the screen's rows, the watchlist filter, the Watchlists view and the web API | 8d25b4c, 4e08aca, 9a1bc05 |
+| B-69 | A Warnings column counting the eleven quality warnings, sortable, and the Clean filter over valued rows; no composite score | a135f31, 4e08aca |
+| B-24 | The price refresh says "policy changed: run a revalue" or "settings changed: run a revalue", not a full refresh | 1512156 |
+| B-45 | A revalue from the web API runs without the FMP key; the server builds its worker in every case | 1512156 |
