@@ -246,8 +246,8 @@ def test_terminal_roic_rules(policy: Policy) -> None:
 
 
 def test_terminal_roic_reads_the_policy(policy: Policy) -> None:
-    other = replace(policy, required_return=0.10, wide_terminal_roic_cap=0.15)
-    assert terminal_roic(0.25, "Wide", other) == 0.15
+    other = replace(policy, required_return=0.10, wide_terminal_roic_spread=0.05)
+    assert terminal_roic(0.25, "Wide", other) == pytest.approx(0.15)  # r + the spread
     assert terminal_roic(0.05, "Wide", other) == 0.10
     assert terminal_roic(0.25, "Narrow", other) == 0.10
 

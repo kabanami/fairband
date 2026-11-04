@@ -1211,7 +1211,7 @@ def test_the_designation_reads_the_policy_edges(
     """At 1.125 × the value the row is near under v5's edges; with the third edge at 1.10 it is
     above, at valuation and at a price refresh alike."""
     assert value_company(mg_inputs, deciles, policy, TODAY).designation == "near"
-    narrow = replace(policy, designation_edges=(0.65, 0.85, 1.10, 1.50))
+    narrow = replace(policy, fair_band=(0.85, 1.10))
     r = value_company(mg_inputs, deciles, narrow, TODAY)
     assert r.designation == "above"
     assert r.price is not None and r.price_date is not None

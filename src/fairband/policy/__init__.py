@@ -1,11 +1,17 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v5.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v6.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v4 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v5 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
+
+The designation edges and the Wide moat's terminal return cap are derived, not read (spec
+2026-11-04 8.3): ``Policy.designation_edges`` and ``Policy.wide_terminal_roic_cap`` are
+properties. The file's values are the defaults the user's settings overlay
+(``fairband.policy.settings``); ``load_policy`` checks every setting's range as the overlay does,
+so a file outside them fails at load with the setting's name.
 """
 
 import hashlib
@@ -19,7 +25,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v5.toml"
+_POLICY_FILE = "fairband-policy-v6.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -80,7 +86,7 @@ class Policy:
     margin_of_safety: dict[Moat, float]
     fair_band: tuple[float, float]
     trim_multiple: float
-    wide_terminal_roic_cap: float
+    wide_terminal_roic_spread: float
     moat_wide_min: float
     moat_narrow_min: float
     base_rates: tuple[BaseRateClass, ...]
@@ -109,7 +115,7 @@ class Policy:
     forward_pe_unit_error: float
     validity_fallback_days: int
     aging_fraction: float
-    designation_edges: tuple[float, float, float, float]
+    repricing_horizon_years: int
     runoff_years: int
     runoff_recovery: float
     distress_sale_fraction: float
@@ -122,10 +128,25 @@ class Policy:
     universe: UniversePolicy
     refresh: RefreshPolicy
     raw: dict[str, Any]
+    settings_hash: str
+
+    @property
+    def designation_edges(self) -> tuple[float, float, float, float]:
+        """e1 to e4: 1 − the Narrow margin of safety, the fair band's ends, the trim multiple."""
+        low, high = self.fair_band
+        return (1 - self.margin_of_safety["Narrow"], low, high, self.trim_multiple)
+
+    @property
+    def wide_terminal_roic_cap(self) -> float:
+        """The Wide moat's terminal return cap: r + the spread."""
+        return self.required_return + self.wide_terminal_roic_spread
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v5 file) into a ``Policy``."""
+    """Parse the policy file (default: the packaged v6 file) into a ``Policy`` with the empty
+    overlay's settings hash, and check every setting's range."""
+    from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
+
     if path is None:
         data = resources.files(__name__).joinpath(_POLICY_FILE).read_bytes()
     else:
@@ -151,16 +172,16 @@ def load_policy(path: Path | None = None) -> Policy:
                 f"policy: [values.{name}] is malformed ({type(e).__name__}: {e})"
             ) from e
 
-    return Policy(
+    policy = Policy(
         version=version,
         hash=hashlib.sha256(data).hexdigest(),
         required_return=read("required_return", _num),
         terminal_growth=read("terminal_growth", _num),
-        runway_years=read("runway_years", lambda t: {m: _whole(t[m]) for m in _MOATS}),
-        margin_of_safety=read("margin_of_safety", lambda t: {m: _num(t[m]) for m in _MOATS}),
+        runway_years=read("runway_years", lambda t: _by_moat(t, _whole)),
+        margin_of_safety=read("margin_of_safety", lambda t: _by_moat(t, _num)),
         fair_band=read("fair_band", _pair),
         trim_multiple=read("trim_multiple", _num),
-        wide_terminal_roic_cap=read("wide_terminal_roic_cap", _num),
+        wide_terminal_roic_spread=read("wide_terminal_roic_spread", _num),
         moat_wide_min=read("moat_wide_min", _num),
         moat_narrow_min=read("moat_narrow_min", _num),
         base_rates=read("base_rates", _base_rates),
@@ -189,7 +210,7 @@ def load_policy(path: Path | None = None) -> Policy:
         forward_pe_unit_error=read("forward_pe_unit_error", _num),
         validity_fallback_days=read("validity_fallback_days", _whole),
         aging_fraction=read("aging_fraction", _num),
-        designation_edges=read("designation_edges", _edges),
+        repricing_horizon_years=read("repricing_horizon_years", _whole),
         runoff_years=read("runoff_years", _whole),
         runoff_recovery=read("runoff_recovery", _num),
         distress_sale_fraction=read("distress_sale_fraction", _num),
@@ -202,7 +223,10 @@ def load_policy(path: Path | None = None) -> Policy:
         universe=read("universe", _universe),
         refresh=read("refresh", _refresh),
         raw=raw,
+        settings_hash=EMPTY_SETTINGS_HASH,
     )
+    check(policy)
+    return policy
 
 
 def _num(x: Any) -> float:
@@ -235,10 +259,16 @@ def _pair(x: Any) -> tuple[float, float]:
     return (_num(x[0]), _num(x[1]))
 
 
-def _edges(x: Any) -> tuple[float, float, float, float]:
-    if not isinstance(x, list) or len(x) != 4:
-        raise TypeError(f"{x!r} is not four numbers")
-    return (_num(x[0]), _num(x[1]), _num(x[2]), _num(x[3]))
+def _by_moat[T](t: Any, convert: Callable[[Any], T]) -> dict[Moat, T]:
+    if not isinstance(t, dict) or set(t) != set(_MOATS):
+        raise TypeError(f"{t!r} is not a table of None, Narrow and Wide")
+    return {m: convert(t[m]) for m in _MOATS}
+
+
+def _cap_bands(x: Any) -> tuple[tuple[float, str], ...]:
+    if not isinstance(x, list) or not all(isinstance(b, list) and len(b) == 2 for b in x):
+        raise TypeError(f"{x!r} is not a list of [floor, label] pairs")
+    return tuple((_num(floor), _text(label)) for floor, label in x)
 
 
 def _synthetic_rating(rows: Any) -> tuple[RatingRow, ...]:
@@ -289,7 +319,7 @@ def _universe(t: Any) -> UniversePolicy:
     return UniversePolicy(
         exchanges=_texts(t["exchanges"]),
         cap_floor_usd=_num(t["cap_floor_usd"]),
-        cap_bands=tuple((_num(bound), _text(label)) for bound, label in t["cap_bands"]),
+        cap_bands=_cap_bands(t["cap_bands"]),
         excluded_industries=_texts(t["excluded_industries"]),
         symbol_exclude_patterns=_texts(t["symbol_exclude_patterns"]),
         name_exclude_patterns=_texts(t["name_exclude_patterns"]),

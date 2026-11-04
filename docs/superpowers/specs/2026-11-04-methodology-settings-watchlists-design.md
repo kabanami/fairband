@@ -545,9 +545,10 @@ revalue runs keyless, which closes B-45.
 
 Checked at the write and at the load: r above g_T; the runways non-decreasing by moat; the
 margins of safety non-increasing by moat; the band's low below 1 below the band's high below
-the trim multiple; the sensitivities' high above the low; high-growth years plus fade years at
-most 10; the industry peer maximum at least the fewest peers; the cap bands descending with
-the lowest equal to the size floor; a symbol list of valid exchange-form symbols
+the trim multiple; the band's low above 1 − the Narrow margin of safety, so the four
+designation edges ascend; the sensitivities' high above the low; high-growth years plus fade
+years at most 10; the industry peer maximum at least the fewest peers; the cap bands descending
+with the lowest equal to the size floor; a symbol list of valid exchange-form symbols
 (`[A-Z0-9.-]{1,10}`), upper-cased on the write.
 
 ## 9. Watchlists (B-67) and the flag count (B-69)

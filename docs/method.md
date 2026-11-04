@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Method version | `fairband-mechanical/0.7` (`fairband.engine.METHOD_VERSION`) |
-| Policy version | `fairband-policy-v5` (`src/fairband/policy/fairband-policy-v5.toml`) |
+| Policy version | `fairband-policy-v6` (`src/fairband/policy/fairband-policy-v6.toml`) |
 | Status | The single statement of the method the engine runs. Written 2026-11-02 from the code and the specs. |
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
@@ -155,7 +155,7 @@ A company is unclassified, with the reason as its refusal, when its series has f
 
 ### 4.1 Policy values
 
-Every value comes from `fairband-policy-v5.toml` with a source line. The ones below are the ones the method reads; the universe and refresh values are in sections 1 and 2, and the ones policy v5 adds are listed here as well.
+Every value comes from `fairband-policy-v6.toml` with a source line. The ones below are the ones the method reads; the universe and refresh values are in sections 1 and 2, and the ones policy v6 adds are listed here as well.
 
 | Value | Policy name | Source |
 |---|---|---|
@@ -165,7 +165,7 @@ Every value comes from `fairband-policy-v5.toml` with a source line. The ones be
 | Margin of safety: None 45%, Narrow 35%, Wide 25% | `margin_of_safety` | method v1.7 Step 10 |
 | Fair band 0.85 to 1.15 × value | `fair_band` | Step 10 |
 | Trim at 1.5 × value | `trim_multiple` | Step 10 |
-| Wide-moat terminal return cap 13% | `wide_terminal_roic_cap` | design.md 6.6: r + 4 points |
+| Wide-moat terminal spread above r: 4 points | `wide_terminal_roic_spread` | design.md 6.6: the cap is r + the spread, 13% at the defaults; spec 2026-11-04 8.3 |
 | Moat: score 8 to 10 Wide, 4 to 7 Narrow, else None | `moat_wide_min`, `moat_narrow_min` | mech/1.2 |
 | Base-rate medians by sales class (eleven classes) | `base_rates` | Base Rate Book, exhibit 4 |
 | Held-rate cap by sales class: the 90th-percentile five-year sales growth (eleven classes) | `base_rates`, `sales_p90_5y` | Base Rate Book, Sales Growth exhibit 4; growth routes spec 5.4; founder decision 2026-11-03 |
@@ -192,11 +192,12 @@ Every value comes from `fairband-policy-v5.toml` with a source line. The ones be
 | Forward P/E unit error: below 2 | `forward_pe_unit_error` | mech/1.2 |
 | Validity fallback: 91 days | `validity_fallback_days` | design.md 8 |
 | Aging at 0.6667 of the window | `aging_fraction` | design system |
+| Repricing horizon 3 years | `repricing_horizon_years` | stocks method v1.7 Step 9; design.md 1; spec 2026-11-04 8.3 |
 | FMP pace: 2,850 calls a minute | `refresh.fmp_calls_per_minute` | the founder's Ultimate plan, 3,000 a minute, less 5%; spec 2026-11-03 5.2; policy value |
 | 429 hold: 60 seconds | `refresh.rate_limit_hold_s` | one plan window; spec 2026-11-03 5.2; policy value |
 | Excluded industries: banks, insurance, REITs and Shell Companies (section 1), and six financial ones: `Asset Management`, `Financial - Capital Markets`, `Financial - Credit Services`, `Financial - Mortgages`, `Financial - Conglomerates`, `Investment - Banking & Investment Services` | `universe.excluded_industries` | design.md 6.1; decision 2026-10-26; spec 2026-11-03 6.4 |
 | Manual admissions: V, MA, GPN | `universe.manual_admissions` | founder 2026-11-03: payment companies that do not lend; spec 2026-11-03 6.4 |
-| Designation edges: 0.65, 0.85, 1.15, 1.50 × value | `designation_edges` | method v1.7 Step 10 (the fair band, the trim multiple, the Narrow margin of safety); spec 2026-11-03 7.1 |
+| Designation edges, derived: 1 − the Narrow margin of safety, the fair band's low and high, the trim multiple (0.65, 0.85, 1.15, 1.50 at the defaults) | — | method v1.7 Step 10; spec 2026-11-04 8.3 |
 | Run-off horizon: 10 years | `runoff_years` | Damodaran's ten-year template (H2) |
 | Divestiture recovery: 60% of the capital released | `runoff_recovery` | Damodaran 2009 Sears: 54% to 67% of the capital released; the midpoint; policy value |
 | Distress-sale fraction: 60% of the firm value | `distress_sale_fraction` | Damodaran 2009, "Estimating Distress Sale Proceeds", choice (a), the illustration's $3 billion of $5 billion; policy value |
@@ -208,7 +209,7 @@ Every value comes from `fairband-policy-v5.toml` with a source line. The ones be
 
 The run-off, distress-sale, rating, default-probability, Z″ and F values are read by the Decline route (section 6a); the burn-cover value by the Start-up route (section 6b).
 
-Policies v1 to v4 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v5 only.
+Policies v1 to v5 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v6 only.
 
 ### 4.1a Constants in code
 
