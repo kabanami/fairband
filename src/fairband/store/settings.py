@@ -27,7 +27,7 @@ from datetime import datetime
 from typing import Any
 
 from fairband.policy import Policy, load_policy
-from fairband.policy.settings import apply_overlay, default_of
+from fairband.policy.settings import apply_overlay, default_of, value_of
 from fairband.store._codec import dump_stamp, load_stamp
 from fairband.store.db import transaction
 
@@ -80,7 +80,7 @@ def write_settings(
         after = dict(before)
         entries: list[dict[str, Any]] = []
         for name in changes:
-            new = _stored(checked, name)
+            new = value_of(name, checked)
             if new == default_of(name, file_policy):
                 new = None
             old = before.get(name)
@@ -129,13 +129,6 @@ def changes(conn: sqlite3.Connection) -> list[ChangeRow]:
         )
         for r in rows
     ]
-
-
-def _stored(policy: Policy, name: str) -> Any:
-    """The setting's value in ``policy`` in its JSON form: tuples become lists."""
-    group, _, field = name.rpartition(".")
-    holder = getattr(policy, group) if group else policy
-    return json.loads(_json(getattr(holder, field)))
 
 
 def _log(

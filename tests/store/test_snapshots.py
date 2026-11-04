@@ -23,6 +23,7 @@ from fairband.store.snapshots import (
     insert_snapshot,
     latest_snapshot,
     latest_snapshots,
+    latest_versions,
     refresh_snapshots,
 )
 
@@ -225,3 +226,23 @@ def test_refresh_snapshots_by_refresh(
     ]
     assert [(r.symbol, r.value) for r in refresh_snapshots(conn, second)] == [("MSFT", 110.0)]
     assert refresh_snapshots(conn, second + 1) == []
+
+
+def test_latest_versions_most_of_the_newest_snapshots_cite(
+    conn: sqlite3.Connection, new_refresh: Callable[[], int]
+) -> None:
+    assert latest_versions(conn) is None
+    first, second = new_refresh(), new_refresh()
+    old = replace(_result("MSFT"), policy_version="fairband-policy-v5")
+    new = replace(_result("MSFT"), policy_version="fairband-policy-v6", settings_hash="abc")
+    for symbol in ("AAPL", "KO", "MSFT"):
+        insert_snapshot(conn, replace(old, symbol=symbol), first, clock=_at())
+    assert latest_versions(conn) == ("fairband-policy-v5", EMPTY_SETTINGS_HASH)
+    for symbol in ("AAPL", "KO"):  # a later revalue: two of the three newest cite it
+        insert_snapshot(conn, replace(new, symbol=symbol), second, clock=_at())
+    assert latest_versions(conn) == ("fairband-policy-v6", "abc")
+    insert_snapshot(conn, replace(old, symbol="PEP"), second, clock=_at())
+    assert latest_versions(conn) == (
+        "fairband-policy-v5",
+        EMPTY_SETTINGS_HASH,
+    )  # the newest on a tie

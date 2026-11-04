@@ -6,7 +6,7 @@ text, so each float reads back exactly, price ÷ value as a REAL (the double its
 the designation's word, ``flags`` as a JSON list of the flag codes, and the policy version,
 method version and settings hash the result cites. The ``stance5`` and ``stance3`` columns of
 method 0.5 are no longer written: a new row leaves them NULL. The screen reads the snapshot with
-the greatest id per symbol.
+the greatest id per symbol, and the Settings page the versions most of those snapshots cite.
 """
 
 import json
@@ -113,6 +113,17 @@ def latest_snapshots(conn: sqlite3.Connection) -> list[SnapshotRow]:
         " ORDER BY symbol"
     )
     return [_snapshot(r) for r in rows]
+
+
+def latest_versions(conn: sqlite3.Connection) -> tuple[str, str] | None:
+    """The policy version and settings hash that most of the newest snapshots cite, one per
+    company; on a tie, the pair of the newest snapshot. ``None`` before the first snapshot."""
+    row = conn.execute(
+        "SELECT policy_version, settings_hash FROM snapshots"
+        " WHERE id IN (SELECT MAX(id) FROM snapshots GROUP BY symbol)"
+        " GROUP BY policy_version, settings_hash ORDER BY COUNT(*) DESC, MAX(id) DESC LIMIT 1"
+    ).fetchone()
+    return None if row is None else (row["policy_version"], row["settings_hash"])
 
 
 def latest_snapshot(conn: sqlite3.Connection, symbol: str) -> SnapshotRow | None:

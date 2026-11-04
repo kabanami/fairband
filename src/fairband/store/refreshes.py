@@ -167,6 +167,14 @@ def latest_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
     return None if row is None else _refresh(row)
 
 
+def latest_full_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
+    """The full refresh with the greatest id among those that finished ``done``."""
+    row = conn.execute(
+        "SELECT * FROM refreshes WHERE kind = 'full' AND status = 'done' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    return None if row is None else _refresh(row)
+
+
 def mark_interrupted(conn: sqlite3.Connection, at: datetime) -> int:
     """Set every ``running`` refresh to ``interrupted``, finished ``at``; return how many."""
     with transaction(conn):

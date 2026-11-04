@@ -14,8 +14,10 @@ from fairband.policy.settings import (
     SETTINGS,
     apply_overlay,
     default_of,
+    exchange_symbol,
     setting,
     settings_hash,
+    value_of,
 )
 
 
@@ -496,3 +498,23 @@ def test_default_of_reads_the_file_under_an_overlay() -> None:
 def test_default_of_an_unknown_name_raises() -> None:
     with pytest.raises(KeyError):
         default_of("designation_edges", load_policy())
+
+
+def test_value_of_is_the_policys_value_as_json() -> None:
+    """At the defaults every setting's value is its default; under an overlay the policy's value,
+    as the API serves it and the overlay stores it."""
+    p = load_policy()
+    assert all(value_of(s.name, p) == default_of(s.name, p) for s in SETTINGS)
+    custom = apply_overlay(p, {"fair_band": [0.9, 1.2], "universe.cap_floor_usd": 3e9})
+    assert value_of("fair_band", custom) == [0.9, 1.2]
+    assert value_of("runway_years", custom) == {"None": 5, "Narrow": 10, "Wide": 20}
+    assert value_of("universe.cap_bands", custom) == [[2e11, "Mega"], [1e10, "Large"], [3e9, "Mid"]]
+    with pytest.raises(KeyError):
+        value_of("designation_edges", p)
+
+
+def test_exchange_symbol() -> None:
+    assert exchange_symbol("brk.b") == "BRK.B"
+    for text in ("bad symbol", "", "TOOLONGSYMBOL", "BRK/B"):
+        with pytest.raises(ValueError, match=f"^{re.escape(repr(text))} is not a symbol$"):
+            exchange_symbol(text)

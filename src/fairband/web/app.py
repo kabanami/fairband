@@ -1,5 +1,7 @@
-"""The FastAPI app: the screen page, the static files, the screen's JSON API, the group view and the
-refresh routes (spec 6.10).
+"""The FastAPI app: the screen page, the static files, the screen's JSON API, the group view, the
+refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
+``watchlists_api``), and the policy values and growth deciles the Methodology page cites (spec
+2026-11-04 7.4).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -14,7 +16,12 @@ or a placeholder row "not yet valued" before its first; a company the latest uni
 admit has no row. The latest universe is the newest that admitted a company
 (``latest_companies``), so a refresh whose screener admitted nobody leaves the screen as it was.
 Before any universe exists, every company with a snapshot has its row. The group view groups the
-same rows.
+same rows. Each row carries the ids of the watchlists the company is on.
+
+Each request that reads a policy value reads the effective policy, the file's values with the
+user's settings over them, so a changed setting shows at the next request: the aging fraction of
+the rows' freshness, the designation edges of the groups and the drawer. A stored setting the
+policy refuses makes those routes answer 409 naming it, until it is reset (``settings_api``).
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
 command that stopped, and logs how many.
@@ -48,8 +55,17 @@ from fairband.policy import Policy
 from fairband.refresh.run import KINDS
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import CompanyRow, latest_companies, latest_company
-from fairband.store.refreshes import RefreshRow, RefreshRunning, latest_refresh, mark_interrupted
+from fairband.store.refreshes import (
+    RefreshRow,
+    RefreshRunning,
+    latest_deciles,
+    latest_refresh,
+    mark_interrupted,
+)
+from fairband.store.settings import read_overlay
 from fairband.store.snapshots import latest_snapshot, latest_snapshots
+from fairband.store.watchlists import memberships
+from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.rows import (
     COLUMNS,
     GROUP_BY,
@@ -63,6 +79,8 @@ from fairband.web.rows import (
     snapshot_json,
     sort_rows,
 )
+from fairband.web.settings_api import add_settings_routes, effective
+from fairband.web.watchlists_api import add_watchlist_routes
 
 logger = logging.getLogger("fairband.web")
 
@@ -70,7 +88,7 @@ _STATIC = resources.files("fairband.web").joinpath("static")
 TRUSTED_HOSTS = ["127.0.0.1", "localhost"]
 REQUEST_HEADER = "X-Fairband-Request"
 _SAFE_METHODS = ("GET", "HEAD")
-_NO_WORKER = "no refresh worker: start the server with the vendor keys"
+_NO_WORKER = "no refresh worker"
 
 
 class RefreshRequest(BaseModel):
@@ -85,8 +103,9 @@ def create_app(
     worker: RefreshWorker | None = None,
     clock: Callable[[], datetime] = utcnow,
 ) -> FastAPI:
-    """The app; ``clock`` gives the day the validity states are judged on and the time a
-    refresh left running is marked interrupted."""
+    """The app; ``policy`` is the file's, which the user's settings overlay; ``clock`` gives the
+    day the validity states are judged on and the time a refresh left running is marked
+    interrupted, a setting changed and a watchlist entry added."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -121,26 +140,38 @@ def create_app(
     def page() -> FileResponse:
         return FileResponse(str(_STATIC.joinpath("index.html")), media_type="text/html")
 
-    def screen_rows(today: date) -> tuple[list[dict[str, Any]], RefreshRow | None]:
+    def current(conn: sqlite3.Connection) -> Policy:
+        """The effective policy: the file's values with the user's settings over them."""
+        return effective(conn, policy)
+
+    def screen_rows(today: date) -> tuple[list[dict[str, Any]], RefreshRow | None, Policy]:
         """A row per admitted company of the latest universe (see the module docstring), in
-        symbol order, its freshness judged on ``today``; and the latest refresh's record."""
+        symbol order, its freshness judged on ``today``; the latest refresh's record; and the
+        effective policy the rows were read under."""
         with closing(conn_factory()) as conn:
+            read_under = current(conn)
             admitted = latest_companies(conn)
             listed = bool(admitted) or bool(latest_companies(conn, eligible_only=False))
             snapshots = {s.symbol: s for s in latest_snapshots(conn)}
             refresh = latest_refresh(conn)
+            lists = memberships(conn)
+        aging = read_under.aging_fraction
 
         def row(company: CompanyRow) -> dict[str, Any]:
             snapshot = snapshots.get(company.symbol)
+            watchlists = lists.get(company.symbol, [])
             if snapshot is None:
-                return placeholder_row(company)
-            return screen_row(snapshot, company, today, policy.aging_fraction)
+                return placeholder_row(company, watchlists)
+            return screen_row(snapshot, company, today, aging, watchlists)
 
         if listed:
             rows = [row(company) for company in admitted]
         else:
-            rows = [screen_row(s, None, today, policy.aging_fraction) for s in snapshots.values()]
-        return rows, refresh
+            rows = [
+                screen_row(s, None, today, aging, lists.get(s.symbol, []))
+                for s in snapshots.values()
+            ]
+        return rows, refresh, read_under
 
     @app.get("/api/screen")
     def screen(
@@ -152,7 +183,7 @@ def create_app(
         if direction not in ("asc", "desc"):
             raise HTTPException(400, f"dir must be asc or desc, not {direction}")
         today = clock().date()
-        rows, refresh = screen_rows(today)
+        rows, refresh, _ = screen_rows(today)
         return {
             "rows": sort_rows(rows, sort, descending=direction == "desc"),
             "columns": list(COLUMNS),
@@ -165,18 +196,19 @@ def create_app(
         """The screen's rows grouped by sector, phase or cap band (``group_rows``)."""
         if by not in GROUP_BY:
             raise HTTPException(400, f"by must be sector, phase or cap, not {by}")
-        rows, _ = screen_rows(clock().date())
-        return {"by": by, "groups": group_rows(rows, by, policy.designation_edges)}
+        rows, _, read_under = screen_rows(clock().date())
+        return {"by": by, "groups": group_rows(rows, by, read_under.designation_edges)}
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:
-        """The company's latest snapshot in full, with its latest universe row and the policy's
-        designation edges, by which the drawer keeps its price ÷ value figure inside the word's
-        band."""
+        """The company's latest snapshot in full, with its latest universe row and the effective
+        policy's designation edges, by which the drawer keeps its price ÷ value figure inside the
+        word's band."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
             listed = latest_company(conn, symbol)
+            edges = current(conn).designation_edges
         if snapshot is None:
             raise HTTPException(404, f"no snapshot for {symbol}")
         return {
@@ -184,8 +216,25 @@ def create_app(
             "snapshot": snapshot_json(snapshot),
             "result": json.loads(result_to_json(snapshot.result)),
             "today": today.isoformat(),
-            "designationEdges": list(policy.designation_edges),
+            "designationEdges": list(edges),
         }
+
+    @app.get("/api/policy")
+    def policy_values() -> dict[str, Any]:
+        """The effective policy's values the Methodology page cites (``policy_json``)."""
+        with closing(conn_factory()) as conn:
+            read_under = current(conn)
+            overlay = read_overlay(conn)
+        return policy_json(read_under, policy, overlay)
+
+    @app.get("/api/deciles")
+    def deciles() -> dict[str, Any]:
+        """The latest full refresh's revenue-growth decile edges and the growth words' deciles."""
+        with closing(conn_factory()) as conn:
+            found = latest_deciles(conn)
+        if found is None:
+            raise HTTPException(404, "no deciles yet")
+        return deciles_json(found)
 
     @app.post("/api/refresh", response_model=None)
     def start_refresh(body: RefreshRequest) -> dict[str, int] | JSONResponse:
@@ -225,6 +274,8 @@ def create_app(
             worker.cancel()
         return {"cancelled": True}
 
+    add_settings_routes(app, conn_factory, policy, clock)
+    add_watchlist_routes(app, conn_factory, clock)
     return app
 
 

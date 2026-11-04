@@ -14,6 +14,7 @@ from fairband.store.refreshes import (
     finish_refresh,
     items,
     latest_deciles,
+    latest_full_refresh,
     latest_refresh,
     mark_interrupted,
     save_deciles,
@@ -149,3 +150,16 @@ def test_save_deciles_and_latest_deciles(conn: sqlite3.Connection) -> None:
     assert latest_deciles(conn) == Deciles(edges, margin_edges, 1200, 980, second)
     computed = conn.execute("select computed_at from deciles where refresh_id = ?", (second,))
     assert computed.fetchone()[0] == "2026-11-01T09:35:00+00:00"
+
+
+def test_latest_full_refresh_is_the_newest_done(conn: sqlite3.Connection) -> None:
+    assert latest_full_refresh(conn) is None
+    done = _start(conn)
+    finish_refresh(conn, done, "done", T1)
+    cancelled = _start(conn)
+    finish_refresh(conn, cancelled, "cancelled", T1)
+    revalue = _start(conn, "revalue")
+    finish_refresh(conn, revalue, "done", T1)
+    _start(conn)  # running
+    found = latest_full_refresh(conn)
+    assert found is not None and (found.id, found.kind, found.status) == (done, "full", "done")

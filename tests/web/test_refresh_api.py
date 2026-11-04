@@ -333,7 +333,7 @@ def test_api_without_worker_503(client_without_worker: TestClient) -> None:
     client = client_without_worker
     response = start(client, kind="full")
     assert response.status_code == 503
-    assert response.json() == {"detail": "no refresh worker: start the server with the vendor keys"}
+    assert response.json() == {"detail": "no refresh worker"}
     assert current(client) == {"refresh": None, "last": None, "error": None}
     assert client.post("/api/refresh/cancel", headers=POST).json() == {"cancelled": True}
 

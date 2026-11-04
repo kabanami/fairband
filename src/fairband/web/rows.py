@@ -4,9 +4,11 @@ refresh and progress records as the routes send them.
 
 A screen row carries the ``ScreenRow`` keys of the design system's ``index.d.ts`` (``ticker`` to
 ``freshness``), so the page hands rows to ``ScreenTable`` as they come, and, in the same
-camelCase, the extra columns of spec 6.3. Numbers are JSON numbers or ``None``; dates and
-timestamps are ISO text. Nothing is reviewed in this cut: ``reviewed`` is ``None``, ``overrides``
-is 0 and ``mechanical`` is the snapshot's value.
+camelCase, the extra columns of spec 6.3 and after. Numbers are JSON numbers or ``None``; dates
+and timestamps are ISO text. Nothing is reviewed in this cut: ``reviewed`` is ``None``,
+``overrides`` is 0 and ``mechanical`` is the snapshot's value. Every row, a placeholder too, has
+``watchlists``, the ids of the user's lists it is on, and ``flagCount``, the number of its quality
+warnings (spec 2026-11-04 9.3 and 9.5).
 """
 
 import statistics
@@ -14,6 +16,7 @@ from collections.abc import Sequence
 from datetime import date
 from typing import Any
 
+from fairband.engine.flags import flag_count
 from fairband.engine.levels import validity_state
 from fairband.engine.types import PHASE_NUMBER
 from fairband.refresh.run import UNCLASSIFIED, Progress
@@ -62,6 +65,8 @@ EXTRA_KEYS = (
     "change5y",
     "drawdown",
     "flags",
+    "flagCount",
+    "watchlists",
     "refusal",
     "priceToValue",
     "designation",
@@ -104,10 +109,16 @@ COLUMNS = DESIGN_COLUMNS + tuple(key for key in EXTRA_KEYS if key not in DESIGN_
 
 
 def screen_row(
-    snapshot: SnapshotRow, company: CompanyRow | None, today: date, aging_fraction: float
+    snapshot: SnapshotRow,
+    company: CompanyRow | None,
+    today: date,
+    aging_fraction: float,
+    watchlists: Sequence[int],
 ) -> dict[str, Any]:
     """The snapshot as a screen row; the name, sector, cap band and market cap come from
-    ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``. The moat
+    ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``, aging
+    from ``aging_fraction`` of the window; ``watchlists`` are the ids of the lists the company is
+    on. ``flagCount`` counts the quality warnings among the flags, a refusal's too. The moat
     shows on a row with a value only: a growth refusal keeps the moat class for the price refresh,
     not for the screen. ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the
     price needs, a growth row's; a row refused for its target margin has the latter alone.
@@ -177,6 +188,8 @@ def screen_row(
         "altmanZ": _table(im, "altman_z").get("score"),
         "piotroskiF": _piotroski_f(im),
         "impliedDeclineRate": im.get("implied_decline_rate"),
+        "watchlists": list(watchlists),
+        "flagCount": flag_count(result.flags),
     }
 
 
@@ -205,10 +218,10 @@ def _piotroski_f(im: dict[str, Any]) -> str | None:
     return f"{f['score']} of {f['read']}" if f.get("read") else None
 
 
-def placeholder_row(company: CompanyRow) -> dict[str, Any]:
+def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str, Any]:
     """The row of an admitted company with no snapshot yet: its name, sector, cap band and
-    market cap, the refusal "not yet valued", freshness ``current`` and ``None`` elsewhere (no
-    override, as on every row of this cut)."""
+    market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag and
+    ``None`` elsewhere (no override, as on every row of this cut)."""
     row: dict[str, Any] = dict.fromkeys(ROW_KEYS)
     market_cap = company.market_cap
     row |= {
@@ -220,6 +233,8 @@ def placeholder_row(company: CompanyRow) -> dict[str, Any]:
         "capBand": company.cap_band,
         "marketCap": None if market_cap is None else float(market_cap),
         "refusal": NOT_YET_VALUED,
+        "watchlists": list(watchlists),
+        "flagCount": 0,
     }
     return row
 

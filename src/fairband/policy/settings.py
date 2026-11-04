@@ -5,7 +5,8 @@ with the label, the plain sentence, the unit, the range and the effect the Setti
 A dotted name (``universe.cap_floor_usd``, ``refresh.workers``) addresses a value inside the
 file's ``[values.universe]`` or ``[values.refresh]`` table.
 
-The user's values are an overlay of name to value, in the JSON form the API serves.
+The user's values are an overlay of name to value, in the JSON form the API serves; ``default_of``
+and ``value_of`` give a setting's file value and its value in a policy in that form.
 ``apply_overlay`` converts each value as ``load_policy`` converts the file's, replaces it in the
 policy, sets the settings hash and checks every range; the policy's version stays the file's.
 ``check`` holds the ranges of 8.2 and the rules of 8.9 and runs at the end of ``load_policy``
@@ -514,6 +515,15 @@ def default_of(name: str, base: Policy) -> Any:
     return copy.deepcopy(value)
 
 
+def value_of(name: str, policy: Policy) -> Any:
+    """The setting's value in ``policy``, in the JSON form the API serves and the overlay stores:
+    tuples become lists, a table by moat a dict. ``KeyError`` for a name that is not a setting."""
+    setting(name)
+    group, _, field = name.rpartition(".")
+    holder = getattr(policy, group) if group else policy
+    return json.loads(json.dumps(getattr(holder, field), allow_nan=False))
+
+
 def apply_overlay(base: Policy, overlay: Mapping[str, Any]) -> Policy:
     """``base`` with each overlay value converted and in place, the settings hash set, and every
     range checked. A value that is not a setting, or does not convert, raises
@@ -562,7 +572,7 @@ def _converted(s: Setting, value: Any) -> Any:
         case "years" | "days" | "count" | "hours":
             return _whole(value)
         case "symbols":
-            return tuple(_symbol(text) for text in _texts(value))
+            return tuple(exchange_symbol(text) for text in _texts(value))
         case "exchanges":
             return _texts(value)
         case "cap_bands":
@@ -571,7 +581,9 @@ def _converted(s: Setting, value: Any) -> Any:
             return _num(value)
 
 
-def _symbol(text: str) -> str:
+def exchange_symbol(text: str) -> str:
+    """The text upper-cased, as a symbol in the exchange form the store keeps (``BRK.B``);
+    ``ValueError("'<text>' is not a symbol")`` when it is not one."""
     symbol = text.upper()
     if not _SYMBOL.fullmatch(symbol):
         raise ValueError(f"{text!r} is not a symbol")

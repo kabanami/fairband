@@ -2,15 +2,15 @@
 engine's test companies: AAPL, valued on the Mature Growth route; AAL, a Young Growth company with
 no mature peers, which the engine refuses for its target margin; and HGCO, the High Growth company,
 valued on the revenue growth route. All three are listed in the universe of one finished full
-refresh."""
+refresh. The fixtures are in ``conftest.py``, the names they share in ``support.web``."""
 
 import json
 import re
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from contextlib import closing
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from html.parser import HTMLParser
 from importlib import resources
@@ -30,30 +30,35 @@ from support.engine_companies import (
     mature_stable_inputs,
     start_up_inputs,
     universe_deciles,
-    young_growth_inputs,
+)
+from support.web import (
+    CALIBRATION,
+    CREATED,
+    FINISHED,
+    HEADER,
+    HOST,
+    NOW,
+    STARTED,
+    TODAY,
+    _company,
+    _component_file,
+    _settings,
+    _static_file,
 )
 
 from fairband import __main__ as cli
-from fairband.config import DEFAULT_PORT, Settings
+from fairband.config import DEFAULT_PORT
 from fairband.engine import METHOD_VERSION
 from fairband.engine.route import value_company
 from fairband.engine.types import Designation, ValuationResult, result_to_json
-from fairband.policy import Policy, load_policy
+from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
-from fairband.store.companies import CompanyRow, insert_companies
+from fairband.store.companies import insert_companies
 from fairband.store.db import applied_versions, connect, migrate
-from fairband.store.refreshes import create_refresh, finish_refresh, set_stage
+from fairband.store.refreshes import create_refresh, finish_refresh
 from fairband.store.snapshots import insert_snapshot
 from fairband.web.app import create_app
 from fairband.web.rows import EXTRA_KEYS
-
-TODAY = date(2026, 10, 31)  # the day the engine's test companies are valued
-STARTED = datetime(2026, 10, 31, 22, 0, tzinfo=UTC)
-CREATED = datetime(2026, 10, 31, 22, 15, tzinfo=UTC)
-FINISHED = datetime(2026, 10, 31, 22, 20, tzinfo=UTC)
-NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
-CALIBRATION = {"refused": 1, "valued": 2}
-HOST = "http://127.0.0.1:8470"  # a host the app trusts (D11)
 
 # The design system's ScreenRow keys.
 DESIGN_ROW_KEYS = [
@@ -105,6 +110,8 @@ EXTRA_COLUMNS = [
     "change5y",
     "drawdown",
     "flags",
+    "flagCount",
+    "watchlists",
     "refusal",
     "priceToValue",
     "designation",
@@ -126,95 +133,6 @@ EXTRA_COLUMNS = [
 # The Start-up and Decline rows' figures, the last extra columns.
 START_UP_KEYS = ("requiredRevenue", "burnCover")
 DECLINE_KEYS = ("rating", "distressProbability", "altmanZ", "piotroskiF", "impliedDeclineRate")
-
-
-@pytest.fixture
-def policy() -> Policy:
-    return load_policy()
-
-
-@pytest.fixture
-def results(policy: Policy) -> dict[str, ValuationResult]:
-    deciles = universe_deciles()
-    valued = value_company(replace(mature_growth_inputs(), symbol="AAPL"), deciles, policy, TODAY)
-    no_peers = replace(young_growth_inputs(), symbol="AAL", peers=())
-    refused = value_company(no_peers, deciles, policy, TODAY)
-    growth = value_company(high_growth_inputs(), deciles, policy, TODAY)
-    assert valued.value is not None and refused.value is None
-    assert growth.symbol == "HGCO" and growth.route == "revenue-growth"
-    return {"AAPL": valued, "AAL": refused, "HGCO": growth}
-
-
-def _company(symbol: str, refresh_id: int, name: str, market_cap: Decimal) -> CompanyRow:
-    return CompanyRow(
-        symbol=symbol,
-        refresh_id=refresh_id,
-        name=name,
-        exchange="NASDAQ",
-        sector="Technology",
-        industry="Software - Application",
-        country="US",
-        currency="USD",
-        is_adr=False,
-        cap_band="mega" if market_cap >= 100_000_000_000 else "mid",
-        market_cap=market_cap,
-        eligible=True,
-        exclusion_reason=None,
-        observed_at=STARTED,
-    )
-
-
-@pytest.fixture
-def db_path(tmp_path: Path, policy: Policy, results: dict[str, ValuationResult]) -> Path:
-    path = tmp_path / "data" / "fairband.db"
-    with closing(connect(path)) as conn:
-        migrate(conn)
-        refresh_id = create_refresh(
-            conn, "full", None, policy.version, METHOD_VERSION, STARTED, EMPTY_SETTINGS_HASH
-        )
-        insert_companies(
-            conn,
-            [
-                _company("AAPL", refresh_id, "Mature Growth Co", Decimal(150_000_000_000)),
-                _company("AAL", refresh_id, "Young Growth Co", Decimal(4_000_000_000)),
-                _company("HGCO", refresh_id, "High Growth Co", Decimal(15_000_000_000)),
-            ],
-        )
-        for result in results.values():
-            insert_snapshot(conn, result, refresh_id, clock=lambda: CREATED)
-        set_stage(conn, refresh_id, "done")
-        finish_refresh(conn, refresh_id, "done", FINISHED, "3 valued or refused", CALIBRATION)
-    return path
-
-
-def _settings(tmp_path: Path, db_path: Path) -> Settings:
-    return Settings(
-        data_dir=db_path.parent, config_dir=tmp_path / "config", db_path=db_path, port=DEFAULT_PORT
-    )
-
-
-@pytest.fixture
-def client_with_clock(
-    tmp_path: Path, db_path: Path, policy: Policy
-) -> Iterator[Callable[[datetime], TestClient]]:
-    """Makes a client of an app whose clock reads ``now``."""
-    clients: list[TestClient] = []
-
-    def make(now: datetime) -> TestClient:
-        app = create_app(
-            _settings(tmp_path, db_path), policy, lambda: connect(db_path), clock=lambda: now
-        )
-        clients.append(TestClient(app, base_url=HOST))
-        return clients[-1]
-
-    yield make
-    for c in clients:
-        c.close()
-
-
-@pytest.fixture
-def client(client_with_clock: Callable[[datetime], TestClient]) -> TestClient:
-    return client_with_clock(NOW)
 
 
 def _screen(client: TestClient, query: str = "") -> dict[str, Any]:
@@ -302,6 +220,8 @@ def test_screen_rows_and_default_sort(
         "altmanZ": None,
         "piotroskiF": None,
         "impliedDeclineRate": None,
+        "watchlists": [],
+        "flagCount": 1,  # value-spread; its other flags are notes
     }
 
     refused = results["AAL"]
@@ -333,6 +253,14 @@ def test_screen_sort_nulls_last(client: TestClient) -> None:
     for key in _screen(client)["rows"][0]:
         for direction in ("asc", "desc"):
             assert len(_tickers(client, f"?sort={key}&dir={direction}")) == 3, key
+
+
+def test_screen_sorts_by_flag_count(client: TestClient) -> None:
+    """AAL has no quality warning, AAPL one and HGCO three; the notes do not count."""
+    assert [r["flagCount"] for r in _screen(client, "?sort=flagCount")["rows"]] == [0, 1, 3]
+    assert _tickers(client, "?sort=flagCount&dir=asc") == ["AAL", "AAPL", "HGCO"]
+    assert _tickers(client, "?sort=flagCount&dir=desc") == ["HGCO", "AAPL", "AAL"]
+    assert _tickers(client, "?sort=watchlists") == ["AAL", "AAPL", "HGCO"]  # a row key too
 
 
 def test_screen_sorts_by_price_to_value(client: TestClient) -> None:
@@ -399,6 +327,32 @@ def test_freshness_states(
     assert [row["freshness"] for row in body["rows"]] == [state, state, state]
 
 
+def test_aging_fraction_from_the_overlay_changes_freshness(
+    client_with_clock: Callable[[datetime], TestClient],
+) -> None:
+    """The setting is read at once, at the next request: on day 21 of the 90-day window a row is
+    current at the default 2/3 and aging from 10%."""
+    client = client_with_clock(datetime(2026, 11, 20, 12, 0, tzinfo=UTC))
+    assert [row["freshness"] for row in _screen(client)["rows"]] == ["current"] * 3
+    r = client.put("/api/settings", json={"changes": {"aging_fraction": 0.1}}, headers=HEADER)
+    assert r.status_code == 200, r.text
+    assert [row["freshness"] for row in _screen(client)["rows"]] == ["aging"] * 3
+
+
+def test_groups_and_the_drawer_read_the_edges_of_the_settings(client: TestClient) -> None:
+    """HGCO sits at 0.63 × its value and AAPL at 1.125. Under a fair band from 0.6, with the Narrow
+    margin of safety at 45% so the edges still ascend, HGCO is no longer below the band."""
+    [before] = client.get("/api/groups?by=sector").json()["groups"]
+    assert before["shareBelowValue"] == 0.5  # HGCO below 0.85, AAPL not
+    safety = {"None": 0.45, "Narrow": 0.45, "Wide": 0.25}
+    changes = {"fair_band": [0.6, 1.15], "margin_of_safety": safety}
+    assert client.put("/api/settings", json={"changes": changes}, headers=HEADER).status_code == 200
+    edges = client.get("/api/companies/AAPL").json()["designationEdges"]
+    assert edges == [1 - 0.45, 0.6, 1.15, 1.5]
+    [after] = client.get("/api/groups?by=sector").json()["groups"]
+    assert after["shareBelowValue"] == 0.0
+
+
 def _universe(db_path: Path, policy: Policy, *companies: tuple[str, str, int, bool]) -> None:
     """A later full refresh whose universe lists ``companies``: symbol, name, market cap and
     whether it is admitted."""
@@ -457,6 +411,8 @@ def test_screen_placeholder_row_not_yet_valued(
         "capBand": "mid",
         "marketCap": 3_000_000_000.0,
         "refusal": "not yet valued",
+        "watchlists": [],
+        "flagCount": 0,
     }
 
 
@@ -740,17 +696,6 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
     assert len(fonts) == 6
     for font in fonts:
         assert client.get(f"/static/design-system/fonts/{font}").status_code == 200, font
-
-
-def _component_file(name: str) -> str:
-    """A file of the repository's design-system copy, as text."""
-    components = resources.files("fairband.web").joinpath("static", "design-system", "components")
-    return components.joinpath(name).read_text(encoding="utf-8")
-
-
-def _static_file(name: str) -> str:
-    """A file of the page's own static directory, as text."""
-    return resources.files("fairband.web").joinpath("static", name).read_text(encoding="utf-8")
 
 
 def test_index_mounts_the_header_and_the_favicon(client: TestClient) -> None:
@@ -1650,10 +1595,27 @@ def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, polic
         return opened[-1]
 
     app = create_app(_settings(tmp_path, db_path), policy, conn_factory, clock=lambda: NOW)
+    paths = (
+        "/api/screen",
+        "/api/companies/AAPL",
+        "/api/companies/NOPE",
+        "/api/groups?by=phase",
+        "/api/settings",
+        "/api/policy",
+        "/api/deciles",
+        "/api/watchlists",
+        "/",
+    )
     with TestClient(app, base_url=HOST) as c:
-        for path in ("/api/screen", "/api/companies/AAPL", "/api/companies/NOPE", "/"):
+        for path in paths:
             c.get(path)
-    assert len(opened) == 4  # the startup's, which marks the refreshes left running, and three
+        c.put("/api/settings", json={"changes": {"fade_years": 3}}, headers=HEADER)
+        c.post("/api/settings/reset", json={}, headers=HEADER)
+        c.post("/api/watchlists", json={"name": "Core"}, headers=HEADER)
+        c.put("/api/watchlists/1/symbols/AAPL", headers=HEADER)
+        c.put("/api/watchlists/memberships/AAPL", json={"ids": []}, headers=HEADER)
+    # the startup's, which marks the refreshes left running, and one for each request to the API
+    assert len(opened) == 1 + len(paths) - 1 + 5
 
     for conn in opened:
         with pytest.raises(sqlite3.ProgrammingError):
