@@ -988,6 +988,53 @@ def test_watchlists_view_draws_the_screen_rows_and_a_symbol_without_one() -> Non
     assert "#watchlists .fb-screen { --bar-height: 0px; }" in page
 
 
+def test_watchlists_view_enter_adds_only_a_chosen_company() -> None:
+    """Spec 2026-11-04 9.6: the field adds the chosen company. Enter adds the row whose ticker the
+    text spells, ignoring case, or the one match shown; a ticker already on the list adds nothing
+    and the line under the field says so; a text no row matches is added as typed when it is a
+    symbol. Any other choice is a match's button: Enter never adds the first of several."""
+    js = _static_file("watchlists.js")
+    for text in (
+        "var typed = text.trim().toUpperCase();",
+        "if (r.ticker.toUpperCase() === typed) exact = r;",
+        "if (exact) onEnter = on[exact.ticker] ? null : exact.ticker;",
+        "else if (shown.length === 1) onEnter = shown[0].ticker;",
+        "else if (asTyped) onEnter = asTyped;",
+        "hint = exact.ticker + ' is on this list.';",
+        "if (onEnter) add(list.id, onEnter);",
+        "onClick: function () { add(list.id, r.ticker); }",
+    ):
+        assert text in js, text
+    assert "add(list.id, shown[0].ticker)" not in js
+
+
+def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
+    """Spec 2026-11-04 9.6: a delete's one affirmative button is the danger one. ConfirmDialog
+    shows no revision without targetRevision and no Reject without onReject, and confirmVariant
+    styles Confirm; the Watchlists view's Delete passes neither and the danger variant."""
+    bundle = _component_file("bundle.js")
+    dialog = bundle[bundle.index("  function ConfirmDialog(props) {") :]
+    dialog = dialog[: dialog.index("\n  }\n")]
+    assert "// fairband:" in dialog and "(spec 2026-11-04 9.6)" in dialog
+    assert ": p.targetRevision == null ? null : h('p', { className: 'fb-rec__gloss caption' }," in (
+        dialog
+    )
+    assert "variant: p.confirmVariant === 'danger' ? 'danger' : 'primary', size: 'sm'," in dialog
+    assert (
+        ": p.onReject ? h(Button, { variant: 'danger', size: 'sm', onClick: p.onReject }, 'Reject')"
+        in dialog
+    )
+    declarations = _component_file("index.d.ts")
+    props = re.search(r"export interface ConfirmDialogProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None
+    assert "confirmVariant?: 'primary' | 'danger';" in props.group(1)
+    js = _static_file("watchlists.js")
+    view = js[js.index("h(F.ConfirmDialog, {") :]
+    view = view[: view.index("}));")]
+    assert "confirmVariant: 'danger'," in view
+    assert "targetRevision" not in view and "onReject" not in view
+
+
 def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
     """Spec 7.3: the band meter's caption says the word and the price ÷ value; the levels below
     it read Margin of safety (the value less the moat's margin), Fair band and 1.5 × value, and
@@ -1114,8 +1161,14 @@ def test_drawer_figure_tables_scroll_by_keyboard_with_the_year_in_view() -> None
 
 
 def test_app_js_escape_closes_an_open_menu_before_the_drawer() -> None:
+    """Escape closes an open menu before the drawer, and closes the drawer only while the Screen
+    shows it: in another view the drawer is hidden, and Escape belongs to that view's field."""
     script = _static_file("app.js")
-    assert "event.key === 'Escape' && state.drawer && !document.querySelector('.fb-menu')" in script
+    assert "var mount = document.getElementById('screen');" in script
+    assert (
+        "if (event.key === 'Escape' && state.drawer && !mount.hidden &&\n"
+        "        !document.querySelector('.fb-menu')) close();"
+    ) in script
 
 
 def test_app_js_drawer_draws_the_run_off_table() -> None:
@@ -1509,7 +1562,7 @@ def test_bundle_patches_marked() -> None:
     """The repository's patches to the exported bundle each carry a ``// fairband:`` comment, so
     a later export can be diffed against them."""
     bundle = _component_file("bundle.js")
-    assert bundle.count("// fairband:") >= 53
+    assert bundle.count("// fairband:") >= 54
     # A menu's toggle says whether its menu is open: Button passes aria-expanded through.
     assert "'aria-expanded': p['aria-expanded']," in bundle
     # A null phase has no badge: an em dash, never phase 1 "Start-up".

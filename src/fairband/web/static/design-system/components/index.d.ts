@@ -328,6 +328,10 @@ export interface ConfirmDialogProps {
   onReject?: () => void;
   onCancel?: () => void;
   onReload?: () => void;
+  /** fairband: the Confirm button's variant, `primary` by default; `danger` where the confirmed
+   * write is a delete. Without `targetRevision` the dialog shows no revision line, and without
+   * `onReject` no Reject. */
+  confirmVariant?: 'primary' | 'danger';
 }
 
 export interface ScreenRow {

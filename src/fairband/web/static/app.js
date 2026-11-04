@@ -238,9 +238,11 @@
     render();
   }
 
-  /* Escape closes the drawer, unless a menu is open: then Escape closes the menu first. */
+  /* Escape closes the drawer, unless a menu is open: then Escape closes the menu first. Only while
+     the Screen shows it: in another view the drawer is hidden, and Escape belongs to that view. */
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && state.drawer && !document.querySelector('.fb-menu')) close();
+    if (event.key === 'Escape' && state.drawer && !mount.hidden &&
+        !document.querySelector('.fb-menu')) close();
   });
 
   /* ------------------------------------------------------- find and filters */

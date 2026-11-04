@@ -150,8 +150,11 @@
   }
 
   /* The field under a list's head, its matches under it as buttons: the first eight not on the
-     list already. Enter adds the first; on a text no row matches, it adds the text, upper-cased,
-     when it is a symbol. A line under the field says what Enter would do when no match shows. */
+     list already. A match's button adds it. Enter adds only a company the reader chose: the row
+     whose ticker the text spells, ignoring case, unless it is on the list already; else the one
+     match shown; else, when no row matches, the text upper-cased if it is a symbol. Enter never
+     adds the first of several. A line under the field says why Enter adds nothing, or what it
+     adds when no match shows. */
   function addField(list) {
     var text = state.adding[list.id] || '';
     var on = {};
@@ -159,12 +162,23 @@
     var all = found(text);
     var shown = all.filter(function (r) { return !on[r.ticker]; }).slice(0, 8);
     var typed = text.trim().toUpperCase();
+    var exact = null;
+    all.forEach(function (r) {
+      if (r.ticker.toUpperCase() === typed) exact = r;
+    });
     var asTyped = text.trim() && all.length === 0 && SYMBOL.test(typed) ? typed : null;
+    var onEnter = null;
+    if (exact) onEnter = on[exact.ticker] ? null : exact.ticker;
+    else if (shown.length === 1) onEnter = shown[0].ticker;
+    else if (asTyped) onEnter = asTyped;
     var hint = null;
-    if (text.trim() && !shown.length) {
-      if (all.length) hint = 'Every company that matches is on this list.';
-      else if (asTyped) hint = 'No company on the screen matches. Enter adds ' + asTyped + '.';
-      else hint = 'No company on the screen matches, and the text is not a symbol.';
+    if (text.trim()) {
+      if (exact && !onEnter) hint = exact.ticker + ' is on this list.';
+      else if (!all.length) {
+        hint = asTyped ? 'No company on the screen matches. Enter adds ' + asTyped + '.'
+          : 'No company on the screen matches, and the text is not a symbol.';
+      } else if (!shown.length) hint = 'Every company that matches is on this list.';
+      else if (!onEnter) hint = 'Choose a company below, or type its full ticker.';
     }
     function set(value) {
       state.adding[list.id] = value;
@@ -174,8 +188,7 @@
       h('form', {
         onSubmit: function (event) {
           event.preventDefault();
-          if (shown.length) add(list.id, shown[0].ticker);
-          else if (asTyped) add(list.id, asTyped);
+          if (onEnter) add(list.id, onEnter);
         }
       },
         h('input', {
@@ -183,9 +196,7 @@
           'aria-label': 'Add a company to ' + list.name, maxLength: 60, value: text,
           onChange: function (event) { set(event.target.value); },
           onKeyDown: function (event) {
-            if (event.key !== 'Escape' || !text) return;
-            event.stopPropagation(); /* the field empties; the drawer stays */
-            set('');
+            if (event.key === 'Escape' && text) set('');
           }
         })),
       shown.length ? h('ul', { className: 'app-wl__matches' }, shown.map(function (r) {
@@ -239,9 +250,7 @@
           render();
         },
         onKeyDown: function (event) {
-          if (event.key !== 'Escape') return;
-          event.stopPropagation(); /* the name stays; the drawer stays */
-          stopRenaming(list.id);
+          if (event.key === 'Escape') stopRenaming(list.id);
         }
       })) : h('h2', { className: 'title app-wl__title' }, list.name);
     return h('div', { className: 'app-wl__head' },
@@ -290,8 +299,9 @@
       table);
   }
 
-  /* Delete's dialog, over the page: the payload is the list's name and its count. Escape, a press
-     beside it, Cancel and Reject close it; Confirm deletes. */
+  /* Delete's dialog, over the page: the payload is the list's name and its count. Its one
+     affirmative button, Confirm, deletes, so it is the danger one; there is no revision to bind
+     to and no Reject. Escape, a press beside it and Cancel close it. */
   function dialog(d) {
     return h('div', {
       className: 'app-dialog',
@@ -299,18 +309,15 @@
         if (event.target === event.currentTarget && !state.pending) cancelDelete();
       },
       onKeyDown: function (event) {
-        if (event.key !== 'Escape') return;
-        event.stopPropagation(); /* the drawer stays */
-        if (!state.pending) cancelDelete();
+        if (event.key === 'Escape' && !state.pending) cancelDelete();
       }
     },
       h(F.ConfirmDialog, {
         title: 'Delete ' + d.name,
         payload: { name: d.name, companies: d.count },
-        targetRevision: d.id,
         state: state.pending ? 'confirming' : 'open',
+        confirmVariant: 'danger',
         onConfirm: function () { drop(d); },
-        onReject: cancelDelete,
         onCancel: cancelDelete
       }));
   }

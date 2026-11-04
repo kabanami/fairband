@@ -796,6 +796,9 @@
     var p = props || {};
     var state = p.state || 'open';
     var stale = state === 'stale';
+    // fairband: without targetRevision there is no revision line, and without onReject no Reject;
+    // confirmVariant styles Confirm, 'primary' or 'danger', so a delete's one affirmative button
+    // is the danger one (spec 2026-11-04 9.6).
     return h('div', { className: cx('fb-dlg', 'fb-dlg--' + state), role: 'dialog', 'aria-modal': 'true' },
       h('h4', { className: 'fb-dlg__title title' }, p.title || 'Confirm this change'),
       h('p', { className: 'fb-dlg__warn-note caption' }, 'This cannot be undone.'),
@@ -804,17 +807,18 @@
         ? h('p', { className: 'fb-dlg__stale body' },
             'The target changed while this was open. Reload to see the current revision; this '
             + 'confirmation no longer binds to anything.')
-        : h('p', { className: 'fb-rec__gloss caption' },
+        : p.targetRevision == null ? null : h('p', { className: 'fb-rec__gloss caption' },
             'target · review ', h('span', { className: 'figure-sm' }, p.targetRevision)),
       h('div', { className: 'fb-dlg__foot' },
         h(Button, {
-          variant: 'primary', size: 'sm',
+          variant: p.confirmVariant === 'danger' ? 'danger' : 'primary', size: 'sm',
           disabled: stale || state === 'confirming' || state === 'done',
           onClick: p.onConfirm
         }, state === 'confirming' ? 'Confirming…' : 'Confirm'),
         stale
           ? h(Button, { size: 'sm', onClick: p.onReload }, 'Reload')
-          : h(Button, { variant: 'danger', size: 'sm', onClick: p.onReject }, 'Reject'),
+          : p.onReject ? h(Button, { variant: 'danger', size: 'sm', onClick: p.onReject }, 'Reject')
+            : null,
         h(Button, { variant: 'quiet', size: 'sm', onClick: p.onCancel }, 'Cancel')
       )
     );
