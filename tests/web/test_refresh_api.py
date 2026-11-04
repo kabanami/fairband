@@ -23,6 +23,7 @@ from fairband.config import DEFAULT_PORT, Keys, MissingKey, Settings
 from fairband.engine import METHOD_VERSION
 from fairband.engine.route import refusal_result
 from fairband.policy import Policy, load_policy
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import load_tax_table
 from fairband.refresh import run as run_module
 from fairband.refresh.fetch import FetchOutcome
@@ -223,7 +224,9 @@ def test_api_refuses_second_refresh(
 
     # A refresh another process runs (the command) is refused the same way.
     with closing(connect(db_path)) as conn:
-        other = create_refresh(conn, "scoped", ["BOLT"], "fairband-policy-v1", METHOD_VERSION, NOW)
+        other = create_refresh(
+            conn, "scoped", ["BOLT"], "fairband-policy-v1", METHOD_VERSION, NOW, EMPTY_SETTINGS_HASH
+        )
     response = start(client, kind="scoped", symbols=["ACME"])
     assert (response.status_code, response.json()) == (409, {"running": other})
 
@@ -297,7 +300,9 @@ def test_api_price_refresh_starts(client_with_worker: TestClient, db_path: Path)
     """With no universe yet, the price refresh quotes every company with a snapshot. The mock
     FMP answers the quote 404: ACME fails and keeps its snapshot, and the run is done."""
     with closing(connect(db_path)) as conn:
-        scoped = create_refresh(conn, "scoped", ["ACME"], "fairband-policy-v1", METHOD_VERSION, NOW)
+        scoped = create_refresh(
+            conn, "scoped", ["ACME"], "fairband-policy-v1", METHOD_VERSION, NOW, EMPTY_SETTINGS_HASH
+        )
         refused = refusal_result("ACME", "no universe deciles yet", load_policy(), NOW.date())
         insert_snapshot(conn, refused, scoped, clock=lambda: NOW)
         finish_refresh(conn, scoped, "done", NOW)

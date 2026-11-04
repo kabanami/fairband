@@ -29,6 +29,7 @@ from fairband.config import DEFAULT_PORT, Settings
 from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
 from fairband.engine.route import CompanyInputs
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.refresh import fetch as fetch_module
 from fairband.refresh import run as run_module
 from fairband.refresh.deciles import deciles_for_universe
@@ -554,7 +555,9 @@ def test_worker_waits_for_abandoned_fetches(env: Env, monkeypatch: pytest.Monkey
 def test_startup_marks_interrupted(env: Env, caplog: pytest.LogCaptureFixture) -> None:
     """A refresh a stopped server or command left running is marked when the server starts."""
     with closing(env.connect()) as conn:
-        left = create_refresh(conn, "full", None, env.policy.version, METHOD_VERSION, env.clock())
+        left = create_refresh(
+            conn, "full", None, env.policy.version, METHOD_VERSION, env.clock(), EMPTY_SETTINGS_HASH
+        )
     env.clock.now += timedelta(hours=2)
     settings = Settings(env.db_path.parent, env.db_path.parent, env.db_path, DEFAULT_PORT)
     app = create_app(settings, env.policy, env.connect, clock=env.clock)
@@ -609,7 +612,9 @@ def test_migrate_marks_an_interrupted_refresh(
     out, and ``migrate`` takes it without the server."""
     use_cli(env, monkeypatch, tmp_path)
     with closing(env.connect()) as conn:
-        left = create_refresh(conn, "scoped", ["ACME"], env.policy.version, "m", env.clock())
+        left = create_refresh(
+            conn, "scoped", ["ACME"], env.policy.version, "m", env.clock(), EMPTY_SETTINGS_HASH
+        )
     assert cli.main(["refresh", "ACME"]) == 1
     assert capsys.readouterr().err.splitlines()[-1] == (
         f"refresh {left} is running; try again when it has finished."

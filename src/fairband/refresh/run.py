@@ -215,7 +215,13 @@ class Refresh:
         with closing(self._conn_factory()) as conn:
             record_policy(conn, self._policy, self._clock())
             refresh_id = create_refresh(
-                conn, kind, names, self._policy.version, METHOD_VERSION, self._clock()
+                conn,
+                kind,
+                names,
+                self._policy.version,
+                METHOD_VERSION,
+                self._clock(),
+                self._policy.settings_hash,
             )
             try:
                 if on_started is not None:

@@ -3,9 +3,10 @@
 ``result`` holds the whole ``ValuationResult`` as ``result_to_json`` writes it. The other columns
 copy the fields the screen sorts and filters on: the value, the levels and the price as ``repr``
 text, so each float reads back exactly, price ÷ value as a REAL (the double itself, also exact),
-the designation's word, and ``flags`` as a JSON list of the flag codes. The ``stance5`` and
-``stance3`` columns of method 0.5 are no longer written: a new row leaves them NULL. The screen
-reads the snapshot with the greatest id per symbol.
+the designation's word, ``flags`` as a JSON list of the flag codes, and the policy version,
+method version and settings hash the result cites. The ``stance5`` and ``stance3`` columns of
+method 0.5 are no longer written: a new row leaves them NULL. The screen reads the snapshot with
+the greatest id per symbol.
 """
 
 import json
@@ -52,6 +53,7 @@ class SnapshotRow:
     refusal: str | None
     policy_version: str
     method_version: str
+    settings_hash: str
     result: ValuationResult
 
 
@@ -89,6 +91,7 @@ def insert_snapshot(
         result.refusal,
         result.policy_version,
         result.method_version,
+        result.settings_hash,
         result_to_json(result),
     )
     with transaction(conn):
@@ -96,8 +99,8 @@ def insert_snapshot(
             "INSERT INTO snapshots (symbol, refresh_id, deciles_refresh_id, created_at, phase,"
             " route, value, buy_level, fair_low, fair_high, trim_level, price, price_to_value,"
             " designation, price_date, data_date, valid_until, flags, refusal, policy_version,"
-            " method_version, result)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " method_version, settings_hash, result)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             row,
         )
     return inserted_id(cursor)
@@ -152,5 +155,6 @@ def _snapshot(row: sqlite3.Row) -> SnapshotRow:
         refusal=row["refusal"],
         policy_version=row["policy_version"],
         method_version=row["method_version"],
+        settings_hash=row["settings_hash"],
         result=result_from_json(row["result"]),
     )

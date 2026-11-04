@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store import db
 from fairband.store.db import applied_versions, connect, migrate
 
@@ -25,11 +26,25 @@ _TABLES = {
     "facts",
     "observations",
     "snapshots",
+    "settings",
+    "settings_changes",
+    "watchlists",
+    "watchlist_entries",
 }
+_ALL = [
+    "001_initial.sql",
+    "002_designation.sql",
+    "003_facts_by_response.sql",
+    "004_settings_and_watchlists.sql",
+]
 
 
 def _packaged_initial() -> bytes:
-    return resources.files("fairband.store").joinpath("migrations/001_initial.sql").read_bytes()
+    return _packaged("001_initial.sql")
+
+
+def _packaged(filename: str) -> bytes:
+    return resources.files("fairband.store").joinpath(f"migrations/{filename}").read_bytes()
 
 
 def _migrations_dir(tmp_path: Path, extra: dict[str, str]) -> Path:
@@ -49,8 +64,8 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
-    assert migrate(conn) == ["001_initial.sql", "002_designation.sql", "003_facts_by_response.sql"]
-    assert applied_versions(conn) == [1, 2, 3]
+    assert migrate(conn) == _ALL
+    assert applied_versions(conn) == [1, 2, 3, 4]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -92,11 +107,42 @@ def test_designation_columns_join_a_database_at_001(
     with monkeypatch.context() as patched:
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
-    assert migrate(conn) == ["002_designation.sql", "003_facts_by_response.sql"]
-    assert applied_versions(conn) == [1, 2, 3]
+    assert migrate(conn) == _ALL[1:]
+    assert applied_versions(conn) == [1, 2, 3, 4]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
+
+
+def test_migration_004_fills_the_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 003 gains the settings and watchlist tables, and its refreshes and snapshots
+    read the empty overlay's settings hash: they ran under the policy file alone."""
+    folder = _migrations_dir(tmp_path, {})
+    for filename in _ALL[1:3]:
+        (folder / filename).write_bytes(_packaged(filename))
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", folder)
+        assert migrate(conn) == _ALL[:3]
+    stamp = "2026-11-01T09:30:00+00:00"
+    conn.execute(
+        "insert into refreshes (kind, status, started_at, policy_version, method_version)"
+        " values ('full', 'done', ?, 'fairband-policy-v5', 'fairband-mechanical/0.7')",
+        (stamp,),
+    )
+    conn.execute(
+        "insert into snapshots (symbol, refresh_id, created_at, data_date, valid_until, flags,"
+        " policy_version, method_version, result) values ('MSFT', 1, ?, '2026-10-29',"
+        " '2027-01-28', '[]', 'fairband-policy-v5', 'fairband-mechanical/0.7', '{}')",
+        (stamp,),
+    )
+    conn.commit()
+    assert migrate(conn) == ["004_settings_and_watchlists.sql"]
+    assert conn.execute("select settings_hash from refreshes").fetchone()[0] == EMPTY_SETTINGS_HASH
+    assert conn.execute("select settings_hash from snapshots").fetchone()[0] == EMPTY_SETTINGS_HASH
+    names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
+    assert {"settings", "settings_changes", "watchlists", "watchlist_entries"} <= names
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -204,6 +250,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 001_initial.sql",
         "Applied 002_designation.sql",
         "Applied 003_facts_by_response.sql",
+        "Applied 004_settings_and_watchlists.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()

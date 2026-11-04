@@ -39,6 +39,7 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy, load_policy
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import CompanyRow, insert_companies
 from fairband.store.db import connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh
@@ -109,7 +110,9 @@ def seed(
     """One finished full refresh (id 1) whose universe lists ``listed`` and holds ``results``."""
     with closing(connect(db_path)) as conn:
         migrate(conn)
-        refresh_id = create_refresh(conn, "full", None, policy.version, METHOD_VERSION, NOW)
+        refresh_id = create_refresh(
+            conn, "full", None, policy.version, METHOD_VERSION, NOW, EMPTY_SETTINGS_HASH
+        )
         assert refresh_id == 1
         insert_companies(conn, listed)
         for result in results:

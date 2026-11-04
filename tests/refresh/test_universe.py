@@ -13,6 +13,7 @@ import pytest
 from vendor_double import FMP_KEY, Clients, Clock, Router
 
 from fairband.policy import Policy
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.refresh.universe import UniverseResult, build_universe
 from fairband.store.companies import CompanyRow, latest_companies
 from fairband.store.refreshes import create_refresh, finish_refresh
@@ -26,7 +27,9 @@ def build(
     conn: sqlite3.Connection, clients: Clients, policy: Policy, clock: Clock
 ) -> UniverseResult:
     """The universe of a new full refresh, which is then closed so the next one may start."""
-    refresh_id = create_refresh(conn, "full", None, policy.version, "m", clock())
+    refresh_id = create_refresh(
+        conn, "full", None, policy.version, "m", clock(), EMPTY_SETTINGS_HASH
+    )
     result = build_universe(conn, clients.fmp, policy, refresh_id, clock(), clients.secrets)
     finish_refresh(conn, refresh_id, "done", clock())
     return result
@@ -460,7 +463,9 @@ def test_unusable_screener_payload(
 def test_refuses_to_run_inside_a_transaction(
     conn: sqlite3.Connection, clients: Clients, router: Router, policy: Policy, clock: Clock
 ) -> None:
-    refresh_id = create_refresh(conn, "full", None, policy.version, "m", clock())
+    refresh_id = create_refresh(
+        conn, "full", None, policy.version, "m", clock(), EMPTY_SETTINGS_HASH
+    )
     conn.execute("BEGIN")
     with pytest.raises(ValueError, match="transaction"):
         build_universe(conn, clients.fmp, policy, refresh_id, clock(), clients.secrets)

@@ -39,6 +39,7 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.route import value_company
 from fairband.engine.types import Designation, ValuationResult, result_to_json
 from fairband.policy import Policy, load_policy
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import CompanyRow, insert_companies
 from fairband.store.db import applied_versions, connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh, set_stage
@@ -168,7 +169,9 @@ def db_path(tmp_path: Path, policy: Policy, results: dict[str, ValuationResult])
     path = tmp_path / "data" / "fairband.db"
     with closing(connect(path)) as conn:
         migrate(conn)
-        refresh_id = create_refresh(conn, "full", None, policy.version, METHOD_VERSION, STARTED)
+        refresh_id = create_refresh(
+            conn, "full", None, policy.version, METHOD_VERSION, STARTED, EMPTY_SETTINGS_HASH
+        )
         insert_companies(
             conn,
             [
@@ -400,7 +403,9 @@ def _universe(db_path: Path, policy: Policy, *companies: tuple[str, str, int, bo
     """A later full refresh whose universe lists ``companies``: symbol, name, market cap and
     whether it is admitted."""
     with closing(connect(db_path)) as conn:
-        refresh_id = create_refresh(conn, "full", None, policy.version, METHOD_VERSION, NOW)
+        refresh_id = create_refresh(
+            conn, "full", None, policy.version, METHOD_VERSION, NOW, EMPTY_SETTINGS_HASH
+        )
         rows = [
             _company(symbol, refresh_id, name, Decimal(cap))
             if admitted
@@ -641,7 +646,7 @@ def test_screen_without_a_universe_shows_every_snapshot(
         migrate(conn)
         symbols = list(results)
         refresh_id = create_refresh(
-            conn, "scoped", symbols, policy.version, METHOD_VERSION, STARTED
+            conn, "scoped", symbols, policy.version, METHOD_VERSION, STARTED, EMPTY_SETTINGS_HASH
         )
         for result in results.values():
             insert_snapshot(conn, result, refresh_id, clock=lambda: CREATED)
@@ -1670,7 +1675,7 @@ def test_serve_cli_parses_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert isinstance(app, FastAPI)
     assert kwargs == {"host": "127.0.0.1", "port": 9123, "log_level": "info"}
     with closing(connect(tmp_path / "data" / "fairband.db")) as conn:
-        assert applied_versions(conn) == [1, 2, 3]
+        assert applied_versions(conn) == [1, 2, 3, 4]
     with TestClient(app, base_url=HOST) as c:
         body = c.get("/api/screen").json()
     assert body["rows"] == [] and body["refresh"] is None

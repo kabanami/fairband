@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.db import connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh
 from fairband.store.vendor import record_response
@@ -28,7 +29,13 @@ def new_refresh(conn: sqlite3.Connection) -> Callable[[], int]:
 
     def make() -> int:
         refresh_id = create_refresh(
-            conn, "scoped", ["AAPL"], "fairband-policy-v1", "fairband-mechanical/0.1", _AT
+            conn,
+            "scoped",
+            ["AAPL"],
+            "fairband-policy-v1",
+            "fairband-mechanical/0.1",
+            _AT,
+            EMPTY_SETTINGS_HASH,
         )
         finish_refresh(conn, refresh_id, "done", _AT)
         return refresh_id

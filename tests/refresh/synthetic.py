@@ -11,6 +11,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import CompanyRow, insert_companies
 from fairband.store.refreshes import create_refresh, finish_refresh
 
@@ -235,7 +236,9 @@ def add_company(
     symbols: Sequence[str] = ("ACME",),
 ) -> int:
     """List ``symbols`` in the universe of a new finished full refresh; return its id."""
-    refresh_id = create_refresh(conn, "full", None, "fairband-policy-v1", "m", NOW)
+    refresh_id = create_refresh(
+        conn, "full", None, "fairband-policy-v1", "m", NOW, EMPTY_SETTINGS_HASH
+    )
     finish_refresh(conn, refresh_id, "done", NOW)
     rows = [
         CompanyRow(

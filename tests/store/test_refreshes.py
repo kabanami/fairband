@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from fairband.engine.classifier import Deciles
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.refreshes import (
     ItemRow,
     RefreshRow,
@@ -26,7 +27,7 @@ POLICY, METHOD = "fairband-policy-v1", "fairband-mechanical/0.1"
 
 
 def _start(conn: sqlite3.Connection, kind: str = "full", symbols: list[str] | None = None) -> int:
-    return create_refresh(conn, kind, symbols, POLICY, METHOD, T0)
+    return create_refresh(conn, kind, symbols, POLICY, METHOD, T0, EMPTY_SETTINGS_HASH)
 
 
 def test_create_refresh_and_latest_refresh(conn: sqlite3.Connection) -> None:
@@ -45,11 +46,19 @@ def test_create_refresh_and_latest_refresh(conn: sqlite3.Connection) -> None:
         finished_at=None,
         policy_version=POLICY,
         method_version=METHOD,
+        settings_hash=EMPTY_SETTINGS_HASH,
         calibration=None,
         message=None,
     )
     stored = conn.execute("select symbols from refreshes order by id").fetchall()
     assert [r[0] for r in stored] == [None, '["MSFT", "BRK.B"]']
+
+
+def test_create_refresh_records_the_settings_hash(conn: sqlite3.Connection) -> None:
+    refresh_id = create_refresh(conn, "revalue", None, POLICY, METHOD, T0, "abc")
+    row = latest_refresh(conn)
+    assert row is not None and (row.id, row.settings_hash) == (refresh_id, "abc")
+    assert conn.execute("select settings_hash from refreshes").fetchone()[0] == "abc"
 
 
 def test_create_refresh_refuses_while_one_runs(conn: sqlite3.Connection) -> None:

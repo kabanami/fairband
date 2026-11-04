@@ -105,9 +105,20 @@ def test_insert_snapshot_and_latest_snapshot(
         refusal=None,
         policy_version="fairband-policy-v1",
         method_version=METHOD_VERSION,
+        settings_hash=EMPTY_SETTINGS_HASH,
         result=result,
     )
     assert latest_snapshot(conn, "AAPL") is None
+
+
+def test_snapshot_keeps_the_results_settings_hash(
+    conn: sqlite3.Connection, new_refresh: Callable[[], int]
+) -> None:
+    result = replace(_result("MSFT"), settings_hash="abc")
+    insert_snapshot(conn, result, new_refresh(), clock=_at())
+    row = latest_snapshot(conn, "MSFT")
+    assert row is not None and row.settings_hash == "abc" == row.result.settings_hash
+    assert conn.execute("select settings_hash from snapshots").fetchone()[0] == "abc"
 
 
 def test_snapshot_columns_keep_exact_floats(

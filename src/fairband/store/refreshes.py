@@ -3,8 +3,10 @@
 ``refreshes`` holds one row per run; its status is ``running`` until ``finish_refresh`` sets
 ``done``, ``failed`` or ``cancelled``, or ``mark_interrupted`` finds it after a stop and sets
 ``interrupted``. One refresh runs at a time: ``create_refresh`` raises ``RefreshRunning`` while a
-row is ``running``. ``refresh_items`` holds each company's latest status within a refresh, and
-``deciles`` the decile edges as JSON lists of floats. These are the only rows the store updates.
+row is ``running``. Each row records the policy version, the method version and the settings hash
+the run reads. ``refresh_items`` holds each company's latest status within a refresh, and
+``deciles`` the decile edges as JSON lists of floats. Apart from the user's settings and
+watchlists, these are the only rows the store updates.
 """
 
 import json
@@ -40,6 +42,7 @@ class RefreshRow:
     finished_at: datetime | None
     policy_version: str
     method_version: str
+    settings_hash: str
     calibration: dict[str, Any] | None
     message: str | None
 
@@ -60,6 +63,7 @@ def create_refresh(
     policy_version: str,
     method_version: str,
     started_at: datetime,
+    settings_hash: str,
 ) -> int:
     """Start a ``running`` refresh and return its id. Called outside a transaction, it takes the
     write lock before the check, so two connections cannot both start one."""
@@ -72,8 +76,15 @@ def create_refresh(
             raise RefreshRunning(int(running["id"]))
         cursor = conn.execute(
             "INSERT INTO refreshes (kind, symbols, status, started_at, policy_version,"
-            " method_version) VALUES (?, ?, 'running', ?, ?, ?)",
-            (kind, stored_symbols, dump_stamp(started_at), policy_version, method_version),
+            " method_version, settings_hash) VALUES (?, ?, 'running', ?, ?, ?, ?)",
+            (
+                kind,
+                stored_symbols,
+                dump_stamp(started_at),
+                policy_version,
+                method_version,
+                settings_hash,
+            ),
         )
     return inserted_id(cursor)
 
@@ -214,6 +225,7 @@ def _refresh(row: sqlite3.Row) -> RefreshRow:
         finished_at=load_stamp(row["finished_at"]),
         policy_version=row["policy_version"],
         method_version=row["method_version"],
+        settings_hash=row["settings_hash"],
         calibration=None if calibration is None else json.loads(calibration),
         message=row["message"],
     )
