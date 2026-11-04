@@ -4,7 +4,9 @@ One list of work not started. Specs, plans and `docs/method.md` hold the detail;
 pointer with the origin and the figure that justify it. **Now** is ordered: the next spec starts at
 the top. **Later** is not ordered; its items are grouped by the files that change. **Questions**
 need the founder's call before anyone builds. An item moves to **Done** with the commit that closed
-it. IDs are never reused.
+it. IDs are never reused. An origin `FC-n` is a feature candidate of the product brief
+(`docs/legacy/product-brief.md`), listed in Section 11 of the earlier build's
+`discovery/synthesis.md`, which is outside the repo.
 
 Types: feature (new behaviour), fix (wrong behaviour), debt (code, test or document cleanup),
 question (the founder decides).
@@ -29,6 +31,7 @@ file or theme, before the workspace is deleted.
 | B-6 | A consensus check flag on every phase: next-3-year consensus revenue growth ranked on the phase deciles maps to a different phase, with at least 5 analysts; the phase stays. And the thin-step rule: "a thin step takes the belief" would give QCOM $157.71 and move the Mature Growth median value ÷ price 0.824 → 0.708 (421 of 716 rows have a thin year-3 step). | founder, 2026-11-02 (QCOM) | adopt the flag only; adopt both; leave as built |
 | B-7 | Are the growth routes too harsh on true growers? 58 growth rows were refused "value not positive" before the classifier fixes (40 High Growth, 18 Young Growth). | readout, 2026-11-03 | recount after refresh 14 and read ten rows |
 | B-8 | AAPL's three-year aggregate return reads 9236% (invested capital near zero), so its runway charge is nil. | readout, 2026-11-02 | floor the capital, cap the return, or accept |
+| B-46 | The Base Rate Book's medians and 90th percentiles ship in policy v5 under an attribution line; the brief lists the book as a source that cannot ship. | brief, uncertainties; design.md 6.13 | keep the attribution; replace the figures with a public source; ask the authors, before the repo goes public |
 
 ## Later
 
@@ -36,7 +39,7 @@ file or theme, before the workspace is deleted.
 
 | ID | Item | Type | Origin | Why |
 |---|---|---|---|---|
-| B-9 | Tier 2: the agent's research and stance per company; the stance column is empty until then | feature | founder, 2026-11-03 | the engine's value is a best effort; the stance is the agent's call after research |
+| B-9 | Tier 2: the agent's research and stance per company; the stance column is empty until then | feature | founder, 2026-11-03 | the engine's value is a best effort; the stance is the agent's call after research; the parts are B-48 to B-59 |
 | B-10 | Young Growth's failure probability is "unavailable" (`failure-not-charged`, 25 rows); the Decline route's rating-to-default table could serve it | feature | growth routes readout, 2026-11-03 | one table can serve three routes |
 | B-11 | `route_decline.py` (730 lines): `_decline_rate` raises ValueError when evidence is None (unreachable; a guard refusal keeps the contract); six helpers imported from `route_revenue_growth` belong in a shared module, `_row` in `distress.py`, `_margin` in the core; the DATA input `equity` (book) and the intermediate `equity` (going concern) share a name; test gaps: path-held with decline-rate-floored, the order of four flags, the π = 1 floor edge | debt | plan B, Task 4 review | |
 | B-12 | `runoff.py`: `runoff_rates` with fewer than 3 years silently returns three rates; `RunoffValuation` built positionally (14 fields); no test of a negative firm value through `runoff_equity` alone | debt | plan B, Task 3 review | |
@@ -48,6 +51,32 @@ file or theme, before the workspace is deleted.
 | B-18 | `classifier.py`: `_checks` takes 12 positional arguments with same-typed neighbours; a no-margin company with a bottom growth word and fewer than three falls is unclassified with no `revenue-falling` flag; `steps` computed and unused; no test for a 4b company carrying both `growth-word-disagrees` and `revenue-falling` | debt | plan A, Task 4 review | |
 | B-19 | Designation: the groups' share recomputes price ÷ value against the edge instead of reading the row's `priceToValue`; the drawer's in-band figure reads the current policy's edges, not the snapshot's; the meter's own "% below fair value" figure (bundle.js, about line 433) rounds across a band edge | debt | plan A, final review | one figure reads 15.0% at a ratio of 0.8499 |
 | B-20 | Peers: computed for every company, not only the growth phases (about 28 s a value stage); a per-stage memo symbol → PeerFigures; the drawer does not list the peers behind the sales-to-capital and ROIC medians; `path.cap` and `revenue_path.hold` show as 0.15, not 15%, in the drawer's generic list | debt | growth routes, Task 4 and final review | |
+| B-47 | A flag for a large price fall with no change in the consensus, read against the consensus stored at the previous refresh; no new endpoint | feature | design.md 4.2 | the top of a screen collects errors; a fall with a revision is a different row from a fall without one |
+
+### Tier 2 and agent access (new files; B-9 is the umbrella)
+
+| ID | Item | Type | Origin | Why |
+|---|---|---|---|---|
+| B-48 | MCP server: an agent connects from Claude Code, Codex or Claude Desktop over stdio, started by the host; finds the tools; reads everything the page shows (the screen, snapshots, financials, peers, price facts, reports, notes, watchlists, the inbox, the ledger); starts a refresh for a scope and follows it. No token: the request-header rule and the 127.0.0.1 binding stay; a token comes only with a network transport | feature | FC-36, FC-37, FC-37a, FC-46; founder 2026-11-04 | the agents are the second surface; every write below arrives through it |
+| B-49 | Provenance ledger: every agent write records the agent, the playbook role, the time and what it rests on | feature | FC-39; concerns A and G | |
+| B-50 | Overrides: one input per override with the old value, the new value, the reason, the evidence, a tag (lasting, or tied to a period) and the snapshot it was made on; locked inputs (r, g_T, reported data) refused; a belief above the sales class's base-rate 90th percentile needs extra evidence; a period-tied override drops at the next full refresh or when the data it corrected changes, so the corrected value is stored | feature | FC-27, FC-28, FC-29; design.md 7.3 | inputs, never numbers |
+| B-51 | Value bridge: the engine recomputes with the overrides and shows one line per override in the method's step order, from the mechanical value to the reviewed value | feature | FC-18; design.md 7.4 | |
+| B-52 | Key judgments: phase, moat, belief, ROIC and target margin, each with the bull view, the bear view and the decision | feature | FC-30; design.md 9.3 | |
+| B-53 | Reports: the valuation review and the full report; the ten-section reader layout with Appendix A (the audit) and B (the glossary); stored as Markdown; the number check rejects a report with a number no tool output gave. Needs segment data, 10-K text from EDGAR and the Beneish M score, which the engine does not fetch | feature | FC-31, FC-32, FC-02; design.md 9 | readability is a hard requirement |
+| B-54 | Notes: dated notes on a company by the user or an agent, with an override's provenance | feature | FC-33; founder 2026-10-27 | |
+| B-55 | Kill criteria and dated news items, recorded by an agent; no automatic trigger check, the agent checks them on the next review | feature | FC-34; founder 2026-11-04 | |
+| B-56 | The mechanical-versus-reviewed log: both values at every update, with the phase and the method | feature | FC-20; design.md 7.3 | the measure of whether the agents help |
+| B-57 | The playbook: the Tier 2 roles as skills the user installs in the agent host; its first step is "check the inbox" | feature | FC-41 | |
+| B-58 | Work inbox, two ways in. A button on a row posts an item: the symbol, the mode (valuation review or full report), a note and the snapshot at posting. A company on a watchlist (B-67) whose validity window expired is posted once per expiry as a valuation review, when the inbox is read on the page or over MCP, never while an item for it is open; it drops while pending if the company leaves every watchlist. States: pending, claimed (agent, time), done (linked to the report or notes), declined with a reason. MCP tools: list, claim, complete. Later: ledger proposals in the reverse direction (B-60) | feature | FC-40; founder 2026-11-04 | the user hands the agent its work through Fairband, not through chat |
+| B-59 | Report export: a Markdown download of the stored report, and a print stylesheet for the browser's save-as-PDF; a server-side PDF only if the print result falls short | feature | FC-35; founder 2026-11-04 | the stored copy is the one that passed the number check, a week later too |
+
+### Portfolio (new files)
+
+| ID | Item | Type | Origin | Why |
+|---|---|---|---|---|
+| B-60 | Transaction ledger: append-only rows the user records; a fix is a reversing row; an agent may propose a row the user confirms | feature | FC-42; design.md 10 | |
+| B-61 | Positions, cash and market value from the ledger, updated at each price refresh | feature | FC-43; design.md 10 | |
+| B-62 | Portfolio review by an agent over MCP, on request only, reading the ledger and the values; no strategy, no rules | feature | FC-44; design.md 10 | |
 
 ### Refresh and vendors
 
@@ -59,6 +88,8 @@ file or theme, before the workspace is deleted.
 | B-24 | `run_price.py` says "policy changed: run a full refresh" where a revalue would do | fix | calibration, 2026-11-02 | |
 | B-25 | A `--force` flag to refetch inside the 24-hour reuse window | feature | offered 2026-11-03, not requested | |
 | B-26 | Ultimate-only FMP content (earnings call transcripts, for one) is unused; the legacy design assumed the Premium plan | feature | 2026-11-01 | |
+| B-63 | Refresh scope by cap band (all Mega, or Mega and Large) as a CLI option and an MCP argument, not a page control | feature | FC-06; founder 2026-10-27 and 2026-11-04 | the page has full, price and revalue; a symbol list covers the rest |
+| B-64 | Point-in-time: as-of reads over the stored observations, which are dated and appended, so a revalue can run as of a past date; a backtest command only once B-56 has data | feature | FC-04; design.md 11.5 | |
 
 ### Universe and data
 
@@ -68,6 +99,8 @@ file or theme, before the workspace is deleted.
 | B-28 | Foreign filers are refused: currency and share-unit handling not built (196 rows on 2026-11-01; 13 of the 112 Decline rows) | feature | first live run | |
 | B-29 | Notes and preferreds: DUKU and SOJC stay admitted; 9 fetch failures were all preferreds and notes without statements; test gaps: `\bpreferred\b` alone, the industry rule beating the name rule, a listed admission skipping the name and symbol patterns, a manual exclusion beating a symbol pattern | debt | growth routes and plan A reviews | |
 | B-30 | Test fixtures label refreshes "fairband-policy-v1" while building results under v2; `env_valued` and `snapshots_of` copied into `test_run_revalue.py`; `load_policy` on the v1 path raises on the missing v2 values and nothing calls it | debt | calibration, 2026-11-02 | |
+| B-65 | A free data path for basic users: SEC EDGAR statements and a free price source, with the fields the routes need | feature | FC-51; founder 2026-10-27, deferred not refused | adoption stays small while the data is paid-only |
+| B-66 | Banks, insurers and REITs, each with its own route per phase | feature | design.md 2 | excluded "for now"; six financial industries are out of the universe today |
 
 ### Page
 
@@ -81,6 +114,12 @@ file or theme, before the workspace is deleted.
 | B-36 | Chooser: reorders its rows while open (the spec asks for table order first); the drop flag lasts until the next press; Clear on FIND drops focus to body | fix | screen controls and growth routes reviews | |
 | B-37 | Pre-existing: the drawer scrolls sideways 17px (the Inputs table is too wide); dark-mode scrollbars and checkboxes stay light; the status line wraps to six lines; the header sits inside `main` (no banner landmark) | fix | screen controls hand check, 2026-11-02 | |
 | B-38 | Page-script tests pin source lines and run no logic; thin pins on Cancel's disabled state, the unknown-stage fallback and the narrowing clauses; two tests pin incidental line wrapping; exact float equality in the repriced-cap check | debt | screen controls and plan B reviews | |
+| B-67 | Watchlists: named lists, a company in several, each entry dated; a watchlist filter on the screen; the lists readable over MCP | feature | FC-26; founder 2026-11-04 | a membership list, not idea tracking; B-58 posts work for its expired companies |
+| B-68 | History: a per-company view of value, phase and designation across snapshots; a "what changed" list after a refresh; the price change since the valuation on the row | feature | FC-24, FC-25, FC-06; journey J2 | snapshots are appended, but the page reads only the latest |
+| B-69 | A flag-count column that sorts and a "clean" filter (no warning flag); no composite score | feature | FC-22; design.md 4.2 | rank by "cheap and clean": the Filters menu has stance, phase, cap and sector only |
+| B-70 | The phase multiples the stored data gives: EV/Sales, EV/forward sales, PEG, EV/EBITDA, P/B; not EV/TAM, EV/users, EV/subscribers or EV/liquidation value | feature | FC-19; design.md 9.5; founder 2026-11-04 | the three P/E, EPV and the growth share exist; the NCAV figure stands in for liquidation |
+| B-71 | Ownership evidence in the drawer: institutional ownership, guru holdings and their quarterly moves, insider transactions, each with its as-of date; evidence only, never a value or a designation | feature | FC-49; founder 2026-10-27 | |
+| B-72 | Recent picks across the universe: guru buys and sells and insider buys from FMP's or GuruFocus's endpoints, joined to the row's value and designation; no filing parsing | feature | FC-50; founder 2026-11-04 | |
 
 ### Design system (the external artifact; patched copies live in `web/static/design-system/`)
 
