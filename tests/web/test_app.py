@@ -725,6 +725,14 @@ def test_header_has_the_five_views() -> None:
         assert f'<section id="{panel}" hidden' in html
 
 
+def test_controls_js_names_a_missing_worker() -> None:
+    """The server answers 503 only from an app built without a refresh worker; serve always
+    builds one, so the page names the state and sends the reader nowhere."""
+    script = _static_file("controls.js")
+    assert "notify('No refresh worker.', false);" in script
+    assert "vendor keys" not in script
+
+
 def test_page_opens_the_view_the_hash_names() -> None:
     """Spec 2026-11-04 6: the hash follows the view, none for the Screen, and names the view on
     load and when a link changes it; #methodology/<section-id> opens the Methodology view and
@@ -760,16 +768,17 @@ def test_page_opens_the_view_the_hash_names() -> None:
 
 
 def test_index_scrolls_the_new_panels_and_the_header_wraps_at_phone_width() -> None:
-    """The three new panels scroll as the groups' does; under 600px the views take a second line
-    under the lockup and the header grows by it (spec 2026-11-04 6)."""
+    """The three new panels scroll as the groups' does; under 840px, where the one-line header no
+    longer fits, the views take a line of their own under the lockup and the header grows by it,
+    so the page never scrolls sideways (spec 2026-11-04 6)."""
     page = _static_file("index.html")
     assert "#screen, #groups, #watchlists, #methodology, #settings {" in page
     assert "#groups, #watchlists, #methodology, #settings { overflow: auto; }" in page
     css = _component_file("bundle.css")
-    patch = css[css.index("/* fairband: at phone width") :]
+    patch = css[css.index("/* fairband: below 840px, where the one-line header") :]
     assert "(spec 2026-11-04 6)" in patch[: patch.index("*/")]
     patch = patch[: patch.index("\n}\n")]
-    assert "@media (width < 600px) {" in patch
+    assert "@media (width < 840px) {" in patch
     assert ".fb-hdr { flex-wrap: wrap; height: auto; row-gap: 0; }" in patch
     assert ".fb-hdr__nav { order: 1; flex-basis: 100%;" in patch
 

@@ -97,7 +97,7 @@
       .then(function (r) {
         if (r.status === 409) notify('A refresh is already running.', false);
         else if (r.status === 503) {
-          notify('No refresh worker: start the server with the vendor keys.', false);
+          notify('No refresh worker.', false);
         } else if (!r.ok) {
           var detail = r.body && r.body.detail ? String(r.body.detail) : 'no reason given';
           notify('The server refused the request: ' + detail + '.', true);
