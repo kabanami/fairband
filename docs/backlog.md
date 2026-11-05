@@ -158,5 +158,5 @@ file or theme, before the workspace is deleted.
 | B-69 | A Warnings column counting the eleven quality warnings, sortable, and the Clean filter over valued rows; no composite score | a135f31, 4e08aca |
 | B-24 | The price refresh says "policy changed: run a revalue" or "settings changed: run a revalue", not a full refresh | 1512156 |
 | B-45 | A revalue from the web API runs without the FMP key; the server builds its worker in every case | 1512156 |
-| B-75 | A rule between two settings names both, the Settings page stands the sentence beside the field the user changed, and the save dialog shows the cap bands a changed size floor carries | PENDING |
-| B-82 | Phone width: the engine stamp gives way below 560px, the refresh buttons read Prices and Full below 400px, the views wrap below 360px, and the Methodology diagram keeps at least 800px and scrolls sideways | PENDING |
+| B-75 | A rule between two settings names both, the Settings page stands the sentence beside the field the user changed, and the save dialog shows the cap bands a changed size floor carries | 088e9a9 |
+| B-82 | Phone width: the engine stamp gives way below 560px, the refresh buttons read Prices and Full below 400px, the views wrap below 360px, and the Methodology diagram keeps at least 800px and scrolls sideways | 088e9a9 |
