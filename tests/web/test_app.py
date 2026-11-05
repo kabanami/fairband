@@ -804,6 +804,40 @@ def test_index_scrolls_the_new_panels_and_the_header_wraps_at_phone_width() -> N
     assert "@media (width < 840px) {" in patch
     assert ".fb-hdr { flex-wrap: wrap; height: auto; row-gap: 0; }" in patch
     assert ".fb-hdr__nav { order: 1; flex-basis: 100%;" in patch
+    # B-82: the refresh controls stay beside the lockup at phone width (the stamp gives way below
+    # 560px, the buttons shorten below 400px), and the five views wrap below 360px.
+    for text in (
+        ".app-actions__short { display: none; }",
+        "@media (width < 560px) {\n    .fb-hdr__ran { display: none; }",
+        (
+            "@media (width < 400px) {\n    .app-actions__long { display: none; }\n"
+            "    .app-actions__short { display: inline; }"
+        ),
+        (
+            "@media (width < 360px) {\n    .fb-hdr__nav { flex-wrap: wrap; height: auto;"
+            " min-height: var(--header-height); row-gap: 0; }"
+        ),
+    ):
+        assert text in page, text
+    controls = _static_file("controls.js")
+    for text in (
+        "'aria-label': 'Refresh prices'",
+        "label('Refresh prices', 'Prices')",
+        "'aria-label': 'Refresh all'",
+        "label('Refresh all', 'Full')",
+        "className: 'app-actions__long' }, full)",
+        "className: 'app-actions__short' }, short)",
+    ):
+        assert text in controls, text
+
+
+def test_the_diagram_keeps_its_labels_legible_at_phone_width() -> None:
+    """B-82: the diagram scales to its panel down to 800px and no further, scrolling sideways in a
+    narrower one, so its captions stay above 9px where the whole drawing at 327px set them at 4."""
+    page = _static_file("index.html")
+    assert "overflow-x: auto;" in _rule(page, ".app-life {")
+    svg = _rule(page, ".app-life__svg {")
+    assert "width: 100%;" in svg and "min-width: 800px;" in svg
 
 
 def test_controls_js_run_bar() -> None:
@@ -1111,8 +1145,9 @@ def test_settings_view_form_and_notices() -> None:
 
 def test_settings_view_saves_through_the_dialog_and_follows_the_run() -> None:
     """Spec 2026-11-04 8.5: the view loads from GET /api/settings as it opens; Save confirms the
-    changes, old to new, and sends them with the reason in one PUT; a 400's "<name>: <rule>" stands
-    beside that setting's field. A stored setting the policy refuses makes GET answer 409: the view
+    changes, old to new, and sends them with the reason in one PUT; a 400's "<name>[, <name>]:
+    <rule>" stands beside the field of the named setting the user changed (B-75), and the dialog
+    shows the cap bands a changed size floor carries (8.9). A stored setting the policy refuses makes GET answer 409: the view
     shows the sentence and Reset all settings, a reset with no names. Revalue now posts a revalue
     the header then follows; the view asks FairbandPage.running() while it is open, so the button
     turns off for a run and the notice is read again when the run ends."""
@@ -1123,7 +1158,11 @@ def test_settings_view_saves_through_the_dialog_and_follows_the_run() -> None:
         "title: 'Change ' + n + ' setting' + (n === 1 ? '' : 's'),",
         "state: state.saving ? 'confirming' : 'open',",
         "P.api.put('/api/settings', { changes: changes, reason: reason })",
+        "var names = detail.slice(0, detail.indexOf(':')).split(', ');",
+        "var name = names.filter(function (n) { return n in changes; })[0] || names[0];",
         "state.error[name] = detail;",
+        "payload.push(['universe.cap_bands',",
+        "shown(bands, bands.value) + ' → ' + shown(bands, carried) + ', with the size floor']",
         "'Reset all settings'",
         "P.api.post('/api/settings/reset', {})",
         "disabled: state.starting || P.running(),",
@@ -1867,7 +1906,7 @@ def test_the_bar_gives_the_find_ring_room() -> None:
 
 
 def test_the_columns_menu_scrolls_inside_the_window() -> None:
-    """Columns ▾ lists all 48 columns, taller than a 900px window: a menu of the screen's bar
+    """Columns ▾ lists all 46 columns, taller than a 900px window: a menu of the screen's bar
     stops 12rem short of the window's height and scrolls, so the last rows, the Warnings column
     among them, can be reached (spec 2026-11-04 9.4)."""
     css = _component_file("bundle.css")

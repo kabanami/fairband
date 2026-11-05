@@ -142,7 +142,7 @@ def test_a_new_size_floor_carries_the_lowest_band() -> None:
     ("overlay", "rule"),
     [
         ({"required_return": 0.02}, "required_return: must be from 4% to 20%"),
-        ({"terminal_growth": 0.1}, "terminal_growth: must be below required_return"),
+        ({"terminal_growth": 0.1}, "required_return, terminal_growth: g_T must be below r"),
         (
             {"runway_years": {"None": 3, "Narrow": 10, "Wide": 20}},
             "runway_years: each must be from 4 to 30 years",
@@ -152,19 +152,25 @@ def test_a_new_size_floor_carries_the_lowest_band() -> None:
             "runway_years: None, Narrow, Wide must not decrease",
         ),
         ({"fair_band": [0.9, 1.6]}, "fair_band: the high must be from 1.01 to 1.50"),
-        ({"trim_multiple": 1.1}, "trim_multiple: must be above the fair band's high, up to 3.0"),
+        (
+            {"trim_multiple": 1.1},
+            "fair_band, trim_multiple: the trim multiple must be above the band's high",
+        ),
         (
             {"high_growth_years": 7, "fade_years": 5},
-            "high_growth_years: with fade_years, at most 10",
+            "fade_years, high_growth_years: together at most 10",
         ),
-        ({"industry_peer_max": 2}, "industry_peer_max: must be from peer_min to 50"),
+        (
+            {"industry_peer_max": 2},
+            "peer_min, industry_peer_max: the industry peers must be at least the fewest peers",
+        ),
         (
             {"refresh.rate_limit_hold_s": float("inf")},
             "refresh.rate_limit_hold_s: must be from 1 to 3600",
         ),
         (
             {"universe.cap_bands": [[2e11, "Mega"], [1e10, "Large"], [3e9, "Mid"]]},
-            "universe.cap_bands: the lowest must equal the size floor",
+            "universe.cap_floor_usd, universe.cap_bands: the lowest band must equal the size floor",
         ),
         (
             {"universe.manual_admissions": ["v", "bad symbol"]},
@@ -192,7 +198,7 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
     ({"terminal_growth": -0.01}, "terminal_growth: must be from 0% to 5%"),
     (
         {"required_return": 0.04, "terminal_growth": 0.04},
-        "terminal_growth: must be below required_return",
+        "required_return, terminal_growth: g_T must be below r",
     ),
     ({"runway_years": _by_moat(5, 10, 31)}, "runway_years: each must be from 4 to 30 years"),
     (
@@ -213,18 +219,21 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
     # The derived edges ascend: e1 = 1 − the Narrow margin of safety below e2 = the band's low.
     (
         {"fair_band": [0.6, 1.15]},
-        "fair_band: the low must be above 1 − the Narrow margin of safety",
+        "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin of safety",
     ),
     (
         {"fair_band": [0.65, 1.15]},
-        "fair_band: the low must be above 1 − the Narrow margin of safety",
+        "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin of safety",
     ),
     (
         {"margin_of_safety": _by_moat(0.45, 0.10, 0.05)},
-        "fair_band: the low must be above 1 − the Narrow margin of safety",
+        "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin of safety",
     ),
-    ({"trim_multiple": 3.01}, "trim_multiple: must be above the fair band's high, up to 3.0"),
-    ({"trim_multiple": 1.15}, "trim_multiple: must be above the fair band's high, up to 3.0"),
+    ({"trim_multiple": 3.01}, "trim_multiple: must be up to 3.0"),
+    (
+        {"trim_multiple": 1.15},
+        "fair_band, trim_multiple: the trim multiple must be above the band's high",
+    ),
     ({"wide_terminal_roic_spread": 0.11}, "wide_terminal_roic_spread: must be from 0 to 10 points"),
     (
         {"wide_terminal_roic_spread": -0.01},
@@ -240,13 +249,16 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
     ({"fade_years": 10}, "fade_years: must be from 1 to 9"),
     ({"high_growth_years": 2}, "high_growth_years: must be from 3 to 9"),
     ({"high_growth_years": 10, "fade_years": 1}, "high_growth_years: must be from 3 to 9"),
-    ({"high_growth_years": 6}, "high_growth_years: with fade_years, at most 10"),
+    ({"high_growth_years": 6}, "fade_years, high_growth_years: together at most 10"),
     ({"margin_convergence_year": 11}, "margin_convergence_year: must be from 1 to 10"),
     ({"margin_convergence_year": 0}, "margin_convergence_year: must be from 1 to 10"),
     ({"peer_min": 0}, "peer_min: must be from 1 to 10"),
     ({"peer_min": 11, "industry_peer_max": 20}, "peer_min: must be from 1 to 10"),
-    ({"industry_peer_max": 51}, "industry_peer_max: must be from peer_min to 50"),
-    ({"peer_min": 5, "industry_peer_max": 4}, "industry_peer_max: must be from peer_min to 50"),
+    ({"industry_peer_max": 51}, "industry_peer_max: must be from 1 to 50"),
+    (
+        {"peer_min": 5, "industry_peer_max": 4},
+        "peer_min, industry_peer_max: the industry peers must be at least the fewest peers",
+    ),
     ({"runoff_years": 4}, "runoff_years: must be from 5 to 20"),
     ({"runoff_years": 21}, "runoff_years: must be from 5 to 20"),
     ({"runoff_recovery": 1.01}, "runoff_recovery: must be from 0% to 100%"),
@@ -299,7 +311,7 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
             "universe.cap_floor_usd": 3e9,
             "universe.cap_bands": [[2e11, "Mega"], [1e10, "Large"], [2e9, "Mid"]],
         },
-        "universe.cap_bands: the lowest must equal the size floor",
+        "universe.cap_floor_usd, universe.cap_bands: the lowest band must equal the size floor",
     ),
     (
         {"universe.manual_exclusions": ["TOOLONGSYMBOL"]},
@@ -335,7 +347,8 @@ def test_every_range_and_rule_names_its_setting(overlay: dict[str, Any], rule: s
 
 
 def test_every_setting_has_a_range_check() -> None:
-    named = {rule.split(":")[0] for _, rule in OUTSIDE}
+    # A rule between two settings names both, joined by a comma (B-75).
+    named = {name for _, rule in OUTSIDE for name in rule.split(":")[0].split(", ")}
     assert named == {s.name for s in SETTINGS}
 
 

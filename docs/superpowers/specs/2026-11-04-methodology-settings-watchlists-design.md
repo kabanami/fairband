@@ -116,7 +116,10 @@ use it.
 
 Below 840px the five views wrap to a second line under the lockup, in the same type style;
 the header grows by one line there. *My call.* The 44px budget holds at desktop width: five
-words in `control` type fit beside the mark and the engine stamp.
+words in `control` type fit beside the mark and the engine stamp. At phone width the refresh
+controls stay beside the lockup: the engine stamp gives way below 560px (the status line under
+the header says when the last refresh ended) and the buttons read Prices and Full below 400px;
+below 360px the views wrap onto two lines rather than widen the page (B-82, 2026-11-05).
 
 ## 7. The Methodology page (B-73)
 
@@ -215,9 +218,9 @@ external file, no animation.
   one per phase, filled with `--phase-1` to `--phase-6` at low opacity: the phase ramp is the
   system's one ordered ramp and this is its use. Under each band, the phase name in `caption`
   and the live count of companies in it in `figure-sm` mono, filled by the script (7.4).
-- **Size.** A `viewBox` of 960 by 320; the SVG scales to its container and fits 320px wide.
-  At phone width the six names stay readable because they are set in the SVG's units; the
-  counts sit under the names.
+- **Size.** A `viewBox` of 960 by 320; the SVG scales to its container down to 800px and no
+  further, scrolling sideways in a narrower panel, so the six names, set in the SVG's units, stay
+  legible at phone width (B-82, 2026-11-05); the counts sit under the names.
 - **Theme.** Every colour is a token (`var(--…)`) or `currentColor`, so the diagram follows
   dark and light mode without a second drawing.
 - **Access.** A `<title>` and a `<desc>` inside the SVG; under it, a visually plain list of the
@@ -472,7 +475,9 @@ One form, five sections in the order of 8.2, each setting one row:
 At the top of the form, one of three notices in `caption`, from the API's `valuedUnder` and
 `current`: nothing, when the latest snapshots were valued under the current hash and version;
 "Your settings changed since the last valuation." with a **Revalue now** button (primary) that
-starts a revalue through `POST /api/refresh`, when the hashes differ; "A universe setting
+starts a revalue through `POST /api/refresh`, when the hashes differ, or "The policy changed
+since the last valuation." with the same button when only the policy version differs; "A
+universe setting
 changed since the last full refresh: run Refresh all." when a group D setting changed after the
 latest full refresh (the API compares the overlay's D entries' `changed_at` with the latest full
 refresh's start).
@@ -522,8 +527,9 @@ range; both are checked in `store/settings.py` and again in `load_policy`.
   settingsHash}` and `valuedUnder: {policyVersion, settingsHash, fullRefreshAt, universeChanged}`
   from the latest snapshots and refreshes.
 - `PUT /api/settings` with `{"changes": {"<name>": <value>, …}, "reason": "…"}`: applies all
-  or none; 200 with the `GET` body; 400 with `detail` "<name>: <rule>" on the first failing
-  setting. The request-header rule of the web API applies, as to every write.
+  or none; 200 with the `GET` body; 400 with `detail` "<name>[, <name>]: <rule>" on the first
+  failing setting, naming both settings of a rule between two (8.9). The request-header rule of
+  the web API applies, as to every write.
 - `POST /api/settings/reset` with `{"names": [...]}` or no names for all: the same body.
 - `GET /api/policy` (7.4).
 
@@ -550,7 +556,10 @@ the trim multiple; the band's low above 1 − the Narrow margin of safety, so th
 designation edges ascend; the sensitivities' high above the low; high-growth years plus fade
 years at most 10; the industry peer maximum at least the fewest peers; the cap bands descending
 with the lowest equal to the size floor; a symbol list of valid exchange-form symbols
-(`[A-Z0-9.-]{1,10}`), upper-cased on the write.
+(`[A-Z0-9.-]{1,10}`), upper-cased on the write. A rule between two settings names both, in the
+order of 8.2 and joined by a comma (`required_return, terminal_growth: g_T must be below r`);
+the Settings page stands the sentence beside the one the user changed, else the first, and its
+save dialog shows the cap bands a changed size floor carries (B-75, 2026-11-05).
 
 ## 9. Watchlists (B-67) and the flag count (B-69)
 
@@ -800,4 +809,5 @@ Python, in the folders that mirror the package:
 | 2026-11-04 | Hand check: the mark on MSFT and the Quality list — pass. The mark opened the popup without opening the row; Add with "Quality" made the list with MSFT on it and filled the mark. Filters ▾ → Quality narrowed 1,626 rows to MSFT under a `Quality` chip; the Watchlists view showed Quality with MSFT's row; unchecking it there emptied the mark on the screen. Claude, during the build. |
 | 2026-11-04 | Hand check: `Warnings` and `Clean` — pass. Warnings sorts by number both ways (0 to 7). Clean left 174 rows, all valued with a zero count, as the API counts them, and every row's count equals its snapshot's quality warnings. AME, with only the three notes and two line notes, counts zero; A, with `large-nri` and notes, counts one. The Warnings row of Columns ▾ sits below a 900px window (a deferred minor), so the walk used a taller one. Claude, during the build. |
 | 2026-11-04 | Hand check: the checks and the documents — pass. The checks command passes (1,221 tests); `docs/method.md` changed in the policy, engine and refresh commits; the backlog moves to Done in this closing commit, as the plan's last task sets. Claude, during the build. |
-| 2026-11-04 | The final review's three fixes. The drawer's validity window reads aging from the effective `aging_fraction`, which `GET /api/companies/{symbol}` serves as `agingFraction`, judged on whole days as the server judges it, so a row reads the same in the drawer as in the Freshness column after a change (8.2). The drawer's trim level is labelled with the multiple read from the levels, `1.5 × value` at the default, so the label follows `trim_multiple` (8.2). The Columns menu stops 12rem short of the window's height and scrolls, so all 48 of its rows, Warnings among them, can be reached in a 900px window (9.4). And the revalue notice reads "The policy changed since the last valuation." when only the policy version differs, keeping "Your settings changed since the last valuation." for a settings hash that differs, with Revalue now in both (8.5). Claude, during the build. |
+| 2026-11-04 | The final review's three fixes. The drawer's validity window reads aging from the effective `aging_fraction`, which `GET /api/companies/{symbol}` serves as `agingFraction`, judged on whole days as the server judges it, so a row reads the same in the drawer as in the Freshness column after a change (8.2). The drawer's trim level is labelled with the multiple read from the levels, `1.5 × value` at the default, so the label follows `trim_multiple` (8.2). The Columns menu stops 12rem short of the window's height and scrolls, so all 46 of its rows, Warnings among them, can be reached in a 900px window (9.4). And the revalue notice reads "The policy changed since the last valuation." when only the policy version differs, keeping "Your settings changed since the last valuation." for a settings hash that differs, with Revalue now in both (8.5). Claude, during the build. |
+| 2026-11-05 | After the merge (main 13eec7c), B-75 and B-82 closed. A rule between two settings names both (8.7, 8.9), the Settings page stands the sentence beside the field the user changed, and the save dialog shows the cap bands a changed size floor carries. At phone width the engine stamp gives way below 560px, the refresh buttons read Prices and Full below 400px and the views wrap below 360px (6); the diagram keeps at least 800px and scrolls sideways (7.3). Three stale sentences corrected: the Columns menu has 46 rows, and 8.5 names the policy-version wording of the revalue notice. Claude Fable 5.1. |

@@ -209,10 +209,11 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-hdr__ran { color: var(--ink-faint); white-space: nowrap; }
 /* fairband: below 840px, where the one-line header no longer fits (the five views, both refresh
    buttons and the engine stamp need about 811px), the views wrap to a line of their own under
-   the lockup, in the same type style, and the header grows by that line (and by one more where
-   the refresh controls do not fit beside the lockup, below about 420px). The views' line is the
-   last, so the current view's accent edge stays on the header's rule; its narrower gap keeps the
-   five words inside the page's margins at 375px (spec 2026-11-04 6). */
+   the lockup, in the same type style, and the header grows by that line. index.html keeps the
+   refresh controls beside the lockup below that (the stamp gives way under 560px, the buttons
+   shorten under 400px) and wraps the views under 360px, where the five words no longer fit
+   inside the page's margins (B-82). The views' line is the last, so the current view's accent
+   edge stays on the header's rule (spec 2026-11-04 6). */
 @media (width < 840px) {
   .fb-hdr { flex-wrap: wrap; height: auto; row-gap: 0; }
   .fb-hdr__lock { height: var(--header-height); }
@@ -731,7 +732,7 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   min-width: 200px;
 }
 /* fairband: a menu of the screen's bar stops 12rem short of the window's height and scrolls
-   (spec 2026-11-04 9.4). Columns ▾ lists every column, 48 of them, taller than a 900px window,
+   (spec 2026-11-04 9.4). Columns ▾ lists every column, 46 of them, taller than a 900px window,
    and its last rows, Warnings among them, sat below the window. The Filters menu's own body
    scrolls at 368px, so the rule changes it only in a short window. */
 .fb-screen__cols > .fb-menu { max-height: calc(100vh - 12rem); overflow-y: auto; }

@@ -307,7 +307,8 @@
 
   /* Confirm: the changes and the reason in one PUT, all or none. Taken, the form is the answer
      and the screen loads again, its words read under the new settings; refused, the sentence
-     "<name>: <rule>" stands beside that setting's field, the drafts kept. */
+     "<name>[, <name>]: <rule>" stands beside that setting's field, the drafts kept: a rule between
+     two settings names both, and the sentence stands beside the one the user changed (B-75). */
   function save() {
     var changes = {};
     state.confirm.forEach(function (c) { changes[c.name] = c.to; });
@@ -331,7 +332,8 @@
         load();
       } else {
         var detail = detailOf(r);
-        var name = detail.slice(0, detail.indexOf(':'));
+        var names = detail.slice(0, detail.indexOf(':')).split(', ');
+        var name = names.filter(function (n) { return n in changes; })[0] || names[0];
         if (r.status === 400 && find(name)) {
           state.error[name] = detail;
           state.focus = inRow(name, 'input');
@@ -540,6 +542,20 @@
       var s = find(c.name);
       return [c.name, shown(s, c.from) + ' → ' + shown(s, c.to)];
     });
+    /* A size floor changed without the cap bands carries the Mid floor with it (spec 8.9), so
+       the dialog shows the bands as the server will hold them, after the changes. */
+    var floor = state.confirm.filter(function (c) {
+      return c.name === 'universe.cap_floor_usd';
+    })[0];
+    var bands = find('universe.cap_bands');
+    if (floor && bands && !state.confirm.some(function (c) {
+      return c.name === 'universe.cap_bands';
+    })) {
+      var last = bands.value[bands.value.length - 1];
+      var carried = bands.value.slice(0, -1).concat([[floor.to, last[1]]]);
+      payload.push(['universe.cap_bands',
+        shown(bands, bands.value) + ' → ' + shown(bands, carried) + ', with the size floor']);
+    }
     var reason = state.reason.trim();
     if (reason) payload.push(['reason', reason]);
     return h('div', {

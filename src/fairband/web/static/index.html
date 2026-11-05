@@ -25,6 +25,22 @@
 
   /* The refresh controls, in the header's right slot beside the engine stamp. */
   .app-actions { display: flex; align-items: center; gap: var(--space-2); }
+  /* At phone width the refresh controls stay beside the lockup, so the header grows by the
+     views' line alone (B-82): below 560px the engine stamp gives way (the status line under the
+     header still says when the last refresh ended), and below 400px the buttons read Prices and
+     Full. Below 360px the five views wrap onto two lines rather than widen the page. */
+  .app-actions__short { display: none; }
+  @media (width < 560px) {
+    .fb-hdr__ran { display: none; }
+  }
+  @media (width < 400px) {
+    .app-actions__long { display: none; }
+    .app-actions__short { display: inline; }
+  }
+  @media (width < 360px) {
+    .fb-hdr__nav { flex-wrap: wrap; height: auto; min-height: var(--header-height); row-gap: 0; }
+    .fb-hdr__view { height: var(--header-height); }
+  }
   /* The status line under the header, with the notice line under it when there is one. */
   .app-bar { margin-bottom: var(--space-3); }
   .app-status { margin: var(--space-2) 0 0; color: var(--ink-muted); }
@@ -214,7 +230,8 @@
      headings in title and heading, its text in body, its tables in fb-table, their text cells
      free to wrap and their header cells not sticky, since many tables share one scroller; a
      table wider than the panel, at phone width, scrolls sideways on its own. The diagram takes
-     up to its own 960 units; under it, the plain list of the phases and their counts. Every live
+     up to its own 960 units and at least 800px, scrolling sideways in a narrower panel so its
+     labels stay legible (B-82); under it, the plain list of the phases and their counts. Every live
      figure is mono with a dotted rule under it, in accent when it is a setting the reader
      changed. A link is in accent. */
   .app-prose { padding: var(--space-2) 0 var(--space-8); }
@@ -246,8 +263,8 @@
     text-decoration: underline dotted var(--ink-faint); text-underline-offset: 3px;
   }
   .app-prose .is-changed { color: var(--accent); text-decoration-color: var(--accent); }
-  .app-life { max-width: 960px; margin: var(--space-4) 0 var(--space-3); }
-  .app-life__svg { display: block; width: 100%; height: auto; }
+  .app-life { max-width: 960px; margin: var(--space-4) 0 var(--space-3); overflow-x: auto; }
+  .app-life__svg { display: block; width: 100%; min-width: 800px; height: auto; }
   .app-prose .app-life__list {
     display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4);
     margin: var(--space-2) 0 0; padding: 0; list-style: none; color: var(--ink-muted);

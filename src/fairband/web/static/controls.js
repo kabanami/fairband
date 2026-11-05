@@ -321,6 +321,16 @@
     if (state.tab === 'groups') groupsRoot.render(groupsView());
   }
 
+  /* A refresh button's words: the full ones, and the short ones index.html shows in their place
+     below 400px, where the full ones no longer fit beside the lockup (B-82). The button names
+     itself in full either way. */
+  function label(full, short) {
+    return [
+      h('span', { key: 'l', className: 'app-actions__long' }, full),
+      h('span', { key: 's', className: 'app-actions__short' }, short)
+    ];
+  }
+
   /* The refresh controls in the header, small: the two refreshes while no run is alive, else one
      Cancel in their place, disabled once a cancel was asked until the run ends. */
   function actions(alive) {
@@ -329,11 +339,14 @@
         key: 'cancel', variant: 'quiet', size: 'sm', disabled: state.cancelAsked, onClick: cancel
       }, 'Cancel')
     ] : [
-      h(F.Button, { key: 'price', size: 'sm', onClick: function () { start('price'); } },
-        'Refresh prices'),
       h(F.Button, {
-        key: 'full', variant: 'primary', size: 'sm', onClick: function () { start('full'); }
-      }, 'Refresh all')
+        key: 'price', size: 'sm', 'aria-label': 'Refresh prices',
+        onClick: function () { start('price'); }
+      }, label('Refresh prices', 'Prices')),
+      h(F.Button, {
+        key: 'full', variant: 'primary', size: 'sm', 'aria-label': 'Refresh all',
+        onClick: function () { start('full'); }
+      }, label('Refresh all', 'Full'))
     ];
     return h('div', { className: 'app-actions' }, buttons);
   }

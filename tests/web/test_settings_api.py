@@ -97,7 +97,7 @@ def test_put_settings_all_or_none_and_the_notice(client: TestClient) -> None:
     )
     assert (
         r.status_code == 400
-        and r.json()["detail"] == "terminal_growth: must be below required_return"
+        and r.json()["detail"] == "required_return, terminal_growth: g_T must be below r"
     )
     assert client.get("/api/settings").json()["current"]["settingsHash"] == EMPTY_SETTINGS_HASH
     r = client.put(

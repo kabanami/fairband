@@ -1,7 +1,8 @@
 """The settings routes (spec 2026-11-04 8.7): the Settings form with its values, a save and a reset.
 
 A save applies all or none (``fairband.store.settings.write_settings``); a refused one is a 400
-whose detail is ``"<name>: <rule>"``, naming the first failing setting. A reset deletes the named
+whose detail is ``"<name>[, <name>]: <rule>"``, naming the first failing setting, or both
+settings of a rule between two. A reset deletes the named
 rows, or every row when it names none, and never builds the policy first, so it clears a stored
 row the policy no longer accepts: a name a later policy file dropped, or a value outside a new
 range. While such a row is stored, every route that reads the effective policy answers 409 with

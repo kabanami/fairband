@@ -34,7 +34,7 @@ def test_write_read_and_hash(conn: sqlite3.Connection) -> None:
 
 
 def test_write_is_all_or_none(conn: sqlite3.Connection) -> None:
-    with pytest.raises(ValueError, match="terminal_growth: must be below required_return"):
+    with pytest.raises(ValueError, match="required_return, terminal_growth: g_T must be below r"):
         write_settings(conn, {"refresh.workers": 4, "terminal_growth": 0.5}, None, AT)
     assert not conn.in_transaction
     assert read_overlay(conn) == {} and changes(conn) == []

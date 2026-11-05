@@ -72,7 +72,8 @@ def write_settings(
     base: Policy | None = None,
 ) -> Policy:
     """Store the changes over the overlay and log them as one save; return the new effective
-    policy. ``ValueError("<name>: <rule>")`` on the first failing setting, with nothing written."""
+    policy. ``ValueError("<name>[, <name>]: <rule>")`` on the first failing setting, with nothing
+    written."""
     file_policy = load_policy() if base is None else base
     with transaction(conn, immediate=True):
         before = read_overlay(conn)

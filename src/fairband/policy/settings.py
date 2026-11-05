@@ -10,7 +10,8 @@ and ``value_of`` give a setting's file value and its value in a policy in that f
 ``apply_overlay`` converts each value as ``load_policy`` converts the file's, replaces it in the
 policy, sets the settings hash and checks every range; the policy's version stays the file's.
 ``check`` holds the ranges of 8.2 and the rules of 8.9 and runs at the end of ``load_policy``
-too, so a file and an overlay fail alike, with the sentence ``"<name>: <rule>"`` the API serves.
+too, so a file and an overlay fail alike, with the sentence ``"<name>[, <name>]: <rule>"`` the API
+serves; a rule between two settings names both.
 
 The settings hash (8.4) is the sha256 of the JSON, sorted by key, of the overlay's entries that
 change a snapshot's figures: groups valuation and flags and ``validity_fallback_days``. The
@@ -593,14 +594,15 @@ def exchange_symbol(text: str) -> str:
 def check(policy: Policy) -> None:
     """Every range of spec 8.2 and every rule of 8.9, in the order of 8.2; the first that fails
     raises ``ValueError("<name>: <rule>")``. Ranges are inclusive, and a NaN or an infinity is
-    outside every one. A rule between two settings names the later of the two, so r against g_T
-    names g_T, and the Narrow margin against the fair band's low names the band."""
+    outside every one. A rule between two settings names both, in the order of 8.2 and joined by
+    a comma, so r against g_T reads ``"required_return, terminal_growth: …"``; the Settings page
+    then stands the sentence beside the one the user changed (B-75)."""
     p, u, f = policy, policy.universe, policy.refresh
     # A. Valuation
     if not 0.04 <= p.required_return <= 0.20:
         raise ValueError("required_return: must be from 4% to 20%")
     if not p.terminal_growth < p.required_return:
-        raise ValueError("terminal_growth: must be below required_return")
+        raise ValueError("required_return, terminal_growth: g_T must be below r")
     if not 0 <= p.terminal_growth <= 0.05:
         raise ValueError("terminal_growth: must be from 0% to 5%")
     runway = [p.runway_years[m] for m in _MOATS]
@@ -617,11 +619,18 @@ def check(policy: Policy) -> None:
     if not 0.50 <= low <= 0.99:
         raise ValueError("fair_band: the low must be from 0.50 to 0.99")
     if not low > 1 - p.margin_of_safety["Narrow"]:  # the derived edges ascend: e1 below e2
-        raise ValueError("fair_band: the low must be above 1 − the Narrow margin of safety")
+        raise ValueError(
+            "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin"
+            " of safety"
+        )
     if not 1.01 <= high <= 1.50:
         raise ValueError("fair_band: the high must be from 1.01 to 1.50")
-    if not high < p.trim_multiple <= 3.0:
-        raise ValueError("trim_multiple: must be above the fair band's high, up to 3.0")
+    if not p.trim_multiple <= 3.0:
+        raise ValueError("trim_multiple: must be up to 3.0")
+    if not high < p.trim_multiple:
+        raise ValueError(
+            "fair_band, trim_multiple: the trim multiple must be above the band's high"
+        )
     if not 0 <= p.wide_terminal_roic_spread <= 0.10:
         raise ValueError("wide_terminal_roic_spread: must be from 0 to 10 points")
     if not 0 <= p.inflation_addition <= 0.05:
@@ -638,13 +647,17 @@ def check(policy: Policy) -> None:
     if not 3 <= p.high_growth_years <= 9:
         raise ValueError("high_growth_years: must be from 3 to 9")
     if not p.high_growth_years + p.fade_years <= 10:
-        raise ValueError("high_growth_years: with fade_years, at most 10")
+        raise ValueError("fade_years, high_growth_years: together at most 10")
     if not 1 <= p.margin_convergence_year <= 10:
         raise ValueError("margin_convergence_year: must be from 1 to 10")
     if not 1 <= p.peer_min <= 10:
         raise ValueError("peer_min: must be from 1 to 10")
-    if not p.peer_min <= p.industry_peer_max <= 50:
-        raise ValueError("industry_peer_max: must be from peer_min to 50")
+    if not 1 <= p.industry_peer_max <= 50:
+        raise ValueError("industry_peer_max: must be from 1 to 50")
+    if not p.peer_min <= p.industry_peer_max:
+        raise ValueError(
+            "peer_min, industry_peer_max: the industry peers must be at least the fewest peers"
+        )
     if not 5 <= p.runoff_years <= 20:
         raise ValueError("runoff_years: must be from 5 to 20")
     if not 0 <= p.runoff_recovery <= 1:
@@ -689,7 +702,9 @@ def check(policy: Policy) -> None:
     if not all(a > b for a, b in pairwise(floors)):
         raise ValueError("universe.cap_bands: the floors must descend")
     if floors[-1] != u.cap_floor_usd:
-        raise ValueError("universe.cap_bands: the lowest must equal the size floor")
+        raise ValueError(
+            "universe.cap_floor_usd, universe.cap_bands: the lowest band must equal the size floor"
+        )
     for name, symbols in (
         ("universe.manual_admissions", u.manual_admissions),
         ("universe.manual_exclusions", u.manual_exclusions),
