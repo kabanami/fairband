@@ -431,7 +431,7 @@ only.
 ### 13.6 The tax table
 
 Every v1 row is in v2 with the same rate. Greece 2024 is 22%, Sweden 20.6%, Italy 27.81%, India
-25.17%, Hong Kong 16.5%, Belgium 20% (2024), the Bahamas and Guernsey 0%, the UAE 9%, China 25%,
+25.17%, Hong Kong 16.5%, Belgium 25% (2024), the Bahamas and Guernsey 0%, the UAE 9%, China 25%,
 Taiwan 20% (2018 on) and 17% (2014 to 2017), Cyprus 12.5%. `GR`, `TW` and `CY` resolve through the
 aliases. The United States' 2025 rate is 25.569714%, as v1 has it.
 
@@ -524,3 +524,10 @@ The readout, on the same shape as the 2026-11-04 readouts:
 | 2026-11-06 | Tax rows: the table regenerated for every jurisdiction in the series, Taiwan and Cyprus by hand. Claude's call, stated to the founder. |
 | 2026-11-06 | The classifier: no calendar age bound; established on 5 profitable years of the 11 on file beside 3 of the last 5; an established company is never a Start-up; the Mature Stable refusal keeps the growth cross-check. Founder, after the age table: "agreed, add it to the engine round". |
 | 2026-11-06 | Builder check done. Two questions, both settled by Claude: the classifier's moves and the tax rows reach rows through their mature peers, and the spillover is accepted and named in the readout (2, 15); a non-established company with zero revenue now stays a Start-up, an established one is unclassified "no measurable revenue growth" (8.2, 13.4). One note taken into 14: the test deciles shift so MGCO's golden stands. Nothing for the founder. |
+| 2026-11-06 | The goldens are re-captured when only their JSON's shape moves (the phase evidence's second count, `margin_path.ramp`, `sales_to_capital.own_below_bound`) and for DCCO's lost `margin-direction-disagrees`, since Stable now points nowhere (8.3); the golden README names each cause. Their figures stand, so 14's "unchanged bit for bit" holds for the figures, not the JSON; DCCO's figures move with the fade, as 14 says. Claude, during the build. |
+| 2026-11-06 | The phase evidence carries both counts of the established test, `positive_years_last_five` beside `positive_years_on_file`, so the drawer and the `loss-year` and `revenue-gap` sentences can name both (8.1). Claude, during the build. |
+| 2026-11-06 | A year past year 3 whose consensus revenue mean is not above zero ends the consensus at the year before, with no refusal, as 6.1 reads; the plan's test, which refused the row, gave way to the spec. Claude, during the build. |
+| 2026-11-06 | Belgium's statutory rate is 25%, the OECD series' combined rate (`CIT_C`, `S13`, `ST`); the 20% 13.6 first gave was the small-business row. 13.6 is corrected and the test pins 0.25. Claude, during the build. |
+| 2026-11-06 | The formatters `millions` and `signed` moved to `route_steps`, so the growth route's dollar-ramp note can use them without a circular import. Claude, during the build. |
+| 2026-11-06 | The readout's revalue ran on a scratch copy of the live database, made with SQLite's backup API, before the merge; the live backup, the live revalue and the server restart wait for the final review and the founder's consent. A revalue is deterministic on the stored facts and deciles, so the copy's figures are the live ones. Claude, during the build. |
+| 2026-11-06 | The readout (the revalue of refresh 15 under 0.9 and v7): 1,220 of 1,602 valued (1,176 under 0.8). Exactly the seven rows of 8 change phase. Decline: 76 valued, median value ÷ EPV 0.66 → 0.73, well above 67 → 63; 22 rows read the consensus past year 3. Growth: refused for the charge 63 → 37, 26 of the 63 valued, 29 rows on the dollar ramp, 27 past the bound. `margin-direction-disagrees` 744 → 272. Tax refusals 22 → 1, none for a country v2 covers. No row outside the named sets moved through the engine round; 7 fetch-failed rows of refresh 15 read "no financial statements" after any revalue, 0.8's too. Claude, during the build. |

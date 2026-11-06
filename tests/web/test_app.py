@@ -1439,10 +1439,11 @@ def test_app_js_drawer_draws_the_run_off_table() -> None:
 
 def test_app_js_drawer_says_the_fade_the_ramp_and_the_stable_cross_check() -> None:
     """Spec 2026-11-06 12: the run-off's decline rate names the years the consensus gives, K, or
-    the three years on trend, and the fade to zero by year N, and its terminal is flat (6.4); a
-    growth row on the dollar ramp says so over its margins (7.2); a Mature Stable row refused for
-    its trailing earnings shows the growth-route cross-check under the refusal, as a valued row
-    shows it under the band (9). A revenue-growth refusal's cross-check does not move with the
+    the three years on trend, and the fade to zero by year N, or, when the consensus reaches year
+    N and no year reads the rate, says so; its terminal is flat (6.4); a growth row on the dollar
+    ramp says so over its margins (7.2); a Mature Stable row refused for its trailing earnings
+    shows the growth-route cross-check under the refusal, as a valued row shows it under the band
+    (9). A revenue-growth refusal's cross-check does not move with the
     price, so it shows only among the intermediates."""
     script = _static_file("app.js")
     summary = script[script.index("function runoffSummary(") :]
@@ -1450,8 +1451,11 @@ def test_app_js_drawer_says_the_fade_the_ramp_and_the_stable_cross_check() -> No
     for text in (
         "var years = path.ntm_revenue == null ? 'years 1 to 3 at the decline rate'",
         ": 'years 1 to ' + path.consensus_years + ' from the consensus';",
-        "['Decline rate', noted(F.formatPercent(path.d), years + '; fades to zero by year ' +",
-        "path.runoff_years), true],",
+        "var fade = path.consensus_years < path.runoff_years",
+        "? years + '; fades to zero by year ' + path.runoff_years",
+        # no year reads the rate when the consensus reaches year N (review of task 7)
+        ": 'the consensus runs to year ' + path.runoff_years;",
+        "['Decline rate', noted(F.formatPercent(path.d), fade), true],",
         "['Terminal value', noted(whole(im.terminal_value), 'flat'), true],",
     ):
         assert text in summary, text

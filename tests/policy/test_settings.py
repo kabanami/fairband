@@ -61,6 +61,10 @@ def test_the_catalogue_rows_read_as_the_spec_tables() -> None:
         "descending; the lowest equals the size floor",
     )
     assert all(s.description.endswith(".") and len(s.description.split()) <= 25 for s in SETTINGS)
+    # spec 2026-11-06 6.1: past year 3 a thin year ends a Decline row's consensus, unflagged
+    analysts = setting("analyst_min")
+    assert (analysts.effect, analysts.hashed) == ("revalue", True)
+    assert "past year 3 it ends a Decline row's consensus" in analysts.description
     with pytest.raises(KeyError):
         setting("designation_edges")
 

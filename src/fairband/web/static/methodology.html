@@ -2,8 +2,9 @@
      read it. methodology.js inserts this fragment into the view's panel on its first open and fills
      every span marked data-policy (from GET /api/policy), data-count (GET /api/groups?by=phase and
      the screen's size) and data-decile (GET /api/deciles); each starts as an em dash. The worked
-     examples' figures are typed from the drawer of each company's snapshot valued under method 0.8
-     on 4 Nov 2026, and change with the next method version (CLAUDE.md, "Read first"). -->
+     examples' figures are typed from the drawer of each company's snapshot valued under method 0.9
+     on 6 Nov 2026 (a revalue of the 5 Nov full refresh), and change with the next method version
+     (CLAUDE.md, "Read first"). -->
 <article class="app-prose">
 <p class="caption app-prose__note" data-live-note hidden></p>
 
@@ -79,9 +80,9 @@ its count of companies in the latest run.</desc>
 </nav>
 
 <p class="caption app-prose__asof">Each route section ends with a worked example on a real company.
-Figures as of the full refresh of <time datetime="2026-11-03">3 Nov 2026</time>, valued under
-method 0.8 on <time datetime="2026-11-04">4 Nov 2026</time>. Prices are the closes of
-<time datetime="2026-11-02">2 Nov 2026</time>. Each example links to today's row, whose figures
+Figures as of the full refresh of <time datetime="2026-11-05">5 Nov 2026</time>, valued under
+method 0.9 on <time datetime="2026-11-06">6 Nov 2026</time>. Prices are the closes of
+<time datetime="2026-11-04">4 Nov 2026</time>. Each example links to today's row, whose figures
 may differ.</p>
 
 <p class="body">One engine values every company, with one route per phase (a route is the method
@@ -238,25 +239,25 @@ operating margin. An unclassified company gets no value; its row gives the reaso
 <h3 class="heading">Worked example: Microsoft</h3>
 <div class="app-prose__wide">
 <table class="fb-table app-example">
-<caption class="caption">Microsoft (MSFT), phase evidence as of 3 Nov 2026</caption>
+<caption class="caption">Microsoft (MSFT), phase evidence as of 5 Nov 2026</caption>
 <thead><tr><th class="label">Evidence</th><th class="label fb-num">Reading</th></tr></thead>
 <tbody>
 <tr><td class="body">Revenue growth, 3 years</td><td class="figure fb-num">16.1%</td></tr>
 <tr><td class="body">Growth word</td><td class="body fb-num">High · decile 8</td></tr>
 <tr><td class="body">Operating margin</td><td class="figure fb-num">46.8%</td></tr>
-<tr><td class="body">Margin trend</td><td class="body fb-num">1.3 points a year · Stable</td></tr>
+<tr><td class="body">Margin trend</td><td class="body fb-num">1.3 points a year · decile 7 · Stable</td></tr>
 <tr><td class="body">Free cash flow</td><td class="body fb-num">positive</td></tr>
 <tr><td class="body">Dickinson stage</td><td class="body fb-num">Mature</td></tr>
-<tr><td class="body">Checks</td><td class="body fb-num">Margin direction disagrees</td></tr>
+<tr><td class="body">Checks</td><td class="body fb-num">none</td></tr>
 <tr><td class="body">Phase</td><td class="body fb-num">Mature Growth</td></tr>
 </tbody>
 </table>
 </div>
 <p class="body">Microsoft's revenue grew 16.1% a year over its last three fiscal years. That ranks
 in decile 8, so its growth word is High. Its operating margin is 46.8%, above zero, so rule 5 gives
-Mature Growth. Its margin rose 1.3 points a year, which ranks as Stable. Stable points to Mature
-Stable, so the drawer notes that the direction disagrees. The phase stays Mature Growth, and the
-cash-flow stage, Mature, agrees.</p>
+Mature Growth. Its margin rose 1.3 points a year. That ranks in decile 7, below the top two, so
+it reads Stable. A stable margin points to no phase, so the drawer adds no note. The cash-flow
+stage, Mature, agrees.</p>
 <p class="body app-prose__row"><a href="#" data-find="MSFT">Open today's row</a></p>
 </section>
 
@@ -400,12 +401,12 @@ returns gets a warning. A runway of <span data-policy="runway_years.Wide">—</s
 <h3 class="heading">Worked example: Microsoft</h3>
 <div class="app-prose__wide">
 <table class="fb-table app-example">
-<caption class="caption">Microsoft (MSFT), Mature Growth, as of 3 Nov 2026</caption>
+<caption class="caption">Microsoft (MSFT), Mature Growth, as of 5 Nov 2026</caption>
 <thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
 <tbody>
-<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$507.12</td></tr>
-<tr><td class="body">Net income, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$154.6 billion</td></tr>
-<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.6%, 23.2%</td></tr>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$555.80</td></tr>
+<tr><td class="body">Net income, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$154.7 billion</td></tr>
+<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.9%, 23.0%</td></tr>
 <tr><td class="body">Belief: sales above $50 billion, 3.3% plus 2.0%</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">5.3%</td></tr>
 <tr><td class="body">Moat, from a score of 9</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
 <tr><td class="body">Runway</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">20 years</td></tr>
@@ -413,16 +414,16 @@ returns gets a warning. A runway of <span data-policy="runway_years.Wide">—</s
 <tr><td class="body">Terminal return</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
 <tr><td class="body">Hurdle rate</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">9.0%</td></tr>
 <tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$516</td></tr>
-<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">0.98 · Near</td></tr>
-<tr><td class="body">Implied growth</td><td></td><td class="figure fb-num">5.1%</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">1.08 · Near</td></tr>
+<tr><td class="body">Implied growth</td><td></td><td class="figure fb-num">6.4%</td></tr>
 </tbody>
 </table>
 </div>
-<p class="body">Analysts expect Microsoft to earn $154.6 billion over the next twelve months. They
-see earnings growing 20.6% and then 23.2% in the next two fiscal years. The engine fades that
+<p class="body">Analysts expect Microsoft to earn $154.7 billion over the next twelve months. They
+see earnings growing 20.9% and then 23.0% in the next two fiscal years. The engine fades that
 growth to the belief of 5.3% and holds it for a 20-year runway. Each year it holds back earnings at
-Microsoft's own 20.4% return on new capital. The value is $516 a share against a price of $507.12,
-so the word is Near. The price needs a belief of 5.1%, close to what the engine assumes.</p>
+Microsoft's own 20.4% return on new capital. The value is $516 a share against a price of $555.80,
+so the word is Near. The price needs a belief of 6.4%, a little above the engine's 5.3%.</p>
 <p class="body app-prose__row"><a href="#" data-find="MSFT">Open today's row</a></p>
 </section>
 
@@ -451,10 +452,10 @@ cross-check never sets the levels or the word.</p>
 <h3 class="heading">Worked example: Coca-Cola</h3>
 <div class="app-prose__wide">
 <table class="fb-table app-example">
-<caption class="caption">Coca-Cola (KO), Mature Stable, as of 3 Nov 2026</caption>
+<caption class="caption">Coca-Cola (KO), Mature Stable, as of 5 Nov 2026</caption>
 <thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
 <tbody>
-<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$95.83</td></tr>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$95.80</td></tr>
 <tr><td class="body">Trailing net income</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$14.6 billion</td></tr>
 <tr><td class="body">Normalized earnings</td><td></td><td class="figure fb-num">$15.2 billion</td></tr>
 <tr><td class="body">Growth in every year</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">3.0%</td></tr>
@@ -472,7 +473,7 @@ cross-check never sets the levels or the word.</p>
 <p class="body">Coca-Cola earned $15.2 billion over the last twelve months, once one-off items are
 removed. The engine grows that at 3.0% a year. It charges the growth at Coca-Cola's own 30.5%
 return through a 20-year runway, then at 13.0%. The value is $50 a share against a price of
-$95.83, so the word is Well above. The Mature Growth route gives $63; it would need a belief of
+$95.80, so the word is Well above. The Mature Growth route gives $63; it would need a belief of
 10.4% to reach the price.</p>
 <p class="body app-prose__row"><a href="#" data-find="KO">Open today's row</a></p>
 </section>
@@ -534,9 +535,9 @@ needs in the held years.</p>
 
 <h3 class="heading">Flags on this route</h3>
 <p class="body">A held rate cut by the cap gets a note. Peers taken from the industry get a note. A
-return on new capital above the peers' median return gets a note. A value that moves by
-<span data-policy="value_spread_flag">—</span> or more across the peers' margins gets a
-warning.</p>
+loss larger than revenue, moved in dollars, gets a note. A return on new capital above the peers'
+median return gets a note. A value that moves by <span data-policy="value_spread_flag">—</span>
+or more across the peers' margins gets a warning.</p>
 
 <h3 class="heading">Young Growth</h3>
 <p class="body">Young Growth uses the same route and gives the same value on the same inputs.
@@ -549,10 +550,10 @@ survives), and the drawer says so.</p>
 <h3 class="heading">Worked example: CrowdStrike</h3>
 <div class="app-prose__wide">
 <table class="fb-table app-example">
-<caption class="caption">CrowdStrike (CRWD), High Growth, as of 3 Nov 2026</caption>
+<caption class="caption">CrowdStrike (CRWD), High Growth, as of 5 Nov 2026</caption>
 <thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
 <tbody>
-<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$241.81</td></tr>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$241.00</td></tr>
 <tr><td class="body">Trailing revenue</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$5.4 billion</td></tr>
 <tr><td class="body">Revenue, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$6.7 billion</td></tr>
 <tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">22.3%, 16.7%</td></tr>
@@ -563,8 +564,8 @@ survives), and the drawer says so.</p>
 <tr><td class="body">Trailing operating margin</td><td></td><td class="figure fb-num">−2.2%</td></tr>
 <tr><td class="body">Firm value</td><td></td><td class="figure fb-num">$24.3 billion</td></tr>
 <tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$28</td></tr>
-<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">8.73 · Well above</td></tr>
-<tr><td class="body">Growth the price needs, held years</td><td></td><td class="figure fb-num">104.6%</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">8.70 · Well above</td></tr>
+<tr><td class="body">Growth the price needs, held years</td><td></td><td class="figure fb-num">104.5%</td></tr>
 <tr><td class="body">Margin the price needs</td><td></td><td class="body fb-num">none up to 100.0%</td></tr>
 </tbody>
 </table>
@@ -572,32 +573,32 @@ survives), and the drawer says so.</p>
 <p class="body">Analysts expect CrowdStrike's revenue to grow from $5.4 billion to $6.7 billion over
 the next twelve months. They see 22.3% and then 16.7% in the next two fiscal years. The engine
 holds 16.7%, under the 20.0% cap, then fades it to 3.0%. The margin climbs from −2.2% to the
-peers' 22.8% by year 10. The value is $28 a share against a price of $241.81, so the word is Well
-above. The price would need 104.6% growth a year in the held years.</p>
+peers' 22.8% by year 10. The value is $28 a share against a price of $241.00, so the word is Well
+above. The price would need 104.5% growth a year in the held years.</p>
 <p class="body app-prose__row"><a href="#" data-find="CRWD">Open today's row</a></p>
 
 <h3 class="heading">Worked example: Roku</h3>
 <div class="app-prose__wide">
 <table class="fb-table app-example">
-<caption class="caption">Roku (ROKU), Young Growth, as of 3 Nov 2026</caption>
+<caption class="caption">Roku (ROKU), Young Growth, as of 5 Nov 2026</caption>
 <thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
 <tbody>
-<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$155.52</td></tr>
-<tr><td class="body">Revenue, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$6.2 billion</td></tr>
-<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">14.0%, 7.8%</td></tr>
-<tr><td class="body">Target margin, 10 Entertainment peers</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">11.5%</td></tr>
-<tr><td class="body">Sales-to-capital, peers' median</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">1.20</td></tr>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$162.77</td></tr>
+<tr><td class="body">Revenue, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$6.3 billion</td></tr>
+<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">14.1%, 7.9%</td></tr>
+<tr><td class="body">Target margin, 10 Entertainment peers</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">7.3%</td></tr>
+<tr><td class="body">Sales-to-capital, peers' median</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">0.77</td></tr>
 <tr><td class="body">Failure probability</td><td></td><td class="body fb-num">unavailable</td></tr>
-<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$49</td></tr>
-<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">3.17 · Well above</td></tr>
-<tr><td class="body">Margin the price needs</td><td></td><td class="figure fb-num">38.0%</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$21</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">7.62 · Well above</td></tr>
+<tr><td class="body">Margin the price needs</td><td></td><td class="figure fb-num">42.1%</td></tr>
 </tbody>
 </table>
 </div>
 <p class="body">Roku's own peer list held too few mature companies, so ten Entertainment companies
-set its target margin. Its margin moves from 7.8% today to their median of 11.5%. The value is $49
-a share against a price of $155.52, Well above. The price needs a margin of 38.0%, above the highest
-peer's 23.4%. The failure probability is unavailable, so the value assumes Roku survives.</p>
+set its target margin. Its margin moves down from 7.8% today to their median of 7.3%. The value
+is $21 a share against a price of $162.77, Well above. The price needs a margin of 42.1%, above the
+highest peer's 23.4%. The failure probability is unavailable, so the value assumes Roku survives.</p>
 <p class="body app-prose__row"><a href="#" data-find="ROKU">Open today's row</a></p>
 </section>
 
@@ -640,8 +641,8 @@ chance.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The implied decline rate is the decline rate at which the value equals today's price.
-The consensus years stay as they are, and the rate fades to zero as above. Set it beside the
-decline rate the trend gives. A price that needs revenue to shrink more slowly
+The consensus years stay as they are, and the rate fades to zero as above. Set the implied
+decline rate beside the decline rate the trend gives. A price that needs revenue to shrink more slowly
 than it has assumes a turnaround.</p>
 
 <h3 class="heading">Three distress signals</h3>
@@ -660,34 +661,36 @@ the income statement <a class="app-cite" href="#methodology/src-altman">[Altman 
 <h3 class="heading">Worked example: 3M</h3>
 <div class="app-prose__wide">
 <table class="fb-table app-example">
-<caption class="caption">3M (MMM), Decline, as of 3 Nov 2026</caption>
+<caption class="caption">3M (MMM), Decline, as of 5 Nov 2026</caption>
 <thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
 <tbody>
 <tr><td class="body">Revenue growth, 3 years</td><td></td><td class="figure fb-num">−10.0% · decile 1</td></tr>
 <tr><td class="body">Five-year revenue trend</td><td></td><td class="figure fb-num">−$3.0 billion a year</td></tr>
 <tr><td class="body">Falls in revenue, last four years</td><td></td><td class="figure fb-num">3</td></tr>
-<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$178.36</td></tr>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$193.95</td></tr>
 <tr><td class="body">Trailing revenue</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$25.2 billion</td></tr>
 <tr><td class="body">Revenue, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$26.3 billion</td></tr>
-<tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">4.1%, 5.2%</td></tr>
+<tr><td class="body">Consensus growth, years 2 to 4</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">4.1%, 5.1%, 2.8%</td></tr>
 <tr><td class="body">Sales-to-capital, own newest year</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">1.54</td></tr>
 <tr><td class="body">Recovery of freed capital</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">60.0%</td></tr>
 <tr><td class="body">Rating, from an interest cover of 10.6</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">AAA</td></tr>
 <tr><td class="body">Chance of default</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">0.1%</td></tr>
-<tr><td class="body">Decline rate from year 4</td><td></td><td class="figure fb-num">−12.2%</td></tr>
+<tr><td class="body">Decline rate, fading to zero by year 10</td><td></td><td class="figure fb-num">−12.2%</td></tr>
 <tr><td class="body">Margin, median of five years</td><td></td><td class="figure fb-num">18.3%</td></tr>
 <tr><td class="body">Net current asset value a share</td><td></td><td class="figure fb-num">−$32</td></tr>
-<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$35</td></tr>
-<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">5.12 · Well above</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$55</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">3.50 · Well above</td></tr>
 <tr><td class="body">Implied decline rate</td><td></td><td class="body fb-num">none</td></tr>
 </tbody>
 </table>
 </div>
 <p class="body">3M's revenue fell 10.0% a year over three years, decile 1, so its growth word is
 Close to zero or negative. Its five-year trend falls $3.0 billion a year, and revenue fell in three
-of its last four years: rule 2 gives Decline. Analysts expect revenue to grow for the next three
-years, so the drawer warns of a consensus recovery. From year 4 the run-off shrinks revenue 12.2% a
-year, as the trend does, at a margin of 18.3%. The value is $35 a share against a price of $178.36,
+of its last four years: rule 2 gives Decline. Analysts expect revenue to grow in each of the next
+four years, so the drawer warns of a consensus recovery. Five analysts give revenue for fiscal 2030,
+year 4, so the consensus runs to year 4. After it, the trend's decline rate of 12.2% fades in a
+straight line to zero by year 10. Revenue shrinks 10.2% in year 5 and 2.0% in year 9, then holds
+flat. One margin, 18.3%, holds in every year. The value is $55 a share against a price of $193.95,
 Well above. No decline rate reaches the price: the price is above the value even when revenue stops
 shrinking.</p>
 <p class="body app-prose__row"><a href="#" data-find="MMM">Open today's row</a></p>
@@ -716,27 +719,27 @@ without raising money. A cover under <span data-policy="burn_cover_flag_years">�
 <h3 class="heading">Worked example: Revolution Medicines</h3>
 <div class="app-prose__wide">
 <table class="fb-table app-example">
-<caption class="caption">Revolution Medicines (RVMD), Start-up, as of 3 Nov 2026</caption>
+<caption class="caption">Revolution Medicines (RVMD), Start-up, as of 5 Nov 2026</caption>
 <thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
 <tbody>
-<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$188.17</td></tr>
-<tr><td class="body">Market value</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$40.3 billion</td></tr>
-<tr><td class="body">Trailing revenue</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$0</td></tr>
-<tr><td class="body">Trailing operating income</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">−$1.6 billion</td></tr>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$199.70</td></tr>
+<tr><td class="body">Market value</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$42.8 billion</td></tr>
+<tr><td class="body">Trailing revenue</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$198 million</td></tr>
+<tr><td class="body">Trailing operating income</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">−$1.7 billion</td></tr>
 <tr><td class="body">Target margin, 10 Biotechnology peers</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">19.8%</td></tr>
-<tr><td class="body">Sales-to-capital, peers' median</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">2.81</td></tr>
-<tr><td class="body">Price less net cash</td><td></td><td class="figure fb-num">$38.4 billion</td></tr>
-<tr><td class="body">Revenue the price needs in year 10</td><td></td><td class="figure fb-num">$45.7 billion</td></tr>
+<tr><td class="body">Sales-to-capital, peers' median</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">2.52</td></tr>
+<tr><td class="body">Price less net cash</td><td></td><td class="figure fb-num">$40.9 billion</td></tr>
+<tr><td class="body">Revenue the price needs in year 10</td><td></td><td class="figure fb-num">$49.8 billion</td></tr>
 <tr><td class="body">Cash floor a share</td><td></td><td class="figure fb-num">$9</td></tr>
-<tr><td class="body">Burn cover</td><td></td><td class="figure fb-num">1.6 years</td></tr>
+<tr><td class="body">Burn cover</td><td></td><td class="figure fb-num">1.4 years</td></tr>
 </tbody>
 </table>
 </div>
-<p class="body">Revolution Medicines has no revenue yet and lost $1.6 billion of operating income
-over the last year. At $188.17 a share, the market values the business at $38.4 billion net of cash
-and debt. To be worth that, it needs $45.7 billion of revenue in year 10 at its peers' 19.8%
-margin. Its cash covers 1.6 years of the current burn, so the drawer warns. Net cash is $9 a share,
-a floor far under the price.</p>
+<p class="body">Revolution Medicines reported no revenue for fiscal 2025, and $198 million over the
+last twelve months. It lost $1.7 billion of operating income over the last year. At $199.70 a
+share, the market values the business at $40.9 billion net of cash and debt. To be worth that, it
+needs $49.8 billion of revenue in year 10 at its peers' 19.8% margin. Its cash covers 1.4 years of
+the current burn, so the drawer warns. Net cash is $9 a share, a floor far under the price.</p>
 <p class="body app-prose__row"><a href="#" data-find="RVMD">Open today's row</a></p>
 </section>
 

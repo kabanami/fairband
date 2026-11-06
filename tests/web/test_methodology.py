@@ -145,6 +145,42 @@ def test_the_page_says_what_method_0_9_changed() -> None:
     assert "years 1 to 3" in trend[: trend.index("</li>")]
 
 
+def test_the_examples_state_method_0_9_s_rules() -> None:
+    """The examples, re-read from the 0.9 revalue (CLAUDE.md: a change of method version re-reads
+    its examples' figures): Microsoft's Stable margin raises no note, since Stable points to no
+    phase; 3M's run-off names the years the consensus gives and the fade to zero with a flat
+    terminal; the implied decline rate is named where the page sets it beside the trend's; the
+    growth section's notes name the dollar ramp's."""
+    html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
+    asof = html[html.index("Figures as of") :]
+    asof = asof[: asof.index("</p>")]
+    assert "method 0.9" in asof and 'datetime="2026-11-06"' in asof
+    assert "method 0.8" not in html
+    classifier = _section(html, "classifier")
+    msft = classifier[classifier.index("Worked example: Microsoft") :]
+    assert '<td class="body">Checks</td><td class="body fb-num">none</td>' in msft
+    assert "A stable margin points to no phase, so the drawer adds no note." in msft
+    assert "Margin direction disagrees" not in msft and "Stable points to Mature" not in msft
+    decline = _section(html, "decline")
+    mmm = decline[decline.index("Worked example: 3M") :]
+    assert "Consensus growth, years 2 to 4" in mmm
+    assert "Decline rate, fading to zero by year 10" in mmm and "from year 4" not in mmm
+    reading = mmm[mmm.index("</table>") :]
+    for text in (
+        "so the consensus runs to year 4",
+        "fades in a straight line to zero by year 10",
+        "then holds flat",
+    ):
+        assert text in reading, text
+    assert "as the trend does" not in reading
+    price = decline[decline.index(">What the price needs</h3>") :]
+    assert "Set the implied decline rate beside the decline rate the trend gives." in price
+    growth = _section(html, "growth")
+    notes = growth[growth.index(">Flags on this route</h3>") :]
+    notes = notes[: notes.index("</p>")]
+    assert "A loss larger than revenue, moved in dollars, gets a note." in notes
+
+
 def test_diagram_draws_six_bands_two_curves_and_the_counts() -> None:
     """Spec 7.3: a 960 by 320 viewBox, one band per phase on the phase ramp at low opacity, the
     revenue curve in the series hue and the earnings curve in muted ink over a zero line, each
