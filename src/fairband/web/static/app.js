@@ -628,12 +628,17 @@
         crossCheck(im.growth_route),
         growth ? discountedAt(r.inputs) : null) : null,
       /* A refusal takes the band's place: it is the answer when there is no value. A growth row
-         refused with its revenue path still shows the margin the price needs (spec 5.11). */
+         refused with its revenue path still shows the margin the price needs (spec 5.11). A
+         Mature Stable row refused for its trailing earnings shows the growth-route cross-check
+         under the refusal, as a valued row shows it under the band (spec 2026-11-06 9); a
+         revenue-growth refusal's cross-check does not move with the price, so it shows only among
+         the intermediates. */
       r.refusal ? section('refusal', 'Refusal',
         h('p', { className: 'body app-refusal' }, r.refusal),
         'implied_margin' in im ? pairs([
           ['Margin the price needs', F.formatPercent(im.implied_margin), true]
-        ]) : null) : null,
+        ]) : null,
+        'e_trailing' in im ? crossCheck(im.growth_route) : null) : null,
       /* The window reads aging from the effective aging_fraction, as the Freshness column does
          (spec 2026-11-04 8.2). */
       section('window', null, h(F.ValidityWindow, {
@@ -712,7 +717,8 @@
   }
 
   /* A Mature Stable or growth row's growth-route value, under the band (calibration spec 5.7,
-     growth-routes spec 5.12); a refused cross-check shows only among the intermediates. */
+     growth-routes spec 5.12), or under a Mature Stable refusal; a refused cross-check shows only
+     among the intermediates. */
   function crossCheck(g) {
     if (!g || g.value_per_share == null) return null;
     return h('p', { className: 'caption app-muted' }, 'Growth-route cross-check: ' +
@@ -844,11 +850,13 @@
   }
 
   /* One row a year: the revenue, the margin, EBIT, tax, NOPAT, the reinvestment and the free cash
-     flow, totals to whole dollars. */
+     flow, totals to whole dollars. On the dollar ramp the margin is each year's operating income
+     over its revenue, the income moving in dollars (method 5a.4), and its head says so. */
   function yearsTable(im) {
+    var ramp = im.margin_path.ramp === 'dollars' ? 'ramp in dollars' : null;
     return figuresTable([
       ['Revenue', im.revenue_by_year, whole],
-      ['Margin', im.margin_path.by_year, F.formatPercent],
+      ['Margin', im.margin_path.by_year, F.formatPercent, ramp],
       ['EBIT', im.ebit_by_year, whole],
       ['Tax', im.tax_by_year, whole],
       ['NOPAT', im.nopat_by_year, whole],
@@ -857,15 +865,17 @@
     ]);
   }
 
-  /* A row a year from year 1, a column for each [head, the figures by year, their format]. Wider
-     than the rail, the table scrolls on its own, by keyboard too: its box takes focus. */
+  /* A row a year from year 1, a column for each [head, the figures by year, their format, and a
+     note on the head when there is one]. Wider than the rail, the table scrolls on its own, by
+     keyboard too: its box takes focus. */
   function figuresTable(columns) {
     return h('div', { className: 'app-scroll', tabIndex: 0 },
       h('table', { className: 'fb-table app-figures' },
         h('thead', null, h('tr', null,
           h('th', { className: 'label fb-num' }, 'Year'),
           columns.map(function (c) {
-            return h('th', { key: c[0], className: 'label fb-num' }, c[0]);
+            return h('th', { key: c[0], className: 'label fb-num' },
+              c[3] ? noted(c[0], c[3]) : c[0]);
           }))),
         h('tbody', null, columns[0][1].map(function (_, t) {
           return h('tr', { key: t },
@@ -952,18 +962,21 @@
     ]);
   }
 
-  /* The decline rate, from year 4 or in every year without a usable consensus; the
-     sales-to-capital the release and the reinvestment read; the terminal value, a perpetuity at
-     the decline rate, and the firm value; and, on a valued row, the decline rate at which the
-     value is the price. */
+  /* The decline rate, after the years the consensus gives (K, 3 to N) or the three years that
+     shrink at it without a usable consensus, fading to zero by year N (method 6a.2); the
+     sales-to-capital the release and the reinvestment read; the terminal value, flat on year N's
+     revenue (6a.5), and the firm value; and, on a valued row, the decline rate at which the value
+     is the price. */
   function runoffSummary(im) {
     var path = im.runoff_path, s = im.sales_to_capital;
+    var years = path.ntm_revenue == null ? 'years 1 to 3 at the decline rate'
+      : 'years 1 to ' + path.consensus_years + ' from the consensus';
     var rows = [
-      ['Decline rate', noted(F.formatPercent(path.d), path.ntm_revenue == null
-        ? 'every year: no usable consensus' : 'from year 4'), true],
+      ['Decline rate', noted(F.formatPercent(path.d), years + '; fades to zero by year ' +
+        path.runoff_years), true],
       ['Sales-to-capital', noted(times(s.value), s.used === 'own-latest'
         ? 'own, newest year' : 'mature peers\' median'), true],
-      ['Terminal value', whole(im.terminal_value), true],
+      ['Terminal value', noted(whole(im.terminal_value), 'flat'), true],
       ['Firm value', whole(im.firm_value), true]
     ];
     if ('implied_decline_rate' in im) {

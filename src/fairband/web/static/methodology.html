@@ -178,20 +178,23 @@ pair of deciles has a growth word.</p>
 <p class="body">The operating margin is operating income divided by revenue. The margin that decides
 is the newest one among the last five fiscal years. Its trend is the slope of the yearly margins
 over those five years. The slopes of the companies with a positive margin are ranked into deciles
-too. A rising slope in the top three deciles reads Rising. A falling slope in the bottom three
-reads Declining. Any other slope reads Stable.</p>
+too. A rising slope in the top two deciles reads Rising. A falling slope in the bottom two reads
+Declining. Any other slope reads Stable. A stable margin points to no phase.</p>
 
 <h3 class="heading">The rules</h3>
 <p class="body">The first rule that fits decides the phase.</p>
 <ol class="body">
-<li>A company with no revenue now, or none three years ago, is a Start-up.</li>
+<li>A company with no revenue now, or none three years ago, is a Start-up. An established company
+(rule 4 says which) is never one. With no revenue three years ago, it moves to rule 2 with a note.
+Its growth runs over its years of revenue since then. With no revenue now, it stays
+unclassified.</li>
 <li>A company is in Decline when three things hold. Its growth word is Close to zero or negative.
 Its five-year revenue trend falls. Its revenue fell in at least three of its last four years.</li>
 <li>A company with no operating margin in its last five fiscal years stays unclassified.</li>
 <li>A company with a negative margin is High Growth when its margin trend rises, else Young Growth.
-The exception is an established company (one with a positive margin in at least three of its last
-five years). It moves to rule 5 as if its margin were positive, with a note that names the loss
-year.</li>
+The exception is an established company. Established means a positive margin in at least three of
+the last five years, or in at least five of the fiscal years on file. Such a company moves to rule
+5 as if its margin were positive, with a note that names the loss year.</li>
 <li>A company with a margin of zero or more is Mature Growth when its growth word is Very High,
 High or Moderate. It is Mature Stable when the word is Low or Close to zero or negative.</li>
 </ol>
@@ -201,11 +204,11 @@ High or Moderate. It is Mature Stable when the word is Low or Close to zero or n
 phase evidence.</p>
 <ul class="body">
 <li>The growth word points to another phase than the margin rule gave a loss-making company.</li>
-<li>The margin direction points elsewhere: Rising to Mature Growth, Stable to Mature Stable,
-Declining to Decline.</li>
+<li>The margin direction points elsewhere: Rising to Mature Growth, Declining to Decline.</li>
 <li>Free cash flow has the unusual sign for the phase, such as positive in Young Growth.</li>
 <li>Revenue fell over five years, but in too few years to make a Decline.</li>
 <li>An established company had a loss year and was placed as if it were profitable.</li>
+<li>An established company had no revenue three years ago and was not made a Start-up.</li>
 <li>The history is short, the margin is exactly zero, or the reporting currency changed.</li>
 </ul>
 
@@ -497,7 +500,10 @@ growth.</li>
 <h3 class="heading">The margin and the peers</h3>
 <p class="body">The operating margin moves in a straight line from today's to the target margin (the
 margin a mature company of the same kind earns). It reaches the target after
-<span data-policy="margin_convergence_year">—</span> and keeps it. The target is the median
+<span data-policy="margin_convergence_year">—</span> and keeps it. A loss larger than revenue is a
+cost base, not a margin. For such a loss, operating income moves in dollars instead. It runs in a
+straight line from today's loss to the target margin's share of revenue by the same year. The
+Start-up route's ramp works the same way. The target is the median
 ten-year margin of the mature peers (the company's peers that the classifier puts in a mature
 phase). The peers come from the data vendor's peer list. At least
 <span data-policy="peer_min">—</span> peers need <span data-policy="peer_margin_min_years">—</span>
@@ -507,7 +513,8 @@ of margins each. With too few, the route takes the largest
 <h3 class="heading">Reinvestment, tax and cash</h3>
 <p class="body">Sales-to-capital (the revenue a dollar of new capital buys) sets what growth costs.
 Each year, the company invests next year's extra revenue divided by sales-to-capital. Fairband uses
-the company's own five-year measure when it is reliable, else the peers' median. Operating profit
+the company's own five-year measure when it is reliable, else the peers' median. An own measure
+below half the mature peers' median does not count as reliable. Operating profit
 is taxed at the country's statutory rate, after any losses earlier in the forecast
 <a class="app-cite" href="#methodology/src-oecd">[OECD]</a>. Free cash flow is the profit after tax
 less the reinvestment.</p>
@@ -604,13 +611,17 @@ business that shrinks year by year and frees capital as it shrinks)
 <h3 class="heading">The run-off</h3>
 <ol class="body">
 <li>Years 1 to 3 follow the consensus revenue, as on the growth route.</li>
-<li>From year 4, revenue shrinks at the decline rate: the five-year revenue trend, as a share of
-last year's revenue. The decline rate never takes away more than half the revenue in a year.</li>
+<li>The consensus revenue continues past year 3, one year at a time, while at least
+<span data-policy="analyst_min">—</span> analysts give it and it stays above zero. After the
+consensus, revenue shrinks at the decline rate: the five-year revenue trend, as a share of last
+year's revenue. The rate fades to zero in a straight line by the last of the run-off's
+<span data-policy="runoff_years">—</span>. The decline rate never takes away more than half the
+revenue in a year.</li>
 <li>One operating margin holds in every year: the median of the last five fiscal margins.</li>
 <li>Each fall in revenue frees the capital that revenue needed. A sale recovers
 <span data-policy="runoff_recovery">—</span> of it.</li>
-<li>After <span data-policy="runoff_years">—</span>, a terminal value keeps shrinking at the decline
-rate.</li>
+<li>After <span data-policy="runoff_years">—</span>, a terminal value holds revenue flat: the
+business neither grows nor shrinks.</li>
 <li>The cash, discounted at the hurdle rate, plus cash on hand less debt, is the going-concern
 value.</li>
 </ol>
@@ -629,7 +640,8 @@ chance.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The implied decline rate is the decline rate at which the value equals today's price.
-Set it beside the decline rate the trend gives. A price that needs revenue to shrink more slowly
+The consensus years stay as they are, and the rate fades to zero as above. Set it beside the
+decline rate the trend gives. A price that needs revenue to shrink more slowly
 than it has assumes a turnaround.</p>
 
 <h3 class="heading">Three distress signals</h3>
@@ -786,6 +798,9 @@ gave.</span></li>
 <li><span class="label">Loss year</span> <code class="fb-tag figure-sm">loss-year</code>
 <span class="body app-flags__what">An established company had a loss year and was placed as if it
 were profitable.</span></li>
+<li><span class="label">Revenue gap</span> <code class="fb-tag figure-sm">revenue-gap</code>
+<span class="body app-flags__what">An established company had no revenue three years ago, so it is
+not a Start-up.</span></li>
 <li><span class="label">Revenue falling</span> <code class="fb-tag figure-sm">revenue-falling</code>
 <span class="body app-flags__what">Revenue fell over five years, but in too few years to make a
 Decline.</span></li>
@@ -827,7 +842,7 @@ income.</span></li>
 before.</span></li>
 <li><span class="label">Path on trend</span> <code class="fb-tag figure-sm">path-on-trend</code>
 <span class="body app-flags__what">A Decline company without a usable consensus shrinks at the
-decline rate from year 1.</span></li>
+decline rate in years 1 to 3, before the fade.</span></li>
 <li><span class="label">Decline rate floored</span> <code class="fb-tag figure-sm">decline-rate-floored</code>
 <span class="body app-flags__what">The trend takes away more than half the revenue a year, so the
 run-off uses that floor.</span></li>
@@ -858,6 +873,9 @@ nothing.</span></li>
 <li><span class="label">Tax losses unknown</span> <code class="fb-tag figure-sm">tax-loss-history-unknown</code>
 <span class="body app-flags__what">The forecast has a loss year, and past tax losses are not on
 file.</span></li>
+<li><span class="label">Ramp in dollars</span> <code class="fb-tag figure-sm">margin-ramp-in-dollars</code>
+<span class="body app-flags__what">The trailing loss is larger than revenue, so operating income
+moves to the target margin in dollars.</span></li>
 <li><span class="label">Return above peers</span> <code class="fb-tag figure-sm">return-above-peers</code>
 <span class="body app-flags__what">The return on new capital at the target margin is above the
 peers' median return.</span></li>

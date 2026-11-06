@@ -108,6 +108,43 @@ def test_the_page_says_what_the_method_does() -> None:
         assert idiom not in prose, idiom
 
 
+def test_the_page_says_what_method_0_9_changed() -> None:
+    """Spec 2026-11-06 12: the margin direction reads the top two and the bottom two deciles, and
+    Stable points to no phase (method 3.4); an established company is never a Start-up, and five
+    profitable years on file make a company established (3.5); the own sales-to-capital bound and
+    the dollar ramp (5a.4, 5a.5); the Decline consensus past year 3, the fade to zero and the flat
+    terminal, and the implied decline rate on that fade (6a.2, 6a.5, 6a.9)."""
+    html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
+    classifier = _section(html, "classifier")
+    direction = classifier[classifier.index(">The margin and its direction</h3>") :]
+    direction = direction[: direction.index("</p>")]
+    for text in ("the top two deciles", "the bottom two", "A stable margin points to no phase"):
+        assert text in direction, text
+    rules = classifier[classifier.index(">The rules</h3>") : classifier.index("</ol>")]
+    start_up = rules[: rules.index("</li>")]
+    assert "established company" in start_up and "never" in start_up
+    assert "five of the fiscal years on file" in rules
+    notes = classifier[classifier.index(">Notes that do not change the phase</h3>") :]
+    notes = notes[: notes.index("</ul>")]
+    assert "Rising to Mature Growth, Declining to Decline" in notes
+    assert "Stable to Mature Stable" not in notes and "not made a Start-up" in notes
+    growth = _section(html, "growth")
+    capital = growth[growth.index(">Reinvestment, tax and cash</h3>") :]
+    assert "half the mature peers' median" in capital[: capital.index("</p>")]
+    margin = growth[growth.index(">The margin and the peers</h3>") :]
+    assert "in dollars" in margin[: margin.index("</p>")]
+    decline = _section(html, "decline")
+    runoff = decline[decline.index(">The run-off</h3>") : decline.index("</ol>")]
+    for text in ("past year 3", "fades to zero", "flat"):
+        assert text in runoff, text
+    assert "keeps shrinking" not in runoff
+    price = decline[decline.index(">What the price needs</h3>") :]
+    assert "fades to zero" in price[: price.index("</p>")]
+    flags = _section(html, "flags")
+    trend = flags[flags.index(">path-on-trend</code>") :]
+    assert "years 1 to 3" in trend[: trend.index("</li>")]
+
+
 def test_diagram_draws_six_bands_two_curves_and_the_counts() -> None:
     """Spec 7.3: a 960 by 320 viewBox, one band per phase on the phase ramp at low opacity, the
     revenue curve in the series hue and the earnings curve in muted ink over a zero line, each
@@ -171,7 +208,14 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
     assert re.findall(r'<code class="fb-tag figure-sm">([^<]+)</code>', warnings) == (
         QUALITY_WARNINGS
     )
-    for code in ("few-analysts", "margin-direction-disagrees", "return-floored", "ncav-floor"):
+    for code in (
+        "few-analysts",
+        "margin-direction-disagrees",
+        "return-floored",
+        "ncav-floor",
+        "margin-ramp-in-dollars",
+        "revenue-gap",
+    ):
         assert f'<code class="fb-tag figure-sm">{code}</code>' in notes, code
     outside = html.replace(flags, "")
     assert "<code" not in outside

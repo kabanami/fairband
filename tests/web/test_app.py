@@ -1397,7 +1397,7 @@ def test_app_js_drawer_draws_the_run_off_table() -> None:
         "['Release', im.release_by_year, whole],",
         "['Reinvestment', im.reinvestment_by_year, whole],",
         "['Free cash flow', im.fcff_by_year, whole]",
-        "['Terminal value', whole(im.terminal_value), true],",
+        "['Terminal value', noted(whole(im.terminal_value), 'flat'), true],",
         "rows.push(['Implied decline rate', im.implied_decline_rate == null",
         "'Normalized margin'",
         "'Rating'",
@@ -1435,6 +1435,36 @@ def test_app_js_drawer_draws_the_run_off_table() -> None:
         "implied_decline_rate",
     ):
         assert key in script, key
+
+
+def test_app_js_drawer_says_the_fade_the_ramp_and_the_stable_cross_check() -> None:
+    """Spec 2026-11-06 12: the run-off's decline rate names the years the consensus gives, K, or
+    the three years on trend, and the fade to zero by year N, and its terminal is flat (6.4); a
+    growth row on the dollar ramp says so over its margins (7.2); a Mature Stable row refused for
+    its trailing earnings shows the growth-route cross-check under the refusal, as a valued row
+    shows it under the band (9). A revenue-growth refusal's cross-check does not move with the
+    price, so it shows only among the intermediates."""
+    script = _static_file("app.js")
+    summary = script[script.index("function runoffSummary(") :]
+    summary = summary[: summary.index("\n  }\n")]
+    for text in (
+        "var years = path.ntm_revenue == null ? 'years 1 to 3 at the decline rate'",
+        ": 'years 1 to ' + path.consensus_years + ' from the consensus';",
+        "['Decline rate', noted(F.formatPercent(path.d), years + '; fades to zero by year ' +",
+        "path.runoff_years), true],",
+        "['Terminal value', noted(whole(im.terminal_value), 'flat'), true],",
+    ):
+        assert text in summary, text
+    assert "from year 4" not in summary and "every year: no usable consensus" not in summary
+    years = script[script.index("function yearsTable(") :]
+    years = years[: years.index("\n  }\n")]
+    assert "var ramp = im.margin_path.ramp === 'dollars' ? 'ramp in dollars' : null;" in years
+    assert "['Margin', im.margin_path.by_year, F.formatPercent, ramp]," in years
+    assert "c[3] ? noted(c[0], c[3]) : c[0]" in script
+    refusal = script[script.index("r.refusal ? section('refusal', 'Refusal',") :]
+    refusal = refusal[: refusal.index("section('window'")]
+    assert "'e_trailing' in im ? crossCheck(im.growth_route) : null" in refusal
+    assert script.count("crossCheck(im.growth_route)") == 2
 
 
 def test_app_js_drawer_draws_the_requirement() -> None:
