@@ -11,8 +11,8 @@ and need not have a snapshot. Text is kept as written; a blank one is refused.
   (one of ``UNITS``), and a period (a fiscal year, a quarter, ``ttm``) may name what it covers.
 - A kill criterion: a measurable event that would prove the view wrong, the report that set it,
   and a state, ``open`` until ``set_kill_criterion`` moves it with a reason.
-- A news item: a date, a headline, a source (a URL or a vendor response id), text, and the
-  company's kill criterion it touches, if any.
+- A news item: a date, a headline, a source (a URL or a vendor response id), text, the
+  company's kill criterion it touches, if any, and the report that recorded it, if one.
 
 A refused value raises ``ValueError`` with the sentence the writer can act on; a cited record
 that is not the company's, a note's override or a news item's kill criterion, ``KeyError(id)``. Each write is
@@ -103,6 +103,7 @@ class NewsItemRow:
     source: str
     text: str
     kill_criterion_id: int | None
+    report_id: int | None
     principal: Principal
     actor: str | None
     client: str | None
@@ -242,9 +243,11 @@ def add_news_item(
     writer: Writer,
     at: datetime,
     kill_criterion_id: int | None = None,
+    report_id: int | None = None,
 ) -> int:
     """Record the news item, dated ``day``, touching the company's kill criterion
-    ``kill_criterion_id`` if one; return its id."""
+    ``kill_criterion_id`` if one, by the report ``report_id`` if one recorded it; return its
+    id."""
     symbol = exchange_symbol(symbol)
     for field, given in (("headline", headline), ("source", source), ("text", text)):
         _require_text(given, f"a news item needs its {field}")
@@ -255,6 +258,7 @@ def add_news_item(
         "source": source,
         "text": text,
         "kill_criterion_id": kill_criterion_id,
+        "report_id": report_id,
     }
     with transaction(conn, immediate=True):
         cited = None if kill_criterion_id is None else _require_criterion(conn, kill_criterion_id)
@@ -379,6 +383,7 @@ def _news_item(row: sqlite3.Row) -> NewsItemRow:
         source=row["source"],
         text=row["text"],
         kill_criterion_id=row["kill_criterion_id"],
+        report_id=row["report_id"],
         principal=row["principal"],
         actor=row["actor"],
         client=row["client"],

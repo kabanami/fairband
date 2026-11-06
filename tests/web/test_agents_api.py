@@ -263,6 +263,7 @@ def test_notes_findings_kill_criteria_and_news_items_round_trip(client: TestClie
     assert item == news | {
         "id": item["id"],
         "symbol": "AAPL",
+        "reportId": None,
         "principal": "agent",
         "actor": "claude-opus-5-5",
         "client": "claude-code/2.1",

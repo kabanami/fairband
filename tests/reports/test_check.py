@@ -11,8 +11,12 @@ from typing import Any
 
 import pytest
 from refresh.synthetic import NOW
+from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.web import TODAY
 
-from fairband.engine.route import reprice
+from fairband.engine.overrides import Override
+from fairband.engine.review import review_company
+from fairband.engine.route import reprice, value_company
 from fairband.policy import Policy
 from fairband.reports.check import (
     CHECKS,
@@ -25,6 +29,7 @@ from fairband.reports.check import (
     WRONG_SNAPSHOT,
     WRONG_UNIT,
     Finding,
+    check_judgments,
     check_sections,
     cited_records,
     headings,
@@ -36,6 +41,8 @@ from fairband.reports.check import (
     structure_refusal,
 )
 from fairband.store.ledger import Writer
+from fairband.store.overrides import applied_overrides, drop_override, insert_override
+from fairband.store.reviews import insert_review, review_row
 from fairband.store.secondary import insert_derivation
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 
@@ -63,7 +70,11 @@ def _clean(sid: int) -> list[Any]:
         _cite("$2,100,000,000", "fact:AAPL/revenue/2025", "FY2025"),
         " grew ",
         _cite("5.0%", "table:AAPL/growth/revenue_growth/2025", "2025"),
-        "; capital spending was ",
+        " (",
+        _cite("$2.1 billion", "fact:AAPL/revenue/2025"),
+        "); capital spending was ",
+        _cite("$126,000,000", "fact:AAPL/capex/2025"),
+        ", ",
         _cite("−$126,000,000", "fact:AAPL/capex/2025"),
         " or ",
         _cite("($126,000,000)", "fact:AAPL/capex/2025"),
@@ -121,11 +132,13 @@ def test_wrong_unit_on_rounding(
     sid = snapshots["AAPL"]
     price = f"snapshot:{sid}/inputs/price"
     found = _one(_check(conn, policy, sid, _cite("$12.345", price)), sid, "$12.345")
-    assert (found.what, found.detail) == (WRONG_UNIT, f"{price} reads $150.00")
+    assert (found.what, found.detail) == (
+        WRONG_UNIT,
+        f"a price is cited to cents: {price} reads $150.00",
+    )
     # the rounding itself: a price is written to cents, so $12.345 is not one, even of $12.345
     assert not rounded_equal(12.345, "$", 12.345, "per-share")
     assert rounded_equal(12.35, "$", 12.345, "per-share")
-    assert not _check(conn, policy, sid, _cite("$150", price))  # whole dollars, as a value is
 
 
 def test_wrong_unit_on_a_suffix(
@@ -219,7 +232,10 @@ def test_the_cite_parser_reads_separators_and_minus_signs() -> None:
     assert parse_cite("−$126,000,000") == (-126_000_000.0, "$")
     assert parse_cite("($3.20)") == (-3.2, "$")
     assert parse_cite("42") == (42.0, "")
-    for text in ("$12%", "(3.2", "about 3", "3.2.1", "", "Wide"):
+    assert parse_cite("$2.1 billion") == (2.1e9, "$") and parse_cite("$126M") == (126e6, "$")
+    assert parse_cite("$1.5bn") == (1.5e9, "$") and parse_cite("($1.5 bn)") == (-1.5e9, "$")
+    assert parse_cite("$500k") == (500e3, "$") and parse_cite("8 billion") == (8e9, "")
+    for text in ("$12%", "(3.2", "about 3", "3.2.1", "", "Wide", "2.1 billion%", "$2bn x"):
         assert parse_cite(text) is None, text
 
 
@@ -266,6 +282,19 @@ def test_a_reprice_keeps_the_cites_and_a_revalue_rejects_them(
         ("on 27 Oct 2026, on 2026-10-30, Oct. 30, 2026, at https://x.com/2025/10", []),
         ("section 13.3, sections 14, Item 10, § 12, fairband-review/1", []),
         ("from 2024-2025; 1989 and 2100", ["1989", "2100"]),
+        # a number after $, or before a scale or a unit word, whatever its digits
+        ("$391bn", ["$391bn"]),
+        ("capex of $1.5bn", ["$1.5bn"]),
+        ("sales of $126M", ["$126M"]),
+        ("margin of 11.2pp", ["11.2pp"]),
+        ("a 50bps cut", ["50bps"]),
+        ("8 billion dollars", ["8 billion"]),
+        ("US$5 a share", ["US$5"]),
+        ("$5 and 3 k and 2 years", ["$5", "3 k", "2 years"]),
+        # a day beside a month is a date, unless a decimal, a % or a scale follows it
+        ("In March 12% of stores closed", ["12%"]),
+        ("since June 30.5 million shares", ["30.5 million"]),
+        ("the 2 big ones, 5 more, on 30 June", []),
     ],
 )
 def test_the_token_rule(text: str, found: list[str]) -> None:
@@ -292,12 +321,32 @@ def test_the_token_rule(text: str, found: list[str]) -> None:
         (5.4, "", 5.4321, None, True),  # no unit: the cite's own precision
         (5.5, "", 5.4321, None, False),
         (-3.2, "%", -0.032, "percent", True),
+        (150.0, "$", 150.0, "price", True),  # a price to cents; the check also reads the
+        (150.01, "$", 150.0, "price", False),  # cents written, here the number alone
     ],
 )
 def test_rounded_equal(
     cite: float, suffix: str, value: float, unit: str | None, equal: bool
 ) -> None:
     assert rounded_equal(cite, suffix, value, unit) is equal
+
+
+@pytest.mark.parametrize(
+    ("cite", "suffix", "value", "unit", "scale", "equal"),
+    [
+        (391e9, "$", 391.3e9, "currency", 10**9, True),  # the cite's own precision
+        (2.1e9, "$", 2.123e9, "currency", 10**9, True),
+        (2.2e9, "$", 2.123e9, "currency", 10**9, False),
+        (2_100e6, "$", 2.1e9, "currency", 10**6, True),
+        (8e9, "", 8.04e9, "count", 10**9, True),
+        (1.5e9, "$", 1.5e9, "per-share", 10**9, False),  # a scale fits a total or a count
+        (1.5e9, "%", 1.5e9, "currency", 10**9, False),
+    ],
+)
+def test_rounded_equal_with_a_scale_word(
+    cite: float, suffix: str, value: float, unit: str, scale: int, equal: bool
+) -> None:
+    assert rounded_equal(cite, suffix, value, unit, scale) is equal
 
 
 def test_shown_writes_the_value_as_its_cite_reads() -> None:
@@ -352,3 +401,187 @@ def test_cited_records(conn: sqlite3.Connection, policy: Policy, snapshots: dict
     sid = snapshots["AAPL"]
     assert cited_records(conn, _report(_clean(sid))) == (sid, None, None)
     assert cited_records(conn, _report(["no cites"])) == (None, None, None)
+
+
+def test_a_scale_word_cites_a_total_at_its_own_precision(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    sid = snapshots["AAPL"]
+    revenue, cfo = "fact:AAPL/revenue/2025", "fact:AAPL/cfo/2025"  # $2,100 m and $525 m
+    for text in ("$2.1 billion", "$2.1bn", "$2,100M", "$2,100 million", "$525 million"):
+        ref = cfo if text == "$525 million" else revenue
+        assert _check(conn, policy, sid, _cite(text, ref)) == [], text
+    found = _one(_check(conn, policy, sid, _cite("$0.5 billion", cfo)), sid, "$0.5 billion")
+    assert (found.what, found.detail) == (
+        WRONG_UNIT,
+        f"a cite with a scale word gives two significant figures or more: {cfo} reads $525,000,000",
+    )
+    found = _one(_check(conn, policy, sid, _cite("$2.2 billion", revenue)), sid, "$2.2 billion")
+    assert (found.what, found.detail) == (WRONG_UNIT, f"{revenue} reads $2,100,000,000")
+
+
+def test_a_signed_outflow_may_be_cited_by_its_size(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    sid = snapshots["AAPL"]
+    capex = "fact:AAPL/capex/2025"  # −$126 m, signed as an outflow
+    for text in ("$126,000,000", "$126 million", "−$126,000,000", "($126,000,000)", "−$126M"):
+        assert _check(conn, policy, sid, _cite(text, capex)) == [], text
+    dividends = "table:AAPL/capital_allocation/dividends/2025"  # −$40 m
+    assert _check(conn, policy, sid, _cite("$40,000,000", dividends)) == []
+    assert _check(conn, policy, sid, _cite("$60 million", "fact:AAPL/buybacks/2025")) == []
+    # a signed cite must match the signed value; a net flow is not an outflow line
+    found = _one(
+        _check(conn, policy, sid, _cite("$126,000,000", "fact:AAPL/cfi/2025")), sid, "$126,000,000"
+    )
+    assert (found.what, found.detail) == (WRONG_UNIT, "fact:AAPL/cfi/2025 reads −$210,000,000")
+    found = _one(
+        _check(conn, policy, sid, _cite("−$126,000,000", "fact:AAPL/cfo/2025")),
+        sid,
+        "−$126,000,000",
+    )
+    assert found.what == WRONG_UNIT
+
+
+def test_a_percentage_may_cite_a_ratio(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    sid = snapshots["AAPL"]
+    sbc, net_income = "fact:AAPL/sbc/2025", "fact:AAPL/net_income/2025"  # $20 m over $315 m
+    ratio = insert_derivation(
+        conn, "AAPL", "ratio", sbc, net_income, None, 20 / 315, "multiple", AGENT, NOW
+    )
+    assert _check(conn, policy, sid, _cite("6.3%", f"derived:{ratio}")) == []
+    assert _check(conn, policy, sid, _cite("0.06x", f"derived:{ratio}")) == []
+    fcf = "table:AAPL/cash_flow/fcf_to_net_income/2025"  # 399 ÷ 315
+    assert _check(conn, policy, sid, _cite("126.7%", fcf)) == []
+    # a multiple that is not a derivation or a table's ratio keeps its x
+    price_to_value = f"snapshot:{sid}/price_to_value"
+    found = _one(_check(conn, policy, sid, _cite("112.5%", price_to_value)), sid, "112.5%")
+    assert found.what == WRONG_UNIT
+
+
+def test_a_price_is_cited_to_cents(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    sid = snapshots["AAPL"]
+    for ref in (f"snapshot:{sid}/price", f"snapshot:{sid}/inputs/price"):
+        found = _one(_check(conn, policy, sid, _cite("$150", ref)), sid, "$150")
+        assert (found.what, found.detail) == (
+            WRONG_UNIT,
+            f"a price is cited to cents: {ref} reads $150.00",
+        )
+        assert _check(conn, policy, sid, _cite("$150.00", ref)) == []
+    close = "close:AAPL/2025-11-03"
+    assert _one(_check(conn, policy, sid, _cite("$190", close)), sid, "$190").what == WRONG_UNIT
+    assert _check(conn, policy, sid, _cite("$190.00", close)) == []
+    # a value a share and a level to cents or to whole dollars
+    for text in ("$133", "$133.37"):
+        assert _check(conn, policy, sid, _cite(text, f"snapshot:{sid}/value")) == []
+    assert _check(conn, policy, sid, _cite("$100", f"snapshot:{sid}/levels/buy")) == []
+
+
+def test_a_policy_score_is_cited_to_its_decimals(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    sid = snapshots["AAPL"]
+    assert policy.z_safe == 2.6
+    assert _check(conn, policy, sid, _cite("2.6", "policy:z_safe")) == []
+    assert _one(_check(conn, policy, sid, _cite("3", "policy:z_safe")), sid, "3").what == WRONG_UNIT
+    whole = str(policy.f_score_low)  # a whole number on the score's grid
+    assert _check(conn, policy, sid, _cite(whole, "policy:f_score_low")) == []
+
+
+def test_judgment_text_holds_no_figure() -> None:
+    judgments = [
+        {
+            "judgment": "moat",
+            "bull": "Patents to 2031 hold.",
+            "bear": "Share fell 11.2%.",
+            "decision": "Keep Wide",
+        },
+        {
+            "judgment": "belief",
+            "bull": "Three reasons",
+            "bear": "none",
+            "decision": "$5bn of buybacks",
+        },
+    ]
+    assert check_judgments(judgments) == [
+        Finding(
+            "judgment moat, bear: 11.2%",
+            NO_REFERENCE,
+            "a judgment's text holds no figure: cite it in a section",
+        ),
+        Finding(
+            "judgment belief, decision: $5bn",
+            NO_REFERENCE,
+            "a judgment's text holds no figure: cite it in a section",
+        ),
+    ]
+
+
+def _applied_review(
+    conn: sqlite3.Connection, policy: Policy, sid: int, symbol: str = "AAPL"
+) -> int:
+    """An applied belief override of 8% on ``sid`` and a review under it there."""
+    override_id = insert_override(
+        conn,
+        symbol,
+        "growth.belief",
+        0.063,
+        0.08,
+        "ratio",
+        "guidance raised",
+        [{"kind": "transcript", "ref": "Q3 call", "note": ""}],
+        "lasting",
+        None,
+        None,
+        sid,
+        AGENT,
+        NOW,
+        "applied",
+        "",
+    )
+    inputs = replace(mature_growth_inputs(), symbol=symbol)
+    deciles = universe_deciles()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    belief = Override(override_id, "growth.belief", 0.08, "agent", "claude-opus-5-5", NOW, "why")
+    review = review_company(inputs, deciles, policy, TODAY, [belief], mechanical)
+    return insert_review(conn, review, symbol, sid, None, clock=lambda: NOW)
+
+
+def test_a_review_cite_must_be_the_current_review(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    sid = snapshots["AAPL"]
+    older = _applied_review(conn, policy, sid)
+    current = _applied_review(conn, policy, sid)  # a newer review on the same snapshot
+    stored = review_row(conn, current)
+    assert stored is not None and stored.value is not None
+    value = f"${stored.value:,.2f}"
+    assert _check(conn, policy, sid, _cite(value, f"review:{current}/value")) == []
+    found = _one(_check(conn, policy, sid, _cite(value, f"review:{older}/value")), sid, value)
+    assert (found.what, found.detail) == (
+        WRONG_SNAPSHOT,
+        f"review:{older}/value is not the company's current review: cite review:{current}",
+    )
+    # a price refresh reprices the review onto the new snapshot: the cited one still counts
+    cited = snapshot_row(conn, sid)
+    assert cited is not None
+    moved = reprice(cited.result, 160.0, date(2026, 11, 2), policy)
+    repriced = insert_snapshot(conn, moved, cited.refresh_id, clock=lambda: NOW)
+    reprice_review = _applied_review(conn, policy, repriced)
+
+    def on_the_reprice(ref: str) -> list[Finding]:
+        sections = _report([*_clean(sid), _cite(value, ref)])
+        return check_sections(conn, "AAPL", repriced, sections, policy)
+
+    assert on_the_reprice(f"review:{current}/value") == []
+    # with every override dropped the company has no current review
+    for row in applied_overrides(conn, "AAPL"):
+        drop_override(conn, row.id, "withdrawn", NOW)
+    found = _one(on_the_reprice(f"review:{reprice_review}/value"), sid, value)
+    assert found.detail == (
+        f"review:{reprice_review}/value is not the company's current review: the company has none"
+    )

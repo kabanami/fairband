@@ -255,10 +255,11 @@ def test_kill_criteria_and_news_items_are_stored_with_the_report(client: TestCli
     )
     assert criterion["actor"] == "claude-opus-5-5"
     [item] = client.get("/api/companies/AAPL/news-items").json()["newsItems"]
-    assert (item["headline"], item["date"], item["killCriterionId"]) == (
+    assert (item["headline"], item["date"], item["killCriterionId"], item["reportId"]) == (
         "Guidance raised",
         "2026-10-28",
         None,
+        report["id"],
     )
     kinds = [e["kind"] for e in _ledger(client)]
     assert kinds[:2] == ["news-item", "kill-criterion"] and kinds[-1] == "report"
@@ -300,3 +301,23 @@ def test_complete_takes_a_published_report_of_the_item_s_company(client: TestCli
 def test_a_company_without_a_snapshot_has_no_report(client: TestClient) -> None:
     r = _submit(client, _body(1), "MSFT")
     assert (r.status_code, r.json()) == (404, {"detail": "no snapshot for MSFT"})
+
+
+def test_a_judgment_s_text_holds_no_figure(client: TestClient) -> None:
+    sid = _snapshot_id(client)
+    moat = {**JUDGMENTS[1], "bull": "Share rose 11.2% on patents."}
+    r = _submit(client, _body(sid, judgments=[JUDGMENTS[0], moat, *JUDGMENTS[2:]]))
+    assert (r.status_code, r.json()) == (
+        422,
+        {
+            "findings": [
+                {
+                    "where": "judgment moat, bull: 11.2%",
+                    "what": NO_REFERENCE,
+                    "detail": "a judgment's text holds no figure: cite it in a section",
+                }
+            ]
+        },
+    )
+    assert _ledger(client)[0]["summary"] == "rejected: 1 finding"
+    assert client.get("/api/companies/AAPL/reports").json() == {"reports": []}

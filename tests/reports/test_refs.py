@@ -70,8 +70,13 @@ def test_snapshot_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
         f"{s}/phase/growth_3y": (result.phase.growth_3y, "percent"),
         f"{s}/phase/years_used": (11.0, "count"),
     }
+    prices = {f"{s}/price", f"{s}/inputs/price"}  # a share price, written to cents
     for ref, (value, unit) in expected.items():
-        assert _resolve(conn, ref, policy) == Resolved(value, unit, None, sid), ref
+        resolved = Resolved(value, unit, None, sid, price=ref in prices)
+        assert _resolve(conn, ref, policy) == resolved, ref
+    assert _resolve(conn, f"{s}/inputs/dividends_ttm", policy) == Resolved(
+        -1_000 * M, "currency", None, sid, outflow=True
+    )
     for ref in (
         f"snapshot:{snapshots['AAL']}/value",  # another company's
         "snapshot:999/value",
@@ -199,6 +204,11 @@ def test_fact_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str
     assert _resolve(conn, "fact:AAPL/total_assets/2025", policy) == Resolved(
         1610 * M, "currency", "2025", None
     )
+    for line, outflow in (("capex", True), ("dividends", True), ("cfi", False), ("cff", False)):
+        found = _resolve(conn, f"fact:AAPL/{line}/2025", policy)
+        assert found is not None and found.outflow is outflow, line
+    capex_ttm = _resolve(conn, "fact:AAPL/capex/ttm", policy)
+    assert capex_ttm is not None and capex_ttm.outflow
     shares = _resolve(conn, "fact:AAPL/shares_diluted/2025", policy)
     assert shares == Resolved(100 * M, "count", "2025", None)
     # the trailing figures: the last four quarters, as statements_for reads them
@@ -226,7 +236,9 @@ def test_table_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[st
             for cell in row.cells:
                 ref = f"table:AAPL/{table.name}/{row.name}/{cell.period}"
                 found = resolver.resolve(ref)
-                assert found == Resolved(cell.value, cell.unit, cell.period, None), ref
+                outflow = row.name in ("capital_spending", "dividends", "buybacks")
+                expected = Resolved(cell.value, cell.unit, cell.period, None, outflow=outflow)
+                assert found == expected, ref
     growth = _resolve(conn, "table:AAPL/growth/revenue_growth/2025", policy)
     assert growth is not None and growth.value == pytest.approx(0.05)
     assert _resolve(conn, "table:AAPL/growth/revenue_growth/2019", policy) is None
@@ -246,7 +258,7 @@ def test_estimate_close_and_peer_refs(
         9.0, "count", "2026", None
     )
     assert _resolve(conn, "close:AAPL/2025-11-03", policy) == Resolved(
-        190.0, "per-share", "2025-11-03", None
+        190.0, "per-share", "2025-11-03", None, price=True
     )
     margin = _resolve(conn, "peer:AAPL/ACME/margin", policy)
     assert margin is not None and margin.unit == "percent"
@@ -335,7 +347,7 @@ def test_policy_refs(conn: sqlite3.Connection, policy: Policy) -> None:
     assert _resolve(conn, "policy:fair_band.1", policy) == Resolved(
         policy.fair_band[1], "multiple", None, None
     )
-    assert _resolve(conn, "policy:z_safe", policy) == Resolved(policy.z_safe, "count", None, None)
+    assert _resolve(conn, "policy:z_safe", policy) == Resolved(policy.z_safe, "score", None, None)
     for ref in ("policy:fair_band", "policy:no_such_value", "policy:runway_years.Huge"):
         assert _resolve(conn, ref, policy) is None, ref
 

@@ -95,6 +95,7 @@ CREATE TABLE news_items (
     source TEXT NOT NULL,
     text TEXT NOT NULL,
     kill_criterion_id INTEGER,
+    report_id INTEGER,            -- the report that recorded it, if one
     principal TEXT NOT NULL,
     actor TEXT,
     client TEXT,

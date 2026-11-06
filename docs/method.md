@@ -1229,32 +1229,38 @@ The reprice rule (spec 13.2): a report rests on the company's latest snapshot. A
 
 ### 16.3 The check
 
-Every part of every section is read, and each failure is a finding `{where, what, detail}`: `where` is the section and the part, counted from 1 in the submission, and the text at fault, "section 1, part 3: $12.345". The six failures, in the server's words:
+Every part of every section is read, and so is the text of every judgment, and each failure is a finding `{where, what, detail}`: `where` is the section and the part, counted from 1 in the submission, and the text at fault, "section 1, part 3: $12.345", or the judgment and its field, "judgment moat, bull: 11.2%". The six failures, in the server's words:
 
-- `a number with no reference`: a quantity in plain text.
+- `a number with no reference`: a quantity in plain text, or in a judgment's bull, bear or decision, which carries no cite.
 - `unresolved reference`: a cite whose ref names nothing, or names a figure the record does not hold.
 - `wrong unit`: a cite whose suffix does not fit the ref's unit, or whose number is not the ref's value at the report's rounding; the detail gives the value as the cite should read. A word cited against a number, or a word that is not the ref's, is also `wrong unit`.
 - `wrong period`: a cite whose period is not the ref's (`FY2025` reads `2025`); a cite naming no period passes.
-- `wrong snapshot`: a cite whose ref rests on a snapshot other than the company's latest or one the latest reprices; the detail names the latest's id.
+- `wrong snapshot`: a cite whose ref rests on a snapshot other than the company's latest or one the latest reprices; the detail names the latest's id. A `review:` cite must be the company's current review: the newest review on its snapshot, with the current review that one or its reprice; the detail names the current review's id.
 - `a derived figure the engine has not emitted`: a `derived:` cite with no stored derivation of the company, or one with no value; and a multiple (`2.4x`) in plain text, a ratio written out rather than derived.
 
 A cite gets one finding, the first of: wrong snapshot, not emitted, unresolved, wrong period, wrong unit. A plain part gets one for each quantity.
 
-The token rule. A quantity is a money amount (`$1,234.50`), a percentage (`11.2%`, `11.2 percent`), a multiple (`12.3x`, `12.3×`), a decimal, or an integer of two or more digits, a sign (`-` or the minus `−`) or parentheses around it included. These are not quantities: a year from 1990 to 2099; an ISO date, or a day of the month beside a month's name (`27 Oct`); a number joined to letters (`FY2025`, `Q3`, `COVID-19`, `5G`, `21st`); a filing form (`10-K`, `8-K`, `20-F`); a section's or an item's number (`section 13.3`, `Item 10`); anything in a URL or after a slash (`fairband-review/1`); and an integer of one digit. Small counts are written in words.
+The token rule. A quantity is a money amount, any number after `$` (`$1,234.50`, `$5`, `US$5`); a number followed by a scale or a unit word, whatever its digits (`$391bn`, `$126M`, `8 billion`, `11.2pp`, `50bps`, `2 years`; the words `k`, `m`, `mn`, `bn`, `b`, `tn`, `thousand`, `million`, `billion`, `trillion`, `pp`, `bp`, `bps`, `years`); a percentage (`11.2%`, `11.2 percent`); a multiple (`12.3x`, `12.3×`); a decimal; or an integer of two or more digits; a sign (`-` or the minus `−`) or parentheses around it included. These are not quantities: a year from 1990 to 2099; an ISO date, or a day of the month beside a month's name (`27 Oct`), unless a decimal, `%` or a scale follows it (`March 12%`, `June 30.5 million` are quantities); a number joined to letters (`FY2025`, `Q3`, `COVID-19`, `5G`, `21st`); a filing form (`10-K`, `8-K`, `20-F`); a section's or an item's number (`section 13.3`, `Item 10`); anything in a URL or after a slash (`fairband-review/1`); and an integer of one digit with no scale or unit word. Small counts are written in words.
 
-A cite's text is one number: an optional sign or parentheses (a negative), `$`, the digits with their thousands separators, and a suffix, `%` (or `percent`), `x` (or `×`), `years`, or none. The rounding is design.md 9.2's, by the ref's unit:
+A cite's text is one number: an optional sign or parentheses (a negative), `$`, the digits with their thousands separators, a scale word (`thousand`, `million`, `billion`, `trillion`, or `k`, `m`, `mn`, `bn`, `tn`), and a suffix, `%` (or `percent`), `x` (or `×`), `years`, or none. The rounding is design.md 9.2's, by the ref's unit:
 
 | Unit | Written to | Suffix |
 |---|---|---|
-| currency (a total) | whole dollars | `$` or none |
-| per-share | cents, or whole dollars as a value and its levels are written | `$` or none |
+| currency (a total) | whole dollars, or with a scale word at the cite's own precision | `$` or none |
+| a price (`snapshot:<id>/price`, `/inputs/price`, a `close:`) | cents | `$` or none |
+| per-share (a value a share, a level, an EPS) | cents, or whole dollars as a value and its levels are written | `$` or none |
 | percent | one decimal of the fraction × 100 | `%` |
 | multiple | two decimals | `x` or none |
 | years | one decimal | `years` or none |
 | score | two decimals | none |
-| count | a whole number | none |
+| count | a whole number, or with a scale word at the cite's own precision | none |
 
-The cite must be written at that rounding or coarser on its grid, so `$12.345` is never a price, and lie within half a step of the value: `22.7%` cites 0.22702, `23%` does not. A ref with no unit (an intermediate, a vendor field) takes any suffix and is compared at the cite's own precision. Signs count: a capital spending of −$126 m is cited `−$126,000,000` or `($126,000,000)`.
+The cite must be written at that rounding or coarser on its grid, so `$12.345` is never a price and `$150` is not one either, and lie within half a step of the value: `22.7%` cites 0.22702, `23%` does not. A ref with no unit (an intermediate, a vendor field) takes any suffix and is compared at the cite's own precision. Four rules more, so a report reads as design.md 9.1 and 9.2 ask:
+
+- A scale word. A total or a count may be cited in its scale, `$391 billion`, `$2.1bn`, `$126M`, `8 billion`, compared at the cite's own precision in that scale (the decimals it gives) and with two significant figures at least: `$2.1 billion` cites 2,123,000,000, `$2 billion` and `$0.4 billion` are `wrong unit`, the detail naming the rule. A whole-dollar total still passes.
+- Signed outflows. The lines the store signs as outflows, capital spending, dividends and buybacks (as `fact:` lines, the tables' rows of them and the snapshot's trailing inputs; not the net investing or financing flows), may be cited by their size: "capital spending was $126,000,000" cites −126,000,000. A cite with a sign (`−$126,000,000`, `($126,000,000)`) must match the signed value.
+- A ratio as a percentage. A `%` cite may cite a multiple that is a ratio of two figures in one unit, a `derived:` ratio or a table's ratio cell, compared at × 100: "stock compensation was 9.5% of net income" cites a ratio of 0.0952.
+- Prices to cents. A share price, `snapshot:<id>/price`, its `inputs/price` and a `close:`, is cited to cents; a value a share, a level or an EPS to cents or to whole dollars (design.md 9.2, "values to whole dollars").
 
 ### 16.4 Derivations
 

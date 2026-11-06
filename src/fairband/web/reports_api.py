@@ -39,14 +39,16 @@ judgments: [{judgment, bull, bear, decision, overrideId?}], killCriteria?: [{tex
 sentence, the required judgments by the route of the company's current review when it rests on
 that snapshot, else the snapshot's (its phase's for a refused row); a work item it names must be
 the company's (404 "no work item <id>", "... for <symbol>") and open (409 "work item <id> is
-<state>"). Then the number check (``check.check_sections``): with findings, the answer is 422
+<state>"). Then the number check (``check.check_sections`` over the sections, and
+``check.check_judgments`` over the judgments' text, which holds no figure): with findings, the
+answer is 422
 ``{findings: [{where, what, detail}]}`` and nothing is stored but a ``report`` ledger row that
 points at no record, "rejected: <n> findings", resting on the latest snapshot. Without, the report
 is published, 201 ``{report}``: stored as the company's next revision on the snapshot its cites
 rest on (the earliest they name, else the latest), with the review and the secondary valuation
 they cite, else the company's current review and newest secondary valuation when either rests on
 the latest snapshot or one it reprices; a valuation review reuses the company's newest full
-report, ``None`` without one. Its judgments, kill criteria and news items are stored with it (an
+report, ``None`` without one. Its judgments, kill criteria and news items are stored with it, under its id (an
 override a judgment names, or a kill criterion a news item names, must be the company's: 404; a
 blank text 400), and the work item named is completed. Each record is a ledger row (``report``,
 ``judgment``, ``kill-criterion``, ``news-item``, ``complete``) resting on the report's snapshot,
@@ -82,7 +84,12 @@ from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import Statements, country_for, statements_for
 from fairband.refresh.peers import peer_figures
-from fairband.reports.check import check_sections, cited_records, structure_refusal
+from fairband.reports.check import (
+    check_judgments,
+    check_sections,
+    cited_records,
+    structure_refusal,
+)
 from fairband.reports.refs import (
     ESTIMATE_UNITS,
     PEER_UNITS,
@@ -296,7 +303,9 @@ def add_report_routes(
             if refusal is not None:
                 raise HTTPException(400, refusal)
             item = _open_item(conn, body.work_item_id, symbol)
+            judgments = [j.model_dump() for j in body.judgments]
             findings = check_sections(conn, symbol, latest.id, sections, current, tax)
+            findings += check_judgments(judgments)
             if findings:
                 n = len(findings)
                 summary = f"rejected: {n} finding{'' if n == 1 else 's'}"
@@ -340,7 +349,6 @@ def add_report_routes(
             rows = _Rows(conn, writer, at, symbol, report.snapshot_id)
             published = f"{body.mode} revision {report.revision}: {body.stance}"
             rows.add("report", "reports", report_id, published, body.work_item_id)
-            judgments = [j.model_dump() for j in body.judgments]
             with _missing("override", symbol):
                 ids = insert_judgments(conn, report_id, symbol, judgments)
             for judgment_id, j in zip(ids, body.judgments, strict=True):
@@ -363,6 +371,7 @@ def add_report_routes(
                         writer,
                         at,
                         news.kill_criterion_id,
+                        report_id,
                     )
                 rows.add("news-item", "news_items", news_id, gist(news.headline))
             if item is not None:

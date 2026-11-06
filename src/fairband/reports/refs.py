@@ -30,10 +30,16 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
 - ``derived:<id>``: a derivation's value and unit (13.4);
 - ``response:<id>/<json pointer>``: a field of a stored vendor response (RFC 6901, ``/0/revenue``);
 - ``policy:<name>``: a value the Methodology page cites from the policy, by its name or by its
-  name and a moat class or an index (``runway_years.Wide``, ``fair_band.0``).
+  name and a moat class or an index (``runway_years.Wide``, ``fair_band.0``); the page's
+  ``count`` reads as a ``score`` (the Z″ edges have decimals), its ``fraction`` and ``points`` as
+  a percent.
 
 Each resolves to a ``Resolved``: the value (a number, a word, or ``None`` where the record holds no
-figure), its unit, its period and the snapshot it rests on. The units are the reads': ``currency``
+figure), its unit, its period and the snapshot it rests on, and two marks the check reads: a share
+price (``snapshot:<id>/price``, ``/inputs/price``, ``close:``), which is written to cents, and a
+line the store signs as an outflow (``capex``, ``dividends`` and ``buybacks`` as ``fact:`` lines
+and table rows, and the snapshot's ``capex_ttm``, ``dividends_ttm`` and ``buybacks_ttm``), which a
+cite may give by its size. The units are the reads': ``currency``
 (a total, in the statements' currency), ``per-share``, ``percent`` (a fraction), ``multiple``,
 ``count``, ``score``, ``years``; ``None`` for a word and wherever the record names no unit, an
 intermediate or a vendor field. An engine input's unit maps onto them: a currency code is
@@ -148,6 +154,11 @@ _PART_FIELDS = {
 _INPUT_UNITS = {"price": "per-share"}
 # A step of a path that is not there, told apart from a figure stored as null.
 _ABSENT = object()
+# The lines the store signs as outflows (``cfi`` and ``cff`` are net flows, not these): the
+# statement lines, the tables' rows of them and the snapshot's trailing inputs.
+_OUTFLOW_LINES = frozenset({"capex", "dividends", "buybacks"})
+_OUTFLOW_ROWS = frozenset({"capital_spending", "dividends", "buybacks"})
+_OUTFLOW_INPUTS = frozenset({"capex_ttm", "dividends_ttm", "buybacks_ttm"})
 # The engine's unit words for counted things.
 _COUNTED = frozenset({"shares", "fiscal years", "daily closes", "peers", "year"})
 # The Methodology page's units (``policy_rows``) as the resolver's.
@@ -157,7 +168,7 @@ _POLICY_UNITS = {
     "times": "multiple",
     "years": "years",
     "usd": "currency",
-    "count": "count",
+    "count": "score",  # the page shows a score as a count: Z'' edges have decimals
     "days": "count",
     "hours": "count",
     "seconds": "count",
@@ -175,12 +186,16 @@ _NO_DAY = date.min
 
 @dataclass(frozen=True)
 class Resolved:
-    """A ref's value, its unit, its period and the snapshot it rests on (module docstring)."""
+    """A ref's value, its unit, its period and the snapshot it rests on (module docstring);
+    ``price`` marks a share price, which is written to cents, and ``outflow`` a cash flow line the
+    store signs as an outflow, which a cite may give by its size."""
 
     value: float | str | None
     unit: str | None
     period: str | None
     snapshot_id: int | None
+    price: bool = False
+    outflow: bool = False
 
 
 def fact_ref(symbol: str, line: str, period: str) -> str:
@@ -340,7 +355,11 @@ class Resolver:
             found = _at_path(result.intermediates, name.split("/")), None
         elif kind == "phase" and name in _PHASE_FIELDS:
             found = getattr(result.phase, name), _PHASE_UNITS.get(name)
-        return None if found is None else _figure(*found, None, row.id)
+        if found is None:
+            return None
+        price = (kind == "price" and not name) or (kind == "inputs" and name == "price")
+        outflow = kind == "inputs" and name in _OUTFLOW_INPUTS
+        return _figure(*found, None, row.id, price=price, outflow=outflow)
 
     def _review(self, path: str) -> Resolved | None:
         head, _, rest = path.partition("/")
@@ -395,14 +414,15 @@ class Resolver:
             trailing = self._statements().trailing
             if trailing is None or line not in _TRAILING_FIGURES:
                 return None
-            return _figure(getattr(trailing, line), _line_unit(line), period, None)
+            value = getattr(trailing, line)
+            return _figure(value, _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
         from fairband.reports.tables import LINES, year_lines  # tables builds its refs here
 
         lines = self._once("lines", lambda: year_lines(self.conn, self.symbol))
         year = lines.get(int(period)) if period.isdigit() else None
         if year is None or line not in LINES:
             return None
-        return _figure(year[line], _line_unit(line), period, None)
+        return _figure(year[line], _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
 
     def _table(self, path: str) -> Resolved | None:
         pieces = path.split("/")
@@ -418,7 +438,8 @@ class Resolver:
             for r in found.rows if found.name == table else ():
                 for cell in r.cells if r.name == row else ():
                     if cell.period == period:
-                        return _figure(cell.value, cell.unit, cell.period, None)
+                        outflow = row in _OUTFLOW_ROWS
+                        return _figure(cell.value, cell.unit, cell.period, outflow=outflow)
         return None
 
     def _estimate(self, path: str) -> Resolved | None:
@@ -440,7 +461,7 @@ class Resolver:
             return None
         day = pieces[1]
         close = next((c for d, c in self._inputs().closes if d.isoformat() == day), None)
-        return None if close is None else _figure(close, "per-share", day, None)
+        return None if close is None else _figure(close, "per-share", day, price=True)
 
     def _peer(self, path: str) -> Resolved | None:
         pieces = path.split("/")
@@ -520,16 +541,22 @@ def _split(ref: str) -> tuple[str, str]:
 
 
 def _figure(
-    value: Any, unit: str | None, period: str | None = None, snapshot_id: int | None = None
+    value: Any,
+    unit: str | None,
+    period: str | None = None,
+    snapshot_id: int | None = None,
+    *,
+    price: bool = False,
+    outflow: bool = False,
 ) -> Resolved | None:
     """The resolved figure: a finite number, a word or ``None``; ``None`` for anything else, a
     table, a list or a step that is not there, which names no figure."""
-    if value is None or isinstance(value, str):
-        return Resolved(value, unit, period, snapshot_id)
     if isinstance(value, int | float) and not isinstance(value, bool):
         number = float(value)
-        return Resolved(number if math.isfinite(number) else None, unit, period, snapshot_id)
-    return None
+        value = number if math.isfinite(number) else None
+    elif value is not None and not isinstance(value, str):
+        return None
+    return Resolved(value, unit, period, snapshot_id, price, outflow)
 
 
 def _input_value(value: float | None, unit: str, note: str | None) -> float | str | None:

@@ -61,6 +61,7 @@ _AGENT_COLUMNS = {
     ],
     "news_items": [
         *("id", "symbol", "date", "headline", "source", "text", "kill_criterion_id"),
+        "report_id",
         *("principal", "actor", "client", "at"),
     ],
     "overrides": [
