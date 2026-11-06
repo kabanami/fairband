@@ -18,12 +18,14 @@ from fastapi.testclient import TestClient
 from support.engine_companies import (
     high_growth_inputs,
     mature_growth_inputs,
+    start_up_inputs,
     universe_deciles,
     young_growth_inputs,
 )
-from support.web import CREATED, HEADER, NOW
+from support.web import CREATED, HEADER, NOW, TODAY
 
 from fairband.engine import METHOD_VERSION
+from fairband.engine.anchor import sales_class
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import Override, current_reading
 from fairband.engine.route import CompanyInputs, value_company
@@ -33,6 +35,7 @@ from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
 from fairband.store.db import connect
 from fairband.store.refreshes import create_refresh, latest_deciles, save_deciles
+from fairband.store.snapshots import insert_snapshot
 from fairband.web import reviews_api
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -336,6 +339,40 @@ def test_a_period_tied_override_keeps_the_value_it_corrected(client: TestClient)
         r = client.post("/api/companies/HGCO/overrides", json=unnamed, headers=AGENT)
         assert (r.status_code, r.json()) == (400, {"detail": NO_PERIOD})
     assert len(_overrides(client, "HGCO")) == 2  # neither stored
+
+
+def test_a_start_up_put_in_young_growth_meets_the_evidence_rule(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    stored_inputs: dict[str, CompanyInputs],
+) -> None:
+    """A Start-up row carries no belief and no path, so the cap is its trailing revenue's sales
+    class, as the revenue-growth route finds it: a held rate above that class's 90th percentile
+    needs a filing or a transcript once the row is put in Young Growth."""
+    start_up = start_up_inputs()
+    assert start_up.trailing is not None
+    inputs = replace(start_up, trailing=replace(start_up.trailing, revenue=50e6))
+    result = value_company(inputs, universe_deciles(), policy, TODAY)
+    assert (result.phase.phase, result.route, result.value) == ("Start-up", "start-up", None)
+    assert "belief" not in result.intermediates and "path" not in result.intermediates
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, result, 1, clock=lambda: CREATED)
+    stored_inputs["SUCO"] = inputs
+    cap = sales_class(50.0, policy).sales_p90_5y
+    young = BELIEF_8 | {"tag": "phase", "new": "Young Growth", "reason": "it sells now"}
+    assert _post(client, young, "SUCO")["override"]["state"] == "applied"
+    hold = BELIEF_8 | {"tag": "path.hold", "new": cap + 0.5, "reason": "the order book"}
+    blog = {"kind": "url", "ref": "https://example.com/orders", "note": ""}
+    r = client.post(
+        "/api/companies/SUCO/overrides", json=hold | {"evidence": [blog]}, headers=AGENT
+    )
+    assert r.status_code == 400
+    assert (r.json()["override"]["state"], r.json()["detail"]) == (
+        "refused-evidence",
+        "a held rate above the base rate's 90th percentile needs a filing or a transcript",
+    )
+    assert _post(client, hold, "SUCO")["override"]["state"] == "applied"  # a transcript
 
 
 def _moved(snapshot_id: int) -> dict[str, str]:

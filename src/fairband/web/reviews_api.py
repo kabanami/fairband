@@ -9,7 +9,9 @@ changed: run a revalue" and the others, answered 409), so the bridge's mechanica
 row's own figure. ``check_override`` then judges it on the route the row takes: its phase's, or
 the phase an applied ``phase`` override sets (the new one included); an unclassified row with no
 phase override reads no input but its phase. The evidence rule's cap is the ``sales_p90_5y`` of
-the snapshot's sales class (``belief.sales_class`` or ``path.sales_class``), none without one.
+the sales class of the snapshot's trailing revenue (its ``revenue_ttm`` input), the class the
+routes find, so it holds on a row a phase override moves onto a route that reads the input (a
+Start-up put in Young Growth); none when the snapshot cites no trailing revenue.
 The override is stored either way, with the engine's reading of the input on the snapshot as its
 old value and, for a period-tied one, as the value it corrected. A refused one answers 400 with
 the rule's sentence and ``{override}``. An applied one drops the applied override on its tag
@@ -81,6 +83,7 @@ from pydantic import BaseModel, ConfigDict, FiniteFloat
 from pydantic.alias_generators import to_camel
 
 from fairband.engine import METHOD_VERSION
+from fairband.engine.anchor import sales_class
 from fairband.engine.overrides import (
     TAGS,
     Lifetime,
@@ -525,14 +528,12 @@ def _reproduces(fresh: ValuationResult, snapshot: ValuationResult) -> bool:
 
 
 def _cap(result: ValuationResult, policy: Policy) -> float | None:
-    """The 90th-percentile five-year sales growth of the result's sales class; ``None`` without
-    one."""
-    for key in ("belief", "path"):
-        found = result.intermediates.get(key)
-        if isinstance(found, dict) and "sales_class" in found:
-            label = found["sales_class"]
-            return next((c.sales_p90_5y for c in policy.base_rates if c.label == label), None)
-    return None
+    """The 90th-percentile five-year sales growth of the sales class of the result's trailing
+    revenue (its ``revenue_ttm`` input), the class every route finds (``anchor.sales_class``);
+    ``None`` when the result cites no trailing revenue."""
+    cited = next((x.value for x in result.inputs if x.name == "revenue_ttm"), None)
+    revenue = _number(cited, None)
+    return None if revenue is None else sales_class(revenue[0] / 1e6, policy).sales_p90_5y
 
 
 def _record(
