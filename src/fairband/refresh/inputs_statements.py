@@ -36,13 +36,17 @@ way.
 The diluted share count is the newest quarter's weighted average, else the newest fiscal year's.
 
 ``balance_lines`` reads the newest annual balance sheet's lines by FMP name, and
-``stored_payload`` a payload the store keeps whole (the profile's, the peers').
+``stored_payload`` a payload the store keeps whole (the profile's, the peers'). ``balance_sums``
+is the debt and the cash from those lines, short-term plus long-term debt and cash and equivalents
+plus short-term investments, a line not presented counting as nil and a figure with every line
+missing ``None``: assembly's reading, which ``newest_debt_and_cash`` gives the secondary
+valuation.
 """
 
 import json
 import sqlite3
 from calendar import monthrange
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -80,6 +84,11 @@ _LEASES_ON_BALANCE_SHEET = date(2019, 12, 15)
 # A 52/53-week fiscal year ends up to six days either side of a fixed month and day.
 _YEAR_END_DRIFT = timedelta(days=7)
 _DAYS_A_YEAR = 365.25
+# The newest annual balance sheet's lines each figure sums, by input name.
+_BALANCE_SUMS = {
+    "debt": ("shortTermDebt", "longTermDebt"),
+    "cash": ("cashAndCashEquivalents", "shortTermInvestments"),
+}
 
 
 @dataclass(frozen=True)
@@ -283,6 +292,34 @@ def balance_lines(conn: sqlite3.Connection, symbol: str) -> dict[str, float | No
     empty without a balance sheet."""
     sheets = _periods(conn, symbol, "balance-annual")
     return {} if not sheets else {name: sheets[-1].value(name) for name in sheets[-1].facts}
+
+
+def balance_sums(
+    lines: Mapping[str, float | None],
+) -> dict[str, tuple[float | None, str | None]]:
+    """The debt and the cash of a balance sheet's ``lines``, by input name (module docstring),
+    each with the note naming its missing lines, ``None`` with none missing."""
+    return {name: _sum_lines(lines, names) for name, names in _BALANCE_SUMS.items()}
+
+
+def newest_debt_and_cash(
+    conn: sqlite3.Connection, symbol: str
+) -> tuple[float | None, float | None]:
+    """The newest annual balance sheet's debt and cash as assembly reads them; ``None`` for a
+    figure with every line missing, and both without a balance sheet."""
+    sums = balance_sums(balance_lines(conn, symbol))
+    return sums["debt"][0], sums["cash"][0]
+
+
+def _sum_lines(
+    lines: Mapping[str, float | None], names: Sequence[str]
+) -> tuple[float | None, str | None]:
+    """The lines' sum, a missing line counting as nil, ``None`` with every line missing; and the
+    note naming the missing lines, ``None`` with none missing."""
+    missing = [name for name in names if lines.get(name) is None]
+    held = [value for name in names if (value := lines.get(name)) is not None]
+    note = f"{' and '.join(missing)} not presented" if missing else None
+    return (sum(held) if held else None), note
 
 
 def stored_payload(conn: sqlite3.Connection, endpoint: str, symbol: str) -> Any:

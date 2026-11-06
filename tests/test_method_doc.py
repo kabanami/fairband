@@ -23,3 +23,10 @@ def test_section_14_names_every_override_tag() -> None:
         assert f"`{tag}`" in section, tag
     assert "`override_ranges`" in section
     assert "`override_primary_evidence_above_p90`" in section
+
+
+def test_section_15_names_the_three_bounds() -> None:
+    section = _section(15)
+    for name in ("secondary_parts_max", "secondary_years_min", "secondary_years_max"):
+        assert f"`{name}`" in section, name
+    assert "fairband-secondary/1" in section

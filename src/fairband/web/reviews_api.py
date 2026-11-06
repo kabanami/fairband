@@ -1,4 +1,5 @@
-"""The override and review routes (spec 2026-11-06 Tier 2, 10.1 to 10.6 and 16; ``method.md`` 14).
+"""The override, review, secondary valuation and derivation routes (spec 2026-11-06 Tier 2, 10.1
+to 10.6, 11, 13.4 and 16; ``method.md`` 14 and 15).
 
 ``POST /api/companies/{symbol}/overrides`` takes ``{tag, new, reason, evidence: [{kind, ref,
 note}], lifetime, period?}`` from an agent; a blank reason, or a period-tied override that names
@@ -28,13 +29,42 @@ The reads: ``GET /api/companies/{symbol}/overrides`` newest first;
 ``/api/companies/{symbol}/reviews/latest``, the current review with its result, 404 without one;
 ``GET /api/review-log`` newest first, the company's with ``symbol``. Keys are camelCase, as the
 agent routes send them.
+
+``POST /api/companies/{symbol}/secondary`` takes ``{parts: [{name, fcff, terminalGrowth, note?}],
+reason, evidence: [{kind, ref, note, figure?}], debt?, cash?}`` and answers 201 with the stored
+secondary valuation (``method.md`` 15). A blank reason or no evidence is a 400; so is a debt or a
+cash passed without its own evidence item, one whose ``figure`` names it. Then, on the company's
+latest snapshot: ``require_current``'s 409s; a foreign filer, the snapshot refused as one or its
+universe row an ADR or in a currency other than USD (a row naming none leaves it to the
+snapshot), 400 with section 7's sentence; no positive diluted share count on the snapshot (its
+``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share count". The
+debt and the cash are the agent's when passed, else an applied ``balance.*`` override's (both
+sourced ``agent``), else the newest annual balance sheet's as assembly reads them
+(``statements``), nil without a line. The levels take the current review's moat, else the
+snapshot's, else None; the designation the snapshot's price. A rule ``secondary_value`` refuses
+is a 400 with its sentence. Anyone may make one, a tool's output rather than an override; the
+write is a ``secondary`` ledger row resting on the snapshot. ``GET`` on the same path lists the
+company's, newest first.
+
+``POST /api/companies/{symbol}/derivations`` takes ``{derivations: [{operation, a, b, years?}]}``
+and answers 201 with ``{derivations: [{id, value, unit}]}``, each stored with a ``derivation``
+ledger row resting on the latest snapshot (none without one). The operations: ``ratio`` a ÷ b,
+``difference`` a − b, ``sum`` a + b, ``growth`` a ÷ b − 1 and ``cagr`` (a ÷ b)^(1/years) − 1,
+whose ``years`` (one or more) is required. The unit: ``multiple`` for a ratio of two values in
+one unit, else none; ``percent`` for growth and cagr; a difference or a sum keeps its operands'
+unit when they share one, else none. A division by zero, a cagr over a negative ratio or a result
+that is not finite has no value and no unit. The refs resolve through ``_resolve``, a stub that
+reads ``snapshot:`` and ``fact:`` refs until the report references (spec 13.2) replace it; a ref
+it cannot read is a 400, "unresolved reference: <ref>", and stores none of the call's
+derivations. ``GET /api/derivations/{id}`` reads one back, 404 without it.
 """
 
 import json
+import math
 import sqlite3
 from collections.abc import Callable, Sequence
 from contextlib import closing
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, cast, get_args
 
 from fastapi import FastAPI, HTTPException
@@ -51,13 +81,17 @@ from fairband.engine.overrides import (
     current_reading,
     route_of,
 )
+from fairband.engine.route import FOREIGN_FILER
+from fairband.engine.secondary import Part, secondary_value
 from fairband.engine.types import Phase, ValuationResult, result_to_json
-from fairband.policy import Policy
+from fairband.policy import Moat, Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import build_inputs
+from fairband.refresh.inputs_statements import country_for, newest_debt_and_cash, statements_for
 from fairband.refresh.reviews import write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
+from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.ledger import Writer, record
 from fairband.store.overrides import (
@@ -71,13 +105,45 @@ from fairband.store.overrides import (
 )
 from fairband.store.refreshes import latest_deciles
 from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews_for
-from fairband.store.snapshots import SnapshotRow, latest_snapshot
+from fairband.store.secondary import (
+    Operation,
+    SecondaryRow,
+    derivation_row,
+    insert_derivation,
+    insert_secondary,
+    latest_secondary,
+    secondaries_for,
+)
+from fairband.store.snapshots import SnapshotRow, latest_snapshot, snapshot_row
 from fairband.web.agents_api import WriterOf, gist, record_json
 from fairband.web.settings_api import effective
 
 AGENTS_WRITE = "an override is an agent's write"
 EvidenceKind = Literal["filing", "transcript", "url", "vendor", "base-rate", "finding"]
 _PHASES: tuple[str, ...] = get_args(Phase)
+_MOATS: tuple[str, ...] = get_args(Moat)
+_LEVELS = frozenset({"buy", "fair_low", "fair_high", "trim"})
+# The statement lines a ``fact:`` ref reads, by the engine's names: a fiscal year's
+# (``FiscalYear``) and the trailing figures' (``TrailingFigures``).
+_YEAR_LINES = frozenset({"revenue", "operating_income", "cfo", "cfi", "cff", "capex"})
+_TRAILING_LINES = frozenset(
+    {
+        "revenue",
+        "operating_income",
+        "net_income",
+        "eps_diluted",
+        "sbc",
+        "cfo",
+        "capex",
+        "dividends",
+        "buybacks",
+        "equity_issued",
+        "interest_expense",
+        "depreciation",
+    }
+)
+
+type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
 
 
 class _Body(BaseModel):
@@ -103,6 +169,38 @@ class OverridePost(_Body):
 
 class OverrideDrop(_Body):
     reason: str
+
+
+class SecondaryEvidence(Evidence):
+    """An evidence item; ``figure`` marks the one that backs a debt or a cash the agent passes."""
+
+    figure: Literal["debt", "cash"] | None = None
+
+
+class SecondaryPart(_Body):
+    name: str
+    fcff: list[FiniteFloat]
+    terminal_growth: FiniteFloat
+    note: str | None = None
+
+
+class SecondaryPost(_Body):
+    parts: list[SecondaryPart]
+    reason: str
+    evidence: list[SecondaryEvidence]
+    debt: FiniteFloat | None = None
+    cash: FiniteFloat | None = None
+
+
+class DerivationPost(_Body):
+    operation: Operation
+    a: str
+    b: str
+    years: int | None = None
+
+
+class DerivationsPost(_Body):
+    derivations: list[DerivationPost]
 
 
 def require_current(effective: Policy, snapshot: SnapshotRow) -> None:
@@ -131,6 +229,13 @@ def review_json(review: ReviewRow, *, with_result: bool = True) -> dict[str, Any
 
 def bridge_json(review: ReviewRow) -> list[dict[str, Any]]:
     return [{to_camel(key): value for key, value in line.items()} for line in review.bridge]
+
+
+def secondary_json(secondary: SecondaryRow) -> dict[str, Any]:
+    """A secondary valuation as the API sends it, its parts' keys camelCase."""
+    plain = record_json(secondary)
+    plain["parts"] = [{to_camel(key): value for key, value in p.items()} for p in secondary.parts]
+    return plain
 
 
 def add_review_routes(
@@ -281,6 +386,118 @@ def add_review_routes(
             rows = review_log(conn, company)
         return {"reviewLog": [record_json(r) for r in rows]}
 
+    @app.post("/api/companies/{symbol}/secondary", status_code=201)
+    def post_secondary(symbol: str, body: SecondaryPost, writer: WriterOf) -> dict[str, Any]:
+        """Value the company from the agent's path on its latest snapshot and store it."""
+        if not body.reason.strip():
+            raise HTTPException(400, "a secondary valuation needs a reason")
+        if not body.evidence:
+            raise HTTPException(400, "a secondary valuation needs evidence")
+        for name, passed in (("debt", body.debt), ("cash", body.cash)):
+            if passed is not None and not any(e.figure == name for e in body.evidence):
+                raise HTTPException(400, f"an explicit {name} needs its own evidence item")
+        parts = [Part(p.name, tuple(p.fcff), p.terminal_growth, p.note) for p in body.parts]
+        at = clock()
+        with closing(conn_factory()) as conn, transaction(conn, immediate=True):
+            symbol = exchange_symbol(symbol)
+            snapshot = _snapshot(conn, symbol)
+            current = effective(conn, policy)
+            require_current(current, snapshot)
+            if _foreign(conn, snapshot):
+                raise HTTPException(400, FOREIGN_FILER)
+            shares = _shares(snapshot.result)
+            if shares is None:
+                raise HTTPException(400, "no diluted share count")
+            (debt, debt_source), (cash, cash_source) = _balance(conn, symbol, body.debt, body.cash)
+            moat = _moat(conn, snapshot)
+            try:
+                valuation = secondary_value(
+                    parts, debt, cash, shares, snapshot.price, moat, current
+                )
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from None
+            secondary_id = insert_secondary(
+                conn,
+                symbol,
+                snapshot.id,
+                parts,
+                valuation,
+                body.reason,
+                [e.model_dump() for e in body.evidence],
+                debt_source,
+                cash_source,
+                current.version,
+                current.settings_hash,
+                snapshot.deciles_refresh_id,
+                writer,
+                at,
+            )
+            count = f"{len(parts)} part{'' if len(parts) == 1 else 's'}"
+            value = _dollars(valuation.value_per_share)
+            summary = f"{value} a share from {count}: {gist(body.reason)}"
+            record(
+                conn,
+                writer,
+                at,
+                "secondary",
+                symbol,
+                "secondary_valuations",
+                secondary_id,
+                snapshot_id=snapshot.id,
+                summary=summary,
+            )
+            stored = latest_secondary(conn, symbol)
+            assert stored is not None and stored.id == secondary_id  # this transaction's
+            return secondary_json(stored)
+
+    @app.get("/api/companies/{symbol}/secondary")
+    def secondaries(symbol: str) -> dict[str, Any]:
+        with closing(conn_factory()) as conn:
+            found = secondaries_for(conn, exchange_symbol(symbol))
+        return {"secondaryValuations": [secondary_json(s) for s in found]}
+
+    @app.post("/api/companies/{symbol}/derivations", status_code=201)
+    def post_derivations(symbol: str, body: DerivationsPost, writer: WriterOf) -> dict[str, Any]:
+        """Compute and store each derivation; an unresolved reference stores none of them."""
+        if not body.derivations:
+            raise HTTPException(400, "a derive call needs a derivation")
+        if any(d.operation == "cagr" and (d.years or 0) < 1 for d in body.derivations):
+            raise HTTPException(400, "a cagr needs its years, one or more")
+        at = clock()
+        with closing(conn_factory()) as conn, transaction(conn, immediate=True):
+            symbol = exchange_symbol(symbol)
+            latest = latest_snapshot(conn, symbol)
+            answers = []
+            for d in body.derivations:
+                a = _operand(conn, symbol, d.a, tax, at.date())
+                b = _operand(conn, symbol, d.b, tax, at.date())
+                years = d.years if d.operation == "cagr" else None
+                value, unit = _derived(d.operation, a, b, years)
+                derivation_id = insert_derivation(
+                    conn, symbol, d.operation, d.a, d.b, years, value, unit, writer, at
+                )
+                record(
+                    conn,
+                    writer,
+                    at,
+                    "derivation",
+                    symbol,
+                    "derivations",
+                    derivation_id,
+                    snapshot_id=None if latest is None else latest.id,
+                    summary=f"{d.operation} of {d.a} and {d.b}",
+                )
+                answers.append({"id": derivation_id, "value": value, "unit": unit})
+            return {"derivations": answers}
+
+    @app.get("/api/derivations/{derivation_id}")
+    def derivation(derivation_id: int) -> dict[str, Any]:
+        with closing(conn_factory()) as conn:
+            found = derivation_row(conn, derivation_id)
+        if found is None:
+            raise HTTPException(404, f"no derivation {derivation_id}")
+        return record_json(found)
+
 
 def _agents_only(writer: Writer) -> None:
     if writer.principal != "agent":
@@ -344,3 +561,176 @@ def _record(
         snapshot_id=snapshot.id,
         summary=summary,
     )
+
+
+def _foreign(conn: sqlite3.Connection, snapshot: SnapshotRow) -> bool:
+    """A foreign filer: the snapshot refused as one, or the universe row an ADR or in a currency
+    other than USD; a row naming no currency leaves it to the snapshot."""
+    if snapshot.refusal == FOREIGN_FILER:
+        return True
+    company = latest_company(conn, snapshot.symbol)
+    return company is not None and (company.is_adr or company.currency not in (None, "USD"))
+
+
+def _shares(result: ValuationResult) -> float | None:
+    """The snapshot's diluted share count: its ``shares_diluted`` input, else its intermediates'
+    ``shares``; ``None`` without a positive one."""
+    cited = next((x.value for x in result.inputs if x.name == "shares_diluted"), None)
+    for found in (cited, result.intermediates.get("shares")):
+        figure = _number(found, None)
+        if figure is not None and figure[0] > 0:
+            return figure[0]
+    return None
+
+
+def _balance(
+    conn: sqlite3.Connection, symbol: str, debt: float | None, cash: float | None
+) -> tuple[tuple[float, str], tuple[float, str]]:
+    """The debt and the cash with their sources: the agent's figure when passed, else an applied
+    ``balance.*`` override's (both ``agent``), else the newest balance sheet's (``statements``),
+    nil without a line."""
+    corrected = {o.tag: o.new for o in applied_overrides(conn, symbol)}
+    lines = newest_debt_and_cash(conn, symbol)
+    figures = []
+    for name, passed, line in zip(("debt", "cash"), (debt, cash), lines, strict=True):
+        override = _number(corrected.get(f"balance.{name}"), None)
+        if passed is not None:
+            figures.append((passed, "agent"))
+        elif override is not None:
+            figures.append((override[0], "agent"))
+        else:
+            figures.append((0.0 if line is None else line, "statements"))
+    return figures[0], figures[1]
+
+
+def _moat(conn: sqlite3.Connection, snapshot: SnapshotRow) -> Moat:
+    """The moat class the levels take: the current review's, else the snapshot's, else None."""
+    review = latest_review(conn, snapshot.symbol)
+    for result in ([] if review is None else [review.result]) + [snapshot.result]:
+        found = current_reading(result, "moat.class")
+        if found in _MOATS:
+            return cast(Moat, found)
+    return "None"
+
+
+def _dollars(x: float) -> str:
+    return f"{'−' if x < 0 else ''}${abs(x):,.2f}"
+
+
+def _operand(
+    conn: sqlite3.Connection, symbol: str, ref: str, tax: TaxTable, today: date
+) -> _Figure:
+    found = _resolve(conn, symbol, ref, tax, today)
+    if found is None:
+        raise HTTPException(400, f"unresolved reference: {ref}")
+    return found
+
+
+def _resolve(
+    conn: sqlite3.Connection, symbol: str, ref: str, tax: TaxTable, today: date
+) -> _Figure | None:
+    """The number and unit ``ref`` names, ``None`` where it names none: a stub that reads only
+    ``snapshot:`` and ``fact:`` refs until the report references (spec 13.2) replace it."""
+    form, _, path = ref.partition(":")
+    if form == "snapshot":
+        return _snapshot_figure(conn, symbol, path)
+    if form == "fact":
+        return _fact_figure(conn, path, tax, today)
+    return None
+
+
+def _snapshot_figure(conn: sqlite3.Connection, symbol: str, path: str) -> _Figure | None:
+    """``<id>/value``, ``/price``, ``/price_to_value``, ``/levels/<name>``, ``/inputs/<name>`` or
+    ``/intermediates/<path>`` of one of the company's snapshots; an intermediate has no unit."""
+    head, _, rest = path.partition("/")
+    found = snapshot_row(conn, int(head)) if head.isdigit() else None
+    if found is None or found.symbol != symbol:
+        return None
+    result = found.result
+    kind, _, name = rest.partition("/")
+    match kind:
+        case "value" | "price" if not name:
+            return _number(getattr(result, kind), "USD")
+        case "price_to_value" if not name:
+            return _number(result.price_to_value, "multiple")
+        case "levels" if name in _LEVELS and result.levels is not None:
+            return _number(getattr(result.levels, name), "USD")
+        case "inputs":
+            cited = next((x for x in result.inputs if x.name == name), None)
+            return None if cited is None else _number(cited.value, cited.unit)
+        case "intermediates":
+            return _number(_at_path(result.intermediates, name.split("/")), None)
+    return None
+
+
+def _fact_figure(conn: sqlite3.Connection, path: str, tax: TaxTable, today: date) -> _Figure | None:
+    """``<symbol>/<line>/<fiscal year or ttm>``: a statement line as the engine reads it, in the
+    statements' currency (a share for EPS)."""
+    pieces = path.split("/")
+    if len(pieces) != 3:
+        return None
+    text, line, period = pieces
+    try:
+        symbol = exchange_symbol(text)
+    except ValueError:
+        return None
+    country, _ = country_for(conn, symbol, latest_company(conn, symbol))
+    stated = statements_for(conn, symbol, country, tax, today)
+    row: Any
+    if period == "ttm" and line in _TRAILING_LINES:
+        row, currency = stated.trailing, stated.currency
+    elif line in _YEAR_LINES:
+        row = next((fy for fy in stated.series if str(fy.year) == period), None)
+        currency = None if row is None else row.currency
+    else:
+        return None
+    if row is None:
+        return None
+    if currency is not None and line == "eps_diluted":
+        currency = f"{currency} a share"
+    return _number(getattr(row, line), currency)
+
+
+def _number(x: Any, unit: str | None) -> _Figure | None:
+    """``x`` with ``unit`` when ``x`` is a finite number, else ``None``."""
+    if isinstance(x, int | float) and not isinstance(x, bool) and math.isfinite(x):
+        return float(x), unit
+    return None
+
+
+def _at_path(x: Any, keys: Sequence[str]) -> Any:
+    """The value at ``keys`` through dicts and lists; ``None`` where a step is absent."""
+    for key in keys:
+        if isinstance(x, dict):
+            x = x.get(key)
+        elif isinstance(x, list | tuple) and key.isdigit() and int(key) < len(x):
+            x = x[int(key)]
+        else:
+            return None
+    return x
+
+
+def _derived(
+    operation: Operation, a: _Figure, b: _Figure, years: int | None
+) -> tuple[float | None, str | None]:
+    """The operation's value and unit (module docstring); ``(None, None)`` where it is undefined."""
+    (x, x_unit), (y, y_unit) = a, b
+    shared = x_unit if x_unit == y_unit else None
+    value: float | None
+    if operation == "difference":
+        value, unit = x - y, shared
+    elif operation == "sum":
+        value, unit = x + y, shared
+    elif y == 0:
+        value, unit = None, None
+    elif operation == "ratio":
+        value, unit = x / y, None if shared is None else "multiple"
+    elif operation == "growth":
+        value, unit = x / y - 1, "percent"
+    elif x / y < 0 or years is None:  # cagr: a negative ratio has no real root
+        value, unit = None, None
+    else:
+        value, unit = (x / y) ** (1 / years) - 1, "percent"
+    if value is None or not math.isfinite(value):
+        return None, None
+    return value, unit

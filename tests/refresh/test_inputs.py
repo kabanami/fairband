@@ -38,6 +38,7 @@ from fairband.policy import Policy, load_policy
 from fairband.policy.tax import LATEST_YEAR_METHOD, TaxTable, load_tax_table
 from fairband.refresh.fetch import fetch_company
 from fairband.refresh.inputs import build_inputs, series_for
+from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.peers import peer_figures
 
 TODAY = date(2026, 11, 1)
@@ -582,7 +583,7 @@ def test_inputs_carry_peers_debt_cash_and_the_revenue_analysts(
 
 def test_debt_and_cash_read_the_newest_balance_sheet(store: Store) -> None:
     """Each sum counts a missing line as nil; with both lines missing it is unknown. The note
-    names the missing lines."""
+    names the missing lines. The secondary valuation reads the two figures the same way."""
     sheets = balance_annual(YEARS)
     sheets[-1] = {
         **sheets[-1],
@@ -590,7 +591,10 @@ def test_debt_and_cash_read_the_newest_balance_sheet(store: Store) -> None:
         "cashAndCashEquivalents": None,
         "shortTermInvestments": None,
     }
-    inputs = build(store(**{**bodies(), "balance-annual": sheets}))
+    conn = store(**{**bodies(), "balance-annual": sheets})
+    inputs = build(conn)
     assert (inputs.debt, inputs.cash) == (20 * M, None)  # the older years' lines are not read
+    assert newest_debt_and_cash(conn, "ACME") == (20 * M, None)
+    assert newest_debt_and_cash(conn, "BOLT") == (None, None)  # no balance sheet on file
     assert inputs.notes["debt"] == "longTermDebt not presented"
     assert inputs.notes["cash"] == "cashAndCashEquivalents and shortTermInvestments not presented"

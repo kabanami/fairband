@@ -41,7 +41,7 @@ dataset name is a programming error and raises ``ValueError``.
 
 import json
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from datetime import date
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate
@@ -56,6 +56,7 @@ from fairband.refresh.inputs_statements import (
     FiscalCalendar,
     Statements,
     balance_lines,
+    balance_sums,
     country_for,
     series_for,
     statements_for,
@@ -90,12 +91,6 @@ _UNKNOWN_CURRENCY = Flag(
     "Neither the statements nor the universe row give the reporting currency, so the company is "
     "treated as a foreign filer.",
 )
-
-# The newest annual balance sheet's lines each figure sums, by input name.
-_BALANCE_SUMS = {
-    "debt": ("shortTermDebt", "longTermDebt"),
-    "cash": ("cashAndCashEquivalents", "shortTermInvestments"),
-}
 
 type _Cited[T] = tuple[T, Provenance | None]
 type _Closes = tuple[tuple[date, float], ...]
@@ -140,8 +135,7 @@ def build_inputs(
     moat = cite("moat_score", _value(_field(read("gf-score"), "moat_score"), _SUMMARY))
     eps_ttm = cite("gf_eps_ttm", _value(_field(ratios, "eps_ttm"), _KEYRATIOS))
     eps_clean = cite("gf_eps_without_nri", _value(_field(ratios, "eps_without_nri"), _KEYRATIOS))
-    lines = balance_lines(conn, symbol)
-    sums = {name: _sum_lines(lines, names) for name, names in _BALANCE_SUMS.items()}
+    sums = balance_sums(balance_lines(conn, symbol))
     notes = _tax_note(country, origin, stated)
     notes.update({name: note for name, (_, note) in sums.items() if note is not None})
     peers = peer_figures(conn, symbol, deciles, policy, tax, today)
@@ -263,17 +257,6 @@ def _next_earnings(rows: Sequence[ObservationRow], today: date) -> _Cited[date |
     if row is None or row.value is None or value_as_date(row.value) < today:
         return None, None
     return value_as_date(row.value), _cite(_EARNINGS, [row])
-
-
-def _sum_lines(
-    lines: Mapping[str, float | None], names: Sequence[str]
-) -> tuple[float | None, str | None]:
-    """The lines' sum, a missing line counting as nil, ``None`` with every line missing; and the
-    note naming the missing lines, ``None`` with none missing."""
-    missing = [name for name in names if lines.get(name) is None]
-    held = [value for name in names if (value := lines.get(name)) is not None]
-    note = f"{' and '.join(missing)} not presented" if missing else None
-    return (sum(held) if held else None), note
 
 
 def _tax_note(country: str, origin: str | None, stated: Statements) -> dict[str, str]:

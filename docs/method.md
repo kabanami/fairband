@@ -1149,3 +1149,43 @@ A review follows its company's snapshots. Every refresh that writes a snapshot f
 ### 14.7 The log
 
 One row for each review written: the time, the company, the refresh, the snapshot and the review; the mechanical phase and value; the reviewed phase and value, none on a refusal; the latest secondary value (section 15), none without one; the price; the mechanical designation; and the latest published report's stance. It measures whether the agents' overrides help, read once it has rows.
+
+## 15. The secondary valuation
+
+A second valuation beside the routes, from an explicit cash-flow path an agent supplies (spec 2026-11-06 Tier 2, 11). It is a second view on a valued company and a fallback where no phase or route fits, or where the route refuses. The agent builds the path from its own research; the engine keeps the discounting, the terminal and the bridge to equity, so the number is a tool output. A secondary valuation cites `fairband-secondary/1` (section 11). Neither the mechanical value nor the review reads it.
+
+### 15.1 The inputs
+
+One part or more, at most `secondary_parts_max` (10; 4.1). One part is a discounted cash flow, several a sum of parts. A part is a name; the free cash flow to the firm in dollars for years 1 to N, N from `secondary_years_min` (3) to `secondary_years_max` (15); a terminal growth g at most g_T (3.0% at the defaults), lower or negative allowed; and a note. With the parts, a reason and evidence: one item or more, each of the kinds an override's evidence takes (14.1).
+
+### 15.2 The arithmetic
+
+r is the effective policy's required return, locked as for an override (14.2). Per part:
+
+    PV_t = fcff_t ÷ (1 + r)^t, t = 1 … N
+    terminal = fcff_N × (1 + g) ÷ (r − g), discounted by (1 + r)^N
+    part value = Σ PV_t + the discounted terminal
+
+The firm value is the sum over the parts; equity = firm value − debt + cash; the value a share = equity ÷ the diluted shares. The levels are 4.10's on the moat class: the current review's when the company has one (14.5), else the snapshot's, else None. The designation is 4.10's on the snapshot's price ÷ the value a share. A value a share at or below zero is kept as computed, with no levels and no designation; it is not a refusal.
+
+### 15.3 Debt, cash and shares
+
+The server reads the debt and the cash at the call as assembly reads them for the growth, Decline and Start-up routes (5a.9, 6a.5, 6b.2): the newest annual balance sheet's short-term plus long-term debt, and its cash and equivalents plus short-term investments, a line it does not present counting as nil. An applied `balance.debt` or `balance.cash` override (14.2) counts in its place. The agent may pass the debt or the cash itself where the balance sheet is wrong or missing; each figure passed needs its own evidence item, one whose `figure` names it, `debt` or `cash`. The record stores the debt, the cash and the shares used, and where the debt and the cash came from: `statements`, the balance sheet's; `agent`, a figure the agent passed or an applied override's. The shares are the snapshot's diluted count: its `shares_diluted` input, else its intermediates' `shares`.
+
+### 15.4 The refusals
+
+Each is answered with its sentence, and nothing is stored:
+
+- a reason that is blank, "a secondary valuation needs a reason"; no evidence, "a secondary valuation needs evidence"; a debt or a cash passed without its own evidence item, "an explicit debt needs its own evidence item" (or cash);
+- a company whose latest snapshot was valued under another policy version, other settings or another method version: the price refresh's sentences, "settings changed: run a revalue" (or "policy changed", "method changed"), as for an override (14.3);
+- a foreign filer, "foreign filer: currency and share-unit handling not built yet", since a dollar path over local-currency debt would mislead: a snapshot refused as one (section 7), or a universe row that is an ADR or names a currency other than USD (a row naming none leaves it to the snapshot);
+- a snapshot with no positive diluted share count, "no diluted share count";
+- the bounds, each naming its rule with the effective policy's numbers: no part, "at least one part"; more than `secondary_parts_max`, "at most 10 parts"; a path shorter than `secondary_years_min` or longer than `secondary_years_max`, "a part has 3 to 15 years"; a g above g_T, "the terminal growth is at most g_T, 3.0%".
+
+### 15.5 As of its snapshot
+
+A secondary valuation is stored on the company's latest snapshot with its parts, each with its path, its g, its note, its present values, its terminal, the terminal's present value and its value; the firm value; the debt, the cash and the shares with the two sources; the equity; the value a share; the levels, price ÷ value and the designation at the snapshot's price; the reason and the evidence; the writer (the principal, and an agent's model identifier and client) and the time; and the policy version, the settings hash and the deciles refresh it ran under. It is a ledger row, `secondary`. It is never changed, and no refresh recomputes or reprices it: it is as of its snapshot, its window that snapshot's validity window (4.10), and it stays in the company's history after later refreshes, read with its date. The agent makes a new one at its next review. The owner may make one too: it is a tool's output, not an override. The log (14.7) reads the newest one's value a share.
+
+### 15.6 Worked numbers
+
+The tests pin these within 1e-4 (spec 2026-11-06 Tier 2, 20.1). r 9%, g 3%; one part, free cash flow 100 in year 1 growing 5% a year for 5 years (100, 105, 110.25, 115.7625, 121.550625); debt 200, cash 100, 100 diluted shares. The present values 91.7431, 88.3764, 85.1332, 82.0091 and 78.9996, Σ 426.2614; the terminal 121.550625 × 1.03 ÷ 0.06 = 2,086.6191, discounted 1,356.1592; firm value 1,782.4206; equity 1,682.4206; value a share 16.8242. A second part, 20 flat for 5 years at g 0: Σ PV 77.7930; terminal 20 ÷ 0.09 = 222.2222, discounted 144.4292; part value 222.2222; with both parts the value a share is 19.0464. A g of 3.5% is refused, as are a path of 2 years and an 11th part.

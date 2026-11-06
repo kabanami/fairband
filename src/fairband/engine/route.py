@@ -166,7 +166,7 @@ from fairband.engine.types import (
 )
 from fairband.policy import Policy
 
-_FOREIGN = "foreign filer: currency and share-unit handling not built yet"
+FOREIGN_FILER = "foreign filer: currency and share-unit handling not built yet"
 _LONG_RUNWAY = "long-runway-high-growth"
 _VALUE_SPREAD = "value-spread"
 _BELOW_NET_CASH = "below-net-cash"
@@ -242,7 +242,7 @@ def value_company(
     if inputs.refusal is not None:
         return refuse(inputs.refusal)
     if inputs.is_adr or inputs.currency != "USD":
-        return refuse(_FOREIGN)
+        return refuse(FOREIGN_FILER)
     if phase.phase is None:
         return refuse(phase.reason or "unclassified")
     price, shares, trailing = inputs.price, inputs.shares_diluted, inputs.trailing
