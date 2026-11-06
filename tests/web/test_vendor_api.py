@@ -19,6 +19,7 @@ from support.web import HEADER, HOST, NOW, _settings
 from fairband import __main__ as cli
 from fairband.config import Keys
 from fairband.policy import Policy
+from fairband.refresh import passthrough as passthrough_module
 from fairband.refresh.passthrough import Passthrough
 from fairband.store.db import connect
 from fairband.store.settings import write_settings
@@ -68,9 +69,7 @@ def vendor() -> Vendor:
 
 
 @pytest.fixture
-def with_passthrough(
-    tmp_path: Path, db_path: Path, policy: Policy, vendor: Vendor
-) -> Iterator[TestClient]:
+def passthrough(db_path: Path, policy: Policy, vendor: Vendor) -> Iterator[Passthrough]:
     with VendorHttp(
         fmp_api.BASE_URL,
         [KEY],
@@ -79,15 +78,20 @@ def with_passthrough(
         sleep=lambda _: None,
         clock=lambda: NOW,
     ) as http:
+        yield Passthrough(Fmp(http, KEY), lambda: connect(db_path), policy, lambda: NOW, (KEY,))
 
-        def conn_factory() -> Any:
-            return connect(db_path)
 
-        passthrough = Passthrough(Fmp(http, KEY), conn_factory, policy, lambda: NOW, (KEY,))
-        settings = _settings(tmp_path, db_path)
-        app = create_app(settings, policy, conn_factory, clock=lambda: NOW, passthrough=passthrough)
-        with TestClient(app, base_url=HOST) as client:
-            yield client
+@pytest.fixture
+def with_passthrough(
+    tmp_path: Path, db_path: Path, policy: Policy, passthrough: Passthrough
+) -> Iterator[TestClient]:
+    def conn_factory() -> Any:
+        return connect(db_path)
+
+    settings = _settings(tmp_path, db_path)
+    app = create_app(settings, policy, conn_factory, clock=lambda: NOW, passthrough=passthrough)
+    with TestClient(app, base_url=HOST) as client:
+        yield client
 
 
 def test_no_passthrough_is_503(client: TestClient) -> None:
@@ -203,6 +207,48 @@ def test_a_body_that_is_not_json_is_502(
     vendor.answer = None
     again = with_passthrough.get("/api/vendor/insider-trades/ACME").json()
     assert (again["responseId"], again["reused"]) == (2, False)
+
+
+def test_busy_pass_throughs_are_503(
+    with_passthrough: TestClient,
+    passthrough: Passthrough,
+    vendor: Vendor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Four transcript calls held at the vendor take every slot: a request whose call waits past
+    the bound (shortened here) answers 503 with the sentence; a reuse still answers 200."""
+    monkeypatch.setattr(passthrough_module, "PASSTHROUGH_WAIT_S", 0.2)
+    assert with_passthrough.get("/api/vendor/news/ACME").status_code == 200  # stored
+    entered, release = threading.Semaphore(0), threading.Event()
+
+    def held(request: httpx.Request) -> httpx.Response:
+        entered.release()
+        release.wait(5)
+        return httpx.Response(200, json=[])
+
+    vendor.answer = held
+    quarters = [{"year": "2026", "quarter": q} for q in "1234"]
+    threads = [
+        threading.Thread(target=passthrough.fetch, args=("transcript", "ACME", params))
+        for params in quarters
+    ]
+    try:
+        for thread in threads:
+            thread.start()
+        for _ in threads:
+            assert entered.acquire(timeout=5)
+        busy = with_passthrough.get("/api/vendor/transcript/ACME", params=Q3)
+        reused = with_passthrough.get("/api/vendor/news/ACME")
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(5)
+    assert (busy.status_code, busy.json()) == (
+        503,
+        {"detail": "the pass-throughs are busy: four calls are in flight, try again"},
+    )
+    assert reused.status_code == 200 and reused.json()["reused"] is True
+    assert vendor.paths.count("/stable/earning-call-transcript") == 4
 
 
 # --- python -m fairband serve ----------------------------------------------------------------

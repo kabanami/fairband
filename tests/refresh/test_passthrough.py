@@ -4,6 +4,8 @@ slots that bound the vendor calls in flight."""
 
 import json
 import threading
+import time
+from collections.abc import Iterator
 from contextlib import closing
 from datetime import timedelta
 from typing import Any
@@ -14,9 +16,16 @@ from refresh_env import Env
 from vendor_double import FIXTURES, FMP_KEY, GF_TOKEN
 
 from fairband.config import Keys
+from fairband.refresh import passthrough as passthrough_module
 from fairband.refresh.clients import build_clients, build_fmp
 from fairband.refresh.fetch import fetch_company
-from fairband.refresh.passthrough import KINDS, PASSTHROUGH_SLOTS, Passthrough
+from fairband.refresh.passthrough import (
+    KINDS,
+    PASSTHROUGH_SLOTS,
+    PASSTHROUGH_WAIT_S,
+    Passthrough,
+    PassthroughBusy,
+)
 from fairband.reports.refs import Resolved, resolve
 from fairband.store.vendor import response_payload, response_row
 from fairband.vendors import fmp as fmp_api
@@ -213,54 +222,95 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
     assert sleeps[-1] == pytest.approx(13 * interval)
 
 
-def test_a_fifth_vendor_call_waits_for_a_slot(env: Env) -> None:
-    """Four vendor calls in flight hold the ``PASSTHROUGH_SLOTS``: a fifth waits until one ends,
-    and a reuse takes no slot meanwhile. The vendor holds each transcript call until released."""
-    assert PASSTHROUGH_SLOTS == 4
-    entered = threading.Semaphore(0)
-    release = threading.Event()
-    called: list[str] = []
+class Held:
+    """A pass-through over FMP whose transcript calls the vendor holds until ``release``; any other
+    call answers ``[]``. ``called`` names each transcript call that reached the vendor; ``hold``
+    starts four, one per quarter of 2026, on threads of their own, each holding a slot until
+    released, and returns once all four are at the vendor."""
 
-    def answer(request: httpx.Request) -> httpx.Response:
+    def __init__(self, env: Env) -> None:
+        self.entered = threading.Semaphore(0)
+        self.release = threading.Event()
+        self.called: list[str] = []
+        self.answered: list[bool] = []  # each threaded fetch's ``reused``
+        self.threads: list[threading.Thread] = []
+        transport = httpx.MockTransport(self._answer)
+        self.http = VendorHttp(fmp_api.BASE_URL, [FMP_KEY], env.policy.refresh, transport=transport)
+        fmp = Fmp(self.http, FMP_KEY)
+        self.passthrough = Passthrough(fmp, env.connect, env.policy, env.clock, (FMP_KEY,))
+
+    def _answer(self, request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/earning-call-transcript"):
-            called.append(f"{request.url.params['year']}-Q{request.url.params['quarter']}")
-            entered.release()
-            release.wait(5)
+            self.called.append(f"{request.url.params['year']}-Q{request.url.params['quarter']}")
+            self.entered.release()
+            self.release.wait(5)
         return httpx.Response(200, json=[])
 
-    transport = httpx.MockTransport(answer)
-    http = VendorHttp(fmp_api.BASE_URL, [FMP_KEY], env.policy.refresh, transport=transport)
-    passthrough = Passthrough(Fmp(http, FMP_KEY), env.connect, env.policy, env.clock, (FMP_KEY,))
-    passthrough.fetch("news", "ACME", {})  # stored: the next one is a reuse
-    asks = [("2026", "1"), ("2026", "2"), ("2026", "3"), ("2026", "4"), ("2025", "4")]
-    answered: list[bool] = []
+    def start(self, kind: str, params: dict[str, str]) -> threading.Thread:
+        def fetch() -> None:
+            [fetched] = self.passthrough.fetch(kind, "ACME", params).values()
+            self.answered.append(fetched.reused)
 
-    def fetch(kind: str, params: dict[str, str]) -> None:
-        [fetched] = passthrough.fetch(kind, "ACME", params).values()
-        answered.append(fetched.reused)
+        thread = threading.Thread(target=fetch)
+        self.threads.append(thread)
+        thread.start()
+        return thread
 
-    calls = [
-        threading.Thread(target=fetch, args=("transcript", {"year": y, "quarter": q}))
-        for y, q in asks
-    ]
-    try:
-        for thread in calls[:4]:
-            thread.start()
-        for _ in range(4):
-            assert entered.acquire(timeout=5)
-        calls[4].start()
-        calls[4].join(0.2)
-        assert calls[4].is_alive() and len(called) == 4  # the fifth waits for a slot
-        reuse = threading.Thread(target=fetch, args=("news", {}))
-        reuse.start()
-        reuse.join(5)
-        assert not reuse.is_alive() and answered == [True]  # a reuse needs no slot
-        release.set()
-        for thread in calls:
+    def hold(self) -> None:
+        for quarter in "1234":
+            self.start("transcript", {"year": "2026", "quarter": quarter})
+        for _ in range(PASSTHROUGH_SLOTS):
+            assert self.entered.acquire(timeout=5)
+
+    def finish(self) -> None:
+        """Release the held calls and wait for every thread."""
+        self.release.set()
+        for thread in self.threads:
             thread.join(5)
+        assert not any(thread.is_alive() for thread in self.threads)
+
+
+@pytest.fixture
+def held(env: Env) -> Iterator[Held]:
+    held = Held(env)
+    try:
+        yield held
     finally:
-        release.set()
-        http.close()
-    assert not any(thread.is_alive() for thread in calls)
-    assert sorted(called) == ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3", "2026-Q4"]
-    assert answered == [True] + [False] * 5
+        held.finish()
+        held.http.close()
+
+
+def test_a_fifth_vendor_call_waits_for_a_slot(held: Held) -> None:
+    """Four vendor calls in flight hold the ``PASSTHROUGH_SLOTS``: a fifth waits until one ends,
+    and a reuse takes no slot meanwhile."""
+    assert PASSTHROUGH_SLOTS == 4 and PASSTHROUGH_WAIT_S == 10.0
+    held.passthrough.fetch("news", "ACME", {})  # stored: the next one is a reuse
+    held.hold()
+    fifth = held.start("transcript", {"year": "2025", "quarter": "4"})
+    fifth.join(0.2)
+    assert fifth.is_alive() and len(held.called) == 4  # the fifth waits for a slot
+    held.start("news", {}).join(5)
+    assert held.answered == [True]  # a reuse needs no slot
+    held.finish()
+    assert sorted(held.called) == ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3", "2026-Q4"]
+    assert held.answered == [True] + [False] * 5
+
+
+def test_a_call_that_waits_past_the_bound_is_busy(
+    held: Held, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With every slot held past ``PASSTHROUGH_WAIT_S``, the call gives up: ``PassthroughBusy``,
+    nothing called and nothing stored; once a slot frees, the same call goes through."""
+    monkeypatch.setattr(passthrough_module, "PASSTHROUGH_WAIT_S", 0.2)
+    held.hold()
+    began = time.monotonic()
+    with pytest.raises(PassthroughBusy) as caught:
+        held.passthrough.fetch("transcript", "ACME", {"year": "2025", "quarter": "4"})
+    assert time.monotonic() - began >= 0.15  # it waited for a slot first
+    assert str(caught.value) == "the pass-throughs are busy: four calls are in flight, try again"
+    assert len(held.called) == 4
+    with closing(env.connect()) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM vendor_responses").fetchone()[0] == 0
+    held.finish()
+    fetched = held.passthrough.fetch("transcript", "ACME", {"year": "2025", "quarter": "4"})
+    assert fetched["transcript"].reused is False and "2025-Q4" in held.called

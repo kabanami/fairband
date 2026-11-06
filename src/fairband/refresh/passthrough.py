@@ -24,9 +24,10 @@ is reused.
 
 The calls go through the FMP client the server builds on the limiter its refresh runs share, so the
 pass-throughs keep the refresh's pace. They run on the request threads, the pool every sync route
-of the app shares; at most ``PASSTHROUGH_SLOTS`` vendor calls are in flight at once, the others
-waiting for a slot, so a burst of agent requests during a refresh or a 429 hold leaves the rest of
-the pool to the page. A reuse takes no slot.
+of the app shares. What is bounded: at most ``PASSTHROUGH_SLOTS`` (four) vendor calls are in
+flight at once; a call that finds every slot taken waits for one at most ``PASSTHROUGH_WAIT_S``
+(ten seconds), holding its request's thread meanwhile, then raises ``PassthroughBusy`` (``BUSY``,
+a 503 on the route), nothing called or stored, and the agent tries again. A reuse takes no slot.
 """
 
 import json
@@ -55,9 +56,15 @@ from fairband.vendors.scrub import scrub
 KINDS = ("transcript", "news", "segments", "insider-trades")
 NEWS_LIMIT = 20
 NEWS_LIMIT_MAX = 100
-PASSTHROUGH_SLOTS = 4  # vendor calls in flight at once; the rest of the pool stays with the page
+PASSTHROUGH_SLOTS = 4  # vendor calls in flight at once
+PASSTHROUGH_WAIT_S = 10.0  # the longest a call waits for a slot
+BUSY = "the pass-throughs are busy: four calls are in flight, try again"
 _KIND_LIST = ", ".join(KINDS[:-1]) + f" or {KINDS[-1]}"
 _PROVIDER = "fmp"
+
+
+class PassthroughBusy(Exception):
+    """No slot freed within ``PASSTHROUGH_WAIT_S``: the message is ``BUSY``."""
 
 
 @dataclass(frozen=True)
@@ -104,7 +111,7 @@ class Passthrough:
         """The stored responses that answer ``kind`` for ``symbol`` (the store's exchange form), by
         part: ``product`` and ``geographic`` for ``segments``, else the one part named ``kind``.
         Raises ``ValueError`` on an unknown kind or a missing or bad parameter, before any call,
-        and ``VendorError`` when a call fails."""
+        ``PassthroughBusy`` when no slot frees in time, and ``VendorError`` when a call fails."""
         calls = self._calls(kind, symbol, params)
         with closing(self._conn_factory()) as conn:
             return {call.part: self._fetch(conn, call, symbol) for call in calls}
@@ -116,8 +123,7 @@ class Passthrough:
             if text is not None:
                 return Fetched(latest, json.loads(text), reused=True)
         try:
-            with self._slots:  # the vendor call alone: a reuse never waits for a slot
-                response = call.send()
+            response = self._send(call)
         except VendorError as exc:
             message = scrub(str(exc), self._secrets)
             self._record(conn, call, symbol, exc.status, None, message, self._clock())
@@ -134,6 +140,15 @@ class Passthrough:
         row = response_row(conn, response_id)
         assert row is not None
         return Fetched(row, json.loads(payload), reused=False)
+
+    def _send(self, call: _Call) -> VendorResponse:
+        """The vendor call in a slot, the wait for one bounded: a reuse never takes a slot."""
+        if not self._slots.acquire(timeout=PASSTHROUGH_WAIT_S):
+            raise PassthroughBusy(BUSY)
+        try:
+            return call.send()
+        finally:
+            self._slots.release()
 
     def _record(
         self,

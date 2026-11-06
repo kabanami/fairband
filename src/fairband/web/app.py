@@ -13,10 +13,12 @@ no network. Nothing here reads a key. The refresh routes hand the work to the ``
 whose thread calls the vendors; without one they answer 503. ``serve`` always passes one; without
 an FMP key its runs refuse every kind but a revalue, and a refusal is a 400. The pass-through
 route alone calls a vendor from a request: it calls FMP on FastAPI's sync-route thread through the
-``Passthrough`` that ``serve`` builds with the key, at most four calls at once, paced by the one
-limiter the worker's runs share, and answers the stored payload scrubbed, so no answer carries a
-key; without a pass-through (no FMP key) it answers 503. FastAPI's own documentation routes are off; they would
-load their scripts from a CDN.
+``Passthrough`` that ``serve`` builds with the key, paced by the one limiter the worker's runs
+share, and answers the stored payload scrubbed, so no answer carries a key; without a pass-through
+(no FMP key) it answers 503. What is bounded: four vendor calls in flight; a request that finds
+them all taken waits at most ten seconds for a slot, holding its pool thread meanwhile, and past
+that answers 503. FastAPI's own documentation routes are off; they would load their scripts from
+a CDN.
 
 The screen's rows are the latest universe's admitted companies, each with its latest snapshot,
 or a placeholder row "not yet valued" before its first; a company the latest universe does not
