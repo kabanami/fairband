@@ -29,7 +29,9 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
 - ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs`` and
   ``value_company`` with the latest stored deciles (a full refresh's own; assembly classifies the
   company's peers on them), ``insert_snapshot``; the symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
-  yet" (spec 6.6).
+  yet" (spec 6.6). In the snapshot's transaction, ``reviews.follow_snapshot`` follows it with a
+  review on the same inputs when the company holds an applied override, after dropping a
+  period-tied one its new inputs no longer bear out (spec 2026-11-06 Tier 2, 10.5).
 - ``done``: the run's totals. A full refresh saves its ``calibration`` with the record (goal 7).
 
 Every kind but a revalue fetches, so without an FMP client (the server's worker without a key)
@@ -107,6 +109,7 @@ from fairband.refresh.backfill import backfill_statement_facts
 from fairband.refresh.deciles import deciles_for_universe
 from fairband.refresh.fetch import FetchOutcome, fetch_company, provider_of
 from fairband.refresh.inputs import build_inputs, latest_price
+from fairband.refresh.reviews import follow_snapshot
 from fairband.refresh.run_price import PriceRefresh, rate_limited
 from fairband.refresh.universe import build_universe
 from fairband.store.companies import latest_companies
@@ -482,7 +485,18 @@ class Refresh:
                 inputs = build_inputs(conn, symbol, self._policy, self._tax, today, deciles)
                 result = value_company(inputs, deciles, self._policy, today)
                 with transaction(conn):
-                    insert_snapshot(conn, result, refresh_id, clock=self._clock)
+                    snapshot_id = insert_snapshot(conn, result, refresh_id, clock=self._clock)
+                    follow_snapshot(
+                        conn,
+                        inputs,
+                        result,
+                        snapshot_id,
+                        deciles,
+                        self._policy,
+                        today,
+                        refresh_id,
+                        self._clock,
+                    )
                     upsert_item(conn, refresh_id, symbol, "valued", None, self._clock())
             except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own
                 self._fail(conn, refresh_id, symbol, f"valuation failed: {self.describe(exc)}")

@@ -137,7 +137,7 @@ def _serve(args: argparse.Namespace) -> int:
     worker = RefreshWorker(
         lambda cancel, on_progress: make_refresh(conn_factory, keys, tax, cancel, on_progress)
     )
-    app = create_app(settings, policy, conn_factory, worker)
+    app = create_app(settings, policy, conn_factory, worker, tax=tax)
     try:
         uvicorn.run(app, host=_HOST, port=args.port, log_level="info")
     finally:

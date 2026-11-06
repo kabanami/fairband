@@ -243,7 +243,7 @@ def add_agent_routes(
                 summary = f"completed with report {body.report_id}"
             else:
                 item = decline_item(conn, item_id, body.reason or "", at)
-                summary = f"declined: {_gist(body.reason or '')}"
+                summary = f"declined: {gist(body.reason or '')}"
             _record_item(conn, writer, at, body.action, item, summary)
             return record_json(item)
 
@@ -262,7 +262,7 @@ def add_agent_routes(
         ):
             note = note_row(conn, add_note(conn, symbol, body.text, writer, at, body.override_id))
             assert note is not None  # written in this transaction
-            _record(conn, writer, at, "note", note.symbol, "notes", note.id, _gist(note.text))
+            _record(conn, writer, at, "note", note.symbol, "notes", note.id, gist(note.text))
             return record_json(note)
 
     @app.get("/api/companies/{symbol}/findings")
@@ -293,7 +293,7 @@ def add_agent_routes(
             )
             finding = finding_row(conn, finding_id)
             assert finding is not None  # written in this transaction
-            summary = _gist(finding.text)
+            summary = gist(finding.text)
             _record(conn, writer, at, "finding", finding.symbol, "findings", finding.id, summary)
             return finding_json(finding)
 
@@ -315,7 +315,7 @@ def add_agent_routes(
             criterion_id = add_kill_criterion(conn, symbol, body.text, writer, at)
             criterion = kill_criterion_row(conn, criterion_id)
             assert criterion is not None  # written in this transaction
-            _record_criterion(conn, writer, at, criterion, _gist(criterion.text))
+            _record_criterion(conn, writer, at, criterion, gist(criterion.text))
             return record_json(criterion)
 
     @app.patch("/api/kill-criteria/{criterion_id}")
@@ -330,7 +330,7 @@ def add_agent_routes(
             transaction(conn, immediate=True),
         ):
             criterion = set_kill_criterion(conn, criterion_id, body.state, body.reason, at)
-            summary = f"{criterion.state}: {_gist(body.reason)}"
+            summary = f"{criterion.state}: {gist(body.reason)}"
             _record_criterion(conn, writer, at, criterion, summary)
             return record_json(criterion)
 
@@ -361,7 +361,7 @@ def add_agent_routes(
             )
             item = news_item_row(conn, item_id)
             assert item is not None  # written in this transaction
-            summary = _gist(item.headline)
+            summary = gist(item.headline)
             _record(conn, writer, at, "news-item", item.symbol, "news_items", item.id, summary)
             return record_json(item)
 
@@ -387,7 +387,7 @@ def _require_report(report_id: int, symbol: str) -> None:
 
 
 def _record_post(conn: sqlite3.Connection, writer: Writer, at: datetime, item: WorkItem) -> None:
-    summary = f"{item.mode} posted" + (f": {_gist(item.note)}" if item.note.strip() else "")
+    summary = f"{item.mode} posted" + (f": {gist(item.note)}" if item.note.strip() else "")
     _record_item(conn, writer, at, "work-item", item, summary)
 
 
@@ -443,7 +443,7 @@ def _record(
     )
 
 
-def _gist(text: str) -> str:
+def gist(text: str) -> str:
     """The text's first line, cut to ``_GIST`` characters, for a ledger summary."""
     lines = text.strip().splitlines()
     line = lines[0] if lines else ""

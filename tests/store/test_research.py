@@ -7,9 +7,8 @@ from typing import Any
 
 import pytest
 
-from fairband.store._codec import inserted_id
-from fairband.store.db import transaction
 from fairband.store.ledger import OWNER, Writer
+from fairband.store.overrides import insert_override
 from fairband.store.research import (
     FindingRow,
     KillCriterionRow,
@@ -36,16 +35,25 @@ FILING = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": "the segment tabl
 
 
 def _override(conn: sqlite3.Connection, symbol: str) -> int:
-    """An override row of ``symbol`` with its NOT NULL columns only, written straight to the
-    table: no store module writes one yet."""
-    with transaction(conn):
-        cursor = conn.execute(
-            "INSERT INTO overrides (symbol, tag, new, unit, reason, evidence, lifetime,"
-            " snapshot_id, principal, at, state, message) VALUES (?, 'margin.target', '0.3',"
-            " 'percent', 'r', '[]', 'lasting', 1, 'agent', ?, 'applied', 'applied')",
-            (symbol, NOW.isoformat()),
-        )
-    return inserted_id(cursor)
+    """An applied override of ``symbol``."""
+    return insert_override(
+        conn,
+        symbol,
+        "margin.target",
+        None,
+        0.3,
+        "ratio",
+        "r",
+        [FILING],
+        "lasting",
+        None,
+        None,
+        1,
+        AGENT,
+        NOW,
+        "applied",
+        "",
+    )
 
 
 def test_notes(conn: sqlite3.Connection) -> None:

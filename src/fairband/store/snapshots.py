@@ -140,6 +140,12 @@ def latest_snapshot(conn: sqlite3.Connection, symbol: str) -> SnapshotRow | None
     return None if row is None else _snapshot(row)
 
 
+def snapshot_row(conn: sqlite3.Connection, snapshot_id: int) -> SnapshotRow | None:
+    """The snapshot ``snapshot_id``, if there is one."""
+    row = conn.execute("SELECT * FROM snapshots WHERE id = ?", (snapshot_id,)).fetchone()
+    return None if row is None else _snapshot(row)
+
+
 def refresh_snapshots(conn: sqlite3.Connection, refresh_id: int) -> list[SnapshotRow]:
     """The snapshots refresh ``refresh_id`` wrote, ordered by symbol."""
     rows = conn.execute(

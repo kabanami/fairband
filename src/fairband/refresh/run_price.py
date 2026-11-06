@@ -32,7 +32,9 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   method's, and a rebuild at the price would carry it. The checks run in that order, so a
   snapshot unlike the run on several counts reads the first. A revalue writes the current
   versions and hash. An exception (``reprice`` refuses a price that is not positive and finite)
-  is ``failed``, "reprice failed: <class>: <message>".
+  is ``failed``, "reprice failed: <class>: <message>". In the repriced snapshot's transaction,
+  ``reviews.reprice_review`` reprices the company's current review at the same quote, if it has
+  one, and writes it on the new snapshot (spec 2026-11-06 Tier 2, 10.5).
 - ``done``: the totals, and the calibration ``{"total", "repriced", "failed", "skipped"}`` saved
   with the record.
 
@@ -58,6 +60,7 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.route import reprice
 from fairband.policy import Policy
 from fairband.refresh.fetch import unusable
+from fairband.refresh.reviews import reprice_review
 from fairband.store.companies import latest_companies
 from fairband.store.db import transaction
 from fairband.store.observations import ObservationRow, insert_observations
@@ -275,7 +278,19 @@ class PriceRefresh:
                         entered_at=quote.entered_at,
                     )
                     with transaction(self._conn):
-                        insert_snapshot(self._conn, new, self._id, clock=self._clock)
+                        snapshot_id = insert_snapshot(self._conn, new, self._id, clock=self._clock)
+                        reprice_review(
+                            self._conn,
+                            symbol,
+                            snapshot_id,
+                            quote.price,
+                            quote.as_of,
+                            self._policy,
+                            self._id,
+                            self._clock,
+                            observed_at=quote.observed_at,
+                            entered_at=quote.entered_at,
+                        )
                         upsert_item(self._conn, self._id, symbol, "repriced", None, self._clock())
                 except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own
                     reason = f"reprice failed: {self._describe(exc)}"

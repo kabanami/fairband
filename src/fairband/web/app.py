@@ -1,8 +1,8 @@
 """The FastAPI app: the screen page, the static files, the screen's JSON API, the group view, the
 refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
-(``agents_api``), and the policy values and growth deciles the Methodology page cites (spec
-2026-11-04 7.4).
+(``agents_api``), the override and review routes (``reviews_api``), and the policy values and
+growth deciles the Methodology page cites (spec 2026-11-04 7.4).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -34,7 +34,9 @@ A write names its writer (spec 2026-11-06 Tier 2, section 7; ``identity``): an a
 the owner's. An agent's write without an actor is a 400, "identify first: the model identifier
 you run as", and any other principal a 400. The agent routes record each write in the ledger
 under its writer; the system's own writes, such as an expiry item posted when the inbox is read,
-are the principal ``system``, which no request can name.
+are the principal ``system``, which no request can name. The override and review routes
+(``reviews_api``) take an agent's override or drop, an agent's write alone, and recompute the
+company's review over its applied overrides.
 
 D11, for a server bound to 127.0.0.1: ``TrustedHostMiddleware`` answers 400 to a request whose
 ``Host`` is neither ``127.0.0.1`` nor ``localhost`` (any port), so a page on another name that
@@ -62,6 +64,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fairband.config import Settings, utcnow
 from fairband.engine.types import result_to_json
 from fairband.policy import Policy
+from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.run import KINDS
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import CompanyRow, latest_companies, latest_company
@@ -77,6 +80,7 @@ from fairband.store.snapshots import latest_snapshot, latest_snapshots
 from fairband.store.watchlists import memberships
 from fairband.web.agents_api import add_agent_routes
 from fairband.web.policy_rows import deciles_json, policy_json
+from fairband.web.reviews_api import add_review_routes
 from fairband.web.rows import (
     COLUMNS,
     GROUP_BY,
@@ -113,11 +117,13 @@ def create_app(
     conn_factory: Callable[[], sqlite3.Connection],
     worker: RefreshWorker | None = None,
     clock: Callable[[], datetime] = utcnow,
+    tax: TaxTable | None = None,
 ) -> FastAPI:
     """The app; ``policy`` is the file's, which the user's settings overlay; ``clock`` gives the
     day the validity states are judged on and the time a refresh left running is marked
     interrupted, a setting changed, a watchlist entry added and an agent route's record
-    written."""
+    written; ``tax`` is the table a review's inputs are built with, the packaged one when
+    ``None``."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -291,6 +297,7 @@ def create_app(
     add_settings_routes(app, conn_factory, policy, clock)
     add_watchlist_routes(app, conn_factory, clock)
     add_agent_routes(app, conn_factory, clock)
+    add_review_routes(app, conn_factory, policy, load_tax_table() if tax is None else tax, clock)
     return app
 
 
