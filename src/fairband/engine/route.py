@@ -17,6 +17,16 @@ trailing earnings (which keeps the growth-route cross-check). Revenue growth and
 refusals of their module docstrings, in their order. A refusal is a result with no value and a
 reason, never an exception.
 
+Overrides (spec 2026-11-06 Tier 2, 10.4; ``method.md`` 14). ``value_company`` takes an agent's
+applied overrides by tag, empty for the mechanical method. A ``phase`` override replaces the
+classifier's phase right after the classification, its evidence otherwise as it was, so every
+guard and the route read the overridden phase: a Start-up row overridden to another phase takes
+that phase's route on a ``Context`` and is refused without trailing figures as any such row is,
+and a row overridden to Start-up takes the Start-up route. The routes read the other inputs
+through ``route_steps.chosen``. Every result, a refusal too, cites the JUDGMENT entries of the
+overrides last (``route_steps.judged_inputs``), in place of the route's own entries for the
+inputs they set.
+
 Every result of ``value_company`` cites the policy's version and its settings hash, and is valid
 until the next earnings date when that is after the data date, else for the policy's fallback
 days. Its flags are the assembly's, the classifier's checks and the route's, the first of each
@@ -107,7 +117,7 @@ three.
 import math
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
@@ -115,6 +125,7 @@ from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Deciles, Series, classify
 from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
+from fairband.engine.overrides import Overrides
 from fairband.engine.revenue_growth import PeerFigures, PeerSource
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route_decline import decline_at_price, value_decline
@@ -142,6 +153,7 @@ from fairband.engine.route_steps import (
     StartUpContext,
     Valued,
     data,
+    judged_inputs,
     price_facts_for,
 )
 from fairband.engine.types import (
@@ -206,19 +218,26 @@ class CompanyInputs:
 
 
 def value_company(
-    inputs: CompanyInputs, deciles: Deciles | None, policy: Policy, today: date
+    inputs: CompanyInputs,
+    deciles: Deciles | None,
+    policy: Policy,
+    today: date,
+    overrides: Overrides | None = None,
 ) -> ValuationResult:
-    """The company's value by its phase's route, or a refusal with the reason."""
+    """The company's value by its phase's route, or a refusal with the reason; under
+    ``overrides``, the applied overrides by tag, the engine's value with those inputs."""
     assert policy.required_return > policy.terminal_growth, "policy: r must exceed g_t"
     assert min(policy.runway_years.values()) >= 1, "policy: a runway is a year or more"
+    judged: Overrides = {} if overrides is None else overrides
     if deciles is None:
-        return _refuse(inputs, policy, today, Refused("no universe deciles yet"), None, None)
-    phase = classify(inputs.series, deciles)
+        found = Refused("no universe deciles yet")
+        return _refuse(inputs, policy, today, found, None, None, judged)
+    phase = _phase(classify(inputs.series, deciles), judged)
     refresh_id = deciles.refresh_id
 
     def refuse(outcome: str | Refused) -> ValuationResult:
         found = Refused(outcome) if isinstance(outcome, str) else outcome
-        return _refuse(inputs, policy, today, found, phase, refresh_id)
+        return _refuse(inputs, policy, today, found, phase, refresh_id, judged)
 
     if inputs.refusal is not None:
         return refuse(inputs.refusal)
@@ -232,16 +251,24 @@ def value_company(
     if shares is None or not _positive(shares):
         return refuse("no diluted share count")
     if phase.phase == "Start-up":
-        start_up = StartUpContext(inputs, trailing, price, shares, policy, today)
+        start_up = StartUpContext(inputs, trailing, price, shares, policy, today, judged)
         return replace(refuse(value_start_up(start_up)), route="start-up")
     if trailing is None:
         return refuse("no trailing figures")
 
-    c = Context(inputs, trailing, price, shares, policy, today, phase)
+    c = Context(inputs, trailing, price, shares, policy, today, phase, judged)
     outcome = _route(c, phase.phase)
     if isinstance(outcome, Refused):
         return refuse(outcome)
-    return _valued(inputs, phase, price, policy, refresh_id, outcome)
+    return _valued(inputs, phase, price, policy, refresh_id, outcome, judged)
+
+
+def _phase(found: PhaseEvidence, overrides: Overrides) -> PhaseEvidence:
+    """The classifier's evidence, its phase the override's word when ``overrides`` holds one."""
+    override = overrides.get("phase")
+    if override is None:
+        return found
+    return replace(found, phase=cast(Phase, override.value))
 
 
 def _route(c: Context, phase: Phase) -> Valued | Refused:
@@ -398,6 +425,7 @@ def _valued(
     policy: Policy,
     refresh_id: int | None,
     v: Valued,
+    overrides: Overrides,
 ) -> ValuationResult:
     price_to_value, designation = designation_for(price, v.value, policy.designation_edges)
     return ValuationResult(
@@ -412,7 +440,7 @@ def _valued(
         data_date=i.data_date,
         valid_until=_valid_until(i, policy),
         phase=phase,
-        inputs=_base_inputs(i) + v.inputs,
+        inputs=judged_inputs(_base_inputs(i) + v.inputs, overrides),
         intermediates=v.intermediates,
         flags=_unique(i.input_flags + phase.checks + v.flags),
         refusal=None,
@@ -430,10 +458,11 @@ def _refuse(
     found: Refused,
     phase: PhaseEvidence | None,
     refresh_id: int | None,
+    overrides: Overrides,
 ) -> ValuationResult:
     """A refusal from ``value_company``: the company's price when it is one, its price facts
-    beside any intermediates the route computed, the base inputs and any the route cites, the
-    flags so far and the validity window of every result."""
+    beside any intermediates the route computed, the base inputs and any the route cites with the
+    overrides' JUDGMENT entries, the flags so far and the validity window of every result."""
     price = i.price if i.price is not None and _positive(i.price) else None
     checks = () if phase is None else phase.checks
     result = refusal_result(
@@ -444,7 +473,7 @@ def _refuse(
         price=price,
         price_date=None if price is None else i.price_date,
         phase=phase,
-        inputs=_base_inputs(i) + found.inputs,
+        inputs=judged_inputs(_base_inputs(i) + found.inputs, overrides),
         flags=_unique(i.input_flags + checks + found.flags),
         deciles_refresh_id=refresh_id,
         intermediates={

@@ -21,6 +21,10 @@ A missing or non-positive E refuses "no positive trailing earnings" (engine-roun
 refusal keeps ``e_trailing``, ``nri_gap``, ``eps``, ``shares``, ``moat``, ``price_facts`` and the
 cross-check with its implied growth at the price, which ``route.reprice`` moves as on a valued
 row; it raises no flag and cites no input beyond the ones every result carries.
+
+Overrides (``method.md`` 14) through ``route_steps.chosen``: ``earnings.nri_gap`` the
+non-recurring gap E is taken less, ``moat.class`` the moat and ``return.runway`` the runway return
+of the charge; the cross-check reads the same moat, returns and gap.
 """
 
 from typing import Any
@@ -34,6 +38,7 @@ from fairband.engine.route_steps import (
     Refused,
     RoicTerms,
     Valued,
+    chosen,
     common_inputs,
     common_rules,
     data,
@@ -53,10 +58,11 @@ from fairband.policy import Policy
 
 def value_mature_stable(c: Context) -> Valued | Refused:
     i, t, policy = c.inputs, c.trailing, c.policy
-    gap = nri_gap(i)
+    gap = chosen(c, "earnings.nri_gap", nri_gap(i))
     e = None if t.net_income is None else t.net_income - nil(gap) * c.shares
-    moat = moat_class(i.moat_score, policy)
-    roic = RoicTerms.of(i.capital_years, moat, policy)
+    moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
+    runway_return: float | None = chosen(c, "return.runway", None)
+    roic = RoicTerms.of(i.capital_years, moat, policy, runway_override=runway_return)
     growth_route = growth_cross_check(c, moat, roic)
     if e is None or e <= 0:
         # engine-round spec 9: the refusal keeps the cross-check, at the price

@@ -943,6 +943,7 @@ The three lease and line flags sit on nearly every valued row today; their redes
 | consensus earnings turn negative within the path | 5.3 |
 | value not positive under the reinvestment charge | 5.6, 5a.9 |
 | value not positive in the run-off | 6a.7, 6a.11 |
+| no revenue trend (only a row a `phase` override puts in Decline) | 14.4 |
 | no positive trailing earnings | 6.1 |
 | inside a Start-up row's `requirement`, not the row's refusal: no target margin: <n> mature peers; no sales-to-capital; no statutory tax rate; no market cap; no revenue reaches the price | 6b.2 |
 | data fetch failed: <the failed required endpoints> | the refresh, when an annual statement or the quote fails (section 2) |
@@ -1072,3 +1073,79 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Judgment | One of a report's key judgments (the phase, the moat, the belief, the ROIC, the target margin) with its bull case, its bear case, the decision and the override it produced, if one. An input an override sets is tagged JUDGMENT, beside DATA and RULE |
 | Secondary valuation | A second valuation an agent makes from an explicit free-cash-flow path, one part or a sum of parts, discounted at r with a terminal at g_T or below: a second view on a valued company and a fallback where the route gives no value. It cites `fairband-secondary/1` |
 | Work item | A request in the inbox for an agent's research on one company, a valuation review or a full report, posted by the owner, an agent or the expiry rule; pending, claimed, done, declined or dropped |
+
+## 14. Reviews: overrides and the reviewed value
+
+An agent changes the method's inputs only through overrides, and the engine, not the agent, computes the value they give: the reviewed value. A review cites `fairband-review/1` (section 11). The mechanical method does not move: with no override every figure is the mechanical one, bit for bit.
+
+### 14.1 What an override is
+
+A change to one tagged input of 14.2, with its reason, its evidence and its lifetime (spec 2026-11-06 Tier 2, 10.1). The evidence is one item or more, each a kind (the kinds of a finding's source, a filing, a transcript, a URL, a vendor response or a base rate, or a finding by its id), a reference and a note. The lifetime is lasting, or period-tied: a correction tied to one period, which keeps the value it corrected (14.6). The record keeps the input as the engine read it on the snapshot it was made on (its old value, 14.4), the new value and its unit, the principal and the actor (the model identifier as it arrived), the time and the state: `applied`; `refused-locked`, `refused-not-input`, `refused-route`, `refused-unit` or `refused-evidence` with the rule's sentence (14.3); or `dropped` with the reason. A refused override is stored and applies nothing. One input has one applied override: a new one on the same input drops the old, "replaced by override <n>". Only an agent adds or drops an override this round.
+
+### 14.2 The inputs an agent may override
+
+| Tag | Routes that read it | The input | Range, the ends included |
+|---|---|---|---|
+| `phase` | every route | the phase (3.5); the route follows it | the six phases |
+| `growth.belief` | Mature Growth | the belief (5.4) | −20% to 60% a year |
+| `path.hold` | High Growth, Young Growth | the held rate of years 4 to H (5a.3) | −20% to 300% a year |
+| `path.step_2`, `path.step_3` | Mature Growth, High Growth, Young Growth, Decline | the consensus steps g_2 and g_3 (5.3, 5a.2, 6a.2) | −80% to 300% |
+| `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | the moat class (4.9) | None, Narrow or Wide |
+| `margin.target` | High Growth, Young Growth, Start-up | the target margin (5a.4, 6b.3) | −50% to 60% |
+| `capital.sales_to_capital` | High Growth, Young Growth, Decline | sales-to-capital (5a.5, 6a.4), a multiple | 0.1 to 10 |
+| `return.runway` | Mature Growth, Mature Stable | the runway return (4.6) | 0% to 100% |
+| `earnings.nri_gap` | Mature Growth, Mature Stable | the non-recurring gap (5.9, 6.1) and the anchor's basis (5.2) | −$100 to $100 a share |
+| `decline.rate` | Decline | the decline rate d (6a.2) | −50% to 0% a year |
+| `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest annual balance sheet's debt and cash (5a.9, 6a.5, 6b.2); period-tied only, a correction of a vendor error | $0 or more ($10^15 at most) |
+
+The numeric ranges are the policy's `override_ranges` (4.1), not settings; the two word inputs take their words. The Mature Stable value reads no consensus step (its cross-check, 6.4, reads the consensus as found), so that route does not read `path.step_2` or `path.step_3`.
+
+Locked, refused `refused-locked` with the sentence given: r, "r is a locked input: the hurdle rate"; g_T, "g_T is a locked input: the terminal growth ceiling"; the runway years and the margin of safety, which the moat sets; the fade years, the fair band and the trim multiple, policy values; the terminal return, "the terminal return follows the moat"; the deciles and the growth word; and the reported figures, price, diluted shares, market cap, revenue, operating income and EPS, "<name> is reported data". Debt and cash change only through the two balance corrections. Any name not in the table is not an input.
+
+### 14.3 The rules, in the order they are checked
+
+`overrides.check_override` answers with the first rule an override breaks, else `applied`:
+
+1. A locked input: `refused-locked`, the sentence of 14.2.
+2. A tag that is not one of the thirteen: `refused-not-input`, "<tag> is not an input".
+3. A route that does not read the tag: `refused-route`, "the <route> route does not read <tag>". The route is the one the row takes after any applied `phase` override, so a Start-up row overridden to Young Growth takes `margin.target` on the revenue-growth route.
+4. A value the input cannot take: `refused-unit`. A word outside the input's words, "moat.class takes None, Narrow or Wide"; a number outside its range, or a word where a number is due, "growth.belief takes −20% to 60%"; a lasting override of a period-tied input, "balance.debt is period-tied only".
+5. The evidence: `refused-evidence`. None at all, "an override needs evidence"; or a `growth.belief` or `path.hold` above the sales class's `sales_p90_5y` (4.1, `base_rates`) without a filing or a transcript among its evidence, while `override_primary_evidence_above_p90` holds: "a belief above the base rate's 90th percentile needs a filing or a transcript", or "a held rate above …".
+
+An override, a drop and a recompute are refused with the price refresh's own sentence, "settings changed: run a revalue" (or "policy changed", "method changed"), when the effective settings hash, the policy version or the method version is not the latest snapshot's (section 10); so the bridge's mechanical term is always the row's own figure.
+
+### 14.4 How a route reads an override
+
+`route.value_company` takes the applied overrides by tag, and every route reads each input of 14.2 through one accessor, `route_steps.chosen`: the override's value when one applies, the route's own reading otherwise. What the route computes from the input follows it, its flags included; nothing else moves.
+
+- `phase` replaces the classifier's phase right after the classification, the rest of its evidence as it was, so every guard and the route read it. A Start-up row overridden to another phase takes that phase's route and, as any such row, is refused without trailing figures; a row overridden to Start-up takes 6b. A row put in Decline without a five-year revenue trend or a positive last revenue, and with no `decline.rate` override, is refused "no revenue trend".
+- `growth.belief` replaces the belief's rate (5.4); the fade runs to it.
+- `path.step_2` and `path.step_3` replace a consensus step before anything reads it: on Mature Growth before the check that the path stays above −100% (5.3); on the revenue-growth route before the cap, the fall check and the path's flags (5a.2, 5a.3); on Decline as the revenue-growth route reads them (6a.2), except on a row without a usable consensus, whose years 1 to 3 shrink at d and read no step. A replaced step is never held, and `few-analysts` names only the steps the consensus still gives.
+- `path.hold` replaces the held rate after the cap (5a.3): the agent's rate, which the cap does not bind. `consensus-above-base-rate` is not raised, and `held_growth_cap` notes "does not bind: the held rate is an agent's override".
+- `moat.class` replaces the class (4.9), so the runway, the terminal return, the margin of safety and the levels move with it (4.7, 4.10); the cross-check (6.4) reads it too.
+- `margin.target` replaces the peers' median (5a.4, 6b.3), the peers' lowest and highest margins kept for the sensitivity; on a row with no counted peers, the override stands alone, its own low and high, and the row is not refused for its target margin.
+- `capital.sales_to_capital` replaces the measure (5a.5, 6a.4). Its record's `used` is "override", the measures kept beside it, so the peers neither flag `peers-from-industry` on Decline nor cite their rules for it.
+- `return.runway` replaces the runway return of the charge (4.6) and charges the runway years, even where the measured return had the charge off; the terminal return still follows the moat on the measured return (4.7), and `return-floored` and `charge-zeroed` are not raised.
+- `earnings.nri_gap` replaces the non-recurring gap: Mature Stable's E (6.1), the clean EPS, EPV and `large-nri` (5.9), and the anchor's basis test (5.2), which then compares the street EPS with trailing GAAP EPS less the agent's gap. Without the override the test reads GAAP EPS as reported, so an override equal to the found gap can still move the basis. The cross-check (6.4) reads the gap too.
+- `decline.rate` replaces d (6a.2), never floored: `decline-rate-floored` is not raised.
+- `balance.debt` and `balance.cash` replace the balance sheet's figures before a missing one counts as nil (5a.9, 6a.5, 6b.2): the bridge from firm value to equity, the rating's net debt and whether there is a debt line (6a.7), the cash floor and the burn cover (6b.4). A replaced line raises no `line-not-presented` flag.
+
+An overridden input is tagged JUDGMENT, kind judgment, beside DATA and RULE. Its entry is named by its tag and carries the number (none for a word, which leads the note), the input's unit, and the override's provenance: the source "override <n>", entered at the override's time, the reason as the note. Every result, a refusal too, cites these entries last, in the bridge's order (14.5), in place of the route's own entry for the input (`belief`, `path_step_2`, `path_step_3`, `moat_class`, `target_margin`, `sales_to_capital`, `runway_return`, `debt`, `cash`), so no DATA or RULE entry carries an agent's figure under the vendor's or the policy's provenance. The intermediates hold the figures the route used.
+
+The engine's reading of an input (`overrides.current_reading`), the bridge's old value and the value a period-tied override corrects, comes from a result's intermediates: the phase; the belief's rate; the held rate, the hold when one is set, else g_3 as resolved; the steps, the route's `path_steps`, else the revenue path's or the run-off's as found; the moat, a Start-up row's from its moat class input; the target margin; sales-to-capital; the runway return; the non-recurring gap; d; and for debt and cash the reported figure, none when no line is on file (where the bridge counts nil). It is none where the result holds no such figure.
+
+### 14.5 The review: the recompute and the bridge
+
+A review is the engine's result under the company's applied overrides (`review.review_company`), built from the mechanical result. The overrides apply one at a time in a fixed order, the method's step order: `phase`, `path.step_2`, `path.step_3`, `path.hold`, `growth.belief`, `earnings.nri_gap`, `margin.target`, `capital.sales_to_capital`, `return.runway`, `decline.rate`, `moat.class`, `balance.debt`, `balance.cash`. Each line of the bridge is one engine run with that override and every earlier one; its old value is the engine's reading on the mechanical result (14.4), its new value the override's.
+
+A line's delta is its value a share less the value of the last step that valued, the mechanical value or an earlier line's, so the deltas sum to the reviewed value less the mechanical value. A line whose step refuses shows the refusal in place of a delta, "value not positive under the reinvestment charge" say, and a review whose last step refuses is a refusal with that reason; the next line that values measures from the last step that valued. A mechanical refusal that an override turns into a value, a Start-up row reclassified, starts the bridge at no mechanical value: the first valuing line carries the whole value as its delta. The reviewed value's levels and designation are 4.10's on the same edges, the levels on the reviewed moat.
+
+A review is stored with its result, its value, levels and designation, the mechanical value, the bridge, the ids of the overrides inside and `fairband-review/1`, and with the policy version, the settings hash and the deciles refresh it ran under, as a snapshot is.
+
+### 14.6 A review follows its snapshot
+
+A review follows its company's snapshots. Every refresh that writes a snapshot for a company with applied overrides writes a review on it: a full or scoped refresh and a revalue recompute it on the new inputs; a price refresh reprices the latest review as it reprices the snapshot (section 10), its value, levels and window kept and its designation moved. Before a recompute at a full or scoped refresh, a period-tied override is checked: it drops, by the system and with the reason, when the company's data date has moved past its snapshot's, or when the engine's reading of its input on the new snapshot differs from the value it corrected, "the input the override corrected changed". An override binds to the snapshot it was made on for provenance and applies to the latest snapshot and every later one; snapshots are appended at every price refresh, so there is no stale conflict. A review carries its snapshot's validity window and expires with it; a review that is a refusal has no value.
+
+### 14.7 The log
+
+One row for each review written: the time, the company, the refresh, the snapshot and the review; the mechanical phase and value; the reviewed phase and value, none on a refusal; the latest secondary value (section 15), none without one; the price; the mechanical designation; and the latest published report's stance. It measures whether the agents' overrides help, read once it has rows.

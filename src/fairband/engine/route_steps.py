@@ -12,6 +12,13 @@ marginal return is not usable and the fallback years' capital sums to zero or be
 runway charge is off, on either route; the terminal still charges. The income term of the
 expected return is the trailing flows over the market cap: FMP signs dividends and buybacks as
 outflows (negative) and stock issued as an inflow, and a missing flow counts as nil.
+
+An agent's applied overrides ride on the context (``overrides``, by tag; empty for the mechanical
+method), and a route reads each input of ``overrides.TAGS`` through ``chosen``: the override's
+value when one applies, else the route's own reading. ``judgment_inputs`` are the JUDGMENT
+entries ``route`` cites for them. ``RoicTerms.of`` takes an overriding runway return as
+``runway_override``: it replaces the runway return the charge uses and charges the runway years,
+and the terminal return still follows the moat on the measured return.
 """
 
 from __future__ import annotations
@@ -20,12 +27,13 @@ import math
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.flags import gate_flags, margin_flag, nri_flag
 from fairband.engine.mature_growth import Charge
 from fairband.engine.multiples import multiples
+from fairband.engine.overrides import BRIDGE_ORDER, INPUT_OF, TAGS, Override, Overrides, OverrideTag
 from fairband.engine.price_facts import price_facts
 from fairband.engine.returns import expected_return
 from fairband.engine.roic import (
@@ -53,7 +61,8 @@ _INTANGIBLES_NOTE = "invested capital uses the issuer's total intangibles exclud
 @dataclass(frozen=True)
 class Context:
     """A company past the guards of ``route.value_company``, with the classifier's evidence that
-    put it in its phase (the Decline route reads its revenue trend)."""
+    put it in its phase (the Decline route reads its revenue trend) and the applied overrides by
+    tag."""
 
     inputs: CompanyInputs
     trailing: TrailingFigures
@@ -62,13 +71,14 @@ class Context:
     policy: Policy
     today: date
     evidence: PhaseEvidence | None = None
+    overrides: Overrides = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class StartUpContext:
     """A Start-up company past the guards ``route.value_company`` runs before its route: a
     positive price and diluted share count, and the trailing figures when there are any, since a
-    pre-revenue company may lack them."""
+    pre-revenue company may lack them; and the applied overrides by tag."""
 
     inputs: CompanyInputs
     trailing: TrailingFigures | None
@@ -76,6 +86,7 @@ class StartUpContext:
     shares: float
     policy: Policy
     today: date
+    overrides: Overrides = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -116,12 +127,24 @@ class RoicTerms:
     flags: tuple[Flag, ...]
 
     @classmethod
-    def of(cls, years: Sequence[CapitalYear], moat: Moat, policy: Policy) -> RoicTerms:
+    def of(
+        cls,
+        years: Sequence[CapitalYear],
+        moat: Moat,
+        policy: Policy,
+        *,
+        runway_override: float | None = None,
+    ) -> RoicTerms:
+        """The returns of ``years`` under ``moat``; with ``runway_override``, an agent's runway
+        return in place of the measured one: it charges the runway years, and the flags of the
+        measured return (``return-floored``, ``charge-zeroed``) are not raised."""
         result = aggregate_roic(years)
         rr = runway_return(result, moat, policy)
         terminal = terminal_return(rr, moat, policy)
         aggregate = result.aggregate
         usable = aggregate if aggregate is not None and aggregate > 0 else None
+        if runway_override is not None:
+            return cls(result, rr, usable, runway_override, terminal, False, result.flags)
         flags = result.flags + rr.flags
         return cls(result, rr, usable, rr.value, terminal, rr.charge_off, flags)
 
@@ -139,7 +162,7 @@ class RoicTerms:
                 "marginal_usable": rr.marginal_usable,
                 "three_year": rr.three_year,
                 "ten_year": rr.ten_year,
-                "value": rr.value,
+                "value": self.runway,
             },
             "terminal_roic": self.terminal,
         }
@@ -155,6 +178,46 @@ def charge_for(runway_roic: float, terminal: float, charge_off: bool, policy: Po
     """The reinvestment charge at these returns: ``runway_roic`` in years 1 to N−1, ``terminal``
     in year N and the terminal, and none in years 1 to N−1 when ``charge_off``."""
     return Charge(runway_roic, terminal, policy.required_return, policy.terminal_growth, charge_off)
+
+
+def chosen[T](c: Context | StartUpContext, tag: OverrideTag, computed: T) -> T:
+    """The overriding value of ``tag`` when the context holds an override of it, else
+    ``computed``, the route's own reading. The value is passed as stored: the override's number
+    or word, which the rules of ``overrides.check_override`` gave the input's type."""
+    found = c.overrides.get(tag)
+    return computed if found is None else cast(T, found.value)
+
+
+def judgment_inputs(overrides: Overrides) -> tuple[TaggedInput, ...]:
+    """The JUDGMENT entries of the overrides, in the bridge's order: each named by its tag, its
+    number as the value (``None`` for a word, which leads the note), the input's unit, and the
+    override's provenance: the source "override <id>", entered at the override's time, the
+    reason as the note."""
+    return tuple(_judgment(overrides[tag]) for tag in BRIDGE_ORDER if tag in overrides)
+
+
+def _judgment(o: Override) -> TaggedInput:
+    source = "override" if o.id is None else f"override {o.id}"
+    provenance = Provenance(source, None, None, o.at)
+    value: float | None = None
+    note = o.reason
+    if isinstance(o.value, str):
+        note = f"{o.value}: {o.reason}"
+    else:
+        value = o.value
+    return TaggedInput(
+        o.tag, value, TAGS[o.tag].unit, "JUDGMENT", "judgment", provenance, note=note
+    )
+
+
+def judged_inputs(inputs: tuple[TaggedInput, ...], overrides: Overrides) -> tuple[TaggedInput, ...]:
+    """``inputs`` with the JUDGMENT entries of ``overrides`` in place of the route's own entries
+    for the inputs they set (``overrides.INPUT_OF``), last."""
+    if not overrides:
+        return inputs
+    replaced = {INPUT_OF[tag] for tag in overrides if tag in INPUT_OF}
+    kept = tuple(x for x in inputs if x.name not in replaced)
+    return kept + judgment_inputs(overrides)
 
 
 def nri_gap(i: CompanyInputs) -> float | None:

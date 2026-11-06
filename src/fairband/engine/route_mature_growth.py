@@ -24,6 +24,14 @@ the path's rates from year 2.
 row's moat and returns, so its value is the one this route would reach (calibration spec 5.7).
 It carries the keys the rebuild reads, so ``cross_check_at_price`` gives its implied growth at
 any price by the same solve, from the intermediates alone.
+
+Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the moat, so the
+runway, the terminal return and the margin of safety with it; ``return.runway`` the runway return
+of the charge (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring gap, which the anchor's
+basis test then takes off trailing GAAP EPS (``anchor.ntm_anchor``); ``path.step_2`` and
+``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
+step not counted thin; ``growth.belief`` the belief's rate. The cross-check reads the row's moat,
+returns and gap, and the consensus and belief as found.
 """
 
 from dataclasses import asdict, replace
@@ -35,6 +43,7 @@ from fairband.engine.anchor import (
     Path,
     base_fiscal_year,
     belief_from_sales,
+    few_analysts,
     moat_class,
     ntm_anchor,
     ntm_quarters,
@@ -50,6 +59,7 @@ from fairband.engine.mature_growth import (
     value_at_belief,
 )
 from fairband.engine.multiples import epv, growth_share
+from fairband.engine.overrides import OverrideTag
 from fairband.engine.roic import terminal_roic
 from fairband.engine.route_steps import (
     Context,
@@ -57,6 +67,7 @@ from fairband.engine.route_steps import (
     RoicTerms,
     Valued,
     charge_for,
+    chosen,
     common_inputs,
     common_rules,
     data,
@@ -75,16 +86,18 @@ from fairband.policy import Moat, Policy
 
 _IMPLIED_HI = 2.0  # the highest growth the implied-growth solve tries: 200% a year
 _NOT_POSITIVE = "value not positive under the reinvestment charge"
+_STEP_TAGS: tuple[OverrideTag, OverrideTag] = ("path.step_2", "path.step_3")
 
 
 def value_mature_growth(c: Context) -> Valued | Refused:
     i, t, policy = c.inputs, c.trailing, c.policy
-    found = _anchor_and_path(c)
+    found = _anchor_and_path(c, own=True)
     if isinstance(found, Refused):
         return found
     anchor, path, base_year, belief = found
-    moat = moat_class(i.moat_score, policy)
-    roic = RoicTerms.of(i.capital_years, moat, policy)
+    moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
+    runway_return: float | None = chosen(c, "return.runway", None)
+    roic = RoicTerms.of(i.capital_years, moat, policy, runway_override=runway_return)
     growth, charge = _growth_and_charge(anchor, path, belief, moat, roic, policy)
     value_total = value_at_belief(growth, charge)
     value = value_total / c.shares
@@ -96,7 +109,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         key: None if ch is None else value_at_belief(growth, ch) / c.shares
         for key, ch in _roic_charges(charge, roic.usable, moat, policy).items()
     }
-    gap = nri_gap(i)
+    gap = chosen(c, "earnings.nri_gap", nri_gap(i))
     e = eps(t, gap, anchor.ntm_eps)
     im: dict[str, Any] = {
         "anchor": {
@@ -201,25 +214,49 @@ def cross_check_at_price(
     return gr | {"implied_growth": implied_growth(target, growth, charge, hi=_IMPLIED_HI)}
 
 
-def _anchor_and_path(c: Context) -> tuple[Anchor, Path, int, Belief] | Refused:
+def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, Belief] | Refused:
     """Year 1's anchor, the consensus path with its base fiscal year, and the belief; or the
-    route's refusal, with the flags raised before it."""
+    route's refusal, with the flags raised before it. The anchor reads an overriding
+    non-recurring gap; with ``own``, the route's own path and belief read the step and belief
+    overrides, which a cross-check leaves as found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
         return Refused("no trailing revenue")
     if i.tax_rate_latest is None:
         return Refused("no statutory tax rate")
     quarters = ntm_quarters(i.quarter_estimates, t.period_end) or ()
-    anchor = ntm_anchor(quarters, t, i.street_ttm_eps, c.shares, i.tax_rate_latest, c.price, policy)
+    gap: float | None = chosen(c, "earnings.nri_gap", None)
+    anchor = ntm_anchor(
+        quarters, t, i.street_ttm_eps, c.shares, i.tax_rate_latest, c.price, policy, nri_gap=gap
+    )
     if anchor.refusal is not None:
         return Refused(anchor.refusal, anchor.flags)
     base_year = base_fiscal_year(quarters)
     path = path_steps(i.annual_estimates, base_year, policy)
+    belief = belief_from_sales(t.revenue / 1e6, policy)
+    if own:
+        path, belief = _judged(c, path, belief, base_year)
     if any(g is not None and g <= -1 for g in path.steps):
         return Refused(
             "consensus earnings turn negative within the path", anchor.flags + path.flags
         )
-    return anchor, path, base_year, belief_from_sales(t.revenue / 1e6, policy)
+    return anchor, path, base_year, belief
+
+
+def _judged(c: Context, path: Path, belief: Belief, base_year: int) -> tuple[Path, Belief]:
+    """The path and the belief under the step and belief overrides: an overriding step replaces
+    the consensus's, and ``few-analysts`` names only the steps the consensus still gives."""
+    if not c.overrides:
+        return path, belief
+    steps = (chosen(c, "path.step_2", path.steps[0]), chosen(c, "path.step_3", path.steps[1]))
+    consensus = tuple(
+        None if tag in c.overrides else step
+        for tag, step in zip(_STEP_TAGS, path.steps, strict=True)
+    )
+    thin = few_analysts(base_year, (consensus[0], consensus[1]), path.analysts, c.policy)
+    flags = tuple(f for f in path.flags if f.code != "few-analysts") + present(thin)
+    rate = chosen(c, "growth.belief", belief.rate)
+    return replace(path, steps=steps, flags=flags), replace(belief, rate=rate)
 
 
 def _growth_and_charge(

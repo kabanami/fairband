@@ -71,6 +71,15 @@ floor has no weight); ``distress-not-charged``; ``z-distress``; ``f-score-low``;
 ``reinvesting-in-decline``; the trailing flags. Never the ROIC flags. ``path-on-trend`` and
 ``consensus-recovery`` name the decline rate d as used, so a floored row names −50%, not the
 trend's own figure.
+
+Overrides (``method.md`` 14) through ``route_steps.chosen``. ``decline.rate`` replaces d, never
+floored (``decline-rate-floored`` is not raised); ``path.step_2`` and ``path.step_3`` the
+consensus steps as the revenue-growth route reads them (``revenue_path_for``), not read on a row
+without a usable consensus, whose years 1 to 3 shrink at d; ``capital.sales_to_capital`` the
+measure (``used`` "override", so the peers raise no flag and cite no rule); ``balance.debt`` and
+``balance.cash`` the balance sheet's figures before they count as nil, the rating read on a
+replaced debt figure. A row a ``phase`` override puts in Decline without a revenue trend or a
+positive last revenue, and no ``decline.rate`` override, is refused "no revenue trend".
 """
 
 import math
@@ -95,6 +104,7 @@ from fairband.engine.route_revenue_growth import (
     from_industry,
     from_peers,
     industry_peer_max_input,
+    judged_steps,
     ntm_revenue,
     peer_industry,
     revenue_path_for,
@@ -105,6 +115,7 @@ from fairband.engine.route_steps import (
     Refused,
     RoicTerms,
     Valued,
+    chosen,
     common_inputs,
     data,
     eps,
@@ -171,7 +182,7 @@ _PRIOR_LINES = (
     "net_income",
 )
 
-_Used = Literal["own-latest", "peers"]
+_Used = Literal["own-latest", "peers", "override"]
 
 
 @dataclass(frozen=True)
@@ -201,7 +212,10 @@ def value_decline(c: Context) -> Valued | Refused:
     if tax is None:
         return Refused("no statutory tax rate")
     revenue0, n = t.revenue, policy.runoff_years
-    d, floored = _decline_rate(c)
+    trend = _decline_rate(c)
+    if trend is None:
+        return Refused("no revenue trend")
+    d, floored = trend
     path = _consensus(c, revenue0, d, floored)
     if path.falls:
         return Refused("consensus revenue falls to zero or below within the path", path.flags)
@@ -217,10 +231,11 @@ def value_decline(c: Context) -> Valued | Refused:
 
     margin = _margin(i.series, t.operating_income / revenue0)
     ebit_n = revenue0 * margin["value"]
-    debt, cash = nil(i.debt), nil(i.cash)
+    debt_line = chosen(c, "balance.debt", i.debt)
+    debt, cash = nil(debt_line), nil(chosen(c, "balance.cash", i.cash))
     # Unknown debt is not "no net debt": without a debt line there is no rating.
-    found = None if i.debt is None else rate(ebit_n, t.interest_expense, debt, cash, policy)
-    unrated = _NO_DEBT if i.debt is None else _NO_INTEREST
+    found = None if debt_line is None else rate(ebit_n, t.interest_expense, debt, cash, policy)
+    unrated = _NO_DEBT if debt_line is None else _NO_INTEREST
     rebuild: dict[str, Any] = {
         "runoff_path": {
             "revenue0": revenue0,
@@ -303,7 +318,7 @@ def value_decline(c: Context) -> Valued | Refused:
             "statements",
             "trailing twelve months, each period's expense by its size",
         ),
-        _sales_to_capital_input(c, used, sales_to_capital),
+        *_sales_to_capital_input(c, used, sales_to_capital),
         data(i, "debt", i.debt, "USD", "statements"),
         data(i, "cash", i.cash, "USD", "statements"),
         *_balance_inputs(c),
@@ -360,15 +375,20 @@ def decline_at_price(
     }
 
 
-def _decline_rate(c: Context) -> tuple[float, bool]:
+def _decline_rate(c: Context) -> tuple[float, bool] | None:
     """d: the five-year revenue slope over the last fiscal year's revenue, at most zero, floored
-    at ``DECLINE_FLOOR``; and whether the floor bound. The classifier puts a company in Decline
-    only on a falling trend with a positive last revenue, so both are there."""
+    at ``DECLINE_FLOOR``; and whether the floor bound. An agent's ``decline.rate`` stands as it
+    is, never floored. The classifier puts a company in Decline only on a falling trend with a
+    positive last revenue; a row a ``phase`` override puts here may lack either, and has no d
+    (``None``)."""
+    judged: float | None = chosen(c, "decline.rate", None)
+    if judged is not None:
+        return judged, False
     evidence, series = c.evidence, c.inputs.series
     slope = None if evidence is None else evidence.revenue_slope
     last = series[-1].revenue if series else None
     if slope is None or last is None or last <= 0:
-        raise ValueError("a Decline row carries its revenue trend and a positive last revenue")
+        return None
     trend = min(0.0, slope / last)
     return max(DECLINE_FLOOR, trend), trend < DECLINE_FLOOR
 
@@ -385,7 +405,9 @@ def _consensus(c: Context, revenue0: float, d: float, floored: bool) -> _Consens
         on_trend = (*floor, _on_trend(d, n))
         return _Consensus(ntm, False, (None, None), (False, False), (), False, on_trend)
     base = base_fiscal_year(quarters)
-    path, _, found = revenue_path_for(revenue0, ntm, i.annual_estimates, base, None, c.policy)
+    path, _, found = revenue_path_for(
+        revenue0, ntm, i.annual_estimates, base, None, c.policy, judged=judged_steps(c)
+    )
     beyond = consensus_beyond(i.annual_estimates, base, c.policy)[: n - 3]
     resolved, held = resolved_steps(path)
     flags = (
@@ -455,8 +477,11 @@ def _margin(series: Series, trailing: float) -> dict[str, Any]:
 
 
 def _sales_to_capital(c: Context, roic: RoicTerms) -> tuple[_Used, float] | None:
-    """The company's own newest kept ROIC year's revenue over its average capital; else the mature
-    peers' median; else none."""
+    """An agent's figure; else the company's own newest kept ROIC year's revenue over its average
+    capital; else the mature peers' median; else none."""
+    judged: float | None = chosen(c, "capital.sales_to_capital", None)
+    if judged is not None:
+        return "override", judged
     i = c.inputs
     revenue = {fy.year: fy.revenue for fy in i.series if fy.revenue is not None}
     own = newest_sales_to_capital(roic.result.by_year, revenue)
@@ -650,20 +675,27 @@ def _path_inputs(c: Context, path: _Consensus) -> tuple[TaggedInput, ...]:
     )
 
 
-def _sales_to_capital_input(c: Context, used: _Used, value: float) -> TaggedInput:
+def _sales_to_capital_input(c: Context, used: _Used, value: float) -> tuple[TaggedInput, ...]:
     """The sales-to-capital used: the own newest year from the statements (an estimate under the
-    intangibles method when invested capital took it), or the peers' median."""
+    intangibles method when invested capital took it), or the peers' median; none for an agent's
+    figure, which its JUDGMENT entry cites."""
+    if used == "override":
+        return ()
     if used == "own-latest":
-        return from_capital(
-            c.inputs,
-            "sales_to_capital",
-            value,
-            "the company's own newest year: revenue over average invested capital",
+        return (
+            from_capital(
+                c.inputs,
+                "sales_to_capital",
+                value,
+                "the company's own newest year: revenue over average invested capital",
+            ),
         )
     industry = peer_industry(c)
     median = "the mature peers' median" + ("" if industry is None else f" ({industry} industry)")
-    return from_peers(
-        c, "sales_to_capital", value, f"{median}; the company has no newest-year measure"
+    return (
+        from_peers(
+            c, "sales_to_capital", value, f"{median}; the company has no newest-year measure"
+        ),
     )
 
 

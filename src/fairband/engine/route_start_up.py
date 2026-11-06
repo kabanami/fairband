@@ -49,6 +49,12 @@ are the industry's; ``tax-loss-history-unknown`` when the requirement's ramp sta
 has a loss year; ``below-net-cash`` when EV_price is at or below zero; ``burn-cover-short`` below
 ``burn_cover_flag_years``. Never the ROIC flags, ``return-above-peers``, ``few-analysts`` or the
 trailing flags: no path reads the consensus or the company's return.
+
+Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the moat of the
+terminal return; ``margin.target`` the peers' median (the override alone on a row with no
+counted peers, as the revenue-growth route reads it); ``balance.debt`` and ``balance.cash`` the
+balance sheet's figures, which the requirement, the cash floor and the burn cover read, a
+replaced cash figure known. The result stays the refusal "Start-up: no value by design".
 """
 
 from typing import Any
@@ -70,10 +76,19 @@ from fairband.engine.route_revenue_growth import (
     from_industry,
     from_peers,
     industry_peer_max_input,
+    judged_target,
     peer_industry,
     target_intermediates,
 )
-from fairband.engine.route_steps import Refused, StartUpContext, data, nil, present, rule
+from fairband.engine.route_steps import (
+    Refused,
+    StartUpContext,
+    chosen,
+    data,
+    nil,
+    present,
+    rule,
+)
 from fairband.engine.types import Flag, TaggedInput
 from fairband.policy import Moat, Policy
 
@@ -91,9 +106,10 @@ def value_start_up(c: StartUpContext) -> Refused:
     """A Start-up row's refusal with its figures: the requirement, the cash floor, the burn
     cover."""
     i, t, policy = c.inputs, c.trailing, c.policy
-    debt, cash = nil(i.debt), nil(i.cash)
-    moat = moat_class(i.moat_score, policy)
-    target = target_margin(i.peers, policy)
+    cash_line = chosen(c, "balance.cash", i.cash)
+    debt, cash = nil(chosen(c, "balance.debt", i.debt)), nil(cash_line)
+    moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
+    target = judged_target(c, target_margin(i.peers, policy))
     s2c = peer_sales_to_capital(i.peers, policy)
     tax = i.tax_rate_latest
     terminal = (
@@ -114,7 +130,7 @@ def value_start_up(c: StartUpContext) -> Refused:
         "terminal_roic": terminal,
     }
     requirement = _requirement(found, i.market_cap, debt, cash, policy)
-    burn, cover = _burn(t, i.cash)
+    burn, cover = _burn(t, cash_line)
     im: dict[str, Any] = {
         "requirement": requirement,
         "cash_floor": (cash - debt) / c.shares,
@@ -122,7 +138,7 @@ def value_start_up(c: StartUpContext) -> Refused:
         "burn": burn,
         "debt": debt,
         "cash": cash,
-        "cash_known": i.cash is not None,
+        "cash_known": cash_line is not None,
         "shares": c.shares,
         "market_cap": i.market_cap,
     }

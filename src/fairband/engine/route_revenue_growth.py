@@ -83,6 +83,17 @@ routes are not raised: this route's charge does not read the runway return.
 
 ``consensus_beyond`` reads the annual consensus revenue past base + 2 for the Decline route's
 run-off (spec 2026-11-06 6.1); this route's path ends its consensus at year 3.
+
+Overrides (``method.md`` 14) through ``route_steps.chosen``. ``path.step_2`` and ``path.step_3``
+replace the consensus steps before the cap, the fall check and the path's flags: a replaced step
+is never held, and ``few-analysts`` does not name it. ``path.hold`` replaces the held rate after
+the cap: the agent's rate, which the cap does not bind, so ``consensus-above-base-rate`` is not
+raised and the cap's input says it does not bind. ``moat.class`` replaces the moat.
+``margin.target`` replaces the peers' median, the peers' lowest and highest margins kept (both
+the override's on a row with no counted peers, which then is not refused for its target).
+``capital.sales_to_capital`` replaces the measure (``used`` "override"). ``balance.debt`` and
+``balance.cash`` replace the balance sheet's figures before they count as nil, and a replaced
+line raises no ``line-not-presented`` flag.
 """
 
 from collections.abc import Sequence
@@ -104,6 +115,7 @@ from fairband.engine.anchor import (
 )
 from fairband.engine.flags import value_spread_flag
 from fairband.engine.multiples import epv, growth_share
+from fairband.engine.overrides import OverrideTag
 from fairband.engine.revenue_growth import (
     Bridge,
     MarginPath,
@@ -133,6 +145,7 @@ from fairband.engine.route_steps import (
     RoicTerms,
     StartUpContext,
     Valued,
+    chosen,
     common_inputs,
     common_rules,
     data,
@@ -154,6 +167,7 @@ from fairband.engine.types import Flag, Phase, Provenance, TaggedInput
 from fairband.policy import BaseRateClass, Moat, Policy
 
 _NOT_POSITIVE = "value not positive under the reinvestment charge"
+_BALANCE_TAGS: dict[str, OverrideTag] = {"debt": "balance.debt", "cash": "balance.cash"}
 _PEERS = Provenance("FMP stock-peers and the peers' statements", None, None, None)
 _MARGINS_TESTED = "the peers' lowest, median and highest target margins"
 TAX_LOSS = Flag(
@@ -177,11 +191,11 @@ _FAILURE_PROBABILITY = {
 
 @dataclass(frozen=True)
 class _SalesToCapital:
-    """The measure used (``None`` when neither stands), the company's own five-year marginal
-    measure, whether it is usable and whether the bound on the peers' median alone rejected it,
-    the mature peers' median, and the value used."""
+    """The measure used (``None`` when neither stands, "override" for an agent's figure), the
+    company's own five-year marginal measure, whether it is usable and whether the bound on the
+    peers' median alone rejected it, the mature peers' median, and the value used."""
 
-    used: Literal["own", "peers"] | None
+    used: Literal["own", "peers", "override"] | None
     own: float | None
     own_usable: bool
     own_below_bound: bool
@@ -208,11 +222,15 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     base_year = base_fiscal_year(quarters)
     sales = sales_class(t.revenue / 1e6, policy)
     path, analysts, path_flags = revenue_path_for(
-        t.revenue, ntm, i.annual_estimates, base_year, sales, policy
+        t.revenue, ntm, i.annual_estimates, base_year, sales, policy, judged=judged_steps(c)
     )
     if any(g <= -1 for g in resolved_steps(path)[0]):
         return Refused("consensus revenue falls to zero or below within the path", path_flags)
-    moat = moat_class(i.moat_score, policy)
+    capped, judged_hold = path.hold is not None, "path.hold" in c.overrides
+    if judged_hold:  # the agent's rate: the cap does not bind it
+        path = replace(path, hold=chosen(c, "path.hold", path.hold))
+        path_flags = tuple(f for f in path_flags if f.code != "consensus-above-base-rate")
+    moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
     roic = RoicTerms.of(i.capital_years, moat, policy)
     s2c = _sales_to_capital(c, roic)
     rebuild: dict[str, Any] = {
@@ -227,13 +245,13 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "margin_start": t.operating_income / t.revenue,
         "tax_rate": tax,
         "moat": moat,
-        "debt": nil(i.debt),
-        "cash": nil(i.cash),
+        "debt": nil(chosen(c, "balance.debt", i.debt)),
+        "cash": nil(chosen(c, "balance.cash", i.cash)),
         "shares": c.shares,
         "sales_to_capital": asdict(s2c),
     }
     path_and_capital = path_flags + roic.result.flags + bridge_flags(c) + present(from_industry(c))
-    target = target_margin(i.peers, policy)
+    target = judged_target(c, target_margin(i.peers, policy))
     if target is None:
         counted = len(margin_peers(i.peers, policy))
         rebuild |= implied_margin_at_price(rebuild, c.price, policy)
@@ -327,12 +345,12 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
             target.value,
             f"the median ten-year operating margin of {target.count} mature peers{of_industry}",
         ),
-        _sales_to_capital_input(c, s2c),
+        *_sales_to_capital_input(c, s2c),
         data(i, "debt", i.debt, "USD", "statements"),
         data(i, "cash", i.cash, "USD", "statements"),
         *common_rules(policy, moat, terminal),
         rule(policy, "high_growth_years", policy.high_growth_years, "years"),
-        _cap_input(policy, sales, path.hold is not None),
+        _cap_input(policy, sales, capped, judged_hold),
         rule(policy, "fade_years", policy.fade_years, "years"),
         rule(policy, "margin_convergence_year", policy.margin_convergence_year, "year"),
         *_rule_if(
@@ -410,17 +428,28 @@ def revenue_path_for(
     base_year: int,
     sales: BaseRateClass | None,
     policy: Policy,
+    judged: tuple[float | None, float | None] = (None, None),
 ) -> tuple[RevenuePath, tuple[int | None, int | None], tuple[Flag, ...]]:
     """The revenue path from the annual consensus revenue of the base year and the next two, its
     held rate the sales class's cap when g_3 as resolved is above it, the revenue analysts of the
     years the two steps land on, and the path's flags: ``path-held``,
     ``consensus-above-base-rate``, then ``few-analysts``. Without a sales class nothing is capped
-    or flagged above the base rate: the Decline route reads only years 1 to 3 of the path."""
+    or flagged above the base rate: the Decline route reads only years 1 to 3 of the path.
+    ``judged`` holds an agent's step for year 2 or 3 (``None`` keeps the consensus's), which
+    replaces the consensus step before the cap and the flags: never held, never thin."""
     by_year = {x.fiscal_year: x for x in annual}
     rows = [by_year.get(base_year + k) for k in range(3)]
     points = [(None, None) if r is None else (r.revenue, r.analysts_revenue) for r in rows]
     values = [consensus_value(mean, n) for mean, n in points]
-    steps = (growth_step(values[0], values[1]), growth_step(values[1], values[2]))
+    consensus = (growth_step(values[0], values[1]), growth_step(values[1], values[2]))
+    steps = (
+        consensus[0] if judged[0] is None else judged[0],
+        consensus[1] if judged[1] is None else judged[1],
+    )
+    thin = (
+        None if judged[0] is not None else consensus[0],
+        None if judged[1] is not None else consensus[1],
+    )
     analysts = (points[1][1], points[2][1])
     found = RevenuePath(
         revenue0,
@@ -438,9 +467,14 @@ def revenue_path_for(
     flags = (
         present(_path_held(path, values, base_year))
         + (() if sales is None else present(_above_base_rate(path, sales)))
-        + present(few_analysts(base_year, steps, analysts, policy))
+        + present(few_analysts(base_year, thin, analysts, policy))
     )
     return path, analysts, flags
+
+
+def judged_steps(c: Context) -> tuple[float | None, float | None]:
+    """The agent's steps for years 2 and 3, ``None`` where the consensus stands."""
+    return chosen(c, "path.step_2", None), chosen(c, "path.step_3", None)
 
 
 def consensus_beyond(
@@ -514,7 +548,8 @@ def _above_base_rate(path: RevenuePath, sales: BaseRateClass) -> Flag | None:
 def _sales_to_capital(c: Context, roic: RoicTerms) -> _SalesToCapital:
     """The company's own five-year marginal measure over the kept ROIC years, each year's revenue
     its fiscal year's, when usable and, with a peers' median, at least the policy's share of it
-    (spec 2026-11-06 7.1); else the mature peers' median; else none."""
+    (spec 2026-11-06 7.1); else the mature peers' median; else none. An agent's figure stands
+    over all three, the measures kept beside it."""
     i, policy = c.inputs, c.policy
     revenue = {fy.year: fy.revenue for fy in i.series if fy.revenue is not None}
     own, usable = own_sales_to_capital(
@@ -530,6 +565,9 @@ def _sales_to_capital(c: Context, roic: RoicTerms) -> _SalesToCapital:
         and peers is not None
         and own < policy.own_sales_to_capital_min_share * peers
     )
+    judged: float | None = chosen(c, "capital.sales_to_capital", None)
+    if judged is not None:
+        return _SalesToCapital("override", own, usable, below, peers, judged)
     if usable and not below:
         return _SalesToCapital("own", own, True, False, peers, own)
     if peers is not None:
@@ -590,12 +628,14 @@ def _rule_if(cited: bool, policy: Policy, name: str, value: float) -> tuple[Tagg
 
 def bridge_flags(c: Context | StartUpContext) -> tuple[Flag, ...]:
     """``line-not-presented:debt`` and ``:cash`` for a figure the bridge counts as nil in part or
-    in full: unknown, or with a line assembly's note names as not presented."""
+    in full: unknown, or with a line assembly's note names as not presented; none for a line an
+    agent's balance correction replaces."""
     i = c.inputs
     lines = (
         ("debt", i.debt, "short- and long-term debt"),
         ("cash", i.cash, "cash and short-term investments"),
     )
+    replaced = {name for name, _, _ in lines if _BALANCE_TAGS[name] in c.overrides}
     return tuple(
         Flag(
             f"line-not-presented:{name}",
@@ -605,8 +645,20 @@ def bridge_flags(c: Context | StartUpContext) -> tuple[Flag, ...]:
             "bridge from firm value to equity.",
         )
         for name, figure, words in lines
-        if figure is None or name in i.notes
+        if name not in replaced and (figure is None or name in i.notes)
     )
+
+
+def judged_target(c: Context | StartUpContext, found: TargetMargin | None) -> TargetMargin | None:
+    """The target margin under an agent's ``margin.target``: the peers' record with the override
+    as its value, or, with no counted peers, the override alone (no peers, its low and high the
+    override's); the peers' as found without one."""
+    value: float | None = chosen(c, "margin.target", None)
+    if value is None:
+        return found
+    if found is None:
+        return TargetMargin(value, 0, value, value, None, None, ())
+    return replace(found, value=value)
 
 
 def peer_industry(c: Context | StartUpContext) -> str | None:
@@ -702,13 +754,17 @@ def step_input(c: Context, name: str, step: float | None, held: bool) -> TaggedI
     return data(c.inputs, name, step, "ratio", "estimates_annual", note)
 
 
-def _cap_input(policy: Policy, sales: BaseRateClass, binds: bool) -> TaggedInput:
-    """The cap on the held rate, its note naming the sales class and whether it binds."""
-    whether = (
-        "binds: the year-3 consensus is above it"
-        if binds
-        else "does not bind: the year-3 consensus is at or below it"
-    )
+def _cap_input(
+    policy: Policy, sales: BaseRateClass, binds: bool, overridden: bool = False
+) -> TaggedInput:
+    """The cap on the held rate, its note naming the sales class and whether it binds: never on
+    a held rate an agent's override sets."""
+    if overridden:
+        whether = "does not bind: the held rate is an agent's override"
+    elif binds:
+        whether = "binds: the year-3 consensus is above it"
+    else:
+        whether = "does not bind: the year-3 consensus is at or below it"
     note = (
         "the Base Rate Book's 90th-percentile five-year sales growth for the "
         f"{sales.label} sales class; {whether}"
@@ -732,14 +788,16 @@ def from_peers(
     return replace(data(c.inputs, name, value, "ratio", note=note), provenance=provenance)
 
 
-def _sales_to_capital_input(c: Context, s2c: _SalesToCapital) -> TaggedInput:
+def _sales_to_capital_input(c: Context, s2c: _SalesToCapital) -> tuple[TaggedInput, ...]:
     """The sales-to-capital used: the own measure from the statements (an estimate under the
     intangibles method when invested capital took it), or the peers' median, its note naming both
-    figures when the bound alone rejected the own measure."""
+    figures when the bound alone rejected the own measure; none for an agent's figure, which its
+    JUDGMENT entry cites."""
+    if s2c.used == "override":
+        return ()
     if s2c.used == "own":
-        return from_capital(
-            c.inputs, "sales_to_capital", s2c.value, "the company's own five-year marginal measure"
-        )
+        own = "the company's own five-year marginal measure"
+        return (from_capital(c.inputs, "sales_to_capital", s2c.value, own),)
     industry = peer_industry(c)
     median = "the mature peers' median" + ("" if industry is None else f" ({industry} industry)")
     why = (
@@ -747,7 +805,7 @@ def _sales_to_capital_input(c: Context, s2c: _SalesToCapital) -> TaggedInput:
         if s2c.own_below_bound
         else "the own measure is not usable"
     )
-    return from_peers(c, "sales_to_capital", s2c.value, f"{median}; {why}")
+    return (from_peers(c, "sales_to_capital", s2c.value, f"{median}; {why}"),)
 
 
 def _rebuilt_path(im: dict[str, Any], policy: Policy) -> RevenuePath:

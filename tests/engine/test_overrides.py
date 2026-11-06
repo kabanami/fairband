@@ -1,0 +1,363 @@
+"""The override rules, the accessor the routes read through, the JUDGMENT inputs and the engine's
+reading of each overridable input (spec 2026-11-06 Tier 2, 10.2 to 10.4)."""
+
+from collections.abc import Sequence
+from dataclasses import replace
+from datetime import UTC, date, datetime
+from typing import get_args
+
+import pytest
+from support.engine_companies import (
+    decline_inputs,
+    fiscal_years,
+    high_growth_inputs,
+    mature_growth_inputs,
+    mature_stable_inputs,
+    start_up_inputs,
+)
+
+from fairband.engine.classifier import Deciles
+from fairband.engine.overrides import (
+    BRIDGE_ORDER,
+    TAGS,
+    Lifetime,
+    Override,
+    OverrideTag,
+    State,
+    check_override,
+    current_reading,
+    route_of,
+)
+from fairband.engine.route import value_company
+from fairband.engine.route_steps import Context, chosen, judgment_inputs
+from fairband.engine.types import Provenance, Route
+from fairband.policy import Policy
+
+TODAY = date(2026, 10, 31)
+NOW = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
+
+
+def override(tag: OverrideTag, value: float | str, id: int | None = 7) -> Override:
+    return Override(id, tag, value, "agent", "claude-opus-5-5", NOW, "guidance raised")
+
+
+def checked(
+    policy: Policy,
+    tag: str,
+    value: float | str,
+    route: Route,
+    evidence: Sequence[str] = ("filing",),
+    lifetime: Lifetime = "lasting",
+    cap: float | None = None,
+) -> tuple[State, str]:
+    return check_override(tag, value, route, policy, evidence, lifetime, cap)
+
+
+def test_check_refuses_a_locked_input(policy: Policy) -> None:
+    assert check_override(
+        "terminal_growth", 0.04, "mature-growth", policy, ["filing"], "lasting", None
+    ) == ("refused-locked", "g_T is a locked input: the terminal growth ceiling")
+    assert checked(policy, "required_return", 0.08, "mature-growth") == (
+        "refused-locked",
+        "r is a locked input: the hurdle rate",
+    )
+    assert checked(policy, "terminal_return", 0.2, "mature-growth") == (
+        "refused-locked",
+        "the terminal return follows the moat",
+    )
+    assert checked(policy, "price", 99.0, "decline") == ("refused-locked", "price is reported data")
+
+
+def test_check_refuses_a_tag_that_is_not_an_input(policy: Policy) -> None:
+    assert checked(policy, "colour", 0.1, "mature-growth") == (
+        "refused-not-input",
+        "colour is not an input",
+    )
+
+
+def test_check_refuses_a_tag_the_route_does_not_read(policy: Policy) -> None:
+    assert checked(policy, "decline.rate", -0.02, "mature-growth") == (
+        "refused-route",
+        "the Mature Growth route does not read decline.rate",
+    )
+    assert checked(policy, "growth.belief", 0.08, "revenue-growth") == (
+        "refused-route",
+        "the revenue-growth route does not read growth.belief",
+    )
+    assert checked(policy, "path.step_2", 0.1, "mature-stable")[0] == "refused-route"
+
+
+def test_check_refuses_a_value_outside_its_range(policy: Policy) -> None:
+    assert checked(policy, "growth.belief", 0.7, "mature-growth") == (
+        "refused-unit",
+        "growth.belief takes −20% to 60%",
+    )
+    assert checked(policy, "capital.sales_to_capital", 11.0, "decline") == (
+        "refused-unit",
+        "capital.sales_to_capital takes 0.1 to 10",
+    )
+    assert checked(policy, "earnings.nri_gap", -101.0, "mature-stable") == (
+        "refused-unit",
+        "earnings.nri_gap takes −$100 to $100 a share",
+    )
+
+
+def test_a_range_includes_its_ends(policy: Policy) -> None:
+    assert checked(policy, "growth.belief", -0.2, "mature-growth") == ("applied", "")
+    assert checked(policy, "growth.belief", 0.6, "mature-growth") == ("applied", "")
+
+
+def test_check_refuses_a_word_outside_its_words(policy: Policy) -> None:
+    assert checked(policy, "moat.class", "Huge", "mature-growth") == (
+        "refused-unit",
+        "moat.class takes None, Narrow or Wide",
+    )
+    assert checked(policy, "moat.class", 2.0, "mature-growth")[0] == "refused-unit"
+    assert checked(policy, "growth.belief", "high", "mature-growth") == (
+        "refused-unit",
+        "growth.belief takes −20% to 60%",
+    )
+    assert checked(policy, "phase", "Mature Growth", "start-up") == ("applied", "")
+
+
+def test_check_refuses_a_lasting_balance_correction(policy: Policy) -> None:
+    assert checked(policy, "balance.debt", 100.0, "decline") == (
+        "refused-unit",
+        "balance.debt is period-tied only",
+    )
+    tied = checked(policy, "balance.debt", 100.0, "decline", lifetime="period-tied")
+    assert tied == ("applied", "")
+
+
+def test_check_needs_evidence(policy: Policy) -> None:
+    assert checked(policy, "growth.belief", 0.08, "mature-growth", evidence=[]) == (
+        "refused-evidence",
+        "an override needs evidence",
+    )
+
+
+def test_a_belief_above_the_cap_needs_a_filing_or_a_transcript(policy: Policy) -> None:
+    assert (
+        check_override(
+            "growth.belief", 0.30, "mature-growth", policy, ["finding"], "lasting", 0.25
+        )[0]
+        == "refused-evidence"
+    )
+    assert checked(policy, "growth.belief", 0.30, "mature-growth", ["finding"], cap=0.25) == (
+        "refused-evidence",
+        "a belief above the base rate's 90th percentile needs a filing or a transcript",
+    )
+    assert check_override(
+        "growth.belief", 0.30, "mature-growth", policy, ["transcript"], "lasting", 0.25
+    ) == ("applied", "")
+    assert checked(policy, "path.hold", 0.30, "revenue-growth", ["url"], cap=0.25) == (
+        "refused-evidence",
+        "a held rate above the base rate's 90th percentile needs a filing or a transcript",
+    )
+    at_the_cap = checked(policy, "path.hold", 0.25, "revenue-growth", ["url"], cap=0.25)
+    assert at_the_cap == ("applied", "")
+
+
+def test_the_checks_run_in_the_method_order(policy: Policy) -> None:
+    """Locked, not an input, the route, the unit, the evidence: the first rule broken answers."""
+    assert checked(policy, "fade_years", 9.0, "decline", evidence=[])[0] == "refused-locked"
+    assert checked(policy, "decline.rate", 0.5, "mature-growth", evidence=[])[0] == (
+        "refused-route"
+    )
+    assert checked(policy, "decline.rate", 0.5, "decline", evidence=[])[0] == "refused-unit"
+
+
+def test_every_tag_has_a_place_in_the_bridge_and_a_range_or_words(policy: Policy) -> None:
+    assert sorted(BRIDGE_ORDER) == sorted(get_args(OverrideTag)) == sorted(TAGS)
+    for tag, spec in TAGS.items():
+        assert spec.tag == tag
+        assert (spec.words is None) == (tag in policy.override_ranges), tag
+    assert TAGS["phase"].routes == {
+        "mature-growth",
+        "mature-stable",
+        "revenue-growth",
+        "decline",
+        "start-up",
+    }
+
+
+def test_the_route_follows_the_phase() -> None:
+    assert route_of("Start-up") == "start-up"
+    assert route_of("Young Growth") == route_of("High Growth") == "revenue-growth"
+    assert route_of("Mature Growth") == "mature-growth"
+    assert route_of("Mature Stable") == "mature-stable"
+    assert route_of("Decline") == "decline"
+
+
+def test_the_accessor_returns_the_engines_reading_without_an_override(policy: Policy) -> None:
+    i = mature_growth_inputs()
+    assert i.trailing is not None
+    mechanical = Context(i, i.trailing, 150.0, 1_000e6, policy, TODAY)
+    assert chosen(mechanical, "moat.class", "Narrow") == "Narrow"
+    assert chosen(mechanical, "growth.belief", 0.063) == 0.063
+    judged = Context(
+        i,
+        i.trailing,
+        150.0,
+        1_000e6,
+        policy,
+        TODAY,
+        overrides={"moat.class": override("moat.class", "Wide")},
+    )
+    assert chosen(judged, "moat.class", "Narrow") == "Wide"
+    assert chosen(judged, "growth.belief", 0.063) == 0.063
+
+
+def test_a_judgment_input_carries_the_overrides_provenance() -> None:
+    belief, moat = override("growth.belief", 0.08, 3), override("moat.class", "Wide", 4)
+    # given out of the bridge's order, read in it
+    found = judgment_inputs({"moat.class": moat, "growth.belief": belief})
+    assert [x.name for x in found] == ["growth.belief", "moat.class"]
+    assert all(x.tag == "JUDGMENT" and x.kind == "judgment" for x in found)
+    assert found[0].value == 0.08 and found[0].unit == TAGS["growth.belief"].unit
+    assert found[0].provenance == Provenance("override 3", None, None, NOW)
+    assert found[0].note == "guidance raised"
+    assert found[1].value is None and found[1].note == "Wide: guidance raised"
+
+
+def test_current_reading_on_each_golden(policy: Policy, deciles: Deciles) -> None:
+    mg = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    assert current_reading(mg, "growth.belief") == mg.intermediates["belief"]["rate"]
+    assert current_reading(mg, "path.step_2") == mg.intermediates["path_steps"][0]
+    assert current_reading(mg, "return.runway") == mg.intermediates["runway_return"]["value"]
+    assert current_reading(mg, "earnings.nri_gap") == mg.intermediates["nri_gap"]
+    assert current_reading(mg, "moat.class") == "Wide"
+    assert current_reading(mg, "decline.rate") is None
+    dc = value_company(decline_inputs(), deciles, policy, TODAY)
+    assert current_reading(dc, "decline.rate") == dc.intermediates["runoff_path"]["d"]
+    assert current_reading(dc, "path.step_3") == dc.intermediates["runoff_path"]["steps"][1]
+    assert current_reading(dc, "capital.sales_to_capital") == pytest.approx(2.0)
+    assert current_reading(dc, "balance.debt") == 200e6
+    hg = value_company(high_growth_inputs(), deciles, policy, TODAY)
+    assert current_reading(hg, "path.hold") == hg.intermediates["growth_rates"][3]
+    assert current_reading(hg, "margin.target") == hg.intermediates["target_margin"]["value"]
+    assert current_reading(hg, "balance.cash") == 3_000e6
+    su = value_company(start_up_inputs(), deciles, policy, TODAY)
+    assert current_reading(su, "phase") == "Start-up"
+    assert current_reading(su, "margin.target") == pytest.approx(0.25)
+    assert current_reading(su, "moat.class") == "None"
+    ms = value_company(mature_stable_inputs(), deciles, policy, TODAY)
+    assert current_reading(ms, "margin.target") is None
+    assert current_reading(ms, "path.hold") is None
+
+
+def test_a_balance_line_not_on_file_reads_none(policy: Policy, deciles: Deciles) -> None:
+    """The bridge counts an unknown line as nil; the engine's reading of it is none."""
+    hg = value_company(replace(high_growth_inputs(), cash=None), deciles, policy, TODAY)
+    assert hg.intermediates["cash"] == 0.0
+    assert current_reading(hg, "balance.cash") is None
+
+
+# The read points: each route reads its inputs through the accessor, and what the route computes
+# from an overridden input, its flags included, follows it (method.md 14).
+
+
+def test_the_judgment_entry_stands_for_the_routes_own(policy: Policy, deciles: Deciles) -> None:
+    belief = override("growth.belief", 0.08)
+    r = value_company(mature_growth_inputs(), deciles, policy, TODAY, {"growth.belief": belief})
+    assert [x.name for x in r.inputs if x.name in ("belief", "growth.belief")] == ["growth.belief"]
+    assert r.inputs[-1].tag == "JUDGMENT" and r.intermediates["belief"]["rate"] == 0.08
+
+
+def test_a_held_rate_override_is_not_capped(policy: Policy, deciles: Deciles) -> None:
+    """HGCO's year-3 consensus, 20%, is above its class's 15% cap; an agent's 30% stands."""
+    hold = override("path.hold", 0.30)
+    mechanical = value_company(high_growth_inputs(), deciles, policy, TODAY)
+    r = value_company(high_growth_inputs(), deciles, policy, TODAY, {"path.hold": hold})
+    assert mechanical.intermediates["revenue_path"]["hold"] == 0.15
+    assert "consensus-above-base-rate" in [f.code for f in mechanical.flags]
+    assert r.intermediates["revenue_path"]["hold"] == 0.30
+    assert r.intermediates["growth_rates"][3] == 0.30
+    assert "consensus-above-base-rate" not in [f.code for f in r.flags]
+    (cap,) = [x for x in r.inputs if x.name == "held_growth_cap"]
+    assert cap.note is not None
+    assert cap.note.endswith("does not bind: the held rate is an agent's override")
+
+
+def test_a_balance_correction_replaces_a_missing_line(policy: Policy, deciles: Deciles) -> None:
+    inputs = replace(high_growth_inputs(), cash=None)
+    cash = override("balance.cash", 3_000e6)
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    r = value_company(inputs, deciles, policy, TODAY, {"balance.cash": cash})
+    assert "line-not-presented:cash" in [f.code for f in mechanical.flags]
+    assert "line-not-presented:cash" not in [f.code for f in r.flags]
+    assert r.value == value_company(high_growth_inputs(), deciles, policy, TODAY).value
+
+
+def test_a_target_margin_override_values_a_row_with_no_peers(
+    policy: Policy, deciles: Deciles
+) -> None:
+    inputs = replace(high_growth_inputs(), peers=())
+    refused = value_company(inputs, deciles, policy, TODAY)
+    assert refused.refusal == "no target margin: 0 mature peers"
+    judged = {
+        "margin.target": override("margin.target", 0.20),
+        "capital.sales_to_capital": override("capital.sales_to_capital", 1.5),
+    }
+    r = value_company(inputs, deciles, policy, TODAY, judged)
+    assert r.value is not None and r.value > 0
+    assert r.intermediates["target_margin"]["count"] == 0
+    assert r.intermediates["sales_to_capital"]["used"] == "override"
+
+
+def test_an_overriding_decline_rate_is_never_floored(policy: Policy, deciles: Deciles) -> None:
+    """Revenue falling from $5 bn to $1 bn over five years shrinks faster than 50% a year on the
+    trend, so d is floored; an agent's d stands as given."""
+    steep = fiscal_years(
+        [5_000e6, 3_000e6, 2_000e6, 1_200e6, 1_000e6], [0.07, 0.08, 0.08, 0.09, 0.08]
+    )
+    inputs = replace(decline_inputs(), series=steep)
+    rate = {"decline.rate": override("decline.rate", -0.1)}
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    r = value_company(inputs, deciles, policy, TODAY, rate)
+    assert "decline-rate-floored" in [f.code for f in mechanical.flags]
+    assert r.intermediates["runoff_path"]["d"] == -0.1
+    assert "decline-rate-floored" not in [f.code for f in r.flags]
+
+
+def test_a_row_put_in_decline_without_a_trend_is_refused(policy: Policy, deciles: Deciles) -> None:
+    """Two fiscal years give no five-year revenue trend, so no decline rate: a refusal, not an
+    exception; an agent's decline rate values the row."""
+    mg = mature_growth_inputs()
+    inputs = replace(mg, series=mg.series[-2:])
+    to_decline = {"phase": override("phase", "Decline")}
+    assert value_company(inputs, deciles, policy, TODAY, to_decline).refusal == "no revenue trend"
+    judged = to_decline | {"decline.rate": override("decline.rate", -0.05)}
+    r = value_company(inputs, deciles, policy, TODAY, judged)
+    assert r.route == "decline" and r.refusal is None
+
+
+def test_a_cross_check_reads_the_consensus_as_found(policy: Policy, deciles: Deciles) -> None:
+    """A revenue step overridden on a revenue-growth row is not the growth route's earnings
+    step: the cross-check's figures stay the mechanical row's."""
+    step = override("path.step_2", 0.40)
+    mechanical = value_company(high_growth_inputs(), deciles, policy, TODAY)
+    r = value_company(high_growth_inputs(), deciles, policy, TODAY, {"path.step_2": step})
+    assert r.intermediates["path_steps"][0] == 0.40
+    assert r.intermediates["growth_route"] == mechanical.intermediates["growth_route"]
+
+
+def test_an_overriding_runway_return_charges_the_runway(policy: Policy, deciles: Deciles) -> None:
+    """MGCO with its capital at or below zero has the runway charge off (4.6); an agent's runway
+    return charges the runway years at it, and the terminal return still follows the moat."""
+    mg = mature_growth_inputs()
+    negative = tuple(
+        replace(y, total_current_liabilities=3 * (y.total_current_assets or 0))
+        for y in mg.capital_years
+    )
+    inputs = replace(mg, capital_years=negative)
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    runway = {"return.runway": override("return.runway", 0.20)}
+    r = value_company(inputs, deciles, policy, TODAY, runway)
+    assert mechanical.intermediates["charge_off"] is True
+    assert "charge-zeroed" in [f.code for f in mechanical.flags]
+    assert r.intermediates["charge_off"] is False
+    assert r.intermediates["runway_return"]["value"] == 0.20
+    assert r.intermediates["terminal_roic"] == mechanical.intermediates["terminal_roic"]
+    assert "charge-zeroed" not in [f.code for f in r.flags]
+    assert r.value is not None and mechanical.value is not None and r.value < mechanical.value
