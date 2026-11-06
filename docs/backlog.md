@@ -18,8 +18,9 @@ file or theme, before the workspace is deleted.
 
 | ID | Item | Type | Origin | Why |
 |---|---|---|---|---|
-| B-28 | Foreign filers are refused: currency and share-unit handling not built (196 rows on 2026-11-01; 13 of the 112 Decline rows) | feature | first live run | Spec next: the founder's order of 2026-11-06 |
-| B-87 | The screen after a refresh: B-68 (history and what changed), B-47 (a price fall with no consensus revision), B-32 (the industry filter) and B-31 (FIND performance), as one page piece | feature | founder, 2026-11-06 | the founder's order of 2026-11-06: after B-28, before Tier 2 |
+| B-9 | Tier 2: the agents over MCP, B-48 to B-59 and B-97, as one spec (`docs/superpowers/specs/2026-11-06-tier-2-agents-design.md`) and two plans, the agent's side then the page; the stance column is the agent's and empty until then | feature | founder, 2026-11-03 and 2026-11-06 | Spec written 2026-11-06, builder check done; the founder's order of 2026-11-06 evening: before B-28 ("I want to work on the MCP server") |
+| B-28 | Foreign filers are refused: currency and share-unit handling not built (196 rows on 2026-11-01; 13 of the 112 Decline rows) | feature | first live run | the founder's order of 2026-11-06: after B-9 |
+| B-87 | The screen after a refresh: B-68 (history and what changed), B-47 (a price fall with no consensus revision), B-32 (the industry filter) and B-31 (FIND performance), as one page piece | feature | founder, 2026-11-06 | the founder's order of 2026-11-06: after B-28 |
 
 ## Questions
 
@@ -39,7 +40,6 @@ file or theme, before the workspace is deleted.
 
 | ID | Item | Type | Origin | Why |
 |---|---|---|---|---|
-| B-9 | Tier 2: the agent's research and stance per company; the stance column is empty until then | feature | founder, 2026-11-03 | the engine's value is a best effort; the stance is the agent's call after research; the parts are B-48 to B-59 |
 | B-10 | Young Growth's failure probability is "unavailable" (`failure-not-charged`, 25 rows); the Decline route's rating-to-default table could serve it | feature | growth routes readout, 2026-11-03 | one table can serve three routes |
 | B-11 | `route_decline.py` (730 lines): `_decline_rate` raises ValueError when evidence is None (unreachable; a guard refusal keeps the contract); six helpers imported from `route_revenue_growth` belong in a shared module, `_row` in `distress.py`, `_margin` in the core; the DATA input `equity` (book) and the intermediate `equity` (going concern) share a name; test gaps: path-held with decline-rate-floored, the order of four flags, the π = 1 floor edge | debt | plan B, Task 4 review | |
 | B-12 | `runoff.py`: `runoff_rates` with fewer than 3 years silently returns three rates; `RunoffValuation` built positionally (14 fields); no test of a negative firm value through `runoff_equity` alone | debt | plan B, Task 3 review | |
@@ -76,6 +76,7 @@ file or theme, before the workspace is deleted.
 | B-57 | The playbook: the Tier 2 roles as skills the user installs in the agent host; its first step is "check the inbox" | feature | FC-41 | |
 | B-58 | Work inbox, two ways in. A button on a row posts an item: the symbol, the mode (valuation review or full report), a note and the snapshot at posting. A company on a watchlist (B-67) whose validity window expired is posted once per expiry as a valuation review, when the inbox is read on the page or over MCP, never while an item for it is open; it drops while pending if the company leaves every watchlist. States: pending, claimed (agent, time), done (linked to the report or notes), declined with a reason. MCP tools: list, claim, complete. Later: ledger proposals in the reverse direction (B-60) | feature | FC-40; founder 2026-11-04 | the user hands the agent its work through Fairband, not through chat |
 | B-59 | Report export: a Markdown download of the stored report, and a print stylesheet for the browser's save-as-PDF; a server-side PDF only if the print result falls short | feature | FC-35; founder 2026-11-04 | the stored copy is the one that passed the number check, a week later too |
+| B-97 | The secondary valuation: a tool beside the engine's routes that discounts an explicit cash-flow path from the agent, in parts, at the policy's r with a terminal at or below g_T; a second view on a valued company and the fallback where no phase or route fits, or the route refuses (with B-9; spec 2026-11-06 section 11) | feature | founder, 2026-11-06 | "a secondary tool to complement the existing engine ... a secondary view that would also act as a fall back" |
 
 ### Portfolio (new files)
 
