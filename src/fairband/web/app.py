@@ -1,6 +1,7 @@
 """The FastAPI app: the screen page, the static files, the screen's JSON API, the group view, the
 refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
-``watchlists_api``), and the policy values and growth deciles the Methodology page cites (spec
+``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
+(``agents_api``), and the policy values and growth deciles the Methodology page cites (spec
 2026-11-04 7.4).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
@@ -26,6 +27,14 @@ reset (``settings_api``).
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
 command that stopped, and logs how many.
+
+A write names its writer (spec 2026-11-06 Tier 2, section 7; ``identity``): an agent sends
+``X-Fairband-Principal: agent`` with ``X-Fairband-Actor``, the model identifier it runs as, and
+``X-Fairband-Client``, its client's name and version; a request without the principal header is
+the owner's. An agent's write without an actor is a 400, "identify first: the model identifier
+you run as", and any other principal a 400. The agent routes record each write in the ledger
+under its writer; the system's own writes, such as an expiry item posted when the inbox is read,
+are the principal ``system``, which no request can name.
 
 D11, for a server bound to 127.0.0.1: ``TrustedHostMiddleware`` answers 400 to a request whose
 ``Host`` is neither ``127.0.0.1`` nor ``localhost`` (any port), so a page on another name that
@@ -66,6 +75,7 @@ from fairband.store.refreshes import (
 from fairband.store.settings import read_overlay
 from fairband.store.snapshots import latest_snapshot, latest_snapshots
 from fairband.store.watchlists import memberships
+from fairband.web.agents_api import add_agent_routes
 from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.rows import (
     COLUMNS,
@@ -106,7 +116,8 @@ def create_app(
 ) -> FastAPI:
     """The app; ``policy`` is the file's, which the user's settings overlay; ``clock`` gives the
     day the validity states are judged on and the time a refresh left running is marked
-    interrupted, a setting changed and a watchlist entry added."""
+    interrupted, a setting changed, a watchlist entry added and an agent route's record
+    written."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -279,6 +290,7 @@ def create_app(
 
     add_settings_routes(app, conn_factory, policy, clock)
     add_watchlist_routes(app, conn_factory, clock)
+    add_agent_routes(app, conn_factory, clock)
     return app
 
 
