@@ -11,12 +11,11 @@ A header carries printable ASCII only, so ``identify`` refuses an identifier tha
 A call answers the API's JSON. A server that does not answer raises ``ServerDown`` with its
 sentence: ``NOT_RUNNING`` for a refused or dropped connection or a connect timeout;
 ``NO_ANSWER`` for a timeout after the call reached the server (``TIMEOUT_S``, the command's
-client's), which is running. A 4xx or a 5xx raises ``Refused`` with
-the status, the API's ``detail`` sentence and the rest of its answer: a refused override's record,
-a rejected report's findings. An answer with no sentence of its own is named from what it carries:
-a rejected report ``rejected: <n> findings``, as the ledger words it, and a refresh start that
-meets a running one ``refresh <id> is running``, as the command line does; any other its status's
-reason phrase.
+client's), which is running. A 4xx or a 5xx raises ``Refused`` with the status, the API's
+``detail`` sentence and the rest of its answer: a refused override's record, a rejected report's
+findings. An answer with no sentence of its own is named from what it carries: a rejected report
+``rejected: <n> findings``, as the ledger words it, and a refresh start that meets a running one
+``refresh <id> is running``, as the command line does; any other its status's reason phrase.
 """
 
 from collections.abc import Mapping

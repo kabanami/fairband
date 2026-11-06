@@ -53,21 +53,22 @@ A cite's text is read by ``parse_cite``: an optional sign, ``+``, or ``-``, ``�
 for a negative, ``$``, the number with its thousands separators, a scale word (``thousand``,
 ``million``, ``billion``, ``trillion``, ``k``, ``m``, ``mn``, ``b``, ``bn``, ``tn``), and a suffix,
 ``%`` (or ``percent``, or ``pp`` or ``percentage points``, a difference of two percents read as a
-percent), ``x`` (or ``×``, or ``X`` joined to the number), ``years`` (or ``year``) or none. ``rounded_equal``
-takes design.md 9.2's rounding by the ref's unit: ``currency`` to whole dollars; ``price`` (a share
-price: ``snapshot:<id>/price``, its ``inputs/price``, a ``close:``) to cents; ``per-share`` (a
-value, a level, an EPS) to cents or to whole dollars, as a value and its levels are written;
-``percent`` to one decimal of the fraction × 100; ``multiple`` to two decimals; ``years`` to one;
-``score`` to two; ``count`` to a whole number. The cite must be written at that rounding or coarser
-on its grid (``$12.345`` is not cents) and lie within half a step of the value. A suffix fits a
-unit: ``$`` a currency, price or per-share figure, ``%`` a percent, ``x`` a multiple, ``years`` a
-span in years; none fits any unit but a percent. A ref with no unit (an intermediate, a vendor
-field) takes any suffix, at the cite's own precision, the decimals it was written with. Three more
-rules (``method.md`` 16.3): a cite with a scale word fits a total (with ``$`` or none) or a count
-(with none) and is compared at the decimals it was written with in its scale, with two significant
-figures at least; a cite with no sign of a line the store signs as an outflow (``Resolved.outflow``)
-matches its size; and a ``%`` cite of a ``derived:`` or ``table:`` multiple, a ratio of two figures
-in one unit, is compared as a percentage.
+percent), ``x`` (or ``×``, or ``X`` joined to the number), ``years`` (or ``year``) or none.
+``rounded_equal`` takes design.md 9.2's rounding by the ref's unit: ``currency`` to whole
+dollars; ``price`` (a share price: ``snapshot:<id>/price``, its ``inputs/price``, a ``close:``) to
+cents; ``per-share`` (a value, a level, an EPS) to cents or to whole dollars, as a value and its
+levels are written; ``percent`` to one decimal of the fraction × 100; ``multiple`` to two
+decimals; ``years`` to one; ``score`` to two; ``count`` to a whole number. The cite must be
+written at that rounding or coarser on its grid (``$12.345`` is not cents) and lie within half a
+step of the value. A suffix fits a unit: ``$`` a currency, price or per-share figure, ``%`` a
+percent, ``x`` a multiple, ``years`` a span in years; none fits any unit but a percent. A ref with
+no unit (an intermediate, a vendor field) takes any suffix, at the cite's own precision, the
+decimals it was written with. Three more rules (``method.md`` 16.3): a cite with a scale word fits
+a total (with ``$`` or none) or a count (with none) and is compared at the decimals it was written
+with in its scale, with two significant figures at least; a cite with no sign of a line the store
+signs as an outflow (``Resolved.outflow``) matches its size, and one with a sign, ``+`` included,
+its signed value; and a ``%`` cite of a ``derived:`` or ``table:`` multiple, a ratio of two
+figures in one unit, is compared as a percentage.
 """
 
 import re

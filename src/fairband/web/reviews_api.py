@@ -43,18 +43,17 @@ reason, evidence: [{kind, ref, note, figure?}], debt?, cash?}`` and answers 201 
 secondary valuation (``method.md`` 15). A blank reason or no evidence is a 400; so is evidence
 with no item for the path itself, every item naming a ``figure``, "the path needs its own evidence
 item"; and a debt or a cash passed without its own evidence item, one whose ``figure`` names it.
-Then, on the company's
-latest snapshot: ``require_current``'s 409s; a foreign filer, the snapshot refused as one or its
-universe row an ADR or in a currency other than USD (a row naming none leaves it to the
-snapshot), 400 with section 7's sentence; no positive diluted share count on the snapshot (its
-``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share count". The
-debt and the cash are the agent's when passed, else an applied ``balance.*`` override's (both
-sourced ``agent``), else the newest annual balance sheet's as assembly reads them
-(``statements``), else nil with the source ``none`` when no line is on file. The levels take the current review's moat, else the
-snapshot's, else None; the designation the snapshot's price. A rule ``secondary_value`` refuses
-is a 400 with its sentence. Anyone may make one, a tool's output rather than an override; the
-write is a ``secondary`` ledger row resting on the snapshot. ``GET`` on the same path lists the
-company's, newest first.
+Then, on the company's latest snapshot: ``require_current``'s 409s; a foreign filer, the snapshot
+refused as one or its universe row an ADR or in a currency other than USD (a row naming none
+leaves it to the snapshot), 400 with section 7's sentence; no positive diluted share count on the
+snapshot (its ``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share
+count". The debt and the cash are the agent's when passed, else an applied ``balance.*``
+override's (both sourced ``agent``), else the newest annual balance sheet's as assembly reads them
+(``statements``), else nil with the source ``none`` when no line is on file. The levels take the
+current review's moat, else the snapshot's, else None; the designation the snapshot's price. A
+rule ``secondary_value`` refuses is a 400 with its sentence. Anyone may make one, a tool's output
+rather than an override; the write is a ``secondary`` ledger row resting on the snapshot. ``GET``
+on the same path lists the company's, newest first.
 
 ``POST /api/companies/{symbol}/derivations`` takes ``{derivations: [{operation, a, b, years?}]}``
 and answers 201 with ``{derivations: [{id, value, unit}]}``, each stored with a ``derivation``
@@ -528,7 +527,7 @@ def _check(
 
 def _reproduces(fresh: ValuationResult, snapshot: ValuationResult) -> bool:
     """Whether ``fresh``, the engine with no override on the inputs built today, is ``snapshot``'s
-    result as the bridge reads it: the same route and the same value a share, or no value on both."""
+    result as the bridge reads it: the same route and the same value a share, or none on both."""
     return fresh.route == snapshot.route and fresh.value == snapshot.value
 
 
