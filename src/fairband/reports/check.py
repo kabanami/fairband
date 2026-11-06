@@ -33,37 +33,40 @@ quantity there is ``a number with no reference``, located ``judgment <kind>, <fi
 A ``review:`` cite must also be the company's current review, the newest on its snapshot with the
 current review that one or its reprice; else it is ``wrong snapshot``, the current id named.
 
-A quantity (13.3's token rule) is any number after ``$``, whatever letters follow it (``$5``,
-``$ 5``, ``US$5``, ``$5mm``, ``$3.2T``); a number followed, with or without a space and in any
-case, by a scale of two letters or more or a unit word, whatever its digits (``12 billion``,
-``11.2pp``, ``50bps``, ``5 basis points``, ``5 percentage points``, ``2 Years``); a percentage
-(``11.2%``, ``11.2 percent``, ``5 per cent``); a multiple (``12.3x``, ``5 x``, ``12.3×``); a
-decimal; or an integer of two or more digits; a sign (``-``, the minus ``−``) or parentheses may
-stand around it. A one-letter scale (``m``, ``b``, ``k``, ``t``) counts only after ``$``. Not a
-quantity: a year from 1990 to 2099, an ISO date, a day of the month beside a month's name
-(``27 Oct``) unless a decimal, ``%`` or a scale follows it (``March 12%``) or ``$`` leads it, a
-number joined to letters with no ``$`` (``FY2025``, ``Q3``, ``COVID-19``, ``5G``, ``3M``,
-``401k``, ``21st``), a filing form (``10-K``, ``8-K``, ``20-F``), a section's or an item's number
-(``section 13.3``, ``Item 10``), anything inside a URL or after a slash (``fairband-review/1``),
-and an integer of one digit with no unit word.
+A quantity (13.3's token rule) is any number a currency sign leads (``$``, ``€``, ``£``,
+``¥``, a letter prefix before it or not), whatever letters follow it (``$5``, ``$ 5``, ``US$5``,
+``$5mm``, ``$3.2T``, ``€1.5B``, ``£126m``); a decimal joined to a one-letter scale (``m``, ``b``,
+``k``, ``t``, any case: ``1.5B``, ``2.3M``, ``4.5k``); a number followed, with or without a space
+and in any case, by a scale of two letters or more or a unit word, whatever its digits
+(``12 billion``, ``11.2pp``, ``50bps``, ``5 basis points``, ``5 percentage points``,
+``2 Years``); a percentage (``11.2%``, ``11.2 percent``, ``5 per cent``); a multiple (``12.3x``,
+``5 x``, ``12.3×``, and ``X`` joined to the number, ``15X``, never after a space); a decimal; or
+an integer of two or more digits; a sign (``-``, the minus ``−``) or parentheses may stand around
+it. Not a quantity: a year from 1990 to 2099, an ISO date, a day of the month beside a month's
+name (``27 Oct``) unless a decimal, ``%`` or a scale follows it (``March 12%``) or a currency sign
+leads it, an integer joined to letters with no currency sign (``FY2025``, ``Q3``, ``COVID-19``,
+``5G``, ``3M``, ``401k``, ``150M``, ``21st``), a filing form (``10-K``, ``8-K``, ``20-F``), a
+section's or an item's number (``section 13.3``, ``Item 10``), anything inside a URL or after a
+slash (``fairband-review/1``), and an integer of one digit with no unit word.
 
 A cite's text is read by ``parse_cite``: an optional sign or parentheses (a negative), ``$``, the
 number with its thousands separators, a scale word (``thousand``, ``million``, ``billion``,
-``trillion``, ``k``, ``m``, ``mn``, ``b``, ``bn``, ``tn``), and a suffix, ``%`` (or ``percent``), ``x``
-(or ``×``), ``years`` (or ``year``) or none. ``rounded_equal`` takes design.md 9.2's rounding by
-the ref's unit: ``currency`` to whole dollars; ``price`` (a share price: ``snapshot:<id>/price``,
-its ``inputs/price``, a ``close:``) to cents; ``per-share`` (a value, a level, an EPS) to cents or
-to whole dollars, as a value and its levels are written; ``percent`` to one decimal of the
-fraction × 100; ``multiple`` to two decimals; ``years`` to one; ``score`` to two; ``count`` to a
-whole number. The cite must be written at that rounding or coarser on its grid (``$12.345`` is not
-cents) and lie within half a step of the value. A suffix fits a unit: ``$`` a currency, price or
-per-share figure, ``%`` a percent, ``x`` a multiple, ``years`` a span in years; none fits any unit
-but a percent. A ref with no unit (an intermediate, a vendor field) takes any suffix, at the
-cite's own precision, the decimals it was written with. Three more rules (``method.md`` 16.3): a
-cite with a scale word fits a total (with ``$`` or none) or a count (with none) and is compared at
-the decimals it was written with in its scale, with two significant figures at least; a cite with no sign of a line the store signs as an outflow (``Resolved.outflow``) matches
-its size; and a ``%`` cite of a ``derived:`` or ``table:`` multiple, a ratio of two figures in one
-unit, is compared as a percentage.
+``trillion``, ``k``, ``m``, ``mn``, ``b``, ``bn``, ``tn``), and a suffix, ``%`` (or ``percent``),
+``x`` (or ``×``, or ``X`` joined to the number), ``years`` (or ``year``) or none. ``rounded_equal``
+takes design.md 9.2's rounding by the ref's unit: ``currency`` to whole dollars; ``price`` (a share
+price: ``snapshot:<id>/price``, its ``inputs/price``, a ``close:``) to cents; ``per-share`` (a
+value, a level, an EPS) to cents or to whole dollars, as a value and its levels are written;
+``percent`` to one decimal of the fraction × 100; ``multiple`` to two decimals; ``years`` to one;
+``score`` to two; ``count`` to a whole number. The cite must be written at that rounding or coarser
+on its grid (``$12.345`` is not cents) and lie within half a step of the value. A suffix fits a
+unit: ``$`` a currency, price or per-share figure, ``%`` a percent, ``x`` a multiple, ``years`` a
+span in years; none fits any unit but a percent. A ref with no unit (an intermediate, a vendor
+field) takes any suffix, at the cite's own precision, the decimals it was written with. Three more
+rules (``method.md`` 16.3): a cite with a scale word fits a total (with ``$`` or none) or a count
+(with none) and is compared at the decimals it was written with in its scale, with two significant
+figures at least; a cite with no sign of a line the store signs as an outflow (``Resolved.outflow``)
+matches its size; and a ``%`` cite of a ``derived:`` or ``table:`` multiple, a ratio of two figures
+in one unit, is compared as a percentage.
 """
 
 import re
@@ -121,18 +124,22 @@ _NUMBER = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 # The words after a number, with or without a space and in any case, that make it a quantity
 # whatever its digits: a scale of two letters or more (``bn``, ``mm``, ``million``), points
 # (``pp``, ``bps``, ``percentage points``), a percentage (``%``, ``percent``, ``per cent``), a
-# multiple (``x``, ``×``) and a span of years. A one-letter scale (``m``, ``b``, ``k``, ``t``)
-# counts only after ``$``: without one a number joined to a letter is a name (``3M``, ``401k``).
+# multiple (``x``, ``×``, or ``X`` joined to the number) and a span of years. A one-letter scale
+# (``m``, ``b``, ``k``, ``t``) counts after a currency sign or on a decimal: an integer joined to
+# a letter with no sign is a name (``3M``, ``401k``).
 _UNIT_WORDS = (
     r"thousand|million|billion|trillion|percentage\s+points?|basis\s+points?|percent|per\s+cent"
     r"|years?|bps|bp|bn|mn|mm|pp|tn"
 )
-_UNIT_AFTER = rf"(?:\s?%|\s?[xX×](?![A-Za-z0-9])|\s?(?i:{_UNIT_WORDS})\b)"
+_UNIT_AFTER = rf"(?:\s?%|\s?[x×](?![A-Za-z0-9])|X(?![A-Za-z0-9])|\s?(?i:{_UNIT_WORDS})\b)"
+_SIGNS = "$€£¥"  # the currency signs that make the number after them a money amount
+_DECIMAL = r"(?:\d{1,3}(?:,\d{3})+|\d+)\.\d+"
 _QUANTITY = re.compile(
-    r"(?<![\w.,/$])(?<![A-Za-z]-)"  # not inside a word, a number or a path
+    rf"(?<![\w.,/{_SIGNS}])(?<![A-Za-z]-)"  # not inside a word, a number or a path
     r"\(?[−-]?(?:"
-    # led by $, a currency's letters before it or not: any letters after the number
-    rf"(?:[A-Z]{{1,3}})?\$\s?[−-]?(?:{_NUMBER})(?:[A-Za-z]+|{_UNIT_AFTER})?"
+    # led by a currency sign, a currency's letters before it or not: any letters after
+    rf"(?:[A-Z]{{1,3}})?[{_SIGNS}]\s?[−-]?(?:{_NUMBER})(?:[A-Za-z]+|{_UNIT_AFTER})?"
+    rf"|{_DECIMAL}[mbktMBKT](?![A-Za-z0-9])"  # a decimal in a one-letter scale
     rf"|(?:{_NUMBER}){_UNIT_AFTER}?"
     r")\)?"
     r"(?!\w)(?![.,]\d)(?!-[A-Z]\b)"  # not a filing form, 10-K
@@ -145,15 +152,17 @@ _MONTH = (
 # Text that holds no quantity: a URL, an ISO date, a day beside a month's name; not a day followed
 # by a decimal, a percent sign, a multiple's or a scale's word, which is a quantity after a month.
 _NOT_QUANTITIES = re.compile(
-    rf"https?://\S+|\b\d{{4}}-\d{{2}}-\d{{2}}\b|(?<![\d.,$])(?<!\$\s)\b\d{{1,2}}\s+{_MONTH}"
+    rf"https?://\S+|\b\d{{4}}-\d{{2}}-\d{{2}}\b"
+    rf"|(?<![\d.,{_SIGNS}])(?<![{_SIGNS}]\s)\b\d{{1,2}}\s+{_MONTH}"
     rf"|{_MONTH}\.?\s+\d{{1,2}}\b(?![.,]\d|{_UNIT_AFTER})"
 )
 _SECTION_NUMBER = re.compile(r"(?:\bsections?|§|\bitems?)\s*$", re.IGNORECASE)
 _CITE = re.compile(
     r"\s*(?P<open>\()?\s*(?P<sign>[−-])?\s*(?P<dollar>\$)?\s*(?P<sign2>[−-])?"
     rf"(?P<number>{_NUMBER})"
-    r"\s*(?:(?P<scale>(?i:thousand|million|billion|trillion|mn|bn|tn|k|m|b))(?![A-Za-z]))?"
-    r"\s*(?P<suffix>%|percent|[xX×]|years?)?\s*(?P<close>\))?\s*"
+    r"(?:(?P<upper>X)"  # a multiple's X, joined to the number
+    r"|\s*(?:(?P<scale>(?i:thousand|million|billion|trillion|mn|bn|tn|k|m|b))(?![A-Za-z]))?"
+    r"\s*(?P<suffix>%|percent|[x×]|years?)?)\s*(?P<close>\))?\s*"
 )
 _SCALES = {
     "k": 10**3,
@@ -171,7 +180,6 @@ _SUFFIXES = {
     "%": "%",
     "percent": "%",
     "x": "x",
-    "X": "x",
     "×": "x",
     "year": "years",
     "years": "years",
@@ -339,7 +347,7 @@ def quantities(text: str) -> list[str]:
     found = []
     for match in _QUANTITY.finditer(blanked):
         token = match.group(0)
-        if "$" in token or _CARRIES_A_UNIT.search(token):
+        if any(sign in token for sign in _SIGNS) or _CARRIES_A_UNIT.search(token):
             found.append(token)
             continue
         if _SECTION_NUMBER.search(blanked[: match.start()]):
@@ -496,7 +504,7 @@ def _parsed(text: str) -> _Cite | None:
         return None
     if match["sign"] and match["sign2"]:
         return None
-    suffix = _SUFFIXES.get(match["suffix"] or "", "")
+    suffix = "x" if match["upper"] else _SUFFIXES.get(match["suffix"] or "", "")
     scale = _SCALES[match["scale"].lower()] if match["scale"] else 1
     if suffix and (match["dollar"] or scale != 1):  # a %, x or years with $ or a scale
         return None

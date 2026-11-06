@@ -237,6 +237,7 @@ def test_the_cite_parser_reads_separators_and_minus_signs() -> None:
     assert parse_cite("$1.5bn") == (1.5e9, "$") and parse_cite("($1.5 bn)") == (-1.5e9, "$")
     assert parse_cite("$500k") == (500e3, "$") and parse_cite("8 billion") == (8e9, "")
     assert parse_cite("$1.5B") == (1.5e9, "$") and parse_cite("1.12X") == (1.12, "x")
+    assert parse_cite("1.12 X") is None and parse_cite("$1.5bnX") is None
     for text in ("$12%", "(3.2", "about 3", "3.2.1", "", "Wide", "2.1 billion%", "$2bn x"):
         assert parse_cite(text) is None, text
 
@@ -304,8 +305,16 @@ def test_a_reprice_keeps_the_cites_and_a_revalue_rejects_them(
             "5 per cent, 2 Years, 5 x, 5X, 10 bn, 2.5years",
             ["5 per cent", "2 Years", "5 x", "5X", "10 bn", "2.5years"],
         ),
-        # a number joined to one letter with no $ is a name
-        ("3M Company, Phase 2b, 401k, a 4K screen, Rule 10b-5", []),
+        # an integer joined to one letter with no currency sign is a name
+        ("3M Company, Phase 2b, 401k, a 4K screen, Rule 10b-5, 5G", []),
+        ("150M users and 500k subscribers", []),  # the trade the ruling accepts
+        # a decimal in a one-letter scale, and any currency sign, count
+        ("1.5B shares, 2.3M users, 4.5k, 1.5b", ["1.5B", "2.3M", "4.5k", "1.5b"]),
+        ("€1.5B, €126m, £5m, £126m, ¥300", ["€1.5B", "€126m", "£5m", "£126m", "¥300"]),
+        # an upper-case X is a multiple joined to the number, never after a space
+        ("15X and 1.12X", ["15X", "1.12X"]),
+        ("In 2023 X lost advertisers; 5 X-ray machines", []),
+        ("a Ryzen 9 7950X", ["7950X"]),  # joined: counted, as the ruling accepts
         # a day beside a month is a date, unless a decimal, a % or a scale follows it
         ("In March 12% of stores closed", ["12%"]),
         ("since June 30.5 million shares", ["30.5 million"]),
