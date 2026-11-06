@@ -242,6 +242,19 @@ def test_the_cite_parser_reads_separators_and_minus_signs() -> None:
         assert parse_cite(text) is None, text
 
 
+def test_the_cite_parser_reads_a_plus_sign_and_percentage_points() -> None:
+    """design.md 7.4's bridge writes a change with its sign, ``+$28``; a change of a percent is in
+    points, a percent's suffix."""
+    assert parse_cite("+$28") == (28.0, "$") and parse_cite("$+28") == (28.0, "$")
+    assert parse_cite("+5.0%") == (5.0, "%") and parse_cite("+1.12x") == (1.12, "x")
+    assert parse_cite("2.0 pp") == (2.0, "%") and parse_cite("+2.0pp") == (2.0, "%")
+    assert parse_cite("2.0 percentage points") == (2.0, "%")
+    assert parse_cite("1 percentage point") == (1.0, "%")
+    assert parse_cite("−0.5 pp") == (-0.5, "%")
+    for text in ("(+$28)", "+−$28", "+-5%", "++5%", "+$-28", "$2.0 pp", "2.0 pp%", "2.0 bps"):
+        assert parse_cite(text) is None, text
+
+
 def test_findings_are_located(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
@@ -642,3 +655,40 @@ def test_a_review_cite_must_be_the_current_review(
     assert found.detail == (
         f"review:{reprice_review}/value is not the company's current review: the company has none"
     )
+
+
+def test_a_bridge_line_and_a_change_in_points_are_cited(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The bridge of design.md 7.4 cites each line's change with its sign, ``+$28``; a growth of
+    ``+5.0%``; and a difference of two percents in points, ``2.0 pp``."""
+    sid = snapshots["AAPL"]
+    review = review_row(conn, _applied_review(conn, policy, sid))
+    assert review is not None
+    delta = review.bridge[0]["delta"]
+    assert delta is not None and delta > 0  # a belief of 8% raises the value
+    line = f"review:{review.id}/bridge/1/delta"
+    for text in (f"+${delta:,.0f}", f"+${delta:,.2f}", f"${delta:,.0f}"):
+        assert _check(conn, policy, sid, _cite(text, line)) == [], text
+    growth = "table:AAPL/growth/revenue_growth/2025"  # 5.0%
+    assert _check(conn, policy, sid, _cite("+5.0%", growth, "2025")) == []
+    wider = insert_derivation(
+        conn,
+        "AAPL",
+        "difference",
+        growth,
+        "policy:required_return",
+        None,
+        0.02,
+        "percent",
+        AGENT,
+        NOW,
+    )
+    for text in ("2.0 pp", "+2.0pp", "2.0 percentage points"):
+        assert _check(conn, policy, sid, _cite(text, f"derived:{wider}")) == [], text
+    found = _one(_check(conn, policy, sid, _cite("2.0 pp", growth)), sid, "2.0 pp")
+    assert (found.what, found.detail) == (WRONG_UNIT, f"{growth} reads 5.0%")
+    # a plus sign is a sign: the signed value of an outflow is negative
+    capex = "fact:AAPL/capex/2025"
+    found = _one(_check(conn, policy, sid, _cite("+$126,000,000", capex)), sid, "+$126,000,000")
+    assert found.what == WRONG_UNIT

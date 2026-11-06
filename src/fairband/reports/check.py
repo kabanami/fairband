@@ -49,10 +49,11 @@ leads it, an integer joined to letters with no currency sign (``FY2025``, ``Q3``
 section's or an item's number (``section 13.3``, ``Item 10``), anything inside a URL or after a
 slash (``fairband-review/1``), and an integer of one digit with no unit word.
 
-A cite's text is read by ``parse_cite``: an optional sign or parentheses (a negative), ``$``, the
-number with its thousands separators, a scale word (``thousand``, ``million``, ``billion``,
-``trillion``, ``k``, ``m``, ``mn``, ``b``, ``bn``, ``tn``), and a suffix, ``%`` (or ``percent``),
-``x`` (or ``×``, or ``X`` joined to the number), ``years`` (or ``year``) or none. ``rounded_equal``
+A cite's text is read by ``parse_cite``: an optional sign, ``+``, or ``-``, ``−`` or parentheses
+for a negative, ``$``, the number with its thousands separators, a scale word (``thousand``,
+``million``, ``billion``, ``trillion``, ``k``, ``m``, ``mn``, ``b``, ``bn``, ``tn``), and a suffix,
+``%`` (or ``percent``, or ``pp`` or ``percentage points``, a difference of two percents read as a
+percent), ``x`` (or ``×``, or ``X`` joined to the number), ``years`` (or ``year``) or none. ``rounded_equal``
 takes design.md 9.2's rounding by the ref's unit: ``currency`` to whole dollars; ``price`` (a share
 price: ``snapshot:<id>/price``, its ``inputs/price``, a ``close:``) to cents; ``per-share`` (a
 value, a level, an EPS) to cents or to whole dollars, as a value and its levels are written;
@@ -158,12 +159,13 @@ _NOT_QUANTITIES = re.compile(
 )
 _SECTION_NUMBER = re.compile(r"(?:\bsections?|§|\bitems?)\s*$", re.IGNORECASE)
 _CITE = re.compile(
-    r"\s*(?P<open>\()?\s*(?P<sign>[−-])?\s*(?P<dollar>\$)?\s*(?P<sign2>[−-])?"
+    r"\s*(?P<open>\()?\s*(?P<sign>[−+-])?\s*(?P<dollar>\$)?\s*(?P<sign2>[−+-])?"
     rf"(?P<number>{_NUMBER})"
     r"(?:(?P<upper>X)"  # a multiple's X, joined to the number
     r"|\s*(?:(?P<scale>(?i:thousand|million|billion|trillion|mn|bn|tn|k|m|b))(?![A-Za-z]))?"
-    r"\s*(?P<suffix>%|percent|[x×]|years?)?)\s*(?P<close>\))?\s*"
+    r"\s*(?P<suffix>%|percentage\s+points?|percent|pp|[x×]|years?)?)\s*(?P<close>\))?\s*"
 )
+_NEGATIVE = ("−", "-")  # the signs of a negative; ``+`` is a sign too, of a positive
 _SCALES = {
     "k": 10**3,
     "thousand": 10**3,
@@ -179,6 +181,10 @@ _SCALES = {
 _SUFFIXES = {
     "%": "%",
     "percent": "%",
+    # points: a difference of two percents, compared as a percent is
+    "pp": "%",
+    "percentage point": "%",
+    "percentage points": "%",
     "x": "x",
     "×": "x",
     "year": "years",
@@ -504,17 +510,22 @@ def _parsed(text: str) -> _Cite | None:
         return None
     if match["sign"] and match["sign2"]:
         return None
-    suffix = "x" if match["upper"] else _SUFFIXES.get(match["suffix"] or "", "")
+    sign = match["sign"] or match["sign2"] or ""
+    if match["open"] and sign == "+":  # parentheses are a negative
+        return None
+    written = " ".join((match["suffix"] or "").split())
+    suffix = "x" if match["upper"] else _SUFFIXES.get(written, "")
     scale = _SCALES[match["scale"].lower()] if match["scale"] else 1
     if suffix and (match["dollar"] or scale != 1):  # a %, x or years with $ or a scale
         return None
     if match["dollar"]:
         suffix = "$"
     digits = match["number"].replace(",", "")
-    signed = bool(match["open"] or match["sign"] or match["sign2"])
+    signed = bool(match["open"] or sign)
+    negative = bool(match["open"]) or sign in _NEGATIVE
     decimals = len(digits.partition(".")[2])
     significant = len(digits.replace(".", "").lstrip("0"))
-    number = float(Decimal(digits) * scale) * (-1 if signed else 1)
+    number = float(Decimal(digits) * scale) * (-1 if negative else 1)
     return _Cite(number, suffix, scale, decimals, significant, signed)
 
 

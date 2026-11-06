@@ -81,6 +81,9 @@ The cite is the stored value at the report's rounding, by the ref's unit:
 | count | a whole number, or a scale word at your own precision | none, never `$` | `15,204,137,000`, `15.2 billion` |
 | none (an intermediate, a vendor field) | any suffix, at the decimals you write | any | `7.1%` |
 
+A change may carry a `+`, as a bridge line does: `+$28`, `+5.0%`. A difference of two percents may
+be written in points, `2.0 pp` or `2.0 percentage points`, compared as `2.0%` is.
+
 The number must lie within half a step of the stored value at that rounding. `22.7%` cites
 0.22702; `23%` does not. When in doubt, write exactly the decimals in the table: `22.7%` for
 0.22702, `23.0%` for 0.23.
