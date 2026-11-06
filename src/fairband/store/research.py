@@ -41,7 +41,7 @@ from fairband.store.db import transaction
 from fairband.store.ledger import Principal, Writer
 
 SourceKind = Literal["filing", "transcript", "url", "vendor", "base-rate"]
-Unit = Literal["currency", "percent", "multiple", "count", "per-share"]
+Unit = Literal["currency", "percent", "multiple", "count", "per-share", "score", "years"]
 CriterionState = Literal["open", "triggered", "retired"]
 
 SOURCE_KINDS: tuple[SourceKind, ...] = get_args(SourceKind)

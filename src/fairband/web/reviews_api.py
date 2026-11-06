@@ -53,10 +53,12 @@ ledger row resting on the latest snapshot (none without one). The operations: ``
 whose ``years`` (one or more) is required. The unit: ``multiple`` for a ratio of two values in
 one unit, else none; ``percent`` for growth and cagr; a difference or a sum keeps its operands'
 unit when they share one, else none. A division by zero, a cagr over a negative ratio or a result
-that is not finite has no value and no unit. The refs resolve through ``_resolve``, a stub that
-reads ``snapshot:`` and ``fact:`` refs until the report references (spec 13.2) replace it; a ref
-it cannot read is a 400, "unresolved reference: <ref>", and stores none of the call's
-derivations. ``GET /api/derivations/{id}`` reads one back, 404 without it.
+that is not finite has no value and no unit. The refs resolve as a report's do
+(``fairband.reports.refs``, every form of spec 13.2, a ``table:`` cell included, under the
+effective policy), their units the reads' (``currency``, ``per-share``, ``percent`` ...); a ref
+that names no number, a word or a figure the record does not hold included, is a 400,
+"unresolved reference: <ref>", and stores none of the call's derivations.
+``GET /api/derivations/{id}`` reads one back, 404 without it.
 """
 
 import json
@@ -64,7 +66,7 @@ import math
 import sqlite3
 from collections.abc import Callable, Sequence
 from contextlib import closing
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any, Literal, cast, get_args
 
 from fastapi import FastAPI, HTTPException
@@ -88,9 +90,10 @@ from fairband.policy import Moat, Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import build_inputs
-from fairband.refresh.inputs_statements import country_for, newest_debt_and_cash, statements_for
+from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.reviews import write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
+from fairband.reports.refs import Resolver
 from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.ledger import Writer, record
@@ -114,7 +117,7 @@ from fairband.store.secondary import (
     latest_secondary,
     secondaries_for,
 )
-from fairband.store.snapshots import SnapshotRow, latest_snapshot, snapshot_row
+from fairband.store.snapshots import SnapshotRow, latest_snapshot
 from fairband.web.agents_api import WriterOf, gist, record_json
 from fairband.web.settings_api import effective
 
@@ -122,27 +125,6 @@ AGENTS_WRITE = "an override is an agent's write"
 EvidenceKind = Literal["filing", "transcript", "url", "vendor", "base-rate", "finding"]
 _PHASES: tuple[str, ...] = get_args(Phase)
 _MOATS: tuple[str, ...] = get_args(Moat)
-_LEVELS = frozenset({"buy", "fair_low", "fair_high", "trim"})
-# The statement lines a ``fact:`` ref reads, by the engine's names: a fiscal year's
-# (``FiscalYear``) and the trailing figures' (``TrailingFigures``).
-_YEAR_LINES = frozenset({"revenue", "operating_income", "cfo", "cfi", "cff", "capex"})
-_TRAILING_LINES = frozenset(
-    {
-        "revenue",
-        "operating_income",
-        "net_income",
-        "eps_diluted",
-        "sbc",
-        "cfo",
-        "capex",
-        "dividends",
-        "buybacks",
-        "equity_issued",
-        "interest_expense",
-        "depreciation",
-    }
-)
-
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
 
 
@@ -467,10 +449,10 @@ def add_review_routes(
         with closing(conn_factory()) as conn, transaction(conn, immediate=True):
             symbol = exchange_symbol(symbol)
             latest = latest_snapshot(conn, symbol)
+            resolver = Resolver(conn, symbol, effective(conn, policy), tax)
             answers = []
             for d in body.derivations:
-                a = _operand(conn, symbol, d.a, tax, at.date())
-                b = _operand(conn, symbol, d.b, tax, at.date())
+                a, b = _operand(resolver, d.a), _operand(resolver, d.b)
                 years = d.years if d.operation == "cagr" else None
                 value, unit = _derived(d.operation, a, b, years)
                 derivation_id = insert_derivation(
@@ -617,78 +599,12 @@ def _dollars(x: float) -> str:
     return f"{'−' if x < 0 else ''}${abs(x):,.2f}"
 
 
-def _operand(
-    conn: sqlite3.Connection, symbol: str, ref: str, tax: TaxTable, today: date
-) -> _Figure:
-    found = _resolve(conn, symbol, ref, tax, today)
-    if found is None:
+def _operand(resolver: Resolver, ref: str) -> _Figure:
+    """The number and unit ``ref`` names; 400 when it names no number."""
+    found = resolver.resolve(ref)
+    if found is None or not isinstance(found.value, float):
         raise HTTPException(400, f"unresolved reference: {ref}")
-    return found
-
-
-def _resolve(
-    conn: sqlite3.Connection, symbol: str, ref: str, tax: TaxTable, today: date
-) -> _Figure | None:
-    """The number and unit ``ref`` names, ``None`` where it names none: a stub that reads only
-    ``snapshot:`` and ``fact:`` refs until the report references (spec 13.2) replace it."""
-    form, _, path = ref.partition(":")
-    if form == "snapshot":
-        return _snapshot_figure(conn, symbol, path)
-    if form == "fact":
-        return _fact_figure(conn, path, tax, today)
-    return None
-
-
-def _snapshot_figure(conn: sqlite3.Connection, symbol: str, path: str) -> _Figure | None:
-    """``<id>/value``, ``/price``, ``/price_to_value``, ``/levels/<name>``, ``/inputs/<name>`` or
-    ``/intermediates/<path>`` of one of the company's snapshots; an intermediate has no unit."""
-    head, _, rest = path.partition("/")
-    found = snapshot_row(conn, int(head)) if head.isdigit() else None
-    if found is None or found.symbol != symbol:
-        return None
-    result = found.result
-    kind, _, name = rest.partition("/")
-    match kind:
-        case "value" | "price" if not name:
-            return _number(getattr(result, kind), "USD")
-        case "price_to_value" if not name:
-            return _number(result.price_to_value, "multiple")
-        case "levels" if name in _LEVELS and result.levels is not None:
-            return _number(getattr(result.levels, name), "USD")
-        case "inputs":
-            cited = next((x for x in result.inputs if x.name == name), None)
-            return None if cited is None else _number(cited.value, cited.unit)
-        case "intermediates":
-            return _number(_at_path(result.intermediates, name.split("/")), None)
-    return None
-
-
-def _fact_figure(conn: sqlite3.Connection, path: str, tax: TaxTable, today: date) -> _Figure | None:
-    """``<symbol>/<line>/<fiscal year or ttm>``: a statement line as the engine reads it, in the
-    statements' currency (a share for EPS)."""
-    pieces = path.split("/")
-    if len(pieces) != 3:
-        return None
-    text, line, period = pieces
-    try:
-        symbol = exchange_symbol(text)
-    except ValueError:
-        return None
-    country, _ = country_for(conn, symbol, latest_company(conn, symbol))
-    stated = statements_for(conn, symbol, country, tax, today)
-    row: Any
-    if period == "ttm" and line in _TRAILING_LINES:
-        row, currency = stated.trailing, stated.currency
-    elif line in _YEAR_LINES:
-        row = next((fy for fy in stated.series if str(fy.year) == period), None)
-        currency = None if row is None else row.currency
-    else:
-        return None
-    if row is None:
-        return None
-    if currency is not None and line == "eps_diluted":
-        currency = f"{currency} a share"
-    return _number(getattr(row, line), currency)
+    return found.value, found.unit
 
 
 def _number(x: Any, unit: str | None) -> _Figure | None:
@@ -696,18 +612,6 @@ def _number(x: Any, unit: str | None) -> _Figure | None:
     if isinstance(x, int | float) and not isinstance(x, bool) and math.isfinite(x):
         return float(x), unit
     return None
-
-
-def _at_path(x: Any, keys: Sequence[str]) -> Any:
-    """The value at ``keys`` through dicts and lists; ``None`` where a step is absent."""
-    for key in keys:
-        if isinstance(x, dict):
-            x = x.get(key)
-        elif isinstance(x, list | tuple) and key.isdigit() and int(key) < len(x):
-            x = x[int(key)]
-        else:
-            return None
-    return x
 
 
 def _derived(

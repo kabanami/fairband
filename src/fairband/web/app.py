@@ -1,9 +1,9 @@
 """The FastAPI app: the screen page, the static files, the screen's JSON API, the group view, the
 refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
-(``agents_api``), the override and review routes (``reviews_api``), the company reads and the
-Methodology section read (``reports_api``), and the policy values and growth deciles the
-Methodology page cites (spec 2026-11-04 7.4).
+(``agents_api``), the override and review routes (``reviews_api``), the company reads, the
+Methodology section read and the report routes (``reports_api``), and the policy values and
+growth deciles the Methodology page cites (spec 2026-11-04 7.4).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:

@@ -1189,3 +1189,81 @@ A secondary valuation is stored on the company's latest snapshot with its parts,
 ### 15.6 Worked numbers
 
 The tests pin these within 1e-4 (spec 2026-11-06 Tier 2, 20.1). r 9%, g 3%; one part, free cash flow 100 in year 1 growing 5% a year for 5 years (100, 105, 110.25, 115.7625, 121.550625); debt 200, cash 100, 100 diluted shares. The present values 91.7431, 88.3764, 85.1332, 82.0091 and 78.9996, Σ 426.2614; the terminal 121.550625 × 1.03 ÷ 0.06 = 2,086.6191, discounted 1,356.1592; firm value 1,782.4206; equity 1,682.4206; value a share 16.8242. A second part, 20 flat for 5 years at g 0: Σ PV 77.7930; terminal 20 ÷ 0.09 = 222.2222, discounted 144.4292; part value 222.2222; with both parts the value a share is 19.0464. A g of 3.5% is refused, as are a path of 2 years and an 11th part.
+
+## 16. Reports: the number check
+
+An agent's report is published whole or rejected whole (spec 2026-11-06 Tier 2, 13). Every number in it is a cite of a stored value, so the reader part traces to the records the engine and the store hold; the agent writes the sentences, never a figure of its own. The check is `fairband.reports.check`; the references are `fairband.reports.refs`.
+
+### 16.1 A report
+
+A submission names a mode, a stance, the sections, the key judgments, and optionally kill criteria, news items and the work item it completes. A section is a heading and its parts; a part is plain text or a cite, `{cite, ref, period?}`: the text as the reader sees it, the reference of the stored value, and the period it claims. Before the number check run four structural checks, each refused with one sentence: the mode's section count, ten for a full report and eight for a valuation review, which leaves out "The business" and "Industry and competition" (design.md 7.5); the stance, one of the policy's `stance_words` (buy, hold, trim, avoid; 4.1); the required judgments, `phase`, `moat` and `belief` on every report, `roic` where the route is Mature Growth or Mature Stable and `target_margin` where it is the revenue-growth route or Start-up, the route of the company's current review when it rests on the latest snapshot, else the snapshot's (a refused row's phase's); and the headings, design.md 9.3's ten in order: Summary, The business, Industry and competition, Financial performance and health, Life-cycle phase, Valuation, Price facts and multiples, Key judgments, Recent news, Risks and kill criteria.
+
+A rejected report stores nothing but its ledger row, "rejected: <n> findings", which points at no record; the answer lists the findings. A published one is stored as the company's next revision (from 1) on the snapshot its cites rest on, with the review and the secondary valuation it cites (else the company's current review and newest secondary valuation when they rest on the latest snapshot or one it reprices), its judgments, kill criteria and news items, and it completes the work item it names. A valuation review reuses the company's newest full report, or says there is none. The latest revision is the company's report; the earlier ones stay. The latest report's stance is the one the review log reads (14.7).
+
+### 16.2 The references
+
+A reference is `<form>:<path>`, resolved for the report's company; a record of another company names nothing. Each resolves to a value (a number, a word, or none where the record holds no figure), a unit, a period and the snapshot it rests on.
+
+| Ref | Resolves to | Unit |
+|---|---|---|
+| `snapshot:<id>/value`, `/price`, `/levels/<name>` (buy, fair_low, fair_high, trim) | the snapshot's value a share, price and levels | per-share |
+| `snapshot:<id>/price_to_value` | price ÷ value | multiple |
+| `snapshot:<id>/inputs/<name>` | a tagged input; a word input (the moat class) reads the word leading its note | the input's |
+| `snapshot:<id>/intermediates/<path>` | an intermediate by its keys and list indexes, `belief/rate` | none |
+| `snapshot:<id>/phase/<field>` | a field of the classifier's evidence (3.5), `phase`, `growth_3y` | the field's |
+| `review:<id>/value`, `/price_to_value`, `/levels/<name>`, `/bridge/<n>/delta`, `/old`, `/new` | the review's figures (14.5); the bridge's line n counted from 1 | per-share; old and new the input's |
+| `secondary:<id>/value`, `/firm_value`, `/equity`, `/debt`, `/cash`, `/shares`, `/price_to_value`, `/levels/<name>`, `/parts/<n>/pv/<t>`, `/parts/<n>/fcff/<t>`, `/parts/<n>/value`, `/terminal`, `/terminal_pv`, `/terminal_growth` | the secondary valuation's (15), part n and year t counted from 1 | per-share, currency, count, percent |
+| `fact:<symbol>/<line>/<year or ttm>` | a stored statement line as the engine reads it: a fiscal year's (the store's lines by the engine's names), or the trailing figures' | currency; per-share for EPS; count for the diluted shares |
+| `table:<symbol>/<table>/<row>/<year>` | a cell of the financial tables (16.5) | the row's |
+| `estimate:<symbol>/<period>/<field>` | a stored consensus figure, the period a fiscal year (`2026`) or a quarter (`2026-Q4`) | currency; per-share for EPS; count for the analysts |
+| `close:<symbol>/<date>` | a stored daily close | per-share |
+| `peer:<symbol>/<peer>/<field>` | a mature peer's figure as assembly reads it (5a.4): `market_cap`, `margin`, `margin_years`, `sales_to_capital`, `roic` | currency, percent, count, multiple, percent |
+| `finding:<id>` | a finding's value, unit and period, as the agent recorded it (a percent as a fraction) | the finding's |
+| `derived:<id>` | a derivation's value (16.4) | the derivation's |
+| `response:<id>/<json pointer>` | a field of a stored vendor response (RFC 6901) | none |
+| `policy:<name>` | a value the Methodology page cites, by name or by name and a moat class or an index (`runway_years.Wide`, `fair_band.0`) | the value's |
+
+The units are the reads': currency (a total, in the statements' currency), per-share, percent (a fraction), multiple, count, score and years. An engine input's unit maps onto them: a currency code is currency (the share price per-share), "<code> a share" per-share, a ratio percent, shares and the other counted things count, years and scores as they are; a word or a date has none. The period is the fiscal year, the quarter, `ttm` or the close's date for the forms that have one, the finding's as recorded, none for the others. A `snapshot:`, `review:` or `secondary:` ref rests on its record's snapshot, a `derived:` ref on its operands'.
+
+The reprice rule (spec 13.2): a report rests on the company's latest snapshot. A later snapshot that reprices the cited one, with the same data date, method version, policy version, settings hash and value, counts as the cited one, so a price refresh during the research does not reject a report; the report keeps the cited snapshot, whose price date its header shows. A revalue or a full refresh in between rejects it.
+
+### 16.3 The check
+
+Every part of every section is read, and each failure is a finding `{where, what, detail}`: `where` is the section and the part, counted from 1 in the submission, and the text at fault, "section 1, part 3: $12.345". The six failures, in the server's words:
+
+- `a number with no reference`: a quantity in plain text.
+- `unresolved reference`: a cite whose ref names nothing, or names a figure the record does not hold.
+- `wrong unit`: a cite whose suffix does not fit the ref's unit, or whose number is not the ref's value at the report's rounding; the detail gives the value as the cite should read. A word cited against a number, or a word that is not the ref's, is also `wrong unit`.
+- `wrong period`: a cite whose period is not the ref's (`FY2025` reads `2025`); a cite naming no period passes.
+- `wrong snapshot`: a cite whose ref rests on a snapshot other than the company's latest or one the latest reprices; the detail names the latest's id.
+- `a derived figure the engine has not emitted`: a `derived:` cite with no stored derivation of the company, or one with no value; and a multiple (`2.4x`) in plain text, a ratio written out rather than derived.
+
+A cite gets one finding, the first of: wrong snapshot, not emitted, unresolved, wrong period, wrong unit. A plain part gets one for each quantity.
+
+The token rule. A quantity is a money amount (`$1,234.50`), a percentage (`11.2%`, `11.2 percent`), a multiple (`12.3x`, `12.3×`), a decimal, or an integer of two or more digits, a sign (`-` or the minus `−`) or parentheses around it included. These are not quantities: a year from 1990 to 2099; an ISO date, or a day of the month beside a month's name (`27 Oct`); a number joined to letters (`FY2025`, `Q3`, `COVID-19`, `5G`, `21st`); a filing form (`10-K`, `8-K`, `20-F`); a section's or an item's number (`section 13.3`, `Item 10`); anything in a URL or after a slash (`fairband-review/1`); and an integer of one digit. Small counts are written in words.
+
+A cite's text is one number: an optional sign or parentheses (a negative), `$`, the digits with their thousands separators, and a suffix, `%` (or `percent`), `x` (or `×`), `years`, or none. The rounding is design.md 9.2's, by the ref's unit:
+
+| Unit | Written to | Suffix |
+|---|---|---|
+| currency (a total) | whole dollars | `$` or none |
+| per-share | cents, or whole dollars as a value and its levels are written | `$` or none |
+| percent | one decimal of the fraction × 100 | `%` |
+| multiple | two decimals | `x` or none |
+| years | one decimal | `years` or none |
+| score | two decimals | none |
+| count | a whole number | none |
+
+The cite must be written at that rounding or coarser on its grid, so `$12.345` is never a price, and lie within half a step of the value: `22.7%` cites 0.22702, `23%` does not. A ref with no unit (an intermediate, a vendor field) takes any suffix and is compared at the cite's own precision. Signs count: a capital spending of −$126 m is cited `−$126,000,000` or `($126,000,000)`.
+
+### 16.4 Derivations
+
+The agent's arithmetic is a tool output (spec 13.4): `ratio` (a ÷ b), `difference`, `sum`, `growth` (a ÷ b − 1) and `cagr` ((a ÷ b)^(1/years) − 1), over two refs of 16.2 resolved for the company, a table cell included. The unit: multiple for a ratio of two figures in one unit; percent for growth and cagr; a difference or a sum keeps the shared unit; none otherwise. A division by zero, a cagr over a negative ratio and a result that is not finite have no value. A ref that names no number refuses the call. Each result is stored with its refs and cited as `derived:<id>`; it rests on the snapshot its operands rest on.
+
+### 16.5 The financial tables
+
+The six five-year tables of the report's section 4 (spec 13.5; design.md 9.3), computed by the server from the stored statements and the engine's readings, each cell with its ref: growth and profitability, cash flow, balance sheet and solvency, returns on capital, capital allocation, quality scores. A cell that is one stored line cites it as `fact:`; any other cites itself as `table:`. The agent cites the cells and derives none of them; a cell the lines cannot give holds no figure, and a cite of it is `unresolved reference`.
+
+### 16.6 The appendixes and the export
+
+Appendix A and Appendix B are generated from the records when the report is read, never written by the agent. Appendix A: the snapshot the report rests on; every input with its tag (DATA, RULE or JUDGMENT, the review's entries when the report rests on a review), its value at full precision and its provenance; the overrides inside the review with their reasons and evidence; the bridge; the secondary valuation's parts year by year; the checks that ran, the four structural checks and the six failures, each with its rule; the versions (method, policy, settings hash, `fairband-review/1`, `fairband-secondary/1`); and the classifier's evidence. Appendix B: the terms of section 13 the sections use. The Markdown export opens with a line naming the company, the mode, the date, the actor and the revision, then the stance and the snapshot with its price date, the sections under their headings with each cite as its text, Appendix A as tables and Appendix B as a list.

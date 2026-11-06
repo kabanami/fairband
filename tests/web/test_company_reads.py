@@ -20,6 +20,8 @@ from support.web import CREATED, HEADER
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import FiscalYear
+from fairband.policy import Policy
+from fairband.reports.refs import Resolver
 from fairband.reports.tables import LINES, TABLES
 from fairband.store.db import connect
 from fairband.store.refreshes import save_deciles
@@ -249,3 +251,28 @@ def test_the_classifier_section_reads_the_decile_edges(client: TestClient) -> No
     assert "Very High 9 and 10 18.0% or more" in text
     assert "Close to zero or negative 1 and 2 below −5.0%" in text
     assert "100 companies" in text
+
+
+def test_every_ref_the_reads_hand_out_resolves_to_its_figure(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """A cite of any figure the reads serve passes the number check's resolver: the same value
+    and unit (spec 13.2, 13.5)."""
+    served: list[dict[str, Any]] = []
+
+    def collect(x: Any) -> None:
+        if isinstance(x, dict) and set(x) >= {"value", "unit", "ref"}:
+            served.append(x)
+        for child in x.values() if isinstance(x, dict) else x if isinstance(x, list) else ():
+            collect(child)
+
+    for read in ("financials", "financial-tables", "estimates", "price-history", "peers"):
+        collect(_get(client, f"/api/companies/AAPL/{read}"))
+    forms = {figure["ref"].partition(":")[0] for figure in served}
+    assert forms == {"fact", "table", "estimate", "close", "peer"}
+    with closing(connect(db_path)) as conn:
+        resolver = Resolver(conn, "AAPL", policy)
+        for figure in served:
+            found = resolver.resolve(figure["ref"])
+            assert found is not None, figure["ref"]
+            assert (found.value, found.unit) == (figure["value"], figure["unit"]), figure["ref"]

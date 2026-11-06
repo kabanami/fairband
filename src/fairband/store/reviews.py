@@ -138,6 +138,12 @@ def latest_review(conn: sqlite3.Connection, symbol: str) -> ReviewRow | None:
     return None if row is None else _review(row)
 
 
+def review_row(conn: sqlite3.Connection, review_id: int) -> ReviewRow | None:
+    """The review ``review_id``, current or not, if there is one."""
+    row = conn.execute("SELECT * FROM reviews WHERE id = ?", (review_id,)).fetchone()
+    return None if row is None else _review(row)
+
+
 def reviews_for(conn: sqlite3.Connection, symbol: str) -> list[ReviewRow]:
     """Every review of the company, newest first."""
     rows = conn.execute("SELECT * FROM reviews WHERE symbol = ? ORDER BY id DESC", (symbol,))

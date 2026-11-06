@@ -395,7 +395,7 @@ def test_derivations_in_one_call(client: TestClient, results: dict[str, Valuatio
         (pytest.approx(7_000e6 / 22_800e6), "multiple"),  # operating income ÷ revenue, trailing
         (pytest.approx(5.90 / 5.30 - 1), "percent"),  # NTM EPS over trailing EPS
         (pytest.approx((value / 150.0) ** (1 / 3) - 1), "percent"),
-        (pytest.approx(value - levels.buy), "USD"),
+        (pytest.approx(value - levels.buy), "per-share"),  # the reads' units, not a currency code
         (pytest.approx(22_800e6 + 5.30), None),  # dollars and dollars a share: no unit
     ]
     stored = client.get(f"/api/derivations/{found[2]['id']}").json()
@@ -458,6 +458,19 @@ def test_fact_refs_read_the_statements(client: TestClient) -> None:
     ]
 
 
+def test_table_cells_and_policy_values_are_operands(client: TestClient) -> None:
+    r = _derive(
+        client,
+        {"operation": "ratio", "a": "table:AAPL/solvency/debt/2025", "b": "fact:AAPL/revenue/2025"},
+        {"operation": "difference", "a": "policy:required_return", "b": "policy:terminal_growth"},
+    )
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (pytest.approx(2e9 / 22e9), "multiple"),  # fiscal 2025's debt over its revenue
+        (pytest.approx(0.06), "percent"),  # r less g_T
+    ]
+
+
 @pytest.mark.parametrize(
     "ref",
     [
@@ -470,6 +483,8 @@ def test_fact_refs_read_the_statements(client: TestClient) -> None:
         "snapshot:999/value",
         "snapshot:x/value",
         "review:1/value",
+        "table:AAPL/solvency/cash_runway_years/2025",  # a cell with no figure
+        "snapshot:{AAPL}/inputs/moat_class",  # a word
     ],
 )
 def test_an_unresolved_reference_stores_nothing(client: TestClient, ref: str) -> None:

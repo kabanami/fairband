@@ -10,7 +10,7 @@ a share at or below zero; the reason and the evidence (JSON ``{kind, ref, note, 
 where the debt and the cash came from, ``statements`` or ``agent``; the writer and the time; the
 policy version, the settings hash and the deciles refresh it ran under; and
 ``fairband-secondary/1``. ``latest_secondary`` reads the company's newest, ``secondaries_for``
-every one, newest first.
+every one, newest first, and ``secondary_row`` one by its id.
 
 A derivation is one operation of an agent's arithmetic over two references: its operation, its
 refs, its years (a cagr's, else none), its value as ``repr`` text (none where the operation is
@@ -161,6 +161,14 @@ def latest_secondary(conn: sqlite3.Connection, symbol: str) -> SecondaryRow | No
     """The company's newest secondary valuation, if it has one."""
     row = conn.execute(
         "SELECT * FROM secondary_valuations WHERE symbol = ? ORDER BY id DESC LIMIT 1", (symbol,)
+    ).fetchone()
+    return None if row is None else _secondary(row)
+
+
+def secondary_row(conn: sqlite3.Connection, secondary_id: int) -> SecondaryRow | None:
+    """The secondary valuation ``secondary_id``, if there is one."""
+    row = conn.execute(
+        "SELECT * FROM secondary_valuations WHERE id = ?", (secondary_id,)
     ).fetchone()
     return None if row is None else _secondary(row)
 

@@ -101,6 +101,16 @@ def responses_with_payload(
         yield _response_row(row)
 
 
+def response_row(conn: sqlite3.Connection, response_id: int) -> ResponseRow | None:
+    """The response ``response_id`` without its payload, if there is one."""
+    row = conn.execute(
+        "SELECT id, provider, endpoint, params, symbol, http_status, observed_at, error"
+        " FROM vendor_responses WHERE id = ?",
+        (response_id,),
+    ).fetchone()
+    return None if row is None else _response_row(row)
+
+
 def response_payload(conn: sqlite3.Connection, response_id: int) -> str | None:
     """The payload text of the response, or ``None`` when it has none or does not exist."""
     row = conn.execute(

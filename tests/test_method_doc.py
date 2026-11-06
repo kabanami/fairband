@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import get_args
 
 from fairband.engine.overrides import OverrideTag
+from fairband.reports.check import FAILURES
 
 METHOD = Path(__file__).parent.parent / "docs" / "method.md"
 
@@ -30,3 +31,14 @@ def test_section_15_names_the_three_bounds() -> None:
     for name in ("secondary_parts_max", "secondary_years_min", "secondary_years_max"):
         assert f"`{name}`" in section, name
     assert "fairband-secondary/1" in section
+
+
+def test_section_16_names_the_six_failures() -> None:
+    section = _section(16)
+    for failure in FAILURES:
+        assert f"`{failure}`" in section, failure
+    for form in ("snapshot", "review", "secondary", "fact", "table", "estimate", "close", "peer"):
+        assert f"`{form}:" in section, form
+    for form in ("finding", "derived", "response", "policy"):
+        assert f"`{form}:" in section, form
+    assert "`stance_words`" in section

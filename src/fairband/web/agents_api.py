@@ -50,6 +50,7 @@ from fairband.store.inbox import (
     work_items,
 )
 from fairband.store.ledger import SYSTEM, Writer, entries, record
+from fairband.store.reports import report_row
 from fairband.store.research import (
     CriterionState,
     FindingRow,
@@ -238,7 +239,7 @@ def add_agent_routes(
             if body.action == "complete":
                 if body.report_id is None:
                     raise ValueError("a complete needs a report id")
-                _require_report(body.report_id, work_item(conn, item_id).symbol)
+                _require_report(conn, body.report_id, work_item(conn, item_id).symbol)
                 item = complete_item(conn, item_id, body.report_id, at)
                 summary = f"completed with report {body.report_id}"
             else:
@@ -380,10 +381,11 @@ def add_agent_routes(
         return ledger(symbol, limit)
 
 
-def _require_report(report_id: int, symbol: str) -> None:
-    """A complete names a published report of the item's company. Reports are published by the
-    report routes; until they exist none is, so every report is missing."""
-    raise HTTPException(404, f"no report {report_id} for {symbol}")
+def _require_report(conn: sqlite3.Connection, report_id: int, symbol: str) -> None:
+    """A complete names a published report of the item's company: 404 for any other."""
+    found = report_row(conn, report_id)
+    if found is None or found.symbol != symbol:
+        raise HTTPException(404, f"no report {report_id} for {symbol}")
 
 
 def _record_post(conn: sqlite3.Connection, writer: Writer, at: datetime, item: WorkItem) -> None:
