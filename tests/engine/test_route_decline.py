@@ -996,7 +996,7 @@ def test_a_thin_year_past_three_ends_the_consensus(
     assert step_names(r) == ["path_step_2", "path_step_3"]
 
 
-def test_a_held_year_3_ends_the_consensus_at_year_3(
+def test_a_year_3_held_for_want_of_base_plus_2_ends_the_consensus(
     decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """No consensus for base + 2 (fiscal 2029): year 3 holds year 2's rate, and the years past 3

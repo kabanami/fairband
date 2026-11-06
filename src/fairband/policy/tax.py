@@ -1,10 +1,16 @@
 """Statutory corporate tax rates by country and year: the labelled fallback of research.md D9.
 
-The packaged table holds the OECD combined (central plus sub-central) statutory rate. A year after
-the newest year on file for a country takes that newest rate as a labelled estimate; an earlier
-missing year or an unknown country gives ``None``, so the caller refuses with a reason instead of
-silently using another year's rate. A country is named as the OECD names it or by the ISO 3166-1
-alpha-2 code of the table's ``[country_aliases]`` (``US``), the form FMP gives a company's country.
+The packaged table, v2, holds the OECD combined (central plus sub-central) statutory rate for every
+jurisdiction of the series, and Taiwan's and Cyprus's, which the series lacks, by hand;
+``scripts/build_tax_table.py`` regenerates it from the series' CSV export. v1, the sixteen
+jurisdictions of method 0.8 and earlier, stays in the package for the snapshots that cite it
+(spec 2026-11-06 10).
+
+A year after the newest year on file for a country takes that newest rate as a labelled estimate;
+an earlier missing year or an unknown country gives ``None``, so the caller refuses with a reason
+instead of silently using another year's rate. A country is named as the table names it or by the
+ISO 3166-1 alpha-2 code of the table's ``[country_aliases]`` (``US``), the form FMP gives a
+company's country.
 """
 
 import tomllib
@@ -16,7 +22,7 @@ from typing import Any
 
 LATEST_YEAR_METHOD = "tax-rate-latest-oecd-year-v1"
 
-_TAX_FILE = "tax-rates-oecd-v1.toml"
+_TAX_FILE = "tax-rates-oecd-v2.toml"
 
 
 @dataclass(frozen=True)
@@ -65,7 +71,7 @@ class TaxTable:
 
 
 def load_tax_table(path: Path | None = None) -> TaxTable:
-    """Parse the tax table (default: the packaged OECD v1 file). Rates must be fractions, and a
+    """Parse the tax table (default: the packaged OECD v2 file). Rates must be fractions, and a
     country code must name a country with rates."""
     if path is None:
         data = resources.files("fairband.policy").joinpath(_TAX_FILE).read_bytes()

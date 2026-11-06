@@ -341,10 +341,10 @@ def test_tax_rate_estimate_flag_and_refusal(
 
 
 def test_a_profile_country_outside_the_tax_table_is_refused(store: Store) -> None:
-    profiles = [{"symbol": "ACME", "isAdr": False, "country": "TW"}]
+    profiles = [{"symbol": "ACME", "isAdr": False, "country": "PR"}]  # not in the OECD series
     conn = store(profile=profiles, **bodies())  # the universe row says US
     inputs = build(conn)
-    assert (inputs.country, inputs.refusal) == ("TW", "no statutory tax rate for TW 2015")
+    assert (inputs.country, inputs.refusal) == ("PR", "no statutory tax rate for PR 2015")
     assert inputs.notes == {}
 
 
@@ -384,16 +384,17 @@ def test_the_country_is_unknown_without_profile_or_universe_row(store: Store) ->
 
 
 @pytest.mark.parametrize(
-    ("is_adr", "currency"), [(True, "USD"), (False, "TWD")], ids=["adr", "currency"]
+    ("is_adr", "currency"), [(True, "USD"), (False, "RUB")], ids=["adr", "currency"]
 )
 def test_foreign_filer_outside_the_tax_table_is_refused_as_foreign(
     store: Store, policy: Policy, is_adr: bool, currency: str
 ) -> None:
-    """A Taiwanese filer: no tax rate on file, so a U.S. filer would be refused for it."""
+    """A Russian filer: no tax rate on file (Russia is not in the OECD series), so a U.S. filer
+    would be refused for it."""
     annual = [{**row, "reportedCurrency": currency} for row in income_annual(YEARS)]
     profiles = [{"symbol": "ACME", "isAdr": is_adr, "marketCap": 5_000 * M}]
     conn = store(company=False, profile=profiles, **{**bodies(), "income-annual": annual})
-    add_company(conn, country="TW")
+    add_company(conn, country="RU")
     inputs = build(conn)
     assert (inputs.is_adr, inputs.currency) == (is_adr, currency)
     assert inputs.refusal is None

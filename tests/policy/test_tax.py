@@ -1,11 +1,13 @@
+import tomllib
+from importlib import resources
 from pathlib import Path
 
 import pytest
 
 from fairband.policy.tax import load_tax_table
 
-# The jurisdictions the brief asks for; Puerto Rico is not in the OECD table, so it is omitted.
-# Each with the ISO 3166-1 alpha-2 code FMP gives as a company's country.
+# v1's sixteen jurisdictions, each with the ISO 3166-1 alpha-2 code FMP gives as a company's
+# country; v2 keeps every one. Puerto Rico is not in the OECD series, so neither table has it.
 _CODES = {
     "US": "United States",
     "CA": "Canada",
@@ -66,10 +68,63 @@ def test_country_code_or_name(code: str, name: str) -> None:
     assert later is not None and later.estimate is True
 
 
-def test_every_country_in_the_table_has_a_code() -> None:
+def test_v2_keeps_every_v1_rate() -> None:
+    """v1 still loads, for the snapshots that cite it, and v2 has each of its rates unchanged
+    under the same source (spec 2026-11-06 13.6)."""
+    with resources.as_file(resources.files("fairband.policy") / "tax-rates-oecd-v1.toml") as path:
+        v1 = load_tax_table(path)
+    v2 = load_tax_table()
+    assert len(v1.years()) == 207
+    for country, year in v1.years():
+        old, new = v1.rate_for(country, year), v2.rate_for(country, year)
+        assert old is not None and new is not None
+        assert (new.rate, new.year_used, new.estimate) == (old.rate, year, False)
+    assert v2.source == v1.source
+
+
+def test_the_united_states_2025_rate() -> None:
+    r = load_tax_table().rate_for("US", 2025)
+    assert r is not None and r.rate == 0.25569714 and r.estimate is False
+
+
+@pytest.mark.parametrize(
+    ("code", "year", "rate"),
+    [
+        ("GR", 2024, 0.22),
+        ("SE", 2024, 0.206),
+        ("IT", 2024, 0.2781),
+        ("IN", 2024, 0.2517),
+        ("HK", 2024, 0.165),
+        # The series' statutory rate; 20% is Belgium's rate targeted at small business.
+        ("BE", 2024, 0.25),
+        ("BS", 2024, 0.0),
+        ("GG", 2024, 0.0),
+        ("AE", 2024, 0.09),
+        ("CN", 2024, 0.25),
+        ("TW", 2018, 0.20),
+        ("TW", 2017, 0.17),
+        ("CY", 2024, 0.125),
+    ],
+)
+def test_the_new_countries(code: str, year: int, rate: float) -> None:
+    """Jurisdictions v1 lacked, by their codes; Taiwan and Cyprus are written by hand."""
+    r = load_tax_table().rate_for(code, year)
+    assert r is not None and (r.rate, r.year_used, r.estimate) == (rate, year, False)
+
+
+def test_every_jurisdiction_has_an_alias_and_a_rate_from_2024() -> None:
+    """The OECD series' 146 jurisdictions and the two by hand, each named by its alpha-2 code
+    with a 2024 rate on file; a country the series lacks still has none."""
+    v2 = resources.files("fairband.policy").joinpath("tax-rates-oecd-v2.toml")
+    aliases: dict[str, str] = tomllib.loads(v2.read_text("utf-8"))["country_aliases"]
     t = load_tax_table()
-    assert {c for c, _ in t.years()} == set(_CODES.values())
-    assert t.rate_for("TW", 2022) is None
+    countries = {c for c, _ in t.years()}
+    assert len(countries) == 148 and set(aliases.values()) == countries
+    assert len(aliases) == 148 and all(len(c) == 2 and c.isupper() for c in aliases)
+    for code in aliases:
+        r = t.rate_for(code, 2024)
+        assert r is not None and r.estimate is False, code
+    assert t.rate_for("PR", 2024) is None
 
 
 def test_code_for_a_country_without_rates_is_refused(tmp_path: Path) -> None:
