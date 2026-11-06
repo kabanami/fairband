@@ -13,8 +13,9 @@ refuses on its own guards. Mature Growth: no trailing revenue, no statutory tax 
 refusals (an incomplete NTM consensus, no positive forward anchor, a forward P/E unit error),
 consensus earnings that turn negative within the path, a value a share at or below zero under the
 reinvestment charge (which keeps the value-side intermediates). Mature Stable: no positive
-trailing earnings. Revenue growth and Decline: the refusals of their module docstrings, in their
-order. A refusal is a result with no value and a reason, never an exception.
+trailing earnings (which keeps the growth-route cross-check). Revenue growth and Decline: the
+refusals of their module docstrings, in their order. A refusal is a result with no value and a
+reason, never an exception.
 
 Every result of ``value_company`` cites the policy's version and its settings hash, and is valid
 until the next earnings date when that is after the data date, else for the policy's fallback
@@ -23,8 +24,9 @@ code kept. Its intermediates hold ``price_facts``, the price columns of spec 6.3
 too (``None`` for a row without a price). ``reprice`` moves a result to a new price from its
 intermediates alone, its price input with it; a refusal takes only the new price, except a
 revenue-growth row whose intermediates hold ``revenue_path`` (refused for its target margin or
-its value), whose margin the price needs moves too, and a Start-up row, whose market cap moves
-with the price and whose requirement and ``below-net-cash`` flag are rebuilt at it.
+its value), whose margin the price needs moves too, a Start-up row, whose market cap moves
+with the price and whose requirement and ``below-net-cash`` flag are rebuilt at it, and a Mature
+Stable row refused for its trailing earnings, whose cross-check's implied growth moves.
 ``refusal_result`` is the shape of every refusal.
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
@@ -65,7 +67,9 @@ three.
   ``price_facts``, ``growth_route`` (the growth route's cross-check: value_per_share,
   ntm_net_income, path_steps, belief, runway, fade_years, runway_return, terminal_roic,
   charge_off, refusal ``None``; or only its refusal); at the price, ``multiples``,
-  ``expected_return`` and the cross-check's ``implied_growth``, rebuilt from its own keys.
+  ``expected_return`` and the cross-check's ``implied_growth``, rebuilt from its own keys. A row
+  refused for its trailing earnings holds ``e_trailing``, ``nri_gap``, ``eps``, ``shares``,
+  ``moat``, ``growth_route`` (with its ``implied_growth`` at the price) and ``price_facts``.
 - Revenue growth (High Growth and Young Growth): ``ntm_revenue``, ``path`` (base_year, analysts,
   held, sales_class, cap), ``path_steps``, ``revenue_path``, ``growth_rates`` (years 1 to 10),
   ``margin_start``, ``margin_path`` (start, target, by_year), ``target_margin`` (value, count, low,
@@ -113,7 +117,12 @@ from fairband.engine.levels import levels_for
 from fairband.engine.revenue_growth import PeerFigures, PeerSource
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route_decline import decline_at_price, value_decline
-from fairband.engine.route_mature_growth import growth_at_price, long_runway, value_mature_growth
+from fairband.engine.route_mature_growth import (
+    cross_check_at_price,
+    growth_at_price,
+    long_runway,
+    value_mature_growth,
+)
 from fairband.engine.route_mature_stable import stable_at_price, value_mature_stable
 from fairband.engine.route_revenue_growth import (
     implied_margin_at_price,
@@ -301,9 +310,12 @@ def reprice(
     price-dependent intermediates and the long-runway flag recomputed from the intermediates.
     A result with no value only takes the new price and date, except that a revenue-growth
     refusal whose intermediates hold ``revenue_path`` also moves its ``implied_margin``, the
-    margin the price needs, and a Start-up row, whose intermediates hold ``requirement``, moves
+    margin the price needs; a Start-up row, whose intermediates hold ``requirement``, moves
     its market cap with the price (``route_start_up.market_cap_at``), rebuilds its requirement at
-    it and re-reads its ``below-net-cash`` flag; ``price_facts`` stay as they were.
+    it and re-reads its ``below-net-cash`` flag; and a Mature Stable row refused for its trailing
+    earnings, whose intermediates hold ``growth_route`` and ``e_trailing``, moves the
+    cross-check's implied growth (``cross_check_at_price``; a refused cross-check stays as it
+    is). ``price_facts`` stay as they were.
     Either way the ``price`` input becomes the new quote, so the drawer's arithmetic reproduces:
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
@@ -331,9 +343,12 @@ def reprice(
                 intermediates=im | start_up_at_price(im, market_cap, policy),
                 flags=_swap(result.flags, _BELOW_NET_CASH, net_cash, _BURN_COVER_SHORT),
             )
-        if "revenue_path" not in im:
-            return moved
-        return replace(moved, intermediates=im | implied_margin_at_price(im, price, policy))
+        if "revenue_path" in im:
+            return replace(moved, intermediates=im | implied_margin_at_price(im, price, policy))
+        if "growth_route" in im and "e_trailing" in im:
+            gr = cross_check_at_price(im["growth_route"], price, im["shares"], policy)
+            return replace(moved, intermediates=im | {"growth_route": gr})
+        return moved
     im, flags = dict(result.intermediates), result.flags
     if result.route == "mature-growth":
         im |= growth_at_price(im, price, result.value, policy)

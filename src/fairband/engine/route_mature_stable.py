@@ -16,6 +16,11 @@ years uncharged. EPV is shown as the no-growth value. ``epv`` and ``stable_growt
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
 5.7), or that route's refusal; the value, the levels and the designation stay on the stable-growth
 value. Its implied growth moves with the price, as the growth route's does.
+
+A missing or non-positive E refuses "no positive trailing earnings" (engine-round spec 9). The
+refusal keeps ``e_trailing``, ``nri_gap``, ``eps``, ``shares``, ``moat``, ``price_facts`` and the
+cross-check with its implied growth at the price, which ``route.reprice`` moves as on a valued
+row; it raises no flag and cites no input beyond the ones every result carries.
 """
 
 from typing import Any
@@ -50,8 +55,21 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     i, t, policy = c.inputs, c.trailing, c.policy
     gap = nri_gap(i)
     e = None if t.net_income is None else t.net_income - nil(gap) * c.shares
+    moat = moat_class(i.moat_score, policy)
+    roic = RoicTerms.of(i.capital_years, moat, policy)
+    growth_route = growth_cross_check(c, moat, roic)
     if e is None or e <= 0:
-        return Refused("no positive trailing earnings")
+        # engine-round spec 9: the refusal keeps the cross-check, at the price
+        refused: dict[str, Any] = {
+            "e_trailing": e,
+            "nri_gap": gap,
+            "eps": eps(t, gap, None),
+            "shares": c.shares,
+            "moat": moat,
+            "growth_route": cross_check_at_price(growth_route, c.price, c.shares, policy),
+            "price_facts": price_facts_for(i.closes, c.price, c.today),
+        }
+        return Refused("no positive trailing earnings", (), refused, ())
     margin = ttm_margin(t)
     median = median_margin(i.series)
     flagged = margin_flag(i.series, margin, policy) is not None
@@ -59,8 +77,6 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     if flagged and margin is not None and median is not None:
         e_normalized = normalize_for_margin(e, margin, median, flagged)
 
-    moat = moat_class(i.moat_score, policy)
-    roic = RoicTerms.of(i.capital_years, moat, policy)
     runway = policy.runway_years[moat]
     epv_total, stable = mature_stable_values(e_normalized, roic.charge(policy), runway)
     value = stable / c.shares
@@ -83,7 +99,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "eps": eps(t, gap, None),
         **income(i.market_cap, t),
         "price_facts": price_facts_for(i.closes, c.price, c.today),
-        "growth_route": growth_cross_check(c, moat, roic),
+        "growth_route": growth_route,
     }
     im |= stable_at_price(im, c.price, value, policy)
     inputs = (

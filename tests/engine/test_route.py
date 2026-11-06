@@ -857,6 +857,84 @@ def test_mature_stable_cross_check_refuses_a_value_not_positive(
     assert r.refusal is None and r.value == r.intermediates["stable_growth"]
 
 
+# The intermediates of a Mature Stable row refused for its trailing earnings (spec 2026-11-06 9).
+REFUSED_STABLE_KEYS = {
+    "e_trailing",
+    "nri_gap",
+    "eps",
+    "shares",
+    "moat",
+    "growth_route",
+    "price_facts",
+}
+
+
+def _loss_making(stable: CompanyInputs) -> CompanyInputs:
+    """The stable company with a trailing loss of $500m, $0.50 a share."""
+    assert stable.trailing is not None
+    t = replace(stable.trailing, net_income=-500e6, eps_diluted=-0.50)
+    return replace(stable, trailing=t)
+
+
+def test_no_positive_trailing_earnings_keeps_the_cross_check(
+    ms_inputs: CompanyInputs, mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # spec 2026-11-06 13.5: the growth company's consensus gives a positive anchor; at $120 the
+    # cross-check has an implied growth
+    inputs = replace(_loss_making(_with_consensus(ms_inputs, mg_inputs)), price=120.0)
+    r = value_company(inputs, deciles, policy, TODAY)
+    assert_refused(r, "no positive trailing earnings")
+    assert r.phase.phase == "Mature Stable"
+    im = r.intermediates
+    assert set(im) == REFUSED_STABLE_KEYS
+    assert im["e_trailing"] == pytest.approx(-500e6 - 0.10 * 1_000e6)
+    assert im["nri_gap"] == pytest.approx(0.10)
+    assert im["eps"] == {"reported": -0.50, "clean": pytest.approx(-0.60), "forward": None}
+    assert (im["shares"], im["moat"]) == (1_000e6, "Wide")
+    gr = im["growth_route"]
+    assert set(gr) == CROSS_CHECK_KEYS and gr["refusal"] is None
+    assert gr["value_per_share"] > 0
+    assert gr["implied_growth"] is not None
+    # the trailing loss does not reach the cross-check: it is the valued row's at the same price
+    valued = replace(_with_consensus(ms_inputs, mg_inputs), price=120.0)
+    assert gr == value_company(valued, deciles, policy, TODAY).intermediates["growth_route"]
+
+
+def test_the_cross_check_moves_with_the_price_on_the_refusal(
+    ms_inputs: CompanyInputs, mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    inputs = replace(_loss_making(_with_consensus(ms_inputs, mg_inputs)), price=120.0)
+    r = value_company(inputs, deciles, policy, TODAY)
+    assert r.price is not None
+    stored = result_from_json(result_to_json(r))  # from the intermediates alone
+    moved = reprice(stored, 2 * r.price, date(2026, 11, 2), policy)
+    gr, moved_gr = r.intermediates["growth_route"], moved.intermediates["growth_route"]
+    assert moved_gr["implied_growth"] != gr["implied_growth"]
+    assert moved.value is None and moved.refusal == r.refusal
+    # only the implied growth moves, to what a fresh valuation at that price gives
+    assert {k: v for k, v in moved_gr.items() if k != "implied_growth"} == {
+        k: v for k, v in gr.items() if k != "implied_growth"
+    }
+    fresh = value_company(replace(inputs, price=2 * r.price), deciles, policy, TODAY)
+    assert moved.intermediates == fresh.intermediates
+    [price_input] = [i for i in moved.inputs if i.name == "price"]
+    assert (moved.price, price_input.value) == (2 * r.price, 2 * r.price)
+
+
+def test_a_refused_cross_check_on_a_refused_row_survives_a_reprice(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # spec 2026-11-06 13.5: the stable company has no consensus, so the anchor refuses too
+    r = value_company(_loss_making(ms_inputs), deciles, policy, TODAY)
+    assert_refused(r, "no positive trailing earnings")
+    assert set(r.intermediates) == REFUSED_STABLE_KEYS
+    assert r.intermediates["growth_route"] == {"refusal": "incomplete NTM consensus"}
+    stored = result_from_json(result_to_json(r))
+    moved = reprice(stored, 80.0, date(2026, 11, 2), policy)
+    assert moved.intermediates == r.intermediates
+    assert moved.value is None and moved.refusal == r.refusal and moved.price == 80.0
+
+
 def _capital_year(year: int, nopat: float, capital: float) -> CapitalYear:
     """A year whose invested capital is all net property and equipment, taxed at 25%."""
     return CapitalYear(year, nopat / 0.75, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, capital, 0.0, 0.0, 0.0)
