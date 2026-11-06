@@ -8,17 +8,18 @@ from typing import Any
 import pytest
 
 from fairband.policy import BaseRateClass, load_policy
-from fairband.policy.settings import EMPTY_SETTINGS_HASH
+from fairband.policy.settings import EMPTY_SETTINGS_HASH, SETTINGS
 
 V1_SHA256 = "cfc46d15585c283322f50a710d3385f4921c186ed94679a542c0571a43b54bde"
 V2_SHA256 = "f54a31ab4b4a6a0ca549218773191d0936de63ecce50ab5224b3511046a1070b"
 V3_SHA256 = "470f3dcfad5ff8d1179face5578b48df658cf3778d8440ee8694d5324056db9b"
 V4_SHA256 = "bda7ffc14dfda8dfc2d467489b5abc9c5816b04b6133de19d4ce12fd7448b903"
 V5_SHA256 = "809a5fa620dfdd862d1ceb62e200694b1a20df869029e36c7e44c0e699ac96f2"
+V6_SHA256 = "393d0f68f8fa5c67ce7f0a662c7cdfb4775e4709b28f1f85a3d43d628940d4ac"
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v6.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v7.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -30,7 +31,7 @@ def _file_values(name: str) -> dict[str, Any]:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v6" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v7" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -65,9 +66,13 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v6_is_the_packaged_policy() -> None:
+def test_v7_is_the_packaged_policy() -> None:
     policy = load_policy()
-    assert policy.version == "fairband-policy-v6"
+    assert policy.version == "fairband-policy-v7"
+    assert policy.own_sales_to_capital_min_share == 0.5
+    assert policy.loss_ramp_margin_bound == -1.0
+    for name in ("own_sales_to_capital_min_share", "loss_ramp_margin_bound"):
+        assert policy.raw["values"][name]["source"].strip(), name
     assert policy.universe.manual_admissions == ("V", "MA", "GPN")
     assert set(policy.universe.excluded_industries) >= {
         "Asset Management",
@@ -177,9 +182,8 @@ def test_a_malformed_distress_table_is_refused(
         load_policy(copy)
 
 
-def test_v6_derives_the_edges_and_the_wide_cap() -> None:
+def test_derives_the_edges_and_the_wide_cap() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v6"
     assert p.designation_edges == (0.65, 0.85, 1.15, 1.5)
     assert p.wide_terminal_roic_cap == 0.13
     assert p.wide_terminal_roic_spread == 0.04 and p.repricing_horizon_years == 3
@@ -187,11 +191,24 @@ def test_v6_derives_the_edges_and_the_wide_cap() -> None:
     assert "designation_edges" not in p.raw["values"]
 
 
+def test_v7_is_v6_with_the_two_values_added() -> None:
+    """Every v6 value loads unchanged from v7; v7 adds the growth routes' own sales-to-capital
+    bound and the loss ramp bound, neither a setting (spec 2026-11-06 section 11)."""
+    v6 = _file_values("fairband-policy-v6.toml")
+    v7 = load_policy().raw["values"]
+    assert v6.keys() <= v7.keys()
+    assert v7.keys() - v6.keys() == {"own_sales_to_capital_min_share", "loss_ramp_margin_bound"}
+    assert {k: v7[k] for k in v6} == v6
+    assert v7["own_sales_to_capital_min_share"]["value"] == 0.5
+    assert v7["loss_ramp_margin_bound"]["value"] == -1.0
+    assert not {s.name for s in SETTINGS} & (v7.keys() - v6.keys())
+
+
 def test_v6_is_v5_with_the_two_values_swapped() -> None:
     """Every v5 value loads unchanged from v6, save the edges and the Wide cap, which v6 derives;
     v6 adds the Wide spread and the repricing horizon (spec 2026-11-04 8.3)."""
     v5 = _file_values("fairband-policy-v5.toml")
-    v6 = load_policy().raw["values"]
+    v6 = _file_values("fairband-policy-v6.toml")
     assert v5.keys() - v6.keys() == {"designation_edges", "wide_terminal_roic_cap"}
     assert v6.keys() - v5.keys() == {"wide_terminal_roic_spread", "repricing_horizon_years"}
     kept = v5.keys() & v6.keys()
@@ -271,6 +288,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v6_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v6`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v6.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V6_SHA256
 
 
 def test_v5_file_is_unchanged() -> None:

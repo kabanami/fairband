@@ -194,4 +194,4 @@ def test_phase_numbers_and_method_version() -> None:
         ("Mature Stable", 5),
         ("Decline", 6),
     ]
-    assert METHOD_VERSION == "fairband-mechanical/0.8"
+    assert METHOD_VERSION == "fairband-mechanical/0.9"

@@ -6,7 +6,8 @@ packaged policy at its defaults on 2026-10-31, with `policy_version`, `method_ve
 The policy name a RULE input cites in its provenance is masked as well: its `source`
 `policy fairband-policy-v5` is stored as `policy`.
 
-Captured from method 0.7, policy v5, on 2026-11-04; regenerate only when the method changes on purpose.
+Captured from method 0.7, policy v5, on 2026-11-04, and still the baseline at the start of
+method 0.9; regenerate only when the method changes on purpose.
 
 Run from the repository root:
 

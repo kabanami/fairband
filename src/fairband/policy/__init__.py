@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v6.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v7.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v5 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v6 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -25,7 +25,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v6.toml"
+_POLICY_FILE = "fairband-policy-v7.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -101,6 +101,8 @@ class Policy:
     industry_peer_max: int
     peer_margin_min_years: int
     implied_margin_bounds: tuple[float, float]
+    own_sales_to_capital_min_share: float
+    loss_ramp_margin_bound: float
     roic_sensitivity: tuple[float, float]
     analyst_min: int
     nri_flag_share: float
@@ -143,7 +145,7 @@ class Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v6 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v7 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -196,6 +198,8 @@ def load_policy(path: Path | None = None) -> Policy:
         industry_peer_max=read("industry_peer_max", _whole),
         peer_margin_min_years=read("peer_margin_min_years", _whole),
         implied_margin_bounds=read("implied_margin_bounds", _pair),
+        own_sales_to_capital_min_share=read("own_sales_to_capital_min_share", _num),
+        loss_ramp_margin_bound=read("loss_ramp_margin_bound", _num),
         roic_sensitivity=read("roic_sensitivity", _pair),
         analyst_min=read("analyst_min", _whole),
         nri_flag_share=read("nri_flag_share", _num),

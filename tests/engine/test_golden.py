@@ -47,6 +47,6 @@ def golden_dict(result: ValuationResult) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("symbol", sorted(FIXTURES))
-def test_defaults_match_the_0_7_golden(symbol: str) -> None:
+def test_defaults_match_the_golden(symbol: str) -> None:
     result = value_company(FIXTURES[symbol](), universe_deciles(), load_policy(), TODAY)
     assert golden_dict(result) == json.loads((GOLDEN / f"{symbol}.json").read_text())

@@ -162,7 +162,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/0.8"
+    assert METHOD_VERSION == "fairband-mechanical/0.9"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -1231,7 +1231,7 @@ def test_result_cites_the_settings_hash(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
-    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/0.8"
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/0.9"
     custom = apply_overlay(policy, {"required_return": 0.1})
     valued = value_company(mg_inputs, deciles, custom, TODAY)
     assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH
