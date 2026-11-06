@@ -28,7 +28,7 @@ file or theme, before the workspace is deleted.
 | B-4 | Chip colours for Below and Above fail the brand book's 4.5:1 contrast: below 2.99 dark and 3.51 light; above 2.90 and 3.62; well above 4.10 in dark. | plan B, Task 6 | change the step-2 and step-3 chart tokens in the design system, or accept the contrast |
 | B-5 | The band meter's zones carry no word; the page turns the scale off and lists the levels under the meter. The brand book says every zone carries a word. | plan A, Task 6 | add zone words to the component, or keep the list |
 | B-6 | A consensus check flag on every phase: next-3-year consensus revenue growth ranked on the phase deciles maps to a different phase, with at least 5 analysts; the phase stays. And the thin-step rule: "a thin step takes the belief" would give QCOM $157.71 and move the Mature Growth median value ÷ price 0.824 → 0.708 (421 of 716 rows have a thin year-3 step). | founder, 2026-11-02 (QCOM) | adopt the flag only; adopt both; leave as built |
-| B-7 | Are the growth routes too harsh on true growers? 58 growth rows were refused "value not positive" before the classifier fixes (40 High Growth, 18 Young Growth). | readout, 2026-11-03 | recount after refresh 14 and read ten rows |
+| B-7 | Are the growth routes too harsh on true growers? 58 growth rows were refused "value not positive" before the classifier fixes (40 High Growth, 18 Young Growth); 63 of 151 after them (refresh 15, 2026-11-05: 40 High Growth, 23 Young Growth). | readout, 2026-11-03; recount 2026-11-06 | read in the engine round's brainstorm of 2026-11-06: 50 of the 63 are a reinvestment that outruns the terminal, on a tiny own sales-to-capital or a loss larger than revenue on the margin path |
 | B-8 | AAPL's three-year aggregate return reads 9236% (invested capital near zero), so its runway charge is nil. | readout, 2026-11-02 | floor the capital, cap the return, or accept |
 | B-46 | The Base Rate Book's medians and 90th percentiles ship in policy v5 under an attribution line; the brief lists the book as a source that cannot ship. | brief, uncertainties; design.md 6.13 | keep the attribution; replace the figures with a public source; ask the authors, before the repo goes public |
 
@@ -145,7 +145,6 @@ file or theme, before the workspace is deleted.
 
 | ID | Item | Type | Origin | Why |
 |---|---|---|---|---|
-| B-43 | The limiter's proof at full load: the next full refresh after the 24-hour reuse window (2026-11-05 or later) must finish in one run | question | plan A, refresh 13 (163 calls, 0 holds) | |
 | B-44 | Starting the server marks a running CLI refresh interrupted, and a server on an older method fails on newer JSON: stop the server before a CLI refresh. A guard (the server refuses to start while a refresh runs) would remove the rule | debt | growth routes, 2026-11-03 | |
 
 ## Done
@@ -160,3 +159,4 @@ file or theme, before the workspace is deleted.
 | B-45 | A revalue from the web API runs without the FMP key; the server builds its worker in every case | 1512156 |
 | B-75 | A rule between two settings names both, the Settings page stands the sentence beside the field the user changed, and the save dialog shows the cap bands a changed size floor carries | 088e9a9 |
 | B-82 | Phone width: the engine stamp gives way below 560px, the refresh buttons read Prices and Full below 400px, the views wrap below 360px, and the Methodology diagram keeps at least 800px and scrolls sideways | 088e9a9 |
+| B-43 | The limiter's proof at full load: a full refresh after the 24-hour reuse window finishes in one run | refresh 15, 2026-11-05: the whole universe fetched 35 hours after refresh 13, 1,602 companies in one run of 11 min 40 s, done |
