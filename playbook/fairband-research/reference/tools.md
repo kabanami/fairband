@@ -1,0 +1,141 @@
+# The tools
+
+Fairband's MCP server, `fairband mcp`, serves these tools. Each one calls the Fairband web server
+on this machine; none holds a key. The lists follow the server's order. An argument marked `?` may
+be left out.
+
+## How a tool answers
+
+- A tool answers the web server's JSON, an object. Its keys are camelCase (`responseId`). A ref
+  names a field by the engine's snake_case name (`snapshot:412/inputs/market_cap`).
+- A read gives each figure as `{value, unit, ref}`. Cite the `ref` as given. A percent is a
+  fraction: `0.112` is 11.2%.
+- A refusal is `{"refused": <sentence>, "status": <code>}`, with the rest of the answer beside it:
+  a refused override's `override`, a rejected report's `findings`. The status says what kind of
+  refusal it is: 400 a value the call cannot take; 404 a record that does not exist; 409 a state
+  the write cannot move from; 422 a rejected report; 502 a vendor call that failed; 503 a
+  pass-through that is busy or has no key.
+- A write before `identify` answers `{"refused": "identify first: the model identifier you run
+  as"}` and calls nothing. The reads and the pass-throughs need no identity.
+- When the web server is down, every tool answers `{"refused": "the Fairband server is not
+  running: start `uv run fairband serve`"}`.
+- A record inside an argument (an evidence item, a part, a cite) may name its keys in snake_case
+  (`terminal_growth`) or in camelCase (`terminalGrowth`).
+
+## The reads
+
+- `screen(sort?, direction?)`: the screen's rows, one a company, sorted by a column key;
+  `direction` is `asc` or `desc`.
+- `company(symbol)`: the latest snapshot in full: `snapshot.id`, the `result` (the value, the
+  levels, the price, the inputs, the intermediates, the phase evidence, the flags, `valid_until`)
+  and the company's row in the universe.
+- `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
+  stored statements, each figure with its `fact:` ref.
+- `financial_tables(symbol)`: the six five-year tables of the report's section 4, `growth`,
+  `cash_flow`, `solvency`, `returns`, `capital_allocation` and `quality`, each cell
+  `{period, value, unit, ref, note}`.
+- `estimates(symbol)`: the stored analyst consensus by quarter and by fiscal year, each figure with
+  its `estimate:` ref.
+- `price_history(symbol, years?)`: the stored daily closes, oldest first, each with its `close:`
+  ref; `years` keeps the latest years only.
+- `peers(symbol)`: the company's mature peers with their figures, each with its `peer:` ref, and
+  where the list of peers came from.
+- `watchlists()`: the watchlists with their companies.
+- `inbox_list(state?)`: the work items, newest first, or those in one state: `pending`, `claimed`,
+  `done`, `declined` or `dropped`.
+- `reports(symbol)`: the company's published reports, newest first, without their text.
+- `report(symbol, id?)`: one published report whole, with its judgments and its appendixes: the
+  one with that id, or the company's latest.
+- `notes(symbol)`: the company's notes, newest first.
+- `findings(symbol)`: the company's findings with their sources; cite one as `finding:<id>`.
+- `overrides(symbol)`: the company's overrides, newest first, each with its state.
+- `reviews(symbol)`: the company's reviews, newest first, each with its bridge.
+- `secondary(symbol)`: the company's secondary valuations, newest first.
+- `kill_criteria(symbol)`: the company's kill criteria, each with its state: `open`, `triggered`
+  or `retired`.
+- `news_items(symbol)`: the company's news items.
+- `ledger(symbol?, limit?)`: the ledger's newest rows, for one company or for all: every write, who
+  made it and what it rests on.
+- `review_log(symbol?)`: the review log, newest first: each review's mechanical and reviewed value
+  beside the price.
+- `policy()`: the policy values in force, the user's settings over the file's, each with its
+  source.
+- `methodology(section?)`: one section of the Methodology page in plain words, with the live
+  values; without a section, the list of sections.
+- `refresh_status()`: the running refresh's progress, or the last refresh's record when none runs.
+
+## The vendor pass-throughs
+
+Four FMP reads the engine does not use. The server fetches each with its own key and stores it, so
+a report can cite it.
+
+- `transcript(symbol, year, quarter)`: the earnings call transcript of one fiscal quarter.
+- `news(symbol, limit?)`: recent stock news: 20 items, or `limit` up to 100.
+- `segments(symbol)`: the revenue by product and by region, two responses under `product` and
+  `geographic`.
+- `insider_trades(symbol)`: the insiders' trades.
+
+Each answers `{responseId, observedAt, reused, payload}`; `segments` answers two of them, under
+`responses.product` and `responses.geographic`. Cite a field of a payload as
+`response:<responseId>/<json pointer>`, such as `response:731/0/revenue`. The server reuses a
+response it fetched within the reuse window, so a repeated call costs no vendor call. "the
+pass-throughs are busy: four calls are in flight, try again" (503): wait a little and call again.
+"no FMP key" (503): the server has no vendor key; use the host's own tools and record findings.
+
+## The writes
+
+- `identify(agent)`: name the model identifier you run as; every later write is recorded under it.
+- `inbox_post(symbol, mode, note?)`: post a work item for a company; `mode` is `valuation review`
+  or `full report`.
+- `inbox_claim(item_id?)`: claim the named work item, or the oldest pending one; naming a claimed
+  item takes it over.
+- `inbox_complete(item_id, report_id)`: complete a work item with a published report of its
+  company.
+- `inbox_decline(item_id, reason)`: decline a work item, with the reason.
+- `note_add(symbol, text, override_id?)`: add a note to the company, tied to an override when one
+  is named.
+- `finding_add(symbol, as_of, text, source, value?, unit?, period?)`: record a fact from outside
+  Fairband with its source, so a report can cite it as `finding:<id>`.
+- `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input;
+  applied, it answers `{override, review, bridge}`; refused, the sentence and the `override`.
+- `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over
+  the rest, or cleared when none is left.
+- `secondary_valuation(symbol, parts, reason, evidence, debt?, cash?)`: value the company from your
+  own free-cash-flow path; it answers the stored secondary valuation.
+- `derive(symbol, derivations)`: compute figures from refs; it answers
+  `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`.
+- `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`:
+  submit a report; published whole, it answers `{report}`; rejected whole, the `findings`.
+- `kill_criterion_add(symbol, text)`: add a kill criterion to the company.
+- `kill_criterion_set(id, state, reason)`: move a kill criterion to `open`, `triggered` or
+  `retired`, with the reason.
+- `news_item_add(symbol, date, headline, source, text, kill_criterion_id?)`: record a dated news
+  item, tied to a kill criterion when one is named.
+- `refresh_start(kind, symbols?)`: start a refresh: `full`, `price`, `scoped` with `symbols`, or
+  `revalue`; a refresh already running refuses it.
+- `refresh_cancel()`: ask the running refresh to stop after the companies in flight.
+
+## The records inside the arguments
+
+- An evidence item (`override_add`, `secondary_valuation`): `{kind, ref, note}`. The kind is
+  `filing`, `transcript`, `url`, `vendor`, `base-rate` or `finding`. The ref says where: `10-K
+  2025, Item 7`, a URL, `response:<id>` for a stored vendor response, a finding's id. On
+  `secondary_valuation`, the item that backs a debt or a cash you pass adds `figure`, `debt` or
+  `cash`.
+- A finding's source (`finding_add`): `{kind, ref, note}`, the kind one of `filing`,
+  `transcript`, `url`, `vendor` or `base-rate`. `as_of` is the date the fact describes, as
+  `2026-09-30`. The `unit` is `currency`, `percent`, `multiple`, `count`, `per-share`, `score` or
+  `years`. The `value` is in that unit: dollars in full, a percent as a fraction. The `period` is a
+  fiscal year (`2025`), a quarter (`2026-Q2`) or `ttm`.
+- A part (`secondary_valuation`): `{name, fcff, terminal_growth, note}`, `fcff` a list of dollars
+  for years one to N.
+- A derivation (`derive`): `{operation, a, b, years?}`. The operation is `ratio` (a ÷ b),
+  `difference` (a − b), `sum` (a + b), `growth` (a ÷ b − 1) or `cagr`, the compound annual growth
+  over `years`. `a` and `b` are refs.
+- A section (`report_submit`): `{heading, parts}`, a part a plain string or a cite
+  `{cite, ref, period?}`.
+- A judgment (`report_submit`): `{judgment, bull, bear, decision, override_id?}`, the judgment one
+  of `phase`, `moat`, `belief`, `roic` and `target_margin`.
+- A kill criterion (`report_submit`): `{text}`, a measurable event that would prove the view wrong.
+- A news item (`report_submit`): `{date, headline, source, text, kill_criterion_id?}`, the source a
+  URL or a stored vendor response.
