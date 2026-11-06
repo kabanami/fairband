@@ -13,8 +13,9 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   ``/old`` or ``/new``, the bridge's line ``n`` counted from 1;
 - ``secondary:<id>/value`` (the value a share), ``/firm_value``, ``/equity``, ``/debt``, ``/cash``,
   ``/shares``, ``/price_to_value``, ``/levels/<name>``, and ``/parts/<n>/pv/<t>``,
-  ``/parts/<n>/fcff/<t>``, ``/parts/<n>/value``, ``/terminal``, ``/terminal_pv`` and
-  ``/terminal_growth``, the part ``n`` and the year ``t`` counted from 1;
+  ``/parts/<n>/fcff/<t>``, ``/parts/<n>/value``, ``/parts/<n>/terminal``,
+  ``/parts/<n>/terminal_pv`` and ``/parts/<n>/terminal_growth``, the part ``n`` and the year ``t``
+  counted from 1;
 - ``fact:<symbol>/<line>/<period>``: a stored statement line as the engine reads it, ``<line>``
   the engine's field name (``fairband.reports.tables.LINES`` for a fiscal year, read through
   ``year_lines``; the trailing figures' fields for ``ttm``) and ``<period>`` the fiscal year as

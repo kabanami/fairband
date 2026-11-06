@@ -187,9 +187,12 @@ event one of two ways:
   falls below its 2025 level of 31.2%" cites that cell of the growth table.
 - State it in words: "revenue falls two quarters in a row", "the operating margin turns negative".
 
-Write the text of a kill criterion you record the same way, though the server does not check it. A
-threshold that no stored figure gives is a question for the founder: ask the user, and state the
-event in words meanwhile. A stored threshold on a kill criterion is a later piece of Fairband.
+A kill criterion you record, with `kill_criterion_add` or in a report's `kill_criteria`, is text
+only: it carries no cite. Name the stored figure in words, "the ROIC falls below the hurdle rate",
+or state the event, "revenue falls two quarters in a row"; section 10 of the report cites the
+figure. A threshold that no stored figure gives is a question for the founder: ask the user, and
+state the event in words meanwhile. A stored threshold on a kill criterion is a later piece of
+Fairband.
 
 ## Your own arithmetic: a derivation
 

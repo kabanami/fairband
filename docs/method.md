@@ -1212,7 +1212,8 @@ A reference is `<form>:<path>`, resolved for the report's company; a record of a
 | `snapshot:<id>/intermediates/<path>` | an intermediate by its keys and list indexes, `belief/rate` | none |
 | `snapshot:<id>/phase/<field>` | a field of the classifier's evidence (3.5), `phase`, `growth_3y` | the field's |
 | `review:<id>/value`, `/price_to_value`, `/levels/<name>`, `/bridge/<n>/delta`, `/old`, `/new` | the review's figures (14.5); the bridge's line n counted from 1 | per-share; old and new the input's |
-| `secondary:<id>/value`, `/firm_value`, `/equity`, `/debt`, `/cash`, `/shares`, `/price_to_value`, `/levels/<name>`, `/parts/<n>/pv/<t>`, `/parts/<n>/fcff/<t>`, `/parts/<n>/value`, `/terminal`, `/terminal_pv`, `/terminal_growth` | the secondary valuation's (15), part n and year t counted from 1 | per-share, currency, count, percent |
+| `secondary:<id>/value`, `/firm_value`, `/equity`, `/debt`, `/cash`, `/shares`, `/price_to_value`, `/levels/<name>` | the secondary valuation's figures (15) | per-share, currency, count, multiple |
+| `secondary:<id>/parts/<n>/pv/<t>`, `/parts/<n>/fcff/<t>`, `/parts/<n>/value`, `/parts/<n>/terminal`, `/parts/<n>/terminal_pv`, `/parts/<n>/terminal_growth` | part n's present value and free cash flow of year t, its value, its terminal value, the terminal's present value and its terminal growth; n and t counted from 1 | currency; percent for the terminal growth |
 | `fact:<symbol>/<line>/<year or ttm>` | a stored statement line as the engine reads it: a fiscal year's (the store's lines by the engine's names), or the trailing figures' | currency; per-share for EPS; count for the diluted shares |
 | `table:<symbol>/<table>/<row>/<year>` | a cell of the financial tables (16.5) | the row's |
 | `estimate:<symbol>/<period>/<field>` | a stored consensus figure, the period a fiscal year (`2026`) or a quarter (`2026-Q4`) | currency; per-share for EPS; count for the analysts |

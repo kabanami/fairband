@@ -34,6 +34,10 @@ Call `identify(agent)` with the model identifier you run as, such as `claude-opu
 lower case, exactly as the host reports it. Fairband records every write under it. A write before
 `identify` is refused: "identify first: the model identifier you run as".
 
+Only the lead agent calls `identify`. A subagent the host starts never does: the identity belongs
+to the Fairband MCP process, which the lead and its subagents share, so a subagent's `identify`
+would rename every later write.
+
 ### 2. Take the work item
 
 Call `inbox_list()` to see the work items. Claim one with `inbox_claim(item_id)`. Without an id, it
@@ -48,9 +52,21 @@ when `inbox_post` answers "an item for <symbol> is open", claim that item instea
 A full report covers the business, the industry and the value. A valuation review re-values the
 company and reuses the newest full report for the business and the industry.
 
+An item of origin `expiry` is a company whose validity window has ended: its snapshot is stale.
+Refresh it first, at the start of step 3.
+
 ### 3. Read the company
 
-Read everything the page shows:
+First, the window. When the item's origin is `expiry`, or `company(symbol)` shows a `valid_until`
+before today, refresh the company before you read further:
+
+- Call `refresh_start("scoped", [symbol])`. When it is refused because a refresh is running, call
+  `refresh_status()` until that one ends, then start yours.
+- Call `refresh_status()` until its `refresh` is `null`: no refresh is running, and `last` is the
+  one you started.
+- Read `company(symbol)` again. The snapshot id is new.
+
+Then read everything the page shows:
 
 - `company(symbol)`: the latest snapshot (the company's frozen inputs and the engine's result on
   them). Keep `snapshot.id`: the report cites this snapshot.
@@ -75,8 +91,10 @@ own site. From Fairband, read `transcript(symbol, year, quarter)` for the earnin
 the insiders bought and sold.
 
 Record a finding (a dated fact with its source) with `finding_add` for every number from outside
-Fairband that the report will cite. Fairband's own figures need no finding: each read gives them
-with their refs.
+Fairband that the report will cite. Fairband's own figures need no finding. `financials`,
+`financial_tables`, `estimates`, `price_history` and `peers` give each figure with its ref; for the
+others, a snapshot's, a review's or a secondary valuation's, build the ref from the record's id
+(`reference/citations.md`).
 
 ### 5. The news
 
@@ -148,7 +166,10 @@ instead.
 - No first person. Fairband has no voice: never "I", "we" or "our".
 - The reason on an override is your own words. Fairband keeps it verbatim and shows it on the
   bridge.
-- Start a refresh only when a refusal asks for a revalue, or when the user asks.
+- Start a refresh only in three cases: a scoped refresh of a company whose window has ended (an
+  `expiry` item, or a `valid_until` before today; step 3); a revalue when a refusal asks for one;
+  or when the user asks.
+- Only the lead agent calls `identify`; a subagent never does (step 1).
 
 ## Overrides
 

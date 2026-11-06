@@ -98,13 +98,15 @@ The engine or a derivation gives every item. None of them is a target.
 | Start-up | EV over the market size, over the users, over the subscribers (each a finding) |
 | Young Growth | EV over forward sales |
 | High Growth | EV over sales |
-| Mature Growth | the forward P/E, beside the growth rate it rests on; PEG is not available yet |
+| Mature Growth | the forward P/E, beside the growth rate it rests on, the belief (`snapshot:<id>/inputs/belief`); PEG is not available yet |
 | Mature Stable | P/E, EV over EBITDA |
 | Decline | P/B, EV over the liquidation value |
 
 PEG is not available yet. `derive` takes refs only, so a P/E over a growth rate divides by the
 fraction and gives a figure about a hundred times the usual one, which the check would pass. Show
-the forward P/E and cite the growth rate beside it instead.
+the forward P/E and cite the growth rate beside it instead: the snapshot's belief,
+`snapshot:<id>/inputs/belief`, or, when an applied `growth.belief` override replaced it, the
+override's line of the current review's bridge, `review:<id>/bridge/<n>/new`.
 
 EV (the enterprise value: the market cap plus debt less cash) takes one `derive` call for each
 link, since a link names the `derived:` id the call before it answered:

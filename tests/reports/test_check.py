@@ -562,6 +562,15 @@ def test_a_policy_score_is_cited_to_its_decimals(
     assert _check(conn, policy, sid, _cite(whole, "policy:f_score_low")) == []
 
 
+def test_the_belief_a_forward_p_e_rests_on_is_cited_by_its_input(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The playbook's report template cites the growth rate beside a Mature Growth row's forward
+    P/E as ``snapshot:<id>/inputs/belief``: AAPL's belief is 6.3%."""
+    sid = snapshots["AAPL"]
+    assert _check(conn, policy, sid, _cite("6.3%", f"snapshot:{sid}/inputs/belief")) == []
+
+
 def test_judgment_text_holds_no_figure() -> None:
     judgments = [
         {
