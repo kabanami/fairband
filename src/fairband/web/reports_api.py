@@ -2,7 +2,8 @@
 
 Each read answers a figure as ``{value, unit, ref}``, so a cite costs the agent nothing to build;
 the refs are ``fairband.reports.refs``' forms, the units ``currency``, ``per-share``, ``percent``,
-``multiple``, ``count`` and ``score`` (a currency figure is in the statements' ``currency``). Keys
+``multiple``, ``count``, ``score`` and ``years`` (a currency figure is in the statements'
+``currency``). Keys
 are camelCase, as the agent routes send them; a ref names a field by the engine's snake_case name.
 
 - ``GET /api/companies/{symbol}/financials``: the fiscal-year series (``FiscalYear``), the trailing

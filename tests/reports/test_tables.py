@@ -98,7 +98,8 @@ def test_six_tables_with_five_years(conn: sqlite3.Connection, policy: Policy) ->
     assert at("solvency", "interest_coverage") == pytest.approx(42.0)
     assert at("solvency", "current_ratio") == pytest.approx(710 / 300)
     runway = _row(tables, "solvency", "cash_runway_years")["2025"]
-    assert (runway.value, runway.note) == (None, "operating cash flow is not negative")
+    assert (runway.value, runway.unit) == (None, "years")
+    assert runway.note == "operating cash flow is not negative"
     assert at("returns", "roe") == pytest.approx(315 / 805)
     assert at("returns", "hurdle_rate") == policy.required_return
     assert (at("capital_allocation", "dividends"), at("capital_allocation", "buybacks")) == (
@@ -116,12 +117,13 @@ def test_returns_read_the_engine_s_roic(conn: sqlite3.Connection, policy: Policy
     assert {p: c.value for p, c in _row(tables, "returns", "roic").items()} == {
         p: by_year[p] for p in PERIODS
     }
-    # the newest cell is the engine's ten-year aggregate; each earlier one the aggregate over
-    # the years on file through its own
+    # the newest cell is the engine's ten-year aggregate; an earlier year has fewer than ten
+    # ROIC years behind it in the store, so its cell holds none
     aggregate = _row(tables, "returns", "aggregate_roic_ten_year")
-    assert aggregate["2025"].value == engine.aggregate
-    through_2023 = aggregate_roic([y for y in capital if y.year <= 2023]).aggregate
-    assert aggregate["2023"].value == through_2023 != engine.aggregate
+    assert engine.years_used == 10 and engine.aggregate is not None
+    assert (aggregate["2025"].value, aggregate["2025"].note) == (engine.aggregate, None)
+    earlier = [(aggregate[p].value, aggregate[p].note) for p in PERIODS[:-1]]
+    assert earlier == [(None, "the ten-year aggregate is the newest year's figure")] * 4
 
 
 def test_every_cell_has_a_ref_that_resolves(conn: sqlite3.Connection, policy: Policy) -> None:
@@ -184,6 +186,21 @@ def test_a_missing_line_is_a_none_cell(conn: sqlite3.Connection, policy: Policy)
     # cash flow, the accrual, the liquidity (true) and the stock issued (false)
     f = _row(tables, "quality", "piotroski_f")["2025"]
     assert (f.value, f.note) == (3, "4 of 9 signals read")
+
+
+def test_a_cash_runway_when_operating_cash_flow_is_negative(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    with transaction(conn):
+        conn.execute(
+            "UPDATE facts SET value = '-100000000' WHERE symbol = 'ACME'"
+            " AND dataset = 'cashflow-annual' AND field = 'netCashProvidedByOperatingActivities'"
+            " AND period_end = '2025-12-31'"
+        )
+    runway = _row(financial_tables(conn, "ACME", policy), "solvency", "cash_runway_years")
+    # cash $250 m over an outflow of $100 m
+    assert (runway["2025"].value, runway["2025"].unit, runway["2025"].note) == (2.5, "years", None)
+    assert runway["2024"].value is None
 
 
 def test_a_company_without_statements_has_no_cells(
