@@ -177,15 +177,16 @@ def ntm_anchor(
     price: float,
     policy: Policy,
     *,
-    nri_gap: float | None = None,
+    nri_correction: float | None = None,
 ) -> Anchor:
     """The NTM EPS with stock compensation as a cost and the NTM net income on ``shares``. The
-    basis test reads trailing GAAP EPS as reported; with ``nri_gap``, an agent's non-recurring
-    gap (``method.md`` 14), GAAP EPS less that gap."""
+    basis test reads trailing GAAP EPS as reported; with ``nri_correction``, an agent's
+    non-recurring gap less the gap found (``method.md`` 14), GAAP EPS less that correction, so a
+    gap overridden at the figure found leaves the test as it was."""
     sbc_per_share = None if trailing.sbc is None else trailing.sbc * (1 - tax_rate) / shares
     gaap = trailing.eps_diluted
-    if gaap is not None and nri_gap is not None:
-        gaap -= nri_gap
+    if gaap is not None and nri_correction is not None:
+        gaap -= nri_correction
     basis = sbc_basis(street_ttm_eps, gaap, sbc_per_share, policy.sbc_detect)
     flags = (_SBC_UNKNOWN,) if basis == "unknown" else ()
 

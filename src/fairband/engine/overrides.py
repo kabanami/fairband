@@ -15,7 +15,9 @@ The routes read an override through ``route_steps.chosen``; ``route.value_compan
 applied ones as a mapping by tag. ``current_reading`` is the engine's reading of an input from a
 result's intermediates, ``None`` where the result holds none: the bridge's old value and the
 value a period-tied override corrected. A balance line reads the reported figure the result
-cites, ``None`` when no line is on file (the bridge then counts it as nil).
+cites, ``None`` when no line is on file (the bridge then counts it as nil) or the result cites
+none; the runway return reads ``None`` with the charge off. An override at the engine's reading
+moves nothing.
 
 ``INPUT_OF`` names the route's own entry each tag stands for in a result's inputs: a result
 valued under an override cites the JUDGMENT entry in its place, so no DATA or RULE entry carries
@@ -314,6 +316,9 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
                 _at(im, "requirement", "sales_to_capital", "value"),
             )
         case "return.runway":
+            # with the charge off the value is the terminal return, which charges nothing
+            if _at(im, "runway_return", "used") == "off":
+                return None
             return _at(im, "runway_return", "value")
         case "earnings.nri_gap":
             return im.get("nri_gap")
@@ -325,11 +330,18 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
 
 def _balance(result: ValuationResult, name: str) -> Any:
     """The reported line the result cites, ``None`` when no line is on file (the bridge counts it
-    as nil); on a result that cites an override in its place, the figure the route used."""
+    as nil); on a result that cites an override in its place, the override's figure. ``None`` on
+    a result that cites neither, a row refused before its route cites the line: its
+    intermediates hold the nil the bridge counts, not the line."""
     for x in result.inputs:
-        if x.name == name and x.tag == "DATA":
+        if (
+            x.name == name
+            and x.tag == "DATA"
+            or x.name == f"balance.{name}"
+            and x.tag == "JUDGMENT"
+        ):
             return x.value
-    return result.intermediates.get(name)
+    return None
 
 
 def _rule_note(result: ValuationResult, name: str) -> str | None:

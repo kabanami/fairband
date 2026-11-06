@@ -27,8 +27,9 @@ any price by the same solve, from the intermediates alone.
 
 Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the moat, so the
 runway, the terminal return and the margin of safety with it; ``return.runway`` the runway return
-of the charge (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring gap, which the anchor's
-basis test then takes off trailing GAAP EPS (``anchor.ntm_anchor``); ``path.step_2`` and
+of the charge (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring gap, the anchor's basis
+test then taking the correction, the override less the gap found, off trailing GAAP EPS
+(``anchor.ntm_anchor``), so an override at the gap found moves nothing; ``path.step_2`` and
 ``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
 step not counted thin; ``growth.belief`` the belief's rate. The cross-check reads the row's moat,
 returns and gap, and the consensus and belief as found.
@@ -75,6 +76,7 @@ from fairband.engine.route_steps import (
     expected,
     income,
     multiples_at,
+    nil,
     nri_gap,
     present,
     price_facts_for,
@@ -217,7 +219,7 @@ def cross_check_at_price(
 def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, Belief] | Refused:
     """Year 1's anchor, the consensus path with its base fiscal year, and the belief; or the
     route's refusal, with the flags raised before it. The anchor reads an overriding
-    non-recurring gap; with ``own``, the route's own path and belief read the step and belief
+    non-recurring gap as its correction to the gap found; with ``own``, the route's own path and belief read the step and belief
     overrides, which a cross-check leaves as found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
@@ -226,8 +228,16 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         return Refused("no statutory tax rate")
     quarters = ntm_quarters(i.quarter_estimates, t.period_end) or ()
     gap: float | None = chosen(c, "earnings.nri_gap", None)
+    correction = None if gap is None else gap - nil(nri_gap(i))
     anchor = ntm_anchor(
-        quarters, t, i.street_ttm_eps, c.shares, i.tax_rate_latest, c.price, policy, nri_gap=gap
+        quarters,
+        t,
+        i.street_ttm_eps,
+        c.shares,
+        i.tax_rate_latest,
+        c.price,
+        policy,
+        nri_correction=correction,
     )
     if anchor.refusal is not None:
         return Refused(anchor.refusal, anchor.flags)

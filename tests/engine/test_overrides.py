@@ -215,9 +215,11 @@ def test_a_judgment_input_carries_the_overrides_provenance() -> None:
     assert [x.name for x in found] == ["growth.belief", "moat.class"]
     assert all(x.tag == "JUDGMENT" and x.kind == "judgment" for x in found)
     assert found[0].value == 0.08 and found[0].unit == TAGS["growth.belief"].unit
-    assert found[0].provenance == Provenance("override 3", None, None, NOW)
+    assert found[0].provenance == Provenance("override 3, agent claude-opus-5-5", None, None, NOW)
     assert found[0].note == "guidance raised"
     assert found[1].value is None and found[1].note == "Wide: guidance raised"
+    system = Override(5, "phase", "Decline", "system", None, NOW, "reclassified")
+    assert judgment_inputs({"phase": system})[0].provenance.source == "override 5, system"
 
 
 def test_current_reading_on_each_golden(policy: Policy, deciles: Deciles) -> None:
@@ -251,6 +253,21 @@ def test_a_balance_line_not_on_file_reads_none(policy: Policy, deciles: Deciles)
     hg = value_company(replace(high_growth_inputs(), cash=None), deciles, policy, TODAY)
     assert hg.intermediates["cash"] == 0.0
     assert current_reading(hg, "balance.cash") is None
+
+
+def test_a_row_refused_before_it_cites_its_lines_reads_none(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """A revenue-growth row refused for its target margin keeps the rebuild keys, its missing cash
+    line counted as nil, and cites no balance line: the engine's reading is none, not the nil."""
+    inputs = replace(high_growth_inputs(), peers=(), cash=None)
+    refused = value_company(inputs, deciles, policy, TODAY)
+    assert refused.refusal == "no target margin: 0 mature peers"
+    assert refused.intermediates["cash"] == 0.0
+    assert current_reading(refused, "balance.cash") is None
+    cash = override("balance.cash", 500e6)
+    judged = value_company(inputs, deciles, policy, TODAY, {"balance.cash": cash})
+    assert current_reading(judged, "balance.cash") == 500e6
 
 
 # The read points: each route reads its inputs through the accessor, and what the route computes
@@ -356,8 +373,31 @@ def test_an_overriding_runway_return_charges_the_runway(policy: Policy, deciles:
     r = value_company(inputs, deciles, policy, TODAY, runway)
     assert mechanical.intermediates["charge_off"] is True
     assert "charge-zeroed" in [f.code for f in mechanical.flags]
+    # with the charge off the runway return is the terminal's, which charges nothing: no reading
+    assert current_reading(mechanical, "return.runway") is None
     assert r.intermediates["charge_off"] is False
     assert r.intermediates["runway_return"]["value"] == 0.20
     assert r.intermediates["terminal_roic"] == mechanical.intermediates["terminal_roic"]
     assert "charge-zeroed" not in [f.code for f in r.flags]
     assert r.value is not None and mechanical.value is not None and r.value < mechanical.value
+
+
+def test_the_basis_test_takes_only_the_agents_correction_to_the_gap(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """MGCO with a non-recurring gap of 0.12: street EPS 5.35 is 0.05 above GAAP EPS 5.30, under
+    half the 0.30 of after-tax stock compensation a share, so the consensus includes it. GAAP less
+    the whole gap, 5.18, would read 0.17 and switch the basis; the test takes only the agent's
+    correction, so the gap overridden at 0.12 moves nothing and at 0.32 switches the basis."""
+    inputs = replace(mature_growth_inputs(), gf_eps_without_nri=5.18)
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    found = current_reading(mechanical, "earnings.nri_gap")
+    assert found == pytest.approx(0.12) and mechanical.intermediates["sbc_basis"] == "includes-sbc"
+    assert isinstance(found, float)
+    same = value_company(
+        inputs, deciles, policy, TODAY, {"earnings.nri_gap": override("earnings.nri_gap", found)}
+    )
+    assert same.value == mechanical.value and same.intermediates["sbc_basis"] == "includes-sbc"
+    shifted = {"earnings.nri_gap": override("earnings.nri_gap", 0.32)}
+    moved = value_company(inputs, deciles, policy, TODAY, shifted)
+    assert moved.intermediates["sbc_basis"] == "excludes-sbc" and moved.value != mechanical.value

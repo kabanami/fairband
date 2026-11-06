@@ -191,14 +191,17 @@ def chosen[T](c: Context | StartUpContext, tag: OverrideTag, computed: T) -> T:
 def judgment_inputs(overrides: Overrides) -> tuple[TaggedInput, ...]:
     """The JUDGMENT entries of the overrides, in the bridge's order: each named by its tag, its
     number as the value (``None`` for a word, which leads the note), the input's unit, and the
-    override's provenance: the source "override <id>", entered at the override's time, the
-    reason as the note."""
+    override's provenance: the source "override <id>, <principal> <actor>", entered at the
+    override's time, the reason as the note."""
     return tuple(_judgment(overrides[tag]) for tag in BRIDGE_ORDER if tag in overrides)
 
 
 def _judgment(o: Override) -> TaggedInput:
-    source = "override" if o.id is None else f"override {o.id}"
-    provenance = Provenance(source, None, None, o.at)
+    """The override's entry; its source names the override, the principal and the actor, "override
+    1, agent claude-opus-5-5", or the principal alone without an actor, "override 1, owner"."""
+    record = "override" if o.id is None else f"override {o.id}"
+    writer = o.principal if o.actor is None else f"{o.principal} {o.actor}"
+    provenance = Provenance(f"{record}, {writer}", None, None, o.at)
     value: float | None = None
     note = o.reason
     if isinstance(o.value, str):

@@ -17,6 +17,8 @@ from support.engine_companies import (
 
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import (
+    BRIDGE_ORDER,
+    TAGS,
     Override,
     OverrideTag,
     check_override,
@@ -78,8 +80,34 @@ def test_one_override_equals_the_engine_with_that_input(
     assert review.bridge[0].new == value and review.bridge[0].refusal is None
     assert review.mechanical_value == mechanical.value and review.override_ids == (1,)
     judged = [i for i in review.result.inputs if i.tag == "JUDGMENT"]
-    assert [i.name for i in judged] == [tag] and judged[0].provenance.source == "override 1"
+    assert [i.name for i in judged] == [tag]
+    source = judged[0].provenance.source
+    assert source.startswith("override 1") and "agent" in source and "claude-opus-5-5" in source
     assert review.result.inputs[-1] == judged[0]
+
+
+@pytest.mark.parametrize("symbol", sorted(FIXTURES))
+def test_an_override_at_the_engines_reading_moves_nothing(
+    symbol: str, policy: Policy, deciles: Deciles
+) -> None:
+    """For every tag its route reads, an override at the engine's own reading leaves the value
+    as it was, so a bridge line whose old and new agree carries no delta."""
+    inputs = FIXTURES[symbol]()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.route is not None
+    tried: list[OverrideTag] = []
+    for tag in BRIDGE_ORDER:
+        old = current_reading(mechanical, tag)
+        if mechanical.route not in TAGS[tag].routes or old is None:
+            continue
+        judged = value_company(inputs, deciles, policy, TODAY, {tag: OVERRIDE(tag, old)})
+        assert judged.refusal == mechanical.refusal, tag
+        if mechanical.value is None:
+            assert judged.value is None, tag
+        else:
+            assert judged.value == pytest.approx(mechanical.value, abs=1e-9), tag
+        tried.append(tag)
+    assert tried[0] == "phase" and len(tried) > 1
 
 
 def test_two_overrides_sum_to_the_difference(policy: Policy, deciles: Deciles) -> None:
