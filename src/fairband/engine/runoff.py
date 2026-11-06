@@ -1,10 +1,12 @@
-"""The Decline route's run-off (spec 2026-11-03 sections 10.2 to 10.7 and 10.9): Damodaran's
-shrinking-firm DCF, from the revenue path to the value a share weighted for distress, and the
-decline rate the price implies.
+"""The Decline route's run-off (spec 2026-11-03 sections 10.2 to 10.7 and 10.9, spec 2026-11-06
+section 6): Damodaran's shrinking-firm DCF, from the revenue path to the value a share weighted
+for distress, and the decline rate the price implies.
 
 Years 1 to 3 take the consensus rates where there are any, a missing step holding the rate of the
-year before as the growth route's path does (method 5a.2); with no usable consensus every year
-takes the decline rate d. Years 4 to N take d. Revenue_t is the year before's times one plus its
+year before as the growth route's path does (method 5a.2); with no usable consensus years 1 to 3
+take the decline rate d. Years 4 to K take the consensus steps read past year 3, where it reaches
+(K is 3 without them). From year K + 1 the rate fades in a straight line from d to zero by year N,
+g_t = d × (N − t) ÷ (N − K), so g_N is zero. Revenue_t is the year before's times one plus its
 rate, year 0 trailing revenue. One margin is held in every year: EBIT_t = revenue_t × margin. Tax
 and NOPAT follow the growth route's carried loss (5a.6).
 
@@ -14,11 +16,12 @@ the capital it needs in full, (revenue_t − revenue_{t−1}) ÷ sales-to-capita
 year of the change, not a year ahead as the growth route's reinvestment does (5a.5), and FCFF_t =
 NOPAT_t − reinvestment_t + release_t.
 
-The terminal is a perpetuity at d: revenue_{N+1} = revenue_N × (1 + d), its NOPAT at the full tax
-rate or untaxed when not positive (``revenue_growth.terminal_nopat``; revenue is positive, so the
-test on the operating income is the test on the margin), FCFF_{N+1} that NOPAT plus year N + 1's
-release, and the terminal value FCFF_{N+1} ÷ (r − d). The firm value is the flows and the
-terminal value discounted at r, the terminal N years.
+The terminal is flat: a business of year N's size that neither grows nor shrinks.
+Revenue_{N+1} = revenue_N, its NOPAT at the full tax rate or untaxed when not positive
+(``revenue_growth.terminal_nopat``; revenue is positive, so the test on the operating income is
+the test on the margin), FCFF_{N+1} that NOPAT, nothing released or reinvested, and the terminal
+value FCFF_{N+1} ÷ r. The firm value is the flows and the terminal value discounted at r, the
+terminal N years.
 
 The going-concern value a share is (firm value − debt + cash) ÷ shares; the net current asset
 value a share floors it when it is above zero and above it (10.6). The distress-sale value a
@@ -48,16 +51,28 @@ _IMPLIED_DECLINE_TOL = 1e-7
 
 
 def runoff_rates(
-    g1: float | None, g2: float | None, g3: float | None, d: float, years: int
+    g1: float | None,
+    g2: float | None,
+    g3: float | None,
+    beyond: Sequence[float],
+    d: float,
+    years: int,
 ) -> tuple[float, ...]:
     """The rates for years 1 to ``years``: the consensus g_1 to g_3, a missing g_2 or g_3 holding
-    the rate of the year before, then d; d in every year when g_1 is ``None`` (no usable
-    consensus)."""
+    the rate of the year before, d in each of the three when g_1 is ``None`` (no usable
+    consensus); then the consensus steps ``beyond`` year 3, to year K; then d fading to zero by
+    year N. ``ValueError`` when ``beyond`` reaches past year N."""
+    if len(beyond) > years - 3:
+        raise ValueError(f"{len(beyond)} consensus years past year 3 on a {years}-year run-off")
     if g1 is None:
-        return (d,) * years
-    held2 = g1 if g2 is None else g2
-    held3 = held2 if g3 is None else g3
-    return (g1, held2, held3, *(d,) * (years - 3))
+        head = (d, d, d)
+    else:
+        held2 = g1 if g2 is None else g2
+        head = (g1, held2, held2 if g3 is None else g3)
+    k = 3 + len(beyond)
+    # g_N is zero exactly: d × 0 is −0.0 on a falling d, which would read as −0.0%.
+    fade = (d * (years - t) / (years - k) if t < years else 0.0 for t in range(k + 1, years + 1))
+    return (*head, *beyond, *fade)
 
 
 @dataclass(frozen=True)
@@ -94,9 +109,9 @@ def runoff_valuation(
     sales_to_capital: float,
     recovery: float,
     r: float,
-    d: float,
 ) -> RunoffValuation:
-    """The run-off DCF from trailing revenue and the rates for years 1 to N to the firm value."""
+    """The run-off DCF from trailing revenue and the rates for years 1 to N to the firm value, the
+    terminal flat on year N's revenue."""
     path = tuple(accumulate(rates, lambda rev, g: rev * (1 + g), initial=revenue0))
     revenue = path[1:]
     ebit = tuple(rev * margin for rev in revenue)
@@ -105,10 +120,10 @@ def runoff_valuation(
     reinvestment = tuple(max(0.0, (after - before) / sales_to_capital) for before, after in steps)
     release = tuple(_release(before, after, sales_to_capital, recovery) for before, after in steps)
     fcff = tuple(n - i + rel for n, i, rel in zip(nopat, reinvestment, release, strict=True))
-    revenue_n1 = revenue[-1] * (1 + d)
+    revenue_n1 = revenue[-1]
     nopat_n1 = terminal_nopat(revenue_n1 * margin, tax_rate)
-    fcff_n1 = nopat_n1 + _release(revenue[-1], revenue_n1, sales_to_capital, recovery)
-    terminal = fcff_n1 / (r - d)
+    fcff_n1 = nopat_n1
+    terminal = fcff_n1 / r
     pv_flows = sum(f / (1 + r) ** t for t, f in enumerate(fcff, start=1))
     pv_terminal = terminal / (1 + r) ** len(fcff)
     return RunoffValuation(

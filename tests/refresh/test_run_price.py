@@ -213,13 +213,13 @@ def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
 
 
 def test_price_refresh_reprices_a_decline_row(env_valued: Env) -> None:
-    """A Decline row (spec 13.1: $4.3180 a share, valued at $3.00, "below") reprices from its
-    stored intermediates alone: the value and the levels stay; the designation ("near" at $4.00),
-    the implied decline rate, the multiples and the expected return move to the quote, as the
-    engine's ``reprice`` moves them."""
+    """A Decline row (spec 2026-11-06 13.1: $4.9533 a share, valued at $3.00, "well-below")
+    reprices from its stored intermediates alone: the value and the levels stay; the designation
+    ("below" at $4.00), the implied decline rate, the multiples and the expected return move to the
+    quote, as the engine's ``reprice`` moves them."""
     env = env_valued
     decline = value_company(decline_inputs(), universe_deciles(), env.policy, date(2026, 10, 31))
-    assert (decline.route, decline.designation) == ("decline", "below")
+    assert (decline.route, decline.designation) == ("decline", "well-below")
     with closing(env.connect()) as conn:
         acme = next(c for c in latest_companies(conn) if c.symbol == "ACME")
         insert_companies(conn, [replace(acme, symbol="DCCO", name="Decline Co")])
@@ -234,7 +234,7 @@ def test_price_refresh_reprices_a_decline_row(env_valued: Env) -> None:
         refresh_id,
         "decline",
         4.0,
-        "near",
+        "below",
     )
     assert decline.levels is not None
     assert (dcco.value, dcco.buy_level, dcco.trim_level) == (

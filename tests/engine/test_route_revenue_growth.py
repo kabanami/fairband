@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from support.engine_companies import annual, capital_years, fiscal_years
 
+from fairband.engine.anchor import AnnualEstimate
 from fairband.engine.classifier import Deciles
 from fairband.engine.revenue_growth import (
     Bridge,
@@ -20,7 +21,7 @@ from fairband.engine.revenue_growth import (
     revenue_valuation,
 )
 from fairband.engine.route import CompanyInputs, reprice, value_company
-from fairband.engine.route_revenue_growth import implied_margin_at_price
+from fairband.engine.route_revenue_growth import consensus_beyond, implied_margin_at_price
 from fairband.engine.types import TaggedInput, ValuationResult, result_from_json, result_to_json
 from fairband.policy import Policy
 
@@ -558,6 +559,47 @@ def test_path_held_flag_and_few_analysts(
     assert "fiscal 2029" in sentence(r, "few-analysts")
     # a held step lands on no consensus, so it is never thin
     assert "few-analysts" not in codes(held)
+
+
+def _years(*points: tuple[int, float | None, int | None]) -> tuple[AnnualEstimate, ...]:
+    """Annual consensus rows from (fiscal year, revenue mean, revenue analysts)."""
+    return tuple(annual(year, 1.0, 0.01, 10, mean, n) for year, mean, n in points)
+
+
+def test_consensus_beyond_reads_past_base_plus_two_on_enough_analysts(policy: Policy) -> None:
+    """Spec 2026-11-06 6.1: the steps for base + 3 onward, each from the year before's consensus
+    revenue, while the year has a mean and at least ``analyst_min`` revenue analysts; the first
+    year that fails ends the consensus, so a later year is not read."""
+    base = [(2027, 1_000.0, 10), (2028, 970.0, 8), (2029, 940.0, 6)]
+    reaching = _years(*base, (2030, 940.0 * 1.01, 6), (2031, 940.0 * 1.01 * 1.02, 6))
+    assert consensus_beyond(reaching, 2027, policy) == pytest.approx((0.01, 0.02))
+    assert consensus_beyond(_years(*base), 2027, policy) == ()
+    # a thin year, a year without a count and a year without a mean each end the consensus
+    for stop in ((2030, 950.0, 4), (2030, 950.0, None), (2030, None, 6)):
+        found = _years(*base, stop, (2031, 960.0, 6))
+        assert consensus_beyond(found, 2027, policy) == (), stop
+    later = _years(*base, (2030, 950.0, 6), (2031, 960.0, 4), (2032, 970.0, 6))
+    assert consensus_beyond(later, 2027, policy) == pytest.approx((950 / 940 - 1,))
+    # the base year is the quarters', not the first on file
+    assert consensus_beyond(reaching, 2026, policy) == pytest.approx((940 / 970 - 1, 0.01, 0.02))
+
+
+def test_consensus_beyond_needs_base_plus_two(policy: Policy) -> None:
+    """No step past year 3 without base + 2's consensus revenue to step from: missing, a zero
+    with no analysts (no estimate at all), or at or below zero."""
+    later = ((2030, 950.0, 6), (2031, 960.0, 6))
+    for third in ((), ((2029, 0.0, None),), ((2029, 0.0, 6),), ((2029, -5.0, 6),)):
+        found = _years((2027, 1_000.0, 10), (2028, 970.0, 8), *third, *later)
+        assert consensus_beyond(found, 2027, policy) == (), third
+
+
+def test_consensus_beyond_reads_a_year_at_zero_and_stops(policy: Policy) -> None:
+    """A year whose consensus revenue is zero or below on enough analysts is the consensus's: its
+    step is −100% or below, which refuses a Decline row; no step runs on from it."""
+    base = [(2027, 1_000.0, 10), (2028, 970.0, 8), (2029, 940.0, 6)]
+    for mean, step in ((0.0, -1.0), (-94.0, -1.1)):
+        found = _years(*base, (2030, mean, 6), (2031, 900.0, 6))
+        assert consensus_beyond(found, 2027, policy) == pytest.approx((step,))
 
 
 def test_the_held_rate_is_capped_at_the_sales_class_ninetieth_percentile(

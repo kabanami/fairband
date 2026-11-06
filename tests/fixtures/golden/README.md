@@ -22,6 +22,13 @@ HGCO and YGCO re-captured under 0.9 on 2026-11-06 for the growth routes (spec 20
 being −9% and their own sales-to-capital above half the peers' median, so their figures are
 unchanged.
 
+DCCO re-captured under 0.9 on 2026-11-06: the fade and the flat terminal (spec 2026-11-06 section
+6). The decline rate fades from −4% to zero by year 10 and the terminal is flat on year 10's
+revenue, so every run-off figure moves: the value is 4.9533 a share (4.3180 under 0.8), the
+designation at $3.00 is "well-below", the run-off is worth more than $3.00 at every decline rate
+the scan reads so there is no implied decline rate, the expected return grows at the path's own
+rates, and `runoff_path` gains `consensus_years` (3: the fixture's consensus ends at base + 2).
+
 Run from the repository root:
 
 ```

@@ -310,7 +310,7 @@ def decline_inputs() -> CompanyInputs:
     an average invested capital of 500; the NTM consensus revenue 970 and the annual consensus
     falling 3% a year from fiscal 2027; interest 20 over the four quarters, debt 200, cash 100;
     two balance sheets, the newest with current assets 300 and total liabilities 500 (Altman Z″
-    3.07, safe; Piotroski F 6 of 9); price $3.00. The value is $4.3180 a share, rating A−."""
+    3.07, safe; Piotroski F 6 of 9); price $3.00. The value is $4.9533 a share, rating A−."""
     series = fiscal_years(
         [1_125e6, 1_200e6, 1_120e6, 1_050e6, 1_000e6], [0.07, 0.08, 0.08, 0.09, 0.08]
     )

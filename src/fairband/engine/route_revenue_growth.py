@@ -80,9 +80,14 @@ the target is above the peers' median ROIC; ``failure-not-charged`` on a Young G
 trailing flags; ``value-spread`` over the three margins, unbounded when the value at the lowest
 margin is at or below zero and the median's is positive. The runway-return flags of the mature
 routes are not raised: this route's charge does not read the runway return.
+
+``consensus_beyond`` reads the annual consensus revenue past base + 2 for the Decline route's
+run-off (spec 2026-11-06 6.1); this route's path ends its consensus at year 3.
 """
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
+from itertools import count
 from typing import Any, Literal
 
 from fairband.engine.anchor import (
@@ -436,6 +441,32 @@ def revenue_path_for(
         + present(few_analysts(base_year, steps, analysts, policy))
     )
     return path, analysts, flags
+
+
+def consensus_beyond(
+    annual: Sequence[AnnualEstimate], base_year: int, policy: Policy
+) -> tuple[float, ...]:
+    """The consensus revenue steps for base + 3 onward, each from the year before's consensus
+    revenue (``consensus_value``), while the year has a revenue mean on at least ``analyst_min``
+    revenue analysts. The first year that fails ends them: nothing is held past year 3, and a
+    thin year is not read. Empty when base + 2 has no consensus revenue above zero to step from;
+    a year at or below zero is read, its step −100% or below, and ends them, since no step runs
+    from a base at or below zero (``growth_step``). Spec 2026-11-06 6.1."""
+    by_year = {x.fiscal_year: x for x in annual}
+    third = by_year.get(base_year + 2)
+    earlier = None if third is None else consensus_value(third.revenue, third.analysts_revenue)
+    steps: list[float] = []
+    for year in count(base_year + 3):
+        row = by_year.get(year)
+        if row is None or row.analysts_revenue is None or row.analysts_revenue < policy.analyst_min:
+            break
+        later = consensus_value(row.revenue, row.analysts_revenue)
+        step = growth_step(earlier, later)
+        if step is None:
+            break
+        steps.append(step)
+        earlier = later
+    return tuple(steps)
 
 
 def _path_held(path: RevenuePath, values: list[float | None], base_year: int) -> Flag | None:

@@ -5,11 +5,12 @@ the flags and their sentences, the inputs, the JSON round trip and the price ref
 The fixture (``support.engine_companies.decline_inputs``) is spec 13.1 in USD millions on 100 m
 shares, so a share's figures are the spec's and the totals are the spec's times a million."""
 
+import math
 from dataclasses import replace
 from datetime import date
 
 import pytest
-from support.engine_companies import fiscal_years
+from support.engine_companies import annual, fiscal_years
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import Deciles, Series
@@ -27,13 +28,18 @@ from fairband.policy import Policy
 TODAY = date(2026, 10, 31)
 REPRICED = date(2026, 11, 2)
 M = 1e6
-# Spec 13.1 to the core's last digits (tests/engine/test_runoff.py pins the same figures).
-VALUE = 4.317992370946012  # spec 4.3180
-GOING_CONCERN = 4.426522827495931  # spec 4.4265
-DISTRESS = 2.255913696497558  # spec 2.2559
-FIRM = 542.652282749593 * M  # spec 542.65
-RUNOFF_REVENUE = (970.00, 940.90, 912.67, 876.17, 841.12, 807.47, 775.18, 744.17, 714.40, 685.83)
-FCFF = (67.20, 65.18, 63.23, 63.52, 60.98, 58.54, 56.20, 53.95, 51.79, 49.72)
+# Spec 2026-11-06 13.1 to the core's last digits (tests/engine/test_runoff.py pins the same
+# figures).
+VALUE = 4.953312779039696  # spec 4.9533
+GOING_CONCERN = 5.074808958203771  # spec 5.0748
+DISTRESS = 2.6448853749222625  # spec 2.6449
+FIRM = 607.4808958203771 * M  # spec 607.48
+RUNOFF_REVENUE = (970.00, 940.90, 912.67, 881.38, 856.20, 836.63, 822.29, 812.89, 808.24, 808.24)
+FCFF = (67.20, 65.18, 63.23, 62.27, 58.93, 56.07, 53.64, 51.59, 49.89, 48.49)
+# d = −4% fading to zero by year 10 after the consensus's three years: d × (10 − t) ÷ 7 (spec 6.1)
+FADE = [-0.04 * (10 - t) / 7 for t in range(4, 11)]
+# The fixture's base + 2 consensus revenue (fiscal 2029), from which the years past 3 step.
+BASE_2 = 940.9 * M
 FISCAL_REVENUE = [1_125 * M, 1_200 * M, 1_120 * M, 1_050 * M, 1_000 * M]
 
 DECLINE_KEYS = {
@@ -136,7 +142,18 @@ def trailing(inputs: CompanyInputs) -> TrailingFigures:
     return inputs.trailing
 
 
-def test_the_worked_decline_row_values_at_4_318(
+def with_consensus(inputs: CompanyInputs, *years: tuple[int, float, int | None]) -> CompanyInputs:
+    """The fixture with the consensus revenue of these fiscal years past base + 2 (fiscal 2029),
+    each (fiscal year, revenue mean, revenue analysts)."""
+    extra = tuple(annual(year, 39 * M, 0.39, 6, revenue, n) for year, revenue, n in years)
+    return replace(inputs, annual_estimates=(*inputs.annual_estimates, *extra))
+
+
+def step_names(r: ValuationResult) -> list[str]:
+    return [i.name for i in r.inputs if i.name.startswith("path_step_")]
+
+
+def test_the_worked_decline_row_values_at_4_953(
     decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(decline_inputs, deciles, policy, TODAY)
@@ -148,17 +165,18 @@ def test_the_worked_decline_row_values_at_4_318(
         "revenue0": 1_000 * M,
         "ntm_revenue": pytest.approx(970 * M),
         "steps": pytest.approx([-0.03, -0.03]),
+        "consensus_years": 3,
         "d": pytest.approx(-0.04),
         "runoff_years": 10,
     }
-    assert im["growth_rates"] == pytest.approx([-0.03] * 3 + [-0.04] * 7)
+    assert im["growth_rates"] == pytest.approx([-0.03] * 3 + FADE)
     assert im["revenue_by_year"] == pytest.approx([x * M for x in RUNOFF_REVENUE], abs=0.01 * M)
     assert im["fcff_by_year"] == pytest.approx([x * M for x in FCFF], abs=0.01 * M)
     assert im["ebit_by_year"] == pytest.approx([x * 0.08 for x in im["revenue_by_year"]])
     assert im["reinvestment_by_year"] == [0.0] * 10 and im["release_by_year"][0] == pytest.approx(
         9 * M
     )
-    assert im["terminal_value"] == pytest.approx(367.1805951034126 * M, abs=1e-3)
+    assert im["terminal_value"] == pytest.approx(538.8292788342035 * M, abs=1e-3)
     assert im["firm_value"] == pytest.approx(FIRM, abs=1e-3)
     assert im["equity"] == pytest.approx(FIRM - 200 * M + 100 * M, abs=1e-3)
     assert im["going_concern_per_share"] == pytest.approx(GOING_CONCERN, abs=1e-9)
@@ -222,16 +240,17 @@ def test_the_worked_decline_row_values_at_4_318(
     assert im["capex_vs_depreciation"] == {"capex": -30 * M, "depreciation": 40 * M}
     assert im["eps"] == {"reported": 0.45, "clean": 0.45, "forward": None}
     assert im["epv"] == pytest.approx(0.45 / 0.09)
-    # $3.00 against $4.3180: 0.695 × the value, from 0.65 and below 0.85
-    assert (r.price_to_value, r.designation) == (3.0 / r.value, "below")
+    # $3.00 against $4.9533: 0.606 × the value, below 0.65
+    assert (r.price_to_value, r.designation) == (3.0 / r.value, "well-below")
     assert r.levels is not None and r.levels.buy == pytest.approx(r.value * 0.55)  # None moat
-    # the price-side figures: the decline rate at which the run-off is worth $3.00, the trailing
-    # P/E and no forward one, and the expected return growing at d
-    implied = im["implied_decline_rate"]
-    assert implied == pytest.approx(-0.27728, abs=1e-5)  # method 6a.12: −27.7%
+    # the price-side figures: no decline rate in the scan gives $3.00, the run-off being worth
+    # 3.1251 at −50% (spec 13.1); the trailing P/E and no forward one; and the expected return
+    # growing at the path's rates for years 2 to 4
+    assert im["implied_decline_rate"] is None
     assert im["multiples"]["pe_reported"] == pytest.approx(3.0 / 0.45)
     assert im["multiples"]["pe_forward"] is None
-    assert im["expected_return"]["growth"] == pytest.approx(-0.04)
+    growth = (0.97 * 0.97 * (1 + FADE[0])) ** (1 / 3) - 1
+    assert im["expected_return"]["growth"] == pytest.approx(growth, abs=1e-12)
     assert route_codes(r) == []
     assert r.valid_until == decline_inputs.next_earnings
 
@@ -270,15 +289,15 @@ def test_a_chronic_loss_is_refused_with_its_figures(
     decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """Ruling 3 on spec 13.1: fiscal margins of −2% and four of −3% (m_n = −3%, EBIT_n = −30) rate
-    the company D, π = 100%; the firm value is −140.53, so with net debt the distress-sale value
-    is max(0, 0.6 × −140.53 + 100 − 200) = 0, and with cash 250 π is 0 and the going-concern
-    value −0.9053 a share. Both refuse and keep every figure, and the inputs that gave them."""
+    the company D, π = 100%; the firm value is −241.32, so with net debt the distress-sale value
+    is max(0, 0.6 × −241.32 + 100 − 200) = 0, and with cash 250 π is 0 and the going-concern
+    value −1.9132 a share. Both refuse and keep every figure, and the inputs that gave them."""
     chronic = with_margins(decline_inputs, [-0.02, -0.03, -0.03, -0.03, -0.03])
     r = value_company(chronic, deciles, policy, TODAY)
     assert_refused(r, NOT_POSITIVE)
     im = r.intermediates
     assert im["margin"]["value"] == pytest.approx(-0.03) and im["margin"]["used"] == "median"
-    assert im["firm_value"] == pytest.approx(-140.5297208372582 * M, abs=1e-3)
+    assert im["firm_value"] == pytest.approx(-241.3179552207426 * M, abs=1e-3)
     assert (im["rating"]["rating"], im["rating"]["pi"]) == ("D", 1.0)
     assert im["rating"]["ebit"] == pytest.approx(-30 * M)
     assert im["rating"]["row"] == {"coverage_from": None, "coverage_below": 0.2}
@@ -317,7 +336,7 @@ def test_a_chronic_loss_is_refused_with_its_figures(
         0.0,
         "no net debt",
     )
-    assert im["going_concern_per_share"] == pytest.approx(-0.9052972083725822, abs=1e-9)
+    assert im["going_concern_per_share"] == pytest.approx(-1.913179552207426, abs=1e-9)
     assert im["value_per_share"] == im["floored_per_share"] == im["going_concern_per_share"]
     # a refusal takes only the new price on a price refresh
     p = reprice(r, 5.0, REPRICED, policy)
@@ -340,12 +359,12 @@ def test_the_distress_variants(
         return value_company(inputs, deciles, policy, TODAY)
 
     net_cash = valued(replace(dc, cash=250 * M))
-    assert net_cash.value == pytest.approx(5.926522827495931, abs=1e-9)  # spec 5.9265
+    assert net_cash.value == pytest.approx(6.574808958203771, abs=1e-9)
     assert net_cash.intermediates["pi"] == {"value": 0.0, "rating": "—", "coverage": None}
     assert "distress-not-charged" not in codes(net_cash)
     for interest in (None, 0.0):
         r = valued(replace(dc, trailing=replace(t, interest_expense=interest)))
-        assert r.value == pytest.approx(GOING_CONCERN, abs=1e-9)  # spec 4.4265
+        assert r.value == pytest.approx(GOING_CONCERN, abs=1e-9)  # spec 5.0748
         assert sentence(r, "distress-not-charged") == (
             "No interest expense on file: the distress probability is unavailable and the value "
             "is the floored going-concern value."
@@ -373,14 +392,14 @@ def test_the_distress_variants(
         rating, pi = input_named(r, "synthetic_rating"), input_named(r, "default_probability_10y")
         assert (rating.value, rating.note) == (None, "no rating: no debt line on file")
         assert (pi.value, pi.note) == (None, "no rating: π unavailable")
-    # the floor: current assets 1,100 give NCAV 600, 6.00 a share, above the run-off's 4.4265
+    # the floor: current assets 1,100 give NCAV 600, 6.00 a share, above the run-off's 5.0748
     newest = replace(dc.balance_years[-1], total_current_assets=1_100 * M)
     floored = replace(dc, balance_years=(dc.balance_years[0], newest))
     r = valued(floored)
-    assert r.value == pytest.approx(5.812795684824877, abs=1e-9)  # spec 5.8128
+    assert r.value == pytest.approx(5.832244268746113, abs=1e-9)  # 6.00 × 0.95 + 2.6449 × 0.05
     assert r.intermediates["floored_per_share"] == pytest.approx(6.0)
     assert sentence(r, "ncav-floor") == (
-        "The floored value is the net current asset value 6.00 a share; the run-off gives 4.43."
+        "The floored value is the net current asset value 6.00 a share; the run-off gives 5.07."
     )
     # π unavailable: the floored value is the value, and the floor is flagged
     r = valued(replace(floored, trailing=replace(t, interest_expense=None)))
@@ -404,12 +423,13 @@ def test_the_floor_has_no_weight_at_a_pi_of_one(
     dc = decline_inputs
     newest = replace(dc.balance_years[-1], total_current_assets=1_100 * M)  # NCAV 6.00 a share
     rich = replace(dc, balance_years=(dc.balance_years[0], newest))
-    # a normalized margin of −1%: EBIT_n −10, rated D; the release outweighs the loss, so the firm
-    # value is above zero, and with cash 199 against debt 200 the distress-sale value is too
-    thin = with_margins(replace(rich, cash=199 * M), [-0.02, -0.01, -0.01, -0.01, -0.01])
+    # a normalized margin of zero: EBIT_n 0, rated D; the release alone gives a firm value above
+    # zero, 41.61, and with cash 199 against debt 200 the distress-sale value is above zero too
+    thin = with_margins(replace(rich, cash=199 * M), [-0.02, 0.0, 0.0, 0.0, 0.0])
     r = value_company(thin, deciles, policy, TODAY)
     assert r.route == "decline" and r.value is not None
     im = r.intermediates
+    assert im["firm_value"] == pytest.approx(41.614995126297245 * M, abs=1e-3)
     assert (im["rating"]["rating"], im["pi"]["value"]) == ("D", 1.0)
     assert im["floored_per_share"] == pytest.approx(6.0)
     assert im["floored_per_share"] > im["going_concern_per_share"]
@@ -424,30 +444,37 @@ def test_the_floor_has_no_weight_at_a_pi_of_one(
     assert r.intermediates["pi"]["value"] == 1.0 and "ncav-floor" not in codes(r)
 
 
-def test_no_consensus_takes_the_trend_and_flags_path_on_trend(
+def test_no_consensus_takes_the_trend_then_the_fade(
     decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    dc = decline_inputs
+    """Spec 2026-11-06 13.1: years 1 to 3 at d = −4%, then the fade from year 4 as with K = 3;
+    4.8626 a share. The annual consensus past year 3 is not read without a usable NTM revenue."""
+    dc = with_consensus(decline_inputs, (2030, BASE_2 * 1.01, 6))
     r = value_company(replace(dc, quarter_estimates=()), deciles, policy, TODAY)
     assert r.route == "decline" and r.value is not None
+    assert r.value == pytest.approx(4.8626, abs=1e-4)  # spec 4.8626
+    assert r.value == pytest.approx(4.862642425851334, abs=1e-9)
     im = r.intermediates
     assert im["runoff_path"] == {
         "revenue0": 1_000 * M,
         "ntm_revenue": None,
         "steps": [None, None],
+        "consensus_years": 3,
         "d": pytest.approx(-0.04),
         "runoff_years": 10,
     }
-    assert im["growth_rates"] == pytest.approx([-0.04] * 10)
+    assert im["growth_rates"] == pytest.approx([-0.04] * 3 + FADE)
     assert sentence(r, "path-on-trend") == (
-        "No usable consensus: every year shrinks at the decline rate, −4.0%."
+        "No usable consensus: years 1 to 3 shrink at the decline rate, −4.0%, which fades to zero "
+        "by year 10."
     )
     assert [f.word for f in r.flags if f.code == "path-on-trend"] == ["Path on trend"]
     assert "path-held" not in codes(r) and "few-analysts" not in codes(r)
-    note = "no usable consensus: every year shrinks at the decline rate"
+    note = "no usable consensus: years 1 to 3 shrink at the decline rate"
     for name in ("ntm_revenue", "path_step_2", "path_step_3"):
         found = input_named(r, name)
         assert (found.value, found.note) == (None, note), name
+    assert step_names(r) == ["path_step_2", "path_step_3"]
     # a quarter without a revenue mean, or an NTM revenue at or below zero, does not refuse
     q = dc.quarter_estimates
     gap = (*q[:3], replace(q[3], revenue=None))
@@ -471,7 +498,7 @@ def test_a_held_step_flags_path_held(
         "-3.0% of the year before."
     )
     assert held.intermediates["runoff_path"]["steps"] == [pytest.approx(-0.03), None]
-    assert held.intermediates["growth_rates"][:4] == pytest.approx([-0.03] * 3 + [-0.04])
+    assert held.intermediates["growth_rates"][:4] == pytest.approx([-0.03] * 3 + FADE[:1])
     assert held.value == pytest.approx(VALUE, abs=1e-9)
     assert input_named(held, "path_step_3").note == (
         "no consensus step: the year holds the rate of the year before"
@@ -531,8 +558,10 @@ def test_a_steep_trend_is_floored_at_minus_half(
     assert [f.word for f in r.flags if f.code == "decline-rate-floored"] == ["Decline rate floored"]
     assert route_codes(r)[:2] == ["decline-rate-floored", "path-on-trend"]
     assert sentence(r, "path-on-trend") == (
-        "No usable consensus: every year shrinks at the decline rate, −50.0%."
+        "No usable consensus: years 1 to 3 shrink at the decline rate, −50.0%, which fades to zero "
+        "by year 10."
     )
+    assert r.intermediates["growth_rates"][2:4] == pytest.approx([-0.5, -0.5 * 6 / 7])
     # with the consensus and fiscal 2029 missing from it: the held step first, then the floor;
     # the NTM revenue of 970 is above the trailing 600, so year 1 grows against the floored rate
     held = replace(
@@ -551,7 +580,7 @@ def test_a_steep_trend_is_floored_at_minus_half(
     assert sentence(r, "consensus-recovery") == (
         "The consensus has revenue growing 61.7% in year 1 while the decline rate is −50.0%."
     )
-    assert r.intermediates["growth_rates"][2:4] == pytest.approx([-0.03, -0.5])
+    assert r.intermediates["growth_rates"][2:4] == pytest.approx([-0.03, -0.5 * 6 / 7])
 
 
 def test_sales_to_capital_falls_back_to_the_peers(
@@ -888,8 +917,9 @@ def test_the_json_round_trip_and_the_price_refresh(
     assert stored == r
     assert r.price is not None and r.price_date is not None
     assert reprice(stored, r.price, r.price_date, policy) == r
-    # 4.00 ÷ 4.3180 = 0.93, inside the fair band; 6.00 is 1.39, above it and below the trim
-    for price, word in ((4.0, "near"), (6.0, "above")):
+    # 4.00 ÷ 4.9533 = 0.81, below the fair band; 5.00 is 1.01, inside it; 6.00 is 1.21, above it
+    # and below the trim
+    for price, word in ((4.0, "below"), (5.0, "near"), (6.0, "above")):
         moved = reprice(stored, price, REPRICED, policy)
         assert (moved.value, moved.levels, moved.designation) == (r.value, r.levels, word)
         fresh = value_company(replace(decline_inputs, price=price), deciles, policy, TODAY)
@@ -902,11 +932,162 @@ def test_the_json_round_trip_and_the_price_refresh(
         assert moved.intermediates["multiples"]["pe_reported"] == pytest.approx(price / 0.45)
         others = {k: v for k, v in moved.intermediates.items() if k not in PRICE_KEYS}
         assert others == {k: v for k, v in r.intermediates.items() if k not in PRICE_KEYS}
-    near = reprice(stored, 4.0, REPRICED, policy).intermediates["implied_decline_rate"]
-    assert near is not None and r.intermediates["implied_decline_rate"] < near < -0.04
-    assert reprice(stored, 7.0, REPRICED, policy).designation == "well-above"
+    below = reprice(stored, 4.0, REPRICED, policy).intermediates["implied_decline_rate"]
+    near = reprice(stored, 5.0, REPRICED, policy).intermediates["implied_decline_rate"]
+    assert below is not None and near is not None and -0.5 < below < -0.04 < near < 0.0
+    assert reprice(stored, 8.0, REPRICED, policy).designation == "well-above"
     # at the value the price implies the route's own d
     at_value = reprice(stored, VALUE, REPRICED, policy).intermediates["implied_decline_rate"]
     assert at_value == pytest.approx(-0.04, abs=1e-6)
-    # $6.00 is above the run-off's value even at d = 0: no decline rate gives it
+    # $6.00 is above the run-off's value even at d = 0 (5.2247), and $3.00 below it at −50%
+    # (3.1251): no decline rate gives either
     assert reprice(stored, 6.0, REPRICED, policy).intermediates["implied_decline_rate"] is None
+    assert r.intermediates["implied_decline_rate"] is None
+
+
+def test_the_consensus_is_read_past_year_three_on_enough_analysts(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-06 13.1: base + 3 at +1% on 6 analysts, base + 4 at +2% on 6, base + 5
+    absent: K = 5, the fade from year 6, 5.0974 a share."""
+    dc = with_consensus(decline_inputs, (2030, BASE_2 * 1.01, 6), (2031, BASE_2 * 1.01 * 1.02, 6))
+    r = value_company(dc, deciles, policy, TODAY)
+    assert r.value == pytest.approx(5.0974, abs=1e-4)  # spec 5.0974
+    assert r.value == pytest.approx(5.097413068757769, abs=1e-9)
+    im = r.intermediates
+    assert im["runoff_path"]["consensus_years"] == 5
+    assert im["runoff_path"]["steps"] == pytest.approx([-0.03, -0.03, 0.01, 0.02])
+    assert im["growth_rates"] == pytest.approx(
+        [-0.03] * 3 + [0.01, 0.02, -0.032, -0.024, -0.016, -0.008, 0.0]
+    )
+    assert im["revenue_by_year"][4] == pytest.approx(940.2357246 * M, abs=1e-3)  # spec 940.24
+    assert im["revenue_by_year"][9] == pytest.approx(867.0990170494869 * M, abs=1e-3)
+    assert im["terminal_value"] == pytest.approx(578.0660113663247 * M, abs=1e-3)
+    assert im["firm_value"] == pytest.approx(622.1850070160989 * M, abs=1e-3)
+    assert sentence(r, "consensus-recovery") == (
+        "The consensus has revenue growing 1.0% in year 4 and 2.0% in year 5 while the decline "
+        "rate is −4.0%."
+    )
+    assert route_codes(r) == ["consensus-recovery"]
+    assert step_names(r) == ["path_step_2", "path_step_3", "path_step_4", "path_step_5"]
+    step_3, step_4, step_5 = (input_named(r, f"path_step_{t}") for t in (3, 4, 5))
+    assert (step_4.value, step_5.value) == (pytest.approx(0.01), pytest.approx(0.02))
+    for step in (step_4, step_5):
+        assert (step.tag, step.unit, step.note, step.provenance) == (
+            "DATA",
+            "ratio",
+            None,
+            step_3.provenance,
+        )
+
+
+def test_a_thin_year_past_three_ends_the_consensus(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Base + 3 on 4 analysts is not read, nor base + 4 after it on 6: K = 3 and the row is the
+    worked row's 4.9533. A thin year past year 3 is not the consensus's, so ``few-analysts``
+    does not name it."""
+    dc = with_consensus(decline_inputs, (2030, BASE_2 * 1.01, 4), (2031, BASE_2 * 1.01 * 1.02, 6))
+    r = value_company(dc, deciles, policy, TODAY)
+    assert r.value == pytest.approx(VALUE, abs=1e-9)
+    assert r.intermediates["runoff_path"]["consensus_years"] == 3
+    assert r.intermediates["runoff_path"]["steps"] == pytest.approx([-0.03, -0.03])
+    assert "few-analysts" not in codes(r) and route_codes(r) == []
+    assert step_names(r) == ["path_step_2", "path_step_3"]
+
+
+def test_a_held_year_3_ends_the_consensus_at_year_3(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """No consensus for base + 2 (fiscal 2029): year 3 holds year 2's rate, and the years past 3
+    have no consensus revenue to step from, so base + 3 on 6 analysts is not read."""
+    a = decline_inputs.annual_estimates
+    dc = replace(decline_inputs, annual_estimates=(a[0], a[1]))
+    r = value_company(with_consensus(dc, (2030, BASE_2 * 1.01, 6)), deciles, policy, TODAY)
+    assert r.intermediates["runoff_path"]["consensus_years"] == 3
+    assert r.intermediates["runoff_path"]["steps"] == [pytest.approx(-0.03), None]
+    assert route_codes(r) == ["path-held"]
+    assert r.value == pytest.approx(VALUE, abs=1e-9)
+    assert step_names(r) == ["path_step_2", "path_step_3"]
+
+
+def test_a_consensus_to_year_ten_leaves_no_fade(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Seven years past base + 2 on 6 analysts: K = N = 10, no year fades, year 10 grows at the
+    consensus's own +2%, and the terminal is flat on year 10's revenue. An eighth year past base
+    + 2 is past the run-off and not read, so its fall to zero refuses nothing."""
+    steps = [-0.01] * 6 + [0.02]
+    years, revenue = [], BASE_2
+    for year, step in zip(range(2030, 2037), steps, strict=True):
+        revenue *= 1 + step
+        years.append((year, revenue, 6))
+    r = value_company(
+        with_consensus(decline_inputs, *years, (2037, 0.0, 6)), deciles, policy, TODAY
+    )
+    assert r.route == "decline" and r.value is not None
+    im = r.intermediates
+    assert im["runoff_path"]["consensus_years"] == 10
+    assert im["runoff_path"]["steps"] == pytest.approx([-0.03, -0.03, *steps])
+    assert im["growth_rates"] == pytest.approx([-0.03] * 3 + steps)
+    year_10 = im["revenue_by_year"][-1]
+    assert year_10 == pytest.approx(im["revenue_by_year"][-2] * 1.02)
+    assert im["terminal_value"] == pytest.approx(year_10 * 0.08 * 0.75 / 0.09)
+    assert sentence(r, "consensus-recovery") == (
+        "The consensus has revenue growing 2.0% in year 10 while the decline rate is −4.0%."
+    )
+    assert step_names(r) == [f"path_step_{t}" for t in range(2, 11)]
+
+
+def test_a_far_year_at_minus_100_refuses(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """A consensus year past year 3 whose revenue falls to zero or below, on enough analysts,
+    refuses the row as a year 2 or 3 does, with the path's flags."""
+    dc = replace(decline_inputs, capital_years=(), peers=())
+    for years in (((2030, 0.0, 6),), ((2030, BASE_2 * 1.01, 6), (2031, -5 * M, 6))):
+        r = value_company(with_consensus(dc, *years), deciles, policy, TODAY)
+        assert_refused(r, "consensus revenue falls to zero or below within the path")
+        assert r.intermediates.keys() == {"price_facts"}
+    # the path's flags: the rising year 4 is named before the fall in year 5
+    assert route_codes(r) == ["consensus-recovery"]
+    assert "1.0% in year 4" in sentence(r, "consensus-recovery")
+
+
+def test_the_expected_return_grows_at_the_path_then_zero(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The growth term reads the path's own rates for years 2 to H + 1, and zero past year N
+    (spec 2026-11-06 6.3), where d once served."""
+    r = value_company(decline_inputs, deciles, policy, TODAY)
+    rates = r.intermediates["growth_rates"]
+    growth = math.prod(1 + g for g in rates[1:4]) ** (1 / 3) - 1
+    assert r.intermediates["expected_return"]["growth"] == pytest.approx(growth, abs=1e-12)
+    # a horizon of 12 years: years 2 to 10, then three years at zero
+    long = replace(policy, repricing_horizon_years=12)
+    r = value_company(decline_inputs, deciles, long, TODAY)
+    growth = math.prod(1 + g for g in rates[1:]) ** (1 / 12) - 1
+    assert r.intermediates["expected_return"]["growth"] == pytest.approx(growth, abs=1e-12)
+
+
+def test_reprice_rebuilds_the_same_path(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """A Decline row whose consensus reaches year 5 moves to a new price from its stored
+    intermediates: the path, its rates and the value stay; the implied decline rate, read with
+    the consensus years as found and the fade from the trial d, moves to the fresh valuation's."""
+    dc = with_consensus(decline_inputs, (2030, BASE_2 * 1.01, 6), (2031, BASE_2 * 1.01 * 1.02, 6))
+    r = value_company(dc, deciles, policy, TODAY)
+    assert r.value is not None
+    stored = result_from_json(result_to_json(r))
+    moved = reprice(stored, 4.5, REPRICED, policy)
+    fresh = value_company(replace(dc, price=4.5), deciles, policy, TODAY)
+    assert moved.value == r.value
+    assert moved.intermediates["runoff_path"] == r.intermediates["runoff_path"]
+    assert moved.intermediates["growth_rates"] == r.intermediates["growth_rates"]
+    for key in PRICE_KEYS:
+        assert moved.intermediates[key] == fresh.intermediates[key], key
+    implied = moved.intermediates["implied_decline_rate"]
+    assert implied is not None and implied != r.intermediates["implied_decline_rate"]
+    at_value = reprice(stored, r.value, REPRICED, policy).intermediates["implied_decline_rate"]
+    assert at_value == pytest.approx(-0.04, abs=1e-6)

@@ -524,12 +524,12 @@ def test_screen_row_carries_the_decline_figures(
     db_path: Path, policy: Policy, client: TestClient
 ) -> None:
     """Spec 13.1's Decline row: the rating, its ten-year π, Altman Z″ (3.07) and Piotroski F, and
-    the decline rate its price of $3.00 implies (−27.7%). A row refused for a value at or below
+    the decline rate a price of $4.00 implies (−21.8%). A row refused for a value at or below
     zero keeps them, though it has no route: a chronic loss-maker with net debt rated D, π 100%.
     With net cash there is no rating ("—") and π is 0. No other row carries them, nor a Decline row
     the Start-up figures."""
     deciles = universe_deciles()
-    valued = value_company(decline_inputs(), deciles, policy, TODAY)
+    valued = value_company(replace(decline_inputs(), price=4.0), deciles, policy, TODAY)
     margins = [-0.02, -0.03, -0.03, -0.03, -0.03]
     revenue = [fy.revenue for fy in decline_inputs().series if fy.revenue is not None]
     chronic = replace(decline_inputs(), symbol="DCLM", series=fiscal_years(revenue, margins))
@@ -550,7 +550,7 @@ def test_screen_row_carries_the_decline_figures(
     assert row["distressProbability"] == 0.05
     assert row["altmanZ"] == pytest.approx(3.07, abs=5e-3) == im["altman_z"]["score"]
     assert row["piotroskiF"] == "6 of 9"
-    assert row["impliedDeclineRate"] == pytest.approx(-0.277, abs=5e-4)
+    assert row["impliedDeclineRate"] == pytest.approx(-0.218, abs=5e-4)
     assert row["impliedDeclineRate"] == im["implied_decline_rate"]
     assert all(row[key] is None for key in START_UP_KEYS)
 

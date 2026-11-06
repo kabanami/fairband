@@ -1,17 +1,22 @@
-"""The Decline route: Damodaran's run-off (spec 2026-11-03 section 10), on the core of ``runoff``
-and the measures of ``distress``.
+"""The Decline route: Damodaran's run-off (spec 2026-11-03 section 10, spec 2026-11-06 section 6),
+on the core of ``runoff`` and the measures of ``distress``.
 
 What it reads. Year 0 is trailing revenue. Years 1 to 3 are the revenue-growth route's consensus
 path, uncapped (``route_revenue_growth.ntm_revenue`` and ``revenue_path_for``): year 1 the NTM
 consensus revenue, years 2 and 3 the annual consensus steps from the base year, a missing step
-holding the rate of the year before and a thin landing year flagged. Without a usable NTM
-consensus (no four consecutive quarters, one without a revenue mean, or a sum at or below zero)
-the row is not refused: every year shrinks at the decline rate. Years 4 to ``runoff_years`` shrink
-at the decline rate d: the classifier's five-year revenue slope (``PhaseEvidence.revenue_slope``,
-which ``Context.evidence`` carries) over the last fiscal year's revenue, at most zero and floored
-at ``runoff.DECLINE_FLOOR``, −50%. One operating margin is held in every year and in the terminal,
-the normalized margin: the median of the operating margins of the last five fiscal years that
-have one when at least three do, else the trailing margin. Tax is the newest fiscal year's
+holding the rate of the year before and a thin landing year flagged. Past year 3 the path reads
+the annual consensus revenue one fiscal year at a time (``route_revenue_growth.consensus_beyond``)
+while a year has a revenue mean on at least ``analyst_min`` revenue analysts, to year K, at most
+``runoff_years``: nothing is held past year 3 and a thin year is not read, so it is never flagged.
+From year K + 1 the decline rate d fades in a straight line to zero by year ``runoff_years``.
+Without a usable NTM consensus (no four consecutive quarters, one without a revenue mean, or a sum
+at or below zero) the row is not refused: years 1 to 3 shrink at d, the years past 3 are not read,
+and the fade runs from year 4. d is the classifier's five-year revenue slope
+(``PhaseEvidence.revenue_slope``, which ``Context.evidence`` carries) over the last fiscal year's
+revenue, at most zero and floored at ``runoff.DECLINE_FLOOR``, −50%. The terminal is flat on year
+N's revenue (``runoff.runoff_valuation``). One operating margin is held in every year and in the
+terminal, the normalized margin: the median of the operating margins of the last five fiscal years
+that have one when at least three do, else the trailing margin. Tax is the newest fiscal year's
 statutory rate after the forecast's own losses. Sales-to-capital is the company's own newest kept
 ROIC year's revenue over its average invested capital, else the mature peers' median.
 
@@ -26,9 +31,9 @@ net debt and no interest expense on file, when the floored value stands.
 
 Refusals, in this order, after the shared guards: no trailing revenue (missing or not positive);
 no trailing operating income; no statutory tax rate; consensus revenue that falls to zero or below
-within the path (g_2 or g_3 as resolved at or below −100%), with the path's flags; no
-sales-to-capital, with the path's and the balance sheet's flags; a value a share at or below zero
-after the weighting, "value not positive in the run-off", which keeps every value-side
+within the path (g_2 or g_3 as resolved, or a step to year K, at or below −100%), with the path's
+flags; no sales-to-capital, with the path's and the balance sheet's flags; a value a share at or
+below zero after the weighting, "value not positive in the run-off", which keeps every value-side
 intermediate, every flag and the route's inputs.
 
 Intermediates: the rebuild keys below; ``moat``; ``growth_rates`` for years 1 to N; the tables
@@ -42,21 +47,24 @@ file" or "no interest expense on file"); ``distress_proceeds``, ``distress_per_s
 ``piotroski_f`` (year, prior_year, the nine signals by name with their values, score, read;
 ``None`` with fewer than two balance sheets); ``capex_vs_depreciation``; ``eps`` (no forward
 EPS), ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at
-the price, ``implied_decline_rate``, ``multiples`` and ``expected_return``, its growth term d in
-each year of the policy's repricing horizon.
+the price, ``implied_decline_rate``, ``multiples`` and ``expected_return``, its growth term the
+path's own rates for years 2 to H + 1, H the policy's repricing horizon, and zero past year N.
 
 The rebuild keys: ``runoff_path`` (revenue0, ntm_revenue, ``None`` without a usable consensus, the
-steps as found with ``None`` for a missing one, d, runoff_years); ``margin`` (value, used,
-"median" or "trailing", median, trailing, the fiscal years and margins read); ``tax_rate``;
-``sales_to_capital`` (used, "own-latest" or "peers", value); ``runoff_recovery``; ``debt``;
-``cash``; ``shares``; ``ncav``; ``pi`` (value, rating, coverage); ``distress_sale_fraction``. With
+consensus steps for years 2 to K as found with ``None`` for a held one in years 2 and 3,
+consensus_years K, d, runoff_years); ``margin`` (value, used, "median" or "trailing", median,
+trailing, the fiscal years and margins read); ``tax_rate``; ``sales_to_capital`` (used,
+"own-latest" or "peers", value); ``runoff_recovery``; ``debt``; ``cash``; ``shares``; ``ncav``;
+``pi`` (value, rating, coverage); ``distress_sale_fraction``. With
 the policy's r they rebuild the value at any decline rate, so ``decline_at_price`` moves a stored
 row to a new price from its intermediates alone. The implied decline rate is the first root the
-scan from −50% to 0 finds (``runoff.implied_decline_rate``); the value need not rise with d.
+scan from −50% to 0 finds (``runoff.implied_decline_rate``), the consensus years as found and the
+fade from each trial d; the value need not rise with d.
 
 Flags, in order: ``path-held``, ``decline-rate-floored``, ``path-on-trend``,
-``consensus-recovery``, ``few-analysts``; ``line-not-presented:debt``, ``:cash`` and
-``:totalLiabilities``; ``peers-from-industry`` when the industry's peers gave the sales-to-capital;
+``consensus-recovery`` naming each consensus year 1 to K that grows, ``few-analysts`` on years 2
+and 3 only; ``line-not-presented:debt``, ``:cash`` and ``:totalLiabilities``;
+``peers-from-industry`` when the industry's peers gave the sales-to-capital;
 ``tax-loss-history-unknown``; ``ncav-floor`` when the floor binds and π is not 1 (at π = 1 the
 floor has no weight); ``distress-not-charged``; ``z-distress``; ``f-score-low``;
 ``reinvesting-in-decline``; the trailing flags. Never the ROIC flags. ``path-on-trend`` and
@@ -82,6 +90,7 @@ from fairband.engine.revenue_growth import (
 from fairband.engine.route_revenue_growth import (
     TAX_LOSS,
     bridge_flags,
+    consensus_beyond,
     from_industry,
     from_peers,
     industry_peer_max_input,
@@ -129,7 +138,7 @@ _MARGIN_YEARS = 5
 _MARGIN_MIN = 3
 # The common inputs the run-off does not read: its charge is the release, not the runway return.
 _NOT_READ = frozenset({"aggregate_roic", "runway_return"})
-_NO_CONSENSUS = "no usable consensus: every year shrinks at the decline rate"
+_NO_CONSENSUS = "no usable consensus: years 1 to 3 shrink at the decline rate"
 # Why a row has no rating, so no π: no debt line on file (unknown debt is not "no net debt"), or
 # net debt and no interest expense on file.
 _NO_DEBT = "no debt line on file"
@@ -166,14 +175,16 @@ _Used = Literal["own-latest", "peers"]
 
 @dataclass(frozen=True)
 class _Consensus:
-    """Years 1 to 3: the NTM revenue as found (``None`` without four quarters with a revenue
-    mean), whether it is usable (found and positive), the annual steps as found and which were
-    held, whether a step as resolved falls 100% or more, and the path's flags in order."""
+    """Years 1 to K: the NTM revenue as found (``None`` without four quarters with a revenue
+    mean), whether it is usable (found and positive), the annual steps of years 2 and 3 as found
+    and which were held, the steps of years 4 to K (none without a usable consensus), whether a
+    step as resolved falls 100% or more, and the path's flags in order."""
 
     ntm: float | None
     usable: bool
     steps: tuple[float | None, float | None]
     held: tuple[bool, bool]
+    beyond: tuple[float, ...]
     falls: bool
     flags: tuple[Flag, ...]
 
@@ -213,7 +224,8 @@ def value_decline(c: Context) -> Valued | Refused:
         "runoff_path": {
             "revenue0": revenue0,
             "ntm_revenue": path.ntm if path.usable else None,
-            "steps": list(path.steps),
+            "steps": [*path.steps, *path.beyond],
+            "consensus_years": 3 + len(path.beyond),
             "d": d,
             "runoff_years": n,
         },
@@ -233,7 +245,7 @@ def value_decline(c: Context) -> Valued | Refused:
         "distress_sale_fraction": policy.distress_sale_fraction,
     }
     rates = _rates(rebuild["runoff_path"], d)
-    v = _valuation(rebuild, rates, d, policy)
+    v = _valuation(rebuild, rates, policy)
     e = _equity(rebuild, v.firm_value)
     z = None if newest is None else altman_z(newest, policy)
     f = piotroski_f(years[-1], years[-2]) if len(years) >= 2 else None
@@ -330,18 +342,20 @@ def decline_at_price(
     im: dict[str, Any], price: float, value: float, policy: Policy
 ) -> dict[str, Any]:
     """The intermediates that move with the price, from the rebuild keys in ``im``: the decline
-    rate at which the run-off, floored and weighted as built, is worth the price (``None`` when the
-    scan finds none), the trailing multiples, and the expected return growing at d."""
-    d = im["runoff_path"]["d"]
+    rate at which the run-off, the consensus years as found and the fade from that rate, floored
+    and weighted as built, is worth the price (``None`` when the scan finds none), the trailing
+    multiples, and the expected return growing at the path's own rates from year 2, zero past
+    year N."""
 
     def value_at(trial: float) -> float:
-        v = _valuation(im, _rates(im["runoff_path"], trial), trial, policy)
+        v = _valuation(im, _rates(im["runoff_path"], trial), policy)
         return _equity(im, v.firm_value).value_per_share
 
+    horizon = policy.repricing_horizon_years
     return {
         "implied_decline_rate": implied_decline_rate(value_at, price),
         "multiples": multiples_at(price, im["eps"]),
-        "expected_return": expected(price, value, im, (), policy.repricing_horizon_years, d),
+        "expected_return": expected(price, value, im, im["growth_rates"][1:], horizon, 0.0),
     }
 
 
@@ -359,25 +373,28 @@ def _decline_rate(c: Context) -> tuple[float, bool]:
 
 
 def _consensus(c: Context, revenue0: float, d: float, floored: bool) -> _Consensus:
-    """Years 1 to 3 and the path's flags: ``path-held``, ``decline-rate-floored``,
-    ``path-on-trend`` without a usable NTM consensus, ``consensus-recovery``, ``few-analysts``."""
-    i = c.inputs
+    """Years 1 to K and the path's flags: ``path-held``, ``decline-rate-floored``,
+    ``path-on-trend`` without a usable NTM consensus, ``consensus-recovery``, ``few-analysts``.
+    The years past 3 are read only on a usable consensus and only to ``runoff_years``."""
+    i, n = c.inputs, c.policy.runoff_years
     floor = (_floored(),) if floored else ()
     quarters = ntm_quarters(i.quarter_estimates, c.trailing.period_end)
     ntm = ntm_revenue(quarters)
     if quarters is None or ntm is None or ntm <= 0:
-        return _Consensus(ntm, False, (None, None), (False, False), False, (*floor, _on_trend(d)))
-    path, _, found = revenue_path_for(
-        revenue0, ntm, i.annual_estimates, base_fiscal_year(quarters), None, c.policy
-    )
+        on_trend = (*floor, _on_trend(d, n))
+        return _Consensus(ntm, False, (None, None), (False, False), (), False, on_trend)
+    base = base_fiscal_year(quarters)
+    path, _, found = revenue_path_for(revenue0, ntm, i.annual_estimates, base, None, c.policy)
+    beyond = consensus_beyond(i.annual_estimates, base, c.policy)[: n - 3]
     resolved, held = resolved_steps(path)
     flags = (
         _coded(found, "path-held")
         + floor
-        + present(_recovery((ntm / revenue0 - 1, *path.steps), d))
+        + present(_recovery((ntm / revenue0 - 1, *path.steps, *beyond), d))
         + _coded(found, "few-analysts")
     )
-    return _Consensus(ntm, True, path.steps, held, any(g <= -1 for g in resolved), flags)
+    falls = any(g <= -1 for g in (*resolved, *beyond))
+    return _Consensus(ntm, True, path.steps, held, beyond, falls, flags)
 
 
 def _coded(flags: tuple[Flag, ...], code: str) -> tuple[Flag, ...]:
@@ -385,17 +402,16 @@ def _coded(flags: tuple[Flag, ...], code: str) -> tuple[Flag, ...]:
 
 
 def _rates(p: dict[str, Any], d: float) -> tuple[float, ...]:
-    """The rates for years 1 to N from ``runoff_path`` at the decline rate ``d``."""
+    """The rates for years 1 to N from ``runoff_path`` at the decline rate ``d``: the consensus
+    steps as found to year K, then d fading to zero."""
     ntm = p["ntm_revenue"]
     g1 = None if ntm is None else ntm / p["revenue0"] - 1
-    s2, s3 = p["steps"]
-    return runoff_rates(g1, s2, s3, d, p["runoff_years"])
+    steps = p["steps"]
+    return runoff_rates(g1, steps[0], steps[1], steps[2:], d, p["runoff_years"])
 
 
-def _valuation(
-    im: dict[str, Any], rates: tuple[float, ...], d: float, policy: Policy
-) -> RunoffValuation:
-    """The run-off from the rebuild keys at these rates and decline rate."""
+def _valuation(im: dict[str, Any], rates: tuple[float, ...], policy: Policy) -> RunoffValuation:
+    """The run-off from the rebuild keys at these rates."""
     return runoff_valuation(
         im["runoff_path"]["revenue0"],
         rates,
@@ -404,7 +420,6 @@ def _valuation(
         im["sales_to_capital"]["value"],
         im["runoff_recovery"],
         policy.required_return,
-        d,
     )
 
 
@@ -509,18 +524,19 @@ def _floored() -> Flag:
     )
 
 
-def _on_trend(d: float) -> Flag:
-    """``path-on-trend``, naming the decline rate as used: on a floored row, −50%, not the trend's
-    own figure."""
+def _on_trend(d: float, n: int) -> Flag:
+    """``path-on-trend``, naming the decline rate as used (on a floored row, −50%, not the trend's
+    own figure) and the year ``n`` its fade reaches zero."""
     return Flag(
         "path-on-trend",
         "Path on trend",
-        f"No usable consensus: every year shrinks at the decline rate, {signed(d)}.",
+        f"No usable consensus: years 1 to 3 shrink at the decline rate, {signed(d)}, which fades to "
+        f"zero by year {n}.",
     )
 
 
 def _recovery(rates: tuple[float | None, ...], d: float) -> Flag | None:
-    """``consensus-recovery`` naming each consensus year, 1 to 3, that grows, and the decline rate
+    """``consensus-recovery`` naming each consensus year, 1 to K, that grows, and the decline rate
     as used (on a floored row, −50%, not the trend's own figure); a held step is not the
     consensus's and is not named."""
     rising = [
@@ -616,7 +632,8 @@ def _reinvesting(t: TrailingFigures, falls: bool) -> Flag | None:
 
 
 def _path_inputs(c: Context, path: _Consensus) -> tuple[TaggedInput, ...]:
-    """The NTM revenue and the two annual steps as found; without a usable consensus each says
+    """The NTM revenue, the two annual steps as found and one step for each consensus year past
+    year 3, ``path_step_4`` to ``path_step_K``; without a usable consensus the first three say
     so, the NTM revenue as found."""
     i = c.inputs
     if not path.usable:
@@ -629,6 +646,7 @@ def _path_inputs(c: Context, path: _Consensus) -> tuple[TaggedInput, ...]:
         data(i, "ntm_revenue", path.ntm, "USD", "estimates_quarter"),
         step_input(c, "path_step_2", path.steps[0], path.held[0]),
         step_input(c, "path_step_3", path.steps[1], path.held[1]),
+        *(step_input(c, f"path_step_{t}", g, False) for t, g in enumerate(path.beyond, start=4)),
     )
 
 
