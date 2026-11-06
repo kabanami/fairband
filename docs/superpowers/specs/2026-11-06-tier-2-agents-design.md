@@ -71,9 +71,10 @@ The founder's three rulings shape everything below:
 
 - The portfolio layer (B-60 to B-62) and proposals (the design system's `ProposalCard`: trades,
   policy changes, thesis revisions). Nothing in this round waits for the owner's confirmation.
-- The owner's own override form on the page. The owner can drop an override and add a note; the
-  owner's overrides come through a later piece. *My call*: the founder's reading of the page is
-  the report and the value, and the agent is the one who changes inputs this round.
+- The owner's own override form on the page, and any owner write on an override: the owner
+  neither adds nor drops one; the owner adds a note. Founder, 2026-11-06: the whole user
+  override function waits for a commitment to all of it; the agent is the one who changes
+  inputs.
 - Charts on the report page (`BandHistory`, `HistoryBars`, `SpreadChart`, `SensitivityGrid`):
   they need the history piece (B-68, B-87).
 - A network transport, a token or an account. The server stays on 127.0.0.1 with the
@@ -262,8 +263,9 @@ ranges are policy values (19), not settings this round. *My call* on every range
 - A value outside its range is `refused-unit`, naming the range.
 - One input has one applied override: a new override on a tag with an applied one drops the old
   (`dropped`, "replaced by override n") and applies the new.
-- `override_drop(override_id, reason)` drops an applied override, by an agent or by the owner on
-  the page; the review is recomputed.
+- `override_drop(override_id, reason)` drops an applied override; the review is recomputed. It is
+  an agent's write: the owner neither adds nor drops an override this round (founder,
+  2026-11-06: no user override function until there is a commitment to the whole of it).
 - An override binds to the snapshot it was made on for provenance, and applies to the company's
   latest snapshot and every later one (10.5). There is no stale conflict: snapshots are appended
   at every price refresh, and a conflict on each would stop every agent. *My call.*
@@ -626,8 +628,7 @@ In order, and nothing else:
 
 In order: the review (the `ValueBridge` when a review with a value exists; the review's refusal
 when it refused; the secondary valuation with its parts, value and date); the overrides
-(`OverrideRecord` each, with a `Drop` button opening `ConfirmDialog` with a reason line); the
-judgments; the kill criteria; the news items; the notes, with the owner's `Add a note` field and
+(`OverrideRecord` each, read-only: no Drop button); the judgments; the kill criteria; the news items; the notes, with the owner's `Add a note` field and
 button; the findings; the company's ledger entries; then everything the drawer shows today in its
 order: the validity window, the phase evidence, the route section, the inputs, the intermediates,
 the flags, the estimates and the versions line.
@@ -832,5 +833,6 @@ Plan 2, the page:
 | 2026-11-06 | One spec for the whole of Tier 2, two plans: the agent's side, then the page. Claude proposed; founder: "yes". |
 | 2026-11-06 | The number is rigid and the stance is free: the reviewed value is the engine's figure under the agent's inputs; the override set is wide and includes the phase; a refused row gets no reviewed value from the route. Claude's recommendation; the founder accepted and reframed the escape. |
 | 2026-11-06 | The secondary valuation is a second view that complements the engine and the fallback where no phase or route fits, not an "own-method" escape. Founder. Built as one tool on an explicit cash-flow path with parts (Claude's shape). |
+| 2026-11-06 | No owner write on an override: the owner neither adds nor drops one over the API or on the page, until the founder commits to the whole user override function; `override_drop` stays as the agent's tool (3, 10.3, 18.3). Founder, on reading plan 1. |
 | 2026-11-06 | Builder check done. Four questions, all settled by Claude: the secondary valuation reads debt and cash from the newest balance sheet on file or takes them with evidence, stores the figures used, and is refused on a foreign filer (11); an override, a recompute and a secondary are refused "settings changed: run a revalue" when the effective policy is not the latest snapshot's, and both records cite their versions and hash (10.3); the server computes the report's six financial tables with a ref per cell, `financials` carries refs, and `derive` takes a list (13.5, 13.4); a reprice of the cited snapshot counts as the cited one, a revalue or full refresh does not (13.2). Two notes taken in: the `fairband` console script is added (14); `refused-range` is the component's `refused-unit`, so `refused-route` is the one state patch (10.1). Nothing for the founder. |
 | 2026-11-06 | The MCP server talks to the web API, holds no database connection and no key (6); identity by `identify` and headers (7); no claim timeout and no stale conflict (8, 10.3); the override ranges and the bridge order (10.2, 10.4); the four stance words (13.1); the five derivations (13.4); the four pass-throughs (15.3); the `◆` coverage mark, the sixth header view, the Details disclosure (18); policy v8's values not settings (19). Claude's calls, open to the founder. |
