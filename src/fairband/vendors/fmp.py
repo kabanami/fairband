@@ -32,6 +32,19 @@ documented response example):
 - ``stock-peers``: ``symbol``; the answer is a list of objects, each with a ``symbol``. From the
   growth routes spec (2026-11-02); not checked here, the documentation page refusing an automated
   read.
+
+The agent's pass-throughs (spec 2026-11-06 Tier 2, 15.3), checked on 2026-11-06 against the
+stable documentation's examples as a web search returns them (the pages themselves refuse an
+automated read, so the parameter tables are unchecked):
+
+- ``earning-call-transcript``: ``symbol``, ``year``, ``quarter``; the answer lists the call with
+  its ``symbol``, ``period``, ``year``, ``date`` and ``content``.
+- ``news/stock``: ``symbols`` (the one company here), ``limit``.
+- ``revenue-product-segmentation``, ``revenue-geographic-segmentation``: ``symbol``; ``period``
+  and ``structure`` are left out, so the years come in the nested form, a ``data`` object per
+  fiscal year.
+- ``insider-trading/search``: ``symbol``, ``page``, ``limit``; the documented example asks for
+  page 0 with 100 rows, which this adapter asks for.
 """
 
 from collections.abc import Mapping, Sequence
@@ -48,6 +61,7 @@ type Period = Literal["annual", "quarter"]
 
 QUARTER_ESTIMATE_LIMIT = 40
 ANNUAL_ESTIMATE_LIMIT = 6
+INSIDER_TRADES_LIMIT = 100  # the documented example's page size
 
 _STATEMENT_ROUTES: dict[StatementKind, str] = {
     "income": "income-statement",
@@ -72,7 +86,8 @@ def to_fmp_symbol(symbol: str) -> str:
 
 
 class Fmp:
-    """The FMP stable routes the screen reads; every method returns the response as received."""
+    """The FMP stable routes the screen reads and the agent's pass-throughs fetch; every method
+    returns the response as received."""
 
     def __init__(self, http: VendorHttp, api_key: str) -> None:
         self._http = http
@@ -128,6 +143,24 @@ class Fmp:
 
     def peers(self, symbol: str) -> VendorResponse:
         return self._get("stock-peers", {"symbol": to_fmp_symbol(symbol)})
+
+    def transcript(self, symbol: str, year: int, quarter: int) -> VendorResponse:
+        params = {"symbol": to_fmp_symbol(symbol), "year": str(year), "quarter": str(quarter)}
+        return self._get("earning-call-transcript", params)
+
+    def news(self, symbol: str, limit: int) -> VendorResponse:
+        return self._get("news/stock", {"symbols": to_fmp_symbol(symbol), "limit": str(limit)})
+
+    def segments_product(self, symbol: str) -> VendorResponse:
+        return self._get("revenue-product-segmentation", {"symbol": to_fmp_symbol(symbol)})
+
+    def segments_geographic(self, symbol: str) -> VendorResponse:
+        return self._get("revenue-geographic-segmentation", {"symbol": to_fmp_symbol(symbol)})
+
+    def insider_trades(self, symbol: str) -> VendorResponse:
+        """The newest ``INSIDER_TRADES_LIMIT`` trades, the first page."""
+        params = {"symbol": to_fmp_symbol(symbol), "page": "0", "limit": str(INSIDER_TRADES_LIMIT)}
+        return self._get("insider-trading/search", params)
 
     def _get(self, route: str, params: Mapping[str, str]) -> VendorResponse:
         return self._http.get(route, {**params, "apikey": self._api_key})

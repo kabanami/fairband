@@ -119,3 +119,21 @@ def test_an_unpaced_limiter_counts_its_calls_and_holds() -> None:
     limiter.hold(60)
     assert limiter.totals() == PaceTotals(5, 0.0, 1)
     assert time.sleeps == []
+
+
+def test_a_new_pace_spaces_the_slots_after_the_next() -> None:
+    # At 60 a minute two callers at t = 0 take the slots at 0 and 1. Paced to 30 a minute, the
+    # next caller still takes the slot at 2, set before the change, and the one after waits 2 s.
+    time = FakeTime()
+    limiter = RateLimiter(60, time.clock, time.sleep)
+    for _ in range(2):
+        time.at(0)
+        limiter.acquire()
+    limiter.set_pace(30)
+    assert (limiter.calls_per_minute, limiter.interval) == (30, timedelta(seconds=2))
+    time.at(0)
+    assert limiter.acquire() == 2
+    time.at(2)
+    assert limiter.acquire() == 2
+    limiter.set_pace(0)  # none: every call at once
+    assert (limiter.acquire(), limiter.interval) == (0.0, timedelta(0))

@@ -37,6 +37,7 @@ from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.vendors import fmp as fmp_api
 from fairband.vendors.fmp import Fmp
 from fairband.vendors.http import VendorHttp
+from fairband.vendors.limiter import RateLimiter
 from fairband.web.app import create_app
 
 NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
@@ -361,7 +362,8 @@ def test_make_refresh_builds_the_clients_from_the_effective_policy(
     db_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With an FMP key each run builds clients of its own, from the policy it runs under (the
-    pace is a setting), and ``Refresh.close`` closes them, once."""
+    pace is a setting), and ``Refresh.close`` closes them, once. Given the server's limiter, the
+    run paces it to that policy and hands it to its FMP client."""
     closed: list[str] = []
 
     class Client:
@@ -371,23 +373,34 @@ def test_make_refresh_builds_the_clients_from_the_effective_policy(
         def close(self) -> None:
             closed.append(self.name)
 
-    built: list[tuple[Keys, Policy]] = []
+    built: list[tuple[Keys, Policy, RateLimiter | None]] = []
 
-    def clients(keys: Keys, policy: Policy) -> tuple[Any, Any, tuple[str, ...]]:
-        built.append((keys, policy))
+    def clients(
+        keys: Keys, policy: Policy, *, limiter: RateLimiter | None = None
+    ) -> tuple[Any, Any, tuple[str, ...]]:
+        built.append((keys, policy, limiter))
         return Client("fmp"), Client("gf"), (KEY,)
 
     monkeypatch.setattr(cli, "build_clients", clients)
     with closing(connect(db_path)) as conn:
-        saved = write_settings(conn, {"required_return": 0.1}, None, NOW)
+        changes = {"required_return": 0.1, "refresh.fmp_calls_per_minute": 600}
+        saved = write_settings(conn, changes, None, NOW)
     keys = Keys(fmp=KEY, gurufocus=None)
+    limiter = RateLimiter(2850, lambda: NOW, lambda _: None)
     refresh = cli.make_refresh(
         lambda: connect(db_path), keys, load_tax_table(), threading.Event(), lambda p: None
     )
-    [(given, policy)] = built
+    shared = cli.make_refresh(
+        lambda: connect(db_path), keys, load_tax_table(), threading.Event(), lambda p: None, limiter
+    )
+    [(given, policy, own), (_, _, passed)] = built
     assert given is keys and policy == refresh._policy
     assert policy.settings_hash == saved.settings_hash
     assert refresh._secrets == (KEY,) and closed == []
+    # The server's runs share its limiter, paced to the policy each one runs under.
+    assert own is None and passed is limiter and limiter.calls_per_minute == 600
+    shared.close()
+    closed.clear()
     refresh.close()
     refresh.close()
     assert closed == ["fmp", "gf"]
@@ -580,7 +593,9 @@ def test_serve_builds_a_worker_with_the_keys(
     monkeypatch.setenv("FAIRBAND_FMP_KEY", KEY)
     built: list[str | None] = []
 
-    def clients(keys: Keys, policy: Policy) -> tuple[Fmp, None, tuple[str, ...]]:
+    def clients(
+        keys: Keys, policy: Policy, *, limiter: RateLimiter | None = None
+    ) -> tuple[Fmp, None, tuple[str, ...]]:
         built.append(keys.fmp)
         return fmp, None, (KEY,)
 

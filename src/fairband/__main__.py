@@ -6,6 +6,7 @@ import signal
 import sqlite3
 import sys
 import threading
+import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing, contextmanager
 from types import FrameType
@@ -28,7 +29,8 @@ from fairband.config import (
 from fairband.engine.types import PHASE_NUMBER
 from fairband.policy import load_policy
 from fairband.policy.tax import TaxTable, load_tax_table
-from fairband.refresh.clients import build_clients
+from fairband.refresh.clients import build_clients, build_fmp
+from fairband.refresh.passthrough import Passthrough
 from fairband.refresh.run import KINDS, UNCLASSIFIED, Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.db import connect, migrate
@@ -36,6 +38,7 @@ from fairband.store.refreshes import RefreshRunning, latest_refresh, mark_interr
 from fairband.store.settings import effective_policy
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
 from fairband.vendors.http import VendorError
+from fairband.vendors.limiter import RateLimiter
 from fairband.web.app import create_app
 
 logger = logging.getLogger("fairband")
@@ -93,16 +96,21 @@ def make_refresh(
     tax: TaxTable,
     cancel: threading.Event,
     on_progress: Callable[[Progress], None],
+    limiter: RateLimiter | None = None,
 ) -> Refresh:
     """The server worker's next run: under the effective policy read now (the file and the stored
     overlay, spec 2026-11-04 8.8), so a setting saved since the last run is this one's, with
-    vendor clients of its own built from that policy (the pace is a setting). Without an FMP key
-    it builds no client and the run refuses every kind but a revalue. ``Refresh.close`` closes
-    the clients. Raises ``ValueError`` when the stored settings no longer apply to the file."""
+    vendor clients of its own built from that policy (the pace is a setting). Given the server's
+    ``limiter``, which the pass-through shares, the run paces it to that policy and its FMP client
+    takes its slots from it. Without an FMP key it builds no client and the run refuses every kind
+    but a revalue. ``Refresh.close`` closes the clients. Raises ``ValueError`` when the stored
+    settings no longer apply to the file."""
     with closing(conn_factory()) as conn:
         policy = effective_policy(conn)
     if keys is not None and keys.fmp is not None:
-        fmp, gf, secrets = build_clients(keys, policy)
+        if limiter is not None:
+            limiter.set_pace(policy.refresh.fmp_calls_per_minute)
+        fmp, gf, secrets = build_clients(keys, policy, limiter=limiter)
     else:
         fmp, gf, secrets = None, None, ()
 
@@ -117,34 +125,53 @@ def make_refresh(
 
 def _serve(args: argparse.Namespace) -> int:
     """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. The
-    server runs refreshes on its worker, whose thread alone calls the vendors; each run reads the
-    effective policy and builds its clients as it starts (``make_refresh``). Without an FMP key
-    the worker runs a revalue only and refuses the other kinds. The app reads the policy file as
-    its base. When it starts, the app marks every ``running`` refresh interrupted; with no
-    process lock in this cut, that includes one a command in another process is running at that
-    moment."""
+    server runs refreshes on its worker; each run reads the effective policy and builds its
+    clients as it starts (``make_refresh``). With an FMP key it also builds the agent's vendor
+    pass-through, whose calls run on the request threads. One limiter paces every FMP call of
+    both: made at the pace of the effective policy as the server starts (the file's, when a stored
+    setting no longer applies, which the worker then refuses), paced again by each run to the
+    policy it runs under, and read by the pass-through, whose reuse window is the start's. Without
+    an FMP key the worker runs a revalue only and refuses the other kinds, and the pass-through
+    route answers 503. The app reads the policy file as its base. When it starts, the app marks
+    every ``running`` refresh interrupted; with no process lock in this cut, that includes one a
+    command in another process is running at that moment."""
     settings = load_settings()
     policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
         migrate(conn)
+        try:
+            started = effective_policy(conn, policy)
+        except ValueError:
+            started = policy
 
     def conn_factory() -> sqlite3.Connection:
         return connect(settings.db_path)
 
     keys = _keys(settings)
+    limiter = RateLimiter(started.refresh.fmp_calls_per_minute, utcnow, time.sleep)
+    passthrough = None
     if keys.fmp is None:
         logger.warning("%s; the server runs a revalue only", MissingKey("fmp"))
+    else:
+        secrets = tuple(key for key in (keys.fmp, keys.gurufocus) if key)
+        fmp = build_fmp(keys, started, limiter=limiter)
+        passthrough = Passthrough(fmp, conn_factory, started, utcnow, secrets)
     worker = RefreshWorker(
-        lambda cancel, on_progress: make_refresh(conn_factory, keys, tax, cancel, on_progress)
+        lambda cancel, on_progress: make_refresh(
+            conn_factory, keys, tax, cancel, on_progress, limiter
+        )
     )
-    app = create_app(settings, policy, conn_factory, worker, tax=tax)
+    app = create_app(settings, policy, conn_factory, worker, tax=tax, passthrough=passthrough)
     try:
         uvicorn.run(app, host=_HOST, port=args.port, log_level="info")
     finally:
         # A run still alive holds the clients, so they close with the process, which ends now:
         # closed here, they would fail the companies in flight. The cancel keeps the run from
-        # starting another meanwhile; the next start marks its record interrupted.
+        # starting another meanwhile; the next start marks its record interrupted. The server has
+        # answered its last request, so the pass-through's client closes.
         worker.cancel()
+        if passthrough is not None:
+            passthrough.close()
     return 0
 
 

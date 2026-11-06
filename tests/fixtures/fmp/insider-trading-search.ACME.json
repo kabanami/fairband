@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "ACME",
+    "filingDate": "2026-10-20",
+    "transactionDate": "2026-10-16",
+    "reportingCik": "0000000001",
+    "companyCik": "0000000002",
+    "transactionType": "S-Sale",
+    "securitiesOwned": 120000,
+    "reportingName": "Roe Jane",
+    "typeOfOwner": "officer: Chief Financial Officer",
+    "acquisitionOrDisposition": "D",
+    "directOrIndirect": "D",
+    "formType": "4",
+    "securitiesTransacted": 5000,
+    "price": 51.25,
+    "securityName": "Common Stock",
+    "url": "https://example.com/filings/acme-form-4"
+  }
+]

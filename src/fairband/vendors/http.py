@@ -2,12 +2,13 @@
 
 ``VendorHttp.get`` makes up to ``policy.attempts`` tries, each in a slot of the client's
 ``RateLimiter``, which every thread calling through the client shares (``calls_per_minute``; 0 is
-no pacing). It retries a transport error and the statuses 408, 429, 500, 502, 503 and 504. After a
-429 it holds the limiter, so that every thread waits, for the numeric ``Retry-After`` capped at
-``policy.rate_limit_hold_s``, or else for ``rate_limit_hold_s``, and sleeps that hold before the
-retry; after the others it sleeps the policy's backoff (or a numeric ``Retry-After`` smaller than
-the time left). Any other failure, a redirect included, is final on the first try: a redirect is
-refused before it can carry a credential anywhere.
+no pacing), and every client given the same limiter too. It retries a transport error and the
+statuses 408, 429, 500, 502, 503 and 504. After a 429 it holds the limiter, so that every thread
+waits, for the numeric ``Retry-After`` capped at ``policy.rate_limit_hold_s``, or else for
+``rate_limit_hold_s``, and sleeps that hold before the retry; after the others it sleeps the
+policy's backoff (or a numeric ``Retry-After`` smaller than the time left). Any other failure, a
+redirect included, is final on the first try: a redirect is refused before it can carry a
+credential anywhere.
 
 The deadline (``policy.deadline_s`` from the start of the call, extended by each wait for a slot
 and each hold) bounds the whole call. No sleep is made that would leave under 0.1 s, no try is
@@ -136,8 +137,9 @@ class VendorHttp:
     One ``httpx.Client`` per instance: redirects are not followed, TLS is verified and the
     environment (proxies, certificates, netrc) is ignored. ``secrets`` are scrubbed from everything
     this client emits, and from httpx's and httpcore's log records until ``close``. ``limiter``
-    paces the tries at ``calls_per_minute`` on the client's clock and sleep. Close it, or use it as
-    a context manager.
+    paces the tries: the one given, which other clients may share, on its own clock and sleep
+    (``calls_per_minute`` is then unused); else one of the client's own at ``calls_per_minute`` on
+    the client's clock and sleep. Close it, or use it as a context manager.
     """
 
     def __init__(
@@ -149,12 +151,13 @@ class VendorHttp:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], datetime] = utcnow,
         calls_per_minute: float = 0.0,
+        limiter: RateLimiter | None = None,
     ) -> None:
         self._secrets = tuple(secret for secret in secrets if secret)
         self._policy = policy
         self._sleep = sleep
         self._clock = clock
-        self.limiter = RateLimiter(calls_per_minute, clock, sleep)
+        self.limiter = RateLimiter(calls_per_minute, clock, sleep) if limiter is None else limiter
         self._client = httpx.Client(
             base_url=base_url,
             transport=transport,

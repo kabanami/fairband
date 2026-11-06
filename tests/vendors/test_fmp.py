@@ -136,6 +136,33 @@ ROUTES = [
         "historical-price-eod/full",
         {"symbol": "BRK-B", "from": "2021-11-01"},
     ),
+    _route(
+        "transcript",
+        lambda f: f.transcript("BRK.B", 2026, 3),
+        "earning-call-transcript",
+        {"symbol": "BRK-B", "year": "2026", "quarter": "3"},
+    ),
+    _route(
+        "news", lambda f: f.news("BRK.B", 20), "news/stock", {"symbols": "BRK-B", "limit": "20"}
+    ),
+    _route(
+        "segments-product",
+        lambda f: f.segments_product("BRK.B"),
+        "revenue-product-segmentation",
+        {"symbol": "BRK-B"},
+    ),
+    _route(
+        "segments-geographic",
+        lambda f: f.segments_geographic("BRK.B"),
+        "revenue-geographic-segmentation",
+        {"symbol": "BRK-B"},
+    ),
+    _route(
+        "insider-trades",
+        lambda f: f.insider_trades("BRK.B"),
+        "insider-trading/search",
+        {"symbol": "BRK-B", "page": "0", "limit": "100"},
+    ),
 ]
 
 

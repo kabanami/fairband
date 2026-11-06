@@ -1,0 +1,24 @@
+[
+  {
+    "symbol": "ACME",
+    "fiscalYear": 2025,
+    "period": "FY",
+    "reportedCurrency": null,
+    "date": "2025-12-31",
+    "data": {
+      "Widgets": 2900000000,
+      "Services": 1100000000
+    }
+  },
+  {
+    "symbol": "ACME",
+    "fiscalYear": 2024,
+    "period": "FY",
+    "reportedCurrency": null,
+    "date": "2024-12-31",
+    "data": {
+      "Widgets": 2700000000,
+      "Services": 1000000000
+    }
+  }
+]

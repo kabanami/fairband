@@ -2,16 +2,21 @@
 refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
 (``agents_api``), the override and review routes (``reviews_api``), the company reads, the
-Methodology section read and the report routes (``reports_api``), and the policy values and
-growth deciles the Methodology page cites (spec 2026-11-04 7.4).
+Methodology section read and the report routes (``reports_api``), the vendor pass-through route
+(``vendor_api``), and the policy values and growth deciles the Methodology page cites (spec
+2026-11-04 7.4).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
 the page, its script, the design system copy and the vendored React, so the page renders with
-no network. Nothing here reads a key or calls a vendor: the refresh routes hand the work to the
-``RefreshWorker``, whose thread calls the vendors; without one they answer 503. ``serve`` always
-passes one; without an FMP key its runs refuse every kind but a revalue, and a refusal is a 400.
-FastAPI's own documentation routes are off; they would load their scripts from a CDN.
+no network. Nothing here reads a key. The refresh routes hand the work to the ``RefreshWorker``,
+whose thread calls the vendors; without one they answer 503. ``serve`` always passes one; without
+an FMP key its runs refuse every kind but a revalue, and a refusal is a 400. The pass-through
+route alone calls a vendor from a request: it calls FMP on FastAPI's sync-route thread through the
+``Passthrough`` that ``serve`` builds with the key, paced by the one limiter the worker's runs
+share, and answers the stored payload scrubbed, so no answer carries a key; without a
+pass-through (no FMP key) it answers 503. FastAPI's own documentation routes are off; they would
+load their scripts from a CDN.
 
 The screen's rows are the latest universe's admitted companies, each with its latest snapshot,
 or a placeholder row "not yet valued" before its first; a company the latest universe does not
@@ -66,6 +71,7 @@ from fairband.config import Settings, utcnow
 from fairband.engine.types import result_to_json
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable, load_tax_table
+from fairband.refresh.passthrough import Passthrough
 from fairband.refresh.run import KINDS
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import CompanyRow, latest_companies, latest_company
@@ -97,6 +103,7 @@ from fairband.web.rows import (
     sort_rows,
 )
 from fairband.web.settings_api import add_settings_routes, effective
+from fairband.web.vendor_api import add_vendor_routes
 from fairband.web.watchlists_api import add_watchlist_routes
 
 logger = logging.getLogger("fairband.web")
@@ -120,12 +127,14 @@ def create_app(
     worker: RefreshWorker | None = None,
     clock: Callable[[], datetime] = utcnow,
     tax: TaxTable | None = None,
+    passthrough: Passthrough | None = None,
 ) -> FastAPI:
     """The app; ``policy`` is the file's, which the user's settings overlay; ``clock`` gives the
     day the validity states are judged on and the time a refresh left running is marked
     interrupted, a setting changed, a watchlist entry added and an agent route's record
     written; ``tax`` is the table a review's inputs and the company reads' statements are built
-    with, the packaged one when ``None``."""
+    with, the packaged one when ``None``; ``passthrough`` fetches the vendor pass-throughs, which
+    answer 503 without one."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -302,6 +311,7 @@ def create_app(
     taxed = load_tax_table() if tax is None else tax
     add_review_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
+    add_vendor_routes(app, passthrough)
     return app
 
 

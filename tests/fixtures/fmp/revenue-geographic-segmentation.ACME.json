@@ -1,0 +1,14 @@
+[
+  {
+    "symbol": "ACME",
+    "fiscalYear": 2025,
+    "period": "FY",
+    "reportedCurrency": null,
+    "date": "2025-12-31",
+    "data": {
+      "United States": 2400000000,
+      "Europe": 1000000000,
+      "Rest of World": 600000000
+    }
+  }
+]

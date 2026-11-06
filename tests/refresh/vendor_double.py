@@ -19,8 +19,9 @@ FIXTURES = Path(__file__).parent.parent / "fixtures"
 FMP_KEY = "fake-fmp-key-0001"  # not a real key
 GF_TOKEN = "fakegfhalf:fakegfhalf2"  # not a real token; a real one has two halves and a colon
 
-# The FMP route to the name ``fairband.refresh.fetch`` stores its endpoint under; a request's
-# ``period``, when it sends one, is appended (``income-statement`` + annual → ``income-annual``).
+# The FMP route to the name ``fairband.refresh.fetch`` (or ``fairband.refresh.passthrough``)
+# stores its endpoint under; a request's ``period``, when it sends one, is appended
+# (``income-statement`` + annual → ``income-annual``).
 _FMP_ENDPOINTS = {
     "income-statement": "income",
     "balance-sheet-statement": "balance",
@@ -30,7 +31,14 @@ _FMP_ENDPOINTS = {
     "historical-price-eod/full": "price-history",
     "company-screener": "screener",
     "stock-peers": "peers",
+    "earning-call-transcript": "transcript",
+    "news/stock": "news",
+    "revenue-product-segmentation": "segments-product",
+    "revenue-geographic-segmentation": "segments-geographic",
+    "insider-trading/search": "insider-trades",
 }
+# The routes that name their one company in a parameter other than ``symbol``.
+_SYMBOL_PARAMS = {"news/stock": "symbols"}
 
 
 class Router:
@@ -89,7 +97,7 @@ def _resolve(request: httpx.Request) -> tuple[str, str, Path]:
         return route, symbol, FIXTURES / "gurufocus" / f"{route}.{symbol}.json"
     route = request.url.path.removeprefix("/stable/")
     period = request.url.params.get("period")
-    symbol = request.url.params.get("symbol", "")
+    symbol = request.url.params.get(_SYMBOL_PARAMS.get(route, "symbol"), "")
     name = _FMP_ENDPOINTS.get(route, route)
     parts = (route.replace("/", "-"), period, symbol)
     fixture = FIXTURES / "fmp" / (".".join(part for part in parts if part) + ".json")

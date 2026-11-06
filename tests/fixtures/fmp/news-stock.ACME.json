@@ -1,0 +1,22 @@
+[
+  {
+    "symbol": "ACME",
+    "publishedDate": "2026-10-30 14:05:00",
+    "publisher": "Example Wire",
+    "title": "Acme Corp raises its full-year outlook",
+    "image": "https://example.com/acme-outlook.jpg",
+    "site": "example.com",
+    "text": "Acme Corp raised its full-year revenue outlook after a third quarter in which revenue rose 8%.",
+    "url": "https://example.com/acme-raises-outlook"
+  },
+  {
+    "symbol": "ACME",
+    "publishedDate": "2026-10-12 09:30:00",
+    "publisher": "Example Daily",
+    "title": "Acme Corp opens a second widget plant",
+    "image": "https://example.com/acme-plant.jpg",
+    "site": "example.com",
+    "text": "Acme Corp opened its second widget plant, adding a third to its capacity.",
+    "url": "https://example.com/acme-second-plant"
+  }
+]
