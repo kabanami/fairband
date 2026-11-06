@@ -112,6 +112,31 @@ def test_the_new_countries(code: str, year: int, rate: float) -> None:
     assert r is not None and (r.rate, r.year_used, r.estimate) == (rate, year, False)
 
 
+def test_a_hand_row_cites_its_own_source() -> None:
+    """Taiwan's and Cyprus's rows cite the source on the row, the carried-forward estimate the
+    newest year's row; a series row cites ``[meta]``."""
+    t = load_tax_table()
+    tw = t.rate_for("TW", 2024)
+    assert tw is not None and tw.estimate is False
+    assert tw.source == "the Income Tax Act, article 5, Ministry of Finance, Taiwan: 20% from 2018"
+    cy = t.rate_for("CY", 2026)
+    assert cy is not None and (cy.estimate, cy.year_used, cy.rate) == (True, 2025, 0.125)
+    assert cy.source == "the Tax Department, Republic of Cyprus: 12.5% through 2025"
+    for year in (2024, 2040):
+        us = t.rate_for("US", year)
+        assert us is not None and us.source == t.source and "OECD" in us.source
+
+
+def test_a_row_source_that_is_not_a_string_is_refused(tmp_path: Path) -> None:
+    table = tmp_path / "tax.toml"
+    table.write_text(
+        '[meta]\nsource = "s"\n\n'
+        '[[rates]]\ncountry = "Taiwan"\nyear = 2024\nrate = 0.2\nsource = 5\n'
+    )
+    with pytest.raises(TypeError, match="Taiwan 2024 source"):
+        load_tax_table(table)
+
+
 def test_every_jurisdiction_has_an_alias_and_a_rate_from_2024() -> None:
     """The OECD series' 146 jurisdictions and the two by hand, each named by its alpha-2 code
     with a 2024 rate on file; a country the series lacks still has none."""

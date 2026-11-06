@@ -964,7 +964,8 @@
 
   /* The decline rate, after the years the consensus gives (K, 3 to N) or the three years that
      shrink at it without a usable consensus, fading to zero by year N (method 6a.2); when the
-     consensus reaches year N no year reads the rate, so the note says so instead; the
+     consensus reaches year N - 1 or N no year reads the rate (at K = N - 1 the one fade year, N,
+     is at zero), so the note says where the consensus ends instead, and that year N is flat; the
      sales-to-capital the release and the reinvestment read; the terminal value, flat on year N's
      revenue (6a.5), and the firm value; and, on a valued row, the decline rate at which the value
      is the price. */
@@ -972,9 +973,12 @@
     var path = im.runoff_path, s = im.sales_to_capital;
     var years = path.ntm_revenue == null ? 'years 1 to 3 at the decline rate'
       : 'years 1 to ' + path.consensus_years + ' from the consensus';
-    var fade = path.consensus_years < path.runoff_years
+    var fade = path.consensus_years < path.runoff_years - 1
       ? years + '; fades to zero by year ' + path.runoff_years
-      : 'the consensus runs to year ' + path.runoff_years;
+      : path.consensus_years < path.runoff_years
+        ? 'the consensus runs to year ' + path.consensus_years + '; year ' + path.runoff_years
+          + ' is flat'
+        : 'the consensus runs to year ' + path.runoff_years;
     var rows = [
       ['Decline rate', noted(F.formatPercent(path.d), fade), true],
       ['Sales-to-capital', noted(times(s.value), s.used === 'own-latest'

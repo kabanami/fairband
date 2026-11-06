@@ -166,7 +166,7 @@ def render(dataflow: str, retrieved: str, series: list[Row], by_hand: list[Row])
         f"{dataflow}, MEASURE=CIT_C (combined corporate income tax rate), TARGETING=ST "
         f"(statutory), SECTOR=S13 (general government), retrieved {retrieved}. "
         f"{hand_countries}, which the series lacks, are written by hand at the end, each row with "
-        "its own source; the engine cites [meta]'s source for every rate. A jurisdiction in "
+        "its own source, which the engine cites in place of [meta]'s. A jurisdiction in "
         "neither, Puerto Rico among them, has no rows."
     )
     lines = [

@@ -25,10 +25,11 @@ file.
    reaches, on at least `analyst_min` analysts.
 2. **The growth routes' two faults** (B-7). 63 of 151 High Growth and Young Growth rows are refused
    "value not positive under the reinvestment charge". Fifty of them are a reinvestment that outruns
-   the terminal, from one of two faults: the company's own sales-to-capital can be absurd (ZYME 0.01,
-   CRSP 0.01, AUR 0.00), and a loss larger than revenue on a straight-line margin path grows the
-   dollar loss with revenue for years (CLDX at −2909%). The own measure must now be at least half the
-   mature peers' median, and a loss larger than revenue moves in dollars, as the Start-up ramp does.
+   the terminal, from one of two faults: the company's own sales-to-capital can be absurd (ZYME
+   0.01, CRSP 0.01, AUR 0.00), and a loss larger than revenue on a straight-line margin path grows
+   the dollar loss with revenue for years (CLDX's trailing loss is 2,909 times its revenue, a margin
+   of −290,948%). The own measure must now be at least half the mature peers' median, and a loss
+   larger than revenue moves in dollars, as the Start-up ramp does.
 3. **The classifier's established test and the Start-up rule** (new, 2026-11-06). Take-Two (18
    profitable years of 29), Silicon Labs (20 of 27), Synaptics (21 of 28) and AXT (14 of 28) are
    Young Growth because their loss stretch is longer than two years and the established test reads
@@ -531,3 +532,4 @@ The readout, on the same shape as the 2026-11-04 readouts:
 | 2026-11-06 | The formatters `millions` and `signed` moved to `route_steps`, so the growth route's dollar-ramp note can use them without a circular import. Claude, during the build. |
 | 2026-11-06 | The readout's revalue ran on a scratch copy of the live database, made with SQLite's backup API, before the merge; the live backup, the live revalue and the server restart wait for the final review and the founder's consent. A revalue is deterministic on the stored facts and deciles, so the copy's figures are the live ones. Claude, during the build. |
 | 2026-11-06 | The readout (the revalue of refresh 15 under 0.9 and v7): 1,220 of 1,602 valued (1,176 under 0.8). Exactly the seven rows of 8 change phase. Decline: 76 valued, median value ÷ EPV 0.66 → 0.73, well above 67 → 63; 22 rows read the consensus past year 3. Growth: refused for the charge 63 → 37, 26 of the 63 valued, 29 rows on the dollar ramp, 27 past the bound. `margin-direction-disagrees` 744 → 272. Tax refusals 22 → 1, none for a country v2 covers. No row outside the named sets moved through the engine round; 7 fetch-failed rows of refresh 15 read "no financial statements" after any revalue, 0.8's too. Claude, during the build. |
+| 2026-11-06 | Spec 1's CLDX figure corrected after the readout: −2,909 × revenue, not −2909%. Claude, during the build. |

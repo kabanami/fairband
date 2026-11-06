@@ -10,7 +10,9 @@ A year after the newest year on file for a country takes that newest rate as a l
 an earlier missing year or an unknown country gives ``None``, so the caller refuses with a reason
 instead of silently using another year's rate. A country is named as the table names it or by the
 ISO 3166-1 alpha-2 code of the table's ``[country_aliases]`` (``US``), the form FMP gives a
-company's country.
+company's country. A rate cites the table's ``[meta]`` source, or its row's own ``source`` where
+the row has one, as a row written by hand does; a carried-forward estimate cites the newest year's
+row.
 """
 
 import tomllib
@@ -40,9 +42,11 @@ class TaxTable:
         rates: Mapping[tuple[str, int], float],
         source: str,
         aliases: Mapping[str, str] | None = None,
+        row_sources: Mapping[tuple[str, int], str] | None = None,
     ) -> None:
         self._rates = dict(rates)
         self._aliases = dict(aliases or {})
+        self._row_sources = dict(row_sources or {})
         self._newest: dict[str, int] = {}
         for country, year in self._rates:
             self._newest[country] = max(year, self._newest.get(country, year))
@@ -54,7 +58,9 @@ class TaxTable:
         country = self._aliases.get(country, country)
         rate = self._rates.get((country, year))
         if rate is not None:
-            return TaxRate(rate, year, estimate=False, method=None, source=self.source)
+            return TaxRate(
+                rate, year, estimate=False, method=None, source=self._cite(country, year)
+            )
         newest = self._newest.get(country)
         if newest is None or year < newest:
             return None
@@ -63,16 +69,20 @@ class TaxTable:
             newest,
             estimate=True,
             method=LATEST_YEAR_METHOD,
-            source=self.source,
+            source=self._cite(country, newest),
         )
+
+    def _cite(self, country: str, year: int) -> str:
+        """The row's own source where it has one, else the table's."""
+        return self._row_sources.get((country, year), self.source)
 
     def years(self) -> set[tuple[str, int]]:
         return set(self._rates)
 
 
 def load_tax_table(path: Path | None = None) -> TaxTable:
-    """Parse the tax table (default: the packaged OECD v2 file). Rates must be fractions, and a
-    country code must name a country with rates."""
+    """Parse the tax table (default: the packaged OECD v2 file). Rates must be fractions, a
+    row's optional ``source`` a string, and a country code must name a country with rates."""
     if path is None:
         data = resources.files("fairband.policy").joinpath(_TAX_FILE).read_bytes()
     else:
@@ -85,13 +95,16 @@ def load_tax_table(path: Path | None = None) -> TaxTable:
     if not isinstance(source, str):
         raise TypeError("tax table: meta.source must be a string")
     rates: dict[tuple[str, int], float] = {}
+    row_sources: dict[tuple[str, int], str] = {}
     for row in raw.get("rates", []):
-        country, year, rate = _row(row)
+        country, year, rate, row_source = _row(row)
         if (country, year) in rates:
             raise ValueError(f"tax table: {country} {year} appears twice")
         rates[(country, year)] = rate
+        if row_source is not None:
+            row_sources[(country, year)] = row_source
     aliases = _aliases(raw.get("country_aliases", {}), {c for c, _ in rates})
-    return TaxTable(rates, source, aliases)
+    return TaxTable(rates, source, aliases, row_sources)
 
 
 def _aliases(raw: Any, countries: set[str]) -> dict[str, str]:
@@ -105,7 +118,7 @@ def _aliases(raw: Any, countries: set[str]) -> dict[str, str]:
     return dict(raw)
 
 
-def _row(row: Any) -> tuple[str, int, float]:
+def _row(row: Any) -> tuple[str, int, float, str | None]:
     try:
         country, year, rate = row["country"], row["year"], row["rate"]
     except (KeyError, TypeError) as e:
@@ -114,4 +127,7 @@ def _row(row: Any) -> tuple[str, int, float]:
         raise TypeError(f"tax table: a [[rates]] row has a bad country or year: {row!r}")
     if type(rate) not in (int, float) or not 0 <= rate < 1:
         raise ValueError(f"tax table: {country} {year} rate {rate!r} is not a fraction in [0, 1)")
-    return country, year, float(rate)
+    source = row.get("source")
+    if source is not None and not isinstance(source, str):
+        raise TypeError(f"tax table: {country} {year} source must be a string")
+    return country, year, float(rate), source

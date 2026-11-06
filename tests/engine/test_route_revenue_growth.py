@@ -799,6 +799,28 @@ def test_a_trailing_margin_below_the_bound_takes_the_dollar_ramp(
     assert names.index("margin_convergence_year") + 1 == names.index("loss_ramp_margin_bound")
     margin_path = value_company(with_loss(hg, VALUED_LOSS), deciles, on_margin_path, TODAY)
     assert valued.value > margin_path.intermediates["value_per_share"]
+    # each value by margin is a fresh ramp valuation with every peer at that margin
+    by_margin = valued.intermediates["value_by_margin"]
+    target = valued.intermediates["target_margin"]
+    assert (target["low"], target["value"], target["high"]) == (0.10, 0.20, 0.30)
+    assert by_margin["low"] < by_margin["median"] == valued.value < by_margin["high"]
+    for key in ("low", "median", "high"):
+        at = tuple(replace(p, margin=target["value" if key == "median" else key]) for p in hg.peers)
+        fresh = value_company(replace(with_loss(hg, VALUED_LOSS), peers=at), deciles, policy, TODAY)
+        assert fresh.intermediates["margin_path"]["ramp"] == "dollars"
+        assert by_margin[key] == fresh.intermediates["value_per_share"], key
+
+
+def test_the_ramp_note_groups_the_thousands_of_a_margin(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """A CLDX-sized loss, 2,909.48 times revenue: the note's margin reads with a separator."""
+    hg = high_growth_inputs
+    r = value_company(with_loss(hg, -2_909.48 * 10_000e6), deciles, policy, TODAY)
+    assert sentence(r, "margin-ramp-in-dollars").startswith(
+        "The trailing loss is larger than revenue (margin −290,948.0%), so operating income moves "
+        "in dollars from −$29,094,800.0 million"
+    )
 
 
 def test_a_trailing_margin_at_the_bound_keeps_the_margin_path(

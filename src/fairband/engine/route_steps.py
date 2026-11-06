@@ -314,8 +314,9 @@ def nil(x: float | None) -> float:
 
 
 def signed(x: float) -> str:
-    """A rate as a percent to one decimal, a negative one with the minus sign."""
-    return f"{x:.1%}".replace("-", "−")
+    """A rate as a percent to one decimal with the thousands grouped, a negative one with the
+    minus sign."""
+    return f"{x:,.1%}".replace("-", "−")
 
 
 def millions(x: float) -> str:

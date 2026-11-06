@@ -795,7 +795,10 @@ def test_mature_stable_refusals(ms_inputs: CompanyInputs, deciles: Deciles, poli
     assert_refused(r, "no positive trailing earnings")
     assert r.phase.phase == "Mature Stable"
     none = replace(ms_inputs, trailing=replace(ms_inputs.trailing, net_income=None))
-    assert_refused(value_company(none, deciles, policy, TODAY), "no positive trailing earnings")
+    r = value_company(none, deciles, policy, TODAY)
+    assert_refused(r, "no positive trailing earnings")
+    # the keys of the refusal for a trailing loss (spec 2026-11-06 9), with no E to read
+    assert set(r.intermediates) == REFUSED_STABLE_KEYS and r.intermediates["e_trailing"] is None
 
 
 def _with_consensus(stable: CompanyInputs, growth: CompanyInputs) -> CompanyInputs:
