@@ -190,6 +190,9 @@ def test_notes_findings_kill_criteria_and_news_items_round_trip(client: TestClie
         "overrideId": None,
     }
     assert client.get(f"{base}/notes").json() == {"notes": [note]}
+    r = client.post(f"{base}/notes", json={"text": "its source", "overrideId": 99}, headers=AGENT)
+    assert (r.status_code, r.json()) == (404, {"detail": "no override 99 for AAPL"})
+    assert client.get(f"{base}/notes").json() == {"notes": [note]}
 
     source = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": "the segment table"}
     body = {
@@ -267,7 +270,7 @@ def test_notes_findings_kill_criteria_and_news_items_round_trip(client: TestClie
     }
     assert client.get(f"{base}/news-items").json() == {"newsItems": [item]}
     r = client.post(f"{base}/news-items", json=news | {"killCriterionId": 99}, headers=AGENT)
-    assert (r.status_code, r.json()) == (404, {"detail": "no kill criterion 99"})
+    assert (r.status_code, r.json()) == (404, {"detail": "no kill criterion 99 for AAPL"})
     r = client.post(
         f"{base}/news-items", json={k: v for k, v in news.items() if k != "text"}, headers=AGENT
     )

@@ -14,8 +14,8 @@ and need not have a snapshot. Text is kept as written; a blank one is refused.
 - A news item: a date, a headline, a source (a URL or a vendor response id), text, and the
   company's kill criterion it touches, if any.
 
-A refused value raises ``ValueError`` with the sentence the writer can act on; a kill criterion
-that does not exist, or a news item's that is another company's, ``KeyError(id)``. Each write is
+A refused value raises ``ValueError`` with the sentence the writer can act on; a cited record
+that is not the company's, a note's override or a news item's kill criterion, ``KeyError(id)``. Each write is
 one transaction; it joins the caller's when there is one, so the caller's ledger row commits with
 it.
 """
@@ -117,16 +117,14 @@ def add_note(
     at: datetime,
     override_id: int | None = None,
 ) -> int:
-    """Write the note; return its id."""
+    """Write the note, carrying the company's override ``override_id`` if one; return its id."""
     symbol = exchange_symbol(symbol)
     _require_text(text, "a note needs text")
-    return _insert(
-        conn,
-        "notes",
-        {"symbol": symbol, "text": text, "override_id": override_id},
-        writer,
-        at,
-    )
+    fields = {"symbol": symbol, "text": text, "override_id": override_id}
+    with transaction(conn, immediate=True):
+        if override_id is not None and not _has_override(conn, override_id, symbol):
+            raise KeyError(override_id)
+        return _insert(conn, "notes", fields, writer, at)
 
 
 def note_row(conn: sqlite3.Connection, note_id: int) -> NoteRow | None:
@@ -277,6 +275,13 @@ def news_items_for(conn: sqlite3.Connection, symbol: str) -> list[NewsItemRow]:
 def _require_text(text: str, refusal: str) -> None:
     if not text.strip():
         raise ValueError(refusal)
+
+
+def _has_override(conn: sqlite3.Connection, override_id: int, symbol: str) -> bool:
+    found = conn.execute(
+        "SELECT 1 FROM overrides WHERE id = ? AND symbol = ?", (override_id, symbol)
+    ).fetchone()
+    return found is not None
 
 
 def _require_criterion(conn: sqlite3.Connection, criterion_id: int) -> KillCriterionRow:

@@ -151,9 +151,10 @@ def finding_json(finding: FindingRow) -> dict[str, Any]:
 
 
 @contextmanager
-def _refusals(missing: str) -> Iterator[None]:
+def _refusals(missing: str, symbol: str | None = None) -> Iterator[None]:
     """The store's refusals as answers: a second open item or a state the record cannot move from
-    409, a bad value 400, a missing ``missing`` 404."""
+    409, a bad value 400, a missing ``missing`` 404, named as the company's when the record cites
+    it for ``symbol``."""
     try:
         yield
     except (ItemOpen, WrongState) as exc:
@@ -161,7 +162,8 @@ def _refusals(missing: str) -> Iterator[None]:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
     except KeyError as exc:
-        raise HTTPException(404, f"no {missing} {exc.args[0]}") from None
+        company = "" if symbol is None else f" for {exchange_symbol(symbol)}"
+        raise HTTPException(404, f"no {missing} {exc.args[0]}{company}") from None
 
 
 def add_agent_routes(
@@ -253,7 +255,11 @@ def add_agent_routes(
     @app.post("/api/companies/{symbol}/notes", status_code=201)
     def post_note(symbol: str, body: NotePost, writer: WriterOf) -> dict[str, Any]:
         at = clock()
-        with closing(conn_factory()) as conn, _refusals("note"), transaction(conn, immediate=True):
+        with (
+            closing(conn_factory()) as conn,
+            _refusals("override", symbol),
+            transaction(conn, immediate=True),
+        ):
             note = note_row(conn, add_note(conn, symbol, body.text, writer, at, body.override_id))
             assert note is not None  # written in this transaction
             _record(conn, writer, at, "note", note.symbol, "notes", note.id, _gist(note.text))
@@ -339,7 +345,7 @@ def add_agent_routes(
         at = clock()
         with (
             closing(conn_factory()) as conn,
-            _refusals("kill criterion"),
+            _refusals("kill criterion", symbol),
             transaction(conn, immediate=True),
         ):
             item_id = add_news_item(

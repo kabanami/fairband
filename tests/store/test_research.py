@@ -7,6 +7,8 @@ from typing import Any
 
 import pytest
 
+from fairband.store._codec import inserted_id
+from fairband.store.db import transaction
 from fairband.store.ledger import OWNER, Writer
 from fairband.store.research import (
     FindingRow,
@@ -33,10 +35,24 @@ BY_OWNER = {"principal": "owner", "actor": None, "client": None}
 FILING = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": "the segment table"}
 
 
+def _override(conn: sqlite3.Connection, symbol: str) -> int:
+    """An override row of ``symbol`` with its NOT NULL columns only, written straight to the
+    table: no store module writes one yet."""
+    with transaction(conn):
+        cursor = conn.execute(
+            "INSERT INTO overrides (symbol, tag, new, unit, reason, evidence, lifetime,"
+            " snapshot_id, principal, at, state, message) VALUES (?, 'margin.target', '0.3',"
+            " 'percent', 'r', '[]', 'lasting', 1, 'agent', ?, 'applied', 'applied')",
+            (symbol, NOW.isoformat()),
+        )
+    return inserted_id(cursor)
+
+
 def test_notes(conn: sqlite3.Connection) -> None:
+    override_id = _override(conn, "AAPL")
     first = add_note(conn, "aapl", "margins look peaked", OWNER, NOW)
     other = add_note(conn, "MSFT", "not this one", OWNER, NOW)
-    second = add_note(conn, "AAPL", "the override's source", AGENT, LATER, override_id=4)
+    second = add_note(conn, "AAPL", "the override's source", AGENT, LATER, override_id=override_id)
     assert not conn.in_transaction
     assert notes_for(conn, "AAPL") == [
         NoteRow(
@@ -45,7 +61,7 @@ def test_notes(conn: sqlite3.Connection) -> None:
             text="the override's source",
             **BY_AGENT,
             at=LATER,
-            override_id=4,
+            override_id=override_id,
         ),
         NoteRow(
             id=first,
@@ -59,6 +75,15 @@ def test_notes(conn: sqlite3.Connection) -> None:
     assert [n.id for n in notes_for(conn, "MSFT")] == [other]
     with pytest.raises(ValueError, match="^a note needs text$"):
         add_note(conn, "AAPL", "  ", OWNER, NOW)
+
+
+def test_a_note_carries_only_the_companys_override(conn: sqlite3.Connection) -> None:
+    other = _override(conn, "MSFT")
+    for override_id in (99, other):  # none, or another company's
+        with pytest.raises(KeyError):
+            add_note(conn, "AAPL", "the source", AGENT, NOW, override_id=override_id)
+    assert notes_for(conn, "AAPL") == []
+    assert not conn.in_transaction
 
 
 def test_findings(conn: sqlite3.Connection) -> None:
