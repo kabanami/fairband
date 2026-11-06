@@ -1,7 +1,8 @@
 """The override and review routes (spec 2026-11-06 Tier 2, 10.1 to 10.6 and 16; ``method.md`` 14).
 
 ``POST /api/companies/{symbol}/overrides`` takes ``{tag, new, reason, evidence: [{kind, ref,
-note}], lifetime, period?}`` from an agent. The company's latest snapshot must have been valued
+note}], lifetime, period?}`` from an agent; a blank reason, or a period-tied override that names
+no period, is a 400 and stores nothing. The company's latest snapshot must have been valued
 under the effective policy (``require_current``: the price refresh's sentences, "settings
 changed: run a revalue" and the others, answered 409), so the bridge's mechanical term is the
 row's own figure. ``check_override`` then judges it on the route the row takes: its phase's, or
@@ -185,6 +186,8 @@ def add_review_routes(
         _agents_only(writer)
         if not body.reason.strip():
             raise HTTPException(400, "an override needs a reason")
+        if body.lifetime == "period-tied" and not (body.period or "").strip():
+            raise HTTPException(400, "a period-tied override names its period")
         at = clock()
         with closing(conn_factory()) as conn, transaction(conn, immediate=True):
             symbol = exchange_symbol(symbol)

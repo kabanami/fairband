@@ -17,26 +17,40 @@ writes the review on the new snapshot and its log row; with none left, no review
 the company's current review is cleared (``store.reviews``).
 
 ``reprice_review`` runs in the reprice stage of a price refresh, in the transaction that writes
-the repriced snapshot: the company's current review through ``route.reprice`` at the quote, so its
-value, levels, validity, bridge and override ids stay and its designation follows the price,
-written on the new snapshot with its log row. A company with no current review gets none.
+the repriced snapshot: the company's current review, when it is on the snapshot repriced, through
+``route.reprice`` at the quote, so its value, levels, validity, bridge and override ids stay and
+its designation follows the price, written on the new snapshot with its log row. A company with
+no current review, or one on another snapshot, gets none.
+
+``review_refusal`` gives the refusal snapshot of a company the refresh could not value (a failed
+fetch or valuation) a review that is that refusal, with no mechanical value and an empty bridge,
+over the applied overrides, so the current review follows the snapshot.
+
+The follow and the reprice run inside a savepoint of the snapshot's transaction: an exception
+undoes their writes alone, the snapshot stands, and the review written on it is a refusal, "review
+failed: <class>: <message>", with an empty bridge, over the applied overrides, and a warning is
+logged.
 
 A log row takes the mechanical phase, value, price and designation from the snapshot the review
 follows, the reviewed phase and value from the review (no value on a refusal), and the latest
 secondary value and report stance the store holds.
 """
 
+import logging
 import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import replace
 from datetime import date, datetime
 from typing import cast
 
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import OverrideTag, current_reading
 from fairband.engine.review import BridgeLine, Review, review_company
-from fairband.engine.route import CompanyInputs, reprice
+from fairband.engine.route import CompanyInputs, refusal_result, reprice
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
+from fairband.store.db import transaction
 from fairband.store.ledger import SYSTEM, record
 from fairband.store.overrides import OverrideRow, applied_overrides, as_override, drop_override
 from fairband.store.reviews import (
@@ -47,6 +61,8 @@ from fairband.store.reviews import (
     log_review,
 )
 from fairband.store.snapshots import snapshot_row
+
+logger = logging.getLogger("fairband.refresh")
 
 MOVED = "the statements moved past the override's snapshot"
 CHANGED = "the input the override corrected changed"
@@ -66,6 +82,27 @@ def follow_snapshot(
     """The review written on snapshot ``snapshot_id``, the company's mechanical ``result`` on
     ``inputs``, after the period-tied check (module docstring); ``None`` with no applied override
     left."""
+    with transaction(conn):
+        try:
+            with _savepoint(conn):
+                return _follow(
+                    conn, inputs, result, snapshot_id, deciles, policy, today, refresh_id, clock
+                )
+        except Exception as exc:  # noqa: BLE001 - the snapshot stands; the review is the refusal
+            return _review_failed(conn, result, snapshot_id, policy, refresh_id, clock, exc)
+
+
+def _follow(
+    conn: sqlite3.Connection,
+    inputs: CompanyInputs,
+    result: ValuationResult,
+    snapshot_id: int,
+    deciles: Deciles | None,
+    policy: Policy,
+    today: date,
+    refresh_id: int | None,
+    clock: Callable[[], datetime],
+) -> int | None:
     symbol = result.symbol
     kept = []
     for override in applied_overrides(conn, symbol):
@@ -127,22 +164,134 @@ def reprice_review(
     *,
     observed_at: datetime,
     entered_at: datetime,
+    repriced: int,
 ) -> int | None:
-    """The company's current review repriced at ``price`` and written on the repriced snapshot
-    ``snapshot_id``, with its log row; ``None`` without a current review."""
+    """The company's current review, when it is on snapshot ``repriced``, repriced at ``price``
+    and written on ``snapshot_id``, the snapshot ``repriced`` became, with its log row; ``None``
+    without such a review."""
+    with transaction(conn):
+        try:
+            with _savepoint(conn):
+                return _reprice(
+                    conn,
+                    symbol,
+                    snapshot_id,
+                    price,
+                    price_date,
+                    policy,
+                    refresh_id,
+                    clock,
+                    observed_at,
+                    entered_at,
+                    repriced,
+                )
+        except Exception as exc:  # noqa: BLE001 - the snapshot stands; the review is the refusal
+            mechanical = _snapshot_result(conn, snapshot_id)
+            return _review_failed(conn, mechanical, snapshot_id, policy, refresh_id, clock, exc)
+
+
+def _reprice(
+    conn: sqlite3.Connection,
+    symbol: str,
+    snapshot_id: int,
+    price: float,
+    price_date: date,
+    policy: Policy,
+    refresh_id: int,
+    clock: Callable[[], datetime],
+    observed_at: datetime,
+    entered_at: datetime,
+    repriced: int,
+) -> int | None:
     current = latest_review(conn, symbol)
-    if current is None:
+    if current is None or current.snapshot_id != repriced:
         return None
+    mechanical = _snapshot_result(conn, snapshot_id)
     result = reprice(
         current.result, price, price_date, policy, observed_at=observed_at, entered_at=entered_at
     )
     bridge = tuple(BridgeLine(**line) for line in current.bridge)
     review = Review(result, current.mechanical_value, bridge, current.override_ids)
     review_id = insert_review(conn, review, symbol, snapshot_id, refresh_id, clock=clock)
-    snapshot = snapshot_row(conn, snapshot_id)
-    if snapshot is None:
+    _log(conn, clock(), refresh_id, snapshot_id, review_id, mechanical, result)
+    return review_id
+
+
+def review_refusal(
+    conn: sqlite3.Connection,
+    result: ValuationResult,
+    snapshot_id: int,
+    refresh_id: int,
+    clock: Callable[[], datetime],
+) -> int | None:
+    """The review of ``result``, the refusal snapshot ``snapshot_id`` of a company the refresh
+    could not value: the refusal itself, with its log row; ``None`` with no applied override."""
+    return _write_refusal(conn, result, result, snapshot_id, refresh_id, clock)
+
+
+def _snapshot_result(conn: sqlite3.Connection, snapshot_id: int) -> ValuationResult:
+    found = snapshot_row(conn, snapshot_id)
+    if found is None:
         raise KeyError(snapshot_id)
-    _log(conn, clock(), refresh_id, snapshot_id, review_id, snapshot.result, result)
+    return found.result
+
+
+@contextmanager
+def _savepoint(conn: sqlite3.Connection) -> Iterator[None]:
+    """A savepoint in the caller's transaction: an exception undoes the block's writes alone."""
+    conn.execute("SAVEPOINT review")
+    try:
+        yield
+    except BaseException:
+        conn.execute("ROLLBACK TO review")
+        conn.execute("RELEASE review")
+        raise
+    conn.execute("RELEASE review")
+
+
+def _review_failed(
+    conn: sqlite3.Connection,
+    mechanical: ValuationResult,
+    snapshot_id: int,
+    policy: Policy,
+    refresh_id: int | None,
+    clock: Callable[[], datetime],
+    exc: Exception,
+) -> int | None:
+    """The refusal review of a follow or a reprice that raised ``exc``, on the snapshot it
+    followed and valid as long as it; a warning names the company and the refusal."""
+    detail = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+    reason = f"review failed: {detail}"
+    logger.warning("%s: %s", mechanical.symbol, reason)
+    refused = refusal_result(
+        mechanical.symbol,
+        reason,
+        policy,
+        mechanical.data_date,
+        price=mechanical.price,
+        price_date=mechanical.price_date,
+        deciles_refresh_id=mechanical.deciles_refresh_id,
+    )
+    refused = replace(refused, valid_until=mechanical.valid_until)
+    return _write_refusal(conn, mechanical, refused, snapshot_id, refresh_id, clock)
+
+
+def _write_refusal(
+    conn: sqlite3.Connection,
+    mechanical: ValuationResult,
+    refused: ValuationResult,
+    snapshot_id: int,
+    refresh_id: int | None,
+    clock: Callable[[], datetime],
+) -> int | None:
+    """``refused`` as the review of ``mechanical``, snapshot ``snapshot_id``'s result: an empty
+    bridge over the applied overrides, with its log row; ``None`` with none applied."""
+    applied = applied_overrides(conn, mechanical.symbol)
+    if not applied:
+        return None
+    review = Review(refused, mechanical.value, (), tuple(o.id for o in applied))
+    review_id = insert_review(conn, review, mechanical.symbol, snapshot_id, refresh_id, clock=clock)
+    _log(conn, clock(), refresh_id, snapshot_id, review_id, mechanical, refused)
     return review_id
 
 

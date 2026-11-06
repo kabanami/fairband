@@ -33,8 +33,9 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   snapshot unlike the run on several counts reads the first. A revalue writes the current
   versions and hash. An exception (``reprice`` refuses a price that is not positive and finite)
   is ``failed``, "reprice failed: <class>: <message>". In the repriced snapshot's transaction,
-  ``reviews.reprice_review`` reprices the company's current review at the same quote, if it has
-  one, and writes it on the new snapshot (spec 2026-11-06 Tier 2, 10.5).
+  ``reviews.reprice_review`` reprices the company's current review on the snapshot repriced, if
+  it has one, at the same quote and writes it on the new snapshot (spec 2026-11-06 Tier 2, 10.5);
+  a review that cannot be repriced becomes a refusal review and the snapshot stands.
 - ``done``: the totals, and the calibration ``{"total", "repriced", "failed", "skipped"}`` saved
   with the record.
 
@@ -290,6 +291,7 @@ class PriceRefresh:
                             self._clock,
                             observed_at=quote.observed_at,
                             entered_at=quote.entered_at,
+                            repriced=snapshots[symbol].id,
                         )
                         upsert_item(self._conn, self._id, symbol, "repriced", None, self._clock())
                 except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own

@@ -50,6 +50,7 @@ MOAT_NARROW = BELIEF_8 | {"tag": "moat.class", "new": "Narrow", "reason": "the p
 LOCKED_G = BELIEF_8 | {"tag": "terminal_growth", "new": 0.03}
 G_T_LOCKED = "g_T is a locked input: the terminal growth ceiling"
 OWNERS_REFUSAL = "an override is an agent's write"
+NO_PERIOD = "a period-tied override names its period"
 
 
 @pytest.fixture(autouse=True)
@@ -325,3 +326,7 @@ def test_a_period_tied_override_keeps_the_value_it_corrected(client: TestClient)
     lasting = cash | {"lifetime": "lasting"}
     r = client.post("/api/companies/HGCO/overrides", json=lasting, headers=AGENT)
     assert r.json()["detail"] == "balance.cash is period-tied only"
+    for unnamed in (cash, cash | {"period": " "}):
+        r = client.post("/api/companies/HGCO/overrides", json=unnamed, headers=AGENT)
+        assert (r.status_code, r.json()) == (400, {"detail": NO_PERIOD})
+    assert len(_overrides(client, "HGCO")) == 2  # neither stored

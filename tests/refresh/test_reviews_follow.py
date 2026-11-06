@@ -24,6 +24,7 @@ from fairband.engine.overrides import Lifetime, OverrideTag, current_reading
 from fairband.engine.route import CompanyInputs, value_company
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
+from fairband.refresh import reviews
 from fairband.refresh.reviews import follow_snapshot
 from fairband.store.ledger import SYSTEM, Writer, entries
 from fairband.store.overrides import insert_override, override_row
@@ -35,6 +36,7 @@ AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 EVIDENCE = [{"kind": "transcript", "ref": "Q3 call", "note": ""}]
 CHANGED = "the input the override corrected changed"
 MOVED = "the statements moved past the override's snapshot"
+FAILED = "review failed"
 
 
 @pytest.fixture
@@ -268,3 +270,120 @@ def test_a_period_tied_override_follows_its_line(conn: sqlite3.Connection, polic
     assert [(e.principal, e.kind) for e in entries(conn, "HGCO")] == [
         (SYSTEM.principal, "override-drop")
     ]
+
+
+def test_a_failed_company_s_review_is_its_refusal_and_reprices_as_one(env_valued: Env) -> None:
+    """ACME's fetch fails two days on: its refusal snapshot gets the refusal as its review, so the
+    review follows the snapshot, and the price refresh reprices that refusal, not the older
+    review."""
+    env = env_valued
+    belief = _override(env, "ACME", "growth.belief", 0.08)
+    revalue = env.refresh().run("revalue")
+    env.clock.now += timedelta(days=2)
+    env.router.fail_symbols.add("ACME")
+    scoped = env.run(["ACME"])
+    failed = env.snapshot("ACME")
+    assert failed.refresh_id == scoped and failed.refusal is not None
+    assert failed.refusal.startswith("data fetch failed")
+    with closing(env.connect()) as conn:
+        review = latest_review(conn, "ACME")
+    assert review is not None and review.snapshot_id == failed.id
+    assert (review.value, review.mechanical_value, review.refusal) == (None, None, failed.refusal)
+    assert (review.bridge, review.override_ids, review.refresh_id) == ((), (belief,), scoped)
+
+    env.router.fail_symbols.clear()
+    env.router.bodies["batch-quote"] = _quotes({"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0})
+    price = env.refresh().run("price")
+    repriced = env.snapshot("ACME")
+    assert (repriced.refresh_id, repriced.price, repriced.refusal) == (price, 20.0, failed.refusal)
+    with closing(env.connect()) as conn:
+        after = latest_review(conn, "ACME")
+        log = review_log(conn, "ACME")
+    assert after is not None and after.snapshot_id == repriced.id
+    assert (after.value, after.refusal, after.result.price) == (None, failed.refusal, 20.0)
+    assert after.result.valid_until == review.result.valid_until
+    assert [(r.refresh_id, r.mechanical_value, r.reviewed_value, r.price) for r in log[:2]] == [
+        (price, None, None, 20.0),
+        (scoped, None, None, failed.price),
+    ]
+    assert log[2].refresh_id == revalue and None not in (
+        log[2].mechanical_value,
+        log[2].reviewed_value,
+    )
+
+
+def test_a_review_on_another_snapshot_is_not_repriced(env_valued: Env) -> None:
+    """A snapshot written after the review, with none of its own: the price refresh reprices the
+    snapshot and leaves the review where it is."""
+    env = env_valued
+    _override(env, "ACME", "growth.belief", 0.08)
+    revalue = env.refresh().run("revalue")
+    with closing(env.connect()) as conn:
+        before = latest_review(conn, "ACME")
+        insert_snapshot(conn, env.snapshot("ACME").result, revalue, clock=env.clock)
+    env.router.bodies["batch-quote"] = _quotes({"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0})
+    env.refresh().run("price")
+    assert env.snapshot("ACME").price == 20.0
+    with closing(env.connect()) as conn:
+        assert before is not None and latest_review(conn, "ACME") == before
+        assert len(review_log(conn, "ACME")) == 1
+
+
+def test_a_review_that_raises_leaves_the_snapshot_and_is_a_refusal(
+    env_valued: Env, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    env = env_valued
+    belief = _override(env, "ACME", "growth.belief", 0.08)
+
+    def falls_over(*args: object) -> None:
+        raise RuntimeError("the engine fell over")
+
+    monkeypatch.setattr(reviews, "review_company", falls_over)
+    refresh_id = env.refresh().run("revalue")
+    snapshot = env.snapshot("ACME")
+    assert (snapshot.refresh_id, snapshot.refusal) == (refresh_id, None)
+    assert snapshot.value is not None and ("ACME", "valued", None) in env.items(refresh_id)
+    refusal = f"{FAILED}: RuntimeError: the engine fell over"
+    with closing(env.connect()) as conn:
+        review = latest_review(conn, "ACME")
+        [row] = review_log(conn, "ACME")
+    assert review is not None and review.snapshot_id == snapshot.id
+    assert (review.value, review.refusal, review.mechanical_value) == (
+        None,
+        refusal,
+        snapshot.value,
+    )
+    assert (review.bridge, review.override_ids) == ((), (belief,))
+    assert review.result.valid_until == snapshot.valid_until
+    assert (row.review_id, row.mechanical_value, row.reviewed_value) == (
+        review.id,
+        snapshot.value,
+        None,
+    )
+    assert f"ACME: {refusal}" in caplog.messages
+
+
+def test_a_reprice_that_raises_leaves_the_snapshot_and_is_a_refusal(
+    env_valued: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = env_valued
+    _override(env, "ACME", "growth.belief", 0.08)
+    env.refresh().run("revalue")
+
+    def falls_over(*args: object, **kwargs: object) -> None:
+        raise ValueError("no price")
+
+    monkeypatch.setattr(reviews, "reprice", falls_over)
+    env.router.bodies["batch-quote"] = _quotes({"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0})
+    refresh_id = env.refresh().run("price")
+    snapshot = env.snapshot("ACME")
+    assert (snapshot.refresh_id, snapshot.price) == (refresh_id, 20.0)
+    assert ("ACME", "repriced", None) in env.items(refresh_id)
+    with closing(env.connect()) as conn:
+        review = latest_review(conn, "ACME")
+    assert review is not None and review.snapshot_id == snapshot.id
+    assert (review.refusal, review.mechanical_value, review.bridge) == (
+        f"{FAILED}: ValueError: no price",
+        snapshot.value,
+        (),
+    )

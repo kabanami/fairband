@@ -31,7 +31,8 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   company's peers on them), ``insert_snapshot``; the symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
   yet" (spec 6.6). In the snapshot's transaction, ``reviews.follow_snapshot`` follows it with a
   review on the same inputs when the company holds an applied override, after dropping a
-  period-tied one its new inputs no longer bear out (spec 2026-11-06 Tier 2, 10.5).
+  period-tied one its new inputs no longer bear out (spec 2026-11-06 Tier 2, 10.5); a review the
+  engine cannot compute becomes a refusal review and the snapshot stands.
 - ``done``: the run's totals. A full refresh saves its ``calibration`` with the record (goal 7).
 
 Every kind but a revalue fetches, so without an FMP client (the server's worker without a key)
@@ -47,7 +48,8 @@ builds no universe.
 
 A symbol's failure never stops the run: an exception from its fetch, assembly or valuation gives it
 a refusal snapshot ("data fetch failed: <class>: <message>" or "valuation failed: <class>:
-<message>", the keys scrubbed), marks it ``failed`` and is logged as a warning.
+<message>", the keys scrubbed), marks it ``failed`` and is logged as a warning. A company with an
+applied override gets that refusal as its review too (``reviews.review_refusal``).
 
 The run stops early on two events. A cancel is read before each symbol starts, in both stages; the
 symbols in flight finish and the run ends ``cancelled``, with no further stage: a fetched symbol
@@ -109,7 +111,7 @@ from fairband.refresh.backfill import backfill_statement_facts
 from fairband.refresh.deciles import deciles_for_universe
 from fairband.refresh.fetch import FetchOutcome, fetch_company, provider_of
 from fairband.refresh.inputs import build_inputs, latest_price
-from fairband.refresh.reviews import follow_snapshot
+from fairband.refresh.reviews import follow_snapshot, review_refusal
 from fairband.refresh.run_price import PriceRefresh, rate_limited
 from fairband.refresh.universe import build_universe
 from fairband.store.companies import latest_companies
@@ -517,7 +519,8 @@ class Refresh:
             symbol, reason, self._policy, today, price=price, price_date=price_date
         )
         with transaction(conn):
-            insert_snapshot(conn, result, refresh_id, clock=self._clock)
+            snapshot_id = insert_snapshot(conn, result, refresh_id, clock=self._clock)
+            review_refusal(conn, result, snapshot_id, refresh_id, self._clock)
             upsert_item(conn, refresh_id, symbol, "failed", reason, self._clock())
 
     def _stage(self, conn: sqlite3.Connection, refresh_id: int, stage: str, total: int) -> None:
