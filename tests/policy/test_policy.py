@@ -16,10 +16,20 @@ V3_SHA256 = "470f3dcfad5ff8d1179face5578b48df658cf3778d8440ee8694d5324056db9b"
 V4_SHA256 = "bda7ffc14dfda8dfc2d467489b5abc9c5816b04b6133de19d4ce12fd7448b903"
 V5_SHA256 = "809a5fa620dfdd862d1ceb62e200694b1a20df869029e36c7e44c0e699ac96f2"
 V6_SHA256 = "393d0f68f8fa5c67ce7f0a662c7cdfb4775e4709b28f1f85a3d43d628940d4ac"
+V7_SHA256 = "c964db4e36f8e233b866244b26db1c468f3c64f13e0c0bea985a0dbb8c551c91"
+# The six values policy v8 adds for the agents (spec 2026-11-06 Tier 2, section 19).
+V8_VALUES = {
+    "override_ranges",
+    "override_primary_evidence_above_p90",
+    "secondary_parts_max",
+    "secondary_years_min",
+    "secondary_years_max",
+    "stance_words",
+}
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v7.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v8.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -31,7 +41,7 @@ def _file_values(name: str) -> dict[str, Any]:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v7" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v8" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -66,9 +76,31 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v7_is_the_packaged_policy() -> None:
+def test_v8_is_the_packaged_policy() -> None:
     policy = load_policy()
-    assert policy.version == "fairband-policy-v7"
+    assert policy.version == "fairband-policy-v8"
+    assert policy.override_ranges == {
+        "growth.belief": (-0.20, 0.60),
+        "path.hold": (-0.20, 3.00),
+        "path.step_2": (-0.80, 3.00),
+        "path.step_3": (-0.80, 3.00),
+        "margin.target": (-0.50, 0.60),
+        "capital.sales_to_capital": (0.1, 10.0),
+        "return.runway": (0.0, 1.0),
+        "earnings.nri_gap": (-100.0, 100.0),
+        "decline.rate": (-0.50, 0.0),
+        "balance.debt": (0.0, 1e15),
+        "balance.cash": (0.0, 1e15),
+    }
+    assert policy.override_primary_evidence_above_p90 is True
+    assert (
+        policy.secondary_parts_max,
+        policy.secondary_years_min,
+        policy.secondary_years_max,
+    ) == (10, 3, 15)
+    assert policy.stance_words == ("buy", "hold", "trim", "avoid")
+    for name in sorted(V8_VALUES):
+        assert policy.raw["values"][name]["source"].strip(), name
     assert policy.own_sales_to_capital_min_share == 0.5
     assert policy.loss_ramp_margin_bound == -1.0
     for name in ("own_sales_to_capital_min_share", "loss_ramp_margin_bound"):
@@ -191,11 +223,36 @@ def test_derives_the_edges_and_the_wide_cap() -> None:
     assert "designation_edges" not in p.raw["values"]
 
 
+def test_v8_is_v7_with_the_six_values_added() -> None:
+    """Every v7 value loads unchanged from v8; v8 adds the override ranges, the evidence rule, the
+    secondary valuation's bounds and the stance words, none a setting (spec 2026-11-06 Tier 2,
+    section 19)."""
+    v7 = _file_values("fairband-policy-v7.toml")
+    v8 = load_policy().raw["values"]
+    assert v8.keys() - v7.keys() == V8_VALUES
+    assert {k: v8[k] for k in v7} == v7
+    assert not {s.name for s in SETTINGS} & V8_VALUES
+
+
+@pytest.mark.parametrize("pair", ["[0.60, 0.60]", "[0.60, -0.20]"])
+def test_an_override_range_that_does_not_ascend_is_refused(tmp_path: Path, pair: str) -> None:
+    """A range's low must be below its high."""
+    text = _packaged_bytes().decode()
+    old = '"growth.belief" = [-0.20, 0.60]'
+    assert text.count(old) == 1
+    copy = tmp_path / "policy.toml"
+    copy.write_text(text.replace(old, f'"growth.belief" = {pair}'))
+    with pytest.raises(
+        ValueError, match=r"\[values\.override_ranges\] is malformed .*growth\.belief"
+    ):
+        load_policy(copy)
+
+
 def test_v7_is_v6_with_the_two_values_added() -> None:
     """Every v6 value loads unchanged from v7; v7 adds the growth routes' own sales-to-capital
     bound and the loss ramp bound, neither a setting (spec 2026-11-06 section 11)."""
     v6 = _file_values("fairband-policy-v6.toml")
-    v7 = load_policy().raw["values"]
+    v7 = _file_values("fairband-policy-v7.toml")
     assert v6.keys() <= v7.keys()
     assert v7.keys() - v6.keys() == {"own_sales_to_capital_min_share", "loss_ramp_margin_bound"}
     assert {k: v7[k] for k in v6} == v6
@@ -288,6 +345,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v7_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v7`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v7.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V7_SHA256
 
 
 def test_v6_is_byte_identical_under_its_hash() -> None:

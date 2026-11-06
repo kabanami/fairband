@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v7.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v8.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v6 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v7 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -12,6 +12,10 @@ The designation edges and the Wide moat's terminal return cap are derived, not r
 properties. The file's values are the defaults the user's settings overlay
 (``fairband.policy.settings``); ``load_policy`` checks every setting's range as the overlay does,
 so a file outside them fails at load with the setting's name.
+
+The six values v8 adds for the agents (spec 2026-11-06 Tier 2, section 19) are not settings: the
+override ranges, the evidence rule above the 90th percentile, the secondary valuation's bounds and
+the stance words. An override range whose low is not below its high fails at load.
 """
 
 import hashlib
@@ -25,7 +29,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v7.toml"
+_POLICY_FILE = "fairband-policy-v8.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -127,6 +131,12 @@ class Policy:
     z_safe: float
     f_score_low: int
     burn_cover_flag_years: float
+    override_ranges: dict[str, tuple[float, float]]
+    override_primary_evidence_above_p90: bool
+    secondary_parts_max: int
+    secondary_years_min: int
+    secondary_years_max: int
+    stance_words: tuple[str, ...]
     universe: UniversePolicy
     refresh: RefreshPolicy
     raw: dict[str, Any]
@@ -145,7 +155,7 @@ class Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v7 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v8 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -224,6 +234,12 @@ def load_policy(path: Path | None = None) -> Policy:
         z_safe=read("z_safe", _num),
         f_score_low=read("f_score_low", _whole),
         burn_cover_flag_years=read("burn_cover_flag_years", _num),
+        override_ranges=read("override_ranges", _ranges),
+        override_primary_evidence_above_p90=read("override_primary_evidence_above_p90", _bool),
+        secondary_parts_max=read("secondary_parts_max", _whole),
+        secondary_years_min=read("secondary_years_min", _whole),
+        secondary_years_max=read("secondary_years_max", _whole),
+        stance_words=read("stance_words", _texts),
         universe=read("universe", _universe),
         refresh=read("refresh", _refresh),
         raw=raw,
@@ -245,6 +261,12 @@ def _whole(x: Any) -> int:
     return x
 
 
+def _bool(x: Any) -> bool:
+    if not isinstance(x, bool):
+        raise TypeError(f"{x!r} is not true or false")
+    return x
+
+
 def _text(x: Any) -> str:
     if not isinstance(x, str):
         raise TypeError(f"{x!r} is not a string")
@@ -261,6 +283,17 @@ def _pair(x: Any) -> tuple[float, float]:
     if not isinstance(x, list) or len(x) != 2:
         raise TypeError(f"{x!r} is not a pair of numbers")
     return (_num(x[0]), _num(x[1]))
+
+
+def _ranges(t: Any) -> dict[str, tuple[float, float]]:
+    """Tag to its range, a pair of numbers whose low is below its high."""
+    if not isinstance(t, dict):
+        raise TypeError(f"{t!r} is not a table of ranges")
+    table = {_text(tag): _pair(pair) for tag, pair in t.items()}
+    for tag, (low, high) in table.items():
+        if not low < high:
+            raise ValueError(f"the range of {tag}, {low} to {high}, does not ascend")
+    return table
 
 
 def _by_moat[T](t: Any, convert: Callable[[Any], T]) -> dict[Moat, T]:

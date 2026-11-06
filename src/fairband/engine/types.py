@@ -20,8 +20,10 @@ from typing import Any, Literal
 
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 
-Tag = Literal["DATA", "RULE"]
-Kind = Literal["observed", "estimate", "rule"]
+# JUDGMENT, kind judgment: an input an override sets, with the override's provenance (spec
+# 2026-11-06 Tier 2, 10.4). The mechanical routes tag only DATA and RULE.
+Tag = Literal["DATA", "RULE", "JUDGMENT"]
+Kind = Literal["observed", "estimate", "rule", "judgment"]
 Phase = Literal[
     "Start-up", "Young Growth", "High Growth", "Mature Growth", "Mature Stable", "Decline"
 ]

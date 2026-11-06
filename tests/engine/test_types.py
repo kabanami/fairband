@@ -10,10 +10,12 @@ from fairband.engine.types import (
     PHASE_NUMBER,
     Designation,
     Flag,
+    Kind,
     Levels,
     PhaseEvidence,
     Provenance,
     Route,
+    Tag,
     TaggedInput,
     ValuationResult,
     result_from_json,
@@ -92,6 +94,29 @@ def test_result_json_round_trip(sample_result: ValuationResult) -> None:
     assert result_from_json(result_to_json(sample_result)) == sample_result
     revenue = replace(sample_result, route="revenue-growth")
     assert result_from_json(result_to_json(revenue)) == revenue
+
+
+def test_a_judgment_input_round_trips(sample_result: ValuationResult) -> None:
+    """An input an override sets is tagged JUDGMENT, kind judgment, with the override's
+    provenance (spec 2026-11-06 Tier 2, 10.4); the JSON reads it back as it reads the others."""
+    judged = TaggedInput(
+        name="growth_belief",
+        value=0.12,
+        unit="ratio",
+        tag="JUDGMENT",
+        kind="judgment",
+        provenance=Provenance(
+            source="override 3",
+            as_of=None,
+            observed_at=None,
+            entered_at=datetime(2026, 11, 6, 9, 30, tzinfo=UTC),
+        ),
+        note="agent claude-opus-5-5",
+    )
+    result = replace(sample_result, inputs=(*sample_result.inputs, judged))
+    assert result_from_json(result_to_json(result)) == result
+    assert get_args(Tag) == ("DATA", "RULE", "JUDGMENT")
+    assert get_args(Kind) == ("observed", "estimate", "rule", "judgment")
 
 
 def test_routes() -> None:

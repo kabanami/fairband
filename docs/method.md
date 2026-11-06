@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | Method version | `fairband-mechanical/0.9` (`fairband.engine.METHOD_VERSION`) |
-| Policy version | `fairband-policy-v7` (`src/fairband/policy/fairband-policy-v7.toml`) |
+| Policy version | `fairband-policy-v8` (`src/fairband/policy/fairband-policy-v8.toml`) |
 | Status | The single statement of the method the engine runs. Written 2026-11-02 from the code and the specs. |
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
 
-The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec, the growth routes spec and the 2026-11-03 spec of the rate limiter, the classifier fixes and the designation (`2026-11-03-classifier-designation-ends-design.md`) and the 2026-11-04 spec of the Methodology page, the settings and the watchlists (`2026-11-04-methodology-settings-watchlists-design.md`) and the 2026-11-06 spec of the engine round (`2026-11-06-engine-round-design.md`) under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
+The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec, the growth routes spec and the 2026-11-03 spec of the rate limiter, the classifier fixes and the designation (`2026-11-03-classifier-designation-ends-design.md`) and the 2026-11-04 spec of the Methodology page, the settings and the watchlists (`2026-11-04-methodology-settings-watchlists-design.md`) and the 2026-11-06 spec of the engine round (`2026-11-06-engine-round-design.md`) and the 2026-11-06 spec of the agents, Tier 2 (`2026-11-06-tier-2-agents-design.md`), under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
 
 ## 0. How to read this document
 
@@ -157,7 +157,7 @@ A company is unclassified, with the reason as its refusal, when its series has f
 
 ### 4.1 Policy values
 
-Every value comes from `fairband-policy-v7.toml` with a source line. The table lists the values the method reads and every setting: a value the user may change on the Settings view, marked yes in the column Setting. The other universe and refresh values are in sections 1 and 2.
+Every value comes from `fairband-policy-v8.toml` with a source line. The table lists the values the method reads and every setting: a value the user may change on the Settings view, marked yes in the column Setting. The other universe and refresh values are in sections 1 and 2.
 
 | Value | Policy name | Setting | Source |
 |---|---|---|---|
@@ -217,12 +217,18 @@ Every value comes from `fairband-policy-v7.toml` with a source line. The table l
 | Altman Z″ zones: distress below 1.1, safe above 2.6 | `z_distress`, `z_safe` | no | Altman 2000 |
 | Piotroski F low group: 1 or below | `f_score_low` | no | Piotroski 2000, the 0 to 1 group |
 | Burn cover flag: below 2 years | `burn_cover_flag_years` | yes | no source |
+| Override ranges: growth belief −20% to 60%; held rate −20% to 300%; consensus steps −80% to 300%; target margin −50% to 60%; sales-to-capital 0.1 to 10; runway return 0% to 100%; non-recurring gap −$100 to $100 a share; decline rate −50% to 0%; debt and cash $0 or more ($10^15 at most) | `override_ranges` | no | spec 2026-11-06 Tier 2 10.2; no source gives the numbers; policy value |
+| Primary evidence above the 90th percentile: a belief or held rate overridden above the sales class's `sales_p90_5y` needs a filing or a transcript | `override_primary_evidence_above_p90` | no | spec 2026-11-06 Tier 2 10.3; policy value |
+| Secondary valuation: at most 10 parts | `secondary_parts_max` | no | spec 2026-11-06 Tier 2 11; no source gives the number; policy value |
+| Secondary valuation: a cash-flow path of 3 years at least | `secondary_years_min` | no | same |
+| Secondary valuation: a cash-flow path of 15 years at most | `secondary_years_max` | no | same |
+| Stance words: buy, hold, trim, avoid | `stance_words` | no | spec 2026-11-06 Tier 2 13.1: the brand book's three zone words and avoid; policy value |
 
-The run-off, distress-sale, rating, default-probability, Z″ and F values are read by the Decline route (section 6a); the burn-cover value by the Start-up route (section 6b).
+The run-off, distress-sale, rating, default-probability, Z″ and F values are read by the Decline route (section 6a); the burn-cover value by the Start-up route (section 6b). The override ranges and the evidence rule bound an agent's overrides, the secondary values its secondary valuation and the stance words its report (spec 2026-11-06 Tier 2, 10.2, 10.3, 11 and 13.1); no mechanical route reads them.
 
 The user's settings are an overlay: one stored value for each setting changed from the file's. The effective policy is the file's values with the overlay applied, built once for each run and each request. It keeps the file's version, and every range and cross-field rule (spec 2026-11-04 8.2 and 8.9) is checked when it is built, as when the file loads. A RULE input cites the policy version and carries the effective value. Every result cites the settings hash beside the policy version: the sha256 of the overlay's entries for the valuation and flag settings (groups A and B of spec 2026-11-04 8.2) and `validity_fallback_days`, as JSON with sorted keys; an empty overlay hashes `{}`. The universe and refresh settings and `aging_fraction` do not enter the hash: the first two change which companies are valued and how they are fetched, and `aging_fraction` is read when a row is shown, never at valuation.
 
-Policies v1 to v6 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v7 only.
+Policies v1 to v7 stay in the package unchanged, because the snapshots valued under them cite their hashes. The engine loads v8 only.
 
 ### 4.1a Constants in code
 
@@ -965,6 +971,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.7 | 2026-11-03 | The Decline route (section 6a): the run-off on the consensus path and the five-year trend's decline rate, floored at −50%; the normalized margin; the capital release; the perpetuity at the decline rate; the net-current-asset floor; the distress-sale value weighted by the synthetic rating's ten-year default probability; Altman Z″, Piotroski F and the reinvesting-in-decline flag; the implied decline rate at the price. The Start-up route (section 6b): no value by design, the refusal "Start-up: no value by design" with the year-10 revenue the price needs on a ten-year ramp to the mature peers' margin, the cash floor and the burn cover; the requirement rebuilt at the price. Policy v5 unchanged. |
 | 0.8 | 2026-11-04 | The settings: the forty policy values of 4.1 marked as settings may be changed, and the engine runs the effective policy, the file's values with the user's overlay applied; every result cites its settings hash (4.1). The repricing horizon is a policy value, H (5.10): the growth term reads years 2 to H + 1, the path grows at g_T past the runway (d on the Decline route), and a horizon longer than the path never fails. The flag count: the eleven quality warnings count, every other flag is a note (section 8). Policy v6: the designation edges derived from the Narrow margin of safety, the fair band and the trim multiple (4.10); the Wide cap r plus `wide_terminal_roic_spread` (4.7); `repricing_horizon_years`; the range checks at load. At the defaults every value, level, designation and flag is what method 0.7 and policy v5 give. |
 | 0.9 | 2026-11-06 | The engine round (spec 2026-11-06). The Decline route (6a.2, 6a.5): the run-off reads the consensus past year 3 while a year has a revenue mean above zero and at least `analyst_min` revenue analysts, the decline rate then fades in a straight line to zero by year N, and the terminal is flat on year N's revenue. The revenue-growth route (5a.4, 5a.5): the company's own sales-to-capital is usable only at half the mature peers' median or more, and a trailing loss larger than revenue moves in dollars to the target margin, as the Start-up ramp does. The classifier (3.5): a company with a margin above zero in five of the fiscal years on file is established, and an established company is never a Start-up. The margin-direction check (3.4, 3.6): deciles 9 and 2, and Stable points nowhere. The tax table covers every jurisdiction of the OECD series, Taiwan and Cyprus by hand, each hand row citing its own source (4.3). A Mature Stable row refused "no positive trailing earnings" keeps the growth-route cross-check (6.1, 6.4). Policy v7 adds `own_sales_to_capital_min_share` and `loss_ramp_margin_bound`, neither a setting (4.1). At the defaults every row the changes do not touch, directly or through its mature peers, keeps its figures. |
+| 0.9, `fairband-review/1`, `fairband-secondary/1` | 2026-11-06 | Tier 2 (spec 2026-11-06). The mechanical method is unchanged at 0.9. A review (section 14) carries `fairband-review/1`, a secondary valuation (section 15) `fairband-secondary/1`. Policy v8 adds six values, none a setting. |
 
 A snapshot names the method and policy versions and the settings hash that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
@@ -1059,3 +1066,9 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Requirement | A Start-up row's price-implied requirement: the revenue in year 10 at which a ten-year ramp to the mature peers' margin is worth the market cap plus debt less cash (6b.2) |
 | Cash floor | A Start-up row's net cash a share, (cash − debt) ÷ diluted shares (6b.4) |
 | Burn cover | The years a Start-up row's cash covers its trailing burn, the trailing operating cash flow plus capital spending when below zero; "not burning" otherwise (6b.4) |
+| Override | A change an agent makes to one tagged input, with its reason, its evidence and its lifetime (lasting, or tied to a period); applied, or refused with the rule it breaks, and stored either way. The engine, not the agent, computes the value it gives |
+| Review | The engine's valuation of a company under its applied overrides: the reviewed value, its levels and designation on the same edges, and the bridge from the mechanical value, one line per override. It follows the company's snapshots and cites `fairband-review/1` |
+| Finding | A dated fact an agent records with its source (a filing, a transcript, a URL, a vendor response or a base rate); the only way a number from outside Fairband enters a report |
+| Judgment | One of a report's key judgments (the phase, the moat, the belief, the ROIC, the target margin) with its bull case, its bear case, the decision and the override it produced, if one. An input an override sets is tagged JUDGMENT, beside DATA and RULE |
+| Secondary valuation | A second valuation an agent makes from an explicit free-cash-flow path, one part or a sum of parts, discounted at r with a terminal at g_T or below: a second view on a valued company and a fallback where the route gives no value. It cites `fairband-secondary/1` |
+| Work item | A request in the inbox for an agent's research on one company, a valuation review or a full report, posted by the owner, an agent or the expiry rule; pending, claimed, done, declined or dropped |

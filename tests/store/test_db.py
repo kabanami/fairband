@@ -36,7 +36,69 @@ _ALL = [
     "002_designation.sql",
     "003_facts_by_response.sql",
     "004_settings_and_watchlists.sql",
+    "005_agents.sql",
 ]
+# The agents' records (spec 2026-11-06 Tier 2, section 17), each table's columns the record's
+# fields in order; a work item's poster carries its client as every other writer does.
+_AGENT_COLUMNS = {
+    "ledger": [
+        *("id", "at", "principal", "actor", "client", "kind", "symbol", "ref_table", "ref_id"),
+        *("snapshot_id", "work_item_id", "summary"),
+    ],
+    "work_items": [
+        *("id", "symbol", "mode", "note", "snapshot_id", "origin", "posted_by", "posted_actor"),
+        *("posted_client", "posted_at", "state", "claimed_by", "claimed_at", "report_id"),
+        *("reason", "finished_at", "expiry_valid_until"),
+    ],
+    "notes": ["id", "symbol", "text", "principal", "actor", "client", "at", "override_id"],
+    "findings": [
+        *("id", "symbol", "as_of", "text", "source_kind", "source_ref", "source_note", "value"),
+        *("unit", "period", "principal", "actor", "client", "at"),
+    ],
+    "kill_criteria": [
+        *("id", "symbol", "text", "state", "report_id", "principal", "actor", "client", "at"),
+        *("state_reason", "state_at"),
+    ],
+    "news_items": [
+        *("id", "symbol", "date", "headline", "source", "text", "kill_criterion_id"),
+        *("principal", "actor", "client", "at"),
+    ],
+    "overrides": [
+        *("id", "symbol", "tag", "old", "new", "unit", "reason", "evidence", "lifetime"),
+        *("period", "corrected_value", "snapshot_id", "principal", "actor", "client", "at"),
+        *("state", "message", "review_id", "drop_reason", "dropped_at"),
+    ],
+    "reviews": [
+        *("id", "symbol", "snapshot_id", "refresh_id", "created_at", "value", "buy_level"),
+        *("fair_low", "fair_high", "trim_level", "price_to_value", "designation", "refusal"),
+        *("mechanical_value", "bridge", "override_ids", "policy_version", "method_version"),
+        *("review_method", "settings_hash", "deciles_refresh_id", "result"),
+    ],
+    "review_log": [
+        *("id", "at", "symbol", "refresh_id", "snapshot_id", "review_id", "mechanical_phase"),
+        *("mechanical_value", "reviewed_phase", "reviewed_value", "secondary_value", "price"),
+        *("designation", "stance"),
+    ],
+    "secondary_valuations": [
+        *("id", "symbol", "snapshot_id", "created_at", "principal", "actor", "client", "parts"),
+        *("firm_value", "debt", "cash", "shares", "equity", "value_per_share", "buy_level"),
+        *("fair_low", "fair_high", "trim_level", "price_to_value", "designation", "reason"),
+        *("evidence", "debt_source", "cash_source", "policy_version", "settings_hash"),
+        *("deciles_refresh_id", "secondary_method"),
+    ],
+    "derivations": [
+        *("id", "symbol", "operation", "a", "b", "years", "value", "unit", "principal"),
+        *("actor", "client", "at"),
+    ],
+    "reports": [
+        *("id", "symbol", "revision", "mode", "stance", "sections", "reuses_full_report_of"),
+        *("snapshot_id", "review_id", "secondary_id", "work_item_id", "principal", "actor"),
+        *("client", "created_at"),
+    ],
+    "judgments": [
+        *("id", "report_id", "symbol", "judgment", "bull", "bear", "decision", "override_id"),
+    ],
+}
 
 
 def _packaged_initial() -> bytes:
@@ -65,7 +127,7 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
     assert migrate(conn) == _ALL
-    assert applied_versions(conn) == [1, 2, 3, 4]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -108,7 +170,7 @@ def test_designation_columns_join_a_database_at_001(
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
     assert migrate(conn) == _ALL[1:]
-    assert applied_versions(conn) == [1, 2, 3, 4]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -138,11 +200,31 @@ def test_migration_004_fills_the_hash(
         (stamp,),
     )
     conn.commit()
-    assert migrate(conn) == ["004_settings_and_watchlists.sql"]
+    assert migrate(conn) == ["004_settings_and_watchlists.sql", "005_agents.sql"]
     assert conn.execute("select settings_hash from refreshes").fetchone()[0] == EMPTY_SETTINGS_HASH
     assert conn.execute("select settings_hash from snapshots").fetchone()[0] == EMPTY_SETTINGS_HASH
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert {"settings", "settings_changes", "watchlists", "watchlist_entries"} <= names
+
+
+def test_migration_005_creates_the_agent_tables(conn: sqlite3.Connection) -> None:
+    """One table for each record of the agents' side: the ledger, the work items, the research
+    records, the overrides, the reviews and their log, the secondary valuations, the
+    derivations, the reports and their judgments."""
+    migrate(conn)
+    names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
+    assert len(_AGENT_COLUMNS) == 13 and set(_AGENT_COLUMNS) <= names
+
+
+def test_the_agent_tables_hold_the_records_fields(conn: sqlite3.Connection) -> None:
+    """Each table's columns are its record's fields; price ÷ value is a REAL, as on the
+    snapshots, so it reads back as the double the engine computed."""
+    migrate(conn)
+    for table, columns in _AGENT_COLUMNS.items():
+        assert [r["name"] for r in conn.execute(f"pragma table_info({table})")] == columns, table
+    for table in ("reviews", "secondary_valuations"):
+        types = {r["name"]: r["type"] for r in conn.execute(f"pragma table_info({table})")}
+        assert types["price_to_value"] == "REAL", table
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -251,6 +333,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 002_designation.sql",
         "Applied 003_facts_by_response.sql",
         "Applied 004_settings_and_watchlists.sql",
+        "Applied 005_agents.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()
