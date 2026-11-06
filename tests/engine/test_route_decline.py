@@ -1016,14 +1016,14 @@ def test_a_consensus_to_year_ten_leaves_no_fade(
 ) -> None:
     """Seven years past base + 2 on 6 analysts: K = N = 10, no year fades, year 10 grows at the
     consensus's own +2%, and the terminal is flat on year 10's revenue. An eighth year past base
-    + 2 is past the run-off and not read, so its fall to zero refuses nothing."""
+    + 2, on enough analysts, is past the run-off and not read."""
     steps = [-0.01] * 6 + [0.02]
     years, revenue = [], BASE_2
     for year, step in zip(range(2030, 2037), steps, strict=True):
         revenue *= 1 + step
         years.append((year, revenue, 6))
     r = value_company(
-        with_consensus(decline_inputs, *years, (2037, 0.0, 6)), deciles, policy, TODAY
+        with_consensus(decline_inputs, *years, (2037, revenue * 0.99, 6)), deciles, policy, TODAY
     )
     assert r.route == "decline" and r.value is not None
     im = r.intermediates
@@ -1039,19 +1039,29 @@ def test_a_consensus_to_year_ten_leaves_no_fade(
     assert step_names(r) == [f"path_step_{t}" for t in range(2, 11)]
 
 
-def test_a_far_year_at_minus_100_refuses(
+def test_a_far_year_at_zero_ends_the_consensus(
     decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    """A consensus year past year 3 whose revenue falls to zero or below, on enough analysts,
-    refuses the row as a year 2 or 3 does, with the path's flags."""
-    dc = replace(decline_inputs, capital_years=(), peers=())
-    for years in (((2030, 0.0, 6),), ((2030, BASE_2 * 1.01, 6), (2031, -5 * M, 6))):
-        r = value_company(with_consensus(dc, *years), deciles, policy, TODAY)
-        assert_refused(r, "consensus revenue falls to zero or below within the path")
-        assert r.intermediates.keys() == {"price_facts"}
-    # the path's flags: the rising year 4 is named before the fall in year 5
-    assert route_codes(r) == ["consensus-recovery"]
-    assert "1.0% in year 4" in sentence(r, "consensus-recovery")
+    """Spec 2026-11-06 6.1: base + 3 at +1% on 6 analysts and base + 4 at zero on 6 analysts. A year
+    past year 3 is read only while its revenue mean is above zero, so base + 4 ends the consensus
+    at year 4: no refusal, no flag for it, and the fade from year 5. A mean below zero ends it the
+    same way."""
+    fade = [-0.04 * (10 - t) / 6 for t in range(5, 11)]
+    for mean in (0.0, -5 * M):
+        dc = with_consensus(decline_inputs, (2030, BASE_2 * 1.01, 6), (2031, mean, 6))
+        r = value_company(dc, deciles, policy, TODAY)
+        assert (r.route, r.refusal) == ("decline", None) and r.value is not None
+        im = r.intermediates
+        assert im["runoff_path"]["consensus_years"] == 4
+        assert im["runoff_path"]["steps"] == pytest.approx([-0.03, -0.03, 0.01])
+        assert im["growth_rates"] == pytest.approx([-0.03] * 3 + [0.01] + fade)
+        assert im["growth_rates"][-1] == 0.0
+        assert route_codes(r) == ["consensus-recovery"] and "few-analysts" not in codes(r)
+        assert sentence(r, "consensus-recovery") == (
+            "The consensus has revenue growing 1.0% in year 4 while the decline rate is −4.0%."
+        )
+        assert step_names(r) == ["path_step_2", "path_step_3", "path_step_4"]
+    # a fall to zero in years 2 and 3 still refuses, as before (test_the_refusal_order)
 
 
 def test_the_expected_return_grows_at_the_path_then_zero(

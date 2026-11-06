@@ -6,8 +6,9 @@ path, uncapped (``route_revenue_growth.ntm_revenue`` and ``revenue_path_for``): 
 consensus revenue, years 2 and 3 the annual consensus steps from the base year, a missing step
 holding the rate of the year before and a thin landing year flagged. Past year 3 the path reads
 the annual consensus revenue one fiscal year at a time (``route_revenue_growth.consensus_beyond``)
-while a year has a revenue mean on at least ``analyst_min`` revenue analysts, to year K, at most
-``runoff_years``: nothing is held past year 3 and a thin year is not read, so it is never flagged.
+while a year has a revenue mean above zero and at least ``analyst_min`` revenue analysts, to year
+K, at most ``runoff_years``; the first year that fails either test ends it at the year before,
+with no refusal and no flag: nothing is held past year 3 and a thin year is not read.
 From year K + 1 the decline rate d fades in a straight line to zero by year ``runoff_years``.
 Without a usable NTM consensus (no four consecutive quarters, one without a revenue mean, or a sum
 at or below zero) the row is not refused: years 1 to 3 shrink at d, the years past 3 are not read,
@@ -31,10 +32,10 @@ net debt and no interest expense on file, when the floored value stands.
 
 Refusals, in this order, after the shared guards: no trailing revenue (missing or not positive);
 no trailing operating income; no statutory tax rate; consensus revenue that falls to zero or below
-within the path (g_2 or g_3 as resolved, or a step to year K, at or below −100%), with the path's
-flags; no sales-to-capital, with the path's and the balance sheet's flags; a value a share at or
-below zero after the weighting, "value not positive in the run-off", which keeps every value-side
-intermediate, every flag and the route's inputs.
+within the path (g_2 or g_3 as resolved at or below −100%; no step past year 3 can be), with the
+path's flags; no sales-to-capital, with the path's and the balance sheet's flags; a value a share
+at or below zero after the weighting, "value not positive in the run-off", which keeps every
+value-side intermediate, every flag and the route's inputs.
 
 Intermediates: the rebuild keys below; ``moat``; ``growth_rates`` for years 1 to N; the tables
 ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``,
@@ -177,8 +178,8 @@ _Used = Literal["own-latest", "peers"]
 class _Consensus:
     """Years 1 to K: the NTM revenue as found (``None`` without four quarters with a revenue
     mean), whether it is usable (found and positive), the annual steps of years 2 and 3 as found
-    and which were held, the steps of years 4 to K (none without a usable consensus), whether a
-    step as resolved falls 100% or more, and the path's flags in order."""
+    and which were held, the steps of years 4 to K (none without a usable consensus), whether
+    g_2 or g_3 as resolved falls 100% or more, and the path's flags in order."""
 
     ntm: float | None
     usable: bool
@@ -393,8 +394,7 @@ def _consensus(c: Context, revenue0: float, d: float, floored: bool) -> _Consens
         + present(_recovery((ntm / revenue0 - 1, *path.steps, *beyond), d))
         + _coded(found, "few-analysts")
     )
-    falls = any(g <= -1 for g in (*resolved, *beyond))
-    return _Consensus(ntm, True, path.steps, held, beyond, falls, flags)
+    return _Consensus(ntm, True, path.steps, held, beyond, any(g <= -1 for g in resolved), flags)
 
 
 def _coded(flags: tuple[Flag, ...], code: str) -> tuple[Flag, ...]:

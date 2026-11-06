@@ -447,11 +447,11 @@ def consensus_beyond(
     annual: Sequence[AnnualEstimate], base_year: int, policy: Policy
 ) -> tuple[float, ...]:
     """The consensus revenue steps for base + 3 onward, each from the year before's consensus
-    revenue (``consensus_value``), while the year has a revenue mean on at least ``analyst_min``
-    revenue analysts. The first year that fails ends them: nothing is held past year 3, and a
-    thin year is not read. Empty when base + 2 has no consensus revenue above zero to step from;
-    a year at or below zero is read, its step −100% or below, and ends them, since no step runs
-    from a base at or below zero (``growth_step``). Spec 2026-11-06 6.1."""
+    revenue (``consensus_value``), while the year has a revenue mean above zero and at least
+    ``analyst_min`` revenue analysts. The first year that fails either test ends them at the year
+    before: nothing is held past year 3, a thin year is not read, and no step falls 100% or more.
+    Empty when base + 2 has no consensus revenue above zero to step from (``growth_step``). Spec
+    2026-11-06 6.1."""
     by_year = {x.fiscal_year: x for x in annual}
     third = by_year.get(base_year + 2)
     earlier = None if third is None else consensus_value(third.revenue, third.analysts_revenue)
@@ -462,7 +462,7 @@ def consensus_beyond(
             break
         later = consensus_value(row.revenue, row.analysts_revenue)
         step = growth_step(earlier, later)
-        if step is None:
+        if later is None or later <= 0 or step is None:
             break
         steps.append(step)
         earlier = later

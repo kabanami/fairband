@@ -568,8 +568,8 @@ def _years(*points: tuple[int, float | None, int | None]) -> tuple[AnnualEstimat
 
 def test_consensus_beyond_reads_past_base_plus_two_on_enough_analysts(policy: Policy) -> None:
     """Spec 2026-11-06 6.1: the steps for base + 3 onward, each from the year before's consensus
-    revenue, while the year has a mean and at least ``analyst_min`` revenue analysts; the first
-    year that fails ends the consensus, so a later year is not read."""
+    revenue, while the year has a mean above zero and at least ``analyst_min`` revenue analysts;
+    the first year that fails ends the consensus, so a later year is not read."""
     base = [(2027, 1_000.0, 10), (2028, 970.0, 8), (2029, 940.0, 6)]
     reaching = _years(*base, (2030, 940.0 * 1.01, 6), (2031, 940.0 * 1.01 * 1.02, 6))
     assert consensus_beyond(reaching, 2027, policy) == pytest.approx((0.01, 0.02))
@@ -593,13 +593,15 @@ def test_consensus_beyond_needs_base_plus_two(policy: Policy) -> None:
         assert consensus_beyond(found, 2027, policy) == (), third
 
 
-def test_consensus_beyond_reads_a_year_at_zero_and_stops(policy: Policy) -> None:
-    """A year whose consensus revenue is zero or below on enough analysts is the consensus's: its
-    step is −100% or below, which refuses a Decline row; no step runs on from it."""
+def test_consensus_beyond_ends_at_a_year_at_zero_or_below(policy: Policy) -> None:
+    """A year whose consensus revenue is zero or below, on however many analysts, is not read: it
+    ends the consensus at the year before, so no step past year 3 falls 100% or more."""
     base = [(2027, 1_000.0, 10), (2028, 970.0, 8), (2029, 940.0, 6)]
-    for mean, step in ((0.0, -1.0), (-94.0, -1.1)):
+    for mean in (0.0, -94.0):
         found = _years(*base, (2030, mean, 6), (2031, 900.0, 6))
-        assert consensus_beyond(found, 2027, policy) == pytest.approx((step,))
+        assert consensus_beyond(found, 2027, policy) == (), mean
+        found = _years(*base, (2030, 950.0, 6), (2031, mean, 6), (2032, 960.0, 6))
+        assert consensus_beyond(found, 2027, policy) == pytest.approx((950 / 940 - 1,)), mean
 
 
 def test_the_held_rate_is_capped_at_the_sales_class_ninetieth_percentile(
