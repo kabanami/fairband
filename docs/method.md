@@ -1156,7 +1156,7 @@ A second valuation beside the routes, from an explicit cash-flow path an agent s
 
 ### 15.1 The inputs
 
-One part or more, at most `secondary_parts_max` (10; 4.1). One part is a discounted cash flow, several a sum of parts. A part is a name; the free cash flow to the firm in dollars for years 1 to N, N from `secondary_years_min` (3) to `secondary_years_max` (15); a terminal growth g at most g_T (3.0% at the defaults), lower or negative allowed; and a note. With the parts, a reason and evidence: one item or more, each of the kinds an override's evidence takes (14.1).
+One part or more, at most `secondary_parts_max` (10; 4.1). One part is a discounted cash flow, several a sum of parts. A part is a name; the free cash flow to the firm in dollars for years 1 to N, N from `secondary_years_min` (3) to `secondary_years_max` (15); a terminal growth g at most g_T (3.0% at the defaults), lower or negative allowed; and a note. With the parts, a reason and evidence: one item or more, each of the kinds an override's evidence takes (14.1), one at least for the path itself, with no `figure` (15.3).
 
 ### 15.2 The arithmetic
 
@@ -1170,13 +1170,13 @@ The firm value is the sum over the parts; equity = firm value − debt + cash; t
 
 ### 15.3 Debt, cash and shares
 
-The server reads the debt and the cash at the call as assembly reads them for the growth, Decline and Start-up routes (5a.9, 6a.5, 6b.2): the newest annual balance sheet's short-term plus long-term debt, and its cash and equivalents plus short-term investments, a line it does not present counting as nil. An applied `balance.debt` or `balance.cash` override (14.2) counts in its place. The agent may pass the debt or the cash itself where the balance sheet is wrong or missing; each figure passed needs its own evidence item, one whose `figure` names it, `debt` or `cash`. The record stores the debt, the cash and the shares used, and where the debt and the cash came from: `statements`, the balance sheet's; `agent`, a figure the agent passed or an applied override's. The shares are the snapshot's diluted count: its `shares_diluted` input, else its intermediates' `shares`.
+The server reads the debt and the cash at the call as assembly reads them for the growth, Decline and Start-up routes (5a.9, 6a.5, 6b.2): the newest annual balance sheet's short-term plus long-term debt, and its cash and equivalents plus short-term investments, a line it does not present counting as nil. An applied `balance.debt` or `balance.cash` override (14.2) counts in its place. The agent may pass the debt or the cash itself where the balance sheet is wrong or missing; each figure passed needs its own evidence item, one whose `figure` names it, `debt` or `cash`. The record stores the debt, the cash and the shares used, and where the debt and the cash came from: `statements`, the balance sheet's; `agent`, a figure the agent passed or an applied override's; `none`, no line on file, so the figure counts as nil (0). The shares are the snapshot's diluted count: its `shares_diluted` input, else its intermediates' `shares`.
 
 ### 15.4 The refusals
 
 Each is answered with its sentence, and nothing is stored:
 
-- a reason that is blank, "a secondary valuation needs a reason"; no evidence, "a secondary valuation needs evidence"; a debt or a cash passed without its own evidence item, "an explicit debt needs its own evidence item" (or cash);
+- a reason that is blank, "a secondary valuation needs a reason"; no evidence, "a secondary valuation needs evidence"; no item for the cash-flow path itself, every item naming a `figure`, "the path needs its own evidence item"; a debt or a cash passed without its own evidence item, "an explicit debt needs its own evidence item" (or cash);
 - a company whose latest snapshot was valued under another policy version, other settings or another method version: the price refresh's sentences, "settings changed: run a revalue" (or "policy changed", "method changed"), as for an override (14.3);
 - a foreign filer, "foreign filer: currency and share-unit handling not built yet", since a dollar path over local-currency debt would mislead: a snapshot refused as one (section 7), or a universe row that is an ADR or names a currency other than USD (a row naming none leaves it to the snapshot);
 - a snapshot with no positive diluted share count, "no diluted share count";

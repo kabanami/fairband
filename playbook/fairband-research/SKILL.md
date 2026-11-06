@@ -236,7 +236,8 @@ Call `secondary_valuation(symbol, parts, reason, evidence, debt?, cash?)`:
   any payment to lenders or owners), in dollars, for years one to N. N runs from three to fifteen.
 - `terminal_growth`: a fraction, at most g_T (`0.03` at the defaults; `policy()` gives the value in
   force). A lower or a negative rate is allowed.
-- `reason` and `evidence`: as on an override. At least one evidence item.
+- `reason` and `evidence`: as on an override. At least one evidence item backs the path itself
+  and names no `figure`: "the path needs its own evidence item".
 - `debt` and `cash`: leave them out, and the server reads the newest annual balance sheet, or an
   applied balance override. Pass one only where the balance sheet is wrong or missing. Each figure
   passed needs its own evidence item, with `figure` set to `debt` or `cash`.

@@ -40,15 +40,17 @@ agent routes send them.
 
 ``POST /api/companies/{symbol}/secondary`` takes ``{parts: [{name, fcff, terminalGrowth, note?}],
 reason, evidence: [{kind, ref, note, figure?}], debt?, cash?}`` and answers 201 with the stored
-secondary valuation (``method.md`` 15). A blank reason or no evidence is a 400; so is a debt or a
-cash passed without its own evidence item, one whose ``figure`` names it. Then, on the company's
+secondary valuation (``method.md`` 15). A blank reason or no evidence is a 400; so is evidence
+with no item for the path itself, every item naming a ``figure``, "the path needs its own evidence
+item"; and a debt or a cash passed without its own evidence item, one whose ``figure`` names it.
+Then, on the company's
 latest snapshot: ``require_current``'s 409s; a foreign filer, the snapshot refused as one or its
 universe row an ADR or in a currency other than USD (a row naming none leaves it to the
 snapshot), 400 with section 7's sentence; no positive diluted share count on the snapshot (its
 ``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share count". The
 debt and the cash are the agent's when passed, else an applied ``balance.*`` override's (both
 sourced ``agent``), else the newest annual balance sheet's as assembly reads them
-(``statements``), nil without a line. The levels take the current review's moat, else the
+(``statements``), else nil with the source ``none`` when no line is on file. The levels take the current review's moat, else the
 snapshot's, else None; the designation the snapshot's price. A rule ``secondary_value`` refuses
 is a 400 with its sentence. Anyone may make one, a tool's output rather than an override; the
 write is a ``secondary`` ledger row resting on the snapshot. ``GET`` on the same path lists the
@@ -118,6 +120,7 @@ from fairband.store.overrides import (
 from fairband.store.refreshes import latest_deciles
 from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews_for
 from fairband.store.secondary import (
+    BalanceSource,
     Operation,
     SecondaryRow,
     derivation_row,
@@ -386,6 +389,8 @@ def add_review_routes(
             raise HTTPException(400, "a secondary valuation needs a reason")
         if not body.evidence:
             raise HTTPException(400, "a secondary valuation needs evidence")
+        if all(e.figure is not None for e in body.evidence):
+            raise HTTPException(400, "the path needs its own evidence item")
         for name, passed in (("debt", body.debt), ("cash", body.cash)):
             if passed is not None and not any(e.figure == name for e in body.evidence):
                 raise HTTPException(400, f"an explicit {name} needs its own evidence item")
@@ -582,21 +587,23 @@ def _shares(result: ValuationResult) -> float | None:
 
 def _balance(
     conn: sqlite3.Connection, symbol: str, debt: float | None, cash: float | None
-) -> tuple[tuple[float, str], tuple[float, str]]:
+) -> tuple[tuple[float, BalanceSource], tuple[float, BalanceSource]]:
     """The debt and the cash with their sources: the agent's figure when passed, else an applied
     ``balance.*`` override's (both ``agent``), else the newest balance sheet's (``statements``),
-    nil without a line."""
+    else nil with the source ``none`` when no line is on file."""
     corrected = {o.tag: o.new for o in applied_overrides(conn, symbol)}
     lines = newest_debt_and_cash(conn, symbol)
-    figures = []
+    figures: list[tuple[float, BalanceSource]] = []
     for name, passed, line in zip(("debt", "cash"), (debt, cash), lines, strict=True):
         override = _number(corrected.get(f"balance.{name}"), None)
         if passed is not None:
             figures.append((passed, "agent"))
         elif override is not None:
             figures.append((override[0], "agent"))
+        elif line is not None:
+            figures.append((line, "statements"))
         else:
-            figures.append((0.0 if line is None else line, "statements"))
+            figures.append((0.0, "none"))
     return figures[0], figures[1]
 
 

@@ -7,7 +7,8 @@ terminal's present value and its value; the firm value, the debt, the cash, the 
 the equity, the value a share and the levels as ``repr`` text, so each float reads back exactly;
 price ÷ value as a REAL and the designation's word, none of the four levels or the two on a value
 a share at or below zero; the reason and the evidence (JSON ``{kind, ref, note, figure}`` items);
-where the debt and the cash came from, ``statements`` or ``agent``; the writer and the time; the
+where the debt and the cash came from (``BalanceSource``), ``statements``, ``agent`` or ``none``
+(no line on file, the figure 0.0); the writer and the time; the
 policy version, the settings hash and the deciles refresh it ran under; and
 ``fairband-secondary/1``. ``latest_secondary`` reads the company's newest, ``secondaries_for``
 every one, newest first, and ``secondary_row`` one by its id.
@@ -33,6 +34,9 @@ from fairband.store.db import transaction
 from fairband.store.ledger import Principal, Writer
 
 Operation = Literal["ratio", "difference", "sum", "growth", "cagr"]
+# Where a secondary valuation's debt or cash came from: the newest balance sheet; the agent's
+# figure or an applied balance override; or no line on file, counted as nil.
+BalanceSource = Literal["statements", "agent", "none"]
 
 
 @dataclass(frozen=True)
@@ -59,8 +63,8 @@ class SecondaryRow:
     designation: str | None
     reason: str
     evidence: tuple[dict[str, Any], ...]
-    debt_source: str
-    cash_source: str
+    debt_source: BalanceSource
+    cash_source: BalanceSource
     policy_version: str
     settings_hash: str
     deciles_refresh_id: int | None
@@ -91,8 +95,8 @@ def insert_secondary(
     valuation: SecondaryValuation,
     reason: str,
     evidence: Sequence[Mapping[str, Any]],
-    debt_source: str,
-    cash_source: str,
+    debt_source: BalanceSource,
+    cash_source: BalanceSource,
     policy_version: str,
     settings_hash: str,
     deciles_refresh_id: int | None,

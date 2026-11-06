@@ -246,7 +246,7 @@ def test_explicit_debt_and_cash_need_evidence(client: TestClient) -> None:
     )
     assert _stored(client) == []
     cash_item = {"kind": "url", "ref": "https://example.com/q3", "note": None, "figure": "cash"}
-    body = _secondary(client, passed | {"evidence": [debt_item, cash_item]})
+    body = _secondary(client, passed | {"evidence": [FILING, debt_item, cash_item]})
     assert (body["debt"], body["debtSource"], body["cash"], body["cashSource"]) == (
         5e9,
         "agent",
@@ -254,7 +254,7 @@ def test_explicit_debt_and_cash_need_evidence(client: TestClient) -> None:
         "agent",
     )
     assert body["valuePerShare"] == pytest.approx((FIRM - 5e9 + 2e9) / 1e9, abs=1e-4)
-    no_cash = _secondary(client, ONE_PART | {"cash": 0.0, "evidence": [cash_item]})
+    no_cash = _secondary(client, ONE_PART | {"cash": 0.0, "evidence": [cash_item, FILING]})
     assert (no_cash["debt"], no_cash["debtSource"], no_cash["cash"], no_cash["cashSource"]) == (
         2e9,
         "statements",
@@ -264,8 +264,25 @@ def test_explicit_debt_and_cash_need_evidence(client: TestClient) -> None:
     assert [s["id"] for s in _stored(client)] == [no_cash["id"], body["id"]]
 
 
+def test_the_path_needs_its_own_evidence_item(client: TestClient) -> None:
+    """The items that back a debt or a cash do not back the cash-flow path."""
+    debt_item = FILING | {"figure": "debt"}
+    cash_item = FILING | {"figure": "cash"}
+    for evidence in ([debt_item], [debt_item, cash_item]):
+        passed = ONE_PART | {"debt": 5e9, "cash": 2e9, "evidence": evidence}
+        assert _refused(client, passed) == (
+            400,
+            {"detail": "the path needs its own evidence item"},
+        )
+    assert _stored(client) == []
+    explicit_none = FILING | {"figure": None}  # a figure of none backs the path
+    body = _secondary(client, ONE_PART | {"debt": 5e9, "evidence": [debt_item, explicit_none]})
+    assert body["debtSource"] == "agent"
+
+
 def test_an_applied_balance_override_counts(client: TestClient) -> None:
-    """HGCO has no balance sheet on file: its cash counts as nil, its debt is the override's."""
+    """HGCO has no balance sheet on file: its cash counts as nil, its source none; its debt is
+    the override's."""
     debt = {
         "tag": "balance.debt",
         "new": 4e9,
@@ -281,7 +298,7 @@ def test_an_applied_balance_override_counts(client: TestClient) -> None:
         4e9,
         "agent",
         0.0,
-        "statements",
+        "none",
     )
     assert body["valuePerShare"] == pytest.approx((FIRM - 4e9) / 100e6, abs=1e-3)
 
