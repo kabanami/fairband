@@ -7,22 +7,31 @@ names.
 A tool answers the API's JSON, an object; ``watchlists``, whose route answers a list, answers it as
 ``{"watchlists": [...]}``. A refusal is ``{"refused": <the API's sentence>, "status":
 <code>}`` with the rest of the API's answer beside it: a refused override's record, a rejected
-report's findings. A server that does not answer is ``{"refused": NOT_RUNNING}``.
+report's findings. A server that does not answer is ``{"refused": <the client's sentence>}``,
+``NOT_RUNNING``, or ``NO_ANSWER`` when the call reached it and timed out.
 
-``identify(agent)`` keeps the model identifier the agent runs as for the session, with the
+``identify(agent)`` keeps the model identifier the agent runs as for the MCP process, with the
 client's name and version from the handshake (``clientInfo``), and every later call carries them
 (``fairband.web.identity``); a write tool called before it answers ``{"refused": IDENTIFY_FIRST}``
-and calls nothing. The reads and the vendor pass-throughs need no identity.
+and calls nothing. An identifier that is not printable ASCII answers ``{"refused": NOT_ASCII}``
+and leaves the identity as it was; a client name or version that is not leaves the client out.
+The reads and the vendor pass-throughs need no identity.
 
 Spec 15 names the arguments; a record inside one (a part, an evidence item, a section's cite, a
 judgment, a news item) may name its keys as the spec does (``terminal_growth``,
 ``kill_criterion_id``) or as the API does (``terminalGrowth``): each key is sent camelCase, as the
-API reads them. A symbol or a section is sent as one path segment, so no text reaches another
-route. ``report`` without an id reads the company's latest report: its revisions newest first,
-then the first whole; with none, ``{"refused": "no report for <symbol>", "status": 404}``.
-``methodology`` without a section lists the page's sections (``GET /api/methodology``).
+API reads them. A symbol in a path is upper-cased and must be letters, digits, dots and dashes
+with a letter or a digit among them, else the tool answers ``{"refused": BAD_SYMBOL}`` and calls
+nothing: a slash or a dot segment (``..``) would reach another route. A section is sent escaped,
+as one path segment. ``report`` without an id reads the company's latest report: its revisions
+newest first, then the first whole; with none, ``{"refused": "no report for <symbol>", "status":
+404}``. ``methodology`` without a section lists the page's sections (``GET /api/methodology``).
+
+The command's ``httpx.Client`` (``loopback``) reads no proxy or other setting from the
+environment, so a proxy variable never takes a call meant for the loopback.
 """
 
+import re
 from collections.abc import Callable
 from typing import Any, Literal
 from urllib.parse import quote
@@ -33,16 +42,15 @@ from pydantic.alias_generators import to_camel
 
 from fairband import __version__
 from fairband.engine.overrides import Lifetime
-from fairband.mcp.client import NOT_RUNNING, FairbandClient, Refused, ServerDown
-from fairband.policy.settings import exchange_symbol
+from fairband.mcp.client import TIMEOUT_S, FairbandClient, Refused, ServerDown
 from fairband.refresh.run import Kind
 from fairband.store.inbox import Mode, State
 from fairband.store.research import CriterionState, Unit
 from fairband.web.identity import IDENTIFY_FIRST
 
-# A pass-through waits at most 10 s for a slot and 30 s for the vendor; a refresh start answers at
-# once. Past this, the server is taken as not answering.
-TIMEOUT_S = 60.0
+BAD_SYMBOL = "a symbol is letters, digits, dots and dashes"
+# A letter or a digit among them, so no symbol is a dot segment ("." or "..").
+_SYMBOL = re.compile(r"[A-Z0-9.\-]*[A-Z0-9][A-Z0-9.\-]*")
 INSTRUCTIONS = (
     "Call identify with the model identifier you run as before any write; every write is recorded"
     " under it."
@@ -101,8 +109,18 @@ TOOL_NAMES: tuple[str, ...] = (
 def main(port: int) -> None:
     """Serve the tools over stdio against the web server on 127.0.0.1:``port`` until the host
     closes the pipe."""
-    with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=TIMEOUT_S) as http:
+    with loopback(port) as http:
         build_server(FairbandClient(http)).run("stdio")
+
+
+def loopback(port: int) -> httpx.Client:
+    """The client of the web server on 127.0.0.1:``port``: no proxy or other setting from the
+    environment, and ``TIMEOUT_S``."""
+    return httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=TIMEOUT_S, trust_env=False)
+
+
+class _Unsent(Exception):
+    """A call refused before it is sent: its sentence."""
 
 
 def build_server(client: FairbandClient) -> MCPServer:
@@ -115,8 +133,8 @@ def build_server(client: FairbandClient) -> MCPServer:
             answered: dict[str, Any] = call()
         except Refused as exc:
             return {"refused": exc.detail, "status": exc.status, **exc.extra}
-        except ServerDown:
-            return {"refused": NOT_RUNNING}
+        except (ServerDown, _Unsent) as exc:
+            return {"refused": str(exc)}
         return answered
 
     def write(call: Callable[[], Any]) -> dict[str, Any]:
@@ -197,7 +215,7 @@ def build_server(client: FairbandClient) -> MCPServer:
                 return client.get(f"/api/reports/{id}")
             listed = client.get(_company(symbol, "reports"))["reports"]
             if not listed:
-                raise Refused(404, f"no report for {exchange_symbol(symbol)}")
+                raise Refused(404, f"no report for {_symbol(symbol)}")
             return client.get(f"/api/reports/{listed[0]['id']}")
 
         return answer(read)
@@ -498,13 +516,22 @@ def _segment(text: str) -> str:
     return quote(text, safe="")
 
 
+def _symbol(text: str) -> str:
+    """``text`` upper-cased as a symbol; ``_Unsent(BAD_SYMBOL)`` outside the symbol characters
+    (module docstring)."""
+    symbol = text.upper()
+    if not _SYMBOL.fullmatch(symbol):
+        raise _Unsent(BAD_SYMBOL)
+    return symbol
+
+
 def _company(symbol: str, read: str = "") -> str:
     """The company's route, or the route of one of its records."""
-    return f"/api/companies/{_segment(symbol)}" + (f"/{read}" if read else "")
+    return f"/api/companies/{_symbol(symbol)}" + (f"/{read}" if read else "")
 
 
 def _vendor(kind: str, symbol: str) -> str:
-    return f"/api/vendor/{kind}/{_segment(symbol)}"
+    return f"/api/vendor/{kind}/{_symbol(symbol)}"
 
 
 def _camel(value: Any) -> Any:

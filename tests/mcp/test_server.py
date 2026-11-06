@@ -5,18 +5,22 @@ one-sentence description; each reads or writes its route; a write before ``ident
 without a call; a refusal is the API's sentence and a server that does not answer is one
 sentence."""
 
+import socket
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 import anyio
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 from mcp import Client
 from mcp.server.mcpserver import MCPServer
 from mcp.types import Implementation
 from support.web import HEADER, HOST
 
-from fairband.mcp.client import NOT_RUNNING, FairbandClient
-from fairband.mcp.server import TOOL_NAMES, build_server
+from fairband.mcp.client import NO_ANSWER, NOT_ASCII, NOT_RUNNING, TIMEOUT_S, FairbandClient
+from fairband.mcp.server import BAD_SYMBOL, TOOL_NAMES, build_server, loopback
 from fairband.reports.check import headings
 from fairband.web.identity import IDENTIFY_FIRST
 
@@ -417,10 +421,54 @@ def test_methodology_lists_the_sections_without_one(api: FairbandClient) -> None
     assert unknown == {"refused": "no methodology section nope", "status": 404}
 
 
-def test_a_symbol_reaches_no_other_route(api: FairbandClient) -> None:
-    server = build_server(api)
-    answer = _call(server, "company", {"symbol": "AAPL/../../policy"})
-    assert "values" not in answer and answer["status"] == 404
+def test_a_symbol_outside_the_symbol_characters_is_refused_before_any_call() -> None:
+    """A slash or a dot segment in a path would reach another route (``AAPL/../../policy`` the
+    policy, ``..`` the route above), so a symbol is letters, digits, dots and dashes, with a
+    letter or a digit among them; nothing is called."""
+    called: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        called.append(request)
+        return httpx.Response(200, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(answer), base_url=HOST) as http:
+        server = build_server(FairbandClient(http))
+        symbols = ("AAPL/../../policy", "..", ".", "AAPL?x=1", "a b", "AAPL#")
+        answers = _session(
+            server,
+            *[("company", {"symbol": s}) for s in symbols],
+            ("financials", {"symbol": ".."}),
+            ("report", {"symbol": ".."}),
+            ("transcript", {"symbol": "..", "year": 2025, "quarter": 3}),
+            ("identify", AGENT),
+            ("note_add", {"symbol": "..", "text": "a note"}),
+        )
+    refused = {"refused": BAD_SYMBOL}
+    assert BAD_SYMBOL == "a symbol is letters, digits, dots and dashes"
+    assert answers[: len(symbols) + 3] == [refused] * (len(symbols) + 3)
+    assert answers[-1] == refused
+    assert called == []
+
+
+def test_a_symbol_is_upper_cased(api: FairbandClient, client: TestClient) -> None:
+    company, financials = _session(
+        build_server(api), ("company", {"symbol": "aapl"}), ("financials", {"symbol": "aapl"})
+    )
+    assert company == client.get("/api/companies/AAPL").json()
+    assert financials == {"refused": "no financial statements for AAPL", "status": 404}
+    paths: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        return httpx.Response(200, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(answer), base_url=HOST) as http:
+        _session(
+            build_server(FairbandClient(http)),
+            ("company", {"symbol": "brk.b"}),
+            ("segments", {"symbol": "bf-b"}),
+        )
+    assert paths == ["/api/companies/BRK.B", "/api/vendor/segments/BF-B"]
 
 
 def test_server_down_is_one_sentence(down: FairbandClient) -> None:
@@ -437,3 +485,75 @@ def test_server_down_is_one_sentence(down: FairbandClient) -> None:
         {"agent": "claude-opus-5-5", "client": "probe/0"},
         {"refused": NOT_RUNNING},
     ]
+
+
+def test_a_server_that_does_not_answer_in_time_is_its_own_sentence() -> None:
+    def answer(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(answer), base_url=HOST) as http:
+        answers = _session(
+            build_server(FairbandClient(http)),
+            ("screen", {}),
+            ("identify", AGENT),
+            ("note_add", WRITES["note_add"]),
+        )
+    assert answers[0] == answers[2] == {"refused": NO_ANSWER}
+
+
+def test_identify_refuses_an_identifier_that_is_not_printable_ascii(api: FairbandClient) -> None:
+    server = build_server(api)
+    refused, write = _session(
+        server, ("identify", {"agent": "claude-opus-5-5\nX-Other: 1"}), ("inbox_post", ITEM)
+    )
+    assert refused == {"refused": NOT_ASCII}
+    assert write == {"refused": IDENTIFY_FIRST}  # the identity is not set
+
+
+def test_identify_leaves_out_a_client_that_is_not_printable_ascii(api: FairbandClient) -> None:
+    server = build_server(api)
+    accented = Implementation(name="prøbe", version="0")
+    identified, item = _session(
+        server, ("identify", AGENT), ("inbox_post", ITEM), client_info=accented
+    )
+    assert identified == {"agent": "claude-opus-5-5", "client": None}
+    assert (item["postedActor"], item["postedClient"]) == ("claude-opus-5-5", None)
+
+
+class _Answer(BaseHTTPRequestHandler):
+    """A web server on the loopback that answers every read with ``{"ok": true}``."""
+
+    def do_GET(self) -> None:
+        body = b'{"ok": true}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args: object) -> None:  # quiet
+        pass
+
+
+def test_the_command_s_client_takes_no_proxy_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A proxy variable would send every loopback call to the proxy, so a running server would
+    read as down; the command's client reads no setting from the environment."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        nothing = s.getsockname()[1]  # a proxy that is not there
+    for name in ("HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.setenv(name, f"http://127.0.0.1:{nothing}")
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    web = HTTPServer(("127.0.0.1", 0), _Answer)
+    thread = threading.Thread(target=web.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with loopback(web.server_address[1]) as http:
+            assert http.timeout.read == TIMEOUT_S
+            assert FairbandClient(http).get("/api/screen") == {"ok": True}
+    finally:
+        web.shutdown()
+        web.server_close()

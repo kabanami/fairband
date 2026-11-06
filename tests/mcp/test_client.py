@@ -9,7 +9,15 @@ import httpx
 import pytest
 from support.web import HOST
 
-from fairband.mcp.client import NOT_RUNNING, FairbandClient, Refused, ServerDown
+from fairband.mcp.client import (
+    NO_ANSWER,
+    NOT_ASCII,
+    NOT_RUNNING,
+    TIMEOUT_S,
+    FairbandClient,
+    Refused,
+    ServerDown,
+)
 from fairband.reports.check import headings
 from fairband.web.identity import IDENTIFY_FIRST
 
@@ -92,6 +100,26 @@ def test_a_blank_model_identifier_is_refused(api: FairbandClient) -> None:
     assert not api.identified
 
 
+@pytest.mark.parametrize("agent", ["claude-opus-5-5\r\nX-Other: 1", "claude-öpus", "claude\topus"])
+def test_a_model_identifier_that_is_not_printable_ascii_is_refused(
+    api: FairbandClient, agent: str
+) -> None:
+    """A header carries printable ASCII only: such an identifier would break every later call."""
+    api.identify("claude-opus-5-5", "claude-code", "2.1")
+    with pytest.raises(ValueError) as caught:
+        api.identify(agent, "claude-code", "2.1")
+    assert str(caught.value) == NOT_ASCII == "the model identifier must be printable ASCII"
+    item = api.post("/api/inbox", ITEM)  # the identity stays as it was, and every call goes
+    assert (item["postedActor"], item["postedClient"]) == ("claude-opus-5-5", "claude-code/2.1")
+
+
+def test_a_client_name_that_is_not_printable_ascii_is_left_out(api: FairbandClient) -> None:
+    api.identify("claude-opus-5-5", "cliënt", "2.1")
+    assert api.client is None
+    item = api.post("/api/inbox", ITEM)
+    assert (item["postedActor"], item["postedClient"]) == ("claude-opus-5-5", None)
+
+
 def test_a_refusal_carries_the_detail(api: FairbandClient) -> None:
     api.post("/api/inbox", ITEM)
     with pytest.raises(Refused) as caught:
@@ -153,3 +181,29 @@ def test_a_connection_error_is_server_down(down: FairbandClient) -> None:
         down.post("/api/inbox", ITEM)
     assert str(caught.value) == NOT_RUNNING
     assert NOT_RUNNING == "the Fairband server is not running: start `uv run fairband serve`"
+
+
+@pytest.mark.parametrize(
+    "timeout,sentence",
+    [
+        (httpx.ConnectTimeout, NOT_RUNNING),
+        (httpx.ReadTimeout, NO_ANSWER),
+        (httpx.WriteTimeout, NO_ANSWER),
+        (httpx.PoolTimeout, NO_ANSWER),
+    ],
+)
+def test_a_timeout_after_connecting_is_not_a_server_that_is_down(
+    timeout: type[httpx.TimeoutException], sentence: str
+) -> None:
+    """A server that took the call but did not answer in time is running: its sentence says to
+    try again."""
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        raise timeout("timed out", request=request)
+
+    http = httpx.Client(transport=httpx.MockTransport(answer), base_url=HOST)
+    with http, pytest.raises(ServerDown) as caught:
+        FairbandClient(http).get("/api/screen")
+    assert str(caught.value) == sentence
+    assert NO_ANSWER == "the Fairband server did not answer in 60 seconds: try again"
+    assert TIMEOUT_S == 60

@@ -20,7 +20,11 @@ be left out.
 - A write before `identify` answers `{"refused": "identify first: the model identifier you run
   as"}` and calls nothing. The reads and the pass-throughs need no identity.
 - When the web server is down, every tool answers `{"refused": "the Fairband server is not
-  running: start `uv run fairband serve`"}`.
+  running: start `uv run fairband serve`"}`. When it took the call but did not answer in time, the
+  tool answers `{"refused": "the Fairband server did not answer in 60 seconds: try again"}`: call
+  again.
+- A symbol is letters, digits, dots and dashes, in any case (`brk.b` reads `BRK.B`). Any other
+  symbol answers `{"refused": "a symbol is letters, digits, dots and dashes"}` and calls nothing.
 - A record inside an argument (an evidence item, a part, a cite) may name its keys in snake_case
   (`terminal_growth`) or in camelCase (`terminalGrowth`).
 
@@ -87,6 +91,8 @@ pass-throughs are busy: four calls are in flight, try again" (503): wait a littl
 ## The writes
 
 - `identify(agent)`: name the model identifier you run as; every later write is recorded under it.
+  The identifier is printable ASCII: any other answers `{"refused": "the model identifier must be
+  printable ASCII"}`.
 - `inbox_post(symbol, mode, note?)`: post a work item for a company; `mode` is `valuation review`
   or `full report`.
 - `inbox_claim(item_id?)`: claim the named work item, or the oldest pending one; naming a claimed
