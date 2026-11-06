@@ -7,8 +7,12 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.162.0",
     "httpx>=0.28.1",
+    "mcp>=2.3.0",
     "uvicorn[standard]>=0.54.0",
 ]
+
+[project.scripts]
+fairband = "fairband.__main__:main"
 
 [dependency-groups]
 dev = [

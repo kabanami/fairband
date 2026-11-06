@@ -29,7 +29,8 @@ symbol that is not one is a 400.
 
 ``GET /api/methodology/{section}`` answers ``{id, title, text}`` for the Methodology page's
 ``<section id>`` (``methodology_text``), its live values from the effective policy and the latest
-deciles; an unknown id is a 404, "no methodology section <id>".
+deciles; an unknown id is a 404, "no methodology section <id>". ``GET /api/methodology`` lists the
+sections in the page's order, ``{sections: [{id, title}]}``.
 
 ``POST /api/companies/{symbol}/reports`` takes ``{mode, stance, sections: [{heading, parts}],
 judgments: [{judgment, bull, bear, decision, overrideId?}], killCriteria?: [{text}], newsItems?:
@@ -121,7 +122,7 @@ from fairband.store.secondary import latest_secondary
 from fairband.store.settings import read_overlay
 from fairband.store.snapshots import latest_snapshot
 from fairband.web.agents_api import KillCriterionPost, NewsItemPost, WriterOf, gist, record_json
-from fairband.web.methodology_text import section_text
+from fairband.web.methodology_text import section_index, section_text
 from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.settings_api import effective
 
@@ -266,6 +267,10 @@ def add_report_routes(
             },
             "peers": [_peer(symbol, p) for p in found.figures],
         }
+
+    @app.get("/api/methodology")
+    def methodology_sections() -> dict[str, list[dict[str, str]]]:
+        return {"sections": [{"id": s, "title": title} for s, title in section_index()]}
 
     @app.get("/api/methodology/{section}")
     def methodology(section: str) -> dict[str, str]:

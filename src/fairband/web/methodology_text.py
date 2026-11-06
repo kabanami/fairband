@@ -1,5 +1,6 @@
 """The Methodology page's sections as text (spec 2026-11-06 Tier 2, 15.2), for
-``GET /api/methodology/{section}`` and the MCP ``methodology`` tool.
+``GET /api/methodology/{section}`` and the MCP ``methodology`` tool; ``section_index`` lists them
+for ``GET /api/methodology``, each its id and its title, in the page's order.
 
 ``section_text`` reads ``methodology.html`` with ``html.parser``: the title is the section's
 ``h2``, the text the rest of its text content, whitespace collapsed, with a space at each element
@@ -38,6 +39,14 @@ def section_text(
     if not parsed.found:
         return None
     return _collapsed(parsed.title), _collapsed(parsed.text)
+
+
+def section_index() -> list[tuple[str, str]]:
+    """The page's outermost ``<section id>`` elements in order, each its id and its title."""
+    index = _Index()
+    index.feed(_METHODOLOGY.read_text(encoding="utf-8"))
+    index.close()
+    return [(section, _collapsed(title)) for section, title in index.sections]
 
 
 def _collapsed(parts: Sequence[str]) -> str:
@@ -154,6 +163,37 @@ class _Section(HTMLParser):
 
     def _add(self, text: str) -> None:
         (self.title if self.heading else self.text).append(text)
+
+
+class _Index(HTMLParser):
+    """The page's outermost ``<section id>`` elements, each with the text of its first ``h2``."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.sections: list[tuple[str, list[str]]] = []
+        self.depth = 0  # the sections open
+        self.heading = False  # inside the title's h2
+        self.titled = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "section":
+            self.depth += 1
+            section = dict(attrs).get("id")
+            if self.depth == 1 and section:
+                self.sections.append((section, []))
+                self.titled = False
+        elif tag == "h2" and self.depth and self.sections and not self.titled:
+            self.heading = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "section":
+            self.depth -= 1
+        elif tag == "h2" and self.heading:
+            self.heading, self.titled = False, True
+
+    def handle_data(self, data: str) -> None:
+        if self.heading:
+            self.sections[-1][1].append(data)
 
 
 # The page's formats by unit (methodology.js's ``FORMATS``): a fraction as a percentage to one

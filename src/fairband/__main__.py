@@ -1,4 +1,5 @@
-"""Command line: ``python -m fairband serve | refresh | migrate``."""
+"""Command line: ``python -m fairband serve | refresh | migrate | mcp``, or ``fairband`` (the console
+script)."""
 
 import argparse
 import logging
@@ -27,6 +28,7 @@ from fairband.config import (
     utcnow,
 )
 from fairband.engine.types import PHASE_NUMBER
+from fairband.mcp.server import main as run_mcp
 from fairband.policy import load_policy
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.clients import build_clients, build_fmp
@@ -80,6 +82,11 @@ def _build_parser() -> argparse.ArgumentParser:
     commands.add_parser(
         "migrate", help="apply the database migrations and mark interrupted refreshes"
     )
+
+    mcp = commands.add_parser(
+        "mcp", help="serve the agent's tools over stdio, calling the server on 127.0.0.1"
+    )
+    mcp.add_argument("--port", type=int, default=DEFAULT_PORT, help="the server's port")
     return parser
 
 
@@ -377,10 +384,20 @@ def _migrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _mcp(args: argparse.Namespace) -> int:
+    """Serve the agent's tools over stdio (``fairband.mcp.server``) until the host closes the
+    pipe, each tool a call to the web server on ``--port``, which must be running: when it does
+    not answer, each tool answers so in one sentence. Opens no database and reads no key; stdout
+    carries the protocol alone, the log lines go to stderr."""
+    run_mcp(args.port)
+    return 0
+
+
 _COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "serve": _serve,
     "refresh": _refresh,
     "migrate": _migrate,
+    "mcp": _mcp,
 }
 
 

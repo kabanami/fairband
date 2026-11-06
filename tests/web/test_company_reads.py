@@ -234,6 +234,26 @@ def test_a_methodology_section_reads_with_its_live_values(client: TestClient) ->
     assert r.status_code == 404 and r.json()["detail"] == "no methodology section nope"
 
 
+def test_the_methodology_sections_are_listed(client: TestClient) -> None:
+    sections = _get(client, "/api/methodology")["sections"]
+    assert [s["id"] for s in sections] == [
+        "what",
+        "life-cycle",
+        "classifier",
+        "value",
+        "mature-growth",
+        "mature-stable",
+        "growth",
+        "decline",
+        "start-up",
+        "flags",
+        "sources",
+        "your-settings",
+    ]
+    assert sections[0] == {"id": "what", "title": "What Fairband does"}
+    assert sections[6] == {"id": "growth", "title": "High Growth and Young Growth"}
+
+
 def test_a_methodology_section_reads_the_user_s_settings(client: TestClient) -> None:
     r = client.put("/api/settings", json={"changes": {"required_return": 0.1}}, headers=HEADER)
     assert r.status_code == 200, r.text
