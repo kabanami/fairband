@@ -77,3 +77,28 @@ def test_a_row_joins_the_callers_transaction(conn: sqlite3.Connection) -> None:
         record(conn, OWNER, NOW, "note", "AAPL", "notes", 1, summary="a note")
         raise RuntimeError("the record's write failed")
     assert entries(conn) == []
+
+
+def test_a_row_may_point_at_no_record(conn: sqlite3.Connection) -> None:
+    """A rejected report stores nothing but its ledger row, which has no record to name (spec
+    2026-11-06 Tier 2, 13.1)."""
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    record(conn, writer, NOW, "report", "AAPL", None, None, summary="rejected: 2 findings")
+    [row] = entries(conn, "AAPL")
+    assert (row.kind, row.ref_table, row.ref_id, row.summary) == (
+        "report",
+        None,
+        None,
+        "rejected: 2 findings",
+    )
+
+
+@pytest.mark.parametrize(("ref_table", "ref_id"), [("reports", None), (None, 3)])
+def test_a_half_reference_is_refused(
+    conn: sqlite3.Connection, ref_table: str | None, ref_id: int | None
+) -> None:
+    with pytest.raises(
+        ValueError, match="^a ledger reference names its table and its id together$"
+    ):
+        record(conn, OWNER, NOW, "report", "AAPL", ref_table, ref_id, summary="half")
+    assert entries(conn) == []

@@ -4,10 +4,11 @@ Tier 2, section 7).
 A row names its writer: the principal, and for an agent the model identifier it runs as (the
 actor) and its client's name and version. It names the kind of write (``note``, ``finding``,
 ``override``, ``work-item``, ``claim`` and the others of spec 7), the company when there is one,
-the record it points to by table and id, what the write rested on (the company's snapshot and,
-when there is one, the work item), and one line of summary. Rows are appended, never changed, and
-read newest first. ``record`` joins the caller's transaction when it holds one, so a record and
-its ledger row commit together or not at all.
+the record it points to by table and id (neither for a write that stored no record, as a rejected
+report stores none), what the write rested on (the company's snapshot and, when there is one, the
+work item), and one line of summary. Rows are appended, never changed, and read newest first.
+``record`` joins the caller's transaction when it holds one, so a record and its ledger row
+commit together or not at all.
 """
 
 import sqlite3
@@ -43,8 +44,8 @@ class LedgerRow:
     client: str | None
     kind: str
     symbol: str | None
-    ref_table: str
-    ref_id: int
+    ref_table: str | None
+    ref_id: int | None
     snapshot_id: int | None
     work_item_id: int | None
     summary: str
@@ -56,14 +57,17 @@ def record(
     at: datetime,
     kind: str,
     symbol: str | None,
-    ref_table: str,
-    ref_id: int,
+    ref_table: str | None,
+    ref_id: int | None,
     *,
     snapshot_id: int | None = None,
     work_item_id: int | None = None,
     summary: str,
 ) -> int:
-    """Append the write to the ledger; return the row's id."""
+    """Append the write to the ledger; return the row's id. The reference names its table and
+    its id together, or neither."""
+    if (ref_table is None) != (ref_id is None):
+        raise ValueError("a ledger reference names its table and its id together")
     row = (
         dump_stamp(at),
         writer.principal,

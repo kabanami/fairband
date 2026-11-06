@@ -16,8 +16,8 @@ CREATE TABLE ledger (
     client TEXT,
     kind TEXT NOT NULL,
     symbol TEXT,
-    ref_table TEXT NOT NULL,
-    ref_id INTEGER NOT NULL,
+    ref_table TEXT,               -- the record pointed at, both or neither: a rejected report
+    ref_id INTEGER,               -- stores no record
     snapshot_id INTEGER,
     work_item_id INTEGER,
     summary TEXT NOT NULL
