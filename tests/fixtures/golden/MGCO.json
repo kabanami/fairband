@@ -675,6 +675,8 @@
   "margin_direction": "Rising",
   "margin_slope": 0.015000000000000003,
   "phase": "Mature Growth",
+  "positive_years_last_five": 5,
+  "positive_years_on_file": 11,
   "reason": null,
   "revenue_slope": 1429281706.982488,
   "years_used": 11

@@ -117,10 +117,11 @@ def annual(
 
 def universe_deciles() -> Deciles:
     """The classifier tests' universe: 8% revenue growth is decile 6 ("Moderate"), 2% is decile 4
-    ("Low"); a margin slope of 1.5 points a year is decile 8 ("Rising"), a flat margin "Stable"."""
+    ("Low"); a margin slope of 1.5 points a year is decile 9 ("Rising"), -1.5 points decile 2
+    ("Declining") and a flat margin decile 6 ("Stable")."""
     return Deciles(
         growth_edges=(-0.10, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.30),
-        margin_slope_edges=(-0.03, -0.02, -0.01, -0.005, 0.0, 0.005, 0.01, 0.02, 0.03),
+        margin_slope_edges=(-0.03, -0.012, -0.01, -0.005, 0.0, 0.005, 0.01, 0.012, 0.03),
         n_growth=100,
         n_margin=80,
         refresh_id=1,

@@ -9,6 +9,13 @@ The policy name a RULE input cites in its provenance is masked as well: its `sou
 Captured from method 0.7, policy v5, on 2026-11-04, and still the baseline at the start of
 method 0.9; regenerate only when the method changes on purpose.
 
+Re-captured under 0.9 on 2026-11-06 for the classifier (spec 2026-11-06 section 8), for two
+causes: every phase block gains the established test's two counts, `positive_years_last_five` and
+`positive_years_on_file`; and DCCO loses `margin-direction-disagrees` from its flags and its
+checks, since Stable points to no phase (spec 8.3). The figures of every golden are unchanged by
+this re-capture: values, levels, designations, intermediates, inputs and refusals are as captured
+from 0.7.
+
 Run from the repository root:
 
 ```

@@ -57,6 +57,10 @@ def codes(ev: PhaseEvidence) -> set[str]:
     return {c.code for c in ev.checks}
 
 
+def sentence(ev: PhaseEvidence, code: str) -> str:
+    return next(c.sentence for c in ev.checks if c.code == code)
+
+
 @pytest.fixture
 def deciles() -> Deciles:
     return Deciles(
@@ -120,6 +124,67 @@ def test_is_startup() -> None:
 def test_startup_when_revenue_zero_three_years_ago(deciles: Deciles) -> None:
     s = (fy(2022, 0, -5), fy(2023, 10, -8), fy(2024, 40, -9), fy(2025, 120, -9))
     assert classify(s, deciles).phase == "Start-up"
+
+
+def test_an_established_company_is_never_a_start_up(deciles: Deciles) -> None:
+    # spec 2026-11-06 13.4: revenue zero in 2022, three years back, then three years at 10%
+    s = series([0, 100, 120, 150], [-5, 10, 12, 15])
+    assert is_startup(s) and established(s) == (True, 3, 3)
+    ev = classify(s, deciles)
+    assert ev.growth_3y == pytest.approx(1.5**0.5 - 1) and ev.growth_word == "Very High"
+    assert ev.phase == "Mature Growth" and ev.margin_direction == "Stable"
+    assert ev.checks == (
+        Flag(
+            "revenue-gap",
+            "Revenue gap",
+            "Revenue was zero in fiscal 2022, but the margin was above zero in 3 of the last "
+            "five fiscal years and in 3 of the 4 on file, so the company is not a Start-up.",
+        ),
+        Flag(
+            "short-history",
+            "Short history",
+            "Only 4 fiscal years are on file, so the trends cover fewer than five years; "
+            "revenue for fiscal 2022 is zero, so growth runs from fiscal 2023 to 2025 instead "
+            "of over three years.",
+        ),
+    )
+
+
+def test_a_non_established_company_with_zero_revenue_now_is_a_start_up(deciles: Deciles) -> None:
+    s = series([100, 80, 50, 0], [-5, -8, -9, -9])
+    assert established(s) == (False, 0, 0)
+    ev = classify(s, deciles)
+    assert ev.phase == "Start-up" and ev.reason is None and ev.growth_3y is None
+    assert "revenue-gap" not in codes(ev)
+
+
+def test_an_established_company_with_zero_revenue_now_is_unclassified(deciles: Deciles) -> None:
+    # four profitable years, then a reported zero: no positive run ends at the last year
+    s = series([100, 110, 120, 130, 0], [10, 11, 12, 13, -2])
+    assert is_startup(s) and established(s) == (True, 4, 4)
+    ev = classify(s, deciles)
+    assert ev.phase is None and ev.reason == "no measurable revenue growth"
+    assert ev.checks == ()
+    assert (ev.positive_years_last_five, ev.positive_years_on_file) == (None, None)  # a data gap
+
+
+def test_an_established_company_past_the_start_up_rule_can_be_decline(deciles: Deciles) -> None:
+    # revenue zero in 2022, three years back, after a profitable 2021; three falls in four steps
+    s = series([200, 0, 150, 120, 100], [20, -5, 15, 12, 10])
+    assert is_startup(s) and established(s) == (True, 4, 4) and falling_steps(s) == (3, 4)
+    ev = classify(s, deciles)
+    assert ev.growth_3y == pytest.approx((100 / 150) ** 0.5 - 1)
+    assert ev.growth_word == "Close to zero or negative"
+    assert ev.revenue_slope == pytest.approx(-8.0)
+    assert ev.phase == "Decline"
+    assert sentence(ev, "revenue-gap") == (
+        "Revenue was zero in fiscal 2022, but the margin was above zero in 4 of the last five "
+        "fiscal years and in 4 of the 5 on file, so the company is not a Start-up."
+    )
+    assert sentence(ev, "short-history") == (
+        "Revenue for fiscal 2022 is zero, so growth runs from fiscal 2023 to 2025 instead of "
+        "over three years."
+    )
 
 
 def test_zero_first_revenue_in_a_short_series_falls_back(deciles: Deciles) -> None:
@@ -264,7 +329,7 @@ def test_two_steps_on_file_cannot_make_decline(deciles: Deciles) -> None:
 def test_decline_comes_before_the_established_rule(deciles: Deciles) -> None:
     # margins 4%, 4%, 3%, 2%, -1% on four falling steps
     s = series([100, 95, 90, 85, 80], [4, 3.8, 2.7, 1.7, -0.8])
-    assert established(s) == (True, 4) and falling_steps(s) == (4, 4)
+    assert established(s) == (True, 4, 4) and falling_steps(s) == (4, 4)
     ev = classify(s, deciles)
     assert ev.growth_word == "Close to zero or negative"
     assert ev.margin is not None and ev.margin < 0
@@ -284,12 +349,13 @@ def test_young_vs_high_growth_by_margin_slope(deciles: Deciles) -> None:
     assert high.phase == "High Growth"
 
 
-def loss_year(year: int, n: int) -> Flag:
+def loss_year(year: int, n5: int, on_file: int, years: int) -> Flag:
     return Flag(
         "loss-year",
         "Loss year",
-        f"The operating margin is negative in fiscal {year} after a positive margin in {n} of "
-        "the last five fiscal years; the phase follows the growth word.",
+        f"The operating margin is negative in fiscal {year} after a positive margin in {n5} of "
+        f"the last five fiscal years and in {on_file} of the {years} on file; the phase follows "
+        "the growth word.",
     )
 
 
@@ -298,14 +364,15 @@ def test_an_established_company_with_a_loss_year_follows_its_growth_word(
 ) -> None:
     # margins 4%, 4%, 3%, 2%, -1%
     s = series([100, 105, 110, 115, 120], [4, 4.2, 3.3, 2.3, -1.2])
-    assert established(s) == (True, 4)
+    assert established(s) == (True, 4, 4)
     ev = classify(s, deciles)
     assert ev.growth_word == "Moderate" and ev.margin == pytest.approx(-0.01)
     assert ev.phase == "Mature Growth"
-    assert ev.checks == (loss_year(2025, 4),)
+    assert (ev.positive_years_last_five, ev.positive_years_on_file) == (4, 4)
+    assert ev.checks == (loss_year(2025, 4, 4, 5),)
     assert ev.checks[0].sentence == (
         "The operating margin is negative in fiscal 2025 after a positive margin in 4 of the "
-        "last five fiscal years; the phase follows the growth word."
+        "last five fiscal years and in 4 of the 5 on file; the phase follows the growth word."
     )
 
 
@@ -315,14 +382,14 @@ def test_an_established_company_with_a_low_growth_word_is_mature_stable(
     ev = classify(series([100, 100, 100, 100, 100], [4, 4, 3, 2, -1]), deciles)
     assert ev.growth_word == "Low" and ev.margin == pytest.approx(-0.01)
     assert ev.phase == "Mature Stable"
-    assert ev.checks == (loss_year(2025, 4),)
+    assert ev.checks == (loss_year(2025, 4, 4, 5),)
 
 
 def test_a_pre_profit_company_keeps_the_margin_trend_rule(deciles: Deciles) -> None:
     revenue: list[float | None] = [100, 105, 110, 115, 120]  # "Moderate"
     # margins -5%, -4%, -3%, 1%, -1%: one positive year, an improving trend
     rising = series(revenue, [-5, -4.2, -3.3, 1.15, -1.2])
-    assert established(rising) == (False, 1)
+    assert established(rising) == (False, 1, 1)
     ev = classify(rising, deciles)
     assert ev.margin_slope is not None and ev.margin_slope > 0
     assert ev.phase == "High Growth" and "loss-year" not in codes(ev)
@@ -338,7 +405,7 @@ def test_a_pre_profit_company_keeps_the_margin_trend_rule(deciles: Deciles) -> N
 
     # margins -1%, 1%, -3%, -4%, -5%: one positive year, a worsening trend
     falling = series(revenue, [-1, 1.05, -3.3, -4.6, -6])
-    assert established(falling) == (False, 1)
+    assert established(falling) == (False, 1, 1)
     ev = classify(falling, deciles)
     assert ev.margin_slope is not None and ev.margin_slope < 0
     assert ev.phase == "Young Growth" and "loss-year" not in codes(ev)
@@ -348,34 +415,57 @@ def test_a_pre_profit_company_keeps_the_margin_trend_rule(deciles: Deciles) -> N
 def test_exactly_three_positive_years_is_established(deciles: Deciles) -> None:
     flat: list[float | None] = [100, 100, 100, 100, 100]
     three = series(flat, [4, 3, -2, 2, -1])
-    assert established(three) == (True, 3)
+    assert established(three) == (True, 3, 3)
     ev = classify(three, deciles)
-    assert ev.phase == "Mature Stable" and loss_year(2025, 3) in ev.checks
+    assert ev.phase == "Mature Stable" and loss_year(2025, 3, 3, 5) in ev.checks
 
     two = series(flat, [4, -3, -2, 2, -1])
-    assert established(two) == (False, 2)
+    assert established(two) == (False, 2, 2)
     ev = classify(two, deciles)
     assert ev.phase == "Young Growth" and "loss-year" not in codes(ev)
 
     # a margin of exactly zero is not above zero
-    assert established(series(flat, [4, 0, -2, 2, -1])) == (False, 2)
-    # only the last five fiscal years count: the 2019 and 2020 profits are outside them
+    assert established(series(flat, [4, 0, -2, 2, -1])) == (False, 2, 2)
+    # the 2019 and 2020 profits are outside the last five fiscal years, and four profitable
+    # years on file are fewer than five
     seven: list[float | None] = [100, 100, 100, 100, 100, 100, 100]
-    assert established(series(seven, [4, 4, 4, -2, -2, 2, -1])) == (False, 2)
+    assert established(series(seven, [4, 4, 4, -2, -2, 2, -1])) == (False, 2, 4)
 
 
 def test_a_year_without_a_margin_counts_for_nothing(deciles: Deciles) -> None:
     flat: list[float | None] = [100, 100, 100, 100, 100]
     s = series(flat, [5, None, 5, 5, -1])  # 3 positive among the four with a margin
-    assert established(s) == (True, 3)
+    assert established(s) == (True, 3, 3)
     ev = classify(s, deciles)
-    assert ev.phase == "Mature Stable" and loss_year(2025, 3) in ev.checks
+    assert ev.phase == "Mature Stable" and loss_year(2025, 3, 3, 5) in ev.checks
 
-    assert established(series(flat, [5, None, None, 5, -1])) == (False, 2)
+    assert established(series(flat, [5, None, None, 5, -1])) == (False, 2, 2)
 
     # the flag names the year of the deciding margin, the last of the five that has one
     ev = classify(series(flat, [5, 5, 5, -1, None]), deciles)
-    assert ev.phase == "Mature Stable" and loss_year(2024, 3) in ev.checks
+    assert ev.phase == "Mature Stable" and loss_year(2024, 3, 3, 5) in ev.checks
+
+
+def test_five_profitable_years_on_file_make_an_established_company(deciles: Deciles) -> None:
+    # spec 2026-11-06 13.4: eleven years, a 5% margin six times and then -5% five times
+    flat: list[float | None] = [100] * 11
+    s = series(flat, [5, 5, 5, 5, 5, 5, -5, -5, -5, -5, -5])
+    assert established(s) == (True, 0, 6)
+    ev = classify(s, deciles)
+    assert ev.growth_word == "Low" and ev.phase == "Mature Stable"
+    assert (ev.positive_years_last_five, ev.positive_years_on_file) == (0, 6)
+    assert ev.checks == (loss_year(2025, 0, 6, 11),)
+    assert "0 of the last five fiscal years and in 6 of the 11 on file" in sentence(ev, "loss-year")
+
+
+def test_four_profitable_years_on_file_are_not_established(deciles: Deciles) -> None:
+    flat: list[float | None] = [100] * 11
+    s = series(flat, [5, 5, 5, 5, -5, -5, -5, -5, -5, -5, -5])
+    assert established(s) == (False, 0, 4)
+    ev = classify(s, deciles)
+    assert ev.margin_slope == 0.0 and ev.phase == "Young Growth"  # rule 4b, no improving trend
+    assert (ev.positive_years_last_five, ev.positive_years_on_file) == (0, 4)
+    assert "loss-year" not in codes(ev)
 
 
 def test_growth_word_disagrees_is_silent_under_the_established_rule(deciles: Deciles) -> None:
@@ -384,7 +474,7 @@ def test_growth_word_disagrees_is_silent_under_the_established_rule(deciles: Dec
     ev = classify(s, deciles)
     assert ev.growth_word == "Very High" and ev.phase == "Mature Growth"
     assert "growth-word-disagrees" not in codes(ev)
-    assert ev.checks == (loss_year(2025, 4),)
+    assert ev.checks == (loss_year(2025, 4, 4, 5),)
 
 
 def test_mature_growth_vs_stable_by_growth_word(deciles: Deciles) -> None:
@@ -426,7 +516,9 @@ def test_checks_never_change_phase(deciles: Deciles) -> None:
 
 
 def test_margin_direction_and_its_check(deciles: Deciles) -> None:
-    rising = classify(series([100, 101, 102, 103], [10, 12, 14, 16]), deciles)
+    rising = classify(series([100, 101, 102, 103], [10, 13, 16, 19]), deciles)
+    assert rising.margin_slope is not None
+    assert decile(rising.margin_slope, deciles.margin_slope_edges) == 9
     assert rising.margin_direction == "Rising" and rising.phase == "Mature Stable"
     assert "margin-direction-disagrees" in codes(rising)
 
@@ -435,7 +527,7 @@ def test_margin_direction_and_its_check(deciles: Deciles) -> None:
     assert "margin-direction-disagrees" in codes(declining)
 
     stable = classify(series([100, 101, 102, 103], [10, 10, 10, 10]), deciles)
-    assert stable.margin_direction == "Stable"
+    assert stable.margin_direction == "Stable" and stable.phase == "Mature Stable"
     assert "margin-direction-disagrees" not in codes(stable)
 
     negative = classify(series([100, 101, 102, 103], [-50, -40, -30, -20]), deciles)
@@ -443,17 +535,63 @@ def test_margin_direction_and_its_check(deciles: Deciles) -> None:
 
 
 def test_margin_direction_needs_the_slope_sign(deciles: Deciles) -> None:
-    falling_year = replace(deciles, margin_slope_edges=tuple(-k / 100 for k in range(9, 0, -1)))
+    # a slope below zero in decile 9 (eight edges below it, the ninth at zero) is not Rising
+    falling_year = replace(deciles, margin_slope_edges=(*(-k / 100 for k in range(9, 1, -1)), 0.0))
     ev = classify(series([100, 101, 102, 103], [10, 10, 10, 10]), falling_year)
     assert ev.margin_slope is not None and ev.margin_slope < 0
-    assert decile(ev.margin_slope, falling_year.margin_slope_edges) == 10
+    assert decile(ev.margin_slope, falling_year.margin_slope_edges) == 9
     assert ev.margin_direction == "Stable"
 
-    rising_year = replace(deciles, margin_slope_edges=tuple(k / 100 for k in range(1, 10)))
+    # a slope above zero in decile 2 (the first edge at zero, the rest above it) is not Declining
+    rising_year = replace(deciles, margin_slope_edges=(0.0, *(k / 100 for k in range(2, 10))))
     ev = classify(series([100, 101, 102, 103], [10, 10.2, 10.4, 10.6]), rising_year)
     assert ev.margin_slope is not None and ev.margin_slope > 0
-    assert decile(ev.margin_slope, rising_year.margin_slope_edges) == 1
+    assert decile(ev.margin_slope, rising_year.margin_slope_edges) == 2
     assert ev.margin_direction == "Stable"
+
+
+@pytest.mark.parametrize(
+    ("income", "slope_decile", "direction"),
+    [
+        ([10, 12.5, 15, 17.5], 9, "Rising"),
+        ([10, 11.5, 13, 14.5], 8, "Stable"),
+        ([20, 17.5, 15, 12.5], 2, "Declining"),
+        ([20, 18.5, 17, 15.5], 3, "Stable"),
+    ],
+)
+def test_margin_direction_reads_deciles_nine_and_two(
+    deciles: Deciles, income: list[float | None], slope_decile: int, direction: str
+) -> None:
+    # spec 2026-11-06 13.4: margin slopes of +2.5, +1.5, -2.5 and -1.5 points a year
+    ev = classify(series([100, 100, 100, 100], income), deciles)
+    assert ev.margin_slope is not None
+    assert decile(ev.margin_slope, deciles.margin_slope_edges) == slope_decile
+    assert ev.margin_direction == direction
+
+
+def test_stable_points_nowhere(deciles: Deciles) -> None:
+    # "High" growth at a flat 10% margin: Mature Growth, Stable, no check
+    growth = classify(series([100, 110, 120, 130], [10, 11, 12, 13]), deciles)
+    assert growth.phase == "Mature Growth" and growth.margin_direction == "Stable"
+    assert "margin-direction-disagrees" not in codes(growth)
+
+    # four falls at a flat 10% margin: Decline, Stable, no check
+    decline = classify(series([100, 95, 90, 85, 80], [10, 9.5, 9, 8.5, 8]), deciles)
+    assert decline.phase == "Decline" and decline.margin_direction == "Stable"
+    assert "margin-direction-disagrees" not in codes(decline)
+
+    # flat revenue with the margin up 2.5 points a year: Mature Stable, Rising, the check
+    rising = classify(series([100, 100, 100, 100], [10, 12.5, 15, 17.5]), deciles)
+    assert rising.phase == "Mature Stable" and rising.margin_direction == "Rising"
+    assert (
+        Flag(
+            "margin-direction-disagrees",
+            "Margin direction disagrees",
+            'The operating margin trend is "Rising", which points to Mature Growth, '
+            "while the rules gave Mature Stable.",
+        )
+        in rising.checks
+    )
 
 
 def test_fcf_sign_check(deciles: Deciles) -> None:

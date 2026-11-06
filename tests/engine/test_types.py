@@ -64,6 +64,8 @@ def sample_result() -> ValuationResult:
             phase="Mature Growth",
             reason=None,
             years_used=5,
+            positive_years_last_five=4,
+            positive_years_on_file=5,
             growth_3y=0.11,
             growth_word="moderate",
             growth_decile=6,
@@ -130,6 +132,17 @@ def test_a_0_7_result_reads_with_the_empty_settings_hash(sample_result: Valuatio
     del d["settings_hash"]
     assert result_from_json(json.dumps(d, sort_keys=True)) == sample_result
     assert result_from_json(result_to_json(custom)) == custom
+
+
+def test_a_0_8_result_reads_with_no_established_counts(sample_result: ValuationResult) -> None:
+    """A result classified before method 0.9 carries neither count of the established test: it
+    reads ``None`` for both until a revalue replaces it."""
+    d = json.loads(result_to_json(sample_result))
+    assert (d["phase"]["positive_years_last_five"], d["phase"]["positive_years_on_file"]) == (4, 5)
+    del d["phase"]["positive_years_last_five"], d["phase"]["positive_years_on_file"]
+    read = result_from_json(json.dumps(d, sort_keys=True))
+    phase = replace(sample_result.phase, positive_years_last_five=None, positive_years_on_file=None)
+    assert read == replace(sample_result, phase=phase)
 
 
 def test_refusal_json_round_trip(sample_result: ValuationResult) -> None:

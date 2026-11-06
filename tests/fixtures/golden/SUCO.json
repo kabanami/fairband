@@ -504,6 +504,8 @@
   "margin_direction": null,
   "margin_slope": null,
   "phase": "Start-up",
+  "positive_years_last_five": 0,
+  "positive_years_on_file": 0,
   "reason": null,
   "revenue_slope": 0.0,
   "years_used": 5

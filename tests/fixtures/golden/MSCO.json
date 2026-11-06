@@ -533,6 +533,8 @@
   "margin_direction": "Stable",
   "margin_slope": 0.0,
   "phase": "Mature Stable",
+  "positive_years_last_five": 5,
+  "positive_years_on_file": 11,
   "reason": null,
   "revenue_slope": 464141804.8690907,
   "years_used": 11

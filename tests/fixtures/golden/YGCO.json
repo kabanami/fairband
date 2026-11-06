@@ -821,6 +821,8 @@
   "margin_direction": null,
   "margin_slope": -0.029999999999999992,
   "phase": "Young Growth",
+  "positive_years_last_five": 0,
+  "positive_years_on_file": 0,
   "reason": null,
   "revenue_slope": 1415549077.0312505,
   "years_used": 8

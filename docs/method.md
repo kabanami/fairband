@@ -8,7 +8,7 @@
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
 
-The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec, the growth routes spec and the 2026-11-03 spec of the rate limiter, the classifier fixes and the designation (`2026-11-03-classifier-designation-ends-design.md`) and the 2026-11-04 spec of the Methodology page, the settings and the watchlists (`2026-11-04-methodology-settings-watchlists-design.md`) under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
+The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec, the growth routes spec and the 2026-11-03 spec of the rate limiter, the classifier fixes and the designation (`2026-11-03-classifier-designation-ends-design.md`) and the 2026-11-04 spec of the Methodology page, the settings and the watchlists (`2026-11-04-methodology-settings-watchlists-design.md`) and the 2026-11-06 spec of the engine round (`2026-11-06-engine-round-design.md`) under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
 
 ## 0. How to read this document
 
@@ -101,15 +101,15 @@ The operating margin of a year is operating income ÷ revenue, defined only when
 
 The margin direction exists for a margin at or above zero with a trend. The positive-margin companies' margin slopes are ranked into deciles at the refresh, as the growth rates are:
 
-- decile 8 or higher and a slope above zero: **Rising**;
-- decile 3 or lower and a slope below zero: **Declining**;
-- otherwise **Stable**.
+- decile 9 or higher and a slope above zero: **Rising**;
+- decile 2 or lower and a slope below zero: **Declining**;
+- otherwise **Stable**, which points to no phase (3.6).
 
 ### 3.5 The rules
 
 The first rule that fits decides the phase.
 
-1. A Start-up (3.2) is **Start-up**.
+1. A Start-up (3.2) that is not established is **Start-up**. An established company whose revenue was zero three years ago goes on to rules 2 to 5, its growth measured over the run of positive revenues after the zero (3.2), and is flagged `revenue-gap`; one whose revenue is zero now has no measurable growth and is unclassified (3.8).
 2. A growth word of "Close to zero or negative" with a falling five-year revenue trend and revenue that fell in at least three of the last four year-over-year steps is **Decline**, whatever the margin. The steps are those between the last five fiscal years; a step is a fall when both years have a revenue and the later is below the earlier, and a step with a missing year is not a fall. With fewer than three steps on file the rule cannot fire.
 3. With no operating margin in the last five fiscal years, the company is unclassified ("no operating margin").
 4. A negative margin:
@@ -117,7 +117,7 @@ The first rule that fits decides the phase.
    - (4b) of any other company is **High Growth** when the margin trend is above zero, else **Young Growth** (a missing trend or a slope of exactly zero counts as not improving).
 5. A margin at or above zero with a growth word of "Very High", "High" or "Moderate" is **Mature Growth**; with "Low" or "Close to zero or negative" it is **Mature Stable**. A margin of exactly zero counts as positive and is flagged.
 
-A company is **established** when at least three of the last five fiscal years on file have an operating margin above zero; a year without a margin counts for nothing.
+A company is **established** when at least three of the last five fiscal years on file, or at least five of the fiscal years on file (3.1, eleven at most), have an operating margin above zero; a year without a margin counts for nothing in either count.
 
 ### 3.6 The checks
 
@@ -126,9 +126,10 @@ A check flags the company and never changes its phase.
 | Check | Flag code | When it fires |
 |---|---|---|
 | Growth word | `growth-word-disagrees` | Negative margin of a company that is not established (rule 4b). The growth word points to another phase: Very High → Young Growth, High → High Growth, Moderate → Mature Growth, Low → Mature Stable, Close to zero or negative → Decline. |
-| Loss year | `loss-year` | Rule 4a decides the phase: a negative margin of an established company. The sentence names the fiscal year of the deciding margin and how many of the last five fiscal years have a margin above zero. |
+| Loss year | `loss-year` | Rule 4a decides the phase: a negative margin of an established company. The sentence names the fiscal year of the deciding margin, how many of the last five fiscal years have a margin above zero and how many of the fiscal years on file do. |
+| Revenue gap | `revenue-gap` | Rule 1 lets an established company whose revenue was zero three years ago through to rules 2 to 5. The sentence names the fiscal year of the zero and the two counts of the established test. An unclassified row is not flagged. |
 | Revenue falling | `revenue-falling` | A growth word of "Close to zero or negative" with a falling five-year revenue trend, and revenue that fell in fewer than three of the last four year-over-year steps (rule 2). The sentence names the falls. |
-| Margin direction | `margin-direction-disagrees` | Margin at or above zero with a direction. The direction points to another phase: Rising → Mature Growth, Stable → Mature Stable, Declining → Decline. |
+| Margin direction | `margin-direction-disagrees` | Margin at or above zero with a direction of Rising or Declining. The direction points to another phase: Rising → Mature Growth, Declining → Decline. Stable points to no phase and never fires. |
 | Free cash flow sign | `fcf-sign` | The last fiscal year's operating cash flow plus capital spending is negative in Mature Growth, Mature Stable or Decline, or positive in Start-up, Young Growth or High Growth. A zero does not fire. |
 | Short history | `short-history` | Fewer than five fiscal years on file, or a growth span shorter than three years. |
 | Zero margin | `margin-zero` | The deciding margin is exactly zero. |
@@ -150,7 +151,7 @@ A zero has neither sign and lands in Shake-out unless the pattern is Decline. A 
 
 ### 3.8 Unclassified companies
 
-A company is unclassified, with the reason as its refusal, when its series has fewer than two fiscal years, no revenue for the last fiscal year, a negative last revenue, no measurable revenue growth (a non-Start-up with no positive run of two years), or no operating margin when the margin must decide. An unclassified company does not enter the deciles.
+A company is unclassified, with the reason as its refusal, when its series has fewer than two fiscal years, no revenue for the last fiscal year, a negative last revenue, no measurable revenue growth (a company rule 1 does not make a Start-up with no positive run of two years, among them an established company whose revenue is zero now), or no operating margin when the margin must decide. An unclassified company does not enter the deciles.
 
 ## 4. The engine's shared pieces
 
@@ -849,7 +850,7 @@ Eleven flags are quality warnings: they say the value may be wrong because the b
 
 | Code | Counts | Rule |
 |---|---|---|
-| `growth-word-disagrees`, `loss-year`, `revenue-falling`, `margin-direction-disagrees`, `fcf-sign`, `short-history`, `margin-zero`, `currency-change` | no | the classifier checks, 3.6 |
+| `growth-word-disagrees`, `loss-year`, `revenue-gap`, `revenue-falling`, `margin-direction-disagrees`, `fcf-sign`, `short-history`, `margin-zero`, `currency-change` | no | the classifier checks, 3.6 |
 | `currency-unknown` | no | no annual income statement gives the reporting currency (the screener row never carries one); the company is treated as a foreign filer |
 | `tax-carried-forward` | no | a fiscal year after the tax table's newest year took that year's rate |
 | `leases-not-on-balance-sheet` | no | a balance sheet before 15 December 2019 shows no lease assets |
@@ -942,7 +943,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.6 | 2026-11-03 | The FMP pace (section 2); the universe's six excluded financial industries, its manual admission list, and the manual exclusion checked before every other rule (section 1); the established company with a loss year (3.5 rule 4a) and the Decline duration test (rule 2); the stance leaves the engine; the designation on price ÷ value (4.10). Policy v5 adds the values of the limiter, the universe's admission list and six excluded industries, the designation edges and the Decline and Start-up routes' values (the routes come with 0.7). |
 | 0.7 | 2026-11-03 | The Decline route (section 6a): the run-off on the consensus path and the five-year trend's decline rate, floored at −50%; the normalized margin; the capital release; the perpetuity at the decline rate; the net-current-asset floor; the distress-sale value weighted by the synthetic rating's ten-year default probability; Altman Z″, Piotroski F and the reinvesting-in-decline flag; the implied decline rate at the price. The Start-up route (section 6b): no value by design, the refusal "Start-up: no value by design" with the year-10 revenue the price needs on a ten-year ramp to the mature peers' margin, the cash floor and the burn cover; the requirement rebuilt at the price. Policy v5 unchanged. |
 | 0.8 | 2026-11-04 | The settings: the forty policy values of 4.1 marked as settings may be changed, and the engine runs the effective policy, the file's values with the user's overlay applied; every result cites its settings hash (4.1). The repricing horizon is a policy value, H (5.10): the growth term reads years 2 to H + 1, the path grows at g_T past the runway (d on the Decline route), and a horizon longer than the path never fails. The flag count: the eleven quality warnings count, every other flag is a note (section 8). Policy v6: the designation edges derived from the Narrow margin of safety, the fair band and the trim multiple (4.10); the Wide cap r plus `wide_terminal_roic_spread` (4.7); `repricing_horizon_years`; the range checks at load. At the defaults every value, level, designation and flag is what method 0.7 and policy v5 give. |
-| 0.9 | 2026-11-06 | The engine round (spec 2026-11-06). The Decline route (6a.2, 6a.5): the run-off reads the consensus past year 3 while a year has a revenue mean above zero and at least `analyst_min` revenue analysts, the decline rate then fades in a straight line to zero by year N, and the terminal is flat on year N's revenue. The revenue-growth route (5a.4, 5a.5): the company's own sales-to-capital is usable only at half the mature peers' median or more, and a trailing loss larger than revenue moves in dollars to the target margin, as the Start-up ramp does. The classifier (3.5): a company with a margin above zero in five of the fiscal years on file is established, and an established company is never a Start-up. The margin-direction check (3.4, 3.6): deciles 9 and 2, and Stable points nowhere. The tax table covers every jurisdiction of the OECD series, Taiwan and Cyprus by hand (4.3). A Mature Stable row refused "no positive trailing earnings" keeps the growth-route cross-check (6.1, 6.4). Policy v7 adds `own_sales_to_capital_min_share` and `loss_ramp_margin_bound`, neither a setting (4.1). At the defaults every row the changes do not touch keeps its figures. |
+| 0.9 | 2026-11-06 | The engine round (spec 2026-11-06). The Decline route (6a.2, 6a.5): the run-off reads the consensus past year 3 while a year has a revenue mean above zero and at least `analyst_min` revenue analysts, the decline rate then fades in a straight line to zero by year N, and the terminal is flat on year N's revenue. The revenue-growth route (5a.4, 5a.5): the company's own sales-to-capital is usable only at half the mature peers' median or more, and a trailing loss larger than revenue moves in dollars to the target margin, as the Start-up ramp does. The classifier (3.5): a company with a margin above zero in five of the fiscal years on file is established, and an established company is never a Start-up. The margin-direction check (3.4, 3.6): deciles 9 and 2, and Stable points nowhere. The tax table covers every jurisdiction of the OECD series, Taiwan and Cyprus by hand (4.3). A Mature Stable row refused "no positive trailing earnings" keeps the growth-route cross-check (6.1, 6.4). Policy v7 adds `own_sales_to_capital_min_share` and `loss_ramp_margin_bound`, neither a setting (4.1). At the defaults every row the changes do not touch, directly or through its mature peers, keeps its figures. |
 
 A snapshot names the method and policy versions and the settings hash that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
@@ -954,6 +955,7 @@ The labels are those of the research notes in the openalice workspace (H), the s
 |---|---|
 | The six phases, the two deciding variables, the decile grid, the duration test for Decline | Damodaran, *The Corporate Life Cycle* ch. 2 and 3; design.md 5 |
 | The established company: a negative margin after a margin above zero in three of the last five fiscal years takes the growth word's phase (3.5 rule 4a) | Damodaran, *The Corporate Life Cycle* ch. 3 (the phases marked by the direction of the numbers); spec 2026-11-03 6.2 |
+| The established company also on five profitable fiscal years on file, and never a Start-up (3.5 rules 1 and 4a); the margin direction at deciles 9 and 2, Stable pointing to no phase (3.4, 3.6) | founder decisions 2026-11-06; spec 2026-11-06 8.1 to 8.3 |
 | The Decline duration test: revenue fell in three of the last four year-over-year steps (3.5 rule 2) | Damodaran, *The Corporate Life Cycle* ch. 2 s.20 (one or two years of falling revenue can be explained away; a string of years is decay); spec 2026-11-03 6.3 |
 | Dickinson's stages | Dickinson (2011), *The Accounting Review* 86(6), Table 1 |
 | The reinvestment charge, earnings × (1 − g ÷ return) | McKinsey value-driver formula (V99); design.md 6.5 change 1 |

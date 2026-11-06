@@ -9,7 +9,8 @@ anywhere is refused, since RFC 8259 JSON has no such number.
 ``stance3`` and no designation: it drops the two stance keys and reads ``None`` for
 ``price_to_value`` and ``designation``. A result valued before method 0.8 carries no
 ``settings_hash``; it was valued under the policy file alone, so it reads the empty overlay's
-hash.
+hash. A result classified before method 0.9 carries neither ``positive_years_last_five`` nor
+``positive_years_on_file`` in its phase evidence, and reads ``None`` for both.
 """
 
 import json
@@ -76,9 +77,17 @@ class Levels:
 
 @dataclass(frozen=True)
 class PhaseEvidence:
+    """The classifier's evidence. ``positive_years_last_five`` and ``positive_years_on_file``
+    are the established test's two counts (``method.md`` 3.5): the fiscal years with an operating
+    margin above zero among the last five and among all on file. Both are ``None`` where nothing
+    was counted: a data gap, a row refused before the classifier ran, a result classified before
+    method 0.9."""
+
     phase: Phase | None
     reason: str | None
     years_used: int
+    positive_years_last_five: int | None
+    positive_years_on_file: int | None
     growth_3y: float | None
     growth_word: str | None
     growth_decile: int | None
@@ -122,13 +131,15 @@ def result_to_json(r: ValuationResult) -> str:
 def result_from_json(s: str) -> ValuationResult:
     """The result ``result_to_json`` wrote, with its dates, tuples and nested types restored; a
     0.5 snapshot's stance keys dropped and its missing designation ``None``; a missing settings
-    hash the empty overlay's."""
+    hash the empty overlay's; the established test's missing counts ``None``."""
     d = json.loads(s)
     d.pop("stance5", None)
     d.pop("stance3", None)
     d.setdefault("price_to_value", None)
     d.setdefault("designation", None)
     d.setdefault("settings_hash", EMPTY_SETTINGS_HASH)
+    d["phase"].setdefault("positive_years_last_five", None)
+    d["phase"].setdefault("positive_years_on_file", None)
     return ValuationResult(
         **{
             **d,

@@ -2,13 +2,7 @@
  "data_date": "2026-10-30",
  "deciles_refresh_id": 1,
  "designation": "below",
- "flags": [
-  {
-   "code": "margin-direction-disagrees",
-   "sentence": "The operating margin trend is \"Stable\", which points to Mature Stable, while the rules gave Decline.",
-   "word": "Margin direction disagrees"
-  }
- ],
+ "flags": [],
  "inputs": [
   {
    "estimate_method": null,
@@ -1095,13 +1089,7 @@
   "trim": 6.476988556419016
  },
  "phase": {
-  "checks": [
-   {
-    "code": "margin-direction-disagrees",
-    "sentence": "The operating margin trend is \"Stable\", which points to Mature Stable, while the rules gave Decline.",
-    "word": "Margin direction disagrees"
-   }
-  ],
+  "checks": [],
   "dickinson": "Mature",
   "fcf_sign": "positive",
   "growth_3y": -0.05896397111897145,
@@ -1111,6 +1099,8 @@
   "margin_direction": "Stable",
   "margin_slope": 0.0029999999999999983,
   "phase": "Decline",
+  "positive_years_last_five": 5,
+  "positive_years_on_file": 5,
   "reason": null,
   "revenue_slope": -40000000.0,
   "years_used": 5

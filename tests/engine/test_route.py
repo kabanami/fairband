@@ -999,10 +999,12 @@ def test_a_start_up_row_takes_its_route_and_an_unclassified_row_is_refused(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """A Start-up row is the Start-up route's refusal with its figures
-    (``test_route_start_up.py``): here, revenue zero three years back and no peers, so the
+    (``test_route_start_up.py``): here, revenue zero three years back on a company that never made
+    an operating profit (an established one is never a Start-up, method 3.5) and no peers, so the
     requirement carries its reason. An unclassified row keeps the classifier's reason."""
     series = mg_inputs.series
-    start_up = (*series[:-4], replace(series[-4], revenue=0.0), *series[-3:])
+    losses = tuple(replace(fy, operating_income=-1.0) for fy in series)
+    start_up = (*losses[:-4], replace(losses[-4], revenue=0.0), *losses[-3:])
     r = value_company(replace(mg_inputs, series=start_up), deciles, policy, TODAY)
     assert (r.phase.phase, r.route, r.refusal) == (
         "Start-up",

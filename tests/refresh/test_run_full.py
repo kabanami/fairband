@@ -55,8 +55,8 @@ NO_TARGET = "no target margin: 0 mature peers"
 FOREIGN = "foreign filer: currency and share-unit handling not built yet"
 # The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused. Every company
 # carries a flag (the synthetic company has no leases on its balance sheet, among others), but
-# only ACME, AXLE (margin direction) and NEWT (growth word, free cash flow) are flagged by a
-# classifier check. NEWT's refusal for its target margin keeps the flags of its revenue path (the
+# only NEWT (growth word, free cash flow) is flagged by a classifier check: ACME's and AXLE's
+# margin directions read Stable, which points to no phase (method 0.9). NEWT's refusal for its target margin keeps the flags of its revenue path (the
 # annual consensus has no revenue for a path year, so the path holds), of its capital build, and
 # of the industry fallback for its peers.
 CALIBRATION = {
@@ -72,7 +72,7 @@ CALIBRATION = {
         "Decline": 0,
         "unclassified": 0,
     },
-    "flagged": 3,
+    "flagged": 1,
     "flags": {
         "fcf-sign": 1,
         "growth-word-disagrees": 1,
@@ -81,7 +81,6 @@ CALIBRATION = {
         "line-not-presented:current_lease_liability": 4,
         "line-not-presented:goodwill": 4,
         "line-not-presented:lease_rou_asset": 4,
-        "margin-direction-disagrees": 2,
         "path-held": 1,
         "path-on-eps": 2,
         "peers-from-industry": 1,
@@ -589,7 +588,7 @@ def test_cli_full_refresh_prints_calibration(
     assert out[out.index("done: 4 done, 0 failed, 0 to go") :] == [
         "done: 4 done, 0 failed, 0 to go",
         "refresh 1: done",
-        "4 companies · 3 valued · 3 flagged by a classifier check",
+        "4 companies · 3 valued · 1 flagged by a classifier check",
         "Start-up: 0",
         "Young Growth: 1",
         "High Growth: 0",

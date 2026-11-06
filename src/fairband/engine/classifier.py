@@ -1,27 +1,31 @@
 """Damodaran's six life-cycle phases from revenue growth and operating margin (``design.md`` 5).
 
 The rules run in the order of ``method.md`` 3.5 and the first that fits decides the phase: a zero
-revenue now or three years back is Start-up; growth "Close to zero or negative" with a falling
-five-year revenue trend and revenue that fell in at least three of the last four year-over-year
-steps is Decline; a negative margin of an established company (an operating margin above zero in
-at least three of the last five fiscal years) takes the growth word's phase as a positive margin
+revenue now or three years back is Start-up unless the company is established (an operating
+margin above zero in at least three of the last five fiscal years, or in at least five of the
+fiscal years on file); growth "Close to zero or negative" with a falling five-year revenue trend
+and revenue that fell in at least three of the last four year-over-year steps is Decline; a
+negative margin of an established company takes the growth word's phase as a positive margin
 would, and any other negative margin is Young Growth, or High Growth when its trend improves; a
 positive margin is Mature Growth or Mature Stable by the growth word. A margin of exactly zero
 counts as positive. The checks flag a company but never change its phase.
 
 A data gap leaves the phase ``None`` with a reason: fewer than two fiscal years, no revenue or a
 negative revenue for the last fiscal year, no measurable revenue growth, or no operating margin
-when the margin must decide. A zero revenue is a reported zero, never a missing one.
+when the margin must decide. A zero revenue is a reported zero, never a missing one; an
+established company whose revenue is zero now has no measurable growth.
 
 Growth is the CAGR from the fiscal year three years back to the last, or over the span on file
 when there are two or three years. When the first year of that span has a missing, zero or
 negative revenue, growth runs over the longest run of consecutive positive revenues that ends
 at the last year. The growth word and the margin direction are deciles of the universe at the
-refresh (``Deciles``). The revenue and margin trends are least-squares slopes against the year
-index of the last five fiscal years, at least three points; a year with no value (for the
-margin: revenue or operating income missing, or revenue zero or negative) is skipped but the
-years after it keep their place. The margin sign comes from the last of those five years that
-has a margin. Fewer than five fiscal years, or a shortened growth span, is "short history".
+refresh (``Deciles``): the direction is Rising at decile 9 or higher with a slope above zero,
+Declining at decile 2 or lower with a slope below zero, and Stable otherwise, which points to
+no phase. The revenue and margin trends are least-squares slopes against the year index of the
+last five fiscal years, at least three points; a year with no value (for the margin: revenue or
+operating income missing, or revenue zero or negative) is skipped but the years after it keep
+their place. The margin sign comes from the last of those five years that has a margin. Fewer
+than five fiscal years, or a shortened growth span, is "short history".
 """
 
 import itertools
@@ -37,6 +41,7 @@ _TREND_WINDOW = 5
 _TREND_MIN_POINTS = 3
 
 ESTABLISHED_YEARS = 3
+ESTABLISHED_YEARS_ON_FILE = 5
 DECLINE_FALLS = 3
 DECLINE_STEPS = 4
 
@@ -49,9 +54,8 @@ _GROWTH_WORD_PHASE: dict[str, Phase] = {
     "Low": "Mature Stable",
     "Close to zero or negative": "Decline",
 }
-_DIRECTION_PHASE: dict[str, Phase] = {
+_DIRECTION_PHASE: dict[str, Phase] = {  # Stable points to no phase (spec 2026-11-06 8.3)
     "Rising": "Mature Growth",
-    "Stable": "Mature Stable",
     "Declining": "Decline",
 }
 _FCF_EXPECTED: dict[Phase, str] = {
@@ -112,7 +116,7 @@ def growth_3y(series: Series) -> float | None:
     revenues that ends at the last year. ``None`` for a Start-up (``is_startup``), when the last
     revenue is missing or negative, or when that run is shorter than two years.
     """
-    growth = _growth(series)
+    growth = None if is_startup(series) else _growth(series)
     return None if growth is None else growth[0]
 
 
@@ -131,16 +135,18 @@ def operating_margin(fy: FiscalYear) -> float | None:
     return fy.operating_income / fy.revenue
 
 
-def established(series: Series) -> tuple[bool, int]:
-    """Whether the company is established, and the count of years that decides it.
+def established(series: Series) -> tuple[bool, int, int]:
+    """Whether the company is established, with the two counts that decide it: the fiscal years
+    with an operating margin above zero among the last five, and among all on file.
 
-    Established: at least three of the last five fiscal years have an operating margin above
-    zero. A year without a margin counts for nothing.
+    Established: at least three of the last five fiscal years, or at least five of the fiscal
+    years on file, have an operating margin above zero. A year without a margin counts for
+    nothing in either count.
     """
-    count = sum(
-        1 for fy in series[-_TREND_WINDOW:] if (m := operating_margin(fy)) is not None and m > 0
-    )
-    return count >= ESTABLISHED_YEARS, count
+    positive = [(m := operating_margin(fy)) is not None and m > 0 for fy in series]
+    last_five, on_file = sum(positive[-_TREND_WINDOW:]), sum(positive)
+    is_established = last_five >= ESTABLISHED_YEARS or on_file >= ESTABLISHED_YEARS_ON_FILE
+    return is_established, last_five, on_file
 
 
 def falling_steps(series: Series) -> tuple[int, int]:
@@ -226,6 +232,8 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
             phase=None,
             reason=gap,
             years_used=n,
+            positive_years_last_five=None,
+            positive_years_on_file=None,
             growth_3y=None,
             growth_word=None,
             growth_decile=None,
@@ -238,7 +246,9 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
             checks=(),
         )
 
-    growth = _growth(series)
+    is_established, positive_years, positive_on_file = established(series)
+    start_up = _start_up(series)
+    growth = None if start_up else _growth(series)
     g3 = None if growth is None else growth[0]
     span = None if growth is None else growth[1]
     g_decile = None if g3 is None else decile(g3, deciles.growth_edges)
@@ -249,11 +259,10 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
     m_slope = _trend(series, operating_margin)
     direction = _margin_direction(margin, m_slope, deciles.margin_slope_edges)
     fcf = _fcf_sign(series[-1])
-    is_established, positive_years = established(series)
     falls, _ = falling_steps(series)
 
     phase: Phase | None
-    if is_startup(series):
+    if start_up:
         phase = "Start-up"
     elif (
         g_word == GROWTH_WORDS[0]
@@ -275,6 +284,8 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
         phase=phase,
         reason="no operating margin" if phase is None else None,
         years_used=n,
+        positive_years_last_five=positive_years,
+        positive_years_on_file=positive_on_file,
         growth_3y=g3,
         growth_word=g_word,
         growth_decile=g_decile,
@@ -299,6 +310,7 @@ def classify(series: Series, deciles: Deciles) -> PhaseEvidence:
                 fcf,
                 is_established,
                 positive_years,
+                positive_on_file,
                 falls,
             )
         ),
@@ -314,15 +326,19 @@ def _data_gap(series: Series) -> str | None:
         return "no revenue for the last fiscal year"
     if last < 0:
         return "negative revenue"
-    if not is_startup(series) and _growth(series) is None:
+    if not _start_up(series) and _growth(series) is None:
         return "no measurable revenue growth"
     return None
 
 
+def _start_up(series: Series) -> bool:
+    """Rule 1: a Start-up (``is_startup``) that is not established."""
+    return is_startup(series) and not established(series)[0]
+
+
 def _growth(series: Series) -> tuple[float, int] | None:
-    """``growth_3y`` with its span in years."""
-    if is_startup(series):
-        return None
+    """``growth_3y`` with its span in years, a Start-up's too: rule 1 lets an established company
+    with a zero revenue three years back through on the run of positive revenues after it."""
     revenues = [fy.revenue for fy in series[-1 - _GROWTH_SPAN :]]  # up to four, oldest first
     if len(revenues) < 2:
         return None
@@ -354,6 +370,7 @@ def _checks(
     fcf: str | None,
     is_established: bool,
     positive_years: int,
+    positive_on_file: int,
     falls: int,
 ) -> tuple[Flag, ...]:
     checks: list[Flag] = []
@@ -380,8 +397,22 @@ def _checks(
                 "loss-year",
                 "Loss year",
                 f"The operating margin is negative in fiscal {margin_year} after a positive "
-                f"margin in {positive_years} of the last five fiscal years; "
+                f"margin in {positive_years} of the last five fiscal years and in "
+                f"{positive_on_file} of the {len(series)} on file; "
                 "the phase follows the growth word.",
+            )
+        )
+    # rule 1: an established company is never a Start-up; its revenue was zero three years back,
+    # since a zero now leaves no measurable growth and the phase unclassified
+    if is_established and is_startup(series):
+        checks.append(
+            Flag(
+                "revenue-gap",
+                "Revenue gap",
+                f"Revenue was zero in fiscal {series[-1 - _GROWTH_SPAN].year}, but the margin "
+                f"was above zero in {positive_years} of the last five fiscal years and in "
+                f"{positive_on_file} of the {len(series)} on file, so the company is not a "
+                "Start-up.",
             )
         )
     if (
@@ -398,7 +429,7 @@ def _checks(
                 "five-year trend; the Decline rule needs three.",
             )
         )
-    if direction is not None:
+    if direction in _DIRECTION_PHASE:  # Stable points nowhere
         pointed = _DIRECTION_PHASE[direction]
         if pointed != phase:
             checks.append(
@@ -431,8 +462,9 @@ def _checks(
             "instead of over three years"
         )
         if n > _GROWTH_SPAN:  # the year three years back is on file: its revenue cut the span
-            year = series[-1 - _GROWTH_SPAN].year
-            clause = f"revenue for fiscal {year} is missing or negative, so {clause}"
+            back = series[-1 - _GROWTH_SPAN]
+            state = "zero" if back.revenue == 0 else "missing or negative"  # zero: revenue-gap
+            clause = f"revenue for fiscal {back.year} is {state}, so {clause}"
         clauses.append(clause)
     if clauses:
         sentence = "; ".join(clauses)
@@ -499,13 +531,17 @@ def _last_margin(series: Series) -> float | None:
 def _margin_direction(
     margin: float | None, m_slope: float | None, edges: Sequence[float]
 ) -> str | None:
-    """Rising, Stable or Declining for a margin at or above zero; ``None`` otherwise."""
+    """Rising, Stable or Declining for a margin at or above zero; ``None`` otherwise.
+
+    Rising is decile 9 or higher with a slope above zero, Declining decile 2 or lower with a slope
+    below zero (spec 2026-11-06 8.3).
+    """
     if margin is None or margin < 0 or m_slope is None:
         return None
     d = decile(m_slope, edges)
-    if d >= 8 and m_slope > 0:
+    if d >= 9 and m_slope > 0:
         return "Rising"
-    if d <= 3 and m_slope < 0:
+    if d <= 2 and m_slope < 0:
         return "Declining"
     return "Stable"
 

@@ -263,7 +263,7 @@ def refusal_result(
     intermediates are empty unless given."""
     if phase is None:
         phase = PhaseEvidence(
-            None, reason, 0, None, None, None, None, None, None, None, None, None, ()
+            None, reason, 0, None, None, None, None, None, None, None, None, None, None, None, ()
         )
     return ValuationResult(
         symbol=symbol,

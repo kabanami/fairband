@@ -239,7 +239,7 @@ def test_cli_revalue_prints_calibration(
         "value: 4 done, 0 failed, 0 to go",
         "done: 4 done, 0 failed, 0 to go",
         "refresh 2: done",
-        "4 companies · 3 valued · 3 flagged by a classifier check",
+        "4 companies · 3 valued · 1 flagged by a classifier check",
         "Start-up: 0",
         "Young Growth: 1",
         "High Growth: 0",
