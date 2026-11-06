@@ -153,7 +153,7 @@ owner's. *My call.*
 
 The ledger is one table (17): every write, with `at`, `principal`, `actor`, `client`, `kind`
 (`note`, `finding`, `override`, `override-drop`, `secondary`, `derivation`, `report`,
-`judgment`, `kill-criterion`, `news-item`, `work-item`, `claim`, `complete`, `decline`,
+`judgment`, `kill-criterion`, `news-item`, `work-item`, `claim`, `complete`, `decline`, `drop`,
 `request`), `symbol`, the record it points to (table and id), what it rests on (the snapshot id
 and, when one, the work item id) and one line of summary. The ledger is read over the API and
 MCP, for a symbol or whole, newest first; the drawer's Details shows the company's entries.
@@ -239,7 +239,7 @@ locked input: the terminal growth ceiling").
 | `phase` | every row | word | the six phases | the route follows the phase; a Start-up row overridden to Young Growth is valued by the revenue-growth route where the mechanical row had no value; the classifier's evidence stays as it was |
 | `growth.belief` | Mature Growth | % a year | −20% to 60% | above the sales class's `sales_p90_5y` needs primary evidence (10.3) |
 | `path.hold` | High Growth, Young Growth | % a year | −20% to 300% | the held rate of years 4 to `high_growth_years`; above the cap of 5a.3 needs primary evidence |
-| `path.step_2`, `path.step_3` | every valuing route | % | −80% to 300% | a consensus step; replaces a held or thin one too |
+| `path.step_2`, `path.step_3` | Mature Growth, High Growth, Young Growth, Decline | % | −80% to 300% | a consensus step; replaces a held or thin one too. Not Mature Stable: its value reads no step, only its cross-check does, and an override that moves nothing is refused `refused-route` |
 | `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | word | None, Narrow, Wide | moves the margin of safety, the runway and the terminal return together, as the class does today |
 | `margin.target` | High Growth, Young Growth, Start-up | % | −50% to 60% | |
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | multiple | 0.1 to 10 | |
@@ -296,9 +296,11 @@ order, then the reviewed value. The order is the method's step order: `phase`, `
 `balance.cash`. Each line's delta is the value with this override and every earlier one applied,
 less the value with the earlier ones only, so the deltas sum to reviewed less mechanical exactly.
 A line whose step refuses ("value not positive under the reinvestment charge") shows the refusal
-in place of a delta, and the review is a refusal with that reason; a mechanical refusal that an
+in place of a delta; the next valuing line measures its delta from the last valued step, and the
+review is a refusal with the reason when its last line refuses; a mechanical refusal that an
 override turns into a value (a Start-up reclassified) starts the bridge at "no mechanical value"
-and the first valuing line carries the whole value as its delta. The review's levels read the
+and the first valuing line carries the whole value as its delta. An overridden input's JUDGMENT
+entry names its principal and actor in its source, "override n, agent claude-opus-5-5". The review's levels read the
 reviewed moat. The `ValueBridge` component renders it, with each override's reason in full.
 
 ### 10.5 Following the snapshots
@@ -834,5 +836,6 @@ Plan 2, the page:
 | 2026-11-06 | The number is rigid and the stance is free: the reviewed value is the engine's figure under the agent's inputs; the override set is wide and includes the phase; a refused row gets no reviewed value from the route. Claude's recommendation; the founder accepted and reframed the escape. |
 | 2026-11-06 | The secondary valuation is a second view that complements the engine and the fallback where no phase or route fits, not an "own-method" escape. Founder. Built as one tool on an explicit cash-flow path with parts (Claude's shape). |
 | 2026-11-06 | No owner write on an override: the owner neither adds nor drops one over the API or on the page, until the founder commits to the whole user override function; `override_drop` stays as the agent's tool (3, 10.3, 18.3). Founder, on reading plan 1. |
+| 2026-11-06 | Build rulings, plan 1: the consensus-step overrides do not apply on Mature Stable, whose value reads no step (10.2); a mid-bridge refusal does not end the review, the last line decides (10.4); the JUDGMENT entry names its principal and actor in its source string (10.4); the ledger kind `drop` for a dropped expiry item (7). Claude, during the build. |
 | 2026-11-06 | Builder check done. Four questions, all settled by Claude: the secondary valuation reads debt and cash from the newest balance sheet on file or takes them with evidence, stores the figures used, and is refused on a foreign filer (11); an override, a recompute and a secondary are refused "settings changed: run a revalue" when the effective policy is not the latest snapshot's, and both records cite their versions and hash (10.3); the server computes the report's six financial tables with a ref per cell, `financials` carries refs, and `derive` takes a list (13.5, 13.4); a reprice of the cited snapshot counts as the cited one, a revalue or full refresh does not (13.2). Two notes taken in: the `fairband` console script is added (14); `refused-range` is the component's `refused-unit`, so `refused-route` is the one state patch (10.1). Nothing for the founder. |
 | 2026-11-06 | The MCP server talks to the web API, holds no database connection and no key (6); identity by `identify` and headers (7); no claim timeout and no stale conflict (8, 10.3); the override ranges and the bridge order (10.2, 10.4); the four stance words (13.1); the five derivations (13.4); the four pass-throughs (15.3); the `◆` coverage mark, the sixth header view, the Details disclosure (18); policy v8's values not settings (19). Claude's calls, open to the founder. |
