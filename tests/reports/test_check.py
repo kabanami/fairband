@@ -42,6 +42,7 @@ from fairband.reports.check import (
 )
 from fairband.store.ledger import Writer
 from fairband.store.overrides import applied_overrides, drop_override, insert_override
+from fairband.store.research import add_finding
 from fairband.store.reviews import insert_review, review_row
 from fairband.store.secondary import insert_derivation
 from fairband.store.snapshots import insert_snapshot, snapshot_row
@@ -235,6 +236,7 @@ def test_the_cite_parser_reads_separators_and_minus_signs() -> None:
     assert parse_cite("$2.1 billion") == (2.1e9, "$") and parse_cite("$126M") == (126e6, "$")
     assert parse_cite("$1.5bn") == (1.5e9, "$") and parse_cite("($1.5 bn)") == (-1.5e9, "$")
     assert parse_cite("$500k") == (500e3, "$") and parse_cite("8 billion") == (8e9, "")
+    assert parse_cite("$1.5B") == (1.5e9, "$") and parse_cite("1.12X") == (1.12, "x")
     for text in ("$12%", "(3.2", "about 3", "3.2.1", "", "Wide", "2.1 billion%", "$2bn x"):
         assert parse_cite(text) is None, text
 
@@ -290,10 +292,25 @@ def test_a_reprice_keeps_the_cites_and_a_revalue_rejects_them(
         ("a 50bps cut", ["50bps"]),
         ("8 billion dollars", ["8 billion"]),
         ("US$5 a share", ["US$5"]),
-        ("$5 and 3 k and 2 years", ["$5", "3 k", "2 years"]),
+        ("$5 and 3 k and 2 years", ["$5", "2 years"]),  # a one-letter scale needs a $
+        # led by $, whatever letters follow; the words in any case, with or without a space
+        (
+            "$5mm, $5MM, $3.2T, $5bil, $5bln, $5mln",
+            ["$5mm", "$5MM", "$3.2T", "$5bil", "$5bln", "$5mln"],
+        ),
+        ("$ 5 and $5m and $1.5B", ["$ 5", "$5m", "$1.5B"]),
+        ("5 percentage points, 5 basis points", ["5 percentage points", "5 basis points"]),
+        (
+            "5 per cent, 2 Years, 5 x, 5X, 10 bn, 2.5years",
+            ["5 per cent", "2 Years", "5 x", "5X", "10 bn", "2.5years"],
+        ),
+        # a number joined to one letter with no $ is a name
+        ("3M Company, Phase 2b, 401k, a 4K screen, Rule 10b-5", []),
         # a day beside a month is a date, unless a decimal, a % or a scale follows it
         ("In March 12% of stores closed", ["12%"]),
         ("since June 30.5 million shares", ["30.5 million"]),
+        ("the US$30 June quarter", ["US$30"]),  # a $ leads it: no day
+        ("paid $5 June 30", ["$5"]),
         ("the 2 big ones, 5 more, on 30 June", []),
     ],
 )
@@ -339,6 +356,7 @@ def test_rounded_equal(
         (2.2e9, "$", 2.123e9, "currency", 10**9, False),
         (2_100e6, "$", 2.1e9, "currency", 10**6, True),
         (8e9, "", 8.04e9, "count", 10**9, True),
+        (8e9, "$", 8.04e9, "count", 10**9, False),  # a count takes no $
         (1.5e9, "$", 1.5e9, "per-share", 10**9, False),  # a scale fits a total or a count
         (1.5e9, "%", 1.5e9, "currency", 10**9, False),
     ],
@@ -347,6 +365,13 @@ def test_rounded_equal_with_a_scale_word(
     cite: float, suffix: str, value: float, unit: str, scale: int, equal: bool
 ) -> None:
     assert rounded_equal(cite, suffix, value, unit, scale) is equal
+
+
+def test_a_scaled_cite_is_compared_at_the_decimals_written() -> None:
+    assert rounded_equal(2.1e9, "$", 2.14e9, "currency", 10**9, decimals=1)  # $2.1 billion
+    assert not rounded_equal(2.1e9, "$", 2.14e9, "currency", 10**9, decimals=2)  # $2.10 billion
+    assert rounded_equal(2.14e9, "$", 2.14e9, "currency", 10**9, decimals=2)
+    assert not rounded_equal(5.4, "", 5.4321, None, decimals=2)  # 5.40 against 5.4321
 
 
 def test_shown_writes_the_value_as_its_cite_reads() -> None:
@@ -418,6 +443,29 @@ def test_a_scale_word_cites_a_total_at_its_own_precision(
     )
     found = _one(_check(conn, policy, sid, _cite("$2.2 billion", revenue)), sid, "$2.2 billion")
     assert (found.what, found.detail) == (WRONG_UNIT, f"{revenue} reads $2,100,000,000")
+    # at the decimals written: $2.10 billion is not 2,140,000,000, $2.1 billion is
+    source = {"kind": "filing", "ref": "10-K 2025, p. 12", "note": None}
+    sales = add_finding(
+        conn,
+        "AAPL",
+        date(2025, 12, 31),
+        "segment sales",
+        source,
+        AGENT,
+        NOW,
+        value=2.14e9,
+        unit="currency",
+    )
+    assert _check(conn, policy, sid, _cite("$2.1 billion", f"finding:{sales}")) == []
+    found = _one(
+        _check(conn, policy, sid, _cite("$2.10 billion", f"finding:{sales}")), sid, "$2.10 billion"
+    )
+    assert found.what == WRONG_UNIT
+    # a share count in its scale takes no $
+    shares = f"snapshot:{sid}/inputs/shares_diluted"  # 1,000 m
+    assert _check(conn, policy, sid, _cite("1.0 billion", shares)) == []
+    found = _one(_check(conn, policy, sid, _cite("$1.0 billion", shares)), sid, "$1.0 billion")
+    assert found.what == WRONG_UNIT
 
 
 def test_a_signed_outflow_may_be_cited_by_its_size(

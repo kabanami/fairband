@@ -33,20 +33,23 @@ quantity there is ``a number with no reference``, located ``judgment <kind>, <fi
 A ``review:`` cite must also be the company's current review, the newest on its snapshot with the
 current review that one or its reprice; else it is ``wrong snapshot``, the current id named.
 
-A quantity (13.3's token rule) is any number after ``$`` (``$5``, ``US$5``); a number followed by
-a scale or unit word whatever its digits (``$391bn``, ``8 billion``, ``11.2pp``, ``50bps``,
-``2 years``); a percentage (``11.2%``, ``11.2 percent``); a multiple (``12.3x``, ``12.3×``); a
+A quantity (13.3's token rule) is any number after ``$``, whatever letters follow it (``$5``,
+``$ 5``, ``US$5``, ``$5mm``, ``$3.2T``); a number followed, with or without a space and in any
+case, by a scale of two letters or more or a unit word, whatever its digits (``12 billion``,
+``11.2pp``, ``50bps``, ``5 basis points``, ``5 percentage points``, ``2 Years``); a percentage
+(``11.2%``, ``11.2 percent``, ``5 per cent``); a multiple (``12.3x``, ``5 x``, ``12.3×``); a
 decimal; or an integer of two or more digits; a sign (``-``, the minus ``−``) or parentheses may
-stand around it. Not a quantity: a year from 1990 to 2099, an ISO date, a day of the month beside
-a month's name (``27 Oct``) unless a decimal, ``%`` or a scale follows it (``March 12%``), a
-number joined to letters (``FY2025``, ``Q3``, ``COVID-19``, ``5G``, ``21st``), a filing form
-(``10-K``, ``8-K``, ``20-F``), a section's or an item's number (``section 13.3``, ``Item 10``),
-anything inside a URL or after a slash (``fairband-review/1``), and an integer of one digit with
-no scale or unit word.
+stand around it. A one-letter scale (``m``, ``b``, ``k``, ``t``) counts only after ``$``. Not a
+quantity: a year from 1990 to 2099, an ISO date, a day of the month beside a month's name
+(``27 Oct``) unless a decimal, ``%`` or a scale follows it (``March 12%``) or ``$`` leads it, a
+number joined to letters with no ``$`` (``FY2025``, ``Q3``, ``COVID-19``, ``5G``, ``3M``,
+``401k``, ``21st``), a filing form (``10-K``, ``8-K``, ``20-F``), a section's or an item's number
+(``section 13.3``, ``Item 10``), anything inside a URL or after a slash (``fairband-review/1``),
+and an integer of one digit with no unit word.
 
 A cite's text is read by ``parse_cite``: an optional sign or parentheses (a negative), ``$``, the
 number with its thousands separators, a scale word (``thousand``, ``million``, ``billion``,
-``trillion``, ``k``, ``m``, ``mn``, ``bn``, ``tn``), and a suffix, ``%`` (or ``percent``), ``x``
+``trillion``, ``k``, ``m``, ``mn``, ``b``, ``bn``, ``tn``), and a suffix, ``%`` (or ``percent``), ``x``
 (or ``×``), ``years`` (or ``year``) or none. ``rounded_equal`` takes design.md 9.2's rounding by
 the ref's unit: ``currency`` to whole dollars; ``price`` (a share price: ``snapshot:<id>/price``,
 its ``inputs/price``, a ``close:``) to cents; ``per-share`` (a value, a level, an EPS) to cents or
@@ -56,9 +59,9 @@ whole number. The cite must be written at that rounding or coarser on its grid (
 cents) and lie within half a step of the value. A suffix fits a unit: ``$`` a currency, price or
 per-share figure, ``%`` a percent, ``x`` a multiple, ``years`` a span in years; none fits any unit
 but a percent. A ref with no unit (an intermediate, a vendor field) takes any suffix, at the
-cite's own precision. Three more rules (``method.md`` 16.3): a cite with a scale word fits a total
-or a count and is compared at its own precision in its scale, with two significant figures at
-least; a cite with no sign of a line the store signs as an outflow (``Resolved.outflow``) matches
+cite's own precision, the decimals it was written with. Three more rules (``method.md`` 16.3): a
+cite with a scale word fits a total (with ``$`` or none) or a count (with none) and is compared at
+the decimals it was written with in its scale, with two significant figures at least; a cite with no sign of a line the store signs as an outflow (``Resolved.outflow``) matches
 its size; and a ``%`` cite of a ``derived:`` or ``table:`` multiple, a ratio of two figures in one
 unit, is compared as a percentage.
 """
@@ -115,13 +118,23 @@ STRUCTURE = (
 CHECKS = STRUCTURE + FAILURES
 
 _NUMBER = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"
-# The words after a number that make it a quantity whatever its digits: a scale (``bn``,
-# ``million``), points (``pp``, ``bps``), a percentage, a multiple, a span of years.
-_SCALE_WORDS = r"thousand|million|billion|trillion|bps|bp|bn|mn|pp|tn|k|m|b"
-_UNIT_AFTER = rf"(?:\s?(?:%|percent\b)|[x×](?![A-Za-z0-9])|\s?(?i:{_SCALE_WORDS})\b|\s(?:years?)\b)"
+# The words after a number, with or without a space and in any case, that make it a quantity
+# whatever its digits: a scale of two letters or more (``bn``, ``mm``, ``million``), points
+# (``pp``, ``bps``, ``percentage points``), a percentage (``%``, ``percent``, ``per cent``), a
+# multiple (``x``, ``×``) and a span of years. A one-letter scale (``m``, ``b``, ``k``, ``t``)
+# counts only after ``$``: without one a number joined to a letter is a name (``3M``, ``401k``).
+_UNIT_WORDS = (
+    r"thousand|million|billion|trillion|percentage\s+points?|basis\s+points?|percent|per\s+cent"
+    r"|years?|bps|bp|bn|mn|mm|pp|tn"
+)
+_UNIT_AFTER = rf"(?:\s?%|\s?[xX×](?![A-Za-z0-9])|\s?(?i:{_UNIT_WORDS})\b)"
 _QUANTITY = re.compile(
     r"(?<![\w.,/$])(?<![A-Za-z]-)"  # not inside a word, a number or a path
-    rf"\(?[−-]?(?:[A-Z]{{1,3}}\$|\$)?[−-]?(?:{_NUMBER}){_UNIT_AFTER}?\)?"
+    r"\(?[−-]?(?:"
+    # led by $, a currency's letters before it or not: any letters after the number
+    rf"(?:[A-Z]{{1,3}})?\$\s?[−-]?(?:{_NUMBER})(?:[A-Za-z]+|{_UNIT_AFTER})?"
+    rf"|(?:{_NUMBER}){_UNIT_AFTER}?"
+    r")\)?"
     r"(?!\w)(?![.,]\d)(?!-[A-Z]\b)"  # not a filing form, 10-K
 )
 _CARRIES_A_UNIT = re.compile(rf"\d{_UNIT_AFTER}\)?$")
@@ -132,15 +145,15 @@ _MONTH = (
 # Text that holds no quantity: a URL, an ISO date, a day beside a month's name; not a day followed
 # by a decimal, a percent sign, a multiple's or a scale's word, which is a quantity after a month.
 _NOT_QUANTITIES = re.compile(
-    rf"https?://\S+|\b\d{{4}}-\d{{2}}-\d{{2}}\b|(?<![\d.,])\b\d{{1,2}}\s+{_MONTH}"
+    rf"https?://\S+|\b\d{{4}}-\d{{2}}-\d{{2}}\b|(?<![\d.,$])(?<!\$\s)\b\d{{1,2}}\s+{_MONTH}"
     rf"|{_MONTH}\.?\s+\d{{1,2}}\b(?![.,]\d|{_UNIT_AFTER})"
 )
 _SECTION_NUMBER = re.compile(r"(?:\bsections?|§|\bitems?)\s*$", re.IGNORECASE)
 _CITE = re.compile(
     r"\s*(?P<open>\()?\s*(?P<sign>[−-])?\s*(?P<dollar>\$)?\s*(?P<sign2>[−-])?"
     rf"(?P<number>{_NUMBER})"
-    r"\s*(?:(?P<scale>(?i:thousand|million|billion|trillion|mn|bn|tn|k|m))(?![A-Za-z]))?"
-    r"\s*(?P<suffix>%|percent|[x×]|years?)?\s*(?P<close>\))?\s*"
+    r"\s*(?:(?P<scale>(?i:thousand|million|billion|trillion|mn|bn|tn|k|m|b))(?![A-Za-z]))?"
+    r"\s*(?P<suffix>%|percent|[xX×]|years?)?\s*(?P<close>\))?\s*"
 )
 _SCALES = {
     "k": 10**3,
@@ -148,12 +161,21 @@ _SCALES = {
     "m": 10**6,
     "mn": 10**6,
     "million": 10**6,
+    "b": 10**9,
     "bn": 10**9,
     "billion": 10**9,
     "tn": 10**12,
     "trillion": 10**12,
 }
-_SUFFIXES = {"%": "%", "percent": "%", "x": "x", "×": "x", "year": "years", "years": "years"}
+_SUFFIXES = {
+    "%": "%",
+    "percent": "%",
+    "x": "x",
+    "X": "x",
+    "×": "x",
+    "year": "years",
+    "years": "years",
+}
 _FITS: dict[str, frozenset[str]] = {
     "$": frozenset({"currency", "per-share", "price"}),
     "%": frozenset({"percent"}),
@@ -161,8 +183,8 @@ _FITS: dict[str, frozenset[str]] = {
     "years": frozenset({"years"}),
     "": frozenset({"currency", "per-share", "price", "multiple", "years", "count", "score"}),
 }
-# The units a cite with a scale word fits, with ``$`` or none.
-_SCALED = frozenset({"currency", "count"})
+# The units a cite with a scale word fits: a total with ``$`` or none, a count with none.
+_SCALED = {"$": frozenset({"currency"}), "": frozenset({"currency", "count"})}
 # The decimals each unit is written to (design.md 9.2): a price to cents, a value a share or a
 # level to cents or to whole dollars.
 _PLACES: dict[str, tuple[int, ...]] = {
@@ -341,21 +363,32 @@ def fits(suffix: str, unit: str | None, scale: int = 1) -> bool:
     """Whether a cite with ``suffix``, and a scale word when ``scale`` is not 1, may cite a figure
     in ``unit``."""
     if scale != 1:
-        return suffix in ("$", "") and (unit is None or unit in _SCALED)
+        return suffix in _SCALED and (unit is None or unit in _SCALED[suffix])
     return unit is None or unit in _FITS.get(suffix, frozenset())
 
 
-def rounded_equal(cite: float, suffix: str, value: float, unit: str | None, scale: int = 1) -> bool:
+def rounded_equal(
+    cite: float,
+    suffix: str,
+    value: float,
+    unit: str | None,
+    scale: int = 1,
+    decimals: int | None = None,
+) -> bool:
     """Whether ``cite``, written with ``suffix`` (and a scale word when ``scale`` is not 1), is
-    ``value`` in ``unit`` at the report's rounding (module docstring)."""
+    ``value`` in ``unit`` at the report's rounding (module docstring). A cite with a scale word, or
+    of a figure with no unit, is compared at its own precision: the ``decimals`` it was written
+    with, else those its number shows."""
     if not fits(suffix, unit, scale):
         return False
     scaled = value * 100 if unit == "percent" or (unit is None and suffix == "%") else value
     if scale != 1:  # at the cite's own precision in its scale
         written = round(cite / scale, 9)
-        return _within(written, scaled / scale, _decimals(written))
-    places = _PLACES[unit] if unit is not None else (_decimals(cite),)
-    return any(_on_grid(cite, p) and _within(cite, scaled, p) for p in places)
+        places = _decimals(written) if decimals is None else decimals
+        return _within(written, scaled / scale, places)
+    own = _decimals(cite) if decimals is None else decimals
+    places_by_unit = _PLACES[unit] if unit is not None else (own,)
+    return any(_on_grid(cite, p) and _within(cite, scaled, p) for p in places_by_unit)
 
 
 def shown(value: float, unit: str | None) -> str:
@@ -451,7 +484,8 @@ def _unit_failure(cite: str, ref: str, resolved: Resolved) -> tuple[str, str] | 
         return WRONG_UNIT, f"{cite!r} does not fit a {unit} figure: {ref} reads {expected}"
     if unit == "price" and parsed.decimals != 2:
         return WRONG_UNIT, f"a price is cited to cents: {ref} reads {expected}"
-    if not rounded_equal(parsed.number, parsed.suffix, target, unit, parsed.scale):
+    found = (parsed.number, parsed.suffix, target, unit, parsed.scale, parsed.decimals)
+    if not rounded_equal(*found):
         return WRONG_UNIT, f"{ref} reads {expected}"
     return None
 
@@ -483,7 +517,7 @@ def _plain_detail(what: str) -> str:
 
 
 def _multiple(token: str) -> bool:
-    return token.rstrip(")").endswith(("x", "×"))
+    return token.rstrip(")").endswith(("x", "X", "×"))
 
 
 def _period(text: str | None) -> str | None:
