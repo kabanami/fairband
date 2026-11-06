@@ -30,10 +30,12 @@ stored value it shows.
 The server joins the parts with nothing between them. Put the spaces and the punctuation in the
 plain parts.
 
-Copy each ref from the tool that gave the figure. Every read gives a figure as `{value, unit,
-ref}`. Build the refs of a snapshot, a review or a secondary valuation from its id: `company` gives
-`snapshot.id`, `reviews` and the answer of `override_add` give the review's id, and `secondary`
-gives the secondary valuation's.
+Copy each ref from the tool that gave the figure. The reads of stored figures give each one as
+`{value, unit, ref}`: `financials`, `financial_tables`, `estimates`, `price_history` and `peers`.
+Build every other ref from its record's id. `company` gives `snapshot.id`; `reviews` and the
+answers of `override_add` and `override_drop` give the review's id; `secondary` gives the secondary
+valuation's; `finding_add` and `findings` give a finding's; `derive` gives a derivation's; a
+pass-through gives its `responseId`.
 
 ## The references
 
@@ -80,7 +82,8 @@ The cite is the stored value at the report's rounding, by the ref's unit:
 | none (an intermediate, a vendor field) | any suffix, at the decimals you write | any | `7.1%` |
 
 The number must lie within half a step of the stored value at that rounding. `22.7%` cites
-0.22702; `23%` does not. When in doubt, write exactly the decimals in the table: `23.0%`.
+0.22702; `23%` does not. When in doubt, write exactly the decimals in the table: `22.7%` for
+0.22702, `23.0%` for 0.23.
 
 Four rules more:
 
@@ -115,8 +118,9 @@ counts as the cited one. A revalue or a full refresh in between is not: the repo
 ids, check each figure, and submit again.
 
 A `review:` cite must be the company's current review: the newest review on the latest snapshot,
-or the one that snapshot reprices. Each new override makes a new review, so cite the review your
-last `override_add` or `override_drop` answered. When a drop leaves no override applied, the
+or the one that snapshot reprices. Each applied override and each drop makes a new review; a
+refused override makes none. Cite the review your last applied `override_add` or your last
+`override_drop` answered. When a drop leaves no override applied, the
 company has no review: cite the snapshot.
 
 ## What counts as a quantity
@@ -169,6 +173,21 @@ period)`, then cite `finding:<id>`:
 
 The check cannot prove a finding true. It proves the finding is recorded with its source.
 
+## A threshold you choose
+
+A risk or a kill criterion often names a line to cross. A threshold you choose is not a fact, so it
+is never a finding. A number of your own in the text is `a number with no reference`. Write the
+event one of two ways:
+
+- Tie it to a stored figure, and cite that figure. "The ROIC falls below the hurdle rate of 9.0%"
+  cites `policy:required_return`, or the returns table's `hurdle_rate` cell. "The operating margin
+  falls below its 2025 level of 31.2%" cites that cell of the growth table.
+- State it in words: "revenue falls two quarters in a row", "the operating margin turns negative".
+
+Write the text of a kill criterion you record the same way, though the server does not check it. A
+threshold that no stored figure gives is a question for the founder: ask the user, and state the
+event in words meanwhile. A stored threshold on a kill criterion is a later piece of Fairband.
+
 ## Your own arithmetic: a derivation
 
 Every figure you would compute goes through `derive(symbol, derivations)`, then a cite
@@ -201,7 +220,7 @@ gets one for each quantity.
 
 | `what` | It means | What to do |
 |---|---|---|
-| `a number with no reference` | a quantity in plain text, or in a judgment's text | Cite it. Write a small count in words. Reword a name with a free number. Record a figure Fairband does not hold as a finding first. Take every figure out of the judgment's text. |
+| `a number with no reference` | a quantity in plain text, or in a judgment's text | Cite it. Write a small count in words. Reword a name with a free number. Record a fact Fairband does not hold as a finding first. Never record a threshold you chose as a finding: tie it to a cited figure or state it in words ("A threshold you choose"). Take every figure out of the judgment's text. |
 | `unresolved reference` | the ref names nothing, or the record holds no figure there | Copy the ref from the tool's answer again: check the form, the id, the symbol and the year. A table cell with no value cannot be cited: say in words that the figure is not on file. |
 | `wrong unit` | the suffix does not fit the ref's unit, or the number is not the stored value at the report's rounding | The detail gives the value as the cite should read. Write it so. A price takes cents; a percent one decimal; a multiple two. |
 | `wrong period` | the cite's period is not the ref's | Correct the period or the ref, or leave the period out. |

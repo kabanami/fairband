@@ -8,8 +8,10 @@ be left out.
 
 - A tool answers the web server's JSON, an object. Its keys are camelCase (`responseId`). A ref
   names a field by the engine's snake_case name (`snapshot:412/inputs/market_cap`).
-- A read gives each figure as `{value, unit, ref}`. Cite the `ref` as given. A percent is a
-  fraction: `0.112` is 11.2%.
+- The reads of stored figures, `financials`, `financial_tables`, `estimates`, `price_history` and
+  `peers`, give each figure as `{value, unit, ref}`. Cite the `ref` as given. For every other
+  figure, build the ref from its record's id (`reference/citations.md`). A percent is a fraction:
+  `0.112` is 11.2%.
 - A refusal is `{"refused": <sentence>, "status": <code>}`, with the rest of the answer beside it:
   a refused override's `override`, a rejected report's `findings`. The status says what kind of
   refusal it is: 400 a value the call cannot take; 404 a record that does not exist; 409 a state

@@ -43,7 +43,7 @@ Put the answer first in each section. Keep each sentence to one idea.
 | 7 | Price facts and multiples | both | The price facts and the multiples. Detail below. |
 | 8 | Key judgments | both | For each judgment, the bull view, the bear view and the decision, with their figures cited. |
 | 9 | Recent news | both | The dated items that matter to the value. |
-| 10 | Risks and kill criteria | both | The risks, and the measurable events that would prove the view wrong. |
+| 10 | Risks and kill criteria | both | The risks, and the measurable events that would prove the view wrong. A threshold you choose is not a fact and never a finding: tie each event to a stored figure and cite it ("below the hurdle rate of 9.0%", citing `policy:required_return`), or state it in words ("revenue falls two quarters in a row"). A threshold no stored figure gives is a question for the founder (`reference/citations.md`, "A threshold you choose"). |
 
 A valuation review reuses the company's newest full report for the business and the industry. The
 server names that report on the published record. Say in the summary which one it is, by its
@@ -95,12 +95,27 @@ The engine or a derivation gives every item. None of them is a target.
 
 | Phase | Multiples to show |
 |---|---|
-| Start-up | EV over the market size, over the users, over the subscribers |
+| Start-up | EV over the market size, over the users, over the subscribers (each a finding) |
 | Young Growth | EV over forward sales |
 | High Growth | EV over sales |
-| Mature Growth | PEG, forward P/E |
+| Mature Growth | the forward P/E, beside the growth rate it rests on; PEG is not available yet |
 | Mature Stable | P/E, EV over EBITDA |
 | Decline | P/B, EV over the liquidation value |
+
+PEG is not available yet. `derive` takes refs only, so a P/E over a growth rate divides by the
+fraction and gives a figure about a hundred times the usual one, which the check would pass. Show
+the forward P/E and cite the growth rate beside it instead.
+
+EV (the enterprise value: the market cap plus debt less cash) takes one `derive` call for each
+link, since a link names the `derived:` id the call before it answered:
+
+1. `sum` of `snapshot:<id>/inputs/market_cap` and the solvency table's `debt` cell;
+2. `difference` of that `derived:` id and the solvency table's `cash` cell;
+3. `ratio` of that `derived:` id and the figure EV is set against: the revenue's `fact:` ref, a
+   forward revenue's `estimate:` ref, or EBITDA.
+
+EBITDA is a `sum` of the `operating_income` and `depreciation` `fact:` lines. P/B is a `ratio` of
+the market cap and the `equity` `fact:` line.
 
 ## The summary page
 

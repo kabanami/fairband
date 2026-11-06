@@ -21,8 +21,8 @@ sections, the judgments, every reason on an override and every note.
 
 - Never write in the first person. Fairband has no voice of its own: never "I", "we", "our" or
   "us". Write "the view is wrong if", not "our view is wrong if".
-- Write in the third person for what the engine does: "The engine values the company at $283 a
-  share." Write in the second person only for what the reader does.
+- Write in the third person for what the engine does: "The engine recomputes the value after each
+  override." Write in the second person only for what the reader does.
 - Name the mechanism, not the feeling: "expired 3 Dec 2026", not "needs attention".
 - Use plain words. No idiom, no slang, no hype: write "the margin rose", not "the margin took off".
 - No emoji. No exclamation marks.
