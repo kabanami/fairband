@@ -359,9 +359,10 @@ a tool output.
 
 Stored (17) with the parts, the per-year present values, the firm value, the equity, the value a
 share, the levels, the reason and the evidence, the snapshot id, the principal and actor, and
-`secondary_method` `fairband-secondary/1`. It is as of its snapshot: a price refresh moves its
-designation only; it expires with the snapshot's window and stays in the history after a full
-refresh writes new statements, shown with its date. The agent makes a new one at the next
+`secondary_method` `fairband-secondary/1`. It is as of its snapshot: no refresh touches it; its stored price ÷ value and designation are at
+its snapshot's price, and the page reads price ÷ value against the latest quote where it shows
+the figure; it expires with the snapshot's window and stays in the history after a full refresh
+writes new statements, shown with its date. The agent makes a new one at the next
 review. *My call.* On the row and in the report it stands in where the route gives no value
 (18.1); where both exist, the route's reviewed value leads and the secondary is the second view.
 
@@ -410,6 +411,9 @@ A `ref` names a stored value:
 | `secondary:<id>/value`, `/firm_value`, `/parts/<n>/pv/<t>` | the secondary valuation's |
 | `fact:<symbol>/<line>/<fiscal_year or ttm>` | a stored statement line, normalized as the engine reads it |
 | `table:<symbol>/<table>/<row>/<year>` | a cell of the financial tables (13.5) |
+| `estimate:<symbol>/<period>/<field>` | a stored consensus figure (the estimates read) |
+| `close:<symbol>/<date>` | a stored daily close (the price-history read) |
+| `peer:<symbol>/<peer>/<field>` | a mature peer's figure as assembly reads it (the peers read) |
 | `finding:<id>` | a finding's value |
 | `derived:<id>` | a derivation (13.4) |
 | `response:<id>/<json pointer>` | a field of a stored vendor payload (15.3) |
@@ -546,9 +550,11 @@ responses (so a report can cite `response:<id>/...`) and reused inside `reuse_ho
 `transcript(symbol, year, quarter)` (the earnings call transcript), `news(symbol, limit?)` (stock
 news), `segments(symbol)` (revenue by product and by region), `insider_trades(symbol)`. The exact
 routes are the builder's to check against FMP's stable API at build time. The calls run on the
-server through the refresh's FMP client and limiter, so the pace holds, on a small pool of their
-own beside the worker; the request thread never calls a vendor itself and no answer carries a key.
-*My call* on the four and on the thread shape, which the builder settles (23). GuruFocus
+server through one rate limiter shared with the refresh worker, so the pace holds, on FastAPI's
+sync-route thread: at most four vendor calls are in flight (a semaphore), a fifth waits at most
+ten seconds for a slot and is answered 503 "the pass-throughs are busy: four calls are in flight,
+try again" past it; a stored response inside `reuse_hours` takes no slot; no answer carries a
+key. *My call* on the four; the thread shape as built (Task 8's rulings). GuruFocus
 pass-throughs wait for B-71 and B-72.
 
 ### 15.4 Write tools
@@ -836,6 +842,7 @@ Plan 2, the page:
 | 2026-11-06 | The number is rigid and the stance is free: the reviewed value is the engine's figure under the agent's inputs; the override set is wide and includes the phase; a refused row gets no reviewed value from the route. Claude's recommendation; the founder accepted and reframed the escape. |
 | 2026-11-06 | The secondary valuation is a second view that complements the engine and the fallback where no phase or route fits, not an "own-method" escape. Founder. Built as one tool on an explicit cash-flow path with parts (Claude's shape). |
 | 2026-11-06 | No owner write on an override: the owner neither adds nor drops one over the API or on the page, until the founder commits to the whole user override function; `override_drop` stays as the agent's tool (3, 10.3, 18.3). Founder, on reading plan 1. |
+| 2026-11-06 | Build rulings, plan 1 (later tasks): no refresh touches a secondary valuation, the page reads its price ÷ value against the latest quote (11); the reads hand out `estimate:`, `close:` and `peer:` refs, which the resolver reads (13.2); the pass-throughs run on the sync-route thread, four in flight, a ten-second wait then 503 busy (15.3); the cite rules of method 16.3 (scale words at the cite's precision with two significant figures, unsigned outflows by their size, `%` on a ratio, prices to cents); `news_items` carries the report's id. Claude, during the build. |
 | 2026-11-06 | Build rulings, plan 1: the consensus-step overrides do not apply on Mature Stable, whose value reads no step (10.2); a mid-bridge refusal does not end the review, the last line decides (10.4); the JUDGMENT entry names its principal and actor in its source string (10.4); the ledger kind `drop` for a dropped expiry item (7). Claude, during the build. |
 | 2026-11-06 | Builder check done. Four questions, all settled by Claude: the secondary valuation reads debt and cash from the newest balance sheet on file or takes them with evidence, stores the figures used, and is refused on a foreign filer (11); an override, a recompute and a secondary are refused "settings changed: run a revalue" when the effective policy is not the latest snapshot's, and both records cite their versions and hash (10.3); the server computes the report's six financial tables with a ref per cell, `financials` carries refs, and `derive` takes a list (13.5, 13.4); a reprice of the cited snapshot counts as the cited one, a revalue or full refresh does not (13.2). Two notes taken in: the `fairband` console script is added (14); `refused-range` is the component's `refused-unit`, so `refused-route` is the one state patch (10.1). Nothing for the founder. |
 | 2026-11-06 | The MCP server talks to the web API, holds no database connection and no key (6); identity by `identify` and headers (7); no claim timeout and no stale conflict (8, 10.3); the override ranges and the bridge order (10.2, 10.4); the four stance words (13.1); the five derivations (13.4); the four pass-throughs (15.3); the `◆` coverage mark, the sixth header view, the Details disclosure (18); policy v8's values not settings (19). Claude's calls, open to the founder. |
