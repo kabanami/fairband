@@ -4,16 +4,16 @@
 reused, payload}``: the stored FMP response to the call, reused when it was observed within
 ``reuse_hours``, else fetched and stored (``fairband.refresh.passthrough``), its payload scrubbed of
 the keys; a report cites a field of it as ``response:<responseId>/<json pointer>``. The kinds are
-``transcript`` (``year`` and ``quarter`` required), ``news`` (``limit``, 20 when left out),
-``segments`` and ``insider-trades``; ``segments`` is two responses, answered as ``{responses:
-{product: {...}, geographic: {...}}}``.
+``transcript`` (``year`` and ``quarter`` required), ``news`` (``limit``, 1 to 100, 20 when left
+out), ``segments`` and ``insider-trades``; ``segments`` is two responses, answered as
+``{responses: {product: {...}, geographic: {...}}}``.
 
 An unknown kind, a symbol that is not one or a missing or bad parameter is a 400 with its
 sentence; without a pass-through (the server has no FMP key) a 503, "no FMP key"; a failed vendor
 call a 502 with the vendor's sentence, scrubbed.
 
-The route is a sync one: FastAPI runs it on its thread pool, where the call waits for its slot in
-the limiter the refresh worker's runs share.
+The route is a sync one: FastAPI runs it on its thread pool, where a vendor call waits for one of
+the pass-through's four slots, then for its slot in the limiter the refresh worker's runs share.
 """
 
 from typing import Any

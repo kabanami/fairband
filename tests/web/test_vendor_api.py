@@ -111,7 +111,8 @@ def test_an_unknown_kind_is_400(
         ("transcript/ACME", {"year": "2026"}, "a transcript needs year and quarter"),
         ("transcript/ACME", {"year": "2026", "quarter": "5"}, "quarter must be 1 to 4"),
         ("transcript/ACME", {"year": "2026", "quarter": "Q3"}, "quarter: "),
-        ("news/ACME", {"limit": "0"}, "limit must be at least 1"),
+        ("news/ACME", {"limit": "0"}, "limit is 1 to 100"),
+        ("news/ACME", {"limit": "101"}, "limit is 1 to 100"),
         ("news/A$B", {}, "'A$B' is not a symbol"),
     ],
 )

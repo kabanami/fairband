@@ -6,10 +6,12 @@ The kinds and the endpoints they are stored under (provider ``fmp``):
 
 - ``transcript``: ``transcript``, the earnings call of the fiscal ``year`` and ``quarter`` (1 to 4),
   both required;
-- ``news``: ``news``, the newest ``limit`` stories (``NEWS_LIMIT`` when left out);
+- ``news``: ``news``, the newest ``limit`` stories, 1 to ``NEWS_LIMIT_MAX`` (``NEWS_LIMIT`` when
+  left out);
 - ``segments``: two calls, ``segments-product`` and ``segments-geographic``, the revenue by product
   and by region, answered as the parts ``product`` and ``geographic``;
-- ``insider-trades``: ``insider-trades``, the newest insider trades.
+- ``insider-trades``: ``insider-trades``, the newest insider trades, a page of
+  ``INSIDER_TRADES_LIMIT``, which the reuse key holds.
 
 For each call, as ``fetch_company`` does: the newest HTTP 200 response to the same call (endpoint,
 symbol and the call's logical params, ``symbol`` among them) stored without an error is reused when
@@ -21,11 +23,15 @@ response row with its message and status and no payload, then raised, its messag
 is reused.
 
 The calls go through the FMP client the server builds on the limiter its refresh runs share, so the
-pass-throughs keep the refresh's pace.
+pass-throughs keep the refresh's pace. They run on the request threads, the pool every sync route
+of the app shares; at most ``PASSTHROUGH_SLOTS`` vendor calls are in flight at once, the others
+waiting for a slot, so a burst of agent requests during a refresh or a 429 hold leaves the rest of
+the pool to the page. A reuse takes no slot.
 """
 
 import json
 import sqlite3
+import threading
 from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import dataclass
@@ -42,12 +48,14 @@ from fairband.store.vendor import (
     response_payload,
     response_row,
 )
-from fairband.vendors.fmp import Fmp
+from fairband.vendors.fmp import INSIDER_TRADES_LIMIT, Fmp
 from fairband.vendors.http import VendorError, VendorResponse
 from fairband.vendors.scrub import scrub
 
 KINDS = ("transcript", "news", "segments", "insider-trades")
 NEWS_LIMIT = 20
+NEWS_LIMIT_MAX = 100
+PASSTHROUGH_SLOTS = 4  # vendor calls in flight at once; the rest of the pool stays with the page
 _KIND_LIST = ", ".join(KINDS[:-1]) + f" or {KINDS[-1]}"
 _PROVIDER = "fmp"
 
@@ -86,6 +94,7 @@ class Passthrough:
         self._window = timedelta(hours=policy.refresh.reuse_hours)
         self._clock = clock
         self._secrets = secrets
+        self._slots = threading.BoundedSemaphore(PASSTHROUGH_SLOTS)
 
     def close(self) -> None:
         """Close the FMP client."""
@@ -107,7 +116,8 @@ class Passthrough:
             if text is not None:
                 return Fetched(latest, json.loads(text), reused=True)
         try:
-            response = call.send()
+            with self._slots:  # the vendor call alone: a reuse never waits for a slot
+                response = call.send()
         except VendorError as exc:
             message = scrub(str(exc), self._secrets)
             self._record(conn, call, symbol, exc.status, None, message, self._clock())
@@ -154,8 +164,8 @@ class Passthrough:
             case "news":
                 limit = _whole(params, "limit")
                 limit = NEWS_LIMIT if limit is None else limit
-                if limit < 1:
-                    raise ValueError("limit must be at least 1")
+                if not 1 <= limit <= NEWS_LIMIT_MAX:
+                    raise ValueError(f"limit is 1 to {NEWS_LIMIT_MAX}")
                 logical = {"symbol": symbol, "limit": str(limit)}
                 return [_Call(kind, "news", logical, partial(fmp.news, symbol, limit))]
             case "segments":
@@ -166,8 +176,10 @@ class Passthrough:
                     _Call("geographic", "segments-geographic", {"symbol": symbol}, geographic),
                 ]
             case "insider-trades":
+                # The page size is in the reuse key, so a changed one never reuses older rows.
+                logical = {"symbol": symbol, "limit": str(INSIDER_TRADES_LIMIT)}
                 send = partial(fmp.insider_trades, symbol)
-                return [_Call(kind, "insider-trades", {"symbol": symbol}, send)]
+                return [_Call(kind, "insider-trades", logical, send)]
         raise ValueError(unknown_kind(kind))
 
 

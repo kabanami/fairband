@@ -1,11 +1,14 @@
 """The vendor pass-throughs on the fixture router: each kind's call, stored scrubbed and reused
-inside ``reuse_hours``, and the one limiter the worker's client and the pass-through's share."""
+inside ``reuse_hours``, the one limiter the worker's client and the pass-through's share, and the
+slots that bound the vendor calls in flight."""
 
 import json
+import threading
 from contextlib import closing
 from datetime import timedelta
 from typing import Any
 
+import httpx
 import pytest
 from refresh_env import Env
 from vendor_double import FIXTURES, FMP_KEY, GF_TOKEN
@@ -13,10 +16,12 @@ from vendor_double import FIXTURES, FMP_KEY, GF_TOKEN
 from fairband.config import Keys
 from fairband.refresh.clients import build_clients, build_fmp
 from fairband.refresh.fetch import fetch_company
-from fairband.refresh.passthrough import KINDS, Passthrough
+from fairband.refresh.passthrough import KINDS, PASSTHROUGH_SLOTS, Passthrough
 from fairband.reports.refs import Resolved, resolve
 from fairband.store.vendor import response_payload, response_row
-from fairband.vendors.http import VendorError
+from fairband.vendors import fmp as fmp_api
+from fairband.vendors.fmp import Fmp
+from fairband.vendors.http import VendorError, VendorHttp
 from fairband.vendors.limiter import PaceTotals, RateLimiter
 
 Q3 = {"year": "2026", "quarter": "3"}
@@ -112,7 +117,7 @@ def test_a_fetched_response_is_citable(env: Env) -> None:
             "insider-trades",
             {},
             "insider-trades",
-            {"symbol": "ACME"},
+            {"symbol": "ACME", "limit": "100"},  # the page size is in the reuse key
             {"symbol": "ACME", "page": "0", "limit": "100"},
             "insider-trading-search.ACME.json",
             id="insider-trades",
@@ -168,7 +173,8 @@ def test_a_vendor_error_is_stored_and_raised_scrubbed(env: Env) -> None:
         ("transcript", {"quarter": "3"}, "a transcript needs year and quarter"),
         ("transcript", {"year": "2026", "quarter": "5"}, "quarter must be 1 to 4"),
         ("transcript", {"year": "last", "quarter": "3"}, "year must be a whole number"),
-        ("news", {"limit": "0"}, "limit must be at least 1"),
+        ("news", {"limit": "0"}, "limit is 1 to 100"),
+        ("news", {"limit": "101"}, "limit is 1 to 100"),
     ],
 )
 def test_a_bad_request_is_a_value_error_before_any_call(
@@ -205,3 +211,56 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
     interval = limiter.interval.total_seconds()  # 60 / pace, to the microsecond
     assert limiter.totals() == PaceTotals(14, pytest.approx(91 * interval), 0)
     assert sleeps[-1] == pytest.approx(13 * interval)
+
+
+def test_a_fifth_vendor_call_waits_for_a_slot(env: Env) -> None:
+    """Four vendor calls in flight hold the ``PASSTHROUGH_SLOTS``: a fifth waits until one ends,
+    and a reuse takes no slot meanwhile. The vendor holds each transcript call until released."""
+    assert PASSTHROUGH_SLOTS == 4
+    entered = threading.Semaphore(0)
+    release = threading.Event()
+    called: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/earning-call-transcript"):
+            called.append(f"{request.url.params['year']}-Q{request.url.params['quarter']}")
+            entered.release()
+            release.wait(5)
+        return httpx.Response(200, json=[])
+
+    transport = httpx.MockTransport(answer)
+    http = VendorHttp(fmp_api.BASE_URL, [FMP_KEY], env.policy.refresh, transport=transport)
+    passthrough = Passthrough(Fmp(http, FMP_KEY), env.connect, env.policy, env.clock, (FMP_KEY,))
+    passthrough.fetch("news", "ACME", {})  # stored: the next one is a reuse
+    asks = [("2026", "1"), ("2026", "2"), ("2026", "3"), ("2026", "4"), ("2025", "4")]
+    answered: list[bool] = []
+
+    def fetch(kind: str, params: dict[str, str]) -> None:
+        [fetched] = passthrough.fetch(kind, "ACME", params).values()
+        answered.append(fetched.reused)
+
+    calls = [
+        threading.Thread(target=fetch, args=("transcript", {"year": y, "quarter": q}))
+        for y, q in asks
+    ]
+    try:
+        for thread in calls[:4]:
+            thread.start()
+        for _ in range(4):
+            assert entered.acquire(timeout=5)
+        calls[4].start()
+        calls[4].join(0.2)
+        assert calls[4].is_alive() and len(called) == 4  # the fifth waits for a slot
+        reuse = threading.Thread(target=fetch, args=("news", {}))
+        reuse.start()
+        reuse.join(5)
+        assert not reuse.is_alive() and answered == [True]  # a reuse needs no slot
+        release.set()
+        for thread in calls:
+            thread.join(5)
+    finally:
+        release.set()
+        http.close()
+    assert not any(thread.is_alive() for thread in calls)
+    assert sorted(called) == ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3", "2026-Q4"]
+    assert answered == [True] + [False] * 5
