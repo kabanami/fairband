@@ -16,6 +16,12 @@ checks, since Stable points to no phase (spec 8.3). The figures of every golden 
 this re-capture: values, levels, designations, intermediates, inputs and refusals are as captured
 from 0.7.
 
+HGCO and YGCO re-captured under 0.9 on 2026-11-06 for the growth routes (spec 2026-11-06 section
+7), for one cause: two records gain a key, `margin_path.ramp` ("margin") and
+`sales_to_capital.own_below_bound` (false). Neither rule applies to them, their trailing margin
+being −9% and their own sales-to-capital above half the peers' median, so their figures are
+unchanged.
+
 Run from the repository root:
 
 ```

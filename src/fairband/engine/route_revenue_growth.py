@@ -11,13 +11,18 @@ holds the rate of the year before, and a present step landing on a year with few
 five-year sales growth of the sales class (``anchor.sales_class`` on trailing revenue, the class's
 ``sales_p90_5y``); the consensus steps are not capped. The operating margin moves in a straight line
 from the trailing margin to the target margin, the median ten-year margin of the mature peers
-(``revenue_growth.target_margin``). Sales-to-capital is the company's own five-year marginal measure
-over the kept ROIC years (``RoicTerms``) when it is usable, else the mature peers' median. Tax is
-the newest fiscal year's statutory rate, charged after the forecast's own losses; the terminal reads
-year 10's operating income at the full rate (``revenue_growth.terminal_nopat``). The terminal return
-is the moat's rule (``roic.terminal_roic``) on the return on new capital at the target margin.
-Equity is the firm value less debt plus cash from the newest annual balance sheet, each nil when
-unknown. The value is discounted at r in every year.
+(``revenue_growth.target_margin``); a trailing margin below ``loss_ramp_margin_bound`` is a loss
+larger than revenue, and operating income moves instead in dollars from the trailing operating
+income to the target's share of revenue in the convergence year, as the Start-up ramp does
+(``MarginPath.in_dollars``; spec 2026-11-06 7.2). Sales-to-capital is the company's own five-year
+marginal measure over the kept ROIC years (``RoicTerms``) when it is usable and, when the mature
+peers have a median, at least ``own_sales_to_capital_min_share`` of it (spec 2026-11-06 7.1), else
+the mature peers' median. Tax is the newest fiscal year's statutory rate, charged after the
+forecast's own losses; the terminal reads year 10's operating income at the full rate
+(``revenue_growth.terminal_nopat``). The terminal return is the moat's rule
+(``roic.terminal_roic``) on the return on new capital at the target margin. Equity is the firm
+value less debt plus cash from the newest annual balance sheet, each nil when unknown. The value is
+discounted at r in every year.
 
 Refusals, in this order: no trailing revenue (missing or not positive); no trailing operating
 income, without which there is no trailing margin to start from; no statutory tax rate; an
@@ -32,11 +37,13 @@ intermediate and ``implied_margin``; the others keep nothing.
 
 Intermediates: ``ntm_revenue``; ``path`` (base_year, the revenue analysts of the years the two
 steps land on, which step was held, the sales class and its cap); ``path_steps``, g_2 and g_3 as
-resolved; ``growth_rates`` for years 1 to 10; ``margin_path`` (start, target, by_year);
+resolved; ``growth_rates`` for years 1 to 10; ``margin_path`` (start, target, by_year, each year's
+operating income over its revenue, and ramp, "margin" or "dollars");
 ``target_margin`` (value, the median; count; low; high; largest_symbol and largest_margin, the
 largest counted peer by market cap, which sets nothing; peers, each with its margin and market cap;
 source, "fmp" or "industry", and industry, the industry's name on the fallback);
-``sales_to_capital`` (used, "own" or "peers"; own; own_usable; peers; value); the tables
+``sales_to_capital`` (used, "own" or "peers"; own; own_usable; own_below_bound, true when the bound
+alone rejected an own measure; peers; value); the tables
 ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``,
 ``fcff_by_year``; ``terminal_roic``, ``terminal_nopat`` (year 10's operating income at the full tax
 rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
@@ -52,12 +59,13 @@ policy's repricing horizon, g_T past the path).
 The rebuild keys: ``revenue_path`` (revenue0, ntm_revenue, the consensus steps as found with
 ``None`` for a missing one, hold ``None``, or the cap when it binds, high_growth_years, fade_years),
 ``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares`` and ``sales_to_capital``; a
-valued row adds ``margin_path``'s target and ``terminal_roic``. With the policy's r, g_T and
-convergence year they rebuild the path, the margin and the charge, so ``revenue_at_price`` moves a
-stored row to a new price from its intermediates alone, and ``implied_margin_at_price`` moves the
-margin the price needs on any row that carries ``revenue_path``. The implied growth is the rate held
-in years 4 to the last high-growth year, the fade recomputed from it, the cap not applied; the
-implied margin is the target margin, the terminal return re-read at each trial.
+valued row adds ``margin_path``'s target and ``terminal_roic``. With the policy's r, g_T,
+convergence year and loss ramp bound they rebuild the path, the margin path or the dollar ramp, and
+the charge, so ``revenue_at_price`` moves a stored row to a new price from its intermediates alone,
+and ``implied_margin_at_price`` moves the margin the price needs on any row that carries
+``revenue_path``. The implied growth is the rate held in years 4 to the last high-growth year, the
+fade recomputed from it, the cap not applied; the implied margin is the target margin, the
+terminal return re-read at each trial; on the dollar ramp each trial rebuilds the ramp.
 
 Flags, in order: ``sbc-basis-unknown`` when the cross-check has a value on an anchor whose basis is
 unknown; the path's, ``path-held``, ``consensus-above-base-rate`` when the year-3 consensus is above
@@ -66,7 +74,8 @@ then ``line-not-presented:debt`` and ``line-not-presented:cash`` when a figure i
 assembly's note names a line it lacks; ``peers-from-industry`` when the peers are the industry
 fallback's (``CompanyInputs.peer_source``), on a row refused for the target margin or the
 sales-to-capital too; ``tax-loss-history-unknown`` when the forecast has a loss
-year or the trailing margin is below zero; ``return-above-peers`` when the return on new capital at
+year or the trailing margin is below zero; ``margin-ramp-in-dollars`` on the dollar ramp, naming the
+trailing margin and the ramp's two ends; ``return-above-peers`` when the return on new capital at
 the target is above the peers' median ROIC; ``failure-not-charged`` on a Young Growth row; the
 trailing flags; ``value-spread`` over the three margins, unbounded when the value at the lowest
 margin is at or below zero and the median's is positive. The runway-return flags of the mature
@@ -105,6 +114,7 @@ from fairband.engine.revenue_growth import (
     own_sales_to_capital,
     peer_roic_median,
     peer_sales_to_capital,
+    ramp_ends,
     resolved_steps,
     return_on_new_capital,
     revenue_valuation,
@@ -125,12 +135,14 @@ from fairband.engine.route_steps import (
     expected,
     from_capital,
     income,
+    millions,
     multiples_at,
     nil,
     nri_gap,
     present,
     price_facts_for,
     rule,
+    signed,
     trailing_flags,
 )
 from fairband.engine.types import Flag, Phase, Provenance, TaggedInput
@@ -161,11 +173,13 @@ _FAILURE_PROBABILITY = {
 @dataclass(frozen=True)
 class _SalesToCapital:
     """The measure used (``None`` when neither stands), the company's own five-year marginal
-    measure and whether it is usable, the mature peers' median, and the value used."""
+    measure, whether it is usable and whether the bound on the peers' median alone rejected it,
+    the mature peers' median, and the value used."""
 
     used: Literal["own", "peers"] | None
     own: float | None
     own_usable: bool
+    own_below_bound: bool
     peers: float | None
     value: float | None
 
@@ -223,6 +237,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         return Refused("no sales-to-capital", path_and_capital)
 
     start, bridge = rebuild["margin_start"], Bridge(rebuild["debt"], rebuild["cash"], c.shares)
+    margin = _margin_path(start, target.value, policy)
     v, terminal = _at_margin(path, start, target.value, tax, s2c.value, moat, bridge, policy)
     value = v.value_per_share
     by_margin = {
@@ -248,7 +263,12 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         },
         "path_steps": [g2, g3],
         "growth_rates": list(growth_rates(path)),
-        "margin_path": {"start": start, "target": target.value, "by_year": list(v.margins)},
+        "margin_path": {
+            "start": start,
+            "target": target.value,
+            "by_year": list(v.margins),
+            "ramp": "dollars" if margin.in_dollars else "margin",
+        },
         "target_margin": target_intermediates(target, i.peer_source),
         **rebuild,
         "revenue_by_year": list(v.revenue),
@@ -280,6 +300,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         sbc
         + path_and_capital
         + ((TAX_LOSS,) if start < 0 or any(x < 0 for x in v.ebit) else ())
+        + present(_ramp_in_dollars(margin, v.revenue, path.revenue0))
         + present(_return_above_peers(new_capital, peer_roic))
         + ((_FAILURE,) if young else ())
         + trailing_flags(i, t, gap, policy)
@@ -309,7 +330,16 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         _cap_input(policy, sales, path.hold is not None),
         rule(policy, "fade_years", policy.fade_years, "years"),
         rule(policy, "margin_convergence_year", policy.margin_convergence_year, "year"),
+        *_rule_if(
+            margin.in_dollars, policy, "loss_ramp_margin_bound", policy.loss_ramp_margin_bound
+        ),
         rule(policy, "peer_min", policy.peer_min, "peers"),
+        *_rule_if(
+            s2c.own_below_bound,
+            policy,
+            "own_sales_to_capital_min_share",
+            policy.own_sales_to_capital_min_share,
+        ),
         *industry_peer_max_input(policy, industry),
     )
     return Valued("revenue-growth", value, moat, im, inputs, flags)
@@ -322,9 +352,7 @@ def revenue_at_price(
     implied growth and margin, the multiples, the growth share, the expected return on the revenue
     path's years 2 to H + 1, and the cross-check's implied growth."""
     s2c = im["sales_to_capital"]["value"]
-    margin = MarginPath(
-        im["margin_start"], im["margin_path"]["target"], policy.margin_convergence_year
-    )
+    margin = _margin_path(im["margin_start"], im["margin_path"]["target"], policy)
     charge = RevenueCharge(policy.required_return, policy.terminal_growth, im["terminal_roic"], s2c)
     path, bridge = _rebuilt_path(im, policy), _rebuilt_bridge(im)
     return {
@@ -346,13 +374,14 @@ def revenue_at_price(
 
 def implied_margin_at_price(im: dict[str, Any], price: float, policy: Policy) -> dict[str, Any]:
     """The margin the price needs, from the rebuild keys in ``im``: the target margin at which the
-    value a share equals ``price``, the terminal return re-read at each trial; ``None`` without a
-    sales-to-capital or when the policy's bounds hold no such margin."""
+    value a share equals ``price``, the terminal return re-read and, on the dollar ramp, the ramp
+    rebuilt at each trial; ``None`` without a sales-to-capital or when the policy's bounds hold no
+    such margin."""
     s2c = im["sales_to_capital"]["value"]
     if s2c is None:
         return {"implied_margin": None}
     start = im["margin_start"]
-    margin = MarginPath(start, start, policy.margin_convergence_year)  # the solve sets the target
+    margin = _margin_path(start, start, policy)  # the solve sets the target
     path, bridge = _rebuilt_path(im, policy), _rebuilt_bridge(im)
     implied = implied_target_margin(
         price, path, margin, im["tax_rate"], s2c, im["moat"], policy, bridge
@@ -453,7 +482,8 @@ def _above_base_rate(path: RevenuePath, sales: BaseRateClass) -> Flag | None:
 
 def _sales_to_capital(c: Context, roic: RoicTerms) -> _SalesToCapital:
     """The company's own five-year marginal measure over the kept ROIC years, each year's revenue
-    its fiscal year's, when usable; else the mature peers' median; else none."""
+    its fiscal year's, when usable and, with a peers' median, at least the policy's share of it
+    (spec 2026-11-06 7.1); else the mature peers' median; else none."""
     i, policy = c.inputs, c.policy
     revenue = {fy.year: fy.revenue for fy in i.series if fy.revenue is not None}
     own, usable = own_sales_to_capital(
@@ -463,11 +493,25 @@ def _sales_to_capital(c: Context, roic: RoicTerms) -> _SalesToCapital:
         policy.marginal_capital_growth_min,
     )
     peers = peer_sales_to_capital(i.peers, policy)
-    if usable:
-        return _SalesToCapital("own", own, True, peers, own)
+    below = (
+        usable
+        and own is not None
+        and peers is not None
+        and own < policy.own_sales_to_capital_min_share * peers
+    )
+    if usable and not below:
+        return _SalesToCapital("own", own, True, False, peers, own)
     if peers is not None:
-        return _SalesToCapital("peers", own, False, peers, peers)
-    return _SalesToCapital(None, own, False, None, None)
+        return _SalesToCapital("peers", own, False, below, peers, peers)
+    return _SalesToCapital(None, own, False, False, None, None)
+
+
+def _margin_path(start: float, target: float, policy: Policy) -> MarginPath:
+    """The margin path from the trailing margin to ``target``, on the dollar ramp when the
+    trailing margin is below the loss ramp bound: a loss larger than revenue (spec 2026-11-06
+    7.2)."""
+    in_dollars = start < policy.loss_ramp_margin_bound
+    return MarginPath(start, target, policy.margin_convergence_year, in_dollars)
 
 
 def _at_margin(
@@ -487,8 +531,30 @@ def _at_margin(
     charge = RevenueCharge(
         policy.required_return, policy.terminal_growth, terminal, sales_to_capital
     )
-    margin = MarginPath(start, target, policy.margin_convergence_year)
+    margin = _margin_path(start, target, policy)
     return revenue_valuation(path, margin, tax, charge, bridge), terminal
+
+
+def _ramp_in_dollars(
+    margin: MarginPath, revenue: tuple[float, ...], revenue0: float
+) -> Flag | None:
+    """``margin-ramp-in-dollars`` on the dollar ramp, naming the trailing margin, the trailing
+    operating income and the target's share of revenue the ramp reaches in the convergence year."""
+    if not margin.in_dollars:
+        return None
+    e0, end = ramp_ends(revenue, margin, revenue0)
+    return Flag(
+        "margin-ramp-in-dollars",
+        "Ramp in dollars",
+        f"The trailing loss is larger than revenue (margin {signed(margin.start)}), so operating "
+        f"income moves in dollars from {millions(e0)} to the target margin's {millions(end)} "
+        f"by year {margin.convergence_year}, as the Start-up ramp does.",
+    )
+
+
+def _rule_if(cited: bool, policy: Policy, name: str, value: float) -> tuple[TaggedInput, ...]:
+    """A RULE input, a ratio, cited only on a row it applied to."""
+    return (rule(policy, name, value, "ratio"),) if cited else ()
 
 
 def bridge_flags(c: Context | StartUpContext) -> tuple[Flag, ...]:
@@ -637,14 +703,20 @@ def from_peers(
 
 def _sales_to_capital_input(c: Context, s2c: _SalesToCapital) -> TaggedInput:
     """The sales-to-capital used: the own measure from the statements (an estimate under the
-    intangibles method when invested capital took it), or the peers' median."""
+    intangibles method when invested capital took it), or the peers' median, its note naming both
+    figures when the bound alone rejected the own measure."""
     if s2c.used == "own":
         return from_capital(
             c.inputs, "sales_to_capital", s2c.value, "the company's own five-year marginal measure"
         )
     industry = peer_industry(c)
     median = "the mature peers' median" + ("" if industry is None else f" ({industry} industry)")
-    return from_peers(c, "sales_to_capital", s2c.value, f"{median}; the own measure is not usable")
+    why = (
+        f"the own measure, {s2c.own:.2f}, is below half the peers' median, {s2c.peers:.2f}"
+        if s2c.own_below_bound
+        else "the own measure is not usable"
+    )
+    return from_peers(c, "sales_to_capital", s2c.value, f"{median}; {why}")
 
 
 def _rebuilt_path(im: dict[str, Any], policy: Policy) -> RevenuePath:

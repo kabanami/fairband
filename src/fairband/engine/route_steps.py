@@ -311,3 +311,13 @@ def present(flag: Flag | None) -> tuple[Flag, ...]:
 
 def nil(x: float | None) -> float:
     return 0.0 if x is None else x
+
+
+def signed(x: float) -> str:
+    """A rate as a percent to one decimal, a negative one with the minus sign."""
+    return f"{x:.1%}".replace("-", "−")
+
+
+def millions(x: float) -> str:
+    """A dollar figure in millions to one decimal, a negative one with the minus sign."""
+    return f"{'−' if x < 0 else ''}${abs(x) / 1e6:,.1f} million"

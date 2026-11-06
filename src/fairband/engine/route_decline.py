@@ -101,12 +101,14 @@ from fairband.engine.route_steps import (
     expected,
     from_capital,
     income,
+    millions,
     multiples_at,
     nil,
     nri_gap,
     present,
     price_facts_for,
     rule,
+    signed,
     trailing_flags,
 )
 from fairband.engine.runoff import (
@@ -513,7 +515,7 @@ def _on_trend(d: float) -> Flag:
     return Flag(
         "path-on-trend",
         "Path on trend",
-        f"No usable consensus: every year shrinks at the decline rate, {_signed(d)}.",
+        f"No usable consensus: every year shrinks at the decline rate, {signed(d)}.",
     )
 
 
@@ -530,13 +532,8 @@ def _recovery(rates: tuple[float | None, ...], d: float) -> Flag | None:
         "consensus-recovery",
         "Consensus recovery",
         f"The consensus has revenue growing {' and '.join(rising)} while the decline rate is "
-        f"{_signed(d)}.",
+        f"{signed(d)}.",
     )
-
-
-def _signed(x: float) -> str:
-    """A rate as a percent to one decimal, a negative one with the minus sign."""
-    return f"{x:.1%}".replace("-", "−")
 
 
 def _liabilities_flag(newest: BalanceYear | None) -> Flag | None:
@@ -613,13 +610,9 @@ def _reinvesting(t: TrailingFigures, falls: bool) -> Flag | None:
     return Flag(
         "reinvesting-in-decline",
         "Reinvesting in decline",
-        f"Capital spending {_millions(abs(capex))} exceeds depreciation "
-        f"{_millions(abs(depreciation))} while revenue falls: Damodaran's denial.",
+        f"Capital spending {millions(abs(capex))} exceeds depreciation "
+        f"{millions(abs(depreciation))} while revenue falls: Damodaran's denial.",
     )
-
-
-def _millions(x: float) -> str:
-    return f"${x / 1e6:,.1f} million"
 
 
 def _path_inputs(c: Context, path: _Consensus) -> tuple[TaggedInput, ...]:

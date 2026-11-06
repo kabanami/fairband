@@ -9,6 +9,7 @@ from fairband.engine.revenue_growth import (
     PeerFigures,
     RevenueCharge,
     RevenuePath,
+    ebit_by_year,
     growth_rates,
     implied_hold_growth,
     implied_target_margin,
@@ -166,6 +167,52 @@ def test_value_at_other_inputs() -> None:
     ).value_per_share == pytest.approx(40.45, abs=0.01)
 
 
+def test_the_dollar_ramp_from_a_loss_larger_than_revenue() -> None:
+    """Spec 2026-11-06 13.2: from a trailing margin of -150% the operating income moves in dollars
+    from -1,500 to 20% of year 10's revenue, 891.98, and the margins are the EBITs over revenue."""
+    ramp = MarginPath(-1.5, 0.20, 10, in_dollars=True)
+    ebit = ebit_by_year(revenue_by_year(PATH), ramp, 1000.0)
+    assert ebit == pytest.approx(
+        (-1260.80, -1021.60, -782.41, -543.21, -304.01, -64.81, 174.38, 413.58, 652.78, 891.98),
+        abs=0.01,
+    )
+    v = revenue_valuation(PATH, ramp, 0.21, CHARGE, BRIDGE)
+    assert v.ebit == ebit
+    assert v.margins[0] == pytest.approx(-0.9698, abs=1e-4) and v.margins[9] == pytest.approx(0.20)
+    assert v.nopat[9] == pytest.approx(891.98, abs=0.01) and v.tax == (0.0,) * 10
+    assert v.terminal_nopat == pytest.approx(704.66, abs=0.01)
+    assert v.fcff[0] == pytest.approx(-1423.30, abs=0.01)
+    assert v.fcff[9] == pytest.approx(657.09, abs=0.01)
+    assert v.terminal_value == pytest.approx(8064.46, abs=0.01)
+    assert v.firm_value == pytest.approx(-31.33, abs=0.01)
+    assert v.equity == pytest.approx(168.67, abs=0.01)
+    assert v.value_per_share == pytest.approx(1.6867, abs=1e-4)
+
+
+def test_the_margin_path_from_the_same_loss_gives_minus_61_94() -> None:
+    v = revenue_valuation(PATH, MarginPath(-1.5, 0.20, 10), 0.21, CHARGE, BRIDGE)
+    assert v.ebit[0] == pytest.approx(1300.0 * -1.33)
+    assert v.value_per_share == pytest.approx(-61.94, abs=0.01)
+
+
+def test_the_ramp_holds_the_target_margin_after_the_convergence_year() -> None:
+    v = revenue_valuation(PATH, MarginPath(-1.5, 0.20, 5, in_dollars=True), 0.21, CHARGE, BRIDGE)
+    assert v.ebit[4] == pytest.approx(0.20 * v.revenue[4])
+    assert v.margins[4:] == pytest.approx((0.20,) * 6)
+    assert v.ebit[0] == pytest.approx(-1500.0 + (0.20 * v.revenue[4] + 1500.0) / 5)
+
+
+def test_the_ramp_past_the_explicit_period_ends_at_year_ten_revenue() -> None:
+    """With the convergence year past year 10 the ramp's end is the target margin on year 10's
+    revenue at year 12, so year 10 is ten twelfths of the way there, below the target."""
+    v = revenue_valuation(PATH, MarginPath(-1.5, 0.20, 12, in_dollars=True), 0.21, CHARGE, BRIDGE)
+    end = 0.20 * v.revenue[9]
+    assert end == pytest.approx(891.98, abs=0.01)
+    assert v.ebit[0] == pytest.approx(-1500.0 + (end + 1500.0) / 12)
+    assert v.ebit[9] == pytest.approx(-1500.0 + (end + 1500.0) * 10 / 12)
+    assert v.margins[9] < 0.20
+
+
 def test_return_on_new_capital() -> None:
     assert return_on_new_capital(0.20, 0.21, 2.0) == pytest.approx(0.316)
 
@@ -184,6 +231,14 @@ def test_implied_growth_and_margin_at_the_price(policy: Policy) -> None:
     assert implied_target_margin(
         34.9057, PATH, MARGIN, 0.21, 2.0, "None", policy, BRIDGE
     ) == pytest.approx(0.20, abs=1e-4)
+
+
+def test_the_margin_the_price_needs_on_the_ramp(policy: Policy) -> None:
+    """The solve rebuilds the dollar ramp from each trial margin (spec 2026-11-06 13.2)."""
+    ramp = MarginPath(-1.5, -1.5, 10, in_dollars=True)  # the solve sets the target
+    assert implied_target_margin(
+        25.0, PATH, ramp, 0.21, 2.0, "None", policy, BRIDGE
+    ) == pytest.approx(0.277164, abs=1e-5)
 
 
 def test_implied_margin_reads_the_terminal_from_the_trial_margin(policy: Policy) -> None:

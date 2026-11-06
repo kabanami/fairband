@@ -107,6 +107,33 @@ PRICE_KEYS = (
 )
 
 
+# The fixture's own five-year marginal sales-to-capital: revenue up 35% a year on invested
+# capital of 0.83 × revenue.
+OWN = 2 * 1.35 / (0.83 * 2.35)
+# A trailing operating loss of $15 bn on the fixture's $10 bn of revenue, a margin of -150%, below
+# the loss ramp bound; one of $10.5 bn, -105%, is below it and still valued.
+LOSS = -15_000e6
+VALUED_LOSS = -10_500e6
+
+
+def with_loss(inputs: CompanyInputs, operating_income: float) -> CompanyInputs:
+    """The company with its trailing operating income replaced."""
+    t = inputs.trailing
+    assert t is not None
+    return replace(inputs, trailing=replace(t, operating_income=operating_income))
+
+
+def with_own_measure(inputs: CompanyInputs, own: float) -> CompanyInputs:
+    """The company with its invested capital scaled so that its own five-year marginal
+    sales-to-capital is ``own``; its returns on capital are unchanged."""
+    scale = OWN / own
+    figures = [(fy.revenue, fy.operating_income) for fy in inputs.series]
+    revenue = [rev * scale for rev, _ in figures if rev is not None]
+    margins = [oi / rev for rev, oi in figures if rev is not None and oi is not None]
+    assert len(revenue) == len(margins) == len(figures)
+    return replace(inputs, capital_years=capital_years(fiscal_years(revenue, margins)))
+
+
 def codes(r: ValuationResult) -> list[str]:
     return [f.code for f in r.flags]
 
@@ -150,6 +177,7 @@ def test_high_growth_is_valued_on_the_revenue_route(
     assert im["path_steps"] == pytest.approx([16_000 / 13_000 - 1, 19_200 / 16_000 - 1])
     assert im["margin_start"] == pytest.approx(-0.09)
     assert im["margin_path"]["by_year"][-1] == pytest.approx(0.20)
+    assert im["margin_path"]["ramp"] == "margin"
     assert im["target_margin"]["value"] == pytest.approx(0.20) and im["target_margin"]["count"] == 3
     assert im["target_margin"]["largest_symbol"] == "PEER2"
     assert [p["symbol"] for p in im["target_margin"]["peers"]] == ["PEER1", "PEER2", "PEER3"]
@@ -159,6 +187,7 @@ def test_high_growth_is_valued_on_the_revenue_route(
         "used": "own",
         "own": pytest.approx(2 * 1.35 / (0.83 * 2.35)),
         "own_usable": True,
+        "own_below_bound": False,
         "peers": pytest.approx(2.5),
         "value": pytest.approx(2 * 1.35 / (0.83 * 2.35)),
     }
@@ -304,11 +333,74 @@ def test_peers_sales_to_capital_when_the_own_measure_is_not_usable(
         "used": "peers",
         "own": None,
         "own_usable": False,
+        "own_below_bound": False,
         "peers": pytest.approx(2.5),
         "value": pytest.approx(2.5),
     }
     [s2c] = [i for i in r.inputs if i.name == "sales_to_capital"]
     assert s2c.value == pytest.approx(2.5) and s2c.note is not None and "peers" in s2c.note
+
+
+def test_the_own_sales_to_capital_must_reach_half_the_peers_median(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-06 13.3: an own measure of 0.5, usable on the first two tests, is below half
+    the peers' median of 2.5, so the median serves; 1.3 is not; with no peers' median the own 0.5
+    stands."""
+    below = value_company(with_own_measure(high_growth_inputs, 0.5), deciles, policy, TODAY)
+    assert below.intermediates["sales_to_capital"] == {
+        "used": "peers",
+        "own": pytest.approx(0.5),
+        "own_usable": False,
+        "own_below_bound": True,
+        "peers": pytest.approx(2.5),
+        "value": pytest.approx(2.5),
+    }
+    s2c = input_named(below, "sales_to_capital")
+    assert s2c.value == pytest.approx(2.5) and s2c.provenance.source == FMP_SOURCE
+    assert s2c.note == (
+        "the mature peers' median; the own measure, 0.50, is below half the peers' median, 2.50"
+    )
+    bound = input_named(below, "own_sales_to_capital_min_share")
+    assert (bound.value, bound.unit, bound.tag) == (0.5, "ratio", "RULE")
+    # on the industry fallback the note names the industry as today's does
+    industry = value_company(
+        replace(with_own_measure(high_growth_inputs, 0.5), peer_source=FROM_INDUSTRY),
+        deciles,
+        policy,
+        TODAY,
+    )
+    assert input_named(industry, "sales_to_capital").note == (
+        "the mature peers' median (Specialty Industrial Machinery industry); the own measure, "
+        "0.50, is below half the peers' median, 2.50"
+    )
+
+    above = value_company(with_own_measure(high_growth_inputs, 1.3), deciles, policy, TODAY)
+    s = above.intermediates["sales_to_capital"]
+    assert (s["used"], s["own_usable"], s["own_below_bound"]) == ("own", True, False)
+    assert s["value"] == pytest.approx(1.3)
+    assert input_named(above, "sales_to_capital").note == (
+        "the company's own five-year marginal measure"
+    )
+    assert "own_sales_to_capital_min_share" not in [i.name for i in above.inputs]
+
+    no_median = tuple(replace(p, sales_to_capital=None) for p in high_growth_inputs.peers)
+    alone = replace(with_own_measure(high_growth_inputs, 0.5), peers=no_median)
+    r = value_company(alone, deciles, policy, TODAY)
+    s = r.intermediates["sales_to_capital"]
+    assert (s["used"], s["own_usable"], s["own_below_bound"], s["peers"]) == (
+        "own",
+        True,
+        False,
+        None,
+    )
+    assert s["value"] == pytest.approx(0.5)
+    assert "own_sales_to_capital_min_share" not in [i.name for i in r.inputs]
+    # an own measure not usable on the first two tests is not below the bound: the median serves
+    short = replace(high_growth_inputs, capital_years=high_growth_inputs.capital_years[-4:])
+    r = value_company(short, deciles, policy, TODAY)
+    assert r.intermediates["sales_to_capital"]["own_below_bound"] is False
+    assert "own_sales_to_capital_min_share" not in [i.name for i in r.inputs]
 
 
 def _without_source(im: dict[str, Any]) -> dict[str, Any]:
@@ -620,6 +712,124 @@ def test_tax_loss_flag_and_the_bridge(
     assert note in sentence(noted, "line-not-presented:debt")
     [debt] = [i for i in noted.inputs if i.name == "debt"]
     assert (debt.value, debt.note) == (1_000e6, note)
+
+
+def test_a_trailing_margin_below_the_bound_takes_the_dollar_ramp(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-06 7.2: a trailing loss of $15 bn on $10 bn of revenue moves in dollars to the
+    target margin's share of year 10's revenue, and is worth more than the margin path from -150%,
+    which the bound moved below it gives."""
+    hg = high_growth_inputs
+    r = value_company(with_loss(hg, LOSS), deciles, policy, TODAY)
+    im = r.intermediates
+    assert im["margin_start"] == -1.5 and im["margin_path"]["ramp"] == "dollars"
+    revenue, ebit = im["revenue_by_year"], im["ebit_by_year"]
+    end = 0.20 * revenue[9]
+    assert ebit[0] == pytest.approx(LOSS + (end - LOSS) / 10)
+    assert ebit[9] == pytest.approx(end)
+    assert im["margin_path"]["by_year"] == pytest.approx(
+        [e / rev for e, rev in zip(ebit, revenue, strict=True)]
+    )
+    route = codes(r)
+    assert route.index("tax-loss-history-unknown") + 1 == route.index("margin-ramp-in-dollars")
+    assert sentence(r, "margin-ramp-in-dollars") == (
+        "The trailing loss is larger than revenue (margin −150.0%), so operating income moves in "
+        f"dollars from −$15,000.0 million to the target margin's ${end / 1e6:,.1f} million by year "
+        "10, as the Start-up ramp does."
+    )
+    [word] = [f.word for f in r.flags if f.code == "margin-ramp-in-dollars"]
+    assert word == "Ramp in dollars"
+    on_margin_path = replace(policy, loss_ramp_margin_bound=-2.0)
+    m = value_company(with_loss(hg, LOSS), deciles, on_margin_path, TODAY)
+    assert m.intermediates["margin_path"]["ramp"] == "margin"
+    assert "margin-ramp-in-dollars" not in codes(m)
+    assert m.intermediates["margin_path"]["by_year"][0] == pytest.approx(-1.5 + 1.7 / 10)
+    assert im["value_per_share"] > m.intermediates["value_per_share"]
+    # a loss of $10.5 bn is on the ramp and valued: the bound is cited, after the convergence year
+    valued = value_company(with_loss(hg, VALUED_LOSS), deciles, policy, TODAY)
+    assert valued.value is not None and valued.intermediates["margin_path"]["ramp"] == "dollars"
+    bound = input_named(valued, "loss_ramp_margin_bound")
+    assert (bound.value, bound.unit, bound.tag) == (-1.0, "ratio", "RULE")
+    names = [i.name for i in valued.inputs]
+    assert names.index("margin_convergence_year") + 1 == names.index("loss_ramp_margin_bound")
+    margin_path = value_company(with_loss(hg, VALUED_LOSS), deciles, on_margin_path, TODAY)
+    assert valued.value > margin_path.intermediates["value_per_share"]
+
+
+def test_a_trailing_margin_at_the_bound_keeps_the_margin_path(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    r = value_company(with_loss(high_growth_inputs, -10_000e6), deciles, policy, TODAY)
+    im = r.intermediates
+    assert im["margin_start"] == -1.0 and im["margin_path"]["ramp"] == "margin"
+    assert im["margin_path"]["by_year"][0] == pytest.approx(-1.0 + 1.2 / 10)
+    assert "margin-ramp-in-dollars" not in codes(r)
+    assert "tax-loss-history-unknown" in codes(r)
+    plain = value_company(high_growth_inputs, deciles, policy, TODAY)
+    assert "loss_ramp_margin_bound" not in [i.name for i in plain.inputs]
+
+
+def test_reprice_rebuilds_the_ramp(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """A row on the dollar ramp moves to a new price from its intermediates alone, its two solves
+    on the ramp: at its own value they return the held rate and the target margin."""
+    ramp = with_loss(high_growth_inputs, VALUED_LOSS)
+    r = value_company(ramp, deciles, policy, TODAY)
+    assert r.value is not None and r.price is not None and r.price_date is not None
+    stored = result_from_json(result_to_json(r))
+    assert reprice(stored, r.price, r.price_date, policy) == r
+    r2 = reprice(stored, r.price * 0.5, REPRICED, policy)
+    assert r2.value == r.value
+    assert r2.intermediates["ebit_by_year"] == r.intermediates["ebit_by_year"]
+    assert r2.intermediates["implied_growth"] != r.intermediates["implied_growth"]
+    assert r2.intermediates["implied_margin"] < r.intermediates["implied_margin"]
+    fresh = value_company(replace(ramp, price=r.price * 0.5), deciles, policy, TODAY)
+    for key in PRICE_KEYS:
+        assert r2.intermediates[key] == fresh.intermediates[key], key
+    at_value = reprice(stored, r.value, REPRICED, policy).intermediates
+    assert at_value["implied_growth"] == pytest.approx(CAP, abs=1e-4)
+    assert at_value["implied_margin"] == pytest.approx(0.20, abs=1e-4)
+    # refused for its target margin on the ramp: the margin the price needs is the ramp's
+    no_peers = replace(with_loss(high_growth_inputs, LOSS), peers=())
+    refused = value_company(no_peers, deciles, policy, TODAY)
+    assert refused.refusal == "no target margin: 0 mature peers" and refused.price is not None
+    im = refused.intermediates
+    on_margin_path = replace(policy, loss_ramp_margin_bound=-2.0)
+    assert im["implied_margin"] is not None
+    on_margin = implied_margin_at_price(im, refused.price, on_margin_path)["implied_margin"]
+    assert im["implied_margin"] != on_margin
+    stored = result_from_json(result_to_json(refused))
+    moved = reprice(stored, refused.price * 0.5, REPRICED, policy)
+    assert moved.intermediates["implied_margin"] < im["implied_margin"]
+    fresh = value_company(replace(no_peers, price=refused.price * 0.5), deciles, policy, TODAY)
+    assert moved.intermediates == fresh.intermediates
+
+
+def test_young_growth_equals_high_growth_on_the_ramp(
+    young_growth_inputs: CompanyInputs,
+    high_growth_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+) -> None:
+    young = with_loss(young_growth_inputs, VALUED_LOSS)
+    same = replace(
+        young, series=high_growth_inputs.series, capital_years=high_growth_inputs.capital_years
+    )
+    high = value_company(same, deciles, policy, TODAY)
+    r = value_company(young, deciles, policy, TODAY)
+    assert (high.phase.phase, r.phase.phase) == ("High Growth", "Young Growth")
+    assert r.intermediates["margin_path"]["ramp"] == "dollars"
+    assert r.value is not None and r.value == high.value and r.levels == high.levels
+    figures = dict(r.intermediates)
+    figures.pop("failure_probability")
+    assert figures == high.intermediates
+    assert sentence(r, "margin-ramp-in-dollars") == sentence(high, "margin-ramp-in-dollars")
+    for row in (r, high):
+        assert "loss_ramp_margin_bound" in [i.name for i in row.inputs]
+    route = codes(r)
+    assert route.index("margin-ramp-in-dollars") < route.index("failure-not-charged")
 
 
 def test_cross_check_present_with_a_positive_anchor(

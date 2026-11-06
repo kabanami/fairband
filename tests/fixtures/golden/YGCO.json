@@ -654,6 +654,7 @@
     0.171,
     0.20000000000000004
    ],
+   "ramp": "margin",
    "start": -0.09,
    "target": 0.2
   },
@@ -742,6 +743,7 @@
   },
   "sales_to_capital": {
    "own": 1.3842604460394772,
+   "own_below_bound": false,
    "own_usable": true,
    "peers": 2.5,
    "used": "own",

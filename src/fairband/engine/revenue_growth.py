@@ -14,6 +14,13 @@ The operating margin moves in a straight line from the trailing margin to the ta
 in ``convergence_year`` and staying there: m_t = start + (target − start) × min(t, convergence
 year) ÷ convergence year. A margin above the target moves down the same line.
 
+On the dollar ramp (``MarginPath.in_dollars``, which the route sets for a trailing loss larger
+than revenue; spec 2026-11-06 7.2) operating income moves instead, in dollars, as the Start-up
+ramp's does: from E_0 = start × revenue0 in a straight line to E* = target × revenue in the
+convergence year C, E_t = E_0 + (E* − E_0) × t ÷ C for t up to C, and target × revenue_t after.
+With C past the path's last year N, E* is the target on year N's revenue, reached at year C, so
+year N is below the target. Each year's margin is its operating income over its revenue.
+
 Tax is charged after the forecast's own losses, the carried loss starting at zero because no
 history of tax losses is stored. A loss year adds its size to the carried loss and pays no tax; a
 profit year is taxed on what it earns above the carried loss and uses the carried loss up by its
@@ -38,6 +45,7 @@ first root of the value a share less the price, found by ``mature_growth.solve_r
 rate, between −50% and 200%, the fade recomputed from it and years 1 to 3 unchanged; and the
 target margin, between the policy's implied-margin bounds, the terminal return re-read from the
 return on new capital at each trial margin, at the policy's required return and the path's g_T.
+Each trial rebuilds the margin path, or the dollar ramp from the trial's revenue and margin.
 
 The company's own sales-to-capital is the change in revenue over the change in average invested
 capital from the kept ROIC year ``span`` positions before the newest to the newest, each year's
@@ -81,11 +89,14 @@ class RevenuePath:
 
 @dataclass(frozen=True)
 class MarginPath:
-    """The trailing operating margin, the target and the year the margin reaches it."""
+    """The trailing operating margin, the target and the year the margin reaches it; with
+    ``in_dollars``, operating income ramps in dollars from the trailing loss to the target's share
+    of revenue in that year instead."""
 
     start: float
     target: float
     convergence_year: int
+    in_dollars: bool = False
 
 
 def _g1(path: RevenuePath) -> float:
@@ -120,10 +131,36 @@ def revenue_by_year(path: RevenuePath) -> tuple[float, ...]:
 
 
 def margins_by_year(margin: MarginPath, years: int) -> tuple[float, ...]:
-    """The operating margin for years 1 to ``years``, on the target from the convergence year."""
+    """The margin path's operating margin for years 1 to ``years``, on the target from the
+    convergence year; the dollar ramp's margins are its operating income over revenue."""
     c = margin.convergence_year
     return tuple(
         margin.start + (margin.target - margin.start) * min(t, c) / c for t in range(1, years + 1)
+    )
+
+
+def ramp_ends(revenue: Sequence[float], margin: MarginPath, revenue0: float) -> tuple[float, float]:
+    """The dollar ramp's ends: the trailing operating income, start × ``revenue0``, and the
+    target's share of the revenue in the convergence year, or in the path's last year when the
+    convergence year is past it."""
+    end_year = min(margin.convergence_year, len(revenue))
+    return margin.start * revenue0, margin.target * revenue[end_year - 1]
+
+
+def ebit_by_year(
+    revenue: Sequence[float], margin: MarginPath, revenue0: float
+) -> tuple[float, ...]:
+    """Operating income for the years of ``revenue``: each year's revenue at the margin path's
+    margin, or on the dollar ramp the straight line from the trailing operating income to the
+    target's share of revenue in the convergence year, then the target on each year's revenue."""
+    if not margin.in_dollars:
+        margins = margins_by_year(margin, len(revenue))
+        return tuple(rev * m for rev, m in zip(revenue, margins, strict=True))
+    c = margin.convergence_year
+    e0, end = ramp_ends(revenue, margin, revenue0)
+    return tuple(
+        e0 + (end - e0) * t / c if t <= c else margin.target * rev
+        for t, rev in enumerate(revenue, start=1)
     )
 
 
@@ -208,8 +245,13 @@ def revenue_valuation(
 ) -> RevenueValuation:
     """The revenue DCF from the revenue path to the value a share."""
     revenue = revenue_by_year(path)
-    margins = margins_by_year(margin, len(revenue))
-    ebit = tuple(rev * m for rev, m in zip(revenue, margins, strict=True))
+    ebit = ebit_by_year(revenue, margin, path.revenue0)
+    # EBIT over revenue on either path; the margin path's are its own margins, to the last digit
+    margins = (
+        tuple(e / rev for e, rev in zip(ebit, revenue, strict=True))
+        if margin.in_dollars
+        else margins_by_year(margin, len(revenue))
+    )
     tax, nopat = tax_and_nopat(ebit, tax_rate)
     taxed = terminal_nopat(ebit[-1], tax_rate)
     reinvestment = reinvestment_by_year(revenue, taxed, charge)
