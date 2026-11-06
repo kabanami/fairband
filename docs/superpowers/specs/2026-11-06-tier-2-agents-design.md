@@ -139,8 +139,8 @@ ledger.
 ## 7. Identity and the ledger (B-49)
 
 Every write carries a principal: `owner` (the page, the CLI), `agent`, or `system` (the engine's
-own writes: a review recomputed at a refresh, a period-tied override dropped, an expiry item
-posted).
+own writes: a period-tied override dropped, an expiry item posted; a review recomputed at a
+refresh is a system write the review log records, with no ledger row).
 
 An agent is named by the model identifier it runs as, exactly as the brand book asks:
 `claude-opus-5-5`, `gpt-5`. MCP's handshake carries the client's name and version
