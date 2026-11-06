@@ -214,7 +214,11 @@ reason needs more words.
 An override, a drop and a secondary valuation are refused with "settings changed: run a revalue"
 (or "policy changed", or "method changed") when the latest snapshot was valued under other
 settings. Call `refresh_start("revalue")`. Wait until `refresh_status()` shows no refresh running.
-Read `company` again, since the snapshot id changes, and try again.
+Read `company` again, since the snapshot id changes, and try again. An override or a drop is also
+refused with "the store moved since snapshot <id>: run a revalue" when the stored data changed
+after the latest snapshot: a refresh is under way, or a peer was refreshed. When `refresh_status()`
+shows a refresh running, wait until it ends; otherwise call `refresh_start("revalue")` and wait the
+same way. Read `company` again and try again.
 
 ## The secondary valuation
 

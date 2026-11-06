@@ -14,12 +14,18 @@ The override is stored either way, with the engine's reading of the input on the
 old value and, for a period-tied one, as the value it corrected. A refused one answers 400 with
 the rule's sentence and ``{override}``. An applied one drops the applied override on its tag
 ("replaced by override n") and the company's review is recomputed: ``build_inputs`` on the latest
-deciles, ``review_company`` over every applied override from the snapshot's result, the review
-written on the snapshot with its log row; it answers 201 with ``{override, review, bridge}``.
+deciles and today's date; the engine with no override on them must give the snapshot's route and
+value a share, else the write is refused 409, "the store moved since snapshot <id>: run a
+revalue", and nothing is stored, since a store change after the snapshot (a full refresh's new
+deciles before its value stage, a peer's figures from a scoped refresh) would land on the bridge's
+first line as the agent's; then ``review_company`` over every applied override from the
+snapshot's result, the review written on the snapshot with its validity window and its log row;
+it answers 201 with ``{override, review, bridge}``.
 
 ``DELETE /api/overrides/{id}`` drops an applied override with ``{reason}`` (the same 409s; 404
-for no such override, 409 for one not applied) and recomputes the review over the rest, or clears
-it when none is left; it answers ``{override, review, bridge}``, the review ``null`` when cleared.
+for no such override, 409 for one not applied) and recomputes the review over the rest, the
+store-moved 409 included, or clears it when none is left; it answers ``{override, review,
+bridge}``, the review ``null`` when cleared.
 Both writes are an agent's: the owner's answer 403 (spec 10.3, the founder's ruling of
 2026-11-06). Each write is a ledger row in its transaction, the agent's (``override``, and
 ``override-drop`` for a drop or a replacement), resting on the company's latest snapshot.
@@ -83,7 +89,7 @@ from fairband.engine.overrides import (
     current_reading,
     route_of,
 )
-from fairband.engine.route import FOREIGN_FILER
+from fairband.engine.route import FOREIGN_FILER, value_company
 from fairband.engine.secondary import Part, secondary_value
 from fairband.engine.types import Phase, ValuationResult, result_to_json
 from fairband.policy import Moat, Policy
@@ -241,6 +247,8 @@ def add_review_routes(
         today = clock().date()
         deciles = latest_deciles(conn)
         inputs = build_inputs(conn, symbol, current, tax, today, deciles)
+        if not _reproduces(value_company(inputs, deciles, current, today), snapshot.result):
+            raise HTTPException(409, f"the store moved since snapshot {snapshot.id}: run a revalue")
         return write_review(
             conn,
             inputs,
@@ -508,6 +516,12 @@ def _check(
     kinds = [e.kind for e in body.evidence]
     cap = _cap(snapshot.result, policy)
     return check_override(body.tag, body.new, route, policy, kinds, body.lifetime, cap)
+
+
+def _reproduces(fresh: ValuationResult, snapshot: ValuationResult) -> bool:
+    """Whether ``fresh``, the engine with no override on the inputs built today, is ``snapshot``'s
+    result as the bridge reads it: the same route and the same value a share, or no value on both."""
+    return fresh.route == snapshot.route and fresh.value == snapshot.value
 
 
 def _cap(result: ValuationResult, policy: Policy) -> float | None:

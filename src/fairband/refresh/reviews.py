@@ -13,8 +13,9 @@ resting on the new snapshot:
   against a figure, or a figure against none, is a change.
 
 With an override left, ``write_review`` reviews the new result under the rest on the new inputs,
-writes the review on the new snapshot and its log row; with none left, no review is written and
-the company's current review is cleared (``store.reviews``).
+writes the review on the new snapshot, with the snapshot's validity window, and its log row; with
+none left, no review is written and the company's current review is cleared (``store.reviews``).
+A review written at a refresh writes no ledger row: the review log records it.
 
 ``reprice_review`` runs in the reprice stage of a price refresh, in the transaction that writes
 the repriced snapshot: the company's current review, when it is on the snapshot repriced, through
@@ -144,9 +145,12 @@ def write_review(
     clock: Callable[[], datetime],
 ) -> int:
     """Review ``mechanical``, snapshot ``snapshot_id``'s result on ``inputs``, under the applied
-    ``overrides``; write the review on the snapshot and its log row; the review's id."""
+    ``overrides``; write the review on the snapshot, valid as long as it, and its log row; the
+    review's id."""
     engine = [as_override(o) for o in overrides]
     review = review_company(inputs, deciles, policy, today, engine, mechanical)
+    window = replace(review.result, valid_until=mechanical.valid_until)
+    review = replace(review, result=window)
     review_id = insert_review(conn, review, mechanical.symbol, snapshot_id, refresh_id, clock=clock)
     _log(conn, clock(), refresh_id, snapshot_id, review_id, mechanical, review.result)
     return review_id

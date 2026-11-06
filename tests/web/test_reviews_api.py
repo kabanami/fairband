@@ -6,9 +6,10 @@ refresh."""
 
 import json
 import sqlite3
+from collections.abc import Callable
 from contextlib import closing
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -22,14 +23,16 @@ from support.engine_companies import (
 )
 from support.web import CREATED, HEADER, NOW
 
+from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import Override, current_reading
 from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.types import ValuationResult, result_from_json
 from fairband.policy import Policy
+from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
 from fairband.store.db import connect
-from fairband.store.refreshes import save_deciles
+from fairband.store.refreshes import create_refresh, latest_deciles, save_deciles
 from fairband.web import reviews_api
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -54,7 +57,9 @@ NO_PERIOD = "a period-tied override names its period"
 
 
 @pytest.fixture(autouse=True)
-def stored_inputs(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def stored_inputs(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, CompanyInputs]:
+    """The inputs the routes build for each company, by symbol; a test may change one, as a
+    store change would."""
     with closing(connect(db_path)) as conn:
         save_deciles(conn, 1, universe_deciles(), CREATED)
     inputs = {
@@ -71,10 +76,11 @@ def stored_inputs(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         today: date,
         deciles: Deciles | None = None,
     ) -> CompanyInputs:
-        assert deciles == universe_deciles()  # the stored deciles
+        assert deciles is not None and deciles == latest_deciles(conn)  # the stored deciles
         return inputs[symbol]
 
     monkeypatch.setattr(reviews_api, "build_inputs", build)
+    return inputs
 
 
 def _post(client: TestClient, body: dict[str, Any], symbol: str = "AAPL") -> Any:
@@ -330,3 +336,74 @@ def test_a_period_tied_override_keeps_the_value_it_corrected(client: TestClient)
         r = client.post("/api/companies/HGCO/overrides", json=unnamed, headers=AGENT)
         assert (r.status_code, r.json()) == (400, {"detail": NO_PERIOD})
     assert len(_overrides(client, "HGCO")) == 2  # neither stored
+
+
+def _moved(snapshot_id: int) -> dict[str, str]:
+    return {"detail": f"the store moved since snapshot {snapshot_id}: run a revalue"}
+
+
+def test_an_override_on_a_store_that_moved_is_refused(
+    client: TestClient, stored_inputs: dict[str, CompanyInputs]
+) -> None:
+    """A peer's figures changed after HGCO's snapshot (a scoped refresh of the peer, say): the
+    engine on today's store no longer gives the snapshot's value, so the recompute would put the
+    store's move on the override's line. It is refused and nothing is stored."""
+    snapshot_id = client.get("/api/companies/HGCO").json()["snapshot"]["id"]
+    ledger = client.get("/api/companies/HGCO/ledger").json()["entries"]
+    hgco = stored_inputs["HGCO"]
+    peers = tuple(replace(p, margin=0.25) if p.symbol == "PEER2" else p for p in hgco.peers)
+    stored_inputs["HGCO"] = replace(hgco, peers=peers)  # the peers' median margin moves
+    target = BELIEF_8 | {"tag": "margin.target", "new": 0.25}
+    r = client.post("/api/companies/HGCO/overrides", json=target, headers=AGENT)
+    assert (r.status_code, r.json()) == (409, _moved(snapshot_id))
+    assert _overrides(client, "HGCO") == []
+    assert client.get("/api/companies/HGCO/reviews").json() == {"reviews": []}
+    assert client.get("/api/companies/HGCO/ledger").json()["entries"] == ledger
+
+
+def test_new_deciles_refuse_an_override_and_a_drop(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """A full refresh stored its deciles after AAPL's snapshot and has not valued AAPL yet: on
+    them the classifier puts AAPL in Mature Stable, so no review is recomputed from the old
+    snapshot until a revalue."""
+    belief = _post(client, BELIEF_8)["override"]["id"]
+    moat = _post(client, MOAT_NARROW)["override"]["id"]
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    reviews = client.get("/api/companies/AAPL/reviews").json()
+    deciles = universe_deciles()
+    higher = replace(deciles, growth_edges=tuple(e + 0.1 for e in deciles.growth_edges))
+    with closing(connect(db_path)) as conn:
+        refresh_id = create_refresh(
+            conn, "full", None, policy.version, METHOD_VERSION, NOW, EMPTY_SETTINGS_HASH
+        )
+        save_deciles(conn, refresh_id, higher, NOW)
+    r = client.post("/api/companies/AAPL/overrides", json=BELIEF_8 | {"new": 0.09}, headers=AGENT)
+    assert (r.status_code, r.json()) == (409, _moved(snapshot_id))
+    r = _drop(client, belief)
+    assert (r.status_code, r.json()) == (409, _moved(snapshot_id))
+    assert [(o["id"], o["state"]) for o in _overrides(client)] == [
+        (moat, "applied"),
+        (belief, "applied"),
+    ]
+    assert client.get("/api/companies/AAPL/reviews").json() == reviews
+
+
+def test_a_review_after_the_next_earnings_date_keeps_its_snapshot_s_window(
+    client_with_clock: Callable[[datetime], TestClient],
+    stored_inputs: dict[str, CompanyInputs],
+) -> None:
+    """Past AAPL's next earnings date the store gives no next earnings date, so the engine on
+    today's inputs would end the window at the fallback; a review carries its snapshot's window."""
+    aapl = stored_inputs["AAPL"]
+    assert aapl.next_earnings is not None
+    stored_inputs["AAPL"] = replace(aapl, next_earnings=None)  # as build_inputs reads it then
+    later = client_with_clock(
+        datetime.combine(aapl.next_earnings + timedelta(days=1), NOW.timetz())
+    )
+    window = later.get("/api/companies/AAPL").json()["result"]["valid_until"]
+    assert window == aapl.next_earnings.isoformat()
+    review = _post(later, BELIEF_8)["review"]
+    assert review["result"]["valid_until"] == window
+    latest = later.get("/api/companies/AAPL/reviews/latest").json()
+    assert latest["result"]["valid_until"] == window
