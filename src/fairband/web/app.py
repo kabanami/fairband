@@ -1,8 +1,9 @@
 """The FastAPI app: the screen page, the static files, the screen's JSON API, the group view, the
 refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
-(``agents_api``), the override and review routes (``reviews_api``), and the policy values and
-growth deciles the Methodology page cites (spec 2026-11-04 7.4).
+(``agents_api``), the override and review routes (``reviews_api``), the company reads and the
+Methodology section read (``reports_api``), and the policy values and growth deciles the
+Methodology page cites (spec 2026-11-04 7.4).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -80,6 +81,7 @@ from fairband.store.snapshots import latest_snapshot, latest_snapshots
 from fairband.store.watchlists import memberships
 from fairband.web.agents_api import add_agent_routes
 from fairband.web.policy_rows import deciles_json, policy_json
+from fairband.web.reports_api import add_report_routes
 from fairband.web.reviews_api import add_review_routes
 from fairband.web.rows import (
     COLUMNS,
@@ -122,8 +124,8 @@ def create_app(
     """The app; ``policy`` is the file's, which the user's settings overlay; ``clock`` gives the
     day the validity states are judged on and the time a refresh left running is marked
     interrupted, a setting changed, a watchlist entry added and an agent route's record
-    written; ``tax`` is the table a review's inputs are built with, the packaged one when
-    ``None``."""
+    written; ``tax`` is the table a review's inputs and the company reads' statements are built
+    with, the packaged one when ``None``."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -297,7 +299,9 @@ def create_app(
     add_settings_routes(app, conn_factory, policy, clock)
     add_watchlist_routes(app, conn_factory, clock)
     add_agent_routes(app, conn_factory, clock)
-    add_review_routes(app, conn_factory, policy, load_tax_table() if tax is None else tax, clock)
+    taxed = load_tax_table() if tax is None else tax
+    add_review_routes(app, conn_factory, policy, taxed, clock)
+    add_report_routes(app, conn_factory, policy, taxed, clock)
     return app
 
 

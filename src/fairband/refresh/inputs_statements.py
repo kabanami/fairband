@@ -41,6 +41,10 @@ is the debt and the cash from those lines, short-term plus long-term debt and ca
 plus short-term investments, a line not presented counting as nil and a figure with every line
 missing ``None``: assembly's reading, which ``newest_debt_and_cash`` gives the secondary
 valuation.
+
+``annual_lines`` reads each fiscal year's annual statements whole, by FMP name, joined as the
+series and the balance years join them: the lines the report's financial tables read beside the
+engine's records (``fairband.reports.tables``).
 """
 
 import json
@@ -309,6 +313,35 @@ def newest_debt_and_cash(
     figure with every line missing, and both without a balance sheet."""
     sums = balance_sums(balance_lines(conn, symbol))
     return sums["debt"][0], sums["cash"][0]
+
+
+def annual_lines(
+    conn: sqlite3.Connection, symbol: str
+) -> dict[int, dict[str, dict[str, float | None]]]:
+    """Each fiscal year of the series, oldest first, with its annual statements' lines by
+    dataset (``income-annual``, ``cashflow-annual``, ``balance-annual``) and FMP name: the year's
+    income statement, the cash flow ending on its period end and the balance sheet of its fiscal
+    year, as ``series_for`` and the balance years join them. A statement the year lacks is
+    absent and a line it does not present ``None``; empty without an annual income statement."""
+    years = _Years.of(_periods(conn, symbol, "income-annual"))
+    if years is None:
+        return {}
+    cash = _by_end(_periods(conn, symbol, "cashflow-annual"))
+    balance = _by_year(_periods(conn, symbol, "balance-annual"), years.calendar)
+    out = {}
+    for year in years.span:
+        income = years.income.get(year)
+        found = {
+            "income-annual": income,
+            "cashflow-annual": None if income is None else cash.get(income.end),
+            "balance-annual": balance.get(year),
+        }
+        out[year] = {
+            dataset: {name: period.value(name) for name in period.facts}
+            for dataset, period in found.items()
+            if period is not None
+        }
+    return out
 
 
 def _sum_lines(
