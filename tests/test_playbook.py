@@ -15,7 +15,7 @@ import anyio
 import httpx
 from mcp import Client
 
-from fairband.engine.overrides import NO_GUIDANCE
+from fairband.engine.overrides import NO_GUIDANCE, anchor_misfit
 from fairband.engine.route import FOREIGN_FILER
 from fairband.mcp.client import NOT_RUNNING, FairbandClient
 from fairband.mcp.server import TOOL_NAMES, build_server
@@ -96,6 +96,8 @@ REFUSALS = (
     IDENTIFY_FIRST,
     NOT_RUNNING,
     NO_GUIDANCE,
+    anchor_misfit("earnings.ntm"),
+    anchor_misfit("revenue.ntm"),
     GUIDANCE_REF,
     FOREIGN_FILER,
     NO_FMP_KEY,

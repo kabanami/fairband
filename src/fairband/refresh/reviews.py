@@ -12,6 +12,13 @@ resting on the new snapshot:
   (``overrides.current_reading``) is not the value the override corrected; a reading of none
   against a figure, or a figure against none, is a change.
 
+A lasting override of an NTM anchor (``earnings.ntm``, ``revenue.ntm``) drops the same way, "the
+guided year has passed", when the fiscal year its guidance record guides (``guidance.anchor_year``,
+the latest such year among the records it cites) is before the new snapshot's base year: the
+fiscal year that holds most of the four quarters after the last reported one, as every route
+reads it (``anchor.base_year`` on the new inputs). Without a base year, or without such a record,
+it stays.
+
 With an override left, ``write_review`` reviews the new result under the rest on the new inputs,
 writes the review on the new snapshot, with the snapshot's validity window, and its log row; with
 none left, no review is written and the company's current review is cleared (``store.reviews``).
@@ -45,13 +52,16 @@ from dataclasses import replace
 from datetime import date, datetime
 from typing import cast
 
+from fairband.engine.anchor import base_year
 from fairband.engine.classifier import Deciles
-from fairband.engine.overrides import OverrideTag, current_reading
+from fairband.engine.overrides import ANCHOR_METRICS, OverrideTag, current_reading
 from fairband.engine.review import BridgeLine, Review, review_company
 from fairband.engine.route import CompanyInputs, refusal_result, reprice
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
+from fairband.reports.refs import guidance_cited
 from fairband.store.db import transaction
+from fairband.store.guidance import anchor_year, guidance_row
 from fairband.store.ledger import SYSTEM, record
 from fairband.store.overrides import OverrideRow, applied_overrides, as_override, drop_override
 from fairband.store.reviews import (
@@ -67,6 +77,7 @@ logger = logging.getLogger("fairband.refresh")
 
 MOVED = "the statements moved past the override's snapshot"
 CHANGED = "the input the override corrected changed"
+PASSED = "the guided year has passed"
 
 
 def follow_snapshot(
@@ -105,9 +116,11 @@ def _follow(
     clock: Callable[[], datetime],
 ) -> int | None:
     symbol = result.symbol
+    trailing = inputs.trailing
+    base = None if trailing is None else base_year(inputs.quarter_estimates, trailing.period_end)
     kept = []
     for override in applied_overrides(conn, symbol):
-        reason = None if override.lifetime == "lasting" else _drop_reason(conn, override, result)
+        reason = _drop_reason(conn, override, result, base)
         if reason is None:
             kept.append(override)
             continue
@@ -300,15 +313,31 @@ def _write_refusal(
 
 
 def _drop_reason(
-    conn: sqlite3.Connection, override: OverrideRow, result: ValuationResult
+    conn: sqlite3.Connection, override: OverrideRow, result: ValuationResult, base: int | None
 ) -> str | None:
-    """Why the period-tied ``override`` no longer holds on ``result``, or ``None``."""
+    """Why ``override`` no longer holds on ``result``, whose base year is ``base``, or ``None``
+    (module docstring)."""
+    if override.lifetime == "lasting":
+        return _guided_year_passed(conn, override, base)
     made_on = snapshot_row(conn, override.snapshot_id)
     if made_on is not None and result.data_date > made_on.data_date:
         return MOVED
     if current_reading(result, cast(OverrideTag, override.tag)) != override.corrected_value:
         return CHANGED
     return None
+
+
+def _guided_year_passed(
+    conn: sqlite3.Connection, override: OverrideRow, base: int | None
+) -> str | None:
+    """``PASSED`` when the lasting NTM anchor ``override`` guides a fiscal year before ``base``."""
+    if override.tag not in ANCHOR_METRICS or base is None:
+        return None
+    guided = (e for e in override.evidence if e.get("kind") == "guidance")
+    cited = (guidance_cited(str(e.get("ref", ""))) for e in guided)
+    rows = (guidance_row(conn, i) for i in cited if i is not None)
+    years = [y for r in rows if r is not None and (y := anchor_year(override.tag, r)) is not None]
+    return PASSED if years and max(years) < base else None
 
 
 def _log(

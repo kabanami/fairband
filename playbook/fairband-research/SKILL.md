@@ -244,8 +244,9 @@ The guidance, at your best effort and never required. A clear full-year guidance
 fiscal year may replace the consensus: an NTM anchor, `earnings.ntm` on Mature Growth or
 `revenue.ntm` on High Growth, Young Growth and Decline, or a consensus step, `path.step_2` or
 `path.step_3`. "Guidance" below says which year feeds which input. The override's evidence holds
-an item of kind `guidance` that cites the record as `guidance:<id>`. Where the guidance is not
-clear, or is for any other year, the consensus stands.
+an item of kind `guidance` that cites the record as `guidance:<id>`; an NTM anchor's record is a
+`gaap` record of its metric (`eps` for `earnings.ntm`, `revenue` for `revenue.ntm`) for a fiscal
+year. Where the guidance is not clear, or is for any other year, the consensus stands.
 
 A cyclical, valued at mid-cycle:
 
@@ -393,7 +394,10 @@ The override's evidence names the record: `{kind: "guidance", ref: "guidance:<id
 The server refuses the override, and stores nothing, when that item is not right: "a guidance item
 cites its record as guidance:<id>" (400) for a ref of any other form; "no guidance record <id> for
 <symbol>" (404); "guidance record <id> is superseded by record <id>" (409) when a later call's
-record replaced it. Cite the newer record instead.
+record replaced it. Cite the newer record instead. An NTM anchor's override is refused, and
+stores nothing, when none of its records is a `gaap` record of its metric for a fiscal year: "an
+NTM anchor override needs a gaap guidance record of eps for a fiscal year" on `earnings.ntm`, "an
+NTM anchor override needs a gaap guidance record of revenue for a fiscal year" on `revenue.ntm`.
 
 ## Overrides
 
@@ -433,7 +437,8 @@ The two NTM anchors and the cycle gap:
 - `earnings.ntm` and `revenue.ntm` stand in for the consensus of the next twelve months, from a
   guidance record (see "Guidance"). Each is lasting. The consensus moves at every refresh and the
   guidance at every call, so at each later call drop it with `override_drop`, or replace it with
-  an override citing the new record.
+  an override citing the new record. A refresh drops it by itself once its guided year is before
+  the base year: "the guided year has passed".
 - `earnings.cycle_gap` is a dollar figure a share. It comes off the anchor's earnings and nothing
   else: the NTM EPS on Mature Growth, the normalized earnings on Mature Stable. On Mature Stable,
   when the `margin-flag` fires, the engine has already scaled the earnings to the ten-year median

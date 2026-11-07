@@ -14,11 +14,11 @@ with the trailing revenue and the terminal return and its projection year by yea
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
 every part's (``GRID_ROWS``), or, for a report with none whose company can have none on its
 snapshot, why (``noSecondary``, "no secondary valuation: foreign filer" or "...: no diluted
-share count", ``store.secondary.no_secondary``); the checks that ran (``check.CHECKS``, each with its rule); the
-versions (method, policy, settings hash, review and secondary methods); and the classifier's
-evidence. Appendix B (``appendix_b``), the glossary: the terms of ``GLOSSARY`` that the sections'
-text uses, a term matched whole and in any case, a plural counted, a term of two names (``Growth
-word, margin direction``) by either.
+share count", ``store.secondary.no_secondary``); the checks that ran (``check.CHECKS``, each
+with its rule); the versions (method, policy, settings hash, review and secondary methods); and
+the classifier's evidence. Appendix B (``appendix_b``), the glossary: the terms of ``GLOSSARY``
+that the sections' text uses, a term matched whole and in any case, a plural counted, a term of
+two names (``Growth word, margin direction``) by either.
 
 ``GLOSSARY`` is ``docs/method.md`` section 13's table, term for term; its Note is the flag of
 section 8 and also, in the brand book's word, the note an owner or an agent writes.

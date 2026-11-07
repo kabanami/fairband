@@ -168,7 +168,9 @@ vendor call. The refusals:
   any other form is refused, "a guidance item cites its record as guidance:<id>" (400); a record
   that is not the company's, "no guidance record <id> for <symbol>" (404); a record a later call
   replaced, "guidance record <id> is superseded by record <id>" (409). An NTM anchor override
-  needs one: "an NTM anchor override needs a guidance record among its evidence". On
+  needs one: "an NTM anchor override needs a guidance record among its evidence". Its records hold a
+  `gaap` record of its metric for a fiscal year, else 400, nothing stored: "an NTM anchor override
+  needs a gaap guidance record of eps for a fiscal year" (or of revenue, on `revenue.ntm`). On
   `secondary_valuation`, the item that backs a debt or a cash you pass adds `figure`, `debt` or
   `cash`, and one item at least names no `figure`: "the path needs its own evidence item".
 - A guidance record (`guidance_add`): the `metric` is `revenue`, `eps`, `operating_margin`,

@@ -1,6 +1,6 @@
 """The guidance routes (spec 2026-11-06 Tier 2, 9, 15.4 and 16; ``method.md`` 14.9), on the database
 of ``conftest.py``: AAPL, AAL and HGCO, each with one snapshot. AAPL's fiscal 2025 revenue is
-stored where a test needs a base year's actual on file."""
+stored where a test needs the year before's actual on file."""
 
 from contextlib import closing
 from datetime import date
@@ -70,7 +70,7 @@ def _post(client: TestClient, body: dict[str, Any], symbol: str = "AAPL") -> Any
 
 
 def test_guidance_round_trip(client: TestClient, db_path: Path) -> None:
-    """Posted, read back newest first, recorded in the ledger; the server reads the base year's
+    """Posted, read back newest first, recorded in the ledger; the server reads the year before's
     actual from the statements and computes the midpoint and the step; a newer record for the
     same metric and period supersedes the older."""
     _store_line(db_path, "revenue", 2025, 20e9)
@@ -114,7 +114,7 @@ def test_guidance_round_trip(client: TestClient, db_path: Path) -> None:
 def test_the_step_reads_the_eps_line_and_needs_a_base_on_file(
     client: TestClient, db_path: Path
 ) -> None:
-    """A fiscal-year EPS record steps from the base year's diluted EPS; a year with no actual on
+    """A fiscal-year EPS record steps from the year before's diluted EPS; a year with no actual on
     file, a quarter and a margin take no step."""
     _store_line(db_path, "epsDiluted", 2025, 6.0)
     eps = REVENUE_2026 | {"metric": "eps", "low": 6.3, "high": 6.6}

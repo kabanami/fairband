@@ -6,8 +6,8 @@ quarter, ``2026Q3``), its low and its high (equal for a point; a percent as a fr
 basis (one of ``BASES``), ``as_of`` the call's date, the sentence verbatim, the source (the
 transcript's ``response:`` ref, or a filing), and the writer and the time. The store computes the
 midpoint, ``(low + high) / 2``, and, for a fiscal-year ``revenue`` or ``eps`` record given the
-base year's actual (``base_year``: the fiscal year before the guided one), the step, the midpoint
-over that actual less one, so the agent never computes a rate; no step otherwise, nor on a base
+actual of the year before the guided one (``year_before``), the step, the midpoint over that
+actual less one, so the agent never computes a rate; no step otherwise, nor on a base
 at or below zero, from which growth has no meaning.
 
 The call's date orders a company's records of one metric, period and basis, of which one at most
@@ -17,7 +17,8 @@ its figures and names its successor in ``superseded_by``; a new record of an ear
 previous call's figure written late, is stored already superseded by the current one. Every
 record stays, so a later report can read the track record. ``guidance_for`` lists a
 company's newest first; ``guidance_row`` reads one by its id. ``UNITS`` is each metric's unit as
-the refs read it.
+the refs read it. ``anchor_year`` is the fiscal year a record guides when it may back an NTM
+anchor override: a gaap record of the anchor's metric for a fiscal year (``method.md`` 14.3).
 
 A refused value raises ``ValueError`` with the sentence the writer can act on. Each write is one
 transaction; it joins the caller's when there is one, so the caller's ledger row commits with it.
@@ -29,6 +30,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime
 
+from fairband.engine.overrides import ANCHOR_METRICS
 from fairband.policy.settings import exchange_symbol
 from fairband.store._codec import (
     dump_date,
@@ -62,7 +64,7 @@ UNITS = {
     "revenue_growth": "percent",
     "eps_growth": "percent",
 }
-# The metrics a fiscal-year record steps from its base year's actual.
+# The metrics a fiscal-year record steps from the actual of the year before the guided one.
 STEPPED = frozenset({"revenue", "eps"})
 _PERIOD = re.compile(r"(\d{4})(Q[1-4])?")
 
@@ -88,13 +90,28 @@ class GuidanceRow:
     superseded_by: int | None
 
 
-def base_year(metric: str, period: str) -> int | None:
+def year_before(metric: str, period: str) -> int | None:
     """The fiscal year a record of ``metric`` for ``period`` steps from, the year before the
     guided one: for a fiscal-year revenue or EPS record only, ``None`` for any other."""
     found = _PERIOD.fullmatch(period)
     if metric not in STEPPED or found is None or found[2] is not None:
         return None
     return int(found[1]) - 1
+
+
+def fiscal_year(period: str) -> int | None:
+    """The fiscal year ``period`` names; ``None`` for a quarter or a period that is not one."""
+    found = _PERIOD.fullmatch(period)
+    return None if found is None or found[2] is not None else int(found[1])
+
+
+def anchor_year(tag: str, row: GuidanceRow) -> int | None:
+    """The fiscal year ``row`` guides when it may back an override of the NTM anchor ``tag``: a
+    gaap record of the anchor's metric (``overrides.ANCHOR_METRICS``) for a fiscal year; ``None``
+    for any other record or tag."""
+    if ANCHOR_METRICS.get(tag) != row.metric or row.basis != "gaap":
+        return None
+    return fiscal_year(row.period)
 
 
 def insert_guidance(
@@ -112,14 +129,15 @@ def insert_guidance(
     at: datetime,
     base_actual: float | None,
 ) -> int:
-    """Record the guidance, its step from ``base_actual`` (the base year's actual on file, or
+    """Record the guidance, its step from ``base_actual`` (the actual on file of the year before
+    the guided one, or
     ``None``) when it takes one, and order it against the company's current record of the same
     metric, period and basis by the call's date (module docstring); return its id."""
     symbol = exchange_symbol(symbol)
     _check(metric, period, low, high, basis, text, source)
     midpoint = (low + high) / 2
     step = None
-    if base_year(metric, period) is not None and base_actual is not None and base_actual > 0:
+    if year_before(metric, period) is not None and base_actual is not None and base_actual > 0:
         step = midpoint / base_actual - 1
     row = (
         symbol,

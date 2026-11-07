@@ -1,6 +1,6 @@
 """The guidance records (spec 2026-11-06 Tier 2, 9; ``method.md`` 14.9): a figure the company gave
 on a call for a future period, its midpoint and, for a fiscal-year revenue or EPS figure with its
-base year's actual on file, its step computed by the store; a newer record for the same metric
+actual of the year before on file, its step computed by the store; a newer record for the same metric
 and period supersedes the older, and every record stays."""
 
 import re
@@ -13,10 +13,10 @@ from fairband.store.guidance import (
     BASES,
     METRICS,
     GuidanceRow,
-    base_year,
     guidance_for,
     guidance_row,
     insert_guidance,
+    year_before,
 )
 from fairband.store.ledger import Writer
 
@@ -100,8 +100,8 @@ def test_a_step_needs_a_fiscal_year_revenue_or_eps_and_a_positive_base(
     assert row is not None and row.midpoint == pytest.approx(0.31)
     eps = guidance_row(conn, _add(conn, "eps", "2029", 6.3, 6.6, 6.0))
     assert eps is not None and eps.step == pytest.approx(0.075)
-    assert base_year("revenue", "2026") == base_year("eps", "2026") == 2025
-    assert base_year("eps", "2026Q3") is None and base_year("capex", "2026") is None
+    assert year_before("revenue", "2026") == year_before("eps", "2026") == 2025
+    assert year_before("eps", "2026Q3") is None and year_before("capex", "2026") is None
 
 
 def test_a_newer_record_supersedes_the_older(conn: sqlite3.Connection) -> None:

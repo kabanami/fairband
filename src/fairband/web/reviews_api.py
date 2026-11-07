@@ -11,14 +11,19 @@ company as ``guidance:<id>``: a ref of another form is a 400, "a guidance item c
 guidance:<id>", one naming no record of the company a 404, "no guidance record <id> for
 <symbol>", and one naming a record a later call superseded a 409, "guidance record <id> is
 superseded by record <id>", so an NTM anchor never rests on a record a later call replaced; none
-stores anything. An override applied before a later record superseded the one it cites stays
-applied. ``check_override`` then judges it on the route the row
-takes: its phase's, or the phase an applied ``phase`` override sets (the new one included); an
-unclassified row with no phase override reads no input but its phase. The evidence rule's cap is
-the ``sales_p90_5y`` of the sales class of the snapshot's trailing revenue (its ``revenue_ttm``
-input), the class the routes find, so it holds on a row a phase override moves onto a route that
-reads the input (a Start-up put in Young Growth); none when the snapshot cites no trailing
-revenue. An NTM anchor's override needs a ``guidance`` item among its evidence.
+stores anything. An override of an NTM anchor whose evidence cites guidance must cite, among its
+records, a gaap record of the anchor's metric (``eps`` for ``earnings.ntm``, ``revenue`` for
+``revenue.ntm``) for a fiscal year, else 400 "an NTM anchor override needs a gaap guidance record
+of <eps|revenue> for a fiscal year" (``overrides.anchor_misfit``), nothing stored; one with no
+guidance item at all is left to the evidence rule, which stores it refused. An override applied
+before a later record superseded the one it cites stays applied. ``check_override`` then judges
+it on the route the row takes: its phase's, or the phase an applied ``phase`` override sets (the
+new one included); an unclassified row with no phase override reads no input but its phase. The
+evidence rule's cap is the ``sales_p90_5y`` of the sales class of the snapshot's trailing
+revenue (its ``revenue_ttm`` input), the class the routes find, so it holds on a row a phase
+override moves onto a route that reads the input (a Start-up put in Young Growth); none when the
+snapshot cites no trailing revenue. An NTM anchor's override needs a ``guidance`` item among its
+evidence.
 The override is stored either way, with the engine's reading of the input on the snapshot as its
 old value and, for a period-tied one, as the value it corrected. A refused one answers 400 with
 the rule's sentence and ``{override}``. An applied one drops the applied override on its tag
@@ -108,9 +113,11 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import sales_class
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import (
+    ANCHOR_METRICS,
     TAGS,
     Lifetime,
     State,
+    anchor_misfit,
     check_override,
     current_reading,
     route_of,
@@ -128,7 +135,7 @@ from fairband.refresh.reviews import write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
 from fairband.reports.refs import Resolver, fact_ref, guidance_cited
 from fairband.store.db import transaction
-from fairband.store.guidance import guidance_row
+from fairband.store.guidance import anchor_year, guidance_row
 from fairband.store.ledger import Writer, record
 from fairband.store.overrides import (
     OverrideRow,
@@ -358,6 +365,7 @@ def add_review_routes(
             current = effective(conn, policy)
             require_current(current, snapshot)
             _require_guidance(conn, symbol, body.evidence)
+            _require_anchor_record(conn, body.tag, body.evidence)
             applied = applied_overrides(conn, symbol)
             state, message = _check(body, applied, snapshot, current)
             spec = next((s for s in TAGS.values() if s.tag == body.tag), None)
@@ -718,6 +726,20 @@ def _require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[
         if found.superseded_by is not None:
             detail = f"guidance record {cited} is superseded by record {found.superseded_by}"
             raise HTTPException(409, detail)
+
+
+def _require_anchor_record(
+    conn: sqlite3.Connection, tag: str, evidence: Sequence[Evidence]
+) -> None:
+    """An override of an NTM anchor whose evidence cites guidance cites, among its records, a gaap
+    record of the anchor's metric for a fiscal year: 400 ``anchor_misfit`` otherwise (module
+    docstring). Run after ``_require_guidance``, so each ref names a record of the company."""
+    if tag not in ANCHOR_METRICS:
+        return
+    cited = [guidance_cited(e.ref) for e in evidence if e.kind == "guidance"]
+    records = [guidance_row(conn, i) for i in cited if i is not None]
+    if records and not any(r is not None and anchor_year(tag, r) is not None for r in records):
+        raise HTTPException(400, anchor_misfit(tag))
 
 
 def _reproduces(fresh: ValuationResult, snapshot: ValuationResult) -> bool:

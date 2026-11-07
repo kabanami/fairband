@@ -453,13 +453,15 @@ def _guidance(
     low: float,
     high: float,
     call: str = "2026-10-28",
+    period: str = "2027",
+    basis: str = "gaap",
 ) -> int:
     body = {
         "metric": metric,
-        "period": "2027",
+        "period": period,
         "low": low,
         "high": high,
-        "basis": "gaap",
+        "basis": basis,
         "asOf": call,
         "text": "We guide fiscal 2027.",
         "source": "response:12/0/content",
@@ -511,6 +513,42 @@ def test_an_ntm_override_cites_a_guidance_record(
 
 
 NTM_EPS = BELIEF_8 | {"tag": "earnings.ntm", "new": 6.45, "reason": "guided 6.30 to 6.60"}
+MISFIT_EPS = "an NTM anchor override needs a gaap guidance record of eps for a fiscal year"
+
+
+@pytest.mark.parametrize(
+    ("metric", "period", "basis"),
+    [("eps", "2027", "adjusted"), ("revenue", "2027", "gaap"), ("eps", "2027Q1", "gaap")],
+)
+def test_an_ntm_override_needs_a_record_that_fits_its_anchor(
+    client: TestClient, metric: str, period: str, basis: str
+) -> None:
+    """The NTM EPS takes a gaap EPS record for a fiscal year: an adjusted record, a revenue record
+    and a quarter's are each refused 400 with nothing stored; the gaap fiscal-year EPS record
+    beside one of them applies."""
+    _post(client, BELIEF_8 | {"tag": "phase", "new": "Mature Growth"})
+    misfit = _guidance(client, "AAPL", metric, 6.30, 6.60, period=period, basis=basis)
+    before = _overrides(client)
+    r = client.post("/api/companies/AAPL/overrides", json=_citing(misfit), headers=AGENT)
+    assert (r.status_code, r.json()) == (400, {"detail": MISFIT_EPS})
+    assert _overrides(client) == before
+    fits = _guidance(client, "AAPL", "eps", 6.30, 6.60)
+    both = _citing(fits)
+    both["evidence"].insert(0, _citing(misfit)["evidence"][0])
+    assert _post(client, both)["override"]["state"] == "applied"
+
+
+def test_an_ntm_revenue_override_needs_a_gaap_fiscal_year_revenue_record(
+    client: TestClient,
+) -> None:
+    eps = _guidance(client, "HGCO", "eps", 1.0, 1.2)
+    cite = {"kind": "guidance", "ref": f"guidance:{eps}", "note": "FY2027 EPS"}
+    revenue = BELIEF_8 | {"tag": "revenue.ntm", "new": 12.6e9, "reason": "guided"}
+    r = client.post(
+        "/api/companies/HGCO/overrides", json=revenue | {"evidence": [cite]}, headers=AGENT
+    )
+    detail = "an NTM anchor override needs a gaap guidance record of revenue for a fiscal year"
+    assert (r.status_code, r.json()) == (400, {"detail": detail})
 
 
 def _citing(guidance_id: int) -> dict[str, Any]:

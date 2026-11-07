@@ -16,7 +16,7 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from fixture_universe import serve_universe
 from refresh_env import Env
-from support.engine_companies import high_growth_inputs, universe_deciles
+from support.engine_companies import high_growth_inputs, mature_growth_inputs, universe_deciles
 from vendor_double import FIXTURES
 
 from fairband.engine import METHOD_VERSION
@@ -26,6 +26,7 @@ from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.refresh import reviews
 from fairband.refresh.reviews import follow_snapshot
+from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import SYSTEM, Writer, entries
 from fairband.store.overrides import insert_override, override_row
 from fairband.store.refreshes import create_refresh
@@ -36,6 +37,7 @@ AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 EVIDENCE = [{"kind": "transcript", "ref": "Q3 call", "note": ""}]
 CHANGED = "the input the override corrected changed"
 MOVED = "the statements moved past the override's snapshot"
+PASSED = "the guided year has passed"
 FAILED = "review failed"
 
 
@@ -270,6 +272,88 @@ def test_a_period_tied_override_follows_its_line(conn: sqlite3.Connection, polic
     assert [(e.principal, e.kind) for e in entries(conn, "HGCO")] == [
         (SYSTEM.principal, "override-drop")
     ]
+
+
+def test_a_lasting_ntm_override_drops_when_its_guided_year_passes(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """MGCO's NTM EPS override cites a gaap EPS record for fiscal 2027, its base year. A full
+    refresh on the same consensus keeps it; one whose consensus has moved a year on, so the base
+    year is 2028, drops it, by the system, "the guided year has passed", with its ledger row."""
+    today, deciles = date(2026, 10, 31), universe_deciles()
+    at = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)
+    inputs = mature_growth_inputs()
+    first = value_company(inputs, deciles, policy, today)
+    assert first.intermediates["path"]["base_year"] == 2027
+    ntm = current_reading(first, "earnings.ntm")
+    assert isinstance(ntm, float)
+    refresh_id = create_refresh(
+        conn, "full", None, policy.version, METHOD_VERSION, at, EMPTY_SETTINGS_HASH
+    )
+    made_on = insert_snapshot(conn, first, refresh_id, clock=lambda: at)
+    guided = insert_guidance(
+        conn,
+        "MGCO",
+        "eps",
+        "2027",
+        ntm,
+        ntm * 1.1,
+        "gaap",
+        today,
+        "We guide 2027.",
+        "a 10-Q",
+        AGENT,
+        at,
+        None,
+    )
+    cite = {"kind": "guidance", "ref": f"guidance:{guided}", "note": ""}
+    anchor = insert_override(
+        conn,
+        "MGCO",
+        "earnings.ntm",
+        ntm,
+        ntm * 1.05,
+        "USD a share",
+        "the guidance",
+        [cite, *EVIDENCE],
+        "lasting",
+        None,
+        None,
+        made_on,
+        AGENT,
+        at,
+        "applied",
+        "",
+    )
+
+    def follow(inputs: CompanyInputs) -> int | None:
+        result = value_company(inputs, deciles, policy, today)
+        snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: at)
+        return follow_snapshot(
+            conn, inputs, result, snapshot_id, deciles, policy, today, refresh_id, lambda: at
+        )
+
+    review_id = follow(inputs)
+    found = latest_review(conn, "MGCO")
+    assert found is not None and (found.id, found.override_ids) == (review_id, (anchor,))
+    a_year_on = tuple(
+        replace(
+            q,
+            period_end=q.period_end.replace(year=q.period_end.year + 1),
+            fiscal_year=q.fiscal_year + 1,
+        )
+        for q in inputs.quarter_estimates
+    )
+    assert follow(replace(inputs, quarter_estimates=a_year_on)) is None
+    dropped = override_row(conn, anchor)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", PASSED)
+    [entry] = entries(conn, "MGCO")
+    assert (entry.principal, entry.kind, entry.ref_id) == (
+        SYSTEM.principal,
+        "override-drop",
+        anchor,
+    )
+    assert entry.summary == f"earnings.ntm dropped: {PASSED}"
 
 
 def test_a_failed_company_s_review_is_its_refusal_and_reprices_as_one(env_valued: Env) -> None:

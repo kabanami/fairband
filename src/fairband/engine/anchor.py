@@ -231,6 +231,14 @@ def base_fiscal_year(quarters: Sequence[QuarterEstimate]) -> int:
     return max(counts, key=lambda year: (counts[year], year))
 
 
+def base_year(estimates: Sequence[QuarterEstimate], last_reported: date) -> int | None:
+    """The base year as every route that reads one finds it: the fiscal year that holds most of
+    the four quarters after ``last_reported`` (``ntm_quarters``, ``base_fiscal_year``); ``None``
+    without four consecutive ones."""
+    quarters = ntm_quarters(estimates, last_reported)
+    return None if quarters is None else base_fiscal_year(quarters)
+
+
 def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy) -> Path:
     """The consensus steps from ``base_year`` to the next year and from that to the one after."""
     by_year = {x.fiscal_year: x for x in annual}

@@ -8,7 +8,7 @@ the fields: "metric is one of revenue, eps, ...", "period is a fiscal year or a 
 2026Q3)", "low is above high", "basis is one of gaap, adjusted or constant-currency", "a guidance
 record needs its text", "a guidance record needs its source"; a low or a high that is not a
 finite number is refused by the body's types, a 400 too. For a fiscal-year revenue or EPS record
-the server reads the base year's actual, the fiscal year before the guided one, from the
+the server reads the actual of the fiscal year before the guided one from the
 statements as ``fact:<symbol>/revenue/<year>`` or ``fact:<symbol>/eps_diluted/<year>`` resolves
 it; with no actual on file the record takes no step. The company needs no snapshot. The call's
 date orders the records of one metric, period and basis (``store.guidance``): a record of a call
@@ -36,7 +36,7 @@ from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.reports.refs import Resolver, fact_ref
 from fairband.store.db import transaction
-from fairband.store.guidance import base_year, guidance_for, guidance_row, insert_guidance
+from fairband.store.guidance import guidance_for, guidance_row, insert_guidance, year_before
 from fairband.store.ledger import record
 from fairband.store.snapshots import latest_snapshot
 from fairband.web.agents_api import WriterOf, gist, record_json
@@ -44,7 +44,7 @@ from fairband.web.reviews_api import agents_only
 from fairband.web.settings_api import effective
 
 GUIDANCE_WRITE = "a guidance record is an agent's write"
-# The statement line a stepped metric's base year reads, by the engine's name (``fact:``).
+# The statement line a stepped metric's year before reads, by the engine's name (``fact:``).
 _BASE_LINES = {"revenue": "revenue", "eps": "eps_diluted"}
 
 
@@ -126,9 +126,10 @@ def add_guidance_routes(
 
 
 def _base_actual(resolver: Resolver, metric: str, period: str) -> float | None:
-    """The base year's actual a fiscal-year revenue or EPS record steps from, the statement line as
-    a ``fact:`` ref resolves it; ``None`` for any other record or with no figure on file."""
-    year = base_year(metric, period)
+    """The actual a fiscal-year revenue or EPS record steps from, the statement line of the year
+    before as a ``fact:`` ref resolves it; ``None`` for any other record or with no figure on
+    file."""
+    year = year_before(metric, period)
     if year is None:
         return None
     found = resolver.resolve(fact_ref(resolver.symbol, _BASE_LINES[metric], str(year)))
