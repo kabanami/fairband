@@ -766,7 +766,10 @@ guesses a year; checked live 2026-11-07: 84 calls for MSFT, the newest Q1 FY2027
 being companies that hold no call); `dcf(symbol)` (FMP's discounted-cash-flow and
 levered-discounted-cash-flow figures, two responses under `dcf` and `levered`; 11); and
 `pe_history(symbol)` (GuruFocus's `pettm` daily trailing P/E series, reused for seven days;
-13.7), the first GuruFocus pass-through, on the GuruFocus client and its own limiter. The exact
+13.7), the first GuruFocus pass-through, on a GuruFocus client built as the refresh builds its
+own, unpaced (GuruFocus's quota is monthly) and stored under the refresh's provider name `gf`; a
+payload that reads as no series is stored as unusable and never reused (build rulings of Task 6,
+2026-11-07). The exact
 routes are the builder's to check against each vendor's documentation at build time. The calls
 run on the server through one rate limiter per vendor shared with the refresh worker, so the pace
 holds, on FastAPI's sync-route thread: at most four vendor calls are in flight (a semaphore), a
