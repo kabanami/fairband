@@ -275,7 +275,7 @@ def _unit_refusal(
     else:
         low, high = policy.override_ranges[spec.tag]
         if not _number(value) or not low <= value <= high:
-            return f"{spec.tag} takes {_range(low, high, spec.unit)}"
+            return f"{spec.tag} takes {range_text(low, high, spec.unit)}"
     if spec.period_tied_only and lifetime == "lasting":
         return f"{spec.tag} is period-tied only"
     return None
@@ -285,9 +285,10 @@ def _number(value: object) -> TypeIs[float]:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
-def _range(low: float, high: float, unit: str) -> str:
+def range_text(low: float, high: float, unit: str) -> str:
     """A range in the input's unit: percents for a ratio, dollars for money (a share for the two
-    gaps), the figures for a multiple; a negative end with the minus sign."""
+    gaps), the figures for a multiple; a negative end with the minus sign. The override's
+    refusal and the secondary valuation's driver refusals write their ranges with it."""
     if unit == "ratio":
         return f"{_signed(low * 100)}% to {_signed(high * 100)}%"
     if unit in ("USD", "USD a share"):

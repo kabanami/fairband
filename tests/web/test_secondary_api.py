@@ -343,7 +343,7 @@ def test_settings_changed_refuses_a_secondary(client: TestClient) -> None:
         ({"parts": []}, "at least one part"),
         (
             {"parts": [{"name": "too fast", "fcff": PATH, "terminalGrowth": 0.035}]},
-            "the terminal growth is at most g_T, 3.0%",
+            "the terminal growth is −100% to g_T, 3.0%",
         ),
         (
             {"parts": [{"name": "too short", "fcff": PATH[:2], "terminalGrowth": 0.0}]},

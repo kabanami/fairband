@@ -4,6 +4,7 @@ discounts an explicit cash-flow path; both at r, with the terminal at g, the equ
 levels and designation on a value a share above zero, and a three-by-three grid. The worked
 numbers are pinned to 1e-4."""
 
+import math
 import re
 from collections.abc import Sequence
 from dataclasses import replace
@@ -35,7 +36,7 @@ GROWTH = "revenue_growth is −80% to 300%"
 MARGIN = "operating_margin is −50% to 60%"
 TAX = "tax_rate is 0% to 50%"
 SALES = "sales_to_capital is 0.1 to 10"
-AT_MOST = "the terminal growth is at most g_T, 3.0%"
+G_RANGE = "the terminal growth is −100% to g_T, 3.0%"
 
 
 def _raises(sentence: str) -> Any:
@@ -110,7 +111,7 @@ def test_two_parts(policy: Policy) -> None:
 
 
 def test_the_terminal_growth_is_capped_at_g_t(policy: Policy) -> None:
-    with _raises(AT_MOST):
+    with _raises(G_RANGE):
         _parts(_flat(5, 0.035), 200.0, 100.0, 100.0, 15.0, "None", policy)
     at_g_t = _parts(_flat(5, 0.03), 0.0, 0.0, 1.0, None, "None", policy)
     assert at_g_t.parts[0].terminal == pytest.approx(10.0 * 1.03 / 0.06)
@@ -229,6 +230,24 @@ def test_a_falling_year_reinvests_nothing(policy: Policy) -> None:
     assert falling.fcff == falling.nopat == pytest.approx(1128.6 * 0.20 * 0.75)
 
 
+def test_a_shrinking_terminal_releases_no_capital(policy: Policy) -> None:
+    shrinking = project(replace(DRIVERS, terminal_growth=-0.05), 1000.0, 0.09, 0.12)
+    nopat_n = shrinking.years[-1].nopat
+    assert shrinking.terminal_fcff == pytest.approx(nopat_n * 0.95)  # 187.11 × 0.95, no release
+    assert shrinking.terminal == pytest.approx(187.11 * 0.95 / 0.14)
+
+
+def test_the_terminal_growth_runs_from_minus_100_percent_to_g_t(policy: Policy) -> None:
+    for g in (-math.inf, math.nan, -1.01):
+        with _raises(G_RANGE):
+            _drivers(replace(DRIVERS, terminal_growth=g), policy)
+        with _raises(G_RANGE):
+            _parts(_flat(5, g), 0.0, 0.0, 1.0, None, "None", policy)
+    floor = _drivers(replace(DRIVERS, terminal_growth=-1.0), policy).projection
+    assert floor is not None and floor.terminal == 0.0  # the business is gone at the terminal
+    assert _parts(_flat(5, -1.0), 0.0, 0.0, 1.0, None, "None", policy).parts[0].terminal == 0.0
+
+
 def test_the_grid_caps_the_terminal_growth_at_g_t(policy: Policy) -> None:
     v = _drivers(replace(DRIVERS, terminal_growth=0.03), policy)
     assert v.grid is not None
@@ -286,8 +305,7 @@ def test_the_drivers_form_takes_the_trailing_revenue_and_the_terminal_return(
         (replace(DRIVERS, tax_rate=float("nan")), TAX),
         (replace(DRIVERS, sales_to_capital=0.09), SALES),
         (replace(DRIVERS, sales_to_capital=10.5), SALES),
-        (replace(DRIVERS, terminal_growth=0.035), AT_MOST),
-        (replace(DRIVERS, terminal_growth=float("nan")), AT_MOST),
+        (replace(DRIVERS, terminal_growth=0.035), G_RANGE),
     ],
 )
 def test_each_driver_range_refuses_by_name(policy: Policy, drivers: Drivers, sentence: str) -> None:
@@ -323,7 +341,7 @@ def test_the_drivers_refusals_run_in_order(policy: Policy) -> None:
         _drivers(replace(DRIVERS, revenue_growth=(5.0,) * 3, operating_margin=(0.9,) * 3), policy)
     with _raises(TAX):  # the ranges before the terminal growth
         _drivers(replace(DRIVERS, tax_rate=0.9, terminal_growth=0.05), policy)
-    with _raises(AT_MOST):  # the terminal growth before the shares
+    with _raises(G_RANGE):  # the terminal growth before the shares
         _drivers(replace(DRIVERS, terminal_growth=0.05), policy, shares=0.0)
 
 

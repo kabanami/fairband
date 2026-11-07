@@ -9,11 +9,13 @@ from the trailing revenue, over N years from the policy's ``secondary_years_min`
     EBIT_t = revenue_t × m_t;  NOPAT_t = EBIT_t × (1 − t)
     reinvestment_t = max(0, revenue_t − revenue_{t−1}) ÷ s
     FCFF_t = NOPAT_t − reinvestment_t;  PV_t = FCFF_t ÷ (1 + r)^t
-    terminal FCFF = NOPAT_N × (1 + g) × (1 − g ÷ ROIC_T)
+    terminal FCFF = NOPAT_N × (1 + g) × (1 − g ÷ ROIC_T) when g > 0, NOPAT_N × (1 + g) when g ≤ 0
     terminal = terminal FCFF ÷ (r − g), discounted by (1 + r)^N
 
-A year whose revenue falls reinvests nothing, so a decline does not create cash. ROIC_T is the
-policy's terminal return for the moat class, which the caller computes (``roic.terminal_roic``).
+A year whose revenue falls reinvests nothing, so a decline does not create cash, and a terminal
+growth at or below zero releases no capital, so it creates none in the terminal either. ROIC_T is
+the policy's terminal return for the moat class, which the caller computes
+(``roic.terminal_roic``).
 
 The parts form, ``parts``, is plan 1's: a part is a name, the free cash flow to the firm in
 dollars for years 1 to N, a terminal growth g and a note, and each part is discounted at r:
@@ -24,8 +26,8 @@ dollars for years 1 to N, a terminal growth g and a note, and each part is disco
 
 One part is a DCF; several, up to ``secondary_parts_max``, a sum of parts.
 
-Common to both: r is the policy's required return; g is at most the policy's g_T (lower or
-negative allowed). The firm value is the projection's value or the sum over the parts; equity =
+Common to both: r is the policy's required return; g runs from −100% to the policy's g_T. The
+firm value is the projection's value or the sum over the parts; equity =
 firm value − debt + cash; the value a share = equity ÷ the diluted shares. The levels on the moat
 (``levels_for``) and, with a price, the designation on price ÷ value (``designation_for``) come
 only with a value a share above zero: at or below zero the value is kept as computed, with
@@ -48,6 +50,7 @@ from typing import Literal
 
 from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
+from fairband.engine.overrides import range_text
 from fairband.engine.types import Designation, Levels
 from fairband.policy import Moat, Policy
 
@@ -56,6 +59,7 @@ SECONDARY_METHOD = "fairband-secondary/2"
 Form = Literal["parts", "drivers"]
 
 _STEP = 0.01  # the grid's step on the rate and on the terminal growth, one point (method 4.1a)
+_G_FLOOR = -1.0  # the terminal growth's floor, −100%: a business shrinks by all of itself at most
 
 
 @dataclass(frozen=True)
@@ -165,7 +169,8 @@ def project(drivers: Drivers, revenue_0: float, r: float, roic_t: float) -> Proj
         years.append(Year(t, revenue, ebit, nopat, reinvestment, fcff, fcff / (1 + r) ** t))
         previous = revenue
     g = drivers.terminal_growth
-    terminal_fcff = years[-1].nopat * (1 + g) * (1 - g / roic_t)
+    reinvested = g / roic_t if g > 0 else 0.0  # a shrinking terminal releases no capital
+    terminal_fcff = years[-1].nopat * (1 + g) * (1 - reinvested)
     terminal = terminal_fcff / (r - g)
     terminal_pv = terminal / (1 + r) ** len(years)
     value = sum(year.pv for year in years) + terminal_pv
@@ -253,16 +258,16 @@ def _check_drivers(drivers: Drivers, policy: Policy) -> None:
             entries = f"{len(values)} entr{'y' if len(values) == 1 else 'ies'}"
             raise ValueError(f"{name} has {entries} for {n} years")
     ranged = (
-        *by_year,
-        ("tax_rate", (drivers.tax_rate,)),
-        ("sales_to_capital", (drivers.sales_to_capital,)),
+        *((name, values, "ratio") for name, values in by_year),
+        ("tax_rate", (drivers.tax_rate,), "ratio"),
+        ("sales_to_capital", (drivers.sales_to_capital,), "multiple"),
     )
-    for name, values in ranged:
+    for name, values, unit in ranged:
         low, high = policy.secondary_driver_ranges[name]
         if not all(low <= x <= high for x in values):
-            raise ValueError(f"{name} is {_ends(low, high, percent=name != 'sales_to_capital')}")
-    if not drivers.terminal_growth <= policy.terminal_growth:
-        raise ValueError(_above_g_t(policy.terminal_growth))
+            raise ValueError(f"{name} is {range_text(low, high, unit)}")
+    if not _G_FLOOR <= drivers.terminal_growth <= policy.terminal_growth:
+        raise ValueError(_outside_g_range(policy.terminal_growth))
 
 
 def _check_parts(parts: Sequence[Part], policy: Policy) -> None:
@@ -275,8 +280,8 @@ def _check_parts(parts: Sequence[Part], policy: Policy) -> None:
     for part in parts:
         if not shortest <= len(part.fcff) <= longest:
             raise ValueError(f"a part has {shortest} to {longest} years")
-        if part.terminal_growth > g_t:
-            raise ValueError(_above_g_t(g_t))
+        if not _G_FLOOR <= part.terminal_growth <= g_t:
+            raise ValueError(_outside_g_range(g_t))
 
 
 def _check_shares(shares: float) -> None:
@@ -284,20 +289,9 @@ def _check_shares(shares: float) -> None:
         raise ValueError("a positive diluted share count")
 
 
-def _above_g_t(g_t: float) -> str:
-    return f"the terminal growth is at most g_T, {g_t:.1%}"
-
-
-def _ends(low: float, high: float, percent: bool) -> str:
-    """A driver's range as an override's is written: percents for a rate, the figures for a
-    multiple, a negative end with the minus sign."""
-    if percent:
-        return f"{_signed(low * 100)}% to {_signed(high * 100)}%"
-    return f"{_signed(low)} to {_signed(high)}"
-
-
-def _signed(x: float) -> str:
-    return f"{'−' if x < 0 else ''}{abs(x):g}"
+def _outside_g_range(g_t: float) -> str:
+    """The terminal growth's refusal, from ``_G_FLOOR`` to g_T, on both forms."""
+    return f"the terminal growth is −100% to g_T, {g_t:.1%}"
 
 
 def _discounted(part: Part, r: float) -> PartValue:
