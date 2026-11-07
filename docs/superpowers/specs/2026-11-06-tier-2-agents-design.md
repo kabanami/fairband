@@ -7,6 +7,11 @@ chose the row and the drawer's shape, ruled that the agent's value is the engine
 the agent's inputs with the stance free, and added the secondary valuation as a second view and a
 fallback. Items marked *my call* were settled by Claude while writing and can be overturned. The
 decisions are in the log at the end. Builder check: see the status line at the end of the log.
+Amended 2026-11-07, after plan 1 merged and the founder read the playbook: the report's eleven
+sections with the debate and the thesis, cites and overrides as footnotes, the standard DCF on
+every report, the cycle, the key judgments as the last section, the multiples history, the charts
+on the report page, and the Inbox view's count (11, 12, 13, 14, 15.3, 18.4, 18.5, 19, 24, and the
+log's three rows of that date). Plan 1b carries the report's side; plan 2 the page.
 
 This document adds to `docs/method.md` (sections 14, 15 and 16, and the versions table) and to the
 Methodology page. It changes no mechanical figure: the mechanical method stays
@@ -75,8 +80,9 @@ The founder's three rulings shape everything below:
   neither adds nor drops one; the owner adds a note. Founder, 2026-11-06: the whole user
   override function waits for a commitment to all of it; the agent is the one who changes
   inputs.
-- Charts on the report page (`BandHistory`, `HistoryBars`, `SpreadChart`, `SensitivityGrid`):
-  they need the history piece (B-68, B-87).
+- Charts on the screen or in the drawer: the brand book puts charts on a company report only.
+  The report page's charts are in scope since 2026-11-07 (18.4); the band's history over the
+  snapshots on file is what `BandHistory` draws, and the rest of B-68 stays with B-87.
 - A network transport, a token or an account. The server stays on 127.0.0.1 with the
   request-header rule; the MCP server is a local stdio process (B-48).
 - The agent's own research tools: filings from EDGAR, the web, the host's other MCP servers. The
@@ -245,6 +251,7 @@ locked input: the terminal growth ceiling").
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | multiple | 0.1 to 10 | |
 | `return.runway` | Mature Growth, Mature Stable | % | 0% to 100% | the runway return of 4.6 |
 | `earnings.nri_gap` | Mature Growth, Mature Stable | $ a share | −100 to 100 | the non-recurring gap of 6.2 and the anchor's basis |
+| `earnings.cycle_gap` | Mature Growth, Mature Stable | $ a share | −100 to 100 | plan 1b, policy v9: the correction that takes the anchor's earnings to mid-cycle for a cyclical business (14, step 6); the same arithmetic as the non-recurring gap, its bridge line labelled "mid-cycle earnings", so the reader sees a cycle judgment and not a one-time item |
 | `decline.rate` | Decline | % a year | −50% to 0% | d of 6a.2 |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | $ | 0 or more | period-tied only: a correction of a vendor error |
 
@@ -291,9 +298,9 @@ and `review_method` `fairband-review/1`.
 
 The bridge, design.md 7.4: the mechanical value, then one line per applied override in a fixed
 order, then the reviewed value. The order is the method's step order: `phase`, `path.step_2`,
-`path.step_3`, `path.hold`, `growth.belief`, `earnings.nri_gap`, `margin.target`,
-`capital.sales_to_capital`, `return.runway`, `decline.rate`, `moat.class`, `balance.debt`,
-`balance.cash`. Each line's delta is the value with this override and every earlier one applied,
+`path.step_3`, `path.hold`, `growth.belief`, `earnings.nri_gap`, `earnings.cycle_gap`,
+`margin.target`, `capital.sales_to_capital`, `return.runway`, `decline.rate`, `moat.class`,
+`balance.debt`, `balance.cash`. Each line's delta is the value with this override and every earlier one applied,
 less the value with the earlier ones only, so the deltas sum to reviewed less mechanical exactly.
 A line whose step refuses ("value not positive under the reinvestment charge") shows the refusal
 in place of a delta; the next valuing line measures its delta from the last valued step, and the
@@ -325,55 +332,107 @@ the agents help, read once it has rows; this round only writes it.
 
 ## 11. The secondary valuation (B-97)
 
-A second valuation beside the engine's routes: a tool that takes an explicit cash-flow path from
-the agent and discounts it under the policy's rules. It serves two needs the founder named: a
-second view on a valued company, and a fallback where no phase or route fits, or where the route
-refuses.
+A second valuation beside the engine's routes, computed by the engine from inputs the agent
+supplies, and made on every report. The founder, 2026-11-07: "rather than it being a fall back,
+to always be done (and act as fallback if the main route is refused). I want a secondary
+valuation following a standard DCF method." It serves three needs: the second view beside the
+route's value on every report, the fallback where no phase or route fits or where the route
+refuses, and a reader's check that the route's figure is not alone.
 
-`secondary_valuation(symbol, parts, reason, evidence)`. `parts` is one to `secondary_parts_max`
-(10) parts, each `{name, fcff, terminal_growth, note}`: `fcff` the free cash flow to the firm in
-dollars for years 1 to N, N from `secondary_years_min` (3) to `secondary_years_max` (15);
-`terminal_growth` at most the policy's g_T, lower or negative allowed. One part is a DCF; several
-are a sum of parts. The arithmetic, per part:
+Two forms, one tool: `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?,
+cash?)`, with exactly one of `drivers` and `parts`.
 
-    PV_t = fcff_t ÷ (1 + r)^t, t = 1 … N
-    terminal = fcff_N × (1 + g) ÷ (r − g), discounted by (1 + r)^N
-    part value = Σ PV_t + the discounted terminal
+**The standard form, `drivers`.** The free cash flow to the firm is projected from drivers the
+agent sets, by Damodaran's FCFF model, from the trailing revenue on file:
 
-with r the policy's required return, locked. Firm value is the sum over the parts; equity = firm
+    drivers = {years: N, revenue_growth: [g_1 … g_N], operating_margin: [m_1 … m_N],
+               tax_rate: t, sales_to_capital: s, terminal_growth: g}
+
+    revenue_0 = the trailing revenue as the engine reads it (fact:<symbol>/revenue/ttm)
+    revenue_t = revenue_{t−1} × (1 + g_t)
+    EBIT_t = revenue_t × m_t;  NOPAT_t = EBIT_t × (1 − t)
+    reinvestment_t = max(0, revenue_t − revenue_{t−1}) ÷ s
+    FCFF_t = NOPAT_t − reinvestment_t;  PV_t = FCFF_t ÷ (1 + r)^t
+    terminal FCFF = NOPAT_N × (1 + g) × (1 − g ÷ ROIC_T)
+    terminal = terminal FCFF ÷ (r − g), discounted by (1 + r)^N
+
+with r the policy's required return, locked (the founder, 2026-11-07: "keep the policy's hurdle
+rate"), ROIC_T the policy's terminal return for the moat class as reviewed, and g at most g_T.
+N runs from `secondary_years_min` (3) to `secondary_years_max` (15); every list has N entries;
+each driver is bounded by `secondary_driver_ranges` (19): a growth rate −0.80 to 3.00, a margin
+−0.50 to 0.60, a tax rate 0 to 0.50, sales-to-capital 0.1 to 10. *My call* on the reinvestment
+floor (a shrinking year reinvests nothing, so a decline does not create cash) and on the
+terminal reinvestment through the policy's terminal return, which is the engine's own stable-growth
+rule, so the two values rest on one terminal convention. The record stores the projection table,
+every year's revenue, EBIT, NOPAT, reinvestment, FCFF and present value, cited
+`secondary:<id>/years/<t>/<line>`, and the drivers, cited `secondary:<id>/drivers/<name>` (a list
+driver by `<name>/<t>`).
+
+**The sum-of-parts form, `parts`.** As built in plan 1: one to `secondary_parts_max` (10) parts,
+each `{name, fcff, terminal_growth, note}`, `fcff` the free cash flow to the firm in dollars for
+years 1 to N; the arithmetic of method 15.2. It stays for a conglomerate or a company whose
+cash flows the agent builds segment by segment; the playbook uses the standard form unless the
+parts form fits better. *My call* to keep it: it is built, tested and a different question.
+
+**Common to both.** Firm value is the sum over the parts or the one projection; equity = firm
 value − debt + cash; value a share = equity ÷ diluted shares; the levels by the moat class (as
 reviewed); the designation on price ÷ value. Debt and cash are the newest annual balance sheet's
 on file, read by the server at the call as assembly reads them for the growth and Decline routes
-(an applied `balance.*` override counts), and the shares are the snapshot's diluted count; the
-agent may pass `debt` and `cash` explicitly, each with evidence, where the balance sheet is wrong
-or missing, and the record stores the three figures used with their source, so the value rebuilds.
-A foreign filer is refused, "foreign filer: currency and share-unit handling not built yet"
-(B-28), since a dollar path over local-currency debt would mislead; a row with no diluted share
-count is refused. A `terminal_growth` above g_T, an N outside the range, or a part count above
-the maximum is refused naming the rule. *My call* on the figures' source, from the builder check:
-the mature routes store no debt or cash with their results, and the fallback serves refused rows
-that store nothing. Evidence is required, as on an override. Why
-cash flows and not revenue, margin and capital: the agent builds the path from its own research;
-the tool keeps the discounting, the terminal and the equity bridge, which is what makes the number
-a tool output.
+(an applied `balance.*` override counts); the agent may pass `debt` and `cash` explicitly, each
+with evidence, where the balance sheet is wrong or missing, and the record stores the three
+figures used with their source, so the value rebuilds. A foreign filer is refused, "foreign
+filer: currency and share-unit handling not built yet" (B-28); a row with no diluted share count
+is refused. Evidence is required, as on an override; at least one item backs the path or the
+drivers and names no `figure`. A driver outside its range, a `terminal_growth` above g_T, an N
+outside the range, a list of the wrong length, or a part count above the maximum is refused
+naming the rule. Why drivers and not a value: the agent's judgment is the drivers; the tool keeps
+the projection, the discounting, the terminal and the equity bridge, which is what makes the
+number a tool output.
 
-Stored (17) with the parts, the per-year present values, the firm value, the equity, the value a
-share, the levels, the reason and the evidence, the snapshot id, the principal and actor, and
-`secondary_method` `fairband-secondary/1`. It is as of its snapshot: no refresh touches it; its stored price ÷ value and designation are at
+**The grid.** Every record carries a three-by-three sensitivity grid: the value a share at r −1
+pp, r and r +1 pp across g −1 pp, g and min(g +1 pp, g_T), computed with the record and cited
+`secondary:<id>/grid/<i>/<j>`. It is a display of how much of the value is assumption, not a
+value: the rate in force stays r. *My call*; `SensitivityGrid` draws it (18.4).
+
+**Required on every report.** The report check refuses a submission that cites no secondary
+valuation on the report's snapshot: "the report needs a secondary valuation on snapshot <id>"
+(13.3). The founder: always done. Where the route gives a value, the reviewed value leads and
+the secondary is the second view; where the route refuses or no route fits, the secondary stands
+in on the row and in the report (18.1).
+
+Stored (17) with the form, the drivers or the parts, the projection or the per-year present
+values, the grid, the firm value, the equity, the value a share, the levels, the reason and the
+evidence, the snapshot id, the principal and actor, and `secondary_method` `fairband-secondary/2`
+(the drivers form and the grid; a plan 1 record stays `fairband-secondary/1` and reads as it was).
+It is as of its snapshot: no refresh touches it; its stored price ÷ value and designation are at
 its snapshot's price, and the page reads price ÷ value against the latest quote where it shows
 the figure; it expires with the snapshot's window and stays in the history after a full refresh
-writes new statements, shown with its date. The agent makes a new one at the next
-review. *My call.* On the row and in the report it stands in where the route gives no value
-(18.1); where both exist, the route's reviewed value leads and the secondary is the second view.
+writes new statements, shown with its date. The agent makes a new one at the next review.
+
+**FMP's own DCF as a cross-check.** A fifth pass-through, `dcf(symbol)` (15.3), fetches FMP's
+discounted-cash-flow and levered-discounted-cash-flow figures and stores them as vendor responses,
+so the Valuation section may cite FMP's figure beside the engine's two as a third opinion, in one
+sentence. FMP's custom DCF endpoints, which take drivers and return a projection, are not used: the
+value would rest on FMP's own cost of capital and template, which the method cannot state. *My
+call*; the founder named FMP's template as the reference, and the drivers form above is that
+template under the policy's rate.
 
 ## 12. Key judgments (B-52)
 
-A judgment: `judgment` (`phase`, `moat`, `belief`, `roic`, `target_margin`), `bull`, `bear`,
-`decision`, and the override it produced, if one. Judgments come with a report submission (13.1)
-and are stored with the report. Every report carries `phase`, `moat` and `belief` (`belief` reads
-as the rate the route holds: the belief, the held rate, or the decline rate); `roic` and
-`target_margin` where the route reads them. The report's section 8 shows them; the drawer's
-Details lists the latest.
+A judgment is the record of one of the report's input decisions: `judgment` (`phase`, `moat`,
+`belief`, `roic`, `target_margin`), `decision` (one or two sentences, in words, no figure) and
+the override it produced, if one. Judgments come with a report submission (13.1) and are stored
+with the report. Every report carries `phase`, `moat` and `belief` (`belief` reads as the rate
+the route holds: the belief, the held rate, or the decline rate); `roic` and `target_margin`
+where the route reads them.
+
+The founder, 2026-11-07: "Key judgements to me is just a record of overrides etc. … this is not
+an important section and could be the last section at the end." So the record holds no `bull`
+and `bear` text: the debate about the business is the report's own section (13.1, section 5),
+and the judgments are the audit trail of what the agent changed. The report's last section,
+"Key judgments", lists them in one sentence each; the drawer's Details lists the latest.
+Migration 006 drops the `bull` and `bear` columns; a plan 1 report's judgments keep their
+decisions.
 
 ## 13. Reports and the number check (B-53, B-59)
 
@@ -382,14 +441,47 @@ Details lists the latest.
 `report_submit(symbol, mode, stance, sections, judgments, kill_criteria, news_items,
 work_item_id?)`. `mode` is `valuation review` or `full report`. `stance` is one of `buy`,
 `hold`, `trim`, `avoid`: the three zone words of the brand book and one for a company the agent
-would not hold at any price shown; *my call* on the four. `sections` are the ten of design.md
-9.3, in order, each `{heading, parts}` where a part is a plain string or `{cite, ref, period?}`
-(13.3); a valuation review omits sections 2 and 3 and names `reuses_full_report_of`, the full
-report it reuses, or says there is none (design.md 7.5). The server generates Appendix A (every
-input with its tag, source and dates; the overrides with reasons and evidence; the bridge; the
-secondary parts; the checks that ran; the versions; the classifier's evidence) and Appendix B
-(the glossary: the terms of `docs/method.md` 13 the report uses) from the stored records; the
-agent writes neither.
+would not hold at any price shown; *my call* on the four. `sections` are the eleven below, in
+order, each `{heading, parts}` where a part is a plain string or `{cite, ref, period?}` (13.3);
+a valuation review omits sections 2 and 3 and names `reuses_full_report_of`, the full report it
+reuses, or says there is none (design.md 7.5). The server generates Appendix A (every input with
+its tag, source and dates; the overrides with reasons and evidence; the bridge; the secondary
+valuation's drivers or parts and its projection; the checks that ran; the versions; the
+classifier's evidence) and Appendix B (the glossary: the terms of `docs/method.md` 13 the report
+uses) from the stored records; the agent writes neither.
+
+**The sections.** The founder, 2026-11-07: "These reports need to be human readable friendly, the
+valuation and the details of that should only be talked about in the valuation section. The rest
+of the report should detail and debate the merits of the business and its outlook." The list
+replaces design.md 9.3's ten:
+
+| # | Heading | Mode | What it holds |
+|---|---|---|---|
+| 1 | Summary | both | One page: the stance; the thesis in two or three sentences; the value against the price and the levels; the phase in one sentence, with the word "cyclical" when the agent finds the business cyclical; three reasons for; three risks; what would change the view; the end of the validity window. |
+| 2 | The business | full report | The products; the revenue by product and by region over three years; what drives revenue; the customers and any concentration; the unit economics. |
+| 3 | Industry and competition | full report | The value chain; the industry's size and growth; the competitors; the company's position; the moat by Damodaran's five sources; "are the economics favorable?" in a plain answer. |
+| 4 | Financial performance and health | both | Six parts, one for each table of 13.5, each two or three plain sentences that cite its cells; on the page, each part's charts above its sentences (18.4). |
+| 5 | The bull case and the bear case | both | The debate about the business and its outlook, in arguments: demand and how long it lasts, where the company is in its cycle, competition and the moat, pricing power, capital allocation, management, the balance sheet. Each side's strongest case, in words a reader without the method follows. Figures may be cited; valuation arithmetic, inputs, tags and parameters are not in this section. |
+| 6 | The thesis | both | The investment case that settles the debate and leads to the stance: what must be true for the stance to be right, and what the agent expects to happen. Written for every stance: a buy says why the market is wrong on the downside; a hold says why the price is fair and what the view waits for; a trim says why the price ran ahead of the business; an avoid says why the business is not worth owning at the prices shown. The kill criteria of section 10 test it. |
+| 7 | Valuation | both | The only section that talks about the valuation and its detail. The phase: the growth word and the margin direction behind it, any check flag, the Dickinson stage, and why if an override changed it. The growth the price needs; the belief and why. The mechanical value and the reviewed value, with one sentence in words for each override that moved it (the figures may be cited here); no bridge table, no tags. The secondary valuation: the drivers in words with their figures cited, the value, and how it sits against the route's value; FMP's figure in one sentence when read. For a cyclical business, where it is in its cycle and the mid-cycle basis used. The sensitivity grid. For Start-up, the price-implied requirement; for Decline, the floor and the distress-weighted value. |
+| 8 | Price and multiples | both | The price facts: the current price; the high and the low of the past year and where the price sits between them; the change over one, three and five years and the drop from the last peak. The multiples: the trailing P/E on two bases (the clean P/E on the method's earnings, the reported P/E) and the forward P/E, each against its own history: the ten-year average, median, high and low of the trailing series (13.7), and the forward series since Fairband began logging it. The phase's multiples. None is a target. On the page, the charts of 18.4. |
+| 9 | Recent news | both | The dated items that matter to the value. |
+| 10 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold the agent chooses is never a finding: tie each event to a stored figure, cited, or state it in words. |
+| 11 | Key judgments | both | The record (12): each judgment's decision in one sentence, naming the override it produced. Last, because it is the audit trail and not the reading. |
+
+A valuation review has nine sections. The old section "Life-cycle phase" is folded into 7; the
+old "Key judgments" with its bull and bear text is replaced by 5, 6 and 11.
+
+**Cites and overrides out of the main text.** The founder, 2026-11-07: "Citations and overrides
+can be footnotes, but never in the main report content." The submission keeps every cite as
+`{cite, ref, period?}`, since the check needs the ref; the rendering changes. On the page and in
+the export, a cite shows as its text followed by a footnote mark, and the references are listed
+once, numbered, after section 11 and before Appendix A, each with its ref and the source in
+words ("snapshot 412, the price, 3 Nov 2026"; "the 10-K for 2025, finding 88"). No ref appears
+in the main text. The overrides, the bridge and the secondary's projection are in Appendix A
+only; the main text may say in words what an override changed and why (section 7), and nowhere
+else. `ReportReader` keeps its dotted underline on a cited number as the affordance, with the
+footnote number beside it.
 
 A submission is published whole or rejected whole. Published: stored (17) with its revision
 number for the symbol, the snapshot, review and secondary it cites, the principal and actor; the
@@ -408,7 +500,9 @@ A `ref` names a stored value:
 | `snapshot:<id>/value`, `/price`, `/price_to_value`, `/levels/<name>` (buy, fair_low, fair_high, trim) | the snapshot's figures |
 | `snapshot:<id>/inputs/<name>`, `/intermediates/<path>`, `/phase/<field>` | a tagged input, an intermediate by its JSON path, a classifier field |
 | `review:<id>/value`, `/levels/<name>`, `/bridge/<n>/delta` | the review's figures |
-| `secondary:<id>/value`, `/firm_value`, `/parts/<n>/pv/<t>` | the secondary valuation's |
+| `secondary:<id>/value`, `/firm_value`, `/parts/<n>/pv/<t>`, `/years/<t>/<line>`, `/drivers/<name>`, `/grid/<i>/<j>` | the secondary valuation's: its value, its parts' present values, its projection's lines (`revenue`, `ebit`, `nopat`, `reinvestment`, `fcff`, `pv`), its drivers and its grid (11) |
+| `sensitivity:<id>/<i>/<j>` | a cell of a stored sensitivity grid of the route (13.8) |
+| `multiple:<symbol>/<series>/<date>`, `/<stat>` | a point of the trailing or forward P/E history (`pe`, `pe_forward`), or its `avg_10y`, `median_10y`, `high_10y`, `low_10y` (13.7) |
 | `fact:<symbol>/<line>/<fiscal_year or ttm>` | a stored statement line, normalized as the engine reads it |
 | `table:<symbol>/<table>/<row>/<year>` | a cell of the financial tables (13.5) |
 | `estimate:<symbol>/<period>/<field>` | a stored consensus figure (the estimates read) |
@@ -428,6 +522,12 @@ reject, with the latest snapshot's id in the detail; the agent re-reads. *My cal
 builder check.
 
 ### 13.3 The check
+
+The structure first, each failure one sentence: eleven sections for a full report and nine for a
+valuation review, under the exact headings of 13.1 in order; the stance a `stance_words` word;
+one judgment of each kind the route needs, each with a `decision` and no figure in it; and a
+secondary valuation on the report's snapshot (11), refused "the report needs a secondary
+valuation on snapshot <id>". Then the numbers.
 
 The six failures, in the server's words, which the component and the playbook match on:
 `unresolved reference`, `wrong unit`, `wrong period`, `wrong snapshot`, `a number with no
@@ -474,11 +574,50 @@ from the builder check: without the tables, section 4 alone would take the agent
 
 ### 13.6 Export (B-59)
 
-`GET /api/reports/{id}/markdown` renders the published report as Markdown: the ten sections with
-cited numbers as plain text, then Appendix A as tables and Appendix B as a list, with a header
-line naming the symbol, the mode, the date, the actor and the revision. The report page's
-`Download .md` button fetches it; the page's print stylesheet serves save-as-PDF. No server-side
-PDF unless the print result falls short.
+`GET /api/reports/{id}/markdown` renders the published report as Markdown: the eleven sections
+with cited numbers as plain text, each followed by its footnote mark, then the references list,
+then Appendix A as tables and Appendix B as a list, with a header line naming the symbol, the
+mode, the date, the actor and the revision. Where the page draws a chart (18.4), the export
+carries the chart's table twin under the same title. The report page's `Download .md` button
+fetches it; the page's print stylesheet serves save-as-PDF. No server-side PDF unless the print
+result falls short.
+
+### 13.7 The multiples history
+
+The founder, 2026-11-07: the report shows "the PE and Forward PE multiples, where does it sit
+historically on those, with line graphs for each showing average horizontal lines". Two series
+on file, served by `GET /api/companies/{symbol}/multiples-history` and the read tool
+`multiples_history(symbol)`, each point with its ref:
+
+- **The trailing P/E**, daily, ten years: GuruFocus's `pettm` series, fetched as a pass-through
+  (15.3, `pe_history`), stored as a vendor response and reused for seven days. The read serves
+  the points as `multiple:<symbol>/pe/<date>` and the series' statistics over the ten years on
+  file as `multiple:<symbol>/pe/avg_10y`, `/median_10y`, `/high_10y`, `/low_10y`, computed by the
+  server over the points at or above zero (a loss year has no P/E). The stocks repo's notes
+  record the endpoint as working, with daily rows since 1997.
+- **The forward P/E**, Fairband's own log: no vendor on file gives a forward P/E history
+  (GuruFocus's history is zero for every forward ratio; FMP has none), so the server appends a
+  row to `multiples_log` at every price refresh and every snapshot: the date, the price, the
+  clean, reported and forward P/E of the engine's intermediates. The read serves it as
+  `multiple:<symbol>/pe_forward/<date>` with the same four statistics over the rows on file, and
+  says in `since` when the log began. The chart says so while the log is short. *My call*: an
+  honest short series over a vendor's absent one.
+
+The two series are not the mechanical multiples of 8's text, which stay the snapshot's
+intermediates at the snapshot's price; the history is context, and the agent cites a point or a
+statistic of it as any other ref.
+
+### 13.8 The sensitivity grid of the route
+
+The Valuation section shows how much of the route's value is assumption. The agent cannot
+compute that: every number is a tool output. `sensitivity(symbol, row_tag, row_values, col_tag,
+col_values)` runs the engine on the company's latest snapshot under the current review's applied
+overrides, with two overridable inputs (10.2) set to each pair of the values given, at most five
+by five, and stores the grid as a record cited `sensitivity:<id>/<i>/<j>`, with the pair in
+force marked. Nothing is overridden: the record is a reading, logged like a derivation. A tag the
+route does not read, or a value outside its range, is refused as an override would be. The page
+draws the record the report cites with `SensitivityGrid` (18.4), the price as the baseline. *My
+call*: plan 1's template promised "a small sensitivity table" with no tool to make one.
 
 ## 14. The playbook (B-57)
 
@@ -493,35 +632,58 @@ Code. *My call.* The plan adds the `fairband` console script to `pyproject.toml`
 way.
 
 The flow, the TradingAgents roles of design.md 7.1 as steps the one skill runs (the host may use
-subagents for the analysts and the debate; the skill does not require it):
+subagents for the analysts and the debate; the skill does not require it). The founder's rulings
+of 2026-11-07 reshape steps 6 to 10: the debate is about the business and its outlook, the thesis
+settles it, every report values the company a second way by the standard DCF, and a cyclical
+business is valued at mid-cycle.
 
 1. `identify` with the model identifier you run as.
 2. `inbox_list`; claim the item, or post one for a request made in chat and claim it.
 3. Read the company: `company`, `financials`, `financial_tables`, `estimates`, `peers`,
-   `price_history`, the latest `report`, `notes`, `findings`, `overrides`, `reviews`,
-   `secondary`, `kill_criteria`, `policy`, and `methodology` for the route. Section 4 of the
-   report is written from the tables' cells.
+   `price_history`, `multiples_history`, the latest `report`, `notes`, `findings`, `overrides`,
+   `reviews`, `secondary`, `kill_criteria`, `policy`, and `methodology` for the route. Section 4
+   of the report is written from the tables' cells. An `expiry` item is refreshed first.
 4. The Fundamentals Analyst: the business and the industry from the filings (the host's own
    tools), `transcript` and `segments` from Fairband; record a `finding` for every number from
    outside Fairband that the report will cite, with its source.
 5. The News Analyst: `news` from Fairband and the web; candidate kill criteria; large price
    moves explained.
-6. The Valuation Analyst: the engine's result, its inputs and intermediates, in plain words; the
+6. The cycle. Is the business cyclical? The signs: the industry (memory and other
+   semiconductors, energy, mining, steel, chemicals, shipping, autos, airlines, homebuilders,
+   machinery); ten years of revenue and operating margin with a swing from peak to trough; prices
+   set by a commodity or by industry capacity; inventory cycles; a consensus that extends a peak.
+   The engine does not flag a cyclical and values a peak as if it lasted; the stocks repo's notes
+   record the same limit (MU, FRO). For a cyclical, place the company in its cycle: the operating
+   margin against its ten-year median and revenue against its trend, from the tables; record the
+   evidence as findings. The thesis names the position, the Summary says "cyclical", and the
+   valuation rests on mid-cycle figures (step 8).
+7. The Valuation Analyst: the engine's result, its inputs and intermediates, in plain words; the
    candidate judgments.
-7. The debate: bull and bear on each judgment of section 12.
-8. The Research Manager decides the judgments and writes the overrides, one input each with
-   evidence; reads the review and the bridge. When the review is a refusal, or no route fits,
-   `secondary_valuation`. `derive` for any ratio the report needs.
-9. The stance, from the reviewed value against the levels and the research; the report's reasons
-   carry it.
-10. The report: the ten sections with every quantity cited; `report_submit`; on a rejection, fix
-    each finding and submit again.
-11. `inbox_complete`, or name the item in the submission.
+8. The debate: the bull case and the bear case about the business and its outlook, as arguments
+   a reader follows without the method: demand and how long it lasts, the cycle, competition and
+   the moat, pricing power, capital allocation, management, the balance sheet. Not a debate about
+   inputs or parameters. The thesis settles it: what must be true for the stance to be right, for
+   every stance.
+9. The Research Manager decides the judgments from the thesis and writes the overrides, one input
+   each with evidence; reads the review and the bridge. For a cyclical: on the mature routes the
+   anchor at mid-cycle earnings through `earnings.cycle_gap` and the belief at the through-cycle
+   rate; on the growth routes the target margin at the mid-cycle margin and the held rate at the
+   through-cycle rate; a kill criterion on the margin against its median. Then the standard DCF
+   with `secondary_valuation` on every report, the drivers at mid-cycle for a cyclical; the
+   parts form where a sum of parts fits better; `dcf` for FMP's figure as a cross-check.
+   `sensitivity` for the route's grid; `derive` for any ratio the report needs.
+10. The stance, from the reviewed value against the levels, the secondary valuation and the
+    thesis; the report's reasons carry it.
+11. The report: the eleven sections with every quantity cited; the judgments as the record of
+    the decisions; `report_submit`; on a rejection, fix each finding and submit again.
+12. `inbox_complete`, or name the item in the submission.
 
 Rules the skill states: never write a number you did not get from a tool; cite every quantity;
 small counts in words; the register of design.md 9.2 (the answer first, short sentences, every
 term explained, rounded numbers); no first person, Fairband has no voice; the reason on an
-override is your own words and is kept verbatim.
+override is your own words and is kept verbatim; the valuation and its detail are in section 7
+only, and the rest of the report argues the business; a chosen threshold is never a finding; only
+the lead agent identifies.
 
 ## 15. The MCP server (B-48)
 
@@ -545,17 +707,21 @@ in plain words, with the live values), `refresh_status()`.
 
 ### 15.3 Vendor pass-throughs
 
-Four FMP endpoints the engine does not read, fetched by the server with its key, stored as vendor
-responses (so a report can cite `response:<id>/...`) and reused inside `reuse_hours`:
+Six vendor endpoints the engine does not read, fetched by the server with its key, stored as
+vendor responses (so a report can cite `response:<id>/...`) and reused inside `reuse_hours`:
 `transcript(symbol, year, quarter)` (the earnings call transcript), `news(symbol, limit?)` (stock
-news), `segments(symbol)` (revenue by product and by region), `insider_trades(symbol)`. The exact
-routes are the builder's to check against FMP's stable API at build time. The calls run on the
-server through one rate limiter shared with the refresh worker, so the pace holds, on FastAPI's
-sync-route thread: at most four vendor calls are in flight (a semaphore), a fifth waits at most
-ten seconds for a slot and is answered 503 "the pass-throughs are busy: four calls are in flight,
-try again" past it; a stored response inside `reuse_hours` takes no slot; no answer carries a
-key. *My call* on the four; the thread shape as built (Task 8's rulings). GuruFocus
-pass-throughs wait for B-71 and B-72.
+news), `segments(symbol)` (revenue by product and by region), `insider_trades(symbol)`, all four
+from FMP as built in plan 1; `dcf(symbol)` (FMP's discounted-cash-flow and
+levered-discounted-cash-flow figures, two responses under `dcf` and `levered`; 11); and
+`pe_history(symbol)` (GuruFocus's `pettm` daily trailing P/E series, reused for seven days;
+13.7), the first GuruFocus pass-through, on the GuruFocus client and its own limiter. The exact
+routes are the builder's to check against each vendor's documentation at build time. The calls
+run on the server through one rate limiter per vendor shared with the refresh worker, so the pace
+holds, on FastAPI's sync-route thread: at most four vendor calls are in flight (a semaphore), a
+fifth waits at most ten seconds for a slot and is answered 503 "the pass-throughs are busy: four
+calls are in flight, try again" past it; a stored response inside its reuse window takes no slot;
+no answer carries a key. *My call* on the six; the thread shape as built (Task 8's rulings). The
+ownership and picks pass-throughs wait for B-71 and B-72.
 
 ### 15.4 Write tools
 
@@ -564,10 +730,11 @@ pass-throughs wait for B-71 and B-72.
 override_id?)`; `finding_add(symbol, as_of, text, source, value?, unit?, period?)`;
 `override_add(symbol, tag, new, reason, evidence, lifetime, period?)` returning the override's
 state and, when applied, the review with its bridge; `override_drop(override_id, reason)`;
-`secondary_valuation(...)` (11); `derive(...)` (13.4); `report_submit(...)` (13.1);
-`kill_criterion_add(symbol, text)`, `kill_criterion_set(id, state, reason)`;
-`news_item_add(symbol, date, headline, source, text, kill_criterion_id?)`; `refresh_start(kind,
-symbols?)` (the four kinds of the CLI), `refresh_cancel()`.
+`secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)` (11);
+`sensitivity(symbol, row_tag, row_values, col_tag, col_values)` (13.8); `derive(...)` (13.4);
+`report_submit(...)` (13.1); `kill_criterion_add(symbol, text)`, `kill_criterion_set(id, state,
+reason)`; `news_item_add(symbol, date, headline, source, text, kill_criterion_id?)`;
+`refresh_start(kind, symbols?)` (the four kinds of the CLI), `refresh_cancel()`.
 
 ## 16. The web API
 
@@ -644,46 +811,88 @@ the flags, the estimates and the versions line.
 ### 18.4 The report page
 
 A view at `#report/<symbol>` and `#report/<symbol>/<id>` for an earlier revision, in the
-`CompanyReport` layout without the charts: the header (the ticker, the name, the phase badge, the
-one `figure-lg`: the reviewed value where one exists, else the mechanical, with the price beside
-it), the `BandMeter`, then `ReportReader` with the ten sections and Appendix A and B. Above the
-reader: the mode, the date, the actor, the revision, `Download .md`, and a line listing earlier
-revisions by date. A link back to the screen. A print stylesheet: the reader part and the
-appendixes, no header chrome.
+`CompanyReport` layout: the header (the ticker, the name, the phase badge, the one `figure-lg`:
+the reviewed value where one exists, else the mechanical, with the price beside it), the
+`BandMeter`, then `ReportReader` with the eleven sections, the references list, and Appendix A
+and B. Above the reader: the mode, the date, the actor, the revision, `Download .md`, the page's
+one table toggle, and a line listing earlier revisions by date. A link back to the screen. A
+print stylesheet: the reader part, the references and the appendixes, no header chrome.
+
+**The charts.** The founder, 2026-11-07: charts for the price and the multiples and for the
+financial performance and health section, in the design system's look. The brand book puts charts
+on a company report and nowhere else, and `charts.md` and `CompanyReport.md` of the archive set
+the rules the page follows: one measure per chart, two to a row as small multiples, one series hue
+with `chart-context` for a reference, the diverging pair for a measure that crosses zero, columns
+from zero, solid grid lines, nothing animated, text never in the series colour, every chart with a
+table twin behind the page's one toggle, and a `BasisChip` on each chart's header. The charts sit
+inside the reader, above the sentences of the section they belong to, on `surface-raised` panels:
+
+| Section | Charts |
+|---|---|
+| 4, growth | `HistoryBars`: revenue; the operating margin; the EPS |
+| 4, cash flow | `HistoryBars`: free cash flow; stock compensation over revenue |
+| 4, solvency | `HistoryBars`: net debt over EBITDA; the interest coverage |
+| 4, returns | `SpreadChart`: ROIC against the hurdle rate, the gap filled |
+| 4, capital allocation | `HistoryBars`: buybacks and dividends; the share count |
+| 4, quality | `HistoryBars`: Altman's Z″; Piotroski's F |
+| 7, valuation | `SensitivityGrid`: the route's grid the report cites (13.8); the secondary's grid (11) |
+| 8, price | `BandHistory`: the stored closes over the years on file, the band from the snapshots on file (it begins at the first snapshot's date), the past year's high and low marked and labelled |
+| 8, multiples | `MultipleHistory`, twice: the trailing P/E and the forward P/E (13.7), each a line in `chart-1` with its average as a `chart-context` reference line labelled at its end and the current value labelled at the line's end; a loss year leaves a gap; a short forward log says since when |
+
+Each chart reads the series the section cites: the six tables, the two multiples series, the
+closes, the snapshots and the two grids, so the chart and the sentence under it never disagree.
+`MultipleHistory` is a `// fairband:` patch in the bundle, in `BandHistory`'s marks and tokens
+(a line, a reference line, the end label, the table twin); the four others are the bundle's own.
+A cell with no value leaves a gap, never a zero. *My call* on the chart per part: two or three
+each, and the table twin holds the rest.
 
 ### 18.5 The Inbox view
 
-A sixth header view, `Inbox`, with `AppHeader`'s `count` set to the pending and claimed items.
-*My call*: the 2026-11-04 spec reserved the count for the inbox; six words fit beside the mark at
-desktop width and wrap below 840px as the five do. The view: a table of items, newest first, with
-the symbol (opening the drawer as a watchlist row does), the mode, the state word, the posted date
-and principal, the claimant, the note, the report link when done, and for the owner `Decline`
-with a reason line on a pending or claimed item. Reading the view runs the expiry rule (8).
+A sixth header view, `Inbox`, with `AppHeader`'s `count` set to the open items, pending and
+claimed. The founder, 2026-11-07: "a work inbox page and a link in the header, showing a number
+of pending work items"; the count is the open items since both states are work not yet done
+(*my call*, open to pending only). The 2026-11-04 spec reserved the count for the inbox; six words
+fit beside the mark at desktop width and wrap below 840px as the five do. The view: a table of
+items, newest first, with the symbol (opening the drawer as a watchlist row does), the mode, the
+state word, the posted date and principal, the claimant, the note, the report link when done, and
+for the owner `Decline` with a reason line on a pending or claimed item. Reading the view runs
+the expiry rule (8).
 
 ### 18.6 Watchlists
 
 Each list gains `Request research` beside `Rename` and `Delete`: it posts a valuation review for
 every company on the list with no open item and says how many it posted.
 
-## 19. Policy v8, the method document and the Methodology page
+## 19. Policy v8 and v9, the method document and the Methodology page
 
 Policy `fairband-policy-v8` adds, none a setting this round (*my call*; they become settings
 when the founder asks): `override_ranges` (the table of 10.2), `override_primary_evidence_above_p90`
 (true), `secondary_parts_max` (10), `secondary_years_min` (3), `secondary_years_max` (15),
 `stance_words` (the four). Every v7 value is unchanged; v7 stays byte-identical under its hash.
 
+Policy `fairband-policy-v9` (plan 1b) adds `earnings.cycle_gap` to `override_ranges` (−100 to
+100 dollars a share, as the non-recurring gap) and `secondary_driver_ranges` (11: a growth rate
+−0.80 to 3.00, a margin −0.50 to 0.60, a tax rate 0 to 0.50, sales-to-capital 0.1 to 10). Every
+v8 value is unchanged. The live snapshots, at v7 on 2026-11-07, are revalued once under v9 at
+the live steps (22).
+
 `docs/method.md` gains: section 14, "Reviews: overrides and the reviewed value" (10.2 to 10.5,
-with the bridge's order and the JUDGMENT tag); section 15, "The secondary valuation" (11, with
-the worked numbers of 20.1); section 16, "Reports: the number check" (13.2 and 13.3). The
-versions table gains a row: mechanical 0.9 unchanged, `fairband-review/1` and
-`fairband-secondary/1` added, with the date. Section 13's glossary gains override, review,
-finding, judgment, secondary valuation, work item.
+with the bridge's order and the JUDGMENT tag; plan 1b adds the cycle gap to 14.2 and 14.4, after
+the non-recurring gap in the bridge's order, its line labelled "mid-cycle earnings"); section 15,
+"The secondary valuation" (11; plan 1b adds the drivers form's arithmetic, the grid and
+`fairband-secondary/2`, with worked numbers); section 16, "Reports: the number check" (13.2 and
+13.3; plan 1b adds the eleven sections, the secondary rule, the sensitivity record and the
+`multiple:` refs). The versions table gains rows: mechanical 0.9 unchanged, `fairband-review/1`,
+`fairband-secondary/1` and, in plan 1b, `fairband-secondary/2`, with the dates. Section 13's
+glossary gains override, review, finding, judgment, secondary valuation, work item, thesis,
+cyclical.
 
 The Methodology page gains a section, "Agents and reviews" (`agents`), in plain words: what an
 override is and that the engine computes the reviewed value; the value bridge; the secondary
-valuation as a second view and a fallback; the stance is the agent's; the report's rule that
-every number traces to a stored fact; where the records are read. No example figure until a real
-review exists; then one, as 7.5 of the 2026-11-04 spec does.
+valuation as the standard DCF beside the route's value on every report and the fallback; the
+mid-cycle basis for a cyclical; the stance is the agent's; the report's rule that every number
+traces to a stored fact; where the records are read. No example figure until a real review
+exists; then one, as 7.5 of the 2026-11-04 spec does.
 
 ## 20. Worked numbers for the tests
 
@@ -725,6 +934,24 @@ period); `fact:MGCO/revenue/2031` (unresolved reference); "revenue grew 11.2%" i
 (a number with no reference); `derived:999` (a derived figure the engine has not emitted); and
 "three reasons", "FY2025", "the 10-K", which pass.
 
+### 20.4 The secondary valuation's drivers form (plan 1b)
+
+r = 0.09, ROIC_T = 0.12 (the terminal return of the moat class as reviewed), g = 0.02, t = 0.25,
+s = 2.0, trailing revenue 1,000, N = 3, growth 10%, 8%, 5%, margin 20% in every year; debt 200,
+cash 100, 50 diluted shares:
+
+| t | revenue | EBIT | NOPAT | reinvestment | FCFF | PV |
+|---|---|---|---|---|---|---|
+| 1 | 1,100.00 | 220.00 | 165.00 | 50.00 | 115.00 | 105.504587 |
+| 2 | 1,188.00 | 237.60 | 178.20 | 44.00 | 134.20 | 112.953455 |
+| 3 | 1,247.40 | 249.48 | 187.11 | 29.70 | 157.41 | 121.549402 |
+
+The sum of the present values is 340.007444. The terminal FCFF is 187.11 × 1.02 × (1 − 0.02 ÷
+0.12) = 159.043500; the terminal value 159.043500 ÷ 0.07 = 2,272.05, discounted 1,754.439476.
+Firm value 2,094.446920; equity 1,994.446920; value a share 39.888938. The grid's centre cell
+is this value; its corner at r = 0.08 and g = 0.01 and the rest follow the same arithmetic. A
+year whose revenue falls reinvests nothing: with growth −5% in year 3, reinvestment_3 = 0.
+
 ## 21. Tests the builder must write
 
 - `store`: every table's insert and read; the ledger row on every write; the expiry rule's
@@ -750,23 +977,37 @@ period); `fact:MGCO/revenue/2031` (unresolved reference); "revenue grew 11.2%" i
 - `policy`: v8 loads; v7 byte-identical under its hash; the ranges read.
 - `docs`: the method's new sections cite the policy names; the Methodology page's `agents`
   section exists and its live values resolve.
+- Plan 1b: `engine/secondary` on 20.4, the reinvestment floor, each driver's range refusal, a
+  list of the wrong length, the grid's nine cells and the cap at g_T; `engine/overrides` the
+  cycle gap on both mature routes, its bridge line after the non-recurring gap and labelled
+  "mid-cycle earnings"; the policy v9 file's hash and the v8 values unchanged; migration 006 on
+  a 005 database with a plan 1 report (the judgments keep their decisions); the sensitivity
+  record on a five-by-five grid, a tag the route does not read refused, the pair in force
+  marked; the multiples log written at a price refresh and at a snapshot, the `pe_history`
+  response served as points and statistics, the `multiple:` refs resolving and a `wrong unit`
+  on one; the check's eleven and nine headings, the secondary rule's sentence, a judgment with
+  `bull` refused as an unknown field; the render's footnote marks and the references list with
+  no ref left in the main text, and the chart tables in the Markdown; the playbook's test on the
+  twelve steps and the eleven headings.
 
 ## 22. Acceptance and the readout
 
-After plan 1 merges: the server runs from main; `fairband mcp` is registered in Claude Code and
-the playbook installed; the founder posts an item for one company (over MCP or the API, the page's
-button comes with plan 2); one playbook run produces findings, judgments, at least one applied
-override with a review and a bridge, a published report, and the completed item; the ledger
-carries every write with the actor; the log has its first row; a draft with a bare number was
-rejected on the way and the findings named it. The readout: the company, the mechanical and
-reviewed values, the bridge, the stance, the number of findings and the report's length.
+After plan 1b merges (plan 1's live steps were held for the 2026-11-07 rulings): the live
+database is backed up and migrated (005 and 006), revalued once under policy v9, and the server
+runs from main; `fairband mcp` is registered in Claude Code and the playbook installed. The first
+live session waits for plan 2, so that the report is read on its page. Then the founder posts an
+item for one company; one playbook run produces findings, judgments, at least one applied
+override with a review and a bridge, a secondary valuation, a published report, and the completed
+item; the ledger carries every write with the actor; the log has its first row; a draft with a
+bare number was rejected on the way and the findings named it. The readout: the company, the
+mechanical, reviewed and secondary values, the bridge, the stance, the number of findings and the
+report's length.
 
 After plan 2 merges: the row shows the reviewed value, the stance and the mark; the drawer opens
 on the meter, the stance and the summary; the report page shows the whole report and downloads it;
 `Request research` posts an item the agent then takes; a watchlist company past its window shows
 in the Inbox; the Methodology page's section reads. The readout: the first three companies
-reviewed, each with its mechanical and reviewed values, its secondary value if any, and its
-stance.
+reviewed, each with its mechanical, reviewed and secondary values, and its stance.
 
 At the defaults, every mechanical figure on every row is bit for bit refresh 16's; the readout
 checks it over the whole universe.
@@ -790,7 +1031,7 @@ checks it over the whole universe.
 
 ## 24. Order of work
 
-Plan 1, the agent's side:
+Plan 1, the agent's side (merged 2026-11-07, main e0fd4e8):
 
 1. Policy v8; `docs/method.md` 14 to 16 and the versions row; migration 005; identity and the
    ledger; the request and identity headers on the app.
@@ -803,16 +1044,35 @@ Plan 1, the agent's side:
    financials, estimates, price-history and peers reads.
 6. The pass-through routes.
 7. The MCP server and the playbook; the README's host registrations.
-8. Merge; the first live session; the readout (22).
+
+Plan 1b, the report (the founder's rulings of 2026-11-07 on reading the playbook):
+
+1. Policy v9 and migration 006: the cycle gap in the engine and the bridge; the judgments without
+   bull and bear; the secondary's drivers, projection and grid; `multiples_log`; the
+   sensitivities.
+2. The secondary valuation's drivers form and grid, `fairband-secondary/2`; the secondary rule in
+   the check; `docs/method.md` 15.
+3. The sensitivity tool and record.
+4. The multiples history: the `pe_history` and `dcf` pass-throughs, the log at every price
+   refresh and snapshot, the read and the `multiple:` refs.
+5. The report's eleven sections in the check, the references list in the render and the export,
+   the chart tables in the export; `docs/method.md` 16; the Methodology section.
+6. The playbook: the twelve steps, the cycle, the debate and the thesis, the template and the
+   references; the MCP tools added.
+7. Merge; the live steps (22) up to the revalue under v9 and the MCP registration. The first
+   live session waits for plan 2.
 
 Plan 2, the page:
 
 1. The screen rows' keys; the two columns, the filter rows and the mark.
 2. The drawer's main view and Details; the request menu.
-3. The report page, the download and the print stylesheet.
-4. The Inbox view and the watchlist action.
-5. The Methodology page's section.
-6. Merge; the readout (22).
+3. The report page with the references and the appendixes, the download and the print
+   stylesheet.
+4. The charts: the bundle's four on their sections, the `MultipleHistory` patch, the table
+   toggle, the series reads.
+5. The Inbox view with the header count, and the watchlist action.
+6. The Methodology page's section.
+7. Merge; the first live session; the readout (22).
 
 ## 25. Sources
 
@@ -846,3 +1106,6 @@ Plan 2, the page:
 | 2026-11-06 | Build rulings, plan 1: the consensus-step overrides do not apply on Mature Stable, whose value reads no step (10.2); a mid-bridge refusal does not end the review, the last line decides (10.4); the JUDGMENT entry names its principal and actor in its source string (10.4); the ledger kind `drop` for a dropped expiry item (7). Claude, during the build. |
 | 2026-11-06 | Builder check done. Four questions, all settled by Claude: the secondary valuation reads debt and cash from the newest balance sheet on file or takes them with evidence, stores the figures used, and is refused on a foreign filer (11); an override, a recompute and a secondary are refused "settings changed: run a revalue" when the effective policy is not the latest snapshot's, and both records cite their versions and hash (10.3); the server computes the report's six financial tables with a ref per cell, `financials` carries refs, and `derive` takes a list (13.5, 13.4); a reprice of the cited snapshot counts as the cited one, a revalue or full refresh does not (13.2). Two notes taken in: the `fairband` console script is added (14); `refused-range` is the component's `refused-unit`, so `refused-route` is the one state patch (10.1). Nothing for the founder. |
 | 2026-11-06 | The MCP server talks to the web API, holds no database connection and no key (6); identity by `identify` and headers (7); no claim timeout and no stale conflict (8, 10.3); the override ranges and the bridge order (10.2, 10.4); the four stance words (13.1); the five derivations (13.4); the four pass-throughs (15.3); the `◆` coverage mark, the sixth header view, the Details disclosure (18); policy v8's values not settings (19). Claude's calls, open to the founder. |
+| 2026-11-07 | On reading the playbook, the founder's six rulings: (1) cites and overrides are footnotes, never in the main text (13.1); (2) the secondary valuation is made on every report by a standard DCF and is the fallback when the route refuses, at the policy's hurdle rate ("keep the policy's hurdle rate"), FMP's template the reference (11); (3) the bull and bear views argue the business and its outlook, never the phase or the overrides, and a thesis tied to the debate leads to the stance; Claude: a thesis for every stance (13.1, sections 5 and 6); (4) the agent finds a cyclical business and values it at mid-cycle, since the engine overvalues MU, AVGO and the like at a peak (14 step 6; `earnings.cycle_gap`, 10.2); (5) key judgments are the record of the decisions and the last section (12); (6) section 8 shows the price against its year's range and the P/E and forward P/E against their history, as line charts with average lines (13.7, 18.4). |
+| 2026-11-07 | Charts for the financial performance and health section too, in the design system's look (18.4); a work inbox page and a header link with the count of open items (18.5). Founder. Claude's calls: the charts per part, the `MultipleHistory` patch, the forward P/E from Fairband's own log since no vendor keeps one, the count as pending plus claimed. |
+| 2026-11-07 | Claude's calls in the amendment: the drivers form beside the parts form, the reinvestment floor and the terminal reinvestment through the policy's terminal return, the three-by-three grid on the secondary record, FMP's DCF as a read and not its custom template; the `sensitivity` tool (13.8); `earnings.cycle_gap` as a tag of its own under policy v9; the life-cycle phase section folded into Valuation; a valuation review keeps the debate and the thesis (nine sections); migration 006 drops `bull` and `bear`; plan 1b (the report) before plan 2 (the page); the first live session after plan 2. The engine's own peak-margin flag is a backlog item, not this round. |
