@@ -83,7 +83,7 @@ def _series(rows: Iterable[tuple[date, float | None]]) -> Series:
     if not by_day:
         return Series((), dict.fromkeys(STATS), None)
     days = sorted(by_day)
-    start = _years_before(days[-1], WINDOW_YEARS)
+    start = years_before(days[-1], WINDOW_YEARS)
     points: list[tuple[date, float]] = []
     for day in days:
         value = by_day[day]
@@ -101,7 +101,7 @@ def _series(rows: Iterable[tuple[date, float | None]]) -> Series:
     return Series(tuple(points), stats, days[0])
 
 
-def _years_before(day: date, years: int) -> date:
+def years_before(day: date, years: int) -> date:
     """The same day ``years`` earlier; 29 February becomes the 28th."""
     try:
         return day.replace(year=day.year - years)

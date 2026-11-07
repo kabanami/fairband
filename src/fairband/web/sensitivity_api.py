@@ -21,7 +21,11 @@ override), the writer, the policy version and the settings hash, with a ``sensit
 row resting on the snapshot, its summary "<row tag> by <column tag>, a grid of <n> rows and <m>
 columns". The answer and ``GET /api/sensitivities/{id}`` (404 without it) carry its fields
 camelCase, the pair in force as ``current``, ``[i, j]`` counted from 1 as the ref
-``sensitivity:<id>/<i>/<j>`` counts the row and the column, ``null`` when no pair is in force.
+``sensitivity:<id>/<i>/<j>`` counts the row and the column, ``null`` when no pair is in force;
+and the words the report's Markdown writes the reading's table in (``charts.reading_axes``), which
+the report page draws its grid with (spec 18.4): ``title``, "Sensitivity 7: the belief by the
+runway return", ``rowLabel`` and ``colLabel``, each input's label, and ``rowWords`` and
+``colWords``, each value as a cite of it reads.
 """
 
 import sqlite3
@@ -39,6 +43,7 @@ from fairband.engine.sensitivity import axes_refusal, sensitivity_grid
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
+from fairband.reports.charts import reading_axes
 from fairband.store.db import transaction
 from fairband.store.ledger import record
 from fairband.store.overrides import OverrideRow, applied_overrides, as_override
@@ -149,7 +154,14 @@ def _read(conn: sqlite3.Connection, sensitivity_id: int) -> dict[str, Any]:
     found = sensitivity_row(conn, sensitivity_id)
     if found is None:
         raise HTTPException(404, f"no sensitivity {sensitivity_id}")
-    return record_json(found)
+    axes = reading_axes(found)
+    return record_json(found) | {
+        "title": axes.title,
+        "rowLabel": axes.row_label,
+        "colLabel": axes.col_label,
+        "rowWords": list(axes.rows),
+        "colWords": list(axes.cols),
+    }
 
 
 def _refusal(

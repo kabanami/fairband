@@ -13,9 +13,10 @@ the bridge, each line with its input's label in a
 reader's words (``overrides.LABELS``); the secondary valuation's form, its drivers
 with the trailing revenue and the terminal return and its projection year by year, or its parts
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
-every part's (``GRID_ROWS``), or, for a report with none whose company can have none on its
-snapshot, why (``noSecondary``, "no secondary valuation: foreign filer" or "...: no diluted
-share count", ``store.secondary.no_secondary``); the checks that ran (``check.CHECKS``, each
+every part's (``GRID_ROWS``), with the rows in words as the export's grid table writes them
+(``rowWords``, for the report page's chart), or, for a report with none whose company can have
+none on its snapshot, why (``noSecondary``, "no secondary valuation: foreign filer" or "...: no
+diluted share count", ``store.secondary.no_secondary``); the checks that ran (``check.CHECKS``, each
 with its rule); the versions (method, policy, settings hash, review and secondary methods); and
 the classifier's evidence. Appendix B (``appendix_b``), the glossary: the terms of ``GLOSSARY``
 that the sections' text uses, a term matched whole and in any case, a plural counted, a term of
@@ -50,7 +51,7 @@ from pydantic.alias_generators import to_camel
 from fairband.engine.overrides import LABELS
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
-from fairband.reports.charts import ChartTable, shift_words
+from fairband.reports.charts import ChartTable, grid_row_words, shift_words
 from fairband.reports.check import (
     CHECKS,
     NO_REFERENCE,
@@ -485,8 +486,15 @@ def _secondary(secondary: SecondaryRow) -> dict[str, Any]:
         ],
         "drivers": None if drivers is None else _camel(drivers),
         "projection": None if projection is None else _camel(projection),
-        "grid": None if grid is None else grid | {"rowsAre": GRID_ROWS[secondary.form]},
+        "grid": None if grid is None else _grid(grid, GRID_ROWS[secondary.form]),
     }
+
+
+def _grid(grid: Mapping[str, Any], rows_are: str) -> dict[str, Any]:
+    """The grid with what its rows hold and the rows in words, as the export's grid table writes
+    them (``charts.grid_row_words``), which the report page draws (spec 18.4)."""
+    words = grid_row_words(grid["rows"], rows_are == "shifts")
+    return {**grid, "rowsAre": rows_are, "rowWords": list(words)}
 
 
 def _camel(record: Mapping[str, Any]) -> dict[str, Any]:

@@ -4,10 +4,10 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 (``agents_api``), the guidance routes (``guidance_api``), the override and review routes
 (``reviews_api``), the sensitivity reading's routes (``sensitivity_api``), the company reads, the
 Methodology section read and the report routes (``reports_api``), the drawer's research read
-(``research_api``), the multiples history read (``multiples_api``), the vendor pass-through route
-(``vendor_api``), and the policy values and growth deciles the Methodology page cites (spec
-2026-11-04 7.4). The company detail carries the agents' records the drawer leads with
-(``research_api.agent_records``).
+(``research_api``), the multiples history read (``multiples_api``), the band's history read
+(``history_api``), the vendor pass-through route (``vendor_api``), and the policy values and
+growth deciles the Methodology page cites (spec 2026-11-04 7.4). The company detail carries the
+agents' records the drawer leads with (``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -104,6 +104,7 @@ from fairband.store.snapshots import (
 from fairband.store.watchlists import memberships
 from fairband.web.agents_api import add_agent_routes
 from fairband.web.guidance_api import add_guidance_routes
+from fairband.web.history_api import add_history_routes
 from fairband.web.multiples_api import add_multiples_routes
 from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.reports_api import add_report_routes
@@ -358,6 +359,7 @@ def create_app(
     add_sensitivity_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
     add_research_routes(app, conn_factory)
+    add_history_routes(app, conn_factory)
     add_multiples_routes(app, conn_factory, passthrough)
     add_vendor_routes(app, passthrough)
     return app

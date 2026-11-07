@@ -304,6 +304,12 @@ def _tax_note(country: str, origin: str | None, stated: Statements) -> dict[str,
     return {"tax_rate_latest": note}
 
 
+def stored_closes(conn: sqlite3.Connection, symbol: str) -> _Closes:
+    """The closes ``build_inputs`` reads, oldest first, without building the rest: the report
+    export's price table reads them (``reports.charts``)."""
+    return _closes(conn, symbol)[0]
+
+
 def _closes(conn: sqlite3.Connection, symbol: str) -> _Cited[_Closes]:
     """The closes of the latest usable price-history response; none without one that parses."""
     response = latest_response(conn, "fmp", "price-history", symbol, {"symbol": symbol})

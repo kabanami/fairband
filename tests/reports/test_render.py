@@ -185,6 +185,8 @@ def test_appendix_a_carries_the_drivers_and_the_grid(
     grid = secondary["grid"]
     assert grid["rowsAre"] == "growths" and len(grid["cells"]) == 3
     assert grid["cells"][1][1] == secondary["valuePerShare"]
+    # the rows in words as the export's grid writes them, which the report page reads (18.4)
+    assert grid["rowWords"] == ["1.0%", "2.0%", "3.0%"]
     text = markdown(report, a, [], [], {})
     block = text[text.index("### Secondary valuation") : text.index("### Checks that ran")]
     assert f"Secondary valuation {secondary['id']}, from drivers: firm value " in block
@@ -215,6 +217,7 @@ def test_appendix_a_labels_a_parts_grid_by_its_shift(
         None,
     )
     assert secondary["grid"]["rowsAre"] == "shifts"
+    assert secondary["grid"]["rowWords"] == ["−1 pp", "0 pp", "+0 pp, capped at g_T"]
     block = markdown(report, a, [], [], {}).split("### Secondary valuation")[1]
     assert f"Secondary valuation {secondary['id']}, from parts: firm value " in block
     assert "| Every part's terminal growth | r 8.0% | r 9.0% | r 10.0% |" in block

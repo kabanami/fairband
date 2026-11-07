@@ -7,7 +7,9 @@ the designation's word, ``flags`` as a JSON list of the flag codes, and the poli
 method version and settings hash the result cites. The ``stance5`` and ``stance3`` columns of
 method 0.5 are no longer written: a new row leaves them NULL. The screen reads the snapshot with
 the greatest id per symbol, the snapshots its agents' records rest on in one read
-(``snapshot_rows``), and the Settings page the versions most of the screen's cite.
+(``snapshot_rows``), and the Settings page the versions most of the screen's cite. The report
+page's price chart and its table twin read a company's band over time from the copied columns
+alone (``band_points``), never parsing a result.
 """
 
 import json
@@ -17,7 +19,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 from fairband.config import utcnow
-from fairband.engine.types import ValuationResult, result_from_json, result_to_json
+from fairband.engine.types import Levels, ValuationResult, result_from_json, result_to_json
 from fairband.store._codec import (
     dump_date,
     dump_float,
@@ -164,6 +166,39 @@ def refresh_snapshots(conn: sqlite3.Connection, refresh_id: int) -> list[Snapsho
         "SELECT * FROM snapshots WHERE refresh_id = ? ORDER BY symbol, id", (refresh_id,)
     )
     return [_snapshot(r) for r in rows]
+
+
+@dataclass(frozen=True)
+class BandPoint:
+    """A snapshot's price and its levels on the day it was priced; no levels on a refusal."""
+
+    snapshot_id: int
+    day: date
+    price: float | None
+    levels: Levels | None
+
+
+def band_points(conn: sqlite3.Connection, symbol: str) -> list[BandPoint]:
+    """The company's snapshots that carry a price date, oldest day first, the newest snapshot of
+    each day (the greatest id); none before the first (spec 2026-11-06 Tier 2, 18.4)."""
+    rows = conn.execute(
+        "SELECT id, price_date, price, buy_level, fair_low, fair_high, trim_level FROM snapshots"
+        " WHERE id IN (SELECT MAX(id) FROM snapshots WHERE symbol = ? AND price_date IS NOT NULL"
+        " GROUP BY price_date) ORDER BY price_date",
+        (symbol,),
+    )
+    return [_band_point(r) for r in rows]
+
+
+def _band_point(row: sqlite3.Row) -> BandPoint:
+    buy, low, high, trim = (
+        load_float(row[name]) for name in ("buy_level", "fair_low", "fair_high", "trim_level")
+    )
+    levels = None
+    if buy is not None and low is not None and high is not None and trim is not None:
+        levels = Levels(buy=buy, fair_low=low, fair_high=high, trim=trim)
+    day = date.fromisoformat(row["price_date"])  # the query reads only rows with one
+    return BandPoint(row["id"], day, load_float(row["price"]), levels)
 
 
 def _snapshot(row: sqlite3.Row) -> SnapshotRow:

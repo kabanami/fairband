@@ -1,19 +1,22 @@
 """The chart tables (spec 2026-11-06 Tier 2, 13.6): the table twin of each chart the report page
 draws, as the Markdown export carries it, every figure as a cite of it reads. On the ``snapshots``
 fixture of ``conftest.py``: AAPL with ACME's synthetic statements (revenue $2,100 m in fiscal 2025,
-$2,000 m in 2024)."""
+$2,000 m in 2024) and its closes, valued and priced 30 Oct 2026."""
 
 import json
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Any
 
 from refresh.synthetic import NOW
+from support.payloads import store_payloads
 
 from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.sensitivity import SensitivityGrid
+from fairband.engine.types import Levels
 from fairband.policy import Policy
-from fairband.reports.charts import ChartTable, chart_tables, shift_words
+from fairband.reports.charts import BAND_TITLE, ChartTable, chart_tables, shift_words
 from fairband.reports.check import HEADINGS, headings, shown
 from fairband.reports.tables import financial_tables
 from fairband.store.ledger import Writer
@@ -21,6 +24,7 @@ from fairband.store.multiples import log_multiples
 from fairband.store.reports import ReportRow, insert_report, report_row
 from fairband.store.secondary import insert_secondary
 from fairband.store.sensitivities import insert_sensitivity
+from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.store.vendor import record_response
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
@@ -242,8 +246,9 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
     the references write a day; and each series' last point in each calendar year of the ten
     years (2016-10-29 falls before them), read from the store."""
     sid = snapshots["AAPL"]
-    stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
-    assert (stats.title, year_end.title) == (
+    band, stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
+    assert (band.title, stats.title, year_end.title) == (
+        BAND_TITLE,
         "The P/E over ten years",
         "The P/E at the last point of each year of the ten years",
     )
@@ -265,7 +270,7 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
         log_multiples(
             conn, "AAPL", date.fromisoformat(day), 150.0, None, None, pe_forward, 1, 1, at
         )
-    stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
+    _, stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
     assert stats.header == ("Series", "Ten-year average", "Median", "High", "Low", "Since")
     assert stats.rows == (
         ("trailing P/E", "21.40x", "22.00x", "24.00x", "18.00x", "29 Oct 2016"),
@@ -276,4 +281,44 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
         ("2016", "18.00x", ""),
         ("2025", "22.00x", "21.00x"),
         ("2026", "24.00x", "22.50x"),
+    )
+
+
+def test_section_9_leads_with_the_price_against_the_band_by_quarter(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The price chart's twin: each calendar quarter's last close of the five years to the newest
+    close, with the fair band in force at the quarter's end, the newest snapshot priced on or
+    before it (the later of two priced on one day); none before the first snapshot, and none on a
+    refusal's."""
+    sid = snapshots["AAPL"]
+    first = snapshot_row(conn, sid)
+    assert first is not None and first.fair_low is not None and first.fair_high is not None
+    closes = [  # newest first, as FMP sends them
+        {"symbol": "AAPL", "date": "2026-10-30", "close": 150.0},
+        {"symbol": "AAPL", "date": "2026-10-01", "close": 155.0},  # not the quarter's last
+        {"symbol": "AAPL", "date": "2025-11-03", "close": 190.0},
+        {"symbol": "AAPL", "date": "2024-06-28", "close": 180.0},
+        {"symbol": "AAPL", "date": "2021-11-01", "close": 140.0},
+        {"symbol": "AAPL", "date": "2021-10-29", "close": 130.0},  # before the five years
+    ]
+    store_payloads(conn, "AAPL", {"price-history": closes}, datetime(2026, 11, 2, tzinfo=UTC))
+    valued, refresh_id = first.result, first.refresh_id
+    june = Levels(buy=150.0, fair_low=170.0, fair_high=210.0, trim=240.0)
+    # priced after Q2 2024's last close and before its end: in force at the end
+    insert_snapshot(conn, replace(valued, levels=june, price_date=date(2024, 6, 29)), refresh_id)
+    november = replace(valued, levels=june, price_date=date(2025, 11, 3))
+    insert_snapshot(conn, november, refresh_id)
+    refused = replace(
+        november, value=None, levels=None, price_to_value=None, designation=None, refusal="no"
+    )
+    insert_snapshot(conn, refused, refresh_id)  # the later of the day's two: a refusal
+    band = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"][0]
+    assert band.title == BAND_TITLE == "The price against the band by quarter"
+    assert band.header == ("Quarter", "Price", "Band low", "Band high")
+    assert band.rows == (
+        ("Q4 2021", "$140.00", "", ""),  # before the first snapshot
+        ("Q2 2024", "$180.00", "$170.00", "$210.00"),
+        ("Q4 2025", "$190.00", "", ""),  # the refusal in force
+        ("Q4 2026", "$150.00", shown(first.fair_low, "price"), shown(first.fair_high, "price")),
     )
