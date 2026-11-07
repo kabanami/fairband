@@ -41,6 +41,9 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
 - ``peer:<symbol>/<peer>/<field>``: a figure of one of the company's mature peers as assembly
   reads it (``market_cap``, ``margin``, ``margin_years``, ``sales_to_capital``, ``roic``);
 - ``finding:<id>``: a finding's value, its unit and its period;
+- ``guidance:<id>/low``, ``/high``, ``/midpoint`` and ``/step``: a guidance record's figures in
+  its metric's unit (``store.guidance.UNITS``), its step a percent, each of the record's period;
+  a step the record does not take holds no figure;
 - ``derived:<id>``: a derivation's value and unit (13.4);
 - ``response:<id>/<json pointer>``: a field of a stored vendor response (RFC 6901, ``/0/revenue``);
 - ``policy:<name>``: a value the Methodology page cites from the policy, by its name or by its
@@ -59,10 +62,11 @@ cite may give by its size. The units are the reads': ``currency``
 intermediate or a vendor field. An engine input's unit maps onto them: a currency code is
 ``currency``, ``<code> a share`` ``per-share``, ``ratio`` ``percent``, ``shares`` and the other
 counted things ``count``. The period is the fiscal year (``2025``), the quarter (``2026-Q4``),
-``ttm``, or the close's or the multiple's date for the forms that have one, a finding's as
-recorded; ``None`` for the others. The snapshot is the record's own for ``snapshot:``,
-``review:``, ``secondary:`` and ``sensitivity:``, and for ``derived:`` the snapshot its operands
-rest on; ``None`` for the others.
+``ttm``, or the close's or the multiple's date for the forms that have one, a finding's and a
+guidance record's as recorded; ``None`` for the others. The snapshot is the record's own for
+``snapshot:``, ``review:``, ``secondary:`` and ``sensitivity:``, and for ``derived:`` the
+snapshot its operands rest on; ``None`` for the others, a finding and a guidance record being
+facts of the company.
 
 A ref resolves to ``None`` when it names nothing: a malformed ref, a record or a field that does
 not exist, a figure that is a table rather than a number or a word, or a record of another
@@ -94,6 +98,8 @@ from fairband.refresh.inputs_statements import Statements, country_for, statemen
 from fairband.refresh.peers import peer_figures
 from fairband.reports.multiples import SERIES, STATS, Series, stored_series
 from fairband.store.companies import latest_company
+from fairband.store.guidance import UNITS as GUIDANCE_UNITS
+from fairband.store.guidance import guidance_row
 from fairband.store.refreshes import latest_deciles
 from fairband.store.research import finding_row
 from fairband.store.reviews import review_row
@@ -111,6 +117,7 @@ __all__ = [
     "close_ref",
     "estimate_ref",
     "fact_ref",
+    "guidance_cited",
     "multiple_ref",
     "peer_ref",
     "resolve",
@@ -179,6 +186,9 @@ _DRIVER_UNITS = {
     "terminal_growth": "percent",
 }
 _DRIVER_LISTS = frozenset({"revenue_growth", "operating_margin"})
+# A guidance record's figures a ref names, and the record as an evidence item names it.
+_GUIDANCE_FIGURES = frozenset({"low", "high", "midpoint", "step"})
+_GUIDANCE_RECORD = re.compile(r"guidance:(\d+)")
 # The inputs whose engine unit names the currency of a figure that is a share's: the price.
 _INPUT_UNITS = {"price": "per-share"}
 # A step of a path that is not there, told apart from a figure stored as null.
@@ -250,6 +260,13 @@ def peer_ref(symbol: str, peer: str, field: str) -> str:
 def multiple_ref(symbol: str, series: str, key: str) -> str:
     """A point of a P/E series by its ISO date, or a statistic by its name."""
     return f"multiple:{symbol}/{series}/{key}"
+
+
+def guidance_cited(ref: str) -> int | None:
+    """The id of the guidance record an evidence item's ref names, ``guidance:<id>``; ``None``
+    for a ref of any other form."""
+    found = _GUIDANCE_RECORD.fullmatch(ref.strip())
+    return None if found is None else int(found[1])
 
 
 def resolve(
@@ -348,6 +365,7 @@ class Resolver:
             "multiple": self._multiple,
             "peer": self._peer,
             "finding": self._finding,
+            "guidance": self._guidance,
             "derived": self._derived,
             "response": self._response,
             "policy": self._policy,
@@ -571,6 +589,14 @@ class Resolver:
         if row is None or row.symbol != self.symbol:
             return None
         return _figure(row.value, row.unit, row.period, None)
+
+    def _guidance(self, path: str) -> Resolved | None:
+        head, _, field = path.partition("/")
+        row = guidance_row(self.conn, int(head)) if head.isdigit() else None
+        if row is None or row.symbol != self.symbol or field not in _GUIDANCE_FIGURES:
+            return None
+        unit = "percent" if field == "step" else GUIDANCE_UNITS[row.metric]
+        return _figure(getattr(row, field), unit, row.period)
 
     def _derived(self, path: str) -> Resolved | None:
         row = derivation_row(self.conn, int(path)) if path.isdigit() else None

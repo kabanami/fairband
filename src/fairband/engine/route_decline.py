@@ -73,7 +73,11 @@ floor has no weight); ``distress-not-charged``; ``z-distress``; ``f-score-low``;
 trend's own figure.
 
 Overrides (``method.md`` 14) through ``route_steps.chosen``. ``decline.rate`` replaces d, never
-floored (``decline-rate-floored`` is not raised); ``path.step_2`` and ``path.step_3`` the
+floored (``decline-rate-floored`` is not raised); ``revenue.ntm``, the NTM revenue from a clear
+guidance, the sum of the four NTM quarters' revenue means, which year 1, the rebuild key and
+``consensus-recovery`` then read, so a guided figure makes usable a consensus whose sum is at or
+below zero; it is not read without the quarters or with one lacking its mean, and the
+``ntm_revenue`` data entry cites the consensus as found; ``path.step_2`` and ``path.step_3`` the
 consensus steps as the revenue-growth route reads them (``revenue_path_for``), not read on a row
 without a usable consensus, whose years 1 to 3 shrink at d; ``capital.sales_to_capital`` the
 measure (``used`` "override", so the peers raise no flag and cite no rule); ``balance.debt`` and
@@ -188,10 +192,13 @@ _Used = Literal["own-latest", "peers", "override"]
 @dataclass(frozen=True)
 class _Consensus:
     """Years 1 to K: the NTM revenue as found (``None`` without four quarters with a revenue
-    mean), whether it is usable (found and positive), the annual steps of years 2 and 3 as found
-    and which were held, the steps of years 4 to K (none without a usable consensus), whether
-    g_2 or g_3 as resolved falls 100% or more, and the path's flags in order."""
+    mean) and as year 1 reads it, an agent's guided NTM revenue in its place on the four
+    quarters; whether it is usable (on the four quarters and positive), the annual steps of years
+    2 and 3 as found and which were held, the steps of years 4 to K (none without a usable
+    consensus), whether g_2 or g_3 as resolved falls 100% or more, and the path's flags in
+    order."""
 
+    found: float | None
     ntm: float | None
     usable: bool
     steps: tuple[float | None, float | None]
@@ -396,27 +403,31 @@ def _decline_rate(c: Context) -> tuple[float, bool] | None:
 def _consensus(c: Context, revenue0: float, d: float, floored: bool) -> _Consensus:
     """Years 1 to K and the path's flags: ``path-held``, ``decline-rate-floored``,
     ``path-on-trend`` without a usable NTM consensus, ``consensus-recovery``, ``few-analysts``.
-    The years past 3 are read only on a usable consensus and only to ``runoff_years``."""
+    The years past 3 are read only on a usable consensus and only to ``runoff_years``. An agent's
+    guided NTM revenue stands in for the four quarters' sum before the positive test; without the
+    quarters, or with one lacking its revenue mean, it is not read."""
     i, n = c.inputs, c.policy.runoff_years
     floor = (_floored(),) if floored else ()
     quarters = ntm_quarters(i.quarter_estimates, c.trailing.period_end)
-    ntm = ntm_revenue(quarters)
+    found = ntm_revenue(quarters)
+    ntm = found if quarters is None or found is None else chosen(c, "revenue.ntm", found)
     if quarters is None or ntm is None or ntm <= 0:
         on_trend = (*floor, _on_trend(d, n))
-        return _Consensus(ntm, False, (None, None), (False, False), (), False, on_trend)
+        return _Consensus(found, ntm, False, (None, None), (False, False), (), False, on_trend)
     base = base_fiscal_year(quarters)
-    path, _, found = revenue_path_for(
+    path, _, path_flags = revenue_path_for(
         revenue0, ntm, i.annual_estimates, base, None, c.policy, judged=judged_steps(c)
     )
     beyond = consensus_beyond(i.annual_estimates, base, c.policy)[: n - 3]
     resolved, held = resolved_steps(path)
     flags = (
-        _coded(found, "path-held")
+        _coded(path_flags, "path-held")
         + floor
         + present(_recovery((ntm / revenue0 - 1, *path.steps, *beyond), d))
-        + _coded(found, "few-analysts")
+        + _coded(path_flags, "few-analysts")
     )
-    return _Consensus(ntm, True, path.steps, held, beyond, any(g <= -1 for g in resolved), flags)
+    falls = any(g <= -1 for g in resolved)
+    return _Consensus(found, ntm, True, path.steps, held, beyond, falls, flags)
 
 
 def _coded(flags: tuple[Flag, ...], code: str) -> tuple[Flag, ...]:
@@ -657,18 +668,18 @@ def _reinvesting(t: TrailingFigures, falls: bool) -> Flag | None:
 
 
 def _path_inputs(c: Context, path: _Consensus) -> tuple[TaggedInput, ...]:
-    """The NTM revenue, the two annual steps as found and one step for each consensus year past
-    year 3, ``path_step_4`` to ``path_step_K``; without a usable consensus the first three say
-    so, the NTM revenue as found."""
+    """The NTM revenue as found, the two annual steps as found and one step for each consensus
+    year past year 3, ``path_step_4`` to ``path_step_K``; without a usable consensus the first
+    three say so. An agent's guided NTM revenue is its JUDGMENT entry, not this data."""
     i = c.inputs
     if not path.usable:
         return (
-            data(i, "ntm_revenue", path.ntm, "USD", "estimates_quarter", _NO_CONSENSUS),
+            data(i, "ntm_revenue", path.found, "USD", "estimates_quarter", _NO_CONSENSUS),
             data(i, "path_step_2", None, "ratio", "estimates_annual", _NO_CONSENSUS),
             data(i, "path_step_3", None, "ratio", "estimates_annual", _NO_CONSENSUS),
         )
     return (
-        data(i, "ntm_revenue", path.ntm, "USD", "estimates_quarter"),
+        data(i, "ntm_revenue", path.found, "USD", "estimates_quarter"),
         step_input(c, "path_step_2", path.steps[0], path.held[0]),
         step_input(c, "path_step_3", path.steps[1], path.held[1]),
         *(step_input(c, f"path_step_{t}", g, False) for t, g in enumerate(path.beyond, start=4)),

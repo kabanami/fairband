@@ -12,6 +12,8 @@ The kinds and the endpoints they are stored under, provider ``fmp`` but the last
   and by region, answered as the parts ``product`` and ``geographic``;
 - ``insider-trades``: ``insider-trades``, the newest insider trades, a page of
   ``INSIDER_TRADES_LIMIT``, which the reuse key holds;
+- ``transcript-dates``: ``transcript-dates``, the fiscal year, the quarter and the date of every
+  earnings call on file, newest first, so the agent asks ``transcript`` for a call that exists;
 - ``dcf``: two calls, ``dcf`` and ``dcf-levered``, FMP's discounted cash flow value and its levered
   one, answered as the parts ``dcf`` and ``levered``: a cross-check a report may cite, never a
   value Fairband computes;
@@ -67,7 +69,15 @@ from fairband.vendors.http import VendorError, VendorResponse
 from fairband.vendors.normalize_gf import pe_ttm_rows
 from fairband.vendors.scrub import scrub
 
-KINDS = ("transcript", "news", "segments", "insider-trades", "dcf", "pe-history")
+KINDS = (
+    "transcript",
+    "news",
+    "segments",
+    "insider-trades",
+    "transcript-dates",
+    "dcf",
+    "pe-history",
+)
 NEWS_LIMIT = 20
 NEWS_LIMIT_MAX = 100
 PE_HISTORY_REUSE_HOURS = 168  # a daily series: seven days of reuse, whatever reuse_hours is
@@ -239,6 +249,9 @@ class Passthrough:
                 logical = {"symbol": symbol, "limit": str(INSIDER_TRADES_LIMIT)}
                 send = partial(fmp.insider_trades, symbol)
                 return [_Call(kind, "insider-trades", logical, send)]
+            case "transcript-dates":
+                send = partial(fmp.transcript_dates, symbol)
+                return [_Call(kind, "transcript-dates", {"symbol": symbol}, send)]
             case "dcf":
                 return [
                     _Call("dcf", "dcf", {"symbol": symbol}, partial(fmp.dcf, symbol)),

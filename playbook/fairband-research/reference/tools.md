@@ -56,6 +56,8 @@ be left out.
   one with that id, or the company's latest.
 - `notes(symbol)`: the company's notes, newest first.
 - `findings(symbol)`: the company's findings with their sources; cite one as `finding:<id>`.
+- `guidance(symbol)`: the company's guidance records, newest first, each with its midpoint, its
+  step and the newer record that superseded it; cite one's figures as `guidance:<id>/midpoint`.
 - `overrides(symbol)`: the company's overrides, newest first, each with its state.
 - `reviews(symbol)`: the company's reviews, newest first, each with its bridge.
 - `secondary(symbol)`: the company's secondary valuations, newest first.
@@ -82,6 +84,8 @@ a report can cite it.
 - `segments(symbol)`: the revenue by product and by region, two responses under `product` and
   `geographic`.
 - `insider_trades(symbol)`: the insiders' trades.
+- `transcript_dates(symbol)`: the fiscal year, the quarter and the date of every earnings call on
+  file, newest first.
 - `dcf(symbol)`: FMP's discounted cash flow value and its levered one, under `dcf` and `levered`.
 - `pe_history(symbol)`: GuruFocus's daily trailing P/E series, reused for seven days.
 
@@ -108,6 +112,9 @@ pass-throughs are busy: four calls are in flight, try again" (503): wait a littl
   is named.
 - `finding_add(symbol, as_of, text, source, value?, unit?, period?)`: record a fact from outside
   Fairband with its source, so a report can cite it as `finding:<id>`.
+- `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source)`: record a figure
+  the company guided on a call for a future period; an NTM anchor override cites it as
+  `guidance:<id>`.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input;
   applied, it answers `{override, review, bridge}`; refused, the sentence and the `override`.
 - `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over

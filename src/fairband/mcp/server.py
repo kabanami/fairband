@@ -71,6 +71,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "report",
     "notes",
     "findings",
+    "guidance",
     "overrides",
     "reviews",
     "secondary",
@@ -86,6 +87,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "news",
     "segments",
     "insider_trades",
+    "transcript_dates",
     "dcf",
     "pe_history",
     # 15.4, the writes
@@ -96,6 +98,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "inbox_decline",
     "note_add",
     "finding_add",
+    "guidance_add",
     "override_add",
     "override_drop",
     "secondary_valuation",
@@ -239,6 +242,13 @@ def build_server(client: FairbandClient) -> MCPServer:
     def findings(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_company(symbol, "findings")))
 
+    @server.tool(
+        description="The company's guidance records, newest first, each with its midpoint, its"
+        " step and the newer record that superseded it, if any."
+    )
+    def guidance(symbol: str) -> dict[str, Any]:
+        return answer(lambda: client.get(_company(symbol, "guidance")))
+
     @server.tool(description="The company's overrides, newest first, each with its state.")
     def overrides(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_company(symbol, "overrides")))
@@ -319,6 +329,13 @@ def build_server(client: FairbandClient) -> MCPServer:
         return answer(lambda: client.get(_vendor("insider-trades", symbol)))
 
     @server.tool(
+        description="The fiscal year, quarter and date of every earnings call FMP has on file,"
+        " newest first, stored so a report can cite it."
+    )
+    def transcript_dates(symbol: str) -> dict[str, Any]:
+        return answer(lambda: client.get(_vendor("transcript-dates", symbol)))
+
+    @server.tool(
         description="FMP's discounted cash flow value and its levered one, a cross-check stored so"
         " a report can cite it."
     )
@@ -394,6 +411,33 @@ def build_server(client: FairbandClient) -> MCPServer:
             "period": period,
         }
         return write(lambda: client.post(_company(symbol, "findings"), body))
+
+    @server.tool(
+        description="Record a figure the company guided on a call for a future period, low and"
+        " high equal for a point, so an override or a report can cite it as guidance:<id>."
+    )
+    def guidance_add(
+        symbol: str,
+        metric: str,
+        period: str,
+        low: float,
+        high: float,
+        basis: str,
+        as_of: str,
+        text: str,
+        source: str,
+    ) -> dict[str, Any]:
+        body = {
+            "metric": metric,
+            "period": period,
+            "low": low,
+            "high": high,
+            "basis": basis,
+            "asOf": as_of,
+            "text": text,
+            "source": source,
+        }
+        return write(lambda: client.post(_company(symbol, "guidance"), body))
 
     @server.tool(
         description="Override one input with a reason and evidence [{kind, ref, note}]; answers"

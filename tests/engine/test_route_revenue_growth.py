@@ -3,14 +3,15 @@ Damodaran's revenue DCF, the refusals in order, the flags, the growth-route cros
 price refresh rebuilding every price-side figure from the intermediates."""
 
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
-from support.engine_companies import annual, capital_years, fiscal_years
+from support.engine_companies import annual, capital_years, fiscal_years, with_ntm_revenue
 
 from fairband.engine.anchor import AnnualEstimate
 from fairband.engine.classifier import Deciles
+from fairband.engine.overrides import Override, current_reading
 from fairband.engine.revenue_growth import (
     Bridge,
     MarginPath,
@@ -20,6 +21,7 @@ from fairband.engine.revenue_growth import (
     RevenuePath,
     revenue_valuation,
 )
+from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.route_revenue_growth import consensus_beyond, implied_margin_at_price
 from fairband.engine.types import TaggedInput, ValuationResult, result_from_json, result_to_json
@@ -27,6 +29,7 @@ from fairband.policy import Policy
 
 TODAY = date(2026, 10, 31)
 REPRICED = date(2026, 11, 2)
+NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)  # the time an override is made
 
 REVENUE_GROWTH_KEYS = {
     "ntm_revenue",
@@ -1074,3 +1077,50 @@ def test_own_sales_to_capital_is_an_estimate_under_the_intangibles_method(
     [s2c] = [i for i in r.inputs if i.name == "sales_to_capital"]
     assert (s2c.kind, s2c.estimate_method) == ("estimate", method)
     assert s2c.note == "the company's own five-year marginal measure"
+
+
+def _ntm_revenue(value: float) -> Override:
+    return Override(6, "revenue.ntm", value, "agent", "claude-opus-5-5", NOW, "guided $12.6 bn")
+
+
+def test_the_ntm_revenue_override_replaces_year_one(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """HGCO's NTM consensus revenue is $12.4 bn. An override of $12.6 bn values the row as a
+    consensus of $12.6 bn would, its rebuild keys carrying it so a price refresh rebuilds the same
+    path; the JUDGMENT entry stands for the ``ntm_revenue`` data entry, the cross-check reads the
+    consensus as found, and the bridge's line reads the consensus as its old value."""
+    mechanical = value_company(high_growth_inputs, deciles, policy, TODAY)
+    guided = [_ntm_revenue(12_600e6)]
+    judged = value_company(high_growth_inputs, deciles, policy, TODAY, {"revenue.ntm": guided[0]})
+    raised = value_company(with_ntm_revenue(high_growth_inputs, 12_600e6), deciles, policy, TODAY)
+    assert judged.value is not None and mechanical.value is not None
+    assert judged.value == raised.value and judged.value > mechanical.value
+    im = judged.intermediates
+    assert im["ntm_revenue"] == im["revenue_path"]["ntm_revenue"] == 12_600e6
+    assert im["revenue_by_year"][0] == raised.intermediates["revenue_by_year"][0]
+    assert im["growth_route"] == mechanical.intermediates["growth_route"]
+    cited = {x.name: x for x in judged.inputs}
+    assert "ntm_revenue" not in cited
+    ntm = cited["revenue.ntm"]
+    assert (ntm.tag, ntm.value, ntm.unit) == ("JUDGMENT", 12_600e6, "USD")
+    review = review_company(high_growth_inputs, deciles, policy, TODAY, guided, mechanical)
+    [line] = review.bridge
+    assert (line.tag, line.old, line.new) == ("revenue.ntm", pytest.approx(12_400e6), 12_600e6)
+    moved = reprice(result_from_json(result_to_json(judged)), 120.0, REPRICED, policy)
+    at_120 = replace(high_growth_inputs, price=120.0)
+    fresh = value_company(at_120, deciles, policy, TODAY, {"revenue.ntm": guided[0]})
+    assert moved.value == judged.value
+    assert moved.intermediates["implied_growth"] == fresh.intermediates["implied_growth"]
+
+
+def test_an_incomplete_ntm_consensus_still_refuses(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The override stands for the figure the four NTM quarters give; without the quarters the row
+    is refused as before."""
+    no_quarters = replace(high_growth_inputs, quarter_estimates=())
+    judged = {"revenue.ntm": _ntm_revenue(12_600e6)}
+    r = value_company(no_quarters, deciles, policy, TODAY, judged)
+    assert r.refusal == "incomplete NTM consensus"
+    assert current_reading(r, "revenue.ntm") is None

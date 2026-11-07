@@ -115,6 +115,15 @@ def annual(
     )
 
 
+def with_ntm_revenue(i: CompanyInputs, revenue: float) -> CompanyInputs:
+    """``i`` with its NTM consensus revenue at ``revenue``: the four quarters' revenue means, the
+    company's whole quarterly consensus, sum to it exactly, the whole of it in the first."""
+    assert len(i.quarter_estimates) == 4
+    means = (revenue, 0.0, 0.0, 0.0)
+    quarters = tuple(replace(q, revenue=x) for q, x in zip(i.quarter_estimates, means, strict=True))
+    return replace(i, quarter_estimates=quarters)
+
+
 def universe_deciles() -> Deciles:
     """The classifier tests' universe: 8% revenue growth is decile 6 ("Moderate"), 2% is decile 4
     ("Low"); a margin slope of 1.5 points a year is decile 9 ("Rising"), -1.5 points decile 2

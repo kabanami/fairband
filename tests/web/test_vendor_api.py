@@ -148,8 +148,8 @@ def test_an_unknown_kind_is_400(
     with_passthrough: TestClient, client: TestClient, vendor: Vendor
 ) -> None:
     detail = (
-        "unknown vendor kind: filings (transcript, news, segments, insider-trades, dcf or"
-        " pe-history)"
+        "unknown vendor kind: filings (transcript, news, segments, insider-trades,"
+        " transcript-dates, dcf or pe-history)"
     )
     for app_client in (with_passthrough, client):  # with a key or without
         response = app_client.get("/api/vendor/filings/ACME")

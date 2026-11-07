@@ -5,6 +5,7 @@ an applied belief override and a secondary valuation beside it."""
 import re
 import sqlite3
 from dataclasses import replace
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.policy import Policy
 from fairband.reports.check import CHECKS, HEADINGS, headings
 from fairband.reports.render import GLOSSARY, appendix_a, appendix_b, markdown
+from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
 from fairband.store.reports import ReportRow, insert_report, report_row
@@ -250,11 +252,120 @@ def test_appendix_a_is_generated_from_the_records(
     assert a["classifier"]["phase"] == "Mature Growth" and a["classifier"]["checks"] == []
 
 
+def _guided(conn: sqlite3.Connection, symbol: str, low: float, high: float, call: date) -> int:
+    said = "We guide fiscal 2027 EPS."
+    return insert_guidance(
+        conn,
+        symbol,
+        "eps",
+        "2027",
+        low,
+        high,
+        "gaap",
+        call,
+        said,
+        "response:3/0/content",
+        AGENT,
+        NOW,
+        None,
+    )
+
+
+def test_appendix_a_lists_the_guidance_on_file(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The company's guidance records on file when the report was published, newest first, each
+    current or superseded, with the overrides inside the review that cite it."""
+    sid = snapshots["AAPL"]
+    old = _guided(conn, "AAPL", 6.0, 6.5, date(2026, 7, 28))
+    new = _guided(conn, "AAPL", 6.25, 6.75, date(2026, 10, 28))
+    _guided(conn, "AAL", 1.0, 1.5, date(2026, 10, 28))
+    cites = [{"kind": "guidance", "ref": f"guidance:{new}", "note": "FY2027 EPS"}]
+    override_id = insert_override(
+        conn,
+        "AAPL",
+        "earnings.ntm",
+        5.9,
+        6.5,
+        "USD a share",
+        "guided",
+        cites,
+        "lasting",
+        None,
+        None,
+        sid,
+        AGENT,
+        NOW,
+        "applied",
+        "",
+    )
+    inputs = replace(mature_growth_inputs(), symbol="AAPL")
+    deciles = universe_deciles()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    ntm = Override(override_id, "earnings.ntm", 6.5, "agent", "claude-opus-5-5", NOW, "guided")
+    review = review_company(inputs, deciles, policy, TODAY, [ntm], mechanical)
+    review_id = insert_review(conn, review, "AAPL", sid, None, clock=lambda: NOW)
+    report = _stored(conn, sid, review_id)
+    later = insert_guidance(
+        conn,
+        "AAPL",
+        "eps",
+        "2027",
+        6.4,
+        6.6,
+        "gaap",
+        date(2026, 11, 2),
+        "Raised.",
+        "response:4/0/content",
+        AGENT,
+        NOW + timedelta(days=1),
+        None,
+    )
+    a = appendix_a(conn, report, policy)
+    assert a["guidance"] == [
+        {
+            "id": new,
+            "metric": "eps",
+            "period": "2027",
+            "low": 6.25,
+            "high": 6.75,
+            "midpoint": 6.5,
+            "basis": "gaap",
+            "asOf": "2026-10-28",
+            "state": "current",  # as of the report: the later record came after it
+            "citedBy": [override_id],
+        },
+        {
+            "id": old,
+            "metric": "eps",
+            "period": "2027",
+            "low": 6.0,
+            "high": 6.5,
+            "midpoint": 6.25,
+            "basis": "gaap",
+            "asOf": "2026-07-28",
+            "state": "superseded",
+            "citedBy": [],
+        },
+    ]
+    assert later not in [g["id"] for g in a["guidance"]]
+    text = markdown(report, a, [])
+    block = text[text.index("### Guidance on file") : text.index("### Bridge")]
+    header = (
+        "| Guidance | Metric | Period | Low | High | Midpoint | Basis | Call | State | Cited by |"
+    )
+    assert header in block
+    assert f"| {new} | eps | 2027 | 6.25 | 6.75 | 6.5 | gaap | 2026-10-28 | current |" in block
+    assert f"| current | {override_id} |" in block and "| superseded | — |" in block
+
+
 def test_appendix_a_without_a_review_or_a_secondary(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     a = appendix_a(conn, _stored(conn, snapshots["AAPL"]), policy)
     assert a["overrides"] == [] and a["bridge"] is None and a["secondary"] is None
+    assert a["guidance"] == []
+    assert "### Guidance on file\n\nNone." in markdown(_stored(conn, snapshots["AAPL"]), a, [])
     assert {i["tag"] for i in a["inputs"]} == {"DATA", "RULE"}
     assert a["versions"]["review"] is None and a["versions"]["secondary"] is None
 

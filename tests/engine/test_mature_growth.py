@@ -1,9 +1,12 @@
 import math
 from collections.abc import Callable
 from dataclasses import replace
+from datetime import UTC, date, datetime
+from typing import cast
 
 import pytest
 
+from fairband.engine.classifier import Deciles
 from fairband.engine.mature_growth import (
     Charge,
     GrowthPath,
@@ -17,9 +20,15 @@ from fairband.engine.mature_growth import (
     terminal_multiple,
     value_at_belief,
 )
+from fairband.engine.overrides import Override, OverrideTag, current_reading
+from fairband.engine.review import review_company
+from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.route_mature_growth import value_mature_growth
 from fairband.engine.route_steps import Context, Valued
+from fairband.policy import Policy
 
+TODAY = date(2026, 10, 31)  # the day the engine's test companies are valued
+NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
 R, GT = 0.09, 0.03
 FADE = GrowthPath(1000.0, (0.25, 0.26), 0.053, 20, fade_years=5)
 CHARGE = Charge(0.149, 0.13, R, GT)
@@ -261,3 +270,94 @@ def test_the_cycle_gap_lowers_the_anchor_and_leaves_the_gap_its_own(
         large = [f for f in beside.flags if f.code == "large-nri"]
         assert large == [f for f in alone.flags if f.code == "large-nri"]
         assert beside.value < alone.value
+
+
+# The NTM earnings override on the Mature Growth route (method.md 14.4): a clear guidance stands in
+# for the consensus NTM EPS the anchor reads, and the cycle gap is still taken off it.
+
+
+def _consensus_eps(i: CompanyInputs, ntm_eps: float) -> CompanyInputs:
+    """``i`` with its NTM consensus at ``ntm_eps`` a share: the four quarters' EPS means sum to it
+    exactly, the whole of it in the first."""
+    assert len(i.quarter_estimates) == 4  # MGCO's are its NTM quarters
+    means = (ntm_eps, 0.0, 0.0, 0.0)
+    quarters = tuple(replace(q, eps=x) for q, x in zip(i.quarter_estimates, means, strict=True))
+    return replace(i, quarter_estimates=quarters)
+
+
+def _judged(**values: float) -> dict[OverrideTag, Override]:
+    """Applied overrides by tag, ``earnings_ntm`` naming ``earnings.ntm``."""
+    tags = {name: cast(OverrideTag, name.replace("_", ".", 1)) for name in values}
+    return {
+        tags[name]: Override(n, tags[name], x, "agent", "claude-opus-5-5", NOW, "guided")
+        for n, (name, x) in enumerate(values.items(), start=4)
+    }
+
+
+def test_the_ntm_earnings_override_replaces_the_anchor(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """MGCO's NTM consensus of 5.90 a share includes stock compensation, so its anchor is the
+    consensus as found. An override of 6.45 values the row as a consensus of 6.45 would; the
+    JUDGMENT entry stands for the ``ntm_eps`` data entry, the NTM net income entry and the forward
+    P/E keep the consensus as found, and the bridge's line reads the consensus as its old value."""
+    mechanical = value_company(mg_inputs, deciles, policy, TODAY)
+    guided = _judged(earnings_ntm=6.45)
+    judged = value_company(mg_inputs, deciles, policy, TODAY, guided)
+    raised = value_company(_consensus_eps(mg_inputs, 6.45), deciles, policy, TODAY)
+    assert judged.value is not None and mechanical.value is not None
+    assert judged.value == raised.value and judged.value > mechanical.value
+    anchor = judged.intermediates["anchor"]
+    assert anchor["ntm_eps"] == 6.45 and anchor["ntm_eps_raw"] == pytest.approx(5.90)
+    assert judged.intermediates["ntm_net_income"] == raised.intermediates["ntm_net_income"]
+    assert judged.intermediates["eps"]["forward"] == pytest.approx(5.90)
+    assert judged.intermediates["multiples"] == mechanical.intermediates["multiples"]
+    cited = {x.name: x for x in judged.inputs}
+    assert "ntm_eps" not in cited and "ntm_eps" in {x.name for x in mechanical.inputs}
+    shares = mg_inputs.shares_diluted
+    assert shares is not None
+    assert cited["ntm_net_income"].value == pytest.approx(5.90 * shares)
+    ntm = cited["earnings.ntm"]
+    assert (ntm.tag, ntm.value, ntm.unit) == ("JUDGMENT", 6.45, "USD a share")
+    review = review_company(mg_inputs, deciles, policy, TODAY, list(guided.values()), mechanical)
+    [line] = review.bridge
+    assert line.tag == "earnings.ntm" and line.old == pytest.approx(5.90) and line.new == 6.45
+    assert line.delta == judged.value - mechanical.value
+
+
+def test_the_cycle_gap_comes_off_the_guided_anchor(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The cycle gap applies to the override's figure as it does to the consensus: a guided 6.45
+    less a gap of 1.00 is an anchor of 5.45, and the reading of the NTM earnings stays 6.45."""
+    both = value_company(
+        mg_inputs, deciles, policy, TODAY, _judged(earnings_ntm=6.45, earnings_cycle_gap=1.0)
+    )
+    lowered = value_company(
+        _consensus_eps(mg_inputs, 6.45), deciles, policy, TODAY, _judged(earnings_cycle_gap=1.0)
+    )
+    assert both.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.45)
+    assert both.value == lowered.value
+    assert current_reading(both, "earnings.ntm") == pytest.approx(6.45)
+    judgments = [x.name for x in both.inputs if x.tag == "JUDGMENT"]
+    assert judgments == ["earnings.ntm", "earnings.cycle_gap"]
+
+
+def test_a_guided_anchor_at_or_below_the_cycle_gap_refuses(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    judged = _judged(earnings_ntm=2.0, earnings_cycle_gap=2.0)
+    r = value_company(mg_inputs, deciles, policy, TODAY, judged)
+    assert r.refusal == "no positive forward anchor"
+    assert current_reading(r, "earnings.ntm") is None  # a refusal before the anchor is stored
+
+
+def test_the_cross_check_reads_the_consensus_eps_as_found(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The NTM earnings override is the Mature Growth route's own: a Mature Stable row's
+    cross-check reads the consensus as found and does not move under it."""
+    mechanical = value_company(ms_inputs, deciles, policy, TODAY)
+    judged = value_company(ms_inputs, deciles, policy, TODAY, _judged(earnings_ntm=9.0))
+    assert judged.intermediates["growth_route"] == mechanical.intermediates["growth_route"]
+    assert judged.value == mechanical.value

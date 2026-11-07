@@ -55,6 +55,7 @@ SPEC_TOOLS = (
     "report",
     "notes",
     "findings",
+    "guidance",
     "overrides",
     "reviews",
     "secondary",
@@ -69,6 +70,7 @@ SPEC_TOOLS = (
     "news",
     "segments",
     "insider_trades",
+    "transcript_dates",
     "dcf",
     "pe_history",
     "identify",
@@ -78,6 +80,7 @@ SPEC_TOOLS = (
     "inbox_decline",
     "note_add",
     "finding_add",
+    "guidance_add",
     "override_add",
     "override_drop",
     "secondary_valuation",
@@ -106,6 +109,7 @@ READS: dict[str, tuple[dict[str, Any], str]] = {
     "reports": ({"symbol": "AAPL"}, "/api/companies/AAPL/reports"),
     "notes": ({"symbol": "AAPL"}, "/api/companies/AAPL/notes"),
     "findings": ({"symbol": "AAPL"}, "/api/companies/AAPL/findings"),
+    "guidance": ({"symbol": "AAPL"}, "/api/companies/AAPL/guidance"),
     "overrides": ({"symbol": "AAPL"}, "/api/companies/AAPL/overrides"),
     "reviews": ({"symbol": "AAPL"}, "/api/companies/AAPL/reviews"),
     "secondary": ({"symbol": "AAPL"}, "/api/companies/AAPL/secondary"),
@@ -123,6 +127,7 @@ READS: dict[str, tuple[dict[str, Any], str]] = {
     "news": ({"symbol": "AAPL", "limit": 5}, "/api/vendor/news/AAPL?limit=5"),
     "segments": ({"symbol": "AAPL"}, "/api/vendor/segments/AAPL"),
     "insider_trades": ({"symbol": "AAPL"}, "/api/vendor/insider-trades/AAPL"),
+    "transcript_dates": ({"symbol": "AAPL"}, "/api/vendor/transcript-dates/AAPL"),
     "dcf": ({"symbol": "AAPL"}, "/api/vendor/dcf/AAPL"),
     "pe_history": ({"symbol": "AAPL"}, "/api/vendor/pe-history/AAPL"),
 }
@@ -141,6 +146,17 @@ WRITES: dict[str, dict[str, Any]] = {
         "value": 96e9,
         "unit": "currency",
         "period": "FY2025",
+    },
+    "guidance_add": {
+        "symbol": "AAPL",
+        "metric": "eps",
+        "period": "2026",
+        "low": 6.3,
+        "high": 6.6,
+        "basis": "gaap",
+        "as_of": "2026-10-28",
+        "text": "We expect EPS of $6.30 to $6.60 for fiscal 2026.",
+        "source": "response:12/0/content",
     },
     "override_add": {
         "symbol": "AAPL",
@@ -316,9 +332,9 @@ def test_every_read_tool_reads_its_route(api: FairbandClient, client: TestClient
         else:
             refusal = {"refused": expected.json()["detail"], "status": expected.status_code}
             assert answer == refusal, name
-    # the six pass-throughs reach the route, which has no FMP key here
-    vendor = answers[-6:]
-    assert vendor == [{"refused": "no FMP key", "status": 503}] * 6
+    # the seven pass-throughs reach the route, which has no FMP key here
+    vendor = answers[-7:]
+    assert vendor == [{"refused": "no FMP key", "status": 503}] * 7
 
 
 def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
@@ -333,6 +349,11 @@ def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
     # the part's key as spec 11 names it, sent as the API reads it
     assert written["secondary_valuation"]["parts"][0]["terminalGrowth"] == 0.02
     assert written["derive"] == {"derivations": [{"id": 1, "value": 3.0, "unit": "multiple"}]}
+    # the guidance record's as_of sent as the API reads it, its midpoint the server's
+    guided = written["guidance_add"]
+    assert (guided["asOf"], guided["step"]) == ("2026-10-28", None)
+    assert guided["midpoint"] == pytest.approx(6.45)
+    assert guided["actor"] == "claude-opus-5-5"
 
 
 def _store_revenue(db_path: Path, revenue: float) -> None:

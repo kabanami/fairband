@@ -32,6 +32,7 @@ _FMP_ENDPOINTS = {
     "company-screener": "screener",
     "stock-peers": "peers",
     "earning-call-transcript": "transcript",
+    "earning-call-transcript-dates": "transcript-dates",
     "news/stock": "news",
     "revenue-product-segmentation": "segments-product",
     "revenue-geographic-segmentation": "segments-geographic",

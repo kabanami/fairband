@@ -205,11 +205,64 @@ def test_the_cycle_gap_is_a_mature_tag() -> None:
         "return.runway": "runway return",
         "earnings.nri_gap": "non-recurring gap",
         "earnings.cycle_gap": "mid-cycle earnings",
+        "earnings.ntm": "NTM earnings",
+        "revenue.ntm": "NTM revenue",
         "decline.rate": "decline rate",
         "balance.debt": "debt",
         "balance.cash": "cash",
     }
     assert sorted(LABELS) == sorted(TAGS)
+
+
+def test_the_two_ntm_anchors_are_tags(policy: Policy) -> None:
+    """The NTM EPS on Mature Growth and the NTM revenue on the revenue-growth and Decline routes,
+    each in the unit the route reads it in, their bridge lines right after the phase's."""
+    eps, revenue = TAGS["earnings.ntm"], TAGS["revenue.ntm"]
+    assert eps.routes == {"mature-growth"} and eps.unit == "USD a share" and eps.words is None
+    assert revenue.routes == {"revenue-growth", "decline"} and revenue.unit == "USD"
+    assert not eps.period_tied_only and not revenue.period_tied_only
+    assert BRIDGE_ORDER[:3] == ("phase", "earnings.ntm", "revenue.ntm")
+    assert checked(policy, "earnings.ntm", 6.45, "mature-stable") == (
+        "refused-route",
+        "the Mature Stable route does not read earnings.ntm",
+    )
+    assert checked(policy, "revenue.ntm", 12e9, "mature-growth")[0] == "refused-route"
+    assert checked(policy, "revenue.ntm", 12e9, "start-up")[0] == "refused-route"
+
+
+def test_an_ntm_anchor_is_above_zero(policy: Policy) -> None:
+    """The range's lower end, 0, is not an anchor the route can value: refused, as a figure past
+    the upper end is."""
+    guidance = ("guidance",)
+    for tag, route, high, text in (
+        ("earnings.ntm", "mature-growth", 1_000.0, "above $0 to $1,000 a share"),
+        ("revenue.ntm", "decline", 1e15, "above $0 to $1,000,000,000,000,000"),
+    ):
+        refusal = ("refused-unit", f"{tag} takes {text}")
+        assert checked(policy, tag, 0.0, route, guidance) == refusal
+        assert checked(policy, tag, -1.0, route, guidance) == refusal
+        assert checked(policy, tag, high * 1.01, route, guidance) == refusal
+        assert checked(policy, tag, high, route, guidance) == ("applied", "")
+        assert checked(policy, tag, 0.01, route, guidance) == ("applied", "")
+
+
+def test_an_ntm_anchor_needs_a_guidance_item(policy: Policy) -> None:
+    sentence = "an NTM anchor override needs a guidance record among its evidence"
+    for tag, value, route in (
+        ("earnings.ntm", 6.45, "mature-growth"),
+        ("revenue.ntm", 12.6e9, "revenue-growth"),
+        ("revenue.ntm", 950.0, "decline"),
+    ):
+        refused = checked(policy, tag, value, route, ("transcript",))
+        assert refused == ("refused-evidence", sentence), tag
+        assert checked(policy, tag, value, route, ("transcript", "guidance")) == ("applied", "")
+        assert checked(policy, tag, value, route, ()) == (
+            "refused-evidence",
+            "an override needs evidence",
+        )
+    # the other tags take a guidance record as any other evidence, and need none
+    assert checked(policy, "growth.belief", 0.08, "mature-growth", ("guidance",)) == ("applied", "")
+    assert checked(policy, "path.step_2", 0.1, "decline", ("filing",)) == ("applied", "")
 
 
 def test_a_cycle_gap_is_refused_on_a_growth_route(policy: Policy) -> None:
@@ -290,6 +343,35 @@ def test_current_reading_on_each_golden(policy: Policy, deciles: Deciles) -> Non
     assert current_reading(ms, "earnings.cycle_gap") == 0.0
     assert current_reading(hg, "earnings.cycle_gap") is None
     assert current_reading(dc, "earnings.cycle_gap") is None
+    # the two NTM anchors: the figure each route stored, none on a route that reads neither
+    assert current_reading(mg, "earnings.ntm") == mg.intermediates["anchor"]["ntm_eps"]
+    assert mg.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.9)
+    assert current_reading(hg, "revenue.ntm") == hg.intermediates["ntm_revenue"]
+    assert current_reading(dc, "revenue.ntm") == dc.intermediates["runoff_path"]["ntm_revenue"]
+    for result in (ms, hg, dc, su):
+        assert current_reading(result, "earnings.ntm") is None
+    for result in (mg, ms, su):
+        assert current_reading(result, "revenue.ntm") is None
+
+
+def test_the_ntm_readings_off_a_valued_route(policy: Policy, deciles: Deciles) -> None:
+    """Under a cycle gap the NTM earnings read the anchor before it; a revenue-growth row refused
+    for its target margin reads the NTM revenue of its rebuild keys; a Decline row with no usable
+    consensus reads none."""
+    gap = {"earnings.cycle_gap": override("earnings.cycle_gap", 1.0)}
+    mg = value_company(mature_growth_inputs(), deciles, policy, TODAY, gap)
+    assert mg.intermediates["anchor"]["ntm_eps"] == pytest.approx(4.9)
+    assert current_reading(mg, "earnings.ntm") == pytest.approx(5.9)
+    hg = high_growth_inputs()
+    refused = value_company(replace(hg, peers=()), deciles, policy, TODAY)
+    assert refused.refusal == "no target margin: 0 mature peers"
+    found = refused.intermediates["revenue_path"]["ntm_revenue"]
+    assert current_reading(refused, "revenue.ntm") == found and found > 0
+    no_consensus = value_company(
+        replace(decline_inputs(), quarter_estimates=()), deciles, policy, TODAY
+    )
+    assert no_consensus.intermediates["runoff_path"]["ntm_revenue"] is None
+    assert current_reading(no_consensus, "revenue.ntm") is None
 
 
 def test_the_cycle_gap_reads_nil_until_an_override_sets_it(

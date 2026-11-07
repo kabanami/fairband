@@ -6,12 +6,16 @@ note}], lifetime, period?}`` from an agent; a blank reason, or a period-tied ove
 no period, is a 400 and stores nothing. The company's latest snapshot must have been valued
 under the effective policy (``require_current``: the price refresh's sentences, "settings
 changed: run a revalue" and the others, answered 409), so the bridge's mechanical term is the
-row's own figure. ``check_override`` then judges it on the route the row takes: its phase's, or
-the phase an applied ``phase`` override sets (the new one included); an unclassified row with no
-phase override reads no input but its phase. The evidence rule's cap is the ``sales_p90_5y`` of
-the sales class of the snapshot's trailing revenue (its ``revenue_ttm`` input), the class the
-routes find, so it holds on a row a phase override moves onto a route that reads the input (a
-Start-up put in Young Growth); none when the snapshot cites no trailing revenue.
+row's own figure. An evidence item of kind ``guidance`` cites a guidance record of the company as
+``guidance:<id>``: a ref of another form is a 400, "a guidance item cites its record as
+guidance:<id>", and one naming no record of the company a 404, "no guidance record <id> for
+<symbol>", neither storing anything. ``check_override`` then judges it on the route the row
+takes: its phase's, or the phase an applied ``phase`` override sets (the new one included); an
+unclassified row with no phase override reads no input but its phase. The evidence rule's cap is
+the ``sales_p90_5y`` of the sales class of the snapshot's trailing revenue (its ``revenue_ttm``
+input), the class the routes find, so it holds on a row a phase override moves onto a route that
+reads the input (a Start-up put in Young Growth); none when the snapshot cites no trailing
+revenue. An NTM anchor's override needs a ``guidance`` item among its evidence.
 The override is stored either way, with the engine's reading of the input on the snapshot as its
 old value and, for a period-tied one, as the value it corrected. A refused one answers 400 with
 the rule's sentence and ``{override}``. An applied one drops the applied override on its tag
@@ -118,9 +122,10 @@ from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.reviews import write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
-from fairband.reports.refs import Resolver, fact_ref
+from fairband.reports.refs import Resolver, fact_ref, guidance_cited
 from fairband.store.companies import latest_company
 from fairband.store.db import transaction
+from fairband.store.guidance import guidance_row
 from fairband.store.ledger import Writer, record
 from fairband.store.overrides import (
     OverrideRow,
@@ -149,7 +154,8 @@ from fairband.web.agents_api import WriterOf, gist, record_json
 from fairband.web.settings_api import effective
 
 AGENTS_WRITE = "an override is an agent's write"
-EvidenceKind = Literal["filing", "transcript", "url", "vendor", "base-rate", "finding"]
+EvidenceKind = Literal["filing", "transcript", "url", "vendor", "base-rate", "finding", "guidance"]
+GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
 _PHASES: tuple[str, ...] = get_args(Phase)
 _MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
@@ -346,6 +352,7 @@ def add_review_routes(
             snapshot = snapshot_of(conn, symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
+            _require_guidance(conn, symbol, body.evidence)
             applied = applied_overrides(conn, symbol)
             state, message = _check(body, applied, snapshot, current)
             spec = next((s for s in TAGS.values() if s.tag == body.tag), None)
@@ -686,6 +693,20 @@ def _check(
     kinds = [e.kind for e in body.evidence]
     cap = _cap(snapshot.result, policy)
     return check_override(body.tag, body.new, route, policy, kinds, body.lifetime, cap)
+
+
+def _require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[Evidence]) -> None:
+    """Each ``guidance`` item names a guidance record of the company as ``guidance:<id>``: 400
+    for another form of ref, 404 for a record that is not the company's (module docstring)."""
+    for item in evidence:
+        if item.kind != "guidance":
+            continue
+        cited = guidance_cited(item.ref)
+        if cited is None:
+            raise HTTPException(400, GUIDANCE_REF)
+        found = guidance_row(conn, cited)
+        if found is None or found.symbol != symbol:
+            raise HTTPException(404, f"no guidance record {cited} for {symbol}")
 
 
 def _reproduces(fresh: ValuationResult, snapshot: ValuationResult) -> bool:

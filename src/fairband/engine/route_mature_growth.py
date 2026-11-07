@@ -31,13 +31,16 @@ of the charge (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring gap, th
 test then taking the correction, the override less the gap found, off trailing GAAP EPS
 (``anchor.ntm_anchor``), so an override at the gap found moves nothing; ``path.step_2`` and
 ``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
-step not counted thin; ``growth.belief`` the belief's rate; ``earnings.cycle_gap`` the correction
-to mid-cycle earnings, which the NTM EPS is taken less after the SBC adjustment, before the
-positive-anchor refusal (``anchor.ntm_anchor``), and which nothing else reads: the basis test, the clean
-EPS, EPV and ``large-nri`` read the non-recurring gap alone, and the forward EPS of the P/E and
-the ``ntm_eps`` and ``ntm_net_income`` data entries are the consensus as found
-(``Anchor.ntm_eps_found``). ``cycle_gap`` is in the intermediates only under that override. The
-cross-check reads the row's moat, returns and two gaps, and the consensus and belief as found.
+step not counted thin; ``growth.belief`` the belief's rate; ``earnings.ntm``, the NTM EPS from a
+clear guidance, which stands in for the consensus less the SBC adjustment, the four NTM quarters
+still required; ``earnings.cycle_gap`` the correction to mid-cycle earnings, which the NTM EPS,
+the consensus's or the guided one, is taken less, before the positive-anchor refusal
+(``anchor.ntm_anchor``). Nothing else reads the two: the basis test, the clean EPS, EPV and
+``large-nri`` read the non-recurring gap alone, and the forward EPS of the P/E and the ``ntm_eps``
+and ``ntm_net_income`` data entries are the consensus as found (``Anchor.ntm_eps_found``), the
+``ntm_eps`` entry giving way to the JUDGMENT entry under the guided EPS. ``cycle_gap`` is in the
+intermediates only under that override. The cross-check reads the row's moat, returns and two
+gaps, and the consensus and belief as found.
 """
 
 from dataclasses import asdict, replace
@@ -166,7 +169,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "sbc_ttm", t.sbc, "USD", "statements"),
-        # the consensus as found: an agent's cycle gap is the JUDGMENT entry, not data
+        # the consensus as found: an agent's guided EPS or cycle gap is its JUDGMENT entry
         data(i, "ntm_eps", anchor.ntm_eps_found, "USD a share", "estimates_quarter"),
         data(i, "ntm_net_income", anchor.ntm_eps_found * c.shares, "USD", "estimates_quarter"),
         data(i, "path_step_2", path.steps[0], "ratio", "estimates_annual"),
@@ -229,8 +232,8 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     """Year 1's anchor, the consensus path with its base fiscal year, and the belief; or the
     route's refusal, with the flags raised before it. The anchor's basis test reads an overriding
     non-recurring gap as its correction to the gap found, and its NTM EPS is taken less an
-    overriding cycle gap; with ``own``, the route's own path and belief read the step and belief
-    overrides, which a cross-check leaves as found."""
+    overriding cycle gap; with ``own``, the route's own anchor, path and belief read the NTM EPS,
+    step and belief overrides, which a cross-check leaves as found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
         return Refused("no trailing revenue")
@@ -239,6 +242,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     quarters = ntm_quarters(i.quarter_estimates, t.period_end) or ()
     gap: float | None = chosen(c, "earnings.nri_gap", None)
     correction = None if gap is None else gap - nil(nri_gap(i))
+    guided: float | None = chosen(c, "earnings.ntm", None) if own else None
     anchor = ntm_anchor(
         quarters,
         t,
@@ -249,6 +253,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         policy,
         nri_correction=correction,
         cycle_gap=cycle_gap(c),
+        guided_eps=guided,
     )
     if anchor.refusal is not None:
         return Refused(anchor.refusal, anchor.flags)

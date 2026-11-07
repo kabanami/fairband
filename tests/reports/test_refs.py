@@ -30,6 +30,7 @@ from fairband.reports.refs import (
     unit_of,
 )
 from fairband.reports.tables import financial_tables
+from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.multiples import log_multiples
 from fairband.store.research import add_finding
@@ -448,6 +449,56 @@ def test_finding_and_derived_refs(
     assert _resolve(conn, f"derived:{on_facts}", policy) == Resolved(0.05, "percent", None, None)
     assert _resolve(conn, "derived:999", policy) is None
     assert rests_on(conn, f"derived:{derived}") == sid
+
+
+def test_guidance_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:
+    """A guidance record's figures in the metric's unit, its step a percent, each of the record's
+    period; another company's record names nothing, and a step not computed holds no figure."""
+
+    def guided(
+        symbol: str, metric: str, period: str, low: float, high: float, base: float | None = None
+    ) -> int:
+        said, source = "We guide.", "response:12/0/content"
+        return insert_guidance(
+            conn, symbol, metric, period, low, high, "gaap", TODAY, said, source, AGENT, NOW, base
+        )
+
+    revenue = guided("AAPL", "revenue", "2026", 100 * M, 110 * M, 100 * M)
+    eps = guided("AAPL", "eps", "2026Q3", 1.5, 1.6)
+    margin = guided("AAPL", "operating_margin", "2026", 0.30, 0.32)
+    theirs = guided("AAL", "capex", "2026", 10 * M, 12 * M)
+    g = f"guidance:{revenue}"
+    assert _resolve(conn, f"{g}/low", policy) == Resolved(100 * M, "currency", "2026", None)
+    assert _resolve(conn, f"{g}/high", policy) == Resolved(110 * M, "currency", "2026", None)
+    midpoint = _resolve(conn, f"{g}/midpoint", policy)
+    assert midpoint is not None and midpoint.value == pytest.approx(105 * M)
+    step = _resolve(conn, f"{g}/step", policy)
+    assert step is not None and step.value == pytest.approx(0.05)
+    assert (step.unit, step.period, step.snapshot_id) == ("percent", "2026", None)
+    on_eps = f"guidance:{eps}"
+    assert _resolve(conn, f"{on_eps}/low", policy) == Resolved(1.5, "per-share", "2026Q3", None)
+    assert _resolve(conn, f"{on_eps}/step", policy) == Resolved(None, "percent", "2026Q3", None)
+    found = _resolve(conn, f"guidance:{margin}/midpoint", policy)
+    assert found is not None and found.unit == "percent"
+    for ref in (
+        f"guidance:{theirs}/low",
+        f"{g}/text",
+        f"{g}",
+        "guidance:999/low",
+        "guidance:x/low",
+    ):
+        assert _resolve(conn, ref, policy) is None, ref
+    assert rests_on(conn, f"{g}/low") is None  # a company fact, as a finding is
+    cites = [
+        {"cite": "$0.05", "ref": f"{g}/step"},
+        {"cite": "5.0%", "ref": f"{g}/step"},
+        {"cite": "$105,000,000", "ref": f"{g}/midpoint"},
+    ]
+    sid = snapshots["AAPL"]
+    [finding] = check_sections(
+        conn, "AAPL", sid, [{"heading": "Valuation", "parts": cites}], policy
+    )
+    assert (finding.where, finding.what) == ("section 1, part 1: $0.05", WRONG_UNIT)
 
 
 def test_response_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:

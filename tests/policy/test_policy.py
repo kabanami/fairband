@@ -27,8 +27,9 @@ V8_VALUES = {
     "secondary_years_max",
     "stance_words",
 }
-# The value policy v9 adds, the secondary valuation's driver ranges; it also adds the cycle gap's
-# pair to ``override_ranges`` (spec 2026-11-06 Tier 2 as amended 2026-11-07, section 19).
+# The value policy v9 adds, the secondary valuation's driver ranges; it also adds three pairs to
+# ``override_ranges``, the cycle gap's and the two NTM anchors' (spec 2026-11-06 Tier 2 as amended
+# 2026-11-07, section 19).
 V9_VALUES = {"secondary_driver_ranges"}
 
 
@@ -93,6 +94,8 @@ def test_v9_is_the_packaged_policy() -> None:
         "return.runway": (0.0, 1.0),
         "earnings.nri_gap": (-100.0, 100.0),
         "earnings.cycle_gap": (-100.0, 100.0),
+        "earnings.ntm": (0.0, 1000.0),
+        "revenue.ntm": (0.0, 1e15),
         "decline.rate": (-0.50, 0.0),
         "balance.debt": (0.0, 1e15),
         "balance.cash": (0.0, 1e15),
@@ -247,17 +250,21 @@ def test_v8_is_v7_with_the_six_values_added() -> None:
 
 def test_v9_is_v8_with_the_values_added() -> None:
     """Every v8 value loads unchanged from v9, save the override ranges, which gain the cycle gap's
-    pair; v9 adds the secondary valuation's driver ranges, neither a setting (spec 2026-11-06 Tier
-    2 as amended 2026-11-07, section 19)."""
+    pair and the two NTM anchors'; v9 adds the secondary valuation's driver ranges, neither a
+    setting (spec 2026-11-06 Tier 2 as amended 2026-11-07, section 19)."""
     v8 = _file_values("fairband-policy-v8.toml")
     v9 = load_policy().raw["values"]
     assert v9.keys() - v8.keys() == V9_VALUES
     kept = v8.keys() - {"override_ranges"}
     assert {k: v9[k] for k in kept} == {k: v8[k] for k in kept}
     ranges8, ranges9 = v8["override_ranges"], v9["override_ranges"]
-    assert ranges9["value"] == ranges8["value"] | {"earnings.cycle_gap": [-100.0, 100.0]}
+    assert ranges9["value"] == ranges8["value"] | {
+        "earnings.cycle_gap": [-100.0, 100.0],
+        "earnings.ntm": [0.0, 1000.0],
+        "revenue.ntm": [0.0, 1e15],
+    }
     assert ranges9["source"] == ranges8["source"]
-    assert "the cycle gap" in ranges9["note"]
+    assert "the cycle gap" in ranges9["note"] and "the two NTM anchors" in ranges9["note"]
     assert "a multiple for sales-to-capital" in v9["secondary_driver_ranges"]["note"]
     assert not {s.name for s in SETTINGS} & (V9_VALUES | {"override_ranges"})
 

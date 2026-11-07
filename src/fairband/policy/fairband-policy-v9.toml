@@ -9,7 +9,7 @@
 # v6: the edges and the Wide cap are derived (spec 2026-11-04 8.3); the user's settings overlay these defaults.
 # v7: v6 with the growth routes' own sales-to-capital bound and the loss ramp bound (spec 2026-11-06 section 11)
 # v8: v7 with the override ranges, the evidence rule, the secondary valuation's bounds and the stance words (spec 2026-11-06 Tier 2, section 19)
-# v9: v8 with the cycle gap's override range and the secondary valuation's driver ranges (spec 2026-11-06 Tier 2 as amended 2026-11-07, section 19)
+# v9: v8 with the override ranges of the cycle gap and the two NTM anchors, and the secondary valuation's driver ranges (spec 2026-11-06 Tier 2 as amended 2026-11-07, section 19)
 #
 # Each [values.<name>] table holds `value` and `source`. The source is the design.md section, the
 # stocks mech/1.2 rule, the founder decision (research.md D<n>), the calibration, growth routes or
@@ -343,7 +343,7 @@ rate_limit_hold_s = 60
 
 [values.override_ranges]
 source = "spec 2026-11-06 Tier 2, section 10.2: the range of each numeric input an agent may override; no source gives the numbers; policy value"
-note = "One pair [low, high] for each override tag, the ends included, in the unit the engine reads the input in: a fraction for a growth rate, a consensus step, a margin, a return or a decline rate (-0.20 is -20%), a multiple for sales-to-capital, dollars a share for the non-recurring gap and the cycle gap, dollars for debt and cash. A value outside its pair is refused-unit. The word tags, phase and moat.class, take a word and have no pair. The balance corrections' upper end, 10^15 dollars, stands for no bound: spec 10.2 gives them 0 or more. v9 adds the cycle gap's pair, the same range as the non-recurring gap's (spec 10.2 as amended 2026-11-07)."
+note = "One pair [low, high] for each override tag, the ends included, in the unit the engine reads the input in: a fraction for a growth rate, a consensus step, a margin, a return or a decline rate (-0.20 is -20%), a multiple for sales-to-capital, dollars a share for the non-recurring gap, the cycle gap and the NTM EPS, dollars for the NTM revenue, debt and cash. A value outside its pair is refused-unit; so is a value at the lower end, 0, of the two NTM anchors' pairs, which an anchor must be above. The word tags, phase and moat.class, take a word and have no pair. The upper end of 10^15 dollars stands for no bound: spec 10.2 gives the balance corrections 0 or more and the NTM revenue above 0. v9 adds the cycle gap's pair, the same range as the non-recurring gap's, and the two NTM anchors' pairs, earnings.ntm above 0 to 1,000 dollars a share and revenue.ntm above 0 (spec 10.2 as amended 2026-11-07)."
 
 [values.override_ranges.value]
 "growth.belief" = [-0.20, 0.60]
@@ -355,6 +355,8 @@ note = "One pair [low, high] for each override tag, the ends included, in the un
 "return.runway" = [0.0, 1.0]
 "earnings.nri_gap" = [-100.0, 100.0]
 "earnings.cycle_gap" = [-100.0, 100.0]
+"earnings.ntm" = [0.0, 1000.0]
+"revenue.ntm" = [0.0, 1e15]
 "decline.rate" = [-0.50, 0.0]
 "balance.debt" = [0.0, 1e15]
 "balance.cash" = [0.0, 1e15]

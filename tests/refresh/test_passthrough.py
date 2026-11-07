@@ -58,7 +58,15 @@ def _stored(env: Env, response_id: int) -> tuple[str, str | None, dict[str, str]
 
 
 def test_kinds() -> None:
-    assert KINDS == ("transcript", "news", "segments", "insider-trades", "dcf", "pe-history")
+    assert KINDS == (
+        "transcript",
+        "news",
+        "segments",
+        "insider-trades",
+        "transcript-dates",
+        "dcf",
+        "pe-history",
+    )
 
 
 def test_a_transcript_is_fetched_stored_and_reused(env: Env) -> None:
@@ -81,6 +89,24 @@ def test_a_transcript_is_fetched_stored_and_reused(env: Env) -> None:
     third = passthrough.fetch("transcript", "ACME", Q3)["transcript"]
     assert third.reused is False and third.row.id > other["transcript"].row.id
     assert env.router.calls == {"transcript": 3}
+
+
+def test_transcript_dates_is_one_call(env: Env) -> None:
+    """The fiscal year, the quarter and the date of every call on file: one FMP call, stored and
+    reused inside ``reuse_hours`` like the transcript itself."""
+    passthrough = _passthrough(env)
+    [(part, first)] = passthrough.fetch("transcript-dates", "ACME", {}).items()
+    again = passthrough.fetch("transcript-dates", "ACME", {})["transcript-dates"]
+    assert part == "transcript-dates"
+    assert env.router.calls == {"transcript-dates": 1}
+    assert env.router.requested["transcript-dates"] == {"symbol": "ACME"}
+    assert (first.reused, again.reused) == (False, True) and first.row == again.row
+    assert first.payload == _fixture("earning-call-transcript-dates.ACME.json")
+    assert _stored(env, first.row.id) == ("transcript-dates", "ACME", {"symbol": "ACME"}, None)
+    assert first.row.provider == "fmp"
+    env.clock.now += timedelta(hours=env.policy.refresh.reuse_hours)
+    assert passthrough.fetch("transcript-dates", "ACME", {})["transcript-dates"].reused is False
+    assert env.router.calls == {"transcript-dates": 2}
 
 
 def test_segments_fetch_two_endpoints(env: Env) -> None:

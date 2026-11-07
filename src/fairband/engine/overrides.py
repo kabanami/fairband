@@ -1,12 +1,14 @@
 """Overrides: the inputs an agent may change, the rules an override must pass, and the engine's
 own reading of each input (spec 2026-11-06 Tier 2, 10.1 to 10.3; ``method.md`` 14).
 
-An override changes one tagged input. ``TAGS`` names the fourteen inputs, the routes that read
+An override changes one tagged input. ``TAGS`` names the sixteen inputs, the routes that read
 each, its unit and, for the two word inputs, its words; the numeric ranges are the policy's
-``override_ranges``, the ends included. ``LABELS`` names each input's bridge line in a reader's
+``override_ranges``, the ends included but the two NTM anchors' lower end, 0, which an anchor
+must be above (``TagSpec.low_open``). ``LABELS`` names each input's bridge line in a reader's
 words. ``check_override`` applies the rules in this order and answers with the first one broken:
 a locked input (``LOCKED``); a tag that is not an input; a route that does not read the tag; a
 value outside its words or its range, or a lasting override of a period-tied input; no evidence,
+an NTM anchor (``earnings.ntm``, ``revenue.ntm``) without a guidance record among its evidence,
 or a belief or held rate above the sales class's 90th percentile without a filing or a
 transcript (when the policy's ``override_primary_evidence_above_p90`` holds). A passing override
 is ``("applied", "")``; a refused one names its state and a sentence the agent can act on.
@@ -21,8 +23,10 @@ value a period-tied override corrected. A balance line reads the reported figure
 cites, ``None`` when no line is on file (the bridge then counts it as nil) or the result cites
 none; the runway return reads ``None`` with the charge off. The engine finds no cycle gap: a
 mature route writes ``cycle_gap`` into its intermediates only under an override, so a Mature
-Growth or Mature Stable result without one reads 0.0 (a refusal, the route its phase takes). An
-override at the engine's reading moves nothing.
+Growth or Mature Stable result without one reads 0.0 (a refusal, the route its phase takes). The
+NTM earnings read the anchor the Mature Growth route stored, before the cycle gap came off it;
+the NTM revenue reads the year one the revenue-growth or Decline route stored, none on a Decline
+row with no usable consensus. An override at the engine's reading moves nothing.
 
 ``INPUT_OF`` names the route's own entry each tag stands for in a result's inputs: a result
 valued under an override cites the JUDGMENT entry in its place, so no DATA or RULE entry carries
@@ -39,6 +43,8 @@ from fairband.policy import Policy
 
 OverrideTag = Literal[
     "phase",
+    "earnings.ntm",
+    "revenue.ntm",
     "growth.belief",
     "path.hold",
     "path.step_2",
@@ -56,6 +62,8 @@ OverrideTag = Literal[
 # The bridge's order, the method's step order (spec 10.4).
 BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "phase",
+    "earnings.ntm",
+    "revenue.ntm",
     "path.step_2",
     "path.step_3",
     "path.hold",
@@ -87,14 +95,16 @@ Principal = Literal["owner", "agent", "system"]
 @dataclass(frozen=True)
 class TagSpec:
     """An input an agent may override: the routes that read it, the unit the engine reads it in,
-    its words (``None`` for a number, whose range is the policy's), and whether only a
-    period-tied override may change it."""
+    its words (``None`` for a number, whose range is the policy's), whether only a period-tied
+    override may change it, and whether its range's lower end is excluded: an NTM anchor must be
+    above 0, as the route's own positive-anchor rule asks of the consensus."""
 
     tag: OverrideTag
     routes: frozenset[Route]
     unit: str
     words: tuple[str, ...] | None
     period_tied_only: bool
+    low_open: bool
 
 
 @dataclass(frozen=True)
@@ -129,14 +139,17 @@ def _spec(
     unit: str,
     words: tuple[str, ...] | None = None,
     period_tied_only: bool = False,
+    low_open: bool = False,
 ) -> TagSpec:
-    return TagSpec(tag, routes, unit, words, period_tied_only)
+    return TagSpec(tag, routes, unit, words, period_tied_only, low_open)
 
 
 TAGS: dict[OverrideTag, TagSpec] = {
     s.tag: s
     for s in (
         _spec("phase", _ALL, "phase", _PHASES),
+        _spec("earnings.ntm", frozenset({"mature-growth"}), "USD a share", low_open=True),
+        _spec("revenue.ntm", _GROWTH | {"decline"}, "USD", low_open=True),
         _spec("growth.belief", frozenset({"mature-growth"}), "ratio"),
         _spec("path.hold", _GROWTH, "ratio"),
         _spec("path.step_2", _STEPS, "ratio"),
@@ -157,6 +170,8 @@ TAGS: dict[OverrideTag, TagSpec] = {
 # not as a one-time item.
 LABELS: dict[OverrideTag, str] = {
     "phase": "phase",
+    "earnings.ntm": "NTM earnings",
+    "revenue.ntm": "NTM revenue",
     "growth.belief": "belief",
     "path.hold": "held rate",
     "path.step_2": "consensus step 2",
@@ -173,8 +188,11 @@ LABELS: dict[OverrideTag, str] = {
 }
 
 # The route's own entry in a result's inputs that each tag stands for. The two gaps stand for
-# none: a route cites the gap found and the NTM consensus as found as data.
+# none: a route cites the gap found and the NTM consensus as found as data. An NTM anchor stands
+# for its consensus figure's entry; Mature Growth's NTM net income entry keeps the consensus.
 INPUT_OF: dict[OverrideTag, str] = {
+    "earnings.ntm": "ntm_eps",
+    "revenue.ntm": "ntm_revenue",
     "growth.belief": "belief",
     "path.step_2": "path_step_2",
     "path.step_3": "path_step_3",
@@ -210,6 +228,9 @@ _ROUTE_NAMES: dict[Route, str] = {
 }
 _PRIMARY = frozenset({"filing", "transcript"})
 _ABOVE_P90: dict[str, str] = {"growth.belief": "a belief", "path.hold": "a held rate"}
+# The anchors a clear guidance may replace: an override of one cites a guidance record.
+_NTM_ANCHORS = frozenset({"earnings.ntm", "revenue.ntm"})
+NO_GUIDANCE = "an NTM anchor override needs a guidance record among its evidence"
 
 
 _ROUTE_OF: dict[Phase, Route] = {
@@ -247,6 +268,8 @@ def check_override(
         return "refused-unit", f"{tag} is period-tied only"
     if not evidence_kinds:
         return "refused-evidence", "an override needs evidence"
+    if tag in _NTM_ANCHORS and "guidance" not in evidence_kinds:
+        return "refused-evidence", NO_GUIDANCE
     if (
         tag in _ABOVE_P90
         and cap is not None
@@ -287,25 +310,33 @@ def _unit_refusal(spec: TagSpec, value: float | str, policy: Policy) -> str | No
             return f"{spec.tag} takes {', '.join(spec.words[:-1])} or {spec.words[-1]}"
         return None
     low, high = policy.override_ranges[spec.tag]
-    if not _number(value) or not low <= value <= high:
-        return f"{spec.tag} takes {range_text(low, high, spec.unit)}"
+    if not _number(value) or not _within(value, low, high, spec.low_open):
+        return f"{spec.tag} takes {range_text(low, high, spec.unit, low_open=spec.low_open)}"
     return None
+
+
+def _within(x: float, low: float, high: float, low_open: bool) -> bool:
+    """Whether ``x`` lies in the range, its upper end included and its lower end unless
+    ``low_open``."""
+    return (low < x if low_open else low <= x) and x <= high
 
 
 def _number(value: object) -> TypeIs[float]:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
-def range_text(low: float, high: float, unit: str) -> str:
+def range_text(low: float, high: float, unit: str, *, low_open: bool = False) -> str:
     """A range in the input's unit: percents for a ratio, dollars for money (a share for the two
-    gaps), the figures for a multiple; a negative end with the minus sign. The override's
-    refusal and the secondary valuation's driver refusals write their ranges with it."""
+    gaps and the NTM EPS), the figures for a multiple; a negative end with the minus sign, and
+    "above" before a lower end the range excludes. The override's refusal and the secondary
+    valuation's driver refusals write their ranges with it."""
+    above = "above " if low_open else ""
     if unit == "ratio":
-        return f"{_signed(low * 100)}% to {_signed(high * 100)}%"
+        return f"{above}{_signed(low * 100)}% to {_signed(high * 100)}%"
     if unit in ("USD", "USD a share"):
         per = " a share" if unit == "USD a share" else ""
-        return f"{_dollars(low)} to {_dollars(high)}{per}"
-    return f"{_signed(low)} to {_signed(high)}"
+        return f"{above}{_dollars(low)} to {_dollars(high)}{per}"
+    return f"{above}{_signed(low)} to {_signed(high)}"
 
 
 def _signed(x: float) -> str:
@@ -328,6 +359,17 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
     match tag:
         case "phase":
             return result.phase.phase
+        case "earnings.ntm":
+            # the anchor before the cycle gap came off it: the figure an override stands for
+            ntm_eps = _at(im, "anchor", "ntm_eps")
+            return None if ntm_eps is None else ntm_eps + im.get("cycle_gap", 0.0)
+        case "revenue.ntm":
+            # year one as the route stored it, none on a Decline row with no usable consensus
+            return _first(
+                im.get("ntm_revenue"),
+                _at(im, "revenue_path", "ntm_revenue"),
+                _at(im, "runoff_path", "ntm_revenue"),
+            )
         case "growth.belief":
             return _at(im, "belief", "rate")
         case "path.hold":

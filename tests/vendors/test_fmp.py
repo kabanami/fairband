@@ -163,6 +163,12 @@ ROUTES = [
         "insider-trading/search",
         {"symbol": "BRK-B", "page": "0", "limit": "100"},
     ),
+    _route(
+        "transcript-dates",
+        lambda f: f.transcript_dates("BRK.B"),
+        "earning-call-transcript-dates",
+        {"symbol": "BRK-B"},
+    ),
     _route("dcf", lambda f: f.dcf("BRK.B"), "discounted-cash-flow", {"symbol": "BRK-B"}),
     _route(
         "dcf-levered",

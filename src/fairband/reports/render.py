@@ -5,14 +5,17 @@ Neither appendix is stored: both are generated at read time from the stored reco
 writes neither. Appendix A (``appendix_a``), the audit: the snapshot the report rests on; every
 input with its tag (DATA, RULE or JUDGMENT), its value at full precision and its provenance, the
 review's when the report rests on one (its JUDGMENT entries beside the snapshot's own), else the
-snapshot's; the overrides inside the review with their reasons and evidence; the bridge; the
-secondary valuation's form, its drivers with the trailing revenue and the terminal return and its
-projection year by year, or its parts year by year, and its grid, the rows the terminal growths or,
-on the parts form, the shift in every part's (``GRID_ROWS``); the checks that ran
-(``check.CHECKS``, each with its rule); the versions (method, policy, settings hash, review and
-secondary methods); and the classifier's evidence. Appendix B (``appendix_b``), the glossary: the
-terms of ``GLOSSARY`` that the sections' text uses, a term matched whole and in any case, a plural
-counted, a term of two names (``Growth word, margin direction``) by either.
+snapshot's; the overrides inside the review with their reasons and evidence; the guidance on
+file, the company's guidance records written by the report's time, newest first, each with its
+figures, its basis, its call's date, whether a record on file by then superseded it, and the
+overrides inside the review that cite it; the bridge; the secondary valuation's form, its drivers
+with the trailing revenue and the terminal return and its projection year by year, or its parts
+year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
+every part's (``GRID_ROWS``); the checks that ran (``check.CHECKS``, each with its rule); the
+versions (method, policy, settings hash, review and secondary methods); and the classifier's
+evidence. Appendix B (``appendix_b``), the glossary: the terms of ``GLOSSARY`` that the sections'
+text uses, a term matched whole and in any case, a plural counted, a term of two names (``Growth
+word, margin direction``) by either.
 
 ``GLOSSARY`` is ``docs/method.md`` section 13's table, term for term; its Note is the flag of
 section 8 and also, in the brand book's word, the note an owner or an agent writes.
@@ -43,6 +46,8 @@ from fairband.reports.check import (
     WRONG_UNIT,
     parts,
 )
+from fairband.reports.refs import guidance_cited
+from fairband.store.guidance import guidance_for
 from fairband.store.overrides import override_row
 from fairband.store.reports import ReportRow
 from fairband.store.reviews import ReviewRow, review_row
@@ -226,6 +231,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
     secondary = None if report.secondary_id is None else secondary_row(conn, report.secondary_id)
     result = snapshot.result if review is None else review.result
     rules = _RULES | {"the stance word": f"one of {', '.join(policy.stance_words)}"}
+    overrides = [] if review is None else _overrides(conn, review.override_ids)
     return {
         "snapshot": {
             "id": snapshot.id,
@@ -252,7 +258,8 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
             }
             for i in result.inputs
         ],
-        "overrides": [] if review is None else _overrides(conn, review.override_ids),
+        "overrides": overrides,
+        "guidance": _guidance(conn, report, overrides),
         "bridge": None if review is None else _bridge(review),
         "secondary": None if secondary is None else _secondary(secondary),
         "checks": [{"check": check, "rule": rules[check]} for check in CHECKS],
@@ -325,6 +332,37 @@ def _overrides(conn: sqlite3.Connection, ids: Sequence[int]) -> list[dict[str, A
                 }
             )
     return found
+
+
+def _guidance(
+    conn: sqlite3.Connection, report: ReportRow, overrides: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """The company's guidance records on file when the report was published, newest first: each
+    current, or superseded by a record on file by then; and the overrides inside the review whose
+    evidence cites it."""
+    on_file = [g for g in guidance_for(conn, report.symbol) if g.created_at <= report.created_at]
+    listed = {g.id for g in on_file}
+    cited_by: dict[int, list[int]] = {}
+    for o in overrides:
+        items = (e for e in o["evidence"] if e.get("kind") == "guidance")
+        records = {guidance_cited(str(e.get("ref", ""))) for e in items}
+        for record_id in sorted(r for r in records if r is not None):
+            cited_by.setdefault(record_id, []).append(o["id"])
+    return [
+        {
+            "id": g.id,
+            "metric": g.metric,
+            "period": g.period,
+            "low": g.low,
+            "high": g.high,
+            "midpoint": g.midpoint,
+            "basis": g.basis,
+            "asOf": g.as_of.isoformat(),
+            "state": "superseded" if g.superseded_by in listed else "current",
+            "citedBy": cited_by.get(g.id, []),
+        }
+        for g in on_file
+    ]
 
 
 def _bridge(review: ReviewRow) -> dict[str, Any]:
@@ -414,6 +452,11 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
             for o in a["overrides"]
         ],
     )
+    out += ["", "### Guidance on file", ""]
+    keys = ("id", "metric", "period", "low", "high", "midpoint", "basis", "asOf", "state")
+    header = ("Guidance", "Metric", "Period", "Low", "High", "Midpoint", "Basis", "Call", "State")
+    guided = [(*(g[key] for key in keys), g["citedBy"]) for g in a["guidance"]]
+    out += _table((*header, "Cited by"), guided)
     out += ["", "### Bridge", ""]
     bridge = a["bridge"]
     if bridge is None:

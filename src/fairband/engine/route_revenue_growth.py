@@ -84,16 +84,19 @@ routes are not raised: this route's charge does not read the runway return.
 ``consensus_beyond`` reads the annual consensus revenue past base + 2 for the Decline route's
 run-off (spec 2026-11-06 6.1); this route's path ends its consensus at year 3.
 
-Overrides (``method.md`` 14) through ``route_steps.chosen``. ``path.step_2`` and ``path.step_3``
-replace the consensus steps before the cap, the fall check and the path's flags: a replaced step
-is never held, and ``few-analysts`` does not name it. ``path.hold`` replaces the held rate after
-the cap: the agent's rate, which the cap does not bind, so ``consensus-above-base-rate`` is not
-raised and the cap's input says it does not bind. ``moat.class`` replaces the moat.
-``margin.target`` replaces the peers' median, the peers' lowest and highest margins kept (both
-the override's on a row with no counted peers, which then is not refused for its target).
-``capital.sales_to_capital`` replaces the measure (``used`` "override"). ``balance.debt`` and
-``balance.cash`` replace the balance sheet's figures before they count as nil, and a replaced
-line raises no ``line-not-presented`` flag.
+Overrides (``method.md`` 14) through ``route_steps.chosen``. ``revenue.ntm``, the NTM revenue from
+a clear guidance, replaces the figure the four NTM quarters give as year 1 and the rebuild key,
+before the positive check; without the quarters, or with one lacking its revenue mean, the row is
+refused as before, and the ``ntm_revenue`` data entry and the cross-check read the consensus as
+found. ``path.step_2`` and ``path.step_3`` replace the consensus steps before the cap, the fall
+check and the path's flags: a replaced step is never held, and ``few-analysts`` does not name it.
+``path.hold`` replaces the held rate after the cap: the agent's rate, which the cap does not bind,
+so ``consensus-above-base-rate`` is not raised and the cap's input says it does not bind.
+``moat.class`` replaces the moat. ``margin.target`` replaces the peers' median, the peers' lowest
+and highest margins kept (both the override's on a row with no counted peers, which then is not
+refused for its target). ``capital.sales_to_capital`` replaces the measure (``used``
+"override"). ``balance.debt`` and ``balance.cash`` replace the balance sheet's figures before
+they count as nil, and a replaced line raises no ``line-not-presented`` flag.
 """
 
 from collections.abc import Sequence
@@ -214,9 +217,10 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     if tax is None:
         return Refused("no statutory tax rate")
     quarters = ntm_quarters(i.quarter_estimates, t.period_end)
-    ntm = ntm_revenue(quarters)
-    if quarters is None or ntm is None:
+    found = ntm_revenue(quarters)
+    if quarters is None or found is None:
         return Refused("incomplete NTM consensus")
+    ntm = chosen(c, "revenue.ntm", found)
     if ntm <= 0:
         return Refused("no positive consensus revenue")
     base_year = base_fiscal_year(quarters)
@@ -336,7 +340,8 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     of_industry = "" if industry is None else f" of the {industry} industry"
     inputs = (
         *common_inputs(i, t, roic),
-        data(i, "ntm_revenue", ntm, "USD", "estimates_quarter"),
+        # the consensus as found: an agent's guided NTM revenue is its JUDGMENT entry
+        data(i, "ntm_revenue", found, "USD", "estimates_quarter"),
         step_input(c, "path_step_2", path.steps[0], held[0]),
         step_input(c, "path_step_3", path.steps[1], held[1]),
         from_peers(

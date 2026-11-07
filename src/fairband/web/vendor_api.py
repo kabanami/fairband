@@ -5,10 +5,10 @@ reused, payload}``: the stored vendor response to the call, reused when it was o
 reuse window, else fetched and stored (``fairband.refresh.passthrough``), its payload scrubbed of
 the keys; a report cites a field of it as ``response:<responseId>/<json pointer>``. The kinds are
 ``transcript`` (``year`` and ``quarter`` required), ``news`` (``limit``, 1 to 100, 20 when left
-out), ``segments``, ``insider-trades`` and ``dcf`` from FMP, and ``pe-history`` from GuruFocus,
-reused for seven days; ``segments`` and ``dcf`` are two responses each, answered as
-``{responses: {product: {...}, geographic: {...}}}`` and ``{responses: {dcf: {...}, levered:
-{...}}}``.
+out), ``segments``, ``insider-trades``, ``transcript-dates`` (the fiscal year, the quarter and
+the date of every call on file) and ``dcf`` from FMP, and ``pe-history`` from GuruFocus, reused
+for seven days; ``segments`` and ``dcf`` are two responses each, answered as ``{responses:
+{product: {...}, geographic: {...}}}`` and ``{responses: {dcf: {...}, levered: {...}}}``.
 
 An unknown kind, a symbol that is not one or a missing or bad parameter is a 400 with its
 sentence; without a pass-through (the server has no FMP key) a 503, "no FMP key"; ``pe-history``

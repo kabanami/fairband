@@ -444,3 +444,60 @@ def test_a_review_after_the_next_earnings_date_keeps_its_snapshot_s_window(
     assert review["result"]["valid_until"] == window
     latest = later.get("/api/companies/AAPL/reviews/latest").json()
     assert latest["result"]["valid_until"] == window
+
+
+def _guidance(client: TestClient, symbol: str, metric: str, low: float, high: float) -> int:
+    body = {
+        "metric": metric,
+        "period": "2027",
+        "low": low,
+        "high": high,
+        "basis": "gaap",
+        "asOf": "2026-10-28",
+        "text": "We guide fiscal 2027.",
+        "source": "response:12/0/content",
+    }
+    r = client.post(f"/api/companies/{symbol}/guidance", json=body, headers=AGENT)
+    assert r.status_code == 201, r.text
+    guidance_id: int = r.json()["id"]
+    return guidance_id
+
+
+def test_an_ntm_override_cites_a_guidance_record(
+    client: TestClient, results: dict[str, ValuationResult]
+) -> None:
+    """An NTM anchor override needs a guidance record of the company among its evidence: one of
+    another company's is a 404, a ref that names none a 400, neither storing the override; with
+    no guidance item it is refused and stored; a good one applies, and its bridge line comes
+    right after the phase's."""
+    ours = _guidance(client, "AAPL", "eps", 6.30, 6.60)
+    theirs = _guidance(client, "HGCO", "revenue", 12.5e9, 12.7e9)
+    ntm = BELIEF_8 | {"tag": "earnings.ntm", "new": 6.45, "reason": "guided 6.30 to 6.60"}
+    cite = {"kind": "guidance", "ref": f"guidance:{theirs}", "note": "FY2027 EPS"}
+    r = client.post("/api/companies/AAPL/overrides", json=ntm | {"evidence": [cite]}, headers=AGENT)
+    assert (r.status_code, r.json()) == (404, {"detail": f"no guidance record {theirs} for AAPL"})
+    bad = cite | {"ref": "the Q3 call"}
+    r = client.post("/api/companies/AAPL/overrides", json=ntm | {"evidence": [bad]}, headers=AGENT)
+    assert (r.status_code, r.json()) == (
+        400,
+        {"detail": "a guidance item cites its record as guidance:<id>"},
+    )
+    assert _overrides(client) == []
+    r = client.post("/api/companies/AAPL/overrides", json=ntm, headers=AGENT)  # a transcript only
+    refused = "an NTM anchor override needs a guidance record among its evidence"
+    assert (r.status_code, r.json()["detail"]) == (400, refused)
+    assert r.json()["override"]["state"] == "refused-evidence"
+    _post(client, BELIEF_8 | {"tag": "phase", "new": "Mature Growth"})
+    _post(client, BELIEF_8)
+    good = ntm | {"evidence": [cite | {"ref": f"guidance:{ours}"}, TRANSCRIPT]}
+    body = _post(client, good)
+    assert body["override"]["state"] == "applied"
+    assert body["override"]["unit"] == "USD a share"
+    assert [line["tag"] for line in body["bridge"]] == ["phase", "earnings.ntm", "growth.belief"]
+    line = body["bridge"][1]
+    found = results["AAPL"].intermediates["anchor"]["ntm_eps"]
+    assert (line["old"], line["new"]) == (pytest.approx(found), 6.45)
+    assert line["delta"] > 0
+    revenue = BELIEF_8 | {"tag": "revenue.ntm", "new": 12.6e9, "reason": "guided"}
+    on_hgco = _post(client, revenue | {"evidence": [cite]}, "HGCO")
+    assert [line["tag"] for line in on_hgco["bridge"]] == ["revenue.ntm"]

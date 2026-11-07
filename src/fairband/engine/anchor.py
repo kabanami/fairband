@@ -100,8 +100,9 @@ class TrailingFigures:
 
 @dataclass(frozen=True)
 class Anchor:
-    """Year 1 per share and in total, less an agent's cycle gap when one applies; under the
-    refusal "incomplete NTM consensus" the numbers are 0."""
+    """Year 1 per share and in total: the consensus less the SBC adjustment, or an agent's guided
+    NTM EPS in its place, less an agent's cycle gap when one applies; under the refusal
+    "incomplete NTM consensus" the numbers are 0."""
 
     ntm_eps_raw: float
     sbc_adjustment_per_share: float
@@ -113,7 +114,7 @@ class Anchor:
 
     @property
     def ntm_eps_found(self) -> float:
-        """The NTM EPS as the engine finds it, before any cycle gap: the consensus less the SBC
+        """The NTM EPS as the engine finds it, before any override: the consensus less the SBC
         adjustment, the figure ``ntm_eps`` is without one."""
         return self.ntm_eps_raw - self.sbc_adjustment_per_share
 
@@ -185,16 +186,19 @@ def ntm_anchor(
     *,
     nri_correction: float | None = None,
     cycle_gap: float | None = None,
+    guided_eps: float | None = None,
 ) -> Anchor:
     """The NTM EPS with stock compensation as a cost and the NTM net income on ``shares``. The
     basis test reads trailing GAAP EPS as reported; with ``nri_correction``, an agent's
     non-recurring gap less the gap found (``method.md`` 14), GAAP EPS less that correction, so a
-    gap overridden at the figure found leaves the test as it was. With ``cycle_gap``, an agent's
-    correction to mid-cycle earnings a share, the NTM EPS is taken less it after the SBC
-    adjustment, and "no positive forward anchor" reads the figure so lowered; the unit-error
-    check reads the consensus as found, a check on the vendor's units (on a positive figure: a
-    trough lifted by a negative gap has no forward P/E to check), and the basis test does not
-    read the cycle gap."""
+    gap overridden at the figure found leaves the test as it was. With ``guided_eps``, an agent's
+    NTM EPS from a clear guidance, that figure stands in for the consensus less the SBC
+    adjustment, the four quarters still required; with ``cycle_gap``, an agent's correction to
+    mid-cycle earnings a share, the NTM EPS is then taken less it, and "no positive forward
+    anchor" reads the figure so set and lowered. The unit-error check reads the consensus as
+    found, a check on the vendor's units (on a positive figure: a trough lifted by a negative gap
+    has no forward P/E to check), the raw sum and the adjustment are the consensus's, and the
+    basis test reads neither override."""
     sbc_per_share = None if trailing.sbc is None else trailing.sbc * (1 - tax_rate) / shares
     gaap = trailing.eps_diluted
     if gaap is not None and nri_correction is not None:
@@ -210,7 +214,8 @@ def ntm_anchor(
     if basis == "excludes-sbc" and sbc_per_share is not None:
         adjustment = sbc_per_share * _revenue_scale(quarters, trailing.revenue)
     found = raw - adjustment
-    ntm_eps = found if cycle_gap is None else found - cycle_gap
+    anchor = found if guided_eps is None else guided_eps
+    ntm_eps = anchor if cycle_gap is None else anchor - cycle_gap
 
     refusal = None
     if ntm_eps <= 0:

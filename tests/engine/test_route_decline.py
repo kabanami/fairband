@@ -7,14 +7,16 @@ shares, so a share's figures are the spec's and the totals are the spec's times 
 
 import math
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
-from support.engine_companies import annual, fiscal_years
+from support.engine_companies import annual, fiscal_years, with_ntm_revenue
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import Deciles, Series
+from fairband.engine.overrides import Override
 from fairband.engine.revenue_growth import PeerFigures, PeerSource
+from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.types import (
     Flag,
@@ -27,6 +29,7 @@ from fairband.policy import Policy
 
 TODAY = date(2026, 10, 31)
 REPRICED = date(2026, 11, 2)
+NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)  # the time an override is made
 M = 1e6
 # Spec 2026-11-06 13.1 to the core's last digits (tests/engine/test_runoff.py pins the same
 # figures).
@@ -1101,3 +1104,58 @@ def test_reprice_rebuilds_the_same_path(
     assert implied is not None and implied != r.intermediates["implied_decline_rate"]
     at_value = reprice(stored, r.value, REPRICED, policy).intermediates["implied_decline_rate"]
     assert at_value == pytest.approx(-0.04, abs=1e-6)
+
+
+def _ntm_revenue(value: float) -> Override:
+    return Override(6, "revenue.ntm", value, "agent", "claude-opus-5-5", NOW, "guided 950")
+
+
+def test_the_ntm_revenue_override_replaces_year_one(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 13.1's row has an NTM consensus revenue of 970. An override of 950 values it as a
+    consensus of 950 would: year 1 of the run-off, its rebuild key, and the recovery flag read
+    from it; the JUDGMENT entry stands for the ``ntm_revenue`` data entry, and the bridge's line
+    reads the consensus as its old value."""
+    mechanical = value_company(decline_inputs, deciles, policy, TODAY)
+    guided = [_ntm_revenue(950 * M)]
+    judged = value_company(decline_inputs, deciles, policy, TODAY, {"revenue.ntm": guided[0]})
+    raised = value_company(with_ntm_revenue(decline_inputs, 950 * M), deciles, policy, TODAY)
+    assert judged.value is not None and mechanical.value is not None
+    assert judged.value == raised.value and judged.value < mechanical.value
+    assert judged.intermediates["runoff_path"] == raised.intermediates["runoff_path"]
+    assert judged.intermediates["runoff_path"]["ntm_revenue"] == 950 * M
+    assert judged.intermediates["revenue_by_year"][0] == pytest.approx(950 * M)
+    assert "ntm_revenue" not in {x.name for x in judged.inputs}
+    ntm = input_named(judged, "revenue.ntm")
+    assert (ntm.tag, ntm.value, ntm.unit) == ("JUDGMENT", 950 * M, "USD")
+    review = review_company(decline_inputs, deciles, policy, TODAY, guided, mechanical)
+    [line] = review.bridge
+    assert (line.tag, line.old, line.new) == ("revenue.ntm", pytest.approx(970 * M), 950 * M)
+    # a guided year 1 that grows names the recovery, as a consensus that grows does
+    recovery = value_company(
+        decline_inputs, deciles, policy, TODAY, {"revenue.ntm": _ntm_revenue(1_050 * M)}
+    )
+    assert "consensus-recovery" in codes(recovery)
+    assert "consensus-recovery" not in codes(mechanical)
+
+
+def test_the_ntm_revenue_override_is_read_on_a_consensus_with_its_quarters(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The override stands for the figure the four NTM quarters give: on quarters whose revenue
+    sums to zero it makes the consensus usable; with no quarters on file it is not read, and years
+    1 to 3 shrink at d as they do without it."""
+    q = decline_inputs.quarter_estimates
+    zero = tuple(replace(x, revenue=v) for x, v in zip(q, (1e9, -1e9, 0.0, 0.0), strict=True))
+    judged = {"revenue.ntm": _ntm_revenue(970 * M)}
+    lifted = value_company(
+        replace(decline_inputs, quarter_estimates=zero), deciles, policy, TODAY, judged
+    )
+    assert lifted.value == value_company(decline_inputs, deciles, policy, TODAY).value
+    assert "path-on-trend" not in codes(lifted)
+    bare = replace(decline_inputs, quarter_estimates=())
+    unread = value_company(bare, deciles, policy, TODAY, judged)
+    assert unread.value == value_company(bare, deciles, policy, TODAY).value
+    assert unread.intermediates["runoff_path"]["ntm_revenue"] is None
+    assert "path-on-trend" in codes(unread)

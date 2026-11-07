@@ -51,6 +51,11 @@ Checked on 2026-11-07 the same way (the pages ``developer/docs/stable/dcf`` and
 
 - ``discounted-cash-flow``: ``symbol``; FMP's DCF value a share beside the stock price.
 - ``levered-discounted-cash-flow``: ``symbol``; the same on the levered free cash flow.
+
+Checked live on 2026-11-07 (spec 2026-11-06 Tier 2, 15.3):
+
+- ``earning-call-transcript-dates``: ``symbol``; the fiscal year, the quarter and the date of every
+  call on file, newest first.
 """
 
 from collections.abc import Mapping, Sequence
@@ -153,6 +158,10 @@ class Fmp:
     def transcript(self, symbol: str, year: int, quarter: int) -> VendorResponse:
         params = {"symbol": to_fmp_symbol(symbol), "year": str(year), "quarter": str(quarter)}
         return self._get("earning-call-transcript", params)
+
+    def transcript_dates(self, symbol: str) -> VendorResponse:
+        """The fiscal year, the quarter and the date of every earnings call on file."""
+        return self._get("earning-call-transcript-dates", {"symbol": to_fmp_symbol(symbol)})
 
     def news(self, symbol: str, limit: int) -> VendorResponse:
         return self._get("news/stock", {"symbols": to_fmp_symbol(symbol), "limit": str(limit)})
