@@ -70,6 +70,9 @@ time { font-variant-numeric: tabular-nums; }
 .fb-stance--hold { color: var(--stance-hold); }
 .fb-stance--trim { color: var(--stance-trim); }
 .fb-stance--avoid { color: var(--ink); }
+/* fairband: a stance whose report's snapshot window has expired fades to ink-faint, as the coverage
+   mark does, after the words' colours so it wins over them (spec 2026-11-06 Tier 2, 18.1). */
+.fb-stance--expired { color: var(--ink-faint); }
 
 /* ---------------------------------------------------------------- Button */
 

@@ -6,12 +6,13 @@ text, so each float reads back exactly, price ÷ value as a REAL (the double its
 the designation's word, ``flags`` as a JSON list of the flag codes, and the policy version,
 method version and settings hash the result cites. The ``stance5`` and ``stance3`` columns of
 method 0.5 are no longer written: a new row leaves them NULL. The screen reads the snapshot with
-the greatest id per symbol, and the Settings page the versions most of the screen's cite.
+the greatest id per symbol, the snapshots its agents' records rest on in one read
+(``snapshot_rows``), and the Settings page the versions most of the screen's cite.
 """
 
 import json
 import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -144,6 +145,17 @@ def snapshot_row(conn: sqlite3.Connection, snapshot_id: int) -> SnapshotRow | No
     """The snapshot ``snapshot_id``, if there is one."""
     row = conn.execute("SELECT * FROM snapshots WHERE id = ?", (snapshot_id,)).fetchone()
     return None if row is None else _snapshot(row)
+
+
+def snapshot_rows(conn: sqlite3.Connection, ids: Collection[int]) -> dict[int, SnapshotRow]:
+    """The snapshots of ``ids`` that exist, by id, in one read; none for no id, with no read."""
+    if not ids:
+        return {}
+    rows = conn.execute(
+        "SELECT * FROM snapshots WHERE id IN (SELECT value FROM json_each(?))",
+        (json.dumps(sorted(ids)),),
+    )
+    return {r["id"]: _snapshot(r) for r in rows}
 
 
 def refresh_snapshots(conn: sqlite3.Connection, refresh_id: int) -> list[SnapshotRow]:

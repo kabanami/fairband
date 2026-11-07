@@ -93,6 +93,7 @@ is read as ``resolve`` reads it, so a path its record lacks names nothing.
 
 ``same_snapshot`` is the reprice rule (13.2): a later snapshot that reprices the cited one, with
 the same data date, method, policy, settings hash and value, counts as the cited one.
+``same_snapshot_rows`` is the rule over two snapshots already read, as the screen's rows apply it.
 """
 
 import json
@@ -143,6 +144,7 @@ __all__ = [
     "resolve",
     "rests_on",
     "same_snapshot",
+    "same_snapshot_rows",
     "table_ref",
     "unit_of",
 ]
@@ -409,10 +411,19 @@ def same_snapshot(conn: sqlite3.Connection, cited: int, latest: int) -> bool:
     if cited == latest:
         return True
     a, b = snapshot_row(conn, cited), snapshot_row(conn, latest)
-    if a is None or b is None or a.symbol != b.symbol or b.id < a.id:
+    return a is not None and b is not None and same_snapshot_rows(a, b)
+
+
+def same_snapshot_rows(cited: SnapshotRow, latest: SnapshotRow) -> bool:
+    """``same_snapshot`` over the two snapshots: whether ``latest`` is ``cited``, or a later one of
+    the same company with the same data date, method version, policy version, settings hash and
+    value."""
+    if cited.id == latest.id:
+        return True
+    if cited.symbol != latest.symbol or latest.id < cited.id:
         return False
     keys = ("data_date", "method_version", "policy_version", "settings_hash", "value")
-    return all(getattr(a, key) == getattr(b, key) for key in keys)
+    return all(getattr(cited, key) == getattr(latest, key) for key in keys)
 
 
 def rests_on(conn: sqlite3.Connection, ref: str) -> int | None:

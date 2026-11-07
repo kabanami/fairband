@@ -5,6 +5,7 @@ review's value when the review rests on the row's snapshot or one the snapshot r
 newest secondary valuation's value a share by the same rule, else ``None``; ``overrides`` counts the
 overrides inside that review; ``agentStance`` and ``covered`` read the latest published report."""
 
+import sqlite3
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import replace
@@ -14,11 +15,12 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 from support.engine_companies import mature_growth_inputs, universe_deciles
-from support.web import NOW, TODAY
+from support.web import HOST, NOW, TODAY, _settings
 
 from fairband.engine.overrides import Override
-from fairband.engine.review import review_company
+from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice
+from fairband.engine.secondary import Part, secondary_value
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.store.db import connect
@@ -26,8 +28,9 @@ from fairband.store.ledger import OWNER, Writer
 from fairband.store.overrides import drop_override, insert_override
 from fairband.store.reports import insert_report
 from fairband.store.reviews import insert_review
-from fairband.store.secondary import secondary_row
+from fairband.store.secondary import insert_secondary, secondary_row
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
+from fairband.web.app import create_app
 from fairband.web.rows import sort_rows
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
@@ -87,13 +90,24 @@ def _review(
     return override_id, value
 
 
-def _report(
-    db_path: Path, symbol: str, stance: str, writer: Writer = AGENT, at: datetime = PUBLISHED
-) -> None:
-    """A published valuation review of ``symbol`` on its latest snapshot."""
+def _latest(db_path: Path, symbol: str) -> int:
+    """The id of the company's latest snapshot."""
     with closing(connect(db_path)) as conn:
         snapshot = latest_snapshot(conn, symbol)
-        assert snapshot is not None
+    assert snapshot is not None
+    return snapshot.id
+
+
+def _report(
+    db_path: Path,
+    symbol: str,
+    stance: str,
+    writer: Writer = AGENT,
+    at: datetime = PUBLISHED,
+    snapshot_id: int | None = None,
+) -> None:
+    """A published valuation review of ``symbol`` on ``snapshot_id``, its latest by default."""
+    with closing(connect(db_path)) as conn:
         insert_report(
             conn,
             symbol,
@@ -101,12 +115,40 @@ def _report(
             stance,
             SECTIONS,
             None,
-            snapshot.id,
+            _latest(db_path, symbol) if snapshot_id is None else snapshot_id,
             None,
             None,
             None,
             writer,
             at,
+        )
+
+
+def _secondary(
+    db_path: Path, policy: Policy, symbol: str, snapshot_id: int, fcff: tuple[float, ...]
+) -> int:
+    """A secondary valuation of ``symbol`` on ``snapshot_id``, one part on ``fcff`` over a billion
+    shares; its id."""
+    part = Part("the business", fcff, 0.0, None)
+    valuation = secondary_value(
+        parts=[part], debt=0.0, cash=0.0, shares=1e9, price=150.0, moat="Wide", policy=policy
+    )
+    with closing(connect(db_path)) as conn:
+        return insert_secondary(
+            conn,
+            symbol,
+            snapshot_id,
+            [part],
+            valuation,
+            "a second view",
+            [{"kind": "filing", "ref": "10-K 2025", "note": None}],
+            "none",
+            "none",
+            policy.version,
+            policy.settings_hash,
+            None,
+            AGENT,
+            NOW,
         )
 
 
@@ -172,7 +214,8 @@ def test_a_secondary_stands_in_where_the_route_refuses(
 ) -> None:
     with closing(connect(db_path)) as conn:
         secondary = secondary_row(conn, secondaries["AAL"])
-    assert secondary is not None and results["AAL"].value is None
+        hgco = secondary_row(conn, secondaries["HGCO"])
+    assert secondary is not None and hgco is not None and results["AAL"].value is None
     _, value = _review(db_path, policy, results)
     rows = _rows(client)
     aal = rows["AAL"]
@@ -181,7 +224,7 @@ def test_a_secondary_stands_in_where_the_route_refuses(
         0,
         None,
     )
-    assert rows["HGCO"]["reviewed"] == secondary.value_per_share  # beside the route's value too
+    assert rows["HGCO"]["reviewed"] == hgco.value_per_share  # beside the route's value too
     assert (rows["AAPL"]["reviewed"], rows["AAPL"]["overrides"]) == (value, 1)  # the review leads
     # a reprice keeps it; a later data date leaves it on the snapshot it was made on
     refused = results["AAL"]
@@ -189,6 +232,93 @@ def test_a_secondary_stands_in_where_the_route_refuses(
     assert _rows(client)["AAL"]["reviewed"] == secondary.value_per_share
     _snapshot(db_path, replace(refused, data_date=date(2026, 11, 2)))
     assert _agents(_rows(client)["AAL"]) == NO_AGENT
+
+
+def test_a_refused_review_leaves_the_secondary_to_stand_in(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
+) -> None:
+    """The current review on the latest snapshot refused, so it has no value: the secondary
+    valuation on that snapshot fills the cell, with no override inside it."""
+    override_id, _ = _review(db_path, policy, results)
+    mechanical = results["AAPL"]
+    refused = replace(
+        mechanical,
+        value=None,
+        levels=None,
+        price_to_value=None,
+        designation=None,
+        refusal="the reviewed belief is refused",
+    )
+    with closing(connect(db_path)) as conn:
+        review = Review(refused, mechanical.value, (), (override_id,))
+        insert_review(conn, review, "AAPL", _latest(db_path, "AAPL"), None, clock=lambda: NOW)
+        secondary = secondary_row(conn, secondaries["AAPL"])
+    assert secondary is not None
+    aapl = _rows(client)["AAPL"]
+    assert (aapl["reviewed"], aapl["overrides"]) == (secondary.value_per_share, 0)
+
+
+def test_a_secondary_at_or_below_zero_fills_no_reviewed_value(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """The record stays for the Details; the cell shows an em dash and "Has a review", which keeps
+    a row whose ``reviewed`` is set, does not keep it."""
+    loss = _secondary(db_path, policy, "AAL", _latest(db_path, "AAL"), (-5e9,) * 3)
+    with closing(connect(db_path)) as conn:
+        found = secondary_row(conn, loss)
+    assert found is not None and found.value_per_share < 0
+    assert _agents(_rows(client)["AAL"]) == NO_AGENT
+
+
+def test_the_rows_read_the_agents_records_in_a_fixed_number_of_queries(
+    tmp_path: Path, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """The reviews, the secondary valuations, the reports and the snapshots they rest on are read
+    in one query each for all the rows: covering three companies on older snapshots costs the
+    screen what covering one does."""
+    first = {symbol: _latest(db_path, symbol) for symbol in results}
+    for result in results.values():
+        _snapshot(db_path, replace(result, price=140.0))  # a price refresh: each record is older
+    statements: list[str] = []
+
+    def traced() -> sqlite3.Connection:
+        conn = connect(db_path)
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    app = create_app(_settings(tmp_path, db_path), policy, traced, clock=lambda: NOW)
+    client = TestClient(app, base_url=HOST)
+
+    def cover(symbol: str) -> None:
+        _secondary(db_path, policy, symbol, first[symbol], tuple(x * 1e8 for x in (100.0,) * 5))
+        _report(db_path, symbol, "hold", snapshot_id=first[symbol])
+
+    def read() -> tuple[int, dict[str, dict[str, Any]]]:
+        """The screen's rows and the number of statements reading them took."""
+        statements.clear()
+        found = _rows(client)
+        return len(statements), found
+
+    cover("AAPL")
+    one, rows = read()
+    assert rows["AAPL"]["reviewed"] is not None and rows["AAPL"]["covered"] is not None
+    cover("AAL")
+    cover("HGCO")
+    three, rows = read()
+    for symbol in results:
+        assert rows[symbol]["reviewed"] is not None and rows[symbol]["covered"] is not None
+    assert three == one
+    cited = [
+        s for s in statements if "FROM snapshots WHERE id IN (SELECT value FROM json_each" in s
+    ]
+    assert cited == [  # the three older snapshots in one read
+        f"SELECT * FROM snapshots WHERE id IN (SELECT value FROM json_each('{sorted(first.values())}'))"
+    ]
+    client.close()
 
 
 def test_covered_expires_with_the_window(
@@ -210,7 +340,9 @@ def test_covered_expires_with_the_window(
     assert _rows(after)["AAPL"]["agentStance"] == "buy"
 
 
-def test_sort_by_stance_orders_the_words(client: TestClient, db_path: Path) -> None:
+def test_sort_by_stance_orders_the_words(client: TestClient, db_path: Path, policy: Policy) -> None:
+    """The policy's words in its order, buy first; a row without a report last either way."""
+    assert policy.stance_words == ("buy", "hold", "trim", "avoid")
     rows = [
         {"ticker": ticker, "agentStance": stance}
         for ticker, stance in (
@@ -221,9 +353,9 @@ def test_sort_by_stance_orders_the_words(client: TestClient, db_path: Path) -> N
             ("E", "hold"),
         )
     ]
-    ascending = sort_rows(rows, "agentStance", descending=False)
+    ascending = sort_rows(rows, "agentStance", False, policy.stance_words)
     assert [r["ticker"] for r in ascending] == ["D", "E", "C", "A", "B"]
-    descending = sort_rows(rows, "agentStance", descending=True)
+    descending = sort_rows(rows, "agentStance", True, policy.stance_words)
     assert [r["ticker"] for r in descending] == ["A", "C", "E", "D", "B"]
     _report(db_path, "AAPL", "trim")
     _report(db_path, "HGCO", "buy")

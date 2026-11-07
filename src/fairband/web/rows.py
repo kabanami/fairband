@@ -13,10 +13,10 @@ Every row also has the agents' fields (spec 2026-11-06 Tier 2, 18.1; ``agent_fie
 ``reviewed`` and ``overrides``, the reviewed value and the count of the overrides inside it;
 ``agentStance``, the latest published report's word, a column; and ``covered``, the coverage
 mark's record ``{at, actor, expired}``, which no column draws and nothing sorts by, so it is no
-row key. A row with no agent's record has ``NO_AGENT_FIELDS``.
+row key. A row with no agent's record has ``NO_AGENT_FIELDS``. The fields are computed from records
+already read: the snapshots the records rest on (``rested_on``) are read once for all the rows.
 """
 
-import sqlite3
 import statistics
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date
@@ -26,13 +26,13 @@ from fairband.engine.flags import flag_count
 from fairband.engine.levels import validity_state
 from fairband.engine.types import PHASE_NUMBER
 from fairband.refresh.run import UNCLASSIFIED, Progress
-from fairband.reports.refs import same_snapshot
+from fairband.reports.refs import same_snapshot_rows
 from fairband.store.companies import CompanyRow
 from fairband.store.refreshes import RefreshRow
 from fairband.store.reports import ReportRow
 from fairband.store.reviews import ReviewRow
 from fairband.store.secondary import SecondaryRow
-from fairband.store.snapshots import SnapshotRow, snapshot_row
+from fairband.store.snapshots import SnapshotRow
 
 NOT_YET_VALUED = "not yet valued"
 GROUP_BY = ("sector", "phase", "cap")
@@ -126,49 +126,54 @@ NO_AGENT_FIELDS: Mapping[str, Any] = {
     "agentStance": None,
     "covered": None,
 }
-# The agent's stance words in the order the Stance column sorts them (spec 2026-11-06 Tier 2,
-# 18.1); a word outside them sorts after them.
-STANCE_ORDER = ("buy", "hold", "trim", "avoid")
-_STANCE_RANK = {word: rank for rank, word in enumerate(STANCE_ORDER)}
+
+
+def rested_on(
+    snapshot: SnapshotRow, *records: ReviewRow | SecondaryRow | ReportRow | None
+) -> set[int]:
+    """The ids of the snapshots ``records`` rest on, the company's latest ``snapshot`` left out:
+    the snapshots ``agent_fields`` needs read."""
+    return {r.snapshot_id for r in records if r is not None and r.snapshot_id != snapshot.id}
 
 
 def agent_fields(
-    conn: sqlite3.Connection,
     snapshot: SnapshotRow,
     review: ReviewRow | None,
     secondary: SecondaryRow | None,
     report: ReportRow | None,
+    cited: Mapping[int, SnapshotRow],
     today: date,
 ) -> dict[str, Any]:
     """The agents' fields of the row of the company's latest ``snapshot`` (spec 2026-11-06 Tier 2,
     18.1), from its current review, its newest secondary valuation and its latest published
-    report, each ``None`` without one. A record counts on the snapshot it rests on or on a later
-    one that reprices it (``same_snapshot``, the reports' rule). ``reviewed`` is the review's
+    report, each ``None`` without one; ``cited`` holds the snapshots they rest on, by id
+    (``rested_on``), the latest aside. A record counts on the snapshot it rests on or on a later
+    one that reprices it (``same_snapshot_rows``, the reports' rule). ``reviewed`` is the review's
     value when the review counts and has one, ``overrides`` the count of the overrides inside it;
-    else the secondary valuation's value a share when it counts, with no override inside; else
-    ``None`` and 0. ``agentStance`` is the report's word and ``covered`` its time, its actor (its
-    principal where it names none, an owner's report) and whether the window of the snapshot it
-    rests on ended before ``today``; both ``None`` without a report."""
+    else the secondary valuation's value a share when it counts and is above zero, with no
+    override inside; else ``None`` and 0. ``agentStance`` is the report's word and ``covered`` its
+    time, its actor (its principal where it names none, an owner's report) and whether the window
+    of the snapshot it rests on ended before ``today``; both ``None`` without a report."""
+
+    def rests_on(snapshot_id: int) -> SnapshotRow | None:
+        return snapshot if snapshot_id == snapshot.id else cited.get(snapshot_id)
+
+    def counts(snapshot_id: int) -> bool:
+        found = rests_on(snapshot_id)
+        return found is not None and same_snapshot_rows(found, snapshot)
+
     fields = dict(NO_AGENT_FIELDS)
-    if (
-        review is not None
-        and review.value is not None
-        and same_snapshot(conn, review.snapshot_id, snapshot.id)
-    ):
+    if review is not None and review.value is not None and counts(review.snapshot_id):
         fields |= {"reviewed": review.value, "overrides": len(review.override_ids)}
-    elif secondary is not None and same_snapshot(conn, secondary.snapshot_id, snapshot.id):
+    elif secondary is not None and secondary.value_per_share > 0 and counts(secondary.snapshot_id):
         fields["reviewed"] = secondary.value_per_share
     if report is not None:
-        rests_on = (
-            snapshot
-            if report.snapshot_id == snapshot.id
-            else snapshot_row(conn, report.snapshot_id)
-        )
+        window = rests_on(report.snapshot_id)
         fields["agentStance"] = report.stance
         fields["covered"] = {
             "at": report.created_at.isoformat(),
             "actor": report.principal if report.actor is None else report.actor,
-            "expired": rests_on is None or rests_on.valid_until < today,
+            "expired": window is None or window.valid_until < today,
         }
     return fields
 
@@ -309,18 +314,22 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
     return row
 
 
-def sort_rows(rows: list[dict[str, Any]], key: str, descending: bool) -> list[dict[str, Any]]:
+def sort_rows(
+    rows: list[dict[str, Any]], key: str, descending: bool, stances: Sequence[str]
+) -> list[dict[str, Any]]:
     """The rows ordered by ``key``, those where it is ``None`` last in either direction; ties
-    keep their order. The agent's stance orders by its word's place in ``STANCE_ORDER``."""
+    keep their order. The agent's stance orders by its word's place in ``stances``, the policy's
+    ``stance_words`` (spec 2026-11-06 Tier 2, 18.1), a word outside them after them."""
     present = [r for r in rows if r[key] is not None]
     missing = [r for r in rows if r[key] is None]
-    return sorted(present, key=_order(key), reverse=descending) + missing
+    return sorted(present, key=_order(key, stances), reverse=descending) + missing
 
 
-def _order(key: str) -> Callable[[dict[str, Any]], Any]:
+def _order(key: str, stances: Sequence[str]) -> Callable[[dict[str, Any]], Any]:
     """What a row sorts by for ``key``: its value, or the rank of the agent's stance word."""
     if key == "agentStance":
-        return lambda r: _STANCE_RANK.get(r[key], len(STANCE_ORDER))
+        rank = {word: i for i, word in enumerate(stances)}
+        return lambda r: rank.get(r[key], len(rank))
     return lambda r: r[key]
 
 

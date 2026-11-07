@@ -1750,8 +1750,22 @@ def test_no_derived_stance_remains() -> None:
         "r.agentStance",
         "fb-stance",
         "fb-stance--",
+        "fb-stance--expired",
     }
-    assert named["index.d.ts"] == {"agentStance", "stance"}
+    assert named["index.d.ts"] == {"AgentStance", "agentStance", "stance"}
+
+
+def test_the_bundle_stance_words_are_the_policys(policy: Policy) -> None:
+    """The menu's STANCE rows, the chip's order and the declared union are the policy's
+    ``stance_words`` in its order, the order the server sorts the column by."""
+    bundle = _component_file("bundle.js")
+    words = re.search(r"var AGENT_STANCES = \[(.*?)\];", bundle)
+    assert words is not None
+    assert tuple(re.findall(r"'(\w+)'", words.group(1))) == policy.stance_words
+    declarations = _component_file("index.d.ts")
+    union = re.search(r"export type AgentStance = (.*?);", declarations)
+    assert union is not None
+    assert tuple(re.findall(r"'(\w+)'", union.group(1))) == policy.stance_words
 
 
 def test_the_bundle_draws_the_stance_column_and_the_mark() -> None:
@@ -1761,10 +1775,10 @@ def test_the_bundle_draws_the_stance_column_and_the_mark() -> None:
     holds the four words, its chip "Stance: buy + hold" in the words' order; the reviewedOnly row
     reads "Has a review"; the Ticker cell draws ◆ after the ticker for a covered company, in
     prov-input, ink-faint once the report's window has expired, the report's date and actor in its
-    title, never a control. The chooser and COLUMN_KEYS list every column; the default eight
-    stay."""
+    title, never a control; a stance whose report's window has expired fades to ink-faint as the
+    mark does, its title saying so. The chooser and COLUMN_KEYS list every column; the default
+    eight stay."""
     bundle = _component_file("bundle.js")
-    assert "var AGENT_STANCES = ['buy', 'hold', 'trim', 'avoid'];" in bundle
     # the column
     column = bundle.index("{ key: 'agentStance', head: 'Stance',")
     assert (
@@ -1775,8 +1789,13 @@ def test_the_bundle_draws_the_stance_column_and_the_mark() -> None:
     )
     none = "h('td', null, h('span', { className: 'fb-screen__none' }, '—'));"
     assert f"if (r.agentStance == null) return {none}" in bundle
-    chip = "h('span', { className: 'fb-stance fb-stance--' + r.agentStance + ' label' }, r.agentStance)"
-    assert chip in bundle
+    cell = bundle[column : bundle.index("{ key: 'overrides', head: 'Overrides',")]
+    assert "var stale = !!(r.covered && r.covered.expired);" in cell
+    classes = "'fb-stance', 'fb-stance--' + r.agentStance, stale && 'fb-stance--expired', 'label'"
+    assert f"className: cx({classes})," in cell
+    assert "title: stale ? coverage(r.covered) : null" in cell
+    assert "}, r.agentStance));" in cell
+    assert "// fairband: once the window of the snapshot the report rests on has expired" in bundle
     assert "COLUMN_KEYS: COLUMNS.map(function (c) { return c.key; })," in bundle
     assert (
         "shown.concat(COLUMNS.filter(function (c) { return shown.indexOf(c) === -1; }))" in bundle
@@ -1814,9 +1833,12 @@ def test_the_bundle_draws_the_stance_column_and_the_mark() -> None:
         ".fb-stance--hold { color: var(--stance-hold); }",
         ".fb-stance--trim { color: var(--stance-trim); }",
         ".fb-stance--avoid { color: var(--ink); }",
+        ".fb-stance--expired { color: var(--ink-faint); }",
         ".fb-covered--expired { color: var(--ink-faint); }",
     ):
         assert rule in css, rule
+    # the faded word follows the words' colours, so it wins over each
+    assert css.index(".fb-stance--avoid {") < css.index(".fb-stance--expired {")
     stance = re.search(r"\.fb-stance \{(.*?)\}", css, re.DOTALL)
     assert stance is not None and "color:" not in stance.group(1)  # the word's modifier sets it
     covered = re.search(r"\.fb-covered \{(.*?)\}", css, re.DOTALL)
@@ -1825,10 +1847,11 @@ def test_the_bundle_draws_the_stance_column_and_the_mark() -> None:
     declarations = _component_file("index.d.ts")
     row = re.search(r"export interface ScreenRow \{\n(.*?)\n\}", declarations, re.DOTALL)
     assert row is not None
-    assert "agentStance?: string | null;" in row.group(1)
+    assert "agentStance?: AgentStance | null;" in row.group(1)
+    assert "when `covered.expired`" in row.group(1)
     assert "covered?: { at: string; actor: string; expired: boolean } | null;" in row.group(1)
     filters = re.search(r"export interface ScreenFilters \{\n(.*?)\n\}", declarations, re.DOTALL)
-    assert filters is not None and "stance: string[];" in filters.group(1)
+    assert filters is not None and "stance: AgentStance[];" in filters.group(1)
 
 
 def test_bundle_has_the_margin_columns() -> None:

@@ -29,7 +29,8 @@ admit has no row. The latest universe is the newest that admitted a company
 Before any universe exists, every company with a snapshot has its row. The group view groups the
 same rows. Each row carries the ids of the watchlists the company is on, and the agents' fields
 (``rows.agent_fields``) from the companies' current reviews, newest secondary valuations and latest
-published reports, each read once for every company.
+published reports and the snapshots those rest on: four reads at most for all the rows, whatever
+their number, the fields computed for the companies that have a row.
 
 Each request that reads a policy value reads the effective policy, the file's values with the
 user's settings over them, so a changed setting shows at the next request: the aging fraction of
@@ -92,7 +93,12 @@ from fairband.store.reports import latest_reports
 from fairband.store.reviews import latest_reviews
 from fairband.store.secondary import latest_secondaries
 from fairband.store.settings import read_overlay
-from fairband.store.snapshots import SnapshotRow, latest_snapshot, latest_snapshots
+from fairband.store.snapshots import (
+    SnapshotRow,
+    latest_snapshot,
+    latest_snapshots,
+    snapshot_rows,
+)
 from fairband.store.watchlists import memberships
 from fairband.web.agents_api import add_agent_routes
 from fairband.web.guidance_api import add_guidance_routes
@@ -111,6 +117,7 @@ from fairband.web.rows import (
     placeholder_row,
     progress_json,
     refresh_json,
+    rested_on,
     screen_row,
     snapshot_json,
     sort_rows,
@@ -200,18 +207,19 @@ def create_app(
             lists = memberships(conn)
             reviews, secondaries = latest_reviews(conn), latest_secondaries(conn)
             reports = latest_reports(conn)
-            agents = {
-                symbol: agent_fields(
-                    conn,
-                    snapshots[symbol],
-                    reviews.get(symbol),
-                    secondaries.get(symbol),
-                    reports.get(symbol),
-                    today,
-                )
-                for symbol in reviews.keys() | secondaries.keys() | reports.keys()
+            shown = [c.symbol for c in admitted] if listed else list(snapshots)
+            records = {
+                symbol: (reviews.get(symbol), secondaries.get(symbol), reports.get(symbol))
+                for symbol in shown
                 if symbol in snapshots
+                and (symbol in reviews or symbol in secondaries or symbol in reports)
             }
+            rest_on = {i for s, found in records.items() for i in rested_on(snapshots[s], *found)}
+            cited = snapshot_rows(conn, rest_on)
+        agents = {
+            symbol: agent_fields(snapshots[symbol], *found, cited, today)
+            for symbol, found in records.items()
+        }
         aging = read_under.aging_fraction
 
         def valued(snapshot: SnapshotRow, company: CompanyRow | None) -> dict[str, Any]:
@@ -241,9 +249,9 @@ def create_app(
         if direction not in ("asc", "desc"):
             raise HTTPException(400, f"dir must be asc or desc, not {direction}")
         today = clock().date()
-        rows, refresh, _ = screen_rows(today)
+        rows, refresh, read_under = screen_rows(today)
         return {
-            "rows": sort_rows(rows, sort, descending=direction == "desc"),
+            "rows": sort_rows(rows, sort, direction == "desc", read_under.stance_words),
             "columns": list(COLUMNS),
             "today": today.isoformat(),
             "refresh": None if refresh is None else refresh_json(refresh),

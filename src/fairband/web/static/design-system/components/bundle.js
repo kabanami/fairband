@@ -1042,11 +1042,17 @@
     // fairband: the agent's stance (spec 2026-11-06 Tier 2, 18.1), the word of the company's latest
     // published report as a chip in the stance tokens, avoid in ink; an em dash without a report.
     // The design system's own Stance, derived from the levels, stays gone: the word is the agent's.
+    // fairband: once the window of the snapshot the report rests on has expired, the word takes
+    // ink-faint, as the coverage mark does, and its title says so: a stale stance never reads as
+    // current (spec 2026-11-06 Tier 2, 18.1).
     { key: 'agentStance', head: 'Stance',
       cell: function (r) {
         if (r.agentStance == null) return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));
-        return h('td', null,
-          h('span', { className: 'fb-stance fb-stance--' + r.agentStance + ' label' }, r.agentStance));
+        var stale = !!(r.covered && r.covered.expired);
+        return h('td', null, h('span', {
+          className: cx('fb-stance', 'fb-stance--' + r.agentStance, stale && 'fb-stance--expired', 'label'),
+          title: stale ? coverage(r.covered) : null
+        }, r.agentStance));
       } },
     { key: 'overrides', head: 'Overrides',
       cell: function (r) {

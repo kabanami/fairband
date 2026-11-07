@@ -31,6 +31,12 @@ export type Freshness = 'current' | 'aging' | 'expired';
  */
 export type Designation = 'well-below' | 'below' | 'near' | 'above' | 'well-above';
 
+/**
+ * fairband: the agent's stance, the word a published report takes: the brand book's three zone
+ * words and avoid, the policy's `stance_words` (spec 2026-11-06 Tier 2, 13.1 and 18.1).
+ */
+export type AgentStance = 'buy' | 'hold' | 'trim' | 'avoid';
+
 export interface MarkProps {
   /** Edge length in px. Square. Default 24. Below 20 the three bands fuse. */
   size?: number;
@@ -439,11 +445,11 @@ export interface ScreenRow {
   priceToValue?: number | null;
   designation?: Designation | null;
   /**
-   * fairband: the agent's stance, the word of the company's latest published report: `buy`,
-   * `hold`, `trim` or `avoid`; `null` without a report, and the Stance cell then shows an em dash
-   * (spec 2026-11-06 Tier 2, 18.1).
+   * fairband: the agent's stance, the word of the company's latest published report; `null`
+   * without a report, and the Stance cell then shows an em dash. The word takes `ink-faint`, its
+   * title saying so, when `covered.expired` (spec 2026-11-06 Tier 2, 18.1).
    */
-  agentStance?: string | null;
+  agentStance?: AgentStance | null;
   /**
    * fairband: the coverage mark's record: the latest published report's time (ISO), its actor
    * (the principal for a report that names none) and whether the validity window of the snapshot
@@ -471,7 +477,7 @@ export interface ScreenFilters {
    * fairband: the agent's stance words; a row without a published report matches none (spec
    * 2026-11-06 Tier 2, 18.1).
    */
-  stance: string[];
+  stance: AgentStance[];
   phase: Phase[];
   cap: CapSize[];
   /** Sector names, as they appear in SECTORS. */
