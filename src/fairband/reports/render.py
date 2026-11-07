@@ -175,8 +175,8 @@ GLOSSARY: dict[str, str] = {
     ),
     "Judgment": (
         "One of a report's key judgments (the phase, the moat, the belief, the ROIC, the target "
-        "margin) with its bull case, its bear case, the decision and the override it produced, if"
-        " one. An input an override sets is tagged JUDGMENT, beside DATA and RULE"
+        "margin): the record of the decision, in words, and the override it produced, if one. An"
+        " input an override sets is tagged JUDGMENT, beside DATA and RULE"
     ),
     "Secondary valuation": (
         "A second valuation an agent makes from an explicit free-cash-flow path, one part or a "

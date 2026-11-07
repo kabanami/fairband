@@ -31,7 +31,7 @@ SECTIONS = [
     },
     {"heading": "The business", "parts": ["Phones."]},
 ]
-JUDGMENT = {"judgment": "moat", "bull": "patents", "bear": "lapse", "decision": "Wide"}
+JUDGMENT = {"judgment": "moat", "decision": "Wide"}
 
 
 def _report(
@@ -133,13 +133,13 @@ def test_judgments_round_trip(conn: sqlite3.Connection) -> None:
         first,
         "AAPL",
         [
-            {"judgment": "phase", "bull": "growing", "bear": "slowing", "decision": "as is"},
+            {"judgment": "phase", "decision": "as is"},
             JUDGMENT | {"override_id": override_id},
         ],
     )
     assert judgments_for(conn, first) == [
-        JudgmentRow(ids[0], first, "AAPL", "phase", "growing", "slowing", "as is", None),
-        JudgmentRow(ids[1], first, "AAPL", "moat", "patents", "lapse", "Wide", override_id),
+        JudgmentRow(ids[0], first, "AAPL", "phase", "as is", None),
+        JudgmentRow(ids[1], first, "AAPL", "moat", "Wide", override_id),
     ]
     assert latest_judgments(conn, "AAPL") == judgments_for(conn, first)
     second = _report(conn, "AAPL")

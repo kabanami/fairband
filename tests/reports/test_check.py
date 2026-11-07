@@ -571,27 +571,13 @@ def test_the_belief_a_forward_p_e_rests_on_is_cited_by_its_input(
     assert _check(conn, policy, sid, _cite("6.3%", f"snapshot:{sid}/inputs/belief")) == []
 
 
-def test_judgment_text_holds_no_figure() -> None:
+def test_a_figure_in_a_decision_is_a_finding() -> None:
+    """A judgment is a record: its decision, in words, is the only text the check reads."""
     judgments = [
-        {
-            "judgment": "moat",
-            "bull": "Patents to 2031 hold.",
-            "bear": "Share fell 11.2%.",
-            "decision": "Keep Wide",
-        },
-        {
-            "judgment": "belief",
-            "bull": "Three reasons",
-            "bear": "none",
-            "decision": "$5bn of buybacks",
-        },
+        {"judgment": "moat", "decision": "Keep Wide: the patents run to 2031."},
+        {"judgment": "belief", "decision": "$5bn of buybacks"},
     ]
     assert check_judgments(judgments) == [
-        Finding(
-            "judgment moat, bear: 11.2%",
-            NO_REFERENCE,
-            "a judgment's text holds no figure: cite it in a section",
-        ),
         Finding(
             "judgment belief, decision: $5bn",
             NO_REFERENCE,

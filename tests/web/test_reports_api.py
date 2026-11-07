@@ -18,7 +18,7 @@ AGENT = HEADER | {
     CLIENT_HEADER: "claude-code/2.1",
 }
 JUDGMENTS = [
-    {"judgment": kind, "bull": f"bull on {kind}", "bear": f"bear on {kind}", "decision": "keep"}
+    {"judgment": kind, "decision": f"keep the {kind}"}
     for kind in ("phase", "moat", "belief", "roic")
 ]
 
@@ -95,9 +95,9 @@ def test_a_clean_submission_publishes_and_completes_the_item(client: TestClient)
         "client": "claude-code/2.1",
         "createdAt": NOW.isoformat(),
     }
-    assert [(j["judgment"], j["bull"], j["overrideId"]) for j in report["judgments"]] == [
-        (j["judgment"], j["bull"], None) for j in JUDGMENTS
-    ]
+    assert [
+        {k: v for k, v in j.items() if k not in ("id", "reportId")} for j in report["judgments"]
+    ] == [{"symbol": "AAPL", **j, "overrideId": None} for j in JUDGMENTS]
     assert report["appendixA"]["snapshot"]["id"] == sid
     assert [t["term"] for t in report["appendixB"]] == ["Value at belief", "Belief"]
     assert client.get(f"/api/reports/{report['id']}").json() == report
@@ -192,7 +192,7 @@ def test_the_required_judgments(client: TestClient) -> None:
             400,
             {"detail": "the report lacks the judgment target_margin"},
         )
-    margin = {"judgment": "target_margin", "bull": "b", "bear": "b", "decision": "d"}
+    margin = {"judgment": "target_margin", "decision": "d"}
     hgco = _snapshot_id(client, "HGCO")
     sections = _sections(hgco)
     sections[0]["parts"] = ["Plain words."]
@@ -303,16 +303,33 @@ def test_a_company_without_a_snapshot_has_no_report(client: TestClient) -> None:
     assert (r.status_code, r.json()) == (404, {"detail": "no snapshot for MSFT"})
 
 
+def test_a_judgment_with_bull_or_bear_is_an_unknown_field(client: TestClient) -> None:
+    """A judgment is a record of the decision and its override: the debate is the report's own
+    section, so a judgment carrying a bull or a bear case is refused by the body's validation,
+    as every request the routes' types refuse is, naming the field."""
+    sid = _snapshot_id(client)
+    phase = {**JUDGMENTS[0], "bull": "Revenue still grows."}
+    moat = {**JUDGMENTS[1], "bear": "Rivals sell substitutes."}
+    r = _submit(client, _body(sid, judgments=[phase, moat, *JUDGMENTS[2:]]))
+    detail = (
+        "judgments.0.bull: Extra inputs are not permitted;"
+        " judgments.1.bear: Extra inputs are not permitted"
+    )
+    assert (r.status_code, r.json()) == (400, {"detail": detail})
+    assert _ledger(client) == []  # refused before the number check: no ledger row
+    assert client.get("/api/companies/AAPL/reports").json() == {"reports": []}
+
+
 def test_a_judgment_s_text_holds_no_figure(client: TestClient) -> None:
     sid = _snapshot_id(client)
-    moat = {**JUDGMENTS[1], "bull": "Share rose 11.2% on patents."}
+    moat = {**JUDGMENTS[1], "decision": "Keep Wide: share rose 11.2% on patents."}
     r = _submit(client, _body(sid, judgments=[JUDGMENTS[0], moat, *JUDGMENTS[2:]]))
     assert (r.status_code, r.json()) == (
         422,
         {
             "findings": [
                 {
-                    "where": "judgment moat, bull: 11.2%",
+                    "where": "judgment moat, decision: 11.2%",
                     "what": NO_REFERENCE,
                     "detail": "a judgment's text holds no figure: cite it in a section",
                 }

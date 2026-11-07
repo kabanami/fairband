@@ -142,8 +142,8 @@ pass-throughs are busy: four calls are in flight, try again" (503): wait a littl
   over `years`. `a` and `b` are refs.
 - A section (`report_submit`): `{heading, parts}`, a part a plain string or a cite
   `{cite, ref, period?}`.
-- A judgment (`report_submit`): `{judgment, bull, bear, decision, override_id?}`, the judgment one
-  of `phase`, `moat`, `belief`, `roic` and `target_margin`.
+- A judgment (`report_submit`): `{judgment, decision, override_id?}`, the judgment one of
+  `phase`, `moat`, `belief`, `roic` and `target_margin`; it takes no other key.
 - A kill criterion (`report_submit`): `{text}`, a measurable event that would prove the view wrong.
 - A news item (`report_submit`): `{date, headline, source, text, kill_criterion_id?}`, the source a
   URL or a stored vendor response.

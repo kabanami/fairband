@@ -1073,7 +1073,7 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Override | A change an agent makes to one tagged input, with its reason, its evidence and its lifetime (lasting, or tied to a period); applied, or refused with the rule it breaks, and stored either way. The engine, not the agent, computes the value it gives |
 | Review | The engine's valuation of a company under its applied overrides: the reviewed value, its levels and designation on the same edges, and the bridge from the mechanical value, one line per override. It follows the company's snapshots and cites `fairband-review/1` |
 | Finding | A dated fact an agent records with its source (a filing, a transcript, a URL, a vendor response or a base rate); the only way a number from outside Fairband enters a report |
-| Judgment | One of a report's key judgments (the phase, the moat, the belief, the ROIC, the target margin) with its bull case, its bear case, the decision and the override it produced, if one. An input an override sets is tagged JUDGMENT, beside DATA and RULE |
+| Judgment | One of a report's key judgments (the phase, the moat, the belief, the ROIC, the target margin): the record of the decision, in words, and the override it produced, if one. An input an override sets is tagged JUDGMENT, beside DATA and RULE |
 | Secondary valuation | A second valuation an agent makes from an explicit free-cash-flow path, one part or a sum of parts, discounted at r with a terminal at g_T or below: a second view on a valued company and a fallback where the route gives no value. It cites `fairband-secondary/1` |
 | Work item | A request in the inbox for an agent's research on one company, a valuation review or a full report, posted by the owner, an agent or the expiry rule; pending, claimed, done, declined or dropped |
 
@@ -1237,9 +1237,9 @@ The reprice rule (spec 13.2): a report rests on the company's latest snapshot. A
 
 ### 16.3 The check
 
-Every part of every section is read, and so is the text of every judgment, and each failure is a finding `{where, what, detail}`: `where` is the section and the part, counted from 1 in the submission, and the text at fault, "section 1, part 3: $12.345", or the judgment and its field, "judgment moat, bull: 11.2%". The six failures, in the server's words:
+Every part of every section is read, and so is every judgment's decision, and each failure is a finding `{where, what, detail}`: `where` is the section and the part, counted from 1 in the submission, and the text at fault, "section 1, part 3: $12.345", or the judgment and its field, "judgment moat, decision: 11.2%". The six failures, in the server's words:
 
-- `a number with no reference`: a quantity in plain text, or in a judgment's bull, bear or decision, which carries no cite.
+- `a number with no reference`: a quantity in plain text, or in a judgment's decision, which carries no cite.
 - `unresolved reference`: a cite whose ref names nothing, or names a figure the record does not hold.
 - `wrong unit`: a cite whose suffix does not fit the ref's unit, or whose number is not the ref's value at the report's rounding; the detail gives the value as the cite should read. A word cited against a number, or a word that is not the ref's, is also `wrong unit`.
 - `wrong period`: a cite whose period is not the ref's (`FY2025` reads `2025`); a cite naming no period passes.

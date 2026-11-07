@@ -14,6 +14,7 @@ import pytest
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store import db
 from fairband.store.db import applied_versions, connect, migrate
+from fairband.store.reports import JudgmentRow, judgments_for
 
 _TABLES = {
     "schema_versions",
@@ -37,9 +38,12 @@ _ALL = [
     "003_facts_by_response.sql",
     "004_settings_and_watchlists.sql",
     "005_agents.sql",
+    "006_report.sql",
 ]
 # The agents' records (spec 2026-11-06 Tier 2, section 17), each table's columns the record's
-# fields in order; a work item's poster carries its client as every other writer does.
+# fields in order, as 005 made them and 006 changed them: a judgment without its debate text, a
+# secondary valuation with its form, drivers, projection and grid; a work item's poster carries
+# its client as every other writer does.
 _AGENT_COLUMNS = {
     "ledger": [
         *("id", "at", "principal", "actor", "client", "kind", "symbol", "ref_table", "ref_id"),
@@ -85,7 +89,7 @@ _AGENT_COLUMNS = {
         *("firm_value", "debt", "cash", "shares", "equity", "value_per_share", "buy_level"),
         *("fair_low", "fair_high", "trim_level", "price_to_value", "designation", "reason"),
         *("evidence", "debt_source", "cash_source", "policy_version", "settings_hash"),
-        *("deciles_refresh_id", "secondary_method"),
+        *("deciles_refresh_id", "secondary_method", "form", "drivers", "projection", "grid"),
     ],
     "derivations": [
         *("id", "symbol", "operation", "a", "b", "years", "value", "unit", "principal"),
@@ -96,8 +100,24 @@ _AGENT_COLUMNS = {
         *("snapshot_id", "review_id", "secondary_id", "work_item_id", "principal", "actor"),
         *("client", "created_at"),
     ],
-    "judgments": [
-        *("id", "report_id", "symbol", "judgment", "bull", "bear", "decision", "override_id"),
+    "judgments": ["id", "report_id", "symbol", "judgment", "decision", "override_id"],
+}
+# The report's records 006 adds (spec 2026-11-06 Tier 2, 9, 13.7 and 13.8): the multiples log,
+# the sensitivity readings and the guidance records.
+_REPORT_COLUMNS = {
+    "multiples_log": [
+        *("id", "symbol", "day", "price", "pe_reported", "pe_clean", "pe_forward"),
+        *("snapshot_id", "refresh_id", "created_at"),
+    ],
+    "sensitivities": [
+        *("id", "symbol", "snapshot_id", "review_id", "created_at", "principal", "actor"),
+        *("client", "row_tag", "col_tag", "row_values", "col_values", "cells", "current_row"),
+        *("current_col", "policy_version", "settings_hash"),
+    ],
+    "guidance": [
+        *("id", "symbol", "metric", "period", "low", "high", "midpoint", "step", "basis"),
+        *("as_of", "text", "source", "principal", "actor", "client", "created_at"),
+        "superseded_by",
     ],
 }
 
@@ -128,7 +148,7 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
     assert migrate(conn) == _ALL
-    assert applied_versions(conn) == [1, 2, 3, 4, 5]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -171,7 +191,7 @@ def test_designation_columns_join_a_database_at_001(
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
     assert migrate(conn) == _ALL[1:]
-    assert applied_versions(conn) == [1, 2, 3, 4, 5]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -201,7 +221,7 @@ def test_migration_004_fills_the_hash(
         (stamp,),
     )
     conn.commit()
-    assert migrate(conn) == ["004_settings_and_watchlists.sql", "005_agents.sql"]
+    assert migrate(conn) == _ALL[3:]
     assert conn.execute("select settings_hash from refreshes").fetchone()[0] == EMPTY_SETTINGS_HASH
     assert conn.execute("select settings_hash from snapshots").fetchone()[0] == EMPTY_SETTINGS_HASH
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
@@ -221,11 +241,78 @@ def test_the_agent_tables_hold_the_records_fields(conn: sqlite3.Connection) -> N
     """Each table's columns are its record's fields; price ÷ value is a REAL, as on the
     snapshots, so it reads back as the double the engine computed."""
     migrate(conn)
-    for table, columns in _AGENT_COLUMNS.items():
+    for table, columns in (_AGENT_COLUMNS | _REPORT_COLUMNS).items():
         assert [r["name"] for r in conn.execute(f"pragma table_info({table})")] == columns, table
     for table in ("reviews", "secondary_valuations"):
         types = {r["name"]: r["type"] for r in conn.execute(f"pragma table_info({table})")}
         assert types["price_to_value"] == "REAL", table
+
+
+def test_migration_006_on_a_005_database_keeps_the_judgments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 005 holds a report, its two judgments with their bull and bear text and a
+    secondary valuation. 006 drops the debate text and keeps each judgment's decision and
+    override; the secondary valuation reads as the parts form; the multiples log, the
+    sensitivities and the guidance records join with their indexes."""
+    assert sqlite3.sqlite_version_info >= (3, 35, 0), (
+        "migration 006 drops two columns, which needs SQLite 3.35 or later;"
+        f" this Python links SQLite {sqlite3.sqlite_version}"
+    )
+    folder = _migrations_dir(tmp_path, {})
+    for filename in _ALL[1:5]:
+        (folder / filename).write_bytes(_packaged(filename))
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", folder)
+        assert migrate(conn) == _ALL[:5]
+    stamp = "2026-11-06T09:30:00+00:00"
+    conn.execute(
+        "insert into reports (symbol, revision, mode, stance, sections, snapshot_id, principal,"
+        " created_at) values ('AAPL', 1, 'full report', 'hold', '[]', 4, 'agent', ?)",
+        (stamp,),
+    )
+    conn.executemany(
+        "insert into judgments (report_id, symbol, judgment, bull, bear, decision, override_id)"
+        " values (1, 'AAPL', ?, ?, ?, ?, ?)",
+        [("phase", "growing", "slowing", "as is", None), ("moat", "patents", "lapse", "Wide", 7)],
+    )
+    conn.execute(
+        "insert into secondary_valuations (symbol, snapshot_id, created_at, principal, parts,"
+        " firm_value, debt, cash, shares, equity, value_per_share, reason, evidence, debt_source,"
+        " cash_source, policy_version, settings_hash, secondary_method) values ('AAPL', 4, ?,"
+        " 'agent', '[]', '100.0', '10.0', '5.0', '2.0', '95.0', '47.5', 'a second view', '[]',"
+        " 'balance', 'balance', 'fairband-policy-v8', 'h', 'fairband-secondary/1')",
+        (stamp,),
+    )
+    conn.commit()
+
+    assert migrate(conn) == ["006_report.sql"]
+
+    assert judgments_for(conn, 1) == [
+        JudgmentRow(1, 1, "AAPL", "phase", "as is", None),
+        JudgmentRow(2, 1, "AAPL", "moat", "Wide", 7),
+    ]
+    judgment_columns = [r["name"] for r in conn.execute("pragma table_info(judgments)")]
+    assert "bull" not in judgment_columns and "bear" not in judgment_columns
+    form = {r["name"]: r for r in conn.execute("pragma table_info(secondary_valuations)")}["form"]
+    assert (form["type"], form["notnull"], form["dflt_value"]) == ("TEXT", 1, "'parts'")
+    stored = conn.execute("select form, drivers, projection, grid from secondary_valuations")
+    assert tuple(stored.fetchone()) == ("parts", None, None, None)
+    for table, columns in _REPORT_COLUMNS.items():
+        assert [r["name"] for r in conn.execute(f"pragma table_info({table})")] == columns, table
+
+    def indexed(table: str) -> list[tuple[str, list[str]]]:
+        """Each index on ``table``, its origin (``u`` a UNIQUE constraint's, ``c`` a CREATE
+        INDEX's) with its columns."""
+        names = [(r["origin"], r["name"]) for r in conn.execute(f"pragma index_list({table})")]
+        return [
+            (origin, [c["name"] for c in conn.execute(f"pragma index_info({name})")])
+            for origin, name in names
+        ]
+
+    assert indexed("multiples_log") == [("u", ["symbol", "day"])]  # one row a company a day
+    assert indexed("sensitivities") == [("c", ["symbol", "snapshot_id"])]
+    assert indexed("guidance") == [("c", ["symbol"])]
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -335,6 +422,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 003_facts_by_response.sql",
         "Applied 004_settings_and_watchlists.sql",
         "Applied 005_agents.sql",
+        "Applied 006_report.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()

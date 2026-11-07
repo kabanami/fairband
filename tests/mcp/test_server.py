@@ -166,10 +166,7 @@ WRITES: dict[str, dict[str, Any]] = {
     "refresh_start": {"kind": "price"},
     "refresh_cancel": {},
 }
-JUDGMENTS = [
-    {"judgment": kind, "bull": f"bull on {kind}", "bear": f"bear on {kind}", "decision": "keep"}
-    for kind in ("phase", "moat", "belief", "roic")
-]
+JUDGMENTS = [{"judgment": kind, "decision": "keep"} for kind in ("phase", "moat", "belief", "roic")]
 SECTIONS = [
     "what",
     "life-cycle",

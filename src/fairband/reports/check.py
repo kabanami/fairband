@@ -28,8 +28,8 @@ each failure, ``where`` the section and the part counted from 1 and the text at 
 One finding for each cite, the first failure in the order wrong snapshot, not emitted,
 unresolved, wrong period, wrong unit; one for each quantity of a plain part.
 
-``check_judgments`` reads the judgments' bull, bear and decision text, which carries no cite: a
-quantity there is ``a number with no reference``, located ``judgment <kind>, <field>: <text>``.
+``check_judgments`` reads each judgment's decision, which carries no cite: a quantity there is
+``a number with no reference``, located ``judgment <kind>, decision: <text>``.
 A ``review:`` cite must also be the company's current review, the newest on its snapshot with the
 current review that one or its reprice; else it is ``wrong snapshot``, the current id named.
 
@@ -304,15 +304,14 @@ def check_sections(
 
 
 def check_judgments(judgments: Sequence[Mapping[str, object]]) -> list[Finding]:
-    """A finding for each quantity in a judgment's bull, bear or decision text, which carries no
-    cite, located ``judgment <kind>, <field>: <text>``."""
+    """A finding for each quantity in a judgment's decision, which carries no cite, located
+    ``judgment <kind>, decision: <text>``."""
     found = []
     for j in judgments:
-        for field in ("bull", "bear", "decision"):
-            for q in quantities(str(j.get(field, ""))):
-                where = f"judgment {j.get('judgment')}, {field}: {q}"
-                detail = "a judgment's text holds no figure: cite it in a section"
-                found.append(Finding(where, NO_REFERENCE, detail))
+        for q in quantities(str(j.get("decision", ""))):
+            where = f"judgment {j.get('judgment')}, decision: {q}"
+            detail = "a judgment's text holds no figure: cite it in a section"
+            found.append(Finding(where, NO_REFERENCE, detail))
     return found
 
 

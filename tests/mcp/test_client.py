@@ -142,7 +142,7 @@ def test_a_refusal_with_no_sentence_is_named_from_its_answer(api: FairbandClient
                     {"heading": h, "parts": ["Plain words."]} for h in headings("full report")
                 ],
                 "judgments": [
-                    {"judgment": kind, "bull": "b", "bear": "b", "decision": decision}
+                    {"judgment": kind, "decision": decision}
                     for kind, decision in (
                         ("phase", "keep"),
                         ("moat", "keep"),

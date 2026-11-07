@@ -33,16 +33,17 @@ deciles; an unknown id is a 404, "no methodology section <id>". ``GET /api/metho
 sections in the page's order, ``{sections: [{id, title}]}``.
 
 ``POST /api/companies/{symbol}/reports`` takes ``{mode, stance, sections: [{heading, parts}],
-judgments: [{judgment, bull, bear, decision, overrideId?}], killCriteria?: [{text}], newsItems?:
-[{date, headline, source, text, killCriterionId?}], workItemId?}``, a part a plain string or
-``{cite, ref, period?}``, from any writer. On the company's latest snapshot (404 "no snapshot for
-<symbol>" without one): the structural checks (``check.structure_refusal``), each a 400 with its
-sentence, the required judgments by the route of the company's current review when it rests on
-that snapshot, else the snapshot's (its phase's for a refused row); a work item it names must be
-the company's (404 "no work item <id>", "... for <symbol>") and open (409 "work item <id> is
-<state>"). Then the number check (``check.check_sections`` over the sections, and
-``check.check_judgments`` over the judgments' text, which holds no figure): with findings, the
-answer is 422
+judgments: [{judgment, decision, overrideId?}], killCriteria?: [{text}], newsItems?: [{date,
+headline, source, text, killCriterionId?}], workItemId?}``, a part a plain string or ``{cite,
+ref, period?}``, from any writer. A judgment is a record and takes no other key: one with a
+``bull`` or a ``bear`` is refused 400 by the body's validation, naming the field. On the
+company's latest snapshot (404 "no snapshot for <symbol>" without one): the structural checks
+(``check.structure_refusal``), each a 400 with its sentence, the required judgments by the route
+of the company's current review when it rests on that snapshot, else the snapshot's (its phase's
+for a refused row); a work item it names must be the company's (404 "no work item <id>", "...
+for <symbol>") and open (409 "work item <id> is <state>"). Then the number check
+(``check.check_sections`` over the sections, and ``check.check_judgments`` over the judgments'
+decisions, which hold no figure): with findings, the answer is 422
 ``{findings: [{where, what, detail}]}`` and nothing is stored but a ``report`` ledger row that
 points at no record, "rejected: <n> findings", resting on the latest snapshot. Without, the report
 is published, 201 ``{report}``: stored as the company's next revision on the snapshot its cites
@@ -152,9 +153,12 @@ class Section(_Body):
 
 
 class JudgmentPost(_Body):
+    """A judgment as a record: the decision and the override it produced. An unknown key, a
+    ``bull`` or a ``bear`` among them, is refused rather than dropped."""
+
+    model_config = ConfigDict(alias_generator=to_camel, extra="forbid")
+
     judgment: JudgmentKind
-    bull: str
-    bear: str
     decision: str
     override_id: int | None = None
 

@@ -10,11 +10,12 @@ last two ``None`` without one), the work item it completes, the writer and the t
 appendixes are not stored: ``fairband.reports.render`` generates them from the records at read
 time. The company's report is its latest; the earlier revisions stay, read newest first.
 
-A judgment is one of a report's key judgments: its kind (``phase``, ``moat``, ``belief``,
-``roic``, ``target_margin``), the bull case, the bear case, the decision, and the company's
-override it produced, if one. Each write is one transaction; it joins the caller's when there is
-one, so the caller's ledger rows commit with it. A judgment's override that is not the company's
-raises ``KeyError(id)``.
+A judgment is the record of one of a report's input decisions (spec 12): its kind (``phase``,
+``moat``, ``belief``, ``roic``, ``target_margin``), the decision in words, and the company's
+override it produced, if one. The debate about the business is the report's own section, not the
+judgment's. Each write is one transaction; it joins the caller's when there is one, so the
+caller's ledger rows commit with it. A judgment's override that is not the company's raises
+``KeyError(id)``.
 """
 
 import json
@@ -58,8 +59,6 @@ class JudgmentRow:
     report_id: int
     symbol: str
     judgment: JudgmentKind
-    bull: str
-    bear: str
     decision: str
     override_id: int | None
 
@@ -141,8 +140,8 @@ def insert_judgments(
     symbol: str,
     judgments: Sequence[Mapping[str, Any]],
 ) -> list[int]:
-    """Store the report's judgments, each ``{judgment, bull, bear, decision, override_id}``, in
-    order; return their ids."""
+    """Store the report's judgments, each ``{judgment, decision, override_id}``, in order; return
+    their ids."""
     ids = []
     with transaction(conn, immediate=True):
         for j in judgments:
@@ -150,17 +149,9 @@ def insert_judgments(
             if override_id is not None and not _has_override(conn, override_id, symbol):
                 raise KeyError(override_id)
             cursor = conn.execute(
-                "INSERT INTO judgments (report_id, symbol, judgment, bull, bear, decision,"
-                " override_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    report_id,
-                    symbol,
-                    j["judgment"],
-                    j["bull"],
-                    j["bear"],
-                    j["decision"],
-                    override_id,
-                ),
+                "INSERT INTO judgments (report_id, symbol, judgment, decision, override_id)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (report_id, symbol, j["judgment"], j["decision"], override_id),
             )
             ids.append(inserted_id(cursor))
     return ids
@@ -211,8 +202,6 @@ def _judgment(row: sqlite3.Row) -> JudgmentRow:
         report_id=row["report_id"],
         symbol=row["symbol"],
         judgment=row["judgment"],
-        bull=row["bull"],
-        bear=row["bear"],
         decision=row["decision"],
         override_id=row["override_id"],
     )
