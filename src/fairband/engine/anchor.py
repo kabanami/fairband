@@ -1,12 +1,14 @@
 """The Mature Growth route's consensus inputs: the NTM anchor, the path and the belief (spec 6.6).
 
 Year 1 is the NTM anchor: the sum of the four consensus quarters after the last reported quarter,
-picked by period end and never by row order, and only when they are consecutive quarters. The SBC
-basis test of ``mech/1.2``: when the street's trailing EPS sits above the GAAP trailing EPS by at
-least ``sbc_detect`` times the after-tax SBC per share, the consensus excludes stock compensation,
-and the anchor subtracts the after-tax SBC per share held at its trailing share of revenue (scaled
-by the NTM consensus revenue over the trailing revenue, or unscaled when either is missing). A
-missing input leaves the basis unknown; the consensus then stands as it is and is flagged.
+picked by period end and never by row order, and only when they are consecutive quarters; a row
+ending within ``SAME_PERIOD_DAYS`` after the last reported quarter is that quarter under the
+vendor's second fiscal calendar, not the first NTM quarter. The SBC basis test of ``mech/1.2``:
+when the street's trailing EPS sits above the GAAP trailing EPS by at least ``sbc_detect`` times
+the after-tax SBC per share, the consensus excludes stock compensation, and the anchor subtracts
+the after-tax SBC per share held at its trailing share of revenue (scaled by the NTM consensus
+revenue over the trailing revenue, or unscaled when either is missing). A missing input leaves the
+basis unknown; the consensus then stands as it is and is flagged.
 
 Years 2 and 3 are the next two steps of the annual consensus from the base year, the fiscal year
 that holds most of the NTM quarters (a tie takes the later). The steps read net income when the base
@@ -31,6 +33,9 @@ SbcBasis = Literal["excludes-sbc", "includes-sbc", "unknown"]
 # fiscal years.
 _QUARTER_DAYS_MIN, _QUARTER_DAYS_MAX = 80, 100
 _NTM_QUARTERS = 4
+# Period ends at most this many days apart are one period: FMP reports some companies under two
+# fiscal calendars, whose period ends for one quarter or year lie a day or a few days apart (AAPL).
+SAME_PERIOD_DAYS = 7
 
 _SBC_UNKNOWN = Flag(
     "sbc-basis-unknown",
@@ -142,10 +147,12 @@ class Belief:
 def ntm_quarters(
     estimates: Sequence[QuarterEstimate], last_reported: date
 ) -> tuple[QuarterEstimate, ...] | None:
-    """The first four quarters ending after ``last_reported``, by period end; ``None`` unless there
-    are four and each ends 80 to 100 days after the one before."""
+    """The first four quarters ending more than ``SAME_PERIOD_DAYS`` after ``last_reported``, by
+    period end, since a row ending sooner is the reported quarter under a second fiscal calendar;
+    ``None`` unless there are four and each ends 80 to 100 days after the one before."""
     after = sorted(
-        (e for e in estimates if e.period_end > last_reported), key=lambda e: e.period_end
+        (e for e in estimates if (e.period_end - last_reported).days > SAME_PERIOD_DAYS),
+        key=lambda e: e.period_end,
     )
     window = after[:_NTM_QUARTERS]
     if len(window) < _NTM_QUARTERS or not consecutive_quarters([e.period_end for e in window]):

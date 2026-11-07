@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -105,6 +105,17 @@ def test_ntm_quarters_skips_reported_quarters() -> None:
     rows = [q("2026-06-30", 2026, "Q4", 1), q("2026-03-31", 2026, "Q3", 1), *ntm()]
     got = ntm_quarters(rows, date(2026, 6, 30))
     assert got is not None and got[0].period_end == date(2026, 9, 30)
+
+
+@pytest.mark.parametrize(("days", "first"), [(7, date(2026, 9, 30)), (8, date(2026, 7, 8))])
+def test_ntm_quarters_skip_a_row_within_a_week_after_the_last_reported(
+    days: int, first: date
+) -> None:
+    """A row ending up to seven days after the last reported quarter is that quarter under a
+    second fiscal calendar, not the first NTM quarter; a row a day later starts the chain."""
+    after = date(2026, 6, 30) + timedelta(days=days)
+    got = ntm_quarters([q(str(after), 2026, "Q4", 1), *ntm()], date(2026, 6, 30))
+    assert got is not None and got[0].period_end == first
 
 
 def test_ntm_quarters_none_when_gap() -> None:

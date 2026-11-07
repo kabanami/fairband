@@ -675,6 +675,69 @@ def test_the_ntm_chain_holds_on_a_company_with_duplicate_rows(store: Store) -> N
     assert (result.refusal, result.value) == (None, golden["value"])
 
 
+def test_quarters_that_share_a_calendar_label_are_kept_apart(store: Store) -> None:
+    """A December fiscal year whose quarters end a month later, as after a change of fiscal year:
+    the calendar labels the quarters ending 2027-01-31 and 2027-04-30 both FY2027 Q1, yet they are
+    two quarters, and the NTM chain holds on all four. A duplicate a day apart, and one a week
+    apart, still collapse to the row with more analysts; the labels stay on the kept rows."""
+    ends = (date(2025, 7, 31), date(2025, 10, 31), date(2026, 1, 31), date(2026, 4, 30))
+    redated = {
+        endpoint: [
+            {**row, "date": str(end)}
+            for row, end in zip(rows, (*ends, date(2026, 7, 31)), strict=True)
+        ]
+        for endpoint, rows in (
+            ("income-quarter", income_quarter(QUARTERS)),
+            ("cashflow-quarter", cashflow_quarter(QUARTERS)),
+        )
+    }
+    quarters = [
+        {"date": "2026-10-31", "epsAvg": 0.5, "numAnalystsEps": 12},
+        {"date": "2027-01-30", "epsAvg": 0.1, "numAnalystsEps": 3},  # a day before
+        {"date": "2027-01-31", "epsAvg": 0.6, "numAnalystsEps": 12},
+        {"date": "2027-04-23", "epsAvg": 0.1, "numAnalystsEps": 3},  # a week before
+        {"date": "2027-04-30", "epsAvg": 0.7, "numAnalystsEps": 11},
+        {"date": "2027-07-31", "epsAvg": 0.8, "numAnalystsEps": 10},
+    ]
+    inputs = build(store(**{**bodies(), **redated, "estimates-quarter": quarters}))
+    assert inputs.trailing is not None and not inputs.trailing.on_fiscal_year
+    assert inputs.trailing.period_end == date(2026, 7, 31)
+    assert inputs.quarter_estimates == (
+        QuarterEstimate(date(2026, 10, 31), 2026, "Q3", 0.5, None, None, 12),
+        QuarterEstimate(date(2027, 1, 31), 2027, "Q1", 0.6, None, None, 12),
+        QuarterEstimate(date(2027, 4, 30), 2027, "Q1", 0.7, None, None, 11),
+        QuarterEstimate(date(2027, 7, 31), 2027, "Q2", 0.8, None, None, 10),
+    )
+    ntm = ntm_quarters(inputs.quarter_estimates, inputs.trailing.period_end)
+    assert ntm == inputs.quarter_estimates
+
+
+def test_the_reported_quarter_s_duplicate_is_not_an_ntm_quarter(store: Store) -> None:
+    """The quarter just reported, ending 2026-09-30 in the statements, comes twice in the
+    consensus, and the row kept is the second calendar's, a day after the trailing period end.
+    The NTM quarters skip it: the first ends 80 to 100 days after the trailing period end, and
+    the golden's arithmetic values Mature Growth Co from the four after it."""
+    mgco = mature_growth_inputs()
+    reported = [
+        {"date": "2026-09-30", "epsAvg": 1.30, "numAnalystsEps": 8},
+        {"date": "2026-10-01", "epsAvg": 1.35, "numAnalystsEps": 25},
+    ]
+    ahead = [
+        {"date": str(x.period_end), "epsAvg": x.eps, "numAnalystsEps": x.analysts}
+        for x in mgco.quarter_estimates
+    ]
+    inputs = build(store(**{**bodies(), "estimates-quarter": reported + ahead}))
+    assert inputs.trailing is not None and inputs.trailing.period_end == date(2026, 9, 30)
+    assert inputs.quarter_estimates[0].period_end == date(2026, 10, 1)  # the duplicate kept
+    ntm = ntm_quarters(inputs.quarter_estimates, inputs.trailing.period_end)
+    assert ntm == mgco.quarter_estimates
+    assert 80 <= (ntm[0].period_end - inputs.trailing.period_end).days <= 100
+    stored = replace(mgco, quarter_estimates=inputs.quarter_estimates)
+    result = value_company(stored, universe_deciles(), load_policy(), date(2026, 10, 31))
+    golden = json.loads((GOLDEN / "MGCO.json").read_text())
+    assert (result.refusal, result.value) == (None, golden["value"])
+
+
 @pytest.mark.parametrize(
     ("profile", "market_cap", "source"),
     [
