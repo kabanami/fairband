@@ -360,7 +360,7 @@ def _route(result: ValuationResult) -> Route | None:
     """The result's route; for a refusal, the route its phase takes, ``None`` without a phase."""
     if result.route is not None:
         return result.route
-    phase = None if result.phase is None else result.phase.phase
+    phase = result.phase.phase
     return None if phase is None else route_of(phase)
 
 

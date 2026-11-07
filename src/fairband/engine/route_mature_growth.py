@@ -33,7 +33,7 @@ test then taking the correction, the override less the gap found, off trailing G
 ``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
 step not counted thin; ``growth.belief`` the belief's rate; ``earnings.cycle_gap`` the correction
 to mid-cycle earnings, which the NTM EPS is taken less after the SBC adjustment, before the
-anchor's refusals (``anchor.ntm_anchor``), and which nothing else reads: the basis test, the clean
+positive-anchor refusal (``anchor.ntm_anchor``), and which nothing else reads: the basis test, the clean
 EPS, EPV and ``large-nri`` read the non-recurring gap alone, and the forward EPS of the P/E and
 the ``ntm_eps`` and ``ntm_net_income`` data entries are the consensus as found
 (``Anchor.ntm_eps_found``). ``cycle_gap`` is in the intermediates only under that override. The

@@ -71,8 +71,9 @@ three.
   ``implied_growth_by_runway``, ``implied_by_roic``, ``multiples``, ``growth_share``,
   ``expected_return``.
 - Mature Stable: ``e_trailing``, ``nri_gap``, ``cycle_gap`` (as on Mature Growth), ``ttm_margin``,
-  ``median_margin``, ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``runway_return``,
-  ``terminal_roic``, ``runway``, ``epv`` and ``stable_growth`` (a share), ``epv_total`` and
+  ``median_margin``, ``margin_scaled``, ``e_normalized`` (the E the value rests on: scaled when
+  flagged, then less any cycle gap), ``moat``, ``roic``, ``runway_return``, ``terminal_roic``,
+  ``runway``, ``epv`` and ``stable_growth`` (a share), ``epv_total`` and
   ``stable_growth_total``, ``shares``, ``value_per_share``, ``eps``, ``dividend_yield``,
   ``net_buyback_yield``, ``income_basis``, ``price_facts``, ``growth_route`` (the growth route's
   cross-check: value_per_share, ntm_net_income, path_steps, belief, runway, fade_years,

@@ -209,6 +209,17 @@ def test_a_cycle_gap_lowers_the_anchor_and_stays_out_of_the_basis_test(policy: P
     assert lifted.ntm_eps == pytest.approx(1.0) and lifted.refusal is None
 
 
+def test_the_unit_error_check_reads_the_consensus_as_found(policy: Policy) -> None:
+    """The check is on the vendor's units: a cycle gap of −50.00 on a consensus of 10.00 at $100
+    takes the forward P/E to 1.7, which is no unit error; a consensus of 1.00 at $1, a P/E of 1, is
+    refused under a gap of 0.50 that would read 2."""
+    raised = ntm_anchor(ntm(), trailing(), 4.2, 10.0, 0.21, 100.0, policy, cycle_gap=-50.0)
+    assert raised.ntm_eps == pytest.approx(60.0) and raised.refusal is None
+    unit = ntm_anchor(ntm(eps=0.25), trailing(), 4.2, 10.0, 0.21, 1.0, policy, cycle_gap=0.5)
+    assert unit.ntm_eps == pytest.approx(0.5)
+    assert unit.refusal == "forward P/E below 2: unit error"
+
+
 def test_base_fiscal_year_tie_takes_later() -> None:
     qs = [
         q("2026-09-30", 2026, "Q4", 1),

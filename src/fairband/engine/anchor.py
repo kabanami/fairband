@@ -191,7 +191,10 @@ def ntm_anchor(
     non-recurring gap less the gap found (``method.md`` 14), GAAP EPS less that correction, so a
     gap overridden at the figure found leaves the test as it was. With ``cycle_gap``, an agent's
     correction to mid-cycle earnings a share, the NTM EPS is taken less it after the SBC
-    adjustment, and the refusals read the figure so lowered; the basis test does not read it."""
+    adjustment, and "no positive forward anchor" reads the figure so lowered; the unit-error
+    check reads the consensus as found, a check on the vendor's units (on a positive figure: a
+    trough lifted by a negative gap has no forward P/E to check), and the basis test does not
+    read the cycle gap."""
     sbc_per_share = None if trailing.sbc is None else trailing.sbc * (1 - tax_rate) / shares
     gaap = trailing.eps_diluted
     if gaap is not None and nri_correction is not None:
@@ -206,14 +209,13 @@ def ntm_anchor(
     adjustment = 0.0
     if basis == "excludes-sbc" and sbc_per_share is not None:
         adjustment = sbc_per_share * _revenue_scale(quarters, trailing.revenue)
-    ntm_eps = raw - adjustment
-    if cycle_gap is not None:
-        ntm_eps -= cycle_gap
+    found = raw - adjustment
+    ntm_eps = found if cycle_gap is None else found - cycle_gap
 
     refusal = None
     if ntm_eps <= 0:
         refusal = "no positive forward anchor"
-    elif price / ntm_eps < policy.forward_pe_unit_error:
+    elif found > 0 and price / found < policy.forward_pe_unit_error:
         refusal = f"forward P/E below {policy.forward_pe_unit_error:g}: unit error"
     return Anchor(raw, adjustment, ntm_eps, ntm_eps * shares, basis, flags, refusal)
 

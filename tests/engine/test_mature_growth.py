@@ -1,6 +1,6 @@
 import math
+from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, date, datetime
 
 import pytest
 
@@ -17,15 +17,10 @@ from fairband.engine.mature_growth import (
     terminal_multiple,
     value_at_belief,
 )
-from fairband.engine.overrides import Override, OverrideTag
-from fairband.engine.route import CompanyInputs
 from fairband.engine.route_mature_growth import value_mature_growth
 from fairband.engine.route_steps import Context, Valued
-from fairband.policy import Policy
 
 R, GT = 0.09, 0.03
-TODAY = date(2026, 10, 31)
-NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
 FADE = GrowthPath(1000.0, (0.25, 0.26), 0.053, 20, fade_years=5)
 CHARGE = Charge(0.149, 0.13, R, GT)
 
@@ -202,25 +197,9 @@ def test_solve_root_finds_the_first_sign_change() -> None:
 
 
 # The cycle gap on the Mature Growth route (method.md 14.4): it lowers the NTM anchor the value
-# rests on, and nothing else.
+# rests on, and nothing else. ``mg_context`` and ``with_overrides`` are conftest.py's.
 
-
-@pytest.fixture
-def context(mg_inputs: CompanyInputs, policy: Policy) -> Context:
-    """MGCO past the guards, as ``route.value_company`` builds it: $150 on 1 bn shares, an NTM
-    consensus of 5.90 a share that includes stock compensation, a non-recurring gap of 0.05."""
-    i = mg_inputs
-    assert i.trailing is not None and i.price is not None and i.shares_diluted is not None
-    return Context(i, i.trailing, i.price, i.shares_diluted, policy, TODAY)
-
-
-def with_overrides(c: Context, values: dict[OverrideTag, float]) -> Context:
-    """``c`` under an agent's overrides of ``values``, by tag."""
-    judged = {
-        tag: Override(1, tag, value, "agent", "claude-opus-5-5", NOW, "mid-cycle")
-        for tag, value in values.items()
-    }
-    return replace(c, overrides=judged)
+WithOverrides = Callable[..., Context]
 
 
 def _valued(c: Context) -> Valued:
@@ -229,15 +208,17 @@ def _valued(c: Context) -> Valued:
     return found
 
 
-def test_a_cycle_gap_lowers_the_anchor_earnings(context: Context) -> None:
-    plain = _valued(context)
-    lowered = _valued(with_overrides(context, {"earnings.cycle_gap": 1.0}))
+def test_a_cycle_gap_lowers_the_anchor_earnings(
+    mg_context: Context, with_overrides: WithOverrides
+) -> None:
+    plain = _valued(mg_context)
+    lowered = _valued(with_overrides(mg_context, {"earnings.cycle_gap": 1.0}))
     assert lowered.intermediates["cycle_gap"] == 1.0
     assert "cycle_gap" not in plain.intermediates
     assert plain.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.90)
     assert lowered.intermediates["anchor"]["ntm_eps"] == pytest.approx(4.90)
     assert lowered.intermediates["ntm_net_income"] == pytest.approx(
-        plain.intermediates["ntm_net_income"] - 1.0 * context.shares
+        plain.intermediates["ntm_net_income"] - 1.0 * mg_context.shares
     )
     assert lowered.value < plain.value
     # the data entries keep the consensus as found; the JUDGMENT entry carries the agent's gap
@@ -246,23 +227,28 @@ def test_a_cycle_gap_lowers_the_anchor_earnings(context: Context) -> None:
     assert cited["ntm_net_income"] == plain.intermediates["ntm_net_income"]
 
 
-def test_a_cycle_gap_of_nothing_moves_nothing(context: Context) -> None:
-    nothing = _valued(with_overrides(context, {"earnings.cycle_gap": 0.0}))
-    plain = _valued(context)
+def test_a_cycle_gap_of_nothing_moves_nothing(
+    mg_context: Context, with_overrides: WithOverrides
+) -> None:
+    nothing = _valued(with_overrides(mg_context, {"earnings.cycle_gap": 0.0}))
+    plain = _valued(mg_context)
     assert nothing.value == plain.value
     assert nothing.intermediates.pop("cycle_gap") == 0.0
     assert nothing == plain
 
 
-def test_the_cycle_gap_lowers_the_anchor_and_leaves_the_gap_its_own(context: Context) -> None:
+def test_the_cycle_gap_lowers_the_anchor_and_leaves_the_gap_its_own(
+    mg_context: Context, with_overrides: WithOverrides
+) -> None:
     """A cycle gap of 1.00 takes the NTM anchor and the value down and stays out of what the
     non-recurring gap moves: the basis test for stock compensation, the clean EPS, EPV, the P/E
     and ``large-nri``. Alone it leaves MGCO's basis as found, where a correction of 1.00 to the
     gap would switch it; beside a gap of 0.50 the basis is the gap's alone."""
-    plain = _valued(context)
-    cycle = _valued(with_overrides(context, {"earnings.cycle_gap": 1.0}))
-    gap = _valued(with_overrides(context, {"earnings.nri_gap": 0.5}))
-    both = _valued(with_overrides(context, {"earnings.nri_gap": 0.5, "earnings.cycle_gap": 1.0}))
+    c = mg_context
+    plain = _valued(c)
+    cycle = _valued(with_overrides(c, {"earnings.cycle_gap": 1.0}))
+    gap = _valued(with_overrides(c, {"earnings.nri_gap": 0.5}))
+    both = _valued(with_overrides(c, {"earnings.nri_gap": 0.5, "earnings.cycle_gap": 1.0}))
     assert plain.intermediates["sbc_basis"] == cycle.intermediates["sbc_basis"] == "includes-sbc"
     assert gap.intermediates["sbc_basis"] == both.intermediates["sbc_basis"] == "excludes-sbc"
     for alone, beside in ((plain, cycle), (gap, both)):

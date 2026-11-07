@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, date, datetime
 
 import pytest
 from support.stable_value import stable_dcf
@@ -7,31 +7,13 @@ from support.stable_value import stable_dcf
 from fairband.engine.classifier import Deciles
 from fairband.engine.mature_growth import Charge
 from fairband.engine.mature_stable import mature_stable_values, normalize_for_margin
-from fairband.engine.overrides import Override, OverrideTag, current_reading
-from fairband.engine.route import CompanyInputs, value_company
+from fairband.engine.overrides import current_reading
+from fairband.engine.route import value_company
 from fairband.engine.route_mature_stable import value_mature_stable
 from fairband.engine.route_steps import Context, Valued
 from fairband.policy import Policy
 
-TODAY = date(2026, 10, 31)
-NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
-
-
-@pytest.fixture
-def context(ms_inputs: CompanyInputs, policy: Policy) -> Context:
-    """MSCO past the guards, as ``route.value_company`` builds it: $40 on 1 bn shares."""
-    i = ms_inputs
-    assert i.trailing is not None and i.price is not None and i.shares_diluted is not None
-    return Context(i, i.trailing, i.price, i.shares_diluted, policy, TODAY)
-
-
-def with_overrides(c: Context, values: dict[OverrideTag, float]) -> Context:
-    """``c`` under an agent's overrides of ``values``, by tag."""
-    judged = {
-        tag: Override(1, tag, value, "agent", "claude-opus-5-5", NOW, "mid-cycle")
-        for tag, value in values.items()
-    }
-    return replace(c, overrides=judged)
+WithOverrides = Callable[..., Context]  # the fixture of conftest.py
 
 
 def _charge(runway_roic: float, terminal_roic: float, off: bool = False) -> Charge:
@@ -80,17 +62,23 @@ def test_margin_scaling_needs_both_margins_positive(ttm: float, median: float) -
     assert normalize_for_margin(100.0, ttm, median, True) == 100.0
 
 
+# The cycle gap on the Mature Stable route (method.md 14.4): it comes off E, the anchor earnings,
+# after the engine's margin normalization, and nothing else reads it.
+
+
 def test_a_cycle_gap_lowers_the_anchor_earnings(
-    context: Context, policy: Policy, deciles: Deciles
+    ms_context: Context, with_overrides: WithOverrides, policy: Policy, deciles: Deciles
 ) -> None:
-    plain = value_mature_stable(context)
-    lowered = value_mature_stable(with_overrides(context, {"earnings.cycle_gap": 1.0}))
+    plain = value_mature_stable(ms_context)
+    lowered = value_mature_stable(with_overrides(ms_context, {"earnings.cycle_gap": 1.0}))
     assert lowered.intermediates["cycle_gap"] == 1.0
-    assert lowered.intermediates["e_trailing"] == pytest.approx(
-        plain.intermediates["e_trailing"] - 1.0 * context.shares
+    assert lowered.intermediates["e_normalized"] == pytest.approx(
+        plain.intermediates["e_normalized"] - 1.0 * ms_context.shares
     )
+    assert lowered.intermediates["e_trailing"] == plain.intermediates["e_trailing"]
+    assert lowered.intermediates["margin_scaled"] is False
     assert "cycle_gap" not in plain.intermediates
-    plain_result = value_company(context.inputs, deciles, policy, TODAY)
+    plain_result = value_company(ms_context.inputs, deciles, policy, ms_context.today)
     assert current_reading(plain_result, "earnings.cycle_gap") == 0.0
     # the clean EPS, the P/E and large-nri do not read it
     assert lowered.intermediates["eps"] == plain.intermediates["eps"]
@@ -100,9 +88,31 @@ def test_a_cycle_gap_lowers_the_anchor_earnings(
     assert lowered.value < plain.value
 
 
-def test_a_cycle_gap_of_nothing_moves_nothing(context: Context) -> None:
-    nothing = value_mature_stable(with_overrides(context, {"earnings.cycle_gap": 0.0}))
-    plain = value_mature_stable(context)
+def test_the_cycle_gap_comes_off_the_normalized_earnings(
+    ms_context: Context, with_overrides: WithOverrides
+) -> None:
+    """MSCO at a 32% trailing margin against its 20% median: the margin flag fires and the engine
+    scales E by 0.20 / 0.32. The agent's cycle gap then comes off the scaled E, so the anchor
+    falls by exactly the gap on the shares, not by the gap scaled again."""
+    peak_trailing = replace(ms_context.trailing, operating_income=7_680e6)
+    peak_inputs = replace(ms_context.inputs, trailing=peak_trailing)
+    peak = replace(ms_context, inputs=peak_inputs, trailing=peak_trailing)
+    plain = value_mature_stable(peak)
+    lowered = value_mature_stable(with_overrides(peak, {"earnings.cycle_gap": 1.0}))
+    assert isinstance(plain, Valued) and isinstance(lowered, Valued)
+    p, q = plain.intermediates, lowered.intermediates
+    assert p["margin_scaled"] is True and q["margin_scaled"] is True
+    assert p["e_normalized"] == pytest.approx(p["e_trailing"] * 0.20 / 0.32)
+    assert q["e_normalized"] == p["e_normalized"] - 1.0 * peak.shares
+    assert q["e_trailing"] == p["e_trailing"]
+    assert lowered.value < plain.value
+
+
+def test_a_cycle_gap_of_nothing_moves_nothing(
+    ms_context: Context, with_overrides: WithOverrides
+) -> None:
+    nothing = value_mature_stable(with_overrides(ms_context, {"earnings.cycle_gap": 0.0}))
+    plain = value_mature_stable(ms_context)
     assert isinstance(nothing, Valued) and isinstance(plain, Valued)
     assert nothing.value == plain.value
     assert nothing.intermediates.pop("cycle_gap") == 0.0
