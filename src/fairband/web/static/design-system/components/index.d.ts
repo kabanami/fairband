@@ -288,6 +288,11 @@ export interface OverrideRecordProps {
   effect?: number;
   reviewed?: number;
   validUntil?: string;
+  /**
+   * fairband: on `applied` with no `effect`, the sentence the Result row shows instead of an
+   * empty figure, as for an override outside a valued review (spec 2026-11-06 Tier 2, 18.3).
+   */
+  resultNote?: string;
 }
 
 /** A plain string, or a number that traces to a stored fact or an engine metric. */

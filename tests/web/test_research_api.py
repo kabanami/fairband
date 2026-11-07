@@ -19,9 +19,11 @@ from fastapi.testclient import TestClient
 from support.engine_companies import mature_growth_inputs, universe_deciles
 from support.web import HEADER, NOW, TODAY
 
+from fairband.engine.designation import designation_for
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice
+from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.store.db import connect
@@ -29,7 +31,7 @@ from fairband.store.ledger import OWNER, Writer
 from fairband.store.overrides import insert_override
 from fairband.store.reports import insert_judgments, insert_report
 from fairband.store.reviews import insert_review
-from fairband.store.secondary import secondary_row
+from fairband.store.secondary import insert_secondary, secondary_row
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -228,25 +230,110 @@ def test_a_refused_review_carries_its_refusal(
     assert (found["bridge"], found["overrideCount"]) == ([], 1)
 
 
-def test_the_detail_carries_the_secondary(
-    client: TestClient, db_path: Path, secondaries: dict[str, int]
+def test_a_refused_row_carries_its_counting_secondary(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
 ) -> None:
+    """AAL's route refused; its secondary valuation counts on its snapshot, so the drawer draws
+    the secondary's band (spec 18.2, the ruling of 2026-11-07): the levels, price ÷ value and its
+    word at the latest snapshot's price on the policy's edges, and the parts with their values
+    as the secondary read serves them (18.3)."""
+    refused = results["AAL"]
+    assert refused.value is None and refused.price is not None
     with closing(connect(db_path)) as conn:
         secondary = secondary_row(conn, secondaries["AAL"])
     assert secondary is not None and secondary.buy_level is not None
-    assert _detail(client, "AAL")["secondary"] == {
+    value = secondary.value_per_share
+    ratio, word = designation_for(refused.price, value, policy.designation_edges)
+    served = client.get("/api/companies/AAL/secondary").json()["secondaryValuations"][0]
+    found = _detail(client, "AAL")["secondary"]
+    assert found == {
         "id": secondaries["AAL"],
         "form": "parts",
-        "valuePerShare": secondary.value_per_share,
+        "valuePerShare": value,
         "levels": {
             "buy": secondary.buy_level,
             "fairLow": secondary.fair_low,
             "fairHigh": secondary.fair_high,
             "trim": secondary.trim_level,
         },
+        "priceToValue": ratio,
+        "designation": word,
+        "parts": served["parts"],
+        "drivers": None,
         "createdAt": "2026-10-31T22:15:00+00:00",
         "principal": "agent",
         "actor": "claude-opus-5-5",
+    }
+    (part,) = found["parts"]
+    assert (part["name"], part["note"], part["value"]) == (
+        "the business",
+        None,
+        secondary.parts[0]["value"],
+    )
+    # a reprice: the secondary still counts, its word read at the new price
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, replace(refused, price=100.0), 1, clock=lambda: NOW)
+    repriced = _detail(client, "AAL")["secondary"]
+    assert (repriced["priceToValue"], repriced["designation"]) == designation_for(
+        100.0, value, policy.designation_edges
+    )
+    assert repriced["priceToValue"] == 100.0 / value
+
+
+def test_a_secondary_without_levels_has_no_word(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """A value a share at or below zero has no levels, so no band and no word."""
+    path = (-5e9,) * 3
+    part = Part("the business", path, 0.0, None)
+    loss = secondary_value(
+        parts=[part], debt=0.0, cash=0.0, shares=1e9, price=150.0, moat="None", policy=policy
+    )
+    with closing(connect(db_path)) as conn:
+        insert_secondary(
+            conn, "AAL", _latest(db_path, "AAL"), [part], loss, "a loss", [], "none", "none",
+            policy.version, policy.settings_hash, None, AGENT, NOW,
+        )  # fmt: skip
+    found = _detail(client, "AAL")["secondary"]
+    assert found["valuePerShare"] < 0
+    assert (found["levels"], found["priceToValue"], found["designation"]) == (None, None, None)
+
+
+def test_the_detail_carries_the_drivers_of_a_drivers_form(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 20.4's drivers, as the secondary read serves them, and no parts."""
+    drivers = Drivers(3, (0.10, 0.08, 0.05), (0.20, 0.20, 0.20), 0.25, 2.0, 0.02)
+    valuation = secondary_value(
+        drivers=drivers,
+        revenue_0=1e9,
+        roic_t=0.12,
+        debt=0.0,
+        cash=0.0,
+        shares=1e8,
+        price=150.0,
+        moat="None",
+        policy=policy,
+    )
+    with closing(connect(db_path)) as conn:
+        insert_secondary(
+            conn, "HGCO", _latest(db_path, "HGCO"), [], valuation, "the drivers", [], "none",
+            "none", policy.version, policy.settings_hash, None, AGENT, NOW,
+            revenue_0=1e9, roic_t=0.12,
+        )  # fmt: skip
+    found = _detail(client, "HGCO")["secondary"]
+    assert (found["form"], found["parts"]) == ("drivers", [])
+    assert found["drivers"] == {
+        "years": 3,
+        "revenueGrowth": [0.10, 0.08, 0.05],
+        "operatingMargin": [0.20, 0.20, 0.20],
+        "taxRate": 0.25,
+        "salesToCapital": 2.0,
+        "terminalGrowth": 0.02,
     }
 
 

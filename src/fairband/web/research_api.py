@@ -11,7 +11,12 @@ it), each ``None`` without one:
   step, ``{overrideId, tag, old, new, delta, refusal}``, with the input's label in a reader's words
   (``overrides.LABELS``), its unit (``overrides.TAGS``) and the override's reason and writer.
 - ``secondary``: the newest secondary valuation when it counts, ``{id, form, valuePerShare,
-  levels, createdAt, principal, actor}``.
+  levels, priceToValue, designation, parts, drivers, createdAt, principal, actor}``: price ÷ value
+  and its word at the latest snapshot's price on the effective policy's edges, as the snapshot's
+  own are computed (``designation_for``), ``None`` without levels or a positive price, so a
+  refused row's drawer can draw the secondary's band against today's price; ``parts`` and
+  ``drivers`` as the secondary read serves them (``reviews_api.secondary_json``), the parts form's
+  parts with their values, or the drivers form's drivers.
 - ``report``: the latest published report, ``{id, mode, stance, revision, createdAt, principal,
   actor, expired, summary, references}``, wherever it rests: ``expired`` when the window of its
   snapshot ended before today (``rows.window_ended``), ``summary`` its first section as submitted
@@ -36,6 +41,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
+from fairband.engine.designation import designation_for
 from fairband.engine.overrides import LABELS, TAGS
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
@@ -51,6 +57,7 @@ from fairband.store.reviews import ReviewRow, latest_review
 from fairband.store.secondary import SecondaryRow, latest_secondary
 from fairband.store.snapshots import SnapshotRow, latest_snapshot, snapshot_rows
 from fairband.web.agents_api import finding_json, record_json
+from fairband.web.reviews_api import secondary_json
 from fairband.web.rows import counts_on, rested_on, window_ended
 
 LEDGER_ROWS = 20  # the company's newest ledger rows Details lists
@@ -78,7 +85,7 @@ def agent_records(
             else None
         ),
         "secondary": (
-            _secondary(secondary)
+            _secondary(secondary, snapshot.price, policy.designation_edges)
             if secondary is not None and counts_on(snapshot, cited, secondary)
             else None
         ),
@@ -164,14 +171,28 @@ def _line(line: Mapping[str, Any], override: OverrideRow | None) -> dict[str, An
     }
 
 
-def _secondary(secondary: SecondaryRow) -> dict[str, Any]:
+def _secondary(
+    secondary: SecondaryRow, price: float | None, edges: tuple[float, float, float, float]
+) -> dict[str, Any]:
+    """The secondary valuation, its designation at ``price``, the latest snapshot's."""
+    value = secondary.value_per_share
+    levels = _levels(
+        secondary.buy_level, secondary.fair_low, secondary.fair_high, secondary.trim_level
+    )
+    ratio: float | None = None
+    word: str | None = None
+    if levels is not None and price is not None and price > 0 and value > 0:
+        ratio, word = designation_for(price, value, edges)
+    served = secondary_json(secondary)
     return {
         "id": secondary.id,
         "form": secondary.form,
-        "valuePerShare": secondary.value_per_share,
-        "levels": _levels(
-            secondary.buy_level, secondary.fair_low, secondary.fair_high, secondary.trim_level
-        ),
+        "valuePerShare": value,
+        "levels": levels,
+        "priceToValue": ratio,
+        "designation": word,
+        "parts": served["parts"],
+        "drivers": served["drivers"],
         "createdAt": secondary.created_at.isoformat(),
         "principal": secondary.principal,
         "actor": secondary.actor,

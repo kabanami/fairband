@@ -1693,14 +1693,121 @@ def test_details_is_a_disclosure_whose_research_is_read_when_it_opens() -> None:
     )
     _in_order(post, "if (!r.ok) throw new Error(", "readResearch(symbol);")
     assert "draft.error = err.message;" in post
+    # the records are read again only while the drawer still shows the note's company, so a
+    # company opened meanwhile never shows the first one's records
+    assert "if (state.drawer && state.drawer.symbol === symbol) readResearch(symbol);" in post
+
+
+def test_details_lists_the_secondarys_parts_or_drivers() -> None:
+    """Spec 18.3, the secondary valuation "with its parts, value and date": under its value and
+    levels, on the parts form each part's name, its value and its note; on the drivers form the
+    drivers in words, the years, the growth and margin lists as percentages, the tax rate,
+    sales-to-capital and the terminal growth; then who made it and when."""
+    script = _static_file("app.js")
+    details = _function(script, "details")
+    block = details[details.index("'app-secondary'") : details.index("h(F.OverrideRecord, {")]
+    _in_order(
+        block,
+        "pairs(secondaryRows(secondary))",
+        "secondaryPath(secondary)",
+        "h(F.PrincipalChip, {",
+    )
+    path = _function(script, "secondaryPath")
+    _in_order(
+        path,
+        "if (s.form === 'parts') {",
+        "s.parts.map(function (p, i) {",
+        "h('span', { className: 'body' }, p.name)",
+        "h('span', { className: 'figure-sm' }, whole(p.value))",
+        "p.note ? h('p', { className: 'caption app-muted' }, p.note) : null",
+        "var d = s.drivers;",
+        "['Years', plain(d.years), true],",
+        "['Revenue growth', percents(d.revenueGrowth), true],",
+        "['Operating margin', percents(d.operatingMargin), true],",
+        "['Tax rate', F.formatPercent(d.taxRate), true],",
+        "['Sales to capital', times(d.salesToCapital), true],",
+        "['Terminal growth', F.formatPercent(d.terminalGrowth), true]",
+    )
+    percents = _function(script, "percents")
+    assert "return list.map(function (v) { return F.formatPercent(v); }).join(', ');" in percents
+
+
+def test_a_refused_row_draws_its_secondarys_band() -> None:
+    """The ruling of 2026-11-07 on spec 18.1 and 18.2: a refused row whose secondary valuation
+    counts on the latest snapshot shows that value in the screen's Reviewed column, so its drawer
+    draws the secondary's band against the price, captioned as the secondary valuation with its
+    word at today's price, and the refusal stays under it. A refused row with none stays as it
+    was; the valued row's meter is the mechanical one."""
+    script = _static_file("app.js")
+    main = _function(script, "sections")
+    assert "var secondary = body.secondary;" in main
+    assert (
+        "var banded = !valued && !!r.refusal && !!secondary && !!secondary.levels &&"
+        " r.price != null;"
+    ) in main
+    _in_order(
+        main,
+        "valued ? section('band', null,",
+        "banded ? section('secondary-band', null,",
+        "low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,",
+        "fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,",
+        "trimLevel: secondary.levels.trim, designation: secondary.designation,",
+        "showScale: false, caption: secondaryCaption(secondary, body.designationEdges)",
+        "r.refusal ? section('refusal', 'Refusal',",
+    )
+    band = main[main.index("banded ? section('secondary-band', null,") :]
+    band = band[: band.index("r.refusal ? section('refusal', 'Refusal',")]
+    assert "reviewedValue" not in band
+    caption = _function(script, "secondaryCaption")
+    assert (
+        "var said = standing({ designation: s.designation, price_to_value: s.priceToValue },"
+        " edges);"
+    ) in caption
+    assert "return 'Secondary valuation' + (said ? ' · ' + said : '');" in caption
+
+
+def test_an_applied_override_outside_a_valued_review_says_so() -> None:
+    """Spec 18.3: an applied override with no effect to show (no review on the latest snapshot,
+    after a revalue, or a review that refused) reads a caption in its Result row, never an empty
+    figure: a `// fairband:` patch, ``OverrideRecord.resultNote``."""
+    script = _static_file("app.js")
+    details = _function(script, "details")
+    record = details[details.index("h(F.OverrideRecord, {") : details.index("'app-guidance'")]
+    assert (
+        "var effect = line && line.delta != null && review.value != null ? line.delta : undefined;"
+    ) in details
+    for text in (
+        "effect: effect,",
+        "reviewed: effect === undefined ? undefined : review.value,",
+        "validUntil: effect === undefined ? undefined : r.valid_until,",
+        "resultNote: effect === undefined ? NO_EFFECT : undefined",
+    ):
+        assert text in record, text
+    assert "var NO_EFFECT = 'No effect to show: not inside a valued review on the latest" in script
+    bundle = _component_file("bundle.js")
+    override = _function(bundle, "OverrideRecord")
+    assert "// fairband: an applied override with no effect to show" in override
+    assert "(spec 2026-11-06 Tier 2, 18.3)" in override
+    _in_order(
+        override,
+        "h('dt', { className: 'label' }, 'Result'),",
+        "p.effect == null && p.resultNote",
+        "? h('dd', { className: 'caption fb-rec__gloss' }, p.resultNote)",
+        "h('b', { className: 'fb-rec__effect' }, signedMoney(p.effect)), ' per share',",
+    )
+    declarations = _component_file("index.d.ts")
+    props = re.search(
+        r"export interface OverrideRecordProps \{\n(.*?)\n\}", declarations, re.DOTALL
+    )
+    assert props is not None and "resultNote?: string;" in props.group(1)
 
 
 def test_the_request_menu_shows_the_open_item_refusal(client: TestClient) -> None:
-    """Review focus 2: Request research on a company whose item is open posts nothing new; the
-    server's 409 sentence shows under the button as it arrives, and the detail is read again so
-    the open item's line follows. The menu: the two modes, a radio each, the note line of at most
-    200 characters, and Post, sent as the owner with the request header every page write
-    carries."""
+    """Request research on a company whose item is already open posts nothing new: the server
+    refuses the second post 409, its sentence shows under the button as it arrives, and the
+    detail is read again so the open item's line follows. The menu: the two modes, a radio each,
+    the note line of at most 200 characters, and Post, sent as the owner with the request header
+    every page write carries."""
     script = _static_file("app.js")
     assert "var REQUEST_MODES = ['valuation review', 'full report'];" in script
     menu = _function(script, "RequestMenu")

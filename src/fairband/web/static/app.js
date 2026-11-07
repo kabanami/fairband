@@ -32,6 +32,9 @@
   };
   /* A work item's two modes, as the inbox takes them (spec 2026-11-06 Tier 2, 8). */
   var REQUEST_MODES = ['valuation review', 'full report'];
+  /* An applied override's Result row in Details when no valued review on the latest snapshot
+     holds it (spec 2026-11-06 Tier 2, 18.3). */
+  var NO_EFFECT = 'No effect to show: not inside a valued review on the latest snapshot';
 
   var mount = document.getElementById('screen');
   var root = ReactDOM.createRoot(mount);
@@ -638,6 +641,8 @@
     var growth = r.route === 'revenue-growth';
     var review = body.review;
     var report = body.report;
+    var secondary = body.secondary;
+    var banded = !valued && !!r.refusal && !!secondary && !!secondary.levels && r.price != null;
     var ask = asked(r.symbol);
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
@@ -657,6 +662,17 @@
         youngGrowth(im.failure_probability),
         crossCheck(im.growth_route),
         growth ? discountedAt(r.inputs) : null) : null,
+      /* A refused row whose secondary valuation counts on the latest snapshot shows that value in
+         the screen's Reviewed column (spec 2026-11-06 Tier 2, 18.1), so the drawer draws the
+         secondary's band against the price, its word at today's price, and the refusal stays
+         under it (the ruling of 2026-11-07). A refused row with none has the refusal alone. */
+      banded ? section('secondary-band', null,
+        h(F.BandMeter, {
+          low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,
+          fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,
+          trimLevel: secondary.levels.trim, designation: secondary.designation,
+          showScale: false, caption: secondaryCaption(secondary, body.designationEdges)
+        })) : null,
       /* A refusal takes the band's place: it is the answer when there is no value. A growth row
          refused with its revenue path still shows the margin the price needs (spec 5.11). A
          Mature Stable row refused for its trailing earnings shows the growth-route cross-check
@@ -744,6 +760,7 @@
         h('p', { className: 'body app-refusal' }, review.refusal)) : null,
       secondary ? block('app-secondary', 'Secondary valuation',
         pairs(secondaryRows(secondary)),
+        secondaryPath(secondary),
         h('p', { className: 'app-chipline' }, h(F.PrincipalChip, {
           principal: secondary.principal, actor: secondary.actor,
           at: localIso(secondary.createdAt)
@@ -756,9 +773,13 @@
       }, 'Reading the research records.'),
       rs && rs.overrides.length ? block('app-overrides', 'Overrides',
         rs.overrides.map(function (o) {
+          /* Its step in the valued review on the latest snapshot gives an applied override its
+             effect; outside one (no review there, after a revalue, or one that refused) its
+             Result row says so instead. */
           var line = review ? review.bridge.filter(function (l) {
             return l.overrideId === o.id;
           })[0] : null;
+          var effect = line && line.delta != null && review.value != null ? line.delta : undefined;
           return h(F.OverrideRecord, {
             key: o.id, tag: o.tag, from: inputFigure(o.old, o.unit),
             to: inputFigure(o.new, o.unit),
@@ -766,9 +787,10 @@
             principal: o.principal, actor: o.actor,
             state: o.state,
             message: o.state === 'dropped' ? o.dropReason : o.message,
-            effect: line ? line.delta : undefined,
-            reviewed: line ? review.value : undefined,
-            validUntil: line ? r.valid_until : undefined
+            effect: effect,
+            reviewed: effect === undefined ? undefined : review.value,
+            validUntil: effect === undefined ? undefined : r.valid_until,
+            resultNote: effect === undefined ? NO_EFFECT : undefined
           });
         })) : null,
       rs && rs.guidance.length ? block('app-guidance', 'Guidance on file',
@@ -1070,7 +1092,8 @@
 
   /* Add a note: the note, as the owner, with the request header every page write carries; a
      refusal shows the server's sentence under the field, the text kept. Taken, the field clears
-     and the records are read again, the new note first among them. */
+     and, while the drawer still shows the company, the records are read again, the new note
+     first among them. */
   function postNote(symbol) {
     var draft = drafted(symbol);
     var text = draft.text.trim();
@@ -1083,7 +1106,7 @@
         if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)
           : 'the server answered ' + r.status);
         draft.text = '';
-        readResearch(symbol);
+        if (state.drawer && state.drawer.symbol === symbol) readResearch(symbol);
       })
       .catch(function (err) { draft.error = err.message; })
       .then(function () {
@@ -1132,6 +1155,36 @@
     return rows;
   }
 
+  /* The secondary valuation's path (spec 18.3): on the parts form each part's name and its value,
+     a total in whole dollars, with its note under it; on the drivers form the drivers in words,
+     the rates as percentages. */
+  function secondaryPath(s) {
+    if (s.form === 'parts') {
+      return h('ul', { className: 'app-list app-secondary__path' }, s.parts.map(function (p, i) {
+        return h('li', { key: i },
+          h('span', { className: 'app-line' },
+            h('span', { className: 'body' }, p.name), ' ',
+            h('span', { className: 'figure-sm' }, whole(p.value))),
+          p.note ? h('p', { className: 'caption app-muted' }, p.note) : null);
+      }));
+    }
+    var d = s.drivers;
+    if (!d) return null;
+    return h('div', { className: 'app-secondary__path' }, pairs([
+      ['Years', plain(d.years), true],
+      ['Revenue growth', percents(d.revenueGrowth), true],
+      ['Operating margin', percents(d.operatingMargin), true],
+      ['Tax rate', F.formatPercent(d.taxRate), true],
+      ['Sales to capital', times(d.salesToCapital), true],
+      ['Terminal growth', F.formatPercent(d.terminalGrowth), true]
+    ]));
+  }
+
+  /* A list of rates, each a percent: 10.0%, 8.0%, 5.0%. */
+  function percents(list) {
+    return list.map(function (v) { return F.formatPercent(v); }).join(', ');
+  }
+
   /* The ids of the overrides whose evidence cites guidance record `id`, guidance:<id>, as the
      server reads such a ref (refs.guidance_cited). */
   function citedBy(overrides, id) {
@@ -1176,6 +1229,13 @@
     var word = F.DESIGNATION[r.designation];
     if (!word || r.price_to_value == null) return null;
     return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × the value';
+  }
+
+  /* A refused row's band from its secondary valuation: what drew it, then its word and price ÷
+     value at the latest price, as the meter's own caption says them. */
+  function secondaryCaption(s, edges) {
+    var said = standing({ designation: s.designation, price_to_value: s.priceToValue }, edges);
+    return 'Secondary valuation' + (said ? ' · ' + said : '');
   }
 
   /* Price ÷ value to two decimals, unless they would land on one of the policy's designation

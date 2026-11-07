@@ -686,12 +686,17 @@
               p.evidence && p.evidence.length
                 ? h('dd', null, h(Evidence, { items: p.evidence })) : null,
               h('dt', { className: 'label' }, 'Result'),
-              h('dd', { className: 'body' },
-                h('b', { className: 'fb-rec__effect' }, signedMoney(p.effect)), ' per share',
-                p.reviewed != null ? h(React.Fragment, null, ' · reviewed ',
-                  h('span', { className: 'figure-sm' }, money(p.reviewed))) : null,
-                p.validUntil ? h('span', { className: 'fb-rec__gloss caption' },
-                  ' · valid to ', h(DateText, { value: p.validUntil })) : null)
+              // fairband: an applied override with no effect to show, outside a valued review,
+              // reads the caller's sentence instead of an empty figure
+              // (spec 2026-11-06 Tier 2, 18.3).
+              p.effect == null && p.resultNote
+                ? h('dd', { className: 'caption fb-rec__gloss' }, p.resultNote)
+                : h('dd', { className: 'body' },
+                    h('b', { className: 'fb-rec__effect' }, signedMoney(p.effect)), ' per share',
+                    p.reviewed != null ? h(React.Fragment, null, ' · reviewed ',
+                      h('span', { className: 'figure-sm' }, money(p.reviewed))) : null,
+                    p.validUntil ? h('span', { className: 'fb-rec__gloss caption' },
+                      ' · valid to ', h(DateText, { value: p.validUntil })) : null)
             )
           : h('p', { className: 'fb-rec__msg body' }, p.message)
       )
