@@ -31,7 +31,8 @@ valued at mid-cycle (step 7).
 - The tools, their arguments and their answers: `reference/tools.md`.
 - The rules the server checks every number by: `reference/citations.md`. Read it before you write.
 - The report's twelve sections, the summary page and a full example submission:
-  `reference/report-template.md`.
+  `reference/report-template.md`. The section numbers in this playbook are a full report's. A
+  valuation review leaves out sections 2 and 3, so from section 4 on its numbers are two lower.
 - The register and the product's words: `reference/register.md`.
 
 ## The steps
@@ -138,13 +139,13 @@ Then build the seven parts:
    anchors on earnings without them.
 3. **The story management is telling.** Quote the frame in their words. Then take three to five
    claims. For each: the claim with its figure and its timeline; the evidence for it in the
-   numbers; the driver it moves in the engine's terms (the growth of years two and three, the held
-   rate, the target margin, the reinvestment, the moat, the risk); and the test that would show it
-   true or false, and by when. Give each a verdict in Damodaran's words. **Possible**: it could
-   happen. **Plausible**: the evidence makes it believable. **Probable**: the evidence makes it
-   more likely than not. Only a probable claim moves a figure in step 10. Then the drift since the
-   previous call: a claim that grew or vanished, new words such as "macro" or "visibility", a
-   metric no longer reported. Then what they did not say.
+   numbers; the driver it moves in the engine's terms (the growth of years two and three, the
+   belief, the held rate, the target margin, the reinvestment, the moat, the risk); and the test
+   that would show it true or false, and by when. Give each a verdict in Damodaran's words.
+   **Possible**: it could happen. **Plausible**: the evidence makes it believable. **Probable**:
+   the evidence makes it more likely than not. Only a probable claim moves a figure in step 10.
+   Then the drift since the previous call: a claim that grew or vanished, new words such as
+   "macro" or "visibility", a metric no longer reported. Then what they did not say.
 4. **The guidance.** Record every clear figure the company guided with `guidance_add` (see
    "Guidance" below). The section shows each record: the metric, the period, the low, the high,
    the midpoint, the basis, and whether it was raised, held or cut against the previous record and
@@ -181,15 +182,18 @@ The signs:
 - inventory cycles;
 - a consensus that extends a peak;
 - the engine's `margin-flag`: the trailing operating margin far above its ten-year median or its
-  ten-year high. Its word is "Possible cycle peak" when those years hold a loss year, else "Margin
-  above history".
+  ten-year high. Its word is "Newly profitable" when the median is at or below zero, "Possible
+  cycle peak" when those years hold a loss year, else "Margin above history".
 
-For a cyclical, place the company in its cycle. Set the operating margin against its ten-year
-median, and revenue against its trend, from the cells of `financial_tables` and the years of
-`financials`. On Mature Stable the snapshot's intermediates hold the median (`median_margin`).
-Record the evidence as findings with `finding_add`: the peak and the trough you found, the
-industry's capacity or prices. The thesis names the position. The summary says "cyclical". Step
-10 sets the inputs at mid-cycle.
+For a cyclical, place the company in its cycle. Set the operating margin against its median, and
+revenue against its trend, from the cells of `financial_tables` and the years of `financials`. On
+Mature Stable the snapshot's intermediates hold the ten-year median (`median_margin`); cite it
+there. On every other route no tool gives a median. Cite instead the margin of the median year:
+of the five years in the growth table, the year whose operating margin is the middle one, a
+`table:` cite named as that year's margin ("the margin of fiscal 2023, the middle of the past
+five years"), never a median you computed. Record the rest of the evidence as findings with
+`finding_add`: the peak and the trough you found, the industry's capacity or prices. The thesis
+names the position. The summary says "cyclical". Step 10 sets the inputs at mid-cycle.
 
 ### 8. The valuation
 
@@ -229,17 +233,17 @@ The kill criteria of section 11 test the thesis.
 Decide each judgment from the thesis (see "The judgments" below). Move an input for a claim of the
 call only when the thesis accepts it and step 5 judged it probable. Where a decision changes an
 input, write an override (a change to one input, with its reason and its evidence) with
-`override_add`.
-One override changes one input. Its answer carries the override's state and, when it applied, the
-review (the engine's value under the applied overrides) with its bridge (the change from the
-mechanical value, one line per override). Read both. `override_drop` drops an applied override.
-See "Overrides" below.
+`override_add`. One override changes one input. Its answer carries the override's state and, when
+it applied, the review (the engine's value under the applied overrides) with its bridge (the
+change from the mechanical value, one line per override). Read both. `override_drop` drops an
+applied override. See "Overrides" below.
 
-The guidance, at your best effort and never required. A clear full-year guidance, or a next quarter
-that completes the fiscal year, may replace the consensus anchor: `earnings.ntm` on Mature Growth,
+The guidance, at your best effort and never required. A clear full-year guidance for the right
+fiscal year may replace the consensus: an NTM anchor, `earnings.ntm` on Mature Growth or
 `revenue.ntm` on High Growth, Young Growth and Decline, or a consensus step, `path.step_2` or
-`path.step_3`. The override's evidence holds an item of kind `guidance` that cites the record as
-`guidance:<id>`. Where the guidance is not clear, the consensus stands. See "Guidance" below.
+`path.step_3`. "Guidance" below says which year feeds which input. The override's evidence holds
+an item of kind `guidance` that cites the record as `guidance:<id>`. Where the guidance is not
+clear, or is for any other year, the consensus stands.
 
 A cyclical, valued at mid-cycle:
 
@@ -331,11 +335,14 @@ Record one with `guidance_add(symbol, metric, period, low, high, basis, as_of, t
 - `text`: the sentence, verbatim. `source`: the transcript's `response:<responseId>`, or a filing.
 
 The server computes the midpoint. For a fiscal-year revenue or EPS record it also computes the
-step: the growth from the year before's actual on file. So you never compute a rate. A newer record
-of the same metric, period and basis supersedes the older one, in the order of the calls' dates.
-Record the previous call's figure too, so the section can say raised, held or cut: written after
-the newer one, it is stored already superseded. Every record stays, so a later report reads the
-track record, guided against delivered.
+step: the growth from the year before's actual on file, so you never compute that rate. The step
+is the track-record figure: the guided growth set against what the company last delivered, for
+section 5. It is never an override's `new`.
+
+A newer record of the same metric, period and basis supersedes the older one, in the order of the
+calls' dates. Record the previous call's figure too, so the section can say raised, held or cut:
+written after the newer one, it is stored already superseded. Every record stays, so a later
+report reads the track record, guided against delivered.
 
 The rules:
 
@@ -346,22 +353,34 @@ The rules:
   5: the consensus stands. Record an adjusted or a constant-currency range with its basis. A
   figure in words or a one-sided one has no low and high: record it as a finding with its text and
   no value.
-- A next-quarter figure enters only when it completes the fiscal year: three quarters of that year
-  already reported, and the guided fourth. The year's figure is then the `derive` `sum` of the
-  three reported quarters, each a finding, and the record's midpoint, and it serves as a full-year
-  figure would. Otherwise the quarter stays in section 5, read against the consensus for that
-  quarter.
+- A next-quarter figure feeds no override. With three quarters of the year reported, the next
+  twelve months run into the year after, so the year the quarter completes sits behind every input
+  the engine reads. Record the quarter's guidance all the same. When it completes the fiscal year
+  (three quarters of that year reported, and the guided fourth), derive the year's figure: three
+  chained `derive` `sum` calls, since a `sum` takes two refs and each link names the `derived:` id
+  the call before answered (the first and the second quarter, then the third, then the record's
+  midpoint), each reported quarter a finding. Read that figure against the consensus for the year
+  in section 5, as a signal for the thesis. A quarter that completes no year is read against the
+  consensus for that quarter.
 - Use it at your best effort. It is never required: a report with no guidance override is a normal
   report. Where the guidance is not clear, the consensus is the fallback.
 
-Guidance enters the reviewed value only through an override, never the mechanical value. The
-figure you pass as `new` comes from a tool:
+Guidance enters the reviewed value only through an override, never the mechanical value. Each
+input takes one fiscal year's full-year guidance, and the figure you pass as `new` comes from a
+tool:
 
-- for an NTM anchor, the record's midpoint;
-- for a consensus step, the growth the path reads: `derive` `growth` of the record's midpoint over
-  the consensus of the year before (its `estimate:` ref). Step 2 grows from the base year (the
-  `base_year` of the snapshot's `path` intermediate) into the next year; step 3 into the year after
-  that.
+- `earnings.ntm` (Mature Growth): a full-year EPS guidance for the base year, the fiscal year the
+  next twelve months fall in, read from `base_year` in the snapshot's `path` intermediate. `new`
+  is the record's midpoint.
+- `revenue.ntm` (High Growth, Young Growth, Decline): a full-year revenue guidance for the same
+  year. On Decline, whose intermediates carry no `base_year`, that year is the fiscal year after
+  the newest statement year on file. `new` is the record's midpoint.
+- `path.step_2`: a full-year guidance for the base year plus one; `path.step_3`: for the base year
+  plus two. `new` is the `derive` `growth` of the record's midpoint over the consensus for the
+  year before: its `estimate:` EPS on Mature Growth, its `estimate:` revenue on High Growth, Young
+  Growth and Decline, never a net-income estimate.
+
+A guidance for any other year feeds no input and stays in section 5.
 
 The override's evidence names the record: `{kind: "guidance", ref: "guidance:<id>", note}`.
 The server refuses the override, and stores nothing, when that item is not right: "a guidance item
@@ -499,12 +518,12 @@ grows revenue at that year's rate and takes the margin, then the tax. It reinves
 revenue divided by sales-to-capital. A year whose revenue falls reinvests nothing, so a decline
 does not create cash. It discounts each year's free cash flow at r, the policy's required return,
 which no one may change. The terminal value grows the last year's after-tax operating profit at the
-terminal growth and reinvests the share that growth needs at the terminal return the moat sets (r
-on a Narrow or None moat; on a Wide one, the company's ten-year ROIC, held between r and the
-policy's cap). A
-terminal growth at or below zero reinvests nothing. This is the engine's own
-stable-growth rule, so the route's value and this one rest on one terminal convention. The equity
-is the firm value less debt plus cash. The value a share is the equity over the diluted shares.
+terminal growth and reinvests the share that growth needs at the terminal return the moat sets:
+r on a Narrow or None moat; on a Wide one, the company's ten-year aggregate ROIC, held between r
+and the policy's cap, or r where the snapshot holds no ten-year ROIC, as on the growth routes. A
+terminal growth at or below zero reinvests nothing. This is the engine's own stable-growth rule,
+so the route's value and this one rest on one terminal convention. The equity is the firm value
+less debt plus cash. The value a share is the equity over the diluted shares.
 
 Set the drivers from the thesis, and say in the reason why each one is where it is. The consensus,
 or a clear guidance, serves the first years. A cyclical takes its margins at mid-cycle. On High
@@ -515,10 +534,10 @@ Growth and Young Growth the route's own path in the intermediates (`growth_rates
 
 Every record carries a three-by-three grid: the value a share at r less one point, r, and r plus
 one point (the columns), across the terminal growth less one point, the terminal growth, and the
-lower of the terminal growth plus one point and g_T (the rows). The centre cell is the value. The
-grid shows how much of the value is assumption; it is never a value. A record has no grid when r
-less one point would not exceed the highest growth. Cite a cell as `secondary:<id>/grid/<i>/<j>`,
-rows and columns counted from 1.
+lower of the terminal growth plus one point and g_T (the rows). At a terminal growth of g_T the
+third row repeats the second. The centre cell is the value. The grid shows how much of the value
+is assumption; it is never a value. A record has no grid when r less one point would not exceed
+the highest growth. Cite a cell as `secondary:<id>/grid/<i>/<j>`, rows and columns counted from 1.
 
 ### The parts
 
@@ -544,10 +563,10 @@ drivers or parts"; "the path needs its own evidence item"; a debt or a cash with
 of its own; "settings changed: run a revalue" and its two siblings; a `guidance` item's 400, 404 and
 409, as on an override; "foreign filer: currency and share-unit handling not built yet"; "no
 diluted share count"; on the drivers form, "no trailing revenue on file". Then the bounds, each
-naming its rule with the policy's figures: "a secondary valuation runs 3 to 15 years"; "revenue_growth
-has 4 entries for 5 years" (or `operating_margin`); a driver out of its range, "tax_rate is 0% to
-50%"; the terminal growth, "the terminal growth is −100% to g_T, 3.0%"; on the parts form, "at least
-one part", "at most 10 parts", "a part has 3 to 15 years".
+naming its rule with the policy's figures: "a secondary valuation runs 3 to 15 years";
+"revenue_growth has 4 entries for 5 years" (or `operating_margin`); a driver out of its range,
+"tax_rate is 0% to 50%"; the terminal growth, "the terminal growth is −100% to g_T, 3.0%"; on the
+parts form, "at least one part", "at most 10 parts", "a part has 3 to 15 years".
 
 The drivers or the path are your judgment, carried by the evidence: a tool's input, not a report's
 text. The report cites the stored record: `secondary:<id>/value`, `/years/<t>/<line>`,

@@ -50,7 +50,7 @@ Put the answer first in each section. Keep each sentence to one idea.
 | 5 | The last earnings call | both | One page, in seven parts: the verdict; the quarter against expectations; the story management is telling, claim by claim; the guidance; the positives and the negatives; the questions and answers; what the thesis takes from it. Detail below. |
 | 6 | The bull case and the bear case | both | The debate about the business and its outlook, in arguments: demand and how long it lasts, where the company is in its cycle, competition and the moat, pricing power, capital allocation, management, the balance sheet, the claims of the call. Each side's strongest case, in words a reader without the method follows. Figures may be cited. No valuation arithmetic, input, tag or parameter. |
 | 7 | The thesis | both | The report's own story, set against management's. It opens with a position on each claim of section 5: accepted, rejected or held open. Then the case that settles the debate and leads to the stance: what must be true for the stance to be right, and what you expect to happen. Detail below. |
-| 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, and why if an override changed it; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; the secondary valuation against the route's value; FMP's figure in one sentence, when read; for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
+| 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (the phase the signs of the three cash flows give), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; the secondary valuation against the route's value; FMP's figure in one sentence, when read; for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
 | 9 | Price and multiples | both | The price facts, and the multiples against their own history. Detail below. |
 | 10 | Recent news | both | The dated items that matter to the value. |
 | 11 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold you choose is not a fact and never a finding: tie each event to a stored figure and cite it ("below the hurdle rate of 9.0%", citing `policy:required_return`), or state it in words ("revenue falls two quarters in a row"). A threshold no stored figure gives is a question for the founder (`reference/citations.md`, "A threshold you choose"). |
@@ -111,7 +111,7 @@ One page, in this order. Step 5 of `SKILL.md` says how to build each part.
 
    | Claim | Evidence | Driver | Test |
    |---|---|---|---|
-   | what management says will happen, with its figure and its timeline | what the numbers already show | the input it would move: the growth of years two and three, the held rate, the target margin, the reinvestment, the moat, the risk | what would show it true or false, and by when |
+   | what management says will happen, with its figure and its timeline | what the numbers already show | the input it would move: the growth of years two and three, the belief, the held rate, the target margin, the reinvestment, the moat, the risk | what would show it true or false, and by when |
 
    Then a verdict on each claim, in one of three words. **Possible**: it could happen.
    **Plausible**: the evidence makes it believable. **Probable**: the evidence makes it more likely
@@ -143,6 +143,9 @@ The kill criteria of section 11 test it.
 
 ### Section 8: valuation
 
+- **The phase.** The phase, the growth word and the margin direction behind it, any check flag,
+  the Dickinson stage, and why if an override changed it. Then the growth the price needs, and the
+  belief and why.
 - **The route's value.** The mechanical value (the engine's with no override) and the reviewed
   value (under the overrides). One sentence in words for each override that moved it, citing its
   bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
@@ -354,24 +357,24 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "3.6%", "ref": "derived:532"},
         " |\n\nPrice drove the quarter more than volume: the new price list took effect for new customers in the quarter. There were no one-time items.\n\n**The story management is telling.** Management's frame: \"the system of record for the small firm\". Three claims carry it.\n\n| Claim | Evidence | Driver | Test |\n|---|---|---|---|\n| Customers now sign multi-year contracts. | Multi-year contracts were ",
         {"cite": "41.0%", "ref": "finding:124", "period": "2026-Q4"},
-        " of new bookings in the quarter. | The growth of years two and three. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | The moat. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The belief. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable: the bookings already show them. The price list is plausible: one quarter is too short to judge churn. Payroll is possible, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** Both records are clear, on a GAAP basis, and first given on this call.\n\n| Metric | Period | Low | High | Midpoint | Against the consensus |\n|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
+        " of new bookings in the quarter. | The growth of years two and three. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | The moat. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The belief. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable: the bookings already show them. The price list is plausible: one quarter is too short to judge churn. Payroll is possible, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** Both records are clear and on a reported basis. The EPS outlook is new; the revenue outlook was raised from the call of July.\n\n| Metric | Period | Low | High | Midpoint | Basis | Against the prior record | Against the consensus |\n|---|---|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
         {"cite": "$7.00", "ref": "guidance:17/low"},
         " | ",
         {"cite": "$7.20", "ref": "guidance:17/high"},
         " | ",
         {"cite": "$7.10", "ref": "guidance:17/midpoint", "period": "2027"},
-        " | above |\n| Revenue | fiscal 2027 | ",
+        " | GAAP | first given | above |\n| Revenue | fiscal 2027 | ",
         {"cite": "$1.80 billion", "ref": "guidance:18/low"},
         " | ",
         {"cite": "$1.84 billion", "ref": "guidance:18/high"},
         " | ",
         {"cite": "$1.82 billion", "ref": "guidance:18/midpoint"},
-        " | above |\n\nThe consensus for fiscal 2027 EPS is ",
+        " | GAAP | raised | above |\n\nThe consensus for fiscal 2027 EPS is ",
         {"cite": "$6.95", "ref": "estimate:EXMP/2027/eps", "period": "2027"},
-        ". The valuation takes the EPS guidance: fiscal 2027 is the next twelve months, so its midpoint replaces the consensus as the anchor. The revenue guidance moves nothing on this route. A one-sided promise on the adjusted operating margin stays out of the value.\n\n**The positives and the negatives.** For: multi-year bookings, and an outlook above the consensus. Against: the count of new customers is no longer reported, and payroll's growth was not given.\n\n**The questions and answers.** Two analysts pressed on churn after the price rise; the answers named no figure. One asked about payroll; the answer was direct: payroll will be reported on its own next year.\n\n**What the thesis takes from it.** Revenue grew, so the kill criterion on falling revenue stays open. The one thing to watch next quarter is churn under the new prices. The price moved more than the value: it rose ",
+        ". The valuation takes the EPS guidance: fiscal 2027 is the base year, the fiscal year the next twelve months fall in, so its midpoint replaces the consensus as the anchor. The revenue guidance moves nothing on this route. A one-sided promise on the adjusted operating margin stays out of the value.\n\n**The positives and the negatives.** For: multi-year bookings, and an outlook above the consensus. Against: the count of new customers is no longer reported, and payroll's growth was not given.\n\n**The questions and answers.** Two analysts pressed on churn after the price rise; the answers named no figure. One asked about payroll; the answer was direct: payroll will be reported on its own next year.\n\n**What the thesis takes from it.** Revenue grew, so the kill criterion on falling revenue stays open. The one thing to watch next quarter is churn under the new prices. The price moved more than the value: it rose ",
         {"cite": "+6.1%", "ref": "derived:534"},
         ", while the guidance added ",
-        {"cite": "+$9", "ref": "review:89/bridge/1/delta"},
+        {"cite": "+$5", "ref": "review:89/bridge/1/delta"},
         " a share to the reviewed value."
       ]
     },
@@ -401,13 +404,13 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         ". The company's guidance for fiscal 2027 replaced the consensus as the earnings of the next twelve months: its midpoint of ",
         {"cite": "$7.10", "ref": "guidance:17/midpoint"},
         " a share added ",
-        {"cite": "+$9", "ref": "review:89/bridge/1/delta"},
+        {"cite": "+$5", "ref": "review:89/bridge/1/delta"},
         ". The belief (the growth rate after the analysts' years) rose from ",
         {"cite": "7.1%", "ref": "review:89/bridge/2/old"},
         " to ",
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
         ", which added ",
-        {"cite": "+$27", "ref": "review:89/bridge/2/delta"},
+        {"cite": "+$31", "ref": "review:89/bridge/2/delta"},
         ". The reason: the new contracts run longer than the old ones.\n\nThe secondary valuation, a standard discounted cash flow over ten years, gives ",
         {"cite": "$262", "ref": "secondary:93/value"},
         " a share. Revenue grows ",
@@ -416,10 +419,10 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "34.0%", "ref": "secondary:93/drivers/operating_margin/10"},
         " by year ten. Growth after year ten is ",
         {"cite": "3.0%", "ref": "secondary:93/drivers/terminal_growth"},
-        ". It sits below the reviewed value because it gives the longer contracts less weight in the later years. With the required return a point either way and the growth after year ten a point either way, it runs from ",
+        ". It sits below the reviewed value because it gives the longer contracts less weight in the later years. With the required return a point higher or lower, and the growth after year ten a point lower (it already stands at its ceiling, so it cannot rise), it runs from ",
         {"cite": "$214", "ref": "secondary:93/grid/1/3"},
         " to ",
-        {"cite": "$341", "ref": "secondary:93/grid/3/1"},
+        {"cite": "$328", "ref": "secondary:93/grid/2/1"},
         ". FMP's own discounted cash flow, a third opinion, gives ",
         {"cite": "$251.40", "ref": "response:812/0/dcf"},
         ".\n\nThe sensitivity grid sets the belief against the runway return (the return on new capital in the runway years). Across the values tried, the value a share runs from ",
@@ -445,9 +448,9 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         " over one year. The drop from its last peak is ",
         {"cite": "−12.5%", "ref": "snapshot:412/intermediates/price_facts/drawdown_from_peak"},
         ".\n\nThe P/E is the price over the earnings a share. The trailing P/E is ",
-        {"cite": "31.10x", "ref": "snapshot:412/intermediates/multiples/pe_reported"},
+        {"cite": "36.56x", "ref": "snapshot:412/intermediates/multiples/pe_reported"},
         " on reported earnings, and ",
-        {"cite": "29.40x", "ref": "snapshot:412/intermediates/multiples/pe_clean"},
+        {"cite": "36.11x", "ref": "snapshot:412/intermediates/multiples/pe_clean"},
         " on the method's earnings without one-time items. Over the past ten years the trailing P/E averaged ",
         {"cite": "27.80x", "ref": "multiple:EXMP/pe/avg_10y"},
         ", with a median of ",
@@ -456,8 +459,8 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "41.20x", "ref": "multiple:EXMP/pe/high_10y"},
         " and a low of ",
         {"cite": "18.60x", "ref": "multiple:EXMP/pe/low_10y"},
-        ". So the stock trades above its usual multiple, and well below its peak one. The forward P/E, on the analysts' earnings for the next twelve months, is ",
-        {"cite": "28.40x", "ref": "snapshot:412/intermediates/multiples/pe_forward"},
+        ". So the stock trades well above its usual multiple, and below its peak one. The forward P/E, on the analysts' earnings for the next twelve months, is ",
+        {"cite": "33.77x", "ref": "snapshot:412/intermediates/multiples/pe_forward"},
         ". Fairband began logging the forward P/E on 1 Nov 2026, so it has no history yet to set it against. It rests on growth of ",
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
         " a year after the analysts' years. None of these multiples is a target."

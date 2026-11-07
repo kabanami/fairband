@@ -177,7 +177,12 @@ vendor call. The refusals:
   percent as a fraction; the `basis` `gaap`, `adjusted` or `constant-currency`; `as_of` the call's
   date; `text` the sentence verbatim; `source` a string, the transcript's `response:<id>` or a
   filing. A newer record of the same metric, period and basis supersedes the older, in the order of
-  the calls' dates.
+  the calls' dates. A value the record cannot take is refused (400), nothing stored, with the first
+  of these sentences that applies: "metric is one of revenue, eps, operating_margin,
+  free_cash_flow, capex, revenue_growth or eps_growth"; "period is a fiscal year or a quarter
+  (2026, 2026Q3)"; "low is above high"; "basis is one of gaap, adjusted or constant-currency"; "a
+  guidance record needs its text"; "a guidance record needs its source". A low or a high that is
+  not a number is refused (400) by the call's own validation, naming the field.
 - A finding's source (`finding_add`): `{kind, ref, note}`, the kind one of `filing`,
   `transcript`, `url`, `vendor` or `base-rate`. `as_of` is the date the fact describes, as
   `2026-09-30`. The `unit` is `currency`, `percent`, `multiple`, `count`, `per-share`, `score` or
