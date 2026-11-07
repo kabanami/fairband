@@ -31,7 +31,7 @@
     loading: false,
     error: null,
     tables: false, /* the page's one table toggle (CompanyReport): every chart's table view */
-    series: null, /* the series the charts read (readSeries); null until they are in */
+    series: null, /* the series the charts read (readSeries), each by its key as it lands */
     request: null, /* Request research for a company with no report (FairbandPage.asking) */
     downloadError: null
   };
@@ -88,25 +88,32 @@
   /* The series the report's charts read (spec 18.4), each on its own, its body or the server's
      sentence why not: the six financial tables, the multiples history, the closes of the five
      years, the band's history and each sensitivity reading the sections cite, once, in the order
-     first cited, the company's own. The charts of the same report stay as they are until the new
+     first cited, the company's own. Each lands in state.series as it settles and the page draws
+     again, so the charts of the local reads never wait for the multiples history, whose trailing
+     series may wait on GuruFocus. The charts of the same report stay as they are until their new
      series land; the latest read wins. */
   function readSeries(report, request) {
     var company = '/api/companies/' + encodeURIComponent(report.symbol);
-    Promise.all([
-      settle(read(company + '/financial-tables')),
-      settle(read(company + '/multiples-history')),
-      settle(read(company + '/price-history?years=5')),
-      settle(read(company + '/band-history')),
-      Promise.all(cited(report.references).map(function (id) {
-        return settle(read('/api/sensitivities/' + id));
-      }))
-    ]).then(function (got) {
-      if (request !== latest) return;
-      state.series = {
-        tables: got[0], multiples: got[1], closes: got[2], band: got[3],
-        readings: got[4].filter(function (r) { return r.error || r.body.symbol === report.symbol; })
+    var land = function (key) {
+      return function (got) {
+        if (request !== latest) return;
+        var next = {};
+        Object.keys(state.series || {}).forEach(function (k) { next[k] = state.series[k]; });
+        next[key] = got;
+        state.series = next;
+        render();
       };
-      render();
+    };
+    settle(read(company + '/financial-tables')).then(land('tables'));
+    settle(read(company + '/multiples-history')).then(land('multiples'));
+    settle(read(company + '/price-history?years=5')).then(land('closes'));
+    settle(read(company + '/band-history')).then(land('band'));
+    Promise.all(cited(report.references).map(function (id) {
+      return settle(read('/api/sensitivities/' + id));
+    })).then(function (got) {
+      land('readings')(got.filter(function (r) {
+        return r.error || r.body.symbol === report.symbol;
+      }));
     });
   }
 

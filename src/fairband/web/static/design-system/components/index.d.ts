@@ -690,6 +690,11 @@ export interface SpreadChartProps {
   series: SpreadPoint[];
   title?: string;
   subtitle?: string;
+  /**
+   * fairband: the hurdle's name in the legend, the tooltip and the table twin; `WACC` absent. The
+   * report page's is "Hurdle rate", the policy's required return (spec 2026-11-06 Tier 2, 18.4).
+   */
+  hurdleLabel?: string;
   basis?: Basis;
   height?: number;
   width?: number;

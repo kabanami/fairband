@@ -1843,6 +1843,7 @@
       named = avg <= Y(last.value) ? Y(last.value) - 30 : Y(last.value) + 30;
       if (named - 12 < 0) named = Y(last.value) + 30;
     }
+    if (named != null) named = Math.min(named, H - 13); // its figure's baseline at most H - 2
     var cur = at == null ? null : series[at];
     // As many period labels as fit: the axis's text is 11px mono, 6.6px a character, and a label
     // needs its own width and half its neighbour's, the first and the last anchored at the ends.
@@ -2039,6 +2040,10 @@
 
     var last = series[n - 1] || {};
     var cur = at == null ? null : series[at];
+    // fairband: `hurdleLabel`, the hurdle's name in the legend, the tooltip and the table twin,
+    // "WACC" when absent: the report page's is the policy's required return, "Hurdle rate" as the
+    // export's returns table names it (spec 2026-11-06 Tier 2, 18.4).
+    var hurdle = p.hurdleLabel || 'WACC';
 
     return h('figure', { className: 'fb-c' },
       h('figcaption', { className: 'fb-c__head' },
@@ -2049,7 +2054,7 @@
       ),
       h('ul', { className: 'fb-c__legend' },
         h('li', null, h('span', { className: 'fb-c__key fb-c__key--1' }), h('span', { className: 'label' }, 'ROIC')),
-        h('li', null, h('span', { className: 'fb-c__key fb-c__key--context' }), h('span', { className: 'label' }, 'WACC')),
+        h('li', null, h('span', { className: 'fb-c__key fb-c__key--context' }), h('span', { className: 'label' }, hurdle)),
         h('li', null, h('span', { className: 'fb-c__key fb-c__key--pos' }), h('span', { className: 'label' }, 'creating value')),
         h('li', null, h('span', { className: 'fb-c__key fb-c__key--neg' }), h('span', { className: 'label' }, 'destroying value'))
       ),
@@ -2082,7 +2087,7 @@
         h(Tip, { at: cur ? X(at) : null },
           h('span', { className: 'label' }, cur ? cur.period : ''),
           cur ? h('span', { className: 'figure-sm' }, 'ROIC ' + pct(cur.roic)) : null,
-          cur ? h('span', { className: 'figure-sm' }, 'WACC ' + pct(cur.wacc)) : null,
+          cur ? h('span', { className: 'figure-sm' }, hurdle + ' ' + pct(cur.wacc)) : null,
           // fairband: the spread's sign in the delta's colours (classifier-designation spec 7.3).
           cur ? h('span', { className: cx('label', cur.roic >= cur.wacc ? 'fb-delta--up' : 'fb-delta--down') },
             (cur.roic >= cur.wacc ? '+' : '') + pct(cur.roic - cur.wacc) + ' spread') : null
@@ -2090,7 +2095,7 @@
       ),
       h(DataTable, {
         show: p.tableView,
-        head: ['Period', 'ROIC', 'WACC', 'Spread'],
+        head: ['Period', 'ROIC', hurdle, 'Spread'],
         rows: series.map(function (d) {
           return [d.period, pct(d.roic), pct(d.wacc), (d.roic >= d.wacc ? '+' : '') + pct(d.roic - d.wacc)];
         })

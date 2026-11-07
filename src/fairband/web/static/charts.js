@@ -54,14 +54,15 @@
   var BAND_TITLE = 'The price against the band by quarter';
   var GRID_TITLE = 'The grid of secondary valuation ';
 
-  /* Each section's charts by its heading, as ReportReader places them; none before the series
-     are read. */
+  /* Each section's charts by its heading, as ReportReader places them, each drawn once the
+     series it reads have landed: the price against the band once the closes and the band's
+     history have, the P/E series once the multiples history has. */
   function draw(report, series, tables) {
-    if (!series) return {};
+    var s = series || {};
     return {
-      'Financial performance and health': financial(series.tables, tables),
-      'Valuation': valuation(report, series.readings),
-      'Price and multiples': price(series, tables)
+      'Financial performance and health': s.tables ? financial(s.tables, tables) : null,
+      'Valuation': s.readings ? valuation(report, s.readings) : null,
+      'Price and multiples': (s.closes && s.band) || s.multiples ? price(s, tables) : null
     };
   }
 
@@ -134,7 +135,7 @@
       .map(function (p) { return { period: p.period, roic: p.roic * 100, wacc: p.wacc * 100 }; });
     return panel(c.title, series.length ? h(F.SpreadChart, {
       title: c.title, subtitle: 'against the hurdle rate', series: series, basis: 'mechanical',
-      tableView: tables
+      hurdleLabel: 'Hurdle rate', tableView: tables
     }) : noData(c.title));
   }
 
@@ -179,21 +180,23 @@
 
   /* ----------------------------------------------------------- price and multiples */
 
-  /* The price against the band, the full width, then the two P/E series side by side. */
+  /* The price against the band, the full width, then the two P/E series side by side, each once
+     its reads have landed. */
   function price(series, tables) {
     return h('div', { className: 'app-charts' },
-      band(series.closes, series.band, tables), multiples(series.multiples, tables));
+      series.closes && series.band ? band(series.closes, series.band, tables) : null,
+      series.multiples ? multiples(series.multiples, tables) : null);
   }
 
   /* BandHistory: the five years of closes a quarter each, the quarter's last close, with the band
      in force at the quarter's end, the newest snapshot priced on or before it: none before the
-     first snapshot, none on a refusal's. The past year's high and low in the subtitle. */
+     first snapshot, none on a refusal's. The past year's high and low in the subtitle. When the
+     band's history did not load, the price alone, with the server's sentence under it. */
   function band(closes, history, tables) {
-    var failed = closes.error || history.error;
-    if (failed) return panel(BAND_TITLE, refused('The price history', failed), true);
+    if (closes.error) return panel(BAND_TITLE, refused('The price history', closes.error), true);
     var list = closes.body.closes;
     if (!list.length) return panel(BAND_TITLE, noData(BAND_TITLE), true);
-    var marks = history.body.points;
+    var marks = history.error ? [] : history.body.points;
     var series = quarters(list).map(function (q) {
       var p = inForce(marks, q.end);
       return {
@@ -201,10 +204,13 @@
         fairLow: p ? p.fairLow : null, fairHigh: p ? p.fairHigh : null
       };
     });
-    return panel(BAND_TITLE, h(F.BandHistory, {
-      title: BAND_TITLE, subtitle: pastYear(list), series: series, basis: 'mechanical',
-      tableView: tables
-    }), true);
+    return panel(BAND_TITLE, [
+      h(F.BandHistory, {
+        key: 'chart', title: BAND_TITLE, subtitle: pastYear(list), series: series,
+        basis: 'mechanical', tableView: tables
+      }),
+      history.error ? refused('The band\'s history', history.error, 'refused') : null
+    ], true);
   }
 
   /* The closes a calendar quarter each, oldest first: its last close and its end. */
@@ -244,7 +250,8 @@
   /* The P/E against its own history (13.7), each series against its average over the ten years
      on file, its subtitle saying which: the trailing one a point a month, with the read's note on
      it, the server's sentence, when it has one; the forward one a point a day logged, since the
-     log began. */
+     log began. A trailing series with no point says why in the server's words when it sends them,
+     the series' note ("the series could not be read") or the read's. */
   function multiples(read, tables) {
     if (read.error) return panel('multiples', refused('The P/E history', read.error));
     var m = read.body;
@@ -252,19 +259,19 @@
     return [
       multiple('Trailing P/E', m.pe, m.pe ? byMonth(m.pe.points) : [],
         'the last P/E of each month against its ten-year average' +
-          (m.peNote ? ' · ' + m.peNote : ''), tables),
+          (m.peNote ? ' · ' + m.peNote : ''), tables, (m.pe && m.pe.note) || m.peNote),
       multiple('Forward P/E', forward, forward.points.map(function (p) {
         return { period: F.formatDate(p.day), value: p.value };
       }), forward.since ? 'since ' + F.formatDate(forward.since) : undefined, tables)
     ];
   }
 
-  function multiple(title, found, series, subtitle, tables) {
+  function multiple(title, found, series, subtitle, tables, why) {
     var drawn = series.some(function (p) { return p.value != null; });
     return panel(title, drawn ? h(F.MultipleHistory, {
       title: title, subtitle: subtitle, series: series, average: found.stats.avg10y.value,
       basis: 'mechanical', tableView: tables
-    }) : noData(title));
+    }) : noData(title, why));
   }
 
   /* The trailing series a point a month, the month's last P/E, from the first month on file to
@@ -297,19 +304,19 @@
       chart);
   }
 
-  /* A chart with no point: its title and its basis, and that nothing is on file, not an empty
-     plot. */
-  function noData(title) {
+  /* A chart with no point: its title and its basis, and that nothing is on file, or the
+     server's sentence why when it sent one, not an empty plot. */
+  function noData(title, why) {
     return h('figure', { className: 'fb-c' },
       h('figcaption', { className: 'fb-c__head' },
         h('span', { className: 'fb-c__title heading' }, title),
         h(F.BasisChip, { basis: 'mechanical', compact: true })),
-      h('p', { className: 'caption app-muted' }, NO_DATA));
+      h('p', { className: 'caption app-muted' }, why || NO_DATA));
   }
 
   /* A read the server refused: its sentence, as it arrives. */
-  function refused(what, sentence) {
-    return h('p', { className: 'caption app-report__error' },
+  function refused(what, sentence, key) {
+    return h('p', { key: key, className: 'caption app-report__error' },
       what + ' did not load: ' + sentence + '.');
   }
 

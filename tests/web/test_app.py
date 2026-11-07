@@ -2575,6 +2575,8 @@ def test_the_bundle_exports_multiple_history() -> None:
     for banned in ("phase-", "animat", "transition"):
         assert banned not in chart, banned
     # the shared axis takes `most`, seven absent, so the other charts' axes are as they were
+    # the average's two lines stay inside the figure, its figure's baseline at most H - 2
+    assert "if (named != null) named = Math.min(named, H - 13);" in chart
     assert "function labelEvery(n, most) { return Math.max(1, Math.ceil(n / (most || 7))); }" in (
         bundle
     )
@@ -2646,6 +2648,98 @@ def test_the_bundle_draws_what_the_report_charts_need() -> None:
     script = _code(_static_file("charts.js"))
     inverse = re.findall(r"\{ row: '(\w+)', title: '[^']+', inverse: true \}", script)
     assert inverse == ["net_debt_to_ebitda", "share_count_change"]
+
+
+def test_each_series_lands_as_its_read_settles() -> None:
+    """The multiples history may wait on GuruFocus (13.7): each series lands in the page's state
+    as its own read settles and the page draws again, so the charts of the local reads never wait
+    for it; a section draws once the series it reads are in. The latest read wins."""
+    report = _code(_static_file("report.js"))
+    reads = _function(report, "readSeries")
+    assert "Promise.all([" not in reads
+    for url, key in (
+        ("'/financial-tables'", "tables"),
+        ("'/multiples-history'", "multiples"),
+        ("'/price-history?years=5'", "closes"),
+        ("'/band-history'", "band"),
+    ):
+        assert f"settle(read(company + {url})).then(land('{key}'));" in reads, key
+    _in_order(
+        reads,
+        "Promise.all(cited(report.references).map(function (id) {",
+        "land('readings')(got.filter(function (r) {",
+    )
+    _in_order(
+        reads,
+        "if (request !== latest) return;",
+        "next[key] = got;",
+        "state.series = next;",
+        "render();",
+    )
+    script = _code(_static_file("charts.js"))
+    draw = _function(script, "draw")
+    for text in (
+        "s.tables ? financial(s.tables, tables) : null",
+        "s.readings ? valuation(report, s.readings) : null",
+        "(s.closes && s.band) || s.multiples ? price(s, tables) : null",
+    ):
+        assert text in draw, text
+    price = _function(script, "price")
+    assert "series.closes && series.band ? band(series.closes, series.band, tables) : null" in price
+    assert "series.multiples ? multiples(series.multiples, tables) : null" in price
+
+
+def test_a_refused_or_empty_series_says_why() -> None:
+    """The server's sentences as they arrive: when the band's history alone did not load, the price
+    is drawn alone with that read's own sentence under it, and the price history's refusal is its
+    own; a trailing P/E with no point says why in the server's words when it sends them (the
+    series' note, "the series could not be read", or the read's), else "No data on file."."""
+    script = _code(_static_file("charts.js"))
+    band = _function(script, "band")
+    _in_order(
+        band,
+        "if (closes.error) return panel(BAND_TITLE, refused('The price history', closes.error),"
+        " true);",
+        "var marks = history.error ? [] : history.body.points;",
+        "h(F.BandHistory, {",
+        "history.error ? refused('The band\\'s history', history.error, 'refused') : null",
+    )
+    assert "history.error)" not in band.split("var marks")[0]
+    multiples = _function(script, "multiples")
+    assert "tables, (m.pe && m.pe.note) || m.peNote)," in multiples
+    assert "}) : noData(title, why));" in _function(script, "multiple")
+    assert "h('p', { className: 'caption app-muted' }, why || NO_DATA));" in (
+        _function(script, "noData")
+    )
+    page = _static_file("index.html")
+    assert ".app-chart .fb-c + .app-report__error { margin-top: var(--space-2); }" in page
+
+
+def test_the_spread_names_the_hurdle_as_the_export_does() -> None:
+    """The page's SpreadChart draws ROIC against the policy's required return, which the export's
+    returns table names "Hurdle rate": SpreadChart's `hurdleLabel`, a `// fairband:` patch naming
+    18.4, names it in the legend, the tooltip and the table twin, "WACC" for other callers."""
+    bundle = _component_file("bundle.js")
+    spread = _function(bundle, "SpreadChart")
+    lead = spread.index("// fairband: `hurdleLabel`")
+    assert "(spec 2026-11-06 Tier 2, 18.4)" in spread[lead : spread.index("var hurdle =")]
+    assert "var hurdle = p.hurdleLabel || 'WACC';" in spread
+    for text in (
+        "h('span', { className: 'label' }, hurdle)),",
+        "hurdle + ' ' + pct(cur.wacc)",
+        "head: ['Period', 'ROIC', hurdle, 'Spread'],",
+    ):
+        assert text in spread, text
+    assert _code(spread).count("'WACC'") == 1  # the default alone
+    props = re.search(
+        r"export interface SpreadChartProps \{\n(.*?)\n\}", _component_file("index.d.ts"), re.DOTALL
+    )
+    assert props is not None and "hurdleLabel?: string;" in props.group(1)
+    script = _code(_static_file("charts.js"))
+    assert f"hurdleLabel: '{row_name('hurdle_rate')}', tableView: tables" in (
+        _function(script, "spread")
+    )
+    assert "{ row: 'roic', title: 'ROIC', hurdle: 'hurdle_rate' }" in script
 
 
 def test_the_charts_sit_two_to_a_row_on_raised_panels() -> None:
