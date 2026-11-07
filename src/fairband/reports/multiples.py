@@ -1,10 +1,11 @@
 """The multiples history (spec 2026-11-06 Tier 2, 13.7; ``method.md`` 16.7): the two P/E series a
 report reads the price against, as the read serves them and the refs resolve them.
 
-- The trailing P/E (``pe``): GuruFocus's daily ``pettm`` series as the newest stored ``pe-history``
-  response holds it, each row's closing P/E (``normalize_gf.pe_ttm_rows``). A loss row has no point;
-  nothing fills its days, so the series keeps the gap. A payload without the series' shape gives
-  no series (``None``).
+- The trailing P/E (``pe``): GuruFocus's daily ``pettm`` series as the newest usable stored
+  ``pe-history`` response holds it, whatever its age, each row's closing P/E
+  (``normalize_gf.pe_ttm_rows``). A loss row has no point; nothing fills its days, so the series
+  keeps the gap. A payload without the series' shape gives no series (``None``); the pass-through
+  stores such a payload as unusable, so the newest usable one holds the series.
 - The forward P/E (``pe_forward``): the multiples log's forward P/E by day; a row with none has no
   point.
 
@@ -22,9 +23,9 @@ from datetime import date
 from statistics import fmean, median
 from typing import Any
 
-from fairband.refresh.passthrough import GURUFOCUS, PE_HISTORY_ENDPOINT
 from fairband.store.multiples import MultiplesRow, multiples_log_for
-from fairband.store.vendor import ResponseRow, latest_response, response_payload
+from fairband.store.vendor import latest_response, response_payload
+from fairband.vendors.gurufocus import PE_TTM, PROVIDER
 from fairband.vendors.normalize_gf import pe_ttm_rows
 
 SERIES = ("pe", "pe_forward")
@@ -52,9 +53,18 @@ def forward_series(rows: Sequence[MultiplesRow]) -> Series:
     return _series((row.day, row.pe_forward) for row in rows)
 
 
-def stored_pe_history(conn: sqlite3.Connection, symbol: str) -> ResponseRow | None:
-    """The newest usable ``pe-history`` response stored for the company, whatever its age."""
-    return latest_response(conn, GURUFOCUS, PE_HISTORY_ENDPOINT, symbol, {"symbol": symbol})
+def stored_trailing(conn: sqlite3.Connection, symbol: str) -> tuple[int, Series | None] | None:
+    """The newest usable ``pe-history`` response stored for the company, whatever its age: its id
+    and its series (``None`` when it cannot be read); ``None`` when none is stored."""
+    row = latest_response(conn, PROVIDER, PE_TTM, symbol, {"symbol": symbol})
+    text = None if row is None else response_payload(conn, row.id)
+    if row is None or text is None:
+        return None
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return row.id, None
+    return row.id, trailing_series(payload)
 
 
 def stored_series(conn: sqlite3.Connection, symbol: str, name: str) -> Series | None:
@@ -63,15 +73,8 @@ def stored_series(conn: sqlite3.Connection, symbol: str, name: str) -> Series | 
     from the log."""
     if name == "pe_forward":
         return forward_series(multiples_log_for(conn, symbol))
-    row = stored_pe_history(conn, symbol)
-    text = None if row is None else response_payload(conn, row.id)
-    if text is None:
-        return None
-    try:
-        payload = json.loads(text)
-    except ValueError:
-        return None
-    return trailing_series(payload)
+    stored = stored_trailing(conn, symbol)
+    return None if stored is None else stored[1]
 
 
 def _series(rows: Iterable[tuple[date, float | None]]) -> Series:

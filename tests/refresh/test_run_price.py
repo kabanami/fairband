@@ -190,6 +190,37 @@ def test_a_reprice_logs_the_multiples_of_the_day(env_valued: Env) -> None:
     assert logged["NEWT"][1].pe_reported is None and logged["NEWT"][1].pe_forward is None
 
 
+def test_a_reprice_with_a_multiple_replaces_the_old_figure(env_valued: Env) -> None:
+    """A quote of the full refresh's own day: the reprice's figures replace that day's, one row a
+    company; NEWT's refusal has none to give, and its row keeps none."""
+    env = env_valued
+    with closing(env.connect()) as conn:
+        before = {symbol: multiples_log_for(conn, symbol) for symbol in ADMITTED}
+    [row] = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    same_day = [row | {"symbol": s, "price": p} for s, p in NEW_PRICES.items()]
+    env.router.bodies["batch-quote"] = json.dumps(same_day).encode()
+    refresh_id = env.refresh().run("price")
+    assert env.last().status == "done"
+    with closing(env.connect()) as conn:
+        after = {symbol: multiples_log_for(conn, symbol) for symbol in ADMITTED}
+        refreshes = {r[0] for r in conn.execute("SELECT refresh_id FROM multiples_log")}
+    assert refreshes == {refresh_id}
+    for symbol in ADMITTED:
+        snapshot = env.snapshot(symbol)
+        assert snapshot.price_date == date(2026, 10, 30), symbol
+        [old], [new] = before[symbol], after[symbol]
+        assert (old.day, new.day, new.price, new.snapshot_id) == (
+            date(2026, 10, 30),
+            date(2026, 10, 30),
+            NEW_PRICES[symbol],
+            snapshot.id,
+        ), symbol
+    acme_old, acme_new = before["ACME"][0], after["ACME"][0]
+    assert acme_old.pe_forward is not None and acme_new.pe_forward is not None
+    assert acme_new.pe_forward == pytest.approx(acme_old.pe_forward * 20.0 / 50.0)
+    assert after["NEWT"][0].pe_forward is None and after["NEWT"][0].pe_reported is None
+
+
 def test_price_refresh_runs_no_backfill(env_valued: Env) -> None:
     """A price refresh values nothing, so it does not backfill: the store as it was before the
     normalizer kept the six lines stays so."""

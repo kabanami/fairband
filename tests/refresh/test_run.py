@@ -209,26 +209,36 @@ def test_failed_fetch_keeps_the_stored_price(env: Env) -> None:
     assert (bolt.price, bolt.price_date) == (100.0, QUOTE_DATE)
 
 
-def test_a_refusal_with_a_price_logs_the_price_alone(env: Env) -> None:
-    """A refusal with a price logs the price of its day and no multiple; a failed fetch's refusal
-    that carries the stored price replaces the row of the same day."""
-    first = env.run(["BOLT"])  # no deciles yet: refused, at the quote's price
-    first_snapshot = env.snapshot("BOLT").id
+def test_a_refusal_after_a_valued_day_leaves_its_row_intact(env_with_deciles: Env) -> None:
+    """ACME is valued and logs its multiples at the quote's day; a day later its fetch fails, and
+    the failure's refusal, which carries that stored quote, logs nothing: the day's row keeps its
+    figures, its snapshot and its refresh."""
+    env = env_with_deciles
+    first = env.run(["ACME"])
+    valued = env.snapshot("ACME")
+    multiples = valued.result.intermediates["multiples"]
+    logged = MultiplesRow(
+        QUOTE_DATE,
+        50.0,
+        multiples["pe_reported"],
+        multiples["pe_clean"],
+        multiples["pe_forward"],
+        valued.id,
+    )
+    assert logged.pe_forward is not None
     with closing(env.connect()) as conn:
-        assert multiples_log_for(conn, "BOLT") == [
-            MultiplesRow(QUOTE_DATE, 100.0, None, None, None, first_snapshot)
-        ]
-    env.router.fail_symbols.add("BOLT")
+        assert multiples_log_for(conn, "ACME") == [logged]
+    env.router.fail_symbols.add("ACME")
     env.clock.now += timedelta(hours=25)
-    second = env.run(["BOLT"])
-    bolt = env.snapshot("BOLT")
-    assert bolt.refusal == BOLT_FAILED and bolt.id > first_snapshot
+    env.run(["ACME"])
+    refused = env.snapshot("ACME")
+    assert refused.id > valued.id and refused.refusal is not None
+    assert refused.refusal.startswith("data fetch failed")
+    assert (refused.price, refused.price_date) == (50.0, QUOTE_DATE)
     with closing(env.connect()) as conn:
-        assert multiples_log_for(conn, "BOLT") == [
-            MultiplesRow(QUOTE_DATE, 100.0, None, None, None, bolt.id)
-        ]
+        assert multiples_log_for(conn, "ACME") == [logged]
         [(refresh_id,)] = conn.execute("SELECT refresh_id FROM multiples_log").fetchall()
-    assert (first, refresh_id) == (second - 1, second)
+    assert refresh_id == first
 
 
 @pytest.mark.parametrize(

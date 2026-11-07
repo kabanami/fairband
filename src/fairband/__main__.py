@@ -47,7 +47,10 @@ logger = logging.getLogger("fairband")
 
 _HOST = "127.0.0.1"  # the screen is for this machine only (D11)
 _PRIVATE_BITS = 0o077  # group and other
-_NO_GF_KEY = "no GuruFocus key: the moat score and the GuruFocus EPS are not fetched"
+_NO_GF_KEY = (
+    "no GuruFocus key: the moat score and the GuruFocus EPS are not fetched, and the pe-history"
+    " pass-through is off"
+)
 _WAY_OUT = "Start the server, or run migrate, to mark an interrupted refresh."
 
 

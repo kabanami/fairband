@@ -30,11 +30,11 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   ``value_company`` with the latest stored deciles (a full refresh's own; assembly classifies the
   company's peers on them), ``insert_snapshot``; the symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
   yet" (spec 6.6). In the snapshot's transaction, ``multiples.log_snapshot`` logs its multiples
-  as of its price date when it carries a price (spec 2026-11-06 Tier 2, 13.7), as a refusal
-  snapshot of a symbol's failure does, and ``reviews.follow_snapshot`` follows it with a
-  review on the same inputs when the company holds an applied override, after dropping a
-  period-tied one its new inputs no longer bear out (spec 2026-11-06 Tier 2, 10.5); a review the
-  engine cannot compute becomes a refusal review and the snapshot stands.
+  as of its price date when it carries a price (spec 2026-11-06 Tier 2, 13.7), and
+  ``reviews.follow_snapshot`` follows it with a review on the same inputs when the company holds
+  an applied override, after dropping a period-tied one its new inputs no longer bear out (spec
+  2026-11-06 Tier 2, 10.5); a review the engine cannot compute becomes a refusal review and the
+  snapshot stands.
 - ``done``: the run's totals. A full refresh saves its ``calibration`` with the record (goal 7).
 
 Every kind but a revalue fetches, so without an FMP client (the server's worker without a key)
@@ -51,7 +51,8 @@ builds no universe.
 A symbol's failure never stops the run: an exception from its fetch, assembly or valuation gives it
 a refusal snapshot ("data fetch failed: <class>: <message>" or "valuation failed: <class>:
 <message>", the keys scrubbed), marks it ``failed`` and is logged as a warning. A company with an
-applied override gets that refusal as its review too (``reviews.review_refusal``).
+applied override gets that refusal as its review too (``reviews.review_refusal``). The refusal
+logs no multiples: its price is a stored quote whose day the log already holds.
 
 The run stops early on two events. A cancel is read before each symbol starts, in both stages; the
 symbols in flight finish and the run ends ``cancelled``, with no further stage: a fetched symbol
@@ -524,7 +525,6 @@ class Refresh:
         )
         with transaction(conn):
             snapshot_id = insert_snapshot(conn, result, refresh_id, clock=self._clock)
-            log_snapshot(conn, result, snapshot_id, refresh_id, self._clock())
             review_refusal(conn, result, snapshot_id, refresh_id, self._clock)
             upsert_item(conn, refresh_id, symbol, "failed", reason, self._clock())
 

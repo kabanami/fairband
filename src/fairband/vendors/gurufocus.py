@@ -16,6 +16,8 @@ for a payload without the expected shape.
 from fairband.vendors.http import VendorHttp, VendorResponse
 
 BASE_URL = "https://api.gurufocus.com/public/user"
+PROVIDER = "gf"  # GuruFocus's name in the store, the refresh's responses and the pass-through's
+PE_TTM = "pettm"  # the trailing P/E series' route, and the endpoint its responses are stored under
 
 
 class GuruFocus:
@@ -41,7 +43,7 @@ class GuruFocus:
     def pe_ttm(self, symbol: str) -> VendorResponse:
         """``stock/{symbol}/pettm``: the trailing P/E, a row a day (``normalize_gf.pe_ttm_rows``
         reads them)."""
-        return self._get(symbol, "pettm")
+        return self._get(symbol, PE_TTM)
 
     def _get(self, symbol: str, route: str) -> VendorResponse:
         # The leading slash keeps the path a path: a real token is two halves joined by a colon,

@@ -35,3 +35,14 @@ def test_log_and_read(conn: sqlite3.Connection) -> None:
     ).fetchone()
     assert tuple(stored) == (5, LATER.isoformat())
     assert conn.execute("SELECT COUNT(*) FROM multiples_log").fetchone()[0] == 3
+
+
+def test_a_null_never_replaces_a_figure(conn: sqlite3.Connection) -> None:
+    """A later write of the day without a multiple keeps the row's figure; one with a figure
+    replaces it. The price, the snapshot and the refresh are always the later write's."""
+    day = date(2026, 10, 30)
+    log_multiples(conn, "AAPL", day, 150.0, 28.3, 26.1, 22.5, 7, 3, AT)
+    log_multiples(conn, "AAPL", day, 150.0, None, None, None, 8, 4, LATER)  # a refusal
+    assert multiples_log_for(conn, "AAPL") == [MultiplesRow(day, 150.0, 28.3, 26.1, 22.5, 8)]
+    log_multiples(conn, "AAPL", day, 120.0, 22.6, None, 18.0, 9, 5, LATER)  # a reprice
+    assert multiples_log_for(conn, "AAPL") == [MultiplesRow(day, 120.0, 22.6, 26.1, 18.0, 9)]

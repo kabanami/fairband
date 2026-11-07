@@ -31,7 +31,9 @@ from fairband.refresh.passthrough import (
 from fairband.reports.refs import Resolved, resolve
 from fairband.store.vendor import response_payload, response_row
 from fairband.vendors import fmp as fmp_api
+from fairband.vendors import gurufocus as gurufocus_api
 from fairband.vendors.fmp import Fmp
+from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.http import VendorError, VendorHttp
 from fairband.vendors.limiter import PaceTotals, RateLimiter
 
@@ -119,7 +121,7 @@ def test_pe_history_is_reused_for_seven_days(env: Env) -> None:
     assert PE_HISTORY_REUSE_HOURS == 168 and env.policy.refresh.reuse_hours < 168
     passthrough = _passthrough(env)
     first = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert first.reused is False and first.row.provider == "gurufocus"
+    assert first.reused is False and first.row.provider == "gf"  # the refresh's name
     assert _stored(env, first.row.id) == ("pettm", "ACME", {"symbol": "ACME"}, None)
     assert first.payload == _fixture("pettm.ACME.json", "gurufocus")
     env.clock.now += timedelta(days=6)
@@ -208,7 +210,7 @@ def test_a_fetched_response_is_citable(env: Env) -> None:
         pytest.param(
             "pe-history",
             {},
-            "gurufocus",
+            "gf",
             "pettm",
             {"symbol": "ACME"},
             {},  # the token travels in the path, the symbol too
@@ -310,10 +312,11 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
 
 
 class Held:
-    """A pass-through over FMP whose transcript calls the vendor holds until ``release``; any other
-    call answers ``[]``. ``called`` names each transcript call that reached the vendor; ``hold``
-    starts four, one per quarter of 2026, on threads of their own, each holding a slot until
-    released, and returns once all four are at the vendor."""
+    """A pass-through over FMP and GuruFocus whose transcript and P/E series calls the vendor holds
+    until ``release``; any other call answers ``[]``. ``called`` names each held call that reached
+    the vendor (``2026-Q1``, ``pettm``); ``hold`` starts four, one per quarter of 2026, or three and
+    a P/E series, on threads of their own, each holding a slot until released, and returns once
+    all four are at the vendor."""
 
     def __init__(self, env: Env) -> None:
         self.entered = threading.Semaphore(0)
@@ -322,16 +325,23 @@ class Held:
         self.answered: list[bool] = []  # each threaded fetch's ``reused``
         self.threads: list[threading.Thread] = []
         transport = httpx.MockTransport(self._answer)
-        self.http = VendorHttp(fmp_api.BASE_URL, [FMP_KEY], env.policy.refresh, transport=transport)
-        fmp = Fmp(self.http, FMP_KEY)
-        self.passthrough = Passthrough(fmp, env.connect, env.policy, env.clock, (FMP_KEY,))
+        refresh = env.policy.refresh
+        self.http = VendorHttp(fmp_api.BASE_URL, [FMP_KEY], refresh, transport=transport)
+        self.gf_http = VendorHttp(gurufocus_api.BASE_URL, [GF_TOKEN], refresh, transport=transport)
+        fmp, gurufocus = Fmp(self.http, FMP_KEY), GuruFocus(self.gf_http, GF_TOKEN)
+        secrets = (FMP_KEY, GF_TOKEN)
+        self.passthrough = Passthrough(fmp, env.connect, env.policy, env.clock, secrets, gurufocus)
 
     def _answer(self, request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/earning-call-transcript"):
             self.called.append(f"{request.url.params['year']}-Q{request.url.params['quarter']}")
-            self.entered.release()
-            self.release.wait(5)
-        return httpx.Response(200, json=[])
+        elif request.url.path.endswith("/pettm"):
+            self.called.append("pettm")
+        else:
+            return httpx.Response(200, json=[])
+        self.entered.release()
+        self.release.wait(5)
+        return httpx.Response(200, json=[["2026-10-30", 20.0]])
 
     def start(self, kind: str, params: dict[str, str]) -> threading.Thread:
         def fetch() -> None:
@@ -343,9 +353,11 @@ class Held:
         thread.start()
         return thread
 
-    def hold(self) -> None:
-        for quarter in "1234":
+    def hold(self, pe_history: bool = False) -> None:
+        for quarter in "123" if pe_history else "1234":
             self.start("transcript", {"year": "2026", "quarter": quarter})
+        if pe_history:
+            self.start("pe-history", {})
         for _ in range(PASSTHROUGH_SLOTS):
             assert self.entered.acquire(timeout=5)
 
@@ -365,6 +377,7 @@ def held(env: Env) -> Iterator[Held]:
     finally:
         held.finish()
         held.http.close()
+        held.gf_http.close()
 
 
 def test_a_fifth_vendor_call_waits_for_a_slot(held: Held) -> None:
@@ -401,3 +414,51 @@ def test_a_call_that_waits_past_the_bound_is_busy(
     held.finish()
     fetched = held.passthrough.fetch("transcript", "ACME", {"year": "2025", "quarter": "4"})
     assert fetched["transcript"].reused is False and "2025-Q4" in held.called
+
+
+def test_a_gurufocus_call_waits_for_a_slot_like_an_fmp_call(
+    held: Held, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With four FMP calls in flight, the P/E series waits for a slot and past the bound is
+    busy, GuruFocus never called; once the slots free, it goes through."""
+    monkeypatch.setattr(passthrough_module, "PASSTHROUGH_WAIT_S", 0.2)
+    held.hold()
+    with pytest.raises(PassthroughBusy):
+        held.passthrough.fetch("pe-history", "ACME", {})
+    assert "pettm" not in held.called
+    held.finish()
+    fetched = held.passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    assert fetched.reused is False and held.called.count("pettm") == 1
+
+
+def test_a_gurufocus_call_in_flight_holds_a_slot(
+    held: Held, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Three FMP calls and the P/E series in flight take the four slots: a fifth FMP call is
+    busy."""
+    monkeypatch.setattr(passthrough_module, "PASSTHROUGH_WAIT_S", 0.2)
+    held.hold(pe_history=True)
+    assert sorted(held.called) == ["2026-Q1", "2026-Q2", "2026-Q3", "pettm"]
+    with pytest.raises(PassthroughBusy):
+        held.passthrough.fetch("transcript", "ACME", {"year": "2025", "quarter": "4"})
+    assert "2025-Q4" not in held.called
+
+
+def test_a_pe_history_payload_without_the_series_is_stored_unusable(env: Env) -> None:
+    """GuruFocus answers some failures with HTTP 200 and a JSON body: the payload is stored with
+    the error ``unusable payload: ...``, answered as fetched, and never reused."""
+    unread = {"error": "Stock not found"}
+    env.router.bodies["pettm"] = json.dumps(unread).encode()
+    passthrough = _passthrough(env)
+    first = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    assert (first.reused, first.payload) == (False, unread)
+    error = 'unusable payload: {"error": "Stock not found"}'
+    assert first.row.error == error
+    assert _stored(env, first.row.id) == ("pettm", "ACME", {"symbol": "ACME"}, error)
+    second = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    assert second.reused is False and second.row.id > first.row.id
+    del env.router.bodies["pettm"]  # the fixture's series: usable, then reused
+    third = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    fourth = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    assert (third.row.error, third.reused, fourth.reused) == (None, False, True)
+    assert env.router.calls == {"pettm": 3}

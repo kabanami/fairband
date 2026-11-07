@@ -15,10 +15,12 @@ The kinds and the endpoints they are stored under, provider ``fmp`` but the last
 - ``dcf``: two calls, ``dcf`` and ``dcf-levered``, FMP's discounted cash flow value and its levered
   one, answered as the parts ``dcf`` and ``levered``: a cross-check a report may cite, never a
   value Fairband computes;
-- ``pe-history``: ``pettm`` under provider ``gurufocus``, GuruFocus's daily trailing P/E series
-  (13.7), reused inside ``PE_HISTORY_REUSE_HOURS`` (seven days) whatever ``reuse_hours`` is. It
-  needs the GuruFocus client: without one it raises ``PassthroughNoKey`` (``NO_GF_KEY``, a 503 on
-  the route) before any call or reuse.
+- ``pe-history``: ``pettm`` under provider ``gf`` (the refresh's name for GuruFocus), GuruFocus's
+  daily trailing P/E series (13.7), reused inside ``PE_HISTORY_REUSE_HOURS`` (seven days) whatever
+  ``reuse_hours`` is. It needs the GuruFocus client: without one it raises ``PassthroughNoKey``
+  (``NO_GF_KEY``, a 503 on the route) before any call or reuse. GuruFocus answers some failures
+  with HTTP 200 and a JSON body, so a payload with no dated row (``normalize_gf.pe_ttm_rows``) is
+  unusable: stored with the error ``unusable payload: ...``, answered as fetched, never reused.
 
 For each call, as ``fetch_company`` does: the newest HTTP 200 response to the same call (provider,
 endpoint, symbol and the call's logical params, ``symbol`` among them) stored without an error is
@@ -28,7 +30,7 @@ with its body scrubbed of ``secrets``. The answer's payload is the stored text p
 carries no key either. A body that is not JSON is stored with the error ``unusable payload: ...``
 and raises a ``VendorError``; a ``VendorError`` is stored as a response row with its message and
 status and no payload, then raised, its message scrubbed (the GuruFocus token travels in the URL
-path, which the message names). Neither is reused.
+path, which the message names). None of the three is reused.
 
 The FMP calls go through the FMP client the server builds on the limiter its refresh runs share,
 so the pass-throughs keep the refresh's pace; the GuruFocus client is not paced, as the refresh's
@@ -58,9 +60,11 @@ from fairband.store.vendor import (
     response_payload,
     response_row,
 )
+from fairband.vendors import gurufocus as gurufocus_api
 from fairband.vendors.fmp import INSIDER_TRADES_LIMIT, Fmp
 from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.http import VendorError, VendorResponse
+from fairband.vendors.normalize_gf import pe_ttm_rows
 from fairband.vendors.scrub import scrub
 
 KINDS = ("transcript", "news", "segments", "insider-trades", "dcf", "pe-history")
@@ -71,8 +75,7 @@ PASSTHROUGH_SLOTS = 4  # vendor calls in flight at once
 PASSTHROUGH_WAIT_S = 10.0  # the longest a call waits for a slot
 BUSY = "the pass-throughs are busy: four calls are in flight, try again"
 NO_GF_KEY = "no GuruFocus key: the pe-history pass-through is off"
-FMP, GURUFOCUS = "fmp", "gurufocus"
-PE_HISTORY_ENDPOINT = "pettm"  # the endpoint pe-history is stored under
+FMP = "fmp"  # FMP's name in the store
 _KIND_LIST = ", ".join(KINDS[:-1]) + f" or {KINDS[-1]}"
 
 
@@ -101,6 +104,7 @@ class _Call:
     send: Callable[[], VendorResponse]
     provider: str = FMP
     reuse: timedelta | None = None  # the reuse window; ``reuse_hours`` when ``None``
+    usable: Callable[[Any], bool] | None = None  # whether a JSON payload reads; any does if None
 
 
 class Passthrough:
@@ -157,16 +161,21 @@ class Passthrough:
             raise VendorError(message, exc.status, exc.retryable) from None
         payload = scrub(response.text, self._secrets)
         if response.json is None:
-            error = unusable(payload)
-            self._record(conn, call, symbol, response.status, payload, error, response.observed_at)
+            not_json = unusable(payload)
+            self._record(
+                conn, call, symbol, response.status, payload, not_json, response.observed_at
+            )
             message = f"GET {response.url} -> {response.status} with a body that is not JSON"
             raise VendorError(message, response.status, retryable=False)
+        parsed = json.loads(payload)
+        # A payload the kind cannot read is stored with its error, so it is never reused.
+        error = None if call.usable is None or call.usable(parsed) else unusable(payload)
         response_id = self._record(
-            conn, call, symbol, response.status, payload, None, response.observed_at
+            conn, call, symbol, response.status, payload, error, response.observed_at
         )
         row = response_row(conn, response_id)
         assert row is not None
-        return Fetched(row, json.loads(payload), reused=False)
+        return Fetched(row, parsed, reused=False)
 
     def _send(self, call: _Call) -> VendorResponse:
         """The vendor call in a slot, the wait for one bounded: a reuse never takes a slot."""
@@ -246,14 +255,21 @@ class Passthrough:
                 return [
                     _Call(
                         kind,
-                        PE_HISTORY_ENDPOINT,
+                        gurufocus_api.PE_TTM,
                         {"symbol": symbol},
                         partial(self._gurufocus.pe_ttm, symbol),
-                        provider=GURUFOCUS,
+                        provider=gurufocus_api.PROVIDER,
                         reuse=timedelta(hours=PE_HISTORY_REUSE_HOURS),
+                        usable=_reads_as_series,
                     )
                 ]
         raise ValueError(unknown_kind(kind))
+
+
+def _reads_as_series(payload: Any) -> bool:
+    """Whether a ``pe-history`` payload holds the series' dated rows: GuruFocus answers some
+    failures with HTTP 200 and a JSON body (``{"error": ...}``)."""
+    return pe_ttm_rows(payload) is not None
 
 
 def unknown_kind(kind: str) -> str:

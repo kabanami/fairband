@@ -10,9 +10,12 @@ note}``: the points oldest first as ``{day, value, ref}``, the statistics ``avg1
 - ``pe``, the trailing P/E: the ``pe-history`` pass-through's answer (``responseId`` the stored
   response's), the stored response when one is inside its seven days, else fetched and stored. A
   payload the series cannot be read from has no points and the ``note`` "the series could not be
-  read". When it cannot be had, ``pe`` is ``null`` and ``peNote`` says why: "no GuruFocus key: the
+  read" (the pass-through stores it as unusable, and the next read fetches again). When the fetch
+  cannot be had, the read serves the newest usable stored series, whatever its age, the series
+  the ``multiple:`` refs resolve against, and ``peNote`` says why: "no GuruFocus key: the
   pe-history pass-through is off", "no FMP key" on a server with no pass-through, the busy
-  sentence, or the vendor's failure, scrubbed. ``peNote`` is ``null`` otherwise.
+  sentence, or the vendor's failure, scrubbed. ``pe`` is ``null`` only when none is stored;
+  ``peNote`` is ``null`` when the fetch answered.
 - ``peForward``, the forward P/E: the multiples log's, ``responseId`` and ``note`` ``null``.
 
 A symbol that is not one is a 400. The route is a sync one, as the pass-through route is: the
@@ -28,7 +31,13 @@ from fastapi import FastAPI, HTTPException
 
 from fairband.policy.settings import exchange_symbol
 from fairband.refresh.passthrough import Passthrough, PassthroughBusy, PassthroughNoKey
-from fairband.reports.multiples import STATS, Series, forward_series, trailing_series
+from fairband.reports.multiples import (
+    STATS,
+    Series,
+    forward_series,
+    stored_trailing,
+    trailing_series,
+)
 from fairband.reports.refs import multiple_ref
 from fairband.store.multiples import multiples_log_for
 from fairband.vendors.http import VendorError
@@ -49,7 +58,7 @@ def add_multiples_routes(
             symbol = exchange_symbol(symbol)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        pe, pe_note = _trailing(passthrough, symbol)
+        pe, pe_note = _trailing(passthrough, conn_factory, symbol)
         with closing(conn_factory()) as conn:
             forward = forward_series(multiples_log_for(conn, symbol))
         return {
@@ -61,19 +70,29 @@ def add_multiples_routes(
 
 
 def _trailing(
-    passthrough: Passthrough | None, symbol: str
+    passthrough: Passthrough | None, conn_factory: Callable[[], sqlite3.Connection], symbol: str
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """The trailing series as the read answers it and ``None``, or ``None`` and why."""
+    """The trailing series as the read answers it, and why the fetch could not be had, if so."""
     if passthrough is None:
-        return None, NO_FMP_KEY
-    try:
-        fetched = passthrough.fetch("pe-history", symbol, {})["pe-history"]
-    except (PassthroughNoKey, PassthroughBusy, VendorError) as exc:
-        return None, str(exc)
-    series = trailing_series(fetched.payload)
+        reason = NO_FMP_KEY
+    else:
+        try:
+            fetched = passthrough.fetch("pe-history", symbol, {})["pe-history"]
+        except (PassthroughNoKey, PassthroughBusy, VendorError) as exc:
+            reason = str(exc)
+        else:
+            return _trailing_json(symbol, fetched.row.id, trailing_series(fetched.payload)), None
+    with closing(conn_factory()) as conn:
+        stored = stored_trailing(conn, symbol)
+    if stored is None:
+        return None, reason
+    return _trailing_json(symbol, *stored), reason
+
+
+def _trailing_json(symbol: str, response_id: int, series: Series | None) -> dict[str, Any]:
     if series is None:
-        return _series_json(symbol, "pe", _NO_SERIES, fetched.row.id, UNREADABLE), None
-    return _series_json(symbol, "pe", series, fetched.row.id, None), None
+        return _series_json(symbol, "pe", _NO_SERIES, response_id, UNREADABLE)
+    return _series_json(symbol, "pe", series, response_id, None)
 
 
 def _series_json(

@@ -493,7 +493,7 @@ def test_multiple_refs_resolve(
     for payload, observed in ((older, at.replace(day=1, month=10)), (rows, at)):
         record_response(
             conn,
-            "gurufocus",
+            "gf",
             "pettm",
             {"symbol": "AAPL"},
             "AAPL",
@@ -502,6 +502,18 @@ def test_multiple_refs_resolve(
             None,
             observed,
         )
+    unread = '{"error": "Stock not found"}'  # newer, stored unusable: never read
+    record_response(
+        conn,
+        "gf",
+        "pettm",
+        {"symbol": "AAPL"},
+        "AAPL",
+        200,
+        unread,
+        f"unusable payload: {unread}",
+        at.replace(day=2),
+    )
     for day, pe_forward in (("2026-10-29", 21.5), ("2026-10-30", None), ("2026-10-31", 22.5)):
         log_multiples(
             conn, "AAPL", date.fromisoformat(day), 150.0, None, None, pe_forward, 1, 1, at
