@@ -5,11 +5,11 @@ A row a company a day, the day the price is of: the price and the reported, clea
 of the engine's intermediates at it, ``NULL`` where the result has none, with the snapshot and the
 refresh that wrote it and the time. The refresh writes one in the transaction of every snapshot it
 values or reprices that carries a price and its date (``log_snapshot``); a result with no price
-writes none, nor does a symbol's failure, whose refusal carries a stored quote the log already
-holds. The newest write of a day replaces the row's price, snapshot, refresh and time, and each
-multiple it carries; a multiple it lacks keeps the figure the row holds, so a refusal never blanks
-a valued day. ``multiples_log_for`` reads a company's rows oldest first and ``since`` the day its
-log began.
+writes none. A failure logs nothing: its price is a stored quote or a quote the run fetched, and
+a day without a valued snapshot has no multiples to log. The newest write of a day replaces the
+row's price, snapshot, refresh and time, and each multiple it carries; a multiple it lacks keeps
+the figure the row holds, so a refusal never blanks a valued day. ``multiples_log_for`` reads a
+company's rows oldest first and ``since`` the day its log began.
 
 Each write is one transaction; it joins the caller's when there is one, so the snapshot's row and
 its log row commit together.

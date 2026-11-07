@@ -9,13 +9,15 @@ note}``: the points oldest first as ``{day, value, ref}``, the statistics ``avg1
 
 - ``pe``, the trailing P/E: the ``pe-history`` pass-through's answer (``responseId`` the stored
   response's), the stored response when one is inside its seven days, else fetched and stored. A
-  payload the series cannot be read from has no points and the ``note`` "the series could not be
-  read" (the pass-through stores it as unusable, and the next read fetches again). When the fetch
-  cannot be had, the read serves the newest usable stored series, whatever its age, the series
-  the ``multiple:`` refs resolve against, and ``peNote`` says why: "no GuruFocus key: the
-  pe-history pass-through is off", "no FMP key" on a server with no pass-through, the busy
-  sentence, or the vendor's failure, scrubbed. ``pe`` is ``null`` only when none is stored;
-  ``peNote`` is ``null`` when the fetch answered.
+  fetched payload the series cannot be read from (no dated row, or no point above zero) is stored
+  as unusable, and the next read fetches again: the read serves the newest usable stored series,
+  whatever its age, with ``peNote`` "the series could not be read", so the read and the refs
+  agree; with none stored, the fetched one with no points and that ``note``, ``peNote`` ``null``.
+  When the fetch cannot be had, the read serves the newest usable stored series, whatever its
+  age, the series the ``multiple:`` refs resolve against, and ``peNote`` says why: "no GuruFocus
+  key: the pe-history pass-through is off", "no FMP key" on a server with no pass-through, the
+  busy sentence, or the vendor's failure, scrubbed. ``pe`` is ``null`` only when none is stored;
+  ``peNote`` is ``null`` when the fetch answered a series.
 - ``peForward``, the forward P/E: the multiples log's, ``responseId`` and ``note`` ``null``.
 
 A symbol that is not one is a 400. The route is a sync one, as the pass-through route is: the
@@ -72,7 +74,9 @@ def add_multiples_routes(
 def _trailing(
     passthrough: Passthrough | None, conn_factory: Callable[[], sqlite3.Connection], symbol: str
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """The trailing series as the read answers it, and why the fetch could not be had, if so."""
+    """The trailing series as the read answers it, and why the fetch could not be had or read,
+    if so."""
+    unread: int | None = None  # a fetched response the series cannot be read from
     if passthrough is None:
         reason = NO_FMP_KEY
     else:
@@ -81,12 +85,17 @@ def _trailing(
         except (PassthroughNoKey, PassthroughBusy, VendorError) as exc:
             reason = str(exc)
         else:
-            return _trailing_json(symbol, fetched.row.id, trailing_series(fetched.payload)), None
+            series = trailing_series(fetched.payload)
+            if series is not None:
+                return _trailing_json(symbol, fetched.row.id, series), None
+            reason, unread = UNREADABLE, fetched.row.id
     with closing(conn_factory()) as conn:
         stored = stored_trailing(conn, symbol)
-    if stored is None:
-        return None, reason
-    return _trailing_json(symbol, *stored), reason
+    if stored is not None:
+        return _trailing_json(symbol, *stored), reason
+    if unread is not None:
+        return _trailing_json(symbol, unread, None), None
+    return None, reason
 
 
 def _trailing_json(symbol: str, response_id: int, series: Series | None) -> dict[str, Any]:

@@ -51,8 +51,9 @@ builds no universe.
 A symbol's failure never stops the run: an exception from its fetch, assembly or valuation gives it
 a refusal snapshot ("data fetch failed: <class>: <message>" or "valuation failed: <class>:
 <message>", the keys scrubbed), marks it ``failed`` and is logged as a warning. A company with an
-applied override gets that refusal as its review too (``reviews.review_refusal``). The refusal
-logs no multiples: its price is a stored quote whose day the log already holds.
+applied override gets that refusal as its review too (``reviews.review_refusal``). A failure
+logs nothing: its price is a stored quote or a quote the run fetched, and a day without a valued
+snapshot has no multiples to log.
 
 The run stops early on two events. A cancel is read before each symbol starts, in both stages; the
 symbols in flight finish and the run ends ``cancelled``, with no further stage: a fetched symbol

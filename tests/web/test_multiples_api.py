@@ -289,6 +289,41 @@ def test_a_series_that_cannot_be_read_has_no_points(
         assert (body["pe"], body["peNote"]) == (unread, None)
 
 
+def test_a_fetch_that_cannot_be_read_serves_the_stored_series(
+    with_history: Callable[[bool], TestClient],
+    gf: GuruFocusDouble,
+    db_path: Path,
+    policy: Policy,
+) -> None:
+    """A series stored a month ago, past its seven days, and a fetch the series cannot be read
+    from, an error body or the zero-filled catch-all: the read serves the stored series, the one
+    the refs read, with ``peNote`` "the series could not be read"; the fetch is stored unusable."""
+    observed = datetime(2026, 10, 2, 9, 30, tzinfo=UTC)
+    with closing(connect(db_path)) as conn:
+        response_id = record_response(
+            conn,
+            "gf",
+            "pettm",
+            {"symbol": "AAPL"},
+            "AAPL",
+            200,
+            json.dumps(_pettm(PETTM_YEARS)),
+            None,
+            observed,
+        )
+    pe = _series("pe", TRAILING, TRAILING_STATS, "2013-10-30", response_id)
+    client = with_history(True)
+    for unread in (UNREAD, [["2026-10-30", 0, 0, 0, 0], ["2026-10-31", "At Loss", 0, 0, 0]]):
+        gf.body = unread
+        body = _get(client, "/api/companies/AAPL/multiples-history")
+        assert (body["pe"], body["peNote"]) == (pe, "the series could not be read")
+    assert gf.calls == 2
+    assert [error is None for _, _, error in _pettm_rows(db_path)] == [True, False, False]
+    with closing(connect(db_path)) as conn:
+        found = Resolver(conn, "AAPL", policy).resolve("multiple:AAPL/pe/avg_10y")
+    assert found is not None and found.value == pe["stats"]["avg10y"]["value"]
+
+
 def test_a_fetch_that_cannot_be_had_serves_the_stored_series(
     with_history: Callable[[bool], TestClient],
     client: TestClient,

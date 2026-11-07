@@ -21,8 +21,9 @@ The kinds and the endpoints they are stored under, provider ``fmp`` but the last
   daily trailing P/E series (13.7), reused inside ``PE_HISTORY_REUSE_HOURS`` (seven days) whatever
   ``reuse_hours`` is. It needs the GuruFocus client: without one it raises ``PassthroughNoKey``
   (``NO_GF_KEY``, a 503 on the route) before any call or reuse. GuruFocus answers some failures
-  with HTTP 200 and a JSON body, so a payload with no dated row (``normalize_gf.pe_ttm_rows``) is
-  unusable: stored with the error ``unusable payload: ...``, answered as fetched, never reused.
+  with HTTP 200 and a JSON body, and its catch-all with every value zero, so a payload with no
+  dated row, or none with a point above zero (``normalize_gf.pe_ttm_rows``), is unusable: stored
+  with the error ``unusable payload: ...``, answered as fetched, never reused.
 
 For each call, as ``fetch_company`` does: the newest HTTP 200 response to the same call (provider,
 endpoint, symbol and the call's logical params, ``symbol`` among them) stored without an error is
@@ -280,8 +281,9 @@ class Passthrough:
 
 
 def _reads_as_series(payload: Any) -> bool:
-    """Whether a ``pe-history`` payload holds the series' dated rows: GuruFocus answers some
-    failures with HTTP 200 and a JSON body (``{"error": ...}``)."""
+    """Whether a ``pe-history`` payload holds the series' dated rows with a point above zero:
+    GuruFocus answers some failures with HTTP 200 and a JSON body (``{"error": ...}``), and its
+    catch-all with every value zero."""
     return pe_ttm_rows(payload) is not None
 
 

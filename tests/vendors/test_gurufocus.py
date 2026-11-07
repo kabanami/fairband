@@ -245,9 +245,18 @@ def test_pe_ttm_rows_read_each_row_s_close() -> None:
 
 @pytest.mark.parametrize(
     "payload",
-    [None, [], {}, {"error": "Stock not found"}, [["not a date", 1.0]], [[1, 2, 3]], "x"],
+    [
+        None,
+        [],
+        {},
+        {"error": "Stock not found"},
+        [["not a date", 1.0]],
+        [[1, 2, 3]],
+        "x",
+        [["2026-10-29", 0, 0, 0, 0], ["2026-10-30", "At Loss", 0, 0, 0], ["2026-10-31", 0]],
+    ],
 )
 def test_pe_ttm_rows_without_dated_rows_are_none(payload: Any) -> None:
-    """A payload that is not a list of dated rows gives no series: the read says it could not be
-    read."""
+    """A payload that is not a list of dated rows, or whose dated rows hold no point above zero
+    (GuruFocus's zero-filled catch-all), gives no series: the read says it could not be read."""
     assert pe_ttm_rows(payload) is None

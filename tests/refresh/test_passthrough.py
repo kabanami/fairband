@@ -470,15 +470,26 @@ def test_a_gurufocus_call_in_flight_holds_a_slot(
     assert "2025-Q4" not in held.called
 
 
-def test_a_pe_history_payload_without_the_series_is_stored_unusable(env: Env) -> None:
-    """GuruFocus answers some failures with HTTP 200 and a JSON body: the payload is stored with
-    the error ``unusable payload: ...``, answered as fetched, and never reused."""
-    unread = {"error": "Stock not found"}
+@pytest.mark.parametrize(
+    ("unread", "error"),
+    [
+        ({"error": "Stock not found"}, 'unusable payload: {"error": "Stock not found"}'),
+        (
+            [["2026-10-30", 0, 0, 0, 0], ["2026-10-31", 0, 0, 0, 0]],
+            'unusable payload: [["2026-10-30", 0, 0, 0, 0], ["2026-10-31", 0, 0, 0, 0]]',
+        ),
+    ],
+)
+def test_a_pe_history_payload_without_the_series_is_stored_unusable(
+    env: Env, unread: Any, error: str
+) -> None:
+    """GuruFocus answers some failures with HTTP 200 and a JSON body, and its catch-all with every
+    value zero: the payload is stored with the error ``unusable payload: ...``, answered as
+    fetched, and never reused."""
     env.router.bodies["pettm"] = json.dumps(unread).encode()
     passthrough = _passthrough(env)
     first = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
     assert (first.reused, first.payload) == (False, unread)
-    error = 'unusable payload: {"error": "Stock not found"}'
     assert first.row.error == error
     assert _stored(env, first.row.id) == ("pettm", "ACME", {"symbol": "ACME"}, error)
     second = passthrough.fetch("pe-history", "ACME", {})["pe-history"]

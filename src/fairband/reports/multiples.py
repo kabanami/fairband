@@ -4,8 +4,9 @@ report reads the price against, as the read serves them and the refs resolve the
 - The trailing P/E (``pe``): GuruFocus's daily ``pettm`` series as the newest usable stored
   ``pe-history`` response holds it, whatever its age, each row's closing P/E
   (``normalize_gf.pe_ttm_rows``). A loss row has no point; nothing fills its days, so the series
-  keeps the gap. A payload without the series' shape gives no series (``None``); the pass-through
-  stores such a payload as unusable, so the newest usable one holds the series.
+  keeps the gap. A payload without the series' shape, or with no point above zero, gives no
+  series (``None``); the pass-through stores such a payload as unusable, so the newest usable one
+  holds the series.
 - The forward P/E (``pe_forward``): the multiples log's forward P/E by day; a row with none has no
   point.
 

@@ -87,7 +87,9 @@ def keyratios_observations(
 
 def pe_ttm_rows(payload: Any) -> list[tuple[date, float | None]] | None:
     """The ``pettm`` series' rows in payload order, each day with its trailing P/E, ``None`` for a
-    loss; ``None`` for a payload that is not a list holding a dated row.
+    loss; ``None`` for a payload that is not a list holding a dated row, or whose dated rows hold
+    no point above zero: GuruFocus answers some failures with HTTP 200 and a JSON body, and its
+    catch-all with every value zero.
 
     An indicator row is ``[date, open, high, low, close]``, the close the day's value, or
     ``[date, value]`` (the stocks repository's notes, section 22). A value that is not a positive
@@ -106,4 +108,4 @@ def pe_ttm_rows(payload: Any) -> list[tuple[date, float | None]] | None:
             continue
         value = num(row[-1] if len(row) >= 5 else row[1])
         rows.append((day, float(value) if value is not None and value > 0 else None))
-    return rows or None
+    return rows if any(value is not None for _, value in rows) else None

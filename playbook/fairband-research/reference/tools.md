@@ -49,8 +49,8 @@ be left out.
   P/E (`peForward`, Fairband's own log, kept since `since`) over the ten years on file. Each point
   is `{day, value, ref}`; each statistic, `avg10y`, `median10y`, `high10y` and `low10y`, is
   `{value, unit, ref}`, its ref `multiple:<symbol>/pe/avg_10y` and its siblings. `peNote` says why
-  the trailing series could not be fetched, when it could not; the read then serves the newest one
-  stored. Read this, not `pe_history`, for the points and the statistics with their refs.
+  the trailing series could not be fetched or read, when it could not ("the series could not be
+  read"); the read then serves the newest one stored. Read this, not `pe_history`, for the points and the statistics with their refs.
 - `peers(symbol)`: the company's mature peers with their figures, each with its `peer:` ref, and
   where the list of peers came from.
 - `watchlists()`: the watchlists with their companies.
