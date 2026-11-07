@@ -4,10 +4,14 @@ The statement side (``series_for``, the capital years, the balance years, the ta
 trailing figures and the share count) is ``inputs_statements``; its docstring states those rules.
 ``build_inputs`` adds:
 
-- the consensus: one ``QuarterEstimate`` per ``estimate-quarter`` period and one ``AnnualEstimate``
-  per ``estimate-annual`` period, every row returned, an annual one with its EPS, net-income and
-  revenue analyst counts; the fiscal year is FMP's when stored, else derived from the company's
-  fiscal-year end (``FiscalCalendar``), and so is the quarter label;
+- the consensus: one ``QuarterEstimate`` per fiscal quarter of the ``estimate-quarter`` rows and
+  one ``AnnualEstimate`` per fiscal year of the ``estimate-annual`` rows, in period-end order, an
+  annual one with its EPS, net-income and revenue analyst counts; the fiscal year is FMP's when
+  stored, else derived from the company's fiscal-year end (``FiscalCalendar``), and so is the
+  quarter label. FMP reports some companies under two fiscal calendars, two rows for one fiscal
+  period with period ends days apart (AAPL: 2027-12-26 and 2027-12-27 for fiscal 2028 Q1); the row
+  kept has the larger EPS analyst count, a tie or no count keeping the later period end, so the
+  NTM quarters chain (``ntm_quarters``);
 - the street's trailing EPS: the sum of the four ``street-actual`` values whose periods are exactly
   the four trailing quarter ends; ``None`` when one is missing or the trailing figures are a fiscal
   year, which leaves the SBC basis unknown (``mech/1.2``);
@@ -41,7 +45,7 @@ dataset name is a programming error and raises ``ValueError``.
 
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from datetime import date
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate
@@ -187,17 +191,21 @@ def _quarter_estimates(
 ) -> _Cited[tuple[QuarterEstimate, ...]]:
     if calendar is None:
         return (), None
-    estimates = tuple(
-        QuarterEstimate(
-            period_end=period,
-            fiscal_year=_fiscal_year(fields, period, calendar),
-            fiscal_period=f"Q{_whole(fields.get('fiscal_period')) or calendar.quarter(period)}",
-            eps=_float(fields.get("eps_avg")),
-            revenue=_float(fields.get("revenue_avg")),
-            net_income=_float(fields.get("net_income_avg")),
-            analysts=_whole(fields.get("analysts_eps")),
-        )
-        for period, fields in _by_period(rows).items()
+    estimates = _one_per_period(
+        (
+            QuarterEstimate(
+                period_end=period,
+                fiscal_year=_fiscal_year(fields, period, calendar),
+                fiscal_period=f"Q{_whole(fields.get('fiscal_period')) or calendar.quarter(period)}",
+                eps=_float(fields.get("eps_avg")),
+                revenue=_float(fields.get("revenue_avg")),
+                net_income=_float(fields.get("net_income_avg")),
+                analysts=_whole(fields.get("analysts_eps")),
+            )
+            for period, fields in _by_period(rows).items()
+        ),
+        lambda q: (q.fiscal_year, q.fiscal_period),
+        lambda q: q.analysts,
     )
     return estimates, _cite(_ESTIMATES, rows) if estimates else None
 
@@ -207,20 +215,42 @@ def _annual_estimates(
 ) -> _Cited[tuple[AnnualEstimate, ...]]:
     if calendar is None:
         return (), None
-    estimates = tuple(
-        AnnualEstimate(
-            fiscal_year=_fiscal_year(fields, period, calendar),
-            period_end=period,
-            eps=_float(fields.get("eps_avg")),
-            revenue=_float(fields.get("revenue_avg")),
-            net_income=_float(fields.get("net_income_avg")),
-            analysts_eps=_whole(fields.get("analysts_eps")),
-            analysts_net_income=_whole(fields.get("analysts_net_income")),
-            analysts_revenue=_whole(fields.get("analysts_revenue")),
-        )
-        for period, fields in _by_period(rows).items()
+    estimates = _one_per_period(
+        (
+            AnnualEstimate(
+                fiscal_year=_fiscal_year(fields, period, calendar),
+                period_end=period,
+                eps=_float(fields.get("eps_avg")),
+                revenue=_float(fields.get("revenue_avg")),
+                net_income=_float(fields.get("net_income_avg")),
+                analysts_eps=_whole(fields.get("analysts_eps")),
+                analysts_net_income=_whole(fields.get("analysts_net_income")),
+                analysts_revenue=_whole(fields.get("analysts_revenue")),
+            )
+            for period, fields in _by_period(rows).items()
+        ),
+        lambda a: a.fiscal_year,
+        lambda a: a.analysts_eps,
     )
     return estimates, _cite(_ESTIMATES, rows) if estimates else None
+
+
+def _one_per_period[E: (QuarterEstimate, AnnualEstimate)](
+    estimates: Iterable[E], period: Callable[[E], Hashable], analysts: Callable[[E], int | None]
+) -> tuple[E, ...]:
+    """One estimate per fiscal ``period``, in period-end order: of the rows FMP gives for one
+    period under two fiscal calendars, the one with the most EPS ``analysts``, a tie or no count
+    taking the later period end; a count beats none."""
+    periods: dict[Hashable, list[E]] = {}
+    for estimate in estimates:
+        periods.setdefault(period(estimate), []).append(estimate)
+
+    def rank(estimate: E) -> tuple[int, date]:
+        count = analysts(estimate)
+        return (-1 if count is None else count), estimate.period_end
+
+    kept = (max(same, key=rank) for same in periods.values())
+    return tuple(sorted(kept, key=lambda e: e.period_end))
 
 
 def _street_ttm_eps(rows: Sequence[ObservationRow], stated: Statements) -> _Cited[float | None]:

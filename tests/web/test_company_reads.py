@@ -174,6 +174,39 @@ def test_estimates(client: TestClient) -> None:
     }
 
 
+def test_the_estimates_read_shows_one_row_per_period(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """FMP's two fiscal calendars give HGCO two rows for 2026 Q4 and two for 2027, a day apart:
+    the read serves one row per period, the one with the larger EPS analyst count, and its refs
+    resolve to that row."""
+    quarters = [
+        {"symbol": "HGCO", "date": "2026-12-30", "epsAvg": 0.40, "numAnalystsEps": 4},
+        {"symbol": "HGCO", "date": "2026-12-31", "epsAvg": 0.52, "numAnalystsEps": 11},
+        {"symbol": "HGCO", "date": "2027-03-31", "epsAvg": 0.54, "numAnalystsEps": 10},
+    ]
+    annual = [
+        {"symbol": "HGCO", "date": "2027-12-30", "epsAvg": 3.63, "numAnalystsEps": 8},
+        {"symbol": "HGCO", "date": "2027-12-31", "epsAvg": 3.5, "numAnalystsEps": 3},
+    ]
+    consensus = {"estimates-quarter": quarters, "estimates-annual": annual}
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, "HGCO", consensus, CREATED)
+    body = _get(client, "/api/companies/HGCO/estimates")
+    assert [(q["period"], q["periodEnd"]) for q in body["quarters"]] == [
+        ("2026-Q4", "2026-12-31"),
+        ("2027-Q1", "2027-03-31"),
+    ]
+    assert body["quarters"][0]["eps"] == _figure(0.52, "per-share", "estimate:HGCO/2026-Q4/eps")
+    assert [(a["period"], a["periodEnd"]) for a in body["annual"]] == [("2027", "2027-12-30")]
+    assert body["annual"][0]["eps"] == _figure(3.63, "per-share", "estimate:HGCO/2027/eps")
+    with closing(connect(db_path)) as conn:
+        resolver = Resolver(conn, "HGCO", policy)
+        for ref, value in (("estimate:HGCO/2026-Q4/eps", 0.52), ("estimate:HGCO/2027/eps", 3.63)):
+            found = resolver.resolve(ref)
+            assert found is not None and found.value == value, ref
+
+
 def test_price_history(client: TestClient) -> None:
     body = _get(client, "/api/companies/AAPL/price-history")
     closes = body["closes"]

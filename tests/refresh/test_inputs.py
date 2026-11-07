@@ -7,10 +7,13 @@ other endpoint with its ACME fixture (consensus, quote, profile, closes, GuruFoc
 import json
 import sqlite3
 from collections.abc import Callable
-from datetime import date
+from dataclasses import replace
+from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
+from support.engine_companies import mature_growth_inputs, universe_deciles
 from synthetic import (
     NOW,
     QUARTERS,
@@ -28,7 +31,7 @@ from synthetic import (
 )
 from vendor_double import FIXTURES, Clients, Clock, Router
 
-from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
+from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures, ntm_quarters
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Deciles, FiscalYear
 from fairband.engine.roic import CapitalYear
@@ -42,6 +45,7 @@ from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.peers import peer_figures
 
 TODAY = date(2026, 11, 1)
+GOLDEN = Path(__file__).parent.parent / "fixtures" / "golden"
 DECILES = Deciles((-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3), (0.0,) * 9, 1, 1, 1)
 ROUTE_KEYS = {
     "price",
@@ -515,6 +519,160 @@ def test_estimate_fiscal_years_across_the_turn_of_the_calendar_year(store: Store
         (2028, "Q4"),
     ]
     assert [a.fiscal_year for a in inputs.annual_estimates] == [2026, 2027, 2028]
+
+
+def _on_a_september_year(
+    store: Store, quarters: list[dict[str, Any]], years: list[dict[str, Any]]
+) -> sqlite3.Connection:
+    """ACME on AAPL's calendar, a September year that ends on the last Saturday (FY2025 ends
+    2025-09-27), with the given quarterly and annual consensus."""
+    annual = [
+        statement(date(2024, 9, 28), 2024, "FY", revenue=900 * M),
+        statement(date(2025, 9, 27), 2025, "FY", revenue=1000 * M),
+    ]
+    payloads = {"income-annual": annual, "estimates-quarter": quarters, "estimates-annual": years}
+    return store(**payloads)
+
+
+def test_one_consensus_row_per_fiscal_period(store: Store) -> None:
+    """FMP reports AAPL under two fiscal calendars: two rows for one fiscal period, their period
+    ends a day apart. The row kept has the larger EPS analyst count, the earlier end's when it has
+    it, and a count beats none; a period with one row keeps it; the rows stay in period-end order."""
+    conn = _on_a_september_year(
+        store,
+        quarters=[
+            {"date": "2027-09-25", "epsAvg": 2.0, "numAnalystsEps": 25},  # FY2027 Q4
+            {"date": "2027-12-26", "epsAvg": 2.6, "revenueAvg": 140_000 * M, "numAnalystsEps": 12},
+            {
+                "date": "2027-12-27",
+                "epsAvg": 2.8,
+                "revenueAvg": 145_000 * M,
+                "netIncomeAvg": 41_000 * M,
+                "numAnalystsEps": 30,
+            },
+            {"date": "2028-03-25", "epsAvg": 1.9, "numAnalystsEps": 8},  # FY2028 Q2
+            {"date": "2028-03-26", "epsAvg": 1.7},  # no count
+        ],
+        years=[
+            {
+                "date": "2028-09-29",
+                "epsAvg": 8.5,
+                "revenueAvg": 450_000 * M,
+                "netIncomeAvg": 125_000 * M,
+                "numAnalystsEps": 38,
+                "numAnalystsRevenue": 36,
+            },
+            {"date": "2028-09-30", "epsAvg": 8.1, "numAnalystsEps": 9, "numAnalystsRevenue": 9},
+        ],
+    )
+    inputs = build(conn)
+    assert inputs.quarter_estimates == (
+        QuarterEstimate(date(2027, 9, 25), 2027, "Q4", 2.0, None, None, 25),
+        QuarterEstimate(date(2027, 12, 27), 2028, "Q1", 2.8, 145_000 * M, 41_000 * M, 30),
+        QuarterEstimate(date(2028, 3, 25), 2028, "Q2", 1.9, None, None, 8),
+    )
+    assert inputs.annual_estimates == (
+        AnnualEstimate(2028, date(2028, 9, 29), 8.5, 450_000 * M, 125_000 * M, 38, 38, 36),
+    )
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        pytest.param([{"numAnalystsEps": 12}, {"numAnalystsEps": 12}], id="tie"),
+        pytest.param([{}, {}], id="no-counts"),
+        pytest.param(
+            [{"numAnalystsEps": 30}, {"numAnalystsEps": 12}, {"numAnalystsEps": 30}],
+            id="three-rows",
+        ),
+        pytest.param(
+            [
+                {"numAnalystsEps": 12, "fiscalYear": 2028, "fiscalPeriod": "Q1"},
+                {"numAnalystsEps": 12},
+            ],
+            id="fmp-label",
+        ),
+    ],
+)
+def test_a_tie_keeps_the_later_period_end(store: Store, rows: list[dict[str, Any]]) -> None:
+    """Of the rows for FY2028 Q1, and for FY2028, whose largest EPS analyst count is shared, or
+    that have no count, the row with the later period end is kept, whether FMP labels the period
+    or the calendar does."""
+    quarter_ends = ("2027-12-26", "2027-12-27", "2027-12-28")[: len(rows)]
+    year_ends = ("2028-09-29", "2028-09-30", "2028-10-01")[: len(rows)]
+    conn = _on_a_september_year(
+        store,
+        quarters=[
+            {"date": end, "epsAvg": 2.0 + k, **row}
+            for k, (end, row) in enumerate(zip(quarter_ends, rows, strict=True))
+        ],
+        years=[
+            {
+                "date": end,
+                "epsAvg": 8.0 + k,
+                **{f: v for f, v in row.items() if f != "fiscalPeriod"},
+            }
+            for k, (end, row) in enumerate(zip(year_ends, rows, strict=True))
+        ],
+    )
+    inputs = build(conn)
+    last = len(rows) - 1
+    [quarter] = inputs.quarter_estimates
+    assert (quarter.fiscal_year, quarter.fiscal_period, quarter.period_end, quarter.eps) == (
+        2028,
+        "Q1",
+        date.fromisoformat(quarter_ends[last]),
+        2.0 + last,
+    )
+    [year] = inputs.annual_estimates
+    assert (year.fiscal_year, year.period_end, year.eps) == (
+        2028,
+        date.fromisoformat(year_ends[last]),
+        8.0 + last,
+    )
+
+
+def test_the_ntm_chain_holds_on_a_company_with_duplicate_rows(store: Store) -> None:
+    """Each of the four quarters after the trailing period end, and each year of the path, comes
+    twice, a day apart, the earlier row with fewer analysts and other figures. Assembly keeps
+    Mature Growth Co's consensus, so the four NTM quarters chain and the golden's arithmetic
+    values the row instead of refusing it "incomplete NTM consensus"."""
+    mgco = mature_growth_inputs()
+    quarters = [
+        row
+        for q in mgco.quarter_estimates
+        for row in (
+            {"date": str(q.period_end - timedelta(days=1)), "epsAvg": 0.1, "numAnalystsEps": 6},
+            {"date": str(q.period_end), "epsAvg": q.eps, "numAnalystsEps": q.analysts},
+        )
+    ]
+    years = [
+        row
+        for a in mgco.annual_estimates
+        for row in (
+            {"date": str(a.period_end - timedelta(days=1)), "epsAvg": 0.1, "numAnalystsEps": 2},
+            {
+                "date": str(a.period_end),
+                "epsAvg": a.eps,
+                "netIncomeAvg": a.net_income,
+                "numAnalystsEps": a.analysts_eps,
+            },
+        )
+    ]
+    conn = store(**{**bodies(), "estimates-quarter": quarters, "estimates-annual": years})
+    inputs = build(conn)
+    assert inputs.trailing is not None and inputs.trailing.period_end == date(2026, 9, 30)
+    ntm = ntm_quarters(inputs.quarter_estimates, inputs.trailing.period_end)
+    assert ntm == mgco.quarter_estimates
+    assert inputs.annual_estimates == mgco.annual_estimates
+    stored = replace(
+        mgco,
+        quarter_estimates=inputs.quarter_estimates,
+        annual_estimates=inputs.annual_estimates,
+    )
+    result = value_company(stored, universe_deciles(), load_policy(), date(2026, 10, 31))
+    golden = json.loads((GOLDEN / "MGCO.json").read_text())
+    assert (result.refusal, result.value) == (None, golden["value"])
 
 
 @pytest.mark.parametrize(

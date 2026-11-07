@@ -44,7 +44,7 @@ All from FMP unless named. The depth is set in `refresh/fetch.py`.
 | Income statement, balance sheet, cash flow, annual | `income-statement`, `balance-sheet-statement`, `cash-flow-statement` | 11 fiscal years: ten for the ROIC aggregate plus the opening balance. Among the lines kept, for the Decline route: `grossProfit` and `interestExpense` (income statement), `totalAssets`, `totalLiabilities` and `retainedEarnings` (balance sheet), `depreciationAndAmortization` (cash flow) |
 | As-reported balance sheet, annual | `balance-sheet-statement-as-reported` | 11 fiscal years; supplies the issuer's total intangibles excluding goodwill, and the lease lines |
 | Income statement and cash flow, quarterly | the same endpoints with `period=quarter` | 8 quarters, for the trailing figures; `grossProfit`, `interestExpense` and `depreciationAndAmortization` among the lines kept |
-| Consensus EPS, revenue, net income with analyst counts | `analyst-estimates`, annual and quarterly | 6 annual rows and 40 quarterly rows; the engine picks periods by date, never by row order. FMP gives two analyst counts, for EPS and for revenue; the net-income count reads the EPS count |
+| Consensus EPS, revenue, net income with analyst counts | `analyst-estimates`, annual and quarterly | 6 annual rows and 40 quarterly rows; the engine picks periods by date, never by row order. FMP gives two analyst counts, for EPS and for revenue; the net-income count reads the EPS count. Assembly keeps one row per fiscal quarter and one per fiscal year, because FMP reports some companies under two fiscal calendars, two rows for one period with period ends days apart (AAPL: 2027-12-26 and 2027-12-27 for fiscal 2028 Q1): the row kept has the larger EPS analyst count, a tie or no count keeping the later period end |
 | Street actual EPS by quarter | `earnings` | 12 rows, for the stock-compensation basis test |
 | Next earnings date | `earnings` | the same rows; the next date on or after today |
 | Quote: price, market cap | `quote` | current |
@@ -350,7 +350,7 @@ Then the route's own, in this order: no trailing revenue; no statutory tax rate;
 
 ### 5.2 Year 1: the NTM anchor
 
-The NTM quarters are the first four quarterly consensus periods ending after the trailing period end, by period end, and only when each ends 80 to 100 days after the one before and each has an EPS mean. NTM EPS raw = their sum.
+The NTM quarters are the first four quarterly consensus periods ending after the trailing period end, by period end, and only when each ends 80 to 100 days after the one before and each has an EPS mean. NTM EPS raw = their sum. They are read from one row per fiscal quarter, the row with the larger EPS analyst count (a tie or no count, the later period end), since FMP's two fiscal calendars for some companies give two rows for one quarter a day or a few days apart, which would break the chain (section 2).
 
 The stock-compensation basis test: the street trailing EPS is the sum of the four street actuals whose periods are the four trailing quarter ends (missing when one is absent or the trailing figures are a fiscal year). After-tax SBC a share = trailing stock compensation × (1 − the newest fiscal year's statutory rate) ÷ diluted shares. When street EPS − GAAP trailing diluted EPS ≥ 0.5 × after-tax SBC a share, the consensus excludes stock compensation, and the anchor subtracts after-tax SBC a share × (NTM consensus revenue ÷ trailing revenue; the factor is 1 when any NTM quarter lacks a revenue mean or trailing revenue is missing or not positive). When any of the three inputs is missing, the basis is unknown, the consensus stands as it is, flag `sbc-basis-unknown`.
 
@@ -453,7 +453,7 @@ What a refusal keeps beside the price facts every result carries: refusals 1 to 
 
 ### 5a.2 Year 1 and the path
 
-Year 0 is trailing revenue (4.2). Year 1 is the NTM consensus revenue: the sum of the revenue means of the NTM quarters, picked as 5.2 picks them (the first four quarterly consensus periods ending after the trailing period end, by period end, each ending 80 to 100 days after the one before). Without four such quarters, or with one that lacks a revenue mean, the row is refused "incomplete NTM consensus"; the quarters' EPS means are not needed here. An NTM revenue at or below zero is refused "no positive consensus revenue".
+Year 0 is trailing revenue (4.2). Year 1 is the NTM consensus revenue: the sum of the revenue means of the NTM quarters, picked as 5.2 picks them (the first four quarterly consensus periods ending after the trailing period end, by period end, each ending 80 to 100 days after the one before), from one row per fiscal quarter where FMP's two fiscal calendars give two, the row with the larger EPS analyst count (a tie or no count, the later period end). Without four such quarters, or with one that lacks a revenue mean, the row is refused "incomplete NTM consensus"; the quarters' EPS means are not needed here. An NTM revenue at or below zero is refused "no positive consensus revenue".
 
     g_1 = NTM revenue ÷ trailing revenue − 1
 
