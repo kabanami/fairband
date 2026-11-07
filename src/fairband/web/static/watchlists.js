@@ -1,11 +1,12 @@
 /* The Watchlists view (spec 2026-11-04 9.6), loaded after controls.js. Above the lists, the New
    watchlist field and Create. Each list is a section: its name, its count and the day it was
-   made, Rename and Delete; under them the Add a company field, which matches the screen's rows as
-   FIND does and lists up to eight, then the list's companies as a ScreenTable of the screen's rows
-   under the screen's columns. A company's mark opens the screen's popup, so a company leaves a
-   list when its box there is unchecked; a row opens the drawer on the Screen view. Every write
-   goes through FairbandPage.api; after it the rows and the lists load again, the screen's marks
-   follow, and the view draws again with them. */
+   made, Request research (spec 2026-11-06 Tier 2, 18.6), Rename and Delete; under them the Add a
+   company field, which matches the screen's rows as FIND does and lists up to eight, then the
+   list's companies as a ScreenTable of the screen's rows under the screen's columns. A company's
+   mark opens the screen's popup, so a company leaves a list when its box there is unchecked; a
+   row opens the drawer on the Screen view. Every write goes through FairbandPage.api; after it
+   the rows and the lists load again, the screen's marks follow, and the view draws again with
+   them. */
 (function () {
   'use strict';
 
@@ -14,7 +15,7 @@
   var P = FairbandPage;
   /* A symbol as the server takes one; a text no row matches is added as typed when it is one. */
   var SYMBOL = /^[A-Za-z0-9.-]{1,10}$/;
-  /* A refused write's first words, by its method. */
+  /* A refused write's first words, by its method, unless the write names its own. */
   var REFUSED = {
     POST: 'Not created', PATCH: 'Not renamed', DELETE: 'Not deleted', PUT: 'Not added'
   };
@@ -26,30 +27,34 @@
     adding: {}, /* each list's Add a company field, by list id */
     renaming: null, /* { id, name } while a list's name is a field */
     deleting: null, /* { id, name, count } while Delete's dialog is open */
-    pending: null, /* { method, id }: the write in flight; no other starts until it ends */
+    pending: null, /* { method, id, head? }: the write in flight; no other starts until it ends */
     errors: {}, /* a refused write's sentence, by list id, or under 'new' for Create */
+    requested: {}, /* a Request research run's counts, { posted, open }, by list id */
     focus: null /* a selector in the view that takes focus once the view has drawn */
   };
 
   /* ------------------------------------------------------------------ the writes */
 
   /* One write at a time, so a second press never makes a second write; Delete's dialog reads
-     confirming meanwhile. A write clears the sentences of the writes before it, and a refused
-     write's own sentence stands where the write was made. Then the write's own last step runs,
-     given the sentence (null when the server took it) and the answer's body; the rows and the
-     lists load again, so the screen's marks follow; and the view draws. */
+     confirming meanwhile. A write clears the sentences of the writes before it, Request
+     research's counts among them, and a refused write's own sentence stands where the write was
+     made, led by the write's own head when it names one (read as the write ends, so a run of
+     posts names the company it stopped at). Then the write's own last step runs, given the
+     sentence (null when the server took it) and the answer's body; the rows and the lists load
+     again, so the screen's marks follow; and the view draws. */
   function write(made, call, after) {
     if (state.pending) return;
     var where = made.id == null ? 'new' : made.id;
     state.pending = made;
     state.errors = {};
+    state.requested = {};
     render();
     var answer = null;
     call().then(function (r) {
       answer = r.body;
-      return refusal(REFUSED[made.method], r);
+      return refusal(made.head || REFUSED[made.method], r);
     }).catch(function (err) {
-      return REFUSED[made.method] + ': ' + err.message + '.';
+      return (made.head || REFUSED[made.method]) + ': ' + err.message + '.';
     }).then(function (error) {
       state.pending = null;
       if (error) state.errors[where] = error;
@@ -128,6 +133,36 @@
     }, function (error) {
       if (!error) state.adding[id] = '';
       state.focus = inList(id, '.app-wl__q');
+    });
+  }
+
+  /* Request research (spec 2026-11-06 Tier 2, 18.6): a valuation review posted for each company
+     on the list in turn, one post at a time, as the owner. A 201 counts as posted, and a 409, an
+     item already open for the company, as already open; any other answer, a 400 or a 5xx, stops
+     the run, and its sentence, the server's, stands under the head, led by the company it stopped
+     at. The meta line counts as the run goes; the header's Inbox count follows on its next read.
+     Focus goes back to the button. */
+  function requestResearch(list) {
+    var tally = { posted: 0, open: 0 };
+    var made = { method: 'POST', id: list.id, head: 'Not posted' };
+    write(made, function () {
+      state.requested[list.id] = tally;
+      return list.symbols.reduce(function (run, entry) {
+        return run.then(function (last) {
+          if (last && !last.ok) return last;
+          made.head = 'Not posted for ' + entry.symbol;
+          return P.api.post('/api/inbox', { symbol: entry.symbol, mode: 'valuation review' })
+            .then(function (r) {
+              if (r.status === 409) tally.open++;
+              else if (r.ok) tally.posted++;
+              else return r;
+              render();
+              return { ok: true };
+            });
+        });
+      }, Promise.resolve({ ok: true }));
+    }, function () {
+      state.focus = inList(list.id, '.app-wl__request');
     });
   }
 
@@ -233,11 +268,22 @@
     return Number(n).toLocaleString('en-US') + (n === 1 ? ' company' : ' companies');
   }
 
+  /* What a Request research run came to, or has come to so far: Posted 3 requests · 2 already
+     open; null before a run. */
+  function requested(tally) {
+    if (!tally) return null;
+    return 'Posted ' + tally.posted + (tally.posted === 1 ? ' request' : ' requests') +
+      (tally.open ? ' · ' + tally.open + ' already open' : '');
+  }
+
   /* The list's head: its name, or the name's field while renaming, Enter saving and Escape
-     cancelling; its count and the day it was made, in the reader's time; Rename and Delete. */
+     cancelling; its count and the day it was made, in the reader's time, then what a Request
+     research run came to; Request research, disabled for a list with no company and while a write
+     is in flight, Rename and Delete. */
   function head(list) {
     var renaming = state.renaming && state.renaming.id === list.id;
     var made = P.localIso(list.createdAt);
+    var outcome = requested(state.requested[list.id]);
     var title = renaming ? h('form', {
       className: 'app-wl__rename-form',
       onSubmit: function (event) { event.preventDefault(); rename(list); }
@@ -256,8 +302,14 @@
     return h('div', { className: 'app-wl__head' },
       title,
       h('p', { className: 'caption app-wl__meta' }, count(list.count), ' · created ',
-        h('time', { dateTime: made, title: made }, F.formatDate(made.slice(0, 10)))),
+        h('time', { dateTime: made, title: made }, F.formatDate(made.slice(0, 10))),
+        outcome ? ' · ' + outcome : null),
       h('div', { className: 'app-wl__actions' },
+        h(F.Button, {
+          size: 'sm', className: 'app-wl__request',
+          disabled: list.count === 0 || state.pending !== null,
+          onClick: function () { requestResearch(list); }
+        }, 'Request research'),
         h(F.Button, {
           size: 'sm', className: 'app-wl__rename',
           onClick: function () {

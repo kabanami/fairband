@@ -1,14 +1,15 @@
 /* The page's header, its status line and the group view, loaded after app.js. The header is the
-   design system's AppHeader: the five views (Screen, Groups, Watchlists, Methodology, Settings),
-   the engine stamp and the refresh controls; the URL hash names the open view. Under it, the
-   status line: the running refresh's one run bar (the design system's RunProgress), or how the
-   last one ended in one line, its calibration's breakdown behind Details ▾ (growth-routes spec
-   6.1). While a refresh runs, the page asks /api/refresh/current every 2 seconds, one Cancel
-   stands where the Refresh buttons were, the stamp is gone and the tables keep their old figures
-   at ink-faint; when it ends, the rows (and the groups or the report page, when that view is
-   open) load again. The group view is one plain table from /api/groups (spec 6.3), with no
-   chart. The report page (report.js) is a panel no header view names: #report/<symbol> and
-   #report/<symbol>/<id> open it (spec 2026-11-06 Tier 2, 18.4). */
+   design system's AppHeader: the six views (Screen, Groups, Watchlists, Methodology, Settings,
+   Inbox), the engine stamp and the refresh controls; the URL hash names the open view. Inbox
+   carries the count of the open work items, read every ten seconds (spec 2026-11-06 Tier 2,
+   18.5). Under the header, the status line: the running refresh's one run bar (the design
+   system's RunProgress), or how the last one ended in one line, its calibration's breakdown
+   behind Details ▾ (growth-routes spec 6.1). While a refresh runs, the page asks
+   /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons were, the
+   stamp is gone and the tables keep their old figures at ink-faint; when it ends, the rows (and
+   the groups or the report page, when that view is open) load again. The group view is one plain
+   table from /api/groups (spec 6.3), with no chart. The report page (report.js) is a panel no
+   header view names: #report/<symbol> and #report/<symbol>/<id> open it (18.4). */
 (function () {
   'use strict';
 
@@ -16,6 +17,8 @@
   var F = Fairband;
   var P = FairbandPage;
   var POLL_MS = 2000;
+  var INBOX_MS = 10000;
+  var OPEN = ['pending', 'claimed']; /* a work item's states that are work not yet done */
   var BY = { sector: 'Sector', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
   var UNCLASSIFIED = 'unclassified'; /* the calibration's name for a company without a phase */
@@ -30,7 +33,7 @@
 
   /* The views in the header's order, each with its panel, a section of the page; then the report
      page's panel, which no header view names: the drawer's Open the report opens it. */
-  var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'report'];
+  var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox', 'report'];
   var panels = {};
   VIEWS.forEach(function (id) { panels[id] = document.getElementById(id); });
   var header = ReactDOM.createRoot(document.getElementById('header'));
@@ -44,10 +47,13 @@
     last: null, /* the last refresh's record */
     notice: null, /* { text, caution }: what the last request came to */
     cancelAsked: false, /* Cancel was accepted: it stays disabled until the run ends */
-    detailsOpen: false /* the last refresh's Details ▾ menu is open */
+    detailsOpen: false, /* the last refresh's Details ▾ menu is open */
+    open: 0 /* the open work items, pending and claimed: the Inbox view's count */
   };
   var timer = null;
+  var inboxTimer = null;
   var latestPoll = 0;
+  var latestInbox = 0;
   var latestGroups = 0;
   var started = false; /* a refresh was started here and its end is not seen yet */
 
@@ -91,6 +97,46 @@
   function notify(text, caution, fromPoll) {
     state.notice = text ? { text: text, caution: caution, fromPoll: !!fromPoll } : null;
     render();
+  }
+
+  /* The header's Inbox count (spec 2026-11-06 Tier 2, 18.5): the work items read as the page
+     loads and every ten seconds after, whether a refresh runs or not, since the refresh's poll
+     runs only while one does. Reading the inbox runs the expiry rule on the server, so a watched
+     company whose window ended counts on the next read without a reload, as does an item an agent
+     or another view posted. A failed read keeps the count it had; the next read comes all the
+     same. */
+  function pollInbox() {
+    var request = ++latestInbox;
+    clearTimeout(inboxTimer);
+    P.getJson('/api/inbox')
+      .then(function (body) {
+        if (request === latestInbox) countInbox(body.items);
+      })
+      .catch(function () { /* the count stays as it was */ })
+      .then(function () {
+        if (request === latestInbox) inboxTimer = setTimeout(pollInbox, INBOX_MS);
+      });
+  }
+
+  /* The open items, pending and claimed, among an inbox read's items; the header draws again when
+     the count moves. At 0 the header shows none. */
+  function countInbox(items) {
+    var open = items.filter(function (item) {
+      return OPEN.indexOf(item.state) !== -1;
+    }).length;
+    if (open === state.open) return;
+    state.open = open;
+    render();
+  }
+
+  /* The Inbox view's own read, after its write, so the count matches the table it draws: a poll
+     still in flight, which may predate the write, is dropped, and the next one comes ten seconds
+     on. */
+  function inboxRead(items) {
+    ++latestInbox;
+    clearTimeout(inboxTimer);
+    countInbox(items);
+    inboxTimer = setTimeout(pollInbox, INBOX_MS);
   }
 
   /* A POST, then the status, which polls while a run lives. 409 and 503 have their own words; any
@@ -324,7 +370,7 @@
     header.render(h(F.AppHeader, {
       views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },
         { id: 'watchlists', label: 'Watchlists' }, { id: 'methodology', label: 'Methodology' },
-        { id: 'settings', label: 'Settings' }],
+        { id: 'settings', label: 'Settings' }, { id: 'inbox', label: 'Inbox', count: state.open }],
       /* the report page is no header view: none is marked while it shows */
       view: state.tab === 'report' ? '' : state.tab,
       onViewChange: show,
@@ -445,7 +491,8 @@
      named; report is the report the report page shows, { symbol, id }, the id null for the
      latest, and openReport(symbol, id?) opens that page; running() is true while a refresh runs;
      followRefresh() follows a refresh another view started (the Settings view's revalue) as the
-     header follows its own: the run bar while it runs, the rows loaded again when it ends. */
+     header follows its own: the run bar while it runs, the rows loaded again when it ends;
+     countInbox(items) hands the header the Inbox view's own read, so its count follows. */
   P.show = show;
   P.onShow = {};
   P.section = null;
@@ -453,6 +500,7 @@
   P.openReport = function (symbol, id) { show('report', symbol, id == null ? null : String(id)); };
   P.running = function () { return state.running !== null; };
   P.followRefresh = function () { started = true; poll(); };
+  P.countInbox = inboxRead;
 
   window.addEventListener('hashchange', fromHash);
   /* The first view opens once the page's later scripts have run and registered their loaders. */
@@ -460,4 +508,5 @@
 
   render();
   poll();
+  pollInbox();
 })();

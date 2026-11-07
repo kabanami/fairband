@@ -123,14 +123,15 @@
   /* The server refuses a write without the X-Fairband-Request header (D11): a cross-site form
      cannot send it, nor a cross-origin script without a preflight the server never answers. The
      refresh controls post through here, the watchlist popup posts and puts, and the Watchlists
-     view also renames and deletes; the promise gives the status and the parsed body. */
+     view also renames and deletes; the promise gives the status and the parsed body, null when
+     the answer is not JSON (a 500's plain text), so the refusal names the status. */
   function send(method, url, body) {
     return fetch(url, {
       method: method,
       headers: { 'Content-Type': 'application/json', 'X-Fairband-Request': '1' },
       body: JSON.stringify(body || {})
     }).then(function (response) {
-      return response.json().then(function (json) {
+      return response.json().catch(function () { return null; }).then(function (json) {
         return { ok: response.ok, status: response.status, body: json };
       });
     });
@@ -166,11 +167,13 @@
   /* What controls.js uses: the screen's reload when a refresh ends, the write helpers, the GET
      helper, the local-time helper and the phase numbers; and the later views, find, the lists
      (null until they load), their reload, which settles once they are in, and watch, the marks'
-     onWatch, which opens the popup; the loaded rows (null until they load), the chosen columns and
-     openRow, which opens a row's drawer. controls.js adds show, onShow, section and running, and
-     methodology.js adds methodologySection, which the drawer's link reads; a view drawn from the
-     rows or the lists sets onRender, which runs after each draw of the screen, so it draws again
-     as they load and change. The report page (report.js, spec 2026-11-06 Tier 2, 18.4) draws with
+     onWatch, which opens the popup; the loaded rows (null until they load), the chosen columns,
+     openRow, which opens a row's drawer, and reloadDetail, which reads the drawer's company again
+     after another view's write about it (the Inbox view's decline, spec 2026-11-06 Tier 2, 18.5).
+     controls.js adds show, onShow, section, running and countInbox, and methodology.js adds
+     methodologySection, which the drawer's link reads; a view drawn from the rows or the lists
+     sets onRender, which runs after each draw of the screen, so it draws again as they load and
+     change. The report page (report.js, spec 2026-11-06 Tier 2, 18.4) draws with
      the drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
      evidence, pairs, a date, a total, a count, a report's footnote numbers, and Request research
@@ -183,7 +186,7 @@
     watch: watch,
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
-    openRow: openRow,
+    openRow: openRow, reloadDetail: reloadDetail,
     meter: meter, inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
     phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, plain: plain,

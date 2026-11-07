@@ -229,14 +229,15 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   gap: var(--space-4);
 }
 .fb-hdr__ran { color: var(--ink-faint); white-space: nowrap; }
-/* fairband: below 840px, where the one-line header no longer fits (the five views, both refresh
-   buttons and the engine stamp need about 811px), the views wrap to a line of their own under
+/* fairband: below 980px, where the one-line header no longer fits (the six views with the
+   Inbox count, both refresh buttons on one line each and the engine stamp need about 970px with
+   a two-figure count; spec 2026-11-06 Tier 2, 18.5), the views wrap to a line of their own under
    the lockup, in the same type style, and the header grows by that line. index.html keeps the
    refresh controls beside the lockup below that (the stamp gives way under 560px, the buttons
-   shorten under 400px) and wraps the views under 360px, where the five words no longer fit
+   shorten under 400px) and wraps the views under 450px, where the six words no longer fit
    inside the page's margins (B-82). The views' line is the last, so the current view's accent
    edge stays on the header's rule (spec 2026-11-04 6). */
-@media (width < 840px) {
+@media (width < 980px) {
   .fb-hdr { flex-wrap: wrap; height: auto; row-gap: 0; }
   .fb-hdr__lock { height: var(--header-height); }
   .fb-hdr__nav { order: 1; flex-basis: 100%; height: var(--header-height); gap: var(--space-3); }

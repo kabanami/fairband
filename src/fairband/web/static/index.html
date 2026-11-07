@@ -18,17 +18,18 @@
   .app-page { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; }
   #header { flex: none; }
   #controls { padding: var(--space-2) var(--space-6) 0; }
-  #screen, #groups, #watchlists, #methodology, #settings {
+  #screen, #groups, #watchlists, #methodology, #settings, #inbox {
     flex: 1; min-height: 0; padding: 0 var(--space-6) var(--space-4);
   }
-  #groups, #watchlists, #methodology, #settings { overflow: auto; }
+  #groups, #watchlists, #methodology, #settings, #inbox { overflow: auto; }
 
   /* The refresh controls, in the header's right slot beside the engine stamp. */
   .app-actions { display: flex; align-items: center; gap: var(--space-2); }
   /* At phone width the refresh controls stay beside the lockup, so the header grows by the
      views' line alone (B-82): below 560px the engine stamp gives way (the status line under the
      header still says when the last refresh ended), and below 400px the buttons read Prices and
-     Full. Below 360px the five views wrap onto two lines rather than widen the page. */
+     Full. Below 450px the six views, the Inbox count with them, wrap onto two lines rather than
+     widen the page (spec 2026-11-06 Tier 2, 18.5). */
   .app-actions__short { display: none; }
   @media (width < 560px) {
     .fb-hdr__ran { display: none; }
@@ -37,7 +38,7 @@
     .app-actions__long { display: none; }
     .app-actions__short { display: inline; }
   }
-  @media (width < 360px) {
+  @media (width < 450px) {
     .fb-hdr__nav { flex-wrap: wrap; height: auto; min-height: var(--header-height); row-gap: 0; }
     .fb-hdr__view { height: var(--header-height); }
   }
@@ -169,6 +170,24 @@
     justify-content: center; padding: 15vh var(--space-4) var(--space-4);
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
+  /* The Inbox view (spec 2026-11-06 Tier 2, 18.5): one table of the work items, the panel's
+     width, its header cells not sticky. A note and the state word with a declined item's reason
+     under it wrap rather than widen the table; only when even they cannot does the table scroll
+     sideways on its own. An open item's last cell holds Decline; the reason line it opens spans
+     the table under the row, the field, Decline and Cancel in a row, and a refused decline's
+     sentence spans the line under that, in caution. Loading, the items shown stay, faded. */
+  .app-inbox { padding: var(--space-2) 0 var(--space-4); }
+  .app-inbox__scroll { overflow-x: auto; }
+  .app-inbox .fb-table thead th { position: static; }
+  .app-inbox .fb-table td { padding-top: var(--space-1); padding-bottom: var(--space-1); }
+  .app-inbox .fb-table td.app-inbox__wrap {
+    min-width: 14ch; white-space: normal; overflow-wrap: anywhere;
+  }
+  .app-inbox__why { display: block; color: var(--ink-muted); }
+  .app-inbox__form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .app-inbox__form .app-field { width: 24rem; }
+  .app-inbox .fb-table td.app-inbox__error { white-space: normal; color: var(--caution); }
+  .app-inbox.is-loading .fb-table tbody td { color: var(--ink-faint); }
   /* The Settings view (spec 2026-11-04 8.5): one form, its five groups each a heading over its
      rows. A row is the label and its captions at the left; at the right the fields, right-aligned
      and mono in the control style on surface-sunken, the word changed in accent and Reset beside
@@ -478,6 +497,7 @@
   <section id="watchlists" hidden></section>
   <section id="methodology" hidden></section>
   <section id="settings" hidden></section>
+  <section id="inbox" hidden></section>
   <section id="report" hidden></section>
 </main>
 <script src="/static/vendor/react.production.min.js"></script>
@@ -486,6 +506,7 @@
 <script src="/static/app.js"></script>
 <script src="/static/controls.js"></script>
 <script src="/static/watchlists.js"></script>
+<script src="/static/inbox.js"></script>
 <script src="/static/settings.js"></script>
 <script src="/static/methodology.js"></script>
 <script src="/static/report.js"></script>

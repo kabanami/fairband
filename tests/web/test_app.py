@@ -725,6 +725,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/app.js",
         "/static/controls.js",
         "/static/watchlists.js",
+        "/static/inbox.js",
         "/static/settings.js",
         "/static/methodology.js",
         "/static/report.js",
@@ -751,18 +752,69 @@ def test_controls_js_mounts_app_header() -> None:
     assert "engineRanAt:" in script and "onViewChange: show" in script
 
 
-def test_header_has_the_five_views() -> None:
+def test_header_has_the_six_views() -> None:
+    """Spec 2026-11-06 Tier 2, 18.5: a sixth header view, Inbox, after Settings, its count the
+    open work items; the report page stays a panel no header view names."""
     js = _static_file("controls.js")
     assert (
         "views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },\n"
         "        { id: 'watchlists', label: 'Watchlists' }, "
         "{ id: 'methodology', label: 'Methodology' },\n"
-        "        { id: 'settings', label: 'Settings' }]"
+        "        { id: 'settings', label: 'Settings' }, "
+        "{ id: 'inbox', label: 'Inbox', count: state.open }],"
     ) in js
+    assert "view: state.tab === 'report' ? '' : state.tab," in js
     assert "location.hash" in js and "history.replaceState" in js
     html = _static_file("index.html")
-    for panel in ("watchlists", "methodology", "settings"):
+    for panel in ("watchlists", "methodology", "settings", "inbox"):
         assert f'<section id="{panel}" hidden' in html
+    _in_order(html, '<section id="settings" hidden>', '<section id="inbox" hidden>')
+
+
+def test_the_count_follows_the_poll() -> None:
+    """Spec 18.5: the header's Inbox count is the open work items, pending and claimed. The page
+    reads /api/inbox as it loads and every ten seconds after, whether a refresh runs or not (the
+    refresh's own poll runs only while one does); the read runs the expiry rule on the server, so
+    a watched company whose window ended counts on the next read without a reload. The header
+    draws again only when the count moves; a failed read keeps the count and the next read comes
+    all the same; and the Inbox view hands its own reads over, so the count matches the table it
+    shows. At 0 the bundle draws no count."""
+    js = _static_file("controls.js")
+    assert "var INBOX_MS = 10000;" in js
+    assert "var OPEN = ['pending', 'claimed'];" in js
+    assert "open: 0 /* the open work items, pending and claimed: the Inbox view's count */" in js
+    read = _function(js, "pollInbox")
+    _in_order(
+        read,
+        "var request = ++latestInbox;",
+        "clearTimeout(inboxTimer);",
+        "P.getJson('/api/inbox')",
+        "if (request === latestInbox) countInbox(body.items);",
+        ".catch(function () { /* the count stays as it was */ })",
+        "if (request === latestInbox) inboxTimer = setTimeout(pollInbox, INBOX_MS);",
+    )
+    count = _function(js, "countInbox")
+    _in_order(
+        count,
+        "return OPEN.indexOf(item.state) !== -1;",
+        "if (open === state.open) return;",
+        "state.open = open;",
+        "render();",
+    )
+    # the view's read after its write wins over a poll still in flight, and the cycle goes on
+    _in_order(
+        _function(js, "inboxRead"),
+        "++latestInbox;",
+        "clearTimeout(inboxTimer);",
+        "countInbox(items);",
+        "inboxTimer = setTimeout(pollInbox, INBOX_MS);",
+    )
+    assert "P.countInbox = inboxRead;" in js
+    assert js.rstrip().endswith("render();\n  poll();\n  pollInbox();\n})();")
+    view = _static_file("inbox.js")
+    assert "P.countInbox(body.items);" in _function(view, "load")
+    bundle = _component_file("bundle.js")
+    assert "v.count ? h('span', { className: 'fb-hdr__count figure-sm' }, v.count) : null" in bundle
 
 
 def test_controls_js_names_a_missing_worker() -> None:
@@ -783,8 +835,9 @@ def test_page_opens_the_view_the_hash_names() -> None:
     test_the_report_view_opens_from_the_hash's."""
     js = _static_file("controls.js")
     assert (
-        "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'report'];" in js
-    )
+        "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox',"
+        " 'report'];"
+    ) in js
     show = js[js.index("function show(tab, section, id) {") :]
     show = show[: show.index("\n  }\n")]
     assert (
@@ -816,21 +869,25 @@ def test_page_opens_the_view_the_hash_names() -> None:
 
 
 def test_index_scrolls_the_new_panels_and_the_header_wraps_at_phone_width() -> None:
-    """The three new panels scroll as the groups' does; under 840px, where the one-line header no
-    longer fits, the views take a line of their own under the lockup and the header grows by it,
-    so the page never scrolls sideways (spec 2026-11-04 6)."""
+    """The new panels scroll as the groups' does; under 980px, where the one-line header with the
+    six views and the Inbox count no longer fits (measured in a browser: about 970px with a
+    two-figure count before the refresh buttons' words wrap), the views take a line of their own
+    under the lockup and the header grows by it, so the page never scrolls sideways (spec
+    2026-11-04 6; 2026-11-06 Tier 2, 18.5)."""
     page = _static_file("index.html")
-    assert "#screen, #groups, #watchlists, #methodology, #settings {" in page
-    assert "#groups, #watchlists, #methodology, #settings { overflow: auto; }" in page
+    assert "#screen, #groups, #watchlists, #methodology, #settings, #inbox {" in page
+    assert "#groups, #watchlists, #methodology, #settings, #inbox { overflow: auto; }" in page
     css = _component_file("bundle.css")
-    patch = css[css.index("/* fairband: below 840px, where the one-line header") :]
-    assert "(spec 2026-11-04 6)" in patch[: patch.index("*/")]
+    patch = css[css.index("/* fairband: below 980px, where the one-line header") :]
+    comment = patch[: patch.index("*/")]
+    assert "(spec 2026-11-04 6)" in comment and "spec 2026-11-06 Tier 2, 18.5" in comment
     patch = patch[: patch.index("\n}\n")]
-    assert "@media (width < 840px) {" in patch
+    assert "@media (width < 980px) {" in patch
     assert ".fb-hdr { flex-wrap: wrap; height: auto; row-gap: 0; }" in patch
     assert ".fb-hdr__nav { order: 1; flex-basis: 100%;" in patch
     # B-82: the refresh controls stay beside the lockup at phone width (the stamp gives way below
-    # 560px, the buttons shorten below 400px), and the five views wrap below 360px.
+    # 560px, the buttons shorten below 400px), and the six views wrap below 450px, where they and
+    # the count no longer fit inside the page's margins.
     for text in (
         ".app-actions__short { display: none; }",
         "@media (width < 560px) {\n    .fb-hdr__ran { display: none; }",
@@ -839,7 +896,7 @@ def test_index_scrolls_the_new_panels_and_the_header_wraps_at_phone_width() -> N
             "    .app-actions__short { display: inline; }"
         ),
         (
-            "@media (width < 360px) {\n    .fb-hdr__nav { flex-wrap: wrap; height: auto;"
+            "@media (width < 450px) {\n    .fb-hdr__nav { flex-wrap: wrap; height: auto;"
             " min-height: var(--header-height); row-gap: 0; }"
         ),
     ):
@@ -1103,6 +1160,171 @@ def test_watchlists_view_enter_adds_only_a_chosen_company() -> None:
     ):
         assert text in js, text
     assert "add(list.id, shown[0].ticker)" not in js
+
+
+def test_the_watchlist_requests_research(client: TestClient) -> None:
+    """Spec 2026-11-06 Tier 2, 18.6: each list's head has Request research beside Rename and
+    Delete, disabled for a list with no company. It posts a valuation review for each company on
+    the list in turn, one post at a time, as the owner: a 201 counts as posted and a 409, an item
+    already open for the company, as already open; any other answer, a 400 or a 5xx, stops the run,
+    its sentence, the server's, under the head with the company it stopped at. The list's meta
+    line says what the run came to as it goes, Posted 3 requests · 2 already open, until the next
+    write; then the lists load again, and the header's count follows on its next read."""
+    js = _static_file("watchlists.js")
+    head = _function(js, "head")
+    _in_order(head, "'Request research')", "'Rename')", "'Delete')")
+    assert "disabled: list.count === 0 || state.pending !== null," in head
+    assert "onClick: function () { requestResearch(list); }" in head
+    assert "outcome ? ' · ' + outcome : null" in head
+    run = _function(js, "requestResearch")
+    _in_order(
+        run,
+        "state.requested[list.id] = tally;",
+        "return list.symbols.reduce(function (run, entry) {",
+        "return run.then(function (last) {",
+        "if (last && !last.ok) return last;",
+        "made.head = 'Not posted for ' + entry.symbol;",
+        "P.api.post('/api/inbox', { symbol: entry.symbol, mode: 'valuation review' })",
+        "if (r.status === 409) tally.open++;",
+        "else if (r.ok) tally.posted++;",
+        "else return r;",
+        "render();",
+        "}, Promise.resolve({ ok: true }));",
+    )
+    words = _function(js, "requested")
+    _in_order(
+        words,
+        "if (!tally) return null;",
+        "return 'Posted ' + tally.posted + (tally.posted === 1 ? ' request' : ' requests') +",
+        "(tally.open ? ' · ' + tally.open + ' already open' : '');",
+    )
+    write = _function(js, "write")
+    _in_order(
+        write,
+        "state.errors = {};",
+        "state.requested = {};",
+        "return refusal(made.head || REFUSED[made.method], r);",
+        "return (made.head || REFUSED[made.method]) + ': ' + err.message + '.';",
+    )
+    # a 5xx's plain-text body is none, so the refusal names the status rather than a parse error
+    send = _function(_static_file("app.js"), "send")
+    assert "return response.json().catch(function () { return null; }).then(function (json) {" in (
+        send
+    )
+    # the server's answers the run counts: a post for each company, 409 where one is open
+    core = client.post("/api/watchlists", json={"name": "Core"}, headers=HEADER).json()
+    for symbol in ("AAPL", "AAL", "HGCO"):
+        client.put(f"/api/watchlists/{core['id']}/symbols/{symbol}", headers=HEADER)
+    client.post("/api/inbox", json={"symbol": "AAL", "mode": "full report"}, headers=HEADER)
+    [listed] = client.get("/api/watchlists").json()
+    answers = {
+        s["symbol"]: client.post(
+            "/api/inbox", json={"symbol": s["symbol"], "mode": "valuation review"}, headers=HEADER
+        ).status_code
+        for s in listed["symbols"]
+    }
+    assert answers == {"AAPL": 201, "AAL": 409, "HGCO": 201}
+    r = client.post(
+        "/api/inbox", json={"symbol": "a b", "mode": "valuation review"}, headers=HEADER
+    )
+    assert (r.status_code, r.json()) == (400, {"detail": "'a b' is not a symbol"})
+
+
+def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
+    """Spec 2026-11-06 Tier 2, 18.5: the Inbox view, its own script after watchlists.js, is one
+    table of the work items as the server lists them, newest first, under the heads Symbol, Mode,
+    State, Posted, By, Claimed by, Note and Report: the symbol a link that opens the company's
+    drawer on the Screen as a watchlist's row does; the state word, with a declined item's reason
+    under it as written; the posted day in the reader's time; who posted it, a compact
+    PrincipalChip (the owner, an agent by its model identifier, or the system for an expiry item),
+    and the agent that claimed it likewise; the note as written; the report a done item was
+    completed with, as a link to its page. A pending or claimed item has Decline, which opens the
+    reason line under the row (spec 18.5's "reason line"): the field, Decline, which sends the
+    owner's decline, and Cancel; a refused decline's sentence, the server's, stands on a line under
+    the row. The read runs as the view opens and after every write, and the drawer, if it shows the
+    company, reads it again. "No work items." when there are none. Every field of an item the view
+    reads is one the server sends."""
+    js = _static_file("inbox.js")
+    assert (
+        "var HEADS = ['Symbol', 'Mode', 'State', 'Posted', 'By', 'Claimed by', 'Note', 'Report'];"
+        in js
+    )
+    assert "var OPEN = ['pending', 'claimed'];" in js
+    row = _function(js, "row")
+    _in_order(
+        row,
+        "var open = OPEN.indexOf(item.state) !== -1;",
+        "var declining = open && state.declining === item.id;",
+        "onClick: function (event) { event.preventDefault(); P.openRow(item.symbol); }",
+        "h('td', { className: 'body' }, item.mode),",
+        "h('td', { className: 'body app-inbox__wrap' }, item.state,",
+        "item.state === 'declined' && item.reason",
+        "posted(item.postedAt)",
+        "h(F.PrincipalChip, { principal: item.postedBy, actor: item.postedActor, compact: true })",
+        "h(F.PrincipalChip, { principal: 'agent', actor: item.claimedBy, compact: true })",
+        "h('td', { className: 'body app-inbox__wrap' }, item.note || none()),",
+        "href: '#report/' + encodeURIComponent(item.symbol) + '/' + item.reportId",
+        "h('td', null, open && !declining ? h(F.Button, {",
+        "state.declining = item.id;",
+        "}, 'Decline') : null)),",
+        "declining ? reasonLine(item) : null,",
+        "state.errors[item.id] ? refused(item) : null);",
+    )
+    assert "colSpan: HEADS.length + 1" in _function(js, "refused")
+    line = _function(js, "reasonLine")
+    _in_order(
+        line,
+        "state.declining = null;",
+        "colSpan: HEADS.length + 1",
+        "onSubmit: function (event) { event.preventDefault(); decline(item); }",
+        "autoFocus: true,",
+        "placeholder: 'Reason', 'aria-label': 'Reason for declining ' + item.symbol,",
+        "if (event.key === 'Escape') close();",
+        "type: 'submit', size: 'sm', disabled: !reason.trim() || state.pending !== null",
+        "}, 'Decline'),",
+        "h(F.Button, { variant: 'quiet', size: 'sm', onClick: close }, 'Cancel')",
+    )
+    decline = _function(js, "decline")
+    _in_order(
+        decline,
+        "if (!reason || state.pending !== null) return;",
+        "state.errors = {};",
+        "P.api.patch('/api/inbox/' + item.id, { action: 'decline', reason: reason })",
+        "return refusal('Not declined', r);",
+        "if (error) state.errors[item.id] = error;",
+        "state.declining = null;",
+        "P.reloadDetail(item.symbol);",
+        "return load();",
+    )
+    view = _function(js, "View")
+    assert (
+        "items && items.length === 0 ? h('p', { className: 'body app-note' }, 'No work items.')"
+    ) in view
+    # focus waits for the read after a decline: the field when the item is still open, else the
+    # row's symbol, since a refused decline's item may have closed elsewhere
+    assert "if (!state.focus || state.loading) return;" in view
+    _in_order(
+        decline,
+        "state.focus = (error ? [inRow(item.id, '.app-inbox__reason')] : [])",
+        ".concat([inRow(item.id, '.app-inbox__symbol')]);",
+    )
+    assert "P.onShow.inbox = load;" in js
+    assert "reloadDetail: reloadDetail" in _static_file("app.js")
+    html = _static_file("index.html")
+    _in_order(
+        html,
+        '<script src="/static/watchlists.js"></script>',
+        '<script src="/static/inbox.js"></script>',
+    )
+    assert ".app-inbox.is-loading .fb-table tbody td { color: var(--ink-faint); }" in html
+    # the note and the state wrap, and the refusal line too: the table's own nowrap yields
+    assert "white-space: normal;" in _rule(html, ".app-inbox .fb-table td.app-inbox__wrap {")
+    assert "white-space: normal;" in _rule(html, ".app-inbox .fb-table td.app-inbox__error {")
+    # every field of an item the view reads is one the server sends
+    client.post("/api/inbox", json={"symbol": "AAPL", "mode": "full report"}, headers=HEADER)
+    [item] = client.get("/api/inbox").json()["items"]
+    read = set(re.findall(r"\bitem\.(\w+)", js))
+    assert read and read <= set(item), read - set(item)
 
 
 def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
@@ -1995,8 +2217,9 @@ def test_the_report_view_opens_from_the_hash() -> None:
     the company again. FairbandPage.openReport opens it."""
     js = _static_file("controls.js")
     assert (
-        "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'report'];" in js
-    )
+        "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox',"
+        " 'report'];"
+    ) in js
     show = _function(js, "show")
     _in_order(
         show,

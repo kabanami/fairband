@@ -410,3 +410,61 @@ def test_the_inbox_read_runs_the_expiry_rule(
         "system",
         "dropped: AAPL is on no watchlist",
     )
+
+
+def test_a_declined_item_over_the_api_from_the_owner(
+    client: TestClient, client_with_clock: Callable[[datetime], TestClient], db_path: Path
+) -> None:
+    """The Inbox view's Decline (spec 18.5): the owner declines an open item, pending or claimed,
+    the system's expiry item among them, with a reason kept as written. The item leaves the open
+    items the header counts, the ledger names the owner, and the next read's expiry rule posts no
+    second item for the same window, so the count stays down. A blank reason is refused 400 and a
+    closed item 409, each with the sentence the page shows."""
+    with closing(connect(db_path)) as conn:
+        snapshot = latest_snapshot(conn, "AAPL")
+    assert snapshot is not None
+    core = _post(client, "/api/watchlists", {"name": "Core"}, HEADER)
+    client.put(f"/api/watchlists/{core['id']}/symbols/AAPL", headers=HEADER)
+    later = datetime.combine(snapshot.valid_until + timedelta(days=1), time(9, 30), NOW.tzinfo)
+    past = client_with_clock(later)
+    [expiry] = past.get("/api/inbox").json()["items"]
+    claimed = _post(past, "/api/inbox", {"symbol": "AAL", "mode": "full report"}, HEADER)
+    past.post("/api/inbox/claim", json={"itemId": claimed["id"]}, headers=AGENT)
+
+    def open_items() -> list[int]:
+        items = past.get("/api/inbox").json()["items"]
+        return [i["id"] for i in items if i["state"] in ("pending", "claimed")]
+
+    assert open_items() == [claimed["id"], expiry["id"]]
+    url = f"/api/inbox/{expiry['id']}"
+    r = past.patch(url, json={"action": "decline", "reason": "  "}, headers=HEADER)
+    assert (r.status_code, r.json()) == (400, {"detail": "a decline needs a reason"})
+    reason = "Held: no new filing since the window"
+    r = past.patch(url, json={"action": "decline", "reason": reason}, headers=HEADER)
+    assert r.status_code == 200, r.text
+    assert (r.json()["state"], r.json()["reason"], r.json()["finishedAt"]) == (
+        "declined",
+        reason,
+        later.isoformat(),
+    )
+    r = past.patch(
+        f"/api/inbox/{claimed['id']}",
+        json={"action": "decline", "reason": "not now"},
+        headers=HEADER,
+    )
+    assert (r.status_code, r.json()["state"], r.json()["claimedBy"]) == (
+        200,
+        "declined",
+        "claude-opus-5-5",
+    )
+    assert open_items() == []
+    assert len(past.get("/api/inbox").json()["items"]) == 2  # no second expiry item
+    r = past.patch(url, json={"action": "decline", "reason": "again"}, headers=HEADER)
+    assert (r.status_code, r.json()) == (409, {"detail": f"work item {expiry['id']} is declined"})
+    [declined] = [e for e in _ledger(past, "AAPL") if e["kind"] == "decline"]
+    assert (declined["principal"], declined["actor"], declined["workItemId"]) == (
+        "owner",
+        None,
+        expiry["id"],
+    )
+    assert declined["summary"] == f"declined: {reason}"
