@@ -6,6 +6,7 @@ import json
 import sqlite3
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from typing import Any
 
 import pytest
 from refresh.synthetic import NOW
@@ -674,3 +675,160 @@ def test_rests_on(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str,
     assert rests_on(conn, f"review:{review_id}/value") == snapshots["AAPL"]
     assert rests_on(conn, "snapshot:999/value") is None
     assert rests_on(conn, "fact:AAPL/revenue/2025") is None
+
+
+@pytest.fixture
+def described(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> dict[str, Any]:
+    """The ids of AAPL's records a ref of each form names, and the policy's version."""
+    sid = snapshots["AAPL"]
+    source = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": None}
+    grid = SensitivityGrid((0.05, 0.08), (0.10, 0.20), ((120.5, 130.0), (140.0, 150.0)), None)
+    revenue = "fact:AAPL/revenue/2025"
+    payload = json.dumps([{"symbol": "AAPL", "revenue": 391.0}])
+    observed = datetime(2026, 11, 1, 14, 0, tzinfo=UTC)
+    return {
+        "snapshot": sid,
+        "review": _review_id(conn, policy, sid),
+        "parts": _secondary_id(conn, policy, sid),
+        "drivers": _drivers_secondary_id(conn, policy, sid),
+        "sensitivity": insert_sensitivity(
+            conn, "AAPL", sid, None, "growth.belief", "return.runway", grid, "v", "h", AGENT, NOW
+        ),
+        "finding": add_finding(conn, "AAPL", date(2025, 9, 27), "services", source, AGENT, NOW),
+        "guidance": insert_guidance(
+            conn,
+            "AAPL",
+            "eps",
+            "2027",
+            6.25,
+            6.75,
+            "gaap",
+            date(2026, 10, 28),
+            "We guide.",
+            "response:3/0/content",
+            AGENT,
+            NOW,
+            None,
+        ),
+        "ratio": insert_derivation(
+            conn, "AAPL", "ratio", revenue, f"snapshot:{sid}/value", None, 3.5, None, AGENT, NOW
+        ),
+        "cagr": insert_derivation(
+            conn, "AAPL", "cagr", revenue, "fact:AAPL/revenue/2021", 4, 0.05, "percent", AGENT, NOW
+        ),
+        "response": record_response(
+            conn, "fmp", "segments", {"symbol": "AAPL"}, "AAPL", 200, payload, None, observed
+        ),
+        "version": policy.version,
+    }
+
+
+@pytest.mark.parametrize(
+    ("ref", "source"),
+    [
+        ("snapshot:{snapshot}/price", "snapshot {snapshot}, the price, priced 30 Oct 2026"),
+        ("snapshot:{snapshot}/value", "snapshot {snapshot}, the value a share, priced 30 Oct 2026"),
+        (
+            "snapshot:{snapshot}/price_to_value",
+            "snapshot {snapshot}, price ÷ value, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/levels/fair_low",
+            "snapshot {snapshot}, the fair band's low, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/inputs/aggregate_roic",
+            "snapshot {snapshot}, the input aggregate_roic, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/intermediates/belief/rate",
+            "snapshot {snapshot}, the intermediate belief/rate, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/phase/growth_3y",
+            "snapshot {snapshot}, the classifier's growth_3y, priced 30 Oct 2026",
+        ),
+        ("review:{review}/value", "review {review}, the value a share"),
+        ("review:{review}/levels/buy", "review {review}, the buy level"),
+        (
+            "review:{review}/bridge/1/delta",
+            "review {review}, bridge line 1 (belief), the change in the value a share",
+        ),
+        ("review:{review}/bridge/1/old", "review {review}, bridge line 1 (belief), the old figure"),
+        ("review:{review}/bridge/1/new", "review {review}, bridge line 1 (belief), the new figure"),
+        ("secondary:{parts}/value", "secondary valuation {parts}, the value a share"),
+        ("secondary:{parts}/firm_value", "secondary valuation {parts}, the firm value"),
+        ("secondary:{parts}/levels/trim", "secondary valuation {parts}, the trim level"),
+        ("secondary:{parts}/grid/1/2", "secondary valuation {parts}, the grid, row 1 column 2"),
+        (
+            "secondary:{parts}/parts/1/pv/3",
+            "secondary valuation {parts}, part 1, year 3 present value",
+        ),
+        ("secondary:{parts}/parts/1/fcff/2", "secondary valuation {parts}, part 1, year 2 FCFF"),
+        ("secondary:{parts}/parts/1/value", "secondary valuation {parts}, part 1, its value"),
+        (
+            "secondary:{parts}/parts/1/terminal_growth",
+            "secondary valuation {parts}, part 1, the terminal growth",
+        ),
+        ("secondary:{drivers}/years/3/fcff", "secondary valuation {drivers}, year 3 FCFF"),
+        ("secondary:{drivers}/years/1/revenue", "secondary valuation {drivers}, year 1 revenue"),
+        (
+            "secondary:{drivers}/terminal_pv",
+            "secondary valuation {drivers}, the terminal's present value",
+        ),
+        ("secondary:{drivers}/drivers/tax_rate", "secondary valuation {drivers}, the tax rate"),
+        (
+            "secondary:{drivers}/drivers/revenue_growth/2",
+            "secondary valuation {drivers}, the revenue growth of year 2",
+        ),
+        ("sensitivity:{sensitivity}/1/2", "sensitivity {sensitivity}, row 1 column 2"),
+        ("fact:AAPL/revenue/2025", "the revenue line of fiscal 2025 on file"),
+        ("fact:AAPL/capex/ttm", "the capital spending line of the trailing twelve months on file"),
+        ("fact:AAPL/eps_diluted/2024", "the EPS diluted line of fiscal 2024 on file"),
+        ("table:AAPL/growth/revenue_growth/2025", "the growth table, revenue growth, fiscal 2025"),
+        (
+            "table:AAPL/cash_flow/fcf_to_net_income/2025",
+            "the cash flow table, FCF to net income, fiscal 2025",
+        ),
+        ("estimate:AAPL/2026/eps", "the consensus for fiscal 2026, EPS"),
+        ("estimate:AAPL/2026-Q4/analysts_eps", "the consensus for Q4 of fiscal 2026, analysts EPS"),
+        ("close:AAPL/2025-11-03", "the close of 3 Nov 2025"),
+        ("multiple:AAPL/pe/2026-10-30", "the trailing P/E, 30 Oct 2026"),
+        ("multiple:AAPL/pe_forward/avg_10y", "the forward P/E, the ten-year average"),
+        ("multiple:AAPL/pe/low_10y", "the trailing P/E, the ten-year low"),
+        ("peer:AAPL/ACME/margin", "ACME, margin"),
+        ("peer:AAPL/ACME/sales_to_capital", "ACME, sales to capital"),
+        ("finding:{finding}", "finding {finding}: 10-K 2025, p. 41"),
+        (
+            "guidance:{guidance}/midpoint",
+            "guidance record {guidance}: EPS for fiscal 2027, the midpoint",
+        ),
+        ("guidance:{guidance}/low", "guidance record {guidance}: EPS for fiscal 2027, the low"),
+        ("guidance:{guidance}/step", "guidance record {guidance}: EPS for fiscal 2027, the step"),
+        (
+            "derived:{ratio}",
+            "derivation {ratio}: the ratio of fact:AAPL/revenue/2025 and snapshot:{snapshot}/value",
+        ),
+        (
+            "derived:{cagr}",
+            (
+                "derivation {cagr}: the cagr of fact:AAPL/revenue/2025 and fact:AAPL/revenue/2021"
+                " over 4 years"
+            ),
+        ),
+        ("response:{response}/0/revenue", "FMP segments, observed 1 Nov 2026"),
+        ("policy:required_return", "policy required_return, {version}"),
+        (" snapshot:{snapshot}/price ", "snapshot {snapshot}, the price, priced 30 Oct 2026"),
+        ("nosuchform:1/value", "nosuchform:1/value"),  # names nothing: the ref itself
+        ("finding:999", "finding:999"),
+    ],
+)
+def test_describe(
+    conn: sqlite3.Connection, policy: Policy, described: dict[str, Any], ref: str, source: str
+) -> None:
+    """Each form's source in words, one sentence for the references list: a date or a name where
+    one serves, the record's id where nothing else names it."""
+    resolver = Resolver(conn, "AAPL", policy)
+    assert resolver.describe(ref.format(**described)) == source.format(**described)

@@ -212,17 +212,29 @@ figure is a cite.
       ]
     },
     {
-      "heading": "Life-cycle phase",
+      "heading": "The last earnings call",
       "parts": [
-        "The classifier puts the company in ",
-        {"cite": "Mature Growth", "ref": "snapshot:412/phase/phase"},
-        ": its revenue still grows fast for its size, and its margin is positive."
+        "The call confirmed the thesis: management held its outlook and named longer contracts as the driver."
+      ]
+    },
+    {
+      "heading": "The bull case and the bear case",
+      "parts": [
+        "The bull case: customers rarely leave and pay more each year. The bear case: rivals sell close substitutes at lower prices."
+      ]
+    },
+    {
+      "heading": "The thesis",
+      "parts": [
+        "The longer contracts are accepted as a driver; the price is fair, and the view waits for the next call."
       ]
     },
     {
       "heading": "Valuation",
       "parts": [
-        "One override moved the value. The belief (the growth rate after the analysts' years) rose from ",
+        "The classifier puts the company in ",
+        {"cite": "Mature Growth", "ref": "snapshot:412/phase/phase"},
+        ": its revenue still grows fast for its size, and its margin is positive. One override moved the value. The belief (the growth rate after the analysts' years) rose from ",
         {"cite": "7.1%", "ref": "review:88/bridge/1/old"},
         " to ",
         {"cite": "9.0%", "ref": "review:88/bridge/1/new"},
@@ -232,17 +244,11 @@ figure is a cite.
       ]
     },
     {
-      "heading": "Price facts and multiples",
+      "heading": "Price and multiples",
       "parts": [
         "The clean P/E (the price over the earnings a share without one-time items) is ",
         {"cite": "29.4x", "ref": "snapshot:412/intermediates/multiples/pe_clean"},
         ". None of these multiples is a target."
-      ]
-    },
-    {
-      "heading": "Key judgments",
-      "parts": [
-        "The moat is Narrow. Customers face real costs to switch, but rivals sell close substitutes."
       ]
     },
     {
@@ -255,6 +261,12 @@ figure is a cite.
       "heading": "Risks and kill criteria",
       "parts": [
         "The view is wrong if revenue falls year on year in two quarters in a row."
+      ]
+    },
+    {
+      "heading": "Key judgments",
+      "parts": [
+        "The moat is Narrow. Customers face real costs to switch, but rivals sell close substitutes."
       ]
     }
   ],

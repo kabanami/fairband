@@ -1,16 +1,29 @@
 """The report routes (spec 2026-11-06 Tier 2, 12, 13.1, 13.6 and 16) on the database of
 ``conftest.py``: AAPL (the Mature Growth golden: a price of $150, a value of $133.37), AAL (Young
-Growth, refused for its target margin) and HGCO (High Growth), each with one snapshot. A clean
-submission publishes, completes the work item it names and stores its judgments, kill criteria
-and news items; a rejected one stores nothing but its ledger row."""
+Growth, refused for its target margin) and HGCO (High Growth), each with one snapshot and a
+secondary valuation on it (``secondaries``). A clean submission publishes, completes the work item
+it names and stores its judgments, kill criteria and news items; a rejected one stores nothing but
+its ledger row."""
 
+from contextlib import closing
+from dataclasses import replace
+from datetime import date
+from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from support.web import HEADER, NOW
 
+from fairband.engine.route import reprice
+from fairband.engine.types import ValuationResult
+from fairband.policy import Policy
 from fairband.reports.check import HEADINGS, NO_REFERENCE, UNRESOLVED, headings
+from fairband.store.db import connect
+from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
+
+pytestmark = pytest.mark.usefixtures("secondaries")
 
 AGENT = HEADER | {
     PRINCIPAL_HEADER: "agent",
@@ -70,15 +83,16 @@ def _ledger(client: TestClient, symbol: str = "AAPL") -> list[dict[str, Any]]:
     return found
 
 
-def test_a_clean_submission_publishes_and_completes_the_item(client: TestClient) -> None:
+def test_a_clean_submission_publishes_and_completes_the_item(
+    client: TestClient, secondaries: dict[str, int]
+) -> None:
     sid = _snapshot_id(client)
     item = client.post("/api/inbox", json={"symbol": "AAPL", "mode": "full report"}, headers=HEADER)
     item_id = item.json()["id"]
     client.post("/api/inbox/claim", json={"itemId": item_id}, headers=AGENT)
     report = _published(client, _body(sid, workItemId=item_id))
-    assert {
-        k: v for k, v in report.items() if k not in ("judgments", "appendixA", "appendixB")
-    } == {
+    generated = ("judgments", "appendixA", "appendixB", "references")
+    assert {k: v for k, v in report.items() if k not in generated} == {
         "id": report["id"],
         "symbol": "AAPL",
         "revision": 1,
@@ -88,7 +102,7 @@ def test_a_clean_submission_publishes_and_completes_the_item(client: TestClient)
         "reusesFullReportOf": None,
         "snapshotId": sid,
         "reviewId": None,
-        "secondaryId": None,
+        "secondaryId": secondaries["AAPL"],  # the newest on the snapshot, as the check asks
         "workItemId": item_id,
         "principal": "agent",
         "actor": "claude-opus-5-5",
@@ -100,6 +114,20 @@ def test_a_clean_submission_publishes_and_completes_the_item(client: TestClient)
     ] == [{"symbol": "AAPL", **j, "overrideId": None} for j in JUDGMENTS]
     assert report["appendixA"]["snapshot"]["id"] == sid
     assert [t["term"] for t in report["appendixB"]] == ["Value at belief", "Belief"]
+    version = report["appendixA"]["versions"]["policy"]
+    assert report["references"] == [
+        {
+            "n": 1,
+            "ref": f"snapshot:{sid}/price",
+            "source": f"snapshot {sid}, the price, priced 30 Oct 2026",
+        },
+        {
+            "n": 2,
+            "ref": f"snapshot:{sid}/value",
+            "source": f"snapshot {sid}, the value a share, priced 30 Oct 2026",
+        },
+        {"n": 3, "ref": "policy:required_return", "source": f"policy required_return, {version}"},
+    ]
     assert client.get(f"/api/reports/{report['id']}").json() == report
     done = client.get("/api/inbox").json()["items"][0]
     assert (done["state"], done["reportId"]) == ("done", report["id"])
@@ -151,14 +179,14 @@ def test_a_rejection_stores_nothing_but_the_ledger_row(client: TestClient) -> No
     assert one.status_code == 422 and _ledger(client)[0]["summary"] == "rejected: 1 finding"
 
 
-def test_a_review_mode_has_eight_sections(client: TestClient) -> None:
+def test_a_review_mode_has_ten_sections(client: TestClient) -> None:
     sid = _snapshot_id(client)
     review = _body(sid, mode="valuation review", sections=_sections(sid, "valuation review"))
     first = _published(client, review)
     assert (first["mode"], first["reusesFullReportOf"], len(first["sections"])) == (
         "valuation review",
         None,
-        8,
+        10,
     )
     full = _published(client, _body(sid))
     second = _published(client, review)
@@ -166,7 +194,7 @@ def test_a_review_mode_has_eight_sections(client: TestClient) -> None:
     r = _submit(client, _body(sid, mode="valuation review"))
     assert (r.status_code, r.json()) == (
         400,
-        {"detail": "a valuation review has 8 sections, not 10"},
+        {"detail": "a valuation review has 10 sections, not 12"},
     )
     sections = _sections(sid)
     sections[1], sections[2] = sections[2], sections[1]
@@ -216,10 +244,13 @@ def test_markdown_download(client: TestClient) -> None:
     assert lines[0] == "AAPL · full report · 2026-11-01 · claude-opus-5-5 · revision 1"
     assert [line[3:] for line in lines if line.startswith("## ")] == [
         *HEADINGS,
+        "References",
         "Appendix A",
         "Appendix B",
     ]
-    assert "The price of $150.00 is above the value at belief of $133" in r.text
+    assert "The price of $150.00[^1] is above the value at belief of $133[^2]" in r.text
+    assert f"[^1]: snapshot:{report['snapshotId']}/price — snapshot " in r.text
+    assert "### Growth and profitability" in r.text  # section 4's chart tables
     r = client.get("/api/reports/99/markdown")
     assert (r.status_code, r.json()) == (404, {"detail": "no report 99"})
     assert client.get("/api/reports/99").status_code == 404
@@ -338,3 +369,31 @@ def test_a_judgment_s_text_holds_no_figure(client: TestClient) -> None:
     )
     assert _ledger(client)[0]["summary"] == "rejected: 1 finding"
     assert client.get("/api/companies/AAPL/reports").json() == {"reports": []}
+
+
+def test_a_secondary_on_an_older_snapshot_does_not_count(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
+) -> None:
+    """A reprice keeps the snapshot's secondary valuation in force; a revalue leaves it on an
+    older snapshot, so a submission is refused naming the latest snapshot, whatever its cites."""
+    sid = _snapshot_id(client)
+    with closing(connect(db_path)) as conn:
+        cited = snapshot_row(conn, sid)
+        assert cited is not None and cited.value is not None
+        repriced = reprice(results["AAPL"], 160.0, date(2026, 11, 2), policy)
+        insert_snapshot(conn, repriced, cited.refresh_id, clock=lambda: NOW)
+    report = _published(client, _body(sid))
+    assert (report["snapshotId"], report["secondaryId"]) == (sid, secondaries["AAPL"])
+    with closing(connect(db_path)) as conn:
+        revalued = replace(repriced, value=cited.value + 1.0)
+        latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    assert _snapshot_id(client) == latest
+    detail = f"the report needs a secondary valuation on snapshot {latest}"
+    for body in (_body(latest), _body(sid)):
+        r = _submit(client, body)
+        assert (r.status_code, r.json()) == (400, {"detail": detail})
+    assert len(client.get("/api/companies/AAPL/reports").json()["reports"]) == 1

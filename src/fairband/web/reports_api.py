@@ -40,8 +40,10 @@ ref, period?}``, from any writer. A judgment is a record and takes no other key:
 company's latest snapshot (404 "no snapshot for <symbol>" without one): the structural checks
 (``check.structure_refusal``), each a 400 with its sentence, the required judgments by the route
 of the company's current review when it rests on that snapshot, else the snapshot's (its phase's
-for a refused row); a work item it names must be the company's (404 "no work item <id>", "...
-for <symbol>") and open (409 "work item <id> is <state>"). Then the number check
+for a refused row), and the company's newest secondary valuation resting on that snapshot or one
+it reprices, else "the report needs a secondary valuation on snapshot <id>"; a work item it names
+must be the company's (404 "no work item <id>", "... for <symbol>") and open (409 "work item <id>
+is <state>"). Then the number check
 (``check.check_sections`` over the sections, and ``check.check_judgments`` over the judgments'
 decisions, which hold no figure): with findings, the answer is 422
 ``{findings: [{where, what, detail}]}`` and nothing is stored but a ``report`` ledger row that
@@ -57,10 +59,12 @@ blank text 400), and the work item named is completed. Each record is a ledger r
 the report's and the completion's naming the work item, all in one transaction.
 
 ``GET /api/companies/{symbol}/reports`` lists the company's revisions newest first, without their
-sections; ``GET /api/reports/{id}`` answers one whole, with its judgments and its appendixes,
-generated at read time (``render.appendix_a``, ``appendix_b``), as the publish answers it;
-``GET /api/reports/{id}/markdown`` its Markdown (``render.markdown``), ``text/markdown``. A missing
-report is a 404, "no report <id>".
+sections; ``GET /api/reports/{id}`` answers one whole, with its judgments, its appendixes and its
+references, ``[{n, ref, source}]``, generated at read time (``render.appendix_a``, ``appendix_b``,
+``references``), as the publish answers it; ``GET /api/reports/{id}/markdown`` its Markdown
+(``render.markdown``), ``text/markdown``, each cite with its footnote mark, the references after
+the last section and the chart tables (``charts.chart_tables``) under their sections, which the
+JSON does not carry. A missing report is a 404, "no report <id>".
 """
 
 import sqlite3
@@ -86,6 +90,7 @@ from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import Statements, country_for, statements_for
 from fairband.refresh.peers import peer_figures
+from fairband.reports.charts import chart_tables
 from fairband.reports.check import (
     check_judgments,
     check_sections,
@@ -101,7 +106,7 @@ from fairband.reports.refs import (
     peer_ref,
     same_snapshot,
 )
-from fairband.reports.render import appendix_a, appendix_b, markdown
+from fairband.reports.render import appendix_a, appendix_b, markdown, references
 from fairband.reports.tables import financial_tables
 from fairband.store.companies import latest_company
 from fairband.store.db import transaction
@@ -301,6 +306,9 @@ def add_report_routes(
             review = latest_review(conn, symbol)
             if review is not None and not same_snapshot(conn, review.snapshot_id, latest.id):
                 review = None
+            secondary = latest_secondary(conn, symbol)
+            if secondary is not None and not same_snapshot(conn, secondary.snapshot_id, latest.id):
+                secondary = None
             refusal = structure_refusal(
                 body.mode,
                 body.stance,
@@ -308,6 +316,8 @@ def add_report_routes(
                 [j.judgment for j in body.judgments],
                 _route(latest.result if review is None else review.result),
                 current,
+                secondary is not None,
+                latest.id,
             )
             if refusal is not None:
                 raise HTTPException(400, refusal)
@@ -332,9 +342,6 @@ def add_report_routes(
                 )
                 return JSONResponse({"findings": [asdict(f) for f in findings]}, status_code=422)
             cited, cited_review, cited_secondary = cited_records(conn, sections)
-            secondary = latest_secondary(conn, symbol)
-            if secondary is not None and not same_snapshot(conn, secondary.snapshot_id, latest.id):
-                secondary = None
             reused = None
             if body.mode == "valuation review":
                 full = (r.id for r in reports_for(conn, symbol) if r.mode == "full report")
@@ -387,7 +394,7 @@ def add_report_routes(
                 complete_item(conn, item.id, report_id, at)
                 summary = f"completed with report {report_id}"
                 rows.add("complete", "work_items", item.id, summary, item.id)
-            return {"report": _report_json(conn, report, current)}
+            return {"report": _report_json(conn, report, current, tax)}
 
     @app.get("/api/companies/{symbol}/reports")
     def reports(symbol: str) -> dict[str, Any]:
@@ -401,14 +408,17 @@ def add_report_routes(
     def report(report_id: int) -> dict[str, Any]:
         with closing(conn_factory()) as conn:
             found = _report(conn, report_id)
-            return _report_json(conn, found, effective(conn, policy))
+            return _report_json(conn, found, effective(conn, policy), tax)
 
     @app.get("/api/reports/{report_id}/markdown")
     def report_markdown(report_id: int) -> Response:
         with closing(conn_factory()) as conn:
             found = _report(conn, report_id)
-            a = appendix_a(conn, found, effective(conn, policy))
-        text = markdown(found, a, appendix_b(found.sections))
+            current = effective(conn, policy)
+            a = appendix_a(conn, found, current)
+            refs = references(conn, found, current, tax)
+            tables = chart_tables(conn, found, current, tax)
+        text = markdown(found, a, appendix_b(found.sections), refs, tables)
         return Response(text, media_type="text/markdown; charset=utf-8")
 
 
@@ -488,13 +498,16 @@ def _report(conn: sqlite3.Connection, report_id: int) -> ReportRow:
     return found
 
 
-def _report_json(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> dict[str, Any]:
-    """A report whole: its record, its judgments and its two appendixes."""
+def _report_json(
+    conn: sqlite3.Connection, report: ReportRow, policy: Policy, tax: TaxTable
+) -> dict[str, Any]:
+    """A report whole: its record, its judgments, its two appendixes and its references."""
     return {
         **record_json(report),
         "judgments": [record_json(j) for j in judgments_for(conn, report.id)],
         "appendixA": appendix_a(conn, report, policy),
         "appendixB": appendix_b(report.sections),
+        "references": references(conn, report, policy, tax),
     }
 
 

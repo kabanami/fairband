@@ -73,6 +73,20 @@ not exist, a figure that is a table rather than a number or a word, or a record 
 company. A ``Resolver`` reads one company's refs with its statements, tables, consensus and peers
 read once; ``resolve`` reads one ref.
 
+``Resolver.describe`` gives the references list a ref's source in words, one sentence a form: a
+date or a name where one serves, a record's id where nothing else names it. ``snapshot:`` "snapshot
+412, the price, priced 3 Nov 2026" (the path in words, the snapshot's price date); ``review:``
+"review 88, bridge line 1 (belief), the change in the value a share"; ``secondary:`` "secondary
+valuation 9, year 3 FCFF"; ``sensitivity:`` "sensitivity 7, row 1 column 2"; ``fact:`` "the
+revenue line of fiscal 2025 on file"; ``table:`` "the growth table, revenue growth, fiscal 2025";
+``estimate:`` "the consensus for Q4 of fiscal 2026, EPS"; ``close:`` "the close of 3 Nov 2026";
+``multiple:`` "the trailing P/E, 30 Oct 2026" or "the forward P/E, the ten-year average";
+``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
+``guidance:`` "guidance record 5: EPS for fiscal 2027, the midpoint"; ``derived:`` "derivation 7:
+the ratio of <a> and <b>", the operands' refs; ``response:`` "FMP segments, observed 1 Nov 2026";
+``policy:`` "policy required_return, <the policy's version>". A ref whose form or record names
+nothing is its own description.
+
 ``same_snapshot`` is the reprice rule (13.2): a later snapshot that reprices the cited one, with
 the same data date, method, policy, settings hash and value, counts as the cited one.
 """
@@ -87,7 +101,7 @@ from datetime import date
 from typing import Any
 
 from fairband.engine.anchor import TrailingFigures
-from fairband.engine.overrides import TAGS
+from fairband.engine.overrides import LABELS, TAGS
 from fairband.engine.route import CompanyInputs
 from fairband.engine.types import PhaseEvidence
 from fairband.policy import Policy
@@ -105,7 +119,7 @@ from fairband.store.research import finding_row
 from fairband.store.reviews import review_row
 from fairband.store.secondary import derivation_row, secondary_row
 from fairband.store.sensitivities import sensitivity_row
-from fairband.store.snapshots import snapshot_row
+from fairband.store.snapshots import SnapshotRow, snapshot_row
 from fairband.store.vendor import response_payload, response_row
 from fairband.web.policy_rows import policy_json
 
@@ -117,6 +131,7 @@ __all__ = [
     "close_ref",
     "estimate_ref",
     "fact_ref",
+    "field_words",
     "guidance_cited",
     "multiple_ref",
     "peer_ref",
@@ -221,6 +236,80 @@ _PHASE_FIELDS = frozenset(f.name for f in fields(PhaseEvidence)) - {"checks"}
 # ``statements_for`` and the peers read their day only as the data date of a store without
 # statements, which no ref reads.
 _NO_DAY = date.min
+
+# The references list's words (``Resolver.describe``): a record's figures and levels, a part's,
+# a projection year's lines, the drivers, a bridge line's three figures, the two P/E series and
+# their statistics, the vendors by name.
+_FIGURE_WORDS = {
+    "value": "the value a share",
+    "price": "the price",
+    "price_to_value": "price ÷ value",
+    "firm_value": "the firm value",
+    "equity": "the equity",
+    "debt": "the debt",
+    "cash": "the cash",
+    "shares": "the diluted shares",
+    "terminal_fcff": "the terminal FCFF",
+    "terminal": "the terminal value",
+    "terminal_pv": "the terminal's present value",
+}
+_LEVEL_WORDS = {
+    "buy": "the buy level",
+    "fair_low": "the fair band's low",
+    "fair_high": "the fair band's high",
+    "trim": "the trim level",
+}
+_PART_WORDS = {
+    "value": "its value",
+    "terminal": "the terminal value",
+    "terminal_pv": "the terminal's present value",
+    "terminal_growth": "the terminal growth",
+}
+_YEAR_WORDS = {
+    "revenue": "revenue",
+    "ebit": "EBIT",
+    "nopat": "NOPAT",
+    "reinvestment": "reinvestment",
+    "fcff": "FCFF",
+    "pv": "present value",
+}
+_DRIVER_WORDS = {
+    "years": "the years projected",
+    "tax_rate": "the tax rate",
+    "sales_to_capital": "the sales-to-capital",
+    "terminal_growth": "the terminal growth",
+}
+_BRIDGE_WORDS = {
+    "delta": "the change in the value a share",
+    "old": "the old figure",
+    "new": "the new figure",
+}
+_SERIES_WORDS = {"pe": "the trailing P/E", "pe_forward": "the forward P/E"}
+_STAT_WORDS = {
+    "avg_10y": "the ten-year average",
+    "median_10y": "the ten-year median",
+    "high_10y": "the ten-year high",
+    "low_10y": "the ten-year low",
+}
+_PROVIDER_WORDS = {"fmp": "FMP", "gf": "GuruFocus"}
+# An engine name's words: an abbreviation in capitals, a statement line's short name spelled out.
+_NAME_WORDS = {
+    "eps": "EPS",
+    "fcf": "FCF",
+    "roic": "ROIC",
+    "roe": "ROE",
+    "ebit": "EBIT",
+    "ebitda": "EBITDA",
+    "cfo": "operating cash flow",
+    "cfi": "investing cash flow",
+    "cff": "financing cash flow",
+    "capex": "capital spending",
+    "sbc": "stock compensation",
+}
+# Each input's bridge label by its tag as a stored bridge line names it.
+_LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_QUARTER = re.compile(r"(\d{4})-?(Q[1-4])")
 
 
 @dataclass(frozen=True)
@@ -376,6 +465,48 @@ class Resolver:
         form, path = _split(ref)
         reader = self._readers.get(form)
         return None if reader is None else reader(path)
+
+    def describe(self, ref: str) -> str:
+        """The source of what ``ref`` names in words, one sentence for the references list
+        (module docstring); the ref itself where its form or its record names nothing."""
+        form, path = _split(ref)
+        pieces = path.split("/")
+        head, rest = pieces[0], pieces[1:]
+        found: str | None = None
+        match form, pieces:
+            case "snapshot", _:
+                found = self._snapshot_source(head, rest)
+            case "review", _:
+                found = self._review_source(head, rest)
+            case "secondary", _ if head.isdigit():
+                words = _secondary_words(rest)
+                found = None if words is None else f"secondary valuation {head}, {words}"
+            case "sensitivity", [_, i, j] if head.isdigit():
+                found = f"sensitivity {head}, row {i} column {j}"
+            case "fact", [_, line, period]:
+                found = f"the {field_words(line)} line of {_period_words(period)} on file"
+            case "table", [_, table, row, period]:
+                cell = f"{field_words(row)}, {_period_words(period)}"
+                found = f"the {field_words(table)} table, {cell}"
+            case "estimate", [_, period, name]:
+                found = f"the consensus for {_period_words(period)}, {field_words(name)}"
+            case "close", [_, day]:
+                found = f"the close of {_iso_words(day)}"
+            case "multiple", [_, series, key] if series in _SERIES_WORDS:
+                found = f"{_SERIES_WORDS[series]}, {_STAT_WORDS.get(key) or _iso_words(key)}"
+            case "peer", [_, peer, name]:
+                found = f"{peer}, {field_words(name)}"
+            case "finding", [_]:
+                found = self._finding_source(head)
+            case "guidance", [_, name] if name in _GUIDANCE_FIGURES:
+                found = self._guidance_source(head, name)
+            case "derived", [_]:
+                found = self._derived_source(head)
+            case "response", _:
+                found = self._response_source(head)
+            case "policy", _ if path:
+                found = f"policy {path}, {self.policy.version}"
+        return ref.strip() if found is None else found
 
     def _once(self, key: str, read: Callable[[], Any]) -> Any:
         if key not in self._cache:
@@ -643,6 +774,131 @@ class Resolver:
             "inputs", lambda: build_inputs(self.conn, self.symbol, self.policy, self.tax, _NO_DAY)
         )
         return found
+
+    def _snapshot_source(self, head: str, rest: Sequence[str]) -> str | None:
+        """The snapshot, the path in words and the snapshot's price date."""
+        words = _snapshot_words(rest)
+        if words is None or not head.isdigit():
+            return None
+        row: SnapshotRow | None = self._once(
+            f"snapshot {head}", lambda: snapshot_row(self.conn, int(head))
+        )
+        if row is None:
+            return None
+        priced = "" if row.price_date is None else f", priced {_day_words(row.price_date)}"
+        return f"snapshot {row.id}, {words}{priced}"
+
+    def _review_source(self, head: str, rest: Sequence[str]) -> str | None:
+        """The review and the path in words, a bridge line with its input's label."""
+        row = review_row(self.conn, int(head)) if head.isdigit() else None
+        if row is None:
+            return None
+        match rest:
+            case ["bridge", n, field] if field in _BRIDGE_WORDS:
+                line = _nth(row.bridge, n)
+                label = "" if line is None else f" ({_LABELS.get(line['tag'], line['tag'])})"
+                words: str | None = f"bridge line {n}{label}, {_BRIDGE_WORDS[field]}"
+            case _:
+                words = _figure_words(rest)
+        return None if words is None else f"review {row.id}, {words}"
+
+    def _finding_source(self, head: str) -> str | None:
+        """The finding and its source as recorded."""
+        row = finding_row(self.conn, int(head)) if head.isdigit() else None
+        return None if row is None else f"finding {row.id}: {row.source_ref}"
+
+    def _guidance_source(self, head: str, name: str) -> str | None:
+        """The guidance record, its metric and period, and the figure named."""
+        row = guidance_row(self.conn, int(head)) if head.isdigit() else None
+        if row is None:
+            return None
+        guided = f"{field_words(row.metric)} for {_period_words(row.period)}"
+        return f"guidance record {row.id}: {guided}, the {name}"
+
+    def _derived_source(self, head: str) -> str | None:
+        """The derivation, its operation and its operands' refs."""
+        row = derivation_row(self.conn, int(head)) if head.isdigit() else None
+        if row is None:
+            return None
+        over = "" if row.years is None else f" over {row.years} years"
+        return f"derivation {row.id}: the {row.operation} of {row.a} and {row.b}{over}"
+
+    def _response_source(self, head: str) -> str | None:
+        """The vendor, the endpoint and the day the response was observed."""
+        row = response_row(self.conn, int(head)) if head.isdigit() else None
+        if row is None:
+            return None
+        vendor = _PROVIDER_WORDS.get(row.provider, row.provider)
+        return f"{vendor} {row.endpoint}, observed {_day_words(row.observed_at.date())}"
+
+
+def field_words(name: str) -> str:
+    """An engine name in a reader's words: its underscores as spaces, an abbreviation in capitals
+    and a statement line's short name spelled out (``capex`` reads "capital spending")."""
+    return " ".join(_NAME_WORDS.get(word, word) for word in name.split("_"))
+
+
+def _figure_words(rest: Sequence[str]) -> str | None:
+    """A snapshot's, a review's or a secondary valuation's figure or level in words."""
+    match rest:
+        case [name] if name in _FIGURE_WORDS:
+            return _FIGURE_WORDS[name]
+        case ["levels", name] if name in _LEVEL_WORDS:
+            return _LEVEL_WORDS[name]
+    return None
+
+
+def _snapshot_words(rest: Sequence[str]) -> str | None:
+    """A snapshot's path in words: an input, an intermediate or a classifier field by its name."""
+    match rest:
+        case ["inputs", name]:
+            return f"the input {name}"
+        case ["intermediates", *path] if path:
+            return f"the intermediate {'/'.join(path)}"
+        case ["phase", name]:
+            return f"the classifier's {name}"
+    return _figure_words(rest)
+
+
+def _secondary_words(rest: Sequence[str]) -> str | None:
+    """A secondary valuation's path in words: its grid, its parts, its projection, its drivers."""
+    match rest:
+        case ["grid", i, j]:
+            return f"the grid, row {i} column {j}"
+        case ["parts", n, ("pv" | "fcff") as line, t]:
+            return f"part {n}, year {t} {_YEAR_WORDS[line]}"
+        case ["parts", n, name] if name in _PART_WORDS:
+            return f"part {n}, {_PART_WORDS[name]}"
+        case ["years", t, line] if line in _YEAR_WORDS:
+            return f"year {t} {_YEAR_WORDS[line]}"
+        case ["drivers", name] if name in _DRIVER_WORDS:
+            return _DRIVER_WORDS[name]
+        case ["drivers", name, t]:
+            return f"the {field_words(name)} of year {t}"
+    return _figure_words(rest)
+
+
+def _period_words(period: str) -> str:
+    """A fiscal year, a quarter or the trailing twelve months in words."""
+    if period == "ttm":
+        return "the trailing twelve months"
+    if len(period) == 4 and period.isdecimal():
+        return f"fiscal {period}"
+    quarter = _QUARTER.fullmatch(period)
+    return period if quarter is None else f"{quarter[2]} of fiscal {quarter[1]}"
+
+
+def _day_words(day: date) -> str:
+    """A day as the report writes it, ``3 Nov 2026``."""
+    return f"{day.day} {_MONTHS[day.month - 1]} {day.year}"
+
+
+def _iso_words(text: str) -> str:
+    """An ISO date as the report writes it; any other text as it is."""
+    try:
+        return _day_words(date.fromisoformat(text))
+    except ValueError:
+        return text
 
 
 def _split(ref: str) -> tuple[str, str]:

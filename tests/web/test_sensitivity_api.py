@@ -113,6 +113,7 @@ def _sensitivities(client: TestClient, symbol: str = "AAPL") -> list[dict[str, A
     return [e for e in entries if e["kind"] == "sensitivity"]
 
 
+@pytest.mark.usefixtures("secondaries")  # a report needs one on its snapshot
 def test_a_sensitivity_is_stored_and_cited(
     client: TestClient, stored_inputs: dict[str, CompanyInputs], policy: Policy
 ) -> None:
@@ -162,9 +163,15 @@ def test_a_sensitivity_is_stored_and_cited(
         "/api/companies/AAPL/reports", json=_report("mature-growth", cite), headers=AGENT
     )
     assert r.status_code == 201, r.text
-    assert r.json()["report"]["snapshotId"] == sid
+    report = r.json()["report"]
+    assert report["snapshotId"] == sid
+    [listed] = report["references"]
+    assert listed["source"] == f"sensitivity {found['id']}, row 1 column 2"
+    text = client.get(f"/api/reports/{report['id']}/markdown").text
+    assert f"### Sensitivity {found['id']}: the belief by the runway return" in text
 
 
+@pytest.mark.usefixtures("secondaries")
 def test_a_refused_cell_is_null_and_cannot_be_cited(
     client: TestClient, stored_inputs: dict[str, CompanyInputs], policy: Policy
 ) -> None:

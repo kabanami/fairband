@@ -5,6 +5,7 @@ m in fiscal 2025, up 5.0%; capital spending −$126 m); AAL, refused. A clean re
 failure of spec 20.3 is one finding, located."""
 
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date
 from typing import Any
@@ -17,13 +18,16 @@ from support.web import TODAY
 from fairband.engine.overrides import Override
 from fairband.engine.review import review_company
 from fairband.engine.route import reprice, value_company
+from fairband.engine.types import Route
 from fairband.policy import Policy
 from fairband.reports.check import (
     CHECKS,
     FAILURES,
+    FULL_ONLY,
     HEADINGS,
     NO_REFERENCE,
     NOT_EMITTED,
+    STRUCTURE,
     UNRESOLVED,
     WRONG_PERIOD,
     WRONG_SNAPSHOT,
@@ -405,43 +409,128 @@ def test_shown_writes_the_value_as_its_cite_reads() -> None:
     assert shown(2.46, "years") == "2.5 years"
 
 
+JUDGED = ("phase", "moat", "belief", "roic")
+
+
+def _refusal(
+    policy: Policy,
+    section_headings: list[str],
+    mode: str = "full report",
+    stance: str = "buy",
+    judged: Sequence[str] = JUDGED,
+    route: Route | None = "mature-growth",
+    secondary_on_snapshot: bool = True,
+) -> str | None:
+    """The structural refusal of a submission on snapshot 412."""
+    return structure_refusal(
+        mode, stance, section_headings, judged, route, policy, secondary_on_snapshot, 412
+    )
+
+
 def test_the_structural_checks(policy: Policy) -> None:
     full, review = list(HEADINGS), list(headings("valuation review"))
-    judged = ["phase", "moat", "belief", "roic"]
-    assert len(review) == 8 and "The business" not in review
-    assert structure_refusal("full report", "buy", full, judged, "mature-growth", policy) is None
+    assert _refusal(policy, full) is None
+    assert _refusal(policy, review, "valuation review", "hold") is None
     assert (
-        structure_refusal("valuation review", "hold", review, judged, "mature-growth", policy)
-        is None
+        _refusal(policy, full, "valuation review") == "a valuation review has 10 sections, not 12"
     )
     assert (
-        structure_refusal("valuation review", "buy", full, judged, "mature-growth", policy)
-        == "a valuation review has 8 sections, not 10"
-    )
-    assert (
-        structure_refusal("full report", "accumulate", full, judged, "mature-growth", policy)
+        _refusal(policy, full, stance="accumulate")
         == "a stance is one of buy, hold, trim or avoid, not 'accumulate'"
     )
+    assert _refusal(policy, full, judged=JUDGED[:3]) == "the report lacks the judgment roic"
     assert (
-        structure_refusal("full report", "buy", full, judged[:3], "mature-growth", policy)
-        == "the report lacks the judgment roic"
-    )
-    assert (
-        structure_refusal("full report", "buy", full, ["moat"], "revenue-growth", policy)
+        _refusal(policy, full, judged=["moat"], route="revenue-growth")
         == "the report lacks the judgments phase, belief and target_margin"
     )
     assert (
-        structure_refusal("full report", "buy", full, [*judged, "moat"], "mature-growth", policy)
+        _refusal(policy, full, judged=[*JUDGED, "moat"])
         == "one judgment of each kind: moat is given twice"
     )
     swapped = [full[0], full[2], full[1], *full[3:]]
     assert (
-        structure_refusal("full report", "buy", swapped, judged, "mature-growth", policy)
+        _refusal(policy, swapped)
         == "section 2 is headed 'The business', not 'Industry and competition'"
     )
     assert required_judgments("start-up") == ("phase", "moat", "belief", "target_margin")
     assert required_judgments("decline") == required_judgments(None) == ("phase", "moat", "belief")
     assert CHECKS[-6:] == FAILURES
+
+
+def test_the_twelve_and_ten_headings() -> None:
+    """Spec 13.1's twelve sections, the call, the debate and the thesis after the financials and
+    the judgments last; a valuation review leaves out the business and its industry."""
+    assert HEADINGS == (
+        "Summary",
+        "The business",
+        "Industry and competition",
+        "Financial performance and health",
+        "The last earnings call",
+        "The bull case and the bear case",
+        "The thesis",
+        "Valuation",
+        "Price and multiples",
+        "Recent news",
+        "Risks and kill criteria",
+        "Key judgments",
+    )
+    assert FULL_ONLY == ("The business", "Industry and competition")
+    assert headings("full report") == HEADINGS
+    assert headings("valuation review") == (HEADINGS[0], *HEADINGS[3:])
+    assert STRUCTURE == (
+        "the mode's section count",
+        "the stance word",
+        "the required judgments",
+        "the headings in the spec's order",
+        "a secondary valuation on the snapshot",
+    )
+    assert CHECKS == STRUCTURE + FAILURES
+
+
+def test_an_old_heading_names_the_new_one(policy: Policy) -> None:
+    """A plan 1 report's ten headings are two short; one of them in a twelve-section report is
+    named against the heading in its place."""
+    plan_1 = [
+        "Summary",
+        "The business",
+        "Industry and competition",
+        "Financial performance and health",
+        "Life-cycle phase",
+        "Valuation",
+        "Price facts and multiples",
+        "Key judgments",
+        "Recent news",
+        "Risks and kill criteria",
+    ]
+    assert _refusal(policy, plan_1) == "a full report has 12 sections, not 10"
+    old = [*HEADINGS[:4], "Life-cycle phase", *HEADINGS[5:]]
+    assert _refusal(policy, old) == (
+        "section 5 is headed 'The last earnings call', not 'Life-cycle phase'"
+    )
+    moved = [*HEADINGS[:7], "Key judgments", *HEADINGS[8:11], "Valuation"]
+    assert _refusal(policy, moved) == "section 8 is headed 'Valuation', not 'Key judgments'"
+
+
+def test_a_report_needs_a_secondary_valuation_on_the_snapshot(policy: Policy) -> None:
+    """The last structural check: the refusal names the snapshot the report would rest on, and
+    every earlier check answers first."""
+    full = list(HEADINGS)
+    assert (
+        _refusal(policy, full, secondary_on_snapshot=False)
+        == "the report needs a secondary valuation on snapshot 412"
+    )
+    review = list(headings("valuation review"))
+    assert (
+        _refusal(policy, review, "valuation review", secondary_on_snapshot=False)
+        == "the report needs a secondary valuation on snapshot 412"
+    )
+    swapped = [full[0], full[2], full[1], *full[3:]]
+    assert _refusal(policy, swapped, secondary_on_snapshot=False) == (
+        "section 2 is headed 'The business', not 'Industry and competition'"
+    )
+    assert _refusal(policy, full, judged=JUDGED[:3], secondary_on_snapshot=False) == (
+        "the report lacks the judgment roic"
+    )
 
 
 def test_cited_records(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:

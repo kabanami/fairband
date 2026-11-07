@@ -248,7 +248,7 @@ def _call(server: MCPServer, name: str, arguments: dict[str, Any]) -> dict[str, 
 
 
 def _sections(snapshot_id: int) -> list[dict[str, Any]]:
-    """A full report's ten sections: the first cites the price and the value, the rest are plain
+    """A full report's twelve sections: the first cites the price and the value, the rest are plain
     words."""
     s = f"snapshot:{snapshot_id}"
     first = [
@@ -462,6 +462,7 @@ def test_a_refusal_is_the_api_s_sentence(api: FairbandClient) -> None:
     }
 
 
+@pytest.mark.usefixtures("secondaries")  # a report needs one on its snapshot
 def test_report_submit_passes_the_sections_through(api: FairbandClient, client: TestClient) -> None:
     snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
     server = build_server(api)
@@ -513,6 +514,7 @@ def test_report_submit_passes_the_sections_through(api: FairbandClient, client: 
     assert sorted(texts) == ["A second product recall.", "The services margin falls."]
 
 
+@pytest.mark.usefixtures("secondaries")
 def test_a_rejected_report_carries_its_findings(api: FairbandClient, client: TestClient) -> None:
     snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
     server = build_server(api)

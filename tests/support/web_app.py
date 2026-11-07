@@ -5,7 +5,8 @@ refresh, and clients of an app over that database. The plain names they use are 
 
 AAPL is valued on the Mature Growth route; AAL, a Young Growth company with no mature peers, is
 refused for its target margin; HGCO, the High Growth company, is valued on the revenue growth
-route."""
+route. ``secondaries`` stores a secondary valuation on each one's snapshot, which a report needs
+there (spec 13.3): a test module that submits reports asks for it."""
 
 from collections.abc import Callable, Iterator
 from contextlib import closing
@@ -19,13 +20,16 @@ from fastapi.testclient import TestClient
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.route import value_company
+from fairband.engine.secondary import Part, secondary_value
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy, load_policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import insert_companies
 from fairband.store.db import connect, migrate
+from fairband.store.ledger import Writer
 from fairband.store.refreshes import create_refresh, finish_refresh, set_stage
-from fairband.store.snapshots import insert_snapshot
+from fairband.store.secondary import insert_secondary
+from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.web.app import create_app
 from support.engine_companies import (
     high_growth_inputs,
@@ -84,6 +88,41 @@ def db_path(tmp_path: Path, policy: Policy, results: dict[str, ValuationResult])
         set_stage(conn, refresh_id, "done")
         finish_refresh(conn, refresh_id, "done", FINISHED, "3 valued or refused", CALIBRATION)
     return path
+
+
+@pytest.fixture
+def secondaries(db_path: Path, policy: Policy) -> dict[str, int]:
+    """The id of a secondary valuation on each company's snapshot, by symbol: the parts form on
+    spec 20.1's path in hundreds of millions of dollars over a billion shares, the fixture's
+    figures and not the company's."""
+    fcff = tuple(x * 1e8 for x in (100.0, 105.0, 110.25, 115.7625, 121.550625))
+    part = Part("the business", fcff, 0.03, None)
+    valuation = secondary_value(
+        parts=[part], debt=0.0, cash=0.0, shares=1e9, price=150.0, moat="Wide", policy=policy
+    )
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    found = {}
+    with closing(connect(db_path)) as conn:
+        for symbol in ("AAPL", "AAL", "HGCO"):
+            snapshot = latest_snapshot(conn, symbol)
+            assert snapshot is not None
+            found[symbol] = insert_secondary(
+                conn,
+                symbol,
+                snapshot.id,
+                [part],
+                valuation,
+                "a second view for the report",
+                [{"kind": "filing", "ref": "10-K 2025", "note": None}],
+                "none",
+                "none",
+                policy.version,
+                policy.settings_hash,
+                None,
+                writer,
+                CREATED,
+            )
+    return found
 
 
 @pytest.fixture

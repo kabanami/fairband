@@ -1,12 +1,13 @@
 """The number check of a report (spec 2026-11-06 Tier 2, 13.1 and 13.3; ``method.md`` 16).
 
 A report is published whole or rejected whole. Before the number check run the structural checks
-(``structure_refusal``), each refused with one sentence: the mode's section count, ten for a full
-report and eight for a valuation review, which leaves out "The business" and "Industry and
+(``structure_refusal``), each refused with one sentence: the mode's section count, twelve for a
+full report and ten for a valuation review, which leaves out "The business" and "Industry and
 competition"; the stance, one of the policy's ``stance_words``; the required judgments, ``phase``,
 ``moat`` and ``belief`` on every report, ``roic`` where the route is Mature Growth or Mature
 Stable and ``target_margin`` where it is the revenue-growth route (High Growth, Young Growth) or
-Start-up; and the headings, design.md 9.3's in its order (``HEADINGS``).
+Start-up; the headings, spec 13.1's in its order (``HEADINGS``); and a secondary valuation on the
+snapshot the report would rest on, "the report needs a secondary valuation on snapshot <id>".
 
 The number check (``check_sections``) walks every part of every section and answers a finding for
 each failure, ``where`` the section and the part counted from 1 and the text at fault,
@@ -91,17 +92,21 @@ NO_REFERENCE = "a number with no reference"
 NOT_EMITTED = "a derived figure the engine has not emitted"
 FAILURES = (UNRESOLVED, WRONG_UNIT, WRONG_PERIOD, WRONG_SNAPSHOT, NO_REFERENCE, NOT_EMITTED)
 
+# Spec 13.1's twelve sections: the call, the debate and the thesis chain after the financials,
+# the valuation's detail is section 8's alone, and the judgments, the audit trail, come last.
 HEADINGS = (
     "Summary",
     "The business",
     "Industry and competition",
     "Financial performance and health",
-    "Life-cycle phase",
+    "The last earnings call",
+    "The bull case and the bear case",
+    "The thesis",
     "Valuation",
-    "Price facts and multiples",
-    "Key judgments",
+    "Price and multiples",
     "Recent news",
     "Risks and kill criteria",
+    "Key judgments",
 )
 # The two sections a valuation review leaves out (design.md 7.5).
 FULL_ONLY = ("The business", "Industry and competition")
@@ -118,7 +123,8 @@ STRUCTURE = (
     "the mode's section count",
     "the stance word",
     "the required judgments",
-    "the headings in design.md 9.3's order",
+    "the headings in the spec's order",
+    "a secondary valuation on the snapshot",
 )
 CHECKS = STRUCTURE + FAILURES
 
@@ -256,9 +262,13 @@ def structure_refusal(
     judgments: Sequence[str],
     route: Route | None,
     policy: Policy,
+    secondary_on_snapshot: bool,
+    snapshot_id: int,
 ) -> str | None:
     """The sentence of the first structural check the submission fails (module docstring), in
-    ``STRUCTURE``'s order; ``None`` when it passes them all."""
+    ``STRUCTURE``'s order; ``None`` when it passes them all. ``secondary_on_snapshot`` says
+    whether the company's newest secondary valuation rests on ``snapshot_id``, the snapshot the
+    report would rest on, or one it reprices."""
     expected = headings(mode)
     if len(section_headings) != len(expected):
         count = len(section_headings)
@@ -276,6 +286,8 @@ def structure_refusal(
     for i, (got, want) in enumerate(zip(section_headings, expected, strict=True), 1):
         if got.strip() != want:
             return f"section {i} is headed {want!r}, not {got!r}"
+    if not secondary_on_snapshot:
+        return f"the report needs a secondary valuation on snapshot {snapshot_id}"
     return None
 
 

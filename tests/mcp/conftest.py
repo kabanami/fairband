@@ -1,6 +1,7 @@
 """The MCP tests' fixtures: the web tests' app over their database, shared from
-``support.web_app`` (AAPL, AAL and HGCO, each with one snapshot); the MCP server's client of that
-app, not yet identified; and a client of a port on 127.0.0.1 that nothing listens on."""
+``support.web_app`` (AAPL, AAL and HGCO, each with one snapshot, and a secondary valuation on it
+for the tests that submit a report); the MCP server's client of that app, not yet identified; and
+a client of a port on 127.0.0.1 that nothing listens on."""
 
 import socket
 from collections.abc import Iterator
@@ -8,7 +9,14 @@ from collections.abc import Iterator
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from support.web_app import client, client_with_clock, db_path, policy, results  # noqa: F401
+from support.web_app import (  # noqa: F401
+    client,
+    client_with_clock,
+    db_path,
+    policy,
+    results,
+    secondaries,
+)
 
 from fairband.mcp.client import FairbandClient
 

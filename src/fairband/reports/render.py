@@ -1,5 +1,5 @@
-"""A report's appendixes and its Markdown (spec 2026-11-06 Tier 2, 13.1 and 13.6; design.md 9.4;
-``method.md`` 16).
+"""A report's appendixes, its references and its Markdown (spec 2026-11-06 Tier 2, 13.1 and 13.6;
+design.md 9.4; ``method.md`` 16).
 
 Neither appendix is stored: both are generated at read time from the stored records, so the agent
 writes neither. Appendix A (``appendix_a``), the audit: the snapshot the report rests on; every
@@ -8,7 +8,8 @@ review's when the report rests on one (its JUDGMENT entries beside the snapshot'
 snapshot's; the overrides inside the review with their reasons and evidence; the guidance on
 file, the company's guidance records written by the report's time, newest first, each with its
 figures, its basis, its call's date, whether a record on file by then superseded it, and the
-overrides inside the review that cite it; the bridge; the secondary valuation's form, its drivers
+overrides inside the review that cite it; the bridge, each line with its input's label in a
+reader's words (``overrides.LABELS``); the secondary valuation's form, its drivers
 with the trailing revenue and the terminal return and its projection year by year, or its parts
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
 every part's (``GRID_ROWS``); the checks that ran (``check.CHECKS``, each with its rule); the
@@ -20,11 +21,18 @@ word, margin direction``) by either.
 ``GLOSSARY`` is ``docs/method.md`` section 13's table, term for term; its Note is the flag of
 section 8 and also, in the brand book's word, the note an owner or an agent writes.
 
+``references`` lists the refs the sections cite, numbered from 1 in the order each is first cited,
+one entry a distinct ref whatever the period a cite names, each with its source in words
+(``refs.Resolver.describe``).
+
 ``markdown`` renders the published report: a header line naming the company, the mode, the date,
 the actor (the principal for the owner) and the revision; a line naming the stance and the
 snapshot with its price date, and for a valuation review the full report it reuses or that there
-is none; the sections under their headings as ``##``, each part's text in order, a cite as its
-text; then Appendix A as tables and Appendix B as a list.
+is none; the sections under their headings as ``##``, each led by its chart tables
+(``charts.chart_tables``) as ``###`` tables, then each part's text in order, a cite as its text
+and its footnote mark, ``$150.00[^1]``, so no ref is in the text; after the last section the
+references under ``## References``, ``[^n]: <ref> — <source>``; then Appendix A as tables and
+Appendix B as a list.
 """
 
 import re
@@ -35,7 +43,10 @@ from typing import Any
 
 from pydantic.alias_generators import to_camel
 
+from fairband.engine.overrides import LABELS
 from fairband.policy import Policy
+from fairband.policy.tax import TaxTable
+from fairband.reports.charts import ChartTable, shift_words
 from fairband.reports.check import (
     CHECKS,
     NO_REFERENCE,
@@ -46,7 +57,7 @@ from fairband.reports.check import (
     WRONG_UNIT,
     parts,
 )
-from fairband.reports.refs import guidance_cited
+from fairband.reports.refs import Resolver, guidance_cited
 from fairband.store.guidance import guidance_for
 from fairband.store.overrides import override_row
 from fairband.store.reports import ReportRow
@@ -204,13 +215,17 @@ GLOSSARY: dict[str, str] = {
 # Terms matched by more than their own name.
 _ALIASES: dict[str, tuple[str, ...]] = {"Runway N": ("runway",)}
 _RULES: dict[str, str] = {
-    "the mode's section count": "ten sections for a full report, eight for a valuation review",
+    "the mode's section count": "twelve sections for a full report, ten for a valuation review",
     "the required judgments": (
         "phase, moat and belief; roic on Mature Growth and Mature Stable; target_margin on High "
         "Growth, Young Growth and Start-up"
     ),
-    "the headings in design.md 9.3's order": (
-        "the ten headings in order, sections 2 and 3 left out of a valuation review"
+    "the headings in the spec's order": (
+        "the twelve headings in order, sections 2 and 3 left out of a valuation review"
+    ),
+    "a secondary valuation on the snapshot": (
+        "the company's newest secondary valuation rests on its latest snapshot, or one the latest"
+        " reprices"
     ),
     UNRESOLVED: "every cite's reference names a stored value",
     WRONG_UNIT: "every cite reads its value in its unit at the report's rounding",
@@ -220,6 +235,8 @@ _RULES: dict[str, str] = {
     NOT_EMITTED: "every derived figure is a stored derivation",
 }
 _DASH = "—"
+# Each input's bridge label by its tag as a stored bridge line names it.
+_LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
 
 
 def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> dict[str, Any]:
@@ -288,8 +305,30 @@ def appendix_b(sections: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
     ]
 
 
-def markdown(report: ReportRow, a: Mapping[str, Any], b: Sequence[Mapping[str, str]]) -> str:
-    """The report as Markdown (module docstring), its Appendix A ``a`` and Appendix B ``b``."""
+def references(
+    conn: sqlite3.Connection, report: ReportRow, policy: Policy, tax: TaxTable | None = None
+) -> list[dict[str, Any]]:
+    """The refs ``report``'s sections cite, ``{n, ref, source}``, numbered from 1 in the order
+    each is first cited; a ref cited again, with a period or without, keeps its number. ``policy``
+    is the effective one and ``tax`` the statements' table."""
+    numbered: dict[str, int] = {}
+    for _, part in parts(report.sections):
+        ref = _cited(part)
+        if ref and ref not in numbered:
+            numbered[ref] = len(numbered) + 1
+    resolver = Resolver(conn, report.symbol, policy, tax)
+    return [{"n": n, "ref": ref, "source": resolver.describe(ref)} for ref, n in numbered.items()]
+
+
+def markdown(
+    report: ReportRow,
+    a: Mapping[str, Any],
+    b: Sequence[Mapping[str, str]],
+    refs: Sequence[Mapping[str, Any]],
+    tables: Mapping[str, Sequence[ChartTable]],
+) -> str:
+    """The report as Markdown (module docstring): its Appendix A ``a``, its Appendix B ``b``,
+    its references ``refs`` and its chart tables by the heading of the section they lead."""
     actor = report.actor or report.principal
     day = report.created_at.date().isoformat()
     snapshot = a["snapshot"]
@@ -302,8 +341,16 @@ def markdown(report: ReportRow, a: Mapping[str, Any], b: Sequence[Mapping[str, s
         lines.append(
             "No full report to reuse." if reused is None else f"Reuses full report {reused}."
         )
+    marks = {str(entry["ref"]): int(entry["n"]) for entry in refs}
     for section in report.sections:
-        lines += ["", f"## {section['heading']}", "", "".join(_text(p) for p in section["parts"])]
+        heading = section["heading"]
+        lines += ["", f"## {heading}"]
+        for chart in tables.get(heading.strip(), ()):
+            lines += ["", f"### {chart.title}", "", *_table(chart.header, chart.rows)]
+        lines += ["", "".join(_marked(p, marks) for p in section["parts"])]
+    lines += ["", "## References", ""]
+    listed = [f"[^{entry['n']}]: {entry['ref']} — {entry['source']}" for entry in refs]
+    lines += listed or ["No references."]
     lines += ["", "## Appendix A", "", *_appendix_a_tables(a), "", "## Appendix B", ""]
     lines += [f"- **{entry['term']}**: {entry['meaning']}" for entry in b] or ["No terms used."]
     return "\n".join(lines) + "\n"
@@ -371,8 +418,17 @@ def _bridge(review: ReviewRow) -> dict[str, Any]:
         "mechanicalValue": review.mechanical_value,
         "reviewedValue": review.value,
         "refusal": review.refusal,
-        "lines": [{to_camel(key): value for key, value in line.items()} for line in review.bridge],
+        "lines": [
+            {**{to_camel(key): value for key, value in line.items()}, "label": _label(line)}
+            for line in review.bridge
+        ],
     }
+
+
+def _label(line: Mapping[str, Any]) -> str:
+    """A bridge line's input in a reader's words."""
+    tag = str(line["tag"])
+    return _LABELS.get(tag, tag)
 
 
 def _secondary(secondary: SecondaryRow) -> dict[str, Any]:
@@ -466,10 +522,10 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
         summary = f"Review {bridge['reviewId']}: mechanical value {mechanical}, reviewed value"
         out += [f"{summary} {reviewed}.", ""]
         rows = [
-            (x["tag"], x["overrideId"], x["old"], x["new"], x["delta"], x["refusal"])
+            (x["tag"], x["label"], x["overrideId"], x["old"], x["new"], x["delta"], x["refusal"])
             for x in bridge["lines"]
         ]
-        out += _table(("Input", "Override", "Old", "New", "Delta", "Refusal"), rows)
+        out += _table(("Input", "Label", "Override", "Old", "New", "Delta", "Refusal"), rows)
     out += ["", "### Secondary valuation", ""]
     secondary = a["secondary"]
     out += ["None."] if secondary is None else _secondary_tables(secondary)
@@ -554,7 +610,7 @@ def _grid_table(grid: Mapping[str, Any]) -> list[str]:
     corner = "Every part's terminal growth" if shifts else "Terminal growth"
     header = (corner, *(f"r {_percent(rate)}" for rate in grid["cols"]))
     rows = [
-        (_shift(g) if shifts else _percent(g), *cells)
+        (shift_words(g) if shifts else _percent(g), *cells)
         for g, cells in zip(grid["rows"], grid["cells"], strict=True)
     ]
     return _table(header, rows)
@@ -562,12 +618,6 @@ def _grid_table(grid: Mapping[str, Any]) -> list[str]:
 
 def _percent(x: float) -> str:
     return f"{'−' if x < 0 else ''}{abs(x):.1%}"
-
-
-def _shift(x: float) -> str:
-    """A shift in the terminal growth in points: "−1 pp", "0 pp", "+1 pp"."""
-    points = round(x * 100)
-    return f"{'−' if points < 0 else '+' if points > 0 else ''}{abs(points)} pp"
 
 
 def _table(header: Sequence[str], rows: Sequence[Sequence[Any]]) -> list[str]:
@@ -598,6 +648,17 @@ def _text(part: Any) -> str:
     if isinstance(part, Mapping):
         return str(part.get("cite", ""))
     return part if isinstance(part, str) else ""
+
+
+def _cited(part: Any) -> str:
+    """A cite's ref as the references list keys it; ``""`` for a plain part."""
+    return str(part.get("ref", "")).strip() if isinstance(part, Mapping) else ""
+
+
+def _marked(part: Any, marks: Mapping[str, int]) -> str:
+    """A part's text, a cite's followed by its footnote mark."""
+    mark = marks.get(_cited(part))
+    return _text(part) if mark is None else f"{_text(part)}[^{mark}]"
 
 
 def _names(term: str) -> tuple[str, ...]:
