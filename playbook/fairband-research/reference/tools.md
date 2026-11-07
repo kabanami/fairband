@@ -111,6 +111,9 @@ pass-throughs are busy: four calls are in flight, try again" (503): wait a littl
 - `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: value the
   company a second way, from your drivers or from your own free-cash-flow path, one of the two; it
   answers the stored secondary valuation.
+- `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
+  across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`;
+  nothing is overridden.
 - `derive(symbol, derivations)`: compute figures from refs; it answers
   `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`.
 - `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`:

@@ -8,6 +8,7 @@ sentence."""
 import socket
 import threading
 from contextlib import closing
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -21,6 +22,7 @@ from fastapi.testclient import TestClient
 from mcp import Client
 from mcp.server.mcpserver import MCPServer
 from mcp.types import Implementation
+from support.engine_companies import mature_growth_inputs, universe_deciles
 from support.web import CREATED, HEADER, HOST
 
 from fairband.mcp.client import NO_ANSWER, NOT_ASCII, NOT_RUNNING, TIMEOUT_S, FairbandClient
@@ -28,7 +30,9 @@ from fairband.mcp.server import BAD_SYMBOL, TOOL_NAMES, build_server, loopback
 from fairband.reports.check import headings
 from fairband.store.db import connect
 from fairband.store.facts import FactRow, insert_facts
+from fairband.store.refreshes import save_deciles
 from fairband.store.vendor import record_response
+from fairband.web import reviews_api
 from fairband.web.identity import IDENTIFY_FIRST
 
 PROBE = Implementation(name="probe", version="0")
@@ -74,6 +78,7 @@ SPEC_TOOLS = (
     "override_add",
     "override_drop",
     "secondary_valuation",
+    "sensitivity",
     "derive",
     "report_submit",
     "kill_criterion_add",
@@ -147,6 +152,13 @@ WRITES: dict[str, dict[str, Any]] = {
         ],
         "reason": "the services segment carries the company",
         "evidence": [FILING],
+    },
+    "sensitivity": {
+        "symbol": "AAPL",
+        "row_tag": "growth.belief",
+        "row_values": [0.05, 0.08],
+        "col_tag": "moat.class",
+        "col_values": ["Narrow", "Wide"],
     },
     "derive": {
         "symbol": "AAPL",
@@ -380,6 +392,27 @@ def test_secondary_valuation_takes_drivers_or_parts(api: FairbandClient, db_path
         "status": 400,
     }
     assert neither == {"refused": "a secondary valuation needs drivers or parts", "status": 400}
+
+
+def test_sensitivity_sends_its_axes_as_the_api_reads_them(
+    api: FairbandClient, db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The four axis arguments as spec 15.4 names them, sent camelCase; the store holds no
+    statements, so the route builds AAPL's inputs as the fixture valued them."""
+    with closing(connect(db_path)) as conn:
+        save_deciles(conn, 1, universe_deciles(), CREATED)
+    aapl = replace(mature_growth_inputs(), symbol="AAPL")
+    monkeypatch.setattr(reviews_api, "build_inputs", lambda *args, **kwargs: aapl)
+    server = build_server(api)
+    found = _session(server, ("identify", AGENT), ("sensitivity", WRITES["sensitivity"]))[1]
+    assert (found["rowTag"], found["rowValues"], found["colTag"], found["colValues"]) == (
+        "growth.belief",
+        [0.05, 0.08],
+        "moat.class",
+        ["Narrow", "Wide"],
+    )
+    assert found["current"] is None and found["actor"] == "claude-opus-5-5"
+    assert all(isinstance(cell, float) for row in found["cells"] for cell in row)
 
 
 def test_a_refusal_is_the_api_s_sentence(api: FairbandClient) -> None:

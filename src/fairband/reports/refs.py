@@ -21,6 +21,8 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   ``sales_to_capital``, ``terminal_growth``) and ``/drivers/<name>/<t>`` (``revenue_growth``,
   ``operating_margin``); every index (the part ``n``, the year ``t``, the row ``i`` and the column
   ``j``) counted from 1, and a form's paths naming nothing on the other form;
+- ``sensitivity:<id>/<i>/<j>``: a stored sensitivity reading's value a share at its row ``i`` and
+  its column ``j``, each counted from 1; a refused cell holds no value;
 - ``fact:<symbol>/<line>/<period>``: a stored statement line as the engine reads it, ``<line>``
   the engine's field name (``fairband.reports.tables.LINES`` for a fiscal year, read through
   ``year_lines``; the trailing figures' fields for ``ttm``) and ``<period>`` the fiscal year as
@@ -52,8 +54,8 @@ intermediate or a vendor field. An engine input's unit maps onto them: a currenc
 ``currency``, ``<code> a share`` ``per-share``, ``ratio`` ``percent``, ``shares`` and the other
 counted things ``count``. The period is the fiscal year (``2025``), the quarter (``2026-Q4``),
 ``ttm`` or the close's date for the forms that have one, a finding's as recorded; ``None`` for the
-others. The snapshot is the record's own for ``snapshot:``, ``review:`` and ``secondary:``, and
-for ``derived:`` the snapshot its operands rest on; ``None`` for the others.
+others. The snapshot is the record's own for ``snapshot:``, ``review:``, ``secondary:`` and
+``sensitivity:``, and for ``derived:`` the snapshot its operands rest on; ``None`` for the others.
 
 A ref resolves to ``None`` when it names nothing: a malformed ref, a record or a field that does
 not exist, a figure that is a table rather than a number or a word, or a record of another
@@ -88,6 +90,7 @@ from fairband.store.refreshes import latest_deciles
 from fairband.store.research import finding_row
 from fairband.store.reviews import review_row
 from fairband.store.secondary import derivation_row, secondary_row
+from fairband.store.sensitivities import sensitivity_row
 from fairband.store.snapshots import snapshot_row
 from fairband.store.vendor import response_payload, response_row
 from fairband.web.policy_rows import policy_json
@@ -257,9 +260,9 @@ def same_snapshot(conn: sqlite3.Connection, cited: int, latest: int) -> bool:
 
 
 def rests_on(conn: sqlite3.Connection, ref: str) -> int | None:
-    """The snapshot the record a ``snapshot:``, ``review:``, ``secondary:`` or ``derived:`` ref
-    names rests on, whichever company's it is (a derivation's, its operands'); ``None`` for the
-    other forms and for a record that does not exist."""
+    """The snapshot the record a ``snapshot:``, ``review:``, ``secondary:``, ``sensitivity:`` or
+    ``derived:`` ref names rests on, whichever company's it is (a derivation's, its operands');
+    ``None`` for the other forms and for a record that does not exist."""
     form, path = _split(ref)
     head = path.partition("/")[0]
     if not head.isdigit():
@@ -273,6 +276,9 @@ def rests_on(conn: sqlite3.Connection, ref: str) -> int | None:
     if form == "secondary":
         secondary = secondary_row(conn, record_id)
         return None if secondary is None else secondary.snapshot_id
+    if form == "sensitivity":
+        reading = sensitivity_row(conn, record_id)
+        return None if reading is None else reading.snapshot_id
     if form == "derived":
         derivation = derivation_row(conn, record_id)
         if derivation is None:
@@ -320,6 +326,7 @@ class Resolver:
             "snapshot": self._snapshot,
             "review": self._review,
             "secondary": self._secondary,
+            "sensitivity": self._sensitivity,
             "fact": self._fact,
             "table": self._table,
             "estimate": self._estimate,
@@ -439,6 +446,18 @@ class Resolver:
                 if rate is not None:
                     found = rate, "percent"
         return None if found is None else _figure(*found, None, row.snapshot_id)
+
+    def _sensitivity(self, path: str) -> Resolved | None:
+        """A cell by its row and its column; a refused cell resolves with no value."""
+        pieces = path.split("/")
+        row = sensitivity_row(self.conn, int(pieces[0])) if pieces[0].isdigit() else None
+        if row is None or row.symbol != self.symbol or len(pieces) != 3:
+            return None
+        i = _index(row.cells, pieces[1])
+        j = None if i is None else _index(row.cells[i], pieces[2])
+        if i is None or j is None:
+            return None
+        return _figure(row.cells[i][j], "per-share", None, row.snapshot_id)
 
     def _fact(self, path: str) -> Resolved | None:
         pieces = path.split("/")
@@ -614,9 +633,13 @@ def _line_unit(line: str) -> str:
 
 def _nth(items: Sequence[Any], n: str) -> Any:
     """The item numbered ``n`` from 1; ``None`` where there is none."""
-    if not n.isdigit() or not 1 <= int(n) <= len(items):
-        return None
-    return items[int(n) - 1]
+    k = _index(items, n)
+    return None if k is None else items[k]
+
+
+def _index(items: Sequence[Any], n: str) -> int | None:
+    """The index of the item numbered ``n`` from 1; ``None`` where there is none."""
+    return int(n) - 1 if n.isdigit() and 1 <= int(n) <= len(items) else None
 
 
 def _at_path(x: Any, keys: Sequence[str]) -> Any:

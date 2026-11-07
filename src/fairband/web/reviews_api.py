@@ -78,6 +78,9 @@ effective policy), their units the reads' (``currency``, ``per-share``, ``percen
 that names no number, a word or a figure the record does not hold included, is a 400,
 "unresolved reference: <ref>", and stores none of the call's derivations.
 ``GET /api/derivations/{id}`` reads one back, 404 without it.
+
+``sensitivity_api`` shares ``require_current``, ``agents_only``, ``snapshot_of``, ``built_inputs``
+(the store-moved 409), ``judged_route`` (the route the rules judge a tag on) and ``counted``.
 """
 
 import json
@@ -85,7 +88,7 @@ import math
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, cast, get_args
 
 from fastapi import FastAPI, HTTPException
@@ -95,6 +98,7 @@ from pydantic.alias_generators import to_camel
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import sales_class
+from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import (
     TAGS,
     Lifetime,
@@ -104,9 +108,9 @@ from fairband.engine.overrides import (
     route_of,
 )
 from fairband.engine.roic import terminal_roic
-from fairband.engine.route import FOREIGN_FILER, value_company
+from fairband.engine.route import FOREIGN_FILER, CompanyInputs, value_company
 from fairband.engine.secondary import Drivers, Part, SecondaryValuation, secondary_value
-from fairband.engine.types import Phase, ValuationResult, result_to_json
+from fairband.engine.types import Phase, Route, ValuationResult, result_to_json
 from fairband.policy import Moat, Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
@@ -301,10 +305,7 @@ def add_review_routes(
         if not applied:
             return None
         today = clock().date()
-        deciles = latest_deciles(conn)
-        inputs = build_inputs(conn, symbol, current, tax, today, deciles)
-        if not _reproduces(value_company(inputs, deciles, current, today), snapshot.result):
-            raise HTTPException(409, f"the store moved since snapshot {snapshot.id}: run a revalue")
+        inputs, deciles = built_inputs(conn, snapshot, current, tax, today)
         return write_review(
             conn,
             inputs,
@@ -334,7 +335,7 @@ def add_review_routes(
     ) -> dict[str, Any] | JSONResponse:
         """Judge the override and store it; an applied one replaces the one on its tag and the
         review is recomputed."""
-        _agents_only(writer)
+        agents_only(writer)
         if not body.reason.strip():
             raise HTTPException(400, "an override needs a reason")
         if body.lifetime == "period-tied" and not (body.period or "").strip():
@@ -342,7 +343,7 @@ def add_review_routes(
         at = clock()
         with closing(conn_factory()) as conn, transaction(conn, immediate=True):
             symbol = exchange_symbol(symbol)
-            snapshot = _snapshot(conn, symbol)
+            snapshot = snapshot_of(conn, symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
             applied = applied_overrides(conn, symbol)
@@ -385,7 +386,7 @@ def add_review_routes(
     @app.delete("/api/overrides/{override_id}")
     def delete_override(override_id: int, body: OverrideDrop, writer: WriterOf) -> dict[str, Any]:
         """Drop the applied override; the review is recomputed over the rest, or cleared."""
-        _agents_only(writer)
+        agents_only(writer)
         if not body.reason.strip():
             raise HTTPException(400, "a drop needs a reason")
         at = clock()
@@ -395,7 +396,7 @@ def add_review_routes(
                 raise HTTPException(404, f"no override {override_id}")
             if found.state != "applied":
                 raise HTTPException(409, f"override {override_id} is {found.state}, not applied")
-            snapshot = _snapshot(conn, found.symbol)
+            snapshot = snapshot_of(conn, found.symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
             drop_override(conn, override_id, body.reason, at)
@@ -442,7 +443,7 @@ def add_review_routes(
         at = clock()
         with closing(conn_factory()) as conn, transaction(conn, immediate=True):
             symbol = exchange_symbol(symbol)
-            snapshot = _snapshot(conn, symbol)
+            snapshot = snapshot_of(conn, symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
             if _foreign(conn, snapshot):
@@ -609,11 +610,11 @@ def _valued_from(valuation: SecondaryValuation) -> str:
     was valued from, the drivers' years a small count in words."""
     value = _dollars(valuation.value_per_share)
     if valuation.drivers is not None:
-        return f"{value} a share from drivers over {_counted(valuation.drivers.years, 'year')}"
+        return f"{value} a share from drivers over {counted(valuation.drivers.years, 'year')}"
     return f"{value} a share from {len(valuation.parts)} part{_plural(len(valuation.parts))}"
 
 
-def _counted(n: int, noun: str) -> str:
+def counted(n: int, noun: str) -> str:
     """``n`` ``noun``s, the count in words up to twenty: "three years"."""
     word = _SMALL_COUNTS[n] if 0 <= n < len(_SMALL_COUNTS) else str(n)
     return f"{word} {noun}{_plural(n)}"
@@ -632,30 +633,56 @@ def _camel_keys(value: Any) -> Any:
     return value
 
 
-def _agents_only(writer: Writer) -> None:
+def agents_only(writer: Writer, sentence: str = AGENTS_WRITE) -> None:
+    """Refuse, 403 with ``sentence``, a write that is not an agent's."""
     if writer.principal != "agent":
-        raise HTTPException(403, AGENTS_WRITE)
+        raise HTTPException(403, sentence)
 
 
-def _snapshot(conn: sqlite3.Connection, symbol: str) -> SnapshotRow:
+def snapshot_of(conn: sqlite3.Connection, symbol: str) -> SnapshotRow:
+    """The company's latest snapshot; 404 without one."""
     found = latest_snapshot(conn, symbol)
     if found is None:
         raise HTTPException(404, f"no snapshot for {symbol}")
     return found
 
 
+def built_inputs(
+    conn: sqlite3.Connection, snapshot: SnapshotRow, policy: Policy, tax: TaxTable, today: date
+) -> tuple[CompanyInputs, Deciles | None]:
+    """The company's inputs as ``build_inputs`` builds them today on the latest deciles, with
+    those deciles; 409, "the store moved since snapshot <id>: run a revalue", when the engine on
+    them with no override does not give ``snapshot``'s route and value a share."""
+    deciles = latest_deciles(conn)
+    inputs = build_inputs(conn, snapshot.symbol, policy, tax, today, deciles)
+    if not _reproduces(value_company(inputs, deciles, policy, today), snapshot.result):
+        raise HTTPException(409, f"the store moved since snapshot {snapshot.id}: run a revalue")
+    return inputs, deciles
+
+
+def judged_route(
+    tag: str, applied: Sequence[OverrideRow], snapshot: SnapshotRow, phase: object = None
+) -> Route | tuple[State, str]:
+    """The route the rules judge ``tag`` on: the route of ``phase`` when it is one (the new phase
+    of an override or of a reading), else of an applied ``phase`` override, else the snapshot's.
+    An unclassified row with no phase override reads no input but its phase: another input's tag
+    answers ``refused-route`` with "set its phase first"."""
+    phases = [phase, *(o.new for o in applied if o.tag == "phase"), snapshot.phase]
+    route = next((route_of(cast(Phase, p)) for p in phases if p in _PHASES), None)
+    if route is not None:
+        return route
+    if tag in TAGS and tag != "phase":
+        return "refused-route", f"an unclassified row reads no {tag}: set its phase first"
+    return "start-up"  # read by no rule these tags meet: every route reads a phase
+
+
 def _check(
     body: OverridePost, applied: Sequence[OverrideRow], snapshot: SnapshotRow, policy: Policy
 ) -> tuple[State, str]:
     """The rule's answer on the route the row takes (module docstring)."""
-    phases: list[float | str | None] = [body.new] if body.tag == "phase" else []
-    phases += [o.new for o in applied if o.tag == "phase"]
-    phases.append(snapshot.phase)
-    route = next((route_of(cast(Phase, p)) for p in phases if p in _PHASES), None)
-    if route is None:  # unclassified, with no phase override
-        if body.tag in TAGS and body.tag != "phase":
-            return "refused-route", f"an unclassified row reads no {body.tag}: set its phase first"
-        route = "start-up"  # read by no rule these tags meet: every route reads a phase
+    route = judged_route(body.tag, applied, snapshot, body.new if body.tag == "phase" else None)
+    if isinstance(route, tuple):
+        return route
     kinds = [e.kind for e in body.evidence]
     cap = _cap(snapshot.result, policy)
     return check_override(body.tag, body.new, route, policy, kinds, body.lifetime, cap)

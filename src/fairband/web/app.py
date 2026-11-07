@@ -1,10 +1,10 @@
 """The FastAPI app: the screen page, the static files, the screen's JSON API, the group view, the
 refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
-(``agents_api``), the override and review routes (``reviews_api``), the company reads, the
-Methodology section read and the report routes (``reports_api``), the vendor pass-through route
-(``vendor_api``), and the policy values and growth deciles the Methodology page cites (spec
-2026-11-04 7.4).
+(``agents_api``), the override and review routes (``reviews_api``), the sensitivity reading's
+routes (``sensitivity_api``), the company reads, the Methodology section read and the report
+routes (``reports_api``), the vendor pass-through route (``vendor_api``), and the policy values
+and growth deciles the Methodology page cites (spec 2026-11-04 7.4).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -104,6 +104,7 @@ from fairband.web.rows import (
     snapshot_json,
     sort_rows,
 )
+from fairband.web.sensitivity_api import add_sensitivity_routes
 from fairband.web.settings_api import add_settings_routes, effective
 from fairband.web.vendor_api import add_vendor_routes
 from fairband.web.watchlists_api import add_watchlist_routes
@@ -312,6 +313,7 @@ def create_app(
     add_agent_routes(app, conn_factory, clock)
     taxed = load_tax_table() if tax is None else tax
     add_review_routes(app, conn_factory, policy, taxed, clock)
+    add_sensitivity_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
     add_vendor_routes(app, passthrough)
     return app

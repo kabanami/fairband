@@ -16,6 +16,7 @@ from fairband.engine.overrides import Override
 from fairband.engine.review import review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.secondary import Drivers, Part, secondary_value
+from fairband.engine.sensitivity import SensitivityGrid
 from fairband.policy import Policy
 from fairband.policy.tax import load_tax_table
 from fairband.refresh.inputs_statements import statements_for
@@ -33,6 +34,7 @@ from fairband.store.ledger import Writer
 from fairband.store.research import add_finding
 from fairband.store.reviews import insert_review
 from fairband.store.secondary import insert_derivation, insert_secondary
+from fairband.store.sensitivities import insert_sensitivity
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.store.vendor import record_response
 
@@ -291,6 +293,39 @@ def test_the_secondary_projection_and_grid_refs_resolve(
         conn, "AAPL", sid, [{"heading": "Valuation", "parts": cites}], policy
     )
     assert (finding.where, finding.what) == ("section 1, part 1: $0.25", WRONG_UNIT)
+
+
+def test_sensitivity_refs(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """A cell by its row and its column, each counted from 1; a refused cell holds no value."""
+    sid = snapshots["AAPL"]
+    grid = SensitivityGrid((0.05, 0.08), (0.10, 0.20, 0.30), ((120.5, None, 140.0),) * 2, None)
+    found = insert_sensitivity(
+        conn, "AAPL", sid, None, "growth.belief", "return.runway", grid, "v", "h", AGENT, NOW
+    )
+    theirs = insert_sensitivity(
+        conn, "AAL", snapshots["AAL"], None, "phase", "moat.class", grid, "v", "h", AGENT, NOW
+    )
+    s = f"sensitivity:{found}"
+    assert _resolve(conn, f"{s}/1/1", policy) == Resolved(120.5, "per-share", None, sid)
+    assert _resolve(conn, f"{s}/2/3", policy) == Resolved(140.0, "per-share", None, sid)
+    assert _resolve(conn, f"{s}/1/2", policy) == Resolved(None, "per-share", None, sid)
+    for ref in (
+        f"{s}/0/1",
+        f"{s}/3/1",
+        f"{s}/1/4",
+        f"{s}/1",
+        f"{s}/1/1/1",
+        f"{s}/x/1",
+        f"sensitivity:{theirs}/1/1",  # another company's
+        "sensitivity:999/1/1",
+        "sensitivity:x/1/1",
+    ):
+        assert _resolve(conn, ref, policy) is None, ref
+    assert rests_on(conn, f"{s}/1/1") == sid
+    assert rests_on(conn, f"sensitivity:{theirs}/1/1") == snapshots["AAL"]
+    assert rests_on(conn, "sensitivity:999/1/1") is None
 
 
 def test_fact_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:

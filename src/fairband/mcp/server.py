@@ -96,6 +96,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "override_add",
     "override_drop",
     "secondary_valuation",
+    "sensitivity",
     "derive",
     "report_submit",
     "kill_criterion_add",
@@ -423,6 +424,25 @@ def build_server(client: FairbandClient) -> MCPServer:
             "cash": cash,
         }
         return write(lambda: client.post(_company(symbol, "secondary"), body))
+
+    @server.tool(
+        description="The route's value a share across two inputs' values, at most five by five,"
+        " stored to cite as sensitivity:<id>/<i>/<j>; nothing is overridden."
+    )
+    def sensitivity(
+        symbol: str,
+        row_tag: str,
+        row_values: list[float | str],
+        col_tag: str,
+        col_values: list[float | str],
+    ) -> dict[str, Any]:
+        body = {
+            "rowTag": row_tag,
+            "rowValues": row_values,
+            "colTag": col_tag,
+            "colValues": col_values,
+        }
+        return write(lambda: client.post(_company(symbol, "sensitivities"), body))
 
     @server.tool(
         description="Compute figures from refs, [{operation, a, b, years}], each stored to cite as"

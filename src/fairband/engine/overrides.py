@@ -10,6 +10,9 @@ value outside its words or its range, or a lasting override of a period-tied inp
 or a belief or held rate above the sales class's 90th percentile without a filing or a
 transcript (when the policy's ``override_primary_evidence_above_p90`` holds). A passing override
 is ``("applied", "")``; a refused one names its state and a sentence the agent can act on.
+``check_input`` applies the first four alone, the fourth without the lifetime: the rules on the
+input and its value, which a sensitivity reading's values meet and no others, since a reading
+changes no input (``method.md`` 14.8).
 
 The routes read an override through ``route_steps.chosen``; ``route.value_company`` takes the
 applied ones as a mapping by tag. ``current_reading`` is the engine's reading of an input from a
@@ -29,7 +32,7 @@ the agent's figure under the vendor's or the policy's provenance.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, TypeIs, get_args
+from typing import Any, Literal, TypeIs, cast, get_args
 
 from fairband.engine.types import Phase, Route, ValuationResult
 from fairband.policy import Policy
@@ -237,16 +240,11 @@ def check_override(
     """``("applied", "")``, or the first rule ``value`` breaks for ``tag`` on ``route``, in the
     order of the module's docstring, with its sentence. ``cap`` is the sales class's 90th
     percentile, ``None`` when the row has none."""
-    if tag in LOCKED:
-        return "refused-locked", LOCKED[tag]
-    if tag not in TAGS:
-        return "refused-not-input", f"{tag} is not an input"
-    spec = TAGS[tag]
-    if route not in spec.routes:
-        return "refused-route", f"the {_ROUTE_NAMES[route]} route does not read {tag}"
-    unit = _unit_refusal(spec, value, policy, lifetime)
-    if unit is not None:
-        return "refused-unit", unit
+    state, message = check_input(tag, value, route, policy)
+    if state != "applied":
+        return state, message
+    if TAGS[cast(OverrideTag, tag)].period_tied_only and lifetime == "lasting":
+        return "refused-unit", f"{tag} is period-tied only"
     if not evidence_kinds:
         return "refused-evidence", "an override needs evidence"
     if (
@@ -264,20 +262,33 @@ def check_override(
     return "applied", ""
 
 
-def _unit_refusal(
-    spec: TagSpec, value: float | str, policy: Policy, lifetime: Lifetime
-) -> str | None:
+def check_input(tag: str, value: float | str, route: Route, policy: Policy) -> tuple[State, str]:
+    """``("applied", "")``, or the first of the input's own rules ``value`` breaks for ``tag`` on
+    ``route``, with its sentence: a locked input, a tag that is not an input, a route that does
+    not read it, a value outside its words or its range."""
+    if tag in LOCKED:
+        return "refused-locked", LOCKED[tag]
+    if tag not in TAGS:
+        return "refused-not-input", f"{tag} is not an input"
+    spec = TAGS[tag]
+    if route not in spec.routes:
+        return "refused-route", f"the {_ROUTE_NAMES[route]} route does not read {tag}"
+    unit = _unit_refusal(spec, value, policy)
+    if unit is not None:
+        return "refused-unit", unit
+    return "applied", ""
+
+
+def _unit_refusal(spec: TagSpec, value: float | str, policy: Policy) -> str | None:
     """Why ``value`` is not one the input takes, or ``None``: a word outside its words, a number
-    outside its range (the ends included), a lasting override of a period-tied input."""
+    outside its range (the ends included)."""
     if spec.words is not None:
         if not isinstance(value, str) or value not in spec.words:
             return f"{spec.tag} takes {', '.join(spec.words[:-1])} or {spec.words[-1]}"
-    else:
-        low, high = policy.override_ranges[spec.tag]
-        if not _number(value) or not low <= value <= high:
-            return f"{spec.tag} takes {range_text(low, high, spec.unit)}"
-    if spec.period_tied_only and lifetime == "lasting":
-        return f"{spec.tag} is period-tied only"
+        return None
+    low, high = policy.override_ranges[spec.tag]
+    if not _number(value) or not low <= value <= high:
+        return f"{spec.tag} takes {range_text(low, high, spec.unit)}"
     return None
 
 

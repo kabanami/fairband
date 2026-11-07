@@ -45,6 +45,6 @@ def test_section_16_names_the_six_failures() -> None:
         assert f"`{failure}`" in section, failure
     for form in ("snapshot", "review", "secondary", "fact", "table", "estimate", "close", "peer"):
         assert f"`{form}:" in section, form
-    for form in ("finding", "derived", "response", "policy"):
+    for form in ("finding", "derived", "sensitivity", "response", "policy"):
         assert f"`{form}:" in section, form
     assert "`stance_words`" in section
