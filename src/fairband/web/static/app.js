@@ -4,9 +4,11 @@
    engine computes; this script asks for an order, remembers the chosen columns in the reader's
    order, narrows the loaded rows to the reader's find and filters and lays out what the engine
    produced, rounded for display only. Each row's watchlist mark opens a popup that puts the
-   company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4). The header, the
-   status line and the group view are controls.js, loaded after this script; it reaches the screen
-   through window.FairbandPage. */
+   company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4). The drawer leads with
+   the valuation and the agents' report and puts the rest behind Details ▾; without a report it
+   posts a research request to the work inbox, and Details takes the owner's notes (spec 2026-11-06
+   Tier 2, 18.2 and 18.3). The header, the status line and the group view are controls.js, loaded
+   after this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -28,6 +30,8 @@
     'revenue-growth': 'Revenue growth route', 'decline': 'Decline route',
     'start-up': 'Start-up route'
   };
+  /* A work item's two modes, as the inbox takes them (spec 2026-11-06 Tier 2, 8). */
+  var REQUEST_MODES = ['valuation review', 'full report'];
 
   var mount = document.getElementById('screen');
   var root = ReactDOM.createRoot(mount);
@@ -44,10 +48,17 @@
     watchlists: null, /* the reader's lists, by name, once loaded: [{ id, name, symbols, … }] */
     watchlistsError: null,
     watch: null, /* { symbol, anchor, ids, name, error } while a mark's popup is open */
-    pastFirstScreen: false /* the table is scrolled more than one screen down: Top shows */
+    pastFirstScreen: false, /* the table is scrolled more than one screen down: Top shows */
+    /* The drawer's Details ▾ (spec 2026-11-06 Tier 2, 18.2): closed until the reader opens it,
+       then as the reader left it, whichever company the drawer shows, for the page's life. */
+    detailsOpen: false,
+    research: null, /* Details' records of one company: { symbol, body, error } */
+    request: null, /* Request research of one company: { symbol, open, mode, note, error, … } */
+    noteDraft: null /* Add a note of one company: { symbol, text, error, posting } */
   };
   var latest = 0;
   var latestDetail = 0;
+  var latestResearch = 0;
 
   function loadColumns() {
     try {
@@ -206,12 +217,14 @@
   }
 
   /* A row click, or Enter or Space on a focused row. The previous company stays in the drawer,
-     faded, until the new one lands. */
+     faded, until the new one lands. Details stays as the reader left it; open, its records are
+     read for the company beside its detail. */
   function open(row) {
     var d = state.drawer;
     if (d && d.symbol === row.ticker && !d.error) return;
     var request = ++latestDetail;
     state.drawer = { symbol: row.ticker, body: d && d.body, loading: true, error: null };
+    if (state.detailsOpen) readResearch(row.ticker);
     render();
     getJson('/api/companies/' + encodeURIComponent(row.ticker))
       .then(function (body) {
@@ -609,13 +622,23 @@
         content));
   }
 
+  /* The drawer's main view (spec 2026-11-06 Tier 2, 18.2), in this order and nothing else: the
+     head; the meter with its levels and the route's lines under it, the reviewed value its second
+     marker and named in its caption, or in its place the refusal, as before; the stance line when
+     a report exists, the report's word in the row's chip classes, faded once the window of the
+     snapshot it rests on has expired, then who published it and when; the report's Summary, its
+     first section, then Open the report, a link to the report page; without a report, Request
+     research with its menu, the server's refusal under it and the open item's line; then
+     Details ▾, a disclosure over everything else (details). */
   function sections(body) {
     var r = body.result;
     var im = r.intermediates;
     var phase = PHASE_NUMBER[r.phase.phase];
     var valued = r.value != null && r.levels != null && r.price != null;
     var growth = r.route === 'revenue-growth';
-    var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
+    var review = body.review;
+    var report = body.report;
+    var ask = asked(r.symbol);
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
         h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol),
@@ -626,6 +649,7 @@
         h(F.BandMeter, {
           low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
           buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
+          reviewedValue: review && review.value != null ? review.value : null,
           showScale: false, caption: standing(r, body.designationEdges)
         }),
         levels(r),
@@ -645,8 +669,198 @@
           ['Margin the price needs', F.formatPercent(im.implied_margin), true]
         ]) : null,
         'e_trailing' in im ? crossCheck(im.growth_route) : null) : null,
-      /* The window reads aging from the effective aging_fraction, as the Freshness column does
-         (spec 2026-11-04 8.2). */
+      report ? h('p', { key: 'stance', className: 'app-stance' },
+        h('span', {
+          className: 'fb-stance fb-stance--' + report.stance +
+            (report.expired ? ' fb-stance--expired' : '') + ' label',
+          title: report.expired ? 'The snapshot window of this report has expired' : null
+        }, report.stance),
+        h(F.PrincipalChip, {
+          principal: report.principal, actor: report.actor, at: localIso(report.createdAt)
+        })) : null,
+      report ? section('summary', null,
+        h(F.ReportReader, {
+          mode: report.mode, state: 'published', revision: 'revision ' + report.revision,
+          sections: [report.summary], appendixes: false,
+          /* the Summary's refs, numbered as the report page's references list numbers them
+             (18.4) */
+          references: report.references
+        }),
+        h('p', { className: 'app-open' },
+          h(F.Button, { href: '#report/' + encodeURIComponent(r.symbol) }, 'Open the report')))
+        : section('request', null,
+          h('div', { className: 'app-request' },
+            h(F.Button, {
+              disabled: !!body.item,
+              'aria-expanded': ask.open ? 'true' : 'false',
+              onClick: function () { toggleRequest(r.symbol); }
+            }, 'Request research'),
+            ask.open ? h(RequestMenu, { ask: ask }) : null),
+          ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null,
+          requested(body.item)),
+      h('div', { key: 'disclosure', className: 'app-section app-disclosure' },
+        h(F.Button, {
+          variant: 'quiet', size: 'sm',
+          'aria-expanded': state.detailsOpen ? 'true' : 'false',
+          onClick: toggleDetails
+        }, 'Details ▾')),
+      state.detailsOpen ? details(body) : null
+    ];
+  }
+
+  /* Details (spec 2026-11-06 Tier 2, 18.3), in order: the review, its bridge from the mechanical
+     value when it has a value, each line under its input's label, or its refusal; the secondary
+     valuation; the overrides, each a record, read-only; the guidance on file; the latest report's
+     judgments; the kill criteria; the news items; the notes, with Add a note; the findings; the
+     company's ledger rows; then what the drawer showed before Details, in its order. The review
+     and the secondary come with the detail; the rest is its own read (readResearch). A list with
+     nothing in it is left out, but for the notes, which carry the owner's field. */
+  function details(body) {
+    var r = body.result;
+    var im = r.intermediates;
+    var phase = PHASE_NUMBER[r.phase.phase];
+    var growth = r.route === 'revenue-growth';
+    var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
+    var review = body.review;
+    var secondary = body.secondary;
+    var found = state.research && state.research.symbol === r.symbol ? state.research : null;
+    var rs = found && found.body;
+    var draft = drafted(r.symbol);
+    return h('div', { key: 'details', className: 'app-drawer__details' },
+      review && review.value != null ? section('bridge', 'Review',
+        h(F.ValueBridge, {
+          mechanical: review.mechanical, reviewed: review.value,
+          overrides: review.bridge.map(function (line) {
+            return {
+              tag: line.label,
+              from: inputFigure(line.old, line.unit), to: inputFigure(line.new, line.unit),
+              delta: line.delta == null ? undefined : line.delta,
+              principal: line.principal, actor: line.actor, reason: line.reason
+            };
+          }),
+          note: reviewedLevels(review.levels)
+        })) : null,
+      review && review.refusal ? section('review', 'Review',
+        h('p', { className: 'body app-refusal' }, review.refusal)) : null,
+      secondary ? block('app-secondary', 'Secondary valuation',
+        pairs(secondaryRows(secondary)),
+        h('p', { className: 'app-chipline' }, h(F.PrincipalChip, {
+          principal: secondary.principal, actor: secondary.actor,
+          at: localIso(secondary.createdAt)
+        }))) : null,
+      found && found.error ? h('p', {
+        key: 'unread', className: 'caption app-section app-notes__error'
+      }, found.error) : null,
+      rs || (found && found.error) ? null : h('p', {
+        key: 'reading', className: 'caption app-muted app-section'
+      }, 'Reading the research records.'),
+      rs && rs.overrides.length ? block('app-overrides', 'Overrides',
+        rs.overrides.map(function (o) {
+          var line = review ? review.bridge.filter(function (l) {
+            return l.overrideId === o.id;
+          })[0] : null;
+          return h(F.OverrideRecord, {
+            key: o.id, tag: o.tag, from: inputFigure(o.old, o.unit),
+            to: inputFigure(o.new, o.unit),
+            lifetime: o.lifetime, period: o.period, reason: o.reason, evidence: o.evidence,
+            principal: o.principal, actor: o.actor,
+            state: o.state,
+            message: o.state === 'dropped' ? o.dropReason : o.message,
+            effect: line ? line.delta : undefined,
+            reviewed: line ? review.value : undefined,
+            validUntil: line ? r.valid_until : undefined
+          });
+        })) : null,
+      rs && rs.guidance.length ? block('app-guidance', 'Guidance on file',
+        h('table', { className: 'fb-table app-inputs' },
+          h('thead', null, h('tr', null,
+            h('th', { className: 'label' }, 'Guided'),
+            h('th', { className: 'label fb-num' }, 'Range'))),
+          h('tbody', null, rs.guidance.map(function (g) {
+            var cites = citedBy(rs.overrides, g.id);
+            return h('tr', { key: g.id },
+              h('td', null,
+                h('span', { className: 'app-line' },
+                  h('span', { className: 'body' }, words(g.metric)), ' ',
+                  h('span', { className: 'figure-sm' }, g.period), ' ',
+                  h('span', { className: 'caption app-muted' }, g.basis)),
+                h('span', { className: 'caption app-line' }, 'call ', when(g.asOf), ' · ',
+                  g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy),
+                cites.length ? h('span', { className: 'caption app-line' },
+                  'cited by override ' + cites.join(', ')) : null),
+              h('td', { className: 'fb-num' },
+                h('span', { className: 'figure-sm app-line' }, guidedRange(g)),
+                h('span', { className: 'caption app-muted app-line' },
+                  'midpoint ' + guided(g.midpoint, g.metric))));
+          })))) : null,
+      rs && rs.judgments.length ? block('app-judgments', 'Judgments',
+        h('ul', { className: 'app-list' }, rs.judgments.map(function (j) {
+          return h('li', { key: j.id },
+            h('span', { className: 'label' }, words(j.judgment)),
+            h('p', { className: 'body' }, j.decision));
+        }))) : null,
+      rs && rs.killCriteria.length ? block('app-kill-criteria', 'Kill criteria',
+        h('ul', { className: 'app-list' }, rs.killCriteria.map(function (k) {
+          return h('li', { key: k.id },
+            h('span', { className: 'label' }, k.state),
+            h('p', { className: 'body' }, k.text),
+            k.stateReason ? h('p', { className: 'caption app-muted' },
+              k.stateReason, ' · ', when(k.stateAt)) : null);
+        }))) : null,
+      rs && rs.newsItems.length ? block('app-news', 'News items',
+        h('ul', { className: 'app-list' }, rs.newsItems.map(function (n) {
+          return h('li', { key: n.id },
+            h('span', { className: 'caption app-line' }, when(n.date),
+              n.killCriterionId != null ? ' · touches kill criterion ' + n.killCriterionId : null),
+            h('p', { className: 'body' }, n.headline),
+            h('p', { className: 'caption app-muted' }, n.text),
+            h('p', { className: 'caption app-muted app-source' }, n.source));
+        }))) : null,
+      block('app-notes', 'Notes',
+        rs ? (rs.notes.length ? h('ul', { className: 'app-list' }, rs.notes.map(function (n) {
+          return h('li', { key: n.id },
+            h('p', { className: 'body app-notes__text' }, n.text),
+            h('p', { className: 'app-chipline' },
+              h(F.PrincipalChip, { principal: n.principal, actor: n.actor, at: localIso(n.at) }),
+              n.overrideId != null ? h('span', { className: 'caption app-muted' },
+                ' on override ' + n.overrideId) : null));
+        })) : h('p', { className: 'caption app-muted' }, 'none')) : null,
+        h('form', {
+          className: 'app-notes__new',
+          onSubmit: function (event) { event.preventDefault(); postNote(r.symbol); }
+        },
+          h('textarea', {
+            className: 'control app-field app-notes__field', rows: 3, value: draft.text,
+            placeholder: 'A note on ' + r.symbol, 'aria-label': 'A note on ' + r.symbol,
+            onChange: function (event) { draft.text = event.target.value; render(); }
+          }),
+          h(F.Button, {
+            type: 'submit', size: 'sm', disabled: draft.posting || !draft.text.trim()
+          }, 'Add a note')),
+        draft.error ? h('p', { className: 'caption app-notes__error' }, draft.error) : null),
+      rs && rs.findings.length ? block('app-findings', 'Findings',
+        h('ul', { className: 'app-list' }, rs.findings.map(function (f) {
+          return h('li', { key: f.id },
+            h('span', { className: 'caption app-line' }, 'as of ', when(f.asOf),
+              f.period ? ' · ' + f.period : null),
+            h('p', { className: 'body' }, f.text, f.value != null ? h('span',
+              { className: 'figure-sm' }, ' ' + findingFigure(f.value, f.unit)) : null),
+            h('p', { className: 'caption app-muted app-source' }, f.source.kind + ' ',
+              h('code', { className: 'fb-tag figure-sm' }, f.source.ref),
+              f.source.note ? ' — ' + f.source.note : null),
+            h('p', { className: 'app-chipline' },
+              h(F.PrincipalChip, { principal: f.principal, actor: f.actor, at: localIso(f.at) })));
+        }))) : null,
+      rs && rs.ledger.length ? block('app-ledger', 'Ledger',
+        h('ul', { className: 'app-list' }, rs.ledger.map(function (e) {
+          return h('li', { key: e.id },
+            h('p', { className: 'app-chipline' },
+              h(F.PrincipalChip, { principal: e.principal, actor: e.actor, at: localIso(e.at) })),
+            h('p', { className: 'body' }, h('span', { className: 'label' }, e.kind), ' ',
+              e.summary));
+        }))) : null,
+      /* What the drawer showed before Details, in its order. The window reads aging from the
+         effective aging_fraction, as the Freshness column does (spec 2026-11-04 8.2). */
       section('window', null, h(F.ValidityWindow, {
         asOf: r.data_date, observedAt: r.data_date,
         enteredAt: localIso(body.snapshot.createdAt),
@@ -676,9 +890,285 @@
             h('p', { className: 'body' }, i.estimate_method || 'no method recorded'));
         }))) : null,
       h('p', { key: 'versions', className: 'caption app-muted app-section' },
-        'Policy ' + r.policy_version + ' · method ' + r.method_version)
-    ];
+        'Policy ' + r.policy_version + ' · method ' + r.method_version));
   }
+
+  /* ------------------------------------------------- the drawer's requests and Details' reads */
+
+  /* Request research's state for the drawer's company, kept until the drawer shows another: the
+     menu closed, the mode a full report, since a company with no report has no full report a
+     valuation review could reuse, and no note. */
+  function asked(symbol) {
+    if (!state.request || state.request.symbol !== symbol) {
+      state.request = {
+        symbol: symbol, open: false, mode: 'full report', note: '', error: null, posting: false
+      };
+    }
+    return state.request;
+  }
+
+  function toggleRequest(symbol) {
+    var ask = asked(symbol);
+    ask.open = !ask.open;
+    ask.error = null;
+    render();
+  }
+
+  /* Request research's menu (spec 18.2), in the bundle's menu style as Details ▾ draws it: the
+     mode, a radio each, the note line, then Post. It opens under its button from the button's left
+     edge, focus on the chosen mode; Post, or Enter in the note line, sends it. */
+  function RequestMenu(props) {
+    var ask = props.ask;
+    var ref = React.useRef(null);
+    React.useEffect(function () {
+      var chosen = ref.current.querySelector('input:checked');
+      if (chosen) chosen.focus();
+    }, []);
+    return h('form', {
+      ref: ref, className: 'fb-menu fb-menu--filters app-request__menu',
+      'aria-label': 'Request research on ' + ask.symbol,
+      onSubmit: function (event) { event.preventDefault(); postRequest(ask.symbol); }
+    },
+      h('div', { className: 'fb-menu__body' },
+        h('div', { className: 'fb-menu__sec', role: 'radiogroup', 'aria-label': 'Mode' },
+          h('span', { className: 'fb-menu__h label' }, 'MODE'),
+          REQUEST_MODES.map(function (mode) {
+            return h('label', { key: mode, className: 'fb-menu__row control' },
+              h('input', {
+                type: 'radio', name: 'app-request-mode', value: mode, checked: ask.mode === mode,
+                onChange: function () { ask.mode = mode; render(); }
+              }),
+              h('span', null, mode));
+          })),
+        h('hr'),
+        h('label', { className: 'fb-menu__sec app-request__line' },
+          h('span', { className: 'fb-menu__h label' }, 'NOTE'),
+          h('input', {
+            type: 'text', className: 'control app-field', maxLength: 200, value: ask.note,
+            placeholder: 'What to look at, if anything',
+            onChange: function (event) { ask.note = event.target.value; render(); }
+          }))),
+      h('div', { className: 'fb-menu__foot' },
+        h(F.Button, { type: 'submit', size: 'sm', disabled: ask.posting }, 'Post')));
+  }
+
+  /* Post: the item, as the owner (no identity headers), with the request header every page write
+     carries. The menu closes; a refusal, a second open item's 409 among them, shows the server's
+     sentence under the button as it arrives, the note kept for another try. Either way the detail
+     is read again, so the open item's line follows. */
+  function postRequest(symbol) {
+    var ask = asked(symbol);
+    if (ask.posting) return;
+    ask.posting = true;
+    ask.error = null;
+    render();
+    api.post('/api/inbox', { symbol: symbol, mode: ask.mode, note: ask.note.trim() })
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)
+          : 'the server answered ' + r.status);
+        ask.note = '';
+      })
+      .catch(function (err) {
+        if (state.request !== ask) return;
+        state.request.error = err.message;
+      })
+      .then(function () {
+        ask.posting = false;
+        ask.open = false;
+        reloadDetail(symbol);
+      });
+  }
+
+  /* The open item's line under Request research, until the item is done or declined. */
+  function requested(item) {
+    if (!item) return null;
+    return h('p', { className: 'caption app-requested' },
+      'Requested · ' + (item.state === 'claimed' ? 'claimed by ' + item.claimedBy : 'pending'));
+  }
+
+  /* The drawer's company read again in place after a write that changes its detail, while the
+     drawer still shows it and nothing else is loading; a failed read leaves what it shows. */
+  function reloadDetail(symbol) {
+    var d = state.drawer;
+    if (!d || d.symbol !== symbol || d.loading) {
+      render();
+      return;
+    }
+    var request = ++latestDetail;
+    getJson('/api/companies/' + encodeURIComponent(symbol))
+      .then(function (body) {
+        if (request !== latestDetail) return;
+        state.drawer = { symbol: symbol, body: body, loading: false, error: null };
+      })
+      .catch(function () { /* the drawer keeps what it shows */ })
+      .then(render);
+  }
+
+  /* Request research's menu closes on a press or focus outside it and on Escape, as the screen's
+     menus do; Escape hands focus back to the button, and closes the menu before the drawer, whose
+     own handler waits while a menu is open. */
+  function closeRequestOutside(event) {
+    var ask = state.request;
+    if (!ask || !ask.open || !(event.target instanceof Element)) return;
+    if (event.target.closest('.app-request')) return;
+    ask.open = false;
+    render();
+  }
+  document.addEventListener('pointerdown', closeRequestOutside);
+  document.addEventListener('focusin', closeRequestOutside);
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' || !state.request || !state.request.open) return;
+    state.request.open = false;
+    render();
+    var button = document.querySelector('.app-request > .fb-btn');
+    if (button) button.focus();
+  });
+
+  /* Details ▾: open or closed for the page's life; opening it reads the records of a company not
+     yet read, or whose read failed. */
+  function toggleDetails() {
+    state.detailsOpen = !state.detailsOpen;
+    var d = state.drawer;
+    if (state.detailsOpen && d && needsResearch(d.symbol)) readResearch(d.symbol);
+    render();
+  }
+
+  function needsResearch(symbol) {
+    var found = state.research;
+    return !found || found.symbol !== symbol || found.error != null;
+  }
+
+  /* Details' records (GET /api/companies/{symbol}/research), the latest read winning. A read again
+     for the same company, after a note, keeps the records on show until the new ones land. */
+  function readResearch(symbol) {
+    var request = ++latestResearch;
+    var kept = state.research && state.research.symbol === symbol ? state.research.body : null;
+    state.research = { symbol: symbol, body: kept, error: null };
+    getJson('/api/companies/' + encodeURIComponent(symbol) + '/research')
+      .then(function (body) {
+        if (request !== latestResearch) return;
+        state.research = { symbol: symbol, body: body, error: null };
+        render();
+      })
+      .catch(function (err) {
+        if (request !== latestResearch) return;
+        state.research = {
+          symbol: symbol, body: kept, error: 'The research records did not load: ' +
+            err.message + '. Close Details and open it again to retry.'
+        };
+        render();
+      });
+  }
+
+  /* Add a note's field for the drawer's company, kept until the drawer shows another. */
+  function drafted(symbol) {
+    if (!state.noteDraft || state.noteDraft.symbol !== symbol) {
+      state.noteDraft = { symbol: symbol, text: '', error: null, posting: false };
+    }
+    return state.noteDraft;
+  }
+
+  /* Add a note: the note, as the owner, with the request header every page write carries; a
+     refusal shows the server's sentence under the field, the text kept. Taken, the field clears
+     and the records are read again, the new note first among them. */
+  function postNote(symbol) {
+    var draft = drafted(symbol);
+    var text = draft.text.trim();
+    if (!text || draft.posting) return;
+    draft.posting = true;
+    draft.error = null;
+    render();
+    api.post('/api/companies/' + encodeURIComponent(symbol) + '/notes', { text: text })
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)
+          : 'the server answered ' + r.status);
+        draft.text = '';
+        readResearch(symbol);
+      })
+      .catch(function (err) { draft.error = err.message; })
+      .then(function () {
+        draft.posting = false;
+        render();
+      });
+  }
+
+  /* --------------------------------------------------------- Details' figures */
+
+  /* A section of Details with a class of its own beside app-section. */
+  function block(className, title) {
+    var head = title ? h('h3', { className: 'heading' }, title) : null;
+    return h.apply(null, ['section', { key: className, className: 'app-section ' + className },
+      head].concat(Array.prototype.slice.call(arguments, 2)));
+  }
+
+  /* An override's or a bridge line's value in its input's unit (overrides.TAGS): a word as it
+     is, a multiple to two decimals with x, any other figure as the inputs table reads its unit. */
+  function inputFigure(v, unit) {
+    if (typeof v === 'string') return v;
+    return unit === 'multiple' ? times(v) : inputValue({ value: v, unit: unit });
+  }
+
+  /* The bridge's note: the reviewed value's own levels, which the meter, drawn on the mechanical
+     band, does not show. */
+  function reviewedLevels(l) {
+    if (!l) return undefined;
+    return 'Reviewed levels: margin of safety ' + F.formatMoney(l.buy) + ' · fair band ' +
+      F.formatMoney(l.fairLow) + ' – ' + F.formatMoney(l.fairHigh) + ' · trim ' +
+      F.formatMoney(l.trim);
+  }
+
+  /* The secondary valuation: its form, its value a share and its levels where it has them. */
+  function secondaryRows(s) {
+    var rows = [
+      ['Form', s.form, false],
+      ['Value a share', F.formatMoney(s.valuePerShare), true]
+    ];
+    var l = s.levels;
+    if (l) {
+      rows.push(['Margin of safety', F.formatMoney(l.buy), true],
+        ['Fair band', F.formatMoney(l.fairLow) + ' – ' + F.formatMoney(l.fairHigh), true],
+        ['Trim level', F.formatMoney(l.trim), true]);
+    }
+    return rows;
+  }
+
+  /* The ids of the overrides whose evidence cites guidance record `id`, guidance:<id>, as the
+     server reads such a ref (refs.guidance_cited). */
+  function citedBy(overrides, id) {
+    return overrides.filter(function (o) {
+      return (o.evidence || []).some(function (e) {
+        var found = /^guidance:(\d+)$/.exec(String(e.ref).trim());
+        return e.kind === 'guidance' && found !== null && Number(found[1]) === id;
+      });
+    }).map(function (o) { return o.id; });
+  }
+
+  /* A guidance figure in its metric's unit (store.guidance.UNITS): EPS to cents, a margin or a
+     growth rate as a percent, any other a total in whole dollars. A point is one figure. */
+  var GUIDED_PERCENT = ['operating_margin', 'revenue_growth', 'eps_growth'];
+
+  function guided(v, metric) {
+    if (metric === 'eps') return F.formatMoney(v);
+    if (GUIDED_PERCENT.indexOf(metric) !== -1) return F.formatPercent(v);
+    return whole(v);
+  }
+
+  function guidedRange(g) {
+    if (g.low === g.high) return guided(g.low, g.metric);
+    return guided(g.low, g.metric) + ' – ' + guided(g.high, g.metric);
+  }
+
+  /* A finding's value in its unit (store.research.UNITS). */
+  function findingFigure(v, unit) {
+    if (unit === 'currency') return whole(v);
+    if (unit === 'per-share') return F.formatMoney(v);
+    if (unit === 'percent') return F.formatPercent(v);
+    if (unit === 'multiple') return times(v);
+    return plain(v);
+  }
+
+  /* A store word in a reader's words: target_margin is target margin. */
+  function words(name) { return String(name).replace(/_/g, ' '); }
 
   /* The band meter's caption: the row's word and its price ÷ value (classifier-designation spec
      7.3). A row valued before the designation has neither. */

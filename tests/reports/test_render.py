@@ -516,6 +516,20 @@ def test_the_references_list(
     assert cited["source"] == f"policy required_return, {policy.version}"
 
 
+def test_the_references_one_section_cites(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The drawer's Summary (spec 2026-11-06 Tier 2, 18.2): the refs section 1 cites, each with
+    the number the whole list gives it, so a number in the drawer matches the report page; r,
+    cited in section 4 alone, is left out. A section past the last cites nothing."""
+    sid = snapshots["AAPL"]
+    report = _stored(conn, sid, sections=_cited(sid))
+    whole = references(conn, report, policy)
+    assert references(conn, report, policy, section=1) == whole[:2]
+    assert [r["n"] for r in references(conn, report, policy, section=4)] == [1, 2, 3]
+    assert references(conn, report, policy, section=99) == []
+
+
 def test_one_number_per_distinct_ref(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:

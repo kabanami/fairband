@@ -343,6 +343,37 @@
   .app-nowrap { white-space: nowrap; }
   .app-muted { color: var(--ink-faint); }
   .app-refusal { margin: 0; color: var(--caution); }
+  /* The drawer's main view (spec 2026-11-06 Tier 2, 18.2): the stance line, the report's word as
+     the row's chip with who published it, close over the Summary; Open the report under it.
+     Request research's menu opens under its button from the button's left edge, the menu's note
+     line as wide as the menu; the server's refusal and the open item's line follow the button.
+     Details ▾ closes the main view. */
+  .app-stance {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
+    margin: var(--space-6) 0 0;
+  }
+  .app-stance + .app-section { margin-top: var(--space-3); }
+  .app-open { margin: var(--space-3) 0 0; }
+  .app-request { position: relative; display: inline-block; }
+  .app-request .fb-menu { left: 0; right: auto; }
+  .app-request__line { display: block; }
+  .app-request__line .app-field { width: 100%; }
+  .app-request__error { margin: var(--space-2) 0 0; color: var(--caution); }
+  .app-requested { margin: var(--space-2) 0 0; color: var(--ink-muted); }
+  .app-disclosure { margin-left: calc(-1 * var(--space-2)); }
+  /* Details (18.3): the overrides one record under another; a chip on a line of its own under the
+     text it signs; a note's text as written, its lines kept; Add a note's field the rail's width,
+     a refusal under it; a source or a ref wraps anywhere rather than widen the rail. */
+  .app-drawer .fb-rec + .fb-rec { margin-top: var(--space-3); }
+  .app-chipline { margin: var(--space-1) 0 0; }
+  .app-notes__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .app-notes__new {
+    display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+  .app-notes__field { width: 100%; resize: vertical; font-family: var(--font-sans); }
+  .app-notes__error { margin: var(--space-2) 0 0; color: var(--caution); }
+  .app-source { overflow-wrap: anywhere; }
 </style>
 </head>
 <body>

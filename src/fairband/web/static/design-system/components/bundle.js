@@ -106,10 +106,18 @@
 
   function Button(props) {
     var p = props || {};
+    var className = cx('fb-btn', 'control', 'fb-btn--' + (p.variant || 'secondary'),
+      p.size === 'sm' && 'fb-btn--sm', p.className);
+    // fairband: given href, the button is a link in the button's look, since a link stays a link
+    // (Button.md): Open the report goes to the report page by its hash (spec 2026-11-06 Tier 2,
+    // 18.2).
+    if (p.href) {
+      return h('a', { className: className, href: p.href, 'aria-label': p['aria-label'] },
+        p.children);
+    }
     return h('button', {
       type: p.type || 'button',
-      className: cx('fb-btn', 'control', 'fb-btn--' + (p.variant || 'secondary'),
-        p.size === 'sm' && 'fb-btn--sm', p.className),
+      className: className,
       disabled: !!p.disabled,
       // fairband: a menu's toggle says whether its menu is open (growth-routes spec 6.3).
       'aria-expanded': p['aria-expanded'],
@@ -409,10 +417,15 @@
     var fair = p.fairValue == null ? (low + high) / 2 : Number(p.fairValue);
     var buy = p.buyLevel == null ? null : Number(p.buyLevel);
     var trim = p.trimLevel == null ? null : Number(p.trimLevel);
+    // fairband: the reviewed value, a second marker when the caller passes one (spec 2026-11-06
+    // Tier 2, 18.2): on the track, in ink with the price marker's surface ring, inside the axis's
+    // range; the caption names it. No word is derived from it: the head's word stays the caller's.
+    var reviewed = p.reviewedValue == null ? null : Number(p.reviewedValue);
 
     var pts = [low, high, price, fair];
     if (buy != null) pts.push(buy);
     if (trim != null) pts.push(trim);
+    if (reviewed != null) pts.push(reviewed);
     var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
     var pad = ((hi - lo) || Math.abs(hi) || 1) * 0.12;
     var min = lo - pad, max = hi + pad;
@@ -425,6 +438,8 @@
 
     var holdFrom = buy == null ? 0 : at(buy);
     var holdTo = trim == null ? 100 : at(trim);
+    var caption = [p.caption, reviewed == null ? null : 'reviewed ' + money(reviewed)]
+      .filter(Boolean).join(' · ');
 
     return h('div', {
       className: 'fb-band',
@@ -475,6 +490,12 @@
           style: { left: at(price) + '%' },
           // fairband: the price and its word, when the caller gave one.
           title: 'Price ' + money(price) + (word ? ' — ' + word : '')
+        }),
+        // fairband: the reviewed value's marker, under the price's (spec 2026-11-06 Tier 2, 18.2).
+        reviewed == null ? null : h('div', {
+          className: 'fb-band__reviewed-mark',
+          style: { left: at(reviewed) + '%' },
+          title: 'Reviewed value ' + money(reviewed)
         })
       ),
 
@@ -487,7 +508,9 @@
           money(trim), h('em', { className: 'label' }, 'Trim'))
       ),
 
-      p.caption ? h('div', { className: 'fb-band__caption caption' }, p.caption) : null
+      // fairband: the caller's caption, then "reviewed $283.00" when a reviewed value is passed
+      // (spec 2026-11-06 Tier 2, 18.2).
+      caption ? h('div', { className: 'fb-band__caption caption' }, caption) : null
     );
   }
 
@@ -582,7 +605,12 @@
     'refused-evidence': { word: 'refused · needs extra evidence', tone: 'refused' },
     'refused-unit': { word: 'refused · unit or range', tone: 'refused' },
     'refused-not-input': { word: 'refused · a value, not an input', tone: 'refused' },
-    'conflict-stale': { word: 'conflict · stale revision', tone: 'stale' }
+    'conflict-stale': { word: 'conflict · stale revision', tone: 'stale' },
+    // fairband: the store's two other states (spec 2026-11-06 Tier 2, 18.3): an input the row's
+    // route does not read, refused; an override dropped, no longer inside the value, in a tone of
+    // its own, since it is neither refused nor stale. Neither is drawn as applied.
+    'refused-route': { word: 'refused · not on the route', tone: 'refused' },
+    'dropped': { word: 'dropped', tone: 'dropped' }
   };
 
   var LIFETIMES = {
@@ -715,12 +743,14 @@
                 }))
               ))
           : h(React.Fragment, null,
-              h('p', { className: 'fb-report__cites caption' },
+              // fairband: the cites line only when the caller passes cites: the drawer's Summary
+              // leaves it to the report page (spec 2026-11-06 Tier 2, 18.2).
+              p.cites ? h('p', { className: 'fb-report__cites caption' },
                 'cites snapshot ', h('span', { className: 'figure-sm' }, cites.snapshot),
                 ' · review ', h('span', { className: 'figure-sm' }, cites.review),
                 ' · thesis ', h('span', { className: 'figure-sm' }, cites.thesis),
                 cites.reusesFullReportOf ? h(React.Fragment, null, ' · reuses the full report of ',
-                  h(DateText, { value: cites.reusesFullReportOf })) : null),
+                  h(DateText, { value: cites.reusesFullReportOf })) : null) : null,
               (p.sections || []).map(function (s, i) {
                 return h('section', { key: i, className: 'fb-report__section' },
                   s.heading ? h('h4', { className: 'heading' }, s.heading) : null,

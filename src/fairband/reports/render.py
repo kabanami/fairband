@@ -310,17 +310,28 @@ def appendix_b(sections: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
 
 
 def references(
-    conn: sqlite3.Connection, report: ReportRow, policy: Policy, tax: TaxTable | None = None
+    conn: sqlite3.Connection,
+    report: ReportRow,
+    policy: Policy,
+    tax: TaxTable | None = None,
+    *,
+    section: int | None = None,
 ) -> list[dict[str, Any]]:
     """The refs ``report``'s sections cite, ``{n, ref, source}``, numbered from 1 in the order
     each is first cited; a ref cited again, with a period or without, keeps its number. ``policy``
     is the effective one and ``tax`` the statements' table; a ``policy:`` ref's source names the
-    policy version the report's snapshot was valued under."""
+    policy version the report's snapshot was valued under. With ``section`` (counted from 1), only
+    the refs that section cites, each keeping its number in the whole list: the drawer's Summary
+    (spec 2026-11-06 Tier 2, 18.2), whose numbers match the report page's."""
     numbered: dict[str, int] = {}
     for _, part in parts(report.sections):
         ref = _cited(part)
         if ref and ref not in numbered:
             numbered[ref] = len(numbered) + 1
+    if section is not None:
+        shown = report.sections[section - 1 : section] if section >= 1 else ()
+        cited = {_cited(part) for _, part in parts(shown)}
+        numbered = {ref: n for ref, n in numbered.items() if ref in cited}
     snapshot = snapshot_row(conn, report.snapshot_id)
     version = None if snapshot is None else snapshot.policy_version
     resolver = Resolver(conn, report.symbol, policy, tax, policy_version=version)

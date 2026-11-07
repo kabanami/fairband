@@ -107,6 +107,12 @@ export interface ButtonProps {
   'aria-expanded'?: 'true' | 'false';
   /** fairband: the control's name in full, where its text is short (Top ↑ is "Back to top"). */
   'aria-label'?: string;
+  /**
+   * fairband: given, the button is a link (`<a href>`) in the button's look, as Open the report
+   * goes to the report page (spec 2026-11-06 Tier 2, 18.2); `type`, `disabled` and `onClick` are
+   * then not used.
+   */
+  href?: string;
   className?: string;
   children?: unknown;
 }
@@ -196,6 +202,12 @@ export interface BandMeterProps {
   caption?: string;
   /** fairband: the row's word, shown in the head; `null` or absent shows none. */
   designation?: Designation | null;
+  /**
+   * fairband: the reviewed value a share, a second marker on the track in ink, and "reviewed
+   * $283.00" after the caption; no word is derived from it (spec 2026-11-06 Tier 2, 18.2). `null`
+   * or absent draws none.
+   */
+  reviewedValue?: number | null;
 }
 
 export interface ValidityWindowProps {
@@ -237,7 +249,10 @@ export type OverrideState =
   | 'refused-evidence'
   | 'refused-unit'
   | 'refused-not-input'
-  | 'conflict-stale';
+  | 'conflict-stale'
+  /** fairband: the store's two other states (spec 2026-11-06 Tier 2, 18.3). */
+  | 'refused-route'
+  | 'dropped';
 
 /** `lasting` stays until an updated valuation is asked for; `period-tied` ends with its period. */
 export type Lifetime = 'lasting' | 'period-tied';
@@ -295,6 +310,10 @@ export interface ReportReaderProps {
   mode?: 'valuation review' | 'full report';
   state?: 'published' | 'rejected';
   revision?: string;
+  /**
+   * fairband: absent, a published report draws no cites line, as the drawer's Summary leaves it
+   * to the report page (spec 2026-11-06 Tier 2, 18.2).
+   */
   cites?: {
     snapshot?: string;
     review?: string;

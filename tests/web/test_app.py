@@ -644,7 +644,14 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         "today",
         "designationEdges",
         "agingFraction",
+        "review",
+        "secondary",
+        "report",
+        "item",
     }
+    # The agents' records the drawer's main view leads with (spec 2026-11-06 Tier 2, 18.2): none
+    # here; tests/web/test_research_api.py writes each and reads its shape.
+    assert (body["review"], body["secondary"], body["report"], body["item"]) == (None,) * 4
     # The policy's edges, by which the drawer keeps its price ÷ value figure inside the band.
     assert body["designationEdges"] == [0.65, 0.85, 1.15, 1.5]
     # The fraction of the window from which the drawer's validity window reads aging.
@@ -1524,6 +1531,288 @@ def test_app_js_drawer_draws_the_requirement() -> None:
     assert "r.price >= floor" not in script and "is below the net cash a share" not in script
 
 
+def _function(script: str, name: str) -> str:
+    """The text of the script's ``function <name>(``, to its closing brace."""
+    start = script.index(f"  function {name}(")
+    return script[start : script.index("\n  }\n", start)]
+
+
+def _in_order(text: str, *parts: str) -> None:
+    """Each part is in ``text``, each after the one before it."""
+    at = [text.index(part) for part in parts]
+    assert at == sorted(at), [parts[i] for i in range(len(parts) - 1) if at[i] > at[i + 1]]
+
+
+def test_the_drawers_main_view_order_is_pinned() -> None:
+    """Spec 2026-11-06 Tier 2, 18.2, in this order and nothing else before Details: the head; the
+    meter with its levels, the reviewed value its second marker, or a refusal in its place as
+    before; the stance line, the report's word in its chip classes, faded once the report's window
+    has expired, then the principal's chip; the report's Summary by ReportReader and Open the
+    report, a link to the report page; without a report, Request research and the open item's
+    line; then Details ▾, a quiet disclosure. Everything else is behind it."""
+    script = _static_file("app.js")
+    main = _function(script, "sections")
+    _in_order(
+        main,
+        "className: 'app-drawer__head'",
+        "h(F.BandMeter, {",
+        "r.refusal ? section('refusal', 'Refusal',",
+        "className: 'app-stance'",
+        "h(F.ReportReader, {",
+        "'Open the report')",
+        "'Request research')",
+        "'Details ▾')",
+        "state.detailsOpen ? details(body) : null",
+    )
+    head = main[: main.index("'Details ▾')")]
+    for gone in ("F.ValidityWindow", "'Phase evidence'", "inputsTable(", "intermediates("):
+        assert gone not in head, gone
+    assert "reviewedValue: review && review.value != null ? review.value : null," in main
+    assert "showScale: false, caption: standing(r, body.designationEdges)" in main
+    stance = main[main.index("className: 'app-stance'") : main.index("h(F.ReportReader, {")]
+    assert "'fb-stance fb-stance--' + report.stance +" in stance
+    assert "(report.expired ? ' fb-stance--expired' : '') + ' label'" in stance
+    assert "h(F.PrincipalChip, {" in stance
+    assert "principal: report.principal, actor: report.actor, at: localIso(report.createdAt)" in (
+        stance
+    )
+    reader = main[main.index("h(F.ReportReader, {") : main.index("'Open the report')")]
+    assert "sections: [report.summary]" in reader and "appendixes: false" in reader
+    assert "references: report.references" in reader  # the footnote numbers' hook (18.4)
+    assert "cites:" not in reader  # the report page carries the cites line
+    assert (
+        "h(F.Button, { href: '#report/' + encodeURIComponent(r.symbol) }, 'Open the report')"
+        in (main)
+    )
+    toggle = main[main.index("'Request research')") - 300 : main.index("'Details ▾')")]
+    assert "disabled: !!body.item," in toggle
+    assert "'aria-expanded': ask.open ? 'true' : 'false'" in toggle
+    assert "ask.open ? h(RequestMenu, { ask: ask }) : null" in toggle
+    _in_order(
+        toggle,
+        "'Request research')",
+        "ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null",
+        "requested(body.item)",
+        "variant: 'quiet'",
+        "'aria-expanded': state.detailsOpen ? 'true' : 'false'",
+        "onClick: toggleDetails",
+    )
+    line = _function(script, "requested")
+    assert "if (!item) return null;" in line
+    assert (
+        "'Requested · ' + (item.state === 'claimed' ? 'claimed by ' + item.claimedBy : 'pending')"
+    ) in line
+    page = _static_file("index.html")
+    assert ".app-stance {" in page and ".app-request .fb-menu { left: 0; right: auto; }" in page
+    assert ".app-request__error { margin: var(--space-2) 0 0; color: var(--caution); }" in page
+
+
+def test_details_order_is_pinned() -> None:
+    """Spec 2026-11-06 Tier 2, 18.3, in order: the review's bridge, each line under its input's
+    label, or its refusal; the secondary valuation; the overrides, read-only; the guidance on
+    file; the judgments; the kill criteria; the news items; the notes with Add a note; the
+    findings; the ledger; then what the drawer showed before, in its order."""
+    script = _static_file("app.js")
+    details = _function(script, "details")
+    _in_order(
+        details,
+        "h(F.ValueBridge, {",
+        "review && review.refusal ? section('review', 'Review',",
+        "'app-secondary'",
+        "h(F.OverrideRecord, {",
+        "'app-guidance'",
+        "'app-judgments'",
+        "'app-kill-criteria'",
+        "'app-news'",
+        "'app-notes'",
+        "'Add a note')",
+        "'app-findings'",
+        "'app-ledger'",
+        "h(F.ValidityWindow, {",
+        "'Phase evidence'",
+        "growth ? revenueRoute(r) : null",
+        "section('inputs', 'Inputs'",
+        "'Intermediate results'",
+        "section('flags', 'Flags'",
+        "estimates.length ? section('estimates', 'Estimates'",
+        "'Policy ' + r.policy_version + ' · method ' + r.method_version",
+    )
+    bridge = details[details.index("h(F.ValueBridge, {") : details.index("'app-secondary'")]
+    assert "review && review.value != null ? section('bridge', 'Review'," in details
+    assert "mechanical: review.mechanical, reviewed: review.value," in bridge
+    assert "tag: line.label," in bridge
+    assert "from: inputFigure(line.old, line.unit), to: inputFigure(line.new, line.unit)," in bridge
+    # an override is a record: no Drop, and the page sends no drop (the owner neither adds nor
+    # drops an override, spec 3)
+    record = details[details.index("h(F.OverrideRecord, {") : details.index("'app-guidance'")]
+    for text in ("state: o.state,", "message: o.state === 'dropped' ? o.dropReason : o.message,"):
+        assert text in record, text
+    for gone in ("Drop", "onClick", "Button"):
+        assert gone not in record, gone
+    assert "/overrides" not in script and "api.del" not in script
+    # the guidance's range, midpoint, call, current or superseded and the overrides citing it
+    guidance = details[details.index("'app-guidance'") : details.index("'app-judgments'")]
+    for text in (
+        "g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy",
+        "'call ', when(g.asOf)",
+        "'midpoint ' + guided(g.midpoint, g.metric)",
+        "citedBy(rs.overrides, g.id)",
+    ):
+        assert text in guidance, text
+    assert "var found = /^guidance:(\\d+)$/.exec(String(e.ref).trim());" in script
+    # the ledger: the date, the principal and actor, the kind and the summary
+    ledger = details[details.index("'app-ledger'") : details.index("h(F.ValidityWindow, {")]
+    assert "h(F.PrincipalChip, { principal: e.principal, actor: e.actor, at: localIso(e.at) })" in (
+        ledger
+    )
+    assert "e.kind" in ledger and "e.summary" in ledger
+
+
+def test_details_is_a_disclosure_whose_research_is_read_when_it_opens() -> None:
+    """Spec 18.2 and 18.3: Details ▾ is closed until the reader opens it, and stays as the reader
+    left it for the page's life, whichever company the drawer shows; the research read runs when
+    Details opens for a company (the drawer opening a company while Details is open, or Details
+    opening on a company not yet read) and again after a note is posted."""
+    script = _static_file("app.js")
+    assert "detailsOpen: false," in script
+    open_row = _function(script, "open")
+    assert "state.detailsOpen = " not in open_row  # read, never reset: the reader's choice stands
+    assert "if (state.detailsOpen) readResearch(row.ticker);" in open_row
+    toggle = _function(script, "toggleDetails")
+    assert "state.detailsOpen = !state.detailsOpen;" in toggle
+    assert (
+        "if (state.detailsOpen && d && needsResearch(d.symbol)) readResearch(d.symbol);" in toggle
+    )
+    read = _function(script, "readResearch")
+    assert "getJson('/api/companies/' + encodeURIComponent(symbol) + '/research')" in read
+    assert "if (request !== latestResearch) return;" in read
+    post = _function(script, "postNote")
+    assert (
+        "api.post('/api/companies/' + encodeURIComponent(symbol) + '/notes', { text: text })"
+        in post
+    )
+    _in_order(post, "if (!r.ok) throw new Error(", "readResearch(symbol);")
+    assert "draft.error = err.message;" in post
+
+
+def test_the_request_menu_shows_the_open_item_refusal(client: TestClient) -> None:
+    """Review focus 2: Request research on a company whose item is open posts nothing new; the
+    server's 409 sentence shows under the button as it arrives, and the detail is read again so
+    the open item's line follows. The menu: the two modes, a radio each, the note line of at most
+    200 characters, and Post, sent as the owner with the request header every page write
+    carries."""
+    script = _static_file("app.js")
+    assert "var REQUEST_MODES = ['valuation review', 'full report'];" in script
+    menu = _function(script, "RequestMenu")
+    for text in (
+        "className: 'fb-menu fb-menu--filters app-request__menu'",
+        "REQUEST_MODES.map(function (mode) {",
+        "type: 'radio'",
+        "maxLength: 200",
+        "'Post')",
+    ):
+        assert text in menu, text
+    post = _function(script, "postRequest")
+    assert (
+        "api.post('/api/inbox', { symbol: symbol, mode: ask.mode, note: ask.note.trim() })" in post
+    )
+    _in_order(
+        post,
+        "if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)",
+        "state.request.error = err.message;",
+        "reloadDetail(symbol);",
+    )
+    # the menu closes on a press or focus outside it and on Escape, before the drawer does
+    assert "document.addEventListener('pointerdown', closeRequestOutside);" in script
+    assert "document.addEventListener('focusin', closeRequestOutside);" in script
+    assert "event.target.closest('.app-request')" in script
+    # the server's side: one open item for a company, the second post refused
+    body = {"symbol": "AAPL", "mode": "full report", "note": "the first look"}
+    first = client.post("/api/inbox", json=body, headers=HEADER)
+    assert first.status_code == 201, first.text
+    second = client.post("/api/inbox", json=body | {"mode": "valuation review"}, headers=HEADER)
+    assert (second.status_code, second.json()) == (409, {"detail": "an item for AAPL is open"})
+    assert [i["id"] for i in client.get("/api/inbox").json()["items"]] == [first.json()["id"]]
+    assert client.get("/api/companies/AAPL").json()["item"]["id"] == first.json()["id"]
+
+
+def test_the_meter_takes_a_reviewed_value() -> None:
+    """Spec 2026-11-06 Tier 2, 18.2, a `// fairband:` patch: BandMeter's ``reviewedValue`` is a
+    second marker on the track, in ink with the price marker's surface ring and no cap, within
+    the axis's range; the caption keeps the caller's sentence and adds "reviewed $283.00". No
+    word is derived from it: the head's word stays the caller's designation."""
+    bundle = _component_file("bundle.js")
+    meter = _function(bundle, "BandMeter")
+    assert "// fairband: the reviewed value, a second marker" in meter
+    assert "(spec 2026-11-06 Tier 2, 18.2)" in meter
+    _in_order(
+        meter,
+        "var reviewed = p.reviewedValue == null ? null : Number(p.reviewedValue);",
+        "if (reviewed != null) pts.push(reviewed);",
+        "var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);",
+        "var caption = [p.caption, reviewed == null ? null : 'reviewed ' + money(reviewed)]",
+        "className: 'fb-band__price-mark',",
+        "reviewed == null ? null : h('div', {",
+        "className: 'fb-band__reviewed-mark',",
+        "title: 'Reviewed value ' + money(reviewed)",
+        "caption ? h('div', { className: 'fb-band__caption caption' }, caption) : null",
+    )
+    assert ".filter(Boolean).join(' · ');" in meter
+    assert "var word = DESIGNATION[p.designation];" in meter  # the caller's word, as before
+    css = _component_file("bundle.css")
+    patch = css[css.index("/* fairband: the reviewed value's marker") :]
+    assert "(spec 2026-11-06 Tier 2, 18.2)" in patch[: patch.index("*/")]
+    rule = _rule(css, ".fb-band__reviewed-mark {")
+    for text in (
+        "background: var(--ink);",
+        "box-shadow: 0 0 0 2px var(--surface-raised);",
+        "top: -4px;",
+        "bottom: -4px;",
+    ):
+        assert text in rule, text
+    assert "radius-pill" not in rule  # the pill cap is the price's
+    declarations = _component_file("index.d.ts")
+    props = re.search(r"export interface BandMeterProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None
+    assert "reviewedValue?: number | null;" in props.group(1)
+    assert "(spec 2026-11-06 Tier 2, 18.2)" in props.group(1)
+
+
+def test_the_bundle_links_a_button_and_reads_every_override_state() -> None:
+    """Spec 2026-11-06 Tier 2, 18.2 and 18.3, `// fairband:` patches: a Button given ``href`` is a
+    link in the button's look (Open the report goes to the report page, and Button.md keeps a link
+    a link); ReportReader draws its cites line only when the caller passes cites (the drawer's
+    Summary leaves it to the report page); OverrideRecord knows the store's two other states, an
+    input off the row's route, refused, and a dropped override, in a neutral tone of its own,
+    never drawn as applied."""
+    bundle = _component_file("bundle.js")
+    button = _function(bundle, "Button")
+    assert "// fairband: given href, the button is a link" in button
+    assert "if (p.href) {" in button
+    assert (
+        "return h('a', { className: className, href: p.href, 'aria-label': p['aria-label'] },"
+        in (button)
+    )
+    reader = _function(bundle, "ReportReader")
+    assert "// fairband: the cites line only when the caller passes cites" in reader
+    assert "p.cites ? h('p', { className: 'fb-report__cites caption' }," in reader
+    states = bundle[bundle.index("var OVERRIDE_STATES = {") :]
+    states = states[: states.index("};")]
+    assert "// fairband: the store's two other states (spec 2026-11-06 Tier 2, 18.3)" in states
+    assert "'refused-route': { word: 'refused · not on the route', tone: 'refused' }," in states
+    assert "'dropped': { word: 'dropped', tone: 'dropped' }" in states
+    css = _component_file("bundle.css")
+    assert "a.fb-btn { text-decoration: none; }" in css
+    assert ".fb-rec--dropped .fb-rec__head { background: var(--surface-sunken); }" in css
+    assert ".fb-rec__state--dropped { color: var(--ink-faint); }" in css
+    declarations = _component_file("index.d.ts")
+    props = re.search(r"export interface ButtonProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None and "href?: string;" in props.group(1)
+    union = re.search(r"export type OverrideState =(.*?);", declarations, re.DOTALL)
+    assert union is not None
+    assert "| 'refused-route'" in union.group(1) and "| 'dropped'" in union.group(1)
+
+
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
 EXTRA_COLUMN_HEADS = {
     "sector": "Sector",
@@ -1718,7 +2007,7 @@ def test_no_derived_stance_remains() -> None:
     """Spec 7.2: the engine gives no stance, and the page derives none. The one stance the page
     names is the agent's, the word of the company's latest published report (spec 2026-11-06 Tier
     2, 18.1): the row's ``agentStance``, its column, the STANCE filter group and the chip's
-    classes, and no other name in the code."""
+    classes, and the drawer's stance line (18.2), and no other name in the code."""
     files = {
         "app.js": _static_file("app.js"),
         "controls.js": _static_file("controls.js"),
@@ -1739,7 +2028,18 @@ def test_no_derived_stance_remains() -> None:
         name: set(word.findall(_code(files[name])))
         for name in ("app.js", "bundle.js", "index.d.ts")
     }
-    assert named["app.js"] == {"stance", "agentStance", "filters.stance", "r.agentStance"}
+    # the drawer's stance line (18.2): the report's word in the same chip classes
+    assert named["app.js"] == {
+        "stance",
+        "agentStance",
+        "filters.stance",
+        "r.agentStance",
+        "app-stance",
+        "report.stance",
+        "fb-stance",
+        "fb-stance--",
+        "fb-stance--expired",
+    }
     assert named["bundle.js"] == {
         "AGENT_STANCES",
         "stance",

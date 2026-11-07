@@ -99,6 +99,9 @@ time { font-variant-numeric: tabular-nums; }
 .fb-btn--quiet:hover { background: var(--accent-quiet); border-color: transparent; }
 .fb-btn--danger { color: var(--critical); border-color: var(--border); }
 .fb-btn--danger:hover { background: var(--critical-quiet); border-color: var(--critical); }
+/* fairband: a Button given href is a link in the button's look, Open the report (spec 2026-11-06
+   Tier 2, 18.2): no underline, as the button has none. */
+a.fb-btn { text-decoration: none; }
 
 /* ----------------------------------------------------------- RunProgress */
 
@@ -439,6 +442,21 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   box-shadow: 0 0 0 2px var(--surface-raised);
 }
 
+/* fairband: the reviewed value's marker (spec 2026-11-06 Tier 2, 18.2): in ink with the price
+   marker's 2px surface ring, which keeps it legible on every zone, under the price marker. It
+   overhangs the track by half the price's reach and has no cap, so the price, with its pill cap,
+   stays the one point that reads as the price; the caption says "reviewed" in words. */
+.fb-band__reviewed-mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+  z-index: 2;
+}
+
 .fb-band__scale { position: relative; height: 32px; margin-top: var(--space-3); }
 .fb-band__scale span {
   position: absolute;
@@ -581,6 +599,10 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-rec__state--pending { color: var(--record-pending); }
 .fb-rec__state--refused { color: var(--record-refused); }
 .fb-rec__state--stale { color: var(--record-stale); }
+/* fairband: a dropped override (spec 2026-11-06 Tier 2, 18.3) is neither refused nor stale: its
+   record keeps the hairline border, its head the sunken ground and its state word ink-faint. */
+.fb-rec--dropped .fb-rec__head { background: var(--surface-sunken); }
+.fb-rec__state--dropped { color: var(--ink-faint); }
 
 .fb-rec__chg {
   display: flex;

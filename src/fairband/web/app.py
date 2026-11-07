@@ -3,9 +3,11 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
 (``agents_api``), the guidance routes (``guidance_api``), the override and review routes
 (``reviews_api``), the sensitivity reading's routes (``sensitivity_api``), the company reads, the
-Methodology section read and the report routes (``reports_api``), the multiples history read
-(``multiples_api``), the vendor pass-through route (``vendor_api``), and the policy values and
-growth deciles the Methodology page cites (spec 2026-11-04 7.4).
+Methodology section read and the report routes (``reports_api``), the drawer's research read
+(``research_api``), the multiples history read (``multiples_api``), the vendor pass-through route
+(``vendor_api``), and the policy values and growth deciles the Methodology page cites (spec
+2026-11-04 7.4). The company detail carries the agents' records the drawer leads with
+(``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -105,6 +107,7 @@ from fairband.web.guidance_api import add_guidance_routes
 from fairband.web.multiples_api import add_multiples_routes
 from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.reports_api import add_report_routes
+from fairband.web.research_api import add_research_routes, agent_records
 from fairband.web.reviews_api import add_review_routes
 from fairband.web.rows import (
     COLUMNS,
@@ -156,6 +159,7 @@ def create_app(
     written; ``tax`` is the table a review's inputs and the company reads' statements are built
     with, the packaged one when ``None``; ``passthrough`` fetches the vendor pass-throughs, which
     answer 503 without one."""
+    taxed = load_tax_table() if tax is None else tax
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -267,17 +271,20 @@ def create_app(
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:
-        """The company's latest snapshot in full, with its latest universe row and two of the
+        """The company's latest snapshot in full, with its latest universe row, two of the
         effective policy's values: the designation edges, by which the drawer keeps its price ÷
         value figure inside the word's band, and ``aging_fraction``, by which its validity window
-        reads aging where the screen's Freshness column does."""
+        reads aging where the screen's Freshness column does; and the agents' records the drawer
+        leads with (``research_api.agent_records``: ``review``, ``secondary``, ``report``,
+        ``item``)."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
             listed = latest_company(conn, symbol)
             read_under = current(conn)
-        if snapshot is None:
-            raise HTTPException(404, f"no snapshot for {symbol}")
+            if snapshot is None:
+                raise HTTPException(404, f"no snapshot for {symbol}")
+            records = agent_records(conn, snapshot, today, read_under, taxed)
         return {
             "company": None if listed is None else company_json(listed),
             "snapshot": snapshot_json(snapshot),
@@ -285,6 +292,7 @@ def create_app(
             "today": today.isoformat(),
             "designationEdges": list(read_under.designation_edges),
             "agingFraction": read_under.aging_fraction,
+            **records,
         }
 
     @app.get("/api/policy")
@@ -345,11 +353,11 @@ def create_app(
     add_settings_routes(app, conn_factory, policy, clock)
     add_watchlist_routes(app, conn_factory, clock)
     add_agent_routes(app, conn_factory, clock)
-    taxed = load_tax_table() if tax is None else tax
     add_guidance_routes(app, conn_factory, policy, taxed, clock)
     add_review_routes(app, conn_factory, policy, taxed, clock)
     add_sensitivity_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
+    add_research_routes(app, conn_factory)
     add_multiples_routes(app, conn_factory, passthrough)
     add_vendor_routes(app, passthrough)
     return app

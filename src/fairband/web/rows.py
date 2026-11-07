@@ -153,29 +153,56 @@ def agent_fields(
     else the secondary valuation's value a share when it counts and is above zero, with no
     override inside; else ``None`` and 0. ``agentStance`` is the report's word and ``covered`` its
     time, its actor (its principal where it names none, an owner's report) and whether the window
-    of the snapshot it rests on ended before ``today``; both ``None`` without a report."""
-
-    def rests_on(snapshot_id: int) -> SnapshotRow | None:
-        return snapshot if snapshot_id == snapshot.id else cited.get(snapshot_id)
-
-    def counts(snapshot_id: int) -> bool:
-        found = rests_on(snapshot_id)
-        return found is not None and same_snapshot_rows(found, snapshot)
-
+    of the snapshot it rests on ended before ``today`` (``window_ended``); both ``None`` without a
+    report."""
     fields = dict(NO_AGENT_FIELDS)
-    if review is not None and review.value is not None and counts(review.snapshot_id):
+    if review is not None and review.value is not None and counts_on(snapshot, cited, review):
         fields |= {"reviewed": review.value, "overrides": len(review.override_ids)}
-    elif secondary is not None and secondary.value_per_share > 0 and counts(secondary.snapshot_id):
+    elif (
+        secondary is not None
+        and secondary.value_per_share > 0
+        and counts_on(snapshot, cited, secondary)
+    ):
         fields["reviewed"] = secondary.value_per_share
     if report is not None:
-        window = rests_on(report.snapshot_id)
         fields["agentStance"] = report.stance
         fields["covered"] = {
             "at": report.created_at.isoformat(),
             "actor": report.principal if report.actor is None else report.actor,
-            "expired": window is None or window.valid_until < today,
+            "expired": window_ended(snapshot, cited, report, today),
         }
     return fields
+
+
+def counts_on(
+    snapshot: SnapshotRow,
+    cited: Mapping[int, SnapshotRow],
+    record: ReviewRow | SecondaryRow | ReportRow,
+) -> bool:
+    """Whether ``record`` counts on the company's latest ``snapshot``: it rests on it, or on an
+    earlier one (among ``cited``, by ``rested_on``) that the latest reprices
+    (``same_snapshot_rows``, the reports' rule). The screen's rows and the drawer read the agents'
+    records by it."""
+    found = _rests_on(snapshot, cited, record)
+    return found is not None and same_snapshot_rows(found, snapshot)
+
+
+def window_ended(
+    snapshot: SnapshotRow, cited: Mapping[int, SnapshotRow], report: ReportRow, today: date
+) -> bool:
+    """Whether the window of the snapshot ``report`` rests on ended before ``today``, which fades
+    its stance and its coverage mark; a snapshot not on file has no window left."""
+    window = _rests_on(snapshot, cited, report)
+    return window is None or window.valid_until < today
+
+
+def _rests_on(
+    snapshot: SnapshotRow,
+    cited: Mapping[int, SnapshotRow],
+    record: ReviewRow | SecondaryRow | ReportRow,
+) -> SnapshotRow | None:
+    """The snapshot ``record`` rests on: the latest ``snapshot``, else one of ``cited``."""
+    return snapshot if record.snapshot_id == snapshot.id else cited.get(record.snapshot_id)
 
 
 def screen_row(
