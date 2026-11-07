@@ -374,10 +374,13 @@ The rules:
 Guidance enters the reviewed value only through an override, never the mechanical value. Each
 input takes the full-year guidance of one fiscal year, counted from the base year. The base year
 is the fiscal year that holds most of the four quarters after the last one reported, a tie taking
-the later year. Every route finds it by this one rule. Mature Growth, High Growth and Young Growth
+the later year. Every route that reads a guidance-backed input finds it by this one rule; Mature
+Stable and Start-up have no base year and read none. Mature Growth, High Growth and Young Growth
 store it as `base_year` in the snapshot's `path` intermediate. A Decline snapshot does not store
-it: find it by the rule, from the quarters of `estimates`. The figure you pass as `new` comes from
-a tool:
+it: find it by the rule, from the quarters of `estimates`. On Decline without four consecutive
+NTM quarters there is no base year, and the route reads neither `revenue.ntm` nor the steps: such
+an override would apply and move nothing. Write none there; record the guidance and read it in
+section 5 only. The figure you pass as `new` comes from a tool:
 
 - `earnings.ntm` (Mature Growth): a full-year EPS guidance for the base year. `new` is the
   record's midpoint.
@@ -547,7 +550,9 @@ Growth and Young Growth the route's own path in the intermediates (`growth_rates
 Every record carries a three-by-three grid: the value a share at r less one point, r, and r plus
 one point (the columns), across the terminal growth less one point, the terminal growth, and the
 lower of the terminal growth plus one point and g_T (the rows). At a terminal growth of g_T the
-third row repeats the second. The centre cell is the value. The grid shows how much of the value
+third row repeats the second. On the parts form the rows are the shift applied to every part's
+terminal growth; when every part is within a point of g_T the third row's shift is below a point,
+labelled "capped at g_T". The centre cell is the value. The grid shows how much of the value
 is assumption; it is never a value. A record has no grid when r less one point would not exceed
 the highest growth. Cite a cell as `secondary:<id>/grid/<i>/<j>`, rows and columns counted from 1.
 

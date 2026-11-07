@@ -75,10 +75,15 @@ def chart_tables(
     }
 
 
-def shift_words(x: float) -> str:
-    """A shift in every part's terminal growth in points: "−1 pp", "0 pp", "+1 pp"."""
-    points = round(x * 100)
-    return f"{'−' if points < 0 else '+' if points > 0 else ''}{abs(points)} pp"
+def shift_words(x: float, *, top: bool = False) -> str:
+    """A shift in every part's terminal growth in points: "−1 pp", "0 pp", "+1 pp". The ``top``
+    row, the rise each part takes up to g_T, carries its sign whatever its size and, below a
+    point, says the cap held it: "+0 pp, capped at g_T", "+0.5 pp, capped at g_T"."""
+    points = round(x * 100, 1)
+    size = f"{abs(points):g} pp"
+    if top:
+        return f"+{size}" + (", capped at g_T" if points < 1 else "")
+    return f"{'−' if points < 0 else '+' if points > 0 else ''}{size}"
 
 
 def _financial(table: Table) -> ChartTable:
@@ -129,10 +134,10 @@ def _secondary_grid(conn: sqlite3.Connection, report: ReportRow) -> list[ChartTa
     corner = "Every part's terminal growth" if shifts else "Terminal growth"
     rows = tuple(
         (
-            shift_words(g) if shifts else shown(g, "percent"),
+            shift_words(g, top=i == 2) if shifts else shown(g, "percent"),
             *(_shown(cell, "per-share") for cell in cells),
         )
-        for g, cells in zip(grid["rows"], grid["cells"], strict=True)
+        for i, (g, cells) in enumerate(zip(grid["rows"], grid["cells"], strict=True))
     )
     header = (corner, *(f"r {shown(rate, 'percent')}" for rate in grid["cols"]))
     return [ChartTable(f"The grid of secondary valuation {secondary.id}", header, rows)]
@@ -161,7 +166,7 @@ def _multiples(conn: sqlite3.Connection, symbol: str) -> tuple[ChartTable, Chart
     return (
         ChartTable("The P/E over ten years", header, stats),
         ChartTable(
-            "The P/E on the last day of each year of the ten years",
+            "The P/E at the last point of each year of the ten years",
             ("Year", "Trailing P/E", "Forward P/E"),
             years,
         ),

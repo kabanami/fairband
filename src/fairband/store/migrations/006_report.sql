@@ -59,8 +59,8 @@ CREATE TABLE sensitivities (
 CREATE INDEX sensitivities_by_symbol ON sensitivities (symbol, snapshot_id);
 
 -- A guidance record (9): a figure the company gave on a call for a future period, its midpoint
--- and its step computed by the server. A newer record for the same metric and period supersedes
--- the older; every record stays.
+-- and its step computed by the server. A newer record for the same metric, period and basis
+-- supersedes the older; every record stays.
 CREATE TABLE guidance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT NOT NULL,

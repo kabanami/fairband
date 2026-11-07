@@ -412,7 +412,7 @@ def test_no_trailing_revenue_is_refused(
 
 def test_the_parts_form_still_answers(client: TestClient) -> None:
     """Spec 20.1's path, valued as the parts form always valued it; its grid's rows are the shift
-    in every part's terminal growth."""
+    in every part's terminal growth, the top one none, since the part is at g_T."""
     body = _secondary(client, ONE_PART)
     assert body["form"] == "parts"
     assert body["valuePerShare"] == pytest.approx((FIRM - 2e9 + 1e9) / 1e9, abs=1e-4)
@@ -420,7 +420,7 @@ def test_the_parts_form_still_answers(client: TestClient) -> None:
     grid = body["grid"]
     assert (grid["rowsAre"], grid["rows"], grid["cols"]) == (
         "shifts",
-        pytest.approx([-0.01, 0.0, 0.01]),
+        pytest.approx([-0.01, 0.0, 0.0]),
         pytest.approx([0.08, 0.09, 0.10]),
     )
     assert grid["cells"][1][1] == body["valuePerShare"]

@@ -620,8 +620,8 @@ def _grid_table(grid: Mapping[str, Any]) -> list[str]:
     corner = "Every part's terminal growth" if shifts else "Terminal growth"
     header = (corner, *(f"r {_percent(rate)}" for rate in grid["cols"]))
     rows = [
-        (shift_words(g) if shifts else _percent(g), *cells)
-        for g, cells in zip(grid["rows"], grid["cells"], strict=True)
+        (shift_words(g, top=i == 2) if shifts else _percent(g), *cells)
+        for i, (g, cells) in enumerate(zip(grid["rows"], grid["cells"], strict=True))
     ]
     return _table(header, rows)
 

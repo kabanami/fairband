@@ -13,7 +13,7 @@ from refresh.synthetic import NOW
 from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.sensitivity import SensitivityGrid
 from fairband.policy import Policy
-from fairband.reports.charts import ChartTable, chart_tables
+from fairband.reports.charts import ChartTable, chart_tables, shift_words
 from fairband.reports.check import HEADINGS, headings, shown
 from fairband.reports.tables import financial_tables
 from fairband.store.ledger import Writer
@@ -227,8 +227,12 @@ def test_a_parts_grid_reads_its_rows_as_shifts(
     secondary = _secondary(conn, policy, sid, "parts")
     [grid] = chart_tables(conn, _report(conn, sid, secondary_id=secondary), policy)["Valuation"]
     assert grid.header == ("Every part's terminal growth", "r 8.0%", "r 9.0%", "r 10.0%")
-    assert [row[0] for row in grid.rows] == ["−1 pp", "0 pp", "+1 pp"]
+    # spec 20.1's part is at g_T, so the top row lifts it nothing, and says so
+    assert [row[0] for row in grid.rows] == ["−1 pp", "0 pp", "+0 pp, capped at g_T"]
     assert grid.rows[1][2] == "$16.82"  # spec 20.1's value a share
+    assert shift_words(0.01, top=True) == "+1 pp"
+    assert shift_words(0.005, top=True) == "+0.5 pp, capped at g_T"
+    assert (shift_words(-0.01), shift_words(0.0), shift_words(0.01)) == ("−1 pp", "0 pp", "+1 pp")
 
 
 def test_section_9_holds_the_statistics_and_the_year_end_points(
@@ -241,7 +245,7 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
     stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
     assert (stats.title, year_end.title) == (
         "The P/E over ten years",
-        "The P/E on the last day of each year of the ten years",
+        "The P/E at the last point of each year of the ten years",
     )
     assert stats.rows == (("trailing P/E", "", "", "", "", ""), ("forward P/E", "", "", "", "", ""))
     assert year_end.rows == ()

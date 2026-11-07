@@ -217,7 +217,7 @@ def test_appendix_a_labels_a_parts_grid_by_its_shift(
     block = markdown(report, a, [], [], {}).split("### Secondary valuation")[1]
     assert f"Secondary valuation {secondary['id']}, from parts: firm value " in block
     assert "| Every part's terminal growth | r 8.0% | r 9.0% | r 10.0% |" in block
-    for shift in ("−1 pp", "0 pp", "+1 pp"):
+    for shift in ("−1 pp", "0 pp", "+0 pp, capped at g_T"):  # the part is at g_T
         assert f"| {shift} | " in block, shift
 
 

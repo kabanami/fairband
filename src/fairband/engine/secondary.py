@@ -39,9 +39,10 @@ each part's years, each part's terminal growth; then the share count.
 The grid is a display, never a value: the value a share by the same arithmetic at the rates
 r − 1 pp, r and r + 1 pp (the columns) across the terminal growths g − 1 pp, g and
 min(g + 1 pp, g_T) (the rows), ROIC_T held. On the parts form a row moves every part's terminal
-growth together, each capped at g_T, and the rows hold the shift, −1 pp, 0 and +1 pp. There is no
-grid when the lowest rate is at or below the highest growth in it, which only settings that put
-r − 1 pp at or below g_T allow.
+growth together, each capped at g_T, and the rows hold the shift applied, −1 pp, 0 and +1 pp,
+the top one the largest rise to g_T when every part sits within a point of it (0 when every part
+is at g_T). There is no grid when the lowest rate is at or below the highest growth in it, which
+only settings that put r − 1 pp at or below g_T allow.
 """
 
 from collections.abc import Callable, Sequence
@@ -343,7 +344,11 @@ def _parts_grid(
         return sum(_discounted(part, rate).value for part in at_row)
 
     highest = max(max(g) for g in growths)
-    return _grid((-_STEP, 0.0, _STEP), highest, r, firm_value, bridge)
+    # The top row is the shift applied: a point while any part rises a point under g_T, else the
+    # largest rise to g_T, none when every part is at g_T.
+    rises = [g[2] - part.terminal_growth for part, g in zip(parts, growths, strict=True)]
+    top = _STEP if any(part.terminal_growth + _STEP <= g_t for part in parts) else max(rises)
+    return _grid((-_STEP, 0.0, top), highest, r, firm_value, bridge)
 
 
 def _grid(

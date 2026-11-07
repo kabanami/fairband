@@ -358,6 +358,19 @@ def test_the_parts_form_is_unchanged(policy: Policy) -> None:
     assert v.grid.cols == pytest.approx((0.08, 0.09, 0.10))
 
 
+def test_the_parts_grid_s_top_row_is_the_shift_applied(policy: Policy) -> None:
+    """A part at g_T rises nothing, so the top row of a grid of it alone is no shift; a part half a
+    point under g_T rises half a point; beside a part a point under g_T, a point."""
+    at_g_t = _parts(ONE, 200.0, 100.0, 100.0, 15.0, "None", policy).grid
+    assert at_g_t is not None and at_g_t.rows == (-0.01, 0.0, 0.0)
+    assert at_g_t.cells[2] == at_g_t.cells[1]
+    near = [replace(ONE[0], terminal_growth=0.025)]
+    half = _parts(near, 200.0, 100.0, 100.0, 15.0, "None", policy).grid
+    assert half is not None and half.rows == pytest.approx((-0.01, 0.0, 0.005), abs=1e-12)
+    beside = _parts([*near, UNIT], 200.0, 100.0, 100.0, 15.0, "None", policy).grid
+    assert beside is not None and beside.rows == (-0.01, 0.0, 0.01)
+
+
 def test_the_parts_grid_moves_every_part_together(policy: Policy) -> None:
     # ONE is at g_T, UNIT at 0: the third row lifts UNIT by a point and holds ONE at g_T
     v = _parts([*ONE, UNIT], 200.0, 100.0, 100.0, 15.0, "None", policy)

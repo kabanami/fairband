@@ -455,3 +455,37 @@ def test_appendix_a_says_none_for_a_report_with_no_secondary_that_could_have_one
     assert (a["secondary"], a["noSecondary"]) == (None, None)
     text = client.get(f"/api/reports/{report['id']}/markdown").text
     assert "### Secondary valuation\n\nNone.\n" in text
+
+
+def test_a_plan_1_parts_record_reads_and_renders(
+    client: TestClient, db_path: Path, secondaries: dict[str, int]
+) -> None:
+    """A secondary valuation written under ``fairband-secondary/1``, as migration 006 leaves one:
+    the parts form with no grid. The API reads it with ``grid: null``; a report resting on it
+    renders its parts, "No grid." in Appendix A, and no grid table in the Markdown."""
+    secondary_id = secondaries["AAPL"]
+    with closing(connect(db_path)) as conn:
+        conn.execute(
+            "UPDATE secondary_valuations SET grid = NULL, secondary_method = ? WHERE id = ?",
+            ("fairband-secondary/1", secondary_id),
+        )
+        conn.commit()
+    [listed] = client.get("/api/companies/AAPL/secondary").json()["secondaryValuations"]
+    assert (listed["id"], listed["form"], listed["grid"]) == (secondary_id, "parts", None)
+    assert listed["secondaryMethod"] == "fairband-secondary/1"
+    assert (listed["drivers"], listed["projection"]) == (None, None)
+    assert [p["name"] for p in listed["parts"]] == ["the business"]
+    report = _published(client, _body(_snapshot_id(client)))
+    a = report["appendixA"]
+    assert (a["secondary"]["id"], a["secondary"]["form"], a["secondary"]["grid"]) == (
+        secondary_id,
+        "parts",
+        None,
+    )
+    assert a["versions"]["secondary"] == "fairband-secondary/1"
+    text = client.get(f"/api/reports/{report['id']}/markdown").text
+    block = text.split("### Secondary valuation\n\n", 1)[1].split("\n### ", 1)[0]
+    assert block.startswith(f"Secondary valuation {secondary_id}, from parts: firm value ")
+    assert "| the business |" in block
+    assert block.rstrip().endswith("No grid.")
+    assert "The grid of secondary valuation" not in text
