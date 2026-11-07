@@ -3,12 +3,13 @@ design.md 9.4; ``method.md`` 16).
 
 Neither appendix is stored: both are generated at read time from the stored records, so the agent
 writes neither. Appendix A (``appendix_a``), the audit: the snapshot the report rests on; every
-input with its tag (DATA, RULE or JUDGMENT), its value at full precision and its provenance, the
-review's when the report rests on one (its JUDGMENT entries beside the snapshot's own), else the
-snapshot's; the overrides inside the review with their reasons and evidence; the guidance on
-file, the company's guidance records written by the report's time, newest first, each with its
-figures, its basis, its call's date, whether a record on file by then superseded it, and the
-overrides inside the review that cite it; the bridge, each line with its input's label in a
+input with its tag (DATA, RULE or JUDGMENT), its value at full precision and its provenance (its
+source and its three dates: as of, observed, entered), the review's when the report rests on one
+(its JUDGMENT entries beside the snapshot's own), else the snapshot's; the overrides inside the
+review with their reasons and evidence; the guidance on file, the company's guidance records
+written by the report's time, newest first, each with its figures, its basis, its call's date,
+whether a record on file by then superseded it, and the overrides inside the review that cite it;
+the bridge, each line with its input's label in a
 reader's words (``overrides.LABELS``); the secondary valuation's form, its drivers
 with the trailing revenue and the terminal return and its projection year by year, or its parts
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
@@ -41,6 +42,7 @@ import re
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
+from datetime import date
 from typing import Any
 
 from pydantic.alias_generators import to_camel
@@ -272,7 +274,9 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
                 "tag": i.tag,
                 "kind": i.kind,
                 "source": i.provenance.source,
-                "asOf": None if i.provenance.as_of is None else i.provenance.as_of.isoformat(),
+                "asOf": _iso(i.provenance.as_of),
+                "observedAt": _iso(i.provenance.observed_at),
+                "enteredAt": _iso(i.provenance.entered_at),
                 "estimateMethod": i.estimate_method,
                 "note": i.note,
             }
@@ -657,6 +661,11 @@ def _cell(x: Any) -> str:
         return ", ".join(_cell(item) for item in x) or _DASH
     text = repr(x) if isinstance(x, float) else str(x)
     return text.replace("|", "\\|").replace("\n", " ")
+
+
+def _iso(day: date | None) -> str | None:
+    """A date or a time as ISO text; ``None`` for none."""
+    return None if day is None else day.isoformat()
 
 
 def _evidence(item: Mapping[str, Any]) -> str:

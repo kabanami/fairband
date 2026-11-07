@@ -401,7 +401,10 @@
             h('td', { className: 'fb-bridge__g fb-bridge__g--f', 'aria-hidden': 'true' }, GLYPH_DERIVED),
             h('td', { className: 'body' }, 'Reviewed value'),
             h('td', null, h(BasisChip, { basis: 'reviewed', showGlyph: false })),
-            h('td', { className: 'fb-num figure-lg' }, money(p.reviewed))
+            // fairband: under a page's one headline figure, `hero: false` sets the sum in figure,
+            // its border-strong rule kept (CompanyReport's one hero; spec 2026-11-06 Tier 2, 18.4).
+            h('td', { className: 'fb-num ' + (p.hero === false ? 'figure' : 'figure-lg') },
+              money(p.reviewed))
           )
         )
       ),
@@ -446,7 +449,10 @@
       style: p.width ? { maxWidth: p.width + 'px' } : null
     },
       h('div', { className: 'fb-band__head' },
-        h('span', { className: 'fb-band__price figure-lg' }, money(price)),
+        // fairband: under a page's one headline figure, `hero: false` sets the price in figure
+        // (CompanyReport's one hero; spec 2026-11-06 Tier 2, 18.4).
+        h('span', { className: 'fb-band__price ' + (p.hero === false ? 'figure' : 'figure-lg') },
+          money(price)),
         // fairband: the word's chip in its band's colour, as the screen's column draws it.
         word ? h('span', { className: 'fb-designation fb-designation--' + p.designation + ' label' }, word) : null,
         h('span', { className: 'fb-band__gap caption' },
@@ -714,11 +720,21 @@
     }, props.children);
   }
 
+  // fairband: a key's own entry in a plain map, so a ref never reads an Object method.
+  function own(map, key) {
+    return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
+  }
+
   function ReportReader(props) {
     var p = props || {};
     var rejected = p.state === 'rejected';
     var cites = p.cites || {};
     var findings = p.findings || [];
+    // fairband: a cited number keeps its dotted underline and its ref in the title, and is
+    // followed by its footnote number as a superscript, [n], from the caller's footnotes (ref → n),
+    // which number the report's references; a ref the map lacks has none
+    // (spec 2026-11-06 Tier 2, 13.1 and 18.4).
+    var footnotes = p.footnotes || {};
 
     return h('article', { className: cx('fb-rec', 'fb-report', rejected ? 'fb-rec--refused' : 'fb-rec--applied') },
       h('header', { className: 'fb-rec__head' },
@@ -752,16 +768,23 @@
               // leaves it to the report page (spec 2026-11-06 Tier 2, 18.2).
               p.cites ? h('p', { className: 'fb-report__cites caption' },
                 'cites snapshot ', h('span', { className: 'figure-sm' }, cites.snapshot),
-                ' · review ', h('span', { className: 'figure-sm' }, cites.review),
-                ' · thesis ', h('span', { className: 'figure-sm' }, cites.thesis),
+                // fairband: a review and a thesis only when the report rests on one, so a report
+                // with no review names none (spec 2026-11-06 Tier 2, 18.4).
+                cites.review == null ? null : h(React.Fragment, null, ' · review ',
+                  h('span', { className: 'figure-sm' }, cites.review)),
+                cites.thesis == null ? null : h(React.Fragment, null, ' · thesis ',
+                  h('span', { className: 'figure-sm' }, cites.thesis)),
                 cites.reusesFullReportOf ? h(React.Fragment, null, ' · reuses the full report of ',
                   h(DateText, { value: cites.reusesFullReportOf })) : null) : null,
               (p.sections || []).map(function (s, i) {
                 return h('section', { key: i, className: 'fb-report__section' },
                   s.heading ? h('h4', { className: 'heading' }, s.heading) : null,
                   h('p', { className: 'fb-report__prose body' }, (s.parts || []).map(function (part, j) {
-                    return typeof part === 'string' ? part
-                      : h(Cite, { key: j, source: part.ref }, part.cite);
+                    if (typeof part === 'string') return part;
+                    var n = own(footnotes, String(part.ref).trim());
+                    return h(React.Fragment, { key: j },
+                      h(Cite, { source: part.ref }, part.cite),
+                      n == null ? null : h('sup', { className: 'fb-cite__n' }, '[' + n + ']'));
                   }))
                 );
               }),

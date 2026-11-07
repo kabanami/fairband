@@ -170,7 +170,11 @@
      openRow, which opens a row's drawer. controls.js adds show, onShow, section and running, and
      methodology.js adds methodologySection, which the drawer's link reads; a view drawn from the
      rows or the lists sets onRender, which runs after each draw of the screen, so it draws again
-     as they load and change. */
+     as they load and change. The report page (report.js, spec 2026-11-06 Tier 2, 18.4) draws with
+     the drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
+     figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
+     evidence, pairs, a date, a total, a count, a report's footnote numbers, and Request research
+     with a request of its own (asking). */
   window.FairbandPage = {
     reload: load, api: api, getJson: getJson, localIso: localIso, PHASE_NUMBER: PHASE_NUMBER,
     find: find,
@@ -179,7 +183,11 @@
     watch: watch,
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
-    openRow: openRow
+    openRow: openRow,
+    meter: meter, inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
+    secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
+    phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, plain: plain,
+    footnotes: footnotes, asking: asking, requestResearch: requestResearch
   };
 
   function load() {
@@ -637,12 +645,10 @@
     var r = body.result;
     var im = r.intermediates;
     var phase = PHASE_NUMBER[r.phase.phase];
-    var valued = r.value != null && r.levels != null && r.price != null;
+    var valued = isValued(r);
     var growth = r.route === 'revenue-growth';
-    var review = body.review;
     var report = body.report;
-    var secondary = body.secondary;
-    var banded = !valued && !!r.refusal && !!secondary && !!secondary.levels && r.price != null;
+    var banded = isBanded(body);
     var ask = asked(r.symbol);
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
@@ -650,13 +656,7 @@
         phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,
         body.company && body.company.name
           ? h('p', { className: 'body app-drawer__name' }, body.company.name) : null),
-      valued ? section('band', null,
-        h(F.BandMeter, {
-          low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
-          buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
-          reviewedValue: review && review.value != null ? review.value : null,
-          showScale: false, caption: standing(r, body.designationEdges)
-        }),
+      valued ? section('band', null, meter(body),
         levels(r),
         h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route),
         youngGrowth(im.failure_probability),
@@ -666,13 +666,7 @@
          the screen's Reviewed column (spec 2026-11-06 Tier 2, 18.1), so the drawer draws the
          secondary's band against the price, its word at today's price, and the refusal stays
          under it (the ruling of 2026-11-07). A refused row with none has the refusal alone. */
-      banded ? section('secondary-band', null,
-        h(F.BandMeter, {
-          low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,
-          fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,
-          trimLevel: secondary.levels.trim, designation: secondary.designation,
-          showScale: false, caption: secondaryCaption(secondary, body.designationEdges)
-        })) : null,
+      banded ? section('secondary-band', null, meter(body)) : null,
       /* A refusal takes the band's place: it is the answer when there is no value. A growth row
          refused with its revenue path still shows the margin the price needs (spec 5.11). A
          Mature Stable row refused for its trailing earnings shows the growth-route cross-check
@@ -698,22 +692,14 @@
         h(F.ReportReader, {
           mode: report.mode, state: 'published', revision: 'revision ' + report.revision,
           sections: [report.summary], appendixes: false,
-          /* the Summary's refs, numbered as the report page's references list numbers them
-             (18.4) */
-          references: report.references
+          /* the Summary's cites numbered as the report page's references list numbers them, so
+             a number reads the same in both (13.1, 18.4) */
+          footnotes: footnotes(report.references)
         }),
         h('p', { className: 'app-open' },
           h(F.Button, { href: '#report/' + encodeURIComponent(r.symbol) }, 'Open the report')))
         : section('request', null,
-          h('div', { className: 'app-request' },
-            h(F.Button, {
-              disabled: !!body.item,
-              'aria-expanded': ask.open ? 'true' : 'false',
-              onClick: function () { toggleRequest(r.symbol); }
-            }, 'Request research'),
-            ask.open ? h(RequestMenu, { ask: ask }) : null),
-          ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null,
-          requested(body.item)),
+          requestResearch(ask, body.item, render, function () { reloadDetail(r.symbol); })),
       h('div', { key: 'disclosure', className: 'app-section app-disclosure' },
         h(F.Button, {
           variant: 'quiet', size: 'sm',
@@ -722,6 +708,55 @@
         }, 'Details ▾')),
       state.detailsOpen ? details(body) : null
     ];
+  }
+
+  /* The meter of a company's detail (spec 2026-11-06 Tier 2, 18.2 and 18.4), as the drawer and
+     the report page draw it: a valued row's mechanical band against the price, the reviewed value
+     its second marker when the review on the latest snapshot has one, its caption the row's word
+     and price ÷ value; a refused row whose secondary valuation counts on the latest snapshot, the
+     secondary's band, its word at today's price (the ruling of 2026-11-07); else none. The scale
+     is off: the drawer names the levels under it. `hero` false sets the meter's price in figure,
+     under the report page's one headline figure; the drawer passes none. */
+  function meter(body, hero) {
+    var r = body.result;
+    var review = body.review;
+    var secondary = body.secondary;
+    if (isValued(r)) {
+      return h(F.BandMeter, {
+        low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
+        buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
+        reviewedValue: review && review.value != null ? review.value : null,
+        showScale: false, caption: standing(r, body.designationEdges), hero: hero
+      });
+    }
+    if (!isBanded(body)) return null;
+    return h(F.BandMeter, {
+      low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,
+      fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,
+      trimLevel: secondary.levels.trim, designation: secondary.designation,
+      showScale: false, caption: secondaryCaption(secondary, body.designationEdges), hero: hero
+    });
+  }
+
+  /* A row the engine valued: a value, its levels and a price to draw them against. */
+  function isValued(r) {
+    return r.value != null && r.levels != null && r.price != null;
+  }
+
+  /* A refused row whose secondary valuation, which the detail carries only while it counts on the
+     latest snapshot, has levels, and a price to draw them against: its meter is the secondary's. */
+  function isBanded(body) {
+    var r = body.result;
+    var s = body.secondary;
+    return !isValued(r) && !!r.refusal && !!s && !!s.levels && r.price != null;
+  }
+
+  /* A report's references, [{ n, ref, source }], as ReportReader's footnotes, ref → n (spec 13.1):
+     the drawer's Summary and the report page number a cite alike, by the full report's list. */
+  function footnotes(references) {
+    var marks = {};
+    (references || []).forEach(function (e) { marks[e.ref] = e.n; });
+    return marks;
   }
 
   /* Details (spec 2026-11-06 Tier 2, 18.3), in order: the review, its bridge from the mechanical
@@ -794,27 +829,12 @@
           });
         })) : null,
       rs && rs.guidance.length ? block('app-guidance', 'Guidance on file',
-        h('table', { className: 'fb-table app-inputs' },
-          h('thead', null, h('tr', null,
-            h('th', { className: 'label' }, 'Guided'),
-            h('th', { className: 'label fb-num' }, 'Range'))),
-          h('tbody', null, rs.guidance.map(function (g) {
-            var cites = citedBy(rs.overrides, g.id);
-            return h('tr', { key: g.id },
-              h('td', null,
-                h('span', { className: 'app-line' },
-                  h('span', { className: 'body' }, words(g.metric)), ' ',
-                  h('span', { className: 'figure-sm' }, g.period), ' ',
-                  h('span', { className: 'caption app-muted' }, g.basis)),
-                h('span', { className: 'caption app-line' }, 'call ', when(g.asOf), ' · ',
-                  g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy),
-                cites.length ? h('span', { className: 'caption app-line' },
-                  'cited by override ' + cites.join(', ')) : null),
-              h('td', { className: 'fb-num' },
-                h('span', { className: 'figure-sm app-line' }, guidedRange(g)),
-                h('span', { className: 'caption app-muted app-line' },
-                  'midpoint ' + guided(g.midpoint, g.metric))));
-          })))) : null,
+        guidanceTable(rs.guidance.map(function (g) {
+          return Object.assign({}, g, {
+            state: g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy,
+            citedBy: citedBy(rs.overrides, g.id)
+          });
+        }))) : null,
       rs && rs.judgments.length ? block('app-judgments', 'Judgments',
         h('ul', { className: 'app-list' }, rs.judgments.map(function (j) {
           return h('li', { key: j.id },
@@ -917,39 +937,85 @@
 
   /* ------------------------------------------------- the drawer's requests and Details' reads */
 
-  /* Request research's state for the drawer's company, kept until the drawer shows another: the
-     menu closed, the mode a full report, since a company with no report has no full report a
-     valuation review could reuse, and no note. */
+  /* Request research's state for the drawer's company, kept until the drawer shows another. */
   function asked(symbol) {
-    if (!state.request || state.request.symbol !== symbol) {
-      state.request = {
-        symbol: symbol, open: false, mode: 'full report', note: '', error: null, posting: false
-      };
-    }
+    if (!state.request || state.request.symbol !== symbol) state.request = asking(symbol);
     return state.request;
   }
 
-  function toggleRequest(symbol) {
-    var ask = asked(symbol);
+  /* A company's Request research, as the drawer and the report page each keep one, so the drawer
+     on one company never resets the report page's on another: the menu closed, the mode a full
+     report, since a company with no report has no full report a valuation review could reuse,
+     and no note. */
+  function asking(symbol) {
+    return {
+      symbol: symbol, open: false, mode: 'full report', note: '', error: null, posting: false
+    };
+  }
+
+  /* Request research (spec 18.2), as the drawer and the report page show it without a report
+     (18.4): the button, disabled while an item is open, its menu, the server's refusal under it
+     and the open item's line. `ask` is the view's request (asking), `redraw` draws the view again
+     and `after` runs once a post ends, taken or refused, so the view reads its company again and
+     the open item's line follows. */
+  function requestResearch(ask, item, redraw, after) {
+    return h(React.Fragment, null,
+      h('div', { className: 'app-request' },
+        h(F.Button, {
+          disabled: !!item,
+          'aria-expanded': ask.open ? 'true' : 'false',
+          onClick: function () { toggleRequest(ask, redraw); }
+        }, 'Request research'),
+        ask.open ? h(RequestMenu, { ask: ask, redraw: redraw, after: after }) : null),
+      ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null,
+      requested(item));
+  }
+
+  function toggleRequest(ask, redraw) {
     ask.open = !ask.open;
     ask.error = null;
-    render();
+    redraw();
   }
 
   /* Request research's menu (spec 18.2), in the bundle's menu style as Details ▾ draws it: the
      mode, a radio each, the note line, then Post. It opens under its button from the button's left
-     edge, focus on the chosen mode; Post, or Enter in the note line, sends it. */
+     edge, focus on the chosen mode; Post, or Enter in the note line, sends it. A press or focus
+     outside the button and its menu closes it, as the screen's menus close, and so does Escape,
+     which hands focus back to the button; the listeners last as long as the menu, and the
+     drawer's own Escape, registered first, sees the menu open and waits. */
   function RequestMenu(props) {
     var ask = props.ask;
+    var redraw = props.redraw;
+    var after = props.after;
     var ref = React.useRef(null);
     React.useEffect(function () {
+      var control = ref.current.parentNode;
       var chosen = ref.current.querySelector('input:checked');
       if (chosen) chosen.focus();
+      function outside(event) {
+        if (!(event.target instanceof Element) || control.contains(event.target)) return;
+        ask.open = false;
+        redraw();
+      }
+      function escape(event) {
+        if (event.key !== 'Escape') return;
+        ask.open = false;
+        redraw();
+        control.querySelector(':scope > .fb-btn').focus();
+      }
+      document.addEventListener('pointerdown', outside);
+      document.addEventListener('focusin', outside);
+      document.addEventListener('keydown', escape);
+      return function () {
+        document.removeEventListener('pointerdown', outside);
+        document.removeEventListener('focusin', outside);
+        document.removeEventListener('keydown', escape);
+      };
     }, []);
     return h('form', {
       ref: ref, className: 'fb-menu fb-menu--filters app-request__menu',
       'aria-label': 'Request research on ' + ask.symbol,
-      onSubmit: function (event) { event.preventDefault(); postRequest(ask.symbol); }
+      onSubmit: function (event) { event.preventDefault(); postRequest(ask, redraw, after); }
     },
       h('div', { className: 'fb-menu__body' },
         h('div', { className: 'fb-menu__sec', role: 'radiogroup', 'aria-label': 'Mode' },
@@ -958,7 +1024,7 @@
             return h('label', { key: mode, className: 'fb-menu__row control' },
               h('input', {
                 type: 'radio', name: 'app-request-mode', value: mode, checked: ask.mode === mode,
-                onChange: function () { ask.mode = mode; render(); }
+                onChange: function () { ask.mode = mode; redraw(); }
               }),
               h('span', null, mode));
           })),
@@ -968,7 +1034,7 @@
           h('input', {
             type: 'text', className: 'control app-field', maxLength: 200, value: ask.note,
             placeholder: 'What to look at, if anything',
-            onChange: function (event) { ask.note = event.target.value; render(); }
+            onChange: function (event) { ask.note = event.target.value; redraw(); }
           }))),
       h('div', { className: 'fb-menu__foot' },
         h(F.Button, { type: 'submit', size: 'sm', disabled: ask.posting }, 'Post')));
@@ -976,28 +1042,24 @@
 
   /* Post: the item, as the owner (no identity headers), with the request header every page write
      carries. The menu closes; a refusal, a second open item's 409 among them, shows the server's
-     sentence under the button as it arrives, the note kept for another try. Either way the detail
-     is read again, so the open item's line follows. */
-  function postRequest(symbol) {
-    var ask = asked(symbol);
+     sentence under the button as it arrives, the note kept for another try. Either way `after`
+     runs, so the view reads its company again and the open item's line follows. */
+  function postRequest(ask, redraw, after) {
     if (ask.posting) return;
     ask.posting = true;
     ask.error = null;
-    render();
-    api.post('/api/inbox', { symbol: symbol, mode: ask.mode, note: ask.note.trim() })
+    redraw();
+    api.post('/api/inbox', { symbol: ask.symbol, mode: ask.mode, note: ask.note.trim() })
       .then(function (r) {
         if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)
           : 'the server answered ' + r.status);
         ask.note = '';
       })
-      .catch(function (err) {
-        if (state.request !== ask) return;
-        state.request.error = err.message;
-      })
+      .catch(function (err) { ask.error = err.message; })
       .then(function () {
         ask.posting = false;
         ask.open = false;
-        reloadDetail(symbol);
+        after();
       });
   }
 
@@ -1025,26 +1087,6 @@
       .catch(function () { /* the drawer keeps what it shows */ })
       .then(render);
   }
-
-  /* Request research's menu closes on a press or focus outside it and on Escape, as the screen's
-     menus do; Escape hands focus back to the button, and closes the menu before the drawer, whose
-     own handler waits while a menu is open. */
-  function closeRequestOutside(event) {
-    var ask = state.request;
-    if (!ask || !ask.open || !(event.target instanceof Element)) return;
-    if (event.target.closest('.app-request')) return;
-    ask.open = false;
-    render();
-  }
-  document.addEventListener('pointerdown', closeRequestOutside);
-  document.addEventListener('focusin', closeRequestOutside);
-  document.addEventListener('keydown', function (event) {
-    if (event.key !== 'Escape' || !state.request || !state.request.open) return;
-    state.request.open = false;
-    render();
-    var button = document.querySelector('.app-request > .fb-btn');
-    if (button) button.focus();
-  });
 
   /* Details ▾: open or closed for the page's life; opening it reads the records of a company not
      yet read, or whose read failed. */
@@ -1211,6 +1253,32 @@
     return guided(g.low, g.metric) + ' – ' + guided(g.high, g.metric);
   }
 
+  /* The guidance on file (spec 18.3, and Appendix A's, 18.4): each record's metric, period and
+     basis, its call's date and its state in words, the overrides citing it, then its range and
+     midpoint in the metric's unit. Each record brings its state and the ids citing it, which
+     Details reads from the research records and the report page from Appendix A. */
+  function guidanceTable(guidance) {
+    return h('table', { className: 'fb-table app-inputs' },
+      h('thead', null, h('tr', null,
+        h('th', { className: 'label' }, 'Guided'),
+        h('th', { className: 'label fb-num' }, 'Range'))),
+      h('tbody', null, guidance.map(function (g) {
+        return h('tr', { key: g.id },
+          h('td', null,
+            h('span', { className: 'app-line' },
+              h('span', { className: 'body' }, words(g.metric)), ' ',
+              h('span', { className: 'figure-sm' }, g.period), ' ',
+              h('span', { className: 'caption app-muted' }, g.basis)),
+            h('span', { className: 'caption app-line' }, 'call ', when(g.asOf), ' · ', g.state),
+            g.citedBy.length ? h('span', { className: 'caption app-line' },
+              'cited by override ' + g.citedBy.join(', ')) : null),
+          h('td', { className: 'fb-num' },
+            h('span', { className: 'figure-sm app-line' }, guidedRange(g)),
+            h('span', { className: 'caption app-muted app-line' },
+              'midpoint ' + guided(g.midpoint, g.metric))));
+      })));
+  }
+
   /* A finding's value in its unit (store.research.UNITS). */
   function findingFigure(v, unit) {
     if (unit === 'currency') return whole(v);
@@ -1358,6 +1426,12 @@
       ['Checks', p.checks.length
         ? p.checks.map(function (c) { return c.word; }).join(' · ') : 'none', false]
     ]);
+  }
+
+  /* A result's classifier evidence, as Phase evidence lists it, for the report page's
+     Appendix A (18.4). */
+  function phaseEvidence(p) {
+    return pairs(evidence(p, PHASE_NUMBER[p.phase]));
   }
 
   /* ---------------------------------------------------- the revenue growth route */

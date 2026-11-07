@@ -28,6 +28,7 @@ from fairband.store.overrides import insert_override
 from fairband.store.reports import ReportRow, insert_report, report_row
 from fairband.store.reviews import insert_review
 from fairband.store.secondary import insert_secondary
+from fairband.store.snapshots import snapshot_row
 from fairband.store.vendor import record_response
 
 METHOD = Path(__file__).parent.parent.parent / "docs" / "method.md"
@@ -255,6 +256,25 @@ def test_appendix_a_is_generated_from_the_records(
         "secondary": "fairband-secondary/2",
     }
     assert a["classifier"]["phase"] == "Mature Growth" and a["classifier"]["checks"] == []
+
+
+def test_appendix_a_gives_each_input_its_provenance(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 13.1, "every input with its tag, source and dates": each input carries its source and
+    its three dates, the day the figure is as of, when it was observed and when it was entered, so
+    the report page draws Appendix A's inputs as the drawer draws a snapshot's (18.4)."""
+    sid = snapshots["AAPL"]
+    a = appendix_a(conn, _stored(conn, sid), policy)
+    snapshot = snapshot_row(conn, sid)
+    assert snapshot is not None
+    for entry, i in zip(a["inputs"], snapshot.result.inputs, strict=True):
+        p = i.provenance
+        assert entry["name"] == i.name and entry["source"] == p.source
+        assert entry["asOf"] == (None if p.as_of is None else p.as_of.isoformat())
+        assert entry["observedAt"] == (None if p.observed_at is None else p.observed_at.isoformat())
+        assert entry["enteredAt"] == (None if p.entered_at is None else p.entered_at.isoformat())
+    assert any(e["observedAt"] is not None for e in a["inputs"])
 
 
 def _guided(conn: sqlite3.Connection, symbol: str, low: float, high: float, call: date) -> int:

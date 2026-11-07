@@ -375,6 +375,69 @@
   .app-notes__field { width: 100%; resize: vertical; font-family: var(--font-sans); }
   .app-notes__error { margin: var(--space-2) 0 0; color: var(--caution); }
   .app-source { overflow-wrap: anywhere; }
+  /* The report page (spec 2026-11-06 Tier 2, 18.4), in CompanyReport's order, one column: the
+     head, the ticker, the name and the phase badge, then the one headline figure with the price
+     beside it; the meter under it, at the width it reads best, a refusal under it; the meta line
+     above the reader, its two buttons at its end, the other revisions under it; the reader; then
+     the references, Appendix A and Appendix B, each a panel on the raised surface with a hairline
+     border and no shadow, space-8 apart. Loading, the page keeps what it had, faded. */
+  #report { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-6) var(--space-4); }
+  .app-report { max-width: 72rem; padding: var(--space-2) 0 var(--space-8); }
+  .app-report.is-loading { opacity: 0.5; }
+  .app-report__head {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+    gap: var(--space-2) var(--space-6);
+  }
+  .app-report__id, .app-report__figures {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-3);
+  }
+  .app-report__ticker, .app-report__name { margin: 0; }
+  .app-report__name { color: var(--ink-muted); }
+  .app-report__band { max-width: 40rem; margin-top: var(--space-4); }
+  .app-report__band .app-refusal { margin-top: var(--space-3); }
+  .app-report__meta { margin-top: var(--space-8); }
+  .app-report__line {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+  }
+  .app-report__mode { color: var(--ink-muted); text-transform: uppercase; }
+  .app-report__actions { display: flex; gap: var(--space-2); margin-left: auto; }
+  .app-report__revisions, .app-report__note { margin: var(--space-2) 0 0; color: var(--ink-muted); }
+  .app-report__error { margin: var(--space-2) 0 0; color: var(--caution); }
+  .app-report .fb-report { margin-top: var(--space-3); }
+  .app-report__panel {
+    margin-top: var(--space-8); padding: var(--space-3) var(--space-4) var(--space-4);
+    background: var(--surface-raised); border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+  }
+  .app-report__panel > h3 { margin: 0 0 var(--space-3); }
+  .app-report__notes { max-width: 72ch; margin: 0; padding: 0; list-style: none; }
+  .app-report__notes li { overflow-wrap: anywhere; }
+  .app-report__notes li + li { margin-top: var(--space-1); }
+  .app-report__n { color: var(--ink-faint); }
+  .app-report__part + .app-report__part { margin-top: var(--space-6); }
+  .app-report__part > h4 { margin: 0 0 var(--space-2); }
+  .app-report__part > p { max-width: 72ch; margin: 0; overflow-wrap: anywhere; }
+  .app-report__part > p + * { margin-top: var(--space-2); }
+  .app-report .fb-rec + .fb-rec { margin-top: var(--space-3); }
+  .app-report__glossary { max-width: 72ch; margin: 0; }
+  .app-report__glossary dd { margin: var(--space-1) 0 var(--space-3); }
+  .app-report__none { margin-top: var(--space-6); }
+  .app-report__none > .app-note { margin-bottom: var(--space-3); }
+  .app-report__back { margin: var(--space-8) 0 0; }
+  /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
+     reader, the references and the appendixes. No header chrome, no status line, no button or
+     menu, and not today's figures, the headline, the price and the meter, which move with the
+     latest snapshot while the report rests on its own; a panel another view would show is hidden
+     already. The page runs its full length, not its window's. */
+  @media print {
+    #header, #controls, .fb-btn, .fb-menu, .app-dialog, .app-report__figures, .app-report__band,
+    .app-report__revisions, .app-report__back { display: none !important; }
+    html, body, .app-page { height: auto; }
+    .app-page { display: block; }
+    section#report { overflow: visible; padding: 0; }
+    .app-report { max-width: none; padding: 0; }
+    .app-report h3, .app-report h4 { break-after: avoid; }
+  }
 </style>
 </head>
 <body>
@@ -386,6 +449,7 @@
   <section id="watchlists" hidden></section>
   <section id="methodology" hidden></section>
   <section id="settings" hidden></section>
+  <section id="report" hidden></section>
 </main>
 <script src="/static/vendor/react.production.min.js"></script>
 <script src="/static/vendor/react-dom.production.min.js"></script>
@@ -395,5 +459,6 @@
 <script src="/static/watchlists.js"></script>
 <script src="/static/settings.js"></script>
 <script src="/static/methodology.js"></script>
+<script src="/static/report.js"></script>
 </body>
 </html>

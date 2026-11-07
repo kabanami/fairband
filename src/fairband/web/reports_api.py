@@ -60,8 +60,10 @@ blank text 400), and the work item named is completed. Each record is a ledger r
 ``judgment``, ``kill-criterion``, ``news-item``, ``complete``) resting on the report's snapshot,
 the report's and the completion's naming the work item, all in one transaction.
 
-``GET /api/companies/{symbol}/reports`` lists the company's revisions newest first, without their
-sections; ``GET /api/reports/{id}`` answers one whole, with its judgments, its appendixes and its
+``GET /api/companies/{symbol}/reports`` lists the company's revisions newest first, each record
+without its sections: its id, date (``createdAt``), writer, revision, mode, stance and the full
+report it reuses, which the report page's revisions line and cites line read (spec 18.4);
+``GET /api/reports/{id}`` answers one whole, with its judgments, its appendixes and its
 references, ``[{n, ref, source}]``, generated at read time (``render.appendix_a``, ``appendix_b``,
 ``references``), as the publish answers it; ``GET /api/reports/{id}/markdown`` its Markdown
 (``render.markdown``), ``text/markdown``, each cite with its footnote mark, the references after

@@ -724,6 +724,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/watchlists.js",
         "/static/settings.js",
         "/static/methodology.js",
+        "/static/report.js",
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url
@@ -772,29 +773,40 @@ def test_page_opens_the_view_the_hash_names() -> None:
     """Spec 2026-11-04 6: the hash follows the view, none for the Screen, and names the view on
     load and when a link changes it; #methodology/<section-id> opens the Methodology view and
     keeps the section for its script to scroll to; a hash naming no view is the Screen. Each view
-    loads through FairbandPage.onShow as it opens, every panel but the Methodology view's fades
-    while a refresh runs, and FairbandPage.find puts a symbol in FIND with the filters cleared and
-    opens the Screen."""
+    loads through FairbandPage.onShow as it opens, every panel but the Methodology view's and the
+    report page's fades while a refresh runs, and FairbandPage.find puts a symbol in FIND with the
+    filters cleared and opens the Screen. The report page's own hash is
+    test_the_report_view_opens_from_the_hash's."""
     js = _static_file("controls.js")
-    assert "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings'];" in js
-    show = js[js.index("function show(tab, section) {") :]
+    assert (
+        "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'report'];" in js
+    )
+    show = js[js.index("function show(tab, section, id) {") :]
     show = show[: show.index("\n  }\n")]
-    assert "if (VIEWS.indexOf(tab) === -1) tab = 'screen';" in show
+    assert (
+        "if (VIEWS.indexOf(tab) === -1 || (tab === 'report' && !section)) tab = 'screen';" in show
+    )
     assert "P.section = tab === 'methodology' && section ? section : null;" in show
     assert "history.replaceState(null, '', tab === 'screen' ? location.pathname" in show
-    assert ": '#' + tab + (P.section ? '/' + P.section : ''));" in show
+    assert (
+        ": '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'report' ? reportPath() : ''));"
+    ) in show
     assert "VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });" in show
     assert "if (P.onShow[tab]) P.onShow[tab]();" in show
     assert "var parts = location.hash.slice(1).split('/');" in js
-    assert "show(parts[0], parts[1]);" in js
+    assert "show(parts[0], parts[1], parts[2]);" in js
     assert "window.addEventListener('hashchange', fromHash);" in js
     # the first view opens once the later scripts have registered their loaders
     assert "document.addEventListener('DOMContentLoaded', fromHash);" in js
     assert "P.show = show;" in js and "P.onShow = {};" in js and "P.section = null;" in js
     assert "P.running = function () { return state.running !== null; };" in js
-    # every panel but the Methodology view's, whose examples are figures as of a named date
+    # every panel but the Methodology view's, whose examples are figures as of a named date, and
+    # the report page's, whose appendixes are the records of the report's own snapshot
     assert "VIEWS.forEach(function (id) {\n" in js
-    assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);" in js
+    assert (
+        "if (id !== 'methodology' && id !== 'report') panels[id].classList.toggle(RECOMPUTING,"
+        " alive);"
+    ) in js
     app = _static_file("app.js")
     assert "find: find" in app  # on window.FairbandPage
     find = app[app.index("function find(symbol) {") :]
@@ -936,7 +948,9 @@ def test_app_js_find_and_filters() -> None:
     ):
         assert prop in script, prop
     assert "var rows = narrow(state.rows, state.query, state.filters);" in script
-    assert "footnote" not in script
+    # the screen's script draws no footnote of its own: ReportReader numbers a cite from the
+    # footnotes the drawer's Summary hands it (spec 2026-11-06 Tier 2, 13.1)
+    assert "'sup'" not in script and "[^" not in script
 
 
 def test_app_js_query_is_trimmed_and_lower_cased() -> None:
@@ -1549,26 +1563,32 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
     before; the stance line, the report's word in its chip classes, faded once the report's window
     has expired, then the principal's chip; the report's Summary by ReportReader and Open the
     report, a link to the report page; without a report, Request research and the open item's
-    line; then Details ▾, a quiet disclosure. Everything else is behind it."""
+    line; then Details ▾, a quiet disclosure. Everything else is behind it. The meter and Request
+    research are the drawer's own parts, which the report page draws too (18.4)."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
         main,
         "className: 'app-drawer__head'",
-        "h(F.BandMeter, {",
+        "valued ? section('band', null, meter(body),",
         "r.refusal ? section('refusal', 'Refusal',",
         "className: 'app-stance'",
         "h(F.ReportReader, {",
         "'Open the report')",
-        "'Request research')",
+        "requestResearch(ask, body.item, render, function () { reloadDetail(r.symbol); })",
         "'Details ▾')",
         "state.detailsOpen ? details(body) : null",
     )
     head = main[: main.index("'Details ▾')")]
     for gone in ("F.ValidityWindow", "'Phase evidence'", "inputsTable(", "intermediates("):
         assert gone not in head, gone
-    assert "reviewedValue: review && review.value != null ? review.value : null," in main
-    assert "showScale: false, caption: standing(r, body.designationEdges)" in main
+    meter = _function(script, "meter")
+    assert "reviewedValue: review && review.value != null ? review.value : null," in meter
+    assert "showScale: false, caption: standing(r, body.designationEdges)" in meter
+    assert "var valued = isValued(r);" in main
+    assert "return r.value != null && r.levels != null && r.price != null;" in (
+        _function(script, "isValued")
+    )
     stance = main[main.index("className: 'app-stance'") : main.index("h(F.ReportReader, {")]
     assert "'fb-stance fb-stance--' + report.stance +" in stance
     assert "(report.expired ? ' fb-stance--expired' : '') + ' label'" in stance
@@ -1578,25 +1598,37 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
     )
     reader = main[main.index("h(F.ReportReader, {") : main.index("'Open the report')")]
     assert "sections: [report.summary]" in reader and "appendixes: false" in reader
-    assert "references: report.references" in reader  # the footnote numbers' hook (18.4)
+    # the Summary's cites numbered as the report page's references list numbers them (18.4)
+    assert "footnotes: footnotes(report.references)" in reader
     assert "cites:" not in reader  # the report page carries the cites line
     assert (
         "h(F.Button, { href: '#report/' + encodeURIComponent(r.symbol) }, 'Open the report')"
         in (main)
     )
-    toggle = main[main.index("'Request research')") - 300 : main.index("'Details ▾')")]
-    assert "disabled: !!body.item," in toggle
-    assert "'aria-expanded': ask.open ? 'true' : 'false'" in toggle
-    assert "ask.open ? h(RequestMenu, { ask: ask }) : null" in toggle
+    toggle = main[main.index("requestResearch(ask, body.item") : main.index("'Details ▾')")]
     _in_order(
         toggle,
-        "'Request research')",
-        "ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null",
-        "requested(body.item)",
+        "requestResearch(ask, body.item, render, function () { reloadDetail(r.symbol); })",
         "variant: 'quiet'",
         "'aria-expanded': state.detailsOpen ? 'true' : 'false'",
         "onClick: toggleDetails",
     )
+    ask = _function(script, "requestResearch")
+    assert "disabled: !!item," in ask
+    assert "'aria-expanded': ask.open ? 'true' : 'false'" in ask
+    assert "ask.open ? h(RequestMenu, { ask: ask, redraw: redraw, after: after }) : null" in ask
+    _in_order(
+        ask,
+        "'Request research')",
+        "ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null",
+        "requested(item)",
+    )
+    asked = _function(script, "asked")
+    assert (
+        "if (!state.request || state.request.symbol !== symbol) state.request = asking(symbol);"
+        in (asked)
+    )
+    assert "mode: 'full report'" in _function(script, "asking")
     line = _function(script, "requested")
     assert "if (!item) return null;" in line
     assert (
@@ -1650,15 +1682,23 @@ def test_details_order_is_pinned() -> None:
     for gone in ("Drop", "onClick", "Button"):
         assert gone not in record, gone
     assert "/overrides" not in script and "api.del" not in script
-    # the guidance's range, midpoint, call, current or superseded and the overrides citing it
+    # the guidance's range, midpoint, call, current or superseded and the overrides citing it, in
+    # the guidance table the report page's Appendix A draws too (18.4)
     guidance = details[details.index("'app-guidance'") : details.index("'app-judgments'")]
     for text in (
-        "g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy",
-        "'call ', when(g.asOf)",
-        "'midpoint ' + guided(g.midpoint, g.metric)",
-        "citedBy(rs.overrides, g.id)",
+        "guidanceTable(rs.guidance.map(function (g) {",
+        "state: g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy,",
+        "citedBy: citedBy(rs.overrides, g.id)",
     ):
         assert text in guidance, text
+    table = _function(script, "guidanceTable")
+    for text in (
+        "'call ', when(g.asOf), ' · ', g.state",
+        "'midpoint ' + guided(g.midpoint, g.metric)",
+        "g.citedBy.length ? h('span', { className: 'caption app-line' },",
+        "'cited by override ' + g.citedBy.join(', ')",
+    ):
+        assert text in table, text
     assert "var found = /^guidance:(\\d+)$/.exec(String(e.ref).trim());" in script
     # the ledger: the date, the principal and actor, the kind and the summary
     ledger = details[details.index("'app-ledger'") : details.index("h(F.ValidityWindow, {")]
@@ -1737,26 +1777,31 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
     counts on the latest snapshot shows that value in the screen's Reviewed column, so its drawer
     draws the secondary's band against the price, captioned as the secondary valuation with its
     word at today's price, and the refusal stays under it. A refused row with none stays as it
-    was; the valued row's meter is the mechanical one."""
+    was; the valued row's meter is the mechanical one. The meter is the drawer's own part, which
+    the report page draws too (18.4)."""
     script = _static_file("app.js")
     main = _function(script, "sections")
-    assert "var secondary = body.secondary;" in main
-    assert (
-        "var banded = !valued && !!r.refusal && !!secondary && !!secondary.levels &&"
-        " r.price != null;"
-    ) in main
+    assert "var banded = isBanded(body);" in main
+    banded = _function(script, "isBanded")
+    assert "var s = body.secondary;" in banded
+    assert "return !isValued(r) && !!r.refusal && !!s && !!s.levels && r.price != null;" in banded
     _in_order(
         main,
-        "valued ? section('band', null,",
-        "banded ? section('secondary-band', null,",
+        "valued ? section('band', null, meter(body),",
+        "banded ? section('secondary-band', null, meter(body)) : null,",
+        "r.refusal ? section('refusal', 'Refusal',",
+    )
+    meter = _function(script, "meter")
+    _in_order(
+        meter,
+        "if (isValued(r)) {",
+        "if (!isBanded(body)) return null;",
         "low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,",
         "fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,",
         "trimLevel: secondary.levels.trim, designation: secondary.designation,",
-        "showScale: false, caption: secondaryCaption(secondary, body.designationEdges)",
-        "r.refusal ? section('refusal', 'Refusal',",
+        "showScale: false, caption: secondaryCaption(secondary, body.designationEdges),",
     )
-    band = main[main.index("banded ? section('secondary-band', null,") :]
-    band = band[: band.index("r.refusal ? section('refusal', 'Refusal',")]
+    band = meter[meter.index("if (!isBanded(body)) return null;") :]
     assert "reviewedValue" not in band
     caption = _function(script, "secondaryCaption")
     assert (
@@ -1807,7 +1852,8 @@ def test_the_request_menu_shows_the_open_item_refusal(client: TestClient) -> Non
     refuses the second post 409, its sentence shows under the button as it arrives, and the
     detail is read again so the open item's line follows. The menu: the two modes, a radio each,
     the note line of at most 200 characters, and Post, sent as the owner with the request header
-    every page write carries."""
+    every page write carries. The drawer and the report page each keep their own request, so the
+    drawer on one company never resets the report page's on another."""
     script = _static_file("app.js")
     assert "var REQUEST_MODES = ['valuation review', 'full report'];" in script
     menu = _function(script, "RequestMenu")
@@ -1817,22 +1863,38 @@ def test_the_request_menu_shows_the_open_item_refusal(client: TestClient) -> Non
         "type: 'radio'",
         "maxLength: 200",
         "'Post')",
+        "onSubmit: function (event) { event.preventDefault(); postRequest(ask, redraw, after); }",
     ):
         assert text in menu, text
     post = _function(script, "postRequest")
     assert (
-        "api.post('/api/inbox', { symbol: symbol, mode: ask.mode, note: ask.note.trim() })" in post
+        "api.post('/api/inbox', { symbol: ask.symbol, mode: ask.mode, note: ask.note.trim() })"
+        in post
     )
     _in_order(
         post,
         "if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)",
-        "state.request.error = err.message;",
-        "reloadDetail(symbol);",
+        ".catch(function (err) { ask.error = err.message; })",
+        "ask.open = false;",
+        "after();",
     )
-    # the menu closes on a press or focus outside it and on Escape, before the drawer does
-    assert "document.addEventListener('pointerdown', closeRequestOutside);" in script
-    assert "document.addEventListener('focusin', closeRequestOutside);" in script
-    assert "event.target.closest('.app-request')" in script
+    # the menu closes on a press or focus outside its control and on Escape, which hands focus
+    # back to the button, after the drawer's own Escape has seen a menu open and waited; its
+    # listeners last as long as the menu
+    _in_order(
+        menu,
+        "if (!(event.target instanceof Element) || control.contains(event.target)) return;",
+        "if (event.key !== 'Escape') return;",
+        "control.querySelector(':scope > .fb-btn').focus();",
+        "document.addEventListener('pointerdown', outside);",
+        "document.addEventListener('focusin', outside);",
+        "document.addEventListener('keydown', escape);",
+        "return function () {",
+        "document.removeEventListener('pointerdown', outside);",
+        "document.removeEventListener('focusin', outside);",
+        "document.removeEventListener('keydown', escape);",
+    )
+    assert "closeRequestOutside" not in script
     # the server's side: one open item for a company, the second post refused
     body = {"symbol": "AAPL", "mode": "full report", "note": "the first look"}
     first = client.post("/api/inbox", json=body, headers=HEADER)
@@ -1918,6 +1980,351 @@ def test_the_bundle_links_a_button_and_reads_every_override_state() -> None:
     union = re.search(r"export type OverrideState =(.*?);", declarations, re.DOTALL)
     assert union is not None
     assert "| 'refused-route'" in union.group(1) and "| 'dropped'" in union.group(1)
+
+
+def test_the_report_view_opens_from_the_hash() -> None:
+    """Spec 2026-11-06 Tier 2, 18.4: the report page is a panel no header view names.
+    #report/<symbol> opens the company's latest published report and #report/<symbol>/<id> a
+    revision: show keeps the symbol, upper-cased as the store keeps it, and the id, a whole number
+    or none, in FairbandPage.report for the page's script, writes them back into the hash and runs
+    the loader again when either changes while the page is open; without a symbol it is the
+    Screen. While it shows no header view is marked, and its tables do not fade during a refresh:
+    they are the records of the report's snapshot. FairbandPage.openReport opens it."""
+    js = _static_file("controls.js")
+    assert (
+        "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'report'];" in js
+    )
+    show = _function(js, "show")
+    _in_order(
+        show,
+        "if (VIEWS.indexOf(tab) === -1 || (tab === 'report' && !section)) tab = 'screen';",
+        "var moved = tab === 'report' && keepReport(section, id);",
+        "(tab === 'report' ? reportPath() : '')",
+        "if (!opened && !P.section && !moved) return;",
+        "if (P.onShow[tab]) P.onShow[tab]();",
+    )
+    keep = _function(js, "keepReport")
+    assert (
+        "var report = { symbol: symbol.toUpperCase(), id: /^\\d+$/.test(String(id)) ? Number(id)"
+        " : null };"
+    ) in keep
+    _in_order(keep, "var kept = P.report;", "P.report = report;")
+    assert "return !kept || kept.symbol !== report.symbol || kept.id !== report.id;" in keep
+    path = _function(js, "reportPath")
+    assert "return '/' + P.report.symbol + (P.report.id == null ? '' : '/' + P.report.id);" in path
+    assert "show(parts[0], parts[1], parts[2]);" in js  # #report/AAPL/12: the id is parts[2]
+    assert "view: state.tab === 'report' ? '' : state.tab," in js
+    assert "if (id !== 'methodology' && id !== 'report')" in js
+    assert (
+        "P.openReport = function (symbol, id) { show('report', symbol, id == null ? null"
+        " : String(id)); };"
+    ) in js
+    assert "P.report = null;" in js
+    html = _static_file("index.html")
+    assert '<section id="report" hidden></section>' in html
+    scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
+    assert scripts.index("report.js") > scripts.index("controls.js") > scripts.index("app.js")
+    rule = _rule(html, "#report {")
+    assert "overflow: auto;" in rule and "flex: 1;" in rule
+    report = _static_file("report.js")
+    assert "P.onShow.report = load;" in report
+    assert "var want = P.report;" in _function(report, "load")
+
+
+def test_the_report_page_order_is_pinned() -> None:
+    """Spec 18.4, in the CompanyReport layout: the head with the one headline figure, the reviewed
+    value where the review on the latest snapshot has one, else the mechanical, the price beside
+    it in figure; the meter as the drawer draws it, its price under the head's figure-lg; above
+    the reader the stance, mode, date, writer, revision, Download .md, the table toggle and the
+    other revisions; ReportReader with every section, its cites and its footnote numbers; the
+    references; Appendix A with the bridge; Appendix B; the link back to the screen."""
+    script = _code(_static_file("report.js"))
+    _in_order(
+        script,
+        "h(F.ValueCell, {",
+        "emphasis: 'strong'",
+        "P.meter(d, false)",
+        "'Download .md')",
+        "h(F.ReportReader, {",
+        "'References')",
+        "'Appendix A')",
+        "h(F.ValueBridge, {",
+        "'Appendix B')",
+        "'Back to the screen')",
+    )
+    page = _function(script, "page")
+    _in_order(
+        page,
+        "head(d)",
+        "band(d)",
+        "meta(d, report)",
+        "reader(report)",
+        "references(report)",
+        "appendixA(report)",
+        "appendixB(report)",
+        "back()",
+    )
+    head = _function(script, "head")
+    assert "value: value.value, basis: value.basis, emphasis: 'strong', align: 'left'" in head
+    assert "h('span', { className: 'figure' }, F.formatMoney(r.price))" in head
+    headline = _function(script, "headline")
+    _in_order(
+        headline,
+        "return { value: d.review.value, basis: 'reviewed' };",
+        "return { value: r.value, basis: 'mechanical' };",
+        "return { value: s.valuePerShare, basis: 'reviewed', note: 'secondary valuation' };",
+    )
+    meta = _function(script, "meta")
+    _in_order(
+        meta,
+        "'fb-stance fb-stance--' + report.stance",
+        "report.mode",
+        "P.when(report.createdAt)",
+        "h(F.PrincipalChip, { principal: report.principal, actor: report.actor })",
+        "'revision ' + report.revision",
+        "'Download .md')",
+        "'Tables')",
+        "revisions(report)",
+    )
+    assert "var expired = report.appendixA.snapshot.validUntil < d.today;" in meta
+    lines = _function(script, "revisions")
+    assert "'Earlier revisions: '" in lines and "'Later revisions: '" in lines
+    link = _function(script, "revisionLink")
+    assert "href: '#report/' + encodeURIComponent(report.symbol) + '/' + r.id" in link
+    reader = _function(script, "reader")
+    for text in (
+        "mode: report.mode, state: 'published', revision: 'revision ' + report.revision,",
+        "snapshot: String(report.snapshotId),",
+        "review: report.reviewId == null ? undefined : String(report.reviewId),",
+        "reusesFullReportOf: reusedDate(report)",
+        "sections: report.sections, footnotes: P.footnotes(report.references), appendixes: false",
+    ):
+        assert text in reader, text
+    refs = _function(script, "references")
+    for text in ("h('ol', {", "title: e.ref", "'[' + e.n + ']'", "e.source", "'No references.'"):
+        assert text in refs, text
+    download = _function(script, "download")
+    _in_order(
+        download,
+        "fetch('/api/reports/' + report.id + '/markdown')",
+        "URL.createObjectURL(blob)",
+        "link.download = report.symbol + '-revision-' + report.revision + '.md';",
+        "link.click();",
+    )
+    # the Tables toggle is the page's one flag, which Task 4's charts read
+    assert "state.tables = !state.tables;" in _function(script, "toggleTables")
+    back = _function(script, "back")
+    assert "P.show('screen');" in back and "href: '#'" in back
+
+
+def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
+    """Spec 13.1 and 18.4: Appendix A as the server generates it, drawn with the drawer's parts
+    (window.FairbandPage) rather than copies of them: the snapshot line; the inputs table as the
+    drawer draws it; the bridge, each line under its input's label, when the review has a value,
+    else its refusal; the overrides inside the review, each a record, read-only; the secondary
+    valuation's figures, its drivers or parts and its projection; the guidance on file; the checks
+    that ran; the versions; the classifier's evidence. Appendix B, a definition list. The owner
+    neither adds nor drops an override on the page (spec 3)."""
+    script = _code(_static_file("report.js"))
+    a = _function(script, "appendixA")
+    _in_order(
+        a,
+        "part('Snapshot',",
+        "P.inputsTable(a.inputs.map(input))",
+        "part('Bridge', bridge(a))",
+        "part('Overrides',",
+        "part('Secondary valuation', secondary(a))",
+        "part('Guidance on file',",
+        "P.guidanceTable(a.guidance)",
+        "part('Checks that ran',",
+        "part('Versions', versions(a.versions))",
+        "part('Classifier evidence', P.phaseEvidence(classifier(a.classifier)))",
+    )
+    adapted = _function(script, "input")
+    for text in (
+        "estimate_method: i.estimateMethod,",
+        "source: i.source, as_of: i.asOf, observed_at: i.observedAt, entered_at: i.enteredAt",
+    ):
+        assert text in adapted, text
+    bridge = _function(script, "bridge")
+    _in_order(
+        bridge,
+        "if (!b) return none('No review: the value is the mechanical one.');",
+        "if (b.reviewedValue == null)",
+        "h(F.ValueBridge, {",
+        "mechanical: b.mechanicalValue, reviewed: b.reviewedValue, hero: false,",
+        "tag: line.label,",
+        "from: P.inputFigure(line.old, o.unit), to: P.inputFigure(line.new, o.unit),",
+        "principal: o.principal, actor: o.actor, reason: o.reason",
+    )
+    records = _function(script, "overrides")
+    for text in (
+        "h(F.OverrideRecord, {",
+        "state: 'applied',",
+        (
+            "var effect = line && line.delta != null && b.reviewedValue != null ? line.delta"
+            " : undefined;"
+        ),
+        "resultNote: effect === undefined ? (line && line.refusal) || NO_EFFECT : undefined",
+    ):
+        assert text in records, text
+    for gone in ("Drop", "onClick", "Button"):
+        assert gone not in records, gone
+    page = _static_file("report.js")
+    assert "/overrides" not in page and "api.del" not in page and ".del(" not in page
+    secondary = _function(script, "secondary")
+    _in_order(
+        secondary,
+        "if (!s) return none(a.noSecondary ? sentence(a.noSecondary) : 'None.');",
+        "P.pairs(P.secondaryRows(s).concat([",
+        "P.secondaryPath(s)",
+        "s.form === 'drivers' ? projection(s) : partsYears(s)",
+    )
+    assert "P.figuresTable([" in _function(script, "projection")
+    assert "P.figuresTable([" in _function(script, "partsYears")
+    b = _function(script, "appendixB")
+    assert "h('dl', { className: 'app-report__glossary' }" in b and "'No terms used.'" in b
+    app = _static_file("app.js")
+    exposed = app[app.index("window.FairbandPage = {") :]
+    exposed = exposed[: exposed.index("};")]
+    for name in (
+        "meter: meter",
+        "inputsTable: inputsTable",
+        "figuresTable: figuresTable",
+        "inputFigure: inputFigure",
+        "secondaryRows: secondaryRows",
+        "secondaryPath: secondaryPath",
+        "guidanceTable: guidanceTable",
+        "phaseEvidence: phaseEvidence",
+        "pairs: pairs",
+        "when: when",
+        "whole: whole",
+        "plain: plain",
+        "footnotes: footnotes",
+        "asking: asking",
+        "requestResearch: requestResearch",
+    ):
+        assert name in exposed, name
+
+
+def test_the_report_page_without_a_report() -> None:
+    """Spec 18.4: a company with no published report shows the head, the meter and "No report
+    yet." with Request research as the drawer has it, from the drawer's own code: the button,
+    disabled while an item is open, its menu, the server's refusal and the open item's line.
+    Posted, the page reads the company again, so the line follows."""
+    script = _code(_static_file("report.js"))
+    page = _function(script, "page")
+    _in_order(page, "head(d)", "band(d)", "report ?", "noReport(d)")
+    none = _function(script, "noReport")
+    _in_order(none, "'No report yet.'", "P.requestResearch(state.request, d.item, render, load)")
+    load = _function(script, "load")
+    assert "state.request = P.asking(want.symbol);" in load
+    app = _static_file("app.js")
+    ask = _function(app, "requestResearch")
+    _in_order(
+        ask,
+        "disabled: !!item,",
+        "onClick: function () { toggleRequest(ask, redraw); }",
+        "'Request research')",
+        "ask.open ? h(RequestMenu, { ask: ask, redraw: redraw, after: after }) : null",
+        "ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null",
+        "requested(item)",
+    )
+
+
+def test_the_report_page_has_one_headline_figure() -> None:
+    """The brand book and CompanyReport.md: the head's value is the page's one figure-lg. The
+    meter's price and the bridge's reviewed sum take figure there, by a `// fairband:` prop,
+    ``hero: false``; elsewhere they keep figure-lg."""
+    bundle = _component_file("bundle.js")
+    meter = _function(bundle, "BandMeter")
+    assert "// fairband: under a page's one headline figure, `hero: false`" in meter
+    assert (
+        "h('span', { className: 'fb-band__price ' + (p.hero === false ? 'figure' : 'figure-lg') },"
+        in meter
+    )
+    bridge = _function(bundle, "ValueBridge")
+    assert "// fairband: under a page's one headline figure, `hero: false`" in bridge
+    assert "className: 'fb-num ' + (p.hero === false ? 'figure' : 'figure-lg')" in bridge
+    declarations = _component_file("index.d.ts")
+    for name in ("BandMeterProps", "ValueBridgeProps"):
+        props = re.search(rf"export interface {name} \{{\n(.*?)\n\}}", declarations, re.DOTALL)
+        assert props is not None and "hero?: boolean;" in props.group(1), name
+    script = _code(_static_file("report.js"))
+    assert script.count("emphasis: 'strong'") == 1 and "figure-lg" not in script
+    meter = _function(_static_file("app.js"), "meter")
+    assert meter.count("hero: hero") == 2  # the drawer passes none: its meter keeps figure-lg
+
+
+def test_the_reader_numbers_its_footnotes() -> None:
+    """Spec 13.1: a cite shows as its text followed by its footnote number; ReportReader keeps the
+    dotted underline and the ref in the title and adds the number as a superscript, from the
+    caller's ``footnotes`` (ref → n), a `// fairband:` patch. The report page numbers its cites
+    by its references; the drawer's Summary by the full report's numbers, so a number reads the
+    same in both. The cites line names a review or a thesis only when given."""
+    bundle = _component_file("bundle.js")
+    reader = _function(bundle, "ReportReader")
+    assert "// fairband: a cited number keeps its dotted underline" in reader
+    assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in reader
+    _in_order(
+        reader,
+        "var footnotes = p.footnotes || {};",
+        "if (typeof part === 'string') return part;",
+        "var n = own(footnotes, String(part.ref).trim());",
+        "h(Cite, { source: part.ref }, part.cite),",
+        "n == null ? null : h('sup', { className: 'fb-cite__n' }, '[' + n + ']'));",
+    )
+    _in_order(
+        reader,
+        "'cites snapshot ', h('span', { className: 'figure-sm' }, cites.snapshot),",
+        "cites.review == null ? null : h(React.Fragment, null, ' · review ',",
+        "cites.thesis == null ? null : h(React.Fragment, null, ' · thesis ',",
+        "cites.reusesFullReportOf ?",
+    )
+    assert "return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;" in (
+        _function(bundle, "own")
+    )
+    css = _component_file("bundle.css")
+    patch = css[css.index("/* fairband: a cited number's footnote number") :]
+    assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in patch[: patch.index("*/")]
+    rule = _rule(css, ".fb-cite__n {")
+    assert "color: var(--ink-faint);" in rule and "line-height: 0;" in rule
+    declarations = _component_file("index.d.ts")
+    props = re.search(r"export interface ReportReaderProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None and "footnotes?: Record<string, number>;" in props.group(1)
+    app = _static_file("app.js")
+    assert "footnotes: footnotes(report.references)" in _function(app, "sections")
+    marks = _function(app, "footnotes")
+    assert "(references || []).forEach(function (e) { marks[e.ref] = e.n; });" in marks
+    assert "footnotes: P.footnotes(report.references)" in _static_file("report.js")
+
+
+def test_the_print_stylesheet() -> None:
+    """Spec 13.6 and 18.4: printed, the report page gives the reader, the references and the
+    appendixes under the company's name: no header chrome, no status line, no button or menu, and
+    not today's figures, which move with the latest snapshot; the page runs its full length. A
+    panel another view would show is hidden already."""
+    page = _static_file("index.html")
+    block = page[page.index("@media print {") :]
+    block = block[: block.index("\n  }\n")]
+    hidden = block[: block.index("{ display: none !important; }")]
+    for selector in (
+        "#header",
+        "#controls",
+        ".fb-btn",
+        ".fb-menu",
+        ".app-report__figures",
+        ".app-report__band",
+        ".app-report__revisions",
+        ".app-report__back",
+    ):
+        assert selector in hidden, selector
+    for text in (
+        "html, body, .app-page { height: auto; }",
+        ".app-page { display: block; }",
+        "#report { overflow: visible; padding: 0; }",
+    ):
+        assert text in block, text
 
 
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
@@ -2160,6 +2567,9 @@ def test_no_derived_stance_remains() -> None:
         "fb-stance--expired",
     }
     assert named["index.d.ts"] == {"AgentStance", "agentStance", "stance"}
+    # the report page's stance (18.4): the report's own word in the drawer's chip classes
+    page = set(word.findall(_code(_static_file("report.js"))))
+    assert page == {"report.stance", "fb-stance", "fb-stance--", "fb-stance--expired"}
 
 
 def test_the_bundle_stance_words_are_the_policys(policy: Policy) -> None:

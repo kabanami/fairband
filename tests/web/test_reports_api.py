@@ -268,6 +268,40 @@ def test_a_second_submission_is_revision_two(client: TestClient) -> None:
     assert "sections" not in listed[0] and listed[0]["actor"] == "claude-opus-5-5"
 
 
+def test_the_list_carries_what_the_report_page_reads(client: TestClient) -> None:
+    """Spec 18.4: the report page's revisions line links each other revision by its date, and the
+    reader's cites line names the date of the full report a valuation review reuses, so the list
+    carries each revision's id, date, writer, revision, mode, stance and the report it reuses,
+    newest first, without its sections."""
+    sid = _snapshot_id(client)
+    full = _published(client, _body(sid))
+    review = _body(sid, mode="valuation review", stance="trim")
+    second = _published(client, review | {"sections": _sections(sid, "valuation review")})
+    listed = client.get("/api/companies/AAPL/reports").json()["reports"]
+    keys = ("id", "createdAt", "actor", "revision", "mode", "stance", "reusesFullReportOf")
+    assert [{k: r[k] for k in keys} for r in listed] == [
+        {
+            "id": second["id"],
+            "createdAt": NOW.isoformat(),
+            "actor": "claude-opus-5-5",
+            "revision": 2,
+            "mode": "valuation review",
+            "stance": "trim",
+            "reusesFullReportOf": full["id"],
+        },
+        {
+            "id": full["id"],
+            "createdAt": NOW.isoformat(),
+            "actor": "claude-opus-5-5",
+            "revision": 1,
+            "mode": "full report",
+            "stance": "hold",
+            "reusesFullReportOf": None,
+        },
+    ]
+    assert all("sections" not in r and r["principal"] == "agent" for r in listed)
+
+
 def test_kill_criteria_and_news_items_are_stored_with_the_report(client: TestClient) -> None:
     sid = _snapshot_id(client)
     news = {

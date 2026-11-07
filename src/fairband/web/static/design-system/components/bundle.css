@@ -656,6 +656,16 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 /* A cited number is the only kind a published report may contain, so the mark
    is a quiet affordance rather than a warning. */
 .fb-cite { color: var(--accent); border-bottom: 1px dotted var(--accent); cursor: help; }
+/* fairband: a cited number's footnote number (spec 2026-11-06 Tier 2, 13.1 and 18.4): a
+   superscript after the cite's dotted underline, in mono at the caption's size and in ink-faint,
+   so the cite stays the figure; no line height of its own, so the prose keeps its rhythm. */
+.fb-cite__n {
+  margin-left: 1px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 0;
+  color: var(--ink-faint);
+}
 
 .fb-report__findings { width: 100%; border-collapse: collapse; }
 .fb-report__findings th {

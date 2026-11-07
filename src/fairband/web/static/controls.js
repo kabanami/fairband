@@ -6,7 +6,9 @@
    6.1). While a refresh runs, the page asks /api/refresh/current every 2 seconds, one Cancel
    stands where the Refresh buttons were, the stamp is gone and the tables keep their old figures
    at ink-faint; when it ends, the rows (and the groups, when that view is open) load again. The
-   group view is one plain table from /api/groups (spec 6.3), with no chart. */
+   group view is one plain table from /api/groups (spec 6.3), with no chart. The report page
+   (report.js) is a panel no header view names: #report/<symbol> and #report/<symbol>/<id> open
+   it (spec 2026-11-06 Tier 2, 18.4). */
 (function () {
   'use strict';
 
@@ -26,8 +28,9 @@
     quotes: 'fetching prices', reprice: 'repricing', done: 'finishing'
   };
 
-  /* The views in the header's order, each with its panel, a section of the page. */
-  var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings'];
+  /* The views in the header's order, each with its panel, a section of the page; then the report
+     page's panel, which no header view names: the drawer's Open the report opens it. */
+  var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'report'];
   var panels = {};
   VIEWS.forEach(function (id) { panels[id] = document.getElementById(id); });
   var header = ReactDOM.createRoot(document.getElementById('header'));
@@ -148,14 +151,17 @@
      and its loader runs, the groups' here and each later view's through P.onShow. A view the page
      does not know is the Screen. A section of the Methodology view stays in P.section for that
      view's script to scroll to; one named while the view is open runs its loader again
-     (spec 2026-11-04 6). */
-  function show(tab, section) {
-    if (VIEWS.indexOf(tab) === -1) tab = 'screen';
+     (spec 2026-11-04 6). The report page takes a company's symbol and, for an earlier revision, a
+     report's id, kept in P.report for its script; without a symbol it is the Screen, and another
+     symbol or id while it is open runs its loader again (spec 2026-11-06 Tier 2, 18.4). */
+  function show(tab, section, id) {
+    if (VIEWS.indexOf(tab) === -1 || (tab === 'report' && !section)) tab = 'screen';
     var opened = state.tab !== tab;
     P.section = tab === 'methodology' && section ? section : null;
+    var moved = tab === 'report' && keepReport(section, id);
     history.replaceState(null, '', tab === 'screen' ? location.pathname
-      : '#' + tab + (P.section ? '/' + P.section : ''));
-    if (!opened && !P.section) return;
+      : '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'report' ? reportPath() : ''));
+    if (!opened && !P.section && !moved) return;
     state.tab = tab;
     VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });
     if (tab === 'groups') loadGroups();
@@ -163,11 +169,27 @@
     render();
   }
 
+  /* The report a hash names, kept in P.report: the symbol upper-cased, as the store keeps it, and
+     the revision's id, a whole number, or null for the company's latest report. True when it is
+     not the report already kept. */
+  function keepReport(symbol, id) {
+    var report = { symbol: symbol.toUpperCase(), id: /^\d+$/.test(String(id)) ? Number(id) : null };
+    var kept = P.report;
+    P.report = report;
+    return !kept || kept.symbol !== report.symbol || kept.id !== report.id;
+  }
+
+  /* The kept report's part of the hash: /AAPL, or /AAPL/12 for a revision. */
+  function reportPath() {
+    return '/' + P.report.symbol + (P.report.id == null ? '' : '/' + P.report.id);
+  }
+
   /* The view a hash names, on load and when a link changes it: #watchlists, #methodology,
-     #settings, or #methodology/<section-id>, the Methodology view at that section. */
+     #settings, #methodology/<section-id>, the Methodology view at that section, #report/<symbol>,
+     the company's report page, or #report/<symbol>/<id>, an earlier revision. */
   function fromHash() {
     var parts = location.hash.slice(1).split('/');
-    show(parts[0], parts[1]);
+    show(parts[0], parts[1], parts[2]);
   }
 
   function groupBy(event) {
@@ -284,9 +306,10 @@
   function render() {
     var alive = state.running !== null;
     /* Every panel's tables fade while a run is alive, but the Methodology view's: its examples
-       are figures as of a named date, not the running refresh's. */
+       are figures as of a named date, not the running refresh's; and the report page's: its
+       appendixes are the records of the snapshot the report rests on. */
     VIEWS.forEach(function (id) {
-      if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);
+      if (id !== 'methodology' && id !== 'report') panels[id].classList.toggle(RECOMPUTING, alive);
     });
     /* The stamp is the latest refresh's finish, whatever its status (the status line says how it
        ended). While a run is alive, or before any refresh finished, there is none: an absent
@@ -296,7 +319,8 @@
       views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },
         { id: 'watchlists', label: 'Watchlists' }, { id: 'methodology', label: 'Methodology' },
         { id: 'settings', label: 'Settings' }],
-      view: state.tab,
+      /* the report page is no header view: none is marked while it shows */
+      view: state.tab === 'report' ? '' : state.tab,
       onViewChange: show,
       engineRanAt: ran ? P.localIso(ran) : null,
       children: actions(alive)
@@ -412,12 +436,15 @@
 
   /* What the later views use: show opens a view; each view registers its loader in onShow, and
      onShow[tab]() runs each time that view opens; section is the Methodology section a hash
-     named; running() is true while a refresh runs; followRefresh() follows a refresh another view
-     started (the Settings view's revalue) as the header follows its own: the run bar while it
-     runs, the rows loaded again when it ends. */
+     named; report is the report the report page shows, { symbol, id }, the id null for the
+     latest, and openReport(symbol, id?) opens that page; running() is true while a refresh runs;
+     followRefresh() follows a refresh another view started (the Settings view's revalue) as the
+     header follows its own: the run bar while it runs, the rows loaded again when it ends. */
   P.show = show;
   P.onShow = {};
   P.section = null;
+  P.report = null;
+  P.openReport = function (symbol, id) { show('report', symbol, id == null ? null : String(id)); };
   P.running = function () { return state.running !== null; };
   P.followRefresh = function () { started = true; poll(); };
 

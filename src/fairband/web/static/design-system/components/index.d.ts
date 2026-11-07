@@ -183,6 +183,11 @@ export interface ValueBridgeProps {
   /** In the order they apply. Reordering them would misstate which input did what. */
   overrides: Override[];
   note?: string;
+  /**
+   * fairband: `false` sets the reviewed sum in `figure`, under a page's one headline figure
+   * (CompanyReport's one hero; spec 2026-11-06 Tier 2, 18.4). Absent, it is `figure-lg`.
+   */
+  hero?: boolean;
 }
 
 export interface BandMeterProps {
@@ -208,6 +213,11 @@ export interface BandMeterProps {
    * or absent draws none.
    */
   reviewedValue?: number | null;
+  /**
+   * fairband: `false` sets the head's price in `figure`, under a page's one headline figure
+   * (CompanyReport's one hero; spec 2026-11-06 Tier 2, 18.4). Absent, it is `figure-lg`.
+   */
+  hero?: boolean;
 }
 
 export interface ValidityWindowProps {
@@ -321,12 +331,21 @@ export interface ReportReaderProps {
    */
   cites?: {
     snapshot?: string;
+    /** fairband: absent, the cites line names no review (spec 2026-11-06 Tier 2, 18.4). */
     review?: string;
+    /** fairband: absent, the cites line names no thesis (spec 2026-11-06 Tier 2, 18.4). */
     thesis?: string;
     /** The date of the full report a valuation review reuses. */
     reusesFullReportOf?: string;
   };
   sections?: ReportSection[];
+  /**
+   * fairband: each cite's footnote number by its ref (ref → n), as the report's references
+   * number them: a cited number keeps its dotted underline and its ref in the title and is
+   * followed by `[n]` as a superscript; a ref the map lacks has none (spec 2026-11-06 Tier 2,
+   * 13.1 and 18.4).
+   */
+  footnotes?: Record<string, number>;
   /** On `rejected`. The published report is unchanged either way. */
   findings?: ReportFinding[];
   appendixes?: boolean;
