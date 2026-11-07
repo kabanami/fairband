@@ -224,9 +224,12 @@ claimed items (18.5).
   `constant-currency`), `as_of` (the call's date), `text` (the sentence, verbatim), `source` (the
   transcript's `response:` ref, or a filing), the principal and actor. The server computes
   `midpoint`, and, for a fiscal-year revenue or EPS figure, `step`: the growth from the base
-  year's actual on file, so the agent never computes a rate. A newer record for the same metric
-  and period supersedes the older (`superseded_by`); every record stays, so a later report shows
-  the track record, guided against delivered. Written with `guidance_add`, read with `guidance`.
+  year's actual on file, so the agent never computes a rate. A newer record for the same metric,
+  period and basis supersedes the older (`superseded_by`), in the order of the calls' dates: a
+  record of an earlier call recorded later is stored already superseded; an override or a
+  secondary valuation citing a superseded record is refused 409 "guidance record <id> is
+  superseded by record <id>" (build rulings of Task 6b, 2026-11-07). Every record stays, so a
+  later report shows the track record, guided against delivered. Written with `guidance_add`, read with `guidance`.
 
   **The rules** (the founder, 2026-11-07): guidance reaches the valuation only when it is clear,
   a number or a range for a stated metric, a stated period, on a reported basis; a range takes
@@ -268,7 +271,7 @@ locked input: the terminal growth ceiling").
 |---|---|---|---|---|
 | `phase` | every row | word | the six phases | the route follows the phase; a Start-up row overridden to Young Growth is valued by the revenue-growth route where the mechanical row had no value; the classifier's evidence stays as it was |
 | `earnings.ntm` | Mature Growth | $ a share | above 0 to 1,000 | plan 1b, policy v9: the forward anchor, the NTM EPS of 5.2, from a clear full-year EPS guidance (9); an override on this tag needs an evidence item of kind `guidance`, else `refused-evidence` |
-| `revenue.ntm` | High Growth, Young Growth, Decline | $ | above 0 | plan 1b, policy v9: the NTM revenue of 5a.2 and 6a.2, from a clear full-year revenue guidance (9); evidence of kind `guidance` required |
+| `revenue.ntm` | High Growth, Young Growth, Decline | $ | above 0 (the range's high is the 10^15 stand-in, which the refusal sentence does not print) | plan 1b, policy v9: the NTM revenue of 5a.2 and 6a.2, from a clear full-year revenue guidance (9); evidence of kind `guidance` required |
 | `growth.belief` | Mature Growth | % a year | −20% to 60% | above the sales class's `sales_p90_5y` needs primary evidence (10.3) |
 | `path.hold` | High Growth, Young Growth | % a year | −20% to 300% | the held rate of years 4 to `high_growth_years`; above the cap of 5a.3 needs primary evidence |
 | `path.step_2`, `path.step_3` | Mature Growth, High Growth, Young Growth, Decline | % | −80% to 300% | a consensus step; replaces a held or thin one too. Not Mature Stable: its value reads no step, only its cross-check does, and an override that moves nothing is refused `refused-route` |
