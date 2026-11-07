@@ -277,7 +277,7 @@ locked input: the terminal growth ceiling").
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | multiple | 0.1 to 10 | |
 | `return.runway` | Mature Growth, Mature Stable | % | 0% to 100% | the runway return of 4.6 |
 | `earnings.nri_gap` | Mature Growth, Mature Stable | $ a share | −100 to 100 | the non-recurring gap of 6.2 and the anchor's basis |
-| `earnings.cycle_gap` | Mature Growth, Mature Stable | $ a share | −100 to 100 | plan 1b, policy v9: the correction that takes the anchor's earnings to mid-cycle for a cyclical business (14, step 6); the same arithmetic as the non-recurring gap, its bridge line labelled "mid-cycle earnings", so the reader sees a cycle judgment and not a one-time item |
+| `earnings.cycle_gap` | Mature Growth, Mature Stable | $ a share | −100 to 100 | plan 1b, policy v9: the correction that takes the anchor's earnings to mid-cycle for a cyclical business (14, step 6); taken off the anchor earnings and nothing else: E on Mature Stable, after the engine's own margin normalization so the two corrections add, and the NTM EPS on Mature Growth (the forward P/E, the clean EPS and the flags read the consensus as found); its bridge line labelled "mid-cycle earnings", so the reader sees a cycle judgment and not a one-time item. Build ruling of Task 1, 2026-11-07 |
 | `decline.rate` | Decline | % a year | −50% to 0% | d of 6a.2 |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | $ | 0 or more | period-tied only: a correction of a vendor error |
 
