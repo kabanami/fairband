@@ -121,6 +121,9 @@
       disabled: !!p.disabled,
       // fairband: a menu's toggle says whether its menu is open (growth-routes spec 6.3).
       'aria-expanded': p['aria-expanded'],
+      // fairband: a toggle says whether it is on, as the report page's Tables is
+      // (spec 2026-11-06 Tier 2, 18.4).
+      'aria-pressed': p['aria-pressed'],
       // fairband: a control can name itself in full, as Top ↑ is "Back to top"
       // (classifier-designation spec 8.3).
       'aria-label': p['aria-label'],
@@ -736,6 +739,9 @@
     // which number the report's references; a ref the map lacks has none
     // (spec 2026-11-06 Tier 2, 13.1 and 18.4).
     var footnotes = p.footnotes || {};
+    // fairband: the charts the caller draws for a section, by its heading, sit under the heading
+    // and above the section's sentences (spec 2026-11-06 Tier 2, 18.4).
+    var charts = p.charts || {};
 
     return h('article', { className: cx('fb-rec', 'fb-report', rejected ? 'fb-rec--refused' : 'fb-rec--applied') },
       h('header', { className: 'fb-rec__head' },
@@ -780,6 +786,7 @@
               (p.sections || []).map(function (s, i) {
                 return h('section', { key: i, className: 'fb-report__section' },
                   s.heading ? h('h4', { className: 'heading' }, s.heading) : null,
+                  own(charts, String(s.heading || '').trim()),
                   h('p', { className: 'fb-report__prose body' }, (s.parts || []).map(function (part, j) {
                     if (typeof part === 'string') return part;
                     var n = own(footnotes, String(part.ref).trim());
@@ -1626,10 +1633,12 @@
     return Math.round(a) === a ? String(v) : v.toFixed(2);
   }
 
-  function labelEvery(n) { return Math.max(1, Math.ceil(n / 7)); }
+  // fairband: `most`, the labels an axis carries at most, seven when absent: a line of a hundred
+  // months on a half-width panel carries as many as fit (spec 2026-11-06 Tier 2, 18.4).
+  function labelEvery(n, most) { return Math.max(1, Math.ceil(n / (most || 7))); }
 
-  function periodLabel(d, i, n) {
-    var every = labelEvery(n);
+  function periodLabel(d, i, n, most) {
+    var every = labelEvery(n, most);
     if (i === 0 || i === n - 1) return d.period;
     if (i % every !== 0) return '';
     if (n - 1 - i < every) return '';
@@ -1659,7 +1668,7 @@
     return h('g', { className: 'fb-c__xaxis' },
       h('line', { className: 'fb-c__axisline', x1: p.left, x2: p.right, y1: p.y, y2: p.y }),
       p.series.map(function (d, i) {
-        var text = periodLabel(d, i, p.series.length);
+        var text = periodLabel(d, i, p.series.length, p.most);
         if (!text) return null;
         var mark = markFor(d.freshness);
         var end = i === 0 ? 'fb-c__tick--start'
@@ -1705,17 +1714,36 @@
     var hover = React.useState(null);
     var at = hover[0], setAt = hover[1];
 
+    // fairband: a period with no band in force, before the first snapshot or on a refused one,
+    // draws the price alone: the band and its edges run over the periods that have one, a lone
+    // period's half a period to each side within the plot, and the scale reads only the figures
+    // there are (spec 2026-11-06 Tier 2, 18.4).
+    var banded = function (d) { return d.fairLow != null && d.fairHigh != null; };
     var vals = [];
-    series.forEach(function (d) { vals.push(d.fairLow, d.fairHigh, d.price); });
+    series.forEach(function (d) {
+      if (banded(d)) vals.push(d.fairLow, d.fairHigh);
+      vals.push(d.price);
+    });
     var ticks = niceTicks(Math.min.apply(null, vals), Math.max.apply(null, vals), 4);
     var lo = ticks[0], hi = ticks[ticks.length - 1];
     var X = function (i) { return n < 2 ? (L + R) / 2 : L + (R - L) * i / (n - 1); };
     var Y = function (v) { return B - (B - T) * (v - lo) / (hi - lo); };
 
-    var band = series.map(function (d, i) { return X(i) + ',' + Y(d.fairHigh); })
-      .concat(series.slice().reverse().map(function (d, i) {
-        return X(n - 1 - i) + ',' + Y(d.fairLow);
-      })).join(' ');
+    var runs = [], run = null;
+    series.forEach(function (d, i) {
+      if (!banded(d)) { run = null; return; }
+      if (!run) { run = []; runs.push(run); }
+      run.push(i);
+    });
+    var half = n < 2 ? (R - L) / 2 : (R - L) / (n - 1) / 2;
+    var edge = function (r, key) {
+      var pts = r.map(function (i) { return [X(i), series[i][key]]; });
+      if (pts.length > 1) return pts;
+      return [[Math.max(L, pts[0][0] - half), pts[0][1]], [Math.min(R, pts[0][0] + half), pts[0][1]]];
+    };
+    var points = function (pts) {
+      return pts.map(function (q) { return q[0] + ',' + Y(q[1]); }).join(' ');
+    };
     var line = series.map(function (d, i) { return X(i) + ',' + Y(d.price); }).join(' ');
     var last = series[n - 1] || {};
     var cur = at == null ? null : series[at];
@@ -1736,9 +1764,13 @@
           onMouseLeave: function () { setAt(null); }
         },
           h(Grid, { ticks: ticks, scale: Y, left: L, right: R, format: compact }),
-          h('polygon', { className: 'fb-c__band', points: band }),
-          h('polyline', { className: 'fb-c__bandedge', points: series.map(function (d, i) { return X(i) + ',' + Y(d.fairHigh); }).join(' ') }),
-          h('polyline', { className: 'fb-c__bandedge', points: series.map(function (d, i) { return X(i) + ',' + Y(d.fairLow); }).join(' ') }),
+          runs.map(function (r, k) {
+            var top = edge(r, 'fairHigh'), bottom = edge(r, 'fairLow');
+            return h(React.Fragment, { key: k },
+              h('polygon', { className: 'fb-c__band', points: points(top.concat(bottom.slice().reverse())) }),
+              h('polyline', { className: 'fb-c__bandedge', points: points(top) }),
+              h('polyline', { className: 'fb-c__bandedge', points: points(bottom) }));
+          }),
           h('polyline', { className: 'fb-c__line fb-c__line--price', points: line }),
           cur ? h('line', { className: 'fb-c__crosshair', x1: X(at), x2: X(at), y1: T, y2: B }) : null,
           cur ? h('circle', { className: 'fb-c__dot fb-c__dot--price', cx: X(at), cy: Y(cur.price), r: 4.5 }) : null,
@@ -1749,8 +1781,8 @@
         h(Tip, { at: cur ? X(at) : null },
           h('span', { className: 'label' }, cur ? cur.period : ''),
           cur ? h('span', { className: 'figure-sm' }, 'price ' + money(cur.price)) : null,
-          cur ? h('span', { className: 'figure-sm' },
-            'band ' + money(cur.fairLow) + ' – ' + money(cur.fairHigh)) : null
+          cur ? h('span', { className: 'figure-sm' }, banded(cur)
+            ? 'band ' + money(cur.fairLow) + ' – ' + money(cur.fairHigh) : 'no band') : null
         )
       ),
       h(DataTable, {
@@ -1759,6 +1791,106 @@
         rows: series.map(function (d) {
           return [d.period, money(d.price), money(d.fairLow), money(d.fairHigh)];
         })
+      })
+    );
+  }
+
+  /* -------------------------------------------------------- MultipleHistory */
+
+  // fairband: a multiple's history against its own average, the P/E's on a company report
+  // (spec 2026-11-06 Tier 2, 18.4 and 13.7), in BandHistory's marks and tokens: the series a line
+  // in chart-1, 2px with round joins and caps, a null value a gap in it (a point alone between
+  // gaps a dot of the line's width); the average a 1px solid chart-context reference line,
+  // labelled at its right end in ink-faint, outside the plot as SpreadChart labels its hurdle,
+  // `averageLabel` over the figure, moved clear of the last value's label; the last value labelled
+  // at the line's end in ink beside the end marker and its surface-raised ring; chart-grid solid
+  // and the ticks bare, the unit in the labels alone; as many period labels as fit the width; a
+  // crosshair and a tooltip; the table twin, period and value, behind `tableView`. One series, so
+  // no legend: the title names it.
+  function MultipleHistory(props) {
+    var p = props || {};
+    var series = p.series || [];
+    var n = series.length;
+    var PH = p.height || 180;
+    var wrap = React.useRef(null);
+    var W = useMeasuredWidth(wrap, p.width || CW);
+    var L = 56, R = W - 86, T = 12, B = T + PH, H = B + 30;
+    var node = React.useRef(null);
+    var hover = React.useState(null);
+    var at = hover[0], setAt = hover[1];
+    var unit = p.unit == null ? 'x' : p.unit;
+    var label = function (v) { return v == null ? '—' : signed(Number(v).toFixed(1)) + unit; };
+
+    var vals = [];
+    series.forEach(function (d) { if (d.value != null) vals.push(d.value); });
+    if (p.average != null) vals.push(p.average);
+    var ticks = niceTicks(Math.min.apply(null, vals), Math.max.apply(null, vals), 4);
+    var lo = ticks[0], hi = ticks[ticks.length - 1];
+    var X = function (i) { return n < 2 ? (L + R) / 2 : L + (R - L) * i / (n - 1); };
+    var Y = function (v) { return B - (B - T) * (v - lo) / (hi - lo); };
+
+    var runs = [], run = null, end = -1;
+    series.forEach(function (d, i) {
+      if (d.value == null) { run = null; return; }
+      if (!run) { run = []; runs.push(run); }
+      run.push(X(i) + ',' + Y(d.value));
+      end = i;
+    });
+    var last = end < 0 ? null : series[end];
+    var avg = p.average == null ? null : Y(p.average);
+    var named = avg;
+    if (avg != null && last && Math.abs(Y(last.value) - avg) < 30) {
+      named = avg <= Y(last.value) ? Y(last.value) - 30 : Y(last.value) + 30;
+      if (named - 12 < 0) named = Y(last.value) + 30;
+    }
+    var cur = at == null ? null : series[at];
+    // As many period labels as fit: the axis's text is 11px mono, 6.6px a character, and a label
+    // needs its own width and half its neighbour's, the first and the last anchored at the ends.
+    var widest = 0;
+    series.forEach(function (d) { widest = Math.max(widest, String(d.period).length); });
+    var most = Math.max(1, Math.floor((R - L) / (widest * 6.6 * 1.5 + 12)));
+
+    return h('figure', { className: 'fb-c' },
+      h('figcaption', { className: 'fb-c__head' },
+        h('span', { className: 'fb-c__title heading' }, p.title),
+        p.subtitle ? h('span', { className: 'fb-c__sub caption' }, p.subtitle) : null,
+        h(BasisChip, { basis: p.basis || 'mechanical', compact: true })
+      ),
+      h('div', { className: 'fb-c__plot', ref: wrap },
+        h('svg', {
+          ref: node, className: 'fb-c__svg', width: W, height: H,
+          viewBox: '0 0 ' + W + ' ' + H, role: 'img',
+          'aria-label': p.title + ' — ' + n + ' periods',
+          onMouseMove: function (e) { setAt(nearestIndex(e, node.current, n, L, R)); },
+          onMouseLeave: function () { setAt(null); }
+        },
+          h(Grid, { ticks: ticks, scale: Y, left: L, right: R, format: compact }),
+          avg == null ? null : h('line', { className: 'fb-c__ref', x1: L, x2: R, y1: avg, y2: avg }),
+          avg == null ? null : h('text', { className: 'fb-c__endlabel fb-c__endlabel--context' },
+            h('tspan', { x: R + 12, y: named - 2 }, p.averageLabel || 'average'),
+            h('tspan', { x: R + 12, y: named + 11 }, label(p.average))),
+          runs.map(function (r, k) {
+            return h('polyline', {
+              key: k, className: 'fb-c__line fb-c__line--1',
+              points: (r.length === 1 ? r.concat(r) : r).join(' ')
+            });
+          }),
+          cur ? h('line', { className: 'fb-c__crosshair', x1: X(at), x2: X(at), y1: T, y2: B }) : null,
+          cur && cur.value != null
+            ? h('circle', { className: 'fb-c__dot fb-c__dot--1', cx: X(at), cy: Y(cur.value), r: 4.5 }) : null,
+          last ? h('circle', { className: 'fb-c__dot fb-c__dot--1', cx: X(end), cy: Y(last.value), r: 4.5 }) : null,
+          last ? h('text', { className: 'fb-c__endlabel', x: X(end) + 12, y: Y(last.value) + 4 }, label(last.value)) : null,
+          h(XAxis, { series: series, x: X, y: B, left: L, right: R, most: most })
+        ),
+        h(Tip, { at: cur ? X(at) : null },
+          h('span', { className: 'label' }, cur ? cur.period : ''),
+          cur ? h('span', { className: 'figure-sm' }, cur.value == null ? 'no value' : label(cur.value)) : null
+        )
+      ),
+      h(DataTable, {
+        show: p.tableView,
+        head: ['Period', p.title || 'Value'],
+        rows: series.map(function (d) { return [d.period, label(d.value)]; })
       })
     );
   }
@@ -1814,8 +1946,12 @@
           h(Grid, { ticks: ticks, scale: Y, left: L, right: R, format: fmt }),
           signed ? h('line', { className: 'fb-c__zero', x1: L, x2: R, y1: zero, y2: zero }) : null,
           h('g', null, series.map(function (d, i) {
+            // fairband: `inverse`, a measure whose lower values are the better ones (net debt over
+            // EBITDA, the share count's change), takes the diverging pair the other way round:
+            // chart-pos below zero, chart-neg above (spec 2026-11-06 Tier 2, 18.4).
+            var good = p.inverse ? d.value < 0 : d.value >= 0;
             var cls = !signed ? 'fb-c__bar'
-              : (d.value < 0 ? 'fb-c__bar fb-c__bar--neg' : 'fb-c__bar fb-c__bar--pos');
+              : (good ? 'fb-c__bar fb-c__bar--pos' : 'fb-c__bar fb-c__bar--neg');
             return h('path', {
               key: d.period, className: cx(cls, at === i && 'is-hovered'),
               d: columnPath(X(i), bw, Y(d.value), zero, 4),
@@ -1967,6 +2103,9 @@
   var SENS_STOPS = [0.02, 0.10, 0.30];
 
   function sensStep(value, price) {
+    // fairband: a pair the engine valued none at has no fill and reads as an em dash, never as
+    // far below the price (spec 2026-11-06 Tier 2, 18.4).
+    if (value == null) return 'none';
     if (!price) return 'mid';
     var d = (value - price) / price;
     var a = Math.abs(d);
@@ -2025,6 +2164,8 @@
     RunProgress: RunProgress,
     ScreenTable: ScreenTable,
     BandHistory: BandHistory,
+    // fairband: the multiples history chart (spec 2026-11-06 Tier 2, 18.4).
+    MultipleHistory: MultipleHistory,
     HistoryBars: HistoryBars,
     SpreadChart: SpreadChart,
     SensitivityGrid: SensitivityGrid,

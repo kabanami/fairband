@@ -5,11 +5,13 @@
    one, else the mechanical, with the price beside it; the meter as the drawer draws it. Above the
    reader, the report's stance, mode, date, writer and revision, Download .md, the page's one table
    toggle and the other revisions by date. Then ReportReader with every section, each cited number
-   followed by its footnote number (13.1), the references those numbers name, Appendix A, the audit
-   of the records the report rests on, and Appendix B, the glossary, both as the server generates
-   them; a link back to the screen. A company with no report shows the head, the meter and
-   Request research, as the drawer has it. The drawer's own parts come through window.FairbandPage;
-   the head and the meter read the company's detail, as the drawer does, and the rest the report. */
+   followed by its footnote number (13.1) and the charts of the sections that have them above
+   their sentences (18.4), the references those numbers name, Appendix A, the audit of the records
+   the report rests on, and Appendix B, the glossary, both as the server generates them; a link
+   back to the screen. A company with no report shows the head, the meter and Request research, as
+   the drawer has it. The drawer's own parts come through window.FairbandPage; the head and the
+   meter read the company's detail, as the drawer does, and the rest the report. The charts read
+   the series the sections cite once the report is in, and charts.js draws them. */
 (function () {
   'use strict';
 
@@ -29,6 +31,7 @@
     loading: false,
     error: null,
     tables: false, /* the page's one table toggle (CompanyReport): every chart's table view */
+    series: null, /* the series the charts read (readSeries); null until they are in */
     request: null, /* Request research for a company with no report (FairbandPage.asking) */
     downloadError: null
   };
@@ -59,6 +62,7 @@
             want.symbol + '\'s');
         }
         if (state.symbol !== want.symbol) state.request = P.asking(want.symbol);
+        if (!report || !state.report || state.report.id !== report.id) state.series = null;
         state.symbol = want.symbol;
         state.detail = found.detail;
         state.reports = found.reports;
@@ -67,6 +71,7 @@
         state.error = null;
         state.downloadError = null;
         render();
+        if (report) readSeries(report, request);
       })
       .catch(function (err) {
         if (request !== latest) return;
@@ -78,6 +83,48 @@
 
   function render() {
     root.render(page());
+  }
+
+  /* The series the report's charts read (spec 18.4), each on its own, its body or the server's
+     sentence why not: the six financial tables, the multiples history, the closes of the five
+     years, the band's history and each sensitivity reading the sections cite, once, in the order
+     first cited, the company's own. The charts of the same report stay as they are until the new
+     series land; the latest read wins. */
+  function readSeries(report, request) {
+    var company = '/api/companies/' + encodeURIComponent(report.symbol);
+    Promise.all([
+      settle(read(company + '/financial-tables')),
+      settle(read(company + '/multiples-history')),
+      settle(read(company + '/price-history?years=5')),
+      settle(read(company + '/band-history')),
+      Promise.all(cited(report.references).map(function (id) {
+        return settle(read('/api/sensitivities/' + id));
+      }))
+    ]).then(function (got) {
+      if (request !== latest) return;
+      state.series = {
+        tables: got[0], multiples: got[1], closes: got[2], band: got[3],
+        readings: got[4].filter(function (r) { return r.error || r.body.symbol === report.symbol; })
+      };
+      render();
+    });
+  }
+
+  /* A read as its body, or the server's sentence why not. */
+  function settle(reading) {
+    return reading.then(function (body) { return { body: body }; },
+      function (err) { return { error: err.message }; });
+  }
+
+  /* The ids of the sensitivity readings the references name, once each, in the order first
+     cited, as the export reads them. */
+  function cited(references) {
+    var ids = [];
+    references.forEach(function (e) {
+      var found = /^sensitivity:(\d+)(\/|$)/.exec(String(e.ref).trim());
+      if (found && ids.indexOf(found[1]) === -1) ids.push(found[1]);
+    });
+    return ids;
   }
 
   /* CompanyReport's order: the head, the meter, then the report with the line above it, its
@@ -167,7 +214,10 @@
         h('span', { className: 'figure-sm' }, 'revision ' + report.revision),
         h('span', { className: 'app-report__actions' },
           h(F.Button, { size: 'sm', onClick: download }, 'Download .md'),
-          h(F.Button, { size: 'sm', variant: 'quiet', onClick: toggleTables }, 'Tables'))),
+          h(F.Button, {
+            size: 'sm', variant: 'quiet', onClick: toggleTables,
+            'aria-pressed': state.tables ? 'true' : 'false'
+          }, 'Tables'))),
       report.mode === 'valuation review' && report.reusesFullReportOf == null
         ? h('p', { className: 'caption app-report__note' }, 'No full report to reuse.') : null,
       revisions(report),
@@ -204,10 +254,11 @@
 
   /* ------------------------------------------------------------------ the report */
 
-  /* Every section, each cited number followed by its footnote number in the references (13.1);
-     the cites line names the snapshot, the review when the report rests on one and, for a
-     valuation review, the date of the full report it reuses. The appendixes follow on the page,
-     so the reader's own pointer to them is off. */
+  /* Every section, each cited number followed by its footnote number in the references (13.1),
+     and the charts of the sections that have them under their headings (18.4, charts.js); the
+     cites line names the snapshot, the review when the report rests on one and, for a valuation
+     review, the date of the full report it reuses. The appendixes follow on the page, so the
+     reader's own pointer to them is off. */
   function reader(report) {
     return h(F.ReportReader, {
       key: 'reader',
@@ -217,7 +268,8 @@
         review: report.reviewId == null ? undefined : String(report.reviewId),
         reusesFullReportOf: reusedDate(report)
       },
-      sections: report.sections, footnotes: P.footnotes(report.references), appendixes: false
+      sections: report.sections, footnotes: P.footnotes(report.references), appendixes: false,
+      charts: P.reportCharts.draw(report, state.series, state.tables)
     });
   }
 
@@ -495,7 +547,8 @@
       });
   }
 
-  /* The page's one table toggle (CompanyReport): it flips every chart to its table and back. */
+  /* The page's one table toggle (CompanyReport): it flips every chart to its table and back, and
+     says whether it is on. */
   function toggleTables() {
     state.tables = !state.tables;
     render();

@@ -105,6 +105,8 @@ export interface ButtonProps {
   onClick?: (event: unknown) => void;
   /** fairband: a menu's toggle passes whether its menu is open; it reaches the button. */
   'aria-expanded'?: 'true' | 'false';
+  /** fairband: a toggle passes whether it is on, as the report page's Tables (18.4). */
+  'aria-pressed'?: 'true' | 'false';
   /** fairband: the control's name in full, where its text is short (Top ↑ is "Back to top"). */
   'aria-label'?: string;
   /**
@@ -346,6 +348,11 @@ export interface ReportReaderProps {
    * 13.1 and 18.4).
    */
   footnotes?: Record<string, number>;
+  /**
+   * fairband: the charts the caller draws for a section, by the section's heading: each sits
+   * under its heading, above the section's sentences (spec 2026-11-06 Tier 2, 18.4).
+   */
+  charts?: Record<string, unknown>;
   /** On `rejected`. The published report is unchanged either way. */
   findings?: ReportFinding[];
   appendixes?: boolean;
@@ -602,8 +609,12 @@ export interface ScreenTableProps {
 export interface BandPoint {
   period: string;
   price: number;
-  fairLow: number;
-  fairHigh: number;
+  /**
+   * fairband: `null` both where no band is in force, before the first snapshot or on a refused
+   * one: the period draws the price alone (spec 2026-11-06 Tier 2, 18.4).
+   */
+  fairLow: number | null;
+  fairHigh: number | null;
   freshness?: Freshness;
 }
 
@@ -629,6 +640,39 @@ export interface HistoryBarsProps {
   title: string;
   unit?: string;
   format?: (value: number) => string;
+  /**
+   * fairband: a measure whose lower values are the better ones (net debt over EBITDA, the share
+   * count's change): crossing zero, chart-pos is below it and chart-neg above (spec 2026-11-06
+   * Tier 2, 18.4).
+   */
+  inverse?: boolean;
+  basis?: Basis;
+  height?: number;
+  width?: number;
+  tableView?: boolean;
+}
+
+/** fairband: a multiple's value at a period; `null` is a gap in the line (18.4). */
+export interface MultiplePoint {
+  period: string;
+  value: number | null;
+}
+
+/**
+ * fairband: a multiple's history against its own average (spec 2026-11-06 Tier 2, 18.4 and 13.7),
+ * in BandHistory's marks: a line in chart-1, the average a chart-context reference line labelled
+ * at its right end, the last value labelled at the line's end; the table twin behind `tableView`.
+ */
+export interface MultipleHistoryProps {
+  series: MultiplePoint[];
+  /** The reference line's figure: the series' average. */
+  average: number;
+  /** The reference line's words, over its figure at the line's right end; `average` absent. */
+  averageLabel?: string;
+  title: string;
+  subtitle?: string;
+  /** Written after a figure in the labels, the tooltip and the table; `x` absent. */
+  unit?: string;
   basis?: Basis;
   height?: number;
   width?: number;
@@ -655,8 +699,11 @@ export interface SpreadChartProps {
 export interface SensitivityGridProps {
   rows: string[];
   cols: string[];
-  /** cells[row][col] = value per share at that pair of assumptions. */
-  cells: number[][];
+  /**
+   * cells[row][col] = value per share at that pair of assumptions. fairband: `null` where the
+   * engine valued none: no fill and an em dash (spec 2026-11-06 Tier 2, 18.4).
+   */
+  cells: (number | null)[][];
   /** Today's price. Cells are coloured by distance from this, not by magnitude. */
   price: number;
   current?: { row: number; col: number };
@@ -685,6 +732,8 @@ export declare function ProposalCard(props: ProposalCardProps): unknown;
 export declare function ConfirmDialog(props: ConfirmDialogProps): unknown;
 export declare function ScreenTable(props: ScreenTableProps): unknown;
 export declare function BandHistory(props: BandHistoryProps): unknown;
+/** fairband: the multiples history chart (spec 2026-11-06 Tier 2, 18.4). */
+export declare function MultipleHistory(props: MultipleHistoryProps): unknown;
 export declare function HistoryBars(props: HistoryBarsProps): unknown;
 export declare function SpreadChart(props: SpreadChartProps): unknown;
 export declare function SensitivityGrid(props: SensitivityGridProps): unknown;

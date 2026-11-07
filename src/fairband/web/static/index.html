@@ -430,6 +430,27 @@
   .app-report__none { margin-top: var(--space-6); }
   .app-report__none > .app-note { margin-bottom: var(--space-3); }
   .app-report__back { margin: var(--space-8) 0 0; }
+  /* The report's charts (spec 18.4, CompanyReport.md): inside the reader, under a section's
+     heading and above its sentences, each on a raised panel with a hairline border and no shadow,
+     two to a row as small multiples, one to a row below 840px; the price against the band the
+     full width. A part of section 4 under its table's title. */
+  .app-charts {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3);
+    margin: var(--space-2) 0 var(--space-4);
+  }
+  .app-chart {
+    min-width: 0; padding: var(--space-3) var(--space-4);
+    background: var(--surface-raised); border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+  }
+  .app-chart--wide { grid-column: 1 / -1; }
+  .app-charts__part {
+    margin: var(--space-4) 0 0; color: var(--ink-muted); text-transform: uppercase;
+  }
+  .app-charts__part:first-child { margin-top: var(--space-2); }
+  .app-chart .app-report__error { margin: 0; }
+  .fb-report__section > .app-report__error { margin: var(--space-1) 0 var(--space-3); }
+  @media (width < 840px) { .app-charts { grid-template-columns: minmax(0, 1fr); } }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or
      menu, and not today's figures, the headline, the price and the meter, which move with the
@@ -443,6 +464,7 @@
     section#report { overflow: visible; padding: 0; }
     .app-report { max-width: none; padding: 0; }
     .app-report h3, .app-report h4 { break-after: avoid; }
+    .app-chart { break-inside: avoid; }
   }
 </style>
 </head>
@@ -466,5 +488,6 @@
 <script src="/static/settings.js"></script>
 <script src="/static/methodology.js"></script>
 <script src="/static/report.js"></script>
+<script src="/static/charts.js"></script>
 </body>
 </html>

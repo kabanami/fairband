@@ -53,6 +53,9 @@ from fairband.engine.route import value_company
 from fairband.engine.types import Designation, ValuationResult, result_to_json
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
+from fairband.reports.charts import BAND_TITLE, GRID_TITLE, SERIES_TITLES, TITLES, row_name
+from fairband.reports.check import HEADINGS
+from fairband.reports.tables import financial_tables
 from fairband.store.companies import insert_companies
 from fairband.store.db import applied_versions, connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh
@@ -725,6 +728,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/settings.js",
         "/static/methodology.js",
         "/static/report.js",
+        "/static/charts.js",
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url
@@ -2349,6 +2353,318 @@ def test_the_print_stylesheet() -> None:
         "#report { overflow: visible; padding: 0; }",
     ):
         assert text in block, text
+
+
+def _call(script: str, start: str) -> str:
+    """The text of the call that opens with ``start`` (an ``h(F.X, {``), to its closing brace."""
+    at = script.index(start)
+    depth = 0
+    for i in range(at + len(start) - 1, len(script)):
+        depth += {"{": 1, "}": -1}.get(script[i], 0)
+        if depth == 0:
+            return script[at : i + 1]
+    raise AssertionError(start)
+
+
+def _calls(script: str, start: str) -> list[str]:
+    """Every call that opens with ``start``."""
+    found, at = [], script.find(start)
+    while at != -1:
+        found.append(_call(script[at:], start))
+        at = script.find(start, at + 1)
+    return found
+
+
+# The page's section-4 charts by their table and row, each titled by its row's name in the export
+# (charts.row_name); buybacks and dividends, one measure, is the page's sum of two rows.
+FINANCIAL_CHARTS = {
+    "growth": ["revenue", "operating_margin", "eps"],
+    "cash_flow": ["free_cash_flow", "stock_compensation_to_revenue"],
+    "solvency": ["net_debt_to_ebitda", "interest_coverage"],
+    "returns": ["roic"],
+    "capital_allocation": ["share_count_change"],
+    "quality": ["altman_z", "piotroski_f"],
+}
+
+
+def test_the_report_page_draws_the_charts_per_section(db_path: Path, policy: Policy) -> None:
+    """Spec 18.4's table: each section's charts inside the reader, under its heading and above
+    its sentences (ReportReader's ``charts`` by the heading, a `// fairband:` patch), drawn by
+    charts.js from the series report.js reads. Section 4: a part per table under its title in
+    the export (charts.TITLES), HistoryBars titled by their rows' names there (charts.row_name):
+    revenue, the operating margin as a percentage, the EPS; free cash flow, stock compensation to
+    revenue; net debt to EBITDA, interest coverage; buybacks and dividends, one measure, and the
+    share count's change; Altman's Z″ and Piotroski's F; and ROIC against the hurdle rate the
+    returns table carries (SpreadChart). Section 8: the readings the sections cite and the
+    secondary valuation's grid (SensitivityGrid twice), titled as their tables are. Section 9: the
+    price against the band (BandHistory) and the trailing and forward P/E (MultipleHistory twice),
+    titled as their table and the year-end table's columns. So the page and its Markdown export
+    never differ."""
+    script = _code(_static_file("charts.js"))
+    draw = _function(script, "draw")
+    for heading in (HEADINGS[3], HEADINGS[7], HEADINGS[8]):  # chart_tables' keys
+        assert f"'{heading}': " in draw, heading
+    parts = re.findall(r"\{ table: '(\w+)', title: '([^']+)', charts: \[", script)
+    assert parts == list(TITLES.items())
+    with closing(connect(db_path)) as conn:
+        rows = {t.name: [r.name for r in t.rows] for t in financial_tables(conn, "AAPL", policy)}
+    part = r"\{ table: '(\w+)', title: '[^']+', charts: \[(.*?)\] \}"
+    blocks = re.findall(part, script, re.DOTALL)
+    charted = {table: re.findall(r"\{ row: '(\w+)'", block) for table, block in blocks}
+    assert charted == FINANCIAL_CHARTS
+    for table, names in charted.items():
+        assert set(names) <= set(rows[table]), table
+    for row, _, title in re.findall(r"\{ row: '(\w+)', title: (['\"])(.+?)\2", script):
+        assert title == row_name(row), row
+    assert "{ rows: ['buybacks', 'dividends'], title: 'Buybacks and dividends' }" in script
+    assert {"buybacks", "dividends"} <= set(rows["capital_allocation"])
+    bars = _function(script, "bars")
+    assert "h(F.HistoryBars, {" in bars and "format: unit === 'percent' ? F.formatPercent" in bars
+    assert "h(F.SpreadChart, {" in _function(script, "spread")
+    assert script.count("h(F.SensitivityGrid, {") == 2
+    assert "h(F.SensitivityGrid, {" in _function(script, "reading")
+    assert "title: r.title, rows: r.rowWords, cols: r.colWords," in _function(script, "reading")
+    grid = _function(script, "secondaryGrid")
+    assert "h(F.SensitivityGrid, {" in grid and "rows: g.rowWords," in grid
+    assert f"var GRID_TITLE = '{GRID_TITLE.format('')}';" in script
+    assert "h(F.BandHistory, {" in _function(script, "band")
+    assert f"var BAND_TITLE = '{BAND_TITLE}';" in script
+    assert "title: BAND_TITLE, subtitle: pastYear(list)" in _function(script, "band")
+    assert "h(F.MultipleHistory, {" in _function(script, "multiple")
+    multiples = _function(script, "multiples")
+    _in_order(
+        multiples,
+        f"multiple('{SERIES_TITLES['pe']}', m.pe,",
+        "'the last P/E of each month against its ten-year average'",
+        "(m.peNote ? ' · ' + m.peNote : '')",  # the server's sentence, as it arrives
+        f"multiple('{SERIES_TITLES['pe_forward']}', forward,",
+        "'since ' + F.formatDate(forward.since)",
+    )
+    assert "P.reportCharts = { draw: draw };" in script
+    report = _code(_static_file("report.js"))
+    reads = _function(report, "readSeries")
+    _in_order(
+        reads,
+        "company + '/financial-tables'",
+        "company + '/multiples-history'",
+        "company + '/price-history?years=5'",
+        "company + '/band-history'",
+        "read('/api/sensitivities/' + id)",
+    )
+    assert "charts: P.reportCharts.draw(report, state.series, state.tables)" in (
+        _function(report, "reader")
+    )
+    html = _static_file("index.html")
+    scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
+    assert scripts.index("charts.js") > scripts.index("report.js")
+    reader = _function(_component_file("bundle.js"), "ReportReader")
+    assert "// fairband: the charts the caller draws for a section, by its heading" in reader
+    _in_order(
+        reader,
+        "var charts = p.charts || {};",
+        "s.heading ? h('h4', { className: 'heading' }, s.heading) : null,",
+        "own(charts, String(s.heading || '').trim()),",
+        "h('p', { className: 'fb-report__prose body' }",
+    )
+
+
+def test_a_missing_cell_is_a_gap() -> None:
+    """Review focus 4: a cell with no value is left out of its chart's series, a gap, never a zero
+    column; the cash returned is none where either line is; a year missing ROIC or the hurdle
+    rate is left out; a month of the trailing P/E with no point is null, which MultipleHistory
+    draws as a break in its line; a quarter with no band in force draws the price alone; a chart
+    left with no point shows its title and "No data on file.", not an empty plot."""
+    script = _code(_static_file("charts.js"))
+    assert "filter(function (p) { return p.value != null; })" in _function(script, "points")
+    assert "var series = row ? points(row) : [];" in _function(script, "bars")
+    assert (
+        "var value = cell.value == null || paid == null ? null : -(cell.value + paid);"
+        in _function(script, "returned")
+    )
+    assert "filter(function (p) { return p.roic != null && p.wacc != null; })" in (
+        _function(script, "spread")
+    )
+    month = _function(script, "byMonth")
+    assert "value: Object.prototype.hasOwnProperty.call(last, key) ? last[key] : null" in month
+    band = _function(script, "band")
+    assert "fairLow: p ? p.fairLow : null, fairHigh: p ? p.fairHigh : null" in band
+    for text in ("|| 0", "?? 0", ": 0)", "value || "):
+        assert text not in script, text
+    empty = _function(script, "noData")
+    assert "h('span', { className: 'fb-c__title heading' }, title)" in empty
+    assert "h(F.BasisChip, { basis: 'mechanical', compact: true })" in empty
+    assert "var NO_DATA = 'No data on file.';" in script
+    for name in ("bars", "spread", "band", "multiple"):
+        assert "noData(" in _function(script, name), name
+    bundle = _component_file("bundle.js")
+    assert "if (d.value == null) { run = null; return; }" in _function(bundle, "MultipleHistory")
+    history = _function(bundle, "BandHistory")
+    assert "var banded = function (d) { return d.fairLow != null && d.fairHigh != null; };" in (
+        history
+    )
+    assert "if (!banded(d)) { run = null; return; }" in history
+    assert "if (banded(d)) vals.push(d.fairLow, d.fairHigh);" in history
+    assert "if (value == null) return 'none';" in _function(bundle, "sensStep")
+
+
+def test_the_tables_toggle_is_one_control() -> None:
+    """CompanyReport.md: the table toggle is one control for the page, flipping tableView on every
+    chart at once, and it says whether it is on (aria-pressed, a `// fairband:` patch on Button).
+    A SensitivityGrid is its own table twin and takes none."""
+    report = _code(_static_file("report.js"))
+    assert (
+        "h(F.Button, { size: 'sm', variant: 'quiet', onClick: toggleTables,"
+        " 'aria-pressed': state.tables ? 'true' : 'false' }, 'Tables')"
+    ) in " ".join(_function(report, "meta").split())
+    assert report.count("P.reportCharts.draw(") == 1
+    script = _code(_static_file("charts.js"))
+    assert "function draw(report, series, tables) {" in script
+    charts = [
+        call
+        for name in ("HistoryBars", "SpreadChart", "BandHistory", "MultipleHistory")
+        for call in _calls(script, f"h(F.{name}, {{")
+    ]
+    assert len(charts) == 4
+    for call in charts:
+        assert "tableView: tables" in call, call
+    assert script.count("tableView") == 4
+    for call in _calls(script, "h(F.SensitivityGrid, {"):
+        assert "tableView" not in call
+    button = _function(_component_file("bundle.js"), "Button")
+    assert "'aria-pressed': p['aria-pressed']," in button
+    assert "// fairband: a toggle says whether it is on" in button
+    props = re.search(
+        r"export interface ButtonProps \{\n(.*?)\n\}", _component_file("index.d.ts"), re.DOTALL
+    )
+    assert props is not None and "'aria-pressed'?: 'true' | 'false';" in props.group(1)
+
+
+def test_the_bundle_exports_multiple_history() -> None:
+    """Spec 18.4: MultipleHistory, a `// fairband:` block in BandHistory's marks and tokens: a
+    line in chart-1, 2px, round joins and caps (fb-c__line), null values gaps; the average a 1px
+    solid chart-context reference line labelled at its right end in ink-faint; the last value
+    labelled at the line's end in ink beside the end marker and its surface-raised ring, the
+    average's words and figure outside the plot at the reference line's right end, as SpreadChart
+    labels its hurdle, moved clear of the last value's label so the series never crosses them;
+    chart-grid solid and bare ticks, as many period labels as fit the width; the BasisChip in its
+    header; the table twin behind tableView. Exported as Fairband.MultipleHistory and declared in
+    index.d.ts. Nothing animates and no phase token colours it."""
+    bundle = _component_file("bundle.js")
+    chart = _function(bundle, "MultipleHistory")
+    lead = bundle.index("// fairband: a multiple's history against its own average")
+    assert "(spec 2026-11-06 Tier 2, 18.4 and 13.7)" in bundle[lead : bundle.index(chart)]
+    for text in (
+        "h(BasisChip, { basis: p.basis || 'mechanical', compact: true })",
+        "h(Grid, { ticks: ticks, scale: Y, left: L, right: R, format: compact }),",
+        "h('line', { className: 'fb-c__ref', x1: L, x2: R, y1: avg, y2: avg }),",
+        "h('text', { className: 'fb-c__endlabel fb-c__endlabel--context' },",
+        "h('tspan', { x: R + 12, y: named - 2 }, p.averageLabel || 'average'),",
+        "h('tspan', { x: R + 12, y: named + 11 }, label(p.average))),",
+        "if (avg != null && last && Math.abs(Y(last.value) - avg) < 30) {",
+        "var most = Math.max(1, Math.floor((R - L) / (widest * 6.6 * 1.5 + 12)));",
+        "h(XAxis, { series: series, x: X, y: B, left: L, right: R, most: most })",
+        "key: k, className: 'fb-c__line fb-c__line--1',",
+        "points: (r.length === 1 ? r.concat(r) : r).join(' ')",
+        "h('circle', { className: 'fb-c__dot fb-c__dot--1', cx: X(end), cy: Y(last.value), r: 4.5 })",
+        "h('text', { className: 'fb-c__endlabel', x: X(end) + 12, y: Y(last.value) + 4 },",
+        "show: p.tableView,",
+        "head: ['Period', p.title || 'Value'],",
+        "rows: series.map(function (d) { return [d.period, label(d.value)]; })",
+    ):
+        assert text in chart, text
+    for banned in ("phase-", "animat", "transition"):
+        assert banned not in chart, banned
+    # the shared axis takes `most`, seven absent, so the other charts' axes are as they were
+    assert "function labelEvery(n, most) { return Math.max(1, Math.ceil(n / (most || 7))); }" in (
+        bundle
+    )
+    assert "var text = periodLabel(d, i, p.series.length, p.most);" in bundle
+    exported = bundle[bundle.index("global.Fairband = {") :]
+    assert "MultipleHistory: MultipleHistory," in exported
+    css = _component_file("bundle.css")
+    assert ".fb-c__ref { stroke: var(--chart-context); stroke-width: 1; }" in css
+    patch = css[css.index("/* fairband: MultipleHistory's average") :]
+    assert "(spec 2026-11-06 Tier 2, 18.4)" in patch[: patch.index("*/")]
+    assert ".fb-c__line { fill: none; stroke-width: 2; stroke-linejoin: round;" in css
+    assert ".fb-c__dot { stroke: var(--surface-raised); stroke-width: 2; }" in css
+    assert ".fb-c__endlabel--context { fill: var(--ink-faint); }" in css
+    declarations = _component_file("index.d.ts")
+    assert "export declare function MultipleHistory(props: MultipleHistoryProps): unknown;" in (
+        declarations
+    )
+    props = re.search(
+        r"export interface MultipleHistoryProps \{\n(.*?)\n\}", declarations, re.DOTALL
+    )
+    assert props is not None
+    for field in (
+        "series: MultiplePoint[];",
+        "average: number;",
+        "averageLabel?: string;",
+        "title: string;",
+        "subtitle?: string;",
+        "unit?: string;",
+        "basis?: Basis;",
+        "tableView?: boolean;",
+    ):
+        assert field in props.group(1), field
+    assert "value: number | null;" in declarations
+
+
+def test_the_bundle_draws_what_the_report_charts_need() -> None:
+    """The bundle's patches for the page's charts, each a `// fairband:` naming 18.4: BandHistory
+    draws a period with no band in force with the price alone, a lone period's band half a period
+    each side; HistoryBars' `inverse` swaps the diverging pair for a measure whose lower values
+    are the better ones; a SensitivityGrid cell the engine valued none at has no fill;
+    ReportReader takes the charts by section (above). index.d.ts says each."""
+    bundle = _component_file("bundle.js")
+    history = _function(bundle, "BandHistory")
+    assert "// fairband: a period with no band in force" in history
+    for text in (
+        "var half = n < 2 ? (R - L) / 2 : (R - L) / (n - 1) / 2;",
+        "if (pts.length > 1) return pts;",
+        "var top = edge(r, 'fairHigh'), bottom = edge(r, 'fairLow');",
+        "? 'band ' + money(cur.fairLow) + ' – ' + money(cur.fairHigh) : 'no band') : null",
+    ):
+        assert text in history, text
+    bars = _function(bundle, "HistoryBars")
+    assert "// fairband: `inverse`, a measure whose lower values are the better ones" in bars
+    assert "var good = p.inverse ? d.value < 0 : d.value >= 0;" in bars
+    assert "(good ? 'fb-c__bar fb-c__bar--pos' : 'fb-c__bar fb-c__bar--neg');" in bars
+    assert "// fairband: a pair the engine valued none at" in _function(bundle, "sensStep")
+    css = _component_file("bundle.css")
+    assert ".fb-sens__cell--none { color: var(--ink-faint); }" in css
+    declarations = _component_file("index.d.ts")
+    for name, field in (
+        ("HistoryBarsProps", "inverse?: boolean;"),
+        ("BandPoint", "fairLow: number | null;"),
+        ("BandPoint", "fairHigh: number | null;"),
+        ("SensitivityGridProps", "cells: (number | null)[][];"),
+        ("ReportReaderProps", "charts?: Record<string, unknown>;"),
+    ):
+        props = re.search(rf"export interface {name} \{{\n(.*?)\n\}}", declarations, re.DOTALL)
+        assert props is not None and field in props.group(1), (name, field)
+    script = _code(_static_file("charts.js"))
+    inverse = re.findall(r"\{ row: '(\w+)', title: '[^']+', inverse: true \}", script)
+    assert inverse == ["net_debt_to_ebitda", "share_count_change"]
+
+
+def test_the_charts_sit_two_to_a_row_on_raised_panels() -> None:
+    """CompanyReport.md: charts on surface-raised panels with hairline borders, two to a row as
+    small multiples, one to a row below 840px; the price chart the full width. Printed, a chart
+    is never split across pages."""
+    page = _static_file("index.html")
+    grid = _rule(page, ".app-charts {")
+    assert "display: grid;" in grid and "grid-template-columns: repeat(2, minmax(0, 1fr));" in grid
+    assert "@media (width < 840px) { .app-charts { grid-template-columns: minmax(0, 1fr); } }" in (
+        page
+    )
+    chart = _rule(page[: page.index("@media print {")], ".app-chart {")
+    assert "background: var(--surface-raised);" in chart
+    assert "border: 1px solid var(--hairline);" in chart
+    assert ".app-chart--wide { grid-column: 1 / -1; }" in page
+    block = page[page.index("@media print {") :]
+    block = block[: block.index("\n  }\n")]
+    assert ".app-chart { break-inside: avoid; }" in block
 
 
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
