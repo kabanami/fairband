@@ -2044,20 +2044,27 @@ def test_details_lists_the_secondarys_parts_or_drivers() -> None:
 
 def test_a_refused_row_draws_its_secondarys_band() -> None:
     """The ruling of 2026-11-07 on spec 18.1 and 18.2: a refused row whose secondary valuation
-    counts on the latest snapshot shows that value in the screen's Reviewed column, so its drawer
-    draws the secondary's band against the price, captioned as the secondary valuation with its
-    word at today's price, and the refusal stays under it. A refused row with none stays as it
-    was; the valued row's meter is the mechanical one. The meter is the drawer's own part, which
-    the report page draws too (18.4)."""
+    counts on the latest snapshot, and whose review has no value there, shows the secondary's
+    value in the screen's Reviewed column, so its drawer draws the secondary's band against the
+    price, captioned as the secondary valuation with its word at today's price, and the refusal
+    stays under it. A refused row with a valued review draws the review's band instead (the
+    ruling of 2026-11-08); a refused row with neither stays as it was; the valued row's meter is
+    the mechanical one. The meter is the drawer's own part, which the report page draws too
+    (18.4)."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     assert "var banded = isBanded(body);" in main
     banded = _function(script, "isBanded")
     assert "var s = body.secondary;" in banded
-    assert "return !isValued(r) && !!r.refusal && !!s && !!s.levels && r.price != null;" in banded
+    assert "var v = body.review;" in banded
+    assert (
+        "return !isValued(r) && !!r.refusal && !(v && v.value != null) && !!s && !!s.levels &&"
+        " r.price != null;"
+    ) in " ".join(banded.split())
     _in_order(
         main,
         "valued ? section('band', null, meter(body),",
+        "reviewBanded ? section('review-band', null, meter(body)) : null,",
         "banded ? section('secondary-band', null, meter(body)) : null,",
         "r.refusal ? section('refusal', 'Refusal',",
     )
@@ -2065,6 +2072,7 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
     _in_order(
         meter,
         "if (isValued(r)) {",
+        "if (isReviewBanded(body)) {",
         "if (!isBanded(body)) return null;",
         "low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,",
         "fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,",
@@ -2081,6 +2089,59 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
     assert "return 'Secondary valuation' + (said ? ' · ' + said : '');" in caption
 
 
+def test_a_refused_row_with_a_valued_review_draws_the_reviews_band() -> None:
+    """The ruling of 2026-11-08 on spec 18.1 and 18.2: where the route refused and the review on
+    the latest snapshot has a value and its levels, the row's Reviewed cell and the report page's
+    headline show that value, so the drawer's meter draws the review's band against the price:
+    its levels and value, the reviewed marker on the value itself, so the meter's caption says
+    "reviewed" after the word and price ÷ value at today's price, which the detail carries. The
+    refusal stays under it."""
+    script = _static_file("app.js")
+    main = _function(script, "sections")
+    assert "var reviewBanded = isReviewBanded(body);" in main
+    reviewed = _function(script, "isReviewBanded")
+    assert "var v = body.review;" in reviewed
+    assert (
+        "return !isValued(r) && !!r.refusal && !!v && v.value != null && !!v.levels &&"
+        " r.price != null;"
+    ) in " ".join(reviewed.split())
+    meter = _function(script, "meter")
+    band = meter[meter.index("if (isReviewBanded(body)) {") : meter.index("if (!isBanded(body))")]
+    _in_order(
+        band,
+        "low: review.levels.fairLow, high: review.levels.fairHigh, price: r.price,",
+        "fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,",
+        "designation: review.designation, reviewedValue: review.value,",
+        "showScale: false, caption: reviewCaption(review, body.designationEdges), hero: hero",
+    )
+    caption = _function(script, "reviewCaption")
+    assert (
+        "return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges);"
+    ) in caption
+    bundle = _function(_component_file("bundle.js"), "BandMeter")
+    assert "reviewed == null ? null : 'reviewed ' + money(reviewed)" in bundle
+
+
+def test_the_drawer_is_read_again_when_a_run_ends() -> None:
+    """A run may follow the drawer's company's review, post its expiry item or drop an override
+    (method 14.6): when a run ends, the drawer's company is read again in place, and Details'
+    records too while Details is open, as the report page is (controls.js's run-end branch)."""
+    js = _static_file("controls.js")
+    ended = js[js.index("if (ended) {") :]
+    ended = ended[: ended.index("\n        }\n")]
+    _in_order(ended, "P.reload();", "P.reloadDrawer();")
+    script = _static_file("app.js")
+    assert "reloadDetail: reloadDetail, reloadDrawer: reloadDrawer," in script
+    drawer = _function(script, "reloadDrawer")
+    _in_order(
+        drawer,
+        "var d = state.drawer;",
+        "if (!d) return;",
+        "if (state.detailsOpen) readResearch(d.symbol);",
+        "reloadDetail(d.symbol);",
+    )
+
+
 def test_an_applied_override_outside_a_valued_review_says_so() -> None:
     """Spec 18.3: an applied override with no effect to show (no review on the latest snapshot,
     after a revalue, or a review that refused) reads a caption in its Result row, never an empty
@@ -2095,7 +2156,9 @@ def test_an_applied_override_outside_a_valued_review_says_so() -> None:
         "effect: effect,",
         "reviewed: effect === undefined ? undefined : review.value,",
         "validUntil: effect === undefined ? undefined : r.valid_until,",
-        "resultNote: effect === undefined ? NO_EFFECT : undefined",
+        # an override whose own step refused inside a valued review: its step's refusal, as the
+        # report page says it
+        "resultNote: effect === undefined ? (line && line.refusal) || NO_EFFECT : undefined",
     ):
         assert text in record, text
     assert "var NO_EFFECT = 'No effect to show: not inside a valued review on the latest" in script
@@ -2549,7 +2612,9 @@ def test_the_report_page_has_one_headline_figure() -> None:
     script = _code(_static_file("report.js"))
     assert script.count("emphasis: 'strong'") == 1 and "figure-lg" not in script
     meter = _function(_static_file("app.js"), "meter")
-    assert meter.count("hero: hero") == 2  # the drawer passes none: its meter keeps figure-lg
+    # each of the three bands, the mechanical, the review's and the secondary's; the drawer passes
+    # none: its meter keeps figure-lg
+    assert meter.count("hero: hero") == 3
 
 
 def test_the_reader_numbers_its_footnotes() -> None:

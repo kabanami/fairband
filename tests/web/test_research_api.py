@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
-from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
 from support.web import HEADER, NOW, TODAY
 
 from fairband.engine.designation import designation_for
@@ -87,6 +87,39 @@ def _review(
     with closing(connect(db_path)) as conn:
         insert_review(conn, review, "AAPL", _latest(db_path, "AAPL"), None, clock=lambda: NOW)
     assert review.result.value is not None
+    return override_id, review
+
+
+def _aal_review(
+    db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> tuple[int, Review]:
+    """An applied margin.target override of AAL at 20%, whose route refused for its target margin,
+    and the review it produced on AAL's snapshot, which values it."""
+    with closing(connect(db_path)) as conn:
+        override_id = insert_override(
+            conn,
+            "AAL",
+            "margin.target",
+            None,
+            0.2,
+            "ratio",
+            "the peers by hand",
+            [{"kind": "filing", "ref": "10-K 2025", "note": ""}],
+            "lasting",
+            None,
+            None,
+            _latest(db_path, "AAL"),
+            AGENT,
+            NOW,
+            "applied",
+            "",
+        )
+        target = Override(override_id, "margin.target", 0.2, "agent", AGENT.actor, NOW, "peers")
+        inputs = replace(young_growth_inputs(), symbol="AAL", peers=())
+        refused = results["AAL"]
+        review = review_company(inputs, universe_deciles(), policy, TODAY, [target], refused)
+        insert_review(conn, review, "AAL", _latest(db_path, "AAL"), None, clock=lambda: NOW)
+    assert refused.value is None and review.result.value is not None
     return override_id, review
 
 
@@ -163,6 +196,10 @@ def test_the_detail_carries_the_review_with_its_bridge(
     mechanical = results["AAPL"].value
     assert mechanical is not None
     (line,) = review.bridge
+    price = results["AAPL"].price
+    assert price is not None
+    ratio, word = designation_for(price, value, policy.designation_edges)
+    assert (ratio, word) == (review.result.price_to_value, review.result.designation)
     found = _detail(client, "AAPL")["review"]
     assert found == {
         "id": found["id"],
@@ -173,6 +210,9 @@ def test_the_detail_carries_the_review_with_its_bridge(
             "fairHigh": levels.fair_high,
             "trim": levels.trim,
         },
+        # price ÷ the reviewed value and its word at the latest snapshot's price (18.2)
+        "priceToValue": ratio,
+        "designation": word,
         "refusal": None,
         "bridge": [
             {
@@ -227,7 +267,53 @@ def test_a_refused_review_carries_its_refusal(
         None,
         "the reviewed belief is refused",
     )
+    assert (found["priceToValue"], found["designation"]) == (None, None)
     assert (found["bridge"], found["overrideCount"]) == ([], 1)
+
+
+def test_a_refused_row_carries_its_valued_review(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
+) -> None:
+    """AAL's route refused and an override values it: the detail carries the review's value, its
+    levels and price ÷ value with its word at the latest snapshot's price, so the drawer draws the
+    review's band where the row shows the review's value (18.1, 18.2; the ruling of 2026-11-08);
+    the secondary valuation that counts there comes too, for Details."""
+    override_id, review = _aal_review(db_path, policy, results)
+    value, levels = review.result.value, review.result.levels
+    assert value is not None and levels is not None
+    refused = results["AAL"]
+    assert refused.price is not None
+    body = _detail(client, "AAL")
+    assert (body["result"]["value"], body["result"]["refusal"]) == (None, refused.refusal)
+    found = body["review"]
+    ratio, word = designation_for(refused.price, value, policy.designation_edges)
+    assert (ratio, word) == (review.result.price_to_value, review.result.designation)
+    assert (found["value"], found["priceToValue"], found["designation"]) == (value, ratio, word)
+    assert found["levels"] == {
+        "buy": levels.buy,
+        "fairLow": levels.fair_low,
+        "fairHigh": levels.fair_high,
+        "trim": levels.trim,
+    }
+    assert (found["refusal"], found["mechanical"], found["overrideCount"]) == (None, None, 1)
+    (line,) = found["bridge"]
+    assert (line["overrideId"], line["label"], line["delta"]) == (
+        override_id,
+        "target margin",
+        value,
+    )
+    assert body["secondary"]["id"] == secondaries["AAL"]
+    # a reprice: the review still counts, its word read at the new price
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, replace(refused, price=100.0), 1, clock=lambda: NOW)
+    repriced = _detail(client, "AAL")["review"]
+    assert (repriced["priceToValue"], repriced["designation"]) == designation_for(
+        100.0, value, policy.designation_edges
+    )
 
 
 def test_a_refused_row_carries_its_counting_secondary(

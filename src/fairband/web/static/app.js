@@ -172,9 +172,10 @@
      item's open states; and the later views, find, the lists (null until they load), their
      reload, which settles once they are in, and watch, the marks' onWatch, which opens the popup;
      the loaded rows (null until they load), the chosen columns, openRow, which opens a row's
-     drawer, and reloadDetail, which reads the drawer's company again after another view's write
+     drawer, reloadDetail, which reads the drawer's company again after another view's write
      about it (the Inbox view's decline and a watchlist's Request research, spec 2026-11-06 Tier
-     2, 18.5 and 18.6). controls.js adds show, onShow, section, running and countInbox, the Inbox
+     2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the drawer shows again
+     when a run ends. controls.js adds show, onShow, section, running and countInbox, the Inbox
      view onInbox, and methodology.js adds methodologySection, which the drawer's link reads; a
      view drawn from the rows or the lists sets onRender, which runs after each draw of the screen,
      so it draws again as they load and change. The report page (report.js, 18.4) draws with the
@@ -191,7 +192,7 @@
     watch: watch,
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
-    openRow: openRow, reloadDetail: reloadDetail,
+    openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
     meter: meter, inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
     phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, plain: plain,
@@ -659,6 +660,7 @@
     var valued = isValued(r);
     var growth = r.route === 'revenue-growth';
     var report = body.report;
+    var reviewBanded = isReviewBanded(body);
     var banded = isBanded(body);
     var ask = asked(r.symbol);
     return [
@@ -673,10 +675,13 @@
         youngGrowth(im.failure_probability),
         crossCheck(im.growth_route),
         growth ? discountedAt(r.inputs) : null) : null,
-      /* A refused row whose secondary valuation counts on the latest snapshot shows that value in
-         the screen's Reviewed column (spec 2026-11-06 Tier 2, 18.1), so the drawer draws the
-         secondary's band against the price, its word at today's price, and the refusal stays
-         under it (the ruling of 2026-11-07). A refused row with none has the refusal alone. */
+      /* A refused row shows in the screen's Reviewed column (spec 2026-11-06 Tier 2, 11 and
+         18.1) the value of its review on the latest snapshot, else of its secondary valuation
+         there, so the drawer draws that value's band against the price, its word at today's
+         price, and the refusal stays under it: the review's when it has a value (the ruling of
+         2026-11-08), else the secondary's (the ruling of 2026-11-07). A refused row with neither
+         has the refusal alone. */
+      reviewBanded ? section('review-band', null, meter(body)) : null,
       banded ? section('secondary-band', null, meter(body)) : null,
       /* A refusal takes the band's place: it is the answer when there is no value. A growth row
          refused with its revenue path still shows the margin the price needs (spec 5.11). A
@@ -724,10 +729,12 @@
   /* The meter of a company's detail (spec 2026-11-06 Tier 2, 18.2 and 18.4), as the drawer and
      the report page draw it: a valued row's mechanical band against the price, the reviewed value
      its second marker when the review on the latest snapshot has one, its caption the row's word
-     and price ÷ value; a refused row whose secondary valuation counts on the latest snapshot, the
-     secondary's band, its word at today's price (the ruling of 2026-11-07); else none. The scale
-     is off: the drawer names the levels under it. `hero` false sets the meter's price in figure,
-     under the report page's one headline figure; the drawer passes none. */
+     and price ÷ value; a refused row whose review on the latest snapshot has a value, the
+     review's band, the reviewed marker on the value itself, its word at today's price (the
+     ruling of 2026-11-08); else a refused row whose secondary valuation counts on the latest
+     snapshot, the secondary's band, its word at today's price (the ruling of 2026-11-07); else
+     none. The scale is off: the drawer names the levels under it. `hero` false sets the meter's
+     price in figure, under the report page's one headline figure; the drawer passes none. */
   function meter(body, hero) {
     var r = body.result;
     var review = body.review;
@@ -738,6 +745,14 @@
         buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
         reviewedValue: review && review.value != null ? review.value : null,
         showScale: false, caption: standing(r, body.designationEdges), hero: hero
+      });
+    }
+    if (isReviewBanded(body)) {
+      return h(F.BandMeter, {
+        low: review.levels.fairLow, high: review.levels.fairHigh, price: r.price,
+        fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,
+        designation: review.designation, reviewedValue: review.value,
+        showScale: false, caption: reviewCaption(review, body.designationEdges), hero: hero
       });
     }
     if (!isBanded(body)) return null;
@@ -754,12 +769,25 @@
     return r.value != null && r.levels != null && r.price != null;
   }
 
-  /* A refused row whose secondary valuation, which the detail carries only while it counts on the
-     latest snapshot, has levels, and a price to draw them against: its meter is the secondary's. */
+  /* A refused row whose review, which the detail carries only while it counts on the latest
+     snapshot, has a value, its levels, and a price to draw them against: its meter is the
+     review's, as the row's Reviewed cell and the report page's headline show that value. */
+  function isReviewBanded(body) {
+    var r = body.result;
+    var v = body.review;
+    return !isValued(r) && !!r.refusal && !!v && v.value != null && !!v.levels &&
+      r.price != null;
+  }
+
+  /* A refused row whose review has no value there and whose secondary valuation, which the detail
+     carries only while it counts on the latest snapshot, has levels, and a price to draw them
+     against: its meter is the secondary's. */
   function isBanded(body) {
     var r = body.result;
     var s = body.secondary;
-    return !isValued(r) && !!r.refusal && !!s && !!s.levels && r.price != null;
+    var v = body.review;
+    return !isValued(r) && !!r.refusal && !(v && v.value != null) && !!s && !!s.levels &&
+      r.price != null;
   }
 
   /* A report's references, [{ n, ref, source }], as ReportReader's footnotes, ref → n (spec 13.1):
@@ -820,8 +848,9 @@
       rs && rs.overrides.length ? block('app-overrides', 'Overrides',
         rs.overrides.map(function (o) {
           /* Its step in the valued review on the latest snapshot gives an applied override its
-             effect; outside one (no review there, after a revalue, or one that refused) its
-             Result row says so instead. */
+             effect; a step that refused, its refusal (a later step may still value the review);
+             outside one (no review there, after a revalue, or one that refused) its Result row
+             says so instead. */
           var line = review ? review.bridge.filter(function (l) {
             return l.overrideId === o.id;
           })[0] : null;
@@ -836,7 +865,7 @@
             effect: effect,
             reviewed: effect === undefined ? undefined : review.value,
             validUntil: effect === undefined ? undefined : r.valid_until,
-            resultNote: effect === undefined ? NO_EFFECT : undefined
+            resultNote: effect === undefined ? (line && line.refusal) || NO_EFFECT : undefined
           });
         })) : null,
       rs && rs.guidance.length ? block('app-guidance', 'Guidance on file',
@@ -1099,6 +1128,16 @@
       .then(render);
   }
 
+  /* The company the drawer shows read again when a run ends (controls.js), since a run may
+     follow its review, post its expiry item or drop an override (method 14.6): the detail in
+     place, and Details' records while Details is open. */
+  function reloadDrawer() {
+    var d = state.drawer;
+    if (!d) return;
+    if (state.detailsOpen) readResearch(d.symbol);
+    reloadDetail(d.symbol);
+  }
+
   /* Details ▾: open or closed for the page's life; opening it reads the records of a company not
      yet read, or whose read failed. */
   function toggleDetails() {
@@ -1308,6 +1347,13 @@
     var word = F.DESIGNATION[r.designation];
     if (!word || r.price_to_value == null) return null;
     return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × the value';
+  }
+
+  /* A refused row's band from its valued review: its word and price ÷ value at the latest price,
+     which the detail carries, as the meter's own caption says them; the meter adds "reviewed" and
+     the value after it. */
+  function reviewCaption(v, edges) {
+    return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges);
   }
 
   /* A refused row's band from its secondary valuation: what drew it, then its word and price ÷

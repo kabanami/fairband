@@ -75,6 +75,7 @@
           state.notice = null;
           state.cancelAsked = false;
           P.reload();
+          P.reloadDrawer(); /* its review, secondary valuation and item may have moved */
           if (state.tab === 'groups') loadGroups();
           if (state.tab === 'report') P.onShow.report();
         }

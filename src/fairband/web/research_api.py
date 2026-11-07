@@ -5,10 +5,12 @@ the drawer's main view leads with, read on the company's latest snapshot by the 
 (``rows.counts_on``: a record counts on the snapshot it rests on or on a later one that reprices
 it), each ``None`` without one:
 
-- ``review``: the current review when it counts, ``{id, value, levels, refusal, bridge,
-  overrideCount, mechanical}``; ``levels`` ``{buy, fairLow, fairHigh, trim}`` (``None`` on a
-  refusal) and ``mechanical`` the value the bridge starts from. Each bridge line is the stored
-  step, ``{overrideId, tag, old, new, delta, refusal}``, with the input's label in a reader's words
+- ``review``: the current review when it counts, ``{id, value, levels, priceToValue,
+  designation, refusal, bridge, overrideCount, mechanical}``; ``levels`` ``{buy, fairLow,
+  fairHigh, trim}`` (``None`` on a refusal); price ÷ value and its word read as the secondary's
+  are (below), so a refused row's drawer can draw a valued review's band against today's price;
+  ``mechanical`` the value the bridge starts from. Each bridge line is the stored step,
+  ``{overrideId, tag, old, new, delta, refusal}``, with the input's label in a reader's words
   (``overrides.LABELS``), its unit (``overrides.TAGS``) and the override's reason and writer.
 - ``secondary``: the newest secondary valuation when it counts, ``{id, form, valuePerShare,
   levels, priceToValue, designation, parts, drivers, createdAt, principal, actor}``: price ÷ value
@@ -78,14 +80,15 @@ def agent_records(
     report = latest_report(conn, symbol)
     cited = snapshot_rows(conn, rested_on(snapshot, review, secondary, report))
     item = open_item(conn, symbol)
+    edges = policy.designation_edges
     return {
         "review": (
-            _review(review, {o.id: o for o in overrides_for(conn, symbol)})
+            _review(review, {o.id: o for o in overrides_for(conn, symbol)}, snapshot.price, edges)
             if review is not None and counts_on(snapshot, cited, review)
             else None
         ),
         "secondary": (
-            _secondary(secondary, snapshot.price, policy.designation_edges)
+            _secondary(secondary, snapshot.price, edges)
             if secondary is not None and counts_on(snapshot, cited, secondary)
             else None
         ),
@@ -141,11 +144,35 @@ def _levels(
     return {"buy": buy, "fairLow": fair_low, "fairHigh": fair_high, "trim": trim}
 
 
-def _review(review: ReviewRow, overrides: Mapping[int, OverrideRow]) -> dict[str, Any]:
+def _standing(
+    value: float | None,
+    levels: dict[str, float] | None,
+    price: float | None,
+    edges: tuple[float, float, float, float],
+) -> tuple[float | None, str | None]:
+    """Price ÷ ``value`` and its word at ``price`` on ``edges`` (``designation_for``), as the
+    snapshot's own are computed; ``None`` without levels, a value above zero or a positive
+    price."""
+    if levels is None or value is None or value <= 0 or price is None or price <= 0:
+        return None, None
+    return designation_for(price, value, edges)
+
+
+def _review(
+    review: ReviewRow,
+    overrides: Mapping[int, OverrideRow],
+    price: float | None,
+    edges: tuple[float, float, float, float],
+) -> dict[str, Any]:
+    """The review, its designation at ``price``, the latest snapshot's."""
+    levels = _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level)
+    ratio, word = _standing(review.value, levels, price, edges)
     return {
         "id": review.id,
         "value": review.value,
-        "levels": _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level),
+        "levels": levels,
+        "priceToValue": ratio,
+        "designation": word,
         "refusal": review.refusal,
         "bridge": [_line(line, overrides.get(line["override_id"])) for line in review.bridge],
         "overrideCount": len(review.override_ids),
@@ -179,10 +206,7 @@ def _secondary(
     levels = _levels(
         secondary.buy_level, secondary.fair_low, secondary.fair_high, secondary.trim_level
     )
-    ratio: float | None = None
-    word: str | None = None
-    if levels is not None and price is not None and price > 0 and value > 0:
-        ratio, word = designation_for(price, value, edges)
+    ratio, word = _standing(value, levels, price, edges)
     served = secondary_json(secondary)
     return {
         "id": secondary.id,
