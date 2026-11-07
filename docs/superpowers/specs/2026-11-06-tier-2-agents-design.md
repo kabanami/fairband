@@ -381,12 +381,13 @@ agent sets, by Damodaran's FCFF model, from the trailing revenue on file:
     EBIT_t = revenue_t × m_t;  NOPAT_t = EBIT_t × (1 − t)
     reinvestment_t = max(0, revenue_t − revenue_{t−1}) ÷ s
     FCFF_t = NOPAT_t − reinvestment_t;  PV_t = FCFF_t ÷ (1 + r)^t
-    terminal FCFF = NOPAT_N × (1 + g) × (1 − g ÷ ROIC_T)
+    terminal FCFF = NOPAT_N × (1 + g) × (1 − g ÷ ROIC_T) when g > 0, NOPAT_N × (1 + g) when g ≤ 0
     terminal = terminal FCFF ÷ (r − g), discounted by (1 + r)^N
 
 with r the policy's required return, locked (the founder, 2026-11-07: "keep the policy's hurdle
-rate"), ROIC_T the policy's terminal return for the moat class as reviewed, and g at most g_T.
-N runs from `secondary_years_min` (3) to `secondary_years_max` (15); every list has N entries;
+rate"), ROIC_T the policy's terminal return for the moat class as reviewed, and g from −100% to g_T (a
+terminal growth at or below zero releases no capital, as the explicit years reinvest nothing in a
+shrinking year; build ruling of Task 3, 2026-11-07). N runs from `secondary_years_min` (3) to `secondary_years_max` (15); every list has N entries;
 each driver is bounded by `secondary_driver_ranges` (19): a growth rate −0.80 to 3.00, a margin
 −0.50 to 0.60, a tax rate 0 to 0.50, sales-to-capital 0.1 to 10. *My call* on the reinvestment
 floor (a shrinking year reinvests nothing, so a decline does not create cash) and on the
@@ -398,7 +399,8 @@ driver by `<name>/<t>`).
 
 **The sum-of-parts form, `parts`.** As built in plan 1: one to `secondary_parts_max` (10) parts,
 each `{name, fcff, terminal_growth, note}`, `fcff` the free cash flow to the firm in dollars for
-years 1 to N; the arithmetic of method 15.2. It stays for a conglomerate or a company whose
+years 1 to N, each `terminal_growth` from −100% to g_T; the arithmetic of method 15.2, with the
+same terminal rule at or below zero. It stays for a conglomerate or a company whose
 cash flows the agent builds segment by segment; the playbook uses the standard form unless the
 parts form fits better. *My call* to keep it: it is built, tested and a different question.
 
@@ -411,7 +413,8 @@ with evidence, where the balance sheet is wrong or missing, and the record store
 figures used with their source, so the value rebuilds. A foreign filer is refused, "foreign
 filer: currency and share-unit handling not built yet" (B-28); a row with no diluted share count
 is refused. Evidence is required, as on an override; at least one item backs the path or the
-drivers and names no `figure`. A driver outside its range, a `terminal_growth` above g_T, an N
+drivers and names no `figure`. A driver outside its range, a `terminal_growth` outside −100% to
+g_T, an N
 outside the range, a list of the wrong length, or a part count above the maximum is refused
 naming the rule. Why drivers and not a value: the agent's judgment is the drivers; the tool keeps
 the projection, the discounting, the terminal and the equity bridge, which is what makes the
@@ -419,7 +422,9 @@ number a tool output.
 
 **The grid.** Every record carries a three-by-three sensitivity grid: the value a share at r −1
 pp, r and r +1 pp across g −1 pp, g and min(g +1 pp, g_T), computed with the record and cited
-`secondary:<id>/grid/<i>/<j>`. It is a display of how much of the value is assumption, not a
+`secondary:<id>/grid/<i>/<j>`; on the parts form the rows are shifts of −1, 0 and +1 pp applied
+to every part's growth, each capped at g_T; the grid is absent where r − 1 pp would not exceed
+the highest growth (build rulings of Task 3). It is a display of how much of the value is assumption, not a
 value: the rate in force stays r. *My call*; `SensitivityGrid` draws it (18.4).
 
 **Required on every report.** The report check refuses a submission that cites no secondary
