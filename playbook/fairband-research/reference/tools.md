@@ -182,7 +182,9 @@ vendor call. The refusals:
   free_cash_flow, capex, revenue_growth or eps_growth"; "period is a fiscal year or a quarter
   (2026, 2026Q3)"; "low is above high"; "basis is one of gaap, adjusted or constant-currency"; "a
   guidance record needs its text"; "a guidance record needs its source". A low or a high that is
-  not a number is refused (400) by the call's own validation, naming the field.
+  not a number never reaches the web server: the tool's own arguments are typed as numbers, so the
+  MCP tool answers a tool error first and calls nothing. A number that is not finite passes the
+  tool and is refused (400) by the web server's validation of the body, naming the field.
 - A finding's source (`finding_add`): `{kind, ref, note}`, the kind one of `filing`,
   `transcript`, `url`, `vendor` or `base-rate`. `as_of` is the date the fact describes, as
   `2026-09-30`. The `unit` is `currency`, `percent`, `multiple`, `count`, `per-share`, `score` or

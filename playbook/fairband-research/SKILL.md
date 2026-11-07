@@ -187,13 +187,15 @@ The signs:
 
 For a cyclical, place the company in its cycle. Set the operating margin against its median, and
 revenue against its trend, from the cells of `financial_tables` and the years of `financials`. On
-Mature Stable the snapshot's intermediates hold the ten-year median (`median_margin`); cite it
-there. On every other route no tool gives a median. Cite instead the margin of the median year:
-of the five years in the growth table, the year whose operating margin is the middle one, a
-`table:` cite named as that year's margin ("the margin of fiscal 2023, the middle of the past
-five years"), never a median you computed. Record the rest of the evidence as findings with
-`finding_add`: the peak and the trough you found, the industry's capacity or prices. The thesis
-names the position. The summary says "cyclical". Step 10 sets the inputs at mid-cycle.
+Mature Stable the snapshot's intermediates hold the ten-year median (`median_margin`); on Decline
+they hold the five-year median (`margin/median`), when three years or more have a margin. Cite
+either as a `snapshot:` ref, named for its years. On the other routes no tool gives a median. Cite
+instead the margin of the median year: of the five years in the growth table, the year whose
+operating margin is the middle one, a `table:` cite named as that year's margin ("the margin of
+fiscal 2023, the middle of the past five years"), never a median you computed. Record the rest of
+the evidence as findings with `finding_add`: the peak and the trough you found, the industry's
+capacity or prices. The thesis names the position. The summary says "cyclical". Step 10 sets the
+inputs at mid-cycle.
 
 ### 8. The valuation
 
@@ -366,15 +368,17 @@ The rules:
   report. Where the guidance is not clear, the consensus is the fallback.
 
 Guidance enters the reviewed value only through an override, never the mechanical value. Each
-input takes one fiscal year's full-year guidance, and the figure you pass as `new` comes from a
-tool:
+input takes the full-year guidance of one fiscal year, counted from the base year. The base year
+is the fiscal year that holds most of the four quarters after the last one reported, a tie taking
+the later year. Every route finds it by this one rule. Mature Growth, High Growth and Young Growth
+store it as `base_year` in the snapshot's `path` intermediate. A Decline snapshot does not store
+it: find it by the rule, from the quarters of `estimates`. The figure you pass as `new` comes from
+a tool:
 
-- `earnings.ntm` (Mature Growth): a full-year EPS guidance for the base year, the fiscal year the
-  next twelve months fall in, read from `base_year` in the snapshot's `path` intermediate. `new`
-  is the record's midpoint.
-- `revenue.ntm` (High Growth, Young Growth, Decline): a full-year revenue guidance for the same
-  year. On Decline, whose intermediates carry no `base_year`, that year is the fiscal year after
-  the newest statement year on file. `new` is the record's midpoint.
+- `earnings.ntm` (Mature Growth): a full-year EPS guidance for the base year. `new` is the
+  record's midpoint.
+- `revenue.ntm` (High Growth, Young Growth, Decline): a full-year revenue guidance for the base
+  year. `new` is the record's midpoint.
 - `path.step_2`: a full-year guidance for the base year plus one; `path.step_3`: for the base year
   plus two. `new` is the `derive` `growth` of the record's midpoint over the consensus for the
   year before: its `estimate:` EPS on Mature Growth, its `estimate:` revenue on High Growth, Young
