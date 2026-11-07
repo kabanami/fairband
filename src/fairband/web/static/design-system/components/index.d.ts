@@ -416,8 +416,9 @@ export interface ScreenRow {
   /**
    * Computed with the overrides inside. `null` when there are none.
    * fairband: the current review's value on the row's snapshot, or one that snapshot reprices;
-   * else the newest secondary valuation's value a share there; `null` with neither (spec
-   * 2026-11-06 Tier 2, 18.1).
+   * else, where the route refused, the newest secondary valuation's value a share there, which
+   * stands in on a refused row and is the second view beside a route's value; `null` otherwise
+   * (spec 2026-11-06 Tier 2, 11 and 18.1).
    */
   reviewed: number | null;
   /** How many overrides are inside the reviewed value. */

@@ -9,12 +9,13 @@ and timestamps are ISO text. ``mechanical`` is the snapshot's value. Every row, 
 has ``watchlists``, the ids of the user's lists it is on, and ``flagCount``, the number of its
 quality warnings (spec 2026-11-04 9.3 and 9.5).
 
-Every row also has the agents' fields (spec 2026-11-06 Tier 2, 18.1; ``agent_fields``):
-``reviewed`` and ``overrides``, the reviewed value and the count of the overrides inside it;
-``agentStance``, the latest published report's word, a column; and ``covered``, the coverage
-mark's record ``{at, actor, expired}``, which no column draws and nothing sorts by, so it is no
-row key. A row with no agent's record has ``NO_AGENT_FIELDS``. The fields are computed from records
-already read: the snapshots the records rest on (``rested_on``) are read once for all the rows.
+Every row also has the agents' fields (spec 2026-11-06 Tier 2, 11 and 18.1; ``agent_fields``):
+``reviewed`` and ``overrides``, the reviewed value and the count of the overrides inside it, or on
+a row the route refused the secondary valuation's value standing in; ``agentStance``, the latest
+published report's word, a column; and ``covered``, the coverage mark's record ``{at, actor,
+expired}``, which no column draws and nothing sorts by, so it is no row key. A row with no agent's
+record has ``NO_AGENT_FIELDS``. The fields are computed from records already read: the snapshots
+the records rest on (``rested_on``) are read once for all the rows.
 """
 
 import statistics
@@ -150,16 +151,19 @@ def agent_fields(
     (``rested_on``), the latest aside. A record counts on the snapshot it rests on or on a later
     one that reprices it (``same_snapshot_rows``, the reports' rule). ``reviewed`` is the review's
     value when the review counts and has one, ``overrides`` the count of the overrides inside it;
-    else the secondary valuation's value a share when it counts and is above zero, with no
-    override inside; else ``None`` and 0. ``agentStance`` is the report's word and ``covered`` its
-    time, its actor (its principal where it names none, an owner's report) and whether the window
-    of the snapshot it rests on ended before ``today`` (``window_ended``); both ``None`` without a
-    report."""
+    else, where the route refused (``snapshot`` has no value), the secondary valuation's value a
+    share when it counts and is above zero, with no override inside: spec 11's secondary stands in
+    on the row where the route refuses and is the second view beside a route's value, which the
+    drawer's Details and the report show; else ``None`` and 0. ``agentStance`` is the report's
+    word and ``covered`` its time, its actor (its principal where it names none, an owner's
+    report) and whether the window of the snapshot it rests on ended before ``today``
+    (``window_ended``); both ``None`` without a report."""
     fields = dict(NO_AGENT_FIELDS)
     if review is not None and review.value is not None and counts_on(snapshot, cited, review):
         fields |= {"reviewed": review.value, "overrides": len(review.override_ids)}
     elif (
-        secondary is not None
+        snapshot.value is None
+        and secondary is not None
         and secondary.value_per_share > 0
         and counts_on(snapshot, cited, secondary)
     ):

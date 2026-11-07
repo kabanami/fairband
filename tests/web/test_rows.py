@@ -1,9 +1,11 @@
 """The agents' fields on the screen's rows (spec 2026-11-06 Tier 2, 16 and 18.1), on the database of
 ``conftest.py``: AAPL valued on the Mature Growth route, AAL refused for its target margin and HGCO
 valued on the revenue growth route, each with one snapshot. A row's ``reviewed`` is its current
-review's value when the review rests on the row's snapshot or one the snapshot reprices, else its
-newest secondary valuation's value a share by the same rule, else ``None``; ``overrides`` counts the
-overrides inside that review; ``agentStance`` and ``covered`` read the latest published report."""
+review's value when the review rests on the row's snapshot or one the snapshot reprices; else, on a
+row the route refused, its newest secondary valuation's value a share by the same rule, which stands
+in there and is the second view beside a route's value (spec 11); else ``None``; ``overrides``
+counts the overrides inside that review; ``agentStance`` and ``covered`` read the latest published
+report."""
 
 import sqlite3
 from collections.abc import Callable
@@ -14,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
-from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
 from support.web import HOST, NOW, TODAY, _settings
 
 from fairband.engine.overrides import Override
@@ -88,6 +90,43 @@ def _review(
     value = review.result.value
     assert value is not None and value != results["AAPL"].value
     return override_id, value
+
+
+def _aal_review(
+    db_path: Path, policy: Policy, results: dict[str, ValuationResult], margin: float | None
+) -> float | None:
+    """An applied margin.target override of AAL, whose route refused for its target margin, and
+    the review on AAL's snapshot: valued at ``margin``, else refused; the review's value."""
+    with closing(connect(db_path)) as conn:
+        snapshot_id = _latest(db_path, "AAL")
+        override_id = insert_override(
+            conn,
+            "AAL",
+            "margin.target",
+            None,
+            0.2 if margin is None else margin,
+            "ratio",
+            "the peers by hand",
+            [{"kind": "filing", "ref": "10-K 2025", "note": ""}],
+            "lasting",
+            None,
+            None,
+            snapshot_id,
+            AGENT,
+            NOW,
+            "applied",
+            "",
+        )
+        refused = results["AAL"]
+        if margin is None:
+            result = replace(refused, refusal="the reviewed margin is refused")
+            review = Review(result, None, (), (override_id,))
+        else:
+            target = Override(override_id, "margin.target", margin, "agent", AGENT.actor, NOW, "")
+            inputs = replace(young_growth_inputs(), symbol="AAL", peers=())
+            review = review_company(inputs, universe_deciles(), policy, TODAY, [target], refused)
+        insert_review(conn, review, "AAL", snapshot_id, None, clock=lambda: NOW)
+    return review.result.value
 
 
 def _latest(db_path: Path, symbol: str) -> int:
@@ -212,6 +251,9 @@ def test_a_secondary_stands_in_where_the_route_refuses(
     results: dict[str, ValuationResult],
     secondaries: dict[str, int],
 ) -> None:
+    """Spec 11: a secondary valuation stands in on the row where the route refuses, and beside a
+    route's value it is the second view, which the drawer's Details and the report show: a valued
+    row with a secondary and no review has no reviewed value."""
     with closing(connect(db_path)) as conn:
         secondary = secondary_row(conn, secondaries["AAL"])
         hgco = secondary_row(conn, secondaries["HGCO"])
@@ -224,7 +266,8 @@ def test_a_secondary_stands_in_where_the_route_refuses(
         0,
         None,
     )
-    assert rows["HGCO"]["reviewed"] == hgco.value_per_share  # beside the route's value too
+    assert results["HGCO"].value is not None and hgco.value_per_share > 0
+    assert _agents(rows["HGCO"]) == NO_AGENT  # beside the route's value: the second view
     assert (rows["AAPL"]["reviewed"], rows["AAPL"]["overrides"]) == (value, 1)  # the review leads
     # a reprice keeps it; a later data date leaves it on the snapshot it was made on
     refused = results["AAL"]
@@ -234,15 +277,16 @@ def test_a_secondary_stands_in_where_the_route_refuses(
     assert _agents(_rows(client)["AAL"]) == NO_AGENT
 
 
-def test_a_refused_review_leaves_the_secondary_to_stand_in(
+def test_a_refused_review_on_a_valued_row_leaves_no_reviewed_value(
     client: TestClient,
     db_path: Path,
     policy: Policy,
     results: dict[str, ValuationResult],
     secondaries: dict[str, int],
 ) -> None:
-    """The current review on the latest snapshot refused, so it has no value: the secondary
-    valuation on that snapshot fills the cell, with no override inside it."""
+    """The current review on the latest snapshot refused, so it has no value, and the route
+    valued the row: the secondary valuation on that snapshot is the second view, not the cell's
+    value."""
     override_id, _ = _review(db_path, policy, results)
     mechanical = results["AAPL"]
     refused = replace(
@@ -257,9 +301,31 @@ def test_a_refused_review_leaves_the_secondary_to_stand_in(
         review = Review(refused, mechanical.value, (), (override_id,))
         insert_review(conn, review, "AAPL", _latest(db_path, "AAPL"), None, clock=lambda: NOW)
         secondary = secondary_row(conn, secondaries["AAPL"])
-    assert secondary is not None
+    assert secondary is not None and secondary.value_per_share > 0
     aapl = _rows(client)["AAPL"]
-    assert (aapl["reviewed"], aapl["overrides"]) == (secondary.value_per_share, 0)
+    assert (aapl["reviewed"], aapl["overrides"], aapl["mechanical"]) == (None, 0, mechanical.value)
+
+
+def test_on_a_refused_row_a_valued_review_leads_the_secondary(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
+) -> None:
+    """AAL's route refused and its secondary valuation counts: a valued review fills the cell with
+    its value and its override; a newer review that refuses leaves the secondary to stand in, with
+    no override inside it."""
+    with closing(connect(db_path)) as conn:
+        secondary = secondary_row(conn, secondaries["AAL"])
+    assert secondary is not None and results["AAL"].value is None
+    value = _aal_review(db_path, policy, results, 0.2)
+    assert value is not None and value != secondary.value_per_share
+    aal = _rows(client)["AAL"]
+    assert (aal["reviewed"], aal["overrides"], aal["mechanical"]) == (value, 1, None)
+    assert _aal_review(db_path, policy, results, None) is None
+    aal = _rows(client)["AAL"]
+    assert (aal["reviewed"], aal["overrides"]) == (secondary.value_per_share, 0)
 
 
 def test_a_secondary_at_or_below_zero_fills_no_reviewed_value(
@@ -279,7 +345,7 @@ def test_the_rows_read_the_agents_records_in_a_fixed_number_of_queries(
 ) -> None:
     """The reviews, the secondary valuations, the reports and the snapshots they rest on are read
     in one query each for all the rows: covering three companies on older snapshots costs the
-    screen what covering one does."""
+    screen what covering one does. The secondary stands in on AAL's refused row alone."""
     first = {symbol: _latest(db_path, symbol) for symbol in results}
     for result in results.values():
         _snapshot(db_path, replace(result, price=140.0))  # a price refresh: each record is older
@@ -303,14 +369,15 @@ def test_the_rows_read_the_agents_records_in_a_fixed_number_of_queries(
         found = _rows(client)
         return len(statements), found
 
-    cover("AAPL")
-    one, rows = read()
-    assert rows["AAPL"]["reviewed"] is not None and rows["AAPL"]["covered"] is not None
     cover("AAL")
+    one, rows = read()
+    assert rows["AAL"]["reviewed"] is not None and rows["AAL"]["covered"] is not None
+    cover("AAPL")
     cover("HGCO")
     three, rows = read()
     for symbol in results:
-        assert rows[symbol]["reviewed"] is not None and rows[symbol]["covered"] is not None
+        assert rows[symbol]["covered"] is not None, symbol
+    assert [s for s in results if rows[s]["reviewed"] is not None] == ["AAL"]
     assert three == one
     cited = [
         s for s in statements if "FROM snapshots WHERE id IN (SELECT value FROM json_each" in s

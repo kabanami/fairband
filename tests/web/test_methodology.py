@@ -230,6 +230,9 @@ def test_the_agents_section_reads(client: TestClient) -> None:
         "drops a period-tied override",
         "once its guided year has passed",
         "a valuation review for each company on the list with no open item",
+        # spec 11: the secondary stands in on a refused row, and is the second view beside a value
+        "Where the route refused, it shows the value of a secondary valuation",
+        "Beside a route's value, the secondary valuation is a second view",
     ):
         assert words in text, words
     assert "values a peak as if it lasted" not in text
