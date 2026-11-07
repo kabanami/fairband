@@ -27,7 +27,9 @@ or a placeholder row "not yet valued" before its first; a company the latest uni
 admit has no row. The latest universe is the newest that admitted a company
 (``latest_companies``), so a refresh whose screener admitted nobody leaves the screen as it was.
 Before any universe exists, every company with a snapshot has its row. The group view groups the
-same rows. Each row carries the ids of the watchlists the company is on.
+same rows. Each row carries the ids of the watchlists the company is on, and the agents' fields
+(``rows.agent_fields``) from the companies' current reviews, newest secondary valuations and latest
+published reports, each read once for every company.
 
 Each request that reads a policy value reads the effective policy, the file's values with the
 user's settings over them, so a changed setting shows at the next request: the aging fraction of
@@ -86,8 +88,11 @@ from fairband.store.refreshes import (
     latest_refresh,
     mark_interrupted,
 )
+from fairband.store.reports import latest_reports
+from fairband.store.reviews import latest_reviews
+from fairband.store.secondary import latest_secondaries
 from fairband.store.settings import read_overlay
-from fairband.store.snapshots import latest_snapshot, latest_snapshots
+from fairband.store.snapshots import SnapshotRow, latest_snapshot, latest_snapshots
 from fairband.store.watchlists import memberships
 from fairband.web.agents_api import add_agent_routes
 from fairband.web.guidance_api import add_guidance_routes
@@ -98,7 +103,9 @@ from fairband.web.reviews_api import add_review_routes
 from fairband.web.rows import (
     COLUMNS,
     GROUP_BY,
+    NO_AGENT_FIELDS,
     ROW_KEYS,
+    agent_fields,
     company_json,
     group_rows,
     placeholder_row,
@@ -182,8 +189,8 @@ def create_app(
 
     def screen_rows(today: date) -> tuple[list[dict[str, Any]], RefreshRow | None, Policy]:
         """A row per admitted company of the latest universe (see the module docstring), in
-        symbol order, its freshness judged on ``today``; the latest refresh's record; and the
-        effective policy the rows were read under."""
+        symbol order, its freshness and its report's window judged on ``today``; the latest
+        refresh's record; and the effective policy the rows were read under."""
         with closing(conn_factory()) as conn:
             read_under = current(conn)
             admitted = latest_companies(conn)
@@ -191,22 +198,37 @@ def create_app(
             snapshots = {s.symbol: s for s in latest_snapshots(conn)}
             refresh = latest_refresh(conn)
             lists = memberships(conn)
+            reviews, secondaries = latest_reviews(conn), latest_secondaries(conn)
+            reports = latest_reports(conn)
+            agents = {
+                symbol: agent_fields(
+                    conn,
+                    snapshots[symbol],
+                    reviews.get(symbol),
+                    secondaries.get(symbol),
+                    reports.get(symbol),
+                    today,
+                )
+                for symbol in reviews.keys() | secondaries.keys() | reports.keys()
+                if symbol in snapshots
+            }
         aging = read_under.aging_fraction
+
+        def valued(snapshot: SnapshotRow, company: CompanyRow | None) -> dict[str, Any]:
+            watchlists = lists.get(snapshot.symbol, [])
+            fields = agents.get(snapshot.symbol, NO_AGENT_FIELDS)
+            return screen_row(snapshot, company, today, aging, watchlists, fields)
 
         def row(company: CompanyRow) -> dict[str, Any]:
             snapshot = snapshots.get(company.symbol)
-            watchlists = lists.get(company.symbol, [])
             if snapshot is None:
-                return placeholder_row(company, watchlists)
-            return screen_row(snapshot, company, today, aging, watchlists)
+                return placeholder_row(company, lists.get(company.symbol, []))
+            return valued(snapshot, company)
 
         if listed:
             rows = [row(company) for company in admitted]
         else:
-            rows = [
-                screen_row(s, None, today, aging, lists.get(s.symbol, []))
-                for s in snapshots.values()
-            ]
+            rows = [valued(s, None) for s in snapshots.values()]
         return rows, refresh, read_under
 
     @app.get("/api/screen")

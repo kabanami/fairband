@@ -357,7 +357,12 @@ export interface ScreenRow {
   price: number;
   /** Computed from the system's own inputs only. */
   mechanical: number;
-  /** Computed with the overrides inside. `null` when there are none. */
+  /**
+   * Computed with the overrides inside. `null` when there are none.
+   * fairband: the current review's value on the row's snapshot, or one that snapshot reprices;
+   * else the newest secondary valuation's value a share there; `null` with neither (spec
+   * 2026-11-06 Tier 2, 18.1).
+   */
   reviewed: number | null;
   /** How many overrides are inside the reviewed value. */
   overrides?: number;
@@ -433,6 +438,19 @@ export interface ScreenRow {
    */
   priceToValue?: number | null;
   designation?: Designation | null;
+  /**
+   * fairband: the agent's stance, the word of the company's latest published report: `buy`,
+   * `hold`, `trim` or `avoid`; `null` without a report, and the Stance cell then shows an em dash
+   * (spec 2026-11-06 Tier 2, 18.1).
+   */
+  agentStance?: string | null;
+  /**
+   * fairband: the coverage mark's record: the latest published report's time (ISO), its actor
+   * (the principal for a report that names none) and whether the validity window of the snapshot
+   * it rests on has expired; `null` without a report, and the Ticker cell then draws no mark
+   * (spec 2026-11-06 Tier 2, 18.1).
+   */
+  covered?: { at: string; actor: string; expired: boolean } | null;
   /** Rows may carry anything else the caller filters or sorts on; the
       component reads only the fields above. */
   [key: string]: unknown;
@@ -449,6 +467,11 @@ export type CapSize = 'mega' | 'large' | 'mid' | 'small';
 export interface ScreenFilters {
   /** fairband: the price-vs-value words; a row without one matches none. */
   designation: Designation[];
+  /**
+   * fairband: the agent's stance words; a row without a published report matches none (spec
+   * 2026-11-06 Tier 2, 18.1).
+   */
+  stance: string[];
   phase: Phase[];
   cap: CapSize[];
   /** Sector names, as they appear in SECTORS. */

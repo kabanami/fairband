@@ -5,14 +5,20 @@ refresh and progress records as the routes send them.
 A screen row carries the ``ScreenRow`` keys of the design system's ``index.d.ts`` (``ticker`` to
 ``freshness``), so the page hands rows to ``ScreenTable`` as they come, and, in the same
 camelCase, the extra columns of spec 6.3 and after. Numbers are JSON numbers or ``None``; dates
-and timestamps are ISO text. Nothing is reviewed in this cut: ``reviewed`` is ``None``,
-``overrides`` is 0 and ``mechanical`` is the snapshot's value. Every row, a placeholder too, has
-``watchlists``, the ids of the user's lists it is on, and ``flagCount``, the number of its quality
-warnings (spec 2026-11-04 9.3 and 9.5).
+and timestamps are ISO text. ``mechanical`` is the snapshot's value. Every row, a placeholder too,
+has ``watchlists``, the ids of the user's lists it is on, and ``flagCount``, the number of its
+quality warnings (spec 2026-11-04 9.3 and 9.5).
+
+Every row also has the agents' fields (spec 2026-11-06 Tier 2, 18.1; ``agent_fields``):
+``reviewed`` and ``overrides``, the reviewed value and the count of the overrides inside it;
+``agentStance``, the latest published report's word, a column; and ``covered``, the coverage
+mark's record ``{at, actor, expired}``, which no column draws and nothing sorts by, so it is no
+row key. A row with no agent's record has ``NO_AGENT_FIELDS``.
 """
 
+import sqlite3
 import statistics
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from typing import Any
 
@@ -20,9 +26,13 @@ from fairband.engine.flags import flag_count
 from fairband.engine.levels import validity_state
 from fairband.engine.types import PHASE_NUMBER
 from fairband.refresh.run import UNCLASSIFIED, Progress
+from fairband.reports.refs import same_snapshot
 from fairband.store.companies import CompanyRow
 from fairband.store.refreshes import RefreshRow
-from fairband.store.snapshots import SnapshotRow
+from fairband.store.reports import ReportRow
+from fairband.store.reviews import ReviewRow
+from fairband.store.secondary import SecondaryRow
+from fairband.store.snapshots import SnapshotRow, snapshot_row
 
 NOT_YET_VALUED = "not yet valued"
 GROUP_BY = ("sector", "phase", "cap")
@@ -70,6 +80,7 @@ EXTRA_KEYS = (
     "refusal",
     "priceToValue",
     "designation",
+    "agentStance",
     "priceDate",
     "dataDate",
     "validUntil",
@@ -107,6 +118,60 @@ DESIGN_COLUMNS = (
 # Each column once: an extra key that is also a design column keeps its design place.
 COLUMNS = DESIGN_COLUMNS + tuple(key for key in EXTRA_KEYS if key not in DESIGN_COLUMNS)
 
+# The agents' fields of a row with no agent's record: no reviewed value, no override inside it, no
+# stance and no coverage mark.
+NO_AGENT_FIELDS: Mapping[str, Any] = {
+    "reviewed": None,
+    "overrides": 0,
+    "agentStance": None,
+    "covered": None,
+}
+# The agent's stance words in the order the Stance column sorts them (spec 2026-11-06 Tier 2,
+# 18.1); a word outside them sorts after them.
+STANCE_ORDER = ("buy", "hold", "trim", "avoid")
+_STANCE_RANK = {word: rank for rank, word in enumerate(STANCE_ORDER)}
+
+
+def agent_fields(
+    conn: sqlite3.Connection,
+    snapshot: SnapshotRow,
+    review: ReviewRow | None,
+    secondary: SecondaryRow | None,
+    report: ReportRow | None,
+    today: date,
+) -> dict[str, Any]:
+    """The agents' fields of the row of the company's latest ``snapshot`` (spec 2026-11-06 Tier 2,
+    18.1), from its current review, its newest secondary valuation and its latest published
+    report, each ``None`` without one. A record counts on the snapshot it rests on or on a later
+    one that reprices it (``same_snapshot``, the reports' rule). ``reviewed`` is the review's
+    value when the review counts and has one, ``overrides`` the count of the overrides inside it;
+    else the secondary valuation's value a share when it counts, with no override inside; else
+    ``None`` and 0. ``agentStance`` is the report's word and ``covered`` its time, its actor (its
+    principal where it names none, an owner's report) and whether the window of the snapshot it
+    rests on ended before ``today``; both ``None`` without a report."""
+    fields = dict(NO_AGENT_FIELDS)
+    if (
+        review is not None
+        and review.value is not None
+        and same_snapshot(conn, review.snapshot_id, snapshot.id)
+    ):
+        fields |= {"reviewed": review.value, "overrides": len(review.override_ids)}
+    elif secondary is not None and same_snapshot(conn, secondary.snapshot_id, snapshot.id):
+        fields["reviewed"] = secondary.value_per_share
+    if report is not None:
+        rests_on = (
+            snapshot
+            if report.snapshot_id == snapshot.id
+            else snapshot_row(conn, report.snapshot_id)
+        )
+        fields["agentStance"] = report.stance
+        fields["covered"] = {
+            "at": report.created_at.isoformat(),
+            "actor": report.principal if report.actor is None else report.actor,
+            "expired": rests_on is None or rests_on.valid_until < today,
+        }
+    return fields
+
 
 def screen_row(
     snapshot: SnapshotRow,
@@ -114,11 +179,13 @@ def screen_row(
     today: date,
     aging_fraction: float,
     watchlists: Sequence[int],
+    agents: Mapping[str, Any],
 ) -> dict[str, Any]:
     """The snapshot as a screen row; the name, sector, cap band and market cap come from
     ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``, aging
     from ``aging_fraction`` of the window; ``watchlists`` are the ids of the lists the company is
-    on. ``flagCount`` counts the quality warnings among the flags, a refusal's too. The moat
+    on; ``agents`` are its agents' fields (``agent_fields``, else ``NO_AGENT_FIELDS``).
+    ``flagCount`` counts the quality warnings among the flags, a refusal's too. The moat
     shows on a row with a value only: a growth refusal keeps the moat class for the price refresh,
     not for the screen. ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the
     price needs, a growth row's; a row refused for its target margin has the latter alone.
@@ -148,8 +215,8 @@ def screen_row(
         "trimLevel": snapshot.trim_level,
         "price": snapshot.price,
         "mechanical": snapshot.value,
-        "reviewed": None,
-        "overrides": 0,
+        "reviewed": agents["reviewed"],
+        "overrides": agents["overrides"],
         "enteredAt": snapshot.created_at.isoformat(),
         "freshness": validity_state(
             snapshot.data_date, snapshot.valid_until, today, aging_fraction
@@ -174,6 +241,7 @@ def screen_row(
         "refusal": snapshot.refusal,
         "priceToValue": snapshot.price_to_value,
         "designation": snapshot.designation,
+        "agentStance": agents["agentStance"],
         "priceDate": _iso(snapshot.price_date),
         "dataDate": snapshot.data_date.isoformat(),
         "validUntil": snapshot.valid_until.isoformat(),
@@ -190,6 +258,7 @@ def screen_row(
         "impliedDeclineRate": im.get("implied_decline_rate"),
         "watchlists": list(watchlists),
         "flagCount": flag_count(result.flags),
+        "covered": agents["covered"],
     }
 
 
@@ -220,14 +289,15 @@ def _piotroski_f(im: dict[str, Any]) -> str | None:
 
 def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str, Any]:
     """The row of an admitted company with no snapshot yet: its name, sector, cap band and
-    market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag and
-    ``None`` elsewhere (no override, as on every row of this cut)."""
+    market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag, no
+    agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a snapshot) and ``None``
+    elsewhere."""
     row: dict[str, Any] = dict.fromkeys(ROW_KEYS)
+    row |= NO_AGENT_FIELDS
     market_cap = company.market_cap
     row |= {
         "ticker": company.symbol,
         "name": company.name,
-        "overrides": 0,
         "freshness": "current",
         "sector": company.sector,
         "capBand": company.cap_band,
@@ -241,10 +311,17 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
 
 def sort_rows(rows: list[dict[str, Any]], key: str, descending: bool) -> list[dict[str, Any]]:
     """The rows ordered by ``key``, those where it is ``None`` last in either direction; ties
-    keep their order."""
+    keep their order. The agent's stance orders by its word's place in ``STANCE_ORDER``."""
     present = [r for r in rows if r[key] is not None]
     missing = [r for r in rows if r[key] is None]
-    return sorted(present, key=lambda r: r[key], reverse=descending) + missing
+    return sorted(present, key=_order(key), reverse=descending) + missing
+
+
+def _order(key: str) -> Callable[[dict[str, Any]], Any]:
+    """What a row sorts by for ``key``: its value, or the rank of the agent's stance word."""
+    if key == "agentStance":
+        return lambda r: _STANCE_RANK.get(r[key], len(STANCE_ORDER))
+    return lambda r: r[key]
 
 
 def group_rows(

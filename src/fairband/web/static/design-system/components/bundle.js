@@ -45,6 +45,10 @@
   var DESIGNATION = { 'well-below': 'Well below', 'below': 'Below', 'near': 'Near',
                       'above': 'Above', 'well-above': 'Well above' };
 
+  // fairband: the agent's stance words in the order the screen sorts them (spec 2026-11-06 Tier 2,
+  // 18.1): the word of the company's latest published report, never derived here from the levels.
+  var AGENT_STANCES = ['buy', 'hold', 'trim', 'avoid'];
+
   /* ------------------------------------------------------------- formatting */
 
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -861,12 +865,14 @@
   // fairband: the watchlist group, list ids, follows the sector; the clean flag keeps the valued
   // rows with no quality warning. Its chip reads Clean, its menu row "No warning flag" (spec
   // 2026-11-04 9.4, 9.5).
-  var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector', 'watchlist'];
+  // fairband: the agent's stance group follows the designation; the reviewed flag's menu row reads
+  // "Has a review" (spec 2026-11-06 Tier 2, 18.1).
+  var FILTER_GROUPS = ['designation', 'stance', 'phase', 'cap', 'sector', 'watchlist'];
   var FILTER_FLAGS = ['reviewedOnly', 'hideExpired', 'cleanOnly'];
   var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired', cleanOnly: 'Clean' };
-  var FLAG_ROWS = { cleanOnly: 'No warning flag' };
+  var FLAG_ROWS = { reviewedOnly: 'Has a review', cleanOnly: 'No warning flag' };
 
-  var EMPTY_FILTERS = { designation: [], phase: [], cap: [], sector: [],
+  var EMPTY_FILTERS = { designation: [], stance: [], phase: [], cap: [], sector: [],
                         watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false };
 
   function listOf(f, key) { return (f && f[key]) || []; }
@@ -897,6 +903,12 @@
       out.push({ key: 'designation', word: 'Price vs value: ' + Object.keys(DESIGNATION)
         .filter(function (k) { return f.designation.indexOf(k) !== -1; })
         .map(function (k) { return DESIGNATION[k]; }).join(' + ') });
+    }
+    // fairband: "Stance: buy + hold", the chosen words in the screen's order (spec 2026-11-06
+    // Tier 2, 18.1).
+    if (listOf(f, 'stance').length) {
+      out.push({ key: 'stance', word: 'Stance: ' + AGENT_STANCES
+        .filter(function (k) { return f.stance.indexOf(k) !== -1; }).join(' + ') });
     }
     if (listOf(f, 'phase').length) out.push({ key: 'phase', word: phaseWord(f.phase) });
     if (listOf(f, 'cap').length) {
@@ -958,6 +970,12 @@
   function dateCell(iso) {
     return h('td', { className: 'fb-num figure' }, h(DateText, { value: iso }));
   }
+  // fairband: the coverage mark's words: the report's date and its actor, and that the window of
+  // the snapshot the report rests on has expired, once it has (spec 2026-11-06 Tier 2, 18.1).
+  function coverage(c) {
+    return 'Report ' + readable(String(c.at).slice(0, 10)) + ' by ' + c.actor +
+      (c.expired ? '; its snapshot window has expired' : '');
+  }
 
   var COLUMNS = [
     // fairband: the watchlist mark (spec 2026-11-04 9.4), at the left of the Ticker cell given
@@ -975,7 +993,15 @@
               if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
             }
           }, r.watched ? '▶' : '▸') : null,
-          r.ticker);
+          r.ticker,
+          // fairband: the coverage mark (spec 2026-11-06 Tier 2, 18.1): ◆, the write glyph, after
+          // the ticker when the company has a published report, in prov-input, in ink-faint once
+          // the report's snapshot window has expired; its title names the report's date and actor.
+          // A mark, not a control: the row opens as it does without it.
+          r.covered ? h('span', {
+            className: cx('fb-covered', r.covered.expired && 'fb-covered--expired'),
+            title: coverage(r.covered), role: 'img', 'aria-label': coverage(r.covered)
+          }, GLYPH_INPUT) : null);
       } },
     { key: 'name', head: 'Company',
       cell: function (r) { return h('td', { className: 'fb-screen__name body' }, r.name); } },
@@ -1012,6 +1038,15 @@
         if (!word) return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));
         return h('td', null,
           h('span', { className: 'fb-designation fb-designation--' + r.designation + ' label' }, word));
+      } },
+    // fairband: the agent's stance (spec 2026-11-06 Tier 2, 18.1), the word of the company's latest
+    // published report as a chip in the stance tokens, avoid in ink; an em dash without a report.
+    // The design system's own Stance, derived from the levels, stays gone: the word is the agent's.
+    { key: 'agentStance', head: 'Stance',
+      cell: function (r) {
+        if (r.agentStance == null) return h('td', null, h('span', { className: 'fb-screen__none' }, '—'));
+        return h('td', null,
+          h('span', { className: 'fb-stance fb-stance--' + r.agentStance + ' label' }, r.agentStance));
       } },
     { key: 'overrides', head: 'Overrides',
       cell: function (r) {
@@ -1257,8 +1292,9 @@
       if (p.onQueryChange) p.onQueryChange('');
       if (p.onFiltersChange) {
         // fairband: the designation group leads, as in EMPTY_FILTERS; the watchlist group and the
-        // clean flag clear with the rest (spec 2026-11-04 9.4).
-        p.onFiltersChange({ designation: [], phase: [], cap: [], sector: [],
+        // clean flag clear with the rest (spec 2026-11-04 9.4), the stance group too (spec
+        // 2026-11-06 Tier 2, 18.1).
+        p.onFiltersChange({ designation: [], stance: [], phase: [], cap: [], sector: [],
                             watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false });
       }
     }
@@ -1333,6 +1369,16 @@
                     return checkRow(k, listOf(filters, 'designation').indexOf(k) !== -1,
                       function () { toggleIn('designation', k); },
                       h('span', null, DESIGNATION[k]));
+                  })),
+                h('hr'),
+                // fairband: STANCE, the agent's four words (spec 2026-11-06 Tier 2, 18.1), after
+                // PRICE VS VALUE; a row without a published report matches none.
+                h('div', { className: 'fb-menu__sec' },
+                  h('span', { className: 'fb-menu__h label' }, 'STANCE'),
+                  AGENT_STANCES.map(function (k) {
+                    return checkRow(k, listOf(filters, 'stance').indexOf(k) !== -1,
+                      function () { toggleIn('stance', k); },
+                      h('span', null, k));
                   })),
                 h('hr'),
                 h('div', { className: 'fb-menu__sec' },

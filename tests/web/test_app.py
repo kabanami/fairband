@@ -58,7 +58,7 @@ from fairband.store.db import applied_versions, connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh
 from fairband.store.snapshots import insert_snapshot
 from fairband.web.app import create_app
-from fairband.web.rows import EXTRA_KEYS
+from fairband.web.rows import EXTRA_KEYS, ROW_KEYS
 
 # The design system's ScreenRow keys.
 DESIGN_ROW_KEYS = [
@@ -115,6 +115,7 @@ EXTRA_COLUMNS = [
     "refusal",
     "priceToValue",
     "designation",
+    "agentStance",
     "priceDate",
     "dataDate",
     "validUntil",
@@ -206,6 +207,7 @@ def test_screen_rows_and_default_sort(
         "refusal": None,
         "priceToValue": 150.0 / valued.value,  # $150 on the value $133.37: 1.125
         "designation": "near",  # from 0.85 to 1.15 × the value
+        "agentStance": None,
         "priceDate": "2026-10-30",
         "dataDate": "2026-10-30",
         "validUntil": "2027-01-28",
@@ -222,6 +224,7 @@ def test_screen_rows_and_default_sort(
         "impliedDeclineRate": None,
         "watchlists": [],
         "flagCount": 1,  # value-spread; its other flags are notes
+        "covered": None,
     }
 
     refused = results["AAL"]
@@ -250,7 +253,9 @@ def test_screen_sort_nulls_last(client: TestClient) -> None:
     assert _tickers(client, "?sort=marketCap&dir=desc") == ["AAPL", "HGCO", "AAL"]
     assert _tickers(client, "?sort=ticker&dir=desc") == ["HGCO", "AAPL", "AAL"]
     assert _tickers(client, "?sort=marketCap") == ["AAL", "HGCO", "AAPL"]  # ascending by default
-    for key in _screen(client)["rows"][0]:
+    # every row key sorts but the coverage mark's record, which no column draws
+    assert set(_screen(client)["rows"][0]) == {*ROW_KEYS, "covered"}
+    for key in ROW_KEYS:
         for direction in ("asc", "desc"):
             assert len(_tickers(client, f"?sort={key}&dir={direction}")) == 3, key
 
@@ -279,6 +284,7 @@ def test_sort_unknown_key_400(client: TestClient) -> None:
     assert client.get("/api/screen?sort=band").status_code == 400  # a column, not a row key
     for gone in ("stance", "stance3", "stance5"):
         assert client.get(f"/api/screen?sort={gone}").status_code == 400, gone
+    assert client.get("/api/screen?sort=covered").status_code == 400  # the mark's, not a column
     response = client.get("/api/screen?sort=ticker&dir=down")
     assert response.status_code == 400
     assert response.json() == {"detail": "dir must be asc or desc, not down"}
@@ -411,7 +417,7 @@ def test_screen_placeholder_row_not_yet_valued(
 ) -> None:
     _universe(db_path, policy, ("NEWC", "New Co", 3_000_000_000, True))
     [row] = _screen(client)["rows"]
-    assert set(row) == set(DESIGN_ROW_KEYS + EXTRA_COLUMNS)
+    assert set(row) == {*DESIGN_ROW_KEYS, *EXTRA_COLUMNS, "covered"}
     assert {key: value for key, value in row.items() if value is not None} == {
         "ticker": "NEWC",
         "name": "New Co",
@@ -937,7 +943,7 @@ def test_app_js_sorts_designation_by_the_ratio() -> None:
     """Spec 7.3: the designation column asks the server for the price-to-value order."""
     script = _static_file("app.js")
     assert (
-        "var SORT_KEYS = { band: 'fairLow', designation: 'priceToValue', entered: 'enteredAt' };"
+        "var SORT_KEYS = { band: 'fairLow', designation: 'priceToValue', entered: 'enteredAt',"
         in script
     )
 
@@ -948,6 +954,20 @@ def test_app_js_narrows_on_the_designation() -> None:
     script = _static_file("app.js")
     assert "within(filters.designation, r.designation) &&" in script
     assert "(r.capBand || '').toLowerCase()" in script
+
+
+def test_app_js_narrows_on_the_stance() -> None:
+    """Spec 2026-11-06 Tier 2, 18.1: a non-empty STANCE group keeps the rows whose published word
+    it names, so a row without a report matches none; the column asks the server for its own key,
+    which the server orders by the words."""
+    script = _static_file("app.js")
+    assert "within(filters.stance, r.agentStance) &&" in script
+    assert "agentStance: 'agentStance' };" in script
+    narrowing = script[script.index("function narrow(") : script.index("function sectorsOf(")]
+    assert narrowing.index("filters.designation") < narrowing.index("filters.stance")
+    assert "filters.stance" not in script.replace("within(filters.stance, r.agentStance)", "")
+    # the report's time in the reader's offset, as the Entered date is, for the mark's title
+    assert "row.covered = Object.assign({}, r.covered, { at: localIso(r.covered.at) });" in script
 
 
 def test_app_js_narrows_on_watchlist_and_clean() -> None:
@@ -1527,6 +1547,7 @@ EXTRA_COLUMN_HEADS = {
     "priceDate": "Price date",
     "dataDate": "Data date",
     "validUntil": "Valid until",
+    "agentStance": "Stance",
     "growthRouteValue": "Growth-route value",
     "targetMargin": "Target margin",
     "impliedMargin": "Implied margin",
@@ -1580,9 +1601,14 @@ def test_bundle_filter_menu_has_a_price_vs_value_section() -> None:
     """Spec 7.3: PRICE VS VALUE stands where STANCE stood, its five words in band order, each a
     checkbox as PHASE's are; the chip names the chosen words in band order."""
     bundle = _component_file("bundle.js")
-    assert "var FILTER_GROUPS = ['designation', 'phase', 'cap', 'sector', 'watchlist'];" in bundle
-    assert "var EMPTY_FILTERS = { designation: [], phase: [], cap: [], sector: []," in bundle
-    assert "p.onFiltersChange({ designation: [], phase: [], cap: [], sector: []," in bundle
+    groups = "['designation', 'stance', 'phase', 'cap', 'sector', 'watchlist']"
+    assert f"var FILTER_GROUPS = {groups};" in bundle
+    assert "var EMPTY_FILTERS = { designation: [], stance: [], phase: [], cap: [], sector: []," in (
+        bundle
+    )
+    assert "p.onFiltersChange({ designation: [], stance: [], phase: [], cap: [], sector: []," in (
+        bundle
+    )
     assert "h('span', { className: 'fb-menu__h label' }, 'PRICE VS VALUE')," in bundle
     assert "Object.keys(DESIGNATION).map(function (k) {" in bundle
     assert "return checkRow(k, listOf(filters, 'designation').indexOf(k) !== -1," in bundle
@@ -1669,14 +1695,13 @@ def test_bundle_designation_column_head_and_chip() -> None:
     # the column's cell and the band meter's head: the same chip, in its band's colour
     assert bundle.count(".designation + ' label' }, word)") == 2
     assert "var word = DESIGNATION[p.designation];" in bundle  # the meter takes the row's word
-    assert "Hold'" not in bundle and "STANCE" not in bundle  # never "Hold"
+    assert "Hold'" not in bundle  # never "Hold": the agent's stance has a column of its own
     css = _component_file("bundle.css")
     rule = re.search(r"\.fb-designation \{(.*?)\}", css, re.DOTALL)
     assert rule is not None
     assert "text-transform: uppercase;" in rule.group(1)
     assert "border: 1px solid currentColor;" in rule.group(1)
     assert "color:" not in rule.group(1)  # the band's modifier sets the colour
-    assert ".fb-stance" not in css
     # the stance tokens stay for the delta and the recommendation's effect; the spread chart's
     # label takes the delta's classes in place of the stance chip's
     assert ".fb-delta--up { color: var(--stance-buy); }" in css
@@ -1684,24 +1709,126 @@ def test_bundle_designation_column_head_and_chip() -> None:
     assert "cur.roic >= cur.wacc ? 'fb-delta--up' : 'fb-delta--down'" in bundle
 
 
-def test_no_stance_word_remains() -> None:
-    """Spec 7.2: the engine gives no stance, and the page derives none, names none and declares
-    none. Only the CSS keeps the --stance-* tokens, for the delta's colours."""
-    for name, text in (
-        ("app.js", _static_file("app.js")),
-        ("controls.js", _static_file("controls.js")),
-        ("bundle.js", _component_file("bundle.js")),
-        ("index.d.ts", _component_file("index.d.ts")),
-    ):
+def _code(script: str) -> str:
+    """A script or a declaration file without its comments."""
+    return re.sub(r"/\*.*?\*/|//[^\n]*", "", script, flags=re.DOTALL)
+
+
+def test_no_derived_stance_remains() -> None:
+    """Spec 7.2: the engine gives no stance, and the page derives none. The one stance the page
+    names is the agent's, the word of the company's latest published report (spec 2026-11-06 Tier
+    2, 18.1): the row's ``agentStance``, its column, the STANCE filter group and the chip's
+    classes, and no other name in the code."""
+    files = {
+        "app.js": _static_file("app.js"),
+        "controls.js": _static_file("controls.js"),
+        "bundle.js": _component_file("bundle.js"),
+        "index.d.ts": _component_file("index.d.ts"),
+    }
+    for name, text in files.items():
         for gone in ("stanceOf", "STANCE[", "Five-step", "stance5", "stance3"):
             assert gone not in text, (name, gone)
-        if name == "app.js":
-            # The one mention: a column list saved under method 0.5 carries the old key, which
-            # normalise maps to the designation's.
-            legacy = "key === 'stance' ? 'designation' : key"
-            assert text.count(legacy) == 1
-            text = text.replace(legacy, "")
-        assert re.search(r"\bstance", text, re.IGNORECASE) is None, name
+    assert re.search(r"\bstance", files["controls.js"], re.IGNORECASE) is None
+    # A column list saved under method 0.5 carries the old key, which normalise maps to the
+    # designation's: app.js's one bare 'stance' outside the filter.
+    assert files["app.js"].count("key === 'stance' ? 'designation' : key") == 1
+    # the names holding the word: `stance` starting a word, `Stance` or `STANCE` anywhere in one
+    # (`agentStance`, `AGENT_STANCES`); never the `stance` inside another word (`instanceof`)
+    word = re.compile(r"[\w.-]*(?:\bstance|Stance|STANCE)[\w-]*")
+    named = {
+        name: set(word.findall(_code(files[name])))
+        for name in ("app.js", "bundle.js", "index.d.ts")
+    }
+    assert named["app.js"] == {"stance", "agentStance", "filters.stance", "r.agentStance"}
+    assert named["bundle.js"] == {
+        "AGENT_STANCES",
+        "stance",
+        "Stance",
+        "STANCE",
+        "f.stance",
+        "agentStance",
+        "r.agentStance",
+        "fb-stance",
+        "fb-stance--",
+    }
+    assert named["index.d.ts"] == {"agentStance", "stance"}
+
+
+def test_the_bundle_draws_the_stance_column_and_the_mark() -> None:
+    """Spec 2026-11-06 Tier 2, 18.1, each a `// fairband:` patch naming the section: the Stance
+    column after Price vs value draws the report's word as a chip in the stance tokens, avoid in
+    ink, and an em dash without a report; the Filters menu's STANCE group after PRICE VS VALUE
+    holds the four words, its chip "Stance: buy + hold" in the words' order; the reviewedOnly row
+    reads "Has a review"; the Ticker cell draws ◆ after the ticker for a covered company, in
+    prov-input, ink-faint once the report's window has expired, the report's date and actor in its
+    title, never a control. The chooser and COLUMN_KEYS list every column; the default eight
+    stay."""
+    bundle = _component_file("bundle.js")
+    assert "var AGENT_STANCES = ['buy', 'hold', 'trim', 'avoid'];" in bundle
+    # the column
+    column = bundle.index("{ key: 'agentStance', head: 'Stance',")
+    assert (
+        bundle.index("{ key: 'designation', head: 'Price vs value',")
+        < bundle.index("// fairband: the agent's stance (spec 2026-11-06 Tier 2, 18.1)")
+        < column
+        < bundle.index("{ key: 'overrides', head: 'Overrides',")
+    )
+    none = "h('td', null, h('span', { className: 'fb-screen__none' }, '—'));"
+    assert f"if (r.agentStance == null) return {none}" in bundle
+    chip = "h('span', { className: 'fb-stance fb-stance--' + r.agentStance + ' label' }, r.agentStance)"
+    assert chip in bundle
+    assert "COLUMN_KEYS: COLUMNS.map(function (c) { return c.key; })," in bundle
+    assert (
+        "shown.concat(COLUMNS.filter(function (c) { return shown.indexOf(c) === -1; }))" in bundle
+    )
+    # the filter
+    assert "// fairband: STANCE, the agent's four words (spec 2026-11-06 Tier 2, 18.1)" in bundle
+    assert bundle.index("'PRICE VS VALUE'") < bundle.index("'STANCE'") < bundle.index("'PHASE'")
+    assert "AGENT_STANCES.map(function (k) {" in bundle
+    assert "return checkRow(k, listOf(filters, 'stance').indexOf(k) !== -1," in bundle
+    assert "function () { toggleIn('stance', k); }," in bundle
+    assert "out.push({ key: 'stance', word: 'Stance: ' + AGENT_STANCES" in bundle
+    assert ".filter(function (k) { return f.stance.indexOf(k) !== -1; }).join(' + ') });" in bundle
+    assert "var FLAG_ROWS = { reviewedOnly: 'Has a review', cleanOnly: 'No warning flag' };" in (
+        bundle
+    )
+    # the mark
+    ticker = bundle[
+        bundle.index("{ key: 'ticker', head: 'Ticker'") : bundle.index("{ key: 'name', head:")
+    ]
+    assert "// fairband: the coverage mark (spec 2026-11-06 Tier 2, 18.1)" in ticker
+    mark = ticker[ticker.index("r.covered ? h('span', {") :]
+    assert ticker.index("r.ticker,") < ticker.index("r.covered ? h('span', {")
+    assert "className: cx('fb-covered', r.covered.expired && 'fb-covered--expired')," in mark
+    assert "title: coverage(r.covered), role: 'img', 'aria-label': coverage(r.covered)" in mark
+    assert "}, GLYPH_INPUT) : null" in mark
+    for control in ("tabIndex", "onClick", "onKeyDown", "button"):
+        assert control not in mark, control
+    assert "return 'Report ' + readable(String(c.at).slice(0, 10)) + ' by ' + c.actor +" in bundle
+    assert "(c.expired ? '; its snapshot window has expired' : '');" in bundle
+    css = _component_file("bundle.css")
+    assert "/* fairband: the agent's stance word (spec 2026-11-06 Tier 2, 18.1)" in css
+    assert "/* fairband: the coverage mark after the ticker (spec 2026-11-06 Tier 2, 18.1)" in css
+    for rule in (
+        ".fb-stance--buy { color: var(--stance-buy); }",
+        ".fb-stance--hold { color: var(--stance-hold); }",
+        ".fb-stance--trim { color: var(--stance-trim); }",
+        ".fb-stance--avoid { color: var(--ink); }",
+        ".fb-covered--expired { color: var(--ink-faint); }",
+    ):
+        assert rule in css, rule
+    stance = re.search(r"\.fb-stance \{(.*?)\}", css, re.DOTALL)
+    assert stance is not None and "color:" not in stance.group(1)  # the word's modifier sets it
+    covered = re.search(r"\.fb-covered \{(.*?)\}", css, re.DOTALL)
+    assert covered is not None and "color: var(--prov-input);" in covered.group(1)
+    assert "cursor" not in covered.group(1)
+    declarations = _component_file("index.d.ts")
+    row = re.search(r"export interface ScreenRow \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert row is not None
+    assert "agentStance?: string | null;" in row.group(1)
+    assert "covered?: { at: string; actor: string; expired: boolean } | null;" in row.group(1)
+    filters = re.search(r"export interface ScreenFilters \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert filters is not None and "stance: string[];" in filters.group(1)
 
 
 def test_bundle_has_the_margin_columns() -> None:

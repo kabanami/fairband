@@ -14,8 +14,10 @@
   var F = Fairband;
   var COLUMNS_KEY = 'fairband.columns';
 
-  /* The columns that draw a row key under another name sort by that key. */
-  var SORT_KEYS = { band: 'fairLow', designation: 'priceToValue', entered: 'enteredAt' };
+  /* The columns that draw a row key under another name sort by that key; the agent's stance
+     names its own, which the server orders by the words (spec 2026-11-06 Tier 2, 18.1). */
+  var SORT_KEYS = { band: 'fairLow', designation: 'priceToValue', entered: 'enteredAt',
+                    agentStance: 'agentStance' };
   /* The engine's phase names, as PhaseBadge's numbers. */
   var PHASE_NUMBER = {
     'Start-up': 1, 'Young Growth': 2, 'High Growth': 3,
@@ -185,10 +187,12 @@
   }
 
   /* A row with its entered time in the reader's offset, so the Entered cell shows the local date
-     (the local-offset ISO in datetime) and agrees with the drawer's ValidityWindow; watched when
-     the company is on a list, which fills its mark. */
+     (the local-offset ISO in datetime) and agrees with the drawer's ValidityWindow, and its
+     report's time likewise, so the coverage mark's title gives the local date; watched when the
+     company is on a list, which fills its mark. */
   function localRow(r) {
     var row = Object.assign({}, r, { watched: (r.watchlists || []).length > 0 });
+    if (r.covered) row.covered = Object.assign({}, r.covered, { at: localIso(r.covered.at) });
     return r.enteredAt ? Object.assign(row, { enteredAt: localIso(r.enteredAt) }) : row;
   }
 
@@ -260,7 +264,8 @@
      page keeps the rows it loaded and draws the ones that pass; the server's order stands. The
      ticker matches by prefix and the name anywhere. A field a row lacks matches no filter: a
      placeholder has no designation or phase, and may have no sector or cap; a refusal has no
-     designation, which is the row's own, never derived here. The row's phase is
+     designation, which is the row's own, never derived here; a row without a published report has
+     no stance, the agent's word (spec 2026-11-06 Tier 2, 18.1). The row's phase is
      already the menu's number (the server maps the engine's phase name through PHASE_NUMBER),
      and its cap band is the menu's id once lower-cased (Mega is mega); small never matches, the
      universe's floor being $2 bn. A row on any chosen watchlist matches; Clean keeps the valued
@@ -273,6 +278,7 @@
         (r.name || '').toLowerCase().indexOf(needle) !== -1;
       return found &&
         within(filters.designation, r.designation) &&
+        within(filters.stance, r.agentStance) &&
         within(filters.phase, r.phase) &&
         within(filters.cap, (r.capBand || '').toLowerCase()) &&
         within(filters.sector, r.sector) &&

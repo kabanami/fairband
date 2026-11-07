@@ -19,8 +19,9 @@ evidence (JSON ``{kind, ref, note, figure}`` items); where the debt and the cash
 (``BalanceSource``), ``statements``, ``agent`` or ``none`` (no line on file, the figure 0.0); the
 writer and the time; the policy version, the settings hash and the deciles refresh it ran under;
 and the engine's ``SECONDARY_METHOD`` (a record written under ``fairband-secondary/1`` keeps it).
-``latest_secondary`` reads the company's newest, ``secondaries_for`` every one, newest first, and
-``secondary_row`` one by its id.
+``latest_secondary`` reads the company's newest, ``latest_secondaries`` every company's newest in
+one read (the screen's rows), ``secondaries_for`` every one, newest first, and ``secondary_row``
+one by its id.
 
 ``no_secondary`` says why a company can have none on a snapshot, the two refusals of the secondary
 route the agent cannot fix (``method.md`` 15.4): a foreign filer (``foreign_filer``: the snapshot
@@ -215,6 +216,15 @@ def latest_secondary(conn: sqlite3.Connection, symbol: str) -> SecondaryRow | No
         "SELECT * FROM secondary_valuations WHERE symbol = ? ORDER BY id DESC LIMIT 1", (symbol,)
     ).fetchone()
     return None if row is None else _secondary(row)
+
+
+def latest_secondaries(conn: sqlite3.Connection) -> dict[str, SecondaryRow]:
+    """The newest secondary valuation of every company that has one, by symbol."""
+    rows = conn.execute(
+        "SELECT * FROM secondary_valuations WHERE id IN"
+        " (SELECT MAX(id) FROM secondary_valuations GROUP BY symbol) ORDER BY symbol"
+    )
+    return {r["symbol"]: _secondary(r) for r in rows}
 
 
 def secondary_row(conn: sqlite3.Connection, secondary_id: int) -> SecondaryRow | None:

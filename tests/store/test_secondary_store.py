@@ -18,6 +18,7 @@ from fairband.store.secondary import (
     derivation_row,
     insert_derivation,
     insert_secondary,
+    latest_secondaries,
     latest_secondary,
     secondaries_for,
 )
@@ -39,13 +40,14 @@ def _insert(
     debt: float = 200.0,
     writer: Writer = AGENT,
     at: datetime = NOW,
+    symbol: str = "AAPL",
 ) -> int:
     valuation = secondary_value(
         parts=parts, debt=debt, cash=100.0, shares=100.0, price=15.0, moat="Wide", policy=POLICY
     )
     return insert_secondary(
         conn,
-        "AAPL",
+        symbol,
         7,
         parts,
         valuation,
@@ -248,6 +250,18 @@ def test_secondaries_newest_first(conn: sqlite3.Connection) -> None:
         "owner",
         None,
     )
+
+
+def test_latest_secondaries_newest_per_symbol(conn: sqlite3.Connection) -> None:
+    """The screen's one read (spec 18.1): every company's newest, by symbol."""
+    assert latest_secondaries(conn) == {}
+    _insert(conn)
+    newest = _insert(conn, at=LATER)
+    other = _insert(conn, symbol="MSFT")
+    found = latest_secondaries(conn)
+    assert list(found) == ["AAPL", "MSFT"]
+    assert (found["AAPL"].id, found["MSFT"].id) == (newest, other)
+    assert found["AAPL"] == latest_secondary(conn, "AAPL")
 
 
 def test_a_derivation_reads_back_exactly(conn: sqlite3.Connection) -> None:

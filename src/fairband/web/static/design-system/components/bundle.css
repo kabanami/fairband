@@ -55,6 +55,22 @@ time { font-variant-numeric: tabular-nums; }
 .fb-designation--above { color: var(--chart-neg-2); }
 .fb-designation--well-above { color: var(--chart-neg-3); }
 
+/* fairband: the agent's stance word (spec 2026-11-06 Tier 2, 18.1), the design system's own stance
+   chip: an outlined uppercase label, the colour riding with the word. buy, hold and trim take the
+   stance tokens; avoid, the agent's fourth word, names no zone and stays in ink. */
+.fb-stance {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.fb-stance--buy { color: var(--stance-buy); }
+.fb-stance--hold { color: var(--stance-hold); }
+.fb-stance--trim { color: var(--stance-trim); }
+.fb-stance--avoid { color: var(--ink); }
+
 /* ---------------------------------------------------------------- Button */
 
 .fb-btn {
@@ -836,6 +852,11 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-watch--on { color: var(--accent); }
 .fb-watch--on:hover { color: var(--accent-hover); }
 .fb-watch:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* fairband: the coverage mark after the ticker (spec 2026-11-06 Tier 2, 18.1): ◆, the write glyph,
+   in prov-input while the window of the snapshot the report rests on runs, in ink-faint once it
+   has expired. A mark, not a control. */
+.fb-covered { margin-left: var(--space-1); color: var(--prov-input); }
+.fb-covered--expired { color: var(--ink-faint); }
 .fb-screen__name { color: var(--ink-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .fb-screen__band { color: var(--ink-muted); min-width: var(--figure-column); }
 .fb-screen__mech { color: var(--ink-muted); }
