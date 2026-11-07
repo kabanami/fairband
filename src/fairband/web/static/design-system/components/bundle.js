@@ -720,7 +720,8 @@
     }, props.children);
   }
 
-  // fairband: a key's own entry in a plain map, so a ref never reads an Object method.
+  // fairband: a key's own entry in a plain map, so a cite's ref never reads an Object method as
+  // its footnote number (spec 2026-11-06 Tier 2, 13.1).
   function own(map, key) {
     return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
   }

@@ -5,10 +5,10 @@
    last one ended in one line, its calibration's breakdown behind Details ▾ (growth-routes spec
    6.1). While a refresh runs, the page asks /api/refresh/current every 2 seconds, one Cancel
    stands where the Refresh buttons were, the stamp is gone and the tables keep their old figures
-   at ink-faint; when it ends, the rows (and the groups, when that view is open) load again. The
-   group view is one plain table from /api/groups (spec 6.3), with no chart. The report page
-   (report.js) is a panel no header view names: #report/<symbol> and #report/<symbol>/<id> open
-   it (spec 2026-11-06 Tier 2, 18.4). */
+   at ink-faint; when it ends, the rows (and the groups or the report page, when that view is
+   open) load again. The group view is one plain table from /api/groups (spec 6.3), with no
+   chart. The report page (report.js) is a panel no header view names: #report/<symbol> and
+   #report/<symbol>/<id> open it (spec 2026-11-06 Tier 2, 18.4). */
 (function () {
   'use strict';
 
@@ -70,6 +70,7 @@
           state.cancelAsked = false;
           P.reload();
           if (state.tab === 'groups') loadGroups();
+          if (state.tab === 'report') P.onShow.report();
         }
         if (body.refresh !== null) timer = setTimeout(poll, POLL_MS);
         render();
@@ -169,19 +170,23 @@
     render();
   }
 
-  /* The report a hash names, kept in P.report: the symbol upper-cased, as the store keeps it, and
-     the revision's id, a whole number, or null for the company's latest report. True when it is
-     not the report already kept. */
+  /* The report a hash names, kept in P.report: the symbol decoded, as the links encode it, and
+     upper-cased, as the store keeps it, and the revision's id, a whole number, or null for the
+     company's latest report. True when it is not the report already kept. */
   function keepReport(symbol, id) {
-    var report = { symbol: symbol.toUpperCase(), id: /^\d+$/.test(String(id)) ? Number(id) : null };
+    var name = symbol;
+    try { name = decodeURIComponent(symbol); } catch (e) { /* a malformed escape stays as typed */ }
+    var report = { symbol: name.toUpperCase(), id: /^\d+$/.test(String(id)) ? Number(id) : null };
     var kept = P.report;
     P.report = report;
     return !kept || kept.symbol !== report.symbol || kept.id !== report.id;
   }
 
-  /* The kept report's part of the hash: /AAPL, or /AAPL/12 for a revision. */
+  /* The kept report's part of the hash, the symbol encoded as the links encode it: /AAPL, or
+     /AAPL/12 for a revision. */
   function reportPath() {
-    return '/' + P.report.symbol + (P.report.id == null ? '' : '/' + P.report.id);
+    var id = P.report.id;
+    return '/' + encodeURIComponent(P.report.symbol) + (id == null ? '' : '/' + id);
   }
 
   /* The view a hash names, on load and when a link changes it: #watchlists, #methodology,
@@ -306,10 +311,11 @@
   function render() {
     var alive = state.running !== null;
     /* Every panel's tables fade while a run is alive, but the Methodology view's: its examples
-       are figures as of a named date, not the running refresh's; and the report page's: its
-       appendixes are the records of the snapshot the report rests on. */
+       are figures as of a named date, not the running refresh's. The report page fades only
+       today's figures, its head's and its meter (index.html): its appendixes are the records of
+       the snapshot the report rests on. */
     VIEWS.forEach(function (id) {
-      if (id !== 'methodology' && id !== 'report') panels[id].classList.toggle(RECOMPUTING, alive);
+      if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);
     });
     /* The stamp is the latest refresh's finish, whatever its status (the status line says how it
        ended). While a run is alive, or before any refresh finished, there is none: an absent

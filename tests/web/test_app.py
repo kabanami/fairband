@@ -773,9 +773,9 @@ def test_page_opens_the_view_the_hash_names() -> None:
     """Spec 2026-11-04 6: the hash follows the view, none for the Screen, and names the view on
     load and when a link changes it; #methodology/<section-id> opens the Methodology view and
     keeps the section for its script to scroll to; a hash naming no view is the Screen. Each view
-    loads through FairbandPage.onShow as it opens, every panel but the Methodology view's and the
-    report page's fades while a refresh runs, and FairbandPage.find puts a symbol in FIND with the
-    filters cleared and opens the Screen. The report page's own hash is
+    loads through FairbandPage.onShow as it opens, every panel but the Methodology view's fades
+    while a refresh runs, and FairbandPage.find puts a symbol in FIND with the filters cleared and
+    opens the Screen. The report page's own hash and what of it fades are
     test_the_report_view_opens_from_the_hash's."""
     js = _static_file("controls.js")
     assert (
@@ -800,13 +800,9 @@ def test_page_opens_the_view_the_hash_names() -> None:
     assert "document.addEventListener('DOMContentLoaded', fromHash);" in js
     assert "P.show = show;" in js and "P.onShow = {};" in js and "P.section = null;" in js
     assert "P.running = function () { return state.running !== null; };" in js
-    # every panel but the Methodology view's, whose examples are figures as of a named date, and
-    # the report page's, whose appendixes are the records of the report's own snapshot
+    # every panel but the Methodology view's, whose examples are figures as of a named date
     assert "VIEWS.forEach(function (id) {\n" in js
-    assert (
-        "if (id !== 'methodology' && id !== 'report') panels[id].classList.toggle(RECOMPUTING,"
-        " alive);"
-    ) in js
+    assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);" in js
     app = _static_file("app.js")
     assert "find: find" in app  # on window.FairbandPage
     find = app[app.index("function find(symbol) {") :]
@@ -1988,8 +1984,11 @@ def test_the_report_view_opens_from_the_hash() -> None:
     revision: show keeps the symbol, upper-cased as the store keeps it, and the id, a whole number
     or none, in FairbandPage.report for the page's script, writes them back into the hash and runs
     the loader again when either changes while the page is open; without a symbol it is the
-    Screen. While it shows no header view is marked, and its tables do not fade during a refresh:
-    they are the records of the report's snapshot. FairbandPage.openReport opens it."""
+    Screen. The symbol is decoded as the links encode it, and encoded again into the hash. While
+    it shows no header view is marked. While a refresh runs, the page holds today's figures, its
+    head's and its meter, at reduced opacity (CompanyReport.md) and its appendixes as they are,
+    the records of the report's own snapshot; when the run ends with the page open, the page reads
+    the company again. FairbandPage.openReport opens it."""
     js = _static_file("controls.js")
     assert (
         "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'report'];" in js
@@ -2004,17 +2003,34 @@ def test_the_report_view_opens_from_the_hash() -> None:
         "if (P.onShow[tab]) P.onShow[tab]();",
     )
     keep = _function(js, "keepReport")
-    assert (
-        "var report = { symbol: symbol.toUpperCase(), id: /^\\d+$/.test(String(id)) ? Number(id)"
-        " : null };"
-    ) in keep
-    _in_order(keep, "var kept = P.report;", "P.report = report;")
+    _in_order(
+        keep,
+        "try { name = decodeURIComponent(symbol); } catch (e) {",
+        "var report = { symbol: name.toUpperCase(), id: /^\\d+$/.test(String(id)) ? Number(id)"
+        " : null };",
+        "var kept = P.report;",
+        "P.report = report;",
+    )
     assert "return !kept || kept.symbol !== report.symbol || kept.id !== report.id;" in keep
     path = _function(js, "reportPath")
-    assert "return '/' + P.report.symbol + (P.report.id == null ? '' : '/' + P.report.id);" in path
+    assert "return '/' + encodeURIComponent(P.report.symbol) + (id == null ? '' : '/' + id);" in (
+        path
+    )
     assert "show(parts[0], parts[1], parts[2]);" in js  # #report/AAPL/12: the id is parts[2]
     assert "view: state.tab === 'report' ? '' : state.tab," in js
-    assert "if (id !== 'methodology' && id !== 'report')" in js
+    # the report panel takes the fade as every panel but the Methodology view's does; its CSS
+    # fades only today's figures, never its appendixes' tables
+    assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);" in js
+    ended = js[js.index("if (ended) {") :]
+    ended = ended[: ended.index("\n        }\n")]
+    _in_order(ended, "P.reload();", "if (state.tab === 'report') P.onShow.report();")
+    page = _static_file("index.html")
+    assert (
+        ".is-recomputing .app-report__figures, .is-recomputing .app-report__band { opacity: 0.5; }"
+        in page
+    )
+    assert ".is-recomputing:not(#report) .fb-table tbody td,\n" in page
+    assert ".is-recomputing:not(#report) .fb-table tbody td *:not(.fb-phase__n) {" in page
     assert (
         "P.openReport = function (symbol, id) { show('report', symbol, id == null ? null"
         " : String(id)); };"
@@ -2147,9 +2163,12 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
     ):
         assert text in adapted, text
     bridge = _function(script, "bridge")
+    # without a review: the mechanical value is the value, unless the snapshot refused and has none
     _in_order(
         bridge,
-        "if (!b) return none('No review: the value is the mechanical one.');",
+        "if (!b) {",
+        "return none(a.snapshot.value == null ? 'No review.'",
+        ": 'No review: the value is the mechanical one.');",
         "if (b.reviewedValue == null)",
         "h(F.ValueBridge, {",
         "mechanical: b.mechanicalValue, reviewed: b.reviewedValue, hero: false,",
@@ -2175,11 +2194,13 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
     secondary = _function(script, "secondary")
     _in_order(
         secondary,
-        "if (!s) return none(a.noSecondary ? sentence(a.noSecondary) : 'None.');",
+        # the server's sentence as it arrives, never rewritten
+        "if (!s) return none(a.noSecondary || 'None.');",
         "P.pairs(P.secondaryRows(s).concat([",
         "P.secondaryPath(s)",
         "s.form === 'drivers' ? projection(s) : partsYears(s)",
     )
+    assert "sentence(" not in script and "toUpperCase()" not in script
     assert "P.figuresTable([" in _function(script, "projection")
     assert "P.figuresTable([" in _function(script, "partsYears")
     b = _function(script, "appendixB")
@@ -2284,6 +2305,9 @@ def test_the_reader_numbers_its_footnotes() -> None:
     assert "return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;" in (
         _function(bundle, "own")
     )
+    helper = bundle[: bundle.index("  function own(")]
+    helper = helper[helper.rindex("// fairband:") :]
+    assert "(spec 2026-11-06 Tier 2, 13.1)" in helper
     css = _component_file("bundle.css")
     patch = css[css.index("/* fairband: a cited number's footnote number") :]
     assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in patch[: patch.index("*/")]

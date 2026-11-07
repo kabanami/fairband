@@ -58,9 +58,11 @@
   }
   .app-details__row + .app-details__row { margin-top: var(--space-1); }
   /* A refresh is running: the old figures stay, at ink-faint, until the new ones land. No spinner,
-     no motion. A phase number keeps its colour on its fill. */
-  .is-recomputing .fb-table tbody td,
-  .is-recomputing .fb-table tbody td *:not(.fb-phase__n) { color: var(--ink-faint); }
+     no motion. A phase number keeps its colour on its fill. The report page's tables are its
+     appendixes, the records of the report's own snapshot, which no refresh changes: its own rule
+     fades today's figures instead. */
+  .is-recomputing:not(#report) .fb-table tbody td,
+  .is-recomputing:not(#report) .fb-table tbody td *:not(.fb-phase__n) { color: var(--ink-faint); }
 
   .app-groups__bar { margin-bottom: var(--space-2); }
   .app-by { color: var(--ink-muted); }
@@ -384,6 +386,10 @@
   #report { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-6) var(--space-4); }
   .app-report { max-width: 72rem; padding: var(--space-2) 0 var(--space-8); }
   .app-report.is-loading { opacity: 0.5; }
+  /* While a refresh runs, today's figures, the head's and the meter, are held at reduced opacity
+     until the page reads the company again as the run ends (CompanyReport.md); the report and its
+     appendixes rest on their own snapshot and stay as they are. */
+  .is-recomputing .app-report__figures, .is-recomputing .app-report__band { opacity: 0.5; }
   .app-report__head {
     display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
     gap: var(--space-2) var(--space-6);

@@ -299,10 +299,14 @@
 
   /* The review's bridge from the mechanical value (spec 10.4) when the review has a value: each
      line under its input's label, from and to in the input's unit, with its override's reason and
-     writer; else its refusal. Without a review the mechanical value is the value. */
+     writer; else its refusal. Without a review the mechanical value is the value, when the
+     snapshot has one; a refused snapshot has none. */
   function bridge(a) {
     var b = a.bridge;
-    if (!b) return none('No review: the value is the mechanical one.');
+    if (!b) {
+      return none(a.snapshot.value == null ? 'No review.'
+        : 'No review: the value is the mechanical one.');
+    }
     if (b.reviewedValue == null) {
       return h('p', { className: 'body app-refusal' }, b.refusal || 'The review has no value.');
     }
@@ -353,10 +357,10 @@
 
   /* The secondary valuation (spec 11): its form and value a share as Details lists them, the walk
      to equity, the agent's reason, its drivers in words or its parts, then its projection year by
-     year. Without one, why, or none. */
+     year. Without one, the server's sentence why, as it arrives, or none. */
   function secondary(a) {
     var s = a.secondary;
-    if (!s) return none(a.noSecondary ? sentence(a.noSecondary) : 'None.');
+    if (!s) return none(a.noSecondary || 'None.');
     return h(React.Fragment, null,
       P.pairs(P.secondaryRows(s).concat([
         ['Firm value', P.whole(s.firmValue), true],
@@ -514,9 +518,6 @@
   }
 
   function none(text) { return h('p', { className: 'caption app-muted' }, text); }
-
-  /* A server's sentence as a line: its first letter upper-cased and a full stop. */
-  function sentence(text) { return text.charAt(0).toUpperCase() + text.slice(1) + '.'; }
 
   P.onShow.report = load;
 })();

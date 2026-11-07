@@ -324,10 +324,6 @@ def test_page_loads_the_script_and_the_prose_styles(client: TestClient) -> None:
 
 
 def test_the_methodology_panel_never_fades() -> None:
-    """Its example tables are figures as of a named date, not the running refresh's. (The report
-    page's never fades either: its appendixes are the records of the report's own snapshot.)"""
+    """Its example tables are figures as of a named date, not the running refresh's."""
     js = _static_file("controls.js")
-    assert (
-        "if (id !== 'methodology' && id !== 'report') panels[id].classList.toggle(RECOMPUTING,"
-        " alive);"
-    ) in js
+    assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);" in js
