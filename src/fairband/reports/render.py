@@ -12,7 +12,9 @@ overrides inside the review that cite it; the bridge, each line with its input's
 reader's words (``overrides.LABELS``); the secondary valuation's form, its drivers
 with the trailing revenue and the terminal return and its projection year by year, or its parts
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
-every part's (``GRID_ROWS``); the checks that ran (``check.CHECKS``, each with its rule); the
+every part's (``GRID_ROWS``), or, for a report with none whose company can have none on its
+snapshot, why (``noSecondary``, "no secondary valuation: foreign filer" or "...: no diluted
+share count", ``store.secondary.no_secondary``); the checks that ran (``check.CHECKS``, each with its rule); the
 versions (method, policy, settings hash, review and secondary methods); and the classifier's
 evidence. Appendix B (``appendix_b``), the glossary: the terms of ``GLOSSARY`` that the sections'
 text uses, a term matched whole and in any case, a plural counted, a term of two names (``Growth
@@ -62,7 +64,7 @@ from fairband.store.guidance import guidance_for
 from fairband.store.overrides import override_row
 from fairband.store.reports import ReportRow
 from fairband.store.reviews import ReviewRow, review_row
-from fairband.store.secondary import GRID_ROWS, SecondaryRow, secondary_row
+from fairband.store.secondary import GRID_ROWS, SecondaryRow, no_secondary, secondary_row
 from fairband.store.snapshots import snapshot_row
 
 GLOSSARY: dict[str, str] = {
@@ -225,7 +227,7 @@ _RULES: dict[str, str] = {
     ),
     "a secondary valuation on the snapshot": (
         "the company's newest secondary valuation rests on its latest snapshot, or one the latest"
-        " reprices"
+        " reprices; none for a foreign filer or a snapshot with no diluted share count"
     ),
     UNRESOLVED: "every cite's reference names a stored value",
     WRONG_UNIT: "every cite reads its value in its unit at the report's rounding",
@@ -249,6 +251,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
     result = snapshot.result if review is None else review.result
     rules = _RULES | {"the stance word": f"one of {', '.join(policy.stance_words)}"}
     overrides = [] if review is None else _overrides(conn, review.override_ids)
+    why = no_secondary(conn, snapshot) if secondary is None else None
     return {
         "snapshot": {
             "id": snapshot.id,
@@ -279,6 +282,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
         "guidance": _guidance(conn, report, overrides),
         "bridge": None if review is None else _bridge(review),
         "secondary": None if secondary is None else _secondary(secondary),
+        "noSecondary": None if why is None else f"no secondary valuation: {why}",
         "checks": [{"check": check, "rule": rules[check]} for check in CHECKS],
         "versions": {
             "method": snapshot.method_version,
@@ -527,8 +531,11 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
         ]
         out += _table(("Input", "Label", "Override", "Old", "New", "Delta", "Refusal"), rows)
     out += ["", "### Secondary valuation", ""]
-    secondary = a["secondary"]
-    out += ["None."] if secondary is None else _secondary_tables(secondary)
+    secondary, why = a["secondary"], a["noSecondary"]
+    if secondary is not None:
+        out += _secondary_tables(secondary)
+    else:
+        out.append("None." if why is None else f"{why[:1].upper()}{why[1:]}.")
     out += ["", "### Checks that ran", ""]
     out += _table(("Check", "Rule"), [(c["check"], c["rule"]) for c in a["checks"]])
     out += ["", "### Versions", ""]

@@ -22,6 +22,12 @@ and the engine's ``SECONDARY_METHOD`` (a record written under ``fairband-seconda
 ``latest_secondary`` reads the company's newest, ``secondaries_for`` every one, newest first, and
 ``secondary_row`` one by its id.
 
+``no_secondary`` says why a company can have none on a snapshot, the two refusals of the secondary
+route the agent cannot fix (``method.md`` 15.4): a foreign filer (``foreign_filer``: the snapshot
+refused as one, or the universe row an ADR or in a currency other than USD, a row naming none
+leaving it to the snapshot) and no positive diluted share count (``diluted_shares``: the snapshot's
+``shares_diluted`` input, else its intermediates' ``shares``).
+
 A derivation is one operation of an agent's arithmetic over two references: its operation, its
 refs, its years (a cagr's, else none), its value as ``repr`` text (none where the operation is
 undefined) and its unit, the writer and the time.
@@ -31,12 +37,14 @@ commits with it.
 """
 
 import json
+import math
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Literal
 
+from fairband.engine.route import FOREIGN_FILER
 from fairband.engine.secondary import (
     SECONDARY_METHOD,
     Form,
@@ -45,9 +53,12 @@ from fairband.engine.secondary import (
     SecondaryGrid,
     SecondaryValuation,
 )
+from fairband.engine.types import ValuationResult
 from fairband.store._codec import dump_float, dump_stamp, inserted_id, load_float, load_stamp
+from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.ledger import Principal, Writer
+from fairband.store.snapshots import SnapshotRow
 
 Operation = Literal["ratio", "difference", "sum", "growth", "cagr"]
 # Where a secondary valuation's debt or cash came from: the newest balance sheet; the agent's
@@ -220,6 +231,38 @@ def secondaries_for(conn: sqlite3.Connection, symbol: str) -> list[SecondaryRow]
         "SELECT * FROM secondary_valuations WHERE symbol = ? ORDER BY id DESC", (symbol,)
     )
     return [_secondary(r) for r in rows]
+
+
+def no_secondary(conn: sqlite3.Connection, snapshot: SnapshotRow) -> str | None:
+    """Why the company can have no secondary valuation on ``snapshot``, "foreign filer" or "no
+    diluted share count", in the order the secondary route refuses them; ``None`` when it can have
+    one."""
+    if foreign_filer(conn, snapshot):
+        return "foreign filer"
+    if diluted_shares(snapshot.result) is None:
+        return "no diluted share count"
+    return None
+
+
+def foreign_filer(conn: sqlite3.Connection, snapshot: SnapshotRow) -> bool:
+    """A foreign filer: the snapshot refused as one, or the universe row an ADR or in a currency
+    other than USD; a row naming no currency leaves it to the snapshot."""
+    if snapshot.refusal == FOREIGN_FILER:
+        return True
+    company = latest_company(conn, snapshot.symbol)
+    return company is not None and (company.is_adr or company.currency not in (None, "USD"))
+
+
+def diluted_shares(result: ValuationResult) -> float | None:
+    """The snapshot's diluted share count: its ``shares_diluted`` input, else its intermediates'
+    ``shares``; ``None`` without a positive one."""
+    cited = next((x.value for x in result.inputs if x.name == "shares_diluted"), None)
+    for found in (cited, result.intermediates.get("shares")):
+        if isinstance(found, bool) or not isinstance(found, int | float):
+            continue
+        if math.isfinite(found) and found > 0:
+            return float(found)
+    return None
 
 
 def insert_derivation(

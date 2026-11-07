@@ -7,7 +7,8 @@ competition"; the stance, one of the policy's ``stance_words``; the required jud
 ``moat`` and ``belief`` on every report, ``roic`` where the route is Mature Growth or Mature
 Stable and ``target_margin`` where it is the revenue-growth route (High Growth, Young Growth) or
 Start-up; the headings, spec 13.1's in its order (``HEADINGS``); and a secondary valuation on the
-snapshot the report would rest on, "the report needs a secondary valuation on snapshot <id>".
+snapshot the report would rest on, "the report needs a secondary valuation on snapshot <id>",
+which a company that can have none there (a foreign filer, no diluted share count) is spared.
 
 The number check (``check_sections``) walks every part of every section and answers a finding for
 each failure, ``where`` the section and the part counted from 1 and the text at fault,
@@ -268,7 +269,7 @@ def structure_refusal(
     """The sentence of the first structural check the submission fails (module docstring), in
     ``STRUCTURE``'s order; ``None`` when it passes them all. ``secondary_on_snapshot`` says
     whether the company's newest secondary valuation rests on ``snapshot_id``, the snapshot the
-    report would rest on, or one it reprices."""
+    report would rest on, or one it reprices, or the company can have none there."""
     expected = headings(mode)
     if len(section_headings) != len(expected):
         count = len(section_headings)

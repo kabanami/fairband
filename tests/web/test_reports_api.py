@@ -13,13 +13,15 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from support.web import HEADER, NOW
+from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.web import HEADER, NOW, TODAY
 
-from fairband.engine.route import reprice
+from fairband.engine.route import reprice, value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.reports.check import HEADINGS, NO_REFERENCE, UNRESOLVED, headings
 from fairband.store.db import connect
+from fairband.store.refreshes import latest_refresh
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -397,3 +399,59 @@ def test_a_secondary_on_an_older_snapshot_does_not_count(
         r = _submit(client, body)
         assert (r.status_code, r.json()) == (400, {"detail": detail})
     assert len(client.get("/api/companies/AAPL/reports").json()["reports"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("symbol", "changes", "why"),
+    [
+        ("FRGN", {"currency": "EUR"}, "foreign filer"),
+        ("NOSH", {"shares_diluted": None}, "no diluted share count"),
+        ("PLAIN", {}, None),
+    ],
+)
+def test_a_company_that_can_have_no_secondary_publishes_without_one(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    symbol: str,
+    changes: dict[str, Any],
+    why: str | None,
+) -> None:
+    """The secondary route refuses a foreign filer and a snapshot with no diluted share count, so
+    the report needs no secondary valuation there and Appendix A names why; a company the route
+    values still needs one."""
+    inputs = replace(mature_growth_inputs(), symbol=symbol, **changes)
+    result = value_company(inputs, universe_deciles(), policy, TODAY)
+    with closing(connect(db_path)) as conn:
+        refresh = latest_refresh(conn)
+        assert refresh is not None
+        sid = insert_snapshot(conn, result, refresh.id, clock=lambda: NOW)
+    sections = [{"heading": h, "parts": ["Plain words."]} for h in HEADINGS]
+    body = _body(sid, sections=sections)
+    if why is None:
+        r = _submit(client, body, symbol)
+        detail = f"the report needs a secondary valuation on snapshot {sid}"
+        assert (r.status_code, r.json()) == (400, {"detail": detail})
+        return
+    report = _published(client, body, symbol)
+    assert (report["snapshotId"], report["secondaryId"]) == (sid, None)
+    a = report["appendixA"]
+    assert (a["secondary"], a["noSecondary"]) == (None, f"no secondary valuation: {why}")
+    text = client.get(f"/api/reports/{report['id']}/markdown").text
+    block = text.split("### Secondary valuation\n\n", 1)[1].split("\n", 1)[0]
+    assert block == f"No secondary valuation: {why}."
+
+
+def test_appendix_a_says_none_for_a_report_with_no_secondary_that_could_have_one(
+    client: TestClient, db_path: Path
+) -> None:
+    """A report published without a secondary valuation on a company that can have one (a plan 1
+    report) names no reason."""
+    report = _published(client, _body(_snapshot_id(client)))
+    with closing(connect(db_path)) as conn:
+        conn.execute("UPDATE reports SET secondary_id = NULL WHERE id = ?", (report["id"],))
+        conn.commit()
+    a = client.get(f"/api/reports/{report['id']}").json()["appendixA"]
+    assert (a["secondary"], a["noSecondary"]) == (None, None)
+    text = client.get(f"/api/reports/{report['id']}/markdown").text
+    assert "### Secondary valuation\n\nNone.\n" in text

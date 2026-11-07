@@ -262,8 +262,10 @@ Then the second value, and the two checks beside it:
   discounted cash flow. Set the drivers from the thesis, at mid-cycle for a cyclical. Use `parts`
   instead where a sum of parts fits the company better. The report check refuses a report with no
   secondary valuation on the latest snapshot: "the report needs a secondary valuation on snapshot
-  <id>". Make it after any revalue, since one made before does not count. See "The secondary
-  valuation" below.
+  <id>". Make it after any revalue, since one made before does not count. Two refusals exempt the
+  report: "foreign filer: currency and share-unit handling not built yet" and "no diluted share
+  count". The company can have no secondary valuation, so publish without one and name the reason
+  in section 8. See "The secondary valuation" below.
 - **FMP's own figure**, a cross-check: `dcf(symbol)` gives FMP's discounted cash flow value and
   its levered one. Section 8 may cite it in one sentence, as a third opinion beside the engine's
   two.
@@ -290,7 +292,8 @@ quantity, by the rules of `reference/citations.md`. Give the judgments as the re
 decisions, each `{judgment, decision, override_id?}`. Submit with `report_submit`. The server
 publishes a report whole or rejects it whole. A structural refusal (the section count, the stance,
 a judgment, a heading, or no secondary valuation on the snapshot) is one sentence: fix it and
-submit again. A rejection (422) lists the findings: fix each one and submit again.
+submit again. A foreign filer and a snapshot with no diluted share count need no secondary
+valuation: the server refused it, section 8 says why, and Appendix A names the reason. A rejection (422) lists the findings: fix each one and submit again.
 
 ### 13. Complete the work item
 

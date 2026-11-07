@@ -28,7 +28,8 @@ and its outlook.
 - `work_item_id`, optional: the work item the report completes.
 
 The server checks the structure first: the section count, the stance, the judgments, the headings,
-and a secondary valuation on the latest snapshot. Each failure is one sentence, such as "section 5
+and a secondary valuation on the latest snapshot (none for a foreign filer or a snapshot with no
+diluted share count, which the secondary valuation refuses). Each failure is one sentence, such as "section 5
 is headed 'The last earnings call', not 'Life-cycle phase'" or "the report needs a secondary
 valuation on snapshot 412". Then it checks every number (`reference/citations.md`).
 
@@ -155,7 +156,8 @@ The kill criteria of section 11 test it.
   (`secondary:<id>/drivers/<name>`, `/drivers/<name>/<t>`); the value, `secondary:<id>/value`; how
   it sits against the route's value, and why they differ; the grid's range, two cells
   `secondary:<id>/grid/<i>/<j>`. Where the route gives no value, the secondary valuation stands in
-  and leads the section.
+  and leads the section. Where the server refused the secondary valuation as a foreign filer or for
+  no diluted share count, say so in one sentence: the report publishes without one.
 - **FMP's figure**, in one sentence when read: `response:<responseId>/<json pointer>` of the `dcf`
   answer.
 - **A cyclical**: where it is in its cycle, and the mid-cycle basis the values rest on.

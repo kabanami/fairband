@@ -127,7 +127,6 @@ from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.reviews import write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
 from fairband.reports.refs import Resolver, fact_ref, guidance_cited
-from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.guidance import guidance_row
 from fairband.store.ledger import Writer, record
@@ -148,6 +147,8 @@ from fairband.store.secondary import (
     Operation,
     SecondaryRow,
     derivation_row,
+    diluted_shares,
+    foreign_filer,
     insert_derivation,
     insert_secondary,
     latest_secondary,
@@ -458,9 +459,9 @@ def add_review_routes(
             current = effective(conn, policy)
             require_current(current, snapshot)
             _require_guidance(conn, symbol, body.evidence)
-            if _foreign(conn, snapshot):
+            if foreign_filer(conn, snapshot):
                 raise HTTPException(400, FOREIGN_FILER)
-            shares = _shares(snapshot.result)
+            shares = diluted_shares(snapshot.result)
             if shares is None:
                 raise HTTPException(400, "no diluted share count")
             moat = _moat(conn, snapshot)
@@ -756,26 +757,6 @@ def _record(
         snapshot_id=snapshot.id,
         summary=summary,
     )
-
-
-def _foreign(conn: sqlite3.Connection, snapshot: SnapshotRow) -> bool:
-    """A foreign filer: the snapshot refused as one, or the universe row an ADR or in a currency
-    other than USD; a row naming no currency leaves it to the snapshot."""
-    if snapshot.refusal == FOREIGN_FILER:
-        return True
-    company = latest_company(conn, snapshot.symbol)
-    return company is not None and (company.is_adr or company.currency not in (None, "USD"))
-
-
-def _shares(result: ValuationResult) -> float | None:
-    """The snapshot's diluted share count: its ``shares_diluted`` input, else its intermediates'
-    ``shares``; ``None`` without a positive one."""
-    cited = next((x.value for x in result.inputs if x.name == "shares_diluted"), None)
-    for found in (cited, result.intermediates.get("shares")):
-        figure = _number(found, None)
-        if figure is not None and figure[0] > 0:
-            return figure[0]
-    return None
 
 
 def _balance(

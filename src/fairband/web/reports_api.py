@@ -41,7 +41,9 @@ company's latest snapshot (404 "no snapshot for <symbol>" without one): the stru
 (``check.structure_refusal``), each a 400 with its sentence, the required judgments by the route
 of the company's current review when it rests on that snapshot, else the snapshot's (its phase's
 for a refused row), and the company's newest secondary valuation resting on that snapshot or one
-it reprices, else "the report needs a secondary valuation on snapshot <id>"; a work item it names
+it reprices, else "the report needs a secondary valuation on snapshot <id>", unless the company
+can have none there (``store.secondary.no_secondary``: a foreign filer, or no diluted share
+count, the secondary route's two refusals the agent cannot fix); a work item it names
 must be the company's (404 "no work item <id>", "... for <symbol>") and open (409 "work item <id>
 is <state>"). Then the number check
 (``check.check_sections`` over the sections, and ``check.check_judgments`` over the judgments'
@@ -124,7 +126,7 @@ from fairband.store.reports import (
 )
 from fairband.store.research import add_kill_criterion, add_news_item
 from fairband.store.reviews import latest_review
-from fairband.store.secondary import latest_secondary
+from fairband.store.secondary import latest_secondary, no_secondary
 from fairband.store.settings import read_overlay
 from fairband.store.snapshots import latest_snapshot
 from fairband.web.agents_api import KillCriterionPost, NewsItemPost, WriterOf, gist, record_json
@@ -309,6 +311,7 @@ def add_report_routes(
             secondary = latest_secondary(conn, symbol)
             if secondary is not None and not same_snapshot(conn, secondary.snapshot_id, latest.id):
                 secondary = None
+            exempt = secondary is None and no_secondary(conn, latest) is not None
             refusal = structure_refusal(
                 body.mode,
                 body.stance,
@@ -316,7 +319,7 @@ def add_report_routes(
                 [j.judgment for j in body.judgments],
                 _route(latest.result if review is None else review.result),
                 current,
-                secondary is not None,
+                secondary is not None or exempt,
                 latest.id,
             )
             if refusal is not None:
