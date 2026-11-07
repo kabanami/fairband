@@ -75,7 +75,9 @@ read once; ``resolve`` reads one ref.
 
 ``Resolver.describe`` gives the references list a ref's source in words, one sentence a form: a
 date or a name where one serves, a record's id where nothing else names it. ``snapshot:`` "snapshot
-412, the price, priced 3 Nov 2026" (the path in words, the snapshot's price date); ``review:``
+412, the clean P/E, priced 3 Nov 2026" (the path in words, an input, an intermediate or a
+classifier field by its name in words, ``field_words``, where no fixed words name it; the
+snapshot's price date); ``review:``
 "review 88, bridge line 1 (belief), the change in the value a share"; ``secondary:`` "secondary
 valuation 9, year 3 FCFF"; ``sensitivity:`` "sensitivity 7, row 1 column 2"; ``fact:`` "the
 revenue line of fiscal 2025 on file"; ``table:`` "the growth table, revenue growth, fiscal 2025";
@@ -85,7 +87,8 @@ revenue line of fiscal 2025 on file"; ``table:`` "the growth table, revenue grow
 ``guidance:`` "guidance record 5: EPS for fiscal 2027, the midpoint"; ``derived:`` "derivation 7:
 the ratio of <a> and <b>", the operands' refs; ``response:`` "FMP segments, observed 1 Nov 2026";
 ``policy:`` "policy required_return, <the policy's version>". A ref whose form or record names
-nothing is its own description.
+nothing, a record of another company among them, is its own description; a ``secondary:`` or
+``sensitivity:`` ref is read as ``resolve`` reads it, so a path its record lacks names nothing.
 
 ``same_snapshot`` is the reprice rule (13.2): a later snapshot that reprices the cited one, with
 the same data date, method, policy, settings hash and value, counts as the cited one.
@@ -129,6 +132,7 @@ __all__ = [
     "Resolved",
     "Resolver",
     "close_ref",
+    "day_words",
     "estimate_ref",
     "fact_ref",
     "field_words",
@@ -293,18 +297,49 @@ _STAT_WORDS = {
 }
 _PROVIDER_WORDS = {"fmp": "FMP", "gf": "GuruFocus"}
 # An engine name's words: an abbreviation in capitals, a statement line's short name spelled out.
+# A whole name is read before its words, so a score or a ratio reads as the spec writes it.
 _NAME_WORDS = {
+    "altman_z": "Altman's Z″",
+    "piotroski_f": "Piotroski's F",
+    "beneish_m": "Beneish's M",
+    "aggregate_roic": "ten-year aggregate ROIC",
+    "aggregate_roic_ten_year": "ten-year aggregate ROIC",
+    "eps_diluted": "diluted EPS",
+    "shares_diluted": "diluted shares",
     "eps": "EPS",
     "fcf": "FCF",
     "roic": "ROIC",
     "roe": "ROE",
     "ebit": "EBIT",
     "ebitda": "EBITDA",
+    "ttm": "TTM",
+    "ntm": "NTM",
+    "fy": "FY",
+    "pe": "P/E",
+    "nri": "NRI",
     "cfo": "operating cash flow",
     "cfi": "investing cash flow",
     "cff": "financing cash flow",
     "capex": "capital spending",
     "sbc": "stock compensation",
+}
+# A snapshot's paths a report cites most, in words; any other reads through ``field_words``.
+_SNAPSHOT_PATH_WORDS = {
+    "intermediates/belief/rate": "the belief",
+    "intermediates/implied_growth": "the growth the price needs",
+    "intermediates/multiples/pe_clean": "the clean P/E",
+    "intermediates/multiples/pe_reported": "the reported P/E",
+    "intermediates/multiples/pe_forward": "the forward P/E",
+    "intermediates/roic/aggregate": "the ten-year aggregate ROIC",
+    "intermediates/price_facts/high_52w": "the 52-week high",
+    "intermediates/price_facts/low_52w": "the 52-week low",
+    "intermediates/price_facts/change_1y": "the price change over one year",
+    "intermediates/price_facts/change_3y": "the price change over three years",
+    "intermediates/price_facts/change_5y": "the price change over five years",
+    "intermediates/price_facts/drawdown_from_peak": "the drop from the last peak",
+    "phase/phase": "the phase",
+    "phase/growth_3y": "the three-year revenue growth",
+    "phase/dickinson": "the Dickinson stage",
 }
 # Each input's bridge label by its tag as a stored bridge line names it.
 _LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
@@ -478,10 +513,10 @@ class Resolver:
                 found = self._snapshot_source(head, rest)
             case "review", _:
                 found = self._review_source(head, rest)
-            case "secondary", _ if head.isdigit():
+            case "secondary", _ if self.resolve(ref) is not None:  # the record read, its path
                 words = _secondary_words(rest)
                 found = None if words is None else f"secondary valuation {head}, {words}"
-            case "sensitivity", [_, i, j] if head.isdigit():
+            case "sensitivity", [_, i, j] if self.resolve(ref) is not None:
                 found = f"sensitivity {head}, row {i} column {j}"
             case "fact", [_, line, period]:
                 found = f"the {field_words(line)} line of {_period_words(period)} on file"
@@ -783,15 +818,15 @@ class Resolver:
         row: SnapshotRow | None = self._once(
             f"snapshot {head}", lambda: snapshot_row(self.conn, int(head))
         )
-        if row is None:
+        if row is None or row.symbol != self.symbol:
             return None
-        priced = "" if row.price_date is None else f", priced {_day_words(row.price_date)}"
+        priced = "" if row.price_date is None else f", priced {day_words(row.price_date)}"
         return f"snapshot {row.id}, {words}{priced}"
 
     def _review_source(self, head: str, rest: Sequence[str]) -> str | None:
         """The review and the path in words, a bridge line with its input's label."""
         row = review_row(self.conn, int(head)) if head.isdigit() else None
-        if row is None:
+        if row is None or row.symbol != self.symbol:
             return None
         match rest:
             case ["bridge", n, field] if field in _BRIDGE_WORDS:
@@ -805,12 +840,14 @@ class Resolver:
     def _finding_source(self, head: str) -> str | None:
         """The finding and its source as recorded."""
         row = finding_row(self.conn, int(head)) if head.isdigit() else None
-        return None if row is None else f"finding {row.id}: {row.source_ref}"
+        if row is None or row.symbol != self.symbol:
+            return None
+        return f"finding {row.id}: {row.source_ref}"
 
     def _guidance_source(self, head: str, name: str) -> str | None:
         """The guidance record, its metric and period, and the figure named."""
         row = guidance_row(self.conn, int(head)) if head.isdigit() else None
-        if row is None:
+        if row is None or row.symbol != self.symbol:
             return None
         guided = f"{field_words(row.metric)} for {_period_words(row.period)}"
         return f"guidance record {row.id}: {guided}, the {name}"
@@ -818,7 +855,7 @@ class Resolver:
     def _derived_source(self, head: str) -> str | None:
         """The derivation, its operation and its operands' refs."""
         row = derivation_row(self.conn, int(head)) if head.isdigit() else None
-        if row is None:
+        if row is None or row.symbol != self.symbol:
             return None
         over = "" if row.years is None else f" over {row.years} years"
         return f"derivation {row.id}: the {row.operation} of {row.a} and {row.b}{over}"
@@ -826,16 +863,23 @@ class Resolver:
     def _response_source(self, head: str) -> str | None:
         """The vendor, the endpoint and the day the response was observed."""
         row = response_row(self.conn, int(head)) if head.isdigit() else None
-        if row is None:
+        if row is None or row.symbol != self.symbol:
             return None
         vendor = _PROVIDER_WORDS.get(row.provider, row.provider)
-        return f"{vendor} {row.endpoint}, observed {_day_words(row.observed_at.date())}"
+        return f"{vendor} {row.endpoint}, observed {day_words(row.observed_at.date())}"
 
 
 def field_words(name: str) -> str:
-    """An engine name in a reader's words: its underscores as spaces, an abbreviation in capitals
-    and a statement line's short name spelled out (``capex`` reads "capital spending")."""
-    return " ".join(_NAME_WORDS.get(word, word) for word in name.split("_"))
+    """An engine name in a reader's words: the whole name as the spec writes it (``altman_z``
+    reads "Altman's Z″"), else its underscores as spaces, an abbreviation in capitals and a
+    statement line's short name spelled out (``capex`` reads "capital spending")."""
+    whole = _NAME_WORDS.get(name)
+    return whole or " ".join(_NAME_WORDS.get(word, word) for word in name.split("_"))
+
+
+def day_words(day: date) -> str:
+    """A day as the report writes it, ``3 Nov 2026``."""
+    return f"{day.day} {_MONTHS[day.month - 1]} {day.year}"
 
 
 def _figure_words(rest: Sequence[str]) -> str | None:
@@ -849,14 +893,18 @@ def _figure_words(rest: Sequence[str]) -> str | None:
 
 
 def _snapshot_words(rest: Sequence[str]) -> str | None:
-    """A snapshot's path in words: an input, an intermediate or a classifier field by its name."""
+    """A snapshot's path in words: a path a report cites most by its words, else an input, an
+    intermediate or a classifier field by its name in words."""
+    known = _SNAPSHOT_PATH_WORDS.get("/".join(rest))
+    if known is not None:
+        return known
     match rest:
         case ["inputs", name]:
-            return f"the input {name}"
+            return f"the {field_words(name)}"
         case ["intermediates", *path] if path:
-            return f"the intermediate {'/'.join(path)}"
+            return f"the {' '.join(field_words(key) for key in path)}"
         case ["phase", name]:
-            return f"the classifier's {name}"
+            return f"the classifier's {field_words(name)}"
     return _figure_words(rest)
 
 
@@ -888,15 +936,10 @@ def _period_words(period: str) -> str:
     return period if quarter is None else f"{quarter[2]} of fiscal {quarter[1]}"
 
 
-def _day_words(day: date) -> str:
-    """A day as the report writes it, ``3 Nov 2026``."""
-    return f"{day.day} {_MONTHS[day.month - 1]} {day.year}"
-
-
 def _iso_words(text: str) -> str:
     """An ISO date as the report writes it; any other text as it is."""
     try:
-        return _day_words(date.fromisoformat(text))
+        return day_words(date.fromisoformat(text))
     except ValueError:
         return text
 

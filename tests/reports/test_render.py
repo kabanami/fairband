@@ -610,7 +610,7 @@ def test_the_markdown_carries_the_chart_tables(
     assert valuation.rstrip().endswith("|\n\nPlain words.")
     price = _part(text, "Price and multiples")
     assert "| Series | Ten-year average | Median | High | Low | Since |" in price
-    assert "| trailing P/E | 23.00x | 23.00x | 24.00x | 22.00x | 2025-12-31 |" in price
+    assert "| trailing P/E | 23.00x | 23.00x | 24.00x | 22.00x | 31 Dec 2025 |" in price
     assert "| Year | Trailing P/E | Forward P/E |" in price and "| 2026 | 24.00x |  |" in price
     assert price.rstrip().endswith("|\n\nPlain words.")
     charted = {HEADINGS[3], "Valuation", "Price and multiples"}

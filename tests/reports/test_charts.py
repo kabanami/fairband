@@ -113,7 +113,8 @@ def test_section_4_holds_the_six_tables_at_the_cite_rounding(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """One table for each of the six financial tables, titled by it, over the last five fiscal
-    years; each cell written as a cite of it reads, an empty cell for a figure not on file."""
+    years, each row by its name as the spec writes it; each cell written as a cite of it reads,
+    an empty cell for a figure not on file."""
     financial = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)[HEADINGS[3]]
     assert [t.title for t in financial] == [
         "Growth and profitability",
@@ -127,17 +128,24 @@ def test_section_4_holds_the_six_tables_at_the_cite_rounding(
     assert {t.header for t in financial} == {("Fiscal year", *years)}
     growth = {row[0]: row[1:] for row in financial[0].rows}
     assert list(growth) == [
-        "revenue",
-        "revenue growth",
-        "gross margin",
-        "operating margin",
-        "net margin",
+        "Revenue",
+        "Revenue growth",
+        "Gross margin",
+        "Operating margin",
+        "Net margin",
         "EPS",
     ]
-    assert growth["revenue"][-2:] == ("$2,000,000,000", "$2,100,000,000")
-    assert growth["revenue growth"][-1] == "5.0%"
+    assert growth["Revenue"][-2:] == ("$2,000,000,000", "$2,100,000,000")
+    assert growth["Revenue growth"][-1] == "5.0%"
+    assert [row[0] for row in financial[3].rows] == [
+        "ROIC",
+        "ROE",
+        "Ten-year aggregate ROIC",
+        "Hurdle rate",
+    ]
     quality = {row[0]: row[1:] for row in financial[5].rows}
-    assert quality["beneish m"] == ("",) * 5  # not on file
+    assert list(quality) == ["Altman's Z″", "Piotroski's F", "Beneish's M"]
+    assert quality["Beneish's M"] == ("",) * 5  # not on file
     for table, chart in zip(financial_tables(conn, "AAPL", policy), financial, strict=True):
         for row, cells in zip(table.rows, chart.rows, strict=True):
             written = tuple("" if c.value is None else shown(c.value, c.unit) for c in row.cells)
@@ -226,13 +234,14 @@ def test_a_parts_grid_reads_its_rows_as_shifts(
 def test_section_9_holds_the_statistics_and_the_year_end_points(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
-    """The four statistics of each P/E series over its ten years, with the day it began; and the
-    last point of each calendar year of either series, read from the store."""
+    """The four statistics of each P/E series over its ten years, with the day it began written as
+    the references write a day; and each series' last point in each calendar year of the ten
+    years (2016-10-29 falls before them), read from the store."""
     sid = snapshots["AAPL"]
     stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
     assert (stats.title, year_end.title) == (
         "The P/E over ten years",
-        "The P/E at the last day of each year on file",
+        "The P/E on the last day of each year of the ten years",
     )
     assert stats.rows == (("trailing P/E", "", "", "", "", ""), ("forward P/E", "", "", "", "", ""))
     assert year_end.rows == ()
@@ -255,8 +264,8 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
     stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
     assert stats.header == ("Series", "Ten-year average", "Median", "High", "Low", "Since")
     assert stats.rows == (
-        ("trailing P/E", "21.40x", "22.00x", "24.00x", "18.00x", "2016-10-29"),
-        ("forward P/E", "21.67x", "21.50x", "22.50x", "21.00x", "2025-12-30"),
+        ("trailing P/E", "21.40x", "22.00x", "24.00x", "18.00x", "29 Oct 2016"),
+        ("forward P/E", "21.67x", "21.50x", "22.50x", "21.00x", "30 Dec 2025"),
     )
     assert year_end.header == ("Year", "Trailing P/E", "Forward P/E")
     assert year_end.rows == (

@@ -1,22 +1,24 @@
 """The chart tables of a report (spec 2026-11-06 Tier 2, 13.6; ``method.md`` 16.6): where the
 report page draws a chart, the Markdown export carries its table twin under the section's
 heading, before the prose. Every figure is written as a cite of it would read
-(``check.shown``), and a cell with no figure on file is empty.
+(``check.shown``), a day as the references write it (``refs.day_words``, "3 Nov 2026"), and a
+cell with no figure on file is empty.
 
 ``chart_tables`` reads them from the store at export, no vendor called, by the heading of the
 section each leads:
 
 - "Financial performance and health": the six tables of ``tables.financial_tables``, one each,
-  titled by the table (``TITLES``), the rows by their names in words over the last five fiscal
-  years; a table without statements has no rows.
+  titled by the table (``TITLES``), each row by its name in words (``refs.field_words``, "Altman's
+  Z″", "Ten-year aggregate ROIC"), over the last five fiscal years; a table without statements has
+  no rows.
 - "Valuation": each sensitivity reading the sections cite (a ``sensitivity:`` ref), once, in the
   order first cited, the rows the first input's values and the columns the second's; then the
   grid of the secondary valuation the report rests on, its columns the rates and its rows the
   terminal growths or, on the parts form, the shift in every part's (``store.secondary.GRID_ROWS``).
   None when the report cites no reading and rests on no secondary valuation with a grid.
 - "Price and multiples": the four statistics of the trailing and the forward P/E over their ten
-  years with the day each series began (``reports.multiples``), and each series' last point of
-  every calendar year on file.
+  years with the day each series began (``reports.multiples``), and each series' last point in
+  each calendar year of the ten years.
 """
 
 import sqlite3
@@ -29,7 +31,7 @@ from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
 from fairband.reports.check import parts, shown
 from fairband.reports.multiples import SERIES, STATS, Series, stored_series
-from fairband.reports.refs import field_words, unit_of
+from fairband.reports.refs import day_words, field_words, unit_of
 from fairband.reports.tables import Table, financial_tables
 from fairband.store.reports import ReportRow
 from fairband.store.secondary import GRID_ROWS, secondary_row
@@ -86,7 +88,7 @@ def _financial(table: Table) -> ChartTable:
     if not periods:
         return ChartTable(TITLES[table.name], ("Fiscal year",), ())
     rows = tuple(
-        (field_words(row.name), *(_shown(cell.value, cell.unit) for cell in row.cells))
+        (_row_name(row.name), *(_shown(cell.value, cell.unit) for cell in row.cells))
         for row in table.rows
     )
     return ChartTable(TITLES[table.name], ("Fiscal year", *periods), rows)
@@ -137,13 +139,13 @@ def _secondary_grid(conn: sqlite3.Connection, report: ReportRow) -> list[ChartTa
 
 
 def _multiples(conn: sqlite3.Connection, symbol: str) -> tuple[ChartTable, ChartTable]:
-    """The two P/E series' statistics, and their last point of each calendar year on file."""
+    """The two P/E series' statistics, and their last point in each calendar year of the ten."""
     series: dict[str, Series | None] = {name: stored_series(conn, symbol, name) for name in SERIES}
     stats = tuple(
         (
             _SERIES_NAMES[name],
             *(_shown(None if s is None else s.stats[stat], "multiple") for stat in STATS),
-            "" if s is None or s.since is None else s.since.isoformat(),
+            "" if s is None or s.since is None else day_words(s.since),
         )
         for name, s in series.items()
     )
@@ -159,11 +161,17 @@ def _multiples(conn: sqlite3.Connection, symbol: str) -> tuple[ChartTable, Chart
     return (
         ChartTable("The P/E over ten years", header, stats),
         ChartTable(
-            "The P/E at the last day of each year on file",
+            "The P/E on the last day of each year of the ten years",
             ("Year", "Trailing P/E", "Forward P/E"),
             years,
         ),
     )
+
+
+def _row_name(name: str) -> str:
+    """A table row's name in words, led by a capital: "Revenue growth", "Altman's Z″"."""
+    words = field_words(name)
+    return words[:1].upper() + words[1:]
 
 
 def _input(value: float | str, tag: str) -> str:

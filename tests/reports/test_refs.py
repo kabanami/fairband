@@ -722,6 +722,12 @@ def described(
             conn, "fmp", "segments", {"symbol": "AAPL"}, "AAPL", 200, payload, None, observed
         ),
         "version": policy.version,
+        # another company's records, which name nothing for AAPL
+        "aal": snapshots["AAL"],
+        "their_sensitivity": insert_sensitivity(
+            conn, "AAL", snapshots["AAL"], None, "phase", "moat.class", grid, "v", "h", AGENT, NOW
+        ),
+        "their_finding": add_finding(conn, "AAL", date(2025, 9, 27), "x", source, AGENT, NOW),
     }
 
 
@@ -740,15 +746,32 @@ def described(
         ),
         (
             "snapshot:{snapshot}/inputs/aggregate_roic",
-            "snapshot {snapshot}, the input aggregate_roic, priced 30 Oct 2026",
+            "snapshot {snapshot}, the ten-year aggregate ROIC, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/inputs/revenue_ttm",  # an input by its name in words
+            "snapshot {snapshot}, the revenue TTM, priced 30 Oct 2026",
         ),
         (
             "snapshot:{snapshot}/intermediates/belief/rate",
-            "snapshot {snapshot}, the intermediate belief/rate, priced 30 Oct 2026",
+            "snapshot {snapshot}, the belief, priced 30 Oct 2026",
         ),
         (
+            "snapshot:{snapshot}/intermediates/multiples/pe_clean",
+            "snapshot {snapshot}, the clean P/E, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/intermediates/growth_rates/0",  # an intermediate by its path
+            "snapshot {snapshot}, the growth rates 0, priced 30 Oct 2026",
+        ),
+        ("snapshot:{snapshot}/phase/phase", "snapshot {snapshot}, the phase, priced 30 Oct 2026"),
+        (
             "snapshot:{snapshot}/phase/growth_3y",
-            "snapshot {snapshot}, the classifier's growth_3y, priced 30 Oct 2026",
+            "snapshot {snapshot}, the three-year revenue growth, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/phase/growth_decile",  # a classifier field by its name
+            "snapshot {snapshot}, the classifier's growth decile, priced 30 Oct 2026",
         ),
         ("review:{review}/value", "review {review}, the value a share"),
         ("review:{review}/levels/buy", "review {review}, the buy level"),
@@ -786,11 +809,16 @@ def described(
         ("sensitivity:{sensitivity}/1/2", "sensitivity {sensitivity}, row 1 column 2"),
         ("fact:AAPL/revenue/2025", "the revenue line of fiscal 2025 on file"),
         ("fact:AAPL/capex/ttm", "the capital spending line of the trailing twelve months on file"),
-        ("fact:AAPL/eps_diluted/2024", "the EPS diluted line of fiscal 2024 on file"),
+        ("fact:AAPL/eps_diluted/2024", "the diluted EPS line of fiscal 2024 on file"),
         ("table:AAPL/growth/revenue_growth/2025", "the growth table, revenue growth, fiscal 2025"),
         (
             "table:AAPL/cash_flow/fcf_to_net_income/2025",
             "the cash flow table, FCF to net income, fiscal 2025",
+        ),
+        ("table:AAPL/quality/altman_z/2025", "the quality table, Altman's Z″, fiscal 2025"),
+        (
+            "table:AAPL/returns/aggregate_roic_ten_year/2025",
+            "the returns table, ten-year aggregate ROIC, fiscal 2025",
         ),
         ("estimate:AAPL/2026/eps", "the consensus for fiscal 2026, EPS"),
         ("estimate:AAPL/2026-Q4/analysts_eps", "the consensus for Q4 of fiscal 2026, analysts EPS"),
@@ -821,8 +849,17 @@ def described(
         ("response:{response}/0/revenue", "FMP segments, observed 1 Nov 2026"),
         ("policy:required_return", "policy required_return, {version}"),
         (" snapshot:{snapshot}/price ", "snapshot {snapshot}, the price, priced 30 Oct 2026"),
-        ("nosuchform:1/value", "nosuchform:1/value"),  # names nothing: the ref itself
+        # a ref that names nothing is its own description
+        ("nosuchform:1/value", "nosuchform:1/value"),
         ("finding:999", "finding:999"),
+        ("sensitivity:999/1/2", "sensitivity:999/1/2"),
+        ("sensitivity:{sensitivity}/3/1", "sensitivity:{sensitivity}/3/1"),  # no third row
+        ("secondary:999/value", "secondary:999/value"),
+        ("secondary:{parts}/years/1/fcff", "secondary:{parts}/years/1/fcff"),  # the drivers form's
+        ("secondary:{drivers}/years/4/fcff", "secondary:{drivers}/years/4/fcff"),  # three years
+        ("sensitivity:{their_sensitivity}/1/1", "sensitivity:{their_sensitivity}/1/1"),
+        ("finding:{their_finding}", "finding:{their_finding}"),
+        ("snapshot:{aal}/price", "snapshot:{aal}/price"),
     ],
 )
 def test_describe(
