@@ -74,6 +74,7 @@ SHEETS = {
 }
 REVENUE = {FY24: 20e9, FY25: 22e9}
 FOREIGN = "foreign filer: currency and share-unit handling not built yet"
+GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
 # Spec 20.4's drivers: three years growing 10%, 8% and 5% at a 20% margin, tax 25%,
 # sales-to-capital 2, a terminal growth of 2%.
 DRIVERS = {
@@ -527,6 +528,52 @@ def test_settings_changed_refuses_a_secondary(client: TestClient) -> None:
     assert r.status_code == 200
     assert _refused(client, ONE_PART) == (409, {"detail": "settings changed: run a revalue"})
     assert _stored(client) == []
+
+
+def _guided(client: TestClient, symbol: str, call: str) -> int:
+    body = {
+        "metric": "revenue",
+        "period": "2027",
+        "low": 24e9,
+        "high": 25e9,
+        "basis": "gaap",
+        "asOf": call,
+        "text": "We guide fiscal 2027 revenue.",
+        "source": "response:12/0/content",
+    }
+    r = client.post(f"/api/companies/{symbol}/guidance", json=body, headers=AGENT)
+    assert r.status_code == 201, r.text
+    guidance_id: int = r.json()["id"]
+    return guidance_id
+
+
+def test_a_guidance_item_is_checked_as_an_override_s_is(client: TestClient) -> None:
+    """A secondary valuation's evidence item of kind ``guidance`` names a current guidance record
+    of the company: another form of ref 400, another company's record 404, a superseded one 409,
+    none stored; a good one is kept with the valuation."""
+    earlier = _guided(client, "AAPL", "2026-07-29")
+    later = _guided(client, "AAPL", "2026-10-28")
+    theirs = _guided(client, "HGCO", "2026-10-28")
+    refusals = [
+        (_guidance_cite(later) | {"ref": "the Q3 call"}, 400, GUIDANCE_REF),
+        (_guidance_cite(theirs), 404, f"no guidance record {theirs} for AAPL"),
+        (
+            _guidance_cite(earlier),
+            409,
+            f"guidance record {earlier} is superseded by record {later}",
+        ),
+    ]
+    for cite, status, detail in refusals:
+        body = ONE_PART | {"evidence": [FILING, cite]}
+        assert _refused(client, body) == (status, {"detail": detail}), detail
+    assert _stored(client) == []
+    good = _guidance_cite(later)
+    stored = _secondary(client, ONE_PART | {"evidence": [FILING, good]})
+    assert stored["evidence"][1] == good | {"figure": None}
+
+
+def _guidance_cite(guidance_id: int) -> dict[str, Any]:
+    return {"kind": "guidance", "ref": f"guidance:{guidance_id}", "note": "FY2027 revenue"}
 
 
 @pytest.mark.parametrize(

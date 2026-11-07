@@ -35,9 +35,11 @@ def _add(
     high: float,
     base: float | None,
     symbol: str = "AAPL",
+    basis: str = "gaap",
+    call: date = CALL,
 ) -> int:
     return insert_guidance(
-        conn, symbol, metric, period, low, high, "gaap", CALL, SAID, SOURCE, AGENT, NOW, base
+        conn, symbol, metric, period, low, high, basis, call, SAID, SOURCE, AGENT, NOW, base
     )
 
 
@@ -121,6 +123,34 @@ def test_a_newer_record_supersedes_the_older(conn: sqlite3.Connection) -> None:
     by_id = {g.id: g for g in guidance_for(conn, "AAPL")}
     assert (by_id[third].superseded_by, by_id[second].superseded_by) == (None, third)
     assert by_id[first].superseded_by == second  # the first keeps its successor
+
+
+def test_a_gaap_and_an_adjusted_record_of_one_call_both_stay_current(
+    conn: sqlite3.Connection,
+) -> None:
+    """The superseding key is the metric, the period and the basis: a call that guides GAAP and
+    adjusted EPS gives two current records; a later GAAP figure supersedes the GAAP one alone."""
+    gaap = _add(conn, "eps", "2027", 6.0, 6.4, None)
+    adjusted = _add(conn, "eps", "2027", 7.0, 7.4, None, basis="adjusted")
+    assert [g.superseded_by for g in guidance_for(conn, "AAPL")] == [None, None]
+    later = _add(conn, "eps", "2027", 6.2, 6.4, None, call=date(2027, 1, 27))
+    by_id = {g.id: g for g in guidance_for(conn, "AAPL")}
+    assert by_id[gaap].superseded_by == later
+    assert by_id[adjusted].superseded_by is None and by_id[later].superseded_by is None
+
+
+def test_an_earlier_call_recorded_later_is_stored_superseded(conn: sqlite3.Connection) -> None:
+    """The call's date orders the records, not the write: the previous call's figure recorded
+    after the newest call's is stored already superseded by it, and the newest stays current; a
+    record of the same call's date supersedes as a later one does."""
+    newest = _add(conn, "revenue", "2027", 1_400.0, 1_500.0, None, call=date(2026, 10, 28))
+    previous = _add(conn, "revenue", "2027", 1_300.0, 1_450.0, None, call=date(2026, 7, 29))
+    by_id = {g.id: g for g in guidance_for(conn, "AAPL")}
+    assert (by_id[newest].superseded_by, by_id[previous].superseded_by) == (None, newest)
+    restated = _add(conn, "revenue", "2027", 1_420.0, 1_500.0, None, call=date(2026, 10, 28))
+    by_id = {g.id: g for g in guidance_for(conn, "AAPL")}
+    assert by_id[newest].superseded_by == restated and by_id[restated].superseded_by is None
+    assert by_id[previous].superseded_by == newest  # kept as stored
 
 
 @pytest.mark.parametrize(

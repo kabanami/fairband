@@ -231,6 +231,9 @@ _ABOVE_P90: dict[str, str] = {"growth.belief": "a belief", "path.hold": "a held 
 # The anchors a clear guidance may replace: an override of one cites a guidance record.
 _NTM_ANCHORS = frozenset({"earnings.ntm", "revenue.ntm"})
 NO_GUIDANCE = "an NTM anchor override needs a guidance record among its evidence"
+# The policy's stand-in for a range with no upper bound (10^15 dollars: the balance corrections
+# and the NTM revenue); a refusal names such a range by its lower end alone.
+NO_BOUND = 1e15
 
 
 _ROUTE_OF: dict[Phase, Route] = {
@@ -328,15 +331,25 @@ def _number(value: object) -> TypeIs[float]:
 def range_text(low: float, high: float, unit: str, *, low_open: bool = False) -> str:
     """A range in the input's unit: percents for a ratio, dollars for money (a share for the two
     gaps and the NTM EPS), the figures for a multiple; a negative end with the minus sign, and
-    "above" before a lower end the range excludes. The override's refusal and the secondary
-    valuation's driver refusals write their ranges with it."""
+    "above" before a lower end the range excludes. An upper end of ``NO_BOUND`` or more stands for
+    no bound and is not written: the range names its lower end alone, "$0 or more", or "above $0"
+    when it excludes it. The override's refusal and the secondary valuation's driver refusals
+    write their ranges with it."""
+    per = " a share" if unit == "USD a share" else ""
+    if high >= NO_BOUND:
+        bound = f"above {_end(low, unit)}" if low_open else f"{_end(low, unit)} or more"
+        return f"{bound}{per}"
     above = "above " if low_open else ""
+    return f"{above}{_end(low, unit)} to {_end(high, unit)}{per}"
+
+
+def _end(x: float, unit: str) -> str:
+    """One end of a range in the input's unit (``range_text``)."""
     if unit == "ratio":
-        return f"{above}{_signed(low * 100)}% to {_signed(high * 100)}%"
+        return f"{_signed(x * 100)}%"
     if unit in ("USD", "USD a share"):
-        per = " a share" if unit == "USD a share" else ""
-        return f"{above}{_dollars(low)} to {_dollars(high)}{per}"
-    return f"{above}{_signed(low)} to {_signed(high)}"
+        return _dollars(x)
+    return _signed(x)
 
 
 def _signed(x: float) -> str:

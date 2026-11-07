@@ -446,14 +446,21 @@ def test_a_review_after_the_next_earnings_date_keeps_its_snapshot_s_window(
     assert latest["result"]["valid_until"] == window
 
 
-def _guidance(client: TestClient, symbol: str, metric: str, low: float, high: float) -> int:
+def _guidance(
+    client: TestClient,
+    symbol: str,
+    metric: str,
+    low: float,
+    high: float,
+    call: str = "2026-10-28",
+) -> int:
     body = {
         "metric": metric,
         "period": "2027",
         "low": low,
         "high": high,
         "basis": "gaap",
-        "asOf": "2026-10-28",
+        "asOf": call,
         "text": "We guide fiscal 2027.",
         "source": "response:12/0/content",
     }
@@ -501,3 +508,43 @@ def test_an_ntm_override_cites_a_guidance_record(
     revenue = BELIEF_8 | {"tag": "revenue.ntm", "new": 12.6e9, "reason": "guided"}
     on_hgco = _post(client, revenue | {"evidence": [cite]}, "HGCO")
     assert [line["tag"] for line in on_hgco["bridge"]] == ["revenue.ntm"]
+
+
+NTM_EPS = BELIEF_8 | {"tag": "earnings.ntm", "new": 6.45, "reason": "guided 6.30 to 6.60"}
+
+
+def _citing(guidance_id: int) -> dict[str, Any]:
+    """The NTM EPS override with the guidance record ``guidance_id`` among its evidence."""
+    cite = {"kind": "guidance", "ref": f"guidance:{guidance_id}", "note": "FY2027 EPS"}
+    return NTM_EPS | {"evidence": [cite, TRANSCRIPT]}
+
+
+def test_an_override_citing_a_superseded_record_is_refused(client: TestClient) -> None:
+    """A later call's figure supersedes the earlier one, so an NTM anchor never rests on a record
+    a later call replaced: 409, nothing stored."""
+    earlier = _guidance(client, "AAPL", "eps", 6.00, 6.40, call="2026-07-29")
+    later = _guidance(client, "AAPL", "eps", 6.30, 6.60)
+    r = client.post("/api/companies/AAPL/overrides", json=_citing(earlier), headers=AGENT)
+    detail = f"guidance record {earlier} is superseded by record {later}"
+    assert (r.status_code, r.json()) == (409, {"detail": detail})
+    assert _overrides(client) == []
+    assert _post(client, _citing(later))["override"]["state"] == "applied"
+
+
+def test_an_applied_override_stands_when_a_later_call_supersedes_its_record(
+    client: TestClient,
+) -> None:
+    """The accepted case: an override applied on the current record stays applied, its review as
+    it was, when a later call's record supersedes the one it cites; Appendix A shows the record's
+    state. A new override citing the superseded record is refused."""
+    cited = _guidance(client, "AAPL", "eps", 6.30, 6.60)
+    applied = _post(client, _citing(cited))
+    review = client.get("/api/companies/AAPL/reviews/latest").json()
+    newer = _guidance(client, "AAPL", "eps", 6.50, 6.70, call="2027-01-27")
+    [override] = _overrides(client)
+    assert (override["id"], override["state"]) == (applied["override"]["id"], "applied")
+    assert client.get("/api/companies/AAPL/reviews/latest").json() == review
+    listed = client.get("/api/companies/AAPL/guidance").json()["guidance"]
+    assert [(g["id"], g["supersededBy"]) for g in listed] == [(newer, None), (cited, newer)]
+    r = client.post("/api/companies/AAPL/overrides", json=_citing(cited), headers=AGENT)
+    assert r.status_code == 409

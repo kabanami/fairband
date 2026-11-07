@@ -8,9 +8,14 @@ transcript's ``response:`` ref, or a filing), and the writer and the time. The s
 midpoint, ``(low + high) / 2``, and, for a fiscal-year ``revenue`` or ``eps`` record given the
 base year's actual (``base_year``: the fiscal year before the guided one), the step, the midpoint
 over that actual less one, so the agent never computes a rate; no step otherwise, nor on a base
-at or below zero, from which growth has no meaning. A newer record for the same metric and period
-supersedes the current one, which keeps its figures and names its successor (``superseded_by``);
-every record stays, so a later report can read the track record. ``guidance_for`` lists a
+at or below zero, from which growth has no meaning.
+
+The call's date orders a company's records of one metric, period and basis, of which one at most
+is current (``superseded_by`` empty): a GAAP and an adjusted figure of one call both stay current.
+A new record of a call on or after the current record's supersedes it, and the old record keeps
+its figures and names its successor in ``superseded_by``; a new record of an earlier call, the
+previous call's figure written late, is stored already superseded by the current one. Every
+record stays, so a later report can read the track record. ``guidance_for`` lists a
 company's newest first; ``guidance_row`` reads one by its id. ``UNITS`` is each metric's unit as
 the refs read it.
 
@@ -108,8 +113,8 @@ def insert_guidance(
     base_actual: float | None,
 ) -> int:
     """Record the guidance, its step from ``base_actual`` (the base year's actual on file, or
-    ``None``) when it takes one, and supersede the company's current record of the same metric
-    and period; return its id."""
+    ``None``) when it takes one, and order it against the company's current record of the same
+    metric, period and basis by the call's date (module docstring); return its id."""
     symbol = exchange_symbol(symbol)
     _check(metric, period, low, high, basis, text, source)
     midpoint = (low + high) / 2
@@ -134,18 +139,24 @@ def insert_guidance(
         dump_stamp(at),
     )
     with transaction(conn, immediate=True):
+        current = conn.execute(
+            "SELECT id, as_of FROM guidance WHERE symbol = ? AND metric = ? AND period = ?"
+            " AND basis = ? AND superseded_by IS NULL",
+            (symbol, metric, period, basis),
+        ).fetchone()
+        # a record of an earlier call than the current one's is stored superseded by it
+        later = current is not None and load_date(current["as_of"]) > as_of
         cursor = conn.execute(
             "INSERT INTO guidance (symbol, metric, period, low, high, midpoint, step, basis, as_of,"
-            " text, source, principal, actor, client, created_at)"
-            f" VALUES ({', '.join('?' * len(row))})",
-            row,
+            " text, source, principal, actor, client, created_at, superseded_by)"
+            f" VALUES ({', '.join('?' * (len(row) + 1))})",
+            (*row, current["id"] if later else None),
         )
         guidance_id = inserted_id(cursor)
-        conn.execute(
-            "UPDATE guidance SET superseded_by = ? WHERE symbol = ? AND metric = ? AND period = ?"
-            " AND superseded_by IS NULL AND id != ?",
-            (guidance_id, symbol, metric, period, guidance_id),
-        )
+        if current is not None and not later:
+            conn.execute(
+                "UPDATE guidance SET superseded_by = ? WHERE id = ?", (guidance_id, current["id"])
+            )
     return guidance_id
 
 

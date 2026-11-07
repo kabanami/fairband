@@ -6,10 +6,13 @@ note}], lifetime, period?}`` from an agent; a blank reason, or a period-tied ove
 no period, is a 400 and stores nothing. The company's latest snapshot must have been valued
 under the effective policy (``require_current``: the price refresh's sentences, "settings
 changed: run a revalue" and the others, answered 409), so the bridge's mechanical term is the
-row's own figure. An evidence item of kind ``guidance`` cites a guidance record of the company as
-``guidance:<id>``: a ref of another form is a 400, "a guidance item cites its record as
-guidance:<id>", and one naming no record of the company a 404, "no guidance record <id> for
-<symbol>", neither storing anything. ``check_override`` then judges it on the route the row
+row's own figure. An evidence item of kind ``guidance`` cites a current guidance record of the
+company as ``guidance:<id>``: a ref of another form is a 400, "a guidance item cites its record as
+guidance:<id>", one naming no record of the company a 404, "no guidance record <id> for
+<symbol>", and one naming a record a later call superseded a 409, "guidance record <id> is
+superseded by record <id>", so an NTM anchor never rests on a record a later call replaced; none
+stores anything. An override applied before a later record superseded the one it cites stays
+applied. ``check_override`` then judges it on the route the row
 takes: its phase's, or the phase an applied ``phase`` override sets (the new one included); an
 unclassified row with no phase override reads no input but its phase. The evidence rule's cap is
 the ``sales_p90_5y`` of the sales class of the snapshot's trailing revenue (its ``revenue_ttm``
@@ -50,7 +53,8 @@ blank reason; no evidence; both forms, "a secondary valuation takes drivers or p
 or neither, "a secondary valuation needs drivers or parts"; evidence with no item for the drivers
 or the path itself, every item naming a ``figure``, "the path needs its own evidence item"; a debt
 or a cash passed without its own evidence item, one whose ``figure`` names it. Then, on the
-company's latest snapshot: ``require_current``'s 409s; a foreign filer, the snapshot refused as one
+company's latest snapshot: ``require_current``'s 409s; a ``guidance`` evidence item's 400, 404 and
+409, as an override's; a foreign filer, the snapshot refused as one
 or its universe row an ADR or in a currency other than USD (a row naming none leaves it to the
 snapshot), 400 with section 7's sentence; no positive diluted share count on the snapshot (its
 ``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share count"; on
@@ -453,6 +457,7 @@ def add_review_routes(
             snapshot = snapshot_of(conn, symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
+            _require_guidance(conn, symbol, body.evidence)
             if _foreign(conn, snapshot):
                 raise HTTPException(400, FOREIGN_FILER)
             shares = _shares(snapshot.result)
@@ -696,8 +701,10 @@ def _check(
 
 
 def _require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[Evidence]) -> None:
-    """Each ``guidance`` item names a guidance record of the company as ``guidance:<id>``: 400
-    for another form of ref, 404 for a record that is not the company's (module docstring)."""
+    """Each ``guidance`` item names a current guidance record of the company as ``guidance:<id>``:
+    400 for another form of ref, 404 for a record that is not the company's, 409 for one a later
+    call's record superseded (module docstring). An override's and a secondary valuation's
+    evidence meet it."""
     for item in evidence:
         if item.kind != "guidance":
             continue
@@ -707,6 +714,9 @@ def _require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[
         found = guidance_row(conn, cited)
         if found is None or found.symbol != symbol:
             raise HTTPException(404, f"no guidance record {cited} for {symbol}")
+        if found.superseded_by is not None:
+            detail = f"guidance record {cited} is superseded by record {found.superseded_by}"
+            raise HTTPException(409, detail)
 
 
 def _reproduces(fresh: ValuationResult, snapshot: ValuationResult) -> bool:

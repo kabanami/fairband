@@ -27,6 +27,7 @@ from fairband.engine.overrides import (
     State,
     check_override,
     current_reading,
+    range_text,
     route_of,
 )
 from fairband.engine.route import value_company
@@ -236,7 +237,7 @@ def test_an_ntm_anchor_is_above_zero(policy: Policy) -> None:
     guidance = ("guidance",)
     for tag, route, high, text in (
         ("earnings.ntm", "mature-growth", 1_000.0, "above $0 to $1,000 a share"),
-        ("revenue.ntm", "decline", 1e15, "above $0 to $1,000,000,000,000,000"),
+        ("revenue.ntm", "decline", 1e15, "above $0"),  # the stand-in for no bound is not written
     ):
         refusal = ("refused-unit", f"{tag} takes {text}")
         assert checked(policy, tag, 0.0, route, guidance) == refusal
@@ -244,6 +245,23 @@ def test_an_ntm_anchor_is_above_zero(policy: Policy) -> None:
         assert checked(policy, tag, high * 1.01, route, guidance) == refusal
         assert checked(policy, tag, high, route, guidance) == ("applied", "")
         assert checked(policy, tag, 0.01, route, guidance) == ("applied", "")
+
+
+def test_a_range_with_no_upper_bound_names_its_lower_end_alone(policy: Policy) -> None:
+    """The balance corrections' 10^15 dollars stands for no bound (spec 10.2: 0 or more), so the
+    sentence names the lower end alone; a bounded range names both ends."""
+    assert checked(policy, "balance.debt", -1.0, "decline", lifetime="period-tied") == (
+        "refused-unit",
+        "balance.debt takes $0 or more",
+    )
+    assert checked(policy, "balance.cash", 2e15, "start-up", lifetime="period-tied") == (
+        "refused-unit",
+        "balance.cash takes $0 or more",
+    )
+    assert range_text(0.0, 1e15, "USD") == "$0 or more"
+    assert range_text(0.0, 1e15, "USD", low_open=True) == "above $0"
+    assert range_text(0.0, 1_000.0, "USD a share", low_open=True) == "above $0 to $1,000 a share"
+    assert range_text(-0.2, 0.6, "ratio") == "−20% to 60%"
 
 
 def test_an_ntm_anchor_needs_a_guidance_item(policy: Policy) -> None:
