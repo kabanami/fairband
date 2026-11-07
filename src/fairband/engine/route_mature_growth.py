@@ -31,8 +31,13 @@ of the charge (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring gap, th
 test then taking the correction, the override less the gap found, off trailing GAAP EPS
 (``anchor.ntm_anchor``), so an override at the gap found moves nothing; ``path.step_2`` and
 ``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
-step not counted thin; ``growth.belief`` the belief's rate. The cross-check reads the row's moat,
-returns and gap, and the consensus and belief as found.
+step not counted thin; ``growth.belief`` the belief's rate; ``earnings.cycle_gap`` the correction
+to mid-cycle earnings, which the NTM EPS is taken less after the SBC adjustment, before the
+anchor's refusals (``anchor.ntm_anchor``), and which nothing else reads: the basis test, the clean
+EPS, EPV and ``large-nri`` read the non-recurring gap alone, and the forward EPS of the P/E and
+the ``ntm_eps`` and ``ntm_net_income`` data entries are the consensus as found
+(``Anchor.ntm_eps_found``). ``cycle_gap`` is in the intermediates only under that override. The
+cross-check reads the row's moat, returns and two gaps, and the consensus and belief as found.
 """
 
 from dataclasses import asdict, replace
@@ -71,6 +76,8 @@ from fairband.engine.route_steps import (
     chosen,
     common_inputs,
     common_rules,
+    cycle_entry,
+    cycle_gap,
     data,
     eps,
     expected,
@@ -112,7 +119,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         for key, ch in _roic_charges(charge, roic.usable, moat, policy).items()
     }
     gap = chosen(c, "earnings.nri_gap", nri_gap(i))
-    e = eps(t, gap, anchor.ntm_eps)
+    e = eps(t, gap, anchor.ntm_eps_found)
     im: dict[str, Any] = {
         "anchor": {
             "ntm_eps_raw": anchor.ntm_eps_raw,
@@ -136,6 +143,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "value_by_runway": by_runway,
         "value_by_roic": by_roic,
         "nri_gap": gap,
+        **cycle_entry(cycle_gap(c)),
         "eps": e,
         "epv": None if e["clean"] is None else epv(e["clean"], policy.required_return),
         **income(i.market_cap, t),
@@ -158,8 +166,9 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "sbc_ttm", t.sbc, "USD", "statements"),
-        data(i, "ntm_eps", anchor.ntm_eps, "USD a share", "estimates_quarter"),
-        data(i, "ntm_net_income", anchor.ntm_net_income, "USD", "estimates_quarter"),
+        # the consensus as found: an agent's cycle gap is the JUDGMENT entry, not data
+        data(i, "ntm_eps", anchor.ntm_eps_found, "USD a share", "estimates_quarter"),
+        data(i, "ntm_net_income", anchor.ntm_eps_found * c.shares, "USD", "estimates_quarter"),
         data(i, "path_step_2", path.steps[0], "ratio", "estimates_annual"),
         data(i, "path_step_3", path.steps[1], "ratio", "estimates_annual"),
         data(i, "street_ttm_eps", i.street_ttm_eps, "USD a share"),
@@ -218,8 +227,9 @@ def cross_check_at_price(
 
 def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, Belief] | Refused:
     """Year 1's anchor, the consensus path with its base fiscal year, and the belief; or the
-    route's refusal, with the flags raised before it. The anchor reads an overriding
-    non-recurring gap as its correction to the gap found; with ``own``, the route's own path and belief read the step and belief
+    route's refusal, with the flags raised before it. The anchor's basis test reads an overriding
+    non-recurring gap as its correction to the gap found, and its NTM EPS is taken less an
+    overriding cycle gap; with ``own``, the route's own path and belief read the step and belief
     overrides, which a cross-check leaves as found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
@@ -238,6 +248,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         c.price,
         policy,
         nri_correction=correction,
+        cycle_gap=cycle_gap(c),
     )
     if anchor.refusal is not None:
         return Refused(anchor.refusal, anchor.flags)

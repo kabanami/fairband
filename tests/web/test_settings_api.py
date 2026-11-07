@@ -63,11 +63,11 @@ def test_get_settings_shape(client: TestClient) -> None:
     }
     assert r["description"].startswith("The yearly return you require")
     assert body["current"] == {
-        "policyVersion": "fairband-policy-v8",
+        "policyVersion": "fairband-policy-v9",
         "settingsHash": EMPTY_SETTINGS_HASH,
     }
     assert body["valuedUnder"] == {
-        "policyVersion": "fairband-policy-v8",
+        "policyVersion": "fairband-policy-v9",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "fullRefreshAt": STARTED.isoformat(),
         "universeChanged": False,
@@ -274,7 +274,7 @@ def test_a_stored_row_the_policy_refuses_is_a_409_until_reset(
 def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> None:
     body = client.get("/api/policy").json()
     assert (body["version"], body["settingsHash"], body["changed"]) == (
-        "fairband-policy-v8",
+        "fairband-policy-v9",
         EMPTY_SETTINGS_HASH,
         0,
     )

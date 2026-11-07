@@ -230,6 +230,18 @@ def nri_gap(i: CompanyInputs) -> float | None:
     return i.gf_eps_ttm - i.gf_eps_without_nri
 
 
+def cycle_gap(c: Context) -> float | None:
+    """An agent's cycle gap, the correction to mid-cycle earnings a share, ``None`` without one:
+    the engine finds none (``overrides.current_reading`` reads its absence as nil)."""
+    return chosen(c, "earnings.cycle_gap", None)
+
+
+def cycle_entry(cycle: float | None) -> dict[str, float]:
+    """The intermediates' ``cycle_gap``, written only under an override, so a mechanical
+    result's intermediates do not carry it."""
+    return {} if cycle is None else {"cycle_gap": cycle}
+
+
 def eps(t: TrailingFigures, gap: float | None, forward: float | None) -> dict[str, float | None]:
     """Reported and clean (less the non-recurring gap) trailing EPS, and the forward EPS."""
     clean = None if t.eps_diluted is None else t.eps_diluted - nil(gap)

@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v8.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v9.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v7 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v8 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -13,9 +13,10 @@ properties. The file's values are the defaults the user's settings overlay
 (``fairband.policy.settings``); ``load_policy`` checks every setting's range as the overlay does,
 so a file outside them fails at load with the setting's name.
 
-The six values v8 adds for the agents (spec 2026-11-06 Tier 2, section 19) are not settings: the
-override ranges, the evidence rule above the 90th percentile, the secondary valuation's bounds and
-the stance words. An override range whose low is not below its high fails at load.
+The six values v8 adds for the agents and the one v9 adds (spec 2026-11-06 Tier 2, section 19)
+are not settings: the override ranges (v9 adds the cycle gap's), the evidence rule above the 90th
+percentile, the secondary valuation's bounds, its driver ranges (v9) and the stance words. An
+override range or a driver range whose low is not below its high fails at load.
 """
 
 import hashlib
@@ -29,7 +30,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v8.toml"
+_POLICY_FILE = "fairband-policy-v9.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -136,6 +137,7 @@ class Policy:
     secondary_parts_max: int
     secondary_years_min: int
     secondary_years_max: int
+    secondary_driver_ranges: dict[str, tuple[float, float]]
     stance_words: tuple[str, ...]
     universe: UniversePolicy
     refresh: RefreshPolicy
@@ -155,7 +157,7 @@ class Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v8 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v9 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -239,6 +241,7 @@ def load_policy(path: Path | None = None) -> Policy:
         secondary_parts_max=read("secondary_parts_max", _whole),
         secondary_years_min=read("secondary_years_min", _whole),
         secondary_years_max=read("secondary_years_max", _whole),
+        secondary_driver_ranges=read("secondary_driver_ranges", _ranges),
         stance_words=read("stance_words", _texts),
         universe=read("universe", _universe),
         refresh=read("refresh", _refresh),
@@ -286,7 +289,8 @@ def _pair(x: Any) -> tuple[float, float]:
 
 
 def _ranges(t: Any) -> dict[str, tuple[float, float]]:
-    """Tag to its range, a pair of numbers whose low is below its high."""
+    """Name to its range, a pair of numbers whose low is below its high: an override tag's, or a
+    secondary valuation driver's."""
     if not isinstance(t, dict):
         raise TypeError(f"{t!r} is not a table of ranges")
     table = {_text(tag): _pair(pair) for tag, pair in t.items()}

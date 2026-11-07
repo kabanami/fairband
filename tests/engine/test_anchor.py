@@ -189,6 +189,26 @@ def test_anchor_refusals(policy: Policy) -> None:
     assert ntm_anchor(ntm(eps=0.25), trailing(), 4.2, 10.0, 0.21, 2.0, policy).refusal is None
 
 
+def test_a_cycle_gap_lowers_the_anchor_and_stays_out_of_the_basis_test(policy: Policy) -> None:
+    """An agent's cycle gap comes off the NTM EPS after the SBC adjustment, and the refusals read
+    the lowered figure; the basis test reads trailing GAAP EPS as reported, where GAAP less 3.00
+    would leave the street's 4.20 above it by 3.20 and switch the basis."""
+    found = ntm_anchor(ntm(), trailing(), 4.2, 10.0, 0.21, 100.0, policy)
+    got = ntm_anchor(ntm(), trailing(), 4.2, 10.0, 0.21, 100.0, policy, cycle_gap=3.0)
+    assert got.basis == found.basis == "includes-sbc"
+    assert got.ntm_eps_raw == found.ntm_eps_raw == pytest.approx(10.0)
+    assert got.ntm_eps == pytest.approx(7.0) and got.ntm_net_income == pytest.approx(70.0)
+    assert got.ntm_eps_found == found.ntm_eps == found.ntm_eps_found
+    excludes = ntm_anchor(ntm(), trailing(), 5.0, 10.0, 0.21, 100.0, policy, cycle_gap=1.0)
+    assert excludes.ntm_eps_found == pytest.approx(9.052)
+    assert excludes.ntm_eps == pytest.approx(8.052)
+    wiped = ntm_anchor(ntm(), trailing(), 4.2, 10.0, 0.21, 100.0, policy, cycle_gap=10.0)
+    assert wiped.refusal == "no positive forward anchor"
+    # a trough lifted to mid-cycle: a loss consensus of −2.00 and a cycle gap of −3.00
+    lifted = ntm_anchor(ntm(eps=-0.5), trailing(), 4.2, 10.0, 0.21, 100.0, policy, cycle_gap=-3.0)
+    assert lifted.ntm_eps == pytest.approx(1.0) and lifted.refusal is None
+
+
 def test_base_fiscal_year_tie_takes_later() -> None:
     qs = [
         q("2026-09-30", 2026, "Q4", 1),

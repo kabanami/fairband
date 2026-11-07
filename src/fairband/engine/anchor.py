@@ -100,8 +100,8 @@ class TrailingFigures:
 
 @dataclass(frozen=True)
 class Anchor:
-    """Year 1 per share and in total; under the refusal "incomplete NTM consensus" the numbers
-    are 0."""
+    """Year 1 per share and in total, less an agent's cycle gap when one applies; under the
+    refusal "incomplete NTM consensus" the numbers are 0."""
 
     ntm_eps_raw: float
     sbc_adjustment_per_share: float
@@ -110,6 +110,12 @@ class Anchor:
     basis: SbcBasis
     flags: tuple[Flag, ...]
     refusal: str | None
+
+    @property
+    def ntm_eps_found(self) -> float:
+        """The NTM EPS as the engine finds it, before any cycle gap: the consensus less the SBC
+        adjustment, the figure ``ntm_eps`` is without one."""
+        return self.ntm_eps_raw - self.sbc_adjustment_per_share
 
 
 @dataclass(frozen=True)
@@ -178,11 +184,14 @@ def ntm_anchor(
     policy: Policy,
     *,
     nri_correction: float | None = None,
+    cycle_gap: float | None = None,
 ) -> Anchor:
     """The NTM EPS with stock compensation as a cost and the NTM net income on ``shares``. The
     basis test reads trailing GAAP EPS as reported; with ``nri_correction``, an agent's
     non-recurring gap less the gap found (``method.md`` 14), GAAP EPS less that correction, so a
-    gap overridden at the figure found leaves the test as it was."""
+    gap overridden at the figure found leaves the test as it was. With ``cycle_gap``, an agent's
+    correction to mid-cycle earnings a share, the NTM EPS is taken less it after the SBC
+    adjustment, and the refusals read the figure so lowered; the basis test does not read it."""
     sbc_per_share = None if trailing.sbc is None else trailing.sbc * (1 - tax_rate) / shares
     gaap = trailing.eps_diluted
     if gaap is not None and nri_correction is not None:
@@ -198,6 +207,8 @@ def ntm_anchor(
     if basis == "excludes-sbc" and sbc_per_share is not None:
         adjustment = sbc_per_share * _revenue_scale(quarters, trailing.revenue)
     ntm_eps = raw - adjustment
+    if cycle_gap is not None:
+        ntm_eps -= cycle_gap
 
     refusal = None
     if ntm_eps <= 0:

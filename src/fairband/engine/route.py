@@ -65,21 +65,22 @@ three.
   runway), ``roic`` (aggregate, years, by_year), ``runway_return`` (used, marginal,
   marginal_usable, three_year, ten_year, value), ``terminal_roic``, ``charge_off``, ``shares``,
   ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
-  ``eps`` (reported, clean, forward), ``epv`` (a share), ``dividend_yield``,
+  ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported, clean, forward: the
+  NTM EPS before any cycle gap), ``epv`` (a share), ``dividend_yield``,
   ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price, ``implied_growth``,
   ``implied_growth_by_runway``, ``implied_by_roic``, ``multiples``, ``growth_share``,
   ``expected_return``.
-- Mature Stable: ``e_trailing``, ``nri_gap``, ``ttm_margin``, ``median_margin``,
-  ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``runway_return``, ``terminal_roic``,
-  ``runway``, ``epv`` and ``stable_growth`` (a share), ``epv_total`` and ``stable_growth_total``,
-  ``shares``,
-  ``value_per_share``, ``eps``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``,
-  ``price_facts``, ``growth_route`` (the growth route's cross-check: value_per_share,
-  ntm_net_income, path_steps, belief, runway, fade_years, runway_return, terminal_roic,
-  charge_off, refusal ``None``; or only its refusal); at the price, ``multiples``,
-  ``expected_return`` and the cross-check's ``implied_growth``, rebuilt from its own keys. A row
-  refused for its trailing earnings holds ``e_trailing``, ``nri_gap``, ``eps``, ``shares``,
-  ``moat``, ``growth_route`` (with its ``implied_growth`` at the price) and ``price_facts``.
+- Mature Stable: ``e_trailing``, ``nri_gap``, ``cycle_gap`` (as on Mature Growth), ``ttm_margin``,
+  ``median_margin``, ``margin_scaled``, ``e_normalized``, ``moat``, ``roic``, ``runway_return``,
+  ``terminal_roic``, ``runway``, ``epv`` and ``stable_growth`` (a share), ``epv_total`` and
+  ``stable_growth_total``, ``shares``, ``value_per_share``, ``eps``, ``dividend_yield``,
+  ``net_buyback_yield``, ``income_basis``, ``price_facts``, ``growth_route`` (the growth route's
+  cross-check: value_per_share, ntm_net_income, path_steps, belief, runway, fade_years,
+  runway_return, terminal_roic, charge_off, refusal ``None``; or only its refusal); at the price,
+  ``multiples``, ``expected_return`` and the cross-check's ``implied_growth``, rebuilt from its
+  own keys. A row refused for its trailing earnings holds ``e_trailing``, ``nri_gap``,
+  ``cycle_gap`` (under an override), ``eps``, ``shares``, ``moat``, ``growth_route`` (with its
+  ``implied_growth`` at the price) and ``price_facts``.
 - Revenue growth (High Growth and Young Growth): ``ntm_revenue``, ``path`` (base_year, analysts,
   held, sales_class, cap), ``path_steps``, ``revenue_path``, ``growth_rates`` (years 1 to 10),
   ``margin_start``, ``margin_path`` (start, target, by_year, ramp), ``target_margin`` (value,

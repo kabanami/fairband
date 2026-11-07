@@ -52,9 +52,11 @@ def OVERRIDE(tag: OverrideTag, value: float | str, id: int = 1) -> Override:
         ("MGCO", "growth.belief", 0.08),
         ("MGCO", "moat.class", "Narrow"),  # MGCO is Wide
         ("MGCO", "earnings.nri_gap", 0.5),
+        ("MGCO", "earnings.cycle_gap", 1.0),
         ("MGCO", "return.runway", 0.20),
         ("MGCO", "path.step_2", 0.15),  # the consensus step is 12%
         ("MSCO", "moat.class", "Narrow"),
+        ("MSCO", "earnings.cycle_gap", 1.0),
         ("HGCO", "margin.target", 0.25),
         ("HGCO", "capital.sales_to_capital", 1.5),
         ("HGCO", "path.hold", 0.30),
@@ -133,6 +135,28 @@ def test_two_overrides_sum_to_the_difference(policy: Policy, deciles: Deciles) -
     assert review.bridge[1].old == "Wide"
     # the review's levels read the reviewed moat
     assert review.result.levels is not None and review.result.levels != mechanical.levels
+
+
+def test_the_cycle_gap_line_follows_the_non_recurring_gap(policy: Policy, deciles: Deciles) -> None:
+    """Given the cycle gap first, the bridge reads the non-recurring gap first, the method's order;
+    the cycle line's old value is the engine's nil, and the two deltas sum to the difference."""
+    inputs = mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    overrides = [OVERRIDE("earnings.cycle_gap", 1.0, 2), OVERRIDE("earnings.nri_gap", 0.5, 1)]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    tags = [line.tag for line in review.bridge]
+    assert tags == ["earnings.nri_gap", "earnings.cycle_gap"]
+    assert tags == sorted(tags, key=BRIDGE_ORDER.index)
+    nri, cycle = review.bridge
+    assert nri.old == mechanical.intermediates["nri_gap"] and nri.new == 0.5
+    assert cycle.old == 0.0 and cycle.new == 1.0 and cycle.override_id == 2
+    assert review.result.value is not None and mechanical.value is not None
+    assert nri.delta is not None and cycle.delta is not None and cycle.delta < 0
+    assert nri.delta + cycle.delta == pytest.approx(
+        review.result.value - mechanical.value, abs=1e-9
+    )
+    judged = [i.name for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert judged == ["earnings.nri_gap", "earnings.cycle_gap"]
 
 
 def test_a_start_up_overridden_to_young_growth_is_valued(policy: Policy, deciles: Deciles) -> None:

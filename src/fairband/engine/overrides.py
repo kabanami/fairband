@@ -1,23 +1,25 @@
 """Overrides: the inputs an agent may change, the rules an override must pass, and the engine's
 own reading of each input (spec 2026-11-06 Tier 2, 10.1 to 10.3; ``method.md`` 14).
 
-An override changes one tagged input. ``TAGS`` names the thirteen inputs, the routes that read
+An override changes one tagged input. ``TAGS`` names the fourteen inputs, the routes that read
 each, its unit and, for the two word inputs, its words; the numeric ranges are the policy's
-``override_ranges``, the ends included. ``check_override`` applies the rules in this order and
-answers with the first one broken: a locked input (``LOCKED``); a tag that is not an input; a
-route that does not read the tag; a value outside its words or its range, or a lasting
-override of a period-tied input; no evidence, or a belief or held rate above the sales class's
-90th percentile without a filing or a transcript (when the policy's
-``override_primary_evidence_above_p90`` holds). A passing override is ``("applied", "")``; a
-refused one names its state and a sentence the agent can act on.
+``override_ranges``, the ends included. ``LABELS`` names each input's bridge line in a reader's
+words. ``check_override`` applies the rules in this order and answers with the first one broken:
+a locked input (``LOCKED``); a tag that is not an input; a route that does not read the tag; a
+value outside its words or its range, or a lasting override of a period-tied input; no evidence,
+or a belief or held rate above the sales class's 90th percentile without a filing or a
+transcript (when the policy's ``override_primary_evidence_above_p90`` holds). A passing override
+is ``("applied", "")``; a refused one names its state and a sentence the agent can act on.
 
 The routes read an override through ``route_steps.chosen``; ``route.value_company`` takes the
 applied ones as a mapping by tag. ``current_reading`` is the engine's reading of an input from a
 result's intermediates, ``None`` where the result holds none: the bridge's old value and the
 value a period-tied override corrected. A balance line reads the reported figure the result
 cites, ``None`` when no line is on file (the bridge then counts it as nil) or the result cites
-none; the runway return reads ``None`` with the charge off. An override at the engine's reading
-moves nothing.
+none; the runway return reads ``None`` with the charge off. The engine finds no cycle gap: a
+mature route writes ``cycle_gap`` into its intermediates only under an override, so a Mature
+Growth or Mature Stable result without one reads 0.0 (a refusal, the route its phase takes). An
+override at the engine's reading moves nothing.
 
 ``INPUT_OF`` names the route's own entry each tag stands for in a result's inputs: a result
 valued under an override cites the JUDGMENT entry in its place, so no DATA or RULE entry carries
@@ -43,6 +45,7 @@ OverrideTag = Literal[
     "capital.sales_to_capital",
     "return.runway",
     "earnings.nri_gap",
+    "earnings.cycle_gap",
     "decline.rate",
     "balance.debt",
     "balance.cash",
@@ -55,6 +58,7 @@ BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "path.hold",
     "growth.belief",
     "earnings.nri_gap",
+    "earnings.cycle_gap",
     "margin.target",
     "capital.sales_to_capital",
     "return.runway",
@@ -139,13 +143,34 @@ TAGS: dict[OverrideTag, TagSpec] = {
         _spec("capital.sales_to_capital", _GROWTH | {"decline"}, "multiple"),
         _spec("return.runway", _MATURE, "ratio"),
         _spec("earnings.nri_gap", _MATURE, "USD a share"),
+        _spec("earnings.cycle_gap", _MATURE, "USD a share"),
         _spec("decline.rate", frozenset({"decline"}), "ratio"),
         _spec("balance.debt", _BALANCE, "USD", period_tied_only=True),
         _spec("balance.cash", _BALANCE, "USD", period_tied_only=True),
     )
 }
 
-# The route's own entry in a result's inputs that each tag stands for.
+# Each input's line on the bridge, in a reader's words: the cycle gap reads as a cycle judgment,
+# not as a one-time item.
+LABELS: dict[OverrideTag, str] = {
+    "phase": "phase",
+    "growth.belief": "belief",
+    "path.hold": "held rate",
+    "path.step_2": "consensus step 2",
+    "path.step_3": "consensus step 3",
+    "moat.class": "moat",
+    "margin.target": "target margin",
+    "capital.sales_to_capital": "sales to capital",
+    "return.runway": "runway return",
+    "earnings.nri_gap": "non-recurring gap",
+    "earnings.cycle_gap": "mid-cycle earnings",
+    "decline.rate": "decline rate",
+    "balance.debt": "debt",
+    "balance.cash": "cash",
+}
+
+# The route's own entry in a result's inputs that each tag stands for. The two gaps stand for
+# none: a route cites the gap found and the NTM consensus as found as data.
 INPUT_OF: dict[OverrideTag, str] = {
     "growth.belief": "belief",
     "path.step_2": "path_step_2",
@@ -261,8 +286,8 @@ def _number(value: object) -> TypeIs[float]:
 
 
 def _range(low: float, high: float, unit: str) -> str:
-    """A range in the input's unit: percents for a ratio, dollars for money (a share for the
-    non-recurring gap), the figures for a multiple; a negative end with the minus sign."""
+    """A range in the input's unit: percents for a ratio, dollars for money (a share for the two
+    gaps), the figures for a multiple; a negative end with the minus sign."""
     if unit == "ratio":
         return f"{_signed(low * 100)}% to {_signed(high * 100)}%"
     if unit in ("USD", "USD a share"):
@@ -322,10 +347,21 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
             return _at(im, "runway_return", "value")
         case "earnings.nri_gap":
             return im.get("nri_gap")
+        case "earnings.cycle_gap":
+            # written only under an override; the engine's own reading is nil
+            return im.get("cycle_gap", 0.0) if _route(result) in TAGS[tag].routes else None
         case "decline.rate":
             return _at(im, "runoff_path", "d")
         case "balance.debt" | "balance.cash":
             return _balance(result, tag.removeprefix("balance."))
+
+
+def _route(result: ValuationResult) -> Route | None:
+    """The result's route; for a refusal, the route its phase takes, ``None`` without a phase."""
+    if result.route is not None:
+        return result.route
+    phase = None if result.phase is None else result.phase.phase
+    return None if phase is None else route_of(phase)
 
 
 def _balance(result: ValuationResult, name: str) -> Any:

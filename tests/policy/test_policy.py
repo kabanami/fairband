@@ -17,6 +17,7 @@ V4_SHA256 = "bda7ffc14dfda8dfc2d467489b5abc9c5816b04b6133de19d4ce12fd7448b903"
 V5_SHA256 = "809a5fa620dfdd862d1ceb62e200694b1a20df869029e36c7e44c0e699ac96f2"
 V6_SHA256 = "393d0f68f8fa5c67ce7f0a662c7cdfb4775e4709b28f1f85a3d43d628940d4ac"
 V7_SHA256 = "c964db4e36f8e233b866244b26db1c468f3c64f13e0c0bea985a0dbb8c551c91"
+V8_SHA256 = "129b080fff5d759e2b76cfe2d73ddfbcda68db8a50980d90ff7b4592c6cf8f06"
 # The six values policy v8 adds for the agents (spec 2026-11-06 Tier 2, section 19).
 V8_VALUES = {
     "override_ranges",
@@ -26,10 +27,13 @@ V8_VALUES = {
     "secondary_years_max",
     "stance_words",
 }
+# The value policy v9 adds, the secondary valuation's driver ranges; it also adds the cycle gap's
+# pair to ``override_ranges`` (spec 2026-11-06 Tier 2 as amended 2026-11-07, section 19).
+V9_VALUES = {"secondary_driver_ranges"}
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v8.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v9.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -41,7 +45,7 @@ def _file_values(name: str) -> dict[str, Any]:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v8" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v9" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -76,9 +80,9 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v8_is_the_packaged_policy() -> None:
+def test_v9_is_the_packaged_policy() -> None:
     policy = load_policy()
-    assert policy.version == "fairband-policy-v8"
+    assert policy.version == "fairband-policy-v9"
     assert policy.override_ranges == {
         "growth.belief": (-0.20, 0.60),
         "path.hold": (-0.20, 3.00),
@@ -88,6 +92,7 @@ def test_v8_is_the_packaged_policy() -> None:
         "capital.sales_to_capital": (0.1, 10.0),
         "return.runway": (0.0, 1.0),
         "earnings.nri_gap": (-100.0, 100.0),
+        "earnings.cycle_gap": (-100.0, 100.0),
         "decline.rate": (-0.50, 0.0),
         "balance.debt": (0.0, 1e15),
         "balance.cash": (0.0, 1e15),
@@ -99,7 +104,13 @@ def test_v8_is_the_packaged_policy() -> None:
         policy.secondary_years_max,
     ) == (10, 3, 15)
     assert policy.stance_words == ("buy", "hold", "trim", "avoid")
-    for name in sorted(V8_VALUES):
+    assert policy.secondary_driver_ranges == {
+        "revenue_growth": (-0.80, 3.00),
+        "operating_margin": (-0.50, 0.60),
+        "tax_rate": (0.0, 0.50),
+        "sales_to_capital": (0.1, 10.0),
+    }
+    for name in sorted(V8_VALUES | V9_VALUES):
         assert policy.raw["values"][name]["source"].strip(), name
     assert policy.own_sales_to_capital_min_share == 0.5
     assert policy.loss_ramp_margin_bound == -1.0
@@ -228,10 +239,39 @@ def test_v8_is_v7_with_the_six_values_added() -> None:
     secondary valuation's bounds and the stance words, none a setting (spec 2026-11-06 Tier 2,
     section 19)."""
     v7 = _file_values("fairband-policy-v7.toml")
-    v8 = load_policy().raw["values"]
+    v8 = _file_values("fairband-policy-v8.toml")
     assert v8.keys() - v7.keys() == V8_VALUES
     assert {k: v8[k] for k in v7} == v7
     assert not {s.name for s in SETTINGS} & V8_VALUES
+
+
+def test_v9_is_v8_with_the_values_added() -> None:
+    """Every v8 value loads unchanged from v9, save the override ranges, which gain the cycle gap's
+    pair; v9 adds the secondary valuation's driver ranges, neither a setting (spec 2026-11-06 Tier
+    2 as amended 2026-11-07, section 19)."""
+    v8 = _file_values("fairband-policy-v8.toml")
+    v9 = load_policy().raw["values"]
+    assert v9.keys() - v8.keys() == V9_VALUES
+    kept = v8.keys() - {"override_ranges"}
+    assert {k: v9[k] for k in kept} == {k: v8[k] for k in kept}
+    ranges8, ranges9 = v8["override_ranges"], v9["override_ranges"]
+    assert ranges9["value"] == ranges8["value"] | {"earnings.cycle_gap": [-100.0, 100.0]}
+    assert ranges9["source"] == ranges8["source"]
+    assert "the cycle gap" in ranges9["note"]
+    assert "a multiple for sales-to-capital" in v9["secondary_driver_ranges"]["note"]
+    assert not {s.name for s in SETTINGS} & (V9_VALUES | {"override_ranges"})
+
+
+def test_a_driver_range_that_does_not_ascend_is_refused(tmp_path: Path) -> None:
+    text = _packaged_bytes().decode()
+    old = "tax_rate = [0.0, 0.50]"
+    assert text.count(old) == 1
+    copy = tmp_path / "policy.toml"
+    copy.write_text(text.replace(old, "tax_rate = [0.50, 0.0]"))
+    with pytest.raises(
+        ValueError, match=r"\[values\.secondary_driver_ranges\] is malformed .*tax_rate"
+    ):
+        load_policy(copy)
 
 
 @pytest.mark.parametrize("pair", ["[0.60, 0.60]", "[0.60, -0.20]"])
@@ -345,6 +385,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v8_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v8`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v8.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V8_SHA256
 
 
 def test_v7_is_byte_identical_under_its_hash() -> None:

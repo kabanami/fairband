@@ -19,6 +19,7 @@ from support.engine_companies import (
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import (
     BRIDGE_ORDER,
+    LABELS,
     TAGS,
     Lifetime,
     Override,
@@ -99,6 +100,10 @@ def test_check_refuses_a_value_outside_its_range(policy: Policy) -> None:
     assert checked(policy, "earnings.nri_gap", -101.0, "mature-stable") == (
         "refused-unit",
         "earnings.nri_gap takes −$100 to $100 a share",
+    )
+    assert checked(policy, "earnings.cycle_gap", 101.0, "mature-growth") == (
+        "refused-unit",
+        "earnings.cycle_gap takes −$100 to $100 a share",
     )
 
 
@@ -181,6 +186,41 @@ def test_every_tag_has_a_place_in_the_bridge_and_a_range_or_words(policy: Policy
     }
 
 
+def test_the_cycle_gap_is_a_mature_tag() -> None:
+    """The mid-cycle correction reads where the non-recurring gap reads, in the same unit, and its
+    bridge line follows the gap's under its own label."""
+    cycle, nri = TAGS["earnings.cycle_gap"], TAGS["earnings.nri_gap"]
+    assert cycle.routes == nri.routes == {"mature-growth", "mature-stable"}
+    assert cycle.unit == "USD a share" and cycle.words is None
+    assert BRIDGE_ORDER.index("earnings.cycle_gap") == BRIDGE_ORDER.index("earnings.nri_gap") + 1
+    assert LABELS == {
+        "phase": "phase",
+        "growth.belief": "belief",
+        "path.hold": "held rate",
+        "path.step_2": "consensus step 2",
+        "path.step_3": "consensus step 3",
+        "moat.class": "moat",
+        "margin.target": "target margin",
+        "capital.sales_to_capital": "sales to capital",
+        "return.runway": "runway return",
+        "earnings.nri_gap": "non-recurring gap",
+        "earnings.cycle_gap": "mid-cycle earnings",
+        "decline.rate": "decline rate",
+        "balance.debt": "debt",
+        "balance.cash": "cash",
+    }
+    assert sorted(LABELS) == sorted(TAGS)
+
+
+def test_a_cycle_gap_is_refused_on_a_growth_route(policy: Policy) -> None:
+    assert checked(policy, "earnings.cycle_gap", 2.0, "revenue-growth") == (
+        "refused-route",
+        "the revenue-growth route does not read earnings.cycle_gap",
+    )
+    assert checked(policy, "earnings.cycle_gap", 2.0, "decline")[0] == "refused-route"
+    assert checked(policy, "earnings.cycle_gap", -2.0, "mature-stable") == ("applied", "")
+
+
 def test_the_route_follows_the_phase() -> None:
     assert route_of("Start-up") == "start-up"
     assert route_of("Young Growth") == route_of("High Growth") == "revenue-growth"
@@ -228,6 +268,7 @@ def test_current_reading_on_each_golden(policy: Policy, deciles: Deciles) -> Non
     assert current_reading(mg, "path.step_2") == mg.intermediates["path_steps"][0]
     assert current_reading(mg, "return.runway") == mg.intermediates["runway_return"]["value"]
     assert current_reading(mg, "earnings.nri_gap") == mg.intermediates["nri_gap"]
+    assert current_reading(mg, "earnings.cycle_gap") == 0.0
     assert current_reading(mg, "moat.class") == "Wide"
     assert current_reading(mg, "decline.rate") is None
     dc = value_company(decline_inputs(), deciles, policy, TODAY)
@@ -246,6 +287,28 @@ def test_current_reading_on_each_golden(policy: Policy, deciles: Deciles) -> Non
     ms = value_company(mature_stable_inputs(), deciles, policy, TODAY)
     assert current_reading(ms, "margin.target") is None
     assert current_reading(ms, "path.hold") is None
+    assert current_reading(ms, "earnings.cycle_gap") == 0.0
+    assert current_reading(hg, "earnings.cycle_gap") is None
+    assert current_reading(dc, "earnings.cycle_gap") is None
+
+
+def test_the_cycle_gap_reads_nil_until_an_override_sets_it(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """The engine finds no cycle gap: a mature row's reading is nil, a Mature Stable row refused
+    for its trailing earnings too (its route is the one its phase takes), and the route writes
+    the gap into its intermediates only under an override."""
+    ms = mature_stable_inputs()
+    assert ms.trailing is not None
+    trough = replace(ms, trailing=replace(ms.trailing, net_income=50e6))
+    refused = value_company(trough, deciles, policy, TODAY)
+    assert refused.refusal == "no positive trailing earnings" and refused.route is None
+    assert "cycle_gap" not in refused.intermediates
+    assert current_reading(refused, "earnings.cycle_gap") == 0.0
+    lifted = {"earnings.cycle_gap": override("earnings.cycle_gap", -1.0)}
+    r = value_company(trough, deciles, policy, TODAY, lifted)
+    assert r.refusal is None and r.intermediates["cycle_gap"] == -1.0
+    assert current_reading(r, "earnings.cycle_gap") == -1.0
 
 
 def test_a_balance_line_not_on_file_reads_none(policy: Policy, deciles: Deciles) -> None:
