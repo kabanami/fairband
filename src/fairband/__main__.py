@@ -31,7 +31,7 @@ from fairband.engine.types import PHASE_NUMBER
 from fairband.mcp.server import main as run_mcp
 from fairband.policy import load_policy
 from fairband.policy.tax import TaxTable, load_tax_table
-from fairband.refresh.clients import build_clients, build_fmp
+from fairband.refresh.clients import build_clients, build_fmp, build_gurufocus
 from fairband.refresh.passthrough import Passthrough
 from fairband.refresh.run import KINDS, UNCLASSIFIED, Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
@@ -134,14 +134,16 @@ def _serve(args: argparse.Namespace) -> int:
     """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. The
     server runs refreshes on its worker; each run reads the effective policy and builds its
     clients as it starts (``make_refresh``). With an FMP key it also builds the agent's vendor
-    pass-through, whose calls run on the request threads. One limiter paces every FMP call of
-    both: made at the pace of the effective policy as the server starts (the file's, when a stored
-    setting no longer applies, which the worker then refuses), paced again by each run to the
-    policy it runs under, and read by the pass-through, whose reuse window is the start's. Without
-    an FMP key the worker runs a revalue only and refuses the other kinds, and the pass-through
-    route answers 503. The app reads the policy file as its base. When it starts, the app marks
-    every ``running`` refresh interrupted; with no process lock in this cut, that includes one a
-    command in another process is running at that moment."""
+    pass-through, whose calls run on the request threads, with a GuruFocus client of its own when
+    a GuruFocus key is present, not paced as the refresh's is not, its token among the secrets
+    scrubbed; without one the pe-history pass-through answers 503. One limiter paces every FMP
+    call of both: made at the pace of the effective policy as the server starts (the file's, when
+    a stored setting no longer applies, which the worker then refuses), paced again by each run to
+    the policy it runs under, and read by the pass-through, whose reuse window is the start's.
+    Without an FMP key the worker runs a revalue only and refuses the other kinds, and the
+    pass-through route answers 503. The app reads the policy file as its base. When it starts, the
+    app marks every ``running`` refresh interrupted; with no process lock in this cut, that
+    includes one a command in another process is running at that moment."""
     settings = load_settings()
     policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
@@ -162,7 +164,8 @@ def _serve(args: argparse.Namespace) -> int:
     else:
         secrets = tuple(key for key in (keys.fmp, keys.gurufocus) if key)
         fmp = build_fmp(keys, started, limiter=limiter)
-        passthrough = Passthrough(fmp, conn_factory, started, utcnow, secrets)
+        gurufocus = build_gurufocus(keys, started)
+        passthrough = Passthrough(fmp, conn_factory, started, utcnow, secrets, gurufocus)
     worker = RefreshWorker(
         lambda cancel, on_progress: make_refresh(
             conn_factory, keys, tax, cancel, on_progress, limiter
@@ -175,7 +178,7 @@ def _serve(args: argparse.Namespace) -> int:
         # A run still alive holds the clients, so they close with the process, which ends now:
         # closed here, they would fail the companies in flight. The cancel keeps the run from
         # starting another meanwhile; the next start marks its record interrupted. The server has
-        # answered its last request, so the pass-through's client closes.
+        # answered its last request, so the pass-through's clients close.
         worker.cancel()
         if passthrough is not None:
             passthrough.close()

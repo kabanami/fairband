@@ -45,6 +45,12 @@ automated read, so the parameter tables are unchecked):
   fiscal year.
 - ``insider-trading/search``: ``symbol``, ``page``, ``limit``; the documented example asks for
   page 0 with 100 rows, which this adapter asks for.
+
+Checked on 2026-11-07 the same way (the pages ``developer/docs/stable/dcf`` and
+``developer/docs/stable/dcf-levered``):
+
+- ``discounted-cash-flow``: ``symbol``; FMP's DCF value a share beside the stock price.
+- ``levered-discounted-cash-flow``: ``symbol``; the same on the levered free cash flow.
 """
 
 from collections.abc import Mapping, Sequence
@@ -161,6 +167,14 @@ class Fmp:
         """The newest ``INSIDER_TRADES_LIMIT`` trades, the first page."""
         params = {"symbol": to_fmp_symbol(symbol), "page": "0", "limit": str(INSIDER_TRADES_LIMIT)}
         return self._get("insider-trading/search", params)
+
+    def dcf(self, symbol: str) -> VendorResponse:
+        """FMP's discounted cash flow value a share."""
+        return self._get("discounted-cash-flow", {"symbol": to_fmp_symbol(symbol)})
+
+    def dcf_levered(self, symbol: str) -> VendorResponse:
+        """FMP's discounted cash flow value a share on the levered free cash flow."""
+        return self._get("levered-discounted-cash-flow", {"symbol": to_fmp_symbol(symbol)})
 
     def _get(self, route: str, params: Mapping[str, str]) -> VendorResponse:
         return self._http.get(route, {**params, "apikey": self._api_key})

@@ -6,7 +6,8 @@ scrubs the key it sends from everything it emits; the fetch scrubs both from wha
 The FMP client is paced to ``refresh.fmp_calls_per_minute``: its one limiter is shared by every
 worker that calls through it. Given a ``limiter``, the FMP client takes its slots from that one
 instead, so clients built apart (the server's runs and its pass-through) keep one pace. The
-GuruFocus client is not paced.
+GuruFocus client (``build_gurufocus``, which the pass-through's ``pe-history`` calls through too)
+is not paced.
 """
 
 import httpx
@@ -34,10 +35,20 @@ def build_clients(
     fmp = build_fmp(keys, policy, transport=transport, limiter=limiter)
     fmp_key = require(keys, "fmp")
     token = keys.gurufocus
+    gurufocus = build_gurufocus(keys, policy, transport=transport)
+    return fmp, gurufocus, (fmp_key,) if token is None else (fmp_key, token)
+
+
+def build_gurufocus(
+    keys: Keys, policy: Policy, *, transport: httpx.BaseTransport | None = None
+) -> GuruFocus | None:
+    """The GuruFocus client, not paced; ``None`` without a GuruFocus token. The caller closes
+    it."""
+    token = keys.gurufocus
     if token is None:
-        return fmp, None, (fmp_key,)
+        return None
     http = VendorHttp(gurufocus_api.BASE_URL, [token], policy.refresh, transport=transport)
-    return fmp, GuruFocus(http, token), (fmp_key, token)
+    return GuruFocus(http, token)
 
 
 def build_fmp(

@@ -13,7 +13,7 @@ from collections import Counter
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import replace
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +38,7 @@ from fairband.refresh.run import Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import latest_companies
 from fairband.store.facts import FactRow, facts_for
+from fairband.store.multiples import MultiplesRow, multiples_log_for
 from fairband.store.policy import record_policy
 from fairband.store.refreshes import (
     RefreshRunning,
@@ -185,6 +186,37 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
     ]
     assert env.router.calls["screener"] == 1
     assert set(env.router.symbol_calls) == {"", *ADMITTED}  # FIRB and TINY are never fetched
+
+
+def test_a_snapshot_logs_its_multiples(env_fixture_universe: Env) -> None:
+    """Each snapshot with a price logs its multiples as of its price date, in its transaction:
+    the three valued companies at the quote's $50 of 30 October, a forward P/E where the result
+    has one. NEWT's fetch fails and the store holds no price for it: its refusal logs nothing."""
+    env = env_fixture_universe
+    env.router.fail_symbols.add("NEWT")
+    refresh_id = env.refresh().run("full")
+    assert env.snapshot("NEWT").refusal is not None and env.snapshot("NEWT").price is None
+    with closing(env.connect()) as conn:
+        logged = {symbol: multiples_log_for(conn, symbol) for symbol in ADMITTED}
+        refreshes = {r[0] for r in conn.execute("SELECT refresh_id FROM multiples_log")}
+    assert logged["NEWT"] == [] and refreshes == {refresh_id}
+    for symbol in ("ACME", "AXLE", "MILD"):
+        snapshot = env.snapshot(symbol)
+        assert snapshot.value is not None, symbol
+        multiples = snapshot.result.intermediates["multiples"]
+        assert logged[symbol] == [
+            MultiplesRow(
+                date(2026, 10, 30),
+                50.0,
+                multiples["pe_reported"],
+                multiples["pe_clean"],
+                multiples["pe_forward"],
+                snapshot.id,
+            )
+        ], symbol
+    # The Mature Growth route reads the NTM consensus: its forward P/E is the price over it.
+    assert logged["ACME"][0].pe_forward is not None
+    assert logged["MILD"][0].pe_forward is None  # Mature Stable has no forward P/E (6.5)
 
 
 def test_a_reused_response_from_before_the_six_lines_is_backfilled_before_valuing(

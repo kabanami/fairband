@@ -31,6 +31,7 @@ from fairband.reports.refs import (
 )
 from fairband.reports.tables import financial_tables
 from fairband.store.ledger import Writer
+from fairband.store.multiples import log_multiples
 from fairband.store.research import add_finding
 from fairband.store.reviews import insert_review
 from fairband.store.secondary import insert_derivation, insert_secondary
@@ -472,6 +473,78 @@ def test_response_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
         "response:999/0/revenue",
     ):
         assert _resolve(conn, ref, policy) is None, ref
+
+
+def test_multiple_refs_resolve(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """A point of either P/E series by its date, with the date as its period, and a statistic of
+    the ten years to the newest day by its name, each a multiple; the trailing series is the newest
+    stored ``pettm`` response's, the forward one the log's."""
+    rows = [
+        ["2016-10-29", 30.0, 30.0, 30.0, 30.0],  # a day before the ten years
+        ["2016-10-30", 20.0, 20.0, 20.0, 20.0],
+        ["2021-06-30", "At Loss", 0, 0, 0],
+        ["2026-10-29", 23.0, 23.0, 23.0, 23.0],
+        ["2026-10-30", 24.0, 24.0, 24.0, 24.0],
+    ]
+    at = datetime(2026, 11, 1, tzinfo=UTC)
+    older = [["2026-10-30", 99.0, 99.0, 99.0, 99.0]]
+    for payload, observed in ((older, at.replace(day=1, month=10)), (rows, at)):
+        record_response(
+            conn,
+            "gurufocus",
+            "pettm",
+            {"symbol": "AAPL"},
+            "AAPL",
+            200,
+            json.dumps(payload),
+            None,
+            observed,
+        )
+    for day, pe_forward in (("2026-10-29", 21.5), ("2026-10-30", None), ("2026-10-31", 22.5)):
+        log_multiples(
+            conn, "AAPL", date.fromisoformat(day), 150.0, None, None, pe_forward, 1, 1, at
+        )
+    expected = {
+        "multiple:AAPL/pe/2026-10-30": Resolved(24.0, "multiple", "2026-10-30", None),
+        "multiple:AAPL/pe/2016-10-30": Resolved(20.0, "multiple", "2016-10-30", None),
+        "multiple:AAPL/pe/avg_10y": Resolved(67 / 3, "multiple", None, None),
+        "multiple:AAPL/pe/median_10y": Resolved(23.0, "multiple", None, None),
+        "multiple:AAPL/pe/high_10y": Resolved(24.0, "multiple", None, None),
+        "multiple:AAPL/pe/low_10y": Resolved(20.0, "multiple", None, None),
+        "multiple:aapl/pe_forward/2026-10-31": Resolved(22.5, "multiple", "2026-10-31", None),
+        "multiple:AAPL/pe_forward/avg_10y": Resolved(22.0, "multiple", None, None),
+        "multiple:AAPL/pe_forward/low_10y": Resolved(21.5, "multiple", None, None),
+    }
+    for ref, resolved in expected.items():
+        assert _resolve(conn, ref, policy) == resolved, ref
+    for ref in (
+        "multiple:AAPL/pe/2026-10-31",  # no row that day
+        "multiple:AAPL/pe/2021-06-30",  # a loss
+        "multiple:AAPL/pe/2016-10-29",  # before the ten years
+        "multiple:AAPL/pe_forward/2026-10-30",  # no forward P/E that day
+        "multiple:AAPL/pe/mean_10y",
+        "multiple:AAPL/ps/avg_10y",
+        "multiple:AAPL/pe",
+        "multiple:AAPL/pe/avg_10y/1",
+        "multiple:AAL/pe/avg_10y",  # another company's
+    ):
+        assert _resolve(conn, ref, policy) is None, ref
+    # AAL has no stored series: its trailing refs name nothing, its forward statistics no figure.
+    assert resolve(conn, "AAL", "multiple:AAL/pe/avg_10y", policy) is None
+    assert resolve(conn, "AAL", "multiple:AAL/pe_forward/avg_10y", policy) == Resolved(
+        None, "multiple", None, None
+    )
+    cites = [
+        {"cite": "$22.33", "ref": "multiple:AAPL/pe/avg_10y"},
+        {"cite": "22.33x", "ref": "multiple:AAPL/pe/avg_10y"},
+        {"cite": "24.00", "ref": "multiple:AAPL/pe/2026-10-30", "period": "2026-10-30"},
+    ]
+    [finding] = check_sections(
+        conn, "AAPL", snapshots["AAPL"], [{"heading": "Price", "parts": cites}], policy
+    )
+    assert (finding.where, finding.what) == ("section 1, part 1: $22.33", WRONG_UNIT)
 
 
 def test_policy_refs(conn: sqlite3.Connection, policy: Policy) -> None:

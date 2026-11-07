@@ -32,6 +32,12 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   (``2026``) or the quarter (``2026-Q4``) and ``<field>`` the engine's name (``eps``,
   ``net_income``, ``analysts_eps``);
 - ``close:<symbol>/<date>``: a stored daily close;
+- ``multiple:<symbol>/<series>/<date>`` and ``/<stat>``: a point of the trailing (``pe``) or the
+  forward (``pe_forward``) P/E history by its ISO date, or one of its statistics over the ten years
+  to its newest day, ``avg_10y``, ``median_10y``, ``high_10y``, ``low_10y``
+  (``fairband.reports.multiples``): the trailing series is the newest stored ``pe-history``
+  response's, the forward one the multiples log's; a statistic of a series with no point holds no
+  figure;
 - ``peer:<symbol>/<peer>/<field>``: a figure of one of the company's mature peers as assembly
   reads it (``market_cap``, ``margin``, ``margin_years``, ``sales_to_capital``, ``roic``);
 - ``finding:<id>``: a finding's value, its unit and its period;
@@ -53,9 +59,10 @@ cite may give by its size. The units are the reads': ``currency``
 intermediate or a vendor field. An engine input's unit maps onto them: a currency code is
 ``currency``, ``<code> a share`` ``per-share``, ``ratio`` ``percent``, ``shares`` and the other
 counted things ``count``. The period is the fiscal year (``2025``), the quarter (``2026-Q4``),
-``ttm`` or the close's date for the forms that have one, a finding's as recorded; ``None`` for the
-others. The snapshot is the record's own for ``snapshot:``, ``review:``, ``secondary:`` and
-``sensitivity:``, and for ``derived:`` the snapshot its operands rest on; ``None`` for the others.
+``ttm``, or the close's or the multiple's date for the forms that have one, a finding's as
+recorded; ``None`` for the others. The snapshot is the record's own for ``snapshot:``,
+``review:``, ``secondary:`` and ``sensitivity:``, and for ``derived:`` the snapshot its operands
+rest on; ``None`` for the others.
 
 A ref resolves to ``None`` when it names nothing: a malformed ref, a record or a field that does
 not exist, a figure that is a table rather than a number or a word, or a record of another
@@ -85,6 +92,7 @@ from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import Statements, country_for, statements_for
 from fairband.refresh.peers import peer_figures
+from fairband.reports.multiples import SERIES, STATS, Series, stored_series
 from fairband.store.companies import latest_company
 from fairband.store.refreshes import latest_deciles
 from fairband.store.research import finding_row
@@ -103,6 +111,7 @@ __all__ = [
     "close_ref",
     "estimate_ref",
     "fact_ref",
+    "multiple_ref",
     "peer_ref",
     "resolve",
     "rests_on",
@@ -238,6 +247,11 @@ def peer_ref(symbol: str, peer: str, field: str) -> str:
     return f"peer:{symbol}/{peer}/{field}"
 
 
+def multiple_ref(symbol: str, series: str, key: str) -> str:
+    """A point of a P/E series by its ISO date, or a statistic by its name."""
+    return f"multiple:{symbol}/{series}/{key}"
+
+
 def resolve(
     conn: sqlite3.Connection, symbol: str, ref: str, policy: Policy, tax: TaxTable | None = None
 ) -> Resolved | None:
@@ -331,6 +345,7 @@ class Resolver:
             "table": self._table,
             "estimate": self._estimate,
             "close": self._close,
+            "multiple": self._multiple,
             "peer": self._peer,
             "finding": self._finding,
             "derived": self._derived,
@@ -516,6 +531,21 @@ class Resolver:
         day = pieces[1]
         close = next((c for d, c in self._inputs().closes if d.isoformat() == day), None)
         return None if close is None else _figure(close, "per-share", day, price=True)
+
+    def _multiple(self, path: str) -> Resolved | None:
+        pieces = path.split("/")
+        if len(pieces) != 3 or not self._own(pieces[0]) or pieces[1] not in SERIES:
+            return None
+        _, name, key = pieces
+        series: Series | None = self._once(
+            f"multiple:{name}", lambda: stored_series(self.conn, self.symbol, name)
+        )
+        if series is None:
+            return None
+        if key in STATS:
+            return _figure(series.stats[key], "multiple")
+        value = next((v for day, v in series.points if day.isoformat() == key), None)
+        return None if value is None else _figure(value, "multiple", key)
 
     def _peer(self, path: str) -> Resolved | None:
         pieces = path.split("/")

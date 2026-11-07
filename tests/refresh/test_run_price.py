@@ -30,6 +30,7 @@ from fairband.refresh import run_price
 from fairband.refresh.inputs import latest_price
 from fairband.refresh.run import Progress
 from fairband.store.companies import insert_companies, latest_companies
+from fairband.store.multiples import MultiplesRow, multiples_log_for
 from fairband.store.snapshots import SnapshotRow, insert_snapshot
 
 PRICE_DATE = date(2026, 10, 31)  # the new quotes' timestamp, a day after the fixtures'
@@ -150,6 +151,43 @@ def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
         Progress(refresh_id, "done", 4, 0, 0, None),
     ]
     assert Progress(refresh_id, "reprice", 4, 0, 0, None) in env.progress
+
+
+def test_a_reprice_logs_the_multiples_of_the_day(env_valued: Env) -> None:
+    """Each repriced snapshot logs its multiples at the quote's price, as of the quote's date, in
+    the snapshot's transaction; a second price refresh the same day replaces the day's row. NEWT's
+    refusal logs its price and no multiple."""
+    env = env_valued
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+    first = env.refresh().run("price")
+    later = {symbol: price + 1.0 for symbol, price in NEW_PRICES.items()}
+    env.router.bodies["batch-quote"] = batch(later)
+    env.clock.now += timedelta(hours=1)
+    second = env.refresh().run("price")
+    assert env.last().status == "done" and second == first + 1
+    with closing(env.connect()) as conn:
+        logged = {symbol: multiples_log_for(conn, symbol) for symbol in ADMITTED}
+        days = conn.execute(
+            "SELECT symbol, refresh_id FROM multiples_log WHERE day = ? ORDER BY symbol",
+            (PRICE_DATE.isoformat(),),
+        ).fetchall()
+    assert [tuple(row) for row in days] == [(symbol, second) for symbol in ADMITTED]
+    for symbol in ADMITTED:
+        snapshot = env.snapshot(symbol)
+        multiples = snapshot.result.intermediates.get("multiples", {})
+        full, repriced = logged[symbol]  # the full refresh's day, then the quote's
+        assert full.day == date(2026, 10, 30) and full.price == 50.0, symbol
+        assert repriced == MultiplesRow(
+            PRICE_DATE,
+            later[symbol],
+            multiples.get("pe_reported"),
+            multiples.get("pe_clean"),
+            multiples.get("pe_forward"),
+            snapshot.id,
+        ), symbol
+    acme = logged["ACME"][1]
+    assert acme.pe_forward is not None and acme.pe_forward < logged["ACME"][0].pe_forward
+    assert logged["NEWT"][1].pe_reported is None and logged["NEWT"][1].pe_forward is None
 
 
 def test_price_refresh_runs_no_backfill(env_valued: Env) -> None:

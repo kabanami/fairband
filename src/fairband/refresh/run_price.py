@@ -33,6 +33,8 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   snapshot unlike the run on several counts reads the first. A revalue writes the current
   versions and hash. An exception (``reprice`` refuses a price that is not positive and finite)
   is ``failed``, "reprice failed: <class>: <message>". In the repriced snapshot's transaction,
+  ``multiples.log_snapshot`` logs its multiples at the quote's price as of the quote's date, the
+  day's row replaced by a later reprice of the same day (spec 2026-11-06 Tier 2, 13.7), and
   ``reviews.reprice_review`` reprices the company's current review on the snapshot repriced, if
   it has one, at the same quote and writes it on the new snapshot (spec 2026-11-06 Tier 2, 10.5);
   a review that cannot be repriced becomes a refusal review and the snapshot stands.
@@ -64,6 +66,7 @@ from fairband.refresh.fetch import unusable
 from fairband.refresh.reviews import reprice_review
 from fairband.store.companies import latest_companies
 from fairband.store.db import transaction
+from fairband.store.multiples import log_snapshot
 from fairband.store.observations import ObservationRow, insert_observations
 from fairband.store.refreshes import Finished, set_stage, upsert_item
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapshots
@@ -280,6 +283,7 @@ class PriceRefresh:
                     )
                     with transaction(self._conn):
                         snapshot_id = insert_snapshot(self._conn, new, self._id, clock=self._clock)
+                        log_snapshot(self._conn, new, snapshot_id, self._id, self._clock())
                         reprice_review(
                             self._conn,
                             symbol,

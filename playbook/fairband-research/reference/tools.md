@@ -44,6 +44,8 @@ be left out.
   its `estimate:` ref.
 - `price_history(symbol, years?)`: the stored daily closes, oldest first, each with its `close:`
   ref; `years` keeps the latest years only.
+- `multiples_history(symbol)`: the trailing and the forward P/E over the ten years on file, each
+  point and each statistic (`avg10y`, `median10y`, `high10y`, `low10y`) with its `multiple:` ref.
 - `peers(symbol)`: the company's mature peers with their figures, each with its `peer:` ref, and
   where the list of peers came from.
 - `watchlists()`: the watchlists with their companies.
@@ -80,6 +82,8 @@ a report can cite it.
 - `segments(symbol)`: the revenue by product and by region, two responses under `product` and
   `geographic`.
 - `insider_trades(symbol)`: the insiders' trades.
+- `dcf(symbol)`: FMP's discounted cash flow value and its levered one, under `dcf` and `levered`.
+- `pe_history(symbol)`: GuruFocus's daily trailing P/E series, reused for seven days.
 
 Each answers `{responseId, observedAt, reused, payload}`; `segments` answers two of them, under
 `responses.product` and `responses.geographic`. Cite a field of a payload as

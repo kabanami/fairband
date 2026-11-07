@@ -63,6 +63,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "financial_tables",
     "estimates",
     "price_history",
+    "multiples_history",
     "peers",
     "watchlists",
     "inbox_list",
@@ -85,6 +86,8 @@ TOOL_NAMES: tuple[str, ...] = (
     "news",
     "segments",
     "insider_trades",
+    "dcf",
+    "pe_history",
     # 15.4, the writes
     "identify",
     "inbox_post",
@@ -186,6 +189,13 @@ def build_server(client: FairbandClient) -> MCPServer:
     )
     def price_history(symbol: str, years: int | None = None) -> dict[str, Any]:
         return answer(lambda: client.get(_company(symbol, "price-history"), {"years": years}))
+
+    @server.tool(
+        description="The trailing and forward P/E over the ten years on file, with their average,"
+        " median, high and low, each with its ref."
+    )
+    def multiples_history(symbol: str) -> dict[str, Any]:
+        return answer(lambda: client.get(_company(symbol, "multiples-history")))
 
     @server.tool(
         description="The company's mature peers with their figures and their source, each figure"
@@ -307,6 +317,20 @@ def build_server(client: FairbandClient) -> MCPServer:
     @server.tool(description="Insider trades from FMP, stored so a report can cite them.")
     def insider_trades(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_vendor("insider-trades", symbol)))
+
+    @server.tool(
+        description="FMP's discounted cash flow value and its levered one, a cross-check stored so"
+        " a report can cite it."
+    )
+    def dcf(symbol: str) -> dict[str, Any]:
+        return answer(lambda: client.get(_vendor("dcf", symbol)))
+
+    @server.tool(
+        description="GuruFocus's daily trailing P/E series, reused for seven days, stored so a"
+        " report can cite it."
+    )
+    def pe_history(symbol: str) -> dict[str, Any]:
+        return answer(lambda: client.get(_vendor("pe-history", symbol)))
 
     # 15.4, the writes
 

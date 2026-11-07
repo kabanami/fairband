@@ -1,6 +1,6 @@
 """The vendor pass-throughs on the fixture router: each kind's call, stored scrubbed and reused
-inside ``reuse_hours``, the one limiter the worker's client and the pass-through's share, and the
-slots that bound the vendor calls in flight."""
+inside ``reuse_hours`` (seven days for GuruFocus's P/E series), the one limiter the worker's client
+and the pass-through's share, and the slots that bound the vendor calls in flight."""
 
 import json
 import threading
@@ -23,8 +23,10 @@ from fairband.refresh.passthrough import (
     KINDS,
     PASSTHROUGH_SLOTS,
     PASSTHROUGH_WAIT_S,
+    PE_HISTORY_REUSE_HOURS,
     Passthrough,
     PassthroughBusy,
+    PassthroughNoKey,
 )
 from fairband.reports.refs import Resolved, resolve
 from fairband.store.vendor import response_payload, response_row
@@ -36,12 +38,13 @@ from fairband.vendors.limiter import PaceTotals, RateLimiter
 Q3 = {"year": "2026", "quarter": "3"}
 
 
-def _fixture(name: str) -> Any:
-    return json.loads((FIXTURES / "fmp" / name).read_text())
+def _fixture(name: str, vendor: str = "fmp") -> Any:
+    return json.loads((FIXTURES / vendor / name).read_text())
 
 
 def _passthrough(env: Env) -> Passthrough:
-    return Passthrough(env.clients.fmp, env.connect, env.policy, env.clock, env.clients.secrets)
+    clients = env.clients
+    return Passthrough(clients.fmp, env.connect, env.policy, env.clock, clients.secrets, clients.gf)
 
 
 def _stored(env: Env, response_id: int) -> tuple[str, str | None, dict[str, str], str | None]:
@@ -53,7 +56,7 @@ def _stored(env: Env, response_id: int) -> tuple[str, str | None, dict[str, str]
 
 
 def test_kinds() -> None:
-    assert KINDS == ("transcript", "news", "segments", "insider-trades")
+    assert KINDS == ("transcript", "news", "segments", "insider-trades", "dcf", "pe-history")
 
 
 def test_a_transcript_is_fetched_stored_and_reused(env: Env) -> None:
@@ -93,6 +96,74 @@ def test_segments_fetch_two_endpoints(env: Env) -> None:
     assert env.router.calls == {"segments-product": 1, "segments-geographic": 1}
 
 
+def test_dcf_fetches_two_endpoints(env: Env) -> None:
+    passthrough = _passthrough(env)
+    parts = passthrough.fetch("dcf", "ACME", {})
+    assert list(parts) == ["dcf", "levered"]
+    dcf, levered = parts["dcf"], parts["levered"]
+    assert env.router.calls == {"dcf": 1, "dcf-levered": 1}
+    assert env.router.requested["dcf"] == env.router.requested["dcf-levered"] == {"symbol": "ACME"}
+    assert dcf.payload == _fixture("discounted-cash-flow.ACME.json")
+    assert levered.payload == _fixture("levered-discounted-cash-flow.ACME.json")
+    assert _stored(env, dcf.row.id) == ("dcf", "ACME", {"symbol": "ACME"}, None)
+    assert _stored(env, levered.row.id) == ("dcf-levered", "ACME", {"symbol": "ACME"}, None)
+    assert dcf.row.provider == levered.row.provider == "fmp"
+    again = passthrough.fetch("dcf", "ACME", {})
+    assert [f.reused for f in again.values()] == [True, True]
+    assert env.router.calls == {"dcf": 1, "dcf-levered": 1}
+
+
+def test_pe_history_is_reused_for_seven_days(env: Env) -> None:
+    """GuruFocus's daily series is one call, stored under provider ``gurufocus``, reused inside
+    ``PE_HISTORY_REUSE_HOURS`` whatever ``reuse_hours`` is."""
+    assert PE_HISTORY_REUSE_HOURS == 168 and env.policy.refresh.reuse_hours < 168
+    passthrough = _passthrough(env)
+    first = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    assert first.reused is False and first.row.provider == "gurufocus"
+    assert _stored(env, first.row.id) == ("pettm", "ACME", {"symbol": "ACME"}, None)
+    assert first.payload == _fixture("pettm.ACME.json", "gurufocus")
+    env.clock.now += timedelta(days=6)
+    second = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    assert second.reused is True and second.row == first.row
+    assert env.router.calls == {"pettm": 1}
+    env.clock.now += timedelta(days=2)  # eight days after the first
+    third = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    assert third.reused is False and third.row.id > first.row.id
+    assert env.router.calls == {"pettm": 2}
+
+
+def test_pe_history_without_a_gurufocus_client_is_no_key(env: Env) -> None:
+    clients = env.clients
+    passthrough = Passthrough(clients.fmp, env.connect, env.policy, env.clock, clients.secrets)
+    with pytest.raises(PassthroughNoKey) as caught:
+        passthrough.fetch("pe-history", "ACME", {})
+    assert str(caught.value) == "no GuruFocus key: the pe-history pass-through is off"
+    assert env.router.calls == {}
+    # The FMP kinds do not need it.
+    assert passthrough.fetch("dcf", "ACME", {})["dcf"].reused is False
+
+
+def test_a_gurufocus_error_is_stored_and_raised_without_the_token(env: Env) -> None:
+    """The token travels in the URL path: the message, the stored error and the stored payload
+    carry ``<key>`` in its place."""
+    env.router.fail.add("pettm")
+    env.router.fail_status = 403
+    passthrough = _passthrough(env)
+    with pytest.raises(VendorError) as caught:
+        passthrough.fetch("pe-history", "ACME", {})
+    message = str(caught.value)
+    assert GF_TOKEN not in message and "/public/user/<key>/stock/ACME/pettm" in message
+    env.router.fail.clear()
+    echoed = [["2026-10-30", f"see /public/user/{GF_TOKEN}/stock/ACME/pettm"]]
+    env.router.bodies["pettm"] = json.dumps(echoed).encode()
+    fetched = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
+    assert fetched.payload == [["2026-10-30", "see /public/user/<key>/stock/ACME/pettm"]]
+    with closing(env.connect()) as conn:
+        rows = [tuple(r) for r in conn.execute("SELECT payload, error FROM vendor_responses")]
+    assert rows[0] == (None, message)
+    assert all(GF_TOKEN not in str(row) for row in rows)
+
+
 def test_a_fetched_response_is_citable(env: Env) -> None:
     product = _passthrough(env).fetch("segments", "ACME", {})["product"]
     ref = f"response:{product.row.id}/0/data/Widgets"
@@ -102,34 +173,47 @@ def test_a_fetched_response_is_citable(env: Env) -> None:
 
 
 @pytest.mark.parametrize(
-    ("kind", "params", "endpoint", "stored", "requested", "fixture"),
+    ("kind", "params", "provider", "endpoint", "stored", "requested", "fixture"),
     [
         pytest.param(
             "news",
             {},
+            "fmp",
             "news",
             {"symbol": "ACME", "limit": "20"},
             {"symbols": "ACME", "limit": "20"},
-            "news-stock.ACME.json",
+            "fmp/news-stock.ACME.json",
             id="news-default-limit",
         ),
         pytest.param(
             "news",
             {"limit": "5"},
+            "fmp",
             "news",
             {"symbol": "ACME", "limit": "5"},
             {"symbols": "ACME", "limit": "5"},
-            "news-stock.ACME.json",
+            "fmp/news-stock.ACME.json",
             id="news-limit",
         ),
         pytest.param(
             "insider-trades",
             {},
+            "fmp",
             "insider-trades",
             {"symbol": "ACME", "limit": "100"},  # the page size is in the reuse key
             {"symbol": "ACME", "page": "0", "limit": "100"},
-            "insider-trading-search.ACME.json",
+            "fmp/insider-trading-search.ACME.json",
             id="insider-trades",
+        ),
+        pytest.param(
+            "pe-history",
+            {},
+            "gurufocus",
+            "pettm",
+            {"symbol": "ACME"},
+            {},  # the token travels in the path, the symbol too
+            "gurufocus/pettm.ACME.json",
+            id="pe-history",
         ),
     ],
 )
@@ -137,6 +221,7 @@ def test_each_kind_stores_its_call(
     env: Env,
     kind: str,
     params: dict[str, str],
+    provider: str,
     endpoint: str,
     stored: dict[str, str],
     requested: dict[str, str],
@@ -144,8 +229,10 @@ def test_each_kind_stores_its_call(
 ) -> None:
     [fetched] = _passthrough(env).fetch(kind, "ACME", params).values()
     assert env.router.requested[endpoint] == requested
+    assert fetched.row.provider == provider
     assert _stored(env, fetched.row.id) == (endpoint, "ACME", stored, None)
-    assert fetched.payload == _fixture(fixture)
+    vendor, _, name = fixture.partition("/")
+    assert fetched.payload == _fixture(name, vendor)
 
 
 def test_the_stored_payload_and_the_answer_carry_no_key(env: Env) -> None:

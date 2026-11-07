@@ -36,6 +36,8 @@ _FMP_ENDPOINTS = {
     "revenue-product-segmentation": "segments-product",
     "revenue-geographic-segmentation": "segments-geographic",
     "insider-trading/search": "insider-trades",
+    "discounted-cash-flow": "dcf",
+    "levered-discounted-cash-flow": "dcf-levered",
 }
 # The routes that name their one company in a parameter other than ``symbol``.
 _SYMBOL_PARAMS = {"news/stock": "symbols"}

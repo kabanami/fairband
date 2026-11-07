@@ -29,7 +29,9 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
 - ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs`` and
   ``value_company`` with the latest stored deciles (a full refresh's own; assembly classifies the
   company's peers on them), ``insert_snapshot``; the symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
-  yet" (spec 6.6). In the snapshot's transaction, ``reviews.follow_snapshot`` follows it with a
+  yet" (spec 6.6). In the snapshot's transaction, ``multiples.log_snapshot`` logs its multiples
+  as of its price date when it carries a price (spec 2026-11-06 Tier 2, 13.7), as a refusal
+  snapshot of a symbol's failure does, and ``reviews.follow_snapshot`` follows it with a
   review on the same inputs when the company holds an applied override, after dropping a
   period-tied one its new inputs no longer bear out (spec 2026-11-06 Tier 2, 10.5); a review the
   engine cannot compute becomes a refusal review and the snapshot stands.
@@ -116,6 +118,7 @@ from fairband.refresh.run_price import PriceRefresh, rate_limited
 from fairband.refresh.universe import build_universe
 from fairband.store.companies import latest_companies
 from fairband.store.db import transaction
+from fairband.store.multiples import log_snapshot
 from fairband.store.policy import record_policy
 from fairband.store.refreshes import (
     Finished,
@@ -488,6 +491,7 @@ class Refresh:
                 result = value_company(inputs, deciles, self._policy, today)
                 with transaction(conn):
                     snapshot_id = insert_snapshot(conn, result, refresh_id, clock=self._clock)
+                    log_snapshot(conn, result, snapshot_id, refresh_id, self._clock())
                     follow_snapshot(
                         conn,
                         inputs,
@@ -520,6 +524,7 @@ class Refresh:
         )
         with transaction(conn):
             snapshot_id = insert_snapshot(conn, result, refresh_id, clock=self._clock)
+            log_snapshot(conn, result, snapshot_id, refresh_id, self._clock())
             review_refusal(conn, result, snapshot_id, refresh_id, self._clock)
             upsert_item(conn, refresh_id, symbol, "failed", reason, self._clock())
 

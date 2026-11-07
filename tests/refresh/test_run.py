@@ -32,6 +32,7 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
 from fairband.refresh import run as run_module
 from fairband.refresh.run import Progress, Refresh
+from fairband.store.multiples import MultiplesRow, multiples_log_for
 from fairband.store.refreshes import RefreshRunning, current_refresh, save_deciles
 from fairband.store.vendor import record_response
 
@@ -206,6 +207,28 @@ def test_failed_fetch_keeps_the_stored_price(env: Env) -> None:
     bolt = env.snapshot("BOLT")
     assert (bolt.refresh_id, bolt.refusal) == (refresh_id, BOLT_FAILED)
     assert (bolt.price, bolt.price_date) == (100.0, QUOTE_DATE)
+
+
+def test_a_refusal_with_a_price_logs_the_price_alone(env: Env) -> None:
+    """A refusal with a price logs the price of its day and no multiple; a failed fetch's refusal
+    that carries the stored price replaces the row of the same day."""
+    first = env.run(["BOLT"])  # no deciles yet: refused, at the quote's price
+    first_snapshot = env.snapshot("BOLT").id
+    with closing(env.connect()) as conn:
+        assert multiples_log_for(conn, "BOLT") == [
+            MultiplesRow(QUOTE_DATE, 100.0, None, None, None, first_snapshot)
+        ]
+    env.router.fail_symbols.add("BOLT")
+    env.clock.now += timedelta(hours=25)
+    second = env.run(["BOLT"])
+    bolt = env.snapshot("BOLT")
+    assert bolt.refusal == BOLT_FAILED and bolt.id > first_snapshot
+    with closing(env.connect()) as conn:
+        assert multiples_log_for(conn, "BOLT") == [
+            MultiplesRow(QUOTE_DATE, 100.0, None, None, None, bolt.id)
+        ]
+        [(refresh_id,)] = conn.execute("SELECT refresh_id FROM multiples_log").fetchall()
+    assert (first, refresh_id) == (second - 1, second)
 
 
 @pytest.mark.parametrize(

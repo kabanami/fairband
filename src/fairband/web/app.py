@@ -3,8 +3,9 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
 (``agents_api``), the override and review routes (``reviews_api``), the sensitivity reading's
 routes (``sensitivity_api``), the company reads, the Methodology section read and the report
-routes (``reports_api``), the vendor pass-through route (``vendor_api``), and the policy values
-and growth deciles the Methodology page cites (spec 2026-11-04 7.4).
+routes (``reports_api``), the multiples history read (``multiples_api``), the vendor pass-through
+route (``vendor_api``), and the policy values and growth deciles the Methodology page cites (spec
+2026-11-04 7.4).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -12,13 +13,14 @@ the page, its script, the design system copy and the vendored React, so the page
 no network. Nothing here reads a key. The refresh routes hand the work to the ``RefreshWorker``,
 whose thread calls the vendors; without one they answer 503. ``serve`` always passes one; without
 an FMP key its runs refuse every kind but a revalue, and a refusal is a 400. The pass-through
-route alone calls a vendor from a request: it calls FMP on FastAPI's sync-route thread through the
-``Passthrough`` that ``serve`` builds with the key, paced by the one limiter the worker's runs
-share, and answers the stored payload scrubbed, so no answer carries a key; without a pass-through
-(no FMP key) it answers 503. What is bounded: four vendor calls in flight; a request that finds
-them all taken waits at most ten seconds for a slot, holding its pool thread meanwhile, and past
-that answers 503. FastAPI's own documentation routes are off; they would load their scripts from
-a CDN.
+route and the multiples history read alone call a vendor from a request: they call FMP, or
+GuruFocus for the trailing P/E series, on FastAPI's sync-route thread through the ``Passthrough``
+that ``serve`` builds with the keys, FMP paced by the one limiter the worker's runs share, and
+answer the stored payload scrubbed, so no answer carries a key; without a pass-through (no FMP key)
+the route answers 503 and the read's trailing series is ``null``. What is bounded: four vendor
+calls in flight; a request that finds them all taken waits at most ten seconds for a slot, holding
+its pool thread meanwhile, and past that answers 503. FastAPI's own documentation routes are off;
+they would load their scripts from a CDN.
 
 The screen's rows are the latest universe's admitted companies, each with its latest snapshot,
 or a placeholder row "not yet valued" before its first; a company the latest universe does not
@@ -88,6 +90,7 @@ from fairband.store.settings import read_overlay
 from fairband.store.snapshots import latest_snapshot, latest_snapshots
 from fairband.store.watchlists import memberships
 from fairband.web.agents_api import add_agent_routes
+from fairband.web.multiples_api import add_multiples_routes
 from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.reports_api import add_report_routes
 from fairband.web.reviews_api import add_review_routes
@@ -315,6 +318,7 @@ def create_app(
     add_review_routes(app, conn_factory, policy, taxed, clock)
     add_sensitivity_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
+    add_multiples_routes(app, conn_factory, passthrough)
     add_vendor_routes(app, passthrough)
     return app
 

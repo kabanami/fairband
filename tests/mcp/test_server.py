@@ -47,6 +47,7 @@ SPEC_TOOLS = (
     "financial_tables",
     "estimates",
     "price_history",
+    "multiples_history",
     "peers",
     "watchlists",
     "inbox_list",
@@ -68,6 +69,8 @@ SPEC_TOOLS = (
     "news",
     "segments",
     "insider_trades",
+    "dcf",
+    "pe_history",
     "identify",
     "inbox_post",
     "inbox_claim",
@@ -96,6 +99,7 @@ READS: dict[str, tuple[dict[str, Any], str]] = {
     "financial_tables": ({"symbol": "AAPL"}, "/api/companies/AAPL/financial-tables"),
     "estimates": ({"symbol": "AAPL"}, "/api/companies/AAPL/estimates"),
     "price_history": ({"symbol": "AAPL", "years": 2}, "/api/companies/AAPL/price-history?years=2"),
+    "multiples_history": ({"symbol": "AAPL"}, "/api/companies/AAPL/multiples-history"),
     "peers": ({"symbol": "AAPL"}, "/api/companies/AAPL/peers"),
     "watchlists": ({}, "/api/watchlists"),
     "inbox_list": ({"state": "pending"}, "/api/inbox?state=pending"),
@@ -119,6 +123,8 @@ READS: dict[str, tuple[dict[str, Any], str]] = {
     "news": ({"symbol": "AAPL", "limit": 5}, "/api/vendor/news/AAPL?limit=5"),
     "segments": ({"symbol": "AAPL"}, "/api/vendor/segments/AAPL"),
     "insider_trades": ({"symbol": "AAPL"}, "/api/vendor/insider-trades/AAPL"),
+    "dcf": ({"symbol": "AAPL"}, "/api/vendor/dcf/AAPL"),
+    "pe_history": ({"symbol": "AAPL"}, "/api/vendor/pe-history/AAPL"),
 }
 # Each write tool with arguments of the right types.
 WRITES: dict[str, dict[str, Any]] = {
@@ -310,9 +316,9 @@ def test_every_read_tool_reads_its_route(api: FairbandClient, client: TestClient
         else:
             refusal = {"refused": expected.json()["detail"], "status": expected.status_code}
             assert answer == refusal, name
-    # the four pass-throughs reach the route, which has no FMP key here
-    vendor = answers[-4:]
-    assert vendor == [{"refused": "no FMP key", "status": 503}] * 4
+    # the six pass-throughs reach the route, which has no FMP key here
+    vendor = answers[-6:]
+    assert vendor == [{"refused": "no FMP key", "status": 503}] * 6
 
 
 def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
