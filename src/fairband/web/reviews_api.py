@@ -38,22 +38,32 @@ The reads: ``GET /api/companies/{symbol}/overrides`` newest first;
 ``GET /api/review-log`` newest first, the company's with ``symbol``. Keys are camelCase, as the
 agent routes send them.
 
-``POST /api/companies/{symbol}/secondary`` takes ``{parts: [{name, fcff, terminalGrowth, note?}],
-reason, evidence: [{kind, ref, note, figure?}], debt?, cash?}`` and answers 201 with the stored
-secondary valuation (``method.md`` 15). A blank reason or no evidence is a 400; so is evidence
-with no item for the path itself, every item naming a ``figure``, "the path needs its own evidence
-item"; and a debt or a cash passed without its own evidence item, one whose ``figure`` names it.
-Then, on the company's latest snapshot: ``require_current``'s 409s; a foreign filer, the snapshot
-refused as one or its universe row an ADR or in a currency other than USD (a row naming none
-leaves it to the snapshot), 400 with section 7's sentence; no positive diluted share count on the
-snapshot (its ``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share
-count". The debt and the cash are the agent's when passed, else an applied ``balance.*``
-override's (both sourced ``agent``), else the newest annual balance sheet's as assembly reads them
-(``statements``), else nil with the source ``none`` when no line is on file. The levels take the
-current review's moat, else the snapshot's, else None; the designation the snapshot's price. A
-rule ``secondary_value`` refuses is a 400 with its sentence. Anyone may make one, a tool's output
-rather than an override; the write is a ``secondary`` ledger row resting on the snapshot. ``GET``
-on the same path lists the company's, newest first.
+``POST /api/companies/{symbol}/secondary`` takes ``{reason, evidence: [{kind, ref, note,
+figure?}], drivers?: {years, revenueGrowth, operatingMargin, taxRate, salesToCapital,
+terminalGrowth}, parts?: [{name, fcff, terminalGrowth, note?}], debt?, cash?}`` and answers 201
+with the stored secondary valuation (``method.md`` 15). On the body, in this order, each a 400: a
+blank reason; no evidence; both forms, "a secondary valuation takes drivers or parts, not both",
+or neither, "a secondary valuation needs drivers or parts"; evidence with no item for the drivers
+or the path itself, every item naming a ``figure``, "the path needs its own evidence item"; a debt
+or a cash passed without its own evidence item, one whose ``figure`` names it. Then, on the
+company's latest snapshot: ``require_current``'s 409s; a foreign filer, the snapshot refused as one
+or its universe row an ADR or in a currency other than USD (a row naming none leaves it to the
+snapshot), 400 with section 7's sentence; no positive diluted share count on the snapshot (its
+``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share count"; on
+the drivers form, no positive trailing revenue, 400 "no trailing revenue on file". The trailing
+revenue is read at the call as ``fact:<symbol>/revenue/ttm`` resolves it, the statements' trailing
+figures as the engine reads them; the terminal return is ``terminal_roic`` on the moat the levels
+take and the aggregate ROIC of the snapshot's intermediates (``roic/aggregate``, which the mature
+routes write; none on the other routes, so r). The debt and the cash are the agent's when passed,
+else an applied ``balance.*`` override's (both sourced ``agent``), else the newest annual balance
+sheet's as assembly reads them (``statements``), else nil with the source ``none`` when no line
+is on file. The levels take the current review's moat, else the snapshot's, else None; the
+designation the snapshot's price. A rule ``secondary_value`` refuses is a 400 with its sentence.
+The answer's drivers, projection and parts carry camelCase keys, and its grid ``rowsAre``,
+``growths`` or ``shifts`` (``GRID_ROWS``). Anyone may make one, a tool's output rather than an
+override; the write is a ``secondary`` ledger row resting on the snapshot, its summary "<value> a
+share from drivers over three years: <reason>" or "... from 2 parts: ...". ``GET`` on the same
+path lists the company's, newest first.
 
 ``POST /api/companies/{symbol}/derivations`` takes ``{derivations: [{operation, a, b, years?}]}``
 and answers 201 with ``{derivations: [{id, value, unit}]}``, each stored with a ``derivation``
@@ -73,7 +83,7 @@ that names no number, a word or a figure the record does not hold included, is a
 import json
 import math
 import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
 from datetime import datetime
 from typing import Any, Literal, cast, get_args
@@ -93,8 +103,9 @@ from fairband.engine.overrides import (
     current_reading,
     route_of,
 )
+from fairband.engine.roic import terminal_roic
 from fairband.engine.route import FOREIGN_FILER, value_company
-from fairband.engine.secondary import Part, secondary_value
+from fairband.engine.secondary import Drivers, Part, SecondaryValuation, secondary_value
 from fairband.engine.types import Phase, ValuationResult, result_to_json
 from fairband.policy import Moat, Policy
 from fairband.policy.settings import exchange_symbol
@@ -103,7 +114,7 @@ from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.reviews import write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
-from fairband.reports.refs import Resolver
+from fairband.reports.refs import Resolver, fact_ref
 from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.ledger import Writer, record
@@ -119,6 +130,7 @@ from fairband.store.overrides import (
 from fairband.store.refreshes import latest_deciles
 from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews_for
 from fairband.store.secondary import (
+    GRID_ROWS,
     BalanceSource,
     Operation,
     SecondaryRow,
@@ -137,6 +149,30 @@ EvidenceKind = Literal["filing", "transcript", "url", "vendor", "base-rate", "fi
 _PHASES: tuple[str, ...] = get_args(Phase)
 _MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
+# The small counts a sentence writes in words (the register: "three years").
+_SMALL_COUNTS = (
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+)
 
 
 class _Body(BaseModel):
@@ -177,10 +213,20 @@ class SecondaryPart(_Body):
     note: str | None = None
 
 
+class SecondaryDrivers(_Body):
+    years: int
+    revenue_growth: list[FiniteFloat]
+    operating_margin: list[FiniteFloat]
+    tax_rate: FiniteFloat
+    sales_to_capital: FiniteFloat
+    terminal_growth: FiniteFloat
+
+
 class SecondaryPost(_Body):
-    parts: list[SecondaryPart]
     reason: str
     evidence: list[SecondaryEvidence]
+    drivers: SecondaryDrivers | None = None
+    parts: list[SecondaryPart] | None = None
     debt: FiniteFloat | None = None
     cash: FiniteFloat | None = None
 
@@ -225,9 +271,14 @@ def bridge_json(review: ReviewRow) -> list[dict[str, Any]]:
 
 
 def secondary_json(secondary: SecondaryRow) -> dict[str, Any]:
-    """A secondary valuation as the API sends it, its parts' keys camelCase."""
+    """A secondary valuation as the API sends it: the keys of its parts, its drivers and its
+    projection camelCase, and its grid with ``rowsAre``, what its rows hold (``GRID_ROWS``)."""
     plain = record_json(secondary)
-    plain["parts"] = [{to_camel(key): value for key, value in p.items()} for p in secondary.parts]
+    plain["parts"] = _camel_keys(secondary.parts)
+    plain["drivers"] = _camel_keys(secondary.drivers)
+    plain["projection"] = _camel_keys(secondary.projection)
+    grid = secondary.grid
+    plain["grid"] = None if grid is None else grid | {"rowsAre": GRID_ROWS[secondary.form]}
     return plain
 
 
@@ -383,17 +434,11 @@ def add_review_routes(
 
     @app.post("/api/companies/{symbol}/secondary", status_code=201)
     def post_secondary(symbol: str, body: SecondaryPost, writer: WriterOf) -> dict[str, Any]:
-        """Value the company from the agent's path on its latest snapshot and store it."""
-        if not body.reason.strip():
-            raise HTTPException(400, "a secondary valuation needs a reason")
-        if not body.evidence:
-            raise HTTPException(400, "a secondary valuation needs evidence")
-        if all(e.figure is not None for e in body.evidence):
-            raise HTTPException(400, "the path needs its own evidence item")
-        for name, passed in (("debt", body.debt), ("cash", body.cash)):
-            if passed is not None and not any(e.figure == name for e in body.evidence):
-                raise HTTPException(400, f"an explicit {name} needs its own evidence item")
-        parts = [Part(p.name, tuple(p.fcff), p.terminal_growth, p.note) for p in body.parts]
+        """Value the company from the agent's drivers or path on its latest snapshot and store
+        it."""
+        _check_secondary(body)
+        drivers = None if body.drivers is None else _drivers(body.drivers)
+        parts = None if body.parts is None else [_part(p) for p in body.parts]
         at = clock()
         with closing(conn_factory()) as conn, transaction(conn, immediate=True):
             symbol = exchange_symbol(symbol)
@@ -405,11 +450,20 @@ def add_review_routes(
             shares = _shares(snapshot.result)
             if shares is None:
                 raise HTTPException(400, "no diluted share count")
-            (debt, debt_source), (cash, cash_source) = _balance(conn, symbol, body.debt, body.cash)
             moat = _moat(conn, snapshot)
+            revenue_0 = roic_t = None
+            if drivers is not None:
+                revenue_0 = _trailing_revenue(Resolver(conn, symbol, current, tax))
+                if revenue_0 is None:
+                    raise HTTPException(400, "no trailing revenue on file")
+                roic_t = terminal_roic(_aggregate_roic(snapshot.result), moat, current)
+            (debt, debt_source), (cash, cash_source) = _balance(conn, symbol, body.debt, body.cash)
             try:
                 valuation = secondary_value(
                     parts=parts,
+                    drivers=drivers,
+                    revenue_0=revenue_0,
+                    roic_t=roic_t,
                     debt=debt,
                     cash=cash,
                     shares=shares,
@@ -423,7 +477,7 @@ def add_review_routes(
                 conn,
                 symbol,
                 snapshot.id,
-                parts,
+                parts or (),
                 valuation,
                 body.reason,
                 [e.model_dump() for e in body.evidence],
@@ -434,10 +488,10 @@ def add_review_routes(
                 snapshot.deciles_refresh_id,
                 writer,
                 at,
+                revenue_0=revenue_0,
+                roic_t=roic_t,
             )
-            count = f"{len(parts)} part{'' if len(parts) == 1 else 's'}"
-            value = _dollars(valuation.value_per_share)
-            summary = f"{value} a share from {count}: {gist(body.reason)}"
+            summary = f"{_valued_from(valuation)}: {gist(body.reason)}"
             record(
                 conn,
                 writer,
@@ -500,6 +554,82 @@ def add_review_routes(
         if found is None:
             raise HTTPException(404, f"no derivation {derivation_id}")
         return record_json(found)
+
+
+def _check_secondary(body: SecondaryPost) -> None:
+    """A secondary valuation's refusals on its body alone, in order (module docstring)."""
+    if not body.reason.strip():
+        raise HTTPException(400, "a secondary valuation needs a reason")
+    if not body.evidence:
+        raise HTTPException(400, "a secondary valuation needs evidence")
+    if body.drivers is not None and body.parts is not None:
+        raise HTTPException(400, "a secondary valuation takes drivers or parts, not both")
+    if body.drivers is None and body.parts is None:
+        raise HTTPException(400, "a secondary valuation needs drivers or parts")
+    if all(e.figure is not None for e in body.evidence):
+        raise HTTPException(400, "the path needs its own evidence item")
+    for name, passed in (("debt", body.debt), ("cash", body.cash)):
+        if passed is not None and not any(e.figure == name for e in body.evidence):
+            raise HTTPException(400, f"an explicit {name} needs its own evidence item")
+
+
+def _drivers(d: SecondaryDrivers) -> Drivers:
+    return Drivers(
+        d.years,
+        tuple(d.revenue_growth),
+        tuple(d.operating_margin),
+        d.tax_rate,
+        d.sales_to_capital,
+        d.terminal_growth,
+    )
+
+
+def _part(p: SecondaryPart) -> Part:
+    return Part(p.name, tuple(p.fcff), p.terminal_growth, p.note)
+
+
+def _trailing_revenue(resolver: Resolver) -> float | None:
+    """The trailing revenue as ``fact:<symbol>/revenue/ttm`` reads it, the statements' trailing
+    figures as the engine reads them (``financials``' ``ttm``); ``None`` without a positive one."""
+    found = resolver.resolve(fact_ref(resolver.symbol, "revenue", "ttm"))
+    figure = None if found is None else _number(found.value, None)
+    return figure[0] if figure is not None and figure[0] > 0 else None
+
+
+def _aggregate_roic(result: ValuationResult) -> float | None:
+    """The ten-year aggregate ROIC of the snapshot's intermediates (``roic/aggregate``), which the
+    mature routes write; ``None`` on the other routes."""
+    roic = result.intermediates.get("roic")
+    figure = _number(roic.get("aggregate") if isinstance(roic, Mapping) else None, None)
+    return None if figure is None else figure[0]
+
+
+def _valued_from(valuation: SecondaryValuation) -> str:
+    """A secondary valuation's ledger summary before its reason: its value a share and what it
+    was valued from, the drivers' years a small count in words."""
+    value = _dollars(valuation.value_per_share)
+    if valuation.drivers is not None:
+        return f"{value} a share from drivers over {_counted(valuation.drivers.years, 'year')}"
+    return f"{value} a share from {len(valuation.parts)} part{_plural(len(valuation.parts))}"
+
+
+def _counted(n: int, noun: str) -> str:
+    """``n`` ``noun``s, the count in words up to twenty: "three years"."""
+    word = _SMALL_COUNTS[n] if 0 <= n < len(_SMALL_COUNTS) else str(n)
+    return f"{word} {noun}{_plural(n)}"
+
+
+def _plural(n: int) -> str:
+    return "" if n == 1 else "s"
+
+
+def _camel_keys(value: Any) -> Any:
+    """``value`` with the keys of every record in it camelCase; a tuple as a list."""
+    if isinstance(value, Mapping):
+        return {to_camel(key): _camel_keys(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_camel_keys(item) for item in value]
+    return value
 
 
 def _agents_only(writer: Writer) -> None:

@@ -15,7 +15,7 @@ from support.web import TODAY
 from fairband.engine.overrides import Override
 from fairband.engine.review import review_company
 from fairband.engine.route import value_company
-from fairband.engine.secondary import Part, secondary_value
+from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.policy import Policy
 from fairband.reports.check import CHECKS, HEADINGS, headings
 from fairband.reports.render import GLOSSARY, appendix_a, appendix_b, markdown
@@ -115,6 +115,103 @@ def _secondary(conn: sqlite3.Connection, policy: Policy, sid: int) -> int:
         AGENT,
         NOW,
     )
+
+
+def _drivers_secondary(conn: sqlite3.Connection, policy: Policy, sid: int) -> int:
+    """Spec 20.4's drivers: a trailing revenue of 1,000, the terminal return 12%, debt 200, cash
+    100, 50 shares."""
+    drivers = Drivers(3, (0.10, 0.08, 0.05), (0.20, 0.20, 0.20), 0.25, 2.0, 0.02)
+    valuation = secondary_value(
+        drivers=drivers,
+        revenue_0=1000.0,
+        roic_t=0.12,
+        debt=200.0,
+        cash=100.0,
+        shares=50.0,
+        price=150.0,
+        moat="Wide",
+        policy=policy,
+    )
+    return insert_secondary(
+        conn,
+        "AAPL",
+        sid,
+        (),
+        valuation,
+        "the cycle turns",
+        EVIDENCE,
+        "agent",
+        "agent",
+        policy.version,
+        policy.settings_hash,
+        None,
+        AGENT,
+        NOW,
+        revenue_0=1000.0,
+        roic_t=0.12,
+    )
+
+
+def test_appendix_a_carries_the_drivers_and_the_grid(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    sid = snapshots["AAPL"]
+    report = _stored(conn, sid, secondary_id=_drivers_secondary(conn, policy, sid))
+    a = appendix_a(conn, report, policy)
+    secondary = a["secondary"]
+    assert (secondary["form"], secondary["parts"]) == ("drivers", [])
+    assert round(secondary["valuePerShare"], 4) == 39.8889
+    assert secondary["drivers"] == {
+        "years": 3,
+        "revenueGrowth": [0.10, 0.08, 0.05],
+        "operatingMargin": [0.20, 0.20, 0.20],
+        "taxRate": 0.25,
+        "salesToCapital": 2.0,
+        "terminalGrowth": 0.02,
+    }
+    projection = secondary["projection"]
+    assert (projection["trailingRevenue"], projection["terminalReturn"]) == (1000.0, 0.12)
+    assert [y["t"] for y in projection["years"]] == [1, 2, 3]
+    assert round(projection["years"][2]["pv"], 6) == 121.549402
+    assert round(projection["terminalPv"], 6) == 1754.439476
+    grid = secondary["grid"]
+    assert grid["rowsAre"] == "growths" and len(grid["cells"]) == 3
+    assert grid["cells"][1][1] == secondary["valuePerShare"]
+    text = markdown(report, a, [])
+    block = text[text.index("### Secondary valuation") : text.index("### Checks that ran")]
+    assert f"Secondary valuation {secondary['id']}, from drivers: firm value " in block
+    assert "| tax rate | 0.25 |" in block and "| revenue growth | 0.1, 0.08, 0.05 |" in block
+    assert "| trailing revenue | 1000.0 |" in block and "| terminal return | 0.12 |" in block
+    assert "| t | Revenue | EBIT | NOPAT | Reinvestment | FCFF | PV |" in block
+    assert f"| 3 | {projection['years'][2]['revenue']!r} | " in block
+    terminal_row = f"| terminal | — | — | — | — | {projection['terminalFcff']!r} | "
+    assert terminal_row + f"{projection['terminalPv']!r} |" in block
+    assert f"Terminal value {projection['terminal']!r} at year 3." in block
+    assert "| Terminal growth | r 8.0% | r 9.0% | r 10.0% |" in block
+    assert f"| 1.0% | {grid['cells'][0][0]!r} | " in block
+    assert "| 3.0% | " in block
+
+
+def test_appendix_a_labels_a_parts_grid_by_its_shift(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """On the parts form a grid's row moves every part's terminal growth: its header is the
+    shift, not a growth no part has."""
+    sid = snapshots["AAPL"]
+    report = _stored(conn, sid, secondary_id=_secondary(conn, policy, sid))
+    a = appendix_a(conn, report, policy)
+    secondary = a["secondary"]
+    assert (secondary["form"], secondary["drivers"], secondary["projection"]) == (
+        "parts",
+        None,
+        None,
+    )
+    assert secondary["grid"]["rowsAre"] == "shifts"
+    block = markdown(report, a, []).split("### Secondary valuation")[1]
+    assert f"Secondary valuation {secondary['id']}, from parts: firm value " in block
+    assert "| Every part's terminal growth | r 8.0% | r 9.0% | r 10.0% |" in block
+    for shift in ("−1 pp", "0 pp", "+1 pp"):
+        assert f"| {shift} | " in block, shift
 
 
 def test_appendix_a_is_generated_from_the_records(

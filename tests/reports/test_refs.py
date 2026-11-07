@@ -15,10 +15,11 @@ from support.web import TODAY
 from fairband.engine.overrides import Override
 from fairband.engine.review import review_company
 from fairband.engine.route import reprice, value_company
-from fairband.engine.secondary import Part, secondary_value
+from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.policy import Policy
 from fairband.policy.tax import load_tax_table
 from fairband.refresh.inputs_statements import statements_for
+from fairband.reports.check import WRONG_UNIT, check_sections
 from fairband.reports.refs import (
     Resolved,
     Resolver,
@@ -191,6 +192,105 @@ def test_secondary_refs(
         ), ref
     for ref in (f"{s}/parts/2/pv/1", f"{s}/parts/1/pv/6", f"{s}/parts/1/pv/0", f"{s}/nope"):
         assert _resolve(conn, ref, policy) is None, ref
+
+
+def _drivers_secondary_id(conn: sqlite3.Connection, policy: Policy, snapshot_id: int) -> int:
+    """Spec 20.4's drivers: a trailing revenue of 1,000, the terminal return 12%, debt 200, cash
+    100, 50 shares."""
+    drivers = Drivers(3, (0.10, 0.08, 0.05), (0.20, 0.20, 0.20), 0.25, 2.0, 0.02)
+    valuation = secondary_value(
+        drivers=drivers,
+        revenue_0=1000.0,
+        roic_t=0.12,
+        debt=200.0,
+        cash=100.0,
+        shares=50.0,
+        price=150.0,
+        moat="Wide",
+        policy=policy,
+    )
+    return insert_secondary(
+        conn,
+        "AAPL",
+        snapshot_id,
+        (),
+        valuation,
+        "the cycle turns",
+        [{"kind": "filing", "ref": "10-K", "note": None}],
+        "agent",
+        "agent",
+        policy.version,
+        policy.settings_hash,
+        None,
+        AGENT,
+        NOW,
+        revenue_0=1000.0,
+        roic_t=0.12,
+    )
+
+
+def test_the_secondary_projection_and_grid_refs_resolve(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    sid = snapshots["AAPL"]
+    s = f"secondary:{_drivers_secondary_id(conn, policy, sid)}"
+    expected = {
+        f"{s}/value": (39.888938, "per-share"),
+        f"{s}/years/1/revenue": (1100.0, "currency"),
+        f"{s}/years/2/ebit": (237.6, "currency"),
+        f"{s}/years/3/nopat": (187.11, "currency"),
+        f"{s}/years/1/reinvestment": (50.0, "currency"),
+        f"{s}/years/2/fcff": (134.2, "currency"),
+        f"{s}/years/3/pv": (121.549402, "currency"),
+        f"{s}/drivers/years": (3.0, "count"),
+        f"{s}/drivers/tax_rate": (0.25, "percent"),
+        f"{s}/drivers/terminal_growth": (0.02, "percent"),
+        f"{s}/drivers/sales_to_capital": (2.0, "multiple"),
+        f"{s}/drivers/revenue_growth/2": (0.08, "percent"),
+        f"{s}/drivers/operating_margin/3": (0.20, "percent"),
+        f"{s}/grid/2/2": (39.888938, "per-share"),  # the centre, the value
+        f"{s}/grid/1/1": (44.220636, "per-share"),  # g 1%, r 8%
+        f"{s}/terminal_fcff": (159.0435, "currency"),
+        f"{s}/terminal": (2272.05, "currency"),
+        f"{s}/terminal_pv": (1754.439476, "currency"),
+    }
+    for ref, (value, unit) in expected.items():
+        found = _resolve(conn, ref, policy)
+        assert found is not None, ref
+        assert (found.value, found.unit, found.snapshot_id) == (
+            pytest.approx(value, abs=1e-4),
+            unit,
+            sid,
+        ), ref
+    unresolved = (
+        "years/9/fcff",  # a three-year record
+        "years/0/fcff",
+        "years/1/nope",
+        "years/1",
+        "drivers/revenue_growth",  # a list, not a figure
+        "drivers/revenue_growth/4",
+        "drivers/tax_rate/1",
+        "drivers/nope",
+        "grid/4/1",
+        "grid/1/0",
+        "grid/1",
+        "parts/1/pv/1",
+    )
+    for path in unresolved:
+        assert _resolve(conn, f"{s}/{path}", policy) is None, path
+    on_parts = f"secondary:{_secondary_id(conn, policy, sid)}"
+    for path in ("years/1/fcff", "drivers/years", "drivers/tax_rate", "terminal_fcff", "terminal"):
+        assert _resolve(conn, f"{on_parts}/{path}", policy) is None, path
+    centre = _resolve(conn, f"{on_parts}/grid/2/2", policy)  # a parts record carries a grid
+    assert centre is not None and centre.value == pytest.approx(16.8242, abs=1e-4)
+    cites = [
+        {"cite": "$0.25", "ref": f"{s}/drivers/tax_rate"},
+        {"cite": "25.0%", "ref": f"{s}/drivers/tax_rate"},
+    ]
+    [finding] = check_sections(
+        conn, "AAPL", sid, [{"heading": "Valuation", "parts": cites}], policy
+    )
+    assert (finding.where, finding.what) == ("section 1, part 1: $0.25", WRONG_UNIT)
 
 
 def test_fact_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:

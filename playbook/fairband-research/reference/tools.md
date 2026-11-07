@@ -108,8 +108,9 @@ pass-throughs are busy: four calls are in flight, try again" (503): wait a littl
   applied, it answers `{override, review, bridge}`; refused, the sentence and the `override`.
 - `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over
   the rest, or cleared when none is left.
-- `secondary_valuation(symbol, parts, reason, evidence, debt?, cash?)`: value the company from your
-  own free-cash-flow path; it answers the stored secondary valuation.
+- `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: value the
+  company a second way, from your drivers or from your own free-cash-flow path, one of the two; it
+  answers the stored secondary valuation.
 - `derive(symbol, derivations)`: compute figures from refs; it answers
   `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`.
 - `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`:
@@ -135,6 +136,9 @@ pass-throughs are busy: four calls are in flight, try again" (503): wait a littl
   `2026-09-30`. The `unit` is `currency`, `percent`, `multiple`, `count`, `per-share`, `score` or
   `years`. The `value` is in that unit: dollars in full, a percent as a fraction. The `period` is a
   fiscal year (`2025`), a quarter (`2026-Q2`) or `ttm`.
+- The drivers (`secondary_valuation`): `{years, revenue_growth, operating_margin, tax_rate,
+  sales_to_capital, terminal_growth}`, the two growth and margin lists with an entry for each year,
+  rates as fractions.
 - A part (`secondary_valuation`): `{name, fcff, terminal_growth, note}`, `fcff` a list of dollars
   for years one to N.
 - A derivation (`derive`): `{operation, a, b, years?}`. The operation is `ratio` (a ÷ b),

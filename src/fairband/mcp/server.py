@@ -401,21 +401,24 @@ def build_server(client: FairbandClient) -> MCPServer:
         return write(lambda: client.delete(f"/api/overrides/{override_id}", {"reason": reason}))
 
     @server.tool(
-        description="Value the company a second way from your cash-flow path, parts [{name, fcff,"
-        " terminal_growth, note}], with a reason and evidence."
+        description="Value the company a second way: the standard DCF from drivers {years,"
+        " revenue_growth[], operating_margin[], tax_rate, sales_to_capital, terminal_growth}, or a"
+        " sum of parts [{name, fcff, terminal_growth, note}]; with a reason and evidence."
     )
     def secondary_valuation(
         symbol: str,
-        parts: list[dict[str, Any]],
         reason: str,
         evidence: list[dict[str, Any]],
+        drivers: dict[str, Any] | None = None,
+        parts: list[dict[str, Any]] | None = None,
         debt: float | None = None,
         cash: float | None = None,
     ) -> dict[str, Any]:
         body = {
-            "parts": _camel(parts),
             "reason": reason,
             "evidence": _camel(evidence),
+            "drivers": _camel(drivers),
+            "parts": _camel(parts),
             "debt": debt,
             "cash": cash,
         }

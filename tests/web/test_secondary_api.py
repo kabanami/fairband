@@ -3,7 +3,8 @@ database of ``conftest.py``: AAPL (the Mature Growth golden: a Wide moat, 1 bn d
 price of $150), AAL and HGCO, each with one snapshot. Here AAPL also gets two hand-written annual
 balance sheets and income statements; FRGN (statements in euros), ADRX (an ADR in the universe)
 and NOSH (no diluted share count) get a snapshot each; and the override routes build each
-company's inputs as the conftest valued them, as ``test_reviews_api`` does."""
+company's inputs as the conftest valued them, as ``test_reviews_api`` does. The drivers form's
+tests add spec 20.4's company (``_drivers_company``)."""
 
 import sqlite3
 from contextlib import closing
@@ -27,6 +28,7 @@ from fairband.engine.classifier import Deciles
 from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
 from fairband.engine.route import CompanyInputs, value_company
+from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
@@ -72,11 +74,39 @@ SHEETS = {
 }
 REVENUE = {FY24: 20e9, FY25: 22e9}
 FOREIGN = "foreign filer: currency and share-unit handling not built yet"
+# Spec 20.4's drivers: three years growing 10%, 8% and 5% at a 20% margin, tax 25%,
+# sales-to-capital 2, a terminal growth of 2%.
+DRIVERS = {
+    "years": 3,
+    "revenueGrowth": [0.10, 0.08, 0.05],
+    "operatingMargin": [0.20, 0.20, 0.20],
+    "taxRate": 0.25,
+    "salesToCapital": 2.0,
+    "terminalGrowth": 0.02,
+}
+DEBT_ITEM = FILING | {"figure": "debt"}
+CASH_ITEM = {"kind": "url", "ref": "https://example.com/q3", "note": None, "figure": "cash"}
+# Spec 20.4's debt and cash, each passed with its evidence item.
+ON_DRIVERS = {
+    "drivers": DRIVERS,
+    "reason": "the cycle turns in fiscal 2027",
+    "evidence": [FILING, DEBT_ITEM, CASH_ITEM],
+    "debt": 200.0,
+    "cash": 100.0,
+}
+# Spec 20.4's projection, year by year: revenue, EBIT, NOPAT, reinvestment, FCFF and PV.
+PROJECTION = [
+    (1100.0, 220.0, 165.0, 50.0, 115.0, 105.504587),
+    (1188.0, 237.6, 178.2, 44.0, 134.2, 112.953455),
+    (1247.4, 249.48, 187.11, 29.7, 157.41, 121.549402),
+]
 
 
-def _fact(dataset: str, end: date, field: str, value: float, response_id: int) -> FactRow:
+def _fact(
+    dataset: str, end: date, field: str, value: float, response_id: int, symbol: str = "AAPL"
+) -> FactRow:
     return FactRow(
-        symbol="AAPL",
+        symbol=symbol,
         dataset=dataset,
         period_end=end,
         fiscal_year=end.year,
@@ -155,6 +185,36 @@ def stored(db_path: Path, policy: Policy, monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(reviews_api, "build_inputs", build)
 
 
+def _drivers_company(
+    db_path: Path, policy: Policy, symbol: str = "DRVR", revenue: float | None = 1000.0
+) -> None:
+    """Spec 20.4's company: the Mature Growth golden with 50 diluted shares, its snapshot's
+    aggregate ROIC set to 12%, so its Wide moat's terminal return is 12% (under the cap of r plus
+    four points), and one fiscal year on file whose revenue, ``revenue``, is its trailing revenue
+    (none on file with ``None``)."""
+    golden = replace(mature_growth_inputs(), symbol=symbol, shares_diluted=50.0)
+    result = value_company(golden, universe_deciles(), policy, TODAY)
+    roic = result.intermediates["roic"] | {"aggregate": 0.12}
+    pinned = replace(result, intermediates=result.intermediates | {"roic": roic})
+    with closing(connect(db_path)) as conn:
+        refresh = latest_refresh(conn)
+        assert refresh is not None
+        insert_snapshot(conn, pinned, refresh.id, clock=lambda: CREATED)
+        if revenue is not None:
+            response = record_response(
+                conn,
+                "fmp",
+                "income-statement",
+                {"symbol": symbol},
+                symbol,
+                200,
+                "[]",
+                None,
+                CREATED,
+            )
+            insert_facts(conn, [_fact("income-annual", FY25, "revenue", revenue, response, symbol)])
+
+
 def _secondary(
     client: TestClient, body: dict[str, Any], symbol: str = "AAPL", headers: Any = AGENT
 ) -> Any:
@@ -230,6 +290,140 @@ def test_a_secondary_valuation_reads_the_balance_sheet(
     assert body["secondaryMethod"] == "fairband-secondary/2"
     assert _stored(client) == [body]
     assert _stored(client, "HGCO") == []
+
+
+def test_the_drivers_form_over_the_api(client: TestClient, db_path: Path, policy: Policy) -> None:
+    """Spec 20.4 to 1e-4: r 9%, the terminal return 12%, debt 200, cash 100, 50 shares."""
+    _drivers_company(db_path, policy)
+    snapshot_id = client.get("/api/companies/DRVR").json()["snapshot"]["id"]
+    body = _secondary(client, ON_DRIVERS, symbol="DRVR")
+    assert body["valuePerShare"] == pytest.approx(39.888938, abs=1e-4)
+    assert body["firmValue"] == pytest.approx(2094.446920, abs=1e-4)
+    assert (body["form"], body["parts"], body["secondaryMethod"]) == (
+        "drivers",
+        [],
+        SECONDARY_METHOD,
+    )
+    assert (body["debt"], body["debtSource"], body["cash"], body["cashSource"]) == (
+        200.0,
+        "agent",
+        100.0,
+        "agent",
+    )
+    assert body["drivers"] == DRIVERS  # the agent's drivers, as sent
+    projection = body["projection"]
+    assert (projection["trailingRevenue"], projection["terminalReturn"]) == (1000.0, 0.12)
+    assert [y["t"] for y in projection["years"]] == [1, 2, 3]
+    lines = ("revenue", "ebit", "nopat", "reinvestment", "fcff", "pv")
+    for year, worked in zip(projection["years"], PROJECTION, strict=True):
+        assert [year[line] for line in lines] == pytest.approx(worked, abs=1e-4)
+    assert projection["terminalFcff"] == pytest.approx(159.043500, abs=1e-4)
+    assert projection["terminal"] == pytest.approx(2272.05, abs=1e-4)
+    assert projection["terminalPv"] == pytest.approx(1754.439476, abs=1e-4)
+    grid = body["grid"]
+    assert (grid["rowsAre"], grid["rows"], grid["cols"]) == (
+        "growths",
+        pytest.approx([0.01, 0.02, 0.03]),
+        pytest.approx([0.08, 0.09, 0.10]),
+    )
+    assert [len(row) for row in grid["cells"]] == [3, 3, 3]  # nine cells
+    assert grid["cells"][1][1] == body["valuePerShare"]  # the centre is the value
+    assert grid["cells"][0][0] == pytest.approx(44.220636, abs=1e-4)  # r 8%, g 1%
+    assert _stored(client, "DRVR") == [body]
+    [entry] = client.get("/api/companies/DRVR/ledger").json()["entries"]
+    assert (entry["kind"], entry["refId"], entry["snapshotId"]) == (
+        "secondary",
+        body["id"],
+        snapshot_id,
+    )
+    reason = ON_DRIVERS["reason"]
+    assert entry["summary"] == f"$39.89 a share from drivers over three years: {reason}"
+
+
+def test_the_terminal_return_follows_the_reviewed_moat(client: TestClient, policy: Policy) -> None:
+    """AAPL's aggregate ROIC, near 22%, takes the Wide moat's cap; under a Narrow moat as reviewed
+    the terminal return is r. Its trailing revenue is fiscal 2025's: no quarters are on file."""
+    wide = _secondary(client, ON_DRIVERS)
+    assert wide["projection"]["terminalReturn"] == policy.wide_terminal_roic_cap
+    assert wide["projection"]["trailingRevenue"] == 22e9
+    narrow = {
+        "tag": "moat.class",
+        "new": "Narrow",
+        "reason": "the patents lapse",
+        "evidence": [FILING],
+        "lifetime": "lasting",
+    }
+    r = client.post("/api/companies/AAPL/overrides", json=narrow, headers=AGENT)
+    assert r.status_code == 201, r.text
+    body = _secondary(client, ON_DRIVERS)
+    assert body["projection"]["terminalReturn"] == policy.required_return
+    assert body["buyLevel"] == levels_for(body["valuePerShare"], "Narrow", policy).buy
+
+
+def test_drivers_or_parts_not_both(client: TestClient) -> None:
+    both = ON_DRIVERS | {"parts": ONE_PART["parts"]}
+    assert _refused(client, both) == (
+        400,
+        {"detail": "a secondary valuation takes drivers or parts, not both"},
+    )
+    assert _stored(client) == []
+
+
+def test_drivers_or_parts_needed(client: TestClient) -> None:
+    neither = {key: value for key, value in ONE_PART.items() if key != "parts"}
+    for body in (neither, neither | {"parts": None, "drivers": None}):
+        assert _refused(client, body) == (
+            400,
+            {"detail": "a secondary valuation needs drivers or parts"},
+        )
+    assert _stored(client) == []
+
+
+@pytest.mark.parametrize(
+    "change,sentence",
+    [
+        ({"revenueGrowth": [0.10, 3.5, 0.05]}, "revenue_growth is −80% to 300%"),
+        ({"operatingMargin": [0.20, 0.20, -0.6]}, "operating_margin is −50% to 60%"),
+        ({"taxRate": 0.55}, "tax_rate is 0% to 50%"),
+        ({"salesToCapital": 12.0}, "sales_to_capital is 0.1 to 10"),
+    ],
+)
+def test_a_driver_range_refuses_by_name(
+    client: TestClient, db_path: Path, policy: Policy, change: dict[str, Any], sentence: str
+) -> None:
+    _drivers_company(db_path, policy)
+    body = ON_DRIVERS | {"drivers": DRIVERS | change}
+    assert _refused(client, body, "DRVR") == (400, {"detail": sentence})
+    assert _stored(client, "DRVR") == []
+
+
+@pytest.mark.parametrize("revenue", [None, 0.0, -1000.0])
+def test_no_trailing_revenue_is_refused(
+    client: TestClient, db_path: Path, policy: Policy, revenue: float | None
+) -> None:
+    _drivers_company(db_path, policy, revenue=revenue)
+    assert _refused(client, ON_DRIVERS, "DRVR") == (
+        400,
+        {"detail": "no trailing revenue on file"},
+    )
+    assert _stored(client, "DRVR") == []
+
+
+def test_the_parts_form_still_answers(client: TestClient) -> None:
+    """Spec 20.1's path, valued as the parts form always valued it; its grid's rows are the shift
+    in every part's terminal growth."""
+    body = _secondary(client, ONE_PART)
+    assert body["form"] == "parts"
+    assert body["valuePerShare"] == pytest.approx((FIRM - 2e9 + 1e9) / 1e9, abs=1e-4)
+    assert (body["drivers"], body["projection"]) == (None, None)
+    grid = body["grid"]
+    assert (grid["rowsAre"], grid["rows"], grid["cols"]) == (
+        "shifts",
+        pytest.approx([-0.01, 0.0, 0.01]),
+        pytest.approx([0.08, 0.09, 0.10]),
+    )
+    assert grid["cells"][1][1] == body["valuePerShare"]
+    assert _stored(client) == [body]
 
 
 def test_explicit_debt_and_cash_need_evidence(client: TestClient) -> None:

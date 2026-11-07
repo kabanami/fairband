@@ -6,11 +6,13 @@ writes neither. Appendix A (``appendix_a``), the audit: the snapshot the report 
 input with its tag (DATA, RULE or JUDGMENT), its value at full precision and its provenance, the
 review's when the report rests on one (its JUDGMENT entries beside the snapshot's own), else the
 snapshot's; the overrides inside the review with their reasons and evidence; the bridge; the
-secondary valuation's parts, year by year; the checks that ran (``check.CHECKS``, each with its
-rule); the versions (method, policy, settings hash, review and secondary methods); and the
-classifier's evidence. Appendix B (``appendix_b``), the glossary: the terms of ``GLOSSARY`` that
-the sections' text uses, a term matched whole and in any case, a plural counted, a term of two
-names (``Growth word, margin direction``) by either.
+secondary valuation's form, its drivers with the trailing revenue and the terminal return and its
+projection year by year, or its parts year by year, and its grid, the rows the terminal growths or,
+on the parts form, the shift in every part's (``GRID_ROWS``); the checks that ran
+(``check.CHECKS``, each with its rule); the versions (method, policy, settings hash, review and
+secondary methods); and the classifier's evidence. Appendix B (``appendix_b``), the glossary: the
+terms of ``GLOSSARY`` that the sections' text uses, a term matched whole and in any case, a plural
+counted, a term of two names (``Growth word, margin direction``) by either.
 
 ``GLOSSARY`` is ``docs/method.md`` section 13's table, term for term; its Note is the flag of
 section 8 and also, in the brand book's word, the note an owner or an agent writes.
@@ -44,7 +46,7 @@ from fairband.reports.check import (
 from fairband.store.overrides import override_row
 from fairband.store.reports import ReportRow
 from fairband.store.reviews import ReviewRow, review_row
-from fairband.store.secondary import SecondaryRow, secondary_row
+from fairband.store.secondary import GRID_ROWS, SecondaryRow, secondary_row
 from fairband.store.snapshots import snapshot_row
 
 GLOSSARY: dict[str, str] = {
@@ -336,8 +338,10 @@ def _bridge(review: ReviewRow) -> dict[str, Any]:
 
 
 def _secondary(secondary: SecondaryRow) -> dict[str, Any]:
+    drivers, projection, grid = secondary.drivers, secondary.projection, secondary.grid
     return {
         "id": secondary.id,
+        "form": secondary.form,
         "valuePerShare": secondary.value_per_share,
         "firmValue": secondary.firm_value,
         "debt": secondary.debt,
@@ -363,7 +367,15 @@ def _secondary(secondary: SecondaryRow) -> dict[str, Any]:
             }
             for p in secondary.parts
         ],
+        "drivers": None if drivers is None else _camel(drivers),
+        "projection": None if projection is None else _camel(projection),
+        "grid": None if grid is None else grid | {"rowsAre": GRID_ROWS[secondary.form]},
     }
+
+
+def _camel(record: Mapping[str, Any]) -> dict[str, Any]:
+    """The drivers or the projection with its keys camelCase (a year's keys are single words)."""
+    return {to_camel(key): value for key, value in record.items()}
 
 
 def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
@@ -417,32 +429,7 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
         out += _table(("Input", "Override", "Old", "New", "Delta", "Refusal"), rows)
     out += ["", "### Secondary valuation", ""]
     secondary = a["secondary"]
-    if secondary is None:
-        out.append("None.")
-    else:
-        figures = (
-            f"firm value {_cell(secondary['firmValue'])}, debt {_cell(secondary['debt'])}"
-            f" ({secondary['debtSource']}), cash {_cell(secondary['cash'])}"
-            f" ({secondary['cashSource']}), equity {_cell(secondary['equity'])},"
-            f" {_cell(secondary['shares'])} shares, value a share"
-            f" {_cell(secondary['valuePerShare'])}"
-        )
-        out += [f"Secondary valuation {secondary['id']}: {figures}. {secondary['reason']}", ""]
-        years = [
-            (p["name"], y["year"], y["fcff"], y["pv"])
-            for p in secondary["parts"]
-            for y in p["years"]
-        ]
-        terminals = [
-            (
-                p["name"],
-                f"terminal at g {_cell(p['terminalGrowth'])}",
-                p["terminal"],
-                p["terminalPv"],
-            )
-            for p in secondary["parts"]
-        ]
-        out += _table(("Part", "Year", "FCFF", "PV"), years + terminals)
+    out += ["None."] if secondary is None else _secondary_tables(secondary)
     out += ["", "### Checks that ran", ""]
     out += _table(("Check", "Rule"), [(c["check"], c["rule"]) for c in a["checks"]])
     out += ["", "### Versions", ""]
@@ -450,6 +437,94 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
     out += ["", "### Classifier evidence", ""]
     out += _table(("Field", "Value"), list(a["classifier"].items()))
     return out
+
+
+def _secondary_tables(secondary: Mapping[str, Any]) -> list[str]:
+    """The secondary valuation's figures; its drivers and its projection, or its parts; its
+    grid."""
+    figures = (
+        f"firm value {_cell(secondary['firmValue'])}, debt {_cell(secondary['debt'])}"
+        f" ({secondary['debtSource']}), cash {_cell(secondary['cash'])}"
+        f" ({secondary['cashSource']}), equity {_cell(secondary['equity'])},"
+        f" {_cell(secondary['shares'])} shares, value a share"
+        f" {_cell(secondary['valuePerShare'])}"
+    )
+    lead = f"Secondary valuation {secondary['id']}, from {secondary['form']}"
+    out = [f"{lead}: {figures}. {secondary['reason']}", ""]
+    if secondary["form"] == "drivers":
+        out += _projection_tables(secondary["drivers"], secondary["projection"])
+    else:
+        out += _parts_table(secondary["parts"])
+    grid = secondary["grid"]
+    return [*out, "", *(["No grid."] if grid is None else _grid_table(grid))]
+
+
+def _projection_tables(drivers: Mapping[str, Any], projection: Mapping[str, Any]) -> list[str]:
+    """The drivers with the trailing revenue and the terminal return; the projection, year by
+    year and the terminal."""
+    out = _table(
+        ("Driver", "Value"),
+        [
+            ("years", drivers["years"]),
+            ("revenue growth", drivers["revenueGrowth"]),
+            ("operating margin", drivers["operatingMargin"]),
+            ("tax rate", drivers["taxRate"]),
+            ("sales-to-capital", drivers["salesToCapital"]),
+            ("terminal growth", drivers["terminalGrowth"]),
+            ("trailing revenue", projection["trailingRevenue"]),
+            ("terminal return", projection["terminalReturn"]),
+        ],
+    )
+    years = [
+        (y["t"], y["revenue"], y["ebit"], y["nopat"], y["reinvestment"], y["fcff"], y["pv"])
+        for y in projection["years"]
+    ]
+    terminal = (
+        "terminal",
+        None,
+        None,
+        None,
+        None,
+        projection["terminalFcff"],
+        projection["terminalPv"],
+    )
+    header = ("t", "Revenue", "EBIT", "NOPAT", "Reinvestment", "FCFF", "PV")
+    out += ["", *_table(header, [*years, terminal])]
+    value = _cell(projection["terminal"])
+    return [*out, "", f"Terminal value {value} at year {drivers['years']}."]
+
+
+def _parts_table(parts: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Each part year by year, then each part's terminal."""
+    years = [(p["name"], y["year"], y["fcff"], y["pv"]) for p in parts for y in p["years"]]
+    terminals = [
+        (p["name"], f"terminal at g {_cell(p['terminalGrowth'])}", p["terminal"], p["terminalPv"])
+        for p in parts
+    ]
+    return _table(("Part", "Year", "FCFF", "PV"), years + terminals)
+
+
+def _grid_table(grid: Mapping[str, Any]) -> list[str]:
+    """The grid with its headers: a rate a column, a terminal growth a row, or on the parts form
+    the shift in every part's terminal growth."""
+    shifts = grid["rowsAre"] == "shifts"
+    corner = "Every part's terminal growth" if shifts else "Terminal growth"
+    header = (corner, *(f"r {_percent(rate)}" for rate in grid["cols"]))
+    rows = [
+        (_shift(g) if shifts else _percent(g), *cells)
+        for g, cells in zip(grid["rows"], grid["cells"], strict=True)
+    ]
+    return _table(header, rows)
+
+
+def _percent(x: float) -> str:
+    return f"{'−' if x < 0 else ''}{abs(x):.1%}"
+
+
+def _shift(x: float) -> str:
+    """A shift in the terminal growth in points: "−1 pp", "0 pp", "+1 pp"."""
+    points = round(x * 100)
+    return f"{'−' if points < 0 else '+' if points > 0 else ''}{abs(points)} pp"
 
 
 def _table(header: Sequence[str], rows: Sequence[Sequence[Any]]) -> list[str]:

@@ -7,7 +7,11 @@ sentence."""
 
 import socket
 import threading
+from contextlib import closing
+from datetime import date
+from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import Any
 
 import anyio
@@ -17,11 +21,14 @@ from fastapi.testclient import TestClient
 from mcp import Client
 from mcp.server.mcpserver import MCPServer
 from mcp.types import Implementation
-from support.web import HEADER, HOST
+from support.web import CREATED, HEADER, HOST
 
 from fairband.mcp.client import NO_ANSWER, NOT_ASCII, NOT_RUNNING, TIMEOUT_S, FairbandClient
 from fairband.mcp.server import BAD_SYMBOL, TOOL_NAMES, build_server, loopback
 from fairband.reports.check import headings
+from fairband.store.db import connect
+from fairband.store.facts import FactRow, insert_facts
+from fairband.store.vendor import record_response
 from fairband.web.identity import IDENTIFY_FIRST
 
 PROBE = Implementation(name="probe", version="0")
@@ -308,6 +315,71 @@ def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
     # the part's key as spec 11 names it, sent as the API reads it
     assert written["secondary_valuation"]["parts"][0]["terminalGrowth"] == 0.02
     assert written["derive"] == {"derivations": [{"id": 1, "value": 3.0, "unit": "multiple"}]}
+
+
+def _store_revenue(db_path: Path, revenue: float) -> None:
+    """AAPL's fiscal 2025 revenue, its trailing revenue with no quarters on file."""
+    with closing(connect(db_path)) as conn:
+        response = record_response(
+            conn, "fmp", "income-statement", {"symbol": "AAPL"}, "AAPL", 200, "[]", None, CREATED
+        )
+        fact = FactRow(
+            symbol="AAPL",
+            dataset="income-annual",
+            period_end=date(2025, 9, 27),
+            fiscal_year=2025,
+            fiscal_period="FY",
+            field="revenue",
+            value=Decimal(repr(revenue)),
+            unit="USD",
+            currency="USD",
+            kind="observed",
+            estimate_method=None,
+            missing_reason=None,
+            as_of=date(2025, 9, 27),
+            observed_at=CREATED,
+            entered_at=CREATED,
+            response_id=response,
+        )
+        insert_facts(conn, [fact])
+
+
+def test_secondary_valuation_takes_drivers_or_parts(api: FairbandClient, db_path: Path) -> None:
+    """The drivers' keys as spec 11 names them, sent as the API reads them; one form only."""
+    _store_revenue(db_path, 22e9)
+    drivers = {
+        "years": 3,
+        "revenue_growth": [0.10, 0.08, 0.05],
+        "operating_margin": [0.20, 0.20, 0.20],
+        "tax_rate": 0.25,
+        "sales_to_capital": 2.0,
+        "terminal_growth": 0.02,
+    }
+    common = {"symbol": "AAPL", "reason": "the cycle turns", "evidence": [FILING]}
+    parts = WRITES["secondary_valuation"]["parts"]
+    server = build_server(api)
+    valued, both, neither = _session(
+        server,
+        ("identify", AGENT),
+        ("secondary_valuation", common | {"drivers": drivers}),
+        ("secondary_valuation", common | {"drivers": drivers, "parts": parts}),
+        ("secondary_valuation", common),
+    )[1:]
+    assert (valued["form"], valued["parts"], valued["actor"]) == ("drivers", [], "claude-opus-5-5")
+    assert valued["drivers"] == {
+        "years": 3,
+        "revenueGrowth": [0.10, 0.08, 0.05],
+        "operatingMargin": [0.20, 0.20, 0.20],
+        "taxRate": 0.25,
+        "salesToCapital": 2.0,
+        "terminalGrowth": 0.02,
+    }
+    assert valued["projection"]["trailingRevenue"] == 22e9
+    assert both == {
+        "refused": "a secondary valuation takes drivers or parts, not both",
+        "status": 400,
+    }
+    assert neither == {"refused": "a secondary valuation needs drivers or parts", "status": 400}
 
 
 def test_a_refusal_is_the_api_s_sentence(api: FairbandClient) -> None:

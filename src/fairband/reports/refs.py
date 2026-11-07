@@ -12,10 +12,15 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
 - ``review:<id>/value``, ``/price_to_value``, ``/levels/<name>`` and ``/bridge/<n>/delta``,
   ``/old`` or ``/new``, the bridge's line ``n`` counted from 1;
 - ``secondary:<id>/value`` (the value a share), ``/firm_value``, ``/equity``, ``/debt``, ``/cash``,
-  ``/shares``, ``/price_to_value``, ``/levels/<name>``, and ``/parts/<n>/pv/<t>``,
+  ``/shares``, ``/price_to_value``, ``/levels/<name>`` and ``/grid/<i>/<j>`` (the grid's row ``i``
+  at its column ``j``, a value a share); on the parts form ``/parts/<n>/pv/<t>``,
   ``/parts/<n>/fcff/<t>``, ``/parts/<n>/value``, ``/parts/<n>/terminal``,
-  ``/parts/<n>/terminal_pv`` and ``/parts/<n>/terminal_growth``, the part ``n`` and the year ``t``
-  counted from 1;
+  ``/parts/<n>/terminal_pv`` and ``/parts/<n>/terminal_growth``; on the drivers form
+  ``/years/<t>/<line>`` (``revenue``, ``ebit``, ``nopat``, ``reinvestment``, ``fcff``, ``pv``),
+  ``/terminal_fcff``, ``/terminal``, ``/terminal_pv``, ``/drivers/<name>`` (``years``, ``tax_rate``,
+  ``sales_to_capital``, ``terminal_growth``) and ``/drivers/<name>/<t>`` (``revenue_growth``,
+  ``operating_margin``); every index (the part ``n``, the year ``t``, the row ``i`` and the column
+  ``j``) counted from 1, and a form's paths naming nothing on the other form;
 - ``fact:<symbol>/<line>/<period>``: a stored statement line as the engine reads it, ``<line>``
   the engine's field name (``fairband.reports.tables.LINES`` for a fiscal year, read through
   ``year_lines``; the trailing figures' fields for ``ttm``) and ``<period>`` the fiscal year as
@@ -151,6 +156,17 @@ _PART_FIELDS = {
     "terminal_pv": "currency",
     "terminal_growth": "percent",
 }
+# The drivers form's projection: a year's lines, and the terminal's three figures, all currency.
+_YEAR_LINES = frozenset({"revenue", "ebit", "nopat", "reinvestment", "fcff", "pv"})
+_TERMINAL_FIGURES = frozenset({"terminal_fcff", "terminal", "terminal_pv"})
+# The drivers by name with their units: one figure each, or a list, a rate for each year.
+_DRIVER_UNITS = {
+    "years": "count",
+    "tax_rate": "percent",
+    "sales_to_capital": "multiple",
+    "terminal_growth": "percent",
+}
+_DRIVER_LISTS = frozenset({"revenue_growth", "operating_margin"})
 # The inputs whose engine unit names the currency of a figure that is a share's: the price.
 _INPUT_UNITS = {"price": "per-share"}
 # A step of a path that is not there, told apart from a figure stored as null.
@@ -388,6 +404,7 @@ class Resolver:
         if row is None or row.symbol != self.symbol:
             return None
         pieces = rest.split("/")
+        projection, drivers, grid = row.projection, row.drivers, row.grid
         found: tuple[Any, str | None] | None = None
         match pieces:
             case [name] if name in _SECONDARY_FIELDS:
@@ -395,6 +412,11 @@ class Resolver:
                 found = getattr(row, column), unit
             case ["levels", name] if name in _LEVEL_COLUMNS:
                 found = getattr(row, _LEVEL_COLUMNS[name]), "per-share"
+            case ["grid", i, j] if grid is not None:
+                cells = _nth(grid["cells"], i)
+                cell = None if cells is None else _nth(cells, j)
+                if cell is not None:
+                    found = cell, "per-share"
             case ["parts", n, ("pv" | "fcff") as field, t]:
                 part = _nth(row.parts, n)
                 year = None if part is None else _nth(part[field], t)
@@ -404,6 +426,18 @@ class Resolver:
                 part = _nth(row.parts, n)
                 if part is not None:
                     found = part[name], _PART_FIELDS[name]
+            case ["years", t, line] if projection is not None and line in _YEAR_LINES:
+                year = _nth(projection["years"], t)
+                if year is not None:
+                    found = year[line], "currency"
+            case [name] if projection is not None and name in _TERMINAL_FIGURES:
+                found = projection[name], "currency"
+            case ["drivers", name] if drivers is not None and name in _DRIVER_UNITS:
+                found = drivers[name], _DRIVER_UNITS[name]
+            case ["drivers", name, t] if drivers is not None and name in _DRIVER_LISTS:
+                rate = _nth(drivers[name], t)
+                if rate is not None:
+                    found = rate, "percent"
         return None if found is None else _figure(*found, None, row.snapshot_id)
 
     def _fact(self, path: str) -> Resolved | None:

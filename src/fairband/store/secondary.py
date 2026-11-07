@@ -1,16 +1,24 @@
 """The secondary valuations and the derivations (spec 2026-11-06 Tier 2, 11 and 13.4; ``method.md``
 15).
 
-A secondary valuation is stored as of the snapshot it was made on, and never changed: its parts as
-JSON, each with its path, its terminal growth, its note, its present values, its terminal, the
-terminal's present value and its value; the firm value, the debt, the cash, the diluted shares,
-the equity, the value a share and the levels as ``repr`` text, so each float reads back exactly;
-price ÷ value as a REAL and the designation's word, none of the four levels or the two on a value
-a share at or below zero; the reason and the evidence (JSON ``{kind, ref, note, figure}`` items);
-where the debt and the cash came from (``BalanceSource``), ``statements``, ``agent`` or ``none``
-(no line on file, the figure 0.0); the writer and the time; the
-policy version, the settings hash and the deciles refresh it ran under; and the engine's
-``SECONDARY_METHOD`` (a record written under ``fairband-secondary/1`` keeps it).
+A secondary valuation is stored as of the snapshot it was made on, and never changed: its form,
+``parts`` or ``drivers``; on the parts form its parts as JSON, each with its path, its terminal
+growth, its note, its present values, its terminal, the terminal's present value and its value
+(an empty list on the drivers form); on the drivers form its drivers as JSON (``years``,
+``revenue_growth``, ``operating_margin``, ``tax_rate``, ``sales_to_capital``,
+``terminal_growth``) and its projection as JSON, ``{trailing_revenue, terminal_return, years:
+[{t, revenue, ebit, nopat, reinvestment, fcff, pv}], terminal_fcff, terminal, terminal_pv}``, the
+trailing revenue and the terminal return it was projected from beside the table, so the value
+rebuilds (both NULL on the parts form); its grid as JSON, ``{rows, cols, cells}``, the rows the
+terminal growths, or the shifts on the parts form (``GRID_ROWS``), NULL where the valuation has
+none and on a ``fairband-secondary/1`` record; the firm value, the debt, the cash, the diluted
+shares, the equity, the value a share and the levels as ``repr`` text, so each float reads back
+exactly (JSON writes a float as its ``repr`` too); price ÷ value as a REAL and the designation's
+word, none of the four levels or the two on a value a share at or below zero; the reason and the
+evidence (JSON ``{kind, ref, note, figure}`` items); where the debt and the cash came from
+(``BalanceSource``), ``statements``, ``agent`` or ``none`` (no line on file, the figure 0.0); the
+writer and the time; the policy version, the settings hash and the deciles refresh it ran under;
+and the engine's ``SECONDARY_METHOD`` (a record written under ``fairband-secondary/1`` keeps it).
 ``latest_secondary`` reads the company's newest, ``secondaries_for`` every one, newest first, and
 ``secondary_row`` one by its id.
 
@@ -25,11 +33,18 @@ commits with it.
 import json
 import sqlite3
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Literal
 
-from fairband.engine.secondary import SECONDARY_METHOD, Part, SecondaryValuation
+from fairband.engine.secondary import (
+    SECONDARY_METHOD,
+    Form,
+    Part,
+    Projection,
+    SecondaryGrid,
+    SecondaryValuation,
+)
 from fairband.store._codec import dump_float, dump_stamp, inserted_id, load_float, load_stamp
 from fairband.store.db import transaction
 from fairband.store.ledger import Principal, Writer
@@ -38,6 +53,9 @@ Operation = Literal["ratio", "difference", "sum", "growth", "cagr"]
 # Where a secondary valuation's debt or cash came from: the newest balance sheet; the agent's
 # figure or an applied balance override; or no line on file, counted as nil.
 BalanceSource = Literal["statements", "agent", "none"]
+# What a grid's rows hold, by form: the terminal growths; on the parts form the shift applied to
+# every part's terminal growth, since the parts' growths differ.
+GRID_ROWS: dict[Form, Literal["growths", "shifts"]] = {"drivers": "growths", "parts": "shifts"}
 
 
 @dataclass(frozen=True)
@@ -70,6 +88,10 @@ class SecondaryRow:
     settings_hash: str
     deciles_refresh_id: int | None
     secondary_method: str
+    form: Form
+    drivers: dict[str, Any] | None
+    projection: dict[str, Any] | None
+    grid: dict[str, Any] | None
 
 
 @dataclass(frozen=True)
@@ -103,8 +125,19 @@ def insert_secondary(
     deciles_refresh_id: int | None,
     writer: Writer,
     at: datetime,
+    *,
+    revenue_0: float | None = None,
+    roic_t: float | None = None,
 ) -> int:
-    """Store the valuation of ``parts`` on snapshot ``snapshot_id``; return its id."""
+    """Store ``valuation`` on snapshot ``snapshot_id``; return its id. ``parts`` are the parts
+    it valued, none on the drivers form; ``revenue_0`` and ``roic_t``, the trailing revenue and
+    the terminal return the drivers were projected from, which the drivers form requires."""
+    projection: dict[str, Any] | None = None
+    if valuation.projection is not None:
+        if revenue_0 is None or roic_t is None:
+            raise TypeError("the drivers form stores revenue_0 and roic_t")
+        projection = _projection_json(valuation.projection, revenue_0, roic_t)
+    drivers = None if valuation.drivers is None else asdict(valuation.drivers)
     levels = valuation.levels
     stored_parts = [
         {
@@ -147,6 +180,10 @@ def insert_secondary(
         settings_hash,
         deciles_refresh_id,
         SECONDARY_METHOD,
+        valuation.form,
+        _dumped(drivers),
+        _dumped(projection),
+        _dumped(_grid_json(valuation.grid)),
     )
     with transaction(conn):
         cursor = conn.execute(
@@ -154,9 +191,8 @@ def insert_secondary(
             " client, parts, firm_value, debt, cash, shares, equity, value_per_share, buy_level,"
             " fair_low, fair_high, trim_level, price_to_value, designation, reason, evidence,"
             " debt_source, cash_source, policy_version, settings_hash, deciles_refresh_id,"
-            " secondary_method)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
-            " ?)",
+            " secondary_method, form, drivers, projection, grid)"
+            f" VALUES ({', '.join('?' * len(row))})",
             row,
         )
     return inserted_id(cursor)
@@ -271,4 +307,34 @@ def _secondary(row: sqlite3.Row) -> SecondaryRow:
         settings_hash=row["settings_hash"],
         deciles_refresh_id=row["deciles_refresh_id"],
         secondary_method=row["secondary_method"],
+        form=row["form"],
+        drivers=_loaded(row["drivers"]),
+        projection=_loaded(row["projection"]),
+        grid=_loaded(row["grid"]),
     )
+
+
+def _projection_json(projection: Projection, revenue_0: float, roic_t: float) -> dict[str, Any]:
+    """The projection table as stored (module docstring), from the trailing revenue and at the
+    terminal return it was projected with."""
+    return {
+        "trailing_revenue": revenue_0,
+        "terminal_return": roic_t,
+        "years": [asdict(year) for year in projection.years],
+        "terminal_fcff": projection.terminal_fcff,
+        "terminal": projection.terminal,
+        "terminal_pv": projection.terminal_pv,
+    }
+
+
+def _grid_json(grid: SecondaryGrid | None) -> dict[str, Any] | None:
+    return None if grid is None else asdict(grid)
+
+
+def _dumped(record: Mapping[str, Any] | None) -> str | None:
+    """A record as JSON text, its floats as ``repr`` text; NULL for none."""
+    return None if record is None else json.dumps(record, allow_nan=False)
+
+
+def _loaded(text: str | None) -> dict[str, Any] | None:
+    return None if text is None else dict(json.loads(text))

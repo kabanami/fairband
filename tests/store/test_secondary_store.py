@@ -1,10 +1,14 @@
 """The secondary valuations and the derivations (spec 2026-11-06 Tier 2, 11 and 13.4): each read
-back exactly, the parts with their present values, newest first."""
+back exactly, the parts with their present values or the drivers with their projection, the grid,
+newest first."""
 
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
-from fairband.engine.secondary import SECONDARY_METHOD, Part, secondary_value
+import pytest
+
+from fairband.engine.secondary import SECONDARY_METHOD, Drivers, Part, secondary_value
 from fairband.policy import load_policy
 from fairband.store.ledger import OWNER, Writer
 from fairband.store.reviews import latest_secondary_value
@@ -24,6 +28,8 @@ AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 FILING = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": None, "figure": "debt"}
 PATH = (100.0, 105.0, 110.25, 115.7625, 121.550625)
 PARTS = (Part("the business", PATH, 0.03, None), Part("a unit", (20.0,) * 5, 0.0, "a royalty"))
+# Spec 20.4's drivers, from a trailing revenue of 1,000 at a terminal return of 12%.
+DRIVERS = Drivers(3, (0.10, 0.08, 0.05), (0.20, 0.20, 0.20), 0.25, 2.0, 0.02)
 POLICY = load_policy()
 
 
@@ -61,7 +67,7 @@ def test_a_secondary_valuation_reads_back_exactly(conn: sqlite3.Connection) -> N
     v = secondary_value(
         parts=PARTS, debt=200.0, cash=100.0, shares=100.0, price=15.0, moat="Wide", policy=POLICY
     )
-    assert v.levels is not None
+    assert v.levels is not None and v.grid is not None
     found = latest_secondary(conn, "AAPL")
     assert found == SecondaryRow(
         id=secondary_id,
@@ -113,9 +119,114 @@ def test_a_secondary_valuation_reads_back_exactly(conn: sqlite3.Connection) -> N
         settings_hash="{}",
         deciles_refresh_id=3,
         secondary_method=SECONDARY_METHOD,
+        form="parts",
+        drivers=None,
+        projection=None,
+        grid={
+            "rows": list(v.grid.rows),
+            "cols": list(v.grid.cols),
+            "cells": [list(row) for row in v.grid.cells],
+        },
     )
     assert latest_secondary_value(conn, "AAPL") == v.value_per_share  # the review log's reader
     assert latest_secondary(conn, "MSFT") is None and secondaries_for(conn, "MSFT") == []
+
+
+def test_a_drivers_valuation_reads_back_exactly(conn: sqlite3.Connection) -> None:
+    v = secondary_value(
+        drivers=DRIVERS,
+        revenue_0=1000.0,
+        roic_t=0.12,
+        debt=200.0,
+        cash=100.0,
+        shares=50.0,
+        price=30.0,
+        moat="Wide",
+        policy=POLICY,
+    )
+    assert v.projection is not None and v.grid is not None
+    secondary_id = insert_secondary(
+        conn,
+        "AAPL",
+        7,
+        (),
+        v,
+        "the cycle turns",
+        [FILING],
+        "agent",
+        "agent",
+        POLICY.version,
+        "{}",
+        3,
+        AGENT,
+        NOW,
+        revenue_0=1000.0,
+        roic_t=0.12,
+    )
+    found = latest_secondary(conn, "AAPL")
+    assert found is not None and found.id == secondary_id
+    assert (found.form, found.parts, found.value_per_share) == ("drivers", (), v.value_per_share)
+    assert found.value_per_share == pytest.approx(39.888938, abs=1e-4)
+    assert found.drivers == {
+        "years": 3,
+        "revenue_growth": [0.10, 0.08, 0.05],
+        "operating_margin": [0.20, 0.20, 0.20],
+        "tax_rate": 0.25,
+        "sales_to_capital": 2.0,
+        "terminal_growth": 0.02,
+    }
+    assert found.projection == {
+        "trailing_revenue": 1000.0,
+        "terminal_return": 0.12,
+        "years": [
+            {
+                "t": y.t,
+                "revenue": y.revenue,
+                "ebit": y.ebit,
+                "nopat": y.nopat,
+                "reinvestment": y.reinvestment,
+                "fcff": y.fcff,
+                "pv": y.pv,
+            }
+            for y in v.projection.years
+        ],
+        "terminal_fcff": v.projection.terminal_fcff,
+        "terminal": v.projection.terminal,
+        "terminal_pv": v.projection.terminal_pv,
+    }
+    assert found.grid == {
+        "rows": list(v.grid.rows),
+        "cols": list(v.grid.cols),
+        "cells": [list(row) for row in v.grid.cells],
+    }
+    assert found.secondary_method == SECONDARY_METHOD
+
+
+def test_a_valuation_with_no_grid_stores_none(conn: sqlite3.Connection) -> None:
+    """A rate a point below r at or below the highest growth leaves no grid (method 15.5)."""
+    low_r = replace(POLICY, required_return=0.035)
+    v = secondary_value(
+        parts=PARTS, debt=200.0, cash=100.0, shares=100.0, price=15.0, moat="Wide", policy=low_r
+    )
+    assert v.grid is None
+    insert_secondary(
+        conn,
+        "AAPL",
+        7,
+        PARTS,
+        v,
+        "the segments diverge",
+        [FILING],
+        "agent",
+        "statements",
+        POLICY.version,
+        "{}",
+        3,
+        AGENT,
+        NOW,
+    )
+    found = latest_secondary(conn, "AAPL")
+    assert found is not None and (found.form, found.grid) == ("parts", None)
 
 
 def test_a_negative_value_is_stored_with_no_levels(conn: sqlite3.Connection) -> None:
