@@ -409,7 +409,13 @@ def add_review_routes(
             moat = _moat(conn, snapshot)
             try:
                 valuation = secondary_value(
-                    parts, debt, cash, shares, snapshot.price, moat, current
+                    parts=parts,
+                    debt=debt,
+                    cash=cash,
+                    shares=shares,
+                    price=snapshot.price,
+                    moat=moat,
+                    policy=current,
                 )
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from None

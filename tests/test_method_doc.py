@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import get_args
 
 from fairband.engine.overrides import OverrideTag
+from fairband.engine.secondary import SECONDARY_METHOD
+from fairband.policy import load_policy
 from fairband.reports.check import FAILURES
 
 METHOD = Path(__file__).parent.parent / "docs" / "method.md"
@@ -26,11 +28,15 @@ def test_section_14_names_every_override_tag() -> None:
     assert "`override_primary_evidence_above_p90`" in section
 
 
-def test_section_15_names_the_three_bounds() -> None:
+def test_section_15_names_the_bounds_and_the_two_versions() -> None:
     section = _section(15)
-    for name in ("secondary_parts_max", "secondary_years_min", "secondary_years_max"):
+    bounds = ("secondary_parts_max", "secondary_years_min", "secondary_years_max")
+    for name in (*bounds, "secondary_driver_ranges"):
         assert f"`{name}`" in section, name
-    assert "fairband-secondary/1" in section
+    assert f"`{SECONDARY_METHOD}`" in section
+    assert "`fairband-secondary/1`" in section  # a plan 1 record reads as it was
+    for name in load_policy().secondary_driver_ranges:
+        assert f'"{name} is ' in section, name  # each driver's refusal sentence
 
 
 def test_section_16_names_the_six_failures() -> None:

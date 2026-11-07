@@ -227,7 +227,7 @@ def test_a_secondary_valuation_reads_the_balance_sheet(
         EMPTY_SETTINGS_HASH,
         results["AAPL"].deciles_refresh_id,
     )
-    assert body["secondaryMethod"] == "fairband-secondary/1"
+    assert body["secondaryMethod"] == "fairband-secondary/2"
     assert _stored(client) == [body]
     assert _stored(client, "HGCO") == []
 

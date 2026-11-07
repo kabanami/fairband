@@ -179,9 +179,14 @@ GLOSSARY: dict[str, str] = {
         " input an override sets is tagged JUDGMENT, beside DATA and RULE"
     ),
     "Secondary valuation": (
-        "A second valuation an agent makes from an explicit free-cash-flow path, one part or a "
-        "sum of parts, discounted at r with a terminal at g_T or below: a second view on a valued"
-        " company and a fallback where the route gives no value. It cites `fairband-secondary/1`"
+        "A second valuation the engine computes from an agent's inputs, in one of two forms: the "
+        "standard form projects the free cash flow to the firm from the agent's drivers (the "
+        "revenue growth and the operating margin year by year, the tax rate, sales-to-capital, "
+        "the terminal growth); the parts form discounts an explicit free-cash-flow path, one part"
+        " or a sum of parts. Both discount at r with a terminal at g_T or below and carry a "
+        "three-by-three grid at other rates and growths, a display and not a value: a second "
+        "view on a valued company and a fallback where the route gives no value. It cites "
+        "`fairband-secondary/2`"
     ),
     "Work item": (
         "A request in the inbox for an agent's research on one company, a valuation review or a "

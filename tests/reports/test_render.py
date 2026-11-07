@@ -96,7 +96,9 @@ def _review(conn: sqlite3.Connection, policy: Policy, sid: int) -> tuple[int, in
 
 def _secondary(conn: sqlite3.Connection, policy: Policy, sid: int) -> int:
     part = Part("the business", (100.0, 105.0, 110.25, 115.7625, 121.550625), 0.03, None)
-    valuation = secondary_value([part], 200.0, 100.0, 100.0, 150.0, "Wide", policy)
+    valuation = secondary_value(
+        parts=[part], debt=200.0, cash=100.0, shares=100.0, price=150.0, moat="Wide", policy=policy
+    )
     return insert_secondary(
         conn,
         "AAPL",
@@ -146,7 +148,7 @@ def test_appendix_a_is_generated_from_the_records(
         "policy": policy.version,
         "settingsHash": policy.settings_hash,
         "review": "fairband-review/1",
-        "secondary": "fairband-secondary/1",
+        "secondary": "fairband-secondary/2",
     }
     assert a["classifier"]["phase"] == "Mature Growth" and a["classifier"]["checks"] == []
 

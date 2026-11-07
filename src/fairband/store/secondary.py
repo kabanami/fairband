@@ -9,9 +9,10 @@ price ÷ value as a REAL and the designation's word, none of the four levels or 
 a share at or below zero; the reason and the evidence (JSON ``{kind, ref, note, figure}`` items);
 where the debt and the cash came from (``BalanceSource``), ``statements``, ``agent`` or ``none``
 (no line on file, the figure 0.0); the writer and the time; the
-policy version, the settings hash and the deciles refresh it ran under; and
-``fairband-secondary/1``. ``latest_secondary`` reads the company's newest, ``secondaries_for``
-every one, newest first, and ``secondary_row`` one by its id.
+policy version, the settings hash and the deciles refresh it ran under; and the engine's
+``SECONDARY_METHOD`` (a record written under ``fairband-secondary/1`` keeps it).
+``latest_secondary`` reads the company's newest, ``secondaries_for`` every one, newest first, and
+``secondary_row`` one by its id.
 
 A derivation is one operation of an agent's arithmetic over two references: its operation, its
 refs, its years (a cagr's, else none), its value as ``repr`` text (none where the operation is

@@ -234,7 +234,7 @@ Policies v1 to v8 stay in the package unchanged, because the snapshots valued un
 
 ### 4.1a Constants in code
 
-These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 9 and 2 (3.4); the established company's three of the last five fiscal years, or five of the fiscal years on file, with a margin above zero (3.5); the Decline rule's three falls in the last four year-over-year steps (3.5); the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7, on the Mature Growth and the revenue-growth routes alike, and the same step and tolerance for the margin the price needs within its policy bounds; the peers' ten-year margin window; the lease-accounting date of 15 December 2019; the Altman Z″ coefficients of the non-manufacturer form, 6.56, 3.26, 6.72 and 1.05 (Altman 2000), and Piotroski's nine F signals (Piotroski 2000), both for the Decline route's distress signals (6a.8); the Decline route's implied decline rate, scanned from −50% to 0 in steps of 0.1% to a tolerance of 1e-7, and the scan's lower bound, −50%, as the floor of the decline rate (6a.2); the normalized margin's window, the last five fiscal years with at least three margins (6a.3); the Start-up requirement's ramp of ten years and its solve, bisection on [0, 10^13] to a relative tolerance of 1e-9 (6b.2).
+These set the method's structure, not a valuation judgment, and live in the code: the ROIC window of ten years and its minimum of five; the growth span of three years; the trend window of five years with at least three points; the margin-direction deciles 9 and 2 (3.4); the established company's three of the last five fiscal years, or five of the fiscal years on file, with a margin above zero (3.5); the Decline rule's three falls in the last four year-over-year steps (3.5); the 80 to 100 days between consecutive quarters; the margin flag's ten-year window; the implied-growth scan from −50% to 200% in steps of 1% to a tolerance of 1e-7, on the Mature Growth and the revenue-growth routes alike, and the same step and tolerance for the margin the price needs within its policy bounds; the peers' ten-year margin window; the lease-accounting date of 15 December 2019; the Altman Z″ coefficients of the non-manufacturer form, 6.56, 3.26, 6.72 and 1.05 (Altman 2000), and Piotroski's nine F signals (Piotroski 2000), both for the Decline route's distress signals (6a.8); the Decline route's implied decline rate, scanned from −50% to 0 in steps of 0.1% to a tolerance of 1e-7, and the scan's lower bound, −50%, as the floor of the decline rate (6a.2); the normalized margin's window, the last five fiscal years with at least three margins (6a.3); the Start-up requirement's ramp of ten years and its solve, bisection on [0, 10^13] to a relative tolerance of 1e-9 (6b.2); the secondary valuation's grid, three rates and three terminal growths one point apart (15.5).
 
 ### 4.2 Trailing figures and the share count
 
@@ -976,6 +976,7 @@ Snapshots are appended, never changed. The screen reads the latest snapshot per 
 | 0.9 | 2026-11-06 | The engine round (spec 2026-11-06). The Decline route (6a.2, 6a.5): the run-off reads the consensus past year 3 while a year has a revenue mean above zero and at least `analyst_min` revenue analysts, the decline rate then fades in a straight line to zero by year N, and the terminal is flat on year N's revenue. The revenue-growth route (5a.4, 5a.5): the company's own sales-to-capital is usable only at half the mature peers' median or more, and a trailing loss larger than revenue moves in dollars to the target margin, as the Start-up ramp does. The classifier (3.5): a company with a margin above zero in five of the fiscal years on file is established, and an established company is never a Start-up. The margin-direction check (3.4, 3.6): deciles 9 and 2, and Stable points nowhere. The tax table covers every jurisdiction of the OECD series, Taiwan and Cyprus by hand, each hand row citing its own source (4.3). A Mature Stable row refused "no positive trailing earnings" keeps the growth-route cross-check (6.1, 6.4). Policy v7 adds `own_sales_to_capital_min_share` and `loss_ramp_margin_bound`, neither a setting (4.1). At the defaults every row the changes do not touch, directly or through its mature peers, keeps its figures. |
 | 0.9, `fairband-review/1`, `fairband-secondary/1` | 2026-11-06 | Tier 2 (spec 2026-11-06). The mechanical method is unchanged at 0.9. A review (section 14) carries `fairband-review/1`, a secondary valuation (section 15) `fairband-secondary/1`. Policy v8 adds six values, none a setting. |
 | 0.9, `fairband-review/1`, `fairband-secondary/1`, policy v9 | 2026-11-07 | The cycle gap and the secondary's driver ranges (spec 2026-11-06 Tier 2, as amended 2026-11-07). The mechanical method is unchanged at 0.9. Policy v9 adds `earnings.cycle_gap` to `override_ranges` and `secondary_driver_ranges`, neither a setting (4.1); every v8 value unchanged. An override of the cycle gap lowers the anchor earnings of the two mature routes (14.2, 14.4), its bridge line after the non-recurring gap's (14.5). |
+| 0.9, `fairband-review/1`, `fairband-secondary/2`, policy v9 | 2026-11-07 | The secondary valuation's standard form (spec 2026-11-06 Tier 2 11, as amended 2026-11-07): the free cash flow to the firm projected from the agent's drivers by Damodaran's FCFF model at the policy's r, a falling year reinvesting nothing and the terminal reinvesting through the terminal return (15.1, 15.2), each driver inside `secondary_driver_ranges` (15.4); the parts form beside it, its arithmetic unchanged; and on both forms the three-by-three grid at r ± 1 point across g ± 1 point, a display and never a value (15.5). A secondary valuation now cites `fairband-secondary/2`; one made under `fairband-secondary/1` keeps its version and reads as it was. The mechanical method is unchanged at 0.9; policy v9 unchanged. |
 
 A snapshot names the method and policy versions and the settings hash that produced it. A price refresh refuses to reprice a snapshot from another method version.
 
@@ -1074,7 +1075,7 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Review | The engine's valuation of a company under its applied overrides: the reviewed value, its levels and designation on the same edges, and the bridge from the mechanical value, one line per override. It follows the company's snapshots and cites `fairband-review/1` |
 | Finding | A dated fact an agent records with its source (a filing, a transcript, a URL, a vendor response or a base rate); the only way a number from outside Fairband enters a report |
 | Judgment | One of a report's key judgments (the phase, the moat, the belief, the ROIC, the target margin): the record of the decision, in words, and the override it produced, if one. An input an override sets is tagged JUDGMENT, beside DATA and RULE |
-| Secondary valuation | A second valuation an agent makes from an explicit free-cash-flow path, one part or a sum of parts, discounted at r with a terminal at g_T or below: a second view on a valued company and a fallback where the route gives no value. It cites `fairband-secondary/1` |
+| Secondary valuation | A second valuation the engine computes from an agent's inputs, in one of two forms: the standard form projects the free cash flow to the firm from the agent's drivers (the revenue growth and the operating margin year by year, the tax rate, sales-to-capital, the terminal growth); the parts form discounts an explicit free-cash-flow path, one part or a sum of parts. Both discount at r with a terminal at g_T or below and carry a three-by-three grid at other rates and growths, a display and not a value: a second view on a valued company and a fallback where the route gives no value. It cites `fairband-secondary/2` |
 | Work item | A request in the inbox for an agent's research on one company, a valuation review or a full report, posted by the owner, an agent or the expiry rule; pending, claimed, done, declined or dropped |
 
 ## 14. Reviews: overrides and the reviewed value
@@ -1159,21 +1160,40 @@ One row for each review written: the time, the company, the refresh, the snapsho
 
 ## 15. The secondary valuation
 
-A second valuation beside the routes, from an explicit cash-flow path an agent supplies (spec 2026-11-06 Tier 2, 11). It is a second view on a valued company and a fallback where no phase or route fits, or where the route refuses. The agent builds the path from its own research; the engine keeps the discounting, the terminal and the bridge to equity, so the number is a tool output. A secondary valuation cites `fairband-secondary/1` (section 11). Neither the mechanical value nor the review reads it.
+A second valuation beside the routes, computed by the engine from inputs an agent supplies (spec 2026-11-06 Tier 2, 11). It is a second view on a valued company and a fallback where no phase or route fits, or where the route refuses. The agent's judgment is the drivers or the path, built from its own research; the engine keeps the projection, the discounting, the terminal and the bridge to equity, so the number is a tool output. A secondary valuation cites `fairband-secondary/2`; one made before the drivers form and the grid cites `fairband-secondary/1` and reads as it was (section 11). Neither the mechanical value nor the review reads it.
 
-### 15.1 The inputs
+### 15.1 The two forms
 
-One part or more, at most `secondary_parts_max` (10; 4.1). One part is a discounted cash flow, several a sum of parts. A part is a name; the free cash flow to the firm in dollars for years 1 to N, N from `secondary_years_min` (3) to `secondary_years_max` (15); a terminal growth g at most g_T (3.0% at the defaults), lower or negative allowed; and a note. With the parts, a reason and evidence: one item or more, each of the kinds an override's evidence takes (14.1), one at least for the path itself, with no `figure` (15.3).
+A secondary valuation takes exactly one of two forms.
+
+- **The standard form, `drivers`**: the free cash flow to the firm projected by Damodaran's FCFF model from drivers the agent sets. N years, from `secondary_years_min` (3) to `secondary_years_max` (15; 4.1); a revenue growth and an operating margin for each year, N entries each; a tax rate; a sales-to-capital; and a terminal growth g at most g_T (3.0% at the defaults), lower or negative allowed. The revenue growths, the operating margins, the tax rate and the sales-to-capital lie inside their pairs of `secondary_driver_ranges` (4.1), the ends included: a revenue growth −80% to 300%, an operating margin −50% to 60%, a tax rate 0% to 50%, a sales-to-capital 0.1 to 10.
+- **The parts form, `parts`**: one part or more, at most `secondary_parts_max` (10; 4.1). One part is a discounted cash flow, several a sum of parts, for a conglomerate or a company whose cash flows the agent builds segment by segment. A part is a name; the free cash flow to the firm in dollars for years 1 to N, N from `secondary_years_min` to `secondary_years_max`; a terminal growth g at most g_T, lower or negative allowed; and a note.
+
+With either, a reason and evidence: one item or more, each of the kinds an override's evidence takes (14.1), one at least for the drivers or the path itself, with no `figure` (15.3).
 
 ### 15.2 The arithmetic
 
-r is the effective policy's required return, locked as for an override (14.2). Per part:
+r is the effective policy's required return, locked as for an override (14.2). The standard form projects from revenue_0, the trailing revenue as the engine reads it (4.2; `fact:<symbol>/revenue/ttm`). In the lines, g_t and m_t are year t's revenue growth and operating margin, t without a subscript is the tax rate, s the sales-to-capital, and ROIC_T the terminal return of 4.7 on the moat class as reviewed:
+
+    revenue_t = revenue_{t−1} × (1 + g_t)
+    EBIT_t = revenue_t × m_t;  NOPAT_t = EBIT_t × (1 − t)
+    reinvestment_t = max(0, revenue_t − revenue_{t−1}) ÷ s
+    FCFF_t = NOPAT_t − reinvestment_t;  PV_t = FCFF_t ÷ (1 + r)^t
+    terminal FCFF = NOPAT_N × (1 + g) × (1 − g ÷ ROIC_T)
+    terminal = terminal FCFF ÷ (r − g), discounted by (1 + r)^N
+    firm value = Σ PV_t + the discounted terminal
+
+A year whose revenue falls reinvests nothing, so a decline does not create cash. The terminal reinvests g ÷ ROIC_T of its NOPAT, the engine's own stable-growth rule (4.8), so the route's value and this one rest on one terminal convention.
+
+The parts form discounts each part:
 
     PV_t = fcff_t ÷ (1 + r)^t, t = 1 … N
     terminal = fcff_N × (1 + g) ÷ (r − g), discounted by (1 + r)^N
     part value = Σ PV_t + the discounted terminal
 
-The firm value is the sum over the parts; equity = firm value − debt + cash; the value a share = equity ÷ the diluted shares. The levels are 4.10's on the moat class: the current review's when the company has one (14.5), else the snapshot's, else None. The designation is 4.10's on the snapshot's price ÷ the value a share. A value a share at or below zero is kept as computed, with no levels and no designation; it is not a refusal.
+and its firm value is the sum over the parts.
+
+On both forms, equity = firm value − debt + cash; the value a share = equity ÷ the diluted shares. The levels are 4.10's on the moat class: the current review's when the company has one (14.5), else the snapshot's, else None. The designation is 4.10's on the snapshot's price ÷ the value a share. A value a share at or below zero is kept as computed, with no levels and no designation; it is not a refusal.
 
 ### 15.3 Debt, cash and shares
 
@@ -1187,15 +1207,29 @@ Each is answered with its sentence, and nothing is stored:
 - a company whose latest snapshot was valued under another policy version, other settings or another method version: the price refresh's sentences, "settings changed: run a revalue" (or "policy changed", "method changed"), as for an override (14.3);
 - a foreign filer, "foreign filer: currency and share-unit handling not built yet", since a dollar path over local-currency debt would mislead: a snapshot refused as one (section 7), or a universe row that is an ADR or names a currency other than USD (a row naming none leaves it to the snapshot);
 - a snapshot with no positive diluted share count, "no diluted share count";
-- the bounds, each naming its rule with the effective policy's numbers: no part, "at least one part"; more than `secondary_parts_max`, "at most 10 parts"; a path shorter than `secondary_years_min` or longer than `secondary_years_max`, "a part has 3 to 15 years"; a g above g_T, "the terminal growth is at most g_T, 3.0%".
+- the form: both, "a secondary valuation takes drivers or parts, not both"; neither, "a secondary valuation needs drivers or parts";
+- the standard form's bounds, in this order, each naming its rule with the effective policy's numbers: an N below `secondary_years_min` or above `secondary_years_max`, "a secondary valuation runs 3 to 15 years"; a list without N entries, the revenue growth's checked first, "revenue_growth has <n> entries for <N> years" (or `operating_margin`); a driver outside its pair of `secondary_driver_ranges`, every entry of a list checked, in the order revenue growth, operating margin, tax rate, sales-to-capital, "revenue_growth is −80% to 300%", "operating_margin is −50% to 60%", "tax_rate is 0% to 50%", "sales_to_capital is 0.1 to 10"; a g above g_T, "the terminal growth is at most g_T, 3.0%";
+- the parts form's bounds, in this order, each naming its rule with the effective policy's numbers: no part, "at least one part"; more than `secondary_parts_max`, "at most 10 parts"; a path shorter than `secondary_years_min` or longer than `secondary_years_max`, "a part has 3 to 15 years"; a g above g_T, "the terminal growth is at most g_T, 3.0%".
 
-### 15.5 As of its snapshot
+### 15.5 The grid, and the record as of its snapshot
+
+Every secondary valuation carries a three-by-three grid: the value a share by the same arithmetic at the rates r − 1 point, r and r + 1 point (the columns) across the terminal growths g − 1 point, g and the lower of g + 1 point and g_T (the rows), every other input held, ROIC_T among them. On the parts form a row moves every part's terminal growth together, each capped at g_T, and the rows read as the shift: −1 point, 0 and +1 point. The centre cell is the value a share. The grid is a display of how much of the value is assumption, never a value: the rate in force stays r, and no level, designation or log reads a cell. A grid whose lowest rate is at or below its highest growth has no terminal in that corner; only settings that put r − 1 point at or below g_T allow it, and that valuation carries no grid.
 
 A secondary valuation is stored on the company's latest snapshot with its parts, each with its path, its g, its note, its present values, its terminal, the terminal's present value and its value; the firm value; the debt, the cash and the shares with the two sources; the equity; the value a share; the levels, price ÷ value and the designation at the snapshot's price; the reason and the evidence; the writer (the principal, and an agent's model identifier and client) and the time; and the policy version, the settings hash and the deciles refresh it ran under. It is a ledger row, `secondary`. It is never changed, and no refresh recomputes or reprices it: it is as of its snapshot, its window that snapshot's validity window (4.10), and it stays in the company's history after later refreshes, read with its date. The agent makes a new one at its next review. The owner may make one too: it is a tool's output, not an override. The log (14.7) reads the newest one's value a share.
 
 ### 15.6 Worked numbers
 
 The tests pin these within 1e-4 (spec 2026-11-06 Tier 2, 20.1). r 9%, g 3%; one part, free cash flow 100 in year 1 growing 5% a year for 5 years (100, 105, 110.25, 115.7625, 121.550625); debt 200, cash 100, 100 diluted shares. The present values 91.7431, 88.3764, 85.1332, 82.0091 and 78.9996, Σ 426.2614; the terminal 121.550625 × 1.03 ÷ 0.06 = 2,086.6191, discounted 1,356.1592; firm value 1,782.4206; equity 1,682.4206; value a share 16.8242. A second part, 20 flat for 5 years at g 0: Σ PV 77.7930; terminal 20 ÷ 0.09 = 222.2222, discounted 144.4292; part value 222.2222; with both parts the value a share is 19.0464. A g of 3.5% is refused, as are a path of 2 years and an 11th part.
+
+The standard form (spec 2026-11-06 Tier 2, 20.4), pinned within 1e-4: r 9%, ROIC_T 12%, g 2%, tax rate 25%, sales-to-capital 2.0, trailing revenue 1,000, N = 3 with growth 10%, 8% and 5% and a margin of 20% in every year; debt 200, cash 100, 50 diluted shares.
+
+| t | revenue | EBIT | NOPAT | reinvestment | FCFF | PV |
+|---|---|---|---|---|---|---|
+| 1 | 1,100.00 | 220.00 | 165.00 | 50.00 | 115.00 | 105.504587 |
+| 2 | 1,188.00 | 237.60 | 178.20 | 44.00 | 134.20 | 112.953455 |
+| 3 | 1,247.40 | 249.48 | 187.11 | 29.70 | 157.41 | 121.549402 |
+
+Σ PV 340.007444; the terminal FCFF 187.11 × 1.02 × (1 − 0.02 ÷ 0.12) = 159.043500; the terminal 159.043500 ÷ 0.07 = 2,272.05, discounted 1,754.439476; firm value 2,094.446920; equity 1,994.446920; value a share 39.888938. The grid's centre cell is that value; its corner at r 8% and g 1% is 44.220636, every cell the same arithmetic at its pair. With growth −5% in year 3 the revenue falls and reinvestment_3 is 0.
 
 ## 16. Reports: the number check
 

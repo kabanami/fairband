@@ -34,7 +34,9 @@ def _insert(
     writer: Writer = AGENT,
     at: datetime = NOW,
 ) -> int:
-    valuation = secondary_value(parts, debt, 100.0, 100.0, 15.0, "Wide", POLICY)
+    valuation = secondary_value(
+        parts=parts, debt=debt, cash=100.0, shares=100.0, price=15.0, moat="Wide", policy=POLICY
+    )
     return insert_secondary(
         conn,
         "AAPL",
@@ -56,7 +58,9 @@ def _insert(
 def test_a_secondary_valuation_reads_back_exactly(conn: sqlite3.Connection) -> None:
     secondary_id = _insert(conn)
     assert not conn.in_transaction
-    v = secondary_value(PARTS, 200.0, 100.0, 100.0, 15.0, "Wide", POLICY)
+    v = secondary_value(
+        parts=PARTS, debt=200.0, cash=100.0, shares=100.0, price=15.0, moat="Wide", policy=POLICY
+    )
     assert v.levels is not None
     found = latest_secondary(conn, "AAPL")
     assert found == SecondaryRow(

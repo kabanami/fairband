@@ -143,7 +143,9 @@ def test_review_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[s
 def _secondary_id(conn: sqlite3.Connection, policy: Policy, snapshot_id: int) -> int:
     """Spec 20.1's one-part path, debt 200, cash 100, 100 shares."""
     part = Part("the business", (100.0, 105.0, 110.25, 115.7625, 121.550625), 0.03, None)
-    valuation = secondary_value([part], 200.0, 100.0, 100.0, 150.0, "Wide", policy)
+    valuation = secondary_value(
+        parts=[part], debt=200.0, cash=100.0, shares=100.0, price=150.0, moat="Wide", policy=policy
+    )
     return insert_secondary(
         conn,
         "AAPL",
