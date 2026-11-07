@@ -30,12 +30,18 @@ stored value it shows.
 The server joins the parts with nothing between them. Put the spaces and the punctuation in the
 plain parts.
 
-Copy each ref from the tool that gave the figure. The reads of stored figures give each one as
-`{value, unit, ref}`: `financials`, `financial_tables`, `estimates`, `price_history` and `peers`.
-Build every other ref from its record's id. `company` gives `snapshot.id`; `reviews` and the
-answers of `override_add` and `override_drop` give the review's id; `secondary` gives the secondary
-valuation's; `finding_add` and `findings` give a finding's; `derive` gives a derivation's; a
-pass-through gives its `responseId`.
+The reader never sees a ref. The server numbers the cites as footnotes, one number for each
+distinct ref in the order it is first cited, and lists the references once, after the last
+section, each with its source in words. Write no footnote, no mark and no reference list yourself:
+the cite is all the server needs.
+
+Copy each ref from the tool that gave the figure. The reads of stored figures give each one with
+its `ref`: `financials`, `financial_tables`, `estimates`, `price_history`, `peers` and
+`multiples_history`. Build every other ref from its record's id. `company` gives `snapshot.id`;
+`reviews` and the answers of `override_add` and `override_drop` give the review's id; `secondary`
+and `secondary_valuation` give the secondary valuation's; `sensitivity` gives the reading's;
+`guidance` and `guidance_add` give a guidance record's; `finding_add` and `findings` give a
+finding's; `derive` gives a derivation's; a pass-through gives its `responseId`.
 
 ## The references
 
@@ -52,7 +58,13 @@ nothing.
 | `review:<id>/value`, `/price_to_value`, `/levels/<name>` | the review's value a share, price ÷ value and levels | per-share; multiple |
 | `review:<id>/bridge/<n>/delta`, `/old`, `/new` | the bridge's line n, counted from 1: its change, the input's old and new value | per-share; the input's |
 | `secondary:<id>/value`, `/firm_value`, `/equity`, `/debt`, `/cash`, `/shares`, `/price_to_value`, `/levels/<name>` | the secondary valuation's figures | per-share, currency, count, multiple |
-| `secondary:<id>/parts/<n>/pv/<t>`, `/parts/<n>/fcff/<t>`, `/parts/<n>/value`, `/parts/<n>/terminal`, `/parts/<n>/terminal_pv`, `/parts/<n>/terminal_growth` | part n's present value and free cash flow of year t, its value, its terminal value, the terminal's present value and its terminal growth; n and t counted from 1 | currency; percent for the terminal growth |
+| `secondary:<id>/years/<t>/<line>`, `/terminal_fcff`, `/terminal`, `/terminal_pv` | on the drivers form, the projection's line of year t, `revenue`, `ebit`, `nopat`, `reinvestment`, `fcff` or `pv`; the terminal free cash flow, the terminal value and its present value; t counted from 1 | currency |
+| `secondary:<id>/drivers/<name>`, `/drivers/<name>/<t>` | on the drivers form, a driver as you set it: `years`, `tax_rate`, `sales_to_capital`, `terminal_growth`; year t's `revenue_growth` or `operating_margin`, t counted from 1 | count for the years, multiple for sales-to-capital, percent for the others |
+| `secondary:<id>/grid/<i>/<j>` | the grid's value a share at row i (a terminal growth, or the shift on the parts form) and column j (a rate), each counted from 1; the centre cell, `/grid/2/2`, is the value | per-share |
+| `secondary:<id>/parts/<n>/pv/<t>`, `/parts/<n>/fcff/<t>`, `/parts/<n>/value`, `/parts/<n>/terminal`, `/parts/<n>/terminal_pv`, `/parts/<n>/terminal_growth` | on the parts form, part n's present value and free cash flow of year t, its value, its terminal value, the terminal's present value and its terminal growth; n and t counted from 1 | currency; percent for the terminal growth |
+| `sensitivity:<id>/<i>/<j>` | a sensitivity reading's value a share at row i and column j, each counted from 1; a refused cell holds no value | per-share |
+| `guidance:<id>/low`, `/high`, `/midpoint`, `/step` | a guidance record's figures, of its period; the step only on a fiscal-year revenue or EPS record with the year before's actual on file | the metric's: currency for revenue, free cash flow and capex, per-share for EPS, percent for the margin and the two growth rates; percent for the step |
+| `multiple:<symbol>/<series>/<date>`, `multiple:<symbol>/<series>/<stat>` | a point of the trailing (`pe`) or the forward (`pe_forward`) P/E history by its date, or a statistic over the ten years to the series' newest day: `avg_10y`, `median_10y`, `high_10y`, `low_10y`; a date with no point (a loss, a day off the series) names nothing | multiple |
 | `fact:<symbol>/<line>/<year or ttm>` | a stored statement line as the engine reads it | currency; per-share for EPS; count for the diluted shares |
 | `table:<symbol>/<table>/<row>/<year>` | a cell of `financial_tables` | the row's |
 | `estimate:<symbol>/<period>/<field>` | a stored consensus figure, the period a fiscal year (`2026`) or a quarter (`2026-Q4`) | currency; per-share for EPS; count for the analysts |
@@ -111,6 +123,9 @@ Four rules more:
 
 A cite's period must be the ref's. `FY2025` reads as `2025`. A ref with a period and a cite with
 none passes. A ref with no period (a snapshot's figure, a policy value) fails a cite that names one.
+A finding's and a guidance record's period is the one recorded: a guidance quarter reads `2027Q1`,
+with no dash, while a consensus quarter reads `2027-Q1`. A close's and a multiple's period is its
+date. When in doubt, leave the period out.
 
 ## The snapshot
 
@@ -118,7 +133,10 @@ Cite the company's latest snapshot: the one `company` gave you. A price refresh 
 is fine: a reprice of the cited snapshot, with the same data date, method, policy and settings,
 counts as the cited one. A revalue or a full refresh in between is not: the report is rejected
 `wrong snapshot`, with the latest snapshot's id in the detail. Read `company` again, take the new
-ids, check each figure, and submit again.
+ids, check each figure, and submit again. A `secondary:` and a `sensitivity:` ref rest on their
+record's snapshot too, and a `derived:` ref on its operands': after a revalue, make the secondary
+valuation, the reading and those derivations again. A `finding:`, a `guidance:` and a `multiple:`
+ref rest on none.
 
 A `review:` cite must be the company's current review: the newest review on the latest snapshot,
 or the one that snapshot reprices. Each applied override and each drop makes a new review; a
@@ -220,7 +238,7 @@ multiple written in plain text, `2.4x`, is rejected: derive it and cite it.
 A rejected report answers `{"refused": "rejected: <n> findings", "status": 422, "findings": [...]}`.
 Each finding is `{where, what, detail}`. `where` is the section and the part, counted from 1 in
 your submission, and the text at fault: `section 1, part 3: $12.345`. For a judgment it is the
-judgment and its field: `judgment moat, bull: 11.2%`. A cite gets one finding, the first that
+judgment and its field: `judgment moat, decision: 11.2%`. A cite gets one finding, the first that
 applies in the order wrong snapshot, not emitted, unresolved, wrong period, wrong unit. A plain part
 gets one for each quantity.
 
@@ -237,6 +255,15 @@ Fix every finding of the answer, then submit the whole report again.
 
 ## The judgments' text
 
-The check reads the `bull`, `bear` and `decision` of every judgment. Any quantity there is
-`a number with no reference`, since a judgment holds no cite. Keep the judgments in words, and put
-their figures, cited, in section 8.
+The check reads the `decision` of every judgment. Any quantity there is `a number with no
+reference`, since a judgment holds no cite. Keep the decisions in words, and put their figures,
+cited, in section 8.
+
+## Before the numbers: the structure
+
+The server checks the structure before it reads a number, in this order: the section count
+(twelve for a full report, ten for a valuation review); the stance word; the judgments the route
+needs, one of each; the headings, in order; and a secondary valuation on the latest snapshot. The
+first check that fails is answered with its one sentence (400), such as "the report needs a
+secondary valuation on snapshot <id>", and no number is checked. Fix the one thing the sentence
+names and submit again.

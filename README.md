@@ -55,6 +55,18 @@ Identity: the agent's first call is `identify`, with the model identifier it run
 `claude-opus-5-5` or `gpt-5`. Fairband records every write under that name, with the host's name
 and version from the MCP handshake. A write before `identify` is refused.
 
+The tools: 51, listed with their arguments in
+`playbook/fairband-research/reference/tools.md`. Twenty-five read the store (the screen, a
+company's snapshot, its statements, tables, consensus, closes, multiples history and peers, the
+research on file, the policy and the Methodology page). Seven are vendor pass-throughs the server
+fetches with its own key and stores so a report can cite them: `transcript`, `news`, `segments`,
+`insider_trades`, `transcript_dates` and `dcf` from FMP, and `pe_history` from GuruFocus, which
+needs the `gurufocus` key. Nineteen write: the identity, the work inbox, notes, findings, guidance
+records, overrides, the secondary valuation, the sensitivity reading, derivations, reports, kill
+criteria, news items and refreshes. The newest are `multiples_history`, `guidance`,
+`transcript_dates`, `dcf`, `pe_history`, `guidance_add` and `sensitivity`; `secondary_valuation`
+now takes the standard discounted cash flow's `drivers` beside its `parts`.
+
 The playbook: `playbook/fairband-research/` is a skill that takes the agent through a research
 report, step by step, starting with `identify`. For Claude Code and Claude Desktop, link it under
 `~/.claude/skills/`:

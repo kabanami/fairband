@@ -16,6 +16,8 @@ sections, the judgments, every reason on an override and every note.
   holds every cite to these roundings (`reference/citations.md`).
 - Keep the summary to one page and the reader part to about five pages.
 - Keep the layout the same for every company. Only the valuation section changes with the phase.
+- Talk about the valuation in the valuation section only. Every other section argues the business
+  and its outlook, in words a reader without the method follows.
 
 ## The voice
 
@@ -48,7 +50,7 @@ These are the product's terms. They are not interchangeable with their near-syno
 | snapshot | baseline | a company's frozen inputs with the rules version, the data date and the price date |
 | locked input | | an input no override may change |
 | finding | | a dated, sourced fact an agent records |
-| judgment | opinion | the phase, the moat, the growth belief, the ROIC or the target margin, with the bull view, the bear view and the decision |
+| judgment | opinion | the record of one input decision, the phase, the moat, the growth belief, the ROIC or the target margin: the decision in words and the override it produced, if any |
 | note | comment | a dated note on a company, with the same provenance as an override |
 | news item | | a dated item, marked with any kill criterion it touches |
 | report | memo | the agents' written report, in one of two modes |
@@ -88,6 +90,19 @@ The first time a report uses one of these terms, give its plain meaning.
 | hurdle rate | the return an investor requires, r |
 | sales-to-capital | the revenue a dollar of invested capital buys |
 | target margin | the operating margin a young company reaches in year ten |
-| secondary valuation | a second value from a cash-flow path the agent supplies, which the engine discounts |
+| secondary valuation | a second value a share by the standard discounted cash flow, from drivers the agent sets (or a cash-flow path for each part), which the engine projects and discounts |
 | validity window | the time a value stays current, to the next earnings report |
 | kill criterion | a measurable event that would prove the view wrong |
+| thesis | the report's own view of the business: which of management's claims it accepts, rejects or holds open, and what must be true for the stance to be right |
+| cyclical | a business whose profits rise and fall with its industry's cycle: memory chips, energy, steel, shipping and the like |
+| mid-cycle | the margin and the earnings a cyclical business makes across a whole cycle, neither at its peak nor at its trough; a cyclical is valued on them |
+| guidance | a figure the company itself gave for a future period; it enters the value only when it is clear, and the analysts' consensus stands otherwise |
+| consensus | the average of the analysts' estimates on file |
+| the story | what management says the business will do, claim by claim |
+| possible | a claim that could come true: nothing rules it out |
+| plausible | a claim the evidence makes believable |
+| probable | a claim the evidence makes more likely than not; only a probable claim moves a figure in the value |
+| sensitivity grid | the value a share across a few values of two inputs; it shows how much of the value is assumption, and is never a value |
+
+The three words possible, plausible and probable are Damodaran's. Use them for a verdict on a
+claim of the call and for nothing else.

@@ -8,15 +8,16 @@ be left out.
 
 - A tool answers the web server's JSON, an object. Its keys are camelCase (`responseId`). A ref
   names a field by the engine's snake_case name (`snapshot:412/inputs/market_cap`).
-- The reads of stored figures, `financials`, `financial_tables`, `estimates`, `price_history` and
-  `peers`, give each figure as `{value, unit, ref}`. Cite the `ref` as given. For every other
-  figure, build the ref from its record's id (`reference/citations.md`). A percent is a fraction:
-  `0.112` is 11.2%.
+- The reads of stored figures, `financials`, `financial_tables`, `estimates`, `price_history`,
+  `peers` and `multiples_history`, give each figure with its `ref`. Cite the `ref` as given. For
+  every other figure, build the ref from its record's id (`reference/citations.md`). A percent is a
+  fraction: `0.112` is 11.2%.
 - A refusal is `{"refused": <sentence>, "status": <code>}`, with the rest of the answer beside it:
   a refused override's `override`, a rejected report's `findings`. The status says what kind of
-  refusal it is: 400 a value the call cannot take; 404 a record that does not exist; 409 a state
-  the write cannot move from; 422 a rejected report; 502 a vendor call that failed; 503 a
-  pass-through that is busy or has no key.
+  refusal it is: 400 a value the call cannot take, or a report's structural refusal; 404 a record
+  that does not exist; 409 a state the write cannot move from (a snapshot valued under other
+  settings, a store that moved, a superseded guidance record); 422 a rejected report; 502 a vendor
+  call that failed; 503 a pass-through that is busy or has no key.
 - A write before `identify` answers `{"refused": "identify first: the model identifier you run
   as"}` and calls nothing. The reads and the pass-throughs need no identity.
 - When the web server is down, every tool answers `{"refused": "the Fairband server is not
@@ -44,8 +45,12 @@ be left out.
   its `estimate:` ref.
 - `price_history(symbol, years?)`: the stored daily closes, oldest first, each with its `close:`
   ref; `years` keeps the latest years only.
-- `multiples_history(symbol)`: the trailing and the forward P/E over the ten years on file, each
-  point and each statistic (`avg10y`, `median10y`, `high10y`, `low10y`) with its `multiple:` ref.
+- `multiples_history(symbol)`: the trailing P/E (`pe`, GuruFocus's daily series) and the forward
+  P/E (`peForward`, Fairband's own log, kept since `since`) over the ten years on file. Each point
+  is `{day, value, ref}`; each statistic, `avg10y`, `median10y`, `high10y` and `low10y`, is
+  `{value, unit, ref}`, its ref `multiple:<symbol>/pe/avg_10y` and its siblings. `peNote` says why
+  the trailing series could not be fetched, when it could not; the read then serves the newest one
+  stored. Read this, not `pe_history`, for the points and the statistics with their refs.
 - `peers(symbol)`: the company's mature peers with their figures, each with its `peer:` ref, and
   where the list of peers came from.
 - `watchlists()`: the watchlists with their companies.
@@ -57,7 +62,8 @@ be left out.
 - `notes(symbol)`: the company's notes, newest first.
 - `findings(symbol)`: the company's findings with their sources; cite one as `finding:<id>`.
 - `guidance(symbol)`: the company's guidance records, newest first, each with its midpoint, its
-  step and the newer record that superseded it; cite one's figures as `guidance:<id>/midpoint`.
+  step and `supersededBy`, the newer record that superseded it, if any; cite one's figures as
+  `guidance:<id>/midpoint` and its siblings.
 - `overrides(symbol)`: the company's overrides, newest first, each with its state.
 - `reviews(symbol)`: the company's reviews, newest first, each with its bridge.
 - `secondary(symbol)`: the company's secondary valuations, newest first.
@@ -76,25 +82,36 @@ be left out.
 
 ## The vendor pass-throughs
 
-Four FMP reads the engine does not use. The server fetches each with its own key and stores it, so
-a report can cite it.
+Seven vendor reads the engine does not use, six from FMP and one from GuruFocus. The server fetches
+each with its own key and stores it, so a report can cite it.
 
-- `transcript(symbol, year, quarter)`: the earnings call transcript of one fiscal quarter.
+- `transcript(symbol, year, quarter)`: the earnings call transcript of one fiscal quarter, the
+  quarter 1 to 4. Take the year and the quarter from `transcript_dates`.
 - `news(symbol, limit?)`: recent stock news: 20 items, or `limit` up to 100.
 - `segments(symbol)`: the revenue by product and by region, two responses under `product` and
   `geographic`.
 - `insider_trades(symbol)`: the insiders' trades.
 - `transcript_dates(symbol)`: the fiscal year, the quarter and the date of every earnings call on
-  file, newest first.
-- `dcf(symbol)`: FMP's discounted cash flow value and its levered one, under `dcf` and `levered`.
-- `pe_history(symbol)`: GuruFocus's daily trailing P/E series, reused for seven days.
+  file, newest first. It finds the last call, so you never guess a year.
+- `dcf(symbol)`: FMP's discounted cash flow value and its levered one, two responses under `dcf`
+  and `levered`. A cross-check: neither the engine nor the secondary valuation reads it.
+- `pe_history(symbol)`: GuruFocus's daily trailing P/E series, reused for seven days. It answers
+  the whole daily series, thousands of rows. Read `multiples_history` instead for the points and
+  the statistics with their refs; it reads the same stored series.
 
-Each answers `{responseId, observedAt, reused, payload}`; `segments` answers two of them, under
-`responses.product` and `responses.geographic`. Cite a field of a payload as
-`response:<responseId>/<json pointer>`, such as `response:731/0/revenue`. The server reuses a
-response it fetched within the reuse window, so a repeated call costs no vendor call. "the
-pass-throughs are busy: four calls are in flight, try again" (503): wait a little and call again.
-"no FMP key" (503): the server has no vendor key; use the host's own tools and record findings.
+Each answers `{responseId, observedAt, reused, payload}`. `segments` and `dcf` answer two of them,
+`{responses: {product: ..., geographic: ...}}` and `{responses: {dcf: ..., levered: ...}}`. Cite
+a field of a payload as `response:<responseId>/<json pointer>`, such as `response:731/0/revenue`.
+The server reuses a response it fetched within the reuse window, so a repeated call costs no
+vendor call. The refusals:
+
+- "the pass-throughs are busy: four calls are in flight, try again" (503): wait a little and call
+  again.
+- "no FMP key" (503): the server has no FMP key, so it serves no pass-through; use the host's own
+  tools and record findings.
+- "no GuruFocus key: the pe-history pass-through is off" (503): the server has no GuruFocus key;
+  `multiples_history` still serves the trailing series stored before, if any, and the forward one.
+- A vendor call that failed (502), with the vendor's sentence.
 
 ## The writes
 
@@ -113,18 +130,22 @@ pass-throughs are busy: four calls are in flight, try again" (503): wait a littl
 - `finding_add(symbol, as_of, text, source, value?, unit?, period?)`: record a fact from outside
   Fairband with its source, so a report can cite it as `finding:<id>`.
 - `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source)`: record a figure
-  the company guided on a call for a future period; an NTM anchor override cites it as
-  `guidance:<id>`.
+  the company guided on a call for a future period, low and high equal for a point; it answers the
+  record with the midpoint and, for a fiscal-year revenue or EPS figure, the step the server
+  computed. An override cites it in its evidence as `guidance:<id>`; a report cites its figures.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input;
   applied, it answers `{override, review, bridge}`; refused, the sentence and the `override`.
 - `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over
   the rest, or cleared when none is left.
 - `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: value the
-  company a second way, from your drivers or from your own free-cash-flow path, one of the two; it
-  answers the stored secondary valuation.
+  company a second way, by the standard discounted cash flow from your `drivers`, or from your own
+  free-cash-flow path in `parts`, exactly one of the two; it answers the stored secondary
+  valuation, with its projection or its parts and its grid. Every report needs one on the latest
+  snapshot.
 - `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
   across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`;
-  nothing is overridden.
+  nothing is overridden. `current` marks the pair in force as `[i, j]`; a cell whose valuation
+  refuses is `null`.
 - `derive(symbol, derivations)`: compute figures from refs; it answers
   `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`.
 - `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`:
@@ -141,20 +162,37 @@ pass-throughs are busy: four calls are in flight, try again" (503): wait a littl
 ## The records inside the arguments
 
 - An evidence item (`override_add`, `secondary_valuation`): `{kind, ref, note}`. The kind is
-  `filing`, `transcript`, `url`, `vendor`, `base-rate` or `finding`. The ref says where: `10-K
-  2025, Item 7`, a URL, `response:<id>` for a stored vendor response, a finding's id. On
+  `filing`, `transcript`, `url`, `vendor`, `base-rate`, `finding` or `guidance`. The ref says
+  where: `10-K 2025, Item 7`, a URL, `response:<id>` for a stored vendor response, a finding's id,
+  and for a `guidance` item `guidance:<id>`, the record's id with no path. A `guidance` item of
+  any other form is refused, "a guidance item cites its record as guidance:<id>" (400); a record
+  that is not the company's, "no guidance record <id> for <symbol>" (404); a record a later call
+  replaced, "guidance record <id> is superseded by record <id>" (409). An NTM anchor override
+  needs one: "an NTM anchor override needs a guidance record among its evidence". On
   `secondary_valuation`, the item that backs a debt or a cash you pass adds `figure`, `debt` or
-  `cash`.
+  `cash`, and one item at least names no `figure`: "the path needs its own evidence item".
+- A guidance record (`guidance_add`): the `metric` is `revenue`, `eps`, `operating_margin`,
+  `free_cash_flow`, `capex`, `revenue_growth` or `eps_growth`; the `period` a fiscal year (`2027`)
+  or a quarter (`2027Q1`, no dash); `low` and `high` in the metric's unit, dollars in full, a
+  percent as a fraction; the `basis` `gaap`, `adjusted` or `constant-currency`; `as_of` the call's
+  date; `text` the sentence verbatim; `source` a string, the transcript's `response:<id>` or a
+  filing. A newer record of the same metric, period and basis supersedes the older, in the order of
+  the calls' dates.
 - A finding's source (`finding_add`): `{kind, ref, note}`, the kind one of `filing`,
   `transcript`, `url`, `vendor` or `base-rate`. `as_of` is the date the fact describes, as
   `2026-09-30`. The `unit` is `currency`, `percent`, `multiple`, `count`, `per-share`, `score` or
   `years`. The `value` is in that unit: dollars in full, a percent as a fraction. The `period` is a
   fiscal year (`2025`), a quarter (`2026-Q2`) or `ttm`.
 - The drivers (`secondary_valuation`): `{years, revenue_growth, operating_margin, tax_rate,
-  sales_to_capital, terminal_growth}`, the two growth and margin lists with an entry for each year,
-  rates as fractions.
+  sales_to_capital, terminal_growth}`, rates as fractions: `years` N from 3 to 15; the
+  `revenue_growth` and `operating_margin` lists with an entry for each year; the terminal growth
+  from −1.00 to g_T. The ranges are the policy's `secondary_driver_ranges` (`SKILL.md`, "The
+  secondary valuation").
 - A part (`secondary_valuation`): `{name, fcff, terminal_growth, note}`, `fcff` a list of dollars
   for years one to N.
+- A sensitivity axis (`sensitivity`): a tag of the overrides table the route reads, and one to five
+  values in the unit an override of it takes: "an axis holds one to five values"; the two tags
+  differ, "the two tags differ".
 - A derivation (`derive`): `{operation, a, b, years?}`. The operation is `ratio` (a ÷ b),
   `difference` (a − b), `sum` (a + b), `growth` (a ÷ b − 1) or `cagr`, the compound annual growth
   over `years`. `a` and `b` are refs.
