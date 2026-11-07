@@ -1208,7 +1208,7 @@ r is the effective policy's required return, locked as for an override (14.2). T
     terminal = terminal FCFF ÷ (r − g), discounted by (1 + r)^N
     firm value = Σ PV_t + the discounted terminal
 
-A year whose revenue falls reinvests nothing, so a decline does not create cash; a terminal growth at or below zero releases no capital, so a decline creates no cash in the terminal either. A terminal growing above zero reinvests g ÷ ROIC_T of its NOPAT, the engine's own stable-growth rule (4.8). The formula is the route's, but on a Wide moat ROIC_T here is 4.7's rule on the ten-year aggregate ROIC (15.3), where the route's takes the runway measure of 4.6.
+A year whose revenue falls reinvests nothing, so a decline does not create cash; a terminal growth at or below zero releases no capital, so a decline creates no cash in the terminal either. A terminal growing above zero reinvests g ÷ ROIC_T of its NOPAT, the engine's own stable-growth rule (4.8). The formula is the route's, but on a Wide moat ROIC_T here is 4.7's rule on the ten-year aggregate ROIC (15.3), where the route's own terminal takes the runway measure of 4.6 on the two mature routes and 4.7's rule on the return at the target margin on the growth and Start-up routes.
 
 The parts form discounts each part:
 

@@ -537,7 +537,8 @@ terminal growth and reinvests the share that growth needs at the terminal return
 r on a Narrow or None moat; on a Wide one, the company's ten-year aggregate ROIC, held between r
 and the policy's cap, or r where the snapshot holds no ten-year ROIC, as on the growth routes. A
 terminal growth at or below zero reinvests nothing. This is the engine's own stable-growth rule,
-so the route's value and this one rest on one terminal convention. The equity is the firm value
+with the terminal return read as above; the route's own terminal reads its return differently
+on some routes, so the two values share the rule and not always the figure. The equity is the firm value
 less debt plus cash. The value a share is the equity over the diluted shares.
 
 Set the drivers from the thesis, and say in the reason why each one is where it is. The consensus,

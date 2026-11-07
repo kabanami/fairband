@@ -11,7 +11,8 @@ Amended 2026-11-07, after plan 1 merged and the founder read the playbook: the r
 sections with the last earnings call, the debate and the thesis, the guidance record, cites and overrides as footnotes, the standard DCF on
 every report, the cycle, the key judgments as the last section, the multiples history, the charts
 on the report page, and the Inbox view's count (11, 12, 13, 14, 15.3, 18.4, 18.5, 19, 24, and the
-log's three rows of that date). Plan 1b carries the report's side; plan 2 the page.
+log's three rows of that date). Plan 1b carries the report's side; plan 2 the page. The build
+rulings of plan 1b (2026-11-07) are marked in place and listed in the log's last row.
 
 This document adds to `docs/method.md` (sections 14, 15 and 16, and the versions table) and to the
 Methodology page. It changes no mechanical figure: the mechanical method stays
@@ -228,7 +229,12 @@ claimed items (18.5).
   period and basis supersedes the older (`superseded_by`), in the order of the calls' dates: a
   record of an earlier call recorded later is stored already superseded; an override or a
   secondary valuation citing a superseded record is refused 409 "guidance record <id> is
-  superseded by record <id>" (build rulings of Task 6b, 2026-11-07). Every record stays, so a
+  superseded by record <id>" (build rulings of Task 6b, 2026-11-07); an NTM anchor override
+  (`earnings.ntm`, `revenue.ntm`) needs among its evidence a current record of the tag's metric
+  (`eps` or `revenue`) for a fiscal year on the `gaap` basis, else `refused-evidence`; a lasting
+  NTM override drops at the next full refresh or revalue once its record's fiscal year is before
+  the snapshot's base year, "the guided year has passed" (build rulings of the final review,
+  2026-11-07). Every record stays, so a
   later report shows the track record, guided against delivered. Written with `guidance_add`, read with `guidance`.
 
   **The rules** (the founder, 2026-11-07): guidance reaches the valuation only when it is clear,
@@ -438,9 +444,12 @@ value: the rate in force stays r. *My call*; `SensitivityGrid` draws it (18.4).
 
 **Required on every report.** The report check refuses a submission that cites no secondary
 valuation on the report's snapshot: "the report needs a secondary valuation on snapshot <id>"
-(13.3). The founder: always done. Where the route gives a value, the reviewed value leads and
-the secondary is the second view; where the route refuses or no route fits, the secondary stands
-in on the row and in the report (18.1).
+(13.3). The founder: always done. The rule does not apply to a company that cannot have one: a
+foreign filer or a snapshot with no diluted share count, the two refusals the secondary route
+makes that no agent can fix; Appendix A names the reason and the playbook has the agent say it
+in the Valuation section (build ruling of the final review, 2026-11-07). Where the route gives a
+value, the reviewed value leads and the secondary is the second view; where the route refuses or
+no route fits, the secondary stands in on the row and in the report (18.1).
 
 Stored (17) with the form, the drivers or the parts, the projection or the per-year present
 values, the grid, the firm value, the equity, the value a share, the levels, the reason and the
@@ -572,7 +581,8 @@ The structure first, each failure one sentence: twelve sections for a full repor
 valuation review, under the exact headings of 13.1 in order; the stance a `stance_words` word;
 one judgment of each kind the route needs, each with a `decision` and no figure in it; and a
 secondary valuation on the report's snapshot (11), refused "the report needs a secondary
-valuation on snapshot <id>". Then the numbers.
+valuation on snapshot <id>", unless the snapshot is a foreign filer or has no diluted share
+count. Then the numbers.
 
 The six failures, in the server's words, which the component and the playbook match on:
 `unresolved reference`, `wrong unit`, `wrong period`, `wrong snapshot`, `a number with no
@@ -662,7 +672,9 @@ by five, and stores the grid as a record cited `sensitivity:<id>/<i>/<j>`, with 
 force marked. Nothing is overridden: the record is a reading, logged like a derivation. A tag the
 route does not read, or a value outside its range, is refused as an override would be. The page
 draws the record the report cites with `SensitivityGrid` (18.4), the price as the baseline. *My
-call*: plan 1's template promised "a small sensitivity table" with no tool to make one.
+call*: plan 1's template promised "a small sensitivity table" with no tool to make one. A reading
+taken under a review that is no longer the company's current review on its snapshot is cited as
+`wrong snapshot` ("the review moved"), as a `review:` cite is (build ruling of the final review).
 
 ## 14. The playbook (B-57)
 
@@ -1187,3 +1199,4 @@ Plan 2, the page:
 | 2026-11-07 | The last earnings call is a section of its own (13.1, section 5), in both modes, since "prices crash or increase based on the earnings call" and "the thesis is formulated, confirmed, or broken in the last earnings call". Its shape, Claude's, accepted: the verdict first; the quarter against expectations; the story management is telling, tested claim by claim (claim, evidence, driver, test; possible, plausible, probable; the drift; what was not said); the guidance table; the positives and the negatives; the questions and answers; what the thesis takes, ending on the gap between the price's move and the value's. The thesis takes a position on each claim of the call: "the company narrative should be the basis for the thesis, whether its accepted or rejected and everything in between". Founder. |
 | 2026-11-07 | Guidance: a stored record with the midpoint and the step computed by the server (9); it reaches the reviewed value through an override citing the record, never the mechanical value. The rules, founder: "only use guidance as overrides if its very clear, any ambiguity etc. then the fall back is the consensus … no need for a fixed words table"; "usage of guidance is on a best effort basis, not required"; a next-quarter figure was to enter when it completes the fiscal year (Claude's rule, agreed); the build found the completed year behind every engine input, so it feeds no override and is read against the consensus in the call section (Task 8's ruling). Two anchor tags, `earnings.ntm` and `revenue.ntm`, guidance-backed only, since the NTM anchors were locked (10.2); Claude's call, open to the founder. |
 | 2026-11-07 | The transcript probe: one FMP call for MSFT (five keys, the call as plain speaker-labelled text, the `year` the fiscal year) and the dates endpoint over 100 random companies of the live universe: 95 with a transcript inside 120 days, five companies that hold no call. The dates endpoint becomes the `transcript_dates` pass-through (15.3). |
+| 2026-11-07 | Build rulings, plan 1b (Claude, during the build, each in place above): the cycle gap comes off the anchor earnings only, after the margin normalization on Mature Stable (10.2); a secondary valuation's terminal releases no capital at or below zero growth, the terminal growth runs from −100% to g_T, the parts grid's rows are shifts (11); the drivers form's trailing revenue from the statements and ROIC_T from the ten-year aggregate (11); grid and sensitivity refs count from 1; the sensitivity reading is an agent's write and a reading under a moved review is `wrong snapshot` (13.8); the P/E history on an unpaced GuruFocus client under `gf`, an unreadable or all-zero series never reused, a failure logs no multiples and a day's logged multiple is never blanked (13.7, 15.3); a guidance record supersedes by metric, period and basis in the order of the calls, a superseded record backs nothing, an NTM anchor needs a gaap fiscal-year record of its metric and drops once the guided year is behind the base year, a next-quarter figure feeds no override (9); the secondary rule spares a foreign filer and a row with no diluted share count (11, 13.3); the judgments refused 400 on `bull`/`bear`; the Markdown keeps GFM footnotes. |
