@@ -16,6 +16,14 @@ The expiry rule (``post_expiry_items``) runs when the inbox is read: every compa
 watchlist whose latest snapshot expired (``valid_until`` before today), with no open item and no
 expiry item yet posted for that same ``valid_until``, gets a valuation review posted by the
 system; then every pending expiry item whose company is on no watchlist drops.
+
+An expiry item stands for its window, the ``valid_until`` it was posted for, whatever becomes of
+it. Declined, in particular, it holds: no new item is posted for the company on any later read
+while its latest snapshot's window is that one, including a newer snapshot in the same window,
+as a price refresh or a revalue on unchanged inputs writes (the window is the next earnings date
+or the data date's fallback, so only new data moves it). A new window that has also ended may
+post again. The window, not the snapshot, is the key, so a daily price refresh does not undo a
+decline.
 """
 
 import sqlite3

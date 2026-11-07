@@ -19,6 +19,8 @@
   var REFUSED = {
     POST: 'Not created', PATCH: 'Not renamed', DELETE: 'Not deleted', PUT: 'Not added'
   };
+  /* A refused write's sentence, with the server's reason; null for a write it took. */
+  var refusal = P.refusal;
 
   var panel = document.getElementById('watchlists');
   var root = ReactDOM.createRoot(panel);
@@ -62,14 +64,6 @@
       P.reload();
       return P.reloadWatchlists();
     }).then(render);
-  }
-
-  /* A refused write's sentence, with the server's reason; null for a write it took. */
-  function refusal(head, r) {
-    if (r.ok) return null;
-    var detail = r.body && typeof r.body.detail === 'string' ? r.body.detail
-      : 'the server answered ' + r.status;
-    return head + ': ' + detail + '.';
   }
 
   /* Create: the new list's Add a company field takes focus, ready for its first company. */
@@ -141,7 +135,8 @@
      item already open for the company, as already open; any other answer, a 400 or a 5xx, stops
      the run, and its sentence, the server's, stands under the head, led by the company it stopped
      at. The meta line counts as the run goes; the header's Inbox count follows on its next read.
-     Focus goes back to the button. */
+     As it ends, the drawer, if it shows a company on the list, reads it again, so its Request
+     research follows, and focus goes back to the button. */
   function requestResearch(list) {
     var tally = { posted: 0, open: 0 };
     var made = { method: 'POST', id: list.id, head: 'Not posted' };
@@ -162,6 +157,7 @@
         });
       }, Promise.resolve({ ok: true }));
     }, function () {
+      list.symbols.forEach(function (entry) { P.reloadDetail(entry.symbol); });
       state.focus = inList(list.id, '.app-wl__request');
     });
   }
@@ -268,11 +264,11 @@
     return Number(n).toLocaleString('en-US') + (n === 1 ? ' company' : ' companies');
   }
 
-  /* What a Request research run came to, or has come to so far: Posted 3 requests · 2 already
-     open; null before a run. */
+  /* What a Request research run came to, or has come to so far, for the meta line after the day
+     the list was made: posted 3 requests · 2 already open; null before a run. */
   function requested(tally) {
     if (!tally) return null;
-    return 'Posted ' + tally.posted + (tally.posted === 1 ? ' request' : ' requests') +
+    return 'posted ' + tally.posted + (tally.posted === 1 ? ' request' : ' requests') +
       (tally.open ? ' · ' + tally.open + ' already open' : '');
   }
 

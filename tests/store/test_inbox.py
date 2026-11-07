@@ -265,3 +265,24 @@ def test_a_new_valid_until_posts_again_after_the_first_is_done(
     [second], [] = post_expiry_items(conn, TODAY, LATER)
     assert work_item(conn, second).expiry_valid_until == date(2026, 10, 15)
     assert [i.id for i in work_items(conn, "pending")] == [second]
+
+
+def test_a_declined_expiry_item_holds_for_its_window(conn: sqlite3.Connection, core: int) -> None:
+    """Declining an expiry item means something: no new item on any later read while the
+    company's latest snapshot carries the window it was posted for, a newer snapshot in that same
+    window (a price refresh's) included; a new window that has also ended posts again."""
+    _expire(conn, "AAPL")
+    [first], [] = post_expiry_items(conn, TODAY, NOW)
+    decline_item(conn, first, "nothing new to read", NOW)
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [])  # read again the same day
+    assert post_expiry_items(conn, TODAY + timedelta(days=30), LATER) == ([], [])  # a month on
+    _expire(conn, "AAPL")  # a newer snapshot in the same window
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [])
+    assert open_item(conn, "AAPL") is None
+    _expire(conn, "AAPL", date(2026, 10, 15))  # a new window, ended too
+    [second], [] = post_expiry_items(conn, TODAY, LATER)
+    assert (work_item(conn, second).state, work_item(conn, second).expiry_valid_until) == (
+        "pending",
+        date(2026, 10, 15),
+    )
+    assert work_item(conn, first).state == "declined"

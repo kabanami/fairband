@@ -773,26 +773,36 @@ def test_header_has_the_six_views() -> None:
 
 def test_the_count_follows_the_poll() -> None:
     """Spec 18.5: the header's Inbox count is the open work items, pending and claimed. The page
-    reads /api/inbox as it loads and every ten seconds after, whether a refresh runs or not (the
-    refresh's own poll runs only while one does); the read runs the expiry rule on the server, so
-    a watched company whose window ended counts on the next read without a reload. The header
-    draws again only when the count moves; a failed read keeps the count and the next read comes
-    all the same; and the Inbox view hands its own reads over, so the count matches the table it
-    shows. At 0 the bundle draws no count."""
+    reads /api/inbox as it loads and every thirty seconds after, whether a refresh runs or not
+    (the refresh's own poll runs only while one does), but not while the page is hidden: each read
+    takes the server's write lock for the expiry rule, and shown again the page reads at once. The
+    read runs the expiry rule, so a watched company whose window ended counts on the next read
+    without a reload. The header draws again only when the count moves; a failed read keeps the
+    count and the next read comes all the same; the Inbox view hands its own reads over, so the
+    count matches the table it shows, and while it shows, its table takes each of the header's
+    reads (onInbox). At 0 the bundle draws no count."""
     js = _static_file("controls.js")
-    assert "var INBOX_MS = 10000;" in js
-    assert "var OPEN = ['pending', 'claimed'];" in js
+    assert "var INBOX_MS = 30000;" in js
+    assert "var OPEN = P.OPEN_STATES;" in js
     assert "open: 0 /* the open work items, pending and claimed: the Inbox view's count */" in js
     read = _function(js, "pollInbox")
     _in_order(
         read,
-        "var request = ++latestInbox;",
         "clearTimeout(inboxTimer);",
+        "if (document.hidden) return;",
+        "var request = ++latestInbox;",
         "P.getJson('/api/inbox')",
-        "if (request === latestInbox) countInbox(body.items);",
+        "if (request !== latestInbox) return;",
+        "countInbox(body.items);",
+        "if (P.onInbox) P.onInbox(body.items);",
         ".catch(function () { /* the count stays as it was */ })",
         "if (request === latestInbox) inboxTimer = setTimeout(pollInbox, INBOX_MS);",
     )
+    assert (
+        "document.addEventListener('visibilitychange', function () {\n"
+        "    if (!document.hidden) pollInbox();\n"
+        "  });"
+    ) in js
     count = _function(js, "countInbox")
     _in_order(
         count,
@@ -813,8 +823,42 @@ def test_the_count_follows_the_poll() -> None:
     assert js.rstrip().endswith("render();\n  poll();\n  pollInbox();\n})();")
     view = _static_file("inbox.js")
     assert "P.countInbox(body.items);" in _function(view, "load")
+    # the header's reads redraw the view's table while it shows, unless its own read is in flight
+    _in_order(
+        _function(view, "fromHeader"),
+        "if (panel.hidden || state.loading) return;",
+        "state.items = items;",
+        "render();",
+    )
+    assert "P.onInbox = fromHeader;" in view
     bundle = _component_file("bundle.js")
     assert "v.count ? h('span', { className: 'fb-hdr__count figure-sm' }, v.count) : null" in bundle
+
+
+def test_one_copy_of_the_open_states_and_the_refusal() -> None:
+    """A work item's open states and a refused write's sentence are app.js's, on FairbandPage, and
+    the header, the Inbox view and the Watchlists view read them there. The sentence is the
+    server's string detail as it arrived, led by the write's head, or the status when the server
+    sent none."""
+    app = _static_file("app.js")
+    assert "var OPEN_STATES = ['pending', 'claimed'];" in app
+    assert "refusal: refusal" in app and "OPEN_STATES: OPEN_STATES" in app
+    _in_order(
+        _function(app, "refusal"),
+        "if (r.ok) return null;",
+        "var detail = r.body && typeof r.body.detail === 'string' ? r.body.detail",
+        ": 'the server answered ' + r.status;",
+        "return head + ': ' + detail + '.';",
+    )
+    for name, uses in (
+        ("controls.js", ("var OPEN = P.OPEN_STATES;",)),
+        ("inbox.js", ("var OPEN = P.OPEN_STATES;", "var refusal = P.refusal;")),
+        ("watchlists.js", ("var refusal = P.refusal;",)),
+    ):
+        js = _static_file(name)
+        assert "function refusal(" not in js and "['pending', 'claimed']" not in js, name
+        for text in uses:
+            assert text in js, (name, text)
 
 
 def test_controls_js_names_a_missing_worker() -> None:
@@ -1168,8 +1212,9 @@ def test_the_watchlist_requests_research(client: TestClient) -> None:
     the list in turn, one post at a time, as the owner: a 201 counts as posted and a 409, an item
     already open for the company, as already open; any other answer, a 400 or a 5xx, stops the run,
     its sentence, the server's, under the head with the company it stopped at. The list's meta
-    line says what the run came to as it goes, Posted 3 requests · 2 already open, until the next
-    write; then the lists load again, and the header's count follows on its next read."""
+    line says what the run came to as it goes, "… · posted 3 requests · 2 already open", until the
+    next write. As it ends, the drawer reads its company again if it is one on the list, the lists
+    load again, and the header's count follows on its next read."""
     js = _static_file("watchlists.js")
     head = _function(js, "head")
     _in_order(head, "'Request research')", "'Rename')", "'Delete')")
@@ -1190,12 +1235,14 @@ def test_the_watchlist_requests_research(client: TestClient) -> None:
         "else return r;",
         "render();",
         "}, Promise.resolve({ ok: true }));",
+        "list.symbols.forEach(function (entry) { P.reloadDetail(entry.symbol); });",
+        "state.focus = inList(list.id, '.app-wl__request');",
     )
     words = _function(js, "requested")
     _in_order(
         words,
         "if (!tally) return null;",
-        "return 'Posted ' + tally.posted + (tally.posted === 1 ? ' request' : ' requests') +",
+        "return 'posted ' + tally.posted + (tally.posted === 1 ? ' request' : ' requests') +",
         "(tally.open ? ' · ' + tally.open + ' already open' : '');",
     )
     write = _function(js, "write")
@@ -1249,7 +1296,7 @@ def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
         "var HEADS = ['Symbol', 'Mode', 'State', 'Posted', 'By', 'Claimed by', 'Note', 'Report'];"
         in js
     )
-    assert "var OPEN = ['pending', 'claimed'];" in js
+    assert "var OPEN = P.OPEN_STATES;" in js
     row = _function(js, "row")
     _in_order(
         row,
@@ -1292,7 +1339,8 @@ def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
         "P.api.patch('/api/inbox/' + item.id, { action: 'decline', reason: reason })",
         "return refusal('Not declined', r);",
         "if (error) state.errors[item.id] = error;",
-        "state.declining = null;",
+        # a taken decline closes its own reason line, not another row's the owner opened meanwhile
+        "if (state.declining === item.id) state.declining = null;",
         "P.reloadDetail(item.symbol);",
         "return load();",
     )

@@ -9,7 +9,8 @@
    under the row: the reason field and Decline again, the owner's decline, and Cancel. A refused
    decline's sentence, the server's, stands on a line under its row. The view reads the inbox as
    it opens and after every write, each read running the expiry rule on the server, and hands
-   each read to the header, so its count matches the table. */
+   each read to the header, so its count matches the table; while it shows, the header's own
+   reads redraw the table too. */
 (function () {
   'use strict';
 
@@ -17,7 +18,8 @@
   var F = Fairband;
   var P = FairbandPage;
   var HEADS = ['Symbol', 'Mode', 'State', 'Posted', 'By', 'Claimed by', 'Note', 'Report'];
-  var OPEN = ['pending', 'claimed']; /* the states an item is declined from */
+  var OPEN = P.OPEN_STATES; /* the states an item is declined from */
+  var refusal = P.refusal;
 
   var panel = document.getElementById('inbox');
   var root = ReactDOM.createRoot(panel);
@@ -59,12 +61,12 @@
 
   /* Decline: the owner's decline of an open item, with the reason as typed, its ends trimmed.
      One at a time, so a second press never sends a second decline. A decline clears the
-     sentences of those before it. A taken one closes the reason line and leaves focus on its
-     row's symbol; a refused one's sentence stands under its row, the line and its reason kept for
-     another try while the item is open, and focus goes back to the field once the read has
-     landed, or to the row's symbol when the item is no longer open (declined elsewhere, say).
-     Then the drawer, if it shows the company, reads it again, so its Request research follows,
-     and the view reads the inbox again. */
+     sentences of those before it. A taken one closes its own reason line, not another row's the
+     owner opened meanwhile, and leaves focus on its row's symbol; a refused one's sentence stands
+     under its row, the line and its reason kept for another try while the item is open, and focus
+     goes back to the field once the read has landed, or to the row's symbol when the item is no
+     longer open (declined elsewhere, say). Then the drawer, if it shows the company, reads it
+     again, so its Request research follows, and the view reads the inbox again. */
   function decline(item) {
     var reason = (state.reasons[item.id] || '').trim();
     if (!reason || state.pending !== null) return;
@@ -83,21 +85,13 @@
         if (error) state.errors[item.id] = error;
         else {
           delete state.reasons[item.id];
-          state.declining = null;
+          if (state.declining === item.id) state.declining = null;
         }
         state.focus = (error ? [inRow(item.id, '.app-inbox__reason')] : [])
           .concat([inRow(item.id, '.app-inbox__symbol')]);
         P.reloadDetail(item.symbol);
         return load();
       });
-  }
-
-  /* A refused write's sentence, with the server's reason; null for a write it took. */
-  function refusal(head, r) {
-    if (r.ok) return null;
-    var detail = r.body && typeof r.body.detail === 'string' ? r.body.detail
-      : 'the server answered ' + r.status;
-    return head + ': ' + detail + '.';
   }
 
   /* ------------------------------------------------------------------ the view */
@@ -230,5 +224,16 @@
 
   function render() { root.render(h(View)); }
 
+  /* The header's own read of the inbox, every thirty seconds: while the view shows, the table
+     takes its items, so the table and the count agree, unless a read of the view's own is in
+     flight, which lands after it. */
+  function fromHeader(items) {
+    if (panel.hidden || state.loading) return;
+    state.items = items;
+    state.error = null;
+    render();
+  }
+
   P.onShow.inbox = load;
+  P.onInbox = fromHeader;
 })();

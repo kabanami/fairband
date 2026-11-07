@@ -4,15 +4,18 @@ snapshot."""
 
 from collections.abc import Callable
 from contextlib import closing
-from datetime import datetime, time, timedelta
+from dataclasses import replace
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
 from support.web import HEADER, NOW
 
+from fairband.engine.route import refusal_result
+from fairband.policy import load_policy
 from fairband.store.db import connect
-from fairband.store.snapshots import latest_snapshot
+from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, IDENTIFY_FIRST, PRINCIPAL_HEADER
 
 AT = NOW.isoformat()
@@ -468,3 +471,55 @@ def test_a_declined_item_over_the_api_from_the_owner(
         expiry["id"],
     )
     assert declined["summary"] == f"declined: {reason}"
+
+
+def _snapshot_until(db_path: Path, symbol: str, valid_until: date) -> int:
+    """A newer snapshot of ``symbol`` under the latest refresh, its window ending ``valid_until``,
+    as a price refresh writes one in the same window or a full refresh a new window; its id."""
+    result = refusal_result(symbol, "a test row", load_policy(), date(2026, 9, 1))
+    with closing(connect(db_path)) as conn:
+        refresh_id = conn.execute("SELECT MAX(id) FROM refreshes").fetchone()[0]
+        return insert_snapshot(
+            conn, replace(result, valid_until=valid_until), refresh_id, clock=lambda: NOW
+        )
+
+
+def test_a_declined_expiry_item_holds_for_its_window(
+    client: TestClient, client_with_clock: Callable[[datetime], TestClient], db_path: Path
+) -> None:
+    """Declining an expiry item means something (spec 8, the store's expiry rule): the inbox read
+    again, the same day or a month on, posts no new item while AAPL's latest snapshot carries the
+    window the declined item was posted for, a newer snapshot in that window included; a new
+    snapshot whose window has also ended posts a new one."""
+    with closing(connect(db_path)) as conn:
+        snapshot = latest_snapshot(conn, "AAPL")
+    assert snapshot is not None
+    window = snapshot.valid_until
+    core = _post(client, "/api/watchlists", {"name": "Core"}, HEADER)
+    client.put(f"/api/watchlists/{core['id']}/symbols/AAPL", headers=HEADER)
+    later = datetime.combine(window + timedelta(days=1), time(9, 30), NOW.tzinfo)
+    past = client_with_clock(later)
+    [expiry] = past.get("/api/inbox").json()["items"]
+    body = {"action": "decline", "reason": "nothing new to read"}
+    assert past.patch(f"/api/inbox/{expiry['id']}", json=body, headers=HEADER).status_code == 200
+
+    def items(at: TestClient) -> list[tuple[int, str, str | None]]:
+        found = at.get("/api/inbox").json()["items"]
+        return [(i["id"], i["state"], i["expiryValidUntil"]) for i in found]
+
+    declined = [(expiry["id"], "declined", window.isoformat())]
+    assert items(past) == declined  # read again the same day
+    month_on = client_with_clock(later + timedelta(days=30))
+    assert items(month_on) == declined
+    _snapshot_until(db_path, "AAPL", window)  # a newer snapshot in the same window
+    assert items(month_on) == declined
+    new_window = window + timedelta(days=20)  # a new window, ended by the month-on read
+    new_id = _snapshot_until(db_path, "AAPL", new_window)
+    [posted, first] = month_on.get("/api/inbox").json()["items"]
+    assert (first["id"], first["state"]) == (expiry["id"], "declined")
+    assert (posted["state"], posted["origin"], posted["snapshotId"]) == (
+        "pending",
+        "expiry",
+        new_id,
+    )
+    assert posted["expiryValidUntil"] == new_window.isoformat()

@@ -32,6 +32,9 @@
   };
   /* A work item's two modes, as the inbox takes them (spec 2026-11-06 Tier 2, 8). */
   var REQUEST_MODES = ['valuation review', 'full report'];
+  /* A work item's open states: work not yet done, which the header's Inbox count counts and the
+     owner may decline (spec 2026-11-06 Tier 2, 8 and 18.5). */
+  var OPEN_STATES = ['pending', 'claimed'];
   /* An applied override's Result row in Details when no valued review on the latest snapshot
      holds it (spec 2026-11-06 Tier 2, 18.3). */
   var NO_EFFECT = 'No effect to show: not inside a valued review on the latest snapshot';
@@ -164,22 +167,24 @@
 
   function two(n) { return (n < 10 ? '0' : '') + n; }
 
-  /* What controls.js uses: the screen's reload when a refresh ends, the write helpers, the GET
-     helper, the local-time helper and the phase numbers; and the later views, find, the lists
-     (null until they load), their reload, which settles once they are in, and watch, the marks'
-     onWatch, which opens the popup; the loaded rows (null until they load), the chosen columns,
-     openRow, which opens a row's drawer, and reloadDetail, which reads the drawer's company again
-     after another view's write about it (the Inbox view's decline, spec 2026-11-06 Tier 2, 18.5).
-     controls.js adds show, onShow, section, running and countInbox, and methodology.js adds
-     methodologySection, which the drawer's link reads; a view drawn from the rows or the lists
-     sets onRender, which runs after each draw of the screen, so it draws again as they load and
-     change. The report page (report.js, spec 2026-11-06 Tier 2, 18.4) draws with
-     the drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
+  /* What controls.js uses: the screen's reload when a refresh ends, the write helpers and a
+     refused write's sentence, the GET helper, the local-time helper, the phase numbers and a work
+     item's open states; and the later views, find, the lists (null until they load), their
+     reload, which settles once they are in, and watch, the marks' onWatch, which opens the popup;
+     the loaded rows (null until they load), the chosen columns, openRow, which opens a row's
+     drawer, and reloadDetail, which reads the drawer's company again after another view's write
+     about it (the Inbox view's decline and a watchlist's Request research, spec 2026-11-06 Tier
+     2, 18.5 and 18.6). controls.js adds show, onShow, section, running and countInbox, the Inbox
+     view onInbox, and methodology.js adds methodologySection, which the drawer's link reads; a
+     view drawn from the rows or the lists sets onRender, which runs after each draw of the screen,
+     so it draws again as they load and change. The report page (report.js, 18.4) draws with the
+     drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
      evidence, pairs, a date, a total, a count, a report's footnote numbers, and Request research
      with a request of its own (asking). */
   window.FairbandPage = {
-    reload: load, api: api, getJson: getJson, localIso: localIso, PHASE_NUMBER: PHASE_NUMBER,
+    reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
+    PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
     find: find,
     watchlists: function () { return state.watchlists; },
     reloadWatchlists: reloadWatchlists,
@@ -429,11 +434,14 @@
     });
   }
 
-  /* A refused write's sentence, with the server's reason; null for a write it took. */
+  /* A refused write's sentence, led by the write's own head, with the server's reason as it
+     arrived, or its status when it sent none; null for a write it took. The popup's, and every
+     later view's through FairbandPage. */
   function refusal(head, r) {
     if (r.ok) return null;
-    return head + ': ' + (r.body && r.body.detail ? String(r.body.detail)
-      : 'the server answered ' + r.status) + '.';
+    var detail = r.body && typeof r.body.detail === 'string' ? r.body.detail
+      : 'the server answered ' + r.status;
+    return head + ': ' + detail + '.';
   }
 
   /* The popup's writes run one after another in the order made, so a quick second change never
