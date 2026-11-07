@@ -74,6 +74,7 @@ its count of companies in the latest run.</desc>
 <li><a href="#methodology/decline">Decline</a></li>
 <li><a href="#methodology/start-up">Start-up</a></li>
 <li><a href="#methodology/flags">The flags</a></li>
+<li><a href="#methodology/agents">Agents and reviews</a></li>
 <li><a href="#methodology/sources">Sources</a></li>
 <li><a href="#methodology/your-settings">Your settings</a></li>
 </ol>
@@ -897,6 +898,89 @@ default applies.</span></li>
 carries a belief or implied growth of <span data-policy="long_runway_growth_flag">—</span> or
 more.</span></li>
 </ul>
+</section>
+
+<section id="agents">
+<h2 class="title">Agents and reviews</h2>
+<p class="body">The engine values every company by rule. An agent (a model that researches one
+company through Fairband's tools) never writes a value. It changes the engine's inputs, and the
+engine computes the value.</p>
+
+<h3 class="heading">Overrides and the reviewed value</h3>
+<p class="body">An override is a change an agent makes to one input of the engine. It carries a
+reason and evidence, such as a filing or a finding (a dated fact with its source). The engine
+values the company again under its overrides: the reviewed value. The mechanical value (the
+engine's value with no override) does not move.</p>
+<p class="body">An agent may change the phase, the belief, the moat, the target margin and twelve
+other inputs, each within set bounds. Locked inputs, such as the hurdle rate, terminal growth and
+the reported figures, take no override. Only an agent adds or drops an override; you read them.
+The review (the overrides and the value they give) moves to each new snapshot, the company's
+figures from a refresh. An overridden input is tagged JUDGMENT, beside DATA and RULE.</p>
+
+<h3 class="heading">The bridge</h3>
+<p class="body">The bridge leads from the mechanical value to the reviewed value, one line for each
+override. The overrides apply one at a time, in the order of the method's steps. A line names the
+input, its old and new figure, and the change in the value a share. The changes add up to the
+difference.</p>
+
+<h3 class="heading">Mid-cycle earnings</h3>
+<p class="body">A cyclical business (one whose profits rise and fall with its industry's cycle,
+such as memory chips or steel) earns most at a peak. The engine does not know a business is
+cyclical, and values a peak as if it lasted. An agent who finds a business cyclical values it at
+mid-cycle: its earnings across a whole cycle. On the Mature Growth and Mature Stable routes, an
+override moves the starting earnings to mid-cycle. Its bridge line reads mid-cycle earnings.</p>
+
+<h3 class="heading">Guidance</h3>
+<p class="body">A guidance record is a figure the company itself gave on an earnings call for a
+future period. It is stored with the sentence as spoken. Only a clear full-year figure can reach
+the value: a number or a range for a stated metric, on the reported basis. It may replace year 1
+(the next twelve months' consensus) or a consensus step, through an override that names the
+record. The mechanical value never reads guidance. Other guidance is discussed in the report, and
+the consensus stands.</p>
+
+<h3 class="heading">The secondary valuation</h3>
+<p class="body">Every report carries a secondary valuation: a second value a share by a standard
+discounted cash flow
+<a class="app-cite" href="#methodology/src-template">[Damodaran templates]</a>. It stands beside
+the route's value, and is the fallback where the route refuses or no phase fits. The agent sets
+the drivers: revenue growth and the operating margin year by year, a tax rate, sales-to-capital
+and a terminal growth. The engine projects the cash flows from them. Or the agent gives the cash
+flows itself, one part or a sum of parts. The engine discounts them at the hurdle rate,
+<span data-policy="required_return">—</span>, which no agent can change. The terminal growth is at
+most <span data-policy="terminal_growth">—</span>.</p>
+<p class="body">A grid shows the value a share at the hurdle rate and one point either side, across
+three terminal growths. It shows how much of the value is assumption, and is never a value. A
+foreign filer, or a row with no diluted share count, can have no secondary valuation; its report
+says why.</p>
+
+<h3 class="heading">The sensitivity reading</h3>
+<p class="body">A sensitivity reading is a grid of the route's value across up to five values of
+each of two inputs. It shows how much of the value is assumption. A reading overrides nothing:
+the reviewed value does not move.</p>
+
+<h3 class="heading">The stance</h3>
+<p class="body">The stance is the agent's word: buy, hold, trim or avoid. The engine sets none, and
+the designation stays a fact about the price. The agent weighs the reviewed value against the
+levels and the secondary valuation, and the report's thesis argues the stance.</p>
+
+<h3 class="heading">The report</h3>
+<p class="body">A report is the agent's written research on one company. A full report has twelve
+sections, the last earnings call among them; a valuation review has ten. The last section records
+the key judgments (the agent's decisions on the inputs) and the override each produced, if any.
+Every number in a report is a cite of a figure Fairband stores. A number from outside Fairband
+enters as a finding or a guidance record. The server checks every cite before it publishes, and
+rejects a report with any failure whole. The report page shows each cited number with a footnote
+mark, and one list of references at the end.</p>
+
+<h3 class="heading">Where to read them</h3>
+<p class="body">On the screen, the Reviewed column shows the reviewed value. Without one, it shows
+the value of a secondary valuation made on the latest snapshot. The Stance column shows the latest
+report's word. A ◆ after the ticker marks a company with a published report. The drawer marks the
+reviewed value on the meter, then shows the stance and the report's summary. Its Details hold the
+bridge, the overrides, the secondary valuation, the guidance, the judgments and the notes. The
+report page shows the whole report with its charts. The <a href="#inbox">Inbox</a> lists the work
+items (requests for an agent's research on one company). The Request research button, in the
+drawer or on a watchlist, posts one.</p>
 </section>
 
 <section id="sources">

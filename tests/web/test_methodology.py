@@ -1,4 +1,4 @@
-"""The Methodology view (spec 2026-11-04 7): the fragment's twelve sections, its diagram, its live
+"""The Methodology view (spec 2026-11-04 7): the fragment's thirteen sections, its diagram, its live
 spans and its examples; the script that fills the spans, wires the contents and the section hash
 and maps a route to its section; the drawer's link to the row's route section; and the prose rule
 of 7.1, every sentence of the fragment's prose at 25 words or fewer. The repository runs no
@@ -11,6 +11,8 @@ from html import unescape
 from fastapi.testclient import TestClient
 from support.web import _static_file
 
+from fairband.web.methodology_text import section_index, section_text
+
 SECTIONS = [
     "what",
     "life-cycle",
@@ -22,6 +24,7 @@ SECTIONS = [
     "decline",
     "start-up",
     "flags",
+    "agents",
     "sources",
     "your-settings",
 ]
@@ -179,6 +182,41 @@ def test_the_examples_state_method_0_9_s_rules() -> None:
     notes = growth[growth.index(">Flags on this route</h3>") :]
     notes = notes[: notes.index("</p>")]
     assert "A loss larger than revenue, moved in dollars, gets a note." in notes
+
+
+def test_the_agents_section_reads(client: TestClient) -> None:
+    """Spec 2026-11-06 Tier 2, 19, as amended: the section "Agents and reviews", before the
+    sources and in the contents, says in plain words what an override is and that the engine
+    computes the reviewed value, the bridge, the secondary valuation at the hurdle rate (a live
+    value), the mid-cycle basis, guidance, the sensitivity reading, the agent's stance, the report's
+    footnotes and where the records are read; it shows no example figure until a real review
+    exists. The text is served as the MCP methodology tool reads it."""
+    html = _static_file("methodology.html")
+    assert '<li><a href="#methodology/agents">Agents and reviews</a></li>' in html
+    agents = _section(re.sub(r"\s+", " ", html), "agents")
+    assert 'data-policy="required_return"' in agents
+    assert "data-find" not in agents and "Worked example" not in agents
+    assert ("agents", "Agents and reviews") in section_index()
+    found = section_text("agents", client.get("/api/policy").json(), None)
+    assert found is not None
+    title, text = found
+    assert title == "Agents and reviews"
+    for words in (
+        "override",
+        "reviewed value",
+        "mechanical value",
+        "bridge",
+        "secondary valuation",
+        "mid-cycle",
+        "guidance",
+        "sensitivity",
+        "stance",
+        "footnote",
+        "Inbox",
+    ):
+        assert words in text, words
+    assert "at the hurdle rate, 9.0%" in text  # the live value, at the policy's default
+    assert "—" not in text and "  " not in text
 
 
 def test_diagram_draws_six_bands_two_curves_and_the_counts() -> None:

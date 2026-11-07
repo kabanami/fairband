@@ -280,6 +280,7 @@ def test_the_methodology_sections_are_listed(client: TestClient) -> None:
         "decline",
         "start-up",
         "flags",
+        "agents",
         "sources",
         "your-settings",
     ]

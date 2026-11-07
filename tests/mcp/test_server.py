@@ -219,6 +219,7 @@ SECTIONS = [
     "decline",
     "start-up",
     "flags",
+    "agents",
     "sources",
     "your-settings",
 ]
