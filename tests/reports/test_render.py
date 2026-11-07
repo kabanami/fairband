@@ -510,6 +510,10 @@ def test_the_references_list(
     ]
     plain = [{"heading": HEADINGS[0], "parts": ["Plain words."]}]
     assert references(conn, _stored(conn, sid, sections=plain), policy) == []
+    # a policy: ref names the version the report's snapshot was valued under, not the newest
+    later = replace(policy, version="fairband-policy-v99")
+    *_, cited = references(conn, report, later)
+    assert cited["source"] == f"policy required_return, {policy.version}"
 
 
 def test_one_number_per_distinct_ref(

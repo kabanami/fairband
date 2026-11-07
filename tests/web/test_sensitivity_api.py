@@ -23,7 +23,7 @@ from fairband.engine.types import Route
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
-from fairband.reports.check import UNRESOLVED, headings, required_judgments
+from fairband.reports.check import UNRESOLVED, WRONG_SNAPSHOT, headings, required_judgments
 from fairband.store.db import connect
 from fairband.store.refreshes import latest_deciles, save_deciles
 from fairband.store.snapshots import insert_snapshot
@@ -334,3 +334,53 @@ def test_a_missing_company_or_record_is_404(client: TestClient) -> None:
     assert (r.status_code, r.json()) == (404, {"detail": "no snapshot for ZZZZ"})
     r = client.get("/api/sensitivities/99")
     assert (r.status_code, r.json()) == (404, {"detail": "no sensitivity 99"})
+
+
+@pytest.mark.usefixtures("secondaries")
+def test_a_reading_goes_stale_when_the_review_moves(client: TestClient) -> None:
+    """A reading taken under no review, then an override on the same snapshot: the company's
+    current review is a new one, so a cite of the reading is wrong snapshot, "the review moved";
+    a reading taken under the new review cites, until the next override moves it too."""
+    sid = _snapshot_id(client)
+    first = _post(client, GRID)
+    assert first["reviewId"] is None
+    moat = {
+        "tag": "moat.class",
+        "new": "Narrow",
+        "reason": "the patents lapse",
+        "evidence": [TRANSCRIPT],
+        "lifetime": "lasting",
+    }
+    r = client.post("/api/companies/AAPL/overrides", json=moat, headers=AGENT)
+    assert r.status_code == 201, r.text
+    review_id = r.json()["review"]["id"]
+    assert r.json()["review"]["snapshotId"] == sid  # the same snapshot
+
+    def submitted(reading: dict[str, Any]) -> Any:
+        cell = reading["cells"][0][0]
+        cite = {"cite": f"${cell:,.0f}", "ref": f"sensitivity:{reading['id']}/1/1"}
+        body = _report("mature-growth", cite)
+        return client.post("/api/companies/AAPL/reports", json=body, headers=AGENT)
+
+    r = submitted(first)
+    assert r.status_code == 422, r.text
+    ref = f"sensitivity:{first['id']}/1/1"
+    [finding] = r.json()["findings"]
+    assert (finding["what"], finding["detail"]) == (
+        WRONG_SNAPSHOT,
+        f"{ref} was taken under no review: the review moved, so take the reading again",
+    )
+    second = _post(client, GRID)
+    assert second["reviewId"] == review_id
+    belief = moat | {"tag": "growth.belief", "new": 0.08, "reason": "the cycle"}
+    r = client.post("/api/companies/AAPL/overrides", json=belief, headers=AGENT)
+    assert r.status_code == 201, r.text
+    r = submitted(second)
+    [finding] = r.json()["findings"]
+    moved = f"was taken under review {review_id}: the review moved, so take the reading again"
+    assert (finding["what"], finding["detail"]) == (
+        WRONG_SNAPSHOT,
+        f"sensitivity:{second['id']}/1/1 {moved}",
+    )
+    third = _post(client, GRID)
+    assert submitted(third).status_code == 201

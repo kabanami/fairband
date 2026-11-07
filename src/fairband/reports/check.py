@@ -19,8 +19,9 @@ each failure, ``where`` the section and the part counted from 1 and the text at 
 - ``wrong unit``: a cite whose suffix does not fit the ref's unit, or whose number is not the
   ref's value at the report's rounding (``rounded_equal``), the value in the detail as the cite
   should read; a word cited against a number, or a word that is not the ref's;
-- ``wrong period``: a cite naming a period that is not the ref's (``FY2025`` reads ``2025``); a
-  cite naming none passes;
+- ``wrong period``: a cite naming a period that is not the ref's (``FY2025`` reads ``2025``, and
+  a quarter reads the same with its dash or without, ``2027-Q1`` as ``2027Q1``); a cite naming
+  none passes;
 - ``wrong snapshot``: a cite whose ref rests on a snapshot other than the company's latest, or one
   the latest does not reprice (``refs.same_snapshot``), the latest's id in the detail;
 - ``a derived figure the engine has not emitted``: a ``derived:`` cite with no stored derivation
@@ -33,7 +34,10 @@ unresolved, wrong period, wrong unit; one for each quantity of a plain part.
 ``check_judgments`` reads each judgment's decision, which carries no cite: a quantity there is
 ``a number with no reference``, located ``judgment <kind>, decision: <text>``.
 A ``review:`` cite must also be the company's current review, the newest on its snapshot with the
-current review that one or its reprice; else it is ``wrong snapshot``, the current id named.
+current review that one or its reprice; else it is ``wrong snapshot``, the current id named. A
+``sensitivity:`` cite must be of a reading taken under the company's current review, by the same
+rule on the review the reading stored, or under none while none is current on its snapshot; else
+it is ``wrong snapshot``, "the review moved".
 
 A quantity (13.3's token rule) is any number a currency sign leads (``$``, ``€``, ``£``,
 ``¥``, a letter prefix before it or not), whatever letters follow it (``$5``, ``$ 5``, ``US$5``,
@@ -84,6 +88,7 @@ from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
 from fairband.reports.refs import Resolved, Resolver, rests_on, same_snapshot
 from fairband.store.reviews import latest_review, latest_review_on, review_row
+from fairband.store.sensitivities import sensitivity_row
 
 UNRESOLVED = "unresolved reference"
 WRONG_UNIT = "wrong unit"
@@ -129,6 +134,8 @@ STRUCTURE = (
 )
 CHECKS = STRUCTURE + FAILURES
 
+# A quarter as a cite or a ref writes it, with a dash or without: ``2027-Q1``, ``2027Q1``.
+_DASHED_QUARTER = re.compile(r"(\d{4})-?(Q[1-4])")
 _NUMBER = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 # The words after a number, with or without a space and in any case, that make it a quantity
 # whatever its digits: a scale of two letters or more (``bn``, ``mm``, ``million``), points
@@ -450,7 +457,7 @@ def _cite_failure(
     if rested is not None and not same_snapshot(conn, rested, latest):
         why = f"{ref} rests on snapshot {rested}; the company's latest is snapshot {latest}"
         return WRONG_SNAPSHOT, f"{why}: read it again"
-    stale = _stale_review(conn, resolver.symbol, ref)
+    stale = _stale_review(conn, resolver.symbol, ref) or _stale_reading(conn, resolver.symbol, ref)
     if stale is not None:
         return WRONG_SNAPSHOT, stale
     resolved = resolver.resolve(ref)
@@ -486,6 +493,29 @@ def _stale_review(conn: sqlite3.Connection, symbol: str, ref: str) -> str | None
         return None
     now = "the company has none" if current is None else f"cite review:{current.id}"
     return f"{ref} is not the company's current review: {now}"
+
+
+def _stale_reading(conn: sqlite3.Connection, symbol: str, ref: str) -> str | None:
+    """Why a ``sensitivity:`` cite of the company is of a reading taken under a review that is no
+    longer its current one on the reading's snapshot (``_stale_review``'s rule on the reading's
+    stored review; a reading taken under none is stale once a review is current on its snapshot);
+    ``None`` when it is not, or for another ref."""
+    form, _, path = ref.strip().partition(":")
+    head = path.partition("/")[0]
+    reading = sensitivity_row(conn, int(head)) if form == "sensitivity" and head.isdigit() else None
+    if reading is None or reading.symbol != symbol:
+        return None
+    if reading.review_id is None:
+        current = latest_review(conn, symbol)
+        on_it = current is not None and same_snapshot(
+            conn, reading.snapshot_id, current.snapshot_id
+        )
+        if not on_it:
+            return None
+    elif _stale_review(conn, symbol, f"review:{reading.review_id}") is None:
+        return None
+    under = "no review" if reading.review_id is None else f"review {reading.review_id}"
+    return f"{ref} was taken under {under}: the review moved, so take the reading again"
 
 
 def _unit_failure(cite: str, ref: str, resolved: Resolved) -> tuple[str, str] | None:
@@ -553,10 +583,14 @@ def _multiple(token: str) -> bool:
 
 
 def _period(text: str | None) -> str | None:
-    """A period as compared: upper case, a fiscal year's ``FY`` dropped."""
+    """A period as compared: upper case, a fiscal year's ``FY`` dropped, a quarter's dash dropped
+    (``2027-Q1`` reads ``2027Q1``, as a guidance record writes it)."""
     if text is None:
         return None
     upper = text.strip().upper()
+    quarter = _DASHED_QUARTER.fullmatch(upper)
+    if quarter is not None:
+        return quarter[1] + quarter[2]
     return upper[2:] if upper.startswith("FY") and upper[2:].isdigit() else upper
 
 

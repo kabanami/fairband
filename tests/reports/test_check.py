@@ -44,6 +44,7 @@ from fairband.reports.check import (
     shown,
     structure_refusal,
 )
+from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import applied_overrides, drop_override, insert_override
 from fairband.store.research import add_finding
@@ -167,6 +168,35 @@ def test_wrong_period(conn: sqlite3.Connection, policy: Policy, snapshots: dict[
     # a ref with no period takes no period
     on_price = _cite("$150.00", f"snapshot:{sid}/price", "2025")
     assert _one(_check(conn, policy, sid, on_price), sid, "$150.00").what == WRONG_PERIOD
+
+
+def test_a_quarter_reads_the_same_with_its_dash_or_without(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """A guidance record writes a quarter ``2027Q1`` and the consensus ``2026-Q4``: a cite of
+    either names the quarter either way, in any case."""
+    sid = snapshots["AAPL"]
+    at = NOW
+    guided = insert_guidance(
+        conn,
+        "AAPL",
+        "eps",
+        "2027Q1",
+        1.5,
+        1.6,
+        "gaap",
+        at.date(),
+        "We guide Q1.",
+        "a 10-Q",
+        AGENT,
+        at,
+        None,
+    )
+    ref = f"guidance:{guided}/midpoint"
+    for period in ("2027-Q1", "2027Q1", "2027-q1"):
+        assert _check(conn, policy, sid, _cite("$1.55", ref, period)) == [], period
+    found = _one(_check(conn, policy, sid, _cite("$1.55", ref, "2027-Q2")), sid, "$1.55")
+    assert (found.what, found.detail) == (WRONG_PERIOD, f"{ref} is for 2027Q1, not 2027-Q2")
 
 
 def test_unresolved_reference(

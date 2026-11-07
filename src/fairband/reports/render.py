@@ -314,13 +314,16 @@ def references(
 ) -> list[dict[str, Any]]:
     """The refs ``report``'s sections cite, ``{n, ref, source}``, numbered from 1 in the order
     each is first cited; a ref cited again, with a period or without, keeps its number. ``policy``
-    is the effective one and ``tax`` the statements' table."""
+    is the effective one and ``tax`` the statements' table; a ``policy:`` ref's source names the
+    policy version the report's snapshot was valued under."""
     numbered: dict[str, int] = {}
     for _, part in parts(report.sections):
         ref = _cited(part)
         if ref and ref not in numbered:
             numbered[ref] = len(numbered) + 1
-    resolver = Resolver(conn, report.symbol, policy, tax)
+    snapshot = snapshot_row(conn, report.snapshot_id)
+    version = None if snapshot is None else snapshot.policy_version
+    resolver = Resolver(conn, report.symbol, policy, tax, policy_version=version)
     return [{"n": n, "ref": ref, "source": resolver.describe(ref)} for ref, n in numbered.items()]
 
 

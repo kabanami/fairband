@@ -142,7 +142,9 @@ A `review:` cite must be the company's current review: the newest review on the 
 or the one that snapshot reprices. Each applied override and each drop makes a new review; a
 refused override makes none. Cite the review your last applied `override_add` or your last
 `override_drop` answered. When a drop leaves no override applied, the
-company has no review: cite the snapshot.
+company has no review: cite the snapshot. A `sensitivity:` cite goes stale the same way: a reading
+taken before your last applied override or drop is `wrong snapshot`, "the review moved". Take the
+reading again after your last override, and cite the new one.
 
 ## What counts as a quantity
 
@@ -247,8 +249,8 @@ gets one for each quantity.
 | `a number with no reference` | a quantity in plain text, or in a judgment's text | Cite it. Write a small count in words. Reword a name with a free number. Record a fact Fairband does not hold as a finding first. Never record a threshold you chose as a finding: tie it to a cited figure or state it in words ("A threshold you choose"). Take every figure out of the judgment's text. |
 | `unresolved reference` | the ref names nothing, or the record holds no figure there | Copy the ref from the tool's answer again: check the form, the id, the symbol and the year. A table cell with no value cannot be cited: say in words that the figure is not on file. |
 | `wrong unit` | the suffix does not fit the ref's unit, or the number is not the stored value at the report's rounding | The detail gives the value as the cite should read. Write it so. A price takes cents; a percent one decimal; a multiple two. |
-| `wrong period` | the cite's period is not the ref's | Correct the period or the ref, or leave the period out. |
-| `wrong snapshot` | the ref rests on a snapshot other than the latest, or a `review:` ref is not the current review | Read `company` and `reviews` again. Take the ids the detail names. Check each figure, since a revalue may have moved them, and submit again. |
+| `wrong period` | the cite's period is not the ref's (a quarter reads the same with its dash or without, `2027-Q1` as `2027Q1`) | Correct the period or the ref, or leave the period out. |
+| `wrong snapshot` | the ref rests on a snapshot other than the latest, a `review:` ref is not the current review, or a `sensitivity:` ref's reading was taken before the review moved | Read `company` and `reviews` again. Take the ids the detail names. Check each figure, since a revalue may have moved them, and submit again. |
 | `a derived figure the engine has not emitted` | a `derived:` ref with no stored derivation of the company, or a multiple in plain text | Call `derive` and cite the `derived:` id it answers. |
 
 Fix every finding of the answer, then submit the whole report again.

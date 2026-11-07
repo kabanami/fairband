@@ -86,9 +86,10 @@ revenue line of fiscal 2025 on file"; ``table:`` "the growth table, revenue grow
 ``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
 ``guidance:`` "guidance record 5: EPS for fiscal 2027, the midpoint"; ``derived:`` "derivation 7:
 the ratio of <a> and <b>", the operands' refs; ``response:`` "FMP segments, observed 1 Nov 2026";
-``policy:`` "policy required_return, <the policy's version>". A ref whose form or record names
-nothing, a record of another company among them, is its own description; a ``secondary:`` or
-``sensitivity:`` ref is read as ``resolve`` reads it, so a path its record lacks names nothing.
+``policy:`` "policy required_return, <the version>", the ``policy_version`` the resolver is given
+(the report's snapshot's), else the policy's. A ref whose form or record names nothing, a record
+of another company among them, is its own description; a ``secondary:`` or ``sensitivity:`` ref
+is read as ``resolve`` reads it, so a path its record lacks names nothing.
 
 ``same_snapshot`` is the reprice rule (13.2): a later snapshot that reprices the cited one, with
 the same data date, method, policy, settings hash and value, counts as the cited one.
@@ -471,10 +472,14 @@ class Resolver:
         symbol: str,
         policy: Policy,
         tax: TaxTable | None = None,
+        *,
+        policy_version: str | None = None,
     ) -> None:
         self.conn = conn
         self.symbol = symbol
         self.policy = policy
+        # The version a ``policy:`` ref's source names: the report's snapshot's when given.
+        self.policy_version = policy.version if policy_version is None else policy_version
         self.tax = load_tax_table() if tax is None else tax
         self._cache: dict[str, Any] = {}
         self._readers: dict[str, Callable[[str], Resolved | None]] = {
@@ -540,7 +545,7 @@ class Resolver:
             case "response", _:
                 found = self._response_source(head)
             case "policy", _ if path:
-                found = f"policy {path}, {self.policy.version}"
+                found = f"policy {path}, {self.policy_version}"
         return ref.strip() if found is None else found
 
     def _once(self, key: str, read: Callable[[], Any]) -> Any:
