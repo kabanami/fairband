@@ -902,52 +902,54 @@ more.</span></li>
 
 <section id="agents">
 <h2 class="title">Agents and reviews</h2>
-<p class="body">The engine values every company by rule. An agent (a model that researches one
-company through Fairband's tools) never writes a value. It changes the engine's inputs, and the
-engine computes the value.</p>
-
 <h3 class="heading">Overrides and the reviewed value</h3>
-<p class="body">An override is a change an agent makes to one input of the engine. It carries a
-reason and evidence, such as a filing or a finding (a dated fact with its source). The engine
-values the company again under its overrides: the reviewed value. The mechanical value (the
-engine's value with no override) does not move.</p>
-<p class="body">An agent may change the phase, the belief, the moat, the target margin and twelve
-other inputs, each within set bounds. Locked inputs, such as the hurdle rate, terminal growth and
-the reported figures, take no override. Only an agent adds or drops an override; you read them.
-The review (the overrides and the value they give) moves to each new snapshot, the company's
-figures from a refresh. An overridden input is tagged JUDGMENT, beside DATA and RULE.</p>
+<p class="body">An override is a change an agent (a model that researches one company through
+Fairband's tools) makes to one input of the engine. It carries a reason and evidence, such as a
+filing or a finding (a dated fact with its source). The engine values the company again under its
+overrides: the reviewed value. An agent never writes a value. The mechanical value (the engine's
+value with no override) does not move.</p>
+<p class="body">An agent may change sixteen inputs, such as the phase, the belief and the moat, each
+within set bounds. Locked inputs, such as the hurdle rate, terminal growth and the reported
+figures, take no override. An agent adds and drops overrides; you read them. A refresh also drops
+a period-tied override (one that corrects a single period's figure) once newer statements arrive
+or that figure changes. The review (the overrides and the value they give) moves to each new
+snapshot, the company's figures from a refresh. An overridden input is tagged JUDGMENT, beside
+DATA (a figure from the vendor) and RULE (a value from the policy).</p>
 
 <h3 class="heading">The bridge</h3>
 <p class="body">The bridge leads from the mechanical value to the reviewed value, one line for each
-override. The overrides apply one at a time, in the order of the method's steps. A line names the
-input, its old and new figure, and the change in the value a share. The changes add up to the
-difference.</p>
+override. A line names the input, its old and new figure, and the change in the value a share.
+The changes add up to the difference.</p>
 
 <h3 class="heading">Mid-cycle earnings</h3>
 <p class="body">A cyclical business (one whose profits rise and fall with its industry's cycle,
-such as memory chips or steel) earns most at a peak. The engine does not know a business is
-cyclical, and values a peak as if it lasted. An agent who finds a business cyclical values it at
-mid-cycle: its earnings across a whole cycle. On the Mature Growth and Mature Stable routes, an
-override moves the starting earnings to mid-cycle. Its bridge line reads mid-cycle earnings.</p>
+such as memory chips or steel) earns most at a peak. The engine does not judge whether a business
+is cyclical. Mature Stable scales earnings down to the ten-year median margin when the margin
+stands far above its history. The margin flag may then read Possible cycle peak. Otherwise a
+peak's earnings stand. An agent who finds a business cyclical bases the reviewed value on mid-cycle
+earnings (what it earns across a whole cycle). On the Mature Growth and Mature Stable routes, an
+override takes the starting earnings to mid-cycle, after any such scaling.</p>
 
 <h3 class="heading">Guidance</h3>
 <p class="body">A guidance record is a figure the company itself gave on an earnings call for a
-future period. It is stored with the sentence as spoken. Only a clear full-year figure can reach
-the value: a number or a range for a stated metric, on the reported basis. It may replace year 1
-(the next twelve months' consensus) or a consensus step, through an override that names the
-record. The mechanical value never reads guidance. Other guidance is discussed in the report, and
-the consensus stands.</p>
+future period. Only a clear full-year figure can reach the reviewed value: a number or a range for
+a stated metric, on the reported basis. A range takes the midpoint. It may replace year 1 (the next
+twelve months' consensus) or the consensus growth of year 2 or 3 (a consensus step). It does so
+only through an override that names the record. A refresh drops an override of year 1 once its
+guided year has passed. Using guidance is the agent's best effort, never required. The mechanical
+value never reads guidance. Other guidance is discussed in the report, and the consensus
+stands.</p>
 
 <h3 class="heading">The secondary valuation</h3>
 <p class="body">Every report carries a secondary valuation: a second value a share by a standard
 discounted cash flow
 <a class="app-cite" href="#methodology/src-template">[Damodaran templates]</a>. It stands beside
-the route's value, and is the fallback where the route refuses or no phase fits. The agent sets
-the drivers: revenue growth and the operating margin year by year, a tax rate, sales-to-capital
-and a terminal growth. The engine projects the cash flows from them. Or the agent gives the cash
-flows itself, one part or a sum of parts. The engine discounts them at the hurdle rate,
-<span data-policy="required_return">—</span>, which no agent can change. The terminal growth is at
-most <span data-policy="terminal_growth">—</span>.</p>
+the route's value, and is the fallback where the route refuses or no phase fits. The engine
+projects the cash flows from drivers the agent sets: revenue growth and margin by year, a tax
+rate, sales-to-capital and a terminal growth. Or the agent gives the cash flows itself, one part
+or a sum of parts (a company valued segment by segment). The engine discounts them at the locked
+hurdle rate, <span data-policy="required_return">—</span>. The terminal growth is the agent's
+choice, at most the locked terminal growth, <span data-policy="terminal_growth">—</span>.</p>
 <p class="body">A grid shows the value a share at the hurdle rate and one point either side, across
 three terminal growths. It shows how much of the value is assumption, and is never a value. A
 foreign filer, or a row with no diluted share count, can have no secondary valuation; its report
@@ -955,32 +957,30 @@ says why.</p>
 
 <h3 class="heading">The sensitivity reading</h3>
 <p class="body">A sensitivity reading is a grid of the route's value across up to five values of
-each of two inputs. It shows how much of the value is assumption. A reading overrides nothing:
-the reviewed value does not move.</p>
+each of two inputs. A reading overrides nothing: the reviewed value does not move.</p>
 
 <h3 class="heading">The stance</h3>
 <p class="body">The stance is the agent's word: buy, hold, trim or avoid. The engine sets none, and
-the designation stays a fact about the price. The agent weighs the reviewed value against the
-levels and the secondary valuation, and the report's thesis argues the stance.</p>
+the designation stays a fact about the price. The agent weighs the price against the reviewed
+value's levels and the secondary valuation, and the report's thesis argues the stance.</p>
 
 <h3 class="heading">The report</h3>
-<p class="body">A report is the agent's written research on one company. A full report has twelve
-sections, the last earnings call among them; a valuation review has ten. The last section records
-the key judgments (the agent's decisions on the inputs) and the override each produced, if any.
-Every number in a report is a cite of a figure Fairband stores. A number from outside Fairband
-enters as a finding or a guidance record. The server checks every cite before it publishes, and
-rejects a report with any failure whole. The report page shows each cited number with a footnote
-mark, and one list of references at the end.</p>
+<p class="body">A full report, the agent's written research on one company, has twelve sections,
+the last earnings call among them. A valuation review has ten, without “The business” and
+“Industry and competition”. Every number in a report cites a figure Fairband stores. A number from
+outside Fairband enters as a finding or a guidance record. The server checks every cite before it
+publishes, and rejects a report with any failure whole. The report page marks each cited number
+with a footnote; the references follow the last section, before the appendixes.</p>
 
 <h3 class="heading">Where to read them</h3>
-<p class="body">On the screen, the Reviewed column shows the reviewed value. Without one, it shows
-the value of a secondary valuation made on the latest snapshot. The Stance column shows the latest
-report's word. A ◆ after the ticker marks a company with a published report. The drawer marks the
-reviewed value on the meter, then shows the stance and the report's summary. Its Details hold the
-bridge, the overrides, the secondary valuation, the guidance, the judgments and the notes. The
-report page shows the whole report with its charts. The <a href="#inbox">Inbox</a> lists the work
-items (requests for an agent's research on one company). The Request research button, in the
-drawer or on a watchlist, posts one.</p>
+<p class="body">The screen's Reviewed column shows the reviewed value, else the value of a
+secondary valuation on the latest snapshot. The Stance column shows the latest report's word. A ◆
+after the ticker marks a company with a published report. The drawer shows the reviewed value on
+its meter, the stance and the report's summary. Its Details hold the bridge, the overrides, the
+secondary valuation, the guidance, the judgments (the agent's decisions on the inputs) and the
+notes. The <a href="#inbox">Inbox</a> lists the work items (requests for an
+agent's research on one company). Request research in the drawer posts one. On a watchlist, it
+posts a valuation review for each company on the list with no open item.</p>
 </section>
 
 <section id="sources">

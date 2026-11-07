@@ -188,8 +188,8 @@ def test_the_agents_section_reads(client: TestClient) -> None:
     """Spec 2026-11-06 Tier 2, 19, as amended: the section "Agents and reviews", before the
     sources and in the contents, says in plain words what an override is and that the engine
     computes the reviewed value, the bridge, the secondary valuation at the hurdle rate (a live
-    value), the mid-cycle basis, guidance, the sensitivity reading, the agent's stance, the report's
-    footnotes and where the records are read; it shows no example figure until a real review
+    value), the mid-cycle basis after Mature Stable's own scaling, guidance, the sensitivity
+    reading, the agent's stance, the report's footnotes and where the records are read; it shows no example figure until a real review
     exists. The text is served as the MCP methodology tool reads it."""
     html = _static_file("methodology.html")
     assert '<li><a href="#methodology/agents">Agents and reviews</a></li>' in html
@@ -215,8 +215,24 @@ def test_the_agents_section_reads(client: TestClient) -> None:
         "Inbox",
     ):
         assert words in text, words
-    assert "at the hurdle rate, 9.0%" in text  # the live value, at the policy's default
+    # the live values, at the policy's defaults
+    assert "at the locked hurdle rate, 9.0%" in text
+    assert "at most the locked terminal growth, 3.0%" in text
     assert "—" not in text and "  " not in text
+    # the task review: Mature Stable's own scaling comes before the mid-cycle override (method 6.2,
+    # 14.4), a consensus step is named in words, and a refresh drops what has lapsed (14.6)
+    for words in (
+        "Possible cycle peak",
+        "after any such scaling",
+        "the consensus growth of year 2 or 3 (a consensus step)",
+        "A range takes the midpoint.",
+        "best effort, never required",
+        "drops a period-tied override",
+        "once its guided year has passed",
+        "a valuation review for each company on the list with no open item",
+    ):
+        assert words in text, words
+    assert "values a peak as if it lasted" not in text
 
 
 def test_diagram_draws_six_bands_two_curves_and_the_counts() -> None:
