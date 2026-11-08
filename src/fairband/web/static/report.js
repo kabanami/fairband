@@ -563,9 +563,11 @@
 
   /* -------------------------------------------------------------------- the reads */
 
-  /* A read whose refusal is the server's sentence, as it arrives. */
+  /* A read whose refusal is the server's sentence, as it arrives. Every read carries the request
+     header, as the page's writes do: the server refuses without it a read that may call a vendor,
+     the multiples history's (D11, B-109), so no other site's page can spend GuruFocus's quota. */
   function read(url) {
-    return fetch(url).then(function (response) {
+    return fetch(url, { headers: { 'X-Fairband-Request': '1' } }).then(function (response) {
       return response.ok ? response.json() : refused(response);
     });
   }

@@ -116,7 +116,7 @@ def _client(tmp_path: Path, db_path: Path, policy: Policy, passthrough: Passthro
 
     settings = _settings(tmp_path, db_path)
     app = create_app(settings, policy, conn_factory, clock=lambda: NOW, passthrough=passthrough)
-    return TestClient(app, base_url=HOST)
+    return TestClient(app, base_url=HOST, headers=HEADER)  # a read that may call a vendor (D11)
 
 
 @pytest.fixture
@@ -140,8 +140,36 @@ def with_gurufocus(
 
 
 def test_no_passthrough_is_503(client: TestClient) -> None:
-    response = client.get("/api/vendor/transcript/ACME", params=Q3)
+    response = client.get("/api/vendor/transcript/ACME", params=Q3, headers=HEADER)
     assert (response.status_code, response.json()) == (503, {"detail": "no FMP key"})
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/api/vendor/transcript/ACME?year=2026&quarter=3",
+        "/api/vendor/pe-history/ACME",
+        "/api/vendor/filings/ACME",  # refused before the kind is read
+        "/api/companies/ACME/multiples-history",
+    ],
+)
+def test_a_read_that_may_call_a_vendor_needs_the_request_header(
+    with_gurufocus: TestClient, vendor: Vendor, url: str
+) -> None:
+    """D11 and B-109: a read that may call a vendor spends its quota and stores its answer, and an
+    image tag on any other site passes the host check, so the read carries
+    ``X-Fairband-Request: 1`` as a write does, else 403 with the writes' sentence and no vendor
+    called. The other reads need none."""
+    bare = TestClient(with_gurufocus.app, base_url=HOST)
+    for method in (bare.get, bare.head):
+        refused = method(url)
+        assert refused.status_code == 403, method
+    assert bare.get(url).json() == {"detail": "missing X-Fairband-Request header"}
+    assert bare.get(url, headers={"X-Fairband-Request": "0"}).status_code == 403
+    assert vendor.paths == []
+    assert with_gurufocus.get(url).status_code in (200, 400)  # with it: served, or the kind's 400
+    for read in ("/api/screen", "/api/companies/AAPL", "/api/companies/AAPL/band-history"):
+        assert bare.get(read).status_code == 200, read  # a read of the store alone needs none
 
 
 def test_an_unknown_kind_is_400(
@@ -152,7 +180,7 @@ def test_an_unknown_kind_is_400(
         " transcript-dates, dcf or pe-history)"
     )
     for app_client in (with_passthrough, client):  # with a key or without
-        response = app_client.get("/api/vendor/filings/ACME")
+        response = app_client.get("/api/vendor/filings/ACME", headers=HEADER)
         assert (response.status_code, response.json()) == (400, {"detail": detail})
     assert vendor.paths == []
 
@@ -366,14 +394,14 @@ def test_serve_paces_the_runs_and_the_pass_through_on_one_limiter(
     answers: list[httpx.Response] = []
 
     def run_app(app: Any, **kwargs: Any) -> None:
-        with TestClient(app, base_url=HOST) as client:
+        with TestClient(app, base_url=HOST, headers=HEADER) as client:
             answers.append(client.get("/api/vendor/transcript/ACME", params=Q3))
             limiter = limiters["passthrough"]
             assert limiter is not None
             paces.append(limiter.calls_per_minute)
             with closing(connect(tmp_path / "data" / "fairband.db")) as conn:
                 write_settings(conn, {"refresh.fmp_calls_per_minute": 600}, None, NOW)
-            answers.append(client.post("/api/refresh", json={"kind": "full"}, headers=HEADER))
+            answers.append(client.post("/api/refresh", json={"kind": "full"}))
             _join_runs()
             paces.append(limiter.calls_per_minute)
 
@@ -417,7 +445,7 @@ def test_serve_hands_the_pass_through_a_gurufocus_client_and_closes_it(
     answers: list[httpx.Response] = []
 
     def run_app(app: Any, **kwargs: Any) -> None:
-        with TestClient(app, base_url=HOST) as client:
+        with TestClient(app, base_url=HOST, headers=HEADER) as client:
             answers.append(client.get("/api/vendor/pe-history/ACME"))
             answers.append(client.get("/api/companies/ACME/multiples-history"))
         assert closed == []  # still serving
@@ -445,7 +473,7 @@ def test_serve_without_a_gurufocus_key_builds_no_gurufocus_client(
     answers: list[httpx.Response] = []
 
     def run_app(app: Any, **kwargs: Any) -> None:
-        with TestClient(app, base_url=HOST) as client:
+        with TestClient(app, base_url=HOST, headers=HEADER) as client:
             answers.append(client.get("/api/vendor/pe-history/ACME"))
 
     monkeypatch.setattr(uvicorn, "run", run_app)

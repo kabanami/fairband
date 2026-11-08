@@ -40,6 +40,17 @@ def test_get_and_post_carry_the_request_header(api: FairbandClient) -> None:
     assert (entry["principal"], entry["actor"], entry["client"]) == ("owner", None, None)
 
 
+def test_the_reads_that_may_call_a_vendor_pass(api: FairbandClient) -> None:
+    """The multiples history read and the pass-through route require the request header (D11,
+    B-109), which the client sends on every call: the read is served, and without an FMP key the
+    pass-through answers its own 503, not the header's 403."""
+    history = api.get("/api/companies/AAPL/multiples-history")
+    assert (history["symbol"], history["pe"], history["peNote"]) == ("AAPL", None, "no FMP key")
+    with pytest.raises(Refused) as caught:
+        api.get("/api/vendor/news/AAPL", {"limit": 5})
+    assert (caught.value.status, caught.value.detail) == (503, "no FMP key")
+
+
 def test_the_headers_and_the_parameters_as_sent() -> None:
     sent: list[httpx.Request] = []
 

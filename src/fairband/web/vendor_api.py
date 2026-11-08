@@ -10,8 +10,9 @@ the date of every call on file) and ``dcf`` from FMP, and ``pe-history`` from Gu
 for seven days; ``segments`` and ``dcf`` are two responses each, answered as ``{responses:
 {product: {...}, geographic: {...}}}`` and ``{responses: {dcf: {...}, levered: {...}}}``.
 
-An unknown kind, a symbol that is not one or a missing or bad parameter is a 400 with its
-sentence; without a pass-through (the server has no FMP key) a 503, "no FMP key"; ``pe-history``
+The route may call a vendor, so a request carries ``X-Fairband-Request: 1`` as a write does,
+else 403 before anything else is read (``app``, D11). An unknown kind, a symbol that is not one or
+a missing or bad parameter is a 400 with its sentence; without a pass-through (the server has no FMP key) a 503, "no FMP key"; ``pe-history``
 without a GuruFocus client a 503, "no GuruFocus key: the pe-history pass-through is off"; when no
 slot frees within ten seconds a 503, "the pass-throughs are busy: four calls are in flight, try
 again"; a failed vendor call a 502 with the vendor's sentence, scrubbed.

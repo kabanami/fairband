@@ -20,8 +20,10 @@ note}``: the points oldest first as ``{day, value, ref}``, the statistics ``avg1
   ``peNote`` is ``null`` when the fetch answered a series.
 - ``peForward``, the forward P/E: the multiples log's, ``responseId`` and ``note`` ``null``.
 
-A symbol that is not one is a 400. The route is a sync one, as the pass-through route is: the
-fetch runs on FastAPI's thread pool, under the pass-through's slots and its wait.
+The read may call GuruFocus, so a request carries ``X-Fairband-Request: 1`` as a write does,
+else 403 before anything else is read (``app``, D11). A symbol that is not one is a 400. The route
+is a sync one, as the pass-through route is: the fetch runs on FastAPI's thread pool, under the
+pass-through's slots and its wait.
 """
 
 import sqlite3

@@ -2986,6 +2986,20 @@ def test_the_bundle_draws_what_the_report_charts_need() -> None:
     assert inverse == ["net_debt_to_ebitda", "share_count_change"]
 
 
+def test_the_report_pages_reads_carry_the_request_header() -> None:
+    """D11 and B-109: the server refuses the multiples history read, which may call GuruFocus,
+    without ``X-Fairband-Request: 1``, as it refuses a write; the report page's one read helper
+    sends it on every read, as the page's writes do, and its refusal stays the server's sentence."""
+    report = _code(_static_file("report.js"))
+    read = _function(report, "read")
+    assert "return fetch(url, { headers: { 'X-Fairband-Request': '1' } }).then(" in read
+    assert "return response.ok ? response.json() : refused(response);" in read
+    assert report.count("fetch(") == 2  # the read and the Markdown download
+    assert "headers: { 'Content-Type': 'application/json', 'X-Fairband-Request': '1' }," in (
+        _function(_static_file("app.js"), "send")
+    )
+
+
 def test_each_series_lands_as_its_read_settles() -> None:
     """The multiples history may wait on GuruFocus (13.7): each series lands in the page's state
     as its own read settles and the page draws again, so the charts of the local reads never wait

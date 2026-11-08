@@ -56,12 +56,17 @@ company's review over its applied overrides.
 D11, for a server bound to 127.0.0.1: ``TrustedHostMiddleware`` answers 400 to a request whose
 ``Host`` is neither ``127.0.0.1`` nor ``localhost`` (any port), so a page on another name that
 resolves here (DNS rebinding) cannot read the API; and a request other than ``GET`` or ``HEAD``
-must carry ``X-Fairband-Request: 1``, else 403. A cross-site form cannot send that header, and a
-cross-origin script cannot without a CORS preflight, which the app never answers.
+must carry ``X-Fairband-Request: 1``, else 403. So must the two reads that may call a vendor, the
+pass-through route (``/api/vendor/{kind}/{symbol}``) and the multiples history read
+(``/api/companies/{symbol}/multiples-history``): each spends a vendor's quota and stores its
+answer, and an image tag or a link on any other site passes the host check. The page's read and
+the MCP server's client send the header on every call. A cross-site form cannot send that header,
+and a cross-origin script cannot without a CORS preflight, which the app never answers.
 """
 
 import json
 import logging
+import re
 import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, closing
@@ -137,6 +142,9 @@ _STATIC = resources.files("fairband.web").joinpath("static")
 TRUSTED_HOSTS = ["127.0.0.1", "localhost"]
 REQUEST_HEADER = "X-Fairband-Request"
 _SAFE_METHODS = ("GET", "HEAD")
+# The reads that may call a vendor (D11, B-109), as their routes match a path: no segment holds a
+# slash.
+_VENDOR_READS = re.compile(r"/api/vendor/[^/]+/[^/]+|/api/companies/[^/]+/multiples-history")
 _NO_WORKER = "no refresh worker"
 
 
@@ -178,7 +186,9 @@ def create_app(
     async def require_request_header(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.method not in _SAFE_METHODS and request.headers.get(REQUEST_HEADER) != "1":
+        vendor_read = _VENDOR_READS.fullmatch(request.url.path) is not None
+        guarded = request.method not in _SAFE_METHODS or vendor_read
+        if guarded and request.headers.get(REQUEST_HEADER) != "1":
             return JSONResponse({"detail": f"missing {REQUEST_HEADER} header"}, status_code=403)
         return await call_next(request)
 

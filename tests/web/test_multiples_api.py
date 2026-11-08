@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from support.web import CREATED, HOST, NOW, _settings
+from support.web import CREATED, HEADER, HOST, NOW, _settings
 
 from fairband.policy import Policy
 from fairband.refresh.passthrough import Passthrough
@@ -118,7 +118,8 @@ def with_history(
             clock=lambda: NOW,
             passthrough=passthrough,
         )
-        opened.append(TestClient(app, base_url=HOST))
+        # the read may call a vendor, so it carries the request header (D11)
+        opened.append(TestClient(app, base_url=HOST, headers=HEADER))
         client: TestClient = opened[-1]
         return client
 
@@ -128,7 +129,7 @@ def with_history(
 
 
 def _get(client: TestClient, url: str) -> Any:
-    r = client.get(url)
+    r = client.get(url, headers=HEADER)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -372,5 +373,5 @@ def test_a_failed_fetch_with_nothing_stored_leaves_the_series_null_without_the_t
 
 
 def test_a_symbol_that_is_not_one_is_400(client: TestClient) -> None:
-    response = client.get("/api/companies/A$B/multiples-history")
+    response = client.get("/api/companies/A$B/multiples-history", headers=HEADER)
     assert response.status_code == 400 and response.json()["detail"].startswith("'A$B'")

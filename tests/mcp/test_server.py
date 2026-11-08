@@ -325,7 +325,8 @@ def test_every_read_tool_reads_its_route(api: FairbandClient, client: TestClient
     server = build_server(api)
     answers = _session(server, *[(name, arguments) for name, (arguments, _) in READS.items()])
     for (name, (_, url)), answer in zip(READS.items(), answers, strict=True):
-        expected = client.get(url)
+        # the header the client sends on every call, which the reads that may call a vendor need
+        expected = client.get(url, headers=HEADER)
         if name == "watchlists":  # the route answers a list; a tool answers an object
             assert answer == {"watchlists": expected.json()}
         elif expected.is_success:
