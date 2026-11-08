@@ -11,8 +11,9 @@ Amended 2026-11-07, after plan 1 merged and the founder read the playbook: the r
 sections with the last earnings call, the debate and the thesis, the guidance record, cites and overrides as footnotes, the standard DCF on
 every report, the cycle, the key judgments as the last section, the multiples history, the charts
 on the report page, and the Inbox view's count (11, 12, 13, 14, 15.3, 18.4, 18.5, 19, 24, and the
-log's three rows of that date). Plan 1b carries the report's side; plan 2 the page. The build
-rulings of plan 1b (2026-11-07) are marked in place and listed in the log's last row.
+log's three rows of that date). Plan 1b (merged 2026-11-07) carries the report's side; plan 2
+(merged 2026-11-08) the page. The build rulings of both plans are marked in place and listed in
+the log's last rows.
 
 This document adds to `docs/method.md` (sections 14, 15 and 16, and the versions table) and to the
 Methodology page. It changes no mechanical figure: the mechanical method stays
@@ -208,7 +209,7 @@ claimed items (18.5).
   `as_of` (the date the fact describes), `text`, `source` (`{kind, ref, note}` with kind one of
   `filing`, `transcript`, `url`, `vendor`, `base-rate`), and optionally a `value` with its `unit`
   (`currency`, `percent`, `multiple`, `count`, `per-share`) and a `period` (a fiscal year, a
-  quarter, `ttm`). A finding is the only way a number from outside Fairband enters a report
+  quarter, `ttm`). A finding or a guidance record (9) is the only way a number from outside Fairband enters a report
   (13.3): the agent records it, then cites it. The check cannot prove a finding true; it proves
   it is recorded with its source.
 - **A kill criterion** (B-55): `symbol`, `text` (a measurable event that would prove the view
@@ -844,11 +845,16 @@ the DDL from sections 7 to 13; the plan lists the columns.
 ### 18.1 The row
 
 Two columns and a mark. `Reviewed` is the design system's own `reviewed` key, filled: the latest
-review's value when it is on the company's latest snapshot and has a value; else the latest
-secondary valuation's value while it is current (11); else an em dash. `overrides` is the count
+review's value when it is on the company's latest snapshot (or a reprice of it) and has a value;
+else, only where the route refused, the latest secondary valuation's value a share above zero
+while it is current (11: the secondary stands in where the route refuses and is the second view
+otherwise; build ruling of plan 2's final review, 2026-11-08); else an em dash. `overrides` is the count
 inside. `Stance` (key `agentStance`, a `// fairband:` patch beside the designation column, which
 keeps its key) is the latest published report's word, coloured by the stance tokens, an em dash
-without a report. Both are in the chooser and sortable; the Filters menu gains `STANCE` (the four
+without a report; it fades to `ink-faint` with the mark when the report's snapshot window has
+expired, so a stale stance is not read as current (build ruling of plan 2, Task 1). A secondary
+valuation whose value a share is at or below zero does not fill `Reviewed` (the record stays in
+Details). Both are in the chooser and sortable; the Filters menu gains `STANCE` (the four
 words) and the design system's `reviewedOnly` row, "Has a review". The chooser's default eight
 do not change. *My call.*
 
@@ -865,7 +871,11 @@ In order, and nothing else:
 1. The head as today: the ticker, the phase badge, the name.
 2. The meter: `BandMeter` as today, with a second marker for the reviewed value when one exists,
    labelled by the word "reviewed" in the caption; a `// fairband:` patch (`reviewedValue`). The
-   caption keeps the designation sentence.
+   caption keeps the designation sentence. On a row the route refused, the meter draws from the
+   current review's levels and value when the review has one, else from the secondary valuation's
+   when it counts on the latest snapshot (its caption "Secondary valuation"), with the refusal
+   line kept under it; a refused row with neither keeps no meter (build rulings of plan 2, Task 2
+   and the final review).
 3. The stance line, when a report exists: the word, then a `PrincipalChip` (agent, the actor,
    the report's date). Without a report, nothing.
 4. The report's Summary section, rendered by `ReportReader` (section 1 only), then one button,
@@ -932,7 +942,11 @@ A sixth header view, `Inbox`, with `AppHeader`'s `count` set to the open items, 
 claimed. The founder, 2026-11-07: "a work inbox page and a link in the header, showing a number
 of pending work items"; the count is the open items since both states are work not yet done
 (*my call*, open to pending only). The 2026-11-04 spec reserved the count for the inbox; six words
-fit beside the mark at desktop width and wrap below 840px as the five do. The view: a table of
+fit beside the mark at desktop width and wrap below 980px (the six overflowed between 840 and
+965px, so the wrap point of the 2026-11-04 spec moves; the views' own line wraps below 450px). The
+count is read by its own thirty-second call to `/api/inbox`, paused while the page is hidden and
+read once when it is shown again, since every such read runs the expiry rule under a write lock
+(build rulings of plan 2, Task 5). The view: a table of
 items, newest first, with the symbol (opening the drawer as a watchlist row does), the mode, the
 state word, the posted date and principal, the claimant, the note, the report link when done, and
 for the owner `Decline` with a reason line on a pending or claimed item. Reading the view runs
@@ -1200,3 +1214,4 @@ Plan 2, the page:
 | 2026-11-07 | Guidance: a stored record with the midpoint and the step computed by the server (9); it reaches the reviewed value through an override citing the record, never the mechanical value. The rules, founder: "only use guidance as overrides if its very clear, any ambiguity etc. then the fall back is the consensus … no need for a fixed words table"; "usage of guidance is on a best effort basis, not required"; a next-quarter figure was to enter when it completes the fiscal year (Claude's rule, agreed); the build found the completed year behind every engine input, so it feeds no override and is read against the consensus in the call section (Task 8's ruling). Two anchor tags, `earnings.ntm` and `revenue.ntm`, guidance-backed only, since the NTM anchors were locked (10.2); Claude's call, open to the founder. |
 | 2026-11-07 | The transcript probe: one FMP call for MSFT (five keys, the call as plain speaker-labelled text, the `year` the fiscal year) and the dates endpoint over 100 random companies of the live universe: 95 with a transcript inside 120 days, five companies that hold no call. The dates endpoint becomes the `transcript_dates` pass-through (15.3). |
 | 2026-11-07 | Build rulings, plan 1b (Claude, during the build, each in place above): the cycle gap comes off the anchor earnings only, after the margin normalization on Mature Stable (10.2); a secondary valuation's terminal releases no capital at or below zero growth, the terminal growth runs from −100% to g_T, the parts grid's rows are shifts (11); the drivers form's trailing revenue from the statements and ROIC_T from the ten-year aggregate (11); grid and sensitivity refs count from 1; the sensitivity reading is an agent's write and a reading under a moved review is `wrong snapshot` (13.8); the P/E history on an unpaced GuruFocus client under `gf`, an unreadable or all-zero series never reused, a failure logs no multiples and a day's logged multiple is never blanked (13.7, 15.3); a guidance record supersedes by metric, period and basis in the order of the calls, a superseded record backs nothing, an NTM anchor needs a gaap fiscal-year record of its metric and drops once the guided year is behind the base year, a next-quarter figure feeds no override (9); the secondary rule spares a foreign filer and a row with no diluted share count (11, 13.3); the judgments refused 400 on `bull`/`bear`; the Markdown keeps GFM footnotes. |
+| 2026-11-08 | Build rulings, plan 2 (Claude, during the build, each in place above): B-111's one consensus row per fiscal period by the closeness of the period ends, a row ending within a week after the trailing period end skipped as the reported quarter's duplicate (Task 0; method 2, 5.2, 5.3, 5a.2); the Stance column as the agent's word (the component's derived stance unused), the stance chip fading with the mark, a non-positive secondary not filling Reviewed, the rows' records read in bulk (Task 1); the drawer's Summary with the full report's footnote numbers, the secondary's parts in Details, the secondary's band on a refused row, one request state per view (Task 2); the `report` panel outside the header's views, `ReportReader.footnotes`, one `figure-lg` on the page, the secondary's headline with basis `reviewed` and the caption naming the tool, print without the head figures (Task 3); the chart titles the export's words, `HistoryBars.inverse`, a one-quarter band shown, `hurdleLabel`, the band table in the export (Task 4); the count as pending plus claimed on a thirty-second read, the Inbox table following the header's read, a declined expiry item holding for its window (Task 5); the Methodology section following the method where the playbook's wording differs (Task 6). |
