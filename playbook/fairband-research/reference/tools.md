@@ -95,8 +95,9 @@ each with its own key and stores it, so a report can cite it.
 - `transcript_dates(symbol)`: the fiscal year, the quarter and the date of every earnings call on
   file, newest first. It finds the last call, so you never guess a year.
 - `dcf(symbol)`: FMP's discounted cash flow value and its levered one, two responses under `dcf`
-  and `levered`. A cross-check on the fallback: read it on a refused row only; never beside a
-  route's value. Neither the engine nor the secondary valuation reads it.
+  and `levered`. Read it only where neither the route nor the review values the company, as a
+  cross-check on the secondary valuation; never beside a route's value. Neither the engine nor the
+  secondary valuation reads it.
 - `pe_history(symbol)`: GuruFocus's daily trailing P/E series, reused for seven days. It answers
   the whole daily series, thousands of rows. Read `multiples_history` instead for the points and
   the statistics with their refs; it reads the same stored series.

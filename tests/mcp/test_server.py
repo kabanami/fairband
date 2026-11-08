@@ -279,7 +279,10 @@ def test_every_spec_tool_is_registered(api: FairbandClient) -> None:
         assert description[0].isupper(), tool.name
     assert set(READS) | set(WRITES) | {"report", "identify"} == set(SPEC_TOOLS)
     dcf = next(t.description or "" for t in tools if t.name == "dcf")  # FMP's figure (plan 3)
-    assert "read on a refused row only, as a cross-check on the secondary valuation" in dcf
+    assert (
+        "read only where neither the route nor the review values the company, as a cross-check on"
+        " the secondary valuation"
+    ) in dcf
 
 
 def test_a_write_before_identify_is_refused() -> None:

@@ -274,9 +274,10 @@ company, make no secondary valuation and read no DCF beside the route's value.
   report: "foreign filer: currency and share-unit handling not built yet" and "no diluted share
   count". The company can have no secondary valuation, so publish without one and name the reason
   in section 8. See "The secondary valuation" below.
-- **FMP's own figure**: `dcf(symbol)`, a cross-check on the fallback: read it on a refused row
-  only; never beside a route's value. It gives FMP's discounted cash flow value and its levered
-  one. Section 8 may cite it in one sentence, beside the secondary valuation.
+- **FMP's own figure**: `dcf(symbol)`: read it only where neither the route nor the review
+  values the company, as a cross-check on the secondary valuation; never beside a route's value.
+  It gives FMP's discounted cash flow value and its levered one. Section 8 may cite it in one
+  sentence, beside the secondary valuation.
 - **The route's grid**: `sensitivity` sets two of the route's inputs across a few values each, and
   answers the route's value a share at every pair. Section 8 cites it. See "The sensitivity
   reading" below.

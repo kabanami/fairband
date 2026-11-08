@@ -143,6 +143,11 @@ HISTORY = (
     "On a company the route or the review values, a secondary valuation on file is history: neither"
     " cite it nor weigh it."
 )
+# Where FMP's figure is read: the secondary valuation's scope (the coordinator, final wave).
+DCF_SCOPE = (
+    "only where neither the route nor the review values the company, as a cross-check on the"
+    " secondary valuation"
+)
 # The phrases of the rule before plan 3: a secondary valuation on every report, the second view;
 # and "no DCF of any kind", which the growth routes' own revenue DCFs contradict.
 STALE = (
@@ -153,6 +158,7 @@ STALE = (
     "two values",
     "dcf of any kind",
     "where the route refuses or no route fits",
+    "on a refused row only",
 )
 
 
@@ -234,7 +240,7 @@ def test_the_template_example_passes_the_structural_checks_and_the_token_rule() 
 def test_the_secondary_valuation_is_the_fallback_only() -> None:
     """The founder's rule of 2026-11-08, as ruled on the final review of plan 3: the secondary
     valuation is made where neither the route nor the review values the company, and only there;
-    no DCF weighs on the stance where either does, and FMP's figure is read on a refused row only;
+    no DCF weighs on the stance where either does, and FMP's figure is read in the same scope;
     a secondary valuation on file on a company the route or the review values is history; a refused
     row with nothing to weigh the price against rests the stance on the thesis."""
     steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
@@ -263,7 +269,9 @@ def test_the_secondary_valuation_is_the_fallback_only() -> None:
     )
     for exemption in ("foreign filer", "no diluted share count"):  # step 10's two exemptions
         assert exemption in _tool_entry("secondary_valuation"), exemption
-    assert "on a refused row only" in _tool_entry("dcf")
+    # FMP's figure takes the secondary valuation's scope, in step 10 and in the tool list
+    assert DCF_SCOPE in steps[10]
+    assert DCF_SCOPE in _tool_entry("dcf").lower()
     assert STRUCTURE[-1] in _flat(_read(CITATIONS))  # the structural check as the check names it
     for path in sorted(PLAYBOOK.rglob("*.md")):
         text = _flat(_read(path)).lower()

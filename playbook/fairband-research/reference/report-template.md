@@ -165,8 +165,9 @@ The kill criteria of section 11 test it.
   filer or for no diluted share count, say so in one sentence: the report publishes without one.
   Where the route or your review values the company, write no second value and read no DCF beside
   the route's value.
-- **FMP's figure**, on a refused row only, in one sentence when read, beside the secondary
-  valuation: `response:<responseId>/<json pointer>` of the `dcf` answer.
+- **FMP's figure**, only where neither the route nor the review values the company, in one sentence
+  when read, beside the secondary valuation: `response:<responseId>/<json pointer>` of the `dcf`
+  answer.
 - **A cyclical**: where it is in its cycle, and the mid-cycle basis the values rest on.
 - **The sensitivity grid**: the two inputs it sets, and the range of the value across them, two
   cells `sensitivity:<id>/<i>/<j>`.
