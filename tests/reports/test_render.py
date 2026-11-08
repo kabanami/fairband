@@ -53,11 +53,12 @@ def _stored(
     secondary_id: int | None = None,
     mode: str = "full report",
     sections: list[dict[str, Any]] | None = None,
+    symbol: str = "AAPL",
 ) -> ReportRow:
-    """AAPL's report on snapshot ``sid``, of ``sections`` or ``_sections``' plain ones."""
+    """``symbol``'s report on snapshot ``sid``, of ``sections`` or ``_sections``' plain ones."""
     report_id = insert_report(
         conn,
-        "AAPL",
+        symbol,
         "full report" if mode == "full report" else "valuation review",
         "buy",
         _sections(sid, mode) if sections is None else sections,
@@ -397,6 +398,22 @@ def test_appendix_a_without_a_review_or_a_secondary(
     assert "### Guidance on file\n\nNone." in text
     assert {i["tag"] for i in a["inputs"]} == {"DATA", "RULE"}
     assert a["versions"]["review"] is None and a["versions"]["secondary"] is None
+
+
+def test_the_bridge_without_a_review_names_the_value_that_stands(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Without a review the mechanical value is the value, unless the snapshot refused and has
+    none: then the export says only that there is no review, as the report page does."""
+    for symbol, line in (
+        ("AAPL", "No review: the value is the mechanical one."),
+        ("AAL", "No review."),
+    ):
+        report = _stored(conn, snapshots[symbol], symbol=symbol)
+        a = appendix_a(conn, report, policy)
+        assert a["bridge"] is None and (a["snapshot"]["value"] is None) == (symbol == "AAL")
+        text = markdown(report, a, [], [], {})
+        assert text.split("### Bridge\n\n", 1)[1].split("\n", 1)[0] == line, symbol
 
 
 def test_appendix_b_lists_only_the_terms_used() -> None:

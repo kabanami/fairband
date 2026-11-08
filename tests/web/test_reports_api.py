@@ -473,7 +473,7 @@ def test_a_company_that_can_have_no_secondary_publishes_without_one(
     assert (a["secondary"], a["noSecondary"]) == (None, f"no secondary valuation: {why}")
     text = client.get(f"/api/reports/{report['id']}/markdown").text
     block = text.split("### Secondary valuation\n\n", 1)[1].split("\n", 1)[0]
-    assert block == f"No secondary valuation: {why}."
+    assert block == f"no secondary valuation: {why}"  # the server's sentence, as the page shows it
 
 
 def test_appendix_a_says_none_for_a_report_with_no_secondary_that_could_have_one(

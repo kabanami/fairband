@@ -545,8 +545,9 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
     out += _table((*header, "Cited by"), guided)
     out += ["", "### Bridge", ""]
     bridge = a["bridge"]
-    if bridge is None:
-        out.append("No review: the value is the mechanical one.")
+    if bridge is None:  # the mechanical value is the value, unless the snapshot refused
+        none = a["snapshot"]["value"] is None
+        out.append("No review." if none else "No review: the value is the mechanical one.")
     else:
         mechanical, reviewed = _cell(bridge["mechanicalValue"]), _cell(bridge["reviewedValue"])
         summary = f"Review {bridge['reviewId']}: mechanical value {mechanical}, reviewed value"
@@ -561,7 +562,7 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
     if secondary is not None:
         out += _secondary_tables(secondary)
     else:
-        out.append("None." if why is None else f"{why[:1].upper()}{why[1:]}.")
+        out.append("None." if why is None else why)  # as it arrives, as the page shows it
     out += ["", "### Checks that ran", ""]
     out += _table(("Check", "Rule"), [(c["check"], c["rule"]) for c in a["checks"]])
     out += ["", "### Versions", ""]
