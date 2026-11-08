@@ -19,6 +19,7 @@
   var P = FairbandPage;
   var NO_DATA = 'No data on file.';
   var QUARTER_ENDS = { 1: '-03-31', 2: '-06-30', 3: '-09-30', 4: '-12-31' };
+  var SHORT_LOG = 5; /* the fewest forward readings drawn as a line (13.7) */
 
   /* Financial performance and health (18.4's table): the six tables in the export's order, each
      under its title (charts.TITLES), its charts by its rows, each titled by its row's name there
@@ -250,19 +251,24 @@
   /* The P/E against its own history (13.7), each series against its average over the ten years
      on file, its subtitle saying which: the trailing one a point a month, with the read's note on
      it, the server's sentence, when it has one; the forward one a point a day logged, since the
-     log began. A trailing series with no point says why in the server's words when it sends them,
-     the series' note ("the series could not be read") or the read's. */
+     log began, once the log holds five readings (SHORT_LOG). A forward log of fewer is no chart:
+     its newest reading as a figure and since when the log is kept (shortLog), no line and no
+     average, and no table twin. A trailing series with no point says why in the server's words
+     when it sends them, the series' note ("the series could not be read") or the read's; a
+     forward log with none, that nothing is on file. */
   function multiples(read, tables) {
     if (read.error) return panel('multiples', refused('The P/E history', read.error));
     var m = read.body;
     var forward = m.peForward;
+    var logged = forward.points.filter(function (p) { return p.value != null; });
     return [
       multiple('Trailing P/E', m.pe, m.pe ? byMonth(m.pe.points) : [],
         'the last P/E of each month against its ten-year average' +
           (m.peNote ? ' · ' + m.peNote : ''), tables, (m.pe && m.pe.note) || m.peNote),
-      multiple('Forward P/E', forward, forward.points.map(function (p) {
-        return { period: F.formatDate(p.day), value: p.value };
-      }), forward.since ? 'since ' + F.formatDate(forward.since) : undefined, tables)
+      0 < logged.length && logged.length < SHORT_LOG ? panel('forward', shortLog(forward)) :
+        multiple('Forward P/E', forward, forward.points.map(function (p) {
+          return { period: F.formatDate(p.day), value: p.value };
+        }), forward.since ? 'since ' + F.formatDate(forward.since) : undefined, tables)
     ];
   }
 
@@ -272,6 +278,23 @@
       title: title, subtitle: subtitle, series: series, average: found.stats.avg10y.value,
       basis: 'mechanical', tableView: tables
     }) : noData(title, why));
+  }
+
+  /* A forward log too short to draw (13.7): its title and its basis, as a chart's head; its
+     newest reading as a figure, on its day, in MultipleHistory's end label's form ("17.5x"); and
+     since when the log is kept. */
+  function shortLog(forward) {
+    var logged = forward.points.filter(function (p) { return p.value != null; });
+    var newest = logged[logged.length - 1];
+    var sentence =
+      'logged since ' + F.formatDate(forward.since) + '; a reading is added at each price refresh';
+    return h('figure', { className: 'fb-c' },
+      h('figcaption', { className: 'fb-c__head' },
+        h('span', { className: 'fb-c__title heading' }, 'Forward P/E'),
+        h(F.BasisChip, { basis: 'mechanical', compact: true })),
+      h('p', { className: 'figure' },
+        newest.value.toFixed(1) + 'x on ' + F.formatDate(newest.day)),
+      h('p', { className: 'caption app-muted' }, sentence));
   }
 
   /* The trailing series a point a month, the month's last P/E, from the first month on file to

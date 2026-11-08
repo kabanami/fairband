@@ -3268,6 +3268,26 @@ def test_a_refused_or_empty_series_says_why() -> None:
     assert ".app-chart .fb-c + .app-report__error { margin-top: var(--space-2); }" in page
 
 
+def test_a_short_forward_log_is_a_figure_not_a_chart() -> None:
+    """Spec 13.7 and 18.4 (plan 4): fewer than five readings show the newest as a figure with the
+    sentence, no line and no average; five draw the line. A log with no reading keeps "No data on
+    file.", and the figure's title is the export's."""
+    script = _code(_static_file("charts.js"))
+    assert "var SHORT_LOG = 5;" in script
+    multiples = _function(script, "multiples")
+    assert "logged.length < SHORT_LOG ? panel('forward', shortLog(forward)) :" in multiples
+    assert "0 < logged.length && logged.length < SHORT_LOG ? panel(" in multiples
+    short = _function(script, "shortLog")
+    assert (
+        "'logged since ' + F.formatDate(forward.since) + '; a reading is added at each price refresh'"
+        in short
+    )
+    assert "F.BasisChip" in short and "average" not in short
+    title = SERIES_TITLES["pe_forward"]
+    assert f"h('span', {{ className: 'fb-c__title heading' }}, '{title}')," in short
+    assert "newest.value.toFixed(1) + 'x on ' + F.formatDate(newest.day)" in short
+
+
 def test_the_spread_names_the_hurdle_as_the_export_does() -> None:
     """The page's SpreadChart draws ROIC against the policy's required return, which the export's
     returns table names "Hurdle rate": SpreadChart's `hurdleLabel`, a `// fairband:` patch naming
