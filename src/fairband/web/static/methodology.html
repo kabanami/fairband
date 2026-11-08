@@ -941,15 +941,16 @@ value never reads guidance. Other guidance is discussed in the report, and the c
 stands.</p>
 
 <h3 class="heading">The secondary valuation</h3>
-<p class="body">Every report carries a secondary valuation: a second value a share by a standard
-discounted cash flow
-<a class="app-cite" href="#methodology/src-template">[Damodaran templates]</a>. It stands beside
-the route's value, and is the fallback where the route refuses or no phase fits. The engine
-projects the cash flows from drivers the agent sets: revenue growth and margin by year, a tax
-rate, sales-to-capital and a terminal growth. Or the agent gives the cash flows itself, one part
-or a sum of parts (a company valued segment by segment). The engine discounts them at the locked
-hurdle rate, <span data-policy="required_return">—</span>. The terminal growth is the agent's
-choice, at most the locked terminal growth, <span data-policy="terminal_growth">—</span>.</p>
+<p class="body">Where the route refuses or no phase fits, the report carries a secondary valuation:
+the fallback. It is a value a share by a standard discounted cash flow
+<a class="app-cite" href="#methodology/src-template">[Damodaran templates]</a>. Where the route
+values the company there is none: the engine refuses the call, so no second value weighs on the
+stance. The engine projects the cash flows from drivers the agent sets: revenue growth and margin
+by year, a tax rate, sales-to-capital and a terminal growth. Or the agent gives the cash flows
+itself, one part or a sum of parts (a company valued segment by segment). The engine discounts
+them at the locked hurdle rate, <span data-policy="required_return">—</span>. The terminal growth
+is the agent's choice, at most the locked terminal growth,
+<span data-policy="terminal_growth">—</span>.</p>
 <p class="body">A grid shows the value a share at the hurdle rate and one point either side, across
 three terminal growths. It shows how much of the value is assumption, and is never a value. A
 foreign filer, or a row with no diluted share count, can have no secondary valuation; its report
@@ -962,7 +963,8 @@ each of two inputs. A reading overrides nothing: the reviewed value does not mov
 <h3 class="heading">The stance</h3>
 <p class="body">The stance is the agent's word: buy, hold, trim or avoid. The engine sets none, and
 the designation stays a fact about the price. The agent weighs the price against the reviewed
-value's levels and the secondary valuation, and the report's thesis argues the stance.</p>
+value's levels, or on a refused row the secondary valuation's. The report's thesis argues the
+stance.</p>
 
 <h3 class="heading">The report</h3>
 <p class="body">A full report, the agent's written research on one company, has twelve sections,
@@ -974,9 +976,8 @@ with a footnote; the references follow the last section, before the appendixes.<
 
 <h3 class="heading">Where to read them</h3>
 <p class="body">The screen's Reviewed column shows the reviewed value. Where the route refused,
-it shows the value of a secondary valuation on the latest snapshot instead. Beside a route's value,
-the secondary valuation is a second view, in the drawer's Details and the report. The Stance
-column shows the latest report's word. A ◆
+it shows the value of a secondary valuation on the latest snapshot instead. The Stance column
+shows the latest report's word. A ◆
 after the ticker marks a company with a published report. The drawer shows the reviewed value on
 its meter, the stance and the report's summary. Its Details hold the bridge, the overrides, the
 secondary valuation, the guidance, the judgments (the agent's decisions on the inputs) and the

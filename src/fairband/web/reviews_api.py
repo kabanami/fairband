@@ -58,8 +58,11 @@ blank reason; no evidence; both forms, "a secondary valuation takes drivers or p
 or neither, "a secondary valuation needs drivers or parts"; evidence with no item for the drivers
 or the path itself, every item naming a ``figure``, "the path needs its own evidence item"; a debt
 or a cash passed without its own evidence item, one whose ``figure`` names it. Then, on the
-company's latest snapshot: ``require_current``'s 409s; a ``guidance`` evidence item's 400, 404 and
-409, as an override's; a foreign filer, the snapshot refused as one
+company's latest snapshot: ``require_current``'s 409s; a snapshot with a value, 400 "the route
+values <symbol>: the secondary valuation is the fallback where it refuses", the secondary
+valuation being the fallback where the route refuses or no phase fits (spec 11 as amended for plan
+3, the founder's ruling of 2026-11-08); a ``guidance`` evidence item's 400, 404 and 409, as an
+override's; a foreign filer, the snapshot refused as one
 or its universe row an ADR or in a currency other than USD (a row naming none leaves it to the
 snapshot), 400 with section 7's sentence; no positive diluted share count on the snapshot (its
 ``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share count"; on
@@ -455,8 +458,8 @@ def add_review_routes(
 
     @app.post("/api/companies/{symbol}/secondary", status_code=201)
     def post_secondary(symbol: str, body: SecondaryPost, writer: WriterOf) -> dict[str, Any]:
-        """Value the company from the agent's drivers or path on its latest snapshot and store
-        it."""
+        """Value the company from the agent's drivers or path on its latest snapshot, where the
+        route refused it, and store it."""
         _check_secondary(body)
         drivers = None if body.drivers is None else _drivers(body.drivers)
         parts = None if body.parts is None else [_part(p) for p in body.parts]
@@ -466,6 +469,12 @@ def add_review_routes(
             snapshot = snapshot_of(conn, symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
+            if snapshot.value is not None:
+                raise HTTPException(
+                    400,
+                    f"the route values {symbol}: the secondary valuation is the fallback where it"
+                    " refuses",
+                )
             _require_guidance(conn, symbol, body.evidence)
             if foreign_filer(conn, snapshot):
                 raise HTTPException(400, FOREIGN_FILER)

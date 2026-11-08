@@ -512,7 +512,7 @@ def test_the_twelve_and_ten_headings() -> None:
         "the stance word",
         "the required judgments",
         "the headings in the spec's order",
-        "a secondary valuation on the snapshot",
+        "a secondary valuation on a refused snapshot",
     )
     assert CHECKS == STRUCTURE + FAILURES
 
@@ -542,8 +542,9 @@ def test_an_old_heading_names_the_new_one(policy: Policy) -> None:
 
 
 def test_a_report_needs_a_secondary_valuation_on_the_snapshot(policy: Policy) -> None:
-    """The last structural check: the refusal names the snapshot the report would rest on, and
-    every earlier check answers first."""
+    """The last structural check, which the caller asks only on a refused latest snapshot (plan
+    3): the refusal names the snapshot the report would rest on, and every earlier check answers
+    first."""
     full = list(HEADINGS)
     assert (
         _refusal(policy, full, secondary_on_snapshot=False)

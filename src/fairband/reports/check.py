@@ -6,9 +6,12 @@ full report and ten for a valuation review, which leaves out "The business" and 
 competition"; the stance, one of the policy's ``stance_words``; the required judgments, ``phase``,
 ``moat`` and ``belief`` on every report, ``roic`` where the route is Mature Growth or Mature
 Stable and ``target_margin`` where it is the revenue-growth route (High Growth, Young Growth) or
-Start-up; the headings, spec 13.1's in its order (``HEADINGS``); and a secondary valuation on the
-snapshot the report would rest on, "the report needs a secondary valuation on snapshot <id>",
-which a company that can have none there (a foreign filer, no diluted share count) is spared.
+Start-up; the headings, spec 13.1's in its order (``HEADINGS``); and, on a refused latest snapshot
+only, a secondary valuation on the snapshot the report would rest on, "the report needs a
+secondary valuation on snapshot <id>", which a company that can have none there (a foreign filer,
+no diluted share count) is spared. A valued snapshot needs none: the secondary valuation is the
+fallback where the route refuses, and the secondary route refuses one where it values (plan 3);
+the caller says which with ``secondary_on_snapshot``.
 
 The number check (``check_sections``) walks every part of every section and answers a finding for
 each failure, ``where`` the section and the part counted from 1 and the text at fault,
@@ -130,7 +133,7 @@ STRUCTURE = (
     "the stance word",
     "the required judgments",
     "the headings in the spec's order",
-    "a secondary valuation on the snapshot",
+    "a secondary valuation on a refused snapshot",
 )
 CHECKS = STRUCTURE + FAILURES
 

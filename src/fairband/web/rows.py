@@ -152,11 +152,10 @@ def agent_fields(
     one that reprices it (``same_snapshot_rows``, the reports' rule). ``reviewed`` is the review's
     value when the review counts and has one, ``overrides`` the count of the overrides inside it;
     else, where the route refused (``snapshot`` has no value), the secondary valuation's value a
-    share when it counts and is above zero, with no override inside: spec 11's secondary stands in
-    on the row where the route refuses and is the second view beside a route's value, which the
-    drawer's Details and the report show; else ``None`` and 0. ``agentStance`` is the report's
-    word and ``covered`` its time, its actor (its principal where it names none, an owner's
-    report) and whether the window of the snapshot it rests on ended before ``today``
+    share when it counts and is above zero, with no override inside: spec 11's secondary is the
+    fallback, standing in on the row where the route refuses; else ``None`` and 0. ``agentStance``
+    is the report's word and ``covered`` its time, its actor (its principal where it names none,
+    an owner's report) and whether the window of the snapshot it rests on ended before ``today``
     (``window_ended``); both ``None`` without a report."""
     fields = dict(NO_AGENT_FIELDS)
     if review is not None and review.value is not None and counts_on(snapshot, cited, review):

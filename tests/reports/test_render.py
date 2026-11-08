@@ -391,13 +391,29 @@ def test_appendix_a_lists_the_guidance_on_file(
 def test_appendix_a_without_a_review_or_a_secondary(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
+    """AAPL's snapshot is valued, so a report with no secondary valuation says the route values
+    the company (method 16.6, plan 3); AAL's is refused and could have one, so its report names
+    no reason."""
     a = appendix_a(conn, _stored(conn, snapshots["AAPL"]), policy)
     assert a["overrides"] == [] and a["bridge"] is None and a["secondary"] is None
+    assert a["noSecondary"] == "no secondary valuation: the route values the company"
     assert a["guidance"] == []
     text = markdown(_stored(conn, snapshots["AAPL"]), a, [], [], {})
     assert "### Guidance on file\n\nNone." in text
+    route_values = "no secondary valuation: the route values the company"
+    assert f"### Secondary valuation\n\n{route_values}\n" in text
     assert {i["tag"] for i in a["inputs"]} == {"DATA", "RULE"}
     assert a["versions"]["review"] is None and a["versions"]["secondary"] is None
+    refused = _stored(conn, snapshots["AAL"], symbol="AAL")
+    a = appendix_a(conn, refused, policy)
+    assert (a["secondary"], a["noSecondary"]) == (None, None)
+    assert "### Secondary valuation\n\nNone.\n" in markdown(refused, a, [], [], {})
+    rule = next(c["rule"] for c in a["checks"] if c["check"] == CHECKS[4])
+    assert rule == (
+        "on a refused latest snapshot, the company's newest secondary valuation rests on it or on"
+        " one it reprices; none where the route values the company, for a foreign filer or for a"
+        " snapshot with no diluted share count"
+    )
 
 
 def test_the_bridge_without_a_review_names_the_value_that_stands(

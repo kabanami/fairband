@@ -15,12 +15,12 @@ with the trailing revenue and the terminal return and its projection year by yea
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
 every part's (``GRID_ROWS``), with the rows in words as the export's grid table writes them
 (``rowWords``, for the report page's chart), or, for a report with none whose company can have
-none on its snapshot, why (``noSecondary``, "no secondary valuation: foreign filer" or "...: no
-diluted share count", ``store.secondary.no_secondary``); the checks that ran (``check.CHECKS``, each
-with its rule); the versions (method, policy, settings hash, review and secondary methods); and
-the classifier's evidence. Appendix B (``appendix_b``), the glossary: the terms of ``GLOSSARY``
-that the sections' text uses, a term matched whole and in any case, a plural counted, a term of
-two names (``Growth word, margin direction``) by either.
+none on its snapshot, why (``noSecondary``, "no secondary valuation: the route values the company",
+"...: foreign filer" or "...: no diluted share count", ``store.secondary.no_secondary``); the checks
+that ran (``check.CHECKS``, each with its rule); the versions (method, policy, settings hash,
+review and secondary methods); and the classifier's evidence. Appendix B (``appendix_b``), the
+glossary: the terms of ``GLOSSARY`` that the sections' text uses, a term matched whole and in any
+case, a plural counted, a term of two names (``Growth word, margin direction``) by either.
 
 ``GLOSSARY`` is ``docs/method.md`` section 13's table, term for term; its Note is the flag of
 section 8 and also, in the brand book's word, the note an owner or an agent writes.
@@ -208,9 +208,8 @@ GLOSSARY: dict[str, str] = {
         "revenue growth and the operating margin year by year, the tax rate, sales-to-capital, "
         "the terminal growth); the parts form discounts an explicit free-cash-flow path, one part"
         " or a sum of parts. Both discount at r with a terminal at g_T or below and carry a "
-        "three-by-three grid at other rates and growths, a display and not a value: a second "
-        "view on a valued company and a fallback where the route gives no value. It cites "
-        "`fairband-secondary/2`"
+        "three-by-three grid at other rates and growths, a display and not a value: the fallback "
+        "where the route gives no value, refused where it does. It cites `fairband-secondary/2`"
     ),
     "Work item": (
         "A request in the inbox for an agent's research on one company, a valuation review or a "
@@ -229,9 +228,10 @@ _RULES: dict[str, str] = {
     "the headings in the spec's order": (
         "the twelve headings in order, sections 2 and 3 left out of a valuation review"
     ),
-    "a secondary valuation on the snapshot": (
-        "the company's newest secondary valuation rests on its latest snapshot, or one the latest"
-        " reprices; none for a foreign filer or a snapshot with no diluted share count"
+    "a secondary valuation on a refused snapshot": (
+        "on a refused latest snapshot, the company's newest secondary valuation rests on it or on"
+        " one it reprices; none where the route values the company, for a foreign filer or for a"
+        " snapshot with no diluted share count"
     ),
     UNRESOLVED: "every cite's reference names a stored value",
     WRONG_UNIT: "every cite reads its value in its unit at the report's rounding",

@@ -470,9 +470,10 @@ def build_server(client: FairbandClient) -> MCPServer:
         return write(lambda: client.delete(f"/api/overrides/{override_id}", {"reason": reason}))
 
     @server.tool(
-        description="Value the company a second way: the standard DCF from drivers {years,"
-        " revenue_growth[], operating_margin[], tax_rate, sales_to_capital, terminal_growth}, or a"
-        " sum of parts [{name, fcff, terminal_growth, note}]; with a reason and evidence."
+        description="Value the company a second way by a standard discounted cash flow where the"
+        " route refuses; refused where it values; from drivers {years, revenue_growth[],"
+        " operating_margin[], tax_rate, sales_to_capital, terminal_growth}, or a sum of parts"
+        " [{name, fcff, terminal_growth, note}]; with a reason and evidence."
     )
     def secondary_valuation(
         symbol: str,

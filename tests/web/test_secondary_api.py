@@ -4,7 +4,12 @@ price of $150), AAL and HGCO, each with one snapshot. Here AAPL also gets two ha
 balance sheets and income statements; FRGN (statements in euros), ADRX (an ADR in the universe)
 and NOSH (no diluted share count) get a snapshot each; and the override routes build each
 company's inputs as the conftest valued them, as ``test_reviews_api`` does. The drivers form's
-tests add spec 20.4's company (``_drivers_company``)."""
+tests add spec 20.4's company (``_drivers_company``).
+
+The secondary valuation is the fallback where the route refuses, and the route refuses one where
+it values (plan 3): AAL, refused for its target margin, takes one as it stands; a test that makes
+one on AAPL asks for ``refused_aapl``, AAPL revalued and refused (``_refuse``), and spec 20.4's
+company is refused the same way."""
 
 import sqlite3
 from contextlib import closing
@@ -27,6 +32,8 @@ from support.web import CREATED, HEADER, NOW, TODAY, _company
 from fairband.engine.classifier import Deciles
 from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
+from fairband.engine.overrides import Override
+from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.engine.types import ValuationResult
@@ -36,8 +43,11 @@ from fairband.policy.tax import TaxTable
 from fairband.store.companies import insert_companies
 from fairband.store.db import connect
 from fairband.store.facts import FactRow, insert_facts
+from fairband.store.ledger import Writer
+from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh, save_deciles
-from fairband.store.snapshots import insert_snapshot
+from fairband.store.reviews import insert_review
+from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.store.vendor import record_response
 from fairband.web import reviews_api
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
@@ -74,6 +84,8 @@ SHEETS = {
 }
 REVENUE = {FY24: 20e9, FY25: 22e9}
 FOREIGN = "foreign filer: currency and share-unit handling not built yet"
+# The Mature Growth route's refusal that keeps the value-side intermediates (method 5.6).
+NOT_POSITIVE = "value not positive under the reinvestment charge"
 GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
 # Spec 20.4's drivers: three years growing 10%, 8% and 5% at a 20% margin, tax 25%,
 # sales-to-capital 2, a terminal growth of 2%.
@@ -186,17 +198,53 @@ def stored(db_path: Path, policy: Policy, monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(reviews_api, "build_inputs", build)
 
 
+def _refuse(db_path: Path, symbol: str) -> int:
+    """A later snapshot of ``symbol`` that the route refused, as the Mature Growth route refuses a
+    value at or below zero: the latest's result with no route, value, levels or designation, its
+    phase, inputs, intermediates (the moat, the aggregate ROIC) and price kept; its id."""
+    with closing(connect(db_path)) as conn:
+        latest = latest_snapshot(conn, symbol)
+        assert latest is not None and latest.value is not None
+        refused = replace(
+            latest.result,
+            route=None,
+            value=None,
+            levels=None,
+            price_to_value=None,
+            designation=None,
+            refusal=NOT_POSITIVE,
+        )
+        return insert_snapshot(conn, refused, latest.refresh_id, clock=lambda: CREATED)
+
+
+@pytest.fixture
+def refused_aapl(db_path: Path) -> int:
+    """AAPL revalued and refused (``_refuse``): the golden's Wide moat, aggregate ROIC, 1 bn
+    diluted shares and $150 price on a snapshot with no value, which takes the fallback."""
+    return _refuse(db_path, "AAPL")
+
+
 def _drivers_company(
     db_path: Path, policy: Policy, symbol: str = "DRVR", revenue: float | None = 1000.0
 ) -> None:
-    """Spec 20.4's company: the Mature Growth golden with 50 diluted shares, its snapshot's
-    aggregate ROIC set to 12%, so its Wide moat's terminal return is 12% (under the cap of r plus
-    four points), and one fiscal year on file whose revenue, ``revenue``, is its trailing revenue
-    (none on file with ``None``)."""
+    """Spec 20.4's company: the Mature Growth golden with 50 diluted shares, refused as the route
+    refuses a value at or below zero (``_refuse``), so it takes the fallback (plan 3); its
+    snapshot's aggregate ROIC set to 12%, so its Wide moat's terminal return is 12% (under the cap
+    of r plus four points), and one fiscal year on file whose revenue, ``revenue``, is its
+    trailing revenue (none on file with ``None``)."""
     golden = replace(mature_growth_inputs(), symbol=symbol, shares_diluted=50.0)
     result = value_company(golden, universe_deciles(), policy, TODAY)
     roic = result.intermediates["roic"] | {"aggregate": 0.12}
-    pinned = replace(result, intermediates=result.intermediates | {"roic": roic})
+    pinned = replace(
+        result,
+        intermediates=result.intermediates | {"roic": roic},
+        route=None,
+        value=None,
+        levels=None,
+        price_to_value=None,
+        designation=None,
+        refusal=NOT_POSITIVE,
+    )
     with closing(connect(db_path)) as conn:
         refresh = latest_refresh(conn)
         assert refresh is not None
@@ -241,6 +289,32 @@ def _derive(client: TestClient, *derivations: dict[str, Any]) -> Any:
     return client.post("/api/companies/AAPL/derivations", json=body, headers=AGENT)
 
 
+@pytest.mark.parametrize("symbol", ["HGCO", "AAPL", "ADRX"])
+def test_a_secondary_valuation_is_refused_where_the_route_values(
+    client: TestClient, symbol: str
+) -> None:
+    """Method 15.4, plan 3: the secondary valuation is the fallback where the route refuses, so a
+    valued latest snapshot refuses the call on either form, before the snapshot's other refusals
+    (ADRX, an ADR the route values); nothing is stored and no ledger row is written."""
+    detail = f"the route values {symbol}: the secondary valuation is the fallback where it refuses"
+    for body in (ONE_PART, ON_DRIVERS):
+        assert _refused(client, body, symbol) == (400, {"detail": detail})
+    assert _stored(client, symbol) == []
+    assert client.get(f"/api/companies/{symbol}/ledger").json()["entries"] == []
+
+
+def test_a_secondary_valuation_is_made_where_the_route_refused(
+    client: TestClient, results: dict[str, ValuationResult]
+) -> None:
+    """AAL, refused for its target margin, takes the fallback on its latest snapshot."""
+    assert results["AAL"].value is None and results["AAL"].refusal is not None
+    snapshot = client.get("/api/companies/AAL").json()["snapshot"]
+    body = _secondary(client, ONE_PART, symbol="AAL")
+    assert (body["snapshotId"], body["form"]) == (snapshot["id"], "parts")
+    assert _stored(client, "AAL") == [body]
+
+
+@pytest.mark.usefixtures("refused_aapl")
 def test_a_secondary_valuation_reads_the_balance_sheet(
     client: TestClient, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
@@ -341,24 +415,49 @@ def test_the_drivers_form_over_the_api(client: TestClient, db_path: Path, policy
     assert entry["summary"] == f"$39.89 a share from drivers over three years: {reason}"
 
 
-def test_the_terminal_return_follows_the_reviewed_moat(client: TestClient, policy: Policy) -> None:
+def test_the_terminal_return_follows_the_reviewed_moat(
+    client: TestClient, db_path: Path, policy: Policy, refused_aapl: int
+) -> None:
     """AAPL's aggregate ROIC, near 22%, takes the Wide moat's cap; under a Narrow moat as reviewed
-    the terminal return is r. Its trailing revenue is fiscal 2025's: no quarters are on file."""
+    the terminal return is r. Its trailing revenue is fiscal 2025's: no quarters are on file. The
+    review rests on the refused snapshot, stored as the override route stores one."""
     wide = _secondary(client, ON_DRIVERS)
     assert wide["projection"]["terminalReturn"] == policy.wide_terminal_roic_cap
     assert wide["projection"]["trailingRevenue"] == 22e9
-    narrow = {
-        "tag": "moat.class",
-        "new": "Narrow",
-        "reason": "the patents lapse",
-        "evidence": [FILING],
-        "lifetime": "lasting",
-    }
-    r = client.post("/api/companies/AAPL/overrides", json=narrow, headers=AGENT)
-    assert r.status_code == 201, r.text
+    _review_narrow(db_path, policy, refused_aapl)
     body = _secondary(client, ON_DRIVERS)
     assert body["projection"]["terminalReturn"] == policy.required_return
     assert body["buyLevel"] == levels_for(body["valuePerShare"], "Narrow", policy).buy
+
+
+def _review_narrow(db_path: Path, policy: Policy, snapshot_id: int) -> None:
+    """An applied override of AAPL's moat to Narrow on ``snapshot_id`` and the review under it."""
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    reason = "the patents lapse"
+    with closing(connect(db_path)) as conn:
+        override_id = insert_override(
+            conn,
+            "AAPL",
+            "moat.class",
+            "Wide",
+            "Narrow",
+            "class",
+            reason,
+            [FILING],
+            "lasting",
+            None,
+            None,
+            snapshot_id,
+            writer,
+            CREATED,
+            "applied",
+            "",
+        )
+        inputs = replace(mature_growth_inputs(), symbol="AAPL")
+        mechanical = value_company(inputs, universe_deciles(), policy, TODAY)
+        narrow = Override(override_id, "moat.class", "Narrow", "agent", writer.actor, NOW, reason)
+        review = review_company(inputs, universe_deciles(), policy, TODAY, [narrow], mechanical)
+        insert_review(conn, review, "AAPL", snapshot_id, None, clock=lambda: CREATED)
 
 
 def test_drivers_or_parts_not_both(client: TestClient) -> None:
@@ -410,6 +509,7 @@ def test_no_trailing_revenue_is_refused(
     assert _stored(client, "DRVR") == []
 
 
+@pytest.mark.usefixtures("refused_aapl")
 def test_the_parts_form_still_answers(client: TestClient) -> None:
     """Spec 20.1's path, valued as the parts form always valued it; its grid's rows are the shift
     in every part's terminal growth, the top one none, since the part is at g_T."""
@@ -427,6 +527,7 @@ def test_the_parts_form_still_answers(client: TestClient) -> None:
     assert _stored(client) == [body]
 
 
+@pytest.mark.usefixtures("refused_aapl")
 def test_explicit_debt_and_cash_need_evidence(client: TestClient) -> None:
     passed = ONE_PART | {"debt": 5e9, "cash": 2e9}
     assert _refused(client, passed) == (
@@ -459,6 +560,7 @@ def test_explicit_debt_and_cash_need_evidence(client: TestClient) -> None:
     assert [s["id"] for s in _stored(client)] == [no_cash["id"], body["id"]]
 
 
+@pytest.mark.usefixtures("refused_aapl")
 def test_the_path_needs_its_own_evidence_item(client: TestClient) -> None:
     """The items that back a debt or a cash do not back the cash-flow path."""
     debt_item = FILING | {"figure": "debt"}
@@ -476,8 +578,8 @@ def test_the_path_needs_its_own_evidence_item(client: TestClient) -> None:
 
 
 def test_an_applied_balance_override_counts(client: TestClient) -> None:
-    """HGCO has no balance sheet on file: its cash counts as nil, its source none; its debt is
-    the override's."""
+    """AAL, refused, has no balance sheet on file: its cash counts as nil, its source none; its
+    debt is the override's."""
     debt = {
         "tag": "balance.debt",
         "new": 4e9,
@@ -486,9 +588,9 @@ def test_an_applied_balance_override_counts(client: TestClient) -> None:
         "lifetime": "period-tied",
         "period": "FY2025",
     }
-    r = client.post("/api/companies/HGCO/overrides", json=debt, headers=AGENT)
+    r = client.post("/api/companies/AAL/overrides", json=debt, headers=AGENT)
     assert r.status_code == 201 and r.json()["override"]["state"] == "applied"
-    body = _secondary(client, ONE_PART, symbol="HGCO")
+    body = _secondary(client, ONE_PART, symbol="AAL")
     assert (body["debt"], body["debtSource"], body["cash"], body["cashSource"]) == (
         4e9,
         "agent",
@@ -499,6 +601,10 @@ def test_an_applied_balance_override_counts(client: TestClient) -> None:
 
 
 def test_the_levels_follow_the_reviewed_moat(client: TestClient, policy: Policy) -> None:
+    """AAL's snapshot holds no moat class, so its levels take None's; under a Narrow moat as
+    reviewed, Narrow's: the review the override route writes on the refused row."""
+    before = _secondary(client, ONE_PART, symbol="AAL")
+    assert before["buyLevel"] == levels_for(before["valuePerShare"], "None", policy).buy
     narrow = {
         "tag": "moat.class",
         "new": "Narrow",
@@ -506,14 +612,18 @@ def test_the_levels_follow_the_reviewed_moat(client: TestClient, policy: Policy)
         "evidence": [FILING],
         "lifetime": "lasting",
     }
-    r = client.post("/api/companies/AAPL/overrides", json=narrow, headers=AGENT)
-    assert r.status_code == 201
-    body = _secondary(client, ONE_PART)
+    r = client.post("/api/companies/AAL/overrides", json=narrow, headers=AGENT)
+    assert r.status_code == 201, r.text
+    body = _secondary(client, ONE_PART, symbol="AAL")
     assert body["buyLevel"] == levels_for(body["valuePerShare"], "Narrow", policy).buy
+    assert body["buyLevel"] != before["buyLevel"]
 
 
 @pytest.mark.parametrize("symbol", ["FRGN", "ADRX"])
-def test_a_foreign_filer_is_refused(client: TestClient, symbol: str) -> None:
+def test_a_foreign_filer_is_refused(client: TestClient, db_path: Path, symbol: str) -> None:
+    """FRGN refused as a foreign filer; ADRX, an ADR in the universe, once its route refuses."""
+    if symbol == "ADRX":
+        _refuse(db_path, symbol)
     assert _refused(client, ONE_PART, symbol) == (400, {"detail": FOREIGN})
     assert _stored(client, symbol) == []
 
@@ -547,6 +657,7 @@ def _guided(client: TestClient, symbol: str, call: str) -> int:
     return guidance_id
 
 
+@pytest.mark.usefixtures("refused_aapl")
 def test_a_guidance_item_is_checked_as_an_override_s_is(client: TestClient) -> None:
     """A secondary valuation's evidence item of kind ``guidance`` names a current guidance record
     of the company: another form of ref 400, another company's record 404, a superseded one 409,
@@ -600,11 +711,13 @@ def _guidance_cite(guidance_id: int) -> dict[str, Any]:
         ),
     ],
 )
+@pytest.mark.usefixtures("refused_aapl")
 def test_a_rule_refuses_by_name(client: TestClient, change: dict[str, Any], sentence: str) -> None:
     assert _refused(client, ONE_PART | change) == (400, {"detail": sentence})
     assert _stored(client) == []
 
 
+@pytest.mark.usefixtures("refused_aapl")
 def test_a_secondary_is_a_ledger_row(client: TestClient) -> None:
     snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
     by_agent = _secondary(client, ONE_PART)

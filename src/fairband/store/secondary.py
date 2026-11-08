@@ -23,11 +23,13 @@ and the engine's ``SECONDARY_METHOD`` (a record written under ``fairband-seconda
 one read (the screen's rows), ``secondaries_for`` every one, newest first, and ``secondary_row``
 one by its id.
 
-``no_secondary`` says why a company can have none on a snapshot, the two refusals of the secondary
-route the agent cannot fix (``method.md`` 15.4): a foreign filer (``foreign_filer``: the snapshot
-refused as one, or the universe row an ADR or in a currency other than USD, a row naming none
-leaving it to the snapshot) and no positive diluted share count (``diluted_shares``: the snapshot's
-``shares_diluted`` input, else its intermediates' ``shares``).
+``no_secondary`` says why a company can have none on a snapshot, the three refusals of the
+secondary route the agent cannot fix (``method.md`` 15.4), in the route's order: the route values
+the company (the snapshot has a value: the secondary valuation is the fallback where the route
+refuses, plan 3), a foreign filer (``foreign_filer``: the snapshot refused as one, or the universe
+row an ADR or in a currency other than USD, a row naming none leaving it to the snapshot) and no
+positive diluted share count (``diluted_shares``: the snapshot's ``shares_diluted`` input, else its
+intermediates' ``shares``).
 
 A derivation is one operation of an agent's arithmetic over two references: its operation, its
 refs, its years (a cagr's, else none), its value as ``repr`` text (none where the operation is
@@ -244,9 +246,11 @@ def secondaries_for(conn: sqlite3.Connection, symbol: str) -> list[SecondaryRow]
 
 
 def no_secondary(conn: sqlite3.Connection, snapshot: SnapshotRow) -> str | None:
-    """Why the company can have no secondary valuation on ``snapshot``, "foreign filer" or "no
-    diluted share count", in the order the secondary route refuses them; ``None`` when it can have
-    one."""
+    """Why the company can have no secondary valuation on ``snapshot``, "the route values the
+    company", "foreign filer" or "no diluted share count", in the order the secondary route
+    refuses them; ``None`` when it can have one."""
+    if snapshot.value is not None:
+        return "the route values the company"
     if foreign_filer(conn, snapshot):
         return "foreign filer"
     if diluted_shares(snapshot.result) is None:

@@ -168,7 +168,7 @@ WRITES: dict[str, dict[str, Any]] = {
     },
     "override_drop": {"override_id": 99, "reason": "the filing was restated"},
     "secondary_valuation": {
-        "symbol": "AAPL",
+        "symbol": "AAL",  # refused: the secondary valuation is the fallback (plan 3)
         "parts": [
             {"name": "the business", "fcff": [1e10, 1.05e10, 1.1e10], "terminal_growth": 0.02}
         ],
@@ -358,14 +358,14 @@ def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
     assert guided["actor"] == "claude-opus-5-5"
 
 
-def _store_revenue(db_path: Path, revenue: float) -> None:
-    """AAPL's fiscal 2025 revenue, its trailing revenue with no quarters on file."""
+def _store_revenue(db_path: Path, revenue: float, symbol: str = "AAPL") -> None:
+    """The company's fiscal 2025 revenue, its trailing revenue with no quarters on file."""
     with closing(connect(db_path)) as conn:
         response = record_response(
-            conn, "fmp", "income-statement", {"symbol": "AAPL"}, "AAPL", 200, "[]", None, CREATED
+            conn, "fmp", "income-statement", {"symbol": symbol}, symbol, 200, "[]", None, CREATED
         )
         fact = FactRow(
-            symbol="AAPL",
+            symbol=symbol,
             dataset="income-annual",
             period_end=date(2025, 9, 27),
             fiscal_year=2025,
@@ -386,8 +386,10 @@ def _store_revenue(db_path: Path, revenue: float) -> None:
 
 
 def test_secondary_valuation_takes_drivers_or_parts(api: FairbandClient, db_path: Path) -> None:
-    """The drivers' keys as spec 11 names them, sent as the API reads them; one form only."""
-    _store_revenue(db_path, 22e9)
+    """The drivers' keys as spec 11 names them, sent as the API reads them; one form only. AAL's
+    route refuses, so it takes the fallback; AAPL's values, so the route's refusal comes back
+    (plan 3), as the tool's description says."""
+    _store_revenue(db_path, 22e9, "AAL")
     drivers = {
         "years": 3,
         "revenue_growth": [0.10, 0.08, 0.05],
@@ -396,15 +398,16 @@ def test_secondary_valuation_takes_drivers_or_parts(api: FairbandClient, db_path
         "sales_to_capital": 2.0,
         "terminal_growth": 0.02,
     }
-    common = {"symbol": "AAPL", "reason": "the cycle turns", "evidence": [FILING]}
+    common = {"symbol": "AAL", "reason": "the cycle turns", "evidence": [FILING]}
     parts = WRITES["secondary_valuation"]["parts"]
     server = build_server(api)
-    valued, both, neither = _session(
+    valued, both, neither, on_a_value = _session(
         server,
         ("identify", AGENT),
         ("secondary_valuation", common | {"drivers": drivers}),
         ("secondary_valuation", common | {"drivers": drivers, "parts": parts}),
         ("secondary_valuation", common),
+        ("secondary_valuation", common | {"symbol": "AAPL", "drivers": drivers}),
     )[1:]
     assert (valued["form"], valued["parts"], valued["actor"]) == ("drivers", [], "claude-opus-5-5")
     assert valued["drivers"] == {
@@ -421,6 +424,18 @@ def test_secondary_valuation_takes_drivers_or_parts(api: FairbandClient, db_path
         "status": 400,
     }
     assert neither == {"refused": "a secondary valuation needs drivers or parts", "status": 400}
+    fallback = "the secondary valuation is the fallback where it refuses"
+    assert on_a_value == {"refused": f"the route values AAPL: {fallback}", "status": 400}
+
+    async def described() -> str:
+        async with Client(server) as session:
+            tools = (await session.list_tools()).tools
+        return next(t.description or "" for t in tools if t.name == "secondary_valuation")
+
+    assert anyio.run(described).startswith(
+        "Value the company a second way by a standard discounted cash flow where the route"
+        " refuses; refused where it values;"
+    )
 
 
 def test_sensitivity_sends_its_axes_as_the_api_reads_them(

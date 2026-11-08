@@ -230,12 +230,22 @@ def test_the_agents_section_reads(client: TestClient) -> None:
         "drops a period-tied override",
         "once its guided year has passed",
         "a valuation review for each company on the list with no open item",
-        # spec 11: the secondary stands in on a refused row, and is the second view beside a value
+        # spec 11 and 13.3, plan 3: the secondary valuation is the fallback only, refused where
+        # the route values the company, and no second value weighs on the stance there
+        "Where the route refuses or no phase fits, the report carries a secondary valuation",
+        (
+            "Where the route values the company there is none: the engine refuses the call, so no"
+            " second value weighs on the stance."
+        ),
+        (
+            "The agent weighs the price against the reviewed value's levels, or on a refused row"
+            " the secondary valuation's."
+        ),
         "Where the route refused, it shows the value of a secondary valuation",
-        "Beside a route's value, the secondary valuation is a second view",
     ):
         assert words in text, words
     assert "values a peak as if it lasted" not in text
+    assert "second view" not in text and "Every report carries a secondary" not in text
 
 
 def test_diagram_draws_six_bands_two_curves_and_the_counts() -> None:

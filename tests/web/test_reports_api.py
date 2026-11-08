@@ -7,7 +7,7 @@ its ledger row."""
 
 from contextlib import closing
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +36,12 @@ JUDGMENTS = [
     {"judgment": kind, "decision": f"keep the {kind}"}
     for kind in ("phase", "moat", "belief", "roic")
 ]
+# AAL's route, the revenue-growth route's, asks for the target margin in place of the ROIC.
+REFUSED_JUDGMENTS = [
+    {"judgment": kind, "decision": f"keep the {kind}"}
+    for kind in ("phase", "moat", "belief", "target_margin")
+]
+ROUTE_VALUES = "no secondary valuation: the route values the company"
 
 
 def _snapshot_id(client: TestClient, symbol: str = "AAPL") -> int:
@@ -80,6 +86,22 @@ def _published(client: TestClient, body: dict[str, Any], symbol: str = "AAPL") -
     return r.json()["report"]
 
 
+def _refused_body(sid: int) -> dict[str, Any]:
+    """A full report on AAL's refused snapshot ``sid``: section 1 cites the price, which a refusal
+    keeps; the rest is plain."""
+    first = [
+        "The price of ",
+        {"cite": "$150.00", "ref": f"snapshot:{sid}/price"},
+        " stands where the route refuses.",
+    ]
+    rest = [{"heading": h, "parts": ["Plain words."]} for h in HEADINGS[1:]]
+    return _body(
+        sid,
+        sections=[{"heading": "Summary", "parts": first}, *rest],
+        judgments=REFUSED_JUDGMENTS,
+    )
+
+
 def _ledger(client: TestClient, symbol: str = "AAPL") -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = client.get(f"/api/companies/{symbol}/ledger").json()["entries"]
     return found
@@ -104,7 +126,7 @@ def test_a_clean_submission_publishes_and_completes_the_item(
         "reusesFullReportOf": None,
         "snapshotId": sid,
         "reviewId": None,
-        "secondaryId": secondaries["AAPL"],  # the newest on the snapshot, as the check asks
+        "secondaryId": None,  # the route values AAPL: the secondary on file is not the report's
         "workItemId": item_id,
         "principal": "agent",
         "actor": "claude-opus-5-5",
@@ -414,25 +436,77 @@ def test_a_secondary_on_an_older_snapshot_does_not_count(
     results: dict[str, ValuationResult],
     secondaries: dict[str, int],
 ) -> None:
-    """A reprice keeps the snapshot's secondary valuation in force; a revalue leaves it on an
-    older snapshot, so a submission is refused naming the latest snapshot, whatever its cites."""
+    """On a refused row (AAL) a reprice keeps the snapshot's secondary valuation in force; a
+    revalue leaves it on an older snapshot, so a submission is refused naming the latest snapshot,
+    whatever its cites (method 16.3, plan 3: a refused latest snapshot needs the fallback)."""
+    sid = _snapshot_id(client, "AAL")
+    with closing(connect(db_path)) as conn:
+        cited = snapshot_row(conn, sid)
+        assert cited is not None and cited.value is None
+        repriced = reprice(results["AAL"], 160.0, date(2026, 11, 2), policy)
+        insert_snapshot(conn, repriced, cited.refresh_id, clock=lambda: NOW)
+    report = _published(client, _refused_body(sid), "AAL")
+    assert (report["snapshotId"], report["secondaryId"]) == (sid, secondaries["AAL"])
+    with closing(connect(db_path)) as conn:
+        revalued = replace(repriced, data_date=repriced.data_date + timedelta(days=1))
+        latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    assert _snapshot_id(client, "AAL") == latest
+    detail = f"the report needs a secondary valuation on snapshot {latest}"
+    for body in (_refused_body(latest), _refused_body(sid)):
+        r = _submit(client, body, "AAL")
+        assert (r.status_code, r.json()) == (400, {"detail": detail})
+    assert len(client.get("/api/companies/AAL/reports").json()["reports"]) == 1
+
+
+def test_a_valued_row_revalued_needs_no_secondary(
+    client: TestClient,
+    db_path: Path,
+    results: dict[str, ValuationResult],
+) -> None:
+    """A revalue leaves AAPL's secondary valuation on an older snapshot; the latest is valued, so
+    the report publishes without one and Appendix A names why (method 16.3, plan 3)."""
     sid = _snapshot_id(client)
     with closing(connect(db_path)) as conn:
         cited = snapshot_row(conn, sid)
         assert cited is not None and cited.value is not None
-        repriced = reprice(results["AAPL"], 160.0, date(2026, 11, 2), policy)
-        insert_snapshot(conn, repriced, cited.refresh_id, clock=lambda: NOW)
-    report = _published(client, _body(sid))
-    assert (report["snapshotId"], report["secondaryId"]) == (sid, secondaries["AAPL"])
-    with closing(connect(db_path)) as conn:
-        revalued = replace(repriced, value=cited.value + 1.0)
+        revalued = replace(results["AAPL"], value=cited.value + 1.0)
         latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
-    assert _snapshot_id(client) == latest
-    detail = f"the report needs a secondary valuation on snapshot {latest}"
-    for body in (_body(latest), _body(sid)):
-        r = _submit(client, body)
-        assert (r.status_code, r.json()) == (400, {"detail": detail})
-    assert len(client.get("/api/companies/AAPL/reports").json()["reports"]) == 1
+    sections = [{"heading": h, "parts": ["Plain words."]} for h in HEADINGS]
+    report = _published(client, _body(latest, sections=sections))
+    assert (report["snapshotId"], report["secondaryId"]) == (latest, None)
+    a = report["appendixA"]
+    assert (a["secondary"], a["noSecondary"]) == (None, ROUTE_VALUES)
+
+
+def test_an_older_secondary_on_a_valued_snapshot_is_the_reports_only_when_cited(
+    client: TestClient, secondaries: dict[str, int]
+) -> None:
+    """Review Focus 1, QCOM's case after plan 3: a secondary valuation made before plan 3 rests on
+    AAPL's valued snapshot. A report that does not cite it publishes without naming it, Appendix A
+    saying the route values the company; one that cites it publishes, the cite resolves and
+    Appendix A names it, as a report that cited one before plan 3 still reads."""
+    sid = _snapshot_id(client)
+    secondary_id = secondaries["AAPL"]
+    [found] = client.get("/api/companies/AAPL/secondary").json()["secondaryValuations"]
+    assert found["id"] == secondary_id and found["snapshotId"] == sid
+    plain = _published(client, _body(sid))
+    assert plain["secondaryId"] is None
+    a = plain["appendixA"]
+    assert (a["secondary"], a["noSecondary"], a["versions"]["secondary"]) == (
+        None,
+        ROUTE_VALUES,
+        None,
+    )
+    text = client.get(f"/api/reports/{plain['id']}/markdown").text
+    assert text.split("### Secondary valuation\n\n", 1)[1].split("\n", 1)[0] == ROUTE_VALUES
+    ref = f"secondary:{secondary_id}/value"
+    cite = {"cite": f"${found['valuePerShare']:,.2f}", "ref": ref}
+    citing = _published(client, _body(sid, sections=_sections(sid, "full report", cite)))
+    assert citing["secondaryId"] == secondary_id
+    a = citing["appendixA"]
+    assert (a["secondary"]["id"], a["noSecondary"]) == (secondary_id, None)
+    assert a["versions"]["secondary"] == "fairband-secondary/2"
+    assert [r["ref"] for r in citing["references"]][-1] == ref
 
 
 @pytest.mark.parametrize(
@@ -440,7 +514,7 @@ def test_a_secondary_on_an_older_snapshot_does_not_count(
     [
         ("FRGN", {"currency": "EUR"}, "foreign filer"),
         ("NOSH", {"shares_diluted": None}, "no diluted share count"),
-        ("PLAIN", {}, None),
+        ("PLAIN", {}, "the route values the company"),
     ],
 )
 def test_a_company_that_can_have_no_secondary_publishes_without_one(
@@ -449,11 +523,11 @@ def test_a_company_that_can_have_no_secondary_publishes_without_one(
     policy: Policy,
     symbol: str,
     changes: dict[str, Any],
-    why: str | None,
+    why: str,
 ) -> None:
-    """The secondary route refuses a foreign filer and a snapshot with no diluted share count, so
-    the report needs no secondary valuation there and Appendix A names why; a company the route
-    values still needs one."""
+    """The secondary route refuses a company the route values (plan 3), a foreign filer and a
+    snapshot with no diluted share count, so the report needs no secondary valuation there and
+    Appendix A names why."""
     inputs = replace(mature_growth_inputs(), symbol=symbol, **changes)
     result = value_company(inputs, universe_deciles(), policy, TODAY)
     with closing(connect(db_path)) as conn:
@@ -462,11 +536,6 @@ def test_a_company_that_can_have_no_secondary_publishes_without_one(
         sid = insert_snapshot(conn, result, refresh.id, clock=lambda: NOW)
     sections = [{"heading": h, "parts": ["Plain words."]} for h in HEADINGS]
     body = _body(sid, sections=sections)
-    if why is None:
-        r = _submit(client, body, symbol)
-        detail = f"the report needs a secondary valuation on snapshot {sid}"
-        assert (r.status_code, r.json()) == (400, {"detail": detail})
-        return
     report = _published(client, body, symbol)
     assert (report["snapshotId"], report["secondaryId"]) == (sid, None)
     a = report["appendixA"]
@@ -479,9 +548,9 @@ def test_a_company_that_can_have_no_secondary_publishes_without_one(
 def test_appendix_a_says_none_for_a_report_with_no_secondary_that_could_have_one(
     client: TestClient, db_path: Path
 ) -> None:
-    """A report published without a secondary valuation on a company that can have one (a plan 1
-    report) names no reason."""
-    report = _published(client, _body(_snapshot_id(client)))
+    """A report published without a secondary valuation on a company that can have one, a refused
+    row (a plan 1 report), names no reason."""
+    report = _published(client, _refused_body(_snapshot_id(client, "AAL")), "AAL")
     with closing(connect(db_path)) as conn:
         conn.execute("UPDATE reports SET secondary_id = NULL WHERE id = ?", (report["id"],))
         conn.commit()
@@ -495,8 +564,8 @@ def test_a_plan_1_parts_record_reads_and_renders(
     client: TestClient, db_path: Path, secondaries: dict[str, int]
 ) -> None:
     """A secondary valuation written under ``fairband-secondary/1``, as migration 006 leaves one:
-    the parts form with no grid. The API reads it with ``grid: null``; a report resting on it
-    renders its parts, "No grid." in Appendix A, and no grid table in the Markdown."""
+    the parts form with no grid. The API reads it with ``grid: null``; a report citing it renders
+    its parts, "No grid." in Appendix A, and no grid table in the Markdown."""
     secondary_id = secondaries["AAPL"]
     with closing(connect(db_path)) as conn:
         conn.execute(
@@ -509,7 +578,9 @@ def test_a_plan_1_parts_record_reads_and_renders(
     assert listed["secondaryMethod"] == "fairband-secondary/1"
     assert (listed["drivers"], listed["projection"]) == (None, None)
     assert [p["name"] for p in listed["parts"]] == ["the business"]
-    report = _published(client, _body(_snapshot_id(client)))
+    sid = _snapshot_id(client)
+    cite = {"cite": f"${listed['valuePerShare']:,.2f}", "ref": f"secondary:{secondary_id}/value"}
+    report = _published(client, _body(sid, sections=_sections(sid, "full report", cite)))
     a = report["appendixA"]
     assert (a["secondary"]["id"], a["secondary"]["form"], a["secondary"]["grid"]) == (
         secondary_id,

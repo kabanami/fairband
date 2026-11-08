@@ -40,10 +40,12 @@ ref, period?}``, from any writer. A judgment is a record and takes no other key:
 company's latest snapshot (404 "no snapshot for <symbol>" without one): the structural checks
 (``check.structure_refusal``), each a 400 with its sentence, the required judgments by the route
 of the company's current review when it rests on that snapshot, else the snapshot's (its phase's
-for a refused row), and the company's newest secondary valuation resting on that snapshot or one
-it reprices, else "the report needs a secondary valuation on snapshot <id>", unless the company
-can have none there (``store.secondary.no_secondary``: a foreign filer, or no diluted share
-count, the secondary route's two refusals the agent cannot fix); a work item it names
+for a refused row), and, on a refused latest snapshot, the company's newest secondary valuation
+resting on that snapshot or one it reprices, else "the report needs a secondary valuation on
+snapshot <id>", unless the company can have none there (``store.secondary.no_secondary``: a
+foreign filer, or no diluted share count, the secondary route's two refusals the agent cannot
+fix); a valued latest snapshot needs none, the secondary route refusing one there (plan 3,
+``no_secondary``'s first reason, "the route values the company"); a work item it names
 must be the company's (404 "no work item <id>", "... for <symbol>") and open (409 "work item <id>
 is <state>"). Then the number check
 (``check.check_sections`` over the sections, and ``check.check_judgments`` over the judgments'
@@ -52,13 +54,16 @@ decisions, which hold no figure): with findings, the answer is 422
 points at no record, "rejected: <n> findings", resting on the latest snapshot. Without, the report
 is published, 201 ``{report}``: stored as the company's next revision on the snapshot its cites
 rest on (the earliest they name, else the latest), with the review and the secondary valuation
-they cite, else the company's current review and newest secondary valuation when either rests on
-the latest snapshot or one it reprices; a valuation review reuses the company's newest full
-report, ``None`` without one. Its judgments, kill criteria and news items are stored with it, under its id (an
-override a judgment names, or a kill criterion a news item names, must be the company's: 404; a
-blank text 400), and the work item named is completed. Each record is a ledger row (``report``,
-``judgment``, ``kill-criterion``, ``news-item``, ``complete``) resting on the report's snapshot,
-the report's and the completion's naming the work item, all in one transaction.
+they cite, else the company's current review when it rests on the latest snapshot or one it
+reprices and, on a refused latest snapshot, its newest secondary valuation when that one does; on
+a valued latest snapshot a secondary valuation on file, one made before plan 3, is the report's
+only when a cite names it, else Appendix A says the route values the company; a valuation review
+reuses the company's newest full report, ``None`` without one. Its judgments, kill criteria and
+news items are stored with it, under its id (an override a judgment names, or a kill criterion a
+news item names, must be the company's: 404; a blank text 400), and the work item named is
+completed. Each record is a ledger row (``report``, ``judgment``, ``kill-criterion``,
+``news-item``, ``complete``) resting on the report's snapshot, the report's and the completion's
+naming the work item, all in one transaction.
 
 ``GET /api/companies/{symbol}/reports`` lists the company's revisions newest first, each record
 without its sections: its id, date (``createdAt``), writer, revision, mode, stance and the full
@@ -314,6 +319,9 @@ def add_report_routes(
             if secondary is not None and not same_snapshot(conn, secondary.snapshot_id, latest.id):
                 secondary = None
             exempt = secondary is None and no_secondary(conn, latest) is not None
+            # on a valued snapshot the report talks about the route's value alone: a secondary on
+            # file (one made before plan 3) is the report's only when a cite names it
+            uncited = None if secondary is None or latest.value is not None else secondary.id
             refusal = structure_refusal(
                 body.mode,
                 body.stance,
@@ -360,7 +368,7 @@ def add_report_routes(
                 reused,
                 latest.id if cited is None else cited,
                 cited_review or (None if review is None else review.id),
-                cited_secondary or (None if secondary is None else secondary.id),
+                cited_secondary or uncited,
                 body.work_item_id,
                 writer,
                 at,

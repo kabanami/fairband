@@ -3,13 +3,20 @@ back exactly, the parts with their present values or the drivers with their proj
 newest first."""
 
 import sqlite3
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
+from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
+from support.web import TODAY, _company
 
+from fairband.engine.route import value_company
 from fairband.engine.secondary import SECONDARY_METHOD, Drivers, Part, secondary_value
+from fairband.engine.types import ValuationResult
 from fairband.policy import load_policy
+from fairband.store.companies import insert_companies
 from fairband.store.ledger import OWNER, Writer
 from fairband.store.reviews import latest_secondary_value
 from fairband.store.secondary import (
@@ -20,8 +27,10 @@ from fairband.store.secondary import (
     insert_secondary,
     latest_secondaries,
     latest_secondary,
+    no_secondary,
     secondaries_for,
 )
+from fairband.store.snapshots import SnapshotRow, insert_snapshot, snapshot_row
 
 NOW = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)
 LATER = NOW + timedelta(hours=1)
@@ -262,6 +271,38 @@ def test_latest_secondaries_newest_per_symbol(conn: sqlite3.Connection) -> None:
     assert list(found) == ["AAPL", "MSFT"]
     assert (found["AAPL"].id, found["MSFT"].id) == (newest, other)
     assert found["AAPL"] == latest_secondary(conn, "AAPL")
+
+
+def test_no_secondary_names_the_valued_route_first(
+    conn: sqlite3.Connection, new_refresh: Callable[[], int]
+) -> None:
+    """Why a company can have no secondary valuation on a snapshot, in the order the secondary
+    route refuses (method 15.4, plan 3): the route values it, before a foreign filer (ADRX, an ADR
+    the route values) and no diluted share count; none on a refused snapshot that can have one."""
+    refresh_id = new_refresh()
+    adr = replace(_company("ADRX", refresh_id, "An ADR", Decimal(100_000_000_000)), is_adr=True)
+    insert_companies(conn, [adr])
+
+    def stored(result: ValuationResult) -> SnapshotRow:
+        found = snapshot_row(conn, insert_snapshot(conn, result, refresh_id, clock=lambda: NOW))
+        assert found is not None
+        return found
+
+    def valued(**changes: object) -> ValuationResult:
+        inputs = replace(mature_growth_inputs(), **changes)
+        return value_company(inputs, universe_deciles(), POLICY, TODAY)
+
+    adr_valued = valued(symbol="ADRX")
+    assert adr_valued.value is not None
+    assert no_secondary(conn, stored(adr_valued)) == "the route values the company"
+    adr_refused = valued(symbol="ADRX", refusal="a test refusal")
+    assert no_secondary(conn, stored(adr_refused)) == "foreign filer"
+    no_shares = valued(symbol="NOSH", shares_diluted=None)
+    assert no_secondary(conn, stored(no_shares)) == "no diluted share count"
+    young = replace(young_growth_inputs(), symbol="AAL", peers=())
+    refused = value_company(young, universe_deciles(), POLICY, TODAY)
+    assert refused.value is None and refused.refusal is not None
+    assert no_secondary(conn, stored(refused)) is None
 
 
 def test_a_derivation_reads_back_exactly(conn: sqlite3.Connection) -> None:
