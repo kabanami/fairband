@@ -13,7 +13,7 @@ every report, the cycle, the key judgments as the last section, the multiples hi
 on the report page, and the Inbox view's count (11, 12, 13, 14, 15.3, 18.4, 18.5, 19, 24, and the
 log's three rows of that date). Plan 1b (merged 2026-11-07) carries the report's side; plan 2
 (merged 2026-11-08) the page; plan 3 (merged 2026-11-08, `docs/superpowers/plans/2026-11-08-first-session-fixes.md`)
-the first live session's rulings; plan 4 (`docs/superpowers/plans/2026-11-08-second-run-page-fixes.md`)
+the first live session's rulings; plan 4 (merged 2026-11-08, `docs/superpowers/plans/2026-11-08-second-run-page-fixes.md`)
 the page fixes of the second live session. The build rulings of the plans are marked in place and
 listed in the log's last rows.
 
@@ -926,11 +926,12 @@ In order, and nothing else:
    the mechanical band as today (plan 3; the `reviewedValue` second-marker patch of plan 2 is no
    longer drawn on a valued row and may stay in the bundle for the caller that passes it). On a row the route refused, the meter draws from the
    current review's levels and value when the review has one, else from the secondary valuation's
-   when it counts on the latest snapshot (its caption "Secondary valuation"), with the refusal
+   when it counts on the latest snapshot (its head "× the secondary valuation", no caption; plan 4), with the refusal
    line kept under it; a refused row with neither keeps no meter (build rulings of plan 2, Task 2
-   and the final review). A label on the tier above the track that lies within six points of the
-   price marker is anchored away from it, its near edge 8px off the marker (plan 4: on QCOM the
-   marker's dot covered "$179.11").
+   and the final review). A label on the tier above the track is set off the price marker: centred on its own
+   position, moved only as far as keeps its near edge 8px off the marker, at any width (plan 4: on
+   QCOM the marker's dot covered "$179.11"; the build's final review replaced a six-point
+   threshold, which left the labels touching in the drawer, with the clamp).
 3. The stance line, when a report exists: the word, then a `PrincipalChip` (agent, the actor,
    the report's date). Without a report, nothing.
 4. The report's Summary section, rendered by `ReportReader` (section 1 only), then one button,
