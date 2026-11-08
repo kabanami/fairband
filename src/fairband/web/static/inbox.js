@@ -5,13 +5,13 @@
    time; who posted it, a compact PrincipalChip: the owner, an agent by its model identifier, or
    the system for the item it posts when a watched company's window ends; the agent that claimed
    it, likewise; the requester's note as written; for a done item, a link to the report page of
-   the report it was completed with, named by its revision ("revision 2"), or Open when the
-   server sends none; and for a pending or claimed item, Decline, which opens the reason line
-   under the row: the reason field and Decline again, the owner's decline, and Cancel. A refused
-   decline's sentence, the server's, stands on a line under its row. The view reads the inbox as
-   it opens and after every write, each read running the expiry rule on the server, and hands
-   each read to the header, so its count matches the table; while it shows, the header's own
-   reads redraw the table too. */
+   the report it was completed with, named by its revision ("revision 2", its accessible name
+   "Open revision 2 of the report for QCOM"), or Open when the server sends none; and for a
+   pending or claimed item, Decline, which opens the reason line under the row: the reason field
+   and Decline again, the owner's decline, and Cancel. A refused decline's sentence, the
+   server's, stands on a line under its row. The view reads the inbox as it opens and after every
+   write, each read running the expiry rule on the server, and hands each read to the header, so
+   its count matches the table; while it shows, the header's own reads redraw the table too. */
 (function () {
   'use strict';
 
@@ -135,7 +135,9 @@
         h('td', null, item.state === 'done' && item.reportId != null ? h('a', {
           className: 'app-link',
           href: '#report/' + encodeURIComponent(item.symbol) + '/' + item.reportId,
-          'aria-label': 'Open the report for ' + item.symbol
+          'aria-label': item.reportRevision != null
+            ? 'Open revision ' + item.reportRevision + ' of the report for ' + item.symbol
+            : 'Open the report for ' + item.symbol
         }, item.reportRevision != null ? 'revision ' + item.reportRevision : 'Open') : none()),
         h('td', null, open && !declining ? h(F.Button, {
           size: 'sm', className: 'app-inbox__decline',

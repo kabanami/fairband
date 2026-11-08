@@ -1380,16 +1380,24 @@ def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
 def test_revisions_and_items_are_named_by_number_and_time() -> None:
     """Spec 18.4 and 18.5 (plan 4): two revisions or two items on one day read the same by
     date alone. A revision's link reads "revision 1, 8 Nov 2026, 07:24", the time ``P.when``'s
-    element in the reader's local time; an item's Posted cell is that element; a done item's
-    report link names its revision, and reads Open when the server sends none."""
-    link = _function(_code(_static_file("report.js")), "revisionLink")
+    element in the reader's local time, the links joined by a middle dot since each holds commas;
+    an item's Posted cell is that element; a done item's report link names its revision, in its
+    text and its accessible name, and reads Open when the server sends none."""
+    report = _code(_static_file("report.js"))
+    link = _function(report, "revisionLink")
     assert "'revision ' + r.revision + ', ', P.when(r.createdAt)" in link
     assert "title:" not in link
+    assert "i ? ' · ' : null, revisionLink(report, r)" in _function(report, "dated")
     inbox = _code(_static_file("inbox.js"))
-    assert "P.when(iso)" in _function(inbox, "posted")
+    assert "return P.when(iso);" in _function(inbox, "posted")
     row = _function(inbox, "row")
     assert "item.reportRevision != null ? 'revision ' + item.reportRevision : 'Open'" in row
-    assert "'aria-label': 'Open the report for ' + item.symbol" in row
+    _in_order(
+        row,
+        "'aria-label': item.reportRevision != null",
+        "? 'Open revision ' + item.reportRevision + ' of the report for ' + item.symbol",
+        ": 'Open the report for ' + item.symbol",
+    )
 
 
 def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
@@ -2837,12 +2845,19 @@ def test_the_reader_renders_the_text_as_blocks() -> None:
 def test_the_reader_is_set_at_sixteen_pixels() -> None:
     """Spec 18.4 (plan 4): the reader's text at 16px on a 24px line, the column 72ch at that size.
     Two classes win over the ``body`` token's 14px on 20px, which the paragraphs, the lists and
-    the table's body cells each carry; the table's header row keeps its label."""
+    the table's body cells each carry; the table's header row keeps its label. A cite in that
+    text is the ``figure`` token's 14px over its ``figure-sm``, on the text's line; a section's
+    heading 18px on a 24px line."""
     css = _component_file("bundle.css")
     assert (
         ".fb-report .fb-report__prose, .fb-report .fb-report__list,"
         " .fb-report .fb-report__table td {\n  font-size: 16px;\n  line-height: 24px;\n}"
     ) in css
+    assert (
+        ".fb-report .fb-report__prose .fb-cite, .fb-report .fb-report__list .fb-cite,\n"
+        ".fb-report .fb-report__table td .fb-cite {\n  font-size: 14px;\n  line-height: inherit;\n}"
+    ) in css
+    assert ".fb-report .fb-report__section h4 {\n  font-size: 18px;\n  line-height: 24px;\n}" in css
     assert ".fb-report__prose { margin: 0; max-width: 72ch; color: var(--ink); }" in css
     comment = css[css.index("/* fairband: the reader's text at 16px") :]
     assert "(spec 2026-11-06 Tier 2, 18.4, plan 4" in comment[: comment.index("*/")]

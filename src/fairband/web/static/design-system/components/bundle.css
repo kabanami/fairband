@@ -681,9 +681,21 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 /* fairband: the reader's text at 16px on a 24px line (spec 2026-11-06 Tier 2, 18.4, plan 4:
    the founder found 14px too small to read at ease); the 72ch column scales with it. Two classes
    win over the body token on the paragraph, the list and the table's body cell, each of which
-   carries it; the table's header row keeps its label. */
+   carries it; the table's header row keeps its label. A cite in that text takes the figure
+   token's 14px over its figure-sm, its line height the text's, so the figures read as part of
+   the text and the line does not jump; a section's heading is 18px on the same 24px line, its
+   weight the heading token's. */
 .fb-report .fb-report__prose, .fb-report .fb-report__list, .fb-report .fb-report__table td {
   font-size: 16px;
+  line-height: 24px;
+}
+.fb-report .fb-report__prose .fb-cite, .fb-report .fb-report__list .fb-cite,
+.fb-report .fb-report__table td .fb-cite {
+  font-size: 14px;
+  line-height: inherit;
+}
+.fb-report .fb-report__section h4 {
+  font-size: 18px;
   line-height: 24px;
 }
 .fb-report__table .fb-cite { white-space: nowrap; }

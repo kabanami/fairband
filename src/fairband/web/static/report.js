@@ -249,9 +249,11 @@
       earlier.length ? dated('Earlier revisions: ', report, earlier) : null);
   }
 
+  /* A group's title, then its links joined by a middle dot, as the page's captions join, since
+     each link's own text holds commas (plan 4). */
   function dated(title, report, list) {
     return h(React.Fragment, null, title, list.map(function (r, i) {
-      return h(React.Fragment, { key: r.id }, i ? ', ' : null, revisionLink(report, r));
+      return h(React.Fragment, { key: r.id }, i ? ' · ' : null, revisionLink(report, r));
     }));
   }
 
