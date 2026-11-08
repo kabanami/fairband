@@ -13,7 +13,8 @@ every report, the cycle, the key judgments as the last section, the multiples hi
 on the report page, and the Inbox view's count (11, 12, 13, 14, 15.3, 18.4, 18.5, 19, 24, and the
 log's three rows of that date). Plan 1b (merged 2026-11-07) carries the report's side; plan 2
 (merged 2026-11-08) the page; plan 3 (merged 2026-11-08, `docs/superpowers/plans/2026-11-08-first-session-fixes.md`)
-the first live session's rulings. The build rulings of the three plans are marked in place and
+the first live session's rulings; plan 4 (`docs/superpowers/plans/2026-11-08-second-run-page-fixes.md`)
+the page fixes of the second live session. The build rulings of the plans are marked in place and
 listed in the log's last rows.
 
 This document adds to `docs/method.md` (sections 14, 15 and 16, and the versions table) and to the
@@ -170,8 +171,8 @@ MCP, for a symbol or whole, newest first; the drawer's Details shows the company
 
 ## 8. The work inbox (B-58)
 
-A work item: `symbol`, `mode` (`valuation review` or `full report`), `note` (the requester's
-text, may be empty), `snapshot_id` at posting (none for a company without one), `origin`
+A work item: `symbol`, `mode` (`valuation review` or `full report`), `note` (the request in
+the requester's own words, one line, no commentary, the mode not repeated; may be empty; plan 4), `snapshot_id` at posting (none for a company without one), `origin`
 (`owner`, `agent`, `expiry`), the principal and time of posting, and a state:
 
 | State | Set by | Carries |
@@ -689,7 +690,9 @@ on file, served by `GET /api/companies/{symbol}/multiples-history` and the read 
   row to `multiples_log` at every price refresh and every snapshot: the date, the price, the
   clean, reported and forward P/E of the engine's intermediates. The read serves it as
   `multiple:<symbol>/pe_forward/<date>` with the same four statistics over the rows on file, and
-  says in `since` when the log began. The chart says so while the log is short. *My call*: an
+  says in `since` when the log began. The chart says so while the log is short, and with fewer than five readings the page shows
+  the newest reading as a figure with the sentence, no line and no average (plan 4: a one-point
+  line with an average read as broken). *My call*: an
   honest short series over a vendor's absent one.
 
 The two series are not the mechanical multiples of 8's text, which stay the snapshot's
@@ -916,19 +919,24 @@ In order, and nothing else:
 
 1. The head as today: the ticker, the phase badge, the name.
 2. The meter: `BandMeter`. Where the current review counts on the latest snapshot and has a
-   value, the meter draws the review's levels and value, its caption the designation sentence at
-   the reviewed value followed by the mechanical value in words ("· mechanical $342"); without one,
+   value, the meter draws the review's levels and value, the head beside the price saying price ÷
+   value and the value's name in one form ("0.82 × the reviewed value"), its caption the mechanical
+   value in words ("mechanical $342") and nothing the head already says (plan 4; before it the
+   caption repeated the designation sentence in a second form); without one,
    the mechanical band as today (plan 3; the `reviewedValue` second-marker patch of plan 2 is no
    longer drawn on a valued row and may stay in the bundle for the caller that passes it). On a row the route refused, the meter draws from the
    current review's levels and value when the review has one, else from the secondary valuation's
    when it counts on the latest snapshot (its caption "Secondary valuation"), with the refusal
    line kept under it; a refused row with neither keeps no meter (build rulings of plan 2, Task 2
-   and the final review).
+   and the final review). A label on the tier above the track that lies within six points of the
+   price marker is anchored away from it, its near edge 8px off the marker (plan 4: on QCOM the
+   marker's dot covered "$179.11").
 3. The stance line, when a report exists: the word, then a `PrincipalChip` (agent, the actor,
    the report's date). Without a report, nothing.
 4. The report's Summary section, rendered by `ReportReader` (section 1 only), then one button,
-   `Open the report` (secondary), to the report page. Without a report: one button, `Request
-   research`, which opens a small menu in the bundle's style with the mode (valuation review,
+   `Open the report` (secondary), to the report page; without a report, neither. Then one button, `Request research`, on a
+   company with a report as on one without (plan 4: the founder found none on a company with a
+   report), which opens a small menu in the bundle's style with the mode (valuation review,
    full report) and a note line, and posts the item; it then reads `Requested · pending` (or
    `claimed by <actor>`) until the item is done. A refusal row shows its refusal sentence
    under the meter's place as today.
@@ -958,7 +966,11 @@ bullet and numbered lists, tables with a header row, bold, the cites and their f
 inline; a `// fairband:` patch in the bundle naming 13.1, the same renderer under the drawer's
 Summary. The page's table toggle covers the charts' twins only; the agent's tables are text and
 always show. Print keeps a table on one page. Above the reader: the mode, the date, the actor, the revision, `Download .md`, the page's
-one table toggle, and a line listing earlier revisions by date. A link back to the screen. A
+one table toggle, a line listing the other revisions, each by its number and its date and time
+("revision 1, 8 Nov 2026, 07:24"; plan 4: two revisions on one day read the same by date alone),
+then `Request research` with its menu and the open item's line, as the drawer has it (18.2, plan 4).
+The reader's text is set at 16px on a 24px line, the column 72ch wide at that size (the founder,
+2026-11-08: the text was too small to read at ease). A link back to the screen. A
 print stylesheet: the reader part, the references and the appendixes, no header chrome.
 
 **The charts.** The founder, 2026-11-07: charts for the price and the multiples and for the
@@ -980,7 +992,7 @@ inside the reader, above the sentences of the section they belong to, on `surfac
 | 4, quality | `HistoryBars`: Altman's Z″; Piotroski's F |
 | 8, valuation | `SensitivityGrid`: the route's grid the report cites (13.8); the secondary's grid (11) |
 | 9, price | `BandHistory`: the stored closes over the years on file, the band from the snapshots on file (it begins at the first snapshot's date), the past year's high and low marked and labelled |
-| 9, multiples | `MultipleHistory`, twice: the trailing P/E and the forward P/E (13.7), each a line in `chart-1` with its average as a `chart-context` reference line labelled at its end and the current value labelled at the line's end; a loss year leaves a gap; a short forward log says since when |
+| 9, multiples | `MultipleHistory`, twice: the trailing P/E and the forward P/E (13.7), each a line in `chart-1` with its average as a `chart-context` reference line labelled at its end and the current value labelled at the line's end; a loss year leaves a gap; a forward log of fewer than five readings is no chart but the newest reading as a figure with "logged since <date>; a reading is added at each price refresh", no line and no average (plan 4) |
 
 Each chart reads the series the section cites: the six tables, the two multiples series, the
 closes, the snapshots and the two grids, so the chart and the sentence under it never disagree.
@@ -1001,7 +1013,8 @@ count is read by its own thirty-second call to `/api/inbox`, paused while the pa
 read once when it is shown again, since every such read runs the expiry rule under a write lock
 (build rulings of plan 2, Task 5). The view: a table of
 items, newest first, with the symbol (opening the drawer as a watchlist row does), the mode, the
-state word, the posted date and principal, the claimant, the note, the report link when done, and
+state word, the posted date and time and the principal, the claimant, the note, the report link when done,
+named by its revision ("revision 2"; plan 4: two items on one day read the same by date alone), and
 for the owner `Decline` with a reason line on a pending or claimed item. Reading the view runs
 the expiry rule (8).
 
@@ -1283,3 +1296,4 @@ Plan 3, the first live session's rulings (the founder, 2026-11-08, on the QCOM r
 | 2026-11-08 | Build rulings, plan 2 (Claude, during the build, each in place above): B-111's one consensus row per fiscal period by the closeness of the period ends, a row ending within a week after the trailing period end skipped as the reported quarter's duplicate (Task 0; method 2, 5.2, 5.3, 5a.2); the Stance column as the agent's word (the component's derived stance unused), the stance chip fading with the mark, a non-positive secondary not filling Reviewed, the rows' records read in bulk (Task 1); the drawer's Summary with the full report's footnote numbers, the secondary's parts in Details, the secondary's band on a refused row, one request state per view (Task 2); the `report` panel outside the header's views, `ReportReader.footnotes`, one `figure-lg` on the page, the secondary's headline with basis `reviewed` and the caption naming the tool, print without the head figures (Task 3); the chart titles the export's words, `HistoryBars.inverse`, a one-quarter band shown, `hurdleLabel`, the band table in the export (Task 4); the count as pending plus claimed on a thirty-second read, the Inbox table following the header's read, a declined expiry item holding for its window (Task 5); the Methodology section following the method where the playbook's wording differs (Task 6). |
 | 2026-11-08 | The first live session (QCOM, report 1, stance hold; the founder's three rulings): (1) no DCF where the route values the company: the secondary valuation is the fallback only, refused on a valued snapshot, required on a refused one, and no DCF weighs on the stance (11, 13.3, 14; reverses 2026-11-07's "always done"); (2) the report's text renders as the agent wrote it: paragraphs, lists, tables and bold from the parts, in the reader and under the drawer's Summary (13.1, 18.4); (3) the row's band, buy and trim levels, price ÷ value and designation follow the reviewed value, the engine's value kept in the Mechanical column, and the meters draw the review's band (18.1, 18.2, 18.4). Claude's calls: FMP's `dcf` figure read only on a refused row; the designation at the latest price on the effective edges; the second-marker patch left in the bundle. |
 | 2026-11-08 | Build rulings, plan 3 (Claude, during the build): an older secondary valuation on a company the route or the review values is linked to a new report only when the report cites it, so Appendix A carries no uncited DCF (Task 1); the fallback is for a company neither the route nor the review values, so a review that routes a refused row also bars the DCF (the final review); a review that refuses on a valued snapshot is the agent's to fix, the mechanical value stands meanwhile and no secondary is made, and the values are read in order, the reviewed value, else the snapshot's, else on a refused row the secondary's (Task 2); the drawer's level list under the meter follows the review, the Clean filter and the group view read the mechanical value, the designation at the latest price on the effective edges (Task 3); a table spans the reader's width, one margin per block, headers in the agent's case, a plain line after a list item starts a paragraph, a number alone on its line stays a quantity (Task 4). |
+| 2026-11-08 | The second live session (QCOM, report 2, stance hold, no secondary valuation since the route values the company; the founder's page feedback): `Request research` on a company with a report, under `Open the report` and on the report page (18.2, 18.4); a forward P/E log of fewer than five readings shown as a figure with its sentence, no line and no average (13.7, 18.4); the reader's text at 16px on a 24px line (18.4); the note's form, the request in the requester's own words on one line (8); the meter's head saying price ÷ value and the value's name in one form, its caption only the mechanical value, a level label anchored off the price marker (18.2); revisions and Inbox items named by number and by date and time (18.4, 18.5). The founder's ruling: an item posted over MCP for a chat request keeps origin `agent` (B-125). |
