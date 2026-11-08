@@ -1,11 +1,13 @@
-// ReportReader rendered to HTML in node (spec 2026-11-06 Tier 2, 13.1 "The text's shape" and
-// 18.4), for tests/web/test_reader_blocks.py. The design system's bundle is loaded as the page
-// loads it, with a stub React whose createElement builds a tree; the tree is written as HTML, a
-// class as `class`, text and attributes escaped, no key and no handler.
+// A design system component rendered to HTML in node, for the tests that read what the bundle
+// draws: ReportReader (spec 2026-11-06 Tier 2, 13.1 "The text's shape" and 18.4) for
+// tests/web/test_reader_blocks.py, BandMeter (18.2) for tests/web/test_band_meter.py. The bundle
+// is loaded as the page loads it, with a stub React whose createElement builds a tree; the tree is
+// written as HTML, a class as `class`, text and attributes escaped, no key and no handler.
 //
-//   node reader_blocks.mjs <bundle.js>  < props.json  > reader.html
+//   node render.mjs <bundle.js> [Component]  < props.json  > out.html
 //
-// The props are ReportReader's, as JSON on stdin; the HTML is on stdout.
+// The component is named as window.Fairband names it, ReportReader when none is given; its props
+// are JSON on stdin; the HTML is on stdout.
 import { readFileSync } from 'node:fs';
 
 const bundle = readFileSync(process.argv[2], 'utf8');
@@ -55,4 +57,5 @@ function render(node) {
   return `<${type}${attributes(given)}>${render(given.children)}</${type}>`;
 }
 
-process.stdout.write(render(React.createElement(window.Fairband.ReportReader, props)));
+const component = window.Fairband[process.argv[3] || 'ReportReader'];
+process.stdout.write(render(React.createElement(component, props)));

@@ -1557,20 +1557,18 @@ def test_settings_view_keeps_one_primary_and_a_true_note() -> None:
 
 
 def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
-    """Spec 7.3: the band meter's caption says the word and the price ÷ value; the levels below
+    """Spec 7.3 and spec 2026-11-06 Tier 2, 18.2 item 2 (plan 4): the band meter's head says the
+    word and price ÷ value over the value's name, "the mechanical value"; the levels below
     it read Margin of safety (the value less the moat's margin), Fair band and the trim multiple
     × value, the multiple read from the levels as the margin is, so 1.75 under a setting of 1.75
     and 1.5 at the default; and the meter's own scale, whose words would collide in the rail, is
     off."""
     script = _static_file("app.js")
     assert "buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation," in script
-    assert "showScale: false, caption: standing(r, body.designationEdges)" in script
-    assert "var word = F.DESIGNATION[r.designation];" in script
-    assert "if (!word || r.price_to_value == null) return null;" in script
     assert (
-        "return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × ' +\n"
-        "      (of || 'the value');"
-    ) in script  # "the value" unless the caller names it: the reviewed value (plan 3)
+        "designation: r.designation,\n        showScale: false,\n"
+        "        gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value'),"
+    ) in _function(script, "meter")
     assert "var margin = Math.round((1 - r.levels.buy / r.value) * 100);" in script
     assert "['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy)," in script
     assert "'value less the ' + moat + ' moat\\'s ' + margin + '%'" in script
@@ -1856,7 +1854,7 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
     for gone in ("F.ValidityWindow", "'Phase evidence'", "inputsTable(", "intermediates("):
         assert gone not in head, gone
     meter = _function(script, "meter")
-    assert "showScale: false, caption: standing(r, body.designationEdges)" in meter
+    assert "gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value')" in meter
     assert "levels(drawnLevels(body))," in main and "levels(r)" not in main
     assert "var valued = isValued(r);" in main
     assert "return r.value != null && r.levels != null && r.price != null;" in (
@@ -2072,11 +2070,12 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
     """The ruling of 2026-11-07 on spec 18.1 and 18.2: a refused row whose secondary valuation
     counts on the latest snapshot, and whose review has no value there, shows the secondary's
     value in the screen's Reviewed column, so its drawer draws the secondary's band against the
-    price, captioned as the secondary valuation with its word at today's price, and the refusal
-    stays under it. A refused row with a valued review draws the review's band instead (the
-    ruling of 2026-11-08); a refused row with neither stays as it was; the valued row's meter is
-    the review's where its review counts and has a value, else the mechanical one (plan 3). The
-    meter is the drawer's own part, which the report page draws too (18.4)."""
+    price, its head the word and price ÷ value over the secondary valuation at today's price
+    (plan 4), and the refusal stays under it. A refused row with a valued review draws the
+    review's band instead (the ruling of 2026-11-08); a refused row with neither stays as it was;
+    the valued row's meter is the review's where its review counts and has a value, else the
+    mechanical one (plan 3). The meter is the drawer's own part, which the report page draws too
+    (18.4)."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     assert "var banded = isBanded(body);" in main
@@ -2102,26 +2101,21 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
         "if (!isBanded(body)) return null;",
         "low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,",
         "fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,",
-        "trimLevel: secondary.levels.trim, designation: secondary.designation,",
-        "showScale: false, caption: secondaryCaption(secondary, body.designationEdges),",
+        "trimLevel: secondary.levels.trim, designation: secondary.designation, showScale: false,",
+        "gap: gapText(secondary.priceToValue, body.designationEdges, 'the secondary valuation'),",
     )
     band = meter[meter.index("if (!isBanded(body)) return null;") :]
     assert "reviewedValue" not in band
-    caption = _function(script, "secondaryCaption")
-    assert (
-        "var said = standing({ designation: s.designation, price_to_value: s.priceToValue },"
-        " edges);"
-    ) in caption
-    assert "return 'Secondary valuation' + (said ? ' · ' + said : '');" in caption
+    assert "caption:" not in band
 
 
 def test_a_refused_row_with_a_valued_review_draws_the_reviews_band() -> None:
     """The ruling of 2026-11-08 on spec 18.1 and 18.2: where the route refused and the review on
     the latest snapshot has a value and its levels, the row's Reviewed cell and the report page's
     headline show that value, so the drawer's meter draws the review's band against the price:
-    its levels and value, the reviewed marker on the value itself, so the meter's caption says
-    "reviewed" after the word and price ÷ value at today's price, which the detail carries. The
-    refusal stays under it."""
+    its levels and value, the reviewed marker on the value itself, the meter's head the word and
+    price ÷ value over the reviewed value at today's price, which the detail carries, and its
+    caption "reviewed" and the value (plan 4). The refusal stays under it."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     assert "var reviewBanded = isReviewBanded(body);" in main
@@ -2137,15 +2131,11 @@ def test_a_refused_row_with_a_valued_review_draws_the_reviews_band() -> None:
         band,
         "low: review.levels.fairLow, high: review.levels.fairHigh, price: r.price,",
         "fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,",
-        "designation: review.designation, reviewedValue: review.value,",
-        "showScale: false, caption: reviewCaption(review, body.designationEdges), hero: hero",
+        "designation: review.designation, reviewedValue: review.value, showScale: false,",
+        "gap: gapText(review.priceToValue, body.designationEdges, 'the reviewed value'),",
+        "hero: hero",
     )
-    caption = _function(script, "reviewCaption")
-    assert (
-        "return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges,"
-        " of);"
-    ) in caption
-    assert "showScale: false, caption: reviewCaption(review, body.designationEdges), hero" in band
+    assert "caption:" not in band
     bundle = _function(_component_file("bundle.js"), "BandMeter")
     assert "reviewed == null ? null : 'reviewed ' + money(reviewed)" in bundle
 
@@ -2154,11 +2144,11 @@ def test_a_valued_row_with_a_counting_review_draws_the_reviews_band() -> None:
     """Spec 2026-11-06 Tier 2, 18.1 and 18.2, plan 3 (the founder, 2026-11-08: the levels should
     follow the agent's valuation): where the route values the row and the review on the latest
     snapshot has a value and its levels, the meter draws the review's band, value and word at
-    today's price, its caption the word's sentence then the mechanical value in words
-    ("· mechanical $342"); the reviewed second marker is no longer drawn on a valued row. Without
-    such a review the meter is the mechanical band as before. The levels named under the meter are
-    the ones it draws: the review's, the margin read on the moat its moat override sets, else the
-    engine's. The report page draws the same meter (18.4)."""
+    today's price, its head the word and price ÷ value over the reviewed value, its caption the
+    mechanical value in words ("mechanical $342", plan 4); the reviewed second marker is no longer
+    drawn on a valued row. Without such a review the meter is the mechanical band as before. The
+    levels named under the meter are the ones it draws: the review's, the margin read on the moat
+    its moat override sets, else the engine's. The report page draws the same meter (18.4)."""
     script = _static_file("app.js")
     reviewed = _function(script, "isReviewed")
     assert "var v = body.review;" in reviewed
@@ -2173,25 +2163,13 @@ def test_a_valued_row_with_a_counting_review_draws_the_reviews_band() -> None:
         "low: review.levels.fairLow, high: review.levels.fairHigh, price: r.price,",
         "fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,",
         "designation: review.designation, showScale: false,",
-        "caption: mechanicalCaption(review, r, body.designationEdges), hero: hero",
+        "gap: gapText(review.priceToValue, body.designationEdges, 'the reviewed value'),",
+        "caption: 'mechanical ' + F.formatMoney(r.value), hero: hero",
         "low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,",
         "buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,",
-        "showScale: false, caption: standing(r, body.designationEdges), hero: hero",
+        "gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value'), hero: hero",
     )
     assert "reviewedValue" not in valued
-    # the caption: the review's word and price ÷ value over the reviewed value, then the
-    # mechanical value, "Above: the price is 1.42 × the reviewed value · mechanical $133.37"
-    caption = _function(script, "mechanicalCaption")
-    assert (
-        "return [reviewCaption(v, edges, 'the reviewed value'), 'mechanical ' +"
-        " F.formatMoney(r.value)]"
-    ) in caption
-    assert ".filter(Boolean).join(' · ');" in caption
-    said = _function(script, "standing")
-    assert "return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × ' +" in (
-        said
-    )
-    assert "(of || 'the value');" in said
     # the levels under the meter are the ones it draws
     drawn = _function(script, "drawnLevels")
     _in_order(
@@ -2207,6 +2185,24 @@ def test_a_valued_row_with_a_counting_review_draws_the_reviews_band() -> None:
     assert "valued ? section('band', null, meter(body),\n        levels(drawnLevels(body))," in main
     # the report page draws the drawer's meter, so its band is the review's too
     assert "P.meter(d, false)," in _static_file("report.js")
+
+
+def test_the_meter_says_the_ratio_and_the_values_name_once() -> None:
+    """Spec 18.2 item 2 (plan 4): the head says price ÷ value and the value's name in one form;
+    the caption says only what the head does not."""
+    script = _code(_static_file("app.js"))
+    meter = _function(script, "meter")
+    assert "gap: gapText(review.priceToValue, body.designationEdges, 'the reviewed value')" in meter
+    assert "gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value')" in meter
+    assert (
+        "gap: gapText(secondary.priceToValue, body.designationEdges, 'the secondary valuation')"
+        in meter
+    )
+    assert "caption: 'mechanical ' + F.formatMoney(r.value)" in meter
+    assert meter.count("caption:") == 1  # the other three branches pass none
+    gap = _function(script, "gapText")
+    assert "ratioFigure(ratio, edges) + ' × ' + of" in gap
+    assert "mechanicalCaption" not in script and "secondaryCaption" not in script
 
 
 def test_the_drawer_is_read_again_when_a_run_ends() -> None:

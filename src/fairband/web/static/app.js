@@ -732,16 +732,20 @@
   }
 
   /* The meter of a company's detail (spec 2026-11-06 Tier 2, 18.2 and 18.4), as the drawer and
-     the report page draw it: a valued row whose review on the latest snapshot has a value, the
-     review's band, its word at today's price, its caption that word's sentence then the
-     mechanical value in words, as the row's band and levels follow the reviewed value (plan 3);
-     else a valued row's mechanical band against the price, its caption the row's word and price
-     ÷ value; a refused row whose review on the latest snapshot has a value, the review's band,
-     the reviewed marker on the value itself, its word at today's price (the ruling of
+     the report page draw it. The head beside the price says the word and price ÷ value over the
+     value's name in one form, "0.82 × the reviewed value", and the caption only what the head
+     does not (18.2 item 2, plan 4): a valued row whose review on the latest snapshot has a value,
+     the review's band, its word and ratio at today's price over the reviewed value, its caption
+     the mechanical value in words, as the row's band and levels follow the reviewed value (plan
+     3); else a valued row's mechanical band against the price, its word and ratio over the
+     mechanical value; a refused row whose review on the latest snapshot has a value, the
+     review's band, the reviewed marker on the value itself, its word and ratio at today's price
+     over the reviewed value, the bundle's caption "reviewed" and the value (the ruling of
      2026-11-08); else a refused row whose secondary valuation counts on the latest snapshot, the
-     secondary's band, its word at today's price (the ruling of 2026-11-07); else none. The scale
-     is off: the drawer names the levels under it. `hero` false sets the meter's price in figure,
-     under the report page's one headline figure; the drawer passes none. */
+     secondary's band, its word and ratio at today's price over the secondary valuation (the
+     ruling of 2026-11-07); else none. The scale is off: the drawer names the levels under it.
+     `hero` false sets the meter's price in figure, under the report page's one headline figure;
+     the drawer passes none. */
   function meter(body, hero) {
     var r = body.result;
     var review = body.review;
@@ -752,29 +756,32 @@
           low: review.levels.fairLow, high: review.levels.fairHigh, price: r.price,
           fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,
           designation: review.designation, showScale: false,
-          caption: mechanicalCaption(review, r, body.designationEdges), hero: hero
+          gap: gapText(review.priceToValue, body.designationEdges, 'the reviewed value'),
+          caption: 'mechanical ' + F.formatMoney(r.value), hero: hero
         });
       }
       return h(F.BandMeter, {
         low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
         buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
-        showScale: false, caption: standing(r, body.designationEdges), hero: hero
+        showScale: false,
+        gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value'), hero: hero
       });
     }
     if (isReviewBanded(body)) {
       return h(F.BandMeter, {
         low: review.levels.fairLow, high: review.levels.fairHigh, price: r.price,
         fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,
-        designation: review.designation, reviewedValue: review.value,
-        showScale: false, caption: reviewCaption(review, body.designationEdges), hero: hero
+        designation: review.designation, reviewedValue: review.value, showScale: false,
+        gap: gapText(review.priceToValue, body.designationEdges, 'the reviewed value'), hero: hero
       });
     }
     if (!isBanded(body)) return null;
     return h(F.BandMeter, {
       low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,
       fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,
-      trimLevel: secondary.levels.trim, designation: secondary.designation,
-      showScale: false, caption: secondaryCaption(secondary, body.designationEdges), hero: hero
+      trimLevel: secondary.levels.trim, designation: secondary.designation, showScale: false,
+      gap: gapText(secondary.priceToValue, body.designationEdges, 'the secondary valuation'),
+      hero: hero
     });
   }
 
@@ -1385,30 +1392,11 @@
   /* A store word in a reader's words: target_margin is target margin. */
   function words(name) { return String(name).replace(/_/g, ' '); }
 
-  /* The band meter's caption: the row's word and its price ÷ value (classifier-designation spec
-     7.3), over `of`, "the value" when none is named. A row valued before the designation has
-     neither. */
-  function standing(r, edges, of) {
-    var word = F.DESIGNATION[r.designation];
-    if (!word || r.price_to_value == null) return null;
-    return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × ' +
-      (of || 'the value');
-  }
-
-  /* A band from the valued review: its word and price ÷ value at the latest price, which the
-     detail carries, as the meter's own caption says them, over `of`, "the value" when none is
-     named. On a refused row the meter adds "reviewed" and the value after it; on a valued row
-     mechanicalCaption names the reviewed value and adds the mechanical value. */
-  function reviewCaption(v, edges, of) {
-    return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges, of);
-  }
-
-  /* A valued row's band from its review (spec 2026-11-06 Tier 2, 18.2, plan 3): the review's word
-     and price ÷ value at the latest price, over the reviewed value in words, then the mechanical
-     value, "Above: the price is 1.42 × the reviewed value · mechanical $133.37". */
-  function mechanicalCaption(v, r, edges) {
-    return [reviewCaption(v, edges, 'the reviewed value'), 'mechanical ' + F.formatMoney(r.value)]
-      .filter(Boolean).join(' · ');
+  /* The band meter's gap text, beside the word's chip in its head (spec 2026-11-06 Tier 2, 18.2
+     item 2, plan 4): price ÷ value over the value's name `of` in one form, "0.82 × the reviewed
+     value"; '' where there is no ratio (a row valued before the designation), which draws none. */
+  function gapText(ratio, edges, of) {
+    return ratio == null ? '' : ratioFigure(ratio, edges) + ' × ' + of;
   }
 
   /* Why a secondary valuation on file is not the row's fallback (spec 2026-11-06 Tier 2, 11, plan
@@ -1419,13 +1407,6 @@
     var v = body.review;
     if (v && v.value != null) return 'not the fallback: the review values the company';
     return null;
-  }
-
-  /* A refused row's band from its secondary valuation: what drew it, then its word and price ÷
-     value at the latest price, as the meter's own caption says them. */
-  function secondaryCaption(s, edges) {
-    var said = standing({ designation: s.designation, price_to_value: s.priceToValue }, edges);
-    return 'Secondary valuation' + (said ? ' · ' + said : '');
   }
 
   /* Price ÷ value to two decimals, unless they would land on one of the policy's designation

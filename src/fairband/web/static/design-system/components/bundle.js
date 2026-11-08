@@ -441,6 +441,21 @@
     // (classifier-designation spec 7.3); without one the head shows the price and its gap.
     var word = DESIGNATION[p.designation];
     var toFair = fair ? (fair - price) / fair : 0;
+    // fairband: the caller's gap text when it gives one, price ÷ value and the value's name in one
+    // form ("0.82 × the reviewed value"), '' for none; without one the derived percentage (spec
+    // 2026-11-06 Tier 2, 18.2 item 2, plan 4).
+    var gap = p.gap === undefined
+      ? pct(Math.abs(toFair) * 100) + (toFair >= 0 ? ' below' : ' above') + ' fair value'
+      : p.gap;
+    // fairband: a tier label within six points of the price marker is anchored away from it, its
+    // near edge 8px off the marker; on the marker's own position, after it (spec 2026-11-06 Tier
+    // 2, 18.2 item 2, plan 4: on QCOM the marker's dot covered "$179.11").
+    var near = function (v) { return Math.abs(at(v) - at(price)) < 6; };
+    var anchor = function (v) {
+      return near(v)
+        ? (at(v) >= at(price) ? 'fb-band__tier-label--after' : 'fb-band__tier-label--before')
+        : null;
+    };
 
     var holdFrom = buy == null ? 0 : at(buy);
     var holdTo = trim == null ? 100 : at(trim);
@@ -458,14 +473,13 @@
           money(price)),
         // fairband: the word's chip in its band's colour, as the screen's column draws it.
         word ? h('span', { className: 'fb-designation fb-designation--' + p.designation + ' label' }, word) : null,
-        h('span', { className: 'fb-band__gap caption' },
-          pct(Math.abs(toFair) * 100) + (toFair >= 0 ? ' below' : ' above') + ' fair value')
+        gap ? h('span', { className: 'fb-band__gap caption' }, gap) : null
       ),
 
       /* the band's own numbers, on their own tier above the track */
       h('div', { className: 'fb-band__tier figure-sm' },
-        h('span', { style: { left: at(low) + '%' } }, money(low)),
-        h('span', { style: { left: at(high) + '%' } }, money(high)),
+        h('span', { className: anchor(low), style: { left: at(low) + '%' } }, money(low)),
+        h('span', { className: anchor(high), style: { left: at(high) + '%' } }, money(high)),
         /* a div, not a span: the tier's span rule centres its labels on their
            own position, which would drag the bracket half its width left */
         h('div', {

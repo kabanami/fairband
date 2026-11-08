@@ -1,7 +1,7 @@
 """The report reader renders a section's text as the agent wrote it (spec 2026-11-06 Tier 2, 13.1
 "The text's shape" and 18.4): a blank line between paragraphs, bullet and numbered lists, a table
 whose ``|---|`` row sets its header, ``**bold**``, and the cites with their footnote numbers inline
-in any of them. The bundle runs in node with a stub React (``reader_blocks.mjs``), so the test
+in any of them. The bundle runs in node with a stub React (``render.mjs``), so the test
 reads the HTML ``ReportReader`` builds. The drawer's Summary renders through the same component."""
 
 import json
@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 NODE = shutil.which("node")
-HARNESS = Path(__file__).with_name("reader_blocks.mjs")
+HARNESS = Path(__file__).with_name("render.mjs")
 BUNDLE = (
     Path(str(resources.files("fairband.web").joinpath("static", "design-system", "components")))
     / "bundle.js"

@@ -216,6 +216,12 @@ export interface BandMeterProps {
    */
   reviewedValue?: number | null;
   /**
+   * fairband: the head's gap text, price ÷ value and the value's name in one form ("0.82 × the
+   * reviewed value"); `''` draws none; absent keeps the derived "17.8% below fair value" (spec
+   * 2026-11-06 Tier 2, 18.2 item 2, plan 4).
+   */
+  gap?: string;
+  /**
    * fairband: `false` sets the head's price in `figure`, under a page's one headline figure
    * (CompanyReport's one hero; spec 2026-11-06 Tier 2, 18.4). Absent, it is `figure-lg`.
    */

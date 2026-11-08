@@ -382,6 +382,10 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 /* The band's own numbers, on their own tier above the track. */
 .fb-band__tier { position: relative; height: 20px; }
 .fb-band__tier > span { position: absolute; transform: translateX(-50%); white-space: nowrap; color: var(--ink-faint); }
+/* fairband: a label within six points of the price marker, anchored away from it, its near edge
+   8px off the marker (spec 2026-11-06 Tier 2, 18.2 item 2, plan 4). */
+.fb-band__tier > span.fb-band__tier-label--after { transform: none; margin-left: 8px; }
+.fb-band__tier > span.fb-band__tier-label--before { transform: translateX(-100%); margin-left: -8px; }
 .fb-band__bracket {
   position: absolute;
   top: 15px;
