@@ -428,6 +428,7 @@
   .app-report__actions { display: flex; gap: var(--space-2); margin-left: auto; }
   .app-report__revisions, .app-report__note { margin: var(--space-2) 0 0; color: var(--ink-muted); }
   .app-report__error { margin: var(--space-2) 0 0; color: var(--caution); }
+  .app-report__meta .app-request { margin-top: var(--space-2); }
   .app-report .fb-report { margin-top: var(--space-3); }
   .app-report__panel {
     margin-top: var(--space-8); padding: var(--space-3) var(--space-4) var(--space-4);
@@ -473,12 +474,14 @@
   @media (width < 840px) { .app-charts { grid-template-columns: minmax(0, 1fr); } }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or
-     menu, and not today's figures, the headline, the price and the meter, which move with the
-     latest snapshot while the report rests on its own; a panel another view would show is hidden
-     already. The page runs its full length, not its window's. */
+     menu, no Request research or its lines (plan 4), and not today's figures, the headline, the
+     price and the meter, which move with the latest snapshot while the report rests on its own; a
+     panel another view would show is hidden already. The page runs its full length, not its
+     window's. */
   @media print {
     #header, #controls, .fb-btn, .fb-menu, .app-dialog, .app-report__figures, .app-report__band,
-    .app-report__revisions, .app-report__back { display: none !important; }
+    .app-report__revisions, .app-report__back, .app-request, .app-requested,
+    .app-request__error { display: none !important; }
     html, body, .app-page { height: auto; }
     .app-page { display: block; }
     section#report { overflow: visible; padding: 0; }

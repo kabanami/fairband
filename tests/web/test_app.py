@@ -2537,6 +2537,9 @@ def test_the_report_page_order_is_pinned() -> None:
         "state.downloadError",
     )
     assert "var expired = report.appendixA.snapshot.validUntil < d.today;" in meta
+    # Request research under the revisions line, spaced as the meta's other lines are (plan 4)
+    page = _static_file("index.html")
+    assert "margin-top: var(--space-2);" in _rule(page, ".app-report__meta .app-request {")
     lines = _function(script, "revisions")
     assert "'Earlier revisions: '" in lines and "'Later revisions: '" in lines
     link = _function(script, "revisionLink")
@@ -2815,9 +2818,9 @@ def test_the_reader_renders_the_text_as_blocks() -> None:
 
 def test_the_print_stylesheet() -> None:
     """Spec 13.6 and 18.4: printed, the report page gives the reader, the references and the
-    appendixes under the company's name: no header chrome, no status line, no button or menu, and
-    not today's figures, which move with the latest snapshot; the page runs its full length. A
-    panel another view would show is hidden already."""
+    appendixes under the company's name: no header chrome, no status line, no button or menu, no
+    Request research or its lines (plan 4), and not today's figures, which move with the latest
+    snapshot; the page runs its full length. A panel another view would show is hidden already."""
     page = _static_file("index.html")
     block = page[page.index("@media print {") :]
     block = block[: block.index("\n  }\n")]
@@ -2831,6 +2834,9 @@ def test_the_print_stylesheet() -> None:
         ".app-report__band",
         ".app-report__revisions",
         ".app-report__back",
+        ".app-request,",
+        ".app-requested,",
+        ".app-request__error",
     ):
         assert selector in hidden, selector
     for text in (
