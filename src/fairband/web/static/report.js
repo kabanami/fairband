@@ -4,15 +4,16 @@
    the page's one headline figure, the reviewed value where the review on the latest snapshot has
    one, else the mechanical, with the price beside it; the meter as the drawer draws it. Above the
    reader, the report's stance, mode, date, writer and revision, Download .md, the page's one table
-   toggle and the other revisions by date. Then ReportReader with every section, each cited number
-   followed by its footnote number (13.1) and the charts of the sections that have them above
-   their sentences (18.4), the references those numbers name, Appendix A, the audit of the records
-   the report rests on, and Appendix B, the glossary, both as the server generates them; a link
-   back to the screen. The page shows Request research with or without a report, as the drawer
-   has it: under the revisions line, or under the head, the meter and "No report yet." for a
-   company with none. The drawer's own parts come through window.FairbandPage; the head and the
-   meter read the company's detail, as the drawer does, and the rest the report. The charts read
-   the series the sections cite once the report is in, and charts.js draws them. */
+   toggle and the other revisions by number and by date and time. Then ReportReader with every
+   section, each cited number followed by its footnote number (13.1) and the charts of the
+   sections that have them above their sentences (18.4), the references those numbers name,
+   Appendix A, the audit of the records the report rests on, and Appendix B, the glossary, both
+   as the server generates them; a link back to the screen. The page shows Request research with
+   or without a report, as the drawer has it: under the revisions line, or under the head, the
+   meter and "No report yet." for a company with none. The drawer's own parts come through
+   window.FairbandPage; the head and the meter read the company's detail, as the drawer does, and
+   the rest the report. The charts read the series the sections cite once the report is in, and
+   charts.js draws them. */
 (function () {
   'use strict';
 
@@ -205,9 +206,9 @@
   /* Above the reader (18.4): the report's stance in the drawer's chip classes, faded once the
      window of the snapshot it rests on has ended (rows.window_ended's rule); its mode, its date,
      who wrote it and its revision; Download .md and the page's one table toggle. Under it, that a
-     valuation review has no full report to reuse, when it has none; the other revisions by date;
-     Request research, the drawer's own with this page's request, as on a company with no report
-     (plan 4); a download's refusal. */
+     valuation review has no full report to reuse, when it has none; the other revisions by number
+     and by date and time; Request research, the drawer's own with this page's request, as on a
+     company with no report (plan 4); a download's refusal. */
   function meta(d, report) {
     var expired = report.appendixA.snapshot.validUntil < d.today;
     return h('div', { key: 'meta', className: 'app-report__meta' },
@@ -235,8 +236,8 @@
         ? h('p', { className: 'caption app-report__error' }, state.downloadError) : null);
   }
 
-  /* The company's other revisions by date, newest first, each a link to its page: those after the
-     one shown, when it is an earlier revision, then those before it. */
+  /* The company's other revisions by number and by date and time, newest first, each a link to
+     its page: those after the one shown, when it is an earlier revision, then those before it. */
   function revisions(report) {
     var listed = state.reports || [];
     var later = listed.filter(function (r) { return r.revision > report.revision; });
