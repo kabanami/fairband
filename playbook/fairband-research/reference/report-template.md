@@ -46,7 +46,7 @@ Put the answer first in each section. Keep each sentence to one idea.
 
 | # | Heading | Mode | What it holds |
 |---|---|---|---|
-| 1 | Summary | both | One page: the stance; the thesis in two or three sentences; the value against the price and the levels (on a refused row, the secondary valuation's value in its place); the phase in one sentence, with the word "cyclical" when the business is; three reasons for; three risks; what would change the view; the end of the validity window. Shape below. |
+| 1 | Summary | both | One page: the stance; the thesis in two or three sentences; the value against the price and the levels (on a refused row with no reviewed value, the secondary valuation's value in its place); the phase in one sentence, with the word "cyclical" when the business is; three reasons for; three risks; what would change the view; the end of the validity window. Shape below. |
 | 2 | The business | full report | The products (the 10-K's Item 1); the revenue by product and by region over three years (`segments`); what drives revenue: price, volume, users, contracts, recurring or one-time; the customers, any customer at a tenth of revenue or more; the unit economics: the gross margin and the incremental margin (the share of each extra dollar of revenue that became operating profit). |
 | 3 | Industry and competition | full report | The value chain: the suppliers, the customers, where the profit goes; the industry's size and growth; the competitors (`peers` and the 10-K); the company's position, its share and its rank; the moat by Damodaran's five sources: brand name, switching costs, network effect, cost advantages, efficient scale. End with a plain answer to "are the economics favorable?", from the gross margin, the incremental margin against the average margin, and the ROIC against the hurdle rate. |
 | 4 | Financial performance and health | both | Six parts, one for each table of `financial_tables`, each two or three plain sentences that cite its cells. Detail below. |
@@ -155,12 +155,13 @@ The kill criteria of section 11 test it.
 - **The guidance.** Where a guidance override moved an anchor or a step, one sentence names it
   and cites the record's figure, `guidance:<id>/midpoint`.
 - **The secondary valuation**, on a refused row only: where the route refuses or no route fits,
-  it stands in for the route's value and leads the section. The drivers in words, with their
-  figures cited (`secondary:<id>/drivers/<name>`, `/drivers/<name>/<t>`); the value,
-  `secondary:<id>/value`; the grid's range, two cells `secondary:<id>/grid/<i>/<j>`. Where the
-  server refused the secondary valuation as a foreign filer or for no diluted share count, say so
-  in one sentence: the report publishes without one. Where the route values the company, write no
-  second value and read no DCF.
+  it stands in for the route's value and leads the section. Where an override gave the current
+  review a value, the reviewed value leads and the secondary valuation follows it. The drivers in
+  words, with their figures cited (`secondary:<id>/drivers/<name>`, `/drivers/<name>/<t>`); the
+  value, `secondary:<id>/value`; the grid's range, two cells `secondary:<id>/grid/<i>/<j>`. Where
+  the server refused the secondary valuation as a foreign filer or for no diluted share count, say
+  so in one sentence: the report publishes without one. Where the route values the company, write
+  no second value and read no DCF.
 - **FMP's figure**, on a refused row only, in one sentence when read, beside the secondary
   valuation: `response:<responseId>/<json pointer>` of the `dcf` answer.
 - **A cyclical**: where it is in its cycle, and the mid-cycle basis the values rest on.

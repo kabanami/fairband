@@ -283,12 +283,13 @@ difference, a sum, a growth rate or a compound annual growth rate. Never compute
 ### 11. The stance
 
 Choose the stance: `buy`, `hold`, `trim` or `avoid`. Read the value against its levels. Take the
-reviewed value when the current review has one, else the snapshot's value; on a refused row, the
-secondary valuation's. When the current review refused, the snapshot's value stands: fix or drop
-the override that refused before you choose the stance. No stance rests on a refused review. No
-DCF weighs on the stance where the route values the company: the founder's rule of 2026-11-08.
-`avoid` is for a company you would not hold at any price shown. Weigh the thesis as well as the
-levels. The report's reasons carry the stance.
+reviewed value when the current review has one. Else take the snapshot's value. On a refused row
+with no reviewed value, take the secondary valuation's. When the current review refused on a
+valued snapshot, the snapshot's value stands: fix or drop the override whose bridge line refused
+before you choose the stance. No stance rests on a refused review. No DCF weighs on the stance
+where the route values the company: the founder's rule of 2026-11-08. `avoid` is for a company
+you would not hold at any price shown. Weigh the thesis as well as the levels. The report's
+reasons carry the stance.
 
 ### 12. The report
 
@@ -486,9 +487,10 @@ An applied override answers `{override, review, bridge}`. The bridge starts at t
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
 consensus step 3, held rate, belief, non-recurring gap, mid-cycle earnings, target margin, sales to
 capital, runway return, decline rate, moat, debt, cash. A line whose step refuses shows the refusal
-in place of a change. A review whose last line refuses has no value. The secondary valuation does
-not stand in for it while the snapshot has a value: the server refuses one there. The overrides
-are then inconsistent with the route: fix or drop the one that refused (step 11).
+in place of a change. A review whose last line refuses has no value. On a refused row, where the
+mechanical value refuses too, the secondary valuation stands in for it. On a valued snapshot it
+does not: the server refuses one there, and the overrides are inconsistent with the route. Fix or
+drop the override whose bridge line refused (step 11).
 
 One input holds one applied override. A new override on the same tag replaces the old one. An
 override applies to the latest snapshot and to every later one. A period-tied override (a correction
@@ -517,8 +519,8 @@ Make none there, and read no DCF of any kind.
 You set the drivers; the engine projects the free cash flow to the firm (the cash the business
 makes after its investment, before any payment to lenders or owners), discounts it, adds the
 terminal value and bridges the firm value to a value a share. So the figure is a tool output. On a
-refused row it stands in for the route's value: in the stance, on the screen's row and in the
-report.
+refused row with no reviewed value it stands in for the route's value: in the stance, on the
+screen's row and in the report.
 
 Call `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)` with exactly
 one of `drivers` and `parts`.
@@ -594,11 +596,11 @@ of its own; "settings changed: run a revalue" and its two siblings; where the la
 value, "the route values <symbol>: the secondary valuation is the fallback where it refuses"; a
 `guidance` item's 400, 404 and 409, as on an override; "foreign filer: currency and share-unit
 handling not built yet"; "no diluted share count"; on the drivers form, "no trailing revenue on
-file". Then the bounds, each
-naming its rule with the policy's figures: "a secondary valuation runs 3 to 15 years";
-"revenue_growth has 4 entries for 5 years" (or `operating_margin`); a driver out of its range,
-"tax_rate is 0% to 50%"; the terminal growth, "the terminal growth is −100% to g_T, 3.0%"; on the
-parts form, "at least one part", "at most 10 parts", "a part has 3 to 15 years".
+file". Then the bounds, each naming its rule with the policy's figures: "a secondary valuation
+runs 3 to 15 years"; "revenue_growth has 4 entries for 5 years" (or `operating_margin`); a driver
+out of its range, "tax_rate is 0% to 50%"; the terminal growth, "the terminal growth is −100% to
+g_T, 3.0%"; on the parts form, "at least one part", "at most 10 parts", "a part has 3 to 15
+years".
 
 The drivers or the path are your judgment, carried by the evidence: a tool's input, not a report's
 text. The report cites the stored record: `secondary:<id>/value`, `/years/<t>/<line>`,

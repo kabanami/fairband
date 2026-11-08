@@ -143,7 +143,8 @@ vendor call. The refusals:
   from your `drivers`, or from your own free-cash-flow path in `parts`, exactly one of the two; it
   answers the stored secondary valuation, with its projection or its parts and its grid. Where the
   route values the company it is refused: "the route values <symbol>: the secondary valuation is
-  the fallback where it refuses". A report on a refused snapshot needs one on it.
+  the fallback where it refuses". A report on a refused snapshot needs one on it, except for a
+  foreign filer or a snapshot with no diluted share count, which the secondary valuation refuses.
 - `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
   across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`;
   nothing is overridden. `current` marks the pair in force as `[i, j]`; a cell whose valuation

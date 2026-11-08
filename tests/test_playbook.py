@@ -117,10 +117,16 @@ REFUSALS = (
 )
 # The forms the example cites at least once: the history, the grid, the guidance.
 EXAMPLE_FORMS = ("multiple", "sensitivity", "guidance")
+# Step 11's order of the values: the review, else the snapshot, else on a refused row the secondary.
+VALUE_ORDER = (
+    "Take the reviewed value when the current review has one. Else take the snapshot's value. On a"
+    " refused row with no reviewed value, take the secondary valuation's."
+)
 # Step 11 on a review that refused on a valued snapshot: the mechanical value stands meanwhile.
 REFUSED_REVIEW = (
-    "When the current review refused, the snapshot's value stands: fix or drop the override that"
-    " refused before you choose the stance. No stance rests on a refused review."
+    "When the current review refused on a valued snapshot, the snapshot's value stands: fix or drop"
+    " the override whose bridge line refused before you choose the stance. No stance rests on a"
+    " refused review."
 )
 # The phrases of the rule before plan 3: a secondary valuation on every report, the second view.
 STALE = ("on every report", "every report values", "second view", "third opinion", "two values")
@@ -209,9 +215,11 @@ def test_the_secondary_valuation_is_the_fallback_only() -> None:
     rule = steps[10].find("Where the route refuses or no route fits, and only there")
     assert 0 <= rule < steps[10].find("`secondary_valuation`")
     assert "No DCF weighs on the stance where the route values the company" in steps[11]
+    assert VALUE_ORDER in steps[11]
     assert REFUSED_REVIEW in steps[11]  # a refused review is the agent's to fix (ruling 2026-11-08)
-    dcf = re.search(r"^- `dcf\(symbol\)`.*?(?=^- `|^#|\Z)", _read(TOOLS), re.MULTILINE | re.DOTALL)
-    assert dcf is not None and "on a refused row only" in _flat(dcf[0])
+    for exemption in ("foreign filer", "no diluted share count"):  # step 10's two exemptions
+        assert exemption in _tool_entry("secondary_valuation"), exemption
+    assert "on a refused row only" in _tool_entry("dcf")
     assert STRUCTURE[-1] in _flat(_read(CITATIONS))  # the structural check as the check names it
     for path in sorted(PLAYBOOK.rglob("*.md")):
         text = _flat(_read(path)).lower()
@@ -226,6 +234,15 @@ def _read(path: Path) -> str:
 def _flat(text: str) -> str:
     """The text with every run of whitespace one space, so a phrase may cross a line break."""
     return " ".join(text.split())
+
+
+def _tool_entry(name: str) -> str:
+    """The tool's entry in ``reference/tools.md``, from its ``- `name(`` line to the next entry or
+    heading, flattened."""
+    pattern = rf"^- `{name}\(.*?(?=^- `|^#|\Z)"
+    entry = re.search(pattern, _read(TOOLS), re.MULTILINE | re.DOTALL)
+    assert entry is not None, name
+    return _flat(entry[0])
 
 
 @cache

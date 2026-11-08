@@ -336,8 +336,8 @@ def build_server(client: FairbandClient) -> MCPServer:
         return answer(lambda: client.get(_vendor("transcript-dates", symbol)))
 
     @server.tool(
-        description="FMP's discounted cash flow value and its levered one, a cross-check stored so"
-        " a report can cite it."
+        description="FMP's discounted cash flow value and its levered one, read on a refused row"
+        " only, as a cross-check on the secondary valuation, stored so a report can cite it."
     )
     def dcf(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_vendor("dcf", symbol)))
