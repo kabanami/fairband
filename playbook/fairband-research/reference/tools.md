@@ -123,7 +123,7 @@ vendor call. The refusals:
   printable ASCII"}`.
 - `inbox_post(symbol, mode, note?)`: post a work item for a company; `mode` is `valuation review`
   or `full report`; `note` is the request in the user's own words, on one line, with no commentary
-  and without the mode.
+  and without adding the mode.
 - `inbox_claim(item_id?)`: claim the named work item, or the oldest pending one; naming a claimed
   item takes it over.
 - `inbox_complete(item_id, report_id)`: complete a work item with a published report of its

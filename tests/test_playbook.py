@@ -315,7 +315,8 @@ def test_the_note_has_one_form() -> None:
     line; the skill gives the counter-example, a note with process commentary."""
     skill = _flat(_read(SKILL))
     sentence = (
-        "the request in the user's own words, on one line, with no commentary and without the mode"
+        "the request in the user's own words, on one line, with no commentary and without adding"
+        " the mode"
     )
     assert sentence in skill
     assert sentence in _tool_entry("inbox_post")

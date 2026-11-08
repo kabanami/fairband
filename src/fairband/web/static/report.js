@@ -136,8 +136,9 @@
     return ids;
   }
 
-  /* CompanyReport's order: the head, the meter, then the report with the line above it, its
-     references and its appendixes; without a report, Request research. The link back closes it. */
+  /* CompanyReport's order: the head, the meter, then the report with the line above it and
+     Request research under that line (plan 4), its references and its appendixes; without a
+     report, a note and Request research. The link back closes it. */
   function page() {
     var d = state.detail;
     var report = state.report;

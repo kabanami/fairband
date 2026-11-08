@@ -2863,6 +2863,27 @@ def test_the_reader_is_set_at_sixteen_pixels() -> None:
     assert "(spec 2026-11-06 Tier 2, 18.4, plan 4" in comment[: comment.index("*/")]
 
 
+def test_a_tier_label_keeps_its_near_edge_off_the_price_marker() -> None:
+    """Spec 18.2 item 2 (plan 4): a label on the meter's tier is centred on its tick, unless that
+    brings its near edge within 8px of the price marker's centre line, where it stops, at any
+    width; the span gives its tick, the price and its length in ch (tests/web/test_band_meter.py
+    reads them)."""
+    css = _component_file("bundle.css")
+    assert (
+        ".fb-band__tier > span.fb-band__tier-label--right { left: max(calc(var(--tick) -"
+        " var(--len) / 2), calc(var(--price) + 8px)); transform: none; }"
+    ) in css
+    assert (
+        ".fb-band__tier > span.fb-band__tier-label--left { left: min(calc(var(--tick) -"
+        " var(--len) / 2), calc(var(--price) - 8px - var(--len))); transform: none; }"
+    ) in css
+    comment = css[css.index("/* fairband: each tier label") :]
+    assert "its near edge 8px off the marker" in " ".join(comment[: comment.index("*/")].split())
+    bundle = _function(_component_file("bundle.js"), "BandMeter")
+    for gone in ("tier-label--after", "tier-label--before", "var near"):
+        assert gone not in bundle and gone not in css, gone
+
+
 def test_the_print_stylesheet() -> None:
     """Spec 13.6 and 18.4: printed, the report page gives the reader, the references and the
     appendixes under the company's name: no header chrome, no status line, no button or menu, no

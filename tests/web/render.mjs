@@ -2,7 +2,9 @@
 // draws: ReportReader (spec 2026-11-06 Tier 2, 13.1 "The text's shape" and 18.4) for
 // tests/web/test_reader_blocks.py, BandMeter (18.2) for tests/web/test_band_meter.py. The bundle
 // is loaded as the page loads it, with a stub React whose createElement builds a tree; the tree is
-// written as HTML, a class as `class`, text and attributes escaped, no key and no handler.
+// written as HTML, a class as `class`, a style as its declarations (each key as given, `;`-joined,
+// a number on a length as React prints it: 0 bare, else in px), text and attributes escaped, no
+// key and no handler.
 //
 //   node render.mjs <bundle.js> [Component]  < props.json  > out.html
 //
@@ -36,8 +38,18 @@ const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ESCAPES[c]);
 const NAMES = { className: 'class', htmlFor: 'for' };
 
+function declarations(style) {
+  const said = Object.entries(style)
+    .filter(([, value]) => value != null && typeof value !== 'boolean' && value !== '')
+    .map(([name, value]) => `${name}:${typeof value === 'number' && value !== 0
+      && !name.startsWith('--') ? value + 'px' : value}`);
+  return said.length ? said.join(';') : null;
+}
+
 function attributes(given) {
   return Object.entries(given)
+    .map(([name, value]) => [name, name === 'style' && value && typeof value === 'object'
+      ? declarations(value) : value])
     .filter(([name, value]) => name !== 'children' && name !== 'key' && value != null
       && value !== false && typeof value !== 'object' && typeof value !== 'function')
     .map(([name, value]) => ` ${NAMES[name] || name}="${escape(value === true ? '' : value)}"`)

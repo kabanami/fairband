@@ -1,10 +1,11 @@
 """The band meter's head says price ÷ value and the value's name in one form, as the caller gives
 it, and its caption only what the head does not (spec 2026-11-06 Tier 2, 18.2 item 2, plan 4); a
-label on the tier above the track within six points of the price marker is anchored away from it
-(on QCOM the marker's dot covered "$179.11"). The bundle runs in node with a stub React
-(``render.mjs``), so the test reads the HTML ``BandMeter`` builds."""
+label on the tier above the track is placed on its side of the price marker, its near edge never
+nearer the marker than 8px (on QCOM the marker's dot covered "$179.11"). The bundle runs in node
+with a stub React (``render.mjs``), so the test reads the HTML ``BandMeter`` builds."""
 
 import json
+import re
 import shutil
 import subprocess
 from importlib import resources
@@ -65,17 +66,37 @@ def test_without_a_gap_the_derived_text_stays() -> None:
     assert "17.8% below fair value" in html
 
 
-def test_a_label_near_the_price_marker_is_anchored_away_from_it() -> None:
-    # the price 173.19 sits 3.0 points of the axis left of the low label 179.11: it anchors after
+def _tier_label(html: str, text: str) -> tuple[str, dict[str, str]]:
+    """The class of the tier label reading ``text`` and its style's properties."""
+    found = re.search(rf'<span class="([^"]*)" style="([^"]*)">{re.escape(text)}</span>', html)
+    assert found is not None, text
+    pairs = (part.split(":", 1) for part in found[2].split(";"))
+    return found[1], {name: value for name, value in pairs}
+
+
+def test_each_tier_label_is_placed_off_the_price_marker() -> None:
+    """Each tier label carries its side of the price marker and, for bundle.css, its tick, the
+    price and its length in ch (the tier is mono): the stylesheet centres it on its tick unless
+    that brings its near edge within 8px of the marker, where it stops."""
+    # QCOM: the price 173.19 lies left of both labels, so both sit right of the marker
     html = render(QCOM)
-    assert 'class="fb-band__tier-label--after"' in html and "$179.11" in html
-    assert "fb-band__tier-label--before" not in html
-    # the price just above the high label: that label anchors before
+    low = re.search(
+        r'<span class="fb-band__tier-label--right" style="([^"]*)">\$179\.11</span>', html
+    )
+    assert low is not None and "--len:7ch" in low[1]
+    side, style = _tier_label(html, "$179.11")
+    assert list(style) == ["--tick", "--price", "--len"]
+    assert style["--tick"].startswith("20.429") and style["--tick"].endswith("%")
+    assert style["--price"].startswith("17.408") and style["--price"].endswith("%")
+    side, style = _tier_label(html, "$242.32")
+    assert side == "fb-band__tier-label--right"
+    assert style["--tick"].startswith("52.684") and style["--len"] == "7ch"
+    assert "tier-label--left" not in html
+    # the price just above the high label: that label sits left of the marker
     html = render({**QCOM, "price": 245.0, "designation": "above"})
-    assert 'class="fb-band__tier-label--before"' in html
-    # the price on the label's own position anchors after
+    assert _tier_label(html, "$242.32")[0] == "fb-band__tier-label--left"
+    # the price on the low label's own position: that label sits right of the marker
     html = render({**QCOM, "price": 179.11})
-    assert 'class="fb-band__tier-label--after"' in html
-    # a price far from both labels: no anchor class
-    html = render({**QCOM, "price": 100.0, "designation": "well-below"})
-    assert "fb-band__tier-label--" not in html
+    assert _tier_label(html, "$179.11")[0] == "fb-band__tier-label--right"
+    for gone in ("tier-label--after", "tier-label--before"):
+        assert gone not in html

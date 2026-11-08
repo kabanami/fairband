@@ -447,14 +447,17 @@
     var gap = p.gap === undefined
       ? pct(Math.abs(toFair) * 100) + (toFair >= 0 ? ' below' : ' above') + ' fair value'
       : p.gap;
-    // fairband: a tier label within six points of the price marker is anchored away from it, its
-    // near edge 8px off the marker; on the marker's own position, after it (spec 2026-11-06 Tier
-    // 2, 18.2 item 2, plan 4: on QCOM the marker's dot covered "$179.11").
-    var near = function (v) { return Math.abs(at(v) - at(price)) < 6; };
-    var anchor = function (v) {
-      return near(v)
-        ? (at(v) >= at(price) ? 'fb-band__tier-label--after' : 'fb-band__tier-label--before')
-        : null;
+    // fairband: each tier label on its side of the price marker (on the marker's own position, the
+    // right), centred on its tick unless that brings its near edge within 8px of the marker's
+    // centre line, where it stops, at any width: its near edge 8px off the marker (spec 2026-11-06
+    // Tier 2, 18.2 item 2, plan 4: on QCOM the marker's dot covered "$179.11"). The span gives
+    // bundle.css its tick, the price and its length in ch (the tier is mono).
+    var label = function (v) {
+      var text = money(v);
+      return h('span', {
+        className: at(v) >= at(price) ? 'fb-band__tier-label--right' : 'fb-band__tier-label--left',
+        style: { '--tick': at(v) + '%', '--price': at(price) + '%', '--len': text.length + 'ch' }
+      }, text);
     };
 
     var holdFrom = buy == null ? 0 : at(buy);
@@ -478,8 +481,8 @@
 
       /* the band's own numbers, on their own tier above the track */
       h('div', { className: 'fb-band__tier figure-sm' },
-        h('span', { className: anchor(low), style: { left: at(low) + '%' } }, money(low)),
-        h('span', { className: anchor(high), style: { left: at(high) + '%' } }, money(high)),
+        label(low),
+        label(high),
         /* a div, not a span: the tier's span rule centres its labels on their
            own position, which would drag the bracket half its width left */
         h('div', {
