@@ -313,10 +313,11 @@ export interface OverrideRecordProps {
  *
  * fairband: a section's parts are read as the agent wrote them, the shape the reader renders as
  * blocks (spec 2026-11-06 Tier 2, 13.1 and 18.4): a plain part may hold line breaks; a blank line
- * starts a paragraph; a line that opens with `- ` is a bullet and one that opens with `1. ` (one
- * or two digits, `.` or `)`) a numbered item; lines that open with `|` are a table, the `|---|`
- * row under its header row; `**bold**` sets bold. A cite is inline in any of them, a table's cell
- * included. Nothing else is rendered: no heading mark, link, nested list or image.
+ * starts a paragraph; a line that opens with `- ` or `• ` is a bullet and one that opens with
+ * `1. ` (one or two digits, `.` or `)`, then white space) a numbered item; lines that open with
+ * `|` are a table, the `|---|` row under its header row; `**bold**` sets bold. A cite is inline in
+ * any of them, a table's cell included. Nothing else is rendered: no heading mark, link, nested
+ * list or image.
  */
 export type ReportPart = string | { cite: string; ref: string; period?: string };
 

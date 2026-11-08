@@ -56,9 +56,10 @@ name (``27 Oct``) unless a decimal, ``%`` or a scale follows it (``March 12%``) 
 leads it, an integer joined to letters with no currency sign (``FY2025``, ``Q3``, ``COVID-19``,
 ``5G``, ``3M``, ``401k``, ``150M``, ``21st``), a filing form (``10-K``, ``8-K``, ``20-F``), a
 section's or an item's number (``section 13.3``, ``Item 10``), anything inside a URL or after a
-slash (``fairband-review/1``), a list's number at a line's start, one or two digits before ``. ``
-or ``) `` (``12. ``), which is a mark, as a table's separator row (``|---|``) is (spec 13.1, "The
-text's shape"), and an integer of one digit with no unit word.
+slash (``fairband-review/1``), a list's number at a line's start, one or two digits before ``.``
+or ``)`` and white space on the same line (``12. ``), which is a mark, as a table's separator row
+(``|---|``) is (spec 13.1, "The text's shape"), and an integer of one digit with no unit word. A
+number alone on its line (``12.``) is no mark: the reader shows it as prose.
 
 A cite's text is read by ``parse_cite``: an optional sign, ``+``, or ``-``, ``−`` or parentheses
 for a negative, ``$``, the number with its thousands separators, a scale word (``thousand``,
@@ -171,11 +172,12 @@ _MONTH = (
     r"|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?![a-z])"
 )
 # Text that holds no quantity: a URL, an ISO date, a day beside a month's name, a list's number at
-# a line's start (``12. ``, ``12) ``, a mark); not a day followed by a decimal, a percent sign, a
-# multiple's or a scale's word, which is a quantity after a month.
+# a line's start with white space after it on its line (``12. ``, ``12) ``, a mark; a line break,
+# ``\n`` or ``\r``, is not that space, so ``12.`` alone on its line counts); not a day followed by
+# a decimal, a percent sign, a multiple's or a scale's word, which is a quantity after a month.
 _NOT_QUANTITIES = re.compile(
     rf"https?://\S+|\b\d{{4}}-\d{{2}}-\d{{2}}\b"
-    r"|(?m:^)\s*\d{1,2}[.)]\s"
+    r"|(?m:^)\s*\d{1,2}[.)][^\S\r\n]"
     rf"|(?<![\d.,{_SIGNS}])(?<![{_SIGNS}]\s)\b\d{{1,2}}\s+{_MONTH}"
     rf"|{_MONTH}\.?\s+\d{{1,2}}\b(?![.,]\d|{_UNIT_AFTER})"
 )

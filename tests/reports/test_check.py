@@ -389,6 +389,9 @@ def test_a_reprice_keeps_the_cites_and_a_revalue_rejects_them(
         ("12 analysts\n10.5% of revenue\n$10. Then", ["12", "10.5%", "$10"]),
         ("revenue rose 10. Then 12. Then", ["10", "12"]),
         ("100. A three-digit mark", ["100"]),
+        # a number alone on its line is no mark: the reader shows it as prose
+        ("Analysts:\n12.\nMore", ["12"]),
+        ("Analysts:\r\n12)\r\nMore", ["12)"]),
     ],
 )
 def test_the_token_rule(text: str, found: list[str]) -> None:
