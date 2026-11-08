@@ -245,7 +245,10 @@ def test_the_agents_section_reads(client: TestClient) -> None:
             "The agent weighs the price against the reviewed value's levels; on a refused row with"
             " none, the secondary valuation's."
         ),
-        "Where the route refused, it shows the value of a secondary valuation",
+        (
+            "Where neither the route nor the review values the company, it shows the value of a"
+            " secondary valuation instead"
+        ),
         # spec 18.1, plan 3: the row's levels follow the reviewed value
         (
             "The band, the buy and trim levels and the designation follow the reviewed value; the"

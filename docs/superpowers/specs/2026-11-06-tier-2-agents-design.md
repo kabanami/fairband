@@ -12,8 +12,9 @@ sections with the last earnings call, the debate and the thesis, the guidance re
 every report, the cycle, the key judgments as the last section, the multiples history, the charts
 on the report page, and the Inbox view's count (11, 12, 13, 14, 15.3, 18.4, 18.5, 19, 24, and the
 log's three rows of that date). Plan 1b (merged 2026-11-07) carries the report's side; plan 2
-(merged 2026-11-08) the page. The build rulings of both plans are marked in place and listed in
-the log's last rows.
+(merged 2026-11-08) the page; plan 3 (merged 2026-11-08, `docs/superpowers/plans/2026-11-08-first-session-fixes.md`)
+the first live session's rulings. The build rulings of the three plans are marked in place and
+listed in the log's last rows.
 
 This document adds to `docs/method.md` (sections 14, 15 and 16, and the versions table) and to the
 Methodology page. It changes no mechanical figure: the mechanical method stays
@@ -29,7 +30,8 @@ design system's (`docs/design-system/`, read with `tar -xzOf`).
 Fairband's second surface: an agent in the user's own host (Claude Code first; Codex and Claude
 Desktop by the same transport) connects to Fairband over MCP, takes a research request from the
 work inbox, reads everything the page shows, researches, changes the engine's inputs with evidence,
-reads the engine's reviewed value, values the company a second way when the route cannot, writes
+reads the engine's reviewed value, values the company by a standard DCF only when neither the
+route nor the review can, writes
 the report, and completes the request. The user asks for research from the screen or a watchlist
 and reads the report and the value on the page. Twelve backlog items, B-48 to B-59, plus one new
 one, the secondary valuation (B-97), as one design and two plans:
@@ -47,10 +49,10 @@ The founder's three rulings shape everything below:
 - **The number is rigid; the stance is free.** An agent never writes a value. It changes one
   input at a time, with a reason and evidence, and the engine recomputes. The stance is the
   agent's word, with its reasons in the report.
-- **The secondary valuation is a second view and a fallback.** A tool beside the engine takes an
-  explicit cash-flow path from the agent and discounts it under the policy's rules, so a company
-  no route fits still gets a figure that is a tool output, and a valued company can get a second
-  view.
+- **The secondary valuation is the fallback.** A tool beside the engine projects a cash-flow path
+  from the agent's drivers and discounts it under the policy's rules, so a company neither the
+  route nor the review values still gets a figure that is a tool output (plan 3; it was a second
+  view on a valued company until 2026-11-08).
 - **The user reads the report and sees the value.** The drawer's main view is the valuation and
   the report. The phase evidence, the inputs, the bridge, the overrides and every audit item sit
   behind one Details control.
@@ -448,9 +450,14 @@ to every part's growth, each capped at g_T; the grid is absent where r − 1 pp 
 the highest growth (build rulings of Task 3). It is a display of how much of the value is assumption, not a
 value: the rate in force stays r. *My call*; `SensitivityGrid` draws it (18.4).
 
-**Required where the route refused, refused where it values (plan 3).** The report check refuses
-a submission on a refused latest snapshot that cites no secondary valuation on it: "the report
-needs a secondary valuation on snapshot <id>" (13.3). The rule does not apply to a company that
+**Required where neither the route nor the review values the company, refused where one does
+(plan 3).** The report check refuses a submission on a refused latest snapshot whose current review
+has no value and that cites no secondary valuation on it: "the report needs a secondary valuation
+on snapshot <id>" (13.3). A review that values a refused row (an override routed it) is the main
+method working, so the fallback is not made there either: the route refuses the call, 400 "the
+review values <symbol>: the secondary valuation is the fallback where neither the route nor the
+review values the company", and Appendix A says "no secondary valuation: the review values the
+company" (build ruling of plan 3's final review, 2026-11-08). The rule does not apply to a company that
 cannot have one: a foreign filer or a snapshot with no diluted share count, the two refusals the
 secondary route makes that no agent can fix; Appendix A names the reason and the playbook has the
 agent say it in the Valuation section (build ruling of the final review, 2026-11-07). Where the
@@ -459,7 +466,7 @@ latest snapshot has a value, the secondary route refuses the call, 400 "the rout
 Appendix A says "no secondary valuation: the route values the company", and the report talks
 about the route's value alone: FMP's DCF figure (`dcf`) is read as a cross-check on the fallback
 only, never beside a route's value (*my call*, from the founder's rule that no DCF is a factor
-where the route works). Where the route refuses or no route fits, the secondary stands in on the
+where the route works). Where neither the route nor the review values the company, the secondary stands in on the
 row, in the drawer and in the report (18.1, 18.2). A secondary valuation made before plan 3 on a
 valued snapshot stays on file and reads as it was; a report that cites it stays published.
 
@@ -558,7 +565,8 @@ first row the header and the `|---|` row the separator; `**bold**` for a lead wo
 cite is inline in any of them. Nothing else is rendered: no heading marks (the section's heading
 is the server's), no links, no nested list, no image. The reader (18.4) renders these as blocks
 with the design system's type: paragraphs at the prose measure, lists, tables with a header row,
-bold in `ink`; a table wider than the measure scrolls. The check (13.3) reads a list's number and
+bold in `ink`; a table spans the reader's width and scrolls only when wider than it (build
+ruling of plan 3, Task 4: a four-column claims table cannot read at the prose measure). The check (13.3) reads a list's number and
 a table's separator as marks, never as quantities. The Markdown export passes the text through,
 which GFM renders the same way.
 
@@ -606,7 +614,7 @@ builder check.
 The structure first, each failure one sentence: twelve sections for a full report and ten for a
 valuation review, under the exact headings of 13.1 in order; the stance a `stance_words` word;
 one judgment of each kind the route needs, each with a `decision` and no figure in it; and, on
-a refused latest snapshot only (11, plan 3), a secondary valuation on it, refused "the report
+a refused latest snapshot whose current review has no value (11, plan 3), a secondary valuation on it, refused "the report
 needs a secondary valuation on snapshot <id>", unless the snapshot is a foreign filer or has no
 diluted share count. A valued snapshot needs none and the route refuses one. Then the numbers.
 
@@ -717,8 +725,8 @@ way.
 The flow, the TradingAgents roles of design.md 7.1 as steps the one skill runs (the host may use
 subagents for the analysts and the debate; the skill does not require it). The founder's rulings
 of 2026-11-07 reshape steps 6 to 10: the debate is about the business and its outlook, the thesis
-settles it, every report values the company a second way by the standard DCF, and a cyclical
-business is valued at mid-cycle.
+settles it, a company the route cannot value gets the standard DCF as its fallback (plan 3:
+never beside a route's value), and a cyclical business is valued at mid-cycle.
 
 1. `identify` with the model identifier you run as.
 2. `inbox_list`; claim the item, or post one for a request made in chat and claim it.
@@ -762,8 +770,8 @@ business is valued at mid-cycle.
    effort, never required (9); reads the review and the bridge. For a cyclical: on the mature routes the
    anchor at mid-cycle earnings through `earnings.cycle_gap` and the belief at the through-cycle
    rate; on the growth routes the target margin at the mid-cycle margin and the held rate at the
-   through-cycle rate; a kill criterion on the margin against its median. Where the route refuses or no route
-   fits, and only there (plan 3): the standard DCF with `secondary_valuation` as the fallback,
+   through-cycle rate; a kill criterion on the margin against its median. Where neither the route
+   nor the review values the company, and only there (plan 3): the standard DCF with `secondary_valuation` as the fallback,
    the drivers at mid-cycle for a cyclical, the parts form where a sum of parts fits better, and
    `dcf` for FMP's figure as a cross-check on it. Where the route values the company, no DCF of
    any kind. `sensitivity` for the route's grid; `derive` for any ratio the report needs.
@@ -874,8 +882,8 @@ the DDL from sections 7 to 13; the plan lists the columns.
 Two columns and a mark. `Reviewed` is the design system's own `reviewed` key, filled: the latest
 review's value when it is on the company's latest snapshot (or a reprice of it) and has a value;
 else, only where the route refused, the latest secondary valuation's value a share above zero
-while it is current (11: the secondary stands in where the route refuses and is the second view
-otherwise; build ruling of plan 2's final review, 2026-11-08); else an em dash. `overrides` is the count
+while it is current (11: the secondary stands in where neither the route nor the review values
+the company; build rulings of plan 2's and plan 3's final reviews, 2026-11-08); else an em dash. `overrides` is the count
 inside. `Stance` (key `agentStance`, a `// fairband:` patch beside the designation column, which
 keeps its key) is the latest published report's word, coloured by the stance tokens, an em dash
 without a report; it fades to `ink-faint` with the mark when the report's snapshot window has
@@ -1274,3 +1282,4 @@ Plan 3, the first live session's rulings (the founder, 2026-11-08, on the QCOM r
 | 2026-11-07 | Build rulings, plan 1b (Claude, during the build, each in place above): the cycle gap comes off the anchor earnings only, after the margin normalization on Mature Stable (10.2); a secondary valuation's terminal releases no capital at or below zero growth, the terminal growth runs from −100% to g_T, the parts grid's rows are shifts (11); the drivers form's trailing revenue from the statements and ROIC_T from the ten-year aggregate (11); grid and sensitivity refs count from 1; the sensitivity reading is an agent's write and a reading under a moved review is `wrong snapshot` (13.8); the P/E history on an unpaced GuruFocus client under `gf`, an unreadable or all-zero series never reused, a failure logs no multiples and a day's logged multiple is never blanked (13.7, 15.3); a guidance record supersedes by metric, period and basis in the order of the calls, a superseded record backs nothing, an NTM anchor needs a gaap fiscal-year record of its metric and drops once the guided year is behind the base year, a next-quarter figure feeds no override (9); the secondary rule spares a foreign filer and a row with no diluted share count (11, 13.3); the judgments refused 400 on `bull`/`bear`; the Markdown keeps GFM footnotes. |
 | 2026-11-08 | Build rulings, plan 2 (Claude, during the build, each in place above): B-111's one consensus row per fiscal period by the closeness of the period ends, a row ending within a week after the trailing period end skipped as the reported quarter's duplicate (Task 0; method 2, 5.2, 5.3, 5a.2); the Stance column as the agent's word (the component's derived stance unused), the stance chip fading with the mark, a non-positive secondary not filling Reviewed, the rows' records read in bulk (Task 1); the drawer's Summary with the full report's footnote numbers, the secondary's parts in Details, the secondary's band on a refused row, one request state per view (Task 2); the `report` panel outside the header's views, `ReportReader.footnotes`, one `figure-lg` on the page, the secondary's headline with basis `reviewed` and the caption naming the tool, print without the head figures (Task 3); the chart titles the export's words, `HistoryBars.inverse`, a one-quarter band shown, `hurdleLabel`, the band table in the export (Task 4); the count as pending plus claimed on a thirty-second read, the Inbox table following the header's read, a declined expiry item holding for its window (Task 5); the Methodology section following the method where the playbook's wording differs (Task 6). |
 | 2026-11-08 | The first live session (QCOM, report 1, stance hold; the founder's three rulings): (1) no DCF where the route values the company: the secondary valuation is the fallback only, refused on a valued snapshot, required on a refused one, and no DCF weighs on the stance (11, 13.3, 14; reverses 2026-11-07's "always done"); (2) the report's text renders as the agent wrote it: paragraphs, lists, tables and bold from the parts, in the reader and under the drawer's Summary (13.1, 18.4); (3) the row's band, buy and trim levels, price ÷ value and designation follow the reviewed value, the engine's value kept in the Mechanical column, and the meters draw the review's band (18.1, 18.2, 18.4). Claude's calls: FMP's `dcf` figure read only on a refused row; the designation at the latest price on the effective edges; the second-marker patch left in the bundle. |
+| 2026-11-08 | Build rulings, plan 3 (Claude, during the build): an older secondary valuation on a company the route or the review values is linked to a new report only when the report cites it, so Appendix A carries no uncited DCF (Task 1); the fallback is for a company neither the route nor the review values, so a review that routes a refused row also bars the DCF (the final review); a review that refuses on a valued snapshot is the agent's to fix, the mechanical value stands meanwhile and no secondary is made, and the values are read in order, the reviewed value, else the snapshot's, else on a refused row the secondary's (Task 2); the drawer's level list under the meter follows the review, the Clean filter and the group view read the mechanical value, the designation at the latest price on the effective edges (Task 3); a table spans the reader's width, one margin per block, headers in the agent's case, a plain line after a list item starts a paragraph, a number alone on its line stays a quantity (Task 4). |
