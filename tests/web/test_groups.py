@@ -246,6 +246,11 @@ def test_the_groups_page_reads_the_share_below_value() -> None:
     script = resources.files("fairband.web").joinpath("static", "controls.js").read_text("utf-8")
     assert "figure(row.shareBelowValue, F.formatPercent(row.shareBelowValue))" in script
     assert "'Below value'" in script
+    # the figures read the engine's value, never a row's own, which can be the reviewed (plan 3)
+    assert (
+        "'The median and the share read the mechanical value, the engine\\'s, over the companies '"
+        " +\n        'it values; below value is a price in its Below or Well below band.')"
+    ) in script
     assert "shareBelowBuy" not in script and "Below buy" not in script
 
 

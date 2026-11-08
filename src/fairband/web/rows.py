@@ -429,7 +429,7 @@ def group_rows(
     value (``valued``), the median of price ÷ value over the valued rows with a positive price,
     and the share of the valued rows whose price ÷ value is below the second designation edge
     (``edges[1]``: the ``below`` and ``well-below`` bands); ``None`` for the last two when they
-    cover no row."""
+    cover no row. Every figure reads the engine's (mechanical) value (``_group``)."""
     named: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         named.setdefault(_group_name(row, by), []).append(row)
@@ -445,6 +445,10 @@ def _group_name(row: dict[str, Any], by: str) -> str:
 
 
 def _group(name: str, rows: list[dict[str, Any]], below_value: float) -> dict[str, Any]:
+    """One group of ``group_rows``, read on the engine's (mechanical) value, ``mechanical``, never
+    the row's own ``fairValue``, which follows the reviewed value where ``reviewed`` is filled: a
+    row is valued when the engine values it, its price ÷ value is over the mechanical value, and
+    below value is that ratio under ``below_value``, the mechanical Below or Well below band."""
     valued = [r for r in rows if r["mechanical"] is not None]
     priced = [r for r in valued if r["price"] is not None and r["price"] > 0]
     ratios = [r["price"] / r["mechanical"] for r in priced]

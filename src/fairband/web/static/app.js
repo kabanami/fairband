@@ -868,11 +868,12 @@
               principal: line.principal, actor: line.actor, reason: line.reason
             };
           }),
-          note: reviewedLevels(review.levels)
+          note: isReviewed(body) ? mechanicalLevels(r.levels) : undefined
         })) : null,
       review && review.refusal ? section('review', 'Review',
         h('p', { className: 'body app-refusal' }, review.refusal)) : null,
       secondary ? block('app-secondary', 'Secondary valuation',
+        notFallback(body) ? h('p', { className: 'caption app-muted' }, notFallback(body)) : null,
         pairs(secondaryRows(secondary)),
         secondaryPath(secondary),
         h('p', { className: 'app-chipline' }, h(F.PrincipalChip, {
@@ -1263,12 +1264,13 @@
     return unit === 'multiple' ? times(v) : inputValue({ value: v, unit: unit });
   }
 
-  /* The bridge's note: the reviewed value's own levels, which the meter, drawn on the mechanical
-     band, does not show. */
-  function reviewedLevels(l) {
+  /* The bridge's note: the engine's own levels, the snapshot's, which the meter and the levels
+     named under it no longer show where they draw the review's (spec 2026-11-06 Tier 2, 18.1 and
+     18.2, plan 3); none on a refused row, where the engine has no levels. */
+  function mechanicalLevels(l) {
     if (!l) return undefined;
-    return 'Reviewed levels: margin of safety ' + F.formatMoney(l.buy) + ' · fair band ' +
-      F.formatMoney(l.fairLow) + ' – ' + F.formatMoney(l.fairHigh) + ' · trim ' +
+    return 'Mechanical levels: margin of safety ' + F.formatMoney(l.buy) + ' · fair band ' +
+      F.formatMoney(l.fair_low) + ' – ' + F.formatMoney(l.fair_high) + ' · trim ' +
       F.formatMoney(l.trim);
   }
 
@@ -1382,27 +1384,39 @@
   function words(name) { return String(name).replace(/_/g, ' '); }
 
   /* The band meter's caption: the row's word and its price ÷ value (classifier-designation spec
-     7.3). A row valued before the designation has neither. */
-  function standing(r, edges) {
+     7.3), over `of`, "the value" when none is named. A row valued before the designation has
+     neither. */
+  function standing(r, edges, of) {
     var word = F.DESIGNATION[r.designation];
     if (!word || r.price_to_value == null) return null;
-    return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × the value';
+    return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × ' +
+      (of || 'the value');
   }
 
   /* A band from the valued review: its word and price ÷ value at the latest price, which the
-     detail carries, as the meter's own caption says them. On a refused row the meter adds
-     "reviewed" and the value after it; on a valued row mechanicalCaption adds the mechanical
-     value. */
-  function reviewCaption(v, edges) {
-    return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges);
+     detail carries, as the meter's own caption says them, over `of`, "the value" when none is
+     named. On a refused row the meter adds "reviewed" and the value after it; on a valued row
+     mechanicalCaption names the reviewed value and adds the mechanical value. */
+  function reviewCaption(v, edges, of) {
+    return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges, of);
   }
 
   /* A valued row's band from its review (spec 2026-11-06 Tier 2, 18.2, plan 3): the review's word
-     and price ÷ value at the latest price, then the mechanical value in words, "· mechanical
-     $342". */
+     and price ÷ value at the latest price, over the reviewed value in words, then the mechanical
+     value, "Above: the price is 1.42 × the reviewed value · mechanical $133.37". */
   function mechanicalCaption(v, r, edges) {
-    return [reviewCaption(v, edges), 'mechanical ' + F.formatMoney(r.value)]
+    return [reviewCaption(v, edges, 'the reviewed value'), 'mechanical ' + F.formatMoney(r.value)]
       .filter(Boolean).join(' · ');
+  }
+
+  /* Why a secondary valuation on file is not the row's fallback (spec 2026-11-06 Tier 2, 11, plan
+     3): the route values the company, or the review on the latest snapshot does, as Appendix A
+     says of a report; null where it is the fallback. */
+  function notFallback(body) {
+    if (body.result.value != null) return 'not the fallback: the route values the company';
+    var v = body.review;
+    if (v && v.value != null) return 'not the fallback: the review values the company';
+    return null;
   }
 
   /* A refused row's band from its secondary valuation: what drew it, then its word and price ÷

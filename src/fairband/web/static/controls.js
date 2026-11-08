@@ -436,7 +436,9 @@
     return h('div', { className: 'app-actions' }, buttons);
   }
 
-  /* The table of the groups last loaded; while others load, it stays, faded. */
+  /* The table of the groups last loaded; while others load, it stays, faded. Its figures read
+     the engine's (mechanical) value, as rows.group_rows counts them, never a row's own value and
+     word, which follow the reviewed value where Reviewed is filled (plan 3). */
   function groupsView() {
     var g = state.groups;
     var picker = h('label', { className: 'label app-by' }, 'Group by ',
@@ -453,8 +455,8 @@
       h('div', { className: 'app-groups__bar' }, picker),
       body,
       g && g.groups.length ? h('p', { className: 'caption app-muted app-groups__note' },
-        'The median and the share count the companies with a value; below value is a price in ' +
-        'the Below or Well below band.') : null);
+        'The median and the share read the mechanical value, the engine\'s, over the companies ' +
+        'it values; below value is a price in its Below or Well below band.') : null);
   }
 
   function groupsTable(g) {

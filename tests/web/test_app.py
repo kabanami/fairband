@@ -1568,9 +1568,9 @@ def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
     assert "var word = F.DESIGNATION[r.designation];" in script
     assert "if (!word || r.price_to_value == null) return null;" in script
     assert (
-        "return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × the value';"
-        in script
-    )
+        "return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × ' +\n"
+        "      (of || 'the value');"
+    ) in script  # "the value" unless the caller names it: the reviewed value (plan 3)
     assert "var margin = Math.round((1 - r.levels.buy / r.value) * 100);" in script
     assert "['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy)," in script
     assert "'value less the ' + moat + ' moat\\'s ' + margin + '%'" in script
@@ -1944,6 +1944,18 @@ def test_details_order_is_pinned() -> None:
     bridge = details[details.index("h(F.ValueBridge, {") : details.index("'app-secondary'")]
     assert "review && review.value != null ? section('bridge', 'Review'," in details
     assert "mechanical: review.mechanical, reviewed: review.value," in bridge
+    # the note names the engine's own levels, the snapshot's, since the meter and the levels under
+    # it draw the review's (plan 3); none on a refused row, which has no mechanical levels
+    assert "note: isReviewed(body) ? mechanicalLevels(r.levels) : undefined" in bridge
+    note = _function(script, "mechanicalLevels")
+    _in_order(
+        note,
+        "if (!l) return undefined;",
+        "return 'Mechanical levels: margin of safety ' + F.formatMoney(l.buy) + ' · fair band ' +",
+        "F.formatMoney(l.fair_low) + ' – ' + F.formatMoney(l.fair_high) + ' · trim ' +",
+        "F.formatMoney(l.trim);",
+    )
+    assert "Reviewed levels" not in script and "reviewedLevels" not in script
     assert "tag: line.label," in bridge
     assert "from: inputFigure(line.old, line.unit), to: inputFigure(line.new, line.unit)," in bridge
     # an override is a record: no Drop, and the page sends no drop (the owner neither adds nor
@@ -2020,9 +2032,20 @@ def test_details_lists_the_secondarys_parts_or_drivers() -> None:
     block = details[details.index("'app-secondary'") : details.index("h(F.OverrideRecord, {")]
     _in_order(
         block,
+        "notFallback(body) ? h('p', { className: 'caption app-muted' }, notFallback(body)) : null,",
         "pairs(secondaryRows(secondary))",
         "secondaryPath(secondary)",
         "h(F.PrincipalChip, {",
+    )
+    # on a company the route or the review values, the record on file is not the fallback, as
+    # Appendix A says of a report (method 15.4 and 16.6, plan 3)
+    why = _function(script, "notFallback")
+    _in_order(
+        why,
+        "if (body.result.value != null) return 'not the fallback: the route values the company';",
+        "var v = body.review;",
+        "if (v && v.value != null) return 'not the fallback: the review values the company';",
+        "return null;",
     )
     path = _function(script, "secondaryPath")
     _in_order(
@@ -2118,8 +2141,10 @@ def test_a_refused_row_with_a_valued_review_draws_the_reviews_band() -> None:
     )
     caption = _function(script, "reviewCaption")
     assert (
-        "return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges);"
+        "return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges,"
+        " of);"
     ) in caption
+    assert "showScale: false, caption: reviewCaption(review, body.designationEdges), hero" in band
     bundle = _function(_component_file("bundle.js"), "BandMeter")
     assert "reviewed == null ? null : 'reviewed ' + money(reviewed)" in bundle
 
@@ -2153,10 +2178,19 @@ def test_a_valued_row_with_a_counting_review_draws_the_reviews_band() -> None:
         "showScale: false, caption: standing(r, body.designationEdges), hero: hero",
     )
     assert "reviewedValue" not in valued
-    # the caption: the review's word and price ÷ value, then " · mechanical $342"
+    # the caption: the review's word and price ÷ value over the reviewed value, then the
+    # mechanical value, "Above: the price is 1.42 × the reviewed value · mechanical $133.37"
     caption = _function(script, "mechanicalCaption")
-    assert "return [reviewCaption(v, edges), 'mechanical ' + F.formatMoney(r.value)]" in caption
+    assert (
+        "return [reviewCaption(v, edges, 'the reviewed value'), 'mechanical ' +"
+        " F.formatMoney(r.value)]"
+    ) in caption
     assert ".filter(Boolean).join(' · ');" in caption
+    said = _function(script, "standing")
+    assert "return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × ' +" in (
+        said
+    )
+    assert "(of || 'the value');" in said
     # the levels under the meter are the ones it draws
     drawn = _function(script, "drawnLevels")
     _in_order(
