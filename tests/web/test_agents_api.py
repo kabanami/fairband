@@ -15,6 +15,8 @@ from support.web import HEADER, NOW
 from fairband.engine.route import refusal_result
 from fairband.policy import load_policy
 from fairband.store.db import connect
+from fairband.store.ledger import Writer
+from fairband.store.reports import insert_report
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, IDENTIFY_FIRST, PRINCIPAL_HEADER
 
@@ -67,14 +69,53 @@ def test_post_and_list_inbox(client: TestClient) -> None:
         "finishedAt": None,
         "expiryValidUntil": None,
     }
-    assert client.get("/api/inbox").json() == {"items": [item]}
-    assert client.get("/api/inbox", params={"state": "pending"}).json() == {"items": [item]}
+    listed = item | {"reportRevision": None}  # the list's own field (18.5, plan 4)
+    assert client.get("/api/inbox").json() == {"items": [listed]}
+    assert client.get("/api/inbox", params={"state": "pending"}).json() == {"items": [listed]}
     assert client.get("/api/inbox", params={"state": "done"}).json() == {"items": []}
     r = client.get("/api/inbox", params={"state": "open"})
     assert (r.status_code, r.json()) == (
         400,
         {"detail": "state: Input should be 'pending', 'claimed', 'done', 'declined' or 'dropped'"},
     )
+
+
+def test_the_inbox_names_a_done_items_report_revision(client: TestClient, db_path: Path) -> None:
+    """Spec 18.5 (plan 4): a done item carries its report's revision; a pending one null, and a
+    done one whose report row is missing null too, so its link reads Open."""
+    aapl = _post(client, "/api/inbox", {"symbol": "AAPL", "mode": "full report"}, HEADER)
+    _post(client, "/api/inbox", {"symbol": "AAL", "mode": "full report"}, HEADER)
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    sections = [{"heading": "Summary", "parts": ["Phones."]}]
+    with closing(connect(db_path)) as conn:
+        for symbol in ("AAL", "AAPL"):  # AAL's first, so AAPL's report id is not its revision
+            snapshot_id = _snapshot_id(client, symbol)
+            report_id = insert_report(
+                conn,
+                symbol,
+                "full report",
+                "hold",
+                sections,
+                None,
+                snapshot_id,
+                None,
+                None,
+                None,
+                writer,
+                NOW,
+            )
+    url = f"/api/inbox/{aapl['id']}"
+    r = client.patch(url, json={"action": "complete", "reportId": report_id}, headers=AGENT)
+    assert r.status_code == 200, r.text
+    items = client.get("/api/inbox").json()["items"]
+    done = next(i for i in items if i["state"] == "done")
+    assert done["reportRevision"] == 1
+    pending = next(i for i in items if i["state"] == "pending")
+    assert pending["reportRevision"] is None
+    with closing(connect(db_path)) as conn, conn:
+        conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+    [done] = client.get("/api/inbox", params={"state": "done"}).json()["items"]
+    assert (done["reportId"], done["reportRevision"]) == (report_id, None)
 
 
 def test_an_agent_post_carries_its_actor(client: TestClient) -> None:

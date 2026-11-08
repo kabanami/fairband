@@ -335,7 +335,8 @@ def test_inbox_list_calls_the_api(api: FairbandClient, client: TestClient) -> No
         ("inbox_list", {"state": "pending"}),
         ("inbox_list", {"state": "done"}),
     )
-    assert every == client.get("/api/inbox").json() == {"items": [posted]}
+    listed = posted | {"reportRevision": None}  # the list's own field (18.5, plan 4)
+    assert every == client.get("/api/inbox").json() == {"items": [listed]}
     assert pending == every and done == {"items": []}
 
 

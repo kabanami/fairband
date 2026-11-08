@@ -20,7 +20,7 @@ caller's ledger rows commit with it. A judgment's override that is not the compa
 
 import json
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, get_args
@@ -132,6 +132,17 @@ def latest_reports(conn: sqlite3.Connection) -> dict[str, ReportRow]:
         " ORDER BY symbol"
     )
     return {r["symbol"]: _report(r) for r in rows}
+
+
+def revisions_by_id(conn: sqlite3.Connection, ids: Iterable[int]) -> dict[int, int]:
+    """The revision of each of the reports ``ids``, by id, in one query; an id with no report is
+    left out, and no ids read nothing."""
+    wanted = tuple(ids)
+    if not wanted:
+        return {}
+    marks = ", ".join("?" * len(wanted))
+    rows = conn.execute(f"SELECT id, revision FROM reports WHERE id IN ({marks})", wanted)
+    return {r["id"]: r["revision"] for r in rows}
 
 
 def insert_judgments(

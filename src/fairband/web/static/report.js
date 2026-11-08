@@ -254,12 +254,14 @@
     }));
   }
 
-  /* A revision's link, its date in the reader's local time, its number in the title. */
+  /* A revision's link, named by its number and its date and time in the reader's local time
+     ("revision 1, 8 Nov 2026, 07:24"), since two revisions on one day read the same by date
+     alone (18.4, plan 4). P.when gives the time as its element, so it follows the text as a
+     child, not joined to it. */
   function revisionLink(report, r) {
     return h('a', {
-      className: 'app-link', href: '#report/' + encodeURIComponent(report.symbol) + '/' + r.id,
-      title: 'Revision ' + r.revision
-    }, F.formatDate(P.localIso(r.createdAt).slice(0, 10)));
+      className: 'app-link', href: '#report/' + encodeURIComponent(report.symbol) + '/' + r.id
+    }, 'revision ' + r.revision + ', ', P.when(r.createdAt));
   }
 
   /* ------------------------------------------------------------------ the report */

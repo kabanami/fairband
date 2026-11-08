@@ -1,11 +1,12 @@
 /* The Inbox view (spec 2026-11-06 Tier 2, 18.5), loaded after watchlists.js: the work items as
    the server lists them, newest first, in one table. A row: the company's symbol, a link that
    opens its drawer on the Screen view as a watchlist's row does; the mode; the state word, a
-   declined item's reason under it as written; the day it was posted, in the reader's time; who
-   posted it, a compact PrincipalChip: the owner, an agent by its model identifier, or the system
-   for the item it posts when a watched company's window ends; the agent that claimed it, likewise;
-   the requester's note as written; for a done item, a link to the report page of the report it
-   was completed with; and for a pending or claimed item, Decline, which opens the reason line
+   declined item's reason under it as written; the date and time it was posted, in the reader's
+   time; who posted it, a compact PrincipalChip: the owner, an agent by its model identifier, or
+   the system for the item it posts when a watched company's window ends; the agent that claimed
+   it, likewise; the requester's note as written; for a done item, a link to the report page of
+   the report it was completed with, named by its revision ("revision 2"), or Open when the
+   server sends none; and for a pending or claimed item, Decline, which opens the reason line
    under the row: the reason field and Decline again, the owner's decline, and Cancel. A refused
    decline's sentence, the server's, stands on a line under its row. The view reads the inbox as
    it opens and after every write, each read running the expiry rule on the server, and hands
@@ -101,10 +102,11 @@
 
   function none() { return h('span', { className: 'app-muted' }, '—'); }
 
-  /* The day an item was posted, in the reader's time; the instant in datetime and the title. */
+  /* The date and time an item was posted, in the reader's time ("8 Nov 2026, 17:56"), since two
+     items on one day read the same by date alone (18.5, plan 4); P.when's element, the instant
+     in datetime and the title. */
   function posted(iso) {
-    var local = P.localIso(iso);
-    return h('time', { dateTime: local, title: local }, F.formatDate(local.slice(0, 10)));
+    return P.when(iso);
   }
 
   /* An item's row; under it, its reason line while that is open and the item still is, then the
@@ -134,7 +136,7 @@
           className: 'app-link',
           href: '#report/' + encodeURIComponent(item.symbol) + '/' + item.reportId,
           'aria-label': 'Open the report for ' + item.symbol
-        }, 'Open') : none()),
+        }, item.reportRevision != null ? 'revision ' + item.reportRevision : 'Open') : none()),
         h('td', null, open && !declining ? h(F.Button, {
           size: 'sm', className: 'app-inbox__decline',
           'aria-label': 'Decline the work item for ' + item.symbol,

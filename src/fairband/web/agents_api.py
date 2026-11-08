@@ -2,14 +2,15 @@
 records and the ledger.
 
 ``GET /api/inbox`` runs the expiry rule first (``fairband.store.inbox.post_expiry_items``), as the
-system's write, then lists the items newest first, or those in ``state``. ``POST /api/inbox``
-posts an item for the company, its origin the writer's principal and its snapshot the company's
-latest. ``POST /api/inbox/claim`` claims the named item, or the oldest pending one, for the
-agent; ``PATCH /api/inbox/{id}`` completes it with a published report of its company, or
-declines it with a reason. Each company's notes, findings, kill criteria and news items are read
-and written under ``/api/companies/{symbol}/``; ``PATCH /api/kill-criteria/{id}`` moves a
-criterion's state with a reason. ``/api/ledger`` and ``/api/companies/{symbol}/ledger`` read the
-ledger newest first.
+system's write, then lists the items newest first, or those in ``state``, each with
+``reportRevision``, the revision of the report a done item was completed with (``None`` without a
+report or its row; 18.5, plan 4). ``POST /api/inbox`` posts an item for the company, its origin
+the writer's principal and its snapshot the company's latest. ``POST /api/inbox/claim`` claims
+the named item, or the oldest pending one, for the agent; ``PATCH /api/inbox/{id}`` completes it
+with a published report of its company, or declines it with a reason. Each company's notes,
+findings, kill criteria and news items are read and written under ``/api/companies/{symbol}/``;
+``PATCH /api/kill-criteria/{id}`` moves a criterion's state with a reason. ``/api/ledger`` and
+``/api/companies/{symbol}/ledger`` read the ledger newest first.
 
 Every write names its writer by the identity headers (``fairband.web.identity``) and is a ledger
 row, written in the same transaction as the record: the writer, the kind of write, the company,
@@ -50,7 +51,7 @@ from fairband.store.inbox import (
     work_items,
 )
 from fairband.store.ledger import SYSTEM, Writer, entries, record
-from fairband.store.reports import report_row
+from fairband.store.reports import report_row, revisions_by_id
 from fairband.store.research import (
     CriterionState,
     FindingRow,
@@ -174,7 +175,8 @@ def add_agent_routes(
 
     @app.get("/api/inbox")
     def inbox(state: State | None = None) -> dict[str, Any]:
-        """The items, newest first, after the expiry rule has run on the clock's day."""
+        """The items, newest first, after the expiry rule has run on the clock's day; the done
+        items' report revisions read in one query."""
         at = clock()
         with closing(conn_factory()) as conn:
             with transaction(conn, immediate=True):
@@ -185,7 +187,15 @@ def add_agent_routes(
                     item = work_item(conn, item_id)
                     summary = f"dropped: {item.symbol} is on no watchlist"
                     _record_item(conn, SYSTEM, at, "drop", item, summary)
-            return {"items": [record_json(i) for i in work_items(conn, state)]}
+            items = work_items(conn, state)
+            found = revisions_by_id(conn, [i.report_id for i in items if i.report_id is not None])
+            return {
+                "items": [
+                    record_json(i)
+                    | {"reportRevision": None if i.report_id is None else found.get(i.report_id)}
+                    for i in items
+                ]
+            }
 
     @app.post("/api/inbox", status_code=201)
     def post(body: InboxPost, writer: WriterOf) -> dict[str, Any]:

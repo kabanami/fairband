@@ -1284,15 +1284,15 @@ def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
     table of the work items as the server lists them, newest first, under the heads Symbol, Mode,
     State, Posted, By, Claimed by, Note and Report: the symbol a link that opens the company's
     drawer on the Screen as a watchlist's row does; the state word, with a declined item's reason
-    under it as written; the posted day in the reader's time; who posted it, a compact
+    under it as written; the posted date and time in the reader's time; who posted it, a compact
     PrincipalChip (the owner, an agent by its model identifier, or the system for an expiry item),
     and the agent that claimed it likewise; the note as written; the report a done item was
-    completed with, as a link to its page. A pending or claimed item has Decline, which opens the
-    reason line under the row (spec 18.5's "reason line"): the field, Decline, which sends the
-    owner's decline, and Cancel; a refused decline's sentence, the server's, stands on a line under
-    the row. The read runs as the view opens and after every write, and the drawer, if it shows the
-    company, reads it again. "No work items." when there are none. Every field of an item the view
-    reads is one the server sends."""
+    completed with, as a link to its page named by its revision (plan 4). A pending or claimed
+    item has Decline, which opens the reason line under the row (spec 18.5's "reason line"): the
+    field, Decline, which sends the owner's decline, and Cancel; a refused decline's sentence, the
+    server's, stands on a line under the row. The read runs as the view opens and after every
+    write, and the drawer, if it shows the company, reads it again. "No work items." when there
+    are none. Every field of an item the view reads is one the server sends."""
     js = _static_file("inbox.js")
     assert (
         "var HEADS = ['Symbol', 'Mode', 'State', 'Posted', 'By', 'Claimed by', 'Note', 'Report'];"
@@ -1375,6 +1375,21 @@ def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
     [item] = client.get("/api/inbox").json()["items"]
     read = set(re.findall(r"\bitem\.(\w+)", js))
     assert read and read <= set(item), read - set(item)
+
+
+def test_revisions_and_items_are_named_by_number_and_time() -> None:
+    """Spec 18.4 and 18.5 (plan 4): two revisions or two items on one day read the same by
+    date alone. A revision's link reads "revision 1, 8 Nov 2026, 07:24", the time ``P.when``'s
+    element in the reader's local time; an item's Posted cell is that element; a done item's
+    report link names its revision, and reads Open when the server sends none."""
+    link = _function(_code(_static_file("report.js")), "revisionLink")
+    assert "'revision ' + r.revision + ', ', P.when(r.createdAt)" in link
+    assert "title:" not in link
+    inbox = _code(_static_file("inbox.js"))
+    assert "P.when(iso)" in _function(inbox, "posted")
+    row = _function(inbox, "row")
+    assert "item.reportRevision != null ? 'revision ' + item.reportRevision : 'Open'" in row
+    assert "'aria-label': 'Open the report for ' + item.symbol" in row
 
 
 def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
@@ -2817,6 +2832,20 @@ def test_the_reader_renders_the_text_as_blocks() -> None:
     block = page[page.index("@media print {") :]
     block = block[: block.index("\n  }\n")]
     assert ".fb-report__table, .fb-report__list li { break-inside: avoid; }" in block
+
+
+def test_the_reader_is_set_at_sixteen_pixels() -> None:
+    """Spec 18.4 (plan 4): the reader's text at 16px on a 24px line, the column 72ch at that size.
+    Two classes win over the ``body`` token's 14px on 20px, which the paragraphs, the lists and
+    the table's body cells each carry; the table's header row keeps its label."""
+    css = _component_file("bundle.css")
+    assert (
+        ".fb-report .fb-report__prose, .fb-report .fb-report__list,"
+        " .fb-report .fb-report__table td {\n  font-size: 16px;\n  line-height: 24px;\n}"
+    ) in css
+    assert ".fb-report__prose { margin: 0; max-width: 72ch; color: var(--ink); }" in css
+    comment = css[css.index("/* fairband: the reader's text at 16px") :]
+    assert "(spec 2026-11-06 Tier 2, 18.4, plan 4" in comment[: comment.index("*/")]
 
 
 def test_the_print_stylesheet() -> None:

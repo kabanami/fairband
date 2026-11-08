@@ -678,6 +678,14 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 }
 .fb-report__table th { color: var(--ink-muted); border-bottom: 1px solid var(--border); }
 .fb-report__table td { color: var(--ink); border-bottom: 1px solid var(--hairline); }
+/* fairband: the reader's text at 16px on a 24px line (spec 2026-11-06 Tier 2, 18.4, plan 4:
+   the founder found 14px too small to read at ease); the 72ch column scales with it. Two classes
+   win over the body token on the paragraph, the list and the table's body cell, each of which
+   carries it; the table's header row keeps its label. */
+.fb-report .fb-report__prose, .fb-report .fb-report__list, .fb-report .fb-report__table td {
+  font-size: 16px;
+  line-height: 24px;
+}
 .fb-report__table .fb-cite { white-space: nowrap; }
 .fb-report strong { color: var(--ink); font-weight: 600; }
 .fb-report__appx { color: var(--ink-faint); margin: 0; }

@@ -20,6 +20,7 @@ from fairband.store.reports import (
     latest_reports,
     report_row,
     reports_for,
+    revisions_by_id,
 )
 
 NOW = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)
@@ -106,6 +107,21 @@ def test_revisions_count_up_per_symbol(conn: sqlite3.Connection) -> None:
     assert (latest.review_id, latest.secondary_id, latest.work_item_id) == (7, 8, 9)
     assert {s: r.id for s, r in latest_reports(conn).items()} == {"AAPL": second, "MSFT": other}
     assert latest_report(conn, "AAL") is None and report_row(conn, 99) is None
+
+
+def test_revisions_by_id_reads_one_query_and_skips_missing_ids(conn: sqlite3.Connection) -> None:
+    """Each named report's revision, by id, in one query; an id with no report is left out, and
+    no ids read nothing (spec 2026-11-06 Tier 2, 18.5, plan 4: the Inbox names a done item's
+    report by its revision)."""
+    _report(conn, "MSFT")  # so a report's id is not its revision
+    a = _report(conn, "AAPL")
+    b = _report(conn, "AAPL")
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+    assert revisions_by_id(conn, [a, b, 999]) == {a: 1, b: 2}
+    assert len(statements) == 1
+    assert revisions_by_id(conn, []) == {}
+    assert len(statements) == 1  # no ids, no query
 
 
 def test_judgments_round_trip(conn: sqlite3.Connection) -> None:
