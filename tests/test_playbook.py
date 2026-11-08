@@ -310,6 +310,18 @@ def test_the_references_say_what_the_server_and_the_reader_do() -> None:
         assert words in template, words
 
 
+def test_the_note_has_one_form() -> None:
+    """Spec 2026-11-06 Tier 2, 8 (plan 4): the note is the request in the user's own words, on one
+    line; the skill gives the counter-example, a note with process commentary."""
+    skill = _flat(_read(SKILL))
+    sentence = (
+        "the request in the user's own words, on one line, with no commentary and without the mode"
+    )
+    assert sentence in skill
+    assert sentence in _tool_entry("inbox_post")
+    assert "asked in chat on 2026-11-08 (the second run)" in skill  # the counter-example
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 

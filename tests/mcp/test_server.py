@@ -285,6 +285,19 @@ def test_every_spec_tool_is_registered(api: FairbandClient) -> None:
     ) in dcf
 
 
+def test_inbox_post_says_what_the_note_holds(api: FairbandClient) -> None:
+    """Spec 2026-11-06 Tier 2, 8 (plan 4): the note is the request in the requester's own words."""
+    server = build_server(api)
+
+    async def listed() -> list[Any]:
+        async with Client(server) as session:
+            return (await session.list_tools()).tools
+
+    tools = anyio.run(listed)
+    post = next(t.description or "" for t in tools if t.name == "inbox_post")
+    assert "its note the request in the requester's own words on one line" in post
+
+
 def test_a_write_before_identify_is_refused() -> None:
     called: list[httpx.Request] = []
 

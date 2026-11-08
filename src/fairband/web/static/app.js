@@ -1116,7 +1116,7 @@
           h('span', { className: 'fb-menu__h label' }, 'NOTE'),
           h('input', {
             type: 'text', className: 'control app-field', maxLength: 200, value: ask.note,
-            placeholder: 'What to look at, if anything',
+            placeholder: 'The request in your words, one line',
             onChange: function (event) { ask.note = event.target.value; redraw(); }
           }))),
       h('div', { className: 'fb-menu__foot' },

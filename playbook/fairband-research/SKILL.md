@@ -54,9 +54,12 @@ claims the oldest pending item. Keep the item's id, its symbol, its mode and its
 over an item that another agent has claimed unless the user asks.
 
 When the user asks for research in chat, post the request first with `inbox_post(symbol, mode,
-note)`, then claim the item it answers. Every piece of work has a work item. The mode is
-`valuation review` or `full report`. A company holds one open item (pending or claimed) at a time:
-when `inbox_post` answers "an item for <symbol> is open", claim that item instead.
+note)`, then claim the item it answers. Every piece of work has a work item. The note is the
+request in the user's own words, on one line, with no commentary and without the mode: "Complete
+research on QCOM", not "Complete research on QCOM, asked in chat on 2026-11-08 (the second run)".
+The mode is `valuation review` or `full report`. A company holds one open item (pending or
+claimed) at a time: when `inbox_post` answers "an item for <symbol> is open", claim that item
+instead.
 
 A full report covers the business, the industry and the value. A valuation review re-values the
 company and reuses the newest full report for the business and the industry.

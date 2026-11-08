@@ -2325,6 +2325,13 @@ def test_the_request_menu_shows_the_open_item_refusal(client: TestClient) -> Non
     assert client.get("/api/companies/AAPL").json()["item"]["id"] == first.json()["id"]
 
 
+def test_the_request_menu_asks_for_the_request_in_the_owners_words() -> None:
+    """Spec 2026-11-06 Tier 2, 8 (plan 4): the note is the request in the requester's own words,
+    one line, and the menu's note line asks for it so."""
+    menu = _function(_code(_static_file("app.js")), "RequestMenu")
+    assert "placeholder: 'The request in your words, one line'" in menu
+
+
 def test_the_meter_takes_a_reviewed_value() -> None:
     """Spec 2026-11-06 Tier 2, 18.2, a `// fairband:` patch: BandMeter's ``reviewedValue`` is a
     second marker on the track, in ink with the price marker's surface ring and no cap, within

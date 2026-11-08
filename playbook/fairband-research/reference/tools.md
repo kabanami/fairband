@@ -122,7 +122,8 @@ vendor call. The refusals:
   The identifier is printable ASCII: any other answers `{"refused": "the model identifier must be
   printable ASCII"}`.
 - `inbox_post(symbol, mode, note?)`: post a work item for a company; `mode` is `valuation review`
-  or `full report`.
+  or `full report`; `note` is the request in the user's own words, on one line, with no commentary
+  and without the mode.
 - `inbox_claim(item_id?)`: claim the named work item, or the oldest pending one; naming a claimed
   item takes it over.
 - `inbox_complete(item_id, report_id)`: complete a work item with a published report of its

@@ -365,7 +365,8 @@ def build_server(client: FairbandClient) -> MCPServer:
         return {"agent": agent, "client": client.client}
 
     @server.tool(
-        description="Post a work item for a company, its mode valuation review or full report."
+        description="Post a work item for a company, its mode valuation review or full report, its"
+        " note the request in the requester's own words on one line with no commentary."
     )
     def inbox_post(symbol: str, mode: Mode, note: str = "") -> dict[str, Any]:
         body = {"symbol": symbol, "mode": mode, "note": note}
