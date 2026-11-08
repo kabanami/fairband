@@ -653,9 +653,10 @@
      or in its place the refusal, as before; the stance line when a report exists, the report's
      word in the row's chip classes, faded once the window of the snapshot it rests on has
      expired, then who published it and when; the report's Summary, its first section, then Open
-     the report, a link to the report page; without a report, Request research with its menu, the
-     server's refusal under it and the open item's line; then Details ▾, a disclosure over
-     everything else (details). */
+     the report, a link to the report page; then Request research with its menu, the server's
+     refusal under it and the open item's line, with or without a report (plan 4: the founder
+     found none on a company with a report); then Details ▾, a disclosure over everything else
+     (details). */
   function sections(body) {
     var r = body.result;
     var im = r.intermediates;
@@ -717,8 +718,9 @@
         }),
         h('p', { className: 'app-open' },
           h(F.Button, { href: '#report/' + encodeURIComponent(r.symbol) }, 'Open the report')))
-        : section('request', null,
-          requestResearch(ask, body.item, render, function () { reloadDetail(r.symbol); })),
+        : null,
+      section('request', null,
+        requestResearch(ask, body.item, render, function () { reloadDetail(r.symbol); })),
       h('div', { key: 'disclosure', className: 'app-section app-disclosure' },
         h(F.Button, {
           variant: 'quiet', size: 'sm',
@@ -1026,19 +1028,19 @@
 
   /* A company's Request research, as the drawer and the report page each keep one, so the drawer
      on one company never resets the report page's on another: the menu closed, the mode a full
-     report, since a company with no report has no full report a valuation review could reuse,
-     and no note. */
+     report on a company with a report as on one without (the founder asked for a full report on
+     the second run), and no note. */
   function asking(symbol) {
     return {
       symbol: symbol, open: false, mode: 'full report', note: '', error: null, posting: false
     };
   }
 
-  /* Request research (spec 18.2), as the drawer and the report page show it without a report
-     (18.4): the button, disabled while an item is open, its menu, the server's refusal under it
-     and the open item's line. `ask` is the view's request (asking), `redraw` draws the view again
-     and `after` runs once a post ends, taken or refused, so the view reads its company again and
-     the open item's line follows. */
+  /* Request research (spec 18.2), as the drawer and the report page show it with or without a
+     report (18.4): the button, disabled while an item is open, its menu, the server's refusal
+     under it and the open item's line. `ask` is the view's request (asking), `redraw` draws the
+     view again and `after` runs once a post ends, taken or refused, so the view reads its company
+     again and the open item's line follows. */
   function requestResearch(ask, item, redraw, after) {
     return h(React.Fragment, null,
       h('div', { className: 'app-request' },

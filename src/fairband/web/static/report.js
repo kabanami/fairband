@@ -8,8 +8,9 @@
    followed by its footnote number (13.1) and the charts of the sections that have them above
    their sentences (18.4), the references those numbers name, Appendix A, the audit of the records
    the report rests on, and Appendix B, the glossary, both as the server generates them; a link
-   back to the screen. A company with no report shows the head, the meter and Request research, as
-   the drawer has it. The drawer's own parts come through window.FairbandPage; the head and the
+   back to the screen. The page shows Request research with or without a report, as the drawer
+   has it: under the revisions line, or under the head, the meter and "No report yet." for a
+   company with none. The drawer's own parts come through window.FairbandPage; the head and the
    meter read the company's detail, as the drawer does, and the rest the report. The charts read
    the series the sections cite once the report is in, and charts.js draws them. */
 (function () {
@@ -32,7 +33,7 @@
     error: null,
     tables: false, /* the page's one table toggle (CompanyReport): every chart's table view */
     series: null, /* the series the charts read (readSeries), each by its key as it lands */
-    request: null, /* Request research for a company with no report (FairbandPage.asking) */
+    request: null, /* Request research for the page's company (FairbandPage.asking) */
     downloadError: null
   };
   var latest = 0;
@@ -205,7 +206,8 @@
      window of the snapshot it rests on has ended (rows.window_ended's rule); its mode, its date,
      who wrote it and its revision; Download .md and the page's one table toggle. Under it, that a
      valuation review has no full report to reuse, when it has none; the other revisions by date;
-     a download's refusal. */
+     Request research, the drawer's own with this page's request, as on a company with no report
+     (plan 4); a download's refusal. */
   function meta(d, report) {
     var expired = report.appendixA.snapshot.validUntil < d.today;
     return h('div', { key: 'meta', className: 'app-report__meta' },
@@ -228,6 +230,7 @@
       report.mode === 'valuation review' && report.reusesFullReportOf == null
         ? h('p', { className: 'caption app-report__note' }, 'No full report to reuse.') : null,
       revisions(report),
+      P.requestResearch(state.request, d.item, render, load),
       state.downloadError
         ? h('p', { className: 'caption app-report__error' }, state.downloadError) : null);
   }

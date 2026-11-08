@@ -1834,9 +1834,10 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
     meter with its levels, the review's where it counts and has a value (plan 3), or a refusal in
     its place as before; the stance line, the report's word in its chip classes, faded once the report's window
     has expired, then the principal's chip; the report's Summary by ReportReader and Open the
-    report, a link to the report page; without a report, Request research and the open item's
-    line; then Details ▾, a quiet disclosure. Everything else is behind it. The meter and Request
-    research are the drawer's own parts, which the report page draws too (18.4)."""
+    report, a link to the report page; then Request research and the open item's line, with or
+    without a report (plan 4); then Details ▾, a quiet disclosure. Everything else is behind it.
+    The meter and Request research are the drawer's own parts, which the report page draws too
+    (18.4)."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
@@ -2481,9 +2482,10 @@ def test_the_report_page_order_is_pinned() -> None:
     """Spec 18.4, in the CompanyReport layout: the head with the one headline figure, the reviewed
     value where the review on the latest snapshot has one, else the mechanical, the price beside
     it in figure; the meter as the drawer draws it, its price under the head's figure-lg; above
-    the reader the stance, mode, date, writer, revision, Download .md, the table toggle and the
-    other revisions; ReportReader with every section, its cites and its footnote numbers; the
-    references; Appendix A with the bridge; Appendix B; the link back to the screen."""
+    the reader the stance, mode, date, writer, revision, Download .md, the table toggle, the
+    other revisions and Request research (plan 4); ReportReader with every section, its cites and
+    its footnote numbers; the references; Appendix A with the bridge; Appendix B; the link back to
+    the screen."""
     script = _code(_static_file("report.js"))
     _in_order(
         script,
@@ -2531,6 +2533,8 @@ def test_the_report_page_order_is_pinned() -> None:
         "'Download .md')",
         "'Tables')",
         "revisions(report)",
+        "P.requestResearch(state.request, d.item, render, load)",
+        "state.downloadError",
     )
     assert "var expired = report.appendixA.snapshot.validUntil < d.today;" in meta
     lines = _function(script, "revisions")
@@ -2681,6 +2685,19 @@ def test_the_report_page_without_a_report() -> None:
         "ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null",
         "requested(item)",
     )
+
+
+def test_request_research_shows_with_a_report_too() -> None:
+    """Spec 18.2 item 4 and 18.4 (plan 4): Request research with its menu and the open item's line
+    on a company with a report, under Open the report in the drawer and under the revisions line
+    on the report page, as on a company without one."""
+    sections = _function(_code(_static_file("app.js")), "sections")
+    assert "section('request', null," in sections
+    assert ": section('request', null," not in sections  # no longer the Summary's alternative
+    meta = _function(_code(_static_file("report.js")), "meta")
+    assert "P.requestResearch(state.request, d.item, render, load)" in meta
+    no_report = _function(_code(_static_file("report.js")), "noReport")
+    assert "P.requestResearch(state.request, d.item, render, load)" in no_report
 
 
 def test_the_report_page_has_one_headline_figure() -> None:
