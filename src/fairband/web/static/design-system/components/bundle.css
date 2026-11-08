@@ -653,6 +653,27 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-report__section { margin-bottom: var(--space-3); }
 .fb-report__section h4 { margin: 0 0 var(--space-1); color: var(--ink); }
 .fb-report__prose { margin: 0; max-width: 72ch; color: var(--ink); }
+/* fairband: the text's blocks, the shape the agent wrote
+   (spec 2026-11-06 Tier 2, 13.1 and 18.4). A block sits space-2 above the next. A list keeps the
+   prose measure, a two-digit mark hanging into the record's padding. A table sits in a scroller
+   at the prose measure, its ch at the body's 14px, so a table wider than the measure scrolls on
+   its own; its header row in label and ink-muted over the border, each body row over a hairline,
+   as the findings table draws them; a cited figure in a cell never wraps. A header keeps the
+   agent's case, since a cite in it is a figure. Bold is ink at 600. */
+.fb-report__prose, .fb-report__list, .fb-report__scroll { margin: 0 0 var(--space-2); }
+.fb-report__list { padding-left: 1.25em; max-width: 72ch; color: var(--ink); }
+.fb-report__list li + li { margin-top: var(--space-1); }
+.fb-report__scroll { max-width: 72ch; overflow-x: auto; font-size: 14px; }
+.fb-report__table { border-collapse: collapse; }
+.fb-report__table th, .fb-report__table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+  vertical-align: top;
+}
+.fb-report__table th { color: var(--ink-muted); border-bottom: 1px solid var(--border); }
+.fb-report__table td { color: var(--ink); border-bottom: 1px solid var(--hairline); }
+.fb-report__table .fb-cite { white-space: nowrap; }
+.fb-report strong { color: var(--ink); font-weight: 600; }
 .fb-report__appx { color: var(--ink-faint); margin: 0; }
 /* A cited number is the only kind a published report may contain, so the mark
    is a quiet affordance rather than a warning. */

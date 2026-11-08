@@ -307,11 +307,22 @@ export interface OverrideRecordProps {
   resultNote?: string;
 }
 
-/** A plain string, or a number that traces to a stored fact or an engine metric. */
-export type ReportPart = string | { cite: string; ref: string };
+/**
+ * A plain string, or a number that traces to a stored fact or an engine metric, with the period
+ * it claims when it names one.
+ *
+ * fairband: a section's parts are read as the agent wrote them, the shape the reader renders as
+ * blocks (spec 2026-11-06 Tier 2, 13.1 and 18.4): a plain part may hold line breaks; a blank line
+ * starts a paragraph; a line that opens with `- ` is a bullet and one that opens with `1. ` (one
+ * or two digits, `.` or `)`) a numbered item; lines that open with `|` are a table, the `|---|`
+ * row under its header row; `**bold**` sets bold. A cite is inline in any of them, a table's cell
+ * included. Nothing else is rendered: no heading mark, link, nested list or image.
+ */
+export type ReportPart = string | { cite: string; ref: string; period?: string };
 
 export interface ReportSection {
   heading?: string;
+  /** fairband: rendered as paragraphs, lists, tables and bold, as `ReportPart` says (13.1). */
   parts: ReportPart[];
 }
 
@@ -340,6 +351,11 @@ export interface ReportReaderProps {
     /** The date of the full report a valuation review reuses. */
     reusesFullReportOf?: string;
   };
+  /**
+   * fairband: each section's text as blocks, `<p>`, `<ul>` or `<ol start>`, and a table in a
+   * scroller with its header row, bold and the cites inline in any of them; the drawer's Summary
+   * renders the same (spec 2026-11-06 Tier 2, 13.1 and 18.4).
+   */
   sections?: ReportSection[];
   /**
    * fairband: each cite's footnote number by its ref (ref → n), as the report's references

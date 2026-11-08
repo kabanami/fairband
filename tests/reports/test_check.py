@@ -258,6 +258,21 @@ def test_years_quarters_forms_and_small_counts_pass(
     assert _check(conn, policy, sid, plain) == []
 
 
+def test_list_marks_and_a_table_row_are_marks(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 13.1 "The text's shape" and 13.3: a list's number at a line's start and a table's
+    separator row are marks, not quantities, and the bold marks hold no number; a count of two
+    digits in a sentence is still a quantity."""
+    sid = snapshots["AAPL"]
+    listed = "".join(f"{n}. A reason in words.\n" for n in range(1, 13))
+    table = "| | The quarter |\n|---|---|\n| Revenue | in words |\n"
+    plain = f"**Reasons.**\n\n{listed}\n{table}\n**The verdict.** Hold."
+    assert _check(conn, policy, sid, plain) == []
+    found = _one(_check(conn, policy, sid, "Coverage: 12 analysts follow it."), sid, "12")
+    assert found.what == NO_REFERENCE
+
+
 def test_the_cite_parser_reads_separators_and_minus_signs() -> None:
     assert parse_cite("$1,234.50") == (1234.5, "$") and parse_cite("−3.2%") == (-3.2, "%")
     assert parse_cite("(12.3%)") == (-12.3, "%")
@@ -368,6 +383,12 @@ def test_a_reprice_keeps_the_cites_and_a_revalue_rejects_them(
         ("the US$30 June quarter", ["US$30"]),  # a $ leads it: no day
         ("paid $5 June 30", ["$5"]),
         ("the 2 big ones, 5 more, on 30 June", []),
+        # a list's number at a line's start is a mark; a number elsewhere on the line is not
+        ("1. one\n 10. ten\n12) twelve\n|---|:---:|\n**bold**", []),
+        ("10. The company has 12 analysts", ["12"]),
+        ("12 analysts\n10.5% of revenue\n$10. Then", ["12", "10.5%", "$10"]),
+        ("revenue rose 10. Then 12. Then", ["10", "12"]),
+        ("100. A three-digit mark", ["100"]),
     ],
 )
 def test_the_token_rule(text: str, found: list[str]) -> None:

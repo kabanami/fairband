@@ -729,6 +729,171 @@
     return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
   }
 
+  // fairband: a cite as the reader shows it: its dotted underline and its ref in the title, then
+  // its footnote number as a superscript, [n], from the caller's footnotes (ref → n); a ref the
+  // map lacks has none (spec 2026-11-06 Tier 2, 13.1 and 18.4).
+  function cited(part, footnotes, key) {
+    var n = own(footnotes, String(part.ref).trim());
+    return h(React.Fragment, { key: key },
+      h(Cite, { source: part.ref }, part.cite),
+      n == null ? null : h('sup', { className: 'fb-cite__n' }, '[' + n + ']'));
+  }
+
+  // fairband: a run of pieces, plain text and cites, that holds nothing but white space
+  // (spec 2026-11-06 Tier 2, 13.1).
+  function blankPieces(pieces) {
+    return pieces.every(function (piece) { return typeof piece === 'string' && !piece.trim(); });
+  }
+
+  // fairband: a run of pieces without the white space at its two ends
+  // (spec 2026-11-06 Tier 2, 13.1).
+  function trimPieces(pieces) {
+    var out = pieces.slice();
+    while (out.length && typeof out[0] === 'string' && !out[0].trim()) out.shift();
+    while (out.length && typeof out[out.length - 1] === 'string' && !out[out.length - 1].trim()) {
+      out.pop();
+    }
+    if (typeof out[0] === 'string') out[0] = out[0].replace(/^\s+/, '');
+    if (typeof out[out.length - 1] === 'string') {
+      out[out.length - 1] = out[out.length - 1].replace(/\s+$/, '');
+    }
+    return out;
+  }
+
+  // fairband: a block's pieces as nodes, the cites inline: a `**` opens or closes bold across the
+  // pieces, so a bold run may hold a cite; an unpaired `**`, the last of an odd count, and a lone
+  // `*` stay text (spec 2026-11-06 Tier 2, 13.1).
+  function inlineNodes(pieces, footnotes) {
+    var marks = 0;
+    pieces.forEach(function (piece) {
+      if (typeof piece === 'string') marks += piece.split('**').length - 1;
+    });
+    var paired = marks - marks % 2;
+    var out = [];
+    var bold = null;
+    var key = 0;
+    function put(node) { (bold || out).push(node); }
+    pieces.forEach(function (piece) {
+      if (typeof piece !== 'string') { put(cited(piece, footnotes, 'c' + key++)); return; }
+      piece.split('**').forEach(function (text, i) {
+        if (i && paired) {
+          paired -= 1;
+          if (!bold) bold = [];
+          else { out.push(h('strong', { key: 'b' + key++ }, bold)); bold = null; }
+        } else if (i) put('**');
+        if (text) put(text);
+      });
+    });
+    return out;
+  }
+
+  // fairband: a table row's cells, split at each `|` of the plain text, a cite staying in its
+  // cell; the white space before the opening `|` and the empty cell after a closing `|` are no
+  // cells (spec 2026-11-06 Tier 2, 13.1).
+  function tableCells(line) {
+    var cells = [[]];
+    line.forEach(function (piece) {
+      if (typeof piece !== 'string') { cells[cells.length - 1].push(piece); return; }
+      piece.split('|').forEach(function (text, i) {
+        if (i) cells.push([]);
+        if (text) cells[cells.length - 1].push(text);
+      });
+    });
+    cells.shift();
+    if (cells.length > 1 && blankPieces(cells[cells.length - 1])) cells.pop();
+    return cells.map(trimPieces);
+  }
+
+  // fairband: the section's text as blocks, the shape the agent wrote
+  // (spec 2026-11-06 Tier 2, 13.1 and 18.4). The parts are read as lines, a plain part split at
+  // each line break and a cite inline in its line. A blank line closes a block. A line that opens
+  // with `- ` or `• ` is a bullet, and one that opens with a number of one or two digits and `. `
+  // or `) ` a numbered item, its list starting at the first item's number. A line whose first
+  // character, after white space, is `|` and that holds a second `|` is a table row; a row of `-`
+  // and `:` cells is the separator, which makes the rows above it the header and shows nowhere.
+  // Any other line joins the paragraph with a space. In any block `**` sets bold and a cite keeps
+  // its mark and its [n].
+  function blocks(parts, footnotes) {
+    var lines = [[]];
+    (parts || []).forEach(function (part) {
+      if (part && typeof part === 'object') { lines[lines.length - 1].push(part); return; }
+      if (typeof part !== 'string') return;
+      part.split(/\r?\n/).forEach(function (text, i) {
+        if (i) lines.push([]);
+        var line = lines[lines.length - 1];
+        if (!text) return;
+        if (typeof line[line.length - 1] === 'string') line[line.length - 1] += text;
+        else line.push(text);
+      });
+    });
+
+    var found = [];
+    var block = null;
+    function open(kind, extra) {
+      if (block && block.kind === kind) return;
+      if (block) found.push(block);
+      block = Object.assign({ kind: kind, items: [] }, extra);
+    }
+    lines.forEach(function (line) {
+      var head = typeof line[0] === 'string' ? line[0] : '';
+      var bars = line.reduce(function (n, piece) {
+        return typeof piece === 'string' ? n + piece.split('|').length - 1 : n;
+      }, 0);
+      var mark;
+      if (blankPieces(line)) {
+        if (block) found.push(block);
+        block = null;
+      } else if (/^\s*\|/.test(head) && bars >= 2) {
+        open('table', { head: [] });
+        var cells = tableCells(line);
+        var separator = cells.every(function (cell) {
+          return cell.length === 1 && typeof cell[0] === 'string' && /^:?-+:?$/.test(cell[0]);
+        });
+        if (!separator) block.items.push(cells);
+        else if (!block.head.length) { block.head = block.items; block.items = []; }
+      } else if ((mark = /^\s*[-•]\s/.exec(head))) {
+        open('ul');
+        block.items.push([head.slice(mark[0].length)].concat(line.slice(1)));
+      } else if ((mark = /^\s*(\d{1,2})[.)]\s/.exec(head))) {
+        open('ol', { start: Number(mark[1]) });
+        block.items.push([head.slice(mark[0].length)].concat(line.slice(1)));
+      } else {
+        open('p');
+        block.items.push(line);
+      }
+    });
+    if (block) found.push(block);
+
+    function row(cells, cell, i) {
+      return h('tr', { key: i }, cells.map(function (pieces, j) {
+        return h(cell, { key: j, className: cell === 'th' ? 'label' : 'body' },
+          inlineNodes(pieces, footnotes));
+      }));
+    }
+    return found.map(function (b, k) {
+      if (b.kind === 'p') {
+        var pieces = [];
+        b.items.forEach(function (line, i) {
+          pieces = pieces.concat(i ? [' '] : [], trimPieces(line));
+        });
+        return h('p', { className: 'fb-report__prose body', key: k },
+          inlineNodes(pieces, footnotes));
+      }
+      if (b.kind === 'table') {
+        return h('div', { className: 'fb-report__scroll', key: k },
+          h('table', { className: 'fb-report__table' },
+            b.head.length ? h('thead', null, b.head.map(function (cells, i) {
+              return row(cells, 'th', i);
+            })) : null,
+            h('tbody', null, b.items.map(function (cells, i) { return row(cells, 'td', i); }))));
+      }
+      return h(b.kind, { className: 'fb-report__list body', start: b.start, key: k },
+        b.items.map(function (item, i) {
+          return h('li', { key: i }, inlineNodes(trimPieces(item), footnotes));
+        }));
+    });
+  }
+
   function ReportReader(props) {
     var p = props || {};
     var rejected = p.state === 'rejected';
@@ -787,13 +952,7 @@
                 return h('section', { key: i, className: 'fb-report__section' },
                   s.heading ? h('h4', { className: 'heading' }, s.heading) : null,
                   own(charts, String(s.heading || '').trim()),
-                  h('p', { className: 'fb-report__prose body' }, (s.parts || []).map(function (part, j) {
-                    if (typeof part === 'string') return part;
-                    var n = own(footnotes, String(part.ref).trim());
-                    return h(React.Fragment, { key: j },
-                      h(Cite, { source: part.ref }, part.cite),
-                      n == null ? null : h('sup', { className: 'fb-cite__n' }, '[' + n + ']'));
-                  }))
+                  blocks(s.parts, footnotes)
                 );
               }),
               p.appendixes === false ? null : h('p', { className: 'fb-report__appx caption' },

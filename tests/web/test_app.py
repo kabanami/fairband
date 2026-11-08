@@ -2685,10 +2685,9 @@ def test_the_reader_numbers_its_footnotes() -> None:
     reader = _function(bundle, "ReportReader")
     assert "// fairband: a cited number keeps its dotted underline" in reader
     assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in reader
+    _in_order(reader, "var footnotes = p.footnotes || {};", "blocks(s.parts, footnotes)")
     _in_order(
-        reader,
-        "var footnotes = p.footnotes || {};",
-        "if (typeof part === 'string') return part;",
+        _function(bundle, "cited"),
         "var n = own(footnotes, String(part.ref).trim());",
         "h(Cite, { source: part.ref }, part.cite),",
         "n == null ? null : h('sup', { className: 'fb-cite__n' }, '[' + n + ']'));",
@@ -2719,6 +2718,45 @@ def test_the_reader_numbers_its_footnotes() -> None:
     marks = _function(app, "footnotes")
     assert "(references || []).forEach(function (e) { marks[e.ref] = e.n; });" in marks
     assert "footnotes: P.footnotes(report.references)" in _static_file("report.js")
+
+
+def test_the_reader_renders_the_text_as_blocks() -> None:
+    """Spec 13.1 "The text's shape" and 18.4: ReportReader renders each section's parts as the
+    agent wrote them, through ``blocks``, a `// fairband:` patch naming 13.1: paragraphs, bullet
+    and numbered lists, a table with a header row in a scroller, bold in ink; the cites inline in
+    any of them. ``index.d.ts`` notes the shape on the part; ``tests/web/test_reader_blocks.py``
+    renders it."""
+    bundle = _component_file("bundle.js")
+    reader = _function(bundle, "ReportReader")
+    assert "blocks(s.parts, footnotes)" in reader
+    assert "fb-report__prose" not in reader
+    blocks = _function(bundle, "blocks")
+    patch = bundle[: bundle.index("  function blocks(")]
+    patch = patch[patch.rindex("  // fairband:") :]
+    assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in patch
+    for text in (
+        "h('p', { className: 'fb-report__prose body', key: k }",
+        "className: 'fb-report__list body'",
+        "h('div', { className: 'fb-report__scroll', key: k },",
+        "h('table', { className: 'fb-report__table' },",
+    ):
+        assert text in blocks, text
+    css = _component_file("bundle.css")
+    comment = css[css.index("/* fairband: the text's") :]
+    assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in comment[: comment.index("*/")]
+    assert "max-width: 72ch;" in _rule(css, ".fb-report__list {")
+    assert "overflow-x: auto;" in _rule(css, ".fb-report__scroll {")
+    assert "border-collapse: collapse;" in _rule(css, ".fb-report__table {")
+    assert "color: var(--ink);" in _rule(css, ".fb-report strong {")
+    declarations = _component_file("index.d.ts")
+    part = declarations[declarations.index(" * A plain string, or a number that traces") :]
+    part = part[: part.index("export interface ReportSection")]
+    assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in part
+    assert "a blank line" in part and "period?: string" in part
+    page = _static_file("index.html")
+    block = page[page.index("@media print {") :]
+    block = block[: block.index("\n  }\n")]
+    assert ".fb-report__table, .fb-report__list li { break-inside: avoid; }" in block
 
 
 def test_the_print_stylesheet() -> None:
@@ -2858,7 +2896,7 @@ def test_the_report_page_draws_the_charts_per_section(db_path: Path, policy: Pol
         "var charts = p.charts || {};",
         "s.heading ? h('h4', { className: 'heading' }, s.heading) : null,",
         "own(charts, String(s.heading || '').trim()),",
-        "h('p', { className: 'fb-report__prose body' }",
+        "blocks(s.parts, footnotes)",
     )
 
 

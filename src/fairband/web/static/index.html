@@ -485,6 +485,8 @@
     .app-report { max-width: none; padding: 0; }
     .app-report h3, .app-report h4 { break-after: avoid; }
     .app-chart { break-inside: avoid; }
+    /* the agent's table and a list item stay on one page (spec 2026-11-06 Tier 2, 18.4) */
+    .fb-report__table, .fb-report__list li { break-inside: avoid; }
   }
 </style>
 </head>
