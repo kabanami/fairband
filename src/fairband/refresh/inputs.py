@@ -9,10 +9,11 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   with its EPS, net-income and revenue analyst counts; the fiscal year is FMP's when stored, else
   derived from the company's fiscal-year end (``FiscalCalendar``), and so is the quarter label.
   FMP reports some companies under two fiscal calendars, two rows for one period with period ends
-  days apart (AAPL: 2027-12-26 and 2027-12-27 for fiscal 2028 Q1), so rows whose period ends lie
-  within ``SAME_PERIOD_DAYS`` of each other are one period, whatever their labels; the row kept has
-  the larger EPS analyst count, a tie or no count keeping the later period end, so the NTM quarters
-  chain (``ntm_quarters``). The labels are information on the kept row and decide nothing here;
+  days apart (AAPL: 2027-12-26 and 2027-12-27 for fiscal 2028 Q1), so a row whose period end lies
+  within ``SAME_PERIOD_DAYS`` of the period's first row is that period, whatever its label; the row
+  kept has the larger EPS analyst count, a tie or no count keeping the later period end, so the NTM
+  quarters chain (``ntm_quarters``). The labels are information on the kept row and decide
+  nothing here;
 - the street's trailing EPS: the sum of the four ``street-actual`` values whose periods are exactly
   the four trailing quarter ends; ``None`` when one is missing or the trailing figures are a fiscal
   year, which leaves the SBC basis unknown (``mech/1.2``);

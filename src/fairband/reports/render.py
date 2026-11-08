@@ -194,7 +194,8 @@ GLOSSARY: dict[str, str] = {
     ),
     "Finding": (
         "A dated fact an agent records with its source (a filing, a transcript, a URL, a vendor "
-        "response or a base rate); the only way a number from outside Fairband enters a report"
+        "response or a base rate); a finding or a guidance record is the only way a number from "
+        "outside Fairband enters a report"
     ),
     "Judgment": (
         "One of a report's key judgments (the phase, the moat, the belief, the ROIC, the target "
