@@ -134,9 +134,9 @@ is fine: a reprice of the cited snapshot, with the same data date, method, polic
 counts as the cited one. A revalue or a full refresh in between is not: the report is rejected
 `wrong snapshot`, with the latest snapshot's id in the detail. Read `company` again, take the new
 ids, check each figure, and submit again. A `secondary:` and a `sensitivity:` ref rest on their
-record's snapshot too, and a `derived:` ref on its operands': after a revalue, make the secondary
-valuation, the reading and those derivations again. A `finding:`, a `guidance:` and a `multiple:`
-ref rest on none.
+record's snapshot too, and a `derived:` ref on its operands': after a revalue, make the reading
+and those derivations again, and on a refused row the secondary valuation too; on a valued row the
+server refuses one. A `finding:`, a `guidance:` and a `multiple:` ref rest on none.
 
 A `review:` cite must be the company's current review: the newest review on the latest snapshot,
 or the one that snapshot reprices. Each applied override and each drop makes a new review; a
@@ -265,7 +265,8 @@ cited, in section 8.
 
 The server checks the structure before it reads a number, in this order: the section count
 (twelve for a full report, ten for a valuation review); the stance word; the judgments the route
-needs, one of each; the headings, in order; and a secondary valuation on the latest snapshot. The
-first check that fails is answered with its one sentence (400), such as "the report needs a
-secondary valuation on snapshot <id>", and no number is checked. Fix the one thing the sentence
-names and submit again.
+needs, one of each; the headings, in order; and a secondary valuation on a refused snapshot (none
+where the route values the company, and none for a foreign filer or a snapshot with no diluted
+share count). The first check that fails is answered with its one sentence (400), such as "the
+report needs a secondary valuation on snapshot <id>", and no number is checked. Fix the one thing
+the sentence names and submit again.

@@ -16,10 +16,10 @@ in every reason, in the register of `reference/register.md`.
 The report argues the business, and only its valuation section talks about the valuation. The
 steps build it as a chain. The last earnings call gives management's story (step 5). The bull
 case and the bear case argue it, and the thesis decides it (step 9). The decisions turn the
-thesis into the engine's inputs (step 10). Every report values the company twice: by the
-engine's route, and by a standard discounted cash flow from drivers you set, the secondary
-valuation. A cyclical business (one whose profits rise and fall with its industry's cycle) is
-valued at mid-cycle (step 7).
+thesis into the engine's inputs (step 10). A report values the company by the engine's route.
+Only where the route refuses or no route fits does a standard discounted cash flow from drivers
+you set, the secondary valuation, stand in. A cyclical business (one whose profits rise and fall
+with its industry's cycle) is valued at mid-cycle (step 7).
 
 ## Before you start
 
@@ -230,7 +230,7 @@ be right, and what you expect to happen. Write it for every stance:
 
 The kill criteria of section 11 test the thesis.
 
-### 10. The decisions, the overrides and the two values
+### 10. The decisions and the overrides
 
 Decide each judgment from the thesis (see "The judgments" below). Move an input for a claim of the
 call only when the thesis accepts it and step 5 judged it probable. Where a decision changes an
@@ -257,19 +257,22 @@ A cyclical, valued at mid-cycle:
   the held rate (`path.hold`) at the growth rate through the cycle;
 - a kill criterion on the operating margin against its median.
 
-Then the second value, and the two checks beside it:
+Then the fallback, FMP's figure and the route's grid. Where the route values the company, make no
+secondary valuation and read no DCF of any kind.
 
-- **The secondary valuation**, on every report: `secondary_valuation` with `drivers`, the standard
-  discounted cash flow. Set the drivers from the thesis, at mid-cycle for a cyclical. Use `parts`
-  instead where a sum of parts fits the company better. The report check refuses a report with no
-  secondary valuation on the latest snapshot: "the report needs a secondary valuation on snapshot
-  <id>". Make it after any revalue, since one made before does not count. Two refusals exempt the
-  report: "foreign filer: currency and share-unit handling not built yet" and "no diluted share
-  count". The company can have no secondary valuation, so publish without one and name the reason
-  in section 8. See "The secondary valuation" below.
-- **FMP's own figure**, a cross-check: `dcf(symbol)` gives FMP's discounted cash flow value and
-  its levered one. Section 8 may cite it in one sentence, as a third opinion beside the engine's
-  two.
+- Where the route refuses or no route fits, and only there: **the secondary valuation**,
+  `secondary_valuation` with `drivers`, the standard discounted cash flow, as the fallback. Set the
+  drivers from the thesis, at mid-cycle for a cyclical. Use `parts` instead where a sum of parts
+  fits the company better. The server refuses the call where the route values the company: "the
+  route values <symbol>: the secondary valuation is the fallback where it refuses". The report
+  check refuses a report on a refused snapshot with no secondary valuation on it: "the report needs
+  a secondary valuation on snapshot <id>". Make it after any revalue, since one made before does
+  not count. Two refusals exempt the report: "foreign filer: currency and share-unit handling not
+  built yet" and "no diluted share count". The company can have no secondary valuation, so publish
+  without one and name the reason in section 8. See "The secondary valuation" below.
+- **FMP's own figure**: `dcf(symbol)`, a cross-check on the fallback: read it on a refused row
+  only; never beside a route's value. It gives FMP's discounted cash flow value and its levered
+  one. Section 8 may cite it in one sentence, beside the secondary valuation.
 - **The route's grid**: `sensitivity` sets two of the route's inputs across a few values each, and
   answers the route's value a share at every pair. Section 8 cites it. See "The sensitivity
   reading" below.
@@ -280,11 +283,10 @@ difference, a sum, a growth rate or a compound annual growth rate. Never compute
 ### 11. The stance
 
 Choose the stance: `buy`, `hold`, `trim` or `avoid`. Read the value against its levels. Take the
-reviewed value when the current review has one. Take the snapshot's value when the company has no
-review. Take the secondary valuation's when neither gives a value. Where both give a value, the
-route's value leads and the secondary valuation is the second view. `avoid` is for a company you
-would not hold at any price shown. Weigh the thesis as well as the levels. The report's reasons
-carry the stance.
+reviewed value when the current review has one, else the snapshot's value; on a refused row, the
+secondary valuation's. No DCF weighs on the stance where the route values the company: the
+founder's rule of 2026-11-08. `avoid` is for a company you would not hold at any price shown.
+Weigh the thesis as well as the levels. The report's reasons carry the stance.
 
 ### 12. The report
 
@@ -292,9 +294,11 @@ Write the twelve sections of `reference/report-template.md`, ten for a valuation
 quantity, by the rules of `reference/citations.md`. Give the judgments as the record of your
 decisions, each `{judgment, decision, override_id?}`. Submit with `report_submit`. The server
 publishes a report whole or rejects it whole. A structural refusal (the section count, the stance,
-a judgment, a heading, or no secondary valuation on the snapshot) is one sentence: fix it and
-submit again. A foreign filer and a snapshot with no diluted share count need no secondary
-valuation: the server refused it, section 8 says why, and Appendix A names the reason. A rejection (422) lists the findings: fix each one and submit again.
+a judgment, a heading, or no secondary valuation on a refused snapshot) is one sentence: fix it
+and submit again. A valued snapshot needs no secondary valuation: Appendix A says "no secondary
+valuation: the route values the company". A foreign filer and a snapshot with no diluted share
+count need none either: the server refused one, section 8 says why, and Appendix A names the
+reason. A rejection (422) lists the findings: fix each one and submit again.
 
 ### 13. Complete the work item
 
@@ -480,8 +484,8 @@ An applied override answers `{override, review, bridge}`. The bridge starts at t
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
 consensus step 3, held rate, belief, non-recurring gap, mid-cycle earnings, target margin, sales to
 capital, runway return, decline rate, moat, debt, cash. A line whose step refuses shows the refusal
-in place of a change. A review whose last line refuses has no value: the secondary valuation then
-stands in.
+in place of a change. A review whose last line refuses has no value. The secondary valuation does
+not stand in for it while the snapshot has a value: the server refuses one there.
 
 One input holds one applied override. A new override on the same tag replaces the old one. An
 override applies to the latest snapshot and to every later one. A period-tied override (a correction
@@ -496,16 +500,22 @@ refresh running. Read `company` again, since the snapshot id changes, and try ag
 drop and a sensitivity reading are also refused with "the store moved since snapshot <id>: run a
 revalue" when the stored data changed after the latest snapshot: a refresh is under way, or a peer
 was refreshed. When `refresh_status()` shows a refresh running, wait until it ends; otherwise call
-`refresh_start("revalue")` and wait the same way. Read `company` again and try again. A secondary
-valuation made before a revalue does not count for the report: make a new one.
+`refresh_start("revalue")` and wait the same way. Read `company` again and try again. On a refused
+snapshot, a secondary valuation made before a revalue does not count for the report: make a new
+one.
 
 ## The secondary valuation
 
-A second value a share, by the standard discounted cash flow, on every report. You set the drivers;
-the engine projects the free cash flow to the firm (the cash the business makes after its
-investment, before any payment to lenders or owners), discounts it, adds the terminal value and
-bridges the firm value to a value a share. So the figure is a tool output. It is the second view
-beside the route's value, and it stands in where the route refuses or no route fits.
+The fallback, and only the fallback: a value a share by the standard discounted cash flow, made
+where the route refuses or no route fits. Where the route values the company, the server refuses
+the call: "the route values <symbol>: the secondary valuation is the fallback where it refuses".
+Make none there, and read no DCF of any kind.
+
+You set the drivers; the engine projects the free cash flow to the firm (the cash the business
+makes after its investment, before any payment to lenders or owners), discounts it, adds the
+terminal value and bridges the firm value to a value a share. So the figure is a tool output. On a
+refused row it stands in for the route's value: in the stance, on the screen's row and in the
+report.
 
 Call `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)` with exactly
 one of `drivers` and `parts`.
@@ -537,9 +547,8 @@ terminal growth and reinvests the share that growth needs at the terminal return
 r on a Narrow or None moat; on a Wide one, the company's ten-year aggregate ROIC, held between r
 and the policy's cap, or r where the snapshot holds no ten-year ROIC, as on the growth routes. A
 terminal growth at or below zero reinvests nothing. This is the engine's own stable-growth rule,
-with the terminal return read as above; the route's own terminal reads its return differently
-on some routes, so the two values share the rule and not always the figure. The equity is the firm value
-less debt plus cash. The value a share is the equity over the diluted shares.
+with the terminal return read as above. The equity is the firm value less debt plus cash. The
+value a share is the equity over the diluted shares.
 
 Set the drivers from the thesis, and say in the reason why each one is where it is. The consensus,
 or a clear guidance, serves the first years. A cyclical takes its margins at mid-cycle. On High
@@ -578,9 +587,11 @@ part's terminal growth together by one point down, none and one point up, each c
 The refusals, each a sentence, nothing stored: a blank reason; no evidence; both forms, "a
 secondary valuation takes drivers or parts, not both", or neither, "a secondary valuation needs
 drivers or parts"; "the path needs its own evidence item"; a debt or a cash with no evidence item
-of its own; "settings changed: run a revalue" and its two siblings; a `guidance` item's 400, 404 and
-409, as on an override; "foreign filer: currency and share-unit handling not built yet"; "no
-diluted share count"; on the drivers form, "no trailing revenue on file". Then the bounds, each
+of its own; "settings changed: run a revalue" and its two siblings; where the latest snapshot has a
+value, "the route values <symbol>: the secondary valuation is the fallback where it refuses"; a
+`guidance` item's 400, 404 and 409, as on an override; "foreign filer: currency and share-unit
+handling not built yet"; "no diluted share count"; on the drivers form, "no trailing revenue on
+file". Then the bounds, each
 naming its rule with the policy's figures: "a secondary valuation runs 3 to 15 years";
 "revenue_growth has 4 entries for 5 years" (or `operating_margin`); a driver out of its range,
 "tax_rate is 0% to 50%"; the terminal growth, "the terminal growth is −100% to g_T, 3.0%"; on the

@@ -2,8 +2,10 @@
 it describes: it names every MCP tool with the arguments the server takes, in the server's order;
 it runs spec 14's thirteen steps in order with the tools each names; it quotes the refusals the
 agent meets as the server words them; its citation reference names the check's six failures and
-the ref forms; and its submission example, twelve sections for an invented company, passes the
-structural checks, the secondary valuation's among them, and the token rule."""
+the ref forms; its submission example, twelve sections for an invented company the route values,
+passes the structural checks and the token rule; and it makes the secondary valuation only where
+the route refuses, with no DCF where the route values the company (the founder's rule of
+2026-11-08, spec 14 steps 10 and 11 as amended for plan 3)."""
 
 import json
 import re
@@ -25,6 +27,7 @@ from fairband.reports.check import (
     ALWAYS_JUDGED,
     FAILURES,
     HEADINGS,
+    STRUCTURE,
     parse_cite,
     quantities,
     structure_refusal,
@@ -104,6 +107,7 @@ REFUSALS = (
     NO_GF_KEY,
     BUSY,
     "the report needs a secondary valuation on snapshot <id>",
+    "the route values <symbol>: the secondary valuation is the fallback where it refuses",
     "guidance record <id> is superseded by record <id>",
     "the store moved since snapshot <id>: run a revalue",
     "settings changed: run a revalue",
@@ -111,8 +115,10 @@ REFUSALS = (
     "an axis holds one to five values",
     "the two tags differ",
 )
-# The forms the example cites at least once: the second view, the history, the grid, the guidance.
-EXAMPLE_FORMS = ("secondary", "multiple", "sensitivity", "guidance")
+# The forms the example cites at least once: the history, the grid, the guidance.
+EXAMPLE_FORMS = ("multiple", "sensitivity", "guidance")
+# The phrases of the rule before plan 3: a secondary valuation on every report, the second view.
+STALE = ("on every report", "every report values", "second view", "third opinion", "two values")
 
 
 def test_the_skill_names_every_tool() -> None:
@@ -168,7 +174,7 @@ def test_the_template_example_passes_the_structural_checks_and_the_token_rule() 
         judged,
         "mature-growth",  # the example's company, Example Corp, is a Mature Growth company
         load_policy(),
-        secondary_on_snapshot=True,
+        secondary_on_snapshot=True,  # a valued snapshot needs none: the route values the company
         snapshot_id=412,
     )
     assert refusal is None, refusal
@@ -181,10 +187,39 @@ def test_the_template_example_passes_the_structural_checks_and_the_token_rule() 
                 text = part["cite"]
                 assert parse_cite(text) is not None or not re.search(r"\d", text), part
                 forms.add(part["ref"].partition(":")[0])
+                # where the route values the company: no secondary valuation, no DCF of any kind
+                assert not part["ref"].startswith("secondary:"), part
+                assert not part["ref"].endswith("/dcf"), part
     assert set(EXAMPLE_FORMS) <= forms, set(EXAMPLE_FORMS) - forms
     for judgment in example["judgments"]:  # a record: no bull, no bear, no figure
         assert set(judgment) <= {"judgment", "decision", "override_id"}, judgment
         assert quantities(judgment["decision"]) == [], judgment["judgment"]
+
+
+def test_the_secondary_valuation_is_the_fallback_only() -> None:
+    """The founder's rule of 2026-11-08: the secondary valuation is made where the route refuses
+    or no route fits, and only there; no DCF weighs on the stance where the route values the
+    company, and FMP's figure is read on a refused row only."""
+    steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
+    rule = steps[10].find("Where the route refuses or no route fits, and only there")
+    assert 0 <= rule < steps[10].find("`secondary_valuation`")
+    assert "No DCF weighs on the stance where the route values the company" in steps[11]
+    dcf = re.search(r"^- `dcf\(symbol\)`.*?(?=^- `|^#|\Z)", _read(TOOLS), re.MULTILINE | re.DOTALL)
+    assert dcf is not None and "on a refused row only" in _flat(dcf[0])
+    assert STRUCTURE[-1] in _flat(_read(CITATIONS))  # the structural check as the check names it
+    for path in sorted(PLAYBOOK.rglob("*.md")):
+        text = _flat(_read(path)).lower()
+        for phrase in STALE:
+            assert phrase not in text, (path.name, phrase)
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def _flat(text: str) -> str:
+    """The text with every run of whitespace one space, so a phrase may cross a line break."""
+    return " ".join(text.split())
 
 
 @cache

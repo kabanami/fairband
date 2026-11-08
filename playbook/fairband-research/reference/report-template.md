@@ -28,15 +28,17 @@ and its outlook.
 - `work_item_id`, optional: the work item the report completes.
 
 The server checks the structure first: the section count, the stance, the judgments, the headings,
-and a secondary valuation on the latest snapshot (none for a foreign filer or a snapshot with no
-diluted share count, which the secondary valuation refuses). Each failure is one sentence, such as "section 5
-is headed 'The last earnings call', not 'Life-cycle phase'" or "the report needs a secondary
-valuation on snapshot 412". Then it checks every number (`reference/citations.md`).
+and a secondary valuation on a refused snapshot. A valued snapshot needs none: the secondary
+valuation is the fallback where the route refuses, and the server refuses one where the route
+values the company. A foreign filer or a snapshot with no diluted share count needs none either,
+since the secondary valuation refuses them. Each failure is one sentence, such as "section 5 is
+headed 'The last earnings call', not 'Life-cycle phase'" or "the report needs a secondary
+valuation on snapshot 388". Then it checks every number (`reference/citations.md`).
 
 The server writes the references list (each cite's footnote, numbered, with its source in words),
 Appendix A (the audit: every input with its tag and source, the overrides, the guidance on file,
-the bridge, the secondary valuation's drivers and projection, the checks that ran, the versions)
-and Appendix B (the glossary). Write none of them.
+the bridge, the secondary valuation's drivers and projection on a refused row or the reason there
+is none, the checks that ran, the versions) and Appendix B (the glossary). Write none of them.
 
 ## The sections
 
@@ -44,14 +46,14 @@ Put the answer first in each section. Keep each sentence to one idea.
 
 | # | Heading | Mode | What it holds |
 |---|---|---|---|
-| 1 | Summary | both | One page: the stance; the thesis in two or three sentences; the value against the price and the levels, and the secondary valuation's value; the phase in one sentence, with the word "cyclical" when the business is; three reasons for; three risks; what would change the view; the end of the validity window. Shape below. |
+| 1 | Summary | both | One page: the stance; the thesis in two or three sentences; the value against the price and the levels (on a refused row, the secondary valuation's value in its place); the phase in one sentence, with the word "cyclical" when the business is; three reasons for; three risks; what would change the view; the end of the validity window. Shape below. |
 | 2 | The business | full report | The products (the 10-K's Item 1); the revenue by product and by region over three years (`segments`); what drives revenue: price, volume, users, contracts, recurring or one-time; the customers, any customer at a tenth of revenue or more; the unit economics: the gross margin and the incremental margin (the share of each extra dollar of revenue that became operating profit). |
 | 3 | Industry and competition | full report | The value chain: the suppliers, the customers, where the profit goes; the industry's size and growth; the competitors (`peers` and the 10-K); the company's position, its share and its rank; the moat by Damodaran's five sources: brand name, switching costs, network effect, cost advantages, efficient scale. End with a plain answer to "are the economics favorable?", from the gross margin, the incremental margin against the average margin, and the ROIC against the hurdle rate. |
 | 4 | Financial performance and health | both | Six parts, one for each table of `financial_tables`, each two or three plain sentences that cite its cells. Detail below. |
 | 5 | The last earnings call | both | One page, in seven parts: the verdict; the quarter against expectations; the story management is telling, claim by claim; the guidance; the positives and the negatives; the questions and answers; what the thesis takes from it. Detail below. |
 | 6 | The bull case and the bear case | both | The debate about the business and its outlook, in arguments: demand and how long it lasts, where the company is in its cycle, competition and the moat, pricing power, capital allocation, management, the balance sheet, the claims of the call. Each side's strongest case, in words a reader without the method follows. Figures may be cited. No valuation arithmetic, input, tag or parameter. |
 | 7 | The thesis | both | The report's own story, set against management's. It opens with a position on each claim of section 5: accepted, rejected or held open. Then the case that settles the debate and leads to the stance: what must be true for the stance to be right, and what you expect to happen. Detail below. |
-| 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (the life-cycle stage, Introduction, Growth, Mature, Shake-out or Decline, that the signs of the three cash flows give), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; the secondary valuation against the route's value; FMP's figure in one sentence, when read; for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
+| 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (the life-cycle stage, Introduction, Growth, Mature, Shake-out or Decline, that the signs of the three cash flows give), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; on a refused row only, the secondary valuation in the route's place, and FMP's figure in one sentence when read (where the route values the company, no second value and no DCF); for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
 | 9 | Price and multiples | both | The price facts, and the multiples against their own history. Detail below. |
 | 10 | Recent news | both | The dated items that matter to the value. |
 | 11 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold you choose is not a fact and never a finding: tie each event to a stored figure and cite it ("below the hurdle rate of 9.0%", citing `policy:required_return`), or state it in words ("revenue falls two quarters in a row"). A threshold no stored figure gives is a question for the founder (`reference/citations.md`, "A threshold you choose"). |
@@ -152,14 +154,15 @@ The kill criteria of section 11 test it.
   bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
 - **The guidance.** Where a guidance override moved an anchor or a step, one sentence names it
   and cites the record's figure, `guidance:<id>/midpoint`.
-- **The secondary valuation.** The drivers in words, with their figures cited
-  (`secondary:<id>/drivers/<name>`, `/drivers/<name>/<t>`); the value, `secondary:<id>/value`; how
-  it sits against the route's value, and why they differ; the grid's range, two cells
-  `secondary:<id>/grid/<i>/<j>`. Where the route gives no value, the secondary valuation stands in
-  and leads the section. Where the server refused the secondary valuation as a foreign filer or for
-  no diluted share count, say so in one sentence: the report publishes without one.
-- **FMP's figure**, in one sentence when read: `response:<responseId>/<json pointer>` of the `dcf`
-  answer.
+- **The secondary valuation**, on a refused row only: where the route refuses or no route fits,
+  it stands in for the route's value and leads the section. The drivers in words, with their
+  figures cited (`secondary:<id>/drivers/<name>`, `/drivers/<name>/<t>`); the value,
+  `secondary:<id>/value`; the grid's range, two cells `secondary:<id>/grid/<i>/<j>`. Where the
+  server refused the secondary valuation as a foreign filer or for no diluted share count, say so
+  in one sentence: the report publishes without one. Where the route values the company, write no
+  second value and read no DCF.
+- **FMP's figure**, on a refused row only, in one sentence when read, beside the secondary
+  valuation: `response:<responseId>/<json pointer>` of the `dcf` answer.
 - **A cyclical**: where it is in its cycle, and the mid-cycle basis the values rest on.
 - **The sensitivity grid**: the two inputs it sets, and the range of the value across them, two
   cells `sensitivity:<id>/<i>/<j>`.
@@ -215,10 +218,10 @@ the market cap and the `equity` `fact:` line.
 
 ### The charts
 
-The report page draws the charts itself, from the store: in section 4 each table's figures, in
-section 8 the sensitivity grid and the secondary valuation's grid, in section 9 the P/E history
-with its average lines. The Markdown export carries each chart's table under the same title. Write
-no chart and no chart table: write the sentences, and cite the figures they name.
+The report page draws the charts itself, from the store: in section 4 each table's figures; in
+section 8 the sensitivity grid, or on a refused row the secondary valuation's grid; in section 9
+the P/E history with its average lines. The Markdown export carries each chart's table under the
+same title. Write no chart and no chart table: write the sentences, and cite the figures they name.
 
 ## The summary page
 
@@ -232,8 +235,7 @@ The thesis: customers stay for years and now sign longer contracts, so revenue k
 The price already counts on that. The view waits for two quarters of churn under the new prices.
 
 The price of $234.70 is below the reviewed value of $283 a share, but above the buy level of $212.
-The fair band runs from $240 to $325. The secondary valuation, a standard discounted cash flow,
-gives $262 a share.
+The fair band runs from $240 to $325.
 
 Phase: Mature Growth. Revenue grew 11.0% a year over three years, which is high for its size.
 The operating margin is positive and rising. The business is not cyclical.
@@ -275,7 +277,8 @@ An invented company, Example Corp (`EXMP`), a Mature Growth company on snapshot 
 year ends in September. The call of 28 Oct 2026 reported the fourth quarter of fiscal 2026 and
 guided fiscal 2027: guidance records 17 (EPS) and 18 (revenue). The agent's override of the NTM
 earnings, citing record 17 (override 301), and of the belief (override 302) made review 89.
-Secondary valuation 93 is the standard discounted cash flow over ten years. Sensitivity reading 57
+The route values the company, so the report makes no secondary valuation and reads no DCF, and
+Appendix A says "no secondary valuation: the route values the company". Sensitivity reading 57
 sets the belief against the runway return. The derivations: 531 and 532 the surprises, `growth` of
 the quarter's finding over the consensus; 534 the next-day move, `growth` of the close of 29 Oct
 2026 over the close of 28 Oct 2026; 535 and 536 the two differences of the year's range, and 537
@@ -301,9 +304,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "$240", "ref": "review:89/levels/fair_low"},
         " to ",
         {"cite": "$325", "ref": "review:89/levels/fair_high"},
-        ". The secondary valuation, a standard discounted cash flow, gives ",
-        {"cite": "$262", "ref": "secondary:93/value"},
-        " a share.\n\nPhase: Mature Growth. Revenue grew ",
+        ".\n\nPhase: Mature Growth. Revenue grew ",
         {"cite": "11.0%", "ref": "snapshot:412/phase/growth_3y"},
         " a year over three years, which is high for its size. The operating margin is positive and rising. The business is not cyclical.\n\nReasons for:\n\n1. Most revenue recurs each month.\n2. Customers rarely leave once their books run on the product.\n3. The company funds its growth from its own cash.\n\nMain risks:\n\n1. Customers may leave under the new prices.\n2. A payroll rival bundles accounting into its own product.\n3. Small firms cut spending in a recession.\n\nWhat would change the view:\n\n- Two quarters in a row of falling revenue.\n\nValid until 27 Jan 2027, the date of the next earnings report."
       ]
@@ -413,21 +414,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
         ", which added ",
         {"cite": "+$31", "ref": "review:89/bridge/2/delta"},
-        ". The reason: the new contracts run longer than the old ones.\n\nThe secondary valuation, a standard discounted cash flow over ten years, gives ",
-        {"cite": "$262", "ref": "secondary:93/value"},
-        " a share. Revenue grows ",
-        {"cite": "9.0%", "ref": "secondary:93/drivers/revenue_growth/1"},
-        " in the first year and fades toward the long-run rate. The operating margin reaches ",
-        {"cite": "34.0%", "ref": "secondary:93/drivers/operating_margin/10"},
-        " by year ten. Growth after year ten is ",
-        {"cite": "3.0%", "ref": "secondary:93/drivers/terminal_growth"},
-        ". It sits below the reviewed value because it gives the longer contracts less weight in the later years. With the required return a point higher or lower, and the growth after year ten a point lower (it already stands at its ceiling, so it cannot rise), it runs from ",
-        {"cite": "$214", "ref": "secondary:93/grid/1/3"},
-        " to ",
-        {"cite": "$328", "ref": "secondary:93/grid/2/1"},
-        ". FMP's own discounted cash flow, a third opinion, gives ",
-        {"cite": "$251.40", "ref": "response:812/0/dcf"},
-        ".\n\nThe sensitivity grid sets the belief against the runway return (the return on new capital in the runway years). Across the values tried, the value a share runs from ",
+        ". The reason: the new contracts run longer than the old ones.\n\nThe sensitivity grid sets the belief against the runway return (the return on new capital in the runway years). Across the values tried, the value a share runs from ",
         {"cite": "$238", "ref": "sensitivity:57/1/1"},
         " to ",
         {"cite": "$331", "ref": "sensitivity:57/3/3"},

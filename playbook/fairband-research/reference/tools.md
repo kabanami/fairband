@@ -94,7 +94,8 @@ each with its own key and stores it, so a report can cite it.
 - `transcript_dates(symbol)`: the fiscal year, the quarter and the date of every earnings call on
   file, newest first. It finds the last call, so you never guess a year.
 - `dcf(symbol)`: FMP's discounted cash flow value and its levered one, two responses under `dcf`
-  and `levered`. A cross-check: neither the engine nor the secondary valuation reads it.
+  and `levered`. A cross-check on the fallback: read it on a refused row only; never beside a
+  route's value. Neither the engine nor the secondary valuation reads it.
 - `pe_history(symbol)`: GuruFocus's daily trailing P/E series, reused for seven days. It answers
   the whole daily series, thousands of rows. Read `multiples_history` instead for the points and
   the statistics with their refs; it reads the same stored series.
@@ -137,11 +138,12 @@ vendor call. The refusals:
   applied, it answers `{override, review, bridge}`; refused, the sentence and the `override`.
 - `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over
   the rest, or cleared when none is left.
-- `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: value the
-  company a second way, by the standard discounted cash flow from your `drivers`, or from your own
-  free-cash-flow path in `parts`, exactly one of the two; it answers the stored secondary
-  valuation, with its projection or its parts and its grid. Every report needs one on the latest
-  snapshot.
+- `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: the fallback
+  where the route refuses or no route fits: value the company by the standard discounted cash flow
+  from your `drivers`, or from your own free-cash-flow path in `parts`, exactly one of the two; it
+  answers the stored secondary valuation, with its projection or its parts and its grid. Where the
+  route values the company it is refused: "the route values <symbol>: the secondary valuation is
+  the fallback where it refuses". A report on a refused snapshot needs one on it.
 - `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
   across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`;
   nothing is overridden. `current` marks the pair in force as `[i, j]`; a cell whose valuation
