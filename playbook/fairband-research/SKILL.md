@@ -284,9 +284,11 @@ difference, a sum, a growth rate or a compound annual growth rate. Never compute
 
 Choose the stance: `buy`, `hold`, `trim` or `avoid`. Read the value against its levels. Take the
 reviewed value when the current review has one, else the snapshot's value; on a refused row, the
-secondary valuation's. No DCF weighs on the stance where the route values the company: the
-founder's rule of 2026-11-08. `avoid` is for a company you would not hold at any price shown.
-Weigh the thesis as well as the levels. The report's reasons carry the stance.
+secondary valuation's. When the current review refused, the snapshot's value stands: fix or drop
+the override that refused before you choose the stance. No stance rests on a refused review. No
+DCF weighs on the stance where the route values the company: the founder's rule of 2026-11-08.
+`avoid` is for a company you would not hold at any price shown. Weigh the thesis as well as the
+levels. The report's reasons carry the stance.
 
 ### 12. The report
 
@@ -485,7 +487,8 @@ value. The lines run in the method's order: phase, NTM earnings, NTM revenue, co
 consensus step 3, held rate, belief, non-recurring gap, mid-cycle earnings, target margin, sales to
 capital, runway return, decline rate, moat, debt, cash. A line whose step refuses shows the refusal
 in place of a change. A review whose last line refuses has no value. The secondary valuation does
-not stand in for it while the snapshot has a value: the server refuses one there.
+not stand in for it while the snapshot has a value: the server refuses one there. The overrides
+are then inconsistent with the route: fix or drop the one that refused (step 11).
 
 One input holds one applied override. A new override on the same tag replaces the old one. An
 override applies to the latest snapshot and to every later one. A period-tied override (a correction
