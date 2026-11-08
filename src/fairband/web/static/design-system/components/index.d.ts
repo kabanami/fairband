@@ -404,10 +404,16 @@ export interface ScreenRow {
   name: string;
   /** fairband: `null` when the engine could not classify the company. */
   phase: Phase | null;
+  /**
+   * fairband: the fair band, the fair value and the buy and trim levels follow the reviewed value
+   * where `reviewed` is filled: the current review's, or on a refused row the secondary
+   * valuation's standing in; else they are the engine's. `mechanical` keeps the engine's value
+   * (spec 2026-11-06 Tier 2, 18.1, plan 3).
+   */
   fairLow: number;
   fairHigh: number;
   fairValue?: number;
-  /** fairband: `null` on a refusal. */
+  /** fairband: `null` on a refusal that `reviewed` does not fill. */
   buyLevel?: number | null;
   trimLevel?: number | null;
   price: number;
@@ -416,9 +422,10 @@ export interface ScreenRow {
   /**
    * Computed with the overrides inside. `null` when there are none.
    * fairband: the current review's value on the row's snapshot, or one that snapshot reprices;
-   * else, where the route refused, the newest secondary valuation's value a share there, which
-   * stands in on a refused row and is the second view beside a route's value; `null` otherwise
-   * (spec 2026-11-06 Tier 2, 11 and 18.1).
+   * else, where the route refused, the newest secondary valuation's value a share there, the
+   * fallback standing in where the route gives no value; `null` otherwise (spec 2026-11-06 Tier
+   * 2, 11 and 18.1). Where it is filled, the row's band, levels, price ÷ value and designation
+   * are its record's (18.1, plan 3).
    */
   reviewed: number | null;
   /** How many overrides are inside the reviewed value. */
@@ -490,8 +497,10 @@ export interface ScreenRow {
   piotroskiF?: string | null;
   impliedDeclineRate?: number | null;
   /**
-   * fairband: price ÷ value and its word; `null` on a refusal, a placeholder and a snapshot valued
-   * before the designation, and the Price vs value cell then shows an em dash.
+   * fairband: price ÷ value and its word, at the reviewed value where `reviewed` is filled and at
+   * the latest price (spec 2026-11-06 Tier 2, 18.1, plan 3); `null` on a refusal that `reviewed`
+   * does not fill, a placeholder and a snapshot valued before the designation, and the Price vs
+   * value cell then shows an em dash.
    */
   priceToValue?: number | null;
   designation?: Designation | null;

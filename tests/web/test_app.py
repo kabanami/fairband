@@ -1095,8 +1095,10 @@ def test_app_js_narrows_on_the_stance() -> None:
 def test_app_js_narrows_on_watchlist_and_clean() -> None:
     js = _static_file("app.js")
     # Clean keeps the valued rows with no quality warning: a refusal or a placeholder has no
-    # value to be cheap on, so it is never clean.
-    assert "(!filters.cleanOnly || (r.flagCount === 0 && r.fairValue != null))" in js
+    # value to be cheap on, so it is never clean. It reads the engine's value, the Mechanical
+    # column: a refused row's fair value may be its secondary valuation's (18.1, plan 3).
+    assert "(!filters.cleanOnly || (r.flagCount === 0 && r.mechanical != null))" in js
+    assert "r.fairValue != null" not in js
     assert "'/api/watchlists/memberships/' + encodeURIComponent(symbol)" in js
 
 
@@ -1829,8 +1831,8 @@ def _in_order(text: str, *parts: str) -> None:
 
 def test_the_drawers_main_view_order_is_pinned() -> None:
     """Spec 2026-11-06 Tier 2, 18.2, in this order and nothing else before Details: the head; the
-    meter with its levels, the reviewed value its second marker, or a refusal in its place as
-    before; the stance line, the report's word in its chip classes, faded once the report's window
+    meter with its levels, the review's where it counts and has a value (plan 3), or a refusal in
+    its place as before; the stance line, the report's word in its chip classes, faded once the report's window
     has expired, then the principal's chip; the report's Summary by ReportReader and Open the
     report, a link to the report page; without a report, Request research and the open item's
     line; then Details ▾, a quiet disclosure. Everything else is behind it. The meter and Request
@@ -1853,8 +1855,8 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
     for gone in ("F.ValidityWindow", "'Phase evidence'", "inputsTable(", "intermediates("):
         assert gone not in head, gone
     meter = _function(script, "meter")
-    assert "reviewedValue: review && review.value != null ? review.value : null," in meter
     assert "showScale: false, caption: standing(r, body.designationEdges)" in meter
+    assert "levels(drawnLevels(body))," in main and "levels(r)" not in main
     assert "var valued = isValued(r);" in main
     assert "return r.value != null && r.levels != null && r.price != null;" in (
         _function(script, "isValued")
@@ -2049,8 +2051,8 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
     price, captioned as the secondary valuation with its word at today's price, and the refusal
     stays under it. A refused row with a valued review draws the review's band instead (the
     ruling of 2026-11-08); a refused row with neither stays as it was; the valued row's meter is
-    the mechanical one. The meter is the drawer's own part, which the report page draws too
-    (18.4)."""
+    the review's where its review counts and has a value, else the mechanical one (plan 3). The
+    meter is the drawer's own part, which the report page draws too (18.4)."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     assert "var banded = isBanded(body);" in main
@@ -2120,6 +2122,56 @@ def test_a_refused_row_with_a_valued_review_draws_the_reviews_band() -> None:
     ) in caption
     bundle = _function(_component_file("bundle.js"), "BandMeter")
     assert "reviewed == null ? null : 'reviewed ' + money(reviewed)" in bundle
+
+
+def test_a_valued_row_with_a_counting_review_draws_the_reviews_band() -> None:
+    """Spec 2026-11-06 Tier 2, 18.1 and 18.2, plan 3 (the founder, 2026-11-08: the levels should
+    follow the agent's valuation): where the route values the row and the review on the latest
+    snapshot has a value and its levels, the meter draws the review's band, value and word at
+    today's price, its caption the word's sentence then the mechanical value in words
+    ("· mechanical $342"); the reviewed second marker is no longer drawn on a valued row. Without
+    such a review the meter is the mechanical band as before. The levels named under the meter are
+    the ones it draws: the review's, the margin read on the moat its moat override sets, else the
+    engine's. The report page draws the same meter (18.4)."""
+    script = _static_file("app.js")
+    reviewed = _function(script, "isReviewed")
+    assert "var v = body.review;" in reviewed
+    assert "return isValued(body.result) && !!v && v.value != null && !!v.levels;" in " ".join(
+        reviewed.split()
+    )
+    meter = _function(script, "meter")
+    valued = meter[meter.index("if (isValued(r)) {") : meter.index("if (isReviewBanded(body)) {")]
+    _in_order(
+        valued,
+        "if (isReviewed(body)) {",
+        "low: review.levels.fairLow, high: review.levels.fairHigh, price: r.price,",
+        "fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,",
+        "designation: review.designation, showScale: false,",
+        "caption: mechanicalCaption(review, r, body.designationEdges), hero: hero",
+        "low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,",
+        "buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,",
+        "showScale: false, caption: standing(r, body.designationEdges), hero: hero",
+    )
+    assert "reviewedValue" not in valued
+    # the caption: the review's word and price ÷ value, then " · mechanical $342"
+    caption = _function(script, "mechanicalCaption")
+    assert "return [reviewCaption(v, edges), 'mechanical ' + F.formatMoney(r.value)]" in caption
+    assert ".filter(Boolean).join(' · ');" in caption
+    # the levels under the meter are the ones it draws
+    drawn = _function(script, "drawnLevels")
+    _in_order(
+        drawn,
+        "if (!isReviewed(body)) return r;",
+        "var moat = (v.bridge || []).filter(function (line) { return line.tag === 'moat.class'; })",
+        "value: v.value,",
+        "buy: v.levels.buy, fair_low: v.levels.fairLow, fair_high: v.levels.fairHigh,",
+        "trim: v.levels.trim",
+        "intermediates: { moat: moat ? moat.new : r.intermediates.moat }",
+    )
+    main = _function(script, "sections")
+    assert "valued ? section('band', null, meter(body),\n        levels(drawnLevels(body))," in main
+    # the report page draws the drawer's meter, so its band is the review's too
+    assert "P.meter(d, false)," in _static_file("report.js")
 
 
 def test_the_drawer_is_read_again_when_a_run_ends() -> None:
@@ -2242,7 +2294,13 @@ def test_the_meter_takes_a_reviewed_value() -> None:
     """Spec 2026-11-06 Tier 2, 18.2, a `// fairband:` patch: BandMeter's ``reviewedValue`` is a
     second marker on the track, in ink with the price marker's surface ring and no cap, within
     the axis's range; the caption keeps the caller's sentence and adds "reviewed $283.00". No
-    word is derived from it: the head's word stays the caller's designation."""
+    word is derived from it: the head's word stays the caller's designation. Plan 3: the patch
+    stays in the bundle for the caller that passes it, the refused row's band from its review; a
+    valued row's meter draws the review's band itself and passes none."""
+    meter = _function(_static_file("app.js"), "meter")
+    assert meter.count("reviewedValue") == 1
+    refused = meter[meter.index("if (isReviewBanded(body)) {") : meter.index("if (!isBanded(")]
+    assert "designation: review.designation, reviewedValue: review.value," in refused
     bundle = _component_file("bundle.js")
     meter = _function(bundle, "BandMeter")
     assert "// fairband: the reviewed value, a second marker" in meter
@@ -2612,9 +2670,9 @@ def test_the_report_page_has_one_headline_figure() -> None:
     script = _code(_static_file("report.js"))
     assert script.count("emphasis: 'strong'") == 1 and "figure-lg" not in script
     meter = _function(_static_file("app.js"), "meter")
-    # each of the three bands, the mechanical, the review's and the secondary's; the drawer passes
-    # none: its meter keeps figure-lg
-    assert meter.count("hero: hero") == 3
+    # each of the four bands, the review's on a valued row, the mechanical, the review's on a
+    # refused row and the secondary's; the drawer passes none: its meter keeps figure-lg
+    assert meter.count("hero: hero") == 4
 
 
 def test_the_reader_numbers_its_footnotes() -> None:

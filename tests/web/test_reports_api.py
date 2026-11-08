@@ -1,9 +1,10 @@
 """The report routes (spec 2026-11-06 Tier 2, 12, 13.1, 13.6 and 16) on the database of
 ``conftest.py``: AAPL (the Mature Growth golden: a price of $150, a value of $133.37), AAL (Young
 Growth, refused for its target margin) and HGCO (High Growth), each with one snapshot and a
-secondary valuation on it (``secondaries``). A clean submission publishes, completes the work item
-it names and stores its judgments, kill criteria and news items; a rejected one stores nothing but
-its ledger row."""
+secondary valuation on it (``secondaries``): on AAL's refused snapshot the fallback a report needs,
+on AAPL's and HGCO's valued ones a record made before plan 3 that a report there need not name. A
+clean submission publishes, completes the work item it names and stores its judgments, kill
+criteria and news items; a rejected one stores nothing but its ledger row."""
 
 from contextlib import closing
 from dataclasses import replace

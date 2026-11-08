@@ -15,10 +15,10 @@ it), each ``None`` without one:
 - ``secondary``: the newest secondary valuation when it counts, ``{id, form, valuePerShare,
   levels, priceToValue, designation, parts, drivers, createdAt, principal, actor}``: price ÷ value
   and its word at the latest snapshot's price on the effective policy's edges, as the snapshot's
-  own are computed (``designation_for``), ``None`` without levels or a positive price, so a
-  refused row's drawer can draw the secondary's band against today's price; ``parts`` and
-  ``drivers`` as the secondary read serves them (``reviews_api.secondary_json``), the parts form's
-  parts with their values, or the drivers form's drivers.
+  own are computed (``rows.standing``, as the screen's row reads it), ``None`` without levels or a
+  positive price, so a refused row's drawer can draw the secondary's band against today's price;
+  ``parts`` and ``drivers`` as the secondary read serves them (``reviews_api.secondary_json``), the
+  parts form's parts with their values, or the drivers form's drivers.
 - ``report``: the latest published report, ``{id, mode, stance, revision, createdAt, principal,
   actor, expired, summary, references}``, wherever it rests: ``expired`` when the window of its
   snapshot ended before today (``rows.window_ended``), ``summary`` its first section as submitted
@@ -43,7 +43,6 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
-from fairband.engine.designation import designation_for
 from fairband.engine.overrides import LABELS, TAGS
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
@@ -60,7 +59,7 @@ from fairband.store.secondary import SecondaryRow, latest_secondary
 from fairband.store.snapshots import SnapshotRow, latest_snapshot, snapshot_rows
 from fairband.web.agents_api import finding_json, record_json
 from fairband.web.reviews_api import secondary_json
-from fairband.web.rows import counts_on, rested_on, window_ended
+from fairband.web.rows import counts_on, rested_on, standing, window_ended
 
 LEDGER_ROWS = 20  # the company's newest ledger rows Details lists
 # Each input's bridge label and unit by its tag as a stored bridge line names it.
@@ -150,12 +149,12 @@ def _standing(
     price: float | None,
     edges: tuple[float, float, float, float],
 ) -> tuple[float | None, str | None]:
-    """Price ÷ ``value`` and its word at ``price`` on ``edges`` (``designation_for``), as the
-    snapshot's own are computed; ``None`` without levels, a value above zero or a positive
-    price."""
-    if levels is None or value is None or value <= 0 or price is None or price <= 0:
+    """Price ÷ ``value`` and its word at ``price`` on ``edges`` (``rows.standing``, which the
+    screen's row reads too, so the drawer and the row say one word); ``None`` without levels, a
+    value above zero or a positive price."""
+    if levels is None:
         return None, None
-    return designation_for(price, value, edges)
+    return standing(value, price, edges)
 
 
 def _review(

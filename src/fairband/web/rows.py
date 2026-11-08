@@ -13,9 +13,11 @@ Every row also has the agents' fields (spec 2026-11-06 Tier 2, 11 and 18.1; ``ag
 ``reviewed`` and ``overrides``, the reviewed value and the count of the overrides inside it, or on
 a row the route refused the secondary valuation's value standing in; ``agentStance``, the latest
 published report's word, a column; and ``covered``, the coverage mark's record ``{at, actor,
-expired}``, which no column draws and nothing sorts by, so it is no row key. A row with no agent's
-record has ``NO_AGENT_FIELDS``. The fields are computed from records already read: the snapshots
-the records rest on (``rested_on``) are read once for all the rows.
+expired}``, which no column draws and nothing sorts by, so it is no row key. Where ``reviewed`` is
+filled, the row's band, levels, price ÷ value and designation (``LEVEL_KEYS``) are the filling
+record's, the word at the latest price (18.1, plan 3); ``mechanical`` stays the snapshot's value.
+A row with no agent's record has ``NO_AGENT_FIELDS``. The fields are computed from records already
+read: the snapshots the records rest on (``rested_on``) are read once for all the rows.
 """
 
 import statistics
@@ -23,6 +25,7 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from typing import Any
 
+from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
 from fairband.engine.levels import validity_state
 from fairband.engine.types import PHASE_NUMBER
@@ -120,13 +123,25 @@ DESIGN_COLUMNS = (
 COLUMNS = DESIGN_COLUMNS + tuple(key for key in EXTRA_KEYS if key not in DESIGN_COLUMNS)
 
 # The agents' fields of a row with no agent's record: no reviewed value, no override inside it, no
-# stance and no coverage mark.
+# stance, no coverage mark and no levels over the snapshot's.
 NO_AGENT_FIELDS: Mapping[str, Any] = {
     "reviewed": None,
     "overrides": 0,
     "agentStance": None,
     "covered": None,
+    "levels": None,
 }
+# The row keys the record that fills ``reviewed`` sets in place of the snapshot's (spec 2026-11-06
+# Tier 2, 18.1, plan 3): its band, levels, price ÷ value and designation.
+LEVEL_KEYS = (
+    "fairValue",
+    "fairLow",
+    "fairHigh",
+    "buyLevel",
+    "trimLevel",
+    "priceToValue",
+    "designation",
+)
 
 
 def rested_on(
@@ -144,6 +159,7 @@ def agent_fields(
     report: ReportRow | None,
     cited: Mapping[int, SnapshotRow],
     today: date,
+    edges: tuple[float, float, float, float],
 ) -> dict[str, Any]:
     """The agents' fields of the row of the company's latest ``snapshot`` (spec 2026-11-06 Tier 2,
     18.1), from its current review, its newest secondary valuation and its latest published
@@ -153,20 +169,31 @@ def agent_fields(
     value when the review counts and has one, ``overrides`` the count of the overrides inside it;
     else, where the route refused (``snapshot`` has no value), the secondary valuation's value a
     share when it counts and is above zero, with no override inside: spec 11's secondary is the
-    fallback, standing in on the row where the route refuses; else ``None`` and 0. ``agentStance``
-    is the report's word and ``covered`` its time, its actor (its principal where it names none,
-    an owner's report) and whether the window of the snapshot it rests on ended before ``today``
-    (``window_ended``); both ``None`` without a report."""
+    fallback, standing in on the row where the route refuses; else ``None`` and 0. ``levels`` are
+    the row's ``LEVEL_KEYS`` from the record that fills ``reviewed`` (plan 3): its value, its four
+    levels, and price ÷ value and its word at the snapshot's price on ``edges``, the effective
+    policy's (``standing``); ``None`` when ``reviewed`` is. ``agentStance`` is the report's word and
+    ``covered`` its time, its actor (its principal where it names none, an owner's report) and
+    whether the window of the snapshot it rests on ended before ``today`` (``window_ended``); both
+    ``None`` without a report."""
     fields = dict(NO_AGENT_FIELDS)
     if review is not None and review.value is not None and counts_on(snapshot, cited, review):
-        fields |= {"reviewed": review.value, "overrides": len(review.override_ids)}
+        fields |= {
+            "reviewed": review.value,
+            "overrides": len(review.override_ids),
+            "levels": _record_levels(review.value, review, snapshot.price, edges),
+        }
     elif (
         snapshot.value is None
         and secondary is not None
         and secondary.value_per_share > 0
         and counts_on(snapshot, cited, secondary)
     ):
-        fields["reviewed"] = secondary.value_per_share
+        value = secondary.value_per_share
+        fields |= {
+            "reviewed": value,
+            "levels": _record_levels(value, secondary, snapshot.price, edges),
+        }
     if report is not None:
         fields["agentStance"] = report.stance
         fields["covered"] = {
@@ -175,6 +202,30 @@ def agent_fields(
             "expired": window_ended(snapshot, cited, report, today),
         }
     return fields
+
+
+def _record_levels(
+    value: float,
+    record: ReviewRow | SecondaryRow,
+    price: float | None,
+    edges: tuple[float, float, float, float],
+) -> dict[str, Any]:
+    """The row's ``LEVEL_KEYS`` from ``record``, whose value is ``value``, at ``price``."""
+    ratio, word = standing(value, price, edges)
+    figures = (value, record.fair_low, record.fair_high, record.buy_level, record.trim_level)
+    return dict(zip(LEVEL_KEYS, (*figures, ratio, word), strict=True))
+
+
+def standing(
+    value: float | None, price: float | None, edges: tuple[float, float, float, float]
+) -> tuple[float | None, str | None]:
+    """Price ÷ ``value`` and its word at ``price`` on ``edges`` (``designation_for``), as the
+    snapshot's own are computed; ``None`` for both without a value above zero or a positive
+    price. The screen's rows and the drawer read a review's and a secondary valuation's word at
+    the latest price by it, never the word stored with the record at an older price."""
+    if value is None or value <= 0 or price is None or price <= 0:
+        return None, None
+    return designation_for(price, value, edges)
 
 
 def counts_on(
@@ -219,11 +270,13 @@ def screen_row(
     """The snapshot as a screen row; the name, sector, cap band and market cap come from
     ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``, aging
     from ``aging_fraction`` of the window; ``watchlists`` are the ids of the lists the company is
-    on; ``agents`` are its agents' fields (``agent_fields``, else ``NO_AGENT_FIELDS``).
-    ``flagCount`` counts the quality warnings among the flags, a refusal's too. The moat
-    shows on a row with a value only: a growth refusal keeps the moat class for the price refresh,
-    not for the screen. ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the
-    price needs, a growth row's; a row refused for its target margin has the latter alone.
+    on; ``agents`` are its agents' fields (``agent_fields``, else ``NO_AGENT_FIELDS``), whose
+    ``levels``, when set, stand in the row's ``LEVEL_KEYS`` for the snapshot's; ``mechanical``
+    stays the snapshot's value (spec 2026-11-06 Tier 2, 18.1, plan 3). ``flagCount`` counts the
+    quality warnings among the flags, a refusal's too. The moat shows on a row with a value only:
+    a growth refusal keeps the moat class for the price refresh, not for the screen.
+    ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the price needs, a
+    growth row's; a row refused for its target margin has the latter alone.
 
     A Start-up row has ``requiredRevenue``, the year-10 revenue its price needs (``None`` when the
     requirement has a reason), and ``burnCover``, the years its cash covers the trailing burn
@@ -239,7 +292,7 @@ def screen_row(
     facts = _table(im, "price_facts")
     rating = _table(im, "rating")
     market_cap = None if company is None else company.market_cap
-    return {
+    row = {
         "ticker": snapshot.symbol,
         "name": None if company is None else company.name,
         "phase": None if phase is None else PHASE_NUMBER[phase],
@@ -295,6 +348,9 @@ def screen_row(
         "flagCount": flag_count(result.flags),
         "covered": agents["covered"],
     }
+    if agents["levels"] is not None:
+        row |= agents["levels"]
+    return row
 
 
 def _growth_route_value(snapshot: SnapshotRow) -> float | None:
@@ -325,10 +381,10 @@ def _piotroski_f(im: dict[str, Any]) -> str | None:
 def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str, Any]:
     """The row of an admitted company with no snapshot yet: its name, sector, cap band and
     market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag, no
-    agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a snapshot) and ``None``
-    elsewhere."""
+    agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a snapshot; ``levels`` is
+    no row key) and ``None`` elsewhere."""
     row: dict[str, Any] = dict.fromkeys(ROW_KEYS)
-    row |= NO_AGENT_FIELDS
+    row |= {key: value for key, value in NO_AGENT_FIELDS.items() if key != "levels"}
     market_cap = company.market_cap
     row |= {
         "ticker": company.symbol,

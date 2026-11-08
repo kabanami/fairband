@@ -242,6 +242,11 @@ def test_the_agents_section_reads(client: TestClient) -> None:
             " the secondary valuation's."
         ),
         "Where the route refused, it shows the value of a secondary valuation",
+        # spec 18.1, plan 3: the row's levels follow the reviewed value
+        (
+            "The band, the buy and trim levels and the designation follow the reviewed value; the"
+            " Mechanical column keeps the engine's value."
+        ),
     ):
         assert words in text, words
     assert "values a peak as if it lasted" not in text

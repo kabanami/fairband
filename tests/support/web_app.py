@@ -5,8 +5,9 @@ refresh, and clients of an app over that database. The plain names they use are 
 
 AAPL is valued on the Mature Growth route; AAL, a Young Growth company with no mature peers, is
 refused for its target margin; HGCO, the High Growth company, is valued on the revenue growth
-route. ``secondaries`` stores a secondary valuation on each one's snapshot, which a report needs
-there (spec 13.3): a test module that submits reports asks for it."""
+route. ``secondaries`` stores a secondary valuation on each one's snapshot: on AAL's refused one
+the fallback a report needs there (spec 13.3), on AAPL's and HGCO's valued ones a record made before
+plan 3, which stays on file and fills nothing; a test module that submits reports asks for it."""
 
 from collections.abc import Callable, Iterator
 from contextlib import closing
@@ -94,7 +95,10 @@ def db_path(tmp_path: Path, policy: Policy, results: dict[str, ValuationResult])
 def secondaries(db_path: Path, policy: Policy) -> dict[str, int]:
     """The id of a secondary valuation on each company's snapshot, by symbol: the parts form on
     spec 20.1's path in hundreds of millions of dollars over a billion shares, the fixture's
-    figures and not the company's."""
+    figures and not the company's. AAL's is the fallback its refused snapshot needs for a report;
+    AAPL's and HGCO's stand for secondaries made before plan 3 on a valued company, which the
+    secondary route now refuses (method 15.4) and which stay on file: stored here past the route,
+    they fill no row and a report there need not name them."""
     fcff = tuple(x * 1e8 for x in (100.0, 105.0, 110.25, 115.7625, 121.550625))
     part = Part("the business", fcff, 0.03, None)
     valuation = secondary_value(

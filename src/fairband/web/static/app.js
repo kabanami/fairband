@@ -297,13 +297,15 @@
      page keeps the rows it loaded and draws the ones that pass; the server's order stands. The
      ticker matches by prefix and the name anywhere. A field a row lacks matches no filter: a
      placeholder has no designation or phase, and may have no sector or cap; a refusal has no
-     designation, which is the row's own, never derived here; a row without a published report has
-     no stance, the agent's word (spec 2026-11-06 Tier 2, 18.1). The row's phase is
-     already the menu's number (the server maps the engine's phase name through PHASE_NUMBER),
-     and its cap band is the menu's id once lower-cased (Mega is mega); small never matches, the
-     universe's floor being $2 bn. A row on any chosen watchlist matches; Clean keeps the valued
-     rows whose quality warnings count 0: a refusal or a placeholder has no value to be cheap on,
-     so it is never clean (spec 2026-11-04 9.4, 9.5). */
+     designation unless the value in its Reviewed column lends one (spec 2026-11-06 Tier 2, 18.1,
+     plan 3), the server's word, never derived here; a row without a published report has no
+     stance, the agent's word (18.1). The row's phase is already the menu's number (the server
+     maps the engine's phase name through PHASE_NUMBER), and its cap band is the menu's id once
+     lower-cased (Mega is mega); small never matches, the universe's floor being $2 bn. A row on
+     any chosen watchlist matches; Clean keeps the valued rows whose quality warnings count 0: a
+     refusal or a placeholder has no value to be cheap on, so it is never clean (spec 2026-11-04
+     9.4, 9.5). Valued is the engine's word, the Mechanical column: a refused row's fair value may
+     be its secondary valuation's (plan 3). */
   function narrow(rows, query, filters) {
     var needle = (query || '').trim().toLowerCase();
     return rows.filter(function (r) {
@@ -318,7 +320,7 @@
         within(filters.watchlist, r.watchlists || []) &&
         (!filters.reviewedOnly || r.reviewed != null) &&
         (!filters.hideExpired || r.freshness !== 'expired') &&
-        (!filters.cleanOnly || (r.flagCount === 0 && r.fairValue != null));
+        (!filters.cleanOnly || (r.flagCount === 0 && r.mechanical != null));
     });
   }
 
@@ -646,13 +648,14 @@
   }
 
   /* The drawer's main view (spec 2026-11-06 Tier 2, 18.2), in this order and nothing else: the
-     head; the meter with its levels and the route's lines under it, the reviewed value its second
-     marker and named in its caption, or in its place the refusal, as before; the stance line when
-     a report exists, the report's word in the row's chip classes, faded once the window of the
-     snapshot it rests on has expired, then who published it and when; the report's Summary, its
-     first section, then Open the report, a link to the report page; without a report, Request
-     research with its menu, the server's refusal under it and the open item's line; then
-     Details ▾, a disclosure over everything else (details). */
+     head; the meter with its levels and the route's lines under it, the review's band and levels
+     where the review counts and has a value, the mechanical value named in its caption (plan 3),
+     or in its place the refusal, as before; the stance line when a report exists, the report's
+     word in the row's chip classes, faded once the window of the snapshot it rests on has
+     expired, then who published it and when; the report's Summary, its first section, then Open
+     the report, a link to the report page; without a report, Request research with its menu, the
+     server's refusal under it and the open item's line; then Details ▾, a disclosure over
+     everything else (details). */
   function sections(body) {
     var r = body.result;
     var im = r.intermediates;
@@ -670,7 +673,7 @@
         body.company && body.company.name
           ? h('p', { className: 'body app-drawer__name' }, body.company.name) : null),
       valued ? section('band', null, meter(body),
-        levels(r),
+        levels(drawnLevels(body)),
         h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route),
         youngGrowth(im.failure_probability),
         crossCheck(im.growth_route),
@@ -727,23 +730,32 @@
   }
 
   /* The meter of a company's detail (spec 2026-11-06 Tier 2, 18.2 and 18.4), as the drawer and
-     the report page draw it: a valued row's mechanical band against the price, the reviewed value
-     its second marker when the review on the latest snapshot has one, its caption the row's word
-     and price ÷ value; a refused row whose review on the latest snapshot has a value, the
-     review's band, the reviewed marker on the value itself, its word at today's price (the
-     ruling of 2026-11-08); else a refused row whose secondary valuation counts on the latest
-     snapshot, the secondary's band, its word at today's price (the ruling of 2026-11-07); else
-     none. The scale is off: the drawer names the levels under it. `hero` false sets the meter's
-     price in figure, under the report page's one headline figure; the drawer passes none. */
+     the report page draw it: a valued row whose review on the latest snapshot has a value, the
+     review's band, its word at today's price, its caption that word's sentence then the
+     mechanical value in words, as the row's band and levels follow the reviewed value (plan 3);
+     else a valued row's mechanical band against the price, its caption the row's word and price
+     ÷ value; a refused row whose review on the latest snapshot has a value, the review's band,
+     the reviewed marker on the value itself, its word at today's price (the ruling of
+     2026-11-08); else a refused row whose secondary valuation counts on the latest snapshot, the
+     secondary's band, its word at today's price (the ruling of 2026-11-07); else none. The scale
+     is off: the drawer names the levels under it. `hero` false sets the meter's price in figure,
+     under the report page's one headline figure; the drawer passes none. */
   function meter(body, hero) {
     var r = body.result;
     var review = body.review;
     var secondary = body.secondary;
     if (isValued(r)) {
+      if (isReviewed(body)) {
+        return h(F.BandMeter, {
+          low: review.levels.fairLow, high: review.levels.fairHigh, price: r.price,
+          fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,
+          designation: review.designation, showScale: false,
+          caption: mechanicalCaption(review, r, body.designationEdges), hero: hero
+        });
+      }
       return h(F.BandMeter, {
         low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
         buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
-        reviewedValue: review && review.value != null ? review.value : null,
         showScale: false, caption: standing(r, body.designationEdges), hero: hero
       });
     }
@@ -767,6 +779,34 @@
   /* A row the engine valued: a value, its levels and a price to draw them against. */
   function isValued(r) {
     return r.value != null && r.levels != null && r.price != null;
+  }
+
+  /* A valued row whose review, which the detail carries only while it counts on the latest
+     snapshot, has a value and its levels: its meter and the levels named under it are the
+     review's, as the screen row's band and levels are (spec 2026-11-06 Tier 2, 18.1 and 18.2,
+     plan 3). */
+  function isReviewed(body) {
+    var v = body.review;
+    return isValued(body.result) && !!v && v.value != null && !!v.levels;
+  }
+
+  /* The levels a valued row's meter draws, in the shape levels() reads (spec 2026-11-06 Tier 2,
+     18.1 and 18.2, plan 3): the review's where it counts and has a value, the margin's moat the
+     one its moat override sets, as the review's levels read the reviewed moat (method 14.5); else
+     the engine's. The engine's own levels stay on the snapshot and in the report's Appendix A. */
+  function drawnLevels(body) {
+    var r = body.result;
+    var v = body.review;
+    if (!isReviewed(body)) return r;
+    var moat = (v.bridge || []).filter(function (line) { return line.tag === 'moat.class'; })[0];
+    return {
+      value: v.value,
+      levels: {
+        buy: v.levels.buy, fair_low: v.levels.fairLow, fair_high: v.levels.fairHigh,
+        trim: v.levels.trim
+      },
+      intermediates: { moat: moat ? moat.new : r.intermediates.moat }
+    };
   }
 
   /* A refused row whose review, which the detail carries only while it counts on the latest
@@ -1349,11 +1389,20 @@
     return word + ': the price is ' + ratioFigure(r.price_to_value, edges) + ' × the value';
   }
 
-  /* A refused row's band from its valued review: its word and price ÷ value at the latest price,
-     which the detail carries, as the meter's own caption says them; the meter adds "reviewed" and
-     the value after it. */
+  /* A band from the valued review: its word and price ÷ value at the latest price, which the
+     detail carries, as the meter's own caption says them. On a refused row the meter adds
+     "reviewed" and the value after it; on a valued row mechanicalCaption adds the mechanical
+     value. */
   function reviewCaption(v, edges) {
     return standing({ designation: v.designation, price_to_value: v.priceToValue }, edges);
+  }
+
+  /* A valued row's band from its review (spec 2026-11-06 Tier 2, 18.2, plan 3): the review's word
+     and price ÷ value at the latest price, then the mechanical value in words, "· mechanical
+     $342". */
+  function mechanicalCaption(v, r, edges) {
+    return [reviewCaption(v, edges), 'mechanical ' + F.formatMoney(r.value)]
+      .filter(Boolean).join(' · ');
   }
 
   /* A refused row's band from its secondary valuation: what drew it, then its word and price ÷
@@ -1380,7 +1429,8 @@
      moat's margin of safety, the fair band, the trim multiple × the value. The margin and the
      multiple are read from the levels, so each follows the settings the row was valued under:
      1.5 × value at the default, 1.75 × value under a trim multiple of 1.75. The meter's own scale
-     is off: in the drawer's rail these names would run into each other. */
+     is off: in the drawer's rail these names would run into each other. `r` is the meter's
+     levels (drawnLevels): the review's where its band is drawn, else the engine's. */
   function levels(r) {
     var moat = r.intermediates.moat;
     var margin = Math.round((1 - r.levels.buy / r.value) * 100);

@@ -36,9 +36,9 @@ their number, the fields computed for the companies that have a row.
 
 Each request that reads a policy value reads the effective policy, the file's values with the
 user's settings over them, so a changed setting shows at the next request: the aging fraction of
-the rows' freshness and the drawer's validity window, the designation edges of the groups and the
-drawer. A stored setting the policy refuses makes those routes answer 409 naming it, until it is
-reset (``settings_api``).
+the rows' freshness and the drawer's validity window, the designation edges of the groups, of the
+word a row reads at its reviewed value (``rows.agent_fields``) and of the drawer. A stored setting
+the policy refuses makes those routes answer 409 naming it, until it is reset (``settings_api``).
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
 command that stopped, and logs how many.
@@ -231,8 +231,9 @@ def create_app(
             }
             rest_on = {i for s, found in records.items() for i in rested_on(snapshots[s], *found)}
             cited = snapshot_rows(conn, rest_on)
+        edges = read_under.designation_edges
         agents = {
-            symbol: agent_fields(snapshots[symbol], *found, cited, today)
+            symbol: agent_fields(snapshots[symbol], *found, cited, today, edges)
             for symbol, found in records.items()
         }
         aging = read_under.aging_fraction
