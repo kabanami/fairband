@@ -2745,7 +2745,10 @@ def test_the_reader_renders_the_text_as_blocks() -> None:
     comment = css[css.index("/* fairband: the text's") :]
     assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in comment[: comment.index("*/")]
     assert "max-width: 72ch;" in _rule(css, ".fb-report__list {")
-    assert "overflow-x: auto;" in _rule(css, ".fb-report__scroll {")
+    assert "max-width: 72ch;" in _rule(css, ".fb-report__prose {")
+    # the table's scroller spans the reader's width, not the prose measure (ruling 2026-11-08)
+    scroll = _rule(css, ".fb-report__scroll {")
+    assert "overflow-x: auto;" in scroll and "max-width" not in scroll
     assert "border-collapse: collapse;" in _rule(css, ".fb-report__table {")
     assert "color: var(--ink);" in _rule(css, ".fb-report strong {")
     declarations = _component_file("index.d.ts")
