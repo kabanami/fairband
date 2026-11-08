@@ -6,15 +6,16 @@ and NOSH (no diluted share count) get a snapshot each; and the override routes b
 company's inputs as the conftest valued them, as ``test_reviews_api`` does. The drivers form's
 tests add spec 20.4's company (``_drivers_company``).
 
-The secondary valuation is the fallback where the route refuses, and the route refuses one where
-it values (plan 3): AAL, refused for its target margin, takes one as it stands; a test that makes
-one on AAPL asks for ``refused_aapl``, AAPL revalued and refused (``_refuse``), and spec 20.4's
-company is refused the same way."""
+The secondary valuation is the fallback where neither the route nor the review values the
+company, and the route refuses one where either does (plan 3): AAL, refused for its target margin,
+takes one as it stands, and none once a margin override values it (``_aal_review``); a test that
+makes one on AAPL asks for ``refused_aapl``, AAPL revalued and refused (``_refuse``), and spec
+20.4's company is refused the same way."""
 
 import sqlite3
 from contextlib import closing
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -33,8 +34,8 @@ from fairband.engine.classifier import Deciles
 from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
 from fairband.engine.overrides import Override
-from fairband.engine.review import review_company
-from fairband.engine.route import CompanyInputs, value_company
+from fairband.engine.review import Review, review_company
+from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
@@ -303,6 +304,88 @@ def test_a_secondary_valuation_is_refused_where_the_route_values(
     assert client.get(f"/api/companies/{symbol}/ledger").json()["entries"] == []
 
 
+def test_a_secondary_valuation_is_refused_where_the_review_values(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Method 15.4, the ruling on plan 3's final review: the secondary valuation is the fallback
+    where neither the route nor the review values the company. AAL's route refused for its target
+    margin and a margin override values it, so its current review, on the latest snapshot or on one
+    the latest reprices, refuses the call on either form, right after the route's refusal; nothing
+    is stored and no ledger row is written. A revalue leaves that review on an older snapshot,
+    where it no longer counts, and the call is made."""
+    _aal_review(db_path, policy, results, 0.2)
+    detail = (
+        "the review values AAL: the secondary valuation is the fallback where neither the route nor"
+        " the review values the company"
+    )
+    for body in (ONE_PART, ON_DRIVERS):
+        assert _refused(client, body, "AAL") == (400, {"detail": detail})
+    with closing(connect(db_path)) as conn:
+        latest = latest_snapshot(conn, "AAL")
+        assert latest is not None
+        repriced = reprice(results["AAL"], 160.0, date(2026, 11, 2), policy)
+        insert_snapshot(conn, repriced, latest.refresh_id, clock=lambda: CREATED)
+    assert _refused(client, ONE_PART, "AAL") == (400, {"detail": detail})  # the reprice keeps it
+    assert _stored(client, "AAL") == []
+    assert client.get("/api/companies/AAL/ledger").json()["entries"] == []
+    with closing(connect(db_path)) as conn:
+        revalued = replace(repriced, data_date=repriced.data_date + timedelta(days=1))
+        revalue = insert_snapshot(conn, revalued, latest.refresh_id, clock=lambda: CREATED)
+    body = _secondary(client, ONE_PART, symbol="AAL")
+    assert body["snapshotId"] == revalue
+
+
+def test_a_review_that_refused_leaves_the_fallback(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """A current review that refused, as AAL's row does, values nothing: the company takes the
+    fallback on its latest snapshot (method 15.4)."""
+    _aal_review(db_path, policy, results, None)
+    snapshot = client.get("/api/companies/AAL").json()["snapshot"]
+    body = _secondary(client, ONE_PART, symbol="AAL")
+    assert (body["snapshotId"], body["form"]) == (snapshot["id"], "parts")
+
+
+def _aal_review(
+    db_path: Path, policy: Policy, results: dict[str, ValuationResult], margin: float | None
+) -> None:
+    """An applied margin.target override of AAL, whose route refused for its target margin, and
+    the review on AAL's latest snapshot: valued at ``margin``, else refused as the row is."""
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    with closing(connect(db_path)) as conn:
+        latest = latest_snapshot(conn, "AAL")
+        assert latest is not None
+        override_id = insert_override(
+            conn,
+            "AAL",
+            "margin.target",
+            None,
+            0.2 if margin is None else margin,
+            "ratio",
+            "the peers by hand",
+            [FILING],
+            "lasting",
+            None,
+            None,
+            latest.id,
+            writer,
+            CREATED,
+            "applied",
+            "",
+        )
+        refused = results["AAL"]
+        if margin is None:
+            review = Review(
+                replace(refused, refusal="the reviewed margin is refused"), None, (), (override_id,)
+            )
+        else:
+            target = Override(override_id, "margin.target", margin, "agent", writer.actor, NOW, "")
+            inputs = replace(young_growth_inputs(), symbol="AAL", peers=())
+            review = review_company(inputs, universe_deciles(), policy, TODAY, [target], refused)
+            assert review.result.value is not None
+        insert_review(conn, review, "AAL", latest.id, None, clock=lambda: CREATED)
+
+
 def test_a_secondary_valuation_is_made_where_the_route_refused(
     client: TestClient, results: dict[str, ValuationResult]
 ) -> None:
@@ -420,7 +503,8 @@ def test_the_terminal_return_follows_the_reviewed_moat(
 ) -> None:
     """AAPL's aggregate ROIC, near 22%, takes the Wide moat's cap; under a Narrow moat as reviewed
     the terminal return is r. Its trailing revenue is fiscal 2025's: no quarters are on file. The
-    review rests on the refused snapshot, stored as the override route stores one."""
+    review rests on the refused snapshot and refuses as the route does: one that valued it would
+    refuse the fallback (method 15.4)."""
     wide = _secondary(client, ON_DRIVERS)
     assert wide["projection"]["terminalReturn"] == policy.wide_terminal_roic_cap
     assert wide["projection"]["trailingRevenue"] == 22e9
@@ -431,7 +515,8 @@ def test_the_terminal_return_follows_the_reviewed_moat(
 
 
 def _review_narrow(db_path: Path, policy: Policy, snapshot_id: int) -> None:
-    """An applied override of AAPL's moat to Narrow on ``snapshot_id`` and the review under it."""
+    """An applied override of AAPL's moat to Narrow on ``snapshot_id`` and the review under it,
+    which refuses as the refused snapshot does, its inputs holding the reviewed moat."""
     writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
     reason = "the patents lapse"
     with closing(connect(db_path)) as conn:
@@ -456,7 +541,17 @@ def _review_narrow(db_path: Path, policy: Policy, snapshot_id: int) -> None:
         inputs = replace(mature_growth_inputs(), symbol="AAPL")
         mechanical = value_company(inputs, universe_deciles(), policy, TODAY)
         narrow = Override(override_id, "moat.class", "Narrow", "agent", writer.actor, NOW, reason)
-        review = review_company(inputs, universe_deciles(), policy, TODAY, [narrow], mechanical)
+        reviewed = review_company(inputs, universe_deciles(), policy, TODAY, [narrow], mechanical)
+        refused = replace(
+            reviewed.result,
+            route=None,
+            value=None,
+            levels=None,
+            price_to_value=None,
+            designation=None,
+            refusal=NOT_POSITIVE,
+        )
+        review = Review(refused, None, (), (override_id,))
         insert_review(conn, review, "AAPL", snapshot_id, None, clock=lambda: CREATED)
 
 

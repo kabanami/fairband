@@ -61,25 +61,28 @@ or a cash passed without its own evidence item, one whose ``figure`` names it. T
 company's latest snapshot: ``require_current``'s 409s; a snapshot with a value, 400 "the route
 values <symbol>: the secondary valuation is the fallback where it refuses", the secondary
 valuation being the fallback where the route refuses or no phase fits (spec 11 as amended for plan
-3, the founder's ruling of 2026-11-08); a ``guidance`` evidence item's 400, 404 and 409, as an
-override's; a foreign filer, the snapshot refused as one
-or its universe row an ADR or in a currency other than USD (a row naming none leaves it to the
-snapshot), 400 with section 7's sentence; no positive diluted share count on the snapshot (its
-``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share count"; on
-the drivers form, no positive trailing revenue, 400 "no trailing revenue on file". The trailing
-revenue is read at the call as ``fact:<symbol>/revenue/ttm`` resolves it, the statements' trailing
-figures as the engine reads them; the terminal return is ``terminal_roic`` on the moat the levels
-take and the aggregate ROIC of the snapshot's intermediates (``roic/aggregate``, which the mature
-routes write; none on the other routes, so r). The debt and the cash are the agent's when passed,
-else an applied ``balance.*`` override's (both sourced ``agent``), else the newest annual balance
-sheet's as assembly reads them (``statements``), else nil with the source ``none`` when no line
-is on file. The levels take the current review's moat, else the snapshot's, else None; the
-designation the snapshot's price. A rule ``secondary_value`` refuses is a 400 with its sentence.
-The answer's drivers, projection and parts carry camelCase keys, and its grid ``rowsAre``,
-``growths`` or ``shifts`` (``GRID_ROWS``). Anyone may make one, a tool's output rather than an
-override; the write is a ``secondary`` ledger row resting on the snapshot, its summary "<value> a
-share from drivers over three years: <reason>" or "... from 2 parts: ...". ``GET`` on the same
-path lists the company's, newest first.
+3, the founder's ruling of 2026-11-08); a current review that rests on the snapshot or one it
+reprices (``same_snapshot``) and has a value, an override having routed the company, 400 "the
+review values <symbol>: the secondary valuation is the fallback where neither the route nor the
+review values the company"; a ``guidance`` evidence item's 400, 404 and 409, as an override's; a
+foreign filer, the snapshot refused as one or its universe row an ADR or in a currency other than
+USD (a row naming none leaves it to the snapshot), 400 with section 7's sentence; no positive
+diluted share count on the snapshot (its ``shares_diluted`` input, else its intermediates'
+``shares``), 400 "no diluted share count"; on the drivers form, no positive trailing revenue, 400
+"no trailing revenue on file". The trailing revenue is read at the call as
+``fact:<symbol>/revenue/ttm`` resolves it, the statements' trailing figures as the engine reads
+them; the terminal return is ``terminal_roic`` on the moat the levels take and the aggregate ROIC
+of the snapshot's intermediates (``roic/aggregate``, which the mature routes write; none on the
+other routes, so r). The debt and the cash are the agent's when passed, else an applied
+``balance.*`` override's (both sourced ``agent``), else the newest annual balance sheet's as
+assembly reads them (``statements``), else nil with the source ``none`` when no line is on file.
+The levels take the current review's moat, else the snapshot's, else None; the designation the
+snapshot's price. A rule ``secondary_value`` refuses is a 400 with its sentence. The answer's
+drivers, projection and parts carry camelCase keys, and its grid ``rowsAre``, ``growths`` or
+``shifts`` (``GRID_ROWS``). Anyone may make one, a tool's output rather than an override; the write
+is a ``secondary`` ledger row resting on the snapshot, its summary "<value> a share from drivers
+over three years: <reason>" or "... from 2 parts: ...". ``GET`` on the same path lists the
+company's, newest first.
 
 ``POST /api/companies/{symbol}/derivations`` takes ``{derivations: [{operation, a, b, years?}]}``
 and answers 201 with ``{derivations: [{id, value, unit}]}``, each stored with a ``derivation``
@@ -136,7 +139,7 @@ from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.reviews import write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
-from fairband.reports.refs import Resolver, fact_ref, guidance_cited
+from fairband.reports.refs import Resolver, fact_ref, guidance_cited, same_snapshot
 from fairband.store.db import transaction
 from fairband.store.guidance import anchor_year, guidance_row
 from fairband.store.ledger import Writer, record
@@ -458,8 +461,8 @@ def add_review_routes(
 
     @app.post("/api/companies/{symbol}/secondary", status_code=201)
     def post_secondary(symbol: str, body: SecondaryPost, writer: WriterOf) -> dict[str, Any]:
-        """Value the company from the agent's drivers or path on its latest snapshot, where the
-        route refused it, and store it."""
+        """Value the company from the agent's drivers or path on its latest snapshot, where
+        neither the route nor the current review values it, and store it."""
         _check_secondary(body)
         drivers = None if body.drivers is None else _drivers(body.drivers)
         parts = None if body.parts is None else [_part(p) for p in body.parts]
@@ -474,6 +477,17 @@ def add_review_routes(
                     400,
                     f"the route values {symbol}: the secondary valuation is the fallback where it"
                     " refuses",
+                )
+            review = latest_review(conn, symbol)
+            if (
+                review is not None
+                and review.value is not None
+                and same_snapshot(conn, review.snapshot_id, snapshot.id)
+            ):
+                raise HTTPException(
+                    400,
+                    f"the review values {symbol}: the secondary valuation is the fallback where"
+                    " neither the route nor the review values the company",
                 )
             _require_guidance(conn, symbol, body.evidence)
             if foreign_filer(conn, snapshot):

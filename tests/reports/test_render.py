@@ -411,8 +411,8 @@ def test_appendix_a_without_a_review_or_a_secondary(
     rule = next(c["rule"] for c in a["checks"] if c["check"] == CHECKS[4])
     assert rule == (
         "on a refused latest snapshot, the company's newest secondary valuation rests on it or on"
-        " one it reprices; none where the route values the company, for a foreign filer or for a"
-        " snapshot with no diluted share count"
+        " one it reprices; none where the route or the review values the company, for a foreign"
+        " filer or for a snapshot with no diluted share count"
     )
 
 

@@ -389,8 +389,8 @@ def _store_revenue(db_path: Path, revenue: float, symbol: str = "AAPL") -> None:
 
 def test_secondary_valuation_takes_drivers_or_parts(api: FairbandClient, db_path: Path) -> None:
     """The drivers' keys as spec 11 names them, sent as the API reads them; one form only. AAL's
-    route refuses, so it takes the fallback; AAPL's values, so the route's refusal comes back
-    (plan 3), as the tool's description says."""
+    route refuses and no review values it, so it takes the fallback; AAPL's values, so the route's
+    refusal comes back (plan 3), as the tool's description says."""
     _store_revenue(db_path, 22e9, "AAL")
     drivers = {
         "years": 3,
@@ -435,8 +435,8 @@ def test_secondary_valuation_takes_drivers_or_parts(api: FairbandClient, db_path
         return next(t.description or "" for t in tools if t.name == "secondary_valuation")
 
     assert anyio.run(described).startswith(
-        "Value the company a second way by a standard discounted cash flow where the route"
-        " refuses; refused where it values;"
+        "Value the company a second way by a standard discounted cash flow where neither the route"
+        " nor the review values it; refused where either does;"
     )
 
 

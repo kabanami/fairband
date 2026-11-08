@@ -231,15 +231,19 @@ def test_the_agents_section_reads(client: TestClient) -> None:
         "once its guided year has passed",
         "a valuation review for each company on the list with no open item",
         # spec 11 and 13.3, plan 3: the secondary valuation is the fallback only, refused where
-        # the route values the company, and no second value weighs on the stance there
-        "Where the route refuses or no phase fits, the report carries a secondary valuation",
+        # the route or the review values the company, and no second value weighs on the stance
+        # there; a refused row with a valued review weighs the price against the review's levels
         (
-            "Where the route values the company there is none: the engine refuses the call, so no"
-            " second value weighs on the stance."
+            "Where neither the route nor the review values the company, the report carries a"
+            " secondary valuation: the fallback."
         ),
         (
-            "The agent weighs the price against the reviewed value's levels, or on a refused row"
-            " the secondary valuation's."
+            "Where the route or the review values the company there is none: the engine refuses"
+            " the call, so no second value weighs on the stance."
+        ),
+        (
+            "The agent weighs the price against the reviewed value's levels; on a refused row with"
+            " none, the secondary valuation's."
         ),
         "Where the route refused, it shows the value of a secondary valuation",
         # spec 18.1, plan 3: the row's levels follow the reviewed value
@@ -247,10 +251,13 @@ def test_the_agents_section_reads(client: TestClient) -> None:
             "The band, the buy and trim levels and the designation follow the reviewed value; the"
             " Mechanical column keeps the engine's value."
         ),
+        # the meter draws the band; the drawer, not the meter, adds the stance and the summary
+        "The drawer's meter draws that band; the drawer adds the stance and the report's summary.",
     ):
         assert words in text, words
     assert "values a peak as if it lasted" not in text
     assert "second view" not in text and "Every report carries a secondary" not in text
+    assert "draws that band, with the stance" not in text
 
 
 def test_diagram_draws_six_bands_two_curves_and_the_counts() -> None:

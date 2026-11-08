@@ -32,7 +32,8 @@ be left out.
 ## The reads
 
 - `screen(sort?, direction?)`: the screen's rows, one a company, sorted by a column key;
-  `direction` is `asc` or `desc`.
+  `direction` is `asc` or `desc`. A row's `fairValue`, band, levels, price ÷ value and designation
+  follow the reviewed value where `reviewed` is filled; `mechanical` is the engine's value.
 - `company(symbol)`: the latest snapshot in full: `snapshot.id`, the `result` (the value, the
   levels, the price, the inputs, the intermediates, the phase evidence, the flags, `valid_until`)
   and the company's row in the universe.
@@ -139,12 +140,15 @@ vendor call. The refusals:
 - `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over
   the rest, or cleared when none is left.
 - `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: the fallback
-  where the route refuses or no route fits: value the company by the standard discounted cash flow
-  from your `drivers`, or from your own free-cash-flow path in `parts`, exactly one of the two; it
-  answers the stored secondary valuation, with its projection or its parts and its grid. Where the
-  route values the company it is refused: "the route values <symbol>: the secondary valuation is
-  the fallback where it refuses". A report on a refused snapshot needs one on it, except for a
-  foreign filer or a snapshot with no diluted share count, which the secondary valuation refuses.
+  where neither the route nor your review values the company: value the company by the standard
+  discounted cash flow from your `drivers`, or from your own free-cash-flow path in `parts`,
+  exactly one of the two; it answers the stored secondary valuation, with its projection or its
+  parts and its grid. Where the route values the company it is refused: "the route values
+  <symbol>: the secondary valuation is the fallback where it refuses"; where the current review
+  values it: "the review values <symbol>: the secondary valuation is the fallback where neither
+  the route nor the review values the company". A report on a refused snapshot your review does
+  not value needs one on it, except for a foreign filer or a snapshot with no diluted share count,
+  which the secondary valuation refuses.
 - `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
   across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`;
   nothing is overridden. `current` marks the pair in force as `[i, j]`; a cell whose valuation

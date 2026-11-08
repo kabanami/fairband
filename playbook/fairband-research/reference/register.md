@@ -90,7 +90,7 @@ The first time a report uses one of these terms, give its plain meaning.
 | hurdle rate | the return an investor requires, r |
 | sales-to-capital | the revenue a dollar of invested capital buys |
 | target margin | the operating margin a young company reaches in year ten |
-| secondary valuation | the fallback value a share where the route refuses or no route fits: the standard discounted cash flow, from drivers the agent sets (or a cash-flow path for each part), which the engine projects and discounts; none where the route values the company |
+| secondary valuation | the fallback value a share where neither the route nor the review values the company: the standard discounted cash flow, from drivers the agent sets (or a cash-flow path for each part), which the engine projects and discounts; none where the route or the review values the company |
 | validity window | the time a value stays current, to the next earnings report |
 | kill criterion | a measurable event that would prove the view wrong |
 | thesis | the report's own view of the business: which of management's claims it accepts, rejects or holds open, and what must be true for the stance to be right |

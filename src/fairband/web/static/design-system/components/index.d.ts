@@ -440,8 +440,8 @@ export interface ScreenRow {
    * Computed with the overrides inside. `null` when there are none.
    * fairband: the current review's value on the row's snapshot, or one that snapshot reprices;
    * else, where the route refused, the newest secondary valuation's value a share there, the
-   * fallback standing in where the route gives no value; `null` otherwise (spec 2026-11-06 Tier
-   * 2, 11 and 18.1). Where it is filled, the row's band, levels, price ÷ value and designation
+   * fallback standing in where neither the route nor the review gives a value; `null` otherwise
+   * (spec 2026-11-06 Tier 2, 11 and 18.1). Where it is filled, the row's band, levels, price ÷ value and designation
    * are its record's (18.1, plan 3).
    */
   reviewed: number | null;

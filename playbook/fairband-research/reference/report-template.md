@@ -28,12 +28,13 @@ and its outlook.
 - `work_item_id`, optional: the work item the report completes.
 
 The server checks the structure first: the section count, the stance, the judgments, the headings,
-and a secondary valuation on a refused snapshot. A valued snapshot needs none: the secondary
-valuation is the fallback where the route refuses, and the server refuses one where the route
-values the company. A foreign filer or a snapshot with no diluted share count needs none either,
-since the secondary valuation refuses them. Each failure is one sentence, such as "section 5 is
-headed 'The last earnings call', not 'Life-cycle phase'" or "the report needs a secondary
-valuation on snapshot 388". Then it checks every number (`reference/citations.md`).
+and a secondary valuation on a refused snapshot. A valued snapshot needs none, nor does a refused
+one your review values: the secondary valuation is the fallback where neither the route nor your
+review values the company, and the server refuses one where either does. A foreign filer or a
+snapshot with no diluted share count needs none either, since the secondary valuation refuses them.
+Each failure is one sentence, such as "section 5 is headed 'The last earnings call', not
+'Life-cycle phase'" or "the report needs a secondary valuation on snapshot 388". Then it checks
+every number (`reference/citations.md`).
 
 The server writes the references list (each cite's footnote, numbered, with its source in words),
 Appendix A (the audit: every input with its tag and source, the overrides, the guidance on file,
@@ -53,7 +54,7 @@ Put the answer first in each section. Keep each sentence to one idea.
 | 5 | The last earnings call | both | One page, in seven parts: the verdict; the quarter against expectations; the story management is telling, claim by claim; the guidance; the positives and the negatives; the questions and answers; what the thesis takes from it. Detail below. |
 | 6 | The bull case and the bear case | both | The debate about the business and its outlook, in arguments: demand and how long it lasts, where the company is in its cycle, competition and the moat, pricing power, capital allocation, management, the balance sheet, the claims of the call. Each side's strongest case, in words a reader without the method follows. Figures may be cited. No valuation arithmetic, input, tag or parameter. |
 | 7 | The thesis | both | The report's own story, set against management's. It opens with a position on each claim of section 5: accepted, rejected or held open. Then the case that settles the debate and leads to the stance: what must be true for the stance to be right, and what you expect to happen. Detail below. |
-| 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (the life-cycle stage, Introduction, Growth, Mature, Shake-out or Decline, that the signs of the three cash flows give), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; on a refused row only, the secondary valuation in the route's place, and FMP's figure in one sentence when read (where the route values the company, no second value and no DCF); for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
+| 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (the life-cycle stage, Introduction, Growth, Mature, Shake-out or Decline, that the signs of the three cash flows give), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; on a refused row with no reviewed value only, the secondary valuation in the route's place, and FMP's figure in one sentence when read (where the route or your review values the company, no second value and no DCF beside the route's value); for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
 | 9 | Price and multiples | both | The price facts, and the multiples against their own history. Detail below. |
 | 10 | Recent news | both | The dated items that matter to the value. |
 | 11 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold you choose is not a fact and never a finding: tie each event to a stored figure and cite it ("below the hurdle rate of 9.0%", citing `policy:required_return`), or state it in words ("revenue falls two quarters in a row"). A threshold no stored figure gives is a question for the founder (`reference/citations.md`, "A threshold you choose"). |
@@ -154,14 +155,16 @@ The kill criteria of section 11 test it.
   bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
 - **The guidance.** Where a guidance override moved an anchor or a step, one sentence names it
   and cites the record's figure, `guidance:<id>/midpoint`.
-- **The secondary valuation**, on a refused row only: where the route refuses or no route fits,
-  it stands in for the route's value and leads the section. Where an override gave the current
-  review a value, the reviewed value leads and the secondary valuation follows it. The drivers in
-  words, with their figures cited (`secondary:<id>/drivers/<name>`, `/drivers/<name>/<t>`); the
-  value, `secondary:<id>/value`; the grid's range, two cells `secondary:<id>/grid/<i>/<j>`. Where
-  the server refused the secondary valuation as a foreign filer or for no diluted share count, say
-  so in one sentence: the report publishes without one. Where the route values the company, write
-  no second value and read no DCF.
+- **The secondary valuation**, on a refused row with no reviewed value only: where neither the
+  route nor your review values the company, it stands in for the route's value and leads the
+  section. Where an override gave the current review a value, the reviewed value leads and there is
+  no secondary valuation: Appendix A says "no secondary valuation: the review values the company".
+  The drivers in words, with their figures cited (`secondary:<id>/drivers/<name>`,
+  `/drivers/<name>/<t>`); the value, `secondary:<id>/value`; the grid's range, two cells
+  `secondary:<id>/grid/<i>/<j>`. Where the server refused the secondary valuation as a foreign
+  filer or for no diluted share count, say so in one sentence: the report publishes without one.
+  Where the route or your review values the company, write no second value and read no DCF beside
+  the route's value.
 - **FMP's figure**, on a refused row only, in one sentence when read, beside the secondary
   valuation: `response:<responseId>/<json pointer>` of the `dcf` answer.
 - **A cyclical**: where it is in its cycle, and the mid-cycle basis the values rest on.
@@ -257,8 +260,11 @@ What would change the view:
 Valid until 27 Jan 2027, the date of the next earnings report.
 ```
 
-A part may hold line breaks. A blank line starts a new paragraph; a line that starts with `- ` or
-`1. ` after a blank line starts a list.
+A part may hold line breaks. The reader renders this subset and no more: a blank line between
+paragraphs; a list, its items `- ` bullets (not `* `) or `1. ` numbers, one a line, with no blank
+line needed before it; a table, a header row, a `|---|` separator row under it and the rows, each
+a line between `|` marks; and `**bold**`. No heading marks, no links, no nested lists, no images:
+anything else shows as plain text.
 
 ## A cited part
 

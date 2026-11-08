@@ -13,13 +13,13 @@ This skill takes one work item (a request for research on one company) from the 
 published report. Run the thirteen steps below in order. Write every sentence, in the report and
 in every reason, in the register of `reference/register.md`.
 
-The report argues the business, and only its valuation section talks about the valuation. The
-steps build it as a chain. The last earnings call gives management's story (step 5). The bull
-case and the bear case argue it, and the thesis decides it (step 9). The decisions turn the
-thesis into the engine's inputs (step 10). A report values the company by the engine's route.
-Only where the route refuses or no route fits does a standard discounted cash flow from drivers
-you set, the secondary valuation, stand in. A cyclical business (one whose profits rise and fall
-with its industry's cycle) is valued at mid-cycle (step 7).
+The report argues the business, and only its valuation section talks about the valuation. The steps
+build it as a chain. The last earnings call gives management's story (step 5). The bull case and
+the bear case argue it, and the thesis decides it (step 9). The decisions turn the thesis into the
+engine's inputs (step 10). A report values the company by the engine's route, under your overrides
+when you make any. Only where neither the route nor your review values the company does a standard
+discounted cash flow from drivers you set, the secondary valuation, stand in. A cyclical business
+(one whose profits rise and fall with its industry's cycle) is valued at mid-cycle (step 7).
 
 ## Before you start
 
@@ -88,7 +88,8 @@ Then read everything the page shows:
   Its thesis is the one the last earnings call tests in step 5.
 - `notes(symbol)`, `findings(symbol)`, `guidance(symbol)`, `overrides(symbol)`, `reviews(symbol)`,
   `secondary(symbol)` and `kill_criteria(symbol)`: the research already on file. `guidance` holds
-  the figures the company guided on earlier calls, and so its track record.
+  the figures the company guided on earlier calls, and so its track record. On a company the route
+  or the review values, a secondary valuation on file is history: neither cite it nor weigh it.
 - `policy()`: the policy values in force.
 - `methodology(section)` for the company's route: `mature-growth`, `mature-stable`, `growth` (High
   Growth and Young Growth), `decline` or `start-up`. `methodology()` lists every section.
@@ -257,19 +258,22 @@ A cyclical, valued at mid-cycle:
   the held rate (`path.hold`) at the growth rate through the cycle;
 - a kill criterion on the operating margin against its median.
 
-Then the fallback, FMP's figure and the route's grid. Where the route values the company, make no
-secondary valuation and read no DCF of any kind.
+Then the fallback, FMP's figure and the route's grid. Where the route or your review values the
+company, make no secondary valuation and read no DCF beside the route's value.
 
-- Where the route refuses or no route fits, and only there: **the secondary valuation**,
-  `secondary_valuation` with `drivers`, the standard discounted cash flow, as the fallback. Set the
-  drivers from the thesis, at mid-cycle for a cyclical. Use `parts` instead where a sum of parts
-  fits the company better. The server refuses the call where the route values the company: "the
-  route values <symbol>: the secondary valuation is the fallback where it refuses". The report
-  check refuses a report on a refused snapshot with no secondary valuation on it: "the report needs
-  a secondary valuation on snapshot <id>". Make it after any revalue, since one made before does
-  not count. Two refusals exempt the report: "foreign filer: currency and share-unit handling not
-  built yet" and "no diluted share count". The company can have no secondary valuation, so publish
-  without one and name the reason in section 8. See "The secondary valuation" below.
+- Where neither the route nor your review values the company, and only there: **the secondary
+  valuation**, `secondary_valuation` with `drivers`, the standard discounted cash flow, as the
+  fallback. Set the drivers from the thesis, at mid-cycle for a cyclical. Use `parts` instead where
+  a sum of parts fits the company better. The server refuses the call where the route values the
+  company: "the route values <symbol>: the secondary valuation is the fallback where it refuses";
+  and where your review values it (an override routed a refused row): "the review values <symbol>:
+  the secondary valuation is the fallback where neither the route nor the review values the
+  company". The report check refuses a report on a refused snapshot that your review does not
+  value, with no secondary valuation on it: "the report needs a secondary valuation on snapshot
+  <id>". Make it after any revalue, since one made before does not count. Two refusals exempt the
+  report: "foreign filer: currency and share-unit handling not built yet" and "no diluted share
+  count". The company can have no secondary valuation, so publish without one and name the reason
+  in section 8. See "The secondary valuation" below.
 - **FMP's own figure**: `dcf(symbol)`, a cross-check on the fallback: read it on a refused row
   only; never beside a route's value. It gives FMP's discounted cash flow value and its levered
   one. Section 8 may cite it in one sentence, beside the secondary valuation.
@@ -284,12 +288,14 @@ difference, a sum, a growth rate or a compound annual growth rate. Never compute
 
 Choose the stance: `buy`, `hold`, `trim` or `avoid`. Read the value against its levels. Take the
 reviewed value when the current review has one. Else take the snapshot's value. On a refused row
-with no reviewed value, take the secondary valuation's. When the current review refused on a
-valued snapshot, the snapshot's value stands: fix or drop the override whose bridge line refused
-before you choose the stance. No stance rests on a refused review. No DCF weighs on the stance
-where the route values the company: the founder's rule of 2026-11-08. `avoid` is for a company
-you would not hold at any price shown. Weigh the thesis as well as the levels. The report's
-reasons carry the stance.
+with no reviewed value, take the secondary valuation's. On a refused row with no reviewed value and
+no possible secondary valuation (a foreign filer, no diluted share count), the stance rests on the
+thesis alone, and the report says so in section 8. When the current review refused on a valued
+snapshot, the snapshot's value stands: fix or drop the override whose bridge line refused before
+you choose the stance. No stance rests on a refused review. No DCF weighs on the stance where the
+route or your review values the company: the founder's rule of 2026-11-08. `avoid` is for a company
+you would not hold at any price shown. Weigh the thesis as well as the levels. The report's reasons
+carry the stance.
 
 ### 12. The report
 
@@ -297,11 +303,13 @@ Write the twelve sections of `reference/report-template.md`, ten for a valuation
 quantity, by the rules of `reference/citations.md`. Give the judgments as the record of your
 decisions, each `{judgment, decision, override_id?}`. Submit with `report_submit`. The server
 publishes a report whole or rejects it whole. A structural refusal (the section count, the stance,
-a judgment, a heading, or no secondary valuation on a refused snapshot) is one sentence: fix it
-and submit again. A valued snapshot needs no secondary valuation: Appendix A says "no secondary
-valuation: the route values the company". A foreign filer and a snapshot with no diluted share
-count need none either: the server refused one, section 8 says why, and Appendix A names the
-reason. A rejection (422) lists the findings: fix each one and submit again.
+a judgment, a heading, or no secondary valuation on a refused snapshot) is one sentence: fix it and
+submit again. A valued snapshot needs no secondary valuation: Appendix A says "no secondary
+valuation: the route values the company". A refused snapshot your review values needs none either:
+Appendix A says "no secondary valuation: the review values the company". A foreign filer and a
+snapshot with no diluted share count need none: the server refused one, section 8 says why, and
+Appendix A names the reason. A rejection (422) lists the findings: fix each one and submit
+again.
 
 ### 13. Complete the work item
 
@@ -488,9 +496,10 @@ value. The lines run in the method's order: phase, NTM earnings, NTM revenue, co
 consensus step 3, held rate, belief, non-recurring gap, mid-cycle earnings, target margin, sales to
 capital, runway return, decline rate, moat, debt, cash. A line whose step refuses shows the refusal
 in place of a change. A review whose last line refuses has no value. On a refused row, where the
-mechanical value refuses too, the secondary valuation stands in for it. On a valued snapshot it
-does not: the server refuses one there, and the overrides are inconsistent with the route. Fix or
-drop the override whose bridge line refused (step 11).
+mechanical value refuses too, the secondary valuation stands in for it. Where an override values a
+refused row, the reviewed value stands, and the server refuses a secondary valuation there. On a
+valued snapshot a refused review gets no stand-in: the server refuses one there, and the overrides
+are inconsistent with the route. Fix or drop the override whose bridge line refused (step 11).
 
 One input holds one applied override. A new override on the same tag replaces the old one. An
 override applies to the latest snapshot and to every later one. A period-tied override (a correction
@@ -512,9 +521,11 @@ one.
 ## The secondary valuation
 
 The fallback, and only the fallback: a value a share by the standard discounted cash flow, made
-where the route refuses or no route fits. Where the route values the company, the server refuses
-the call: "the route values <symbol>: the secondary valuation is the fallback where it refuses".
-Make none there, and read no DCF of any kind.
+where neither the route nor your review values the company. Where the route values the company,
+the server refuses the call: "the route values <symbol>: the secondary valuation is the fallback
+where it refuses"; where your review values it, "the review values <symbol>: the secondary
+valuation is the fallback where neither the route nor the review values the company". Make none
+there, and read no DCF beside the route's value.
 
 You set the drivers; the engine projects the free cash flow to the firm (the cash the business
 makes after its investment, before any payment to lenders or owners), discounts it, adds the
@@ -593,7 +604,9 @@ The refusals, each a sentence, nothing stored: a blank reason; no evidence; both
 secondary valuation takes drivers or parts, not both", or neither, "a secondary valuation needs
 drivers or parts"; "the path needs its own evidence item"; a debt or a cash with no evidence item
 of its own; "settings changed: run a revalue" and its two siblings; where the latest snapshot has a
-value, "the route values <symbol>: the secondary valuation is the fallback where it refuses"; a
+value, "the route values <symbol>: the secondary valuation is the fallback where it refuses";
+where the current review on that snapshot has one, "the review values <symbol>: the secondary
+valuation is the fallback where neither the route nor the review values the company"; a
 `guidance` item's 400, 404 and 409, as on an override; "foreign filer: currency and share-unit
 handling not built yet"; "no diluted share count"; on the drivers form, "no trailing revenue on
 file". Then the bounds, each naming its rule with the policy's figures: "a secondary valuation
@@ -636,7 +649,7 @@ A grid the route reads well:
 
 Put the input's current value in the middle of each axis, so the grid reads around it. A Start-up
 company has no route value, so it has no grid: its section 8 states the price-implied requirement,
-and the secondary valuation stands in.
+and, with no reviewed value, the secondary valuation stands in.
 
 ## The judgments
 

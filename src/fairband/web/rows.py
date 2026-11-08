@@ -169,11 +169,12 @@ def agent_fields(
     value when the review counts and has one, ``overrides`` the count of the overrides inside it;
     else, where the route refused (``snapshot`` has no value), the secondary valuation's value a
     share when it counts and is above zero, with no override inside: spec 11's secondary is the
-    fallback, standing in on the row where the route refuses; else ``None`` and 0. ``levels`` are
+    fallback, standing in on the row where neither the route nor the review values the company (the
+    review, read first, fills the row wherever it values it); else ``None`` and 0. ``levels`` are
     the row's ``LEVEL_KEYS`` from the record that fills ``reviewed`` (plan 3): its value, its four
     levels, and price ÷ value and its word at the snapshot's price on ``edges``, the effective
-    policy's (``standing``); ``None`` when ``reviewed`` is. ``agentStance`` is the report's word and
-    ``covered`` its time, its actor (its principal where it names none, an owner's report) and
+    policy's (``standing``); ``None`` when ``reviewed`` is. ``agentStance`` is the report's word
+    and ``covered`` its time, its actor (its principal where it names none, an owner's report) and
     whether the window of the snapshot it rests on ended before ``today`` (``window_ended``); both
     ``None`` without a report."""
     fields = dict(NO_AGENT_FIELDS)

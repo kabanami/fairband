@@ -23,13 +23,16 @@ and the engine's ``SECONDARY_METHOD`` (a record written under ``fairband-seconda
 one read (the screen's rows), ``secondaries_for`` every one, newest first, and ``secondary_row``
 one by its id.
 
-``no_secondary`` says why a company can have none on a snapshot, the three refusals of the
-secondary route the agent cannot fix (``method.md`` 15.4), in the route's order: the route values
-the company (the snapshot has a value: the secondary valuation is the fallback where the route
-refuses, plan 3), a foreign filer (``foreign_filer``: the snapshot refused as one, or the universe
-row an ADR or in a currency other than USD, a row naming none leaving it to the snapshot) and no
-positive diluted share count (``diluted_shares``: the snapshot's ``shares_diluted`` input, else its
-intermediates' ``shares``).
+``no_secondary`` says why a company can have none on a snapshot, the four refusals of the secondary
+route that no call can meet (``method.md`` 15.4), in the route's order: the route values the
+company (the snapshot has a value), the review values the company (the company's current review
+counts on the snapshot and has a value: an override routed it), the secondary valuation being the
+fallback where neither does (plan 3); a foreign filer (``foreign_filer``: the snapshot refused as
+one, or the universe row an ADR or in a currency other than USD, a row naming none leaving it to
+the snapshot); and no positive diluted share count (``diluted_shares``: the snapshot's
+``shares_diluted`` input, else its intermediates' ``shares``). The caller passes the review:
+whether one counts on a snapshot is the reports' rule (``reports.refs.same_snapshot``), which reads
+this module.
 
 A derivation is one operation of an agent's arithmetic over two references: its operation, its
 refs, its years (a cagr's, else none), its value as ``repr`` text (none where the operation is
@@ -61,6 +64,7 @@ from fairband.store._codec import dump_float, dump_stamp, inserted_id, load_floa
 from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.ledger import Principal, Writer
+from fairband.store.reviews import ReviewRow
 from fairband.store.snapshots import SnapshotRow
 
 Operation = Literal["ratio", "difference", "sum", "growth", "cagr"]
@@ -245,12 +249,18 @@ def secondaries_for(conn: sqlite3.Connection, symbol: str) -> list[SecondaryRow]
     return [_secondary(r) for r in rows]
 
 
-def no_secondary(conn: sqlite3.Connection, snapshot: SnapshotRow) -> str | None:
+def no_secondary(
+    conn: sqlite3.Connection, snapshot: SnapshotRow, review: ReviewRow | None
+) -> str | None:
     """Why the company can have no secondary valuation on ``snapshot``, "the route values the
-    company", "foreign filer" or "no diluted share count", in the order the secondary route
-    refuses them; ``None`` when it can have one."""
+    company", "the review values the company", "foreign filer" or "no diluted share count", in
+    the order the secondary route refuses them; ``None`` when it can have one. ``review`` is the
+    company's current review where it counts on ``snapshot`` (rests on it or on one it reprices),
+    else ``None``: the caller reads it, as the module docstring says."""
     if snapshot.value is not None:
         return "the route values the company"
+    if review is not None and review.value is not None:
+        return "the review values the company"
     if foreign_filer(conn, snapshot):
         return "foreign filer"
     if diluted_shares(snapshot.result) is None:

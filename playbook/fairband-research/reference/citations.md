@@ -129,14 +129,15 @@ date. When in doubt, leave the period out.
 
 ## The snapshot
 
-Cite the company's latest snapshot: the one `company` gave you. A price refresh during your research
-is fine: a reprice of the cited snapshot, with the same data date, method, policy and settings,
-counts as the cited one. A revalue or a full refresh in between is not: the report is rejected
-`wrong snapshot`, with the latest snapshot's id in the detail. Read `company` again, take the new
-ids, check each figure, and submit again. A `secondary:` and a `sensitivity:` ref rest on their
-record's snapshot too, and a `derived:` ref on its operands': after a revalue, make the reading
-and those derivations again, and on a refused row the secondary valuation too; on a valued row the
-server refuses one. A `finding:`, a `guidance:` and a `multiple:` ref rest on none.
+Cite the company's latest snapshot: the one `company` gave you. A price refresh during your
+research is fine: a reprice of the cited snapshot, with the same data date, method, policy and
+settings, counts as the cited one. A revalue or a full refresh in between is not: the report is
+rejected `wrong snapshot`, with the latest snapshot's id in the detail. Read `company` again, take
+the new ids, check each figure, and submit again. A `secondary:` and a `sensitivity:` ref rest on
+their record's snapshot too, and a `derived:` ref on its operands': after a revalue, make the
+reading and those derivations again, and the secondary valuation too where neither the route nor
+your review values the company; where either does, the server refuses one. A `finding:`, a
+`guidance:` and a `multiple:` ref rest on none.
 
 A `review:` cite must be the company's current review: the newest review on the latest snapshot,
 or the one that snapshot reprices. Each applied override and each drop makes a new review; a
@@ -169,6 +170,9 @@ Not a quantity, so plain text may hold it:
 - a filing form: `10-K`, `8-K`, `20-F`;
 - a section's or an item's number: `section 13.3`, `Item 10`;
 - anything in a URL or after a slash;
+- a list's number at a line's start with a space after it on the same line, `1. `, `12. ` or
+  `12) `, and a table's separator row, `|---|---|`: marks, not quantities (a number alone on its
+  line, `12.`, is a quantity);
 - an integer of one digit with no unit word: `7`.
 
 Write small counts in words: "three reasons", "two quarters in a row", "the past five years".
@@ -263,10 +267,10 @@ cited, in section 8.
 
 ## Before the numbers: the structure
 
-The server checks the structure before it reads a number, in this order: the section count
-(twelve for a full report, ten for a valuation review); the stance word; the judgments the route
-needs, one of each; the headings, in order; and a secondary valuation on a refused snapshot (none
-where the route values the company, and none for a foreign filer or a snapshot with no diluted
+The server checks the structure before it reads a number, in this order: the section count (twelve
+for a full report, ten for a valuation review); the stance word; the judgments the route needs, one
+of each; the headings, in order; and a secondary valuation on a refused snapshot (none where the
+route or your review values the company, and none for a foreign filer or a snapshot with no diluted
 share count). The first check that fails is answered with its one sentence (400), such as "the
 report needs a secondary valuation on snapshot <id>", and no number is checked. Fix the one thing
 the sentence names and submit again.

@@ -4,8 +4,8 @@ it runs spec 14's thirteen steps in order with the tools each names; it quotes t
 agent meets as the server words them; its citation reference names the check's six failures and
 the ref forms; its submission example, twelve sections for an invented company the route values,
 passes the structural checks and the token rule; and it makes the secondary valuation only where
-the route refuses, with no DCF where the route values the company (the founder's rule of
-2026-11-08, spec 14 steps 10 and 11 as amended for plan 3)."""
+neither the route nor the review values the company, with no DCF beside the route's value (the
+founder's rule of 2026-11-08, spec 14 steps 10 and 11 as amended for plan 3)."""
 
 import json
 import re
@@ -108,6 +108,10 @@ REFUSALS = (
     BUSY,
     "the report needs a secondary valuation on snapshot <id>",
     "the route values <symbol>: the secondary valuation is the fallback where it refuses",
+    (
+        "the review values <symbol>: the secondary valuation is the fallback where neither the route"
+        " nor the review values the company"
+    ),
     "guidance record <id> is superseded by record <id>",
     "the store moved since snapshot <id>: run a revalue",
     "settings changed: run a revalue",
@@ -128,8 +132,28 @@ REFUSED_REVIEW = (
     " the override whose bridge line refused before you choose the stance. No stance rests on a"
     " refused review."
 )
-# The phrases of the rule before plan 3: a secondary valuation on every report, the second view.
-STALE = ("on every report", "every report values", "second view", "third opinion", "two values")
+# Step 11 on a refused row with nothing to weigh the price against (the final review of plan 3).
+THESIS_ALONE = (
+    "On a refused row with no reviewed value and no possible secondary valuation (a foreign filer, no"
+    " diluted share count), the stance rests on the thesis alone, and the report says so in section"
+    " 8."
+)
+# Step 3 on a secondary valuation made before the route or an override valued the company.
+HISTORY = (
+    "On a company the route or the review values, a secondary valuation on file is history: neither"
+    " cite it nor weigh it."
+)
+# The phrases of the rule before plan 3: a secondary valuation on every report, the second view;
+# and "no DCF of any kind", which the growth routes' own revenue DCFs contradict.
+STALE = (
+    "on every report",
+    "every report values",
+    "second view",
+    "third opinion",
+    "two values",
+    "dcf of any kind",
+    "where the route refuses or no route fits",
+)
 
 
 def test_the_skill_names_every_tool() -> None:
@@ -208,15 +232,35 @@ def test_the_template_example_passes_the_structural_checks_and_the_token_rule() 
 
 
 def test_the_secondary_valuation_is_the_fallback_only() -> None:
-    """The founder's rule of 2026-11-08: the secondary valuation is made where the route refuses
-    or no route fits, and only there; no DCF weighs on the stance where the route values the
-    company, and FMP's figure is read on a refused row only."""
+    """The founder's rule of 2026-11-08, as ruled on the final review of plan 3: the secondary
+    valuation is made where neither the route nor the review values the company, and only there;
+    no DCF weighs on the stance where either does, and FMP's figure is read on a refused row only;
+    a secondary valuation on file on a company the route or the review values is history; a refused
+    row with nothing to weigh the price against rests the stance on the thesis."""
     steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
-    rule = steps[10].find("Where the route refuses or no route fits, and only there")
+    assert HISTORY in steps[3]
+    lead = "Where the route or your review values the company, make no secondary valuation and read"
+    assert f"{lead} no DCF beside the route's value." in steps[10]
+    rule = steps[10].find(
+        "Where neither the route nor your review values the company, and only there"
+    )
     assert 0 <= rule < steps[10].find("`secondary_valuation`")
-    assert "No DCF weighs on the stance where the route values the company" in steps[11]
+    no_dcf = "No DCF weighs on the stance where the route or your review values the company"
+    assert no_dcf in steps[11]
     assert VALUE_ORDER in steps[11]
+    assert THESIS_ALONE in steps[11]
+    assert steps[11].index(VALUE_ORDER) < steps[11].index(THESIS_ALONE)
     assert REFUSED_REVIEW in steps[11]  # a refused review is the agent's to fix (ruling 2026-11-08)
+    opening = _flat(_read(SKILL)).split("## The secondary valuation ", 1)[1][:600]
+    assert opening.startswith(
+        "The fallback, and only the fallback: a value a share by the standard discounted cash flow,"
+        " made where neither the route nor your review values the company."
+    )
+    assert "Make none there, and read no DCF beside the route's value." in opening
+    assert _tool_entry("secondary_valuation").startswith(
+        "- `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: the"
+        " fallback where neither the route nor your review values the company:"
+    )
     for exemption in ("foreign filer", "no diluted share count"):  # step 10's two exemptions
         assert exemption in _tool_entry("secondary_valuation"), exemption
     assert "on a refused row only" in _tool_entry("dcf")
@@ -225,6 +269,37 @@ def test_the_secondary_valuation_is_the_fallback_only() -> None:
         text = _flat(_read(path)).lower()
         for phrase in STALE:
             assert phrase not in text, (path.name, phrase)
+
+
+def test_the_references_say_what_the_server_and_the_reader_do() -> None:
+    """The final review of plan 3: the check reads a list's number and a table's separator row as
+    marks (method 16.3); the screen's rows follow the reviewed value where it is filled, the
+    engine's value kept as ``mechanical`` (spec 18.1); and the report template states the whole
+    subset of the text the reader renders (spec 13.1, 18.4)."""
+    citations = _flat(_read(CITATIONS))
+    assert (
+        "a list's number at a line's start with a space after it on the same line, `1. `, `12. ` or"
+        " `12) `, and a table's separator row, `|---|---|`: marks, not quantities (a number alone on"
+        " its line, `12.`, is a quantity);"
+    ) in citations
+    for mark in ("1. ", "12) "):  # the check agrees: a mark at a line's start, no quantity
+        assert quantities(f"Reasons:\n{mark}Licensing renewed.") == []
+    assert quantities("|---|---|\n") == []
+    assert quantities("Reasons:\n12.\n") != []
+    assert (
+        "A row's `fairValue`, band, levels, price ÷ value and designation follow the reviewed value"
+        " where `reviewed` is filled; `mechanical` is the engine's value."
+    ) in _tool_entry("screen")
+    template = _flat(_read(TEMPLATE))
+    for words in (
+        "a blank line between paragraphs",
+        "`- ` bullets (not `* `) or `1. ` numbers",
+        "with no blank line needed before it",
+        "a header row, a `|---|` separator row",
+        "`**bold**`",
+        "No heading marks, no links, no nested lists, no images: anything else shows as plain text.",
+    ):
+        assert words in template, words
 
 
 def _read(path: Path) -> str:

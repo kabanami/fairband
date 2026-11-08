@@ -42,12 +42,13 @@ company's latest snapshot (404 "no snapshot for <symbol>" without one): the stru
 of the company's current review when it rests on that snapshot, else the snapshot's (its phase's
 for a refused row), and, on a refused latest snapshot, the company's newest secondary valuation
 resting on that snapshot or one it reprices, else "the report needs a secondary valuation on
-snapshot <id>", unless the company can have none there (``store.secondary.no_secondary``: a
-foreign filer, or no diluted share count, the secondary route's two refusals the agent cannot
-fix); a valued latest snapshot needs none, the secondary route refusing one there (plan 3,
-``no_secondary``'s first reason, "the route values the company"); a work item it names
-must be the company's (404 "no work item <id>", "... for <symbol>") and open (409 "work item <id>
-is <state>"). Then the number check
+snapshot <id>", unless the company can have none there (``store.secondary.no_secondary``): its
+current review rests on that snapshot or one it reprices and has a value, "the review values the
+company" (an override routed it: the secondary valuation is the fallback where neither the route
+nor the review values the company, plan 3), a foreign filer, or no diluted share count; a valued
+latest snapshot needs none, the secondary route refusing one there (``no_secondary``'s first
+reason, "the route values the company"); a work item it names must be the company's (404 "no work
+item <id>", "... for <symbol>") and open (409 "work item <id> is <state>"). Then the number check
 (``check.check_sections`` over the sections, and ``check.check_judgments`` over the judgments'
 decisions, which hold no figure): with findings, the answer is 422
 ``{findings: [{where, what, detail}]}`` and nothing is stored but a ``report`` ledger row that
@@ -55,15 +56,16 @@ points at no record, "rejected: <n> findings", resting on the latest snapshot. W
 is published, 201 ``{report}``: stored as the company's next revision on the snapshot its cites
 rest on (the earliest they name, else the latest), with the review and the secondary valuation
 they cite, else the company's current review when it rests on the latest snapshot or one it
-reprices and, on a refused latest snapshot, its newest secondary valuation when that one does; on
-a valued latest snapshot a secondary valuation on file, one made before plan 3, is the report's
-only when a cite names it, else Appendix A says the route values the company; a valuation review
-reuses the company's newest full report, ``None`` without one. Its judgments, kill criteria and
-news items are stored with it, under its id (an override a judgment names, or a kill criterion a
-news item names, must be the company's: 404; a blank text 400), and the work item named is
-completed. Each record is a ledger row (``report``, ``judgment``, ``kill-criterion``,
-``news-item``, ``complete``) resting on the report's snapshot, the report's and the completion's
-naming the work item, all in one transaction.
+reprices and, on a refused latest snapshot, its newest secondary valuation when that one does;
+where ``no_secondary`` gives a reason a secondary valuation on file (one made before plan 3, or
+before an override routed the company) is the report's only when a cite names it, else Appendix A
+names the reason, the route or the review values the company; a valuation review reuses the
+company's newest full report, ``None`` without one. Its judgments, kill criteria and news items are
+stored with it, under its id (an override a judgment names, or a kill criterion a news item names,
+must be the company's: 404; a blank text 400), and the work item named is completed. Each record is
+a ledger row (``report``, ``judgment``, ``kill-criterion``, ``news-item``, ``complete``) resting on
+the report's snapshot, the report's and the completion's naming the work item, all in one
+transaction.
 
 ``GET /api/companies/{symbol}/reports`` lists the company's revisions newest first, each record
 without its sections: its id, date (``createdAt``), writer, revision, mode, stance and the full
@@ -318,10 +320,12 @@ def add_report_routes(
             secondary = latest_secondary(conn, symbol)
             if secondary is not None and not same_snapshot(conn, secondary.snapshot_id, latest.id):
                 secondary = None
-            exempt = secondary is None and no_secondary(conn, latest) is not None
-            # on a valued snapshot the report talks about the route's value alone: a secondary on
-            # file (one made before plan 3) is the report's only when a cite names it
-            uncited = None if secondary is None or latest.value is not None else secondary.id
+            why = no_secondary(conn, latest, review)
+            exempt = secondary is None and why is not None
+            # where the route or the review values the company the report talks about that value
+            # alone: a secondary on file (one made before plan 3, or before an override routed
+            # the company) is the report's only when a cite names it
+            uncited = None if secondary is None or why is not None else secondary.id
             refusal = structure_refusal(
                 body.mode,
                 body.stance,

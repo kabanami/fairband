@@ -12,13 +12,15 @@ import pytest
 from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
 from support.web import TODAY, _company
 
+from fairband.engine.overrides import Override
+from fairband.engine.review import Review, review_company
 from fairband.engine.route import value_company
 from fairband.engine.secondary import SECONDARY_METHOD, Drivers, Part, secondary_value
 from fairband.engine.types import ValuationResult
 from fairband.policy import load_policy
 from fairband.store.companies import insert_companies
 from fairband.store.ledger import OWNER, Writer
-from fairband.store.reviews import latest_secondary_value
+from fairband.store.reviews import ReviewRow, insert_review, latest_secondary_value, review_row
 from fairband.store.secondary import (
     DerivationRow,
     SecondaryRow,
@@ -278,7 +280,9 @@ def test_no_secondary_names_the_valued_route_first(
 ) -> None:
     """Why a company can have no secondary valuation on a snapshot, in the order the secondary
     route refuses (method 15.4, plan 3): the route values it, before a foreign filer (ADRX, an ADR
-    the route values) and no diluted share count; none on a refused snapshot that can have one."""
+    the route values) and no diluted share count; then the review values it (AAL refused for its
+    target margin, valued by a margin override), before a foreign filer too; none on a refused
+    snapshot that can have one, nor where its review refused."""
     refresh_id = new_refresh()
     adr = replace(_company("ADRX", refresh_id, "An ADR", Decimal(100_000_000_000)), is_adr=True)
     insert_companies(conn, [adr])
@@ -294,15 +298,39 @@ def test_no_secondary_names_the_valued_route_first(
 
     adr_valued = valued(symbol="ADRX")
     assert adr_valued.value is not None
-    assert no_secondary(conn, stored(adr_valued)) == "the route values the company"
+    assert no_secondary(conn, stored(adr_valued), None) == "the route values the company"
     adr_refused = valued(symbol="ADRX", refusal="a test refusal")
-    assert no_secondary(conn, stored(adr_refused)) == "foreign filer"
+    assert no_secondary(conn, stored(adr_refused), None) == "foreign filer"
     no_shares = valued(symbol="NOSH", shares_diluted=None)
-    assert no_secondary(conn, stored(no_shares)) == "no diluted share count"
+    assert no_secondary(conn, stored(no_shares), None) == "no diluted share count"
     young = replace(young_growth_inputs(), symbol="AAL", peers=())
     refused = value_company(young, universe_deciles(), POLICY, TODAY)
     assert refused.value is None and refused.refusal is not None
-    assert no_secondary(conn, stored(refused)) is None
+    on_refused = stored(refused)
+    assert no_secondary(conn, on_refused, None) is None
+    # the review: valued, an override having routed the refused row; refused, as the row is
+    target = Override(1, "margin.target", 0.2, "agent", AGENT.actor, NOW, "the peers by hand")
+    routed = review_company(young, universe_deciles(), POLICY, TODAY, [target], refused)
+    assert routed.result.value is not None
+    valued_review = _review(conn, routed, on_refused.id)
+    still_refused = Review(
+        replace(refused, refusal="the reviewed margin is refused"), None, (), (1,)
+    )
+    refused_review = _review(conn, still_refused, on_refused.id)
+    assert no_secondary(conn, on_refused, valued_review) == "the review values the company"
+    assert no_secondary(conn, on_refused, refused_review) is None
+    # the route's reason first, and the review's before a foreign filer's
+    assert no_secondary(conn, stored(adr_valued), valued_review) == "the route values the company"
+    assert no_secondary(conn, stored(adr_refused), valued_review) == "the review values the company"
+
+
+def _review(conn: sqlite3.Connection, review: Review, snapshot_id: int) -> ReviewRow:
+    """``review`` stored on snapshot ``snapshot_id``, read back."""
+    found = review_row(
+        conn, insert_review(conn, review, "AAL", snapshot_id, None, clock=lambda: NOW)
+    )
+    assert found is not None
+    return found
 
 
 def test_a_derivation_reads_back_exactly(conn: sqlite3.Connection) -> None:

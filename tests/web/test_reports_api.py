@@ -2,9 +2,10 @@
 ``conftest.py``: AAPL (the Mature Growth golden: a price of $150, a value of $133.37), AAL (Young
 Growth, refused for its target margin) and HGCO (High Growth), each with one snapshot and a
 secondary valuation on it (``secondaries``): on AAL's refused snapshot the fallback a report needs,
-on AAPL's and HGCO's valued ones a record made before plan 3 that a report there need not name. A
-clean submission publishes, completes the work item it names and stores its judgments, kill
-criteria and news items; a rejected one stores nothing but its ledger row."""
+on AAPL's and HGCO's valued ones a record made before plan 3 that a report there need not name;
+once a margin override values AAL (``_aal_review``), AAL's is such a record too. A clean
+submission publishes, completes the work item it names and stores its judgments, kill criteria and
+news items; a rejected one stores nothing but its ledger row."""
 
 from contextlib import closing
 from dataclasses import replace
@@ -14,15 +15,20 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
 from support.web import HEADER, NOW, TODAY
 
+from fairband.engine.overrides import Override
+from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.reports.check import HEADINGS, NO_REFERENCE, UNRESOLVED, headings
 from fairband.store.db import connect
+from fairband.store.ledger import Writer
+from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh
+from fairband.store.reviews import insert_review
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -43,6 +49,7 @@ REFUSED_JUDGMENTS = [
     for kind in ("phase", "moat", "belief", "target_margin")
 ]
 ROUTE_VALUES = "no secondary valuation: the route values the company"
+REVIEW_VALUES = "no secondary valuation: the review values the company"
 
 
 def _snapshot_id(client: TestClient, symbol: str = "AAPL") -> int:
@@ -508,6 +515,130 @@ def test_an_older_secondary_on_a_valued_snapshot_is_the_reports_only_when_cited(
     assert (a["secondary"]["id"], a["noSecondary"]) == (secondary_id, None)
     assert a["versions"]["secondary"] == "fairband-secondary/2"
     assert [r["ref"] for r in citing["references"]][-1] == ref
+
+
+def test_a_refused_row_the_review_values_needs_no_secondary(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+) -> None:
+    """The ruling on plan 3's final review: a margin override values AAL, refused for its target
+    margin, so the review is the main method at work and the secondary valuation, the fallback
+    where neither the route nor the review values the company, is refused there (method 15.4).
+    Revalued, AAL's latest snapshot carries no secondary valuation; the report publishes without one
+    and Appendix A says the review values the company, in the JSON and the Markdown (16.3, 16.6)."""
+    sid = _snapshot_id(client, "AAL")
+    with closing(connect(db_path)) as conn:
+        cited = snapshot_row(conn, sid)
+        assert cited is not None and cited.value is None
+        revalued = replace(results["AAL"], data_date=results["AAL"].data_date + timedelta(days=1))
+        latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    review_id = _aal_review(db_path, policy, results, latest, 0.2)
+    report = _published(client, _refused_body(latest), "AAL")
+    assert (report["snapshotId"], report["reviewId"], report["secondaryId"]) == (
+        latest,
+        review_id,
+        None,
+    )
+    a = report["appendixA"]
+    assert (a["secondary"], a["noSecondary"]) == (None, REVIEW_VALUES)
+    text = client.get(f"/api/reports/{report['id']}/markdown").text
+    assert text.split("### Secondary valuation\n\n", 1)[1].split("\n", 1)[0] == REVIEW_VALUES
+
+
+def test_an_older_secondary_on_a_refused_row_the_review_values_is_the_reports_only_when_cited(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
+) -> None:
+    """AAL's secondary valuation was its fallback; a margin override on the same snapshot then
+    values it. A report that does not cite the older secondary publishes without naming it,
+    Appendix A saying the review values the company; one that cites it publishes, the cite resolves
+    and Appendix A names it (method 16.1, as on a valued snapshot)."""
+    sid = _snapshot_id(client, "AAL")
+    secondary_id = secondaries["AAL"]
+    _aal_review(db_path, policy, results, sid, 0.2)
+    plain = _published(client, _refused_body(sid), "AAL")
+    assert plain["secondaryId"] is None
+    a = plain["appendixA"]
+    assert (a["secondary"], a["noSecondary"], a["versions"]["secondary"]) == (
+        None,
+        REVIEW_VALUES,
+        None,
+    )
+    [found] = client.get("/api/companies/AAL/secondary").json()["secondaryValuations"]
+    body = _refused_body(sid)
+    cite = {"cite": f"${found['valuePerShare']:,.2f}", "ref": f"secondary:{secondary_id}/value"}
+    body["sections"][0]["parts"].append(cite)
+    citing = _published(client, body, "AAL")
+    assert citing["secondaryId"] == secondary_id
+    a = citing["appendixA"]
+    assert (a["secondary"]["id"], a["noSecondary"]) == (secondary_id, None)
+
+
+def test_a_refused_row_whose_review_refused_still_needs_a_secondary(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+) -> None:
+    """A current review that refused values nothing: revalued, AAL's latest snapshot needs the
+    fallback on it, whatever its review (method 16.3)."""
+    sid = _snapshot_id(client, "AAL")
+    with closing(connect(db_path)) as conn:
+        cited = snapshot_row(conn, sid)
+        assert cited is not None
+        revalued = replace(results["AAL"], data_date=results["AAL"].data_date + timedelta(days=1))
+        latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    _aal_review(db_path, policy, results, latest, None)
+    r = _submit(client, _refused_body(latest), "AAL")
+    detail = f"the report needs a secondary valuation on snapshot {latest}"
+    assert (r.status_code, r.json()) == (400, {"detail": detail})
+
+
+def _aal_review(
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    snapshot_id: int,
+    margin: float | None,
+) -> int:
+    """An applied margin.target override of AAL, whose route refused for its target margin, and
+    the review on snapshot ``snapshot_id``: valued at ``margin``, else refused as the row is; the
+    review's id."""
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    with closing(connect(db_path)) as conn:
+        override_id = insert_override(
+            conn,
+            "AAL",
+            "margin.target",
+            None,
+            0.2 if margin is None else margin,
+            "ratio",
+            "the peers by hand",
+            [{"kind": "filing", "ref": "10-K 2025", "note": ""}],
+            "lasting",
+            None,
+            None,
+            snapshot_id,
+            writer,
+            NOW,
+            "applied",
+            "",
+        )
+        refused = results["AAL"]
+        if margin is None:
+            result = replace(refused, refusal="the reviewed margin is refused")
+            review = Review(result, None, (), (override_id,))
+        else:
+            target = Override(override_id, "margin.target", margin, "agent", writer.actor, NOW, "")
+            inputs = replace(young_growth_inputs(), symbol="AAL", peers=())
+            review = review_company(inputs, universe_deciles(), policy, TODAY, [target], refused)
+            assert review.result.value is not None
+        return insert_review(conn, review, "AAL", snapshot_id, None, clock=lambda: NOW)
 
 
 @pytest.mark.parametrize(

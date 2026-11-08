@@ -8,10 +8,11 @@ competition"; the stance, one of the policy's ``stance_words``; the required jud
 Stable and ``target_margin`` where it is the revenue-growth route (High Growth, Young Growth) or
 Start-up; the headings, spec 13.1's in its order (``HEADINGS``); and, on a refused latest snapshot
 only, a secondary valuation on the snapshot the report would rest on, "the report needs a
-secondary valuation on snapshot <id>", which a company that can have none there (a foreign filer,
-no diluted share count) is spared. A valued snapshot needs none: the secondary valuation is the
-fallback where the route refuses, and the secondary route refuses one where it values (plan 3);
-the caller says which with ``secondary_on_snapshot``.
+secondary valuation on snapshot <id>", which a company that can have none there (its current
+review values it, a foreign filer, no diluted share count) is spared. A valued snapshot needs
+none: the secondary valuation is the fallback where neither the route nor the review values the
+company, and the secondary route refuses one where either does (plan 3); the caller says which
+with ``secondary_on_snapshot`` (``store.secondary.no_secondary``).
 
 The number check (``check_sections``) walks every part of every section and answers a finding for
 each failure, ``where`` the section and the part counted from 1 and the text at fault,
