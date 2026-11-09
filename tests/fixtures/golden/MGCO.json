@@ -5,7 +5,7 @@
  "flags": [
   {
    "code": "value-spread",
-   "sentence": "The value ranges from 68.14 to 133.37 across the ROIC values or runways tested, a spread of 95.7%, at or above 30.0%.",
+   "sentence": "The value ranges from 65.56 to 133.37 across the ROIC values or runways tested, a spread of 103.4%, at or above 30.0%.",
    "word": "Value spread"
   }
  ],
@@ -525,7 +525,7 @@
   ],
   "growth_share": 0.6111111111111112,
   "implied_by_roic": {
-   "0.09": 0.1419459915161133,
+   "0.09": null,
    "0.15": 0.1189719009399414,
    "runway": 0.07841587066650388,
    "ten-year": 0.09587795257568357
@@ -534,7 +534,7 @@
   "implied_growth_by_runway": {
    "10": 0.14611125946044923,
    "20": 0.07841587066650388,
-   "5": 0.46567409515380853
+   "5": 0.47207706451416015
   },
   "income_basis": "flows over market cap",
   "moat": "Wide",
@@ -645,7 +645,7 @@
   "shares": 1000000000.0,
   "terminal_roic": 0.13,
   "value_by_roic": {
-   "0.09": 68.13996597759576,
+   "0.09": 65.55555555555543,
    "0.15": 103.44673381122892,
    "runway": 133.36653551867192,
    "ten-year": 119.00706592794583

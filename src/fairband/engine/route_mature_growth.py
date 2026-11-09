@@ -62,7 +62,7 @@ from fairband.engine.flags import long_runway_flag, value_spread_flag
 from fairband.engine.mature_growth import (
     Charge,
     GrowthPath,
-    first_floored_year,
+    first_negative_year,
     growth_rates,
     implied_growth,
     value_at_belief,
@@ -359,12 +359,12 @@ def _roic_charges(
 
 
 def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:
-    """``growth-above-return`` on the first year t whose payout the floor raised to zero: year
+    """``growth-above-return`` on the first year t that pays out less than nothing: year
     t + 1's growth, which year t's reinvestment pays for, and the return year t pays at."""
-    floored = first_floored_year(growth, charge)
-    if floored is None:
+    first = first_negative_year(growth, charge)
+    if first is None:
         return None
-    t, g, ret = floored
+    t, g, ret = first
     return Flag(
         "growth-above-return",
         "Growth above return",

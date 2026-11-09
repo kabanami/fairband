@@ -11,11 +11,14 @@ from fairband.engine.mature_growth import (
     Charge,
     GrowthPath,
     cash_to_equity,
+    charge_growth,
     earnings_by_year,
-    first_floored_year,
-    floored_years,
+    first_negative_year,
     growth_rates,
+    hold_years,
     implied_growth,
+    negative_years,
+    return_by_year,
     solve_root,
     terminal_multiple,
     value_at_belief,
@@ -32,6 +35,9 @@ NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
 R, GT = 0.09, 0.03
 FADE = GrowthPath(1000.0, (0.25, 0.26), 0.053, 20, fade_years=5)
 CHARGE = Charge(0.149, 0.13, R, GT)
+# spec 2026-11-09 section 13: the worked path, runway 5, with its revenue steps and its hold
+TOY = GrowthPath(100.0, (0.25, 0.20), 0.05, 5, 5, revenue_steps=(0.15, 0.10))
+TOY_CHARGE = Charge(0.20, 0.13, R, GT, hold=4)
 
 
 def worked_example() -> GrowthPath:
@@ -92,7 +98,7 @@ def test_charge_off_keeps_the_terminal_charge() -> None:
     assert value_at_belief(FADE, replace(CHARGE, charge_off=True)) == pytest.approx(
         37618.17, abs=0.01
     )
-    assert floored_years(FADE, replace(CHARGE, charge_off=True)) == ()  # no charge, no floor
+    assert negative_years(FADE, replace(CHARGE, charge_off=True)) == ()  # no charge, none < 0
 
 
 def test_growth_rates_take_the_belief_for_missing_steps() -> None:
@@ -116,11 +122,10 @@ def test_earnings_by_year() -> None:
     assert earnings_by_year(GrowthPath(100.0, (0.10, None), 0.05, 1)) == (100.0,)
 
 
-def test_cash_to_equity() -> None:
-    assert cash_to_equity(100.0, 0.10, 0.20) == pytest.approx(50.0)
-    assert cash_to_equity(100.0, -0.05, 0.20) == pytest.approx(125.0)
-    assert cash_to_equity(100.0, 0.10, math.inf) == 100.0
-    assert cash_to_equity(100.0, 0.10, 0.20, charge_off=True) == 100.0
+def test_cash_to_equity_has_no_floor() -> None:
+    assert cash_to_equity(100.0, 0.25, 0.20) == pytest.approx(-25.0)
+    assert cash_to_equity(100.0, 0.25, 0.20, charge_off=True) == 100.0
+    assert cash_to_equity(100.0, 0.25, math.inf) == 100.0
 
 
 def test_value_timing_by_hand() -> None:
@@ -160,15 +165,12 @@ def test_fade_path_rates_and_earnings() -> None:
     assert growth_rates(FADE)[6:] == (0.053,) * 13
 
 
-def test_value_with_the_fade_and_the_floor() -> None:
-    assert value_at_belief(FADE, CHARGE) == pytest.approx(24941.95, abs=0.01)
-    assert value_at_belief(replace(FADE, fade_years=0), CHARGE) == pytest.approx(19699.10, abs=0.01)
-
-
 def test_fade_cut_by_the_runway() -> None:
     five = replace(FADE, runway=5)
     assert growth_rates(five) == pytest.approx((0.25, 0.26, 0.2186, 0.1772), abs=1e-4)
-    assert value_at_belief(five, CHARGE) == pytest.approx(20520.66, abs=0.01)
+    # spec 2026-11-09 6.1: years 1 to 4 pay for growth above the 14.9% return and pay out less
+    # than nothing, where the floor held them at zero (20,520.66)
+    assert value_at_belief(five, CHARGE) == pytest.approx(18289.57, abs=0.01)
 
 
 def test_no_fade_when_g3_is_at_or_below_the_belief() -> None:
@@ -180,24 +182,77 @@ def test_no_fade_when_g3_is_at_or_below_the_belief() -> None:
 def test_no_fade_when_g3_is_the_belief() -> None:
     path = GrowthPath(1000.0, (0.25, None), 0.053, 20, fade_years=5)
     assert growth_rates(path)[1:4] == pytest.approx((0.053, 0.053, 0.053))
-    assert floored_years(path, CHARGE) == (1,)  # year 1 pays for the 25% step and floors
+    assert negative_years(path, CHARGE) == (1,)  # year 1 pays for the 25% step, above 14.9%
 
 
-def test_payout_floor() -> None:
-    assert cash_to_equity(100.0, 0.25, 0.149) == 0.0  # -67.79 before the floor
-    assert cash_to_equity(100.0, 0.053, 0.149) == pytest.approx(64.43, abs=0.01)
-    assert floored_years(FADE, CHARGE) == (1, 2, 3, 4)  # growth above 14.9% in years 2 to 5
+def test_charge_growth_reads_the_revenue_steps_then_fades_to_the_belief() -> None:
+    assert charge_growth(TOY) == pytest.approx((0.15, 0.10, 0.09, 0.08))
+    assert growth_rates(TOY) == pytest.approx((0.25, 0.20, 0.17, 0.14))
 
 
-def test_first_floored_year() -> None:
-    # year 1's reinvestment pays for year 2's 25% at the 14.9% runway return
-    assert first_floored_year(FADE, CHARGE) == (1, 0.25, 0.149)
-    path = GrowthPath(1000.0, (0.04, 0.05), 0.053, 20, fade_years=5)
-    assert floored_years(path, CHARGE) == () and first_floored_year(path, CHARGE) is None
-    # year N pays for g_t at the terminal return: one below g_t, which the engine never uses,
-    # floors year N alone
-    steep = Charge(0.149, 0.02, R, GT)
-    assert first_floored_year(path, steep) == (20, GT, 0.02)
+def test_a_missing_revenue_step_takes_the_earnings_step() -> None:
+    path = replace(TOY, revenue_steps=(0.15, None))
+    assert charge_growth(path) == pytest.approx((0.15, 0.20, 0.17, 0.14))
+    assert charge_growth(replace(TOY, revenue_steps=None)) == growth_rates(TOY)
+
+
+def test_a_missing_earnings_step_with_a_present_revenue_step() -> None:
+    path = replace(TOY, steps=(None, 0.20))  # the earnings step takes the belief
+    assert growth_rates(path)[0] == pytest.approx(0.05)
+    assert charge_growth(path)[0] == pytest.approx(0.15)
+
+
+def test_hold_years_is_the_last_year_above_the_belief() -> None:
+    assert hold_years(TOY) == 4
+    assert hold_years(replace(TOY, runway=10)) == 6
+    assert hold_years(GrowthPath(100.0, (0.02, 0.20), 0.05, 10, 5)) == 6  # a flat step inside
+    assert hold_years(GrowthPath(100.0, (GT, GT), GT, 10, 5)) == 0
+    assert hold_years(GrowthPath(100.0, (0.25, 0.20), 0.05, 1, 5)) == 0
+
+
+def test_return_by_year_holds_then_fades() -> None:
+    assert return_by_year(TOY_CHARGE, 5) == pytest.approx((0.20, 0.20, 0.20, 0.20, 0.13))
+    ten = Charge(0.20, 0.13, R, GT, hold=6)
+    assert return_by_year(ten, 10) == pytest.approx(
+        (0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.1825, 0.165, 0.1475, 0.13)
+    )
+    stable = Charge(0.20, 0.13, R, GT, hold=0)
+    assert return_by_year(stable, 10)[0] == pytest.approx(0.193)
+    assert return_by_year(stable, 1) == (0.13,)  # a one-year runway: T alone, no division by zero
+    as_built = Charge(0.20, 0.13, R, GT)  # hold None: R through year N − 1, T in year N
+    assert return_by_year(as_built, 5) == pytest.approx((0.20, 0.20, 0.20, 0.20, 0.13))
+    assert return_by_year(as_built, 1) == (0.13,)
+
+
+def test_value_on_the_spec_s_runway_5_path() -> None:
+    assert value_at_belief(TOY, TOY_CHARGE) == pytest.approx(2030.9538, abs=1e-3)
+    earnings_only = replace(TOY, revenue_steps=None)
+    flat = Charge(0.20, 0.13, R, GT, hold=4)
+    assert value_at_belief(earnings_only, flat) == pytest.approx(1848.8476, abs=1e-3)
+
+
+def test_value_on_the_spec_s_runway_10_paths() -> None:
+    ten = replace(TOY, runway=10)
+    assert value_at_belief(ten, Charge(0.20, 0.13, R, GT, hold=6)) == pytest.approx(
+        2293.8222, abs=1e-3
+    )
+    stable = GrowthPath(100.0, (GT, GT), GT, 10, 5)
+    assert value_at_belief(stable, Charge(0.20, 0.13, R, GT, hold=0)) == pytest.approx(
+        1315.0993, abs=1e-3
+    )
+
+
+def test_the_fallback_example() -> None:
+    path = replace(TOY, revenue_steps=(0.15, None))
+    assert value_at_belief(path, TOY_CHARGE) == pytest.approx(1894.7191, abs=1e-3)
+
+
+def test_negative_years_name_the_owner_s_money_going_in() -> None:
+    path = replace(TOY, revenue_steps=None)
+    assert negative_years(path, TOY_CHARGE) == (1,)
+    assert first_negative_year(path, TOY_CHARGE) == pytest.approx((1, 0.25, 0.20))
+    assert negative_years(TOY, TOY_CHARGE) == ()
+    assert negative_years(path, Charge(0.20, 0.13, R, GT, True, 4)) == ()  # the charge off
 
 
 def test_solve_root_finds_the_first_sign_change() -> None:

@@ -29,6 +29,15 @@ designation at $3.00 is "well-below", the run-off is worth more than $3.00 at ev
 the scan reads so there is no implied decline rate, the expected return grows at the path's own
 rates, and `runoff_path` gains `consensus_years` (3: the fixture's consensus ends at base + 2).
 
+MGCO re-captured under 1.0 on 2026-11-09 for the payout floor's removal (spec 2026-11-09 section
+6.1), before the routes pass the charge's hold and revenue steps: a year whose growth outruns its
+return now pays out less than nothing. The row's own charge, at its 43.1% return, has no such
+year, so its value (133.37 a share), levels and designation are unchanged; the sensitivities that
+charge growth above their return move. At the 9% return, equal to r, the value is year-1 earnings
+over r on any path, 65.56 a share (68.14 under 0.9), so no belief reaches the price and
+`implied_by_roic` `0.09` is null (14.19%); the five-year runway's implied growth is 47.21%
+(46.57%); and `value-spread` reads its range from 65.56, a spread of 103.4% (95.7%).
+
 Run from the repository root:
 
 ```

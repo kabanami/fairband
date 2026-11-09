@@ -34,16 +34,10 @@ from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH, apply_overlay
 
 TODAY = date(2026, 10, 31)
-# At a return equal to r, growth up to r adds no value and the value is year-1 earnings over r;
-# years 1 to 3 pay for the 12% and 10% steps and year 4's 9.26% (the first fade step from 10% to
-# the 6.3% belief), above r, and the payout floor raises their cash from below zero to zero,
-# which adds it back.
-VALUE_AT_R = (
-    5.90 / 0.09
-    + 5.90 * (0.12 / 0.09 - 1) / 1.09
-    + 5.90 * 1.12 * (0.10 / 0.09 - 1) / 1.09**2
-    + 5.90 * 1.12 * 1.10 * (0.0926 / 0.09 - 1) / 1.09**3
-)
+# At a return equal to r, growth adds no value and the value is year-1 earnings over r, whatever
+# the path: with the payout floor off (spec 2026-11-09 6.1), years 1 to 3, which pay for growth
+# above r, pay out less than nothing, where the floor added their cash back.
+VALUE_AT_R = 5.90 / 0.09
 
 MATURE_GROWTH_KEYS = {
     "anchor",
@@ -249,13 +243,10 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert list(im["implied_by_roic"]) == ["runway", "0.15", "0.09", "ten-year"]
     assert im["implied_by_roic"]["runway"] == implied
     assert implied < im["implied_by_roic"]["ten-year"] < im["implied_by_roic"]["0.15"]
-    # at a ROIC equal to r growth up to r adds no value; only growth above r, which the payout
-    # floor makes free, reaches the price
+    # at a ROIC equal to r growth adds no value at any belief, the payout floor being off (spec
+    # 2026-11-09 6.1), so no belief reaches the price
     assert im["value_by_roic"]["0.09"] == pytest.approx(VALUE_AT_R)
-    at_r = im["implied_by_roic"]["0.09"]
-    assert at_r > 0.09 and at_r > im["implied_by_roic"]["0.15"]
-    at_r_value = value_at_belief(replace(growth, belief=at_r), Charge(0.09, 0.09, 0.09, 0.03))
-    assert at_r_value / 1_000e6 == pytest.approx(150.0, rel=1e-6)
+    assert im["implied_by_roic"]["0.09"] is None
     # at $170 a 5-year runway needs growth beyond the old 50% bracket of the solve
     assert im["implied_growth_by_runway"]["10"] > implied
     five = reprice(r, 170.0, date(2026, 11, 2), policy).intermediates["implied_growth_by_runway"]
@@ -502,7 +493,7 @@ def test_flags_in_order_without_duplicates(
         "sbc-basis-unknown",  # the anchor
         "few-analysts",  # the path
         "roic-on-n-years",  # the ROIC
-        "growth-above-return",  # the payout floor
+        "growth-above-return",  # a year that pays out less than nothing
         "margin-flag",
         "large-nri",
         "long-runway-high-growth",
@@ -548,7 +539,7 @@ def test_growth_above_return_flag(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     # consensus net income up 50% a year in fiscal 2028 and 2029, above the 43.1% marginal return:
-    # years 1 and 2 would reinvest more than they earn, so their payouts floor at zero
+    # years 1 and 2 reinvest more than they earn, so they pay out less than nothing
     base, second, third = mg_inputs.annual_estimates
     steep = replace(
         mg_inputs,
