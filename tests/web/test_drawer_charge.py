@@ -27,19 +27,35 @@ GROWTH = "Growth the charge pays for"
 NEWEST = "Newest year's marginal return"
 
 
-def _rows(im: dict[str, Any]) -> list[list[Any]]:
-    """``chargeRows(im)`` as app.js returns it: [label, text, numeric] rows."""
+def _call(helper: str, *args: Any) -> Any:
+    """What app.js's ``helper`` returns on ``args``, through JSON."""
     assert NODE is not None
     done = subprocess.run(
-        [NODE, str(HARNESS), str(BUNDLE), str(APP), "chargeRows"],
-        input=json.dumps([im]),
+        [NODE, str(HARNESS), str(BUNDLE), str(APP), helper],
+        input=json.dumps(list(args)),
         capture_output=True,
         text=True,
         check=True,
         timeout=60,
     )
-    rows: list[list[Any]] = json.loads(done.stdout)
+    return json.loads(done.stdout)
+
+
+def _rows(im: dict[str, Any]) -> list[list[Any]]:
+    """``chargeRows(im)`` as app.js returns it: [label, text, numeric] rows."""
+    rows: list[list[Any]] = _call("chargeRows", im)
     return rows
+
+
+def _texts(node: Any) -> list[str]:
+    """The text of an element tree, in order: its strings and its children's."""
+    if isinstance(node, str):
+        return [node]
+    if isinstance(node, list):
+        return [text for child in node for text in _texts(child)]
+    if isinstance(node, dict):
+        return _texts(node.get("props", {}).get("children", []))
+    return []
 
 
 def _golden(symbol: str) -> dict[str, Any]:
@@ -104,6 +120,23 @@ def test_msco_fades_from_year_1_on_the_terminal_growth() -> None:
         [RETURNS, "fading from 18.0% in year 1 to 13.0% in year 20", False],
         [GROWTH, "3.0% a year, the terminal growth", False],
         [NEWEST, "18.3%", True],
+    ]
+
+
+def test_a_refused_mature_row_draws_its_charge_under_its_phase_s_route() -> None:
+    """A Mature Growth row refused "value not positive under the reinvestment charge" has no route
+    but keeps its charge, the row whose cash years go below zero: the section takes the route's
+    name from the phase and draws the Charge group."""
+    result = {"route": None, "phase": {"phase": "Mature Growth"}, "intermediates": _golden("MGCO")}
+    assert _texts(_call("matureRoute", result)) == [
+        "Mature growth route",
+        "Charge",
+        RETURNS,
+        "43.1% through year 6, then fading to 13.0% in year 20",
+        GROWTH,
+        "12.0% then 10.0%, the earnings growth: years 2 and 3 have no revenue consensus",
+        NEWEST,
+        "45.7%",
     ]
 
 

@@ -1812,13 +1812,16 @@ def test_app_js_drawer_says_the_fade_the_ramp_and_the_stable_cross_check() -> No
 def test_app_js_drawer_draws_the_charge_of_a_mature_row() -> None:
     """Spec 2026-11-09 12: a Mature Growth or Mature Stable row's Details draw the route's section,
     named as the meter's caption names the route, with one group, Charge, of ``chargeRows``'s rows
-    (``tests/web/test_drawer_charge.py`` reads their words). The routes' refusals have no route, and
-    only the two mature routes write ``charge`` at the top of the intermediates."""
+    (``tests/web/test_drawer_charge.py`` reads their words). Only the two mature routes write
+    ``charge`` at the top of the intermediates, and a row they refuse for a value at or below zero
+    keeps it without a route, so the section draws on the key and a refused row's takes the name
+    of its phase's route."""
     script = _static_file("app.js")
-    details = _function(script, "details")
-    assert "var mature = r.route === 'mature-growth' || r.route === 'mature-stable';" in details
+    assert "'charge' in im ? matureRoute(r) : null," in _function(script, "details")
+    mature = "var MATURE = { 'Mature Growth': 'mature-growth', 'Mature Stable': 'mature-stable' };"
+    assert mature in script
     route = _function(script, "matureRoute")
-    assert "return section('mature', ROUTES[r.route]," in route
+    assert "return section('mature', ROUTES[r.route || MATURE[r.phase.phase]]," in route
     assert "group('charge', 'Charge', pairs(chargeRows(r.intermediates))));" in route
 
 
@@ -1970,7 +1973,7 @@ def test_details_order_is_pinned() -> None:
         "h(F.ValidityWindow, {",
         "'Phase evidence'",
         "growth ? revenueRoute(r) : null",
-        "mature && 'charge' in im ? matureRoute(r) : null,",
+        "'charge' in im ? matureRoute(r) : null,",
         "section('inputs', 'Inputs'",
         "'Intermediate results'",
         "section('flags', 'Flags'",
@@ -2702,6 +2705,7 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
         "asking: asking",
         "requestResearch: requestResearch",
         "chargeRows: chargeRows",
+        "matureRoute: matureRoute",
     ):
         assert name in exposed, name
 

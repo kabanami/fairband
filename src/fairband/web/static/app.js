@@ -182,8 +182,8 @@
      drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
      evidence, pairs, a date, a total, a count, a report's footnote numbers, and Request research
-     with a request of its own (asking). The drawer's charge rows are here for the tests, which
-     read them in node (tests/web/page.mjs). */
+     with a request of its own (asking). The drawer's charge section and its rows are here for
+     the tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
@@ -198,7 +198,7 @@
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
     phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, plain: plain,
     footnotes: footnotes, asking: asking, requestResearch: requestResearch,
-    chargeRows: chargeRows
+    chargeRows: chargeRows, matureRoute: matureRoute
   };
 
   function load() {
@@ -861,7 +861,6 @@
     var im = r.intermediates;
     var phase = PHASE_NUMBER[r.phase.phase];
     var growth = r.route === 'revenue-growth';
-    var mature = r.route === 'mature-growth' || r.route === 'mature-stable';
     var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
     var review = body.review;
     var secondary = body.secondary;
@@ -1005,8 +1004,9 @@
       section('phase', 'Phase evidence', pairs(evidence(r.phase, phase)),
         methodologyLink(r, phase)),
       growth ? revenueRoute(r) : null,
-      /* A mature row's charge, in words; the two routes' refusals have no route. */
-      mature && 'charge' in im ? matureRoute(r) : null,
+      /* Only the two mature routes write the charge, and a row they refuse for a value at or
+         below zero keeps it without a route: the reader most needs it there. */
+      'charge' in im ? matureRoute(r) : null,
       /* A Decline row refused for a value at or below zero keeps its figures but has no route,
          and a Start-up row is always a refusal with its figures: each draws from the
          intermediates only its route writes. */
@@ -1545,10 +1545,14 @@
 
   /* ------------------------------------------- the Mature Growth and Mature Stable routes */
 
-  /* A row valued on its earnings path (method 4.8, 5 and 6): the charge, in words (spec
-     2026-11-09 12). The figures behind it are among the intermediates. */
+  /* The route of a mature phase, for a refused row, which has none. */
+  var MATURE = { 'Mature Growth': 'mature-growth', 'Mature Stable': 'mature-stable' };
+
+  /* A row on its earnings path (method 4.8, 5 and 6), valued or refused for a value at or below
+     zero: the charge, in words (spec 2026-11-09 12), under the route's name, a refused row's by
+     its phase. The figures behind it are among the intermediates. */
   function matureRoute(r) {
-    return section('mature', ROUTES[r.route],
+    return section('mature', ROUTES[r.route || MATURE[r.phase.phase]],
       group('charge', 'Charge', pairs(chargeRows(r.intermediates))));
   }
 
