@@ -1809,6 +1809,19 @@ def test_app_js_drawer_says_the_fade_the_ramp_and_the_stable_cross_check() -> No
     assert script.count("crossCheck(im.growth_route)") == 2
 
 
+def test_app_js_drawer_draws_the_charge_of_a_mature_row() -> None:
+    """Spec 2026-11-09 12: a Mature Growth or Mature Stable row's Details draw the route's section,
+    named as the meter's caption names the route, with one group, Charge, of ``chargeRows``'s rows
+    (``tests/web/test_drawer_charge.py`` reads their words). The routes' refusals have no route, and
+    only the two mature routes write ``charge`` at the top of the intermediates."""
+    script = _static_file("app.js")
+    details = _function(script, "details")
+    assert "var mature = r.route === 'mature-growth' || r.route === 'mature-stable';" in details
+    route = _function(script, "matureRoute")
+    assert "return section('mature', ROUTES[r.route]," in route
+    assert "group('charge', 'Charge', pairs(chargeRows(r.intermediates))));" in route
+
+
 def test_app_js_drawer_draws_the_requirement() -> None:
     """Spec 9.2 and 9.4: a Start-up row's drawer, under its refusal, states the revenue its price
     needs in year 10 (a multiple of the trailing revenue when there is one), the target margin
@@ -1957,6 +1970,7 @@ def test_details_order_is_pinned() -> None:
         "h(F.ValidityWindow, {",
         "'Phase evidence'",
         "growth ? revenueRoute(r) : null",
+        "mature && 'charge' in im ? matureRoute(r) : null,",
         "section('inputs', 'Inputs'",
         "'Intermediate results'",
         "section('flags', 'Flags'",
@@ -2687,6 +2701,7 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
         "footnotes: footnotes",
         "asking: asking",
         "requestResearch: requestResearch",
+        "chargeRows: chargeRows",
     ):
         assert name in exposed, name
 

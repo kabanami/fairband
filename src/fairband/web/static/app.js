@@ -182,7 +182,8 @@
      drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
      evidence, pairs, a date, a total, a count, a report's footnote numbers, and Request research
-     with a request of its own (asking). */
+     with a request of its own (asking). The drawer's charge rows are here for the tests, which
+     read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
@@ -196,7 +197,8 @@
     meter: meter, inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
     phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, plain: plain,
-    footnotes: footnotes, asking: asking, requestResearch: requestResearch
+    footnotes: footnotes, asking: asking, requestResearch: requestResearch,
+    chargeRows: chargeRows
   };
 
   function load() {
@@ -859,6 +861,7 @@
     var im = r.intermediates;
     var phase = PHASE_NUMBER[r.phase.phase];
     var growth = r.route === 'revenue-growth';
+    var mature = r.route === 'mature-growth' || r.route === 'mature-stable';
     var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
     var review = body.review;
     var secondary = body.secondary;
@@ -1002,6 +1005,8 @@
       section('phase', 'Phase evidence', pairs(evidence(r.phase, phase)),
         methodologyLink(r, phase)),
       growth ? revenueRoute(r) : null,
+      /* A mature row's charge, in words; the two routes' refusals have no route. */
+      mature && 'charge' in im ? matureRoute(r) : null,
       /* A Decline row refused for a value at or below zero keeps its figures but has no route,
          and a Start-up row is always a refusal with its figures: each draws from the
          intermediates only its route writes. */
@@ -1536,6 +1541,66 @@
      Appendix A (18.4). */
   function phaseEvidence(p) {
     return pairs(evidence(p, PHASE_NUMBER[p.phase]));
+  }
+
+  /* ------------------------------------------- the Mature Growth and Mature Stable routes */
+
+  /* A row valued on its earnings path (method 4.8, 5 and 6): the charge, in words (spec
+     2026-11-09 12). The figures behind it are among the intermediates. */
+  function matureRoute(r) {
+    return section('mature', ROUTES[r.route],
+      group('charge', 'Charge', pairs(chargeRows(r.intermediates))));
+  }
+
+  /* The charge's rows (spec 2026-11-09 6.2 and 6.3): the return each year's reinvestment pays
+     at; the growth it pays for in years 2 and 3 beside the earnings growth, or on a Mature Stable
+     row the terminal growth in every year; and the newest year's marginal return, shown and
+     never used, when there is one. */
+  function chargeRows(im) {
+    var c = im.charge, rr = im.runway_return || {};
+    var rows = [
+      ['Return by year', returnByYear(c.return_by_year, c.hold_years, rr.used === 'off'), false],
+      ['Growth the charge pays for', 'stable_growth' in im
+        ? F.formatPercent(c.growth_by_year[c.growth_by_year.length - 1]) +
+          ' a year, the terminal growth'
+        : paidFor(c, im.growth_rates), false]
+    ];
+    if (rr.one_year != null) {
+      rows.push(['Newest year\'s marginal return', F.formatPercent(rr.one_year), true]);
+    }
+    return rows;
+  }
+
+  /* The return by year from its ends and the hold (method 4.8): years 1 to N - 1 uncharged when
+     the charge is off (4.6 rule 4); one figure when both ends read the same; with no hold, faded
+     from year 1; with the hold at N - 1 or more, held to year N - 1, the shape before method 1.0;
+     else held through the hold and faded to year N. */
+  function returnByYear(returns, hold, off) {
+    var n = returns.length, first = F.formatPercent(returns[0]);
+    var end = F.formatPercent(returns[n - 1]), last = end + ' in year ' + n;
+    if (n === 1) return last;
+    if (off) return 'no charge in years 1 to ' + (n - 1) + ', then ' + last;
+    if (first === end) return first + ' in every year';
+    if (hold === 0) return 'fading from ' + first + ' in year 1 to ' + last;
+    if (hold >= n - 1) return first + ' through year ' + (n - 1) + ', then ' + last;
+    return first + ' through year ' + hold + ', then fading to ' + last;
+  }
+
+  /* Years 2 and 3's growth the charge pays for, the consensus revenue steps, beside the earnings
+     growth as the path resolved it; a year without a revenue step pays for its earnings growth,
+     and the row says so (method 4.8). */
+  function paidFor(c, earnings) {
+    var h = c.growth_by_year, steps = c.revenue_steps;
+    var paid = F.formatPercent(h[0]) + ' then ' + F.formatPercent(h[1]);
+    var against = ', against earnings of ' + F.formatPercent(earnings[0]) + ' then ' +
+      F.formatPercent(earnings[1]);
+    var missing = ' has no revenue consensus and takes its earnings growth';
+    if (steps[0] != null && steps[1] != null) return paid + ' on revenue' + against;
+    if (steps[0] == null && steps[1] == null) {
+      return paid + ', the earnings growth: years 2 and 3 have no revenue consensus';
+    }
+    return paid + against + (steps[0] == null ? ': year 2' + missing + ', year 3 is on revenue'
+      : ': year 2 is on revenue, year 3' + missing);
   }
 
   /* ---------------------------------------------------- the revenue growth route */
