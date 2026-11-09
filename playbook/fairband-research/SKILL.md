@@ -73,16 +73,17 @@ First, the refresh. Every item: refresh the company before you read it, so the r
 the latest price and the row's price, price ÷ value and designation are current when the report
 publishes. The stored price is the last refresh's close, which may be days old.
 
+A scoped refresh fetches the company's price and statements again and values it. It takes about
+a minute.
+
 - Call `refresh_start("scoped", [symbol])`. When it is refused because a refresh is running, call
   `refresh_status()` until that one ends, then start yours.
 - Call `refresh_status()` until its `refresh` is `null`: no refresh is running, and `last` is the
   one you started.
 - When `last` ends with a `status` other than `done`, tell the user, go on with the stored
   snapshot, and write the price's date in section 9 of the report.
-- Then read the company as below. Its `price_date` is the refreshed close when the refresh ran.
-
-A scoped refresh fetches the company's price and statements again and values it. It takes about
-a minute.
+- Read the company as below. Its `price_date` is the refreshed close when the refresh ended
+  `done`.
 
 Then read everything the page shows:
 
@@ -149,9 +150,9 @@ Then build the seven parts:
    anchors on earnings without them.
 3. **The story management is telling.** Quote the frame in their words. Then take three to five
    claims. For each: the claim with its figure and its timeline; the evidence for it in the
-   numbers; the driver it moves in the engine's terms (the growth of years two and three, the
-   belief, the held rate, the target margin, the reinvestment, the moat, the risk); and the test
-   that would show it true or false, and by when. Give each a verdict in Damodaran's words.
+   numbers; the driver it moves, written as the register's phrase for it (`reference/register.md`,
+   "The words a report writes"); and the test that would show it true or false, and by when. Give
+   each a verdict in Damodaran's words.
    **Possible**: it could happen. **Plausible**: the evidence makes it believable. **Probable**:
    the evidence makes it more likely than not. Only a probable claim moves a figure in step 10.
    Then the drift since the previous call: a claim that grew or vanished, new words such as
@@ -387,9 +388,9 @@ The rules:
   for a stated period, on a reported basis. A range takes its midpoint.
 - A figure in words ("upper teens"), a one-sided figure ("at least"), an adjusted figure with no
   bridge to GAAP and a constant-currency figure stay out of the valuation. Discuss them in section
-  5: the consensus stands. Record an adjusted or a constant-currency range with its basis. A
-  figure in words or a one-sided one has no low and high: record it as a finding with its text and
-  no value.
+  5; the valuation keeps the consensus. Record an adjusted or a constant-currency range with its
+  basis. A figure in words or a one-sided one has no low and high: record it as a finding with its
+  text and no value.
 - A next-quarter figure feeds no override. With three quarters of the year reported, the next
   twelve months run into the year after, so the year the quarter completes sits behind every input
   the engine reads. Record the quarter's guidance all the same. When it completes the fiscal year
