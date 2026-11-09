@@ -247,23 +247,26 @@ def test_the_fallback_example() -> None:
     assert value_at_belief(path, TOY_CHARGE) == pytest.approx(1894.7191, abs=1e-3)
 
 
-def test_at_a_return_of_r_only_the_margin_change_moves_with_the_belief() -> None:
-    """Method 5.8: at a return equal to r in every year the value is year-1 earnings over r plus
-    the worth of the margin change (earnings growth above or below the revenue growth), which
-    moves with the belief only where the year-3 steps differ and the belief lies below either."""
+def test_at_a_return_of_r_the_belief_enters_only_through_the_margin_change() -> None:
+    """Method 5.8: at a return equal to r in every year the charge takes every dollar of revenue
+    growth, so the value is year-1 earnings over r plus the present value of the uncharged margin
+    change in the years the two paths differ, and the belief enters only through those years'
+    figures. Pinned: on the review's path (earnings steps 12% and 10%, revenue steps 8% and 7%)
+    the value moves with the belief; on a path whose two steps agree, with no earnings step
+    missing, it is flat at year-1 earnings over r."""
     at_r = Charge(0.09, 0.09, 0.09, 0.03, hold=6)
     path = GrowthPath(100.0, (0.12, 0.10), 0.063, 20, 5, revenue_steps=(0.08, 0.07))
 
     def value(p: GrowthPath, belief: float) -> float:
         return value_at_belief(replace(p, belief=belief), at_r)
 
-    below = [value(path, b) for b in (-0.5, 0.0, 0.063, 0.08, 0.095)]
-    assert len(set(below)) == 5  # a fade runs on either path: the value moves
-    assert value(path, 0.10) == pytest.approx(value(path, 0.30))  # at or above both: no fade
+    moving = [value(path, b) for b in (-0.5, 0.0, 0.063, 0.08, 0.095)]
+    assert len(set(moving)) == 5
     assert implied_growth(1240.0, path, at_r) == pytest.approx(-0.3503, abs=1e-4)
-    agree_in_year_3 = replace(path, revenue_steps=(0.08, 0.10))
-    assert value(agree_in_year_3, -0.5) == pytest.approx(value(agree_in_year_3, 0.12))
-    no_revenue = replace(path, revenue_steps=None)
+    agree = replace(path, revenue_steps=(0.12, 0.10))  # the earnings steps as the revenue steps
+    assert value(agree, 0.0) == pytest.approx(value(agree, 0.10))
+    assert value(agree, 0.0) == pytest.approx(100.0 / 0.09)
+    no_revenue = replace(path, revenue_steps=None)  # the charge falls back on the earnings steps
     for belief in (-0.5, 0.063, 0.3):
         assert value(no_revenue, belief) == pytest.approx(100.0 / 0.09)
 
