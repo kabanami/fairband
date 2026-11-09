@@ -312,15 +312,21 @@ carry the stance.
 
 Write the twelve sections of `reference/report-template.md`, ten for a valuation review. Cite every
 quantity, by the rules of `reference/citations.md`. Give the judgments as the record of your
-decisions, each `{judgment, decision, override_id?}`. Submit with `report_submit`. The server
-publishes a report whole or rejects it whole. A structural refusal (the section count, the stance,
-a judgment, a heading, or no secondary valuation on a refused snapshot) is one sentence: fix it and
-submit again. A valued snapshot needs no secondary valuation: Appendix A says "no secondary
-valuation: the route values the company". A refused snapshot your review values needs none either:
-Appendix A says "no secondary valuation: the review values the company". A foreign filer and a
-snapshot with no diluted share count need none: the server refused one, section 8 says why, and
-Appendix A names the reason. A rejection (422) lists the findings: fix each one and submit
-again.
+decisions, each `{judgment, decision, override_id?}`.
+
+Before you submit, read the report once as its reader: someone who has never seen Fairband, will
+not read its method, and wants to know what the company is worth and why. Rewrite every sentence
+that needs the Methodology page to follow, by `reference/register.md`, "The words a report
+writes". Then read the summary alone: it must stand on its own, since many readers stop there.
+
+Submit with `report_submit`. The server publishes a report whole or rejects it whole. A structural
+refusal (the section count, the stance, a judgment, a heading, or no secondary valuation on a
+refused snapshot) is one sentence: fix it and submit again. A valued snapshot needs no secondary
+valuation: Appendix A says "no secondary valuation: the route values the company". A refused
+snapshot your review values needs none either: Appendix A says "no secondary valuation: the review
+values the company". A foreign filer and a snapshot with no diluted share count need none: the
+server refused one, section 8 says why, and Appendix A names the reason. A rejection (422) lists
+the findings: fix each one and submit again.
 
 ### 13. Complete the work item
 

@@ -446,6 +446,19 @@ def test_the_report_writes_the_plain_phrase_not_the_term() -> None:
             assert not _has(term, text), (term, text[:80])
 
 
+def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
+    """Spec 14 step 12 (plan 5, B-134): the agent reads the report once as someone who has never
+    seen Fairband, before `report_submit`, so a report fixed after a rejection is read again."""
+    _, body = _frontmatter(_read(SKILL))
+    twelve = _flat(_steps(body)[12])
+    sentence = "read the report once as its reader: someone who has never seen Fairband"
+    assert sentence in twelve
+    assert "Rewrite every sentence that needs the Methodology page to follow" in twelve
+    assert '"The words a report writes"' in twelve
+    assert "the summary alone: it must stand on its own" in twelve
+    assert twelve.index(sentence) < twelve.index("Submit with `report_submit`")
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
