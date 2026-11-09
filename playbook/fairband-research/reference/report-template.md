@@ -483,7 +483,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
       "parts": [
         "The company's stage stands as Fairband gave it. The rating of what keeps rivals from taking the company's profits stands at ",
         {"cite": "Narrow", "ref": "snapshot:412/inputs/moat_class"},
-        ": customers face real costs to switch, but rivals sell close substitutes. The growth rate assumed after the analysts' years rose to the rate the longer contracts support (the belief), through a change to the inputs. The return on reinvested money Fairband measured stands. A second change to the inputs, outside the judgments, set the earnings of the next twelve months at the company's guidance."
+        ": customers face real costs to switch, but rivals sell close substitutes. The growth rate assumed after the analysts' years rose to the rate the longer contracts support, through a change to the inputs. The return on reinvested money Fairband measured stands. A second change to the inputs, outside the judgments, set the earnings of the next twelve months at the company's guidance."
       ]
     }
   ],
@@ -495,7 +495,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
     },
     {
       "judgment": "belief",
-      "decision": "The growth rate assumed after the analysts' years rose to the rate the longer contracts support (the belief).",
+      "decision": "The growth rate assumed after the analysts' years rose to the rate the longer contracts support.",
       "override_id": 302
     },
     {"judgment": "roic", "decision": "The return on reinvested money Fairband measured stands."}
