@@ -446,6 +446,20 @@ def test_a_review_after_the_next_earnings_date_keeps_its_snapshot_s_window(
     assert latest["result"]["valid_until"] == window
 
 
+def test_a_review_written_days_later_carries_its_snapshot_s_price_facts(
+    client_with_clock: Callable[[datetime], TestClient],
+) -> None:
+    """An override written days after the snapshot: the engine on that day would anchor the
+    one-year change on a later reference close, but the review shows the snapshot's price facts,
+    which the refresh computed on its own date (B-132)."""
+    later = client_with_clock(NOW + timedelta(days=8))
+    snapshot = later.get("/api/companies/AAPL").json()["result"]["intermediates"]["price_facts"]
+    review = _post(later, BELIEF_8)["review"]["result"]["intermediates"]["price_facts"]
+    assert review == snapshot
+    latest = later.get("/api/companies/AAPL/reviews/latest").json()
+    assert latest["result"]["intermediates"]["price_facts"] == snapshot
+
+
 def _guidance(
     client: TestClient,
     symbol: str,

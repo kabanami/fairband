@@ -20,9 +20,13 @@ reads it (``anchor.base_year`` on the new inputs). Without a base year, or witho
 it stays.
 
 With an override left, ``write_review`` reviews the new result under the rest on the new inputs,
-writes the review on the new snapshot, with the snapshot's validity window, and its log row; with
-none left, no review is written and the company's current review is cleared (``store.reviews``).
-A review written at a refresh writes no ledger row: the review log records it.
+writes the review on the new snapshot, with the snapshot's validity window and its price facts
+(the 52-week range and the one-, three- and five-year changes anchor on the date the refresh
+valued the snapshot; the engine on another day, as an override written from the web writes a
+review, would anchor them on that day's closes, and no override moves them), and its log row;
+with none left, no review is written and the company's current review is cleared
+(``store.reviews``). A review written at a refresh writes no ledger row: the review log records
+it.
 
 ``reprice_review`` runs in the reprice stage of a price refresh, in the transaction that writes
 the repriced snapshot: the company's current review, when it is on the snapshot repriced, through
@@ -158,12 +162,15 @@ def write_review(
     clock: Callable[[], datetime],
 ) -> int:
     """Review ``mechanical``, snapshot ``snapshot_id``'s result on ``inputs``, under the applied
-    ``overrides``; write the review on the snapshot, valid as long as it, and its log row; the
-    review's id."""
+    ``overrides``; write the review on the snapshot, valid as long as it and with its price facts
+    (module docstring), and its log row; the review's id."""
     engine = [as_override(o) for o in overrides]
     review = review_company(inputs, deciles, policy, today, engine, mechanical)
-    window = replace(review.result, valid_until=mechanical.valid_until)
-    review = replace(review, result=window)
+    result = replace(review.result, valid_until=mechanical.valid_until)
+    if "price_facts" in mechanical.intermediates and "price_facts" in result.intermediates:
+        facts = {"price_facts": mechanical.intermediates["price_facts"]}
+        result = replace(result, intermediates=result.intermediates | facts)
+    review = replace(review, result=result)
     review_id = insert_review(conn, review, mechanical.symbol, snapshot_id, refresh_id, clock=clock)
     _log(conn, clock(), refresh_id, snapshot_id, review_id, mechanical, review.result)
     return review_id
