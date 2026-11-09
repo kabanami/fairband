@@ -4,9 +4,9 @@ price ÷ value and the share below value (price ÷ value under the second design
 
 The universe of one full refresh admits six companies:
 
-- AAPL, BBB and CCC: the engine's Mature Growth company (value $133.37) at $150, $80 and $120
-  (1.12, 0.60 and 0.90 × the value); Technology, the first mega cap, the others mid.
-- STBL: the engine's Mature Stable company (value $44.71) at $40, 0.89 × the value; Industrials,
+- AAPL, BBB and CCC: the engine's Mature Growth company (value $127.68) at $150, $80 and $120
+  (1.17, 0.63 and 0.94 × the value); Technology, the first mega cap, the others mid.
+- STBL: the engine's Mature Stable company (value $43.85) at $40, 0.91 × the value; Industrials,
   mid.
 - AAL: the engine's Young Growth company with no mature peers, refused for its target margin;
   Technology, mid.

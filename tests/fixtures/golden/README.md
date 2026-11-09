@@ -43,6 +43,19 @@ intermediates gains `one_year`, the newest year's marginal return, shown and nev
 2026-11-09 section 6.3): 45.75% on MGCO, 18.25% on MSCO. Every figure is unchanged; only the key
 is new.
 
+MGCO and MSCO re-captured under 1.0 on 2026-11-09 for the charge's shape (spec 2026-11-09
+sections 6.1 to 6.3): the two mature routes now pass the hold K and the revenue steps, and the
+intermediates gain `charge` (`growth_by_year`, `return_by_year`, `hold_years`, `revenue_steps`).
+MGCO has no consensus revenue, so its charge pays for its earnings growth (`revenue_steps` null);
+its hold is 6, the last year whose next growth is above the 6.3% belief, so its 43.1% return holds
+through year 6 and fades to 13% in year 20. Its value is 127.68 a share (133.37), so its
+designation at $150 is above (near), and its levels, the 10- and 20-year runway values, the three
+return keys above r, every implied growth but the five-year runway's (the row's own 8.64%, 7.84%)
+and the expected return move with it; the five-year runway, whose path the hold covers to year 4,
+and the `0.09` key keep their figures. `value-spread` reads 65.56 to 127.68, 94.8% (103.4%).
+MSCO's hold is 0, so its three-year 18.25% fades from year 1 to 13% in year 20: its value is 43.85
+a share (44.71), and its levels and expected return move with it; its designation stays near.
+
 Run from the repository root:
 
 ```

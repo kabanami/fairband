@@ -2,23 +2,31 @@
 
 Year 1 is the NTM anchor and years 2 and 3 the consensus path. When year 3's growth is above the
 belief, years 4 to 3 + the policy's ``fade_years`` fade from it to the belief; the other years to
-the runway N grow at the belief. The value is the reverse DCF with the reinvestment charge at the
-runway return in years 1 to N−1 and at the terminal return in year N and the terminal value
-(``RoicTerms``). A year whose next growth is above its return pays out nothing, never less; the
-first such year raises "growth above return", after the ROIC flags and before the trailing ones.
+the runway N grow at the belief. The value is the reverse DCF with the reinvestment charge of spec
+2026-11-09 6 (``RoicTerms``): each year pays for the next year's revenue growth, the consensus
+revenue steps for years 2 and 3 (a missing one taking the earnings step) fading to the belief as
+the earnings path fades, at a return that holds at the runway return through the hold K, the last
+year whose next earnings growth is above the belief, then fades in equal steps to the terminal
+return in year N. K is read once, from the row's own path at the belief in force, and every
+sensitivity and solve holds it. A year whose growth outruns its return pays out less than nothing;
+the first such year raises "growth above return", which counts the rest, after the ROIC flags and
+before the trailing ones, where the ``heavy-capex`` sentence names the return the charge starts at
+and ``consensus-basis-unknown`` follows ``large-nri``. ``charge`` in the intermediates records the
+growth paid for, the return by year, the hold and the revenue steps as found.
 
 The value is also computed at each policy runway and at each return of the sensitivity, and so is
 the implied growth at the price. The sensitivity is keyed ``"runway"``, the row's own charge;
 then the policy's ``roic_sensitivity`` values, each as the runway return with the moat's terminal
 rule applied to it; then ``"ten-year"``, the ten-year aggregate ROIC as the runway return, not
 floored, with the moat's terminal rule applied to it, ``None`` when the aggregate is unavailable
-or not positive. The value-spread flag reads the first three.
+or not positive; each on the row's hold. The value-spread flag reads the first three.
 
-``growth_at_price`` rebuilds the growth path and the charges from the intermediates alone, so a
-stored result moves to a new price without its inputs. The implied growth is the belief at which
-the value equals the price, the fade moving with it; it is solved between −50% and 200% a year,
-and ``None`` means no growth in that range reaches the price. The expected return's growth reads
-the path's rates from year 2.
+``growth_at_price`` rebuilds the growth path and the charges from the intermediates alone, the
+``charge`` entry's revenue steps and hold among them, so a stored result moves to a new price
+without its inputs. The implied growth is the belief at which the value equals the price, both
+paths' fades moving with it and the hold fixed; it is solved between −50% and 200% a year, and
+``None`` means no growth in that range reaches the price. The expected return's growth reads the
+earnings path's rates from year 2.
 
 ``growth_cross_check`` runs the same anchor, path and charge for a Mature Stable row, on that
 row's moat and returns, so its value is the one this route would reach (calibration spec 5.7).
@@ -27,20 +35,21 @@ any price by the same solve, from the intermediates alone.
 
 Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the moat, so the
 runway, the terminal return and the margin of safety with it; ``return.runway`` the runway return
-of the charge (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring gap, the anchor's basis
-test then taking the correction, the override less the gap found, off trailing GAAP EPS
-(``anchor.ntm_anchor``), so an override at the gap found moves nothing; ``path.step_2`` and
-``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
-step not counted thin; ``growth.belief`` the belief's rate; ``earnings.ntm``, the NTM EPS from a
-clear guidance, which stands in for the consensus less the SBC adjustment, the four NTM quarters
-still required; ``earnings.cycle_gap`` the correction to mid-cycle earnings, which the NTM EPS,
-the consensus's or the guided one, is taken less, before the positive-anchor refusal
-(``anchor.ntm_anchor``). Nothing else reads the two: the basis test, the clean EPS, EPV and
-``large-nri`` read the non-recurring gap alone, and the forward EPS of the P/E and the ``ntm_eps``
-and ``ntm_net_income`` data entries are the consensus as found (``Anchor.ntm_eps_found``), the
-``ntm_eps`` entry giving way to the JUDGMENT entry under the guided EPS. ``cycle_gap`` is in the
-intermediates only under that override. The cross-check reads the row's moat, returns and two
-gaps, and the consensus and belief as found.
+of the charge, the start of its fade (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring
+gap, the anchor's basis test then taking the correction, the override less the gap found, off
+trailing GAAP EPS (``anchor.ntm_anchor``), so an override at the gap found moves nothing;
+``path.step_2`` and ``path.step_3`` the consensus steps, before the check that the path stays
+above −100%, a replaced step not counted thin nor named in ``step-series-disagree``, the revenue
+steps the charge pays for left as found; ``growth.belief`` the belief's rate, and the hold read on
+it; ``earnings.ntm``, the NTM EPS from a clear guidance, which stands in for the consensus less
+the SBC adjustment, the four NTM quarters still required; ``earnings.cycle_gap`` the correction
+to mid-cycle earnings, which the NTM EPS, the consensus's or the guided one, is taken less, before
+the positive-anchor refusal (``anchor.ntm_anchor``). Nothing else reads the two: the basis test,
+the clean EPS, EPV and ``large-nri`` read the non-recurring gap alone, and the forward EPS of
+the P/E and the ``ntm_eps`` and ``ntm_net_income`` data entries are the consensus as found
+(``Anchor.ntm_eps_found``), the ``ntm_eps`` entry giving way to the JUDGMENT entry under the
+guided EPS. ``cycle_gap`` is in the intermediates only under that override. The cross-check reads
+the row's moat, returns and two gaps, and the consensus and belief as found.
 """
 
 from dataclasses import asdict, replace
@@ -57,14 +66,19 @@ from fairband.engine.anchor import (
     ntm_anchor,
     ntm_quarters,
     path_steps,
+    step_series_flag,
 )
 from fairband.engine.flags import long_runway_flag, value_spread_flag
 from fairband.engine.mature_growth import (
     Charge,
     GrowthPath,
+    charge_growth,
     first_negative_year,
     growth_rates,
+    hold_years,
     implied_growth,
+    negative_years,
+    return_by_year,
     value_at_belief,
 )
 from fairband.engine.multiples import epv, growth_share
@@ -140,6 +154,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "growth_rates": list(growth_rates(growth)),
         **roic.intermediates(),
         "charge_off": roic.charge_off,
+        "charge": charge_entry(growth, charge),
         "shares": c.shares,
         "value_total": value_total,
         "value_per_share": value,
@@ -157,7 +172,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         + path.flags
         + roic.flags
         + present(_growth_above_return(growth, charge))
-        + trailing_flags(i, t, gap, policy)
+        + trailing_flags(i, t, gap, policy, roic)
     )
     spread = present(value_spread_flag(list(by_roic.values())[:3], policy)) + present(
         value_spread_flag(list(by_runway.values()), policy)
@@ -212,6 +227,7 @@ def growth_cross_check(c: Context, moat: Moat, roic: RoicTerms) -> dict[str, Any
         "runway_return": roic.intermediates()["runway_return"],
         "terminal_roic": charge.terminal_roic,
         "charge_off": charge.charge_off,
+        "charge": charge_entry(growth, charge),
         "refusal": None,
     }
 
@@ -270,28 +286,47 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
 
 
 def _judged(c: Context, path: Path, belief: Belief, base_year: int) -> tuple[Path, Belief]:
-    """The path and the belief under the step and belief overrides: an overriding step replaces
-    the consensus's, and ``few-analysts`` names only the steps the consensus still gives."""
-    if not c.overrides:
-        return path, belief
-    steps = (chosen(c, "path.step_2", path.steps[0]), chosen(c, "path.step_3", path.steps[1]))
-    consensus = tuple(
-        None if tag in c.overrides else step
-        for tag, step in zip(_STEP_TAGS, path.steps, strict=True)
-    )
+    """The route's own path and belief: under the step and belief overrides, an overriding step
+    replaces the consensus's; ``few-analysts`` and ``step-series-disagree`` name only the steps the
+    consensus still gives, the latter against the diluted count (spec 2026-11-09 9)."""
+    read = (_STEP_TAGS[0] not in c.overrides, _STEP_TAGS[1] not in c.overrides)
+    consensus = tuple(step if r else None for r, step in zip(read, path.steps, strict=True))
     thin = few_analysts(base_year, (consensus[0], consensus[1]), path.analysts, c.policy)
+    disagree = step_series_flag(path, c.shares, c.policy, read)
     flags = tuple(f for f in path.flags if f.code != "few-analysts") + present(thin)
+    steps = (chosen(c, "path.step_2", path.steps[0]), chosen(c, "path.step_3", path.steps[1]))
     rate = chosen(c, "growth.belief", belief.rate)
-    return replace(path, steps=steps, flags=flags), replace(belief, rate=rate)
+    judged = replace(path, steps=steps, flags=flags + present(disagree))
+    return judged, replace(belief, rate=rate)
 
 
 def _growth_and_charge(
     anchor: Anchor, path: Path, belief: Belief, moat: Moat, roic: RoicTerms, policy: Policy
 ) -> tuple[GrowthPath, Charge]:
-    """The growth path to the moat's runway and the charge at the returns of ``roic``."""
+    """The growth path to the moat's runway, with the revenue steps the charge pays for, and the
+    charge at the returns of ``roic``, holding the runway return through the path's hold."""
     runway = policy.runway_years[moat]
-    growth = GrowthPath(anchor.ntm_net_income, path.steps, belief.rate, runway, policy.fade_years)
-    return growth, roic.charge(policy)
+    growth = GrowthPath(
+        anchor.ntm_net_income,
+        path.steps,
+        belief.rate,
+        runway,
+        policy.fade_years,
+        revenue_steps=path.revenue_steps,
+    )
+    return growth, roic.charge(policy, hold_years(growth))
+
+
+def charge_entry(growth: GrowthPath, charge: Charge) -> dict[str, Any]:
+    """The intermediates' ``charge`` (spec 2026-11-09 6.2 and 6.3): the growth each year's
+    reinvestment pays for, years 2 to N + 1 with g_T last; the return years 1 to N pay at; the
+    hold; and the revenue steps as found, ``None`` where missing (both on a path without them)."""
+    return {
+        "growth_by_year": [*charge_growth(growth), charge.g_t],
+        "return_by_year": list(return_by_year(charge, growth.runway)),
+        "hold_years": charge.hold,
+        "revenue_steps": list(growth.revenue_steps or (None, None)),
+    }
 
 
 def growth_at_price(
@@ -332,11 +367,25 @@ def long_runway(im: dict[str, Any], policy: Policy) -> Flag | None:
 
 def _rebuilt(im: dict[str, Any], policy: Policy) -> tuple[GrowthPath, Charge]:
     """The growth path and the charge from intermediates: the route's own or a cross-check's,
-    which carry the same keys."""
+    which carry the same keys, the ``charge`` entry's revenue steps and hold among them."""
     g2, g3 = im["path_steps"]
+    r2, r3 = im["charge"]["revenue_steps"]
     belief = im["belief"]["rate"]
-    growth = GrowthPath(im["ntm_net_income"], (g2, g3), belief, im["runway"], im["fade_years"])
-    charge = charge_for(im["runway_return"]["value"], im["terminal_roic"], im["charge_off"], policy)
+    growth = GrowthPath(
+        im["ntm_net_income"],
+        (g2, g3),
+        belief,
+        im["runway"],
+        im["fade_years"],
+        revenue_steps=(r2, r3),
+    )
+    charge = charge_for(
+        im["runway_return"]["value"],
+        im["terminal_roic"],
+        im["charge_off"],
+        policy,
+        im["charge"]["hold_years"],
+    )
     return growth, charge
 
 
@@ -346,10 +395,10 @@ def _roic_charges(
     """The charge at each return of the sensitivity, in order: the row's own; each of the policy's
     values as the runway return; the usable ten-year aggregate as the runway return, not floored
     (``None`` without one). All but the first take the moat's terminal rule on that return and
-    charge in every runway year."""
+    charge in every runway year; every one holds the row's own hold (spec 2026-11-09 6.3)."""
 
     def at(x: float) -> Charge:
-        return charge_for(x, terminal_roic(x, moat, policy), False, policy)
+        return charge_for(x, terminal_roic(x, moat, policy), False, policy, own.hold)
 
     return {
         "runway": own,
@@ -359,19 +408,21 @@ def _roic_charges(
 
 
 def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:
-    """``growth-above-return`` on the first year t that pays out less than nothing: year
-    t + 1's growth, which year t's reinvestment pays for, and the return year t pays at."""
+    """``growth-above-return`` (spec 2026-11-09 6.1) on the first year t that pays out less than
+    nothing: the growth year t's reinvestment pays for, year t + 1's, and the return year t pays
+    at; then the count of the other such years."""
     first = first_negative_year(growth, charge)
     if first is None:
         return None
-    t, g, ret = first
-    return Flag(
-        "growth-above-return",
-        "Growth above return",
-        f"Year {t + 1} growth of {g:.1%} exceeds the {ret:.1%} return on new capital; year {t}'s "
-        "payout is floored at zero and the growth above the return is treated as efficiency "
-        "growth, which costs nothing.",
+    t, h, ret = first
+    sentence = (
+        f"In year {t} the charge pays for {h:.1%} of revenue growth at a return of {ret:.1%}, so "
+        "the year pays out less than nothing: the owner funds the growth."
     )
+    more = len(negative_years(growth, charge)) - 1
+    if more:
+        sentence += f" {more} more such year{'s' if more > 1 else ''}."
+    return Flag("growth-above-return", "Growth above return", sentence)
 
 
 def _runways(policy: Policy) -> list[int]:

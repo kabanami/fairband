@@ -1,6 +1,6 @@
 """The number check (spec 2026-11-06 Tier 2, 13.3 and 20.3) on the ``snapshots`` fixture of
-``conftest.py``: AAPL, the Mature Growth golden renamed (a price of $150, a value of $133.37, price
-÷ value 1.12, a ten-year aggregate ROIC of 22.7%), with ACME's synthetic statements (revenue $2,100
+``conftest.py``: AAPL, the Mature Growth golden renamed (a price of $150, a value of $127.68, price
+÷ value 1.17, a ten-year aggregate ROIC of 22.7%), with ACME's synthetic statements (revenue $2,100
 m in fiscal 2025, up 5.0%; capital spending −$126 m); AAL, refused. A clean report publishes; each
 failure of spec 20.3 is one finding, located."""
 
@@ -67,11 +67,11 @@ def _clean(sid: int) -> list[Any]:
         "The price of ",
         _cite("$150.00", f"{s}/price"),
         " is above the value of ",
-        _cite("$133", f"{s}/value"),
+        _cite("$128", f"{s}/value"),
         " (",
-        _cite("$133.37", f"{s}/value"),
+        _cite("$127.68", f"{s}/value"),
         " a share), price ÷ value ",
-        _cite("1.12x", f"{s}/price_to_value"),
+        _cite("1.17x", f"{s}/price_to_value"),
         ". Revenue of ",
         _cite("$2,100,000,000", "fact:AAPL/revenue/2025", "FY2025"),
         " grew ",
@@ -124,7 +124,7 @@ def test_wrong_snapshot(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     sid, aal = snapshots["AAPL"], snapshots["AAL"]
-    found = _one(_check(conn, policy, sid, _cite("$133", f"snapshot:{aal}/value")), sid, "$133")
+    found = _one(_check(conn, policy, sid, _cite("$128", f"snapshot:{aal}/value")), sid, "$128")
     assert found.what == WRONG_SNAPSHOT
     assert found.detail == (
         f"snapshot:{aal}/value rests on snapshot {aal}; the company's latest is snapshot {sid}:"
@@ -690,9 +690,9 @@ def test_a_price_is_cited_to_cents(
     assert _one(_check(conn, policy, sid, _cite("$190", close)), sid, "$190").what == WRONG_UNIT
     assert _check(conn, policy, sid, _cite("$190.00", close)) == []
     # a value a share and a level to cents or to whole dollars
-    for text in ("$133", "$133.37"):
+    for text in ("$128", "$127.68"):
         assert _check(conn, policy, sid, _cite(text, f"snapshot:{sid}/value")) == []
-    assert _check(conn, policy, sid, _cite("$100", f"snapshot:{sid}/levels/buy")) == []
+    assert _check(conn, policy, sid, _cite("$96", f"snapshot:{sid}/levels/buy")) == []
 
 
 def test_a_policy_score_is_cited_to_its_decimals(

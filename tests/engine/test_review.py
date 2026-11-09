@@ -159,6 +159,42 @@ def test_the_cycle_gap_line_follows_the_non_recurring_gap(policy: Policy, decile
     assert judged == ["earnings.nri_gap", "earnings.cycle_gap"]
 
 
+def test_a_step_override_moves_the_charge_only_where_the_revenue_step_is_missing(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-09 6.2: an earnings step override moves the earnings path and, where the
+    consensus gives no revenue step, the growth the charge pays for, which falls back on the
+    earnings step; it never moves a revenue step the consensus gives."""
+    plain = mature_growth_inputs()  # no consensus revenue
+    revenue = (24_000e6, 25_920e6, 27_734.4e6)  # up 8% then 7%
+    rows = tuple(
+        replace(a, revenue=x, analysts_revenue=20)
+        for a, x in zip(plain.annual_estimates, revenue, strict=True)
+    )
+    for inputs, paid_for in ((plain, 0.15), (replace(plain, annual_estimates=rows), 0.08)):
+        mechanical = value_company(inputs, deciles, policy, TODAY)
+        overrides = [OVERRIDE("path.step_2", 0.15)]
+        im = review_company(inputs, deciles, policy, TODAY, overrides, mechanical).result
+        assert im.intermediates["path_steps"][0] == 0.15
+        charge = im.intermediates["charge"]
+        assert charge["growth_by_year"][0] == pytest.approx(paid_for)
+        assert charge["revenue_steps"] == mechanical.intermediates["charge"]["revenue_steps"]
+
+
+def test_the_hold_is_read_on_the_overriding_belief(policy: Policy, deciles: Deciles) -> None:
+    """The hold is the last year whose next growth is above the belief in force: at a belief of
+    13%, MGCO's steps of 12% and 10% are below it, so the return fades from year 1."""
+    inputs = mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.intermediates["charge"]["hold_years"] == 6
+    overrides = [OVERRIDE("growth.belief", 0.13)]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    charge = review.result.intermediates["charge"]
+    assert charge["hold_years"] == 0
+    runway, terminal = mechanical.intermediates["runway_return"]["value"], 0.13
+    assert charge["return_by_year"][0] == pytest.approx(runway + (terminal - runway) / 20)
+
+
 def test_a_start_up_overridden_to_young_growth_is_valued(policy: Policy, deciles: Deciles) -> None:
     """SUCO has no trailing revenue, so the revenue-growth route, not the Start-up one, refuses it
     on its own first guard; the bridge starts at no mechanical value."""

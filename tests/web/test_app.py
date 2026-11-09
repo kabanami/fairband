@@ -208,8 +208,8 @@ def test_screen_rows_and_default_sort(
         "drawdown": facts["drawdown_from_peak"],
         "flags": [f.word for f in valued.flags],
         "refusal": None,
-        "priceToValue": 150.0 / valued.value,  # $150 on the value $133.37: 1.125
-        "designation": "near",  # from 0.85 to 1.15 × the value
+        "priceToValue": 150.0 / valued.value,  # $150 on the value $127.68: 1.175
+        "designation": "above",  # above 1.15 × the value, below 1.50
         "agentStance": None,
         "priceDate": "2026-10-30",
         "dataDate": "2026-10-30",
@@ -272,7 +272,7 @@ def test_screen_sorts_by_flag_count(client: TestClient) -> None:
 
 
 def test_screen_sorts_by_price_to_value(client: TestClient) -> None:
-    """HGCO at 0.63 × its value, AAPL at 1.125, AAL refused with none: last either way."""
+    """HGCO at 0.63 × its value, AAPL at 1.175, AAL refused with none: last either way."""
     rows = {row["ticker"]: row for row in _screen(client)["rows"]}
     assert rows["HGCO"]["priceToValue"] == pytest.approx(0.632, abs=5e-4)
     assert rows["HGCO"]["designation"] == "well-below"
@@ -349,7 +349,7 @@ def test_aging_fraction_from_the_overlay_changes_freshness(
 
 
 def test_groups_and_the_drawer_read_the_edges_of_the_settings(client: TestClient) -> None:
-    """HGCO sits at 0.63 × its value and AAPL at 1.125. Under a fair band from 0.6, with the Narrow
+    """HGCO sits at 0.63 × its value and AAPL at 1.175. Under a fair band from 0.6, with the Narrow
     margin of safety at 45% so the edges still ascend, HGCO is no longer below the band."""
     [before] = client.get("/api/groups?by=sector").json()["groups"]
     assert before["shareBelowValue"] == 0.5  # HGCO below 0.85, AAPL not

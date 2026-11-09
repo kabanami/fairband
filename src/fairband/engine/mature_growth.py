@@ -17,12 +17,13 @@ terminal growth (6.2). A path without revenue steps charges its earnings growth.
 The return holds at the runway return R through the hold K, then fades in equal steps to the
 terminal return T, which year N takes: return_t = R + (T − R) × (t − K) ÷ (N − K) for K < t ≤ N
 (6.3). K is the last year t below N whose next earnings growth is above the belief, read once
-from the row's own path. A hold of ``None`` is the shape as built, R for years 1 to N − 1 and T
-in year N, which every caller keeps until the routes pass a hold; a hold of N − 1 or more gives
-the same. The terminal value is earnings_N times the terminal multiple at T, discounted N years.
-An infinite return means no charge. ``charge_off``, set when the marginal return is not usable and
-the three-year capital sum is at or below zero (spec 5.1 rule 4), drops the charge in years 1 to
-N−1 only: year N and the terminal value still charge at the terminal return.
+from the row's own path; both mature routes pass it, Mature Stable as 0. A hold of ``None`` is the
+shape before method 1.0, R for years 1 to N − 1 and T in year N, which no route passes; a hold of
+N − 1 or more gives the same. The terminal value is earnings_N times the terminal multiple at T,
+discounted N years. An infinite return means no charge. ``charge_off``, set when the marginal
+return is not usable and the three-year capital sum is at or below zero (spec 5.1 rule 4), drops
+the charge in years 1 to N−1 only: year N and the terminal value still charge at the terminal
+return.
 """
 
 import math
@@ -53,7 +54,8 @@ class GrowthPath:
 class Charge:
     """The ROIC for the runway years and the terminal, the required return and terminal growth,
     whether the runway years' charge is off, and the hold: the years the runway ROIC holds before
-    it fades to the terminal (``None`` is the shape as built, the runway ROIC to year N − 1)."""
+    it fades to the terminal (``None`` is the shape before method 1.0, the runway ROIC to year
+    N − 1)."""
 
     runway_roic: float
     terminal_roic: float
@@ -98,7 +100,7 @@ def hold_years(path: GrowthPath) -> int:
 def return_by_year(charge: Charge, n: int) -> tuple[float, ...]:
     """The return years 1 to ``n`` pay at: the runway ROIC through the hold, then in equal steps to
     the terminal ROIC, which year ``n`` takes exactly. A hold of ``None``, or of ``n`` − 1 or more,
-    is the shape as built: the runway ROIC to year ``n`` − 1."""
+    is the shape before method 1.0: the runway ROIC to year ``n`` − 1."""
     runway, terminal, hold = charge.runway_roic, charge.terminal_roic, charge.hold
     if hold is None or hold >= n - 1 or n <= 1:
         return (runway,) * max(n - 1, 0) + (terminal,)

@@ -256,7 +256,7 @@ def _sections(snapshot_id: int) -> list[dict[str, Any]]:
         "The price of ",
         {"cite": "$150.00", "ref": f"{s}/price"},
         " is above the value at belief of ",
-        {"cite": "$133", "ref": f"{s}/value"},
+        {"cite": "$128", "ref": f"{s}/value"},
         ".",
     ]
     rest = [{"heading": h, "parts": ["Plain words."]} for h in headings("full report")[1:]]

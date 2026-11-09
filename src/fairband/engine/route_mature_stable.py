@@ -6,14 +6,19 @@ fires, E is scaled to the ten-year median operating margin; an agent's cycle gap
 comes off the E so normalized on the diluted shares, so the engine's scaling and the agent's
 correction add (``e_normalized`` is the E the value rests on). The value at belief is the
 stable-growth value: the reverse DCF of ``mature_growth`` on a path that grows at the terminal
-growth in every year, with the reinvestment charge of ``RoicTerms.charge``: the runway return in
-years 1 to N−1 of the moat's runway, the terminal return in year N and the terminal, and off in
-the runway years when the growth route's would be. A row whose runway return is the terminal
-return, with the charge on, values at the one-stage perpetuity; a floored row, charged at r in
-every year, values at EPV under any moat; a row whose runway return is above the terminal return
-is worth more, and more for a longer runway; a charge-off row is worth more still, its runway
-years uncharged. EPV is shown as the no-growth value. ``epv`` and ``stable_growth`` are a share;
-``epv_total`` and ``stable_growth_total`` are the totals. The ROIC flags are the growth route's.
+growth in every year, with the reinvestment charge of ``RoicTerms.charge`` on a hold of 0, since
+no year grows above the belief (spec 2026-11-09 6.3): the return fades in equal steps from the
+runway return in year 1 to the terminal return in year N of the moat's runway and the terminal,
+and the charge is off in the runway years when the growth route's would be. A row whose runway
+return is the terminal return, with the charge on, values at the one-stage perpetuity; a floored
+row, charged at r in every year, values at EPV under any moat; a row whose runway return is above
+the terminal return is worth more, and more for a longer runway; a charge-off row is worth more
+still, its runway years uncharged. EPV is shown as the no-growth value. ``epv`` and
+``stable_growth`` are a share; ``epv_total`` and ``stable_growth_total`` are the totals;
+``charge`` records the growth paid for (g_T in every year), the return by year, the hold and no
+revenue steps. The ROIC flags are the growth route's, and so are the trailing flags' readings of
+the runway return: the ``heavy-capex`` sentence and ``consensus-basis-unknown`` after
+``large-nri``.
 
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
 5.7), or that route's refusal; the value, the levels and the designation stay on the stable-growth
@@ -38,8 +43,13 @@ from typing import Any
 
 from fairband.engine.anchor import moat_class
 from fairband.engine.flags import margin_flag, median_margin
+from fairband.engine.mature_growth import GrowthPath
 from fairband.engine.mature_stable import mature_stable_values, normalize_for_margin
-from fairband.engine.route_mature_growth import cross_check_at_price, growth_cross_check
+from fairband.engine.route_mature_growth import (
+    charge_entry,
+    cross_check_at_price,
+    growth_cross_check,
+)
 from fairband.engine.route_steps import (
     Context,
     Refused,
@@ -96,8 +106,9 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         }
         return Refused("no positive trailing earnings", (), refused, ())
 
-    runway = policy.runway_years[moat]
-    epv_total, stable = mature_stable_values(e_normalized, roic.charge(policy), runway)
+    runway, g_t = policy.runway_years[moat], policy.terminal_growth
+    charge = roic.charge(policy, 0)  # no year grows above g_T: the return fades from year 1
+    epv_total, stable = mature_stable_values(e_normalized, charge, runway)
     value = stable / c.shares
     im: dict[str, Any] = {
         "e_trailing": e,
@@ -109,6 +120,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "e_normalized": e_normalized,
         "moat": moat,
         **roic.intermediates(),
+        "charge": charge_entry(GrowthPath(e_normalized, (g_t, g_t), g_t, runway), charge),
         "runway": runway,
         "epv": epv_total / c.shares,
         "epv_total": epv_total,
@@ -135,7 +147,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
             "the terminal growth, the expected return's growth for a stable company",
         ),
     )
-    flags = roic.flags + trailing_flags(i, t, gap, policy)
+    flags = roic.flags + trailing_flags(i, t, gap, policy, roic)
     return Valued("mature-stable", value, moat, im, inputs, flags)
 
 

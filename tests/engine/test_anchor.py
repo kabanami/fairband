@@ -16,6 +16,7 @@ from fairband.engine.anchor import (
     path_steps,
     sales_class,
     sbc_basis,
+    step_series_flag,
 )
 from fairband.engine.types import Flag
 from fairband.policy import Policy, load_policy
@@ -331,20 +332,23 @@ def test_a_missing_or_non_positive_revenue_leaves_the_step_none(policy: Policy) 
 
 
 def test_step_series_disagree_names_both_rates(policy: Policy) -> None:
+    # spec 2026-11-09 13.4: net income 8.33 to 10.00 and EPS 0.83 to 1.10, on 10.0 bn shares
     annual = _annual(2027, net_income=(8.33e9, 10.0e9, 12.0e9), eps=(0.83, 1.10, 1.32), analysts=20)
     path = path_steps(annual, 2027, policy)
-    note = next(f for f in path.flags if f.code == "step-series-disagree")
+    assert path.flags == ()  # the route raises the note, with the diluted count it holds
+    assert path.net_income_means == (8.33e9, 10.0e9, 12.0e9)
+    assert path.eps_means == (0.83, 1.10, 1.32)
+    note = step_series_flag(path, 10.0e9, policy)
+    assert note is not None
     assert "Step 2 reads 20.0% on net income and 32.5% on EPS" in note.sentence
-    assert "`path.step_2`" in note.sentence
     assert "Step 3" not in note.sentence  # 20.0% against 20.0%
     assert note == Flag(
         "step-series-disagree",
         "Step series disagree",
         "Step 2 reads 20.0% on net income and 32.5% on EPS: the two consensus series imply "
-        "different share counts (10.0B against 9.1B). The path is on net income; `path.step_2` "
-        "decides.",
+        "different share counts (10.0B and 9.1B against the diluted count 10.0B). The path is on "
+        "net income; `path.step_2` decides.",
     )
-    assert codes(path.flags) == ["step-series-disagree"]
     assert path.steps == pytest.approx((10.0 / 8.33 - 1, 0.20))  # the path stays on net income
 
 
@@ -352,29 +356,52 @@ def test_step_series_disagree_names_each_step_and_the_series_the_path_is_on(
     policy: Policy,
 ) -> None:
     both = _annual(2027, net_income=(8.33e9, 10.0e9, 12.0e9), eps=(0.83, 1.10, 1.21))
-    assert path_steps(both, 2027, policy).flags[-1].sentence == (
+    note = step_series_flag(path_steps(both, 2027, policy), 9.5e9, policy)
+    assert note is not None and note.sentence == (
         "Step 2 reads 20.0% on net income and 32.5% on EPS: the two consensus series imply "
-        "different share counts (10.0B against 9.1B); step 3 reads 20.0% on net income and 10.0% "
-        "on EPS: the two consensus series imply different share counts (9.1B against 9.9B). The "
-        "path is on net income; `path.step_2` and `path.step_3` decide."
+        "different share counts (10.0B and 9.1B against the diluted count 9.5B); step 3 reads "
+        "20.0% on net income and 10.0% on EPS: the two consensus series imply different share "
+        "counts (9.1B and 9.9B against the diluted count 9.5B). The path is on net income; "
+        "`path.step_2` and `path.step_3` decide."
     )
 
     # no net income for fiscal 2029: the path is on EPS, and step 2 still reads both series
     on_eps = _annual(2027, net_income=(100e6, 125e6, None), eps=(1.0, 1.10, 1.21), analysts=3)
     path = path_steps(on_eps, 2027, policy)
-    assert codes(path.flags) == ["path-on-eps", "few-analysts", "step-series-disagree"]
-    assert path.flags[-1].sentence == (
+    assert codes(path.flags) == ["path-on-eps", "few-analysts"]
+    note = step_series_flag(path, 110e6, policy)
+    assert note is not None and note.sentence == (
         "Step 2 reads 25.0% on net income and 10.0% on EPS: the two consensus series imply "
-        "different share counts (100.0M against 113.6M). The path is on EPS; `path.step_2` "
-        "decides."
+        "different share counts (100.0M and 113.6M against the diluted count 110.0M). The path "
+        "is on EPS; `path.step_2` decides."
     )
+
+
+def test_step_series_disagree_names_only_the_steps_the_consensus_still_gives(
+    policy: Policy,
+) -> None:
+    """A step an override replaced drops its own clause, as ``few-analysts`` names only the steps
+    the consensus still gives; the other step's clause stands."""
+    path = path_steps(
+        _annual(2027, net_income=(8.33e9, 10.0e9, 12.0e9), eps=(0.83, 1.10, 1.21)), 2027, policy
+    )
+    third = step_series_flag(path, 9.5e9, policy, (False, True))
+    assert third is not None and third.sentence == (
+        "Step 3 reads 20.0% on net income and 10.0% on EPS: the two consensus series imply "
+        "different share counts (9.1B and 9.9B against the diluted count 9.5B). The path is on "
+        "net income; `path.step_3` decides."
+    )
+    second = step_series_flag(path, 9.5e9, policy, (True, False))
+    assert second is not None and second.sentence.endswith("`path.step_2` decides.")
+    assert "step 3" not in second.sentence
+    assert step_series_flag(path, 9.5e9, policy, (False, False)) is None
 
 
 def test_step_series_disagree_without_a_count_for_the_landing_year(policy: Policy) -> None:
     # a counted EPS mean of zero implies no share count, and a fall of 100%
     annual = _annual(2027, net_income=(100e6, 120e6, 150e6), eps=(1.0, 0.0, 1.5))
-    note = path_steps(annual, 2027, policy).flags[-1]
-    assert note.sentence == (
+    note = step_series_flag(path_steps(annual, 2027, policy), 100e6, policy)
+    assert note is not None and note.sentence == (
         "Step 2 reads 20.0% on net income and −100.0% on EPS: the two consensus series imply "
         "different share counts. The path is on net income; `path.step_2` decides."
     )
@@ -383,10 +410,23 @@ def test_step_series_disagree_without_a_count_for_the_landing_year(policy: Polic
 def test_step_series_within_the_gap_is_silent(policy: Policy) -> None:
     # 20.0% against 24.0%, then 20.0% against 20.0%
     annual = _annual(2027, net_income=(100e6, 120e6, 144e6), eps=(1.0, 1.24, 1.488))
-    assert path_steps(annual, 2027, policy).flags == ()
+    path = path_steps(annual, 2027, policy)
+    assert path.flags == () and step_series_flag(path, 100e6, policy) is None
     # one series alone gives no comparison
     no_eps = _annual(2027, net_income=(100e6, 150e6, 225e6), eps=(None, None, None))
-    assert "step-series-disagree" not in codes(path_steps(no_eps, 2027, policy).flags)
+    assert step_series_flag(path_steps(no_eps, 2027, policy), 100e6, policy) is None
+
+
+def test_a_gap_of_exactly_the_tolerance_is_silent_on_both_steps(policy: Policy) -> None:
+    """Five points apart on each step: binary floating point puts step 2's gap a hair above 0.05
+    (20% is 0.19999999999999996) and step 3's a hair below, so a bare comparison fires on one
+    step and not the other; within 1e-12 of the gap both are silent."""
+    annual = _annual(2027, net_income=(100e6, 120e6, 132e6), eps=(1.0, 1.25, 1.4375))
+    path = path_steps(annual, 2027, policy)
+    (g2, g3), (h2, h3) = path.steps, (0.25, 0.15)
+    assert g2 is not None and g3 is not None
+    assert abs(g2 - h2) > policy.step_series_gap_max > abs(g3 - h3)
+    assert step_series_flag(path, 100e6, policy) is None
 
 
 def test_path_analysts_follow_the_series(policy: Policy) -> None:

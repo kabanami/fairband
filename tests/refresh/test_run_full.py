@@ -75,6 +75,7 @@ CALIBRATION = {
     },
     "flagged": 1,
     "flags": {
+        "consensus-basis-unknown": 3,  # beside large-nri on the three mature rows
         "fcf-sign": 1,
         "growth-word-disagrees": 1,
         "large-nri": 3,

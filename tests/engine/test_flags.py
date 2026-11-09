@@ -251,7 +251,8 @@ def test_consensus_basis_unknown_follows_large_nri(policy: Policy) -> None:
         "Consensus basis unknown",
         "The non-recurring gap is $0.60 a share, 12.0% of trailing EPS. FMP's consensus names no "
         "basis, so whether the NTM anchor and the path carry such items is unknown; a report that "
-        "reads the filing decides, through `earnings.ntm` or `earnings.nri_gap`.",
+        "reads the filing decides, through `earnings.nri_gap`, and on Mature Growth "
+        "`earnings.ntm`.",
     )
     assert nri is not None and flag_count((nri, note)) == 1  # a note: only large-nri counts
     negative = basis_unknown_flag(nri_flag(-0.60, 5.00, policy), -0.60, 5.00)
@@ -259,11 +260,16 @@ def test_consensus_basis_unknown_follows_large_nri(policy: Policy) -> None:
 
 
 def mature_terms(
-    i: CompanyInputs, policy: Policy, used: Used = "marginal", one_year: float | None = 0.2142
+    i: CompanyInputs,
+    policy: Policy,
+    used: Used = "marginal",
+    one_year: float | None = 0.2142,
+    override: float | None = None,
 ) -> RoicTerms:
     """MGCO's returns with the runway return as an agent would meet it on a capex surge: the
-    measure ``used`` at 47.2% and the newest year's marginal return ``one_year``."""
-    terms = RoicTerms.of(i.capital_years, "Wide", policy)
+    measure ``used`` at 47.2% and the newest year's marginal return ``one_year``; with
+    ``override``, an agent's ``return.runway`` in place of the measure."""
+    terms = RoicTerms.of(i.capital_years, "Wide", policy, runway_override=override)
     rr = replace(terms.runway_return, used=used, value=0.4716, marginal=0.4716, one_year=one_year)
     return replace(terms, runway_return=rr)
 
@@ -286,8 +292,8 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
     assert heavy == (
         "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The charge's "
         "return starts at 47.2%, the five-year marginal; the newest year's marginal return is "
-        "21.4%, on the capital added in 2025. The stored years end at 2025, so a return on a "
-        "spending surge still under way is the agent's judgment: `return.runway`."
+        "21.4%, on the capital added in fiscal 2025. The stored years end at fiscal 2025, so a "
+        "return on a spending surge still under way is the agent's judgment: `return.runway`."
     )
     three = heavy_capex(
         trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, "three-year"))
@@ -311,6 +317,42 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
         terms = mature_terms(mg_inputs, policy, used)
         assert heavy_capex(trailing_flags(mg_inputs, t, None, policy, terms)) == built
     assert heavy_capex(trailing_flags(mg_inputs, t, None, policy)) == built
+
+
+def test_heavy_capex_names_an_override_as_the_start_and_the_measure_beside_it(
+    mg_inputs: CompanyInputs, policy: Policy
+) -> None:
+    """Under a ``return.runway`` override the sentence names the override's value as the charge's
+    start and the measured figure as the measure, then the newest year's marginal return."""
+    assert mg_inputs.trailing is not None
+    t = replace(mg_inputs.trailing, cfo=6_000e6, capex=-4_000e6)
+    roic = mature_terms(mg_inputs, policy, override=0.214)
+    assert roic.overridden and roic.runway == 0.214
+    assert heavy_capex(trailing_flags(mg_inputs, t, None, policy, roic)) == (
+        "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The charge's "
+        "return starts at 21.4%, the agent's override; the five-year marginal is 47.2%; the "
+        "newest year's marginal return is 21.4%, on the capital added in fiscal 2025. The stored "
+        "years end at fiscal 2025, so a return on a spending surge still under way is the agent's "
+        "judgment: `return.runway`."
+    )
+    three = mature_terms(mg_inputs, policy, "three-year", override=0.214)
+    assert "starts at 21.4%, the agent's override; the three-year aggregate is 47.2%; the " in (
+        heavy_capex(trailing_flags(mg_inputs, t, None, policy, three))
+    )
+    floor = mature_terms(mg_inputs, policy, "floor", override=0.214)
+    assert (
+        "starts at 21.4%, the agent's override; the measured return is 47.2%, floored at the "
+        "required return; the newest"
+        in heavy_capex(trailing_flags(mg_inputs, t, None, policy, floor))
+    )
+    # a measured return that is off or unavailable has no measure to name; the start stands
+    for used in ("off", "unavailable"):
+        terms = mature_terms(mg_inputs, policy, used, one_year=None, override=0.214)
+        assert heavy_capex(trailing_flags(mg_inputs, t, None, policy, terms)) == (
+            "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The "
+            "charge's return starts at 21.4%, the agent's override."
+        )
+    assert not mature_terms(mg_inputs, policy).overridden
 
 
 def test_consensus_basis_unknown_only_on_the_mature_routes(

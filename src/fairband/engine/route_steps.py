@@ -17,8 +17,8 @@ An agent's applied overrides ride on the context (``overrides``, by tag; empty f
 method), and a route reads each input of ``overrides.TAGS`` through ``chosen``: the override's
 value when one applies, else the route's own reading. ``judgment_inputs`` are the JUDGMENT
 entries ``route`` cites for them. ``RoicTerms.of`` takes an overriding runway return as
-``runway_override``: it replaces the runway return the charge uses and charges the runway years,
-and the terminal return still follows the moat on the measured return.
+``runway_override``: it replaces the runway return the charge uses, the start of its fade, and
+charges the runway years, and the terminal return still follows the moat on the measured return.
 """
 
 from __future__ import annotations
@@ -62,6 +62,12 @@ _CHARGE_START = {
     "marginal": "the five-year marginal",
     "three-year": "the three-year aggregate",
     "floor": "floored at the required return",
+}
+# The measured return beside an agent's ``return.runway``, which the charge starts at instead.
+_MEASURED = {
+    "marginal": "the five-year marginal is {}",
+    "three-year": "the three-year aggregate is {}",
+    "floor": "the measured return is {}, floored at the required return",
 }
 
 
@@ -123,7 +129,8 @@ class Refused:
 class RoicTerms:
     """The ten-year ROIC result, the runway return, the usable (positive) ten-year aggregate the
     sensitivity reads, the runway and terminal returns of the charge, whether the runway charge
-    is off, and the ROIC flags: the ten-year ones, then the runway return's."""
+    is off, the ROIC flags (the ten-year ones, then the runway return's), and whether the runway
+    return is an agent's override."""
 
     result: RoicResult
     runway_return: RunwayReturn
@@ -132,6 +139,7 @@ class RoicTerms:
     terminal: float
     charge_off: bool
     flags: tuple[Flag, ...]
+    overridden: bool = False
 
     @classmethod
     def of(
@@ -151,7 +159,7 @@ class RoicTerms:
         aggregate = result.aggregate
         usable = aggregate if aggregate is not None and aggregate > 0 else None
         if runway_override is not None:
-            return cls(result, rr, usable, runway_override, terminal, False, result.flags)
+            return cls(result, rr, usable, runway_override, terminal, False, result.flags, True)
         flags = result.flags + rr.flags
         return cls(result, rr, usable, rr.value, terminal, rr.charge_off, flags)
 
@@ -191,8 +199,8 @@ def charge_for(
 ) -> Charge:
     """The reinvestment charge at these returns: ``runway_roic`` held through year ``hold`` then
     faded to ``terminal`` in year N, the terminal at ``terminal``, and none in years 1 to N−1 when
-    ``charge_off``. A ``hold`` of ``None`` is the shape as built: ``runway_roic`` in years 1 to
-    N−1."""
+    ``charge_off``. A ``hold`` of ``None`` is the shape before method 1.0: ``runway_roic`` in
+    years 1 to N−1."""
     return Charge(
         runway_roic, terminal, policy.required_return, policy.terminal_growth, charge_off, hold
     )
@@ -346,21 +354,31 @@ def _heavy_capex(flag: Flag, roic: RoicTerms) -> Flag:
     """The ``heavy-capex`` flag with the runway return read beside it (spec 2026-11-09 6.3): the
     return the charge starts at and its measure, then the newest year's marginal return and its
     fiscal year, which leave a spending surge still under way to the agent's ``return.runway``.
-    Without a one-year figure the sentence stops at the start; as built when the runway return
-    is off or unavailable."""
+    Under that override the start is the override's value and the measured return follows as the
+    measure. Without a one-year figure the sentence stops there; without an override, as built
+    when the runway return is off or unavailable."""
     rr = roic.runway_return
-    measure = _CHARGE_START.get(rr.used)
-    if measure is None:
-        return flag
-    start = f"{flag.sentence} The charge's return starts at {signed(rr.value)}, {measure}"
+    if roic.overridden:
+        start = (
+            f"{flag.sentence} The charge's return starts at {signed(roic.runway)}, the agent's "
+            "override"
+        )
+        measured = _MEASURED.get(rr.used)
+        if measured is not None:
+            start += f"; {measured.format(signed(rr.value))}"
+    else:
+        measure = _CHARGE_START.get(rr.used)
+        if measure is None:
+            return flag
+        start = f"{flag.sentence} The charge's return starts at {signed(rr.value)}, {measure}"
     if rr.one_year is None or not roic.result.by_year:
         return replace(flag, sentence=f"{start}.")
     year = roic.result.by_year[-1].year
     return replace(
         flag,
         sentence=f"{start}; the newest year's marginal return is {signed(rr.one_year)}, on the "
-        f"capital added in {year}. The stored years end at {year}, so a return on a spending "
-        "surge still under way is the agent's judgment: `return.runway`.",
+        f"capital added in fiscal {year}. The stored years end at fiscal {year}, so a return on "
+        "a spending surge still under way is the agent's judgment: `return.runway`.",
     )
 
 

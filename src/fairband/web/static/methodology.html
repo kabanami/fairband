@@ -3,8 +3,10 @@
      every span marked data-policy (from GET /api/policy), data-count (GET /api/groups?by=phase and
      the screen's size) and data-decile (GET /api/deciles); each starts as an em dash. The worked
      examples' figures are typed from the drawer of each company's snapshot valued under method 0.9
-     on 6 Nov 2026 (a revalue of the 5 Nov full refresh), and change with the next method version
-     (CLAUDE.md, "Read first"). -->
+     on 6 Nov 2026 (a revalue of the 5 Nov full refresh); the Mature Growth and Mature Stable
+     examples' figures that the charge moves were re-read under method 1.0 on 9 Nov 2026 from the
+     same stored inputs, and the other routes' figures are unchanged by 1.0. They change with the
+     next method version (CLAUDE.md, "Read first"). -->
 <article class="app-prose">
 <p class="caption app-prose__note" data-live-note hidden></p>
 
@@ -82,7 +84,7 @@ its count of companies in the latest run.</desc>
 
 <p class="caption app-prose__asof">Each route section ends with a worked example on a real company.
 Figures as of the full refresh of <time datetime="2026-11-05">5 Nov 2026</time>, valued under
-method 0.9 on <time datetime="2026-11-06">6 Nov 2026</time>. Prices are the closes of
+method 1.0 on <time datetime="2026-11-09">9 Nov 2026</time>. Prices are the closes of
 <time datetime="2026-11-04">4 Nov 2026</time>. Each example links to today's row, whose figures
 may differ.</p>
 
@@ -273,18 +275,27 @@ the value would have no limit.</p>
 
 <h3 class="heading">The reinvestment charge</h3>
 <p class="body">Growth costs money: a company must invest to grow. The reinvestment charge (the
-share of earnings held back to pay for growth) is growth divided by the return on new
-capital <a class="app-cite" href="#methodology/src-mckinsey">[McKinsey]</a>. What is left is cash
-the owners can take. Here is the arithmetic for one year.</p>
+share of earnings held back to pay for growth) is next year's revenue growth over the return on
+new capital <a class="app-cite" href="#methodology/src-mckinsey">[McKinsey]</a>. New sales need
+new capital <a class="app-cite" href="#methodology/src-template">[Damodaran templates]</a>.
+Earnings that grow faster than revenue come from wider margins on the capital already in place,
+which costs nothing. What is left is cash the owners can take. Here is the arithmetic for one
+year.</p>
 <ol class="body app-prose__sum">
 <li>Earnings this year are 100.</li>
-<li>Next year's growth is 6.0%, and new capital earns 15.0%.</li>
+<li>Next year's revenue growth is 6.0%, and new capital earns 15.0%.</li>
 <li>The charge is 6.0% ÷ 15.0% = 40.0%, so the company reinvests 40 and keeps 60.</li>
 <li>The route discounts the 60 kept, not the 100 earned, at the hurdle rate of
 <span data-policy="required_return">—</span>.</li>
 </ol>
 <p class="body">When new capital earns only the hurdle rate, growth adds nothing to the value. When
 it earns more, growth adds value. A company with a lasting edge earns more for longer.</p>
+<p class="body">When growth outruns the return, the charge is more than the earnings. That year
+pays out less than nothing: the owners put money in to fund the growth.</p>
+<p class="body">The return on new capital holds while growth stays above the belief. Then it fades
+in equal steps to the terminal return by the end of the runway
+<a class="app-cite" href="#methodology/src-template">[Damodaran templates]</a>. A company with no
+growth above the belief starts the fade in year 1.</p>
 
 <h3 class="heading">The moat and the runway</h3>
 <p class="body">A moat is a lasting edge over competitors
@@ -371,8 +382,10 @@ belief (the long-run growth the engine assumes).</li>
 <a class="app-cite" href="#methodology/src-base-rate">[Base Rate Book]</a>. It adds
 <span data-policy="inflation_addition">—</span> for inflation.</li>
 <li>The belief holds to the end of the runway.</li>
-<li>Each year's earnings pay the reinvestment charge at the runway return (the company's own return
-on new capital, at least the hurdle rate).</li>
+<li>Each year pays the reinvestment charge for next year's revenue growth. Years 2 and 3 take the
+consensus revenue growth; later years fade to the belief.</li>
+<li>The charge starts at the runway return (the company's own return on new capital, at least the
+hurdle rate). It holds while growth is above the belief, then fades to the terminal return.</li>
 <li>After the runway, earnings grow at terminal growth, charged at the terminal return (the hurdle
 rate, or more for a Wide moat).</li>
 <li>Each year's cash and the terminal value are discounted at the hurdle rate and summed. The sum
@@ -394,7 +407,8 @@ too. A wide spread means the value depends heavily on those choices.</p>
 
 <h3 class="heading">Flags on this route</h3>
 <p class="body">A consensus year with fewer than <span data-policy="analyst_min">—</span> analysts
-behind it gets a note. A year whose growth exceeds its return gets a note, and pays out nothing.
+behind it gets a note. A year whose growth exceeds its return gets a note, and pays out less than
+nothing.
 A value that moves by <span data-policy="value_spread_flag">—</span> or more across the runways or
 returns gets a warning. A runway of <span data-policy="runway_years.Wide">—</span> with growth of
 <span data-policy="long_runway_growth_flag">—</span> or more gets a note.</p>
@@ -408,23 +422,26 @@ returns gets a warning. A runway of <span data-policy="runway_years.Wide">—</s
 <tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$555.80</td></tr>
 <tr><td class="body">Net income, next twelve months</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$154.7 billion</td></tr>
 <tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.9%, 23.0%</td></tr>
+<tr><td class="body">Consensus revenue growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.5%, 22.2%</td></tr>
 <tr><td class="body">Belief: sales above $50 billion, 3.3% plus 2.0%</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">5.3%</td></tr>
 <tr><td class="body">Moat, from a score of 9</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
 <tr><td class="body">Runway</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">20 years</td></tr>
 <tr><td class="body">Runway return, five-year marginal</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.4%</td></tr>
 <tr><td class="body">Terminal return</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
 <tr><td class="body">Hurdle rate</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">9.0%</td></tr>
-<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$516</td></tr>
-<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">1.08 · Near</td></tr>
-<tr><td class="body">Implied growth</td><td></td><td class="figure fb-num">6.4%</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$498</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">1.12 · Near</td></tr>
+<tr><td class="body">Implied growth</td><td></td><td class="figure fb-num">7.1%</td></tr>
 </tbody>
 </table>
 </div>
 <p class="body">Analysts expect Microsoft to earn $154.7 billion over the next twelve months. They
 see earnings growing 20.9% and then 23.0% in the next two fiscal years. The engine fades that
-growth to the belief of 5.3% and holds it for a 20-year runway. Each year it holds back earnings at
-Microsoft's own 20.4% return on new capital. The value is $516 a share against a price of $555.80,
-so the word is Near. The price needs a belief of 6.4%, a little above the engine's 5.3%.</p>
+growth to the belief of 5.3% and holds it for a 20-year runway. Each year it holds back earnings
+for the next year's revenue growth, 20.5% and then 22.2%. The charge uses Microsoft's own 20.4%
+return on new capital through year 6. It then fades to 13.0% by year 20. The value is $498 a
+share against a price of $555.80, so the word is Near. The price needs a belief of 7.1%, above the
+engine's 5.3%.</p>
 <p class="body app-prose__row"><a href="#" data-find="MSFT">Open today's row</a></p>
 </section>
 
@@ -440,8 +457,9 @@ point.</li>
 ten-year median margin.</li>
 <li>Earnings grow at terminal growth, <span data-policy="terminal_growth">—</span>, in every
 year.</li>
-<li>Through the runway, the reinvestment charge uses the runway return. After it, the charge uses
-the terminal return.</li>
+<li>No year grows above terminal growth, so the reinvestment charge starts at the runway return
+and fades in equal steps from year 1.</li>
+<li>It reaches the terminal return at the end of the runway, and uses it after.</li>
 <li>The cash, discounted at the hurdle rate and divided by the shares, is the value a share.</li>
 </ol>
 <p class="body">EPV (earnings power value: earnings divided by the hurdle rate, the value with no
@@ -465,17 +483,17 @@ cross-check never sets the levels or the word.</p>
 <tr><td class="body">Runway return, three-year average</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">30.5%</td></tr>
 <tr><td class="body">Terminal return</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
 <tr><td class="body">EPV a share</td><td></td><td class="figure fb-num">$39</td></tr>
-<tr><td class="body">Mature Growth cross-check</td><td></td><td class="figure fb-num">$63</td></tr>
-<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$50</td></tr>
-<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">1.90 · Well above</td></tr>
+<tr><td class="body">Mature Growth cross-check</td><td></td><td class="figure fb-num">$61</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$49</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">1.96 · Well above</td></tr>
 </tbody>
 </table>
 </div>
 <p class="body">Coca-Cola earned $15.2 billion over the last twelve months, once one-off items are
 removed. The engine grows that at 3.0% a year. It charges the growth at Coca-Cola's own 30.5%
-return through a 20-year runway, then at 13.0%. The value is $50 a share against a price of
-$95.80, so the word is Well above. The Mature Growth route gives $63; it would need a belief of
-10.4% to reach the price.</p>
+return in year 1, fading in equal steps to 13.0% by the end of a 20-year runway. The value is $49
+a share against a price of $95.80, so the word is Well above. The Mature Growth route gives $61;
+it would need a belief of 11.3% to reach the price.</p>
 <p class="body app-prose__row"><a href="#" data-find="KO">Open today's row</a></p>
 </section>
 
@@ -875,8 +893,8 @@ charge.</span></li>
 <span class="body app-flags__what">The company's return on new capital was below the hurdle rate,
 so the hurdle rate replaced it.</span></li>
 <li><span class="label">Growth above return</span> <code class="fb-tag figure-sm">growth-above-return</code>
-<span class="body app-flags__what">A year's growth exceeds its return, so that year pays out
-nothing.</span></li>
+<span class="body app-flags__what">The revenue growth a year pays for exceeds its return, so that
+year pays out less than nothing.</span></li>
 <li><span class="label">Tax losses unknown</span> <code class="fb-tag figure-sm">tax-loss-history-unknown</code>
 <span class="body app-flags__what">The forecast has a loss year, and past tax losses are not on
 file.</span></li>

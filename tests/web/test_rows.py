@@ -396,8 +396,8 @@ def test_a_counting_review_sets_the_rows_levels(
     """Spec 18.1, plan 3: where the review fills Reviewed, the row's band, levels, price ÷ value
     and designation are the review's, the word at the latest price on the effective edges and
     never the word stored with the review; the Mechanical column, the moat and the intermediates
-    stay the engine's. Repriced at $125, the review's $151.88 reads below, where the mechanical
-    $133.37 reads near and the review was stored near at $150. The research read says the same
+    stay the engine's. Repriced at $115, the review's $143.32 reads below, where the mechanical
+    $127.68 reads near and the review was stored near at $150. The research read says the same
     word."""
     _, value = _review(db_path, policy, results)
     review = _current_review(db_path, "AAPL")
@@ -405,16 +405,16 @@ def test_a_counting_review_sets_the_rows_levels(
     aapl = _rows(client)["AAPL"]
     assert _levels(aapl) == _record(review, value, 150.0, edges)
     assert (aapl["reviewed"], aapl["mechanical"]) == (value, results["AAPL"].value)
-    _snapshot(db_path, reprice(results["AAPL"], 125.0, date(2026, 11, 2), policy))
+    _snapshot(db_path, reprice(results["AAPL"], 115.0, date(2026, 11, 2), policy))
     latest = _newest(db_path, "AAPL")
     aapl = _rows(client)["AAPL"]
-    assert _levels(aapl) == _record(review, value, 125.0, edges)
+    assert _levels(aapl) == _record(review, value, 115.0, edges)
     assert (review.designation, latest.designation, aapl["designation"]) == (
         "near",
         "near",
         "below",
     )
-    assert (aapl["mechanical"], aapl["price"]) == (latest.value, 125.0)
+    assert (aapl["mechanical"], aapl["price"]) == (latest.value, 115.0)
     im = latest.result.intermediates
     assert (aapl["moat"], aapl["impliedGrowth"]) == (im["moat"], im["implied_growth"])
     found = client.get("/api/companies/AAPL").json()["review"]

@@ -13,9 +13,10 @@ basis unknown; the consensus then stands as it is and is flagged.
 Years 2 and 3 are the next two steps of the annual consensus from the base year, the fiscal year
 that holds most of the NTM quarters (a tie takes the later). The steps read net income when the base
 year and the next two all have a positive consensus, else EPS, flagged. A step the consensus does
-not reach is ``None`` and takes the belief. Both earnings series are read, and a step whose rate on
-net income and rate on EPS lie more than ``step_series_gap_max`` apart is noted (spec 2026-11-09
-section 9). The revenue steps on the same years are kept as found, for the charge. The belief for
+not reach is ``None`` and takes the belief. Both earnings series are read and kept, and
+``step_series_flag`` notes a step whose rate on net income and rate on EPS lie more than
+``step_series_gap_max`` apart, with the diluted count the route holds (spec 2026-11-09 section 9).
+The revenue steps on the same years are kept as found, for the charge. The belief for
 years 4 to N is the Base Rate Book median for the sales class plus the inflation addition; the moat
 class reads the GuruFocus Moat Score.
 """
@@ -39,6 +40,9 @@ _NTM_QUARTERS = 4
 # Period ends at most this many days apart are one period: FMP reports some companies under two
 # fiscal calendars, whose period ends for one quarter or year lie a day or a few days apart (AAPL).
 SAME_PERIOD_DAYS = 7
+# A step's two rates that lie exactly ``step_series_gap_max`` apart are within the gap, whatever
+# binary floating point does to the rates: without it, five points fire on one step and not another.
+_GAP_TOLERANCE = 1e-12
 
 _SBC_UNKNOWN = Flag(
     "sbc-basis-unknown",
@@ -130,14 +134,18 @@ class Anchor:
 @dataclass(frozen=True)
 class Path:
     """The growth for years 2 and 3 (``None`` takes the belief) and the analysts of the year each
-    step lands on, read from the series the steps use; and the consensus revenue steps on the same
-    years as found, ``None`` where missing, for the charge."""
+    step lands on, read from the series the steps use; the consensus revenue steps on the same
+    years as found, ``None`` where missing, for the charge; and the base year's and the next two
+    years' consensus means on net income and on EPS, ``None`` where missing, for
+    ``step_series_flag``."""
 
     steps: tuple[float | None, float | None]
     on_eps: bool
     analysts: tuple[int | None, int | None]
     flags: tuple[Flag, ...]
     revenue_steps: tuple[float | None, float | None]
+    net_income_means: tuple[float | None, float | None, float | None]
+    eps_means: tuple[float | None, float | None, float | None]
 
 
 @dataclass(frozen=True)
@@ -253,13 +261,13 @@ def base_year(estimates: Sequence[QuarterEstimate], last_reported: date) -> int 
 
 def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy) -> Path:
     """The consensus steps from ``base_year`` to the next year and from that to the one after, on
-    the path's series, with the revenue steps on the same years. Both earnings series are read for
-    ``step-series-disagree``, after ``path-on-eps`` and ``few-analysts``."""
+    the path's series, with the revenue steps on the same years and both earnings series' means,
+    which ``step_series_flag`` reads."""
     by_year = {x.fiscal_year: x for x in annual}
     rows = [by_year.get(base_year + i) for i in range(3)]
     on_eps = not all(r is not None and r.net_income is not None and r.net_income > 0 for r in rows)
-    net_income = [consensus_value(*_point(r, False)) for r in rows]
-    per_share = [consensus_value(*_point(r, True)) for r in rows]
+    net_income = _three([consensus_value(*_point(r, False)) for r in rows])
+    per_share = _three([consensus_value(*_point(r, True)) for r in rows])
     revenue = [None if r is None else consensus_value(r.revenue, r.analysts_revenue) for r in rows]
     steps = _steps(per_share if on_eps else net_income)
     analysts = (_point(rows[1], on_eps)[1], _point(rows[2], on_eps)[1])
@@ -268,15 +276,14 @@ def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy)
     thin = few_analysts(base_year, steps, analysts, policy)
     if thin is not None:
         flags.append(thin)
-    disagree = _step_series_flag(net_income, per_share, on_eps, policy)
-    if disagree is not None:
-        flags.append(disagree)
     return Path(
         steps=steps,
         on_eps=on_eps,
         analysts=analysts,
         flags=tuple(flags),
         revenue_steps=_steps(revenue),
+        net_income_means=net_income,
+        eps_means=per_share,
     )
 
 
@@ -342,24 +349,35 @@ def _steps(values: Sequence[float | None]) -> tuple[float | None, float | None]:
     return growth_step(values[0], values[1]), growth_step(values[1], values[2])
 
 
-def _step_series_flag(
-    net_income: Sequence[float | None], eps: Sequence[float | None], on_eps: bool, policy: Policy
+def _three(values: Sequence[float | None]) -> tuple[float | None, float | None, float | None]:
+    """The three years' means as a tuple."""
+    return values[0], values[1], values[2]
+
+
+def step_series_flag(
+    path: Path, shares: float, policy: Policy, read: tuple[bool, bool] = (True, True)
 ) -> Flag | None:
-    """``step-series-disagree`` naming each step whose rate on net income and rate on EPS both
-    exist and lie more than ``step_series_gap_max`` apart in size, with the share counts the two
-    series imply for its earlier year and its landing year; ``net_income`` and ``eps`` are the
-    three years' consensus means."""
+    """``step-series-disagree`` (spec 2026-11-09 9) naming each step still ``read`` whose rate on
+    net income and rate on EPS both exist and lie more than ``step_series_gap_max`` apart in size,
+    with the share counts the two series imply for its earlier year and its landing year against
+    the diluted count ``shares``; a step an override replaced is not read, so it drops its own
+    clause. A count the two means do not imply leaves the parenthetical out."""
+    net_income, eps = path.net_income_means, path.eps_means
     parts: list[str] = []
     tags: list[str] = []
-    for i, (g, h) in enumerate(zip(_steps(net_income), _steps(eps), strict=True)):
-        if g is None or h is None or abs(g - h) <= policy.step_series_gap_max:
+    rates = zip(read, _steps(net_income), _steps(eps), strict=True)
+    for i, (still_read, g, h) in enumerate(rates):
+        if not still_read or g is None or h is None:
+            continue
+        if abs(g - h) <= policy.step_series_gap_max + _GAP_TOLERANCE:
             continue
         earlier = _implied_count(net_income[i], eps[i])
         landing = _implied_count(net_income[i + 1], eps[i + 1])
         counts = (
             ""
             if earlier is None or landing is None
-            else f" ({_count(earlier)} against {_count(landing)})"
+            else f" ({_count(earlier)} and {_count(landing)} against the diluted count "
+            f"{_count(shares)})"
         )
         parts.append(
             f"step {i + 2} reads {_percent(g)} on net income and {_percent(h)} on EPS: the two "
@@ -369,7 +387,7 @@ def _step_series_flag(
     if not parts:
         return None
     steps = "; ".join(parts)
-    series = "EPS" if on_eps else "net income"
+    series = "EPS" if path.on_eps else "net income"
     decide = "decides" if len(tags) == 1 else "decide"
     return Flag(
         "step-series-disagree",

@@ -2,8 +2,8 @@
 migrated temporary database: the quotes, in one batch or one call a symbol, then a new snapshot
 of each company at its new price; the rows it leaves as they were, and the command.
 
-The full refresh values ACME and AXLE (Mature Growth, $33.42 a share) and MILD (Mature Stable,
-$19.25) at $50: ACME and AXLE ``above`` (1.496 × the value), MILD ``well-above`` (2.60 ×). It
+The full refresh values ACME and AXLE (Mature Growth, $31.24 a share) and MILD (Mature Stable,
+$18.68) at $50: ACME and AXLE ``well-above`` (1.60 × the value), MILD ``well-above`` (2.68 ×). It
 refuses NEWT (Young Growth, with no mature peer for a target margin).
 """
 
@@ -122,7 +122,7 @@ def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
     unchanged += ("data_date", "valid_until", "deciles_refresh_id", "policy_version", "refusal")
     for name in unchanged:
         assert getattr(acme, name) == getattr(old, name), name
-    assert (old.price, old.price_date, old.designation) == (50.0, date(2026, 10, 30), "above")
+    assert (old.price, old.price_date, old.designation) == (50.0, date(2026, 10, 30), "well-above")
     assert (acme.price, acme.price_date, acme.designation) == (20.0, PRICE_DATE, "well-below")
     assert acme.value is not None and acme.price_to_value == 20.0 / acme.value
     assert acme.result.designation == acme.designation  # the column copies the result
@@ -136,7 +136,7 @@ def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
     assert others == [i for i in old.result.inputs if i.name != "price"]
     stamps = {"observed_at": env.clock.now, "entered_at": env.clock.now}
     assert acme.result == reprice(old.result, 20.0, PRICE_DATE, env.policy, **stamps)
-    # $20 and $30 on $33.42 (0.60 and 0.90 × the value), $10 on $19.25 (0.52 ×)
+    # $20 and $30 on $31.24 (0.64 and 0.96 × the value), $10 on $18.68 (0.54 ×)
     assert {s: (r.price, r.designation) for s, r in after.items()} == {
         "ACME": (20.0, "well-below"),
         "AXLE": (30.0, "near"),

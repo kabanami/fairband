@@ -423,12 +423,12 @@ def test_cli_prints_the_value_line(
     assert cli.main(["refresh", "ACME"]) == 0
     acme = env.snapshot("ACME")
     assert acme.value is not None and acme.price_to_value is not None
-    assert acme.designation == "above"
+    assert acme.designation == "well-above"
     line = capsys.readouterr().out.splitlines()[-1]
-    # ACME's price is about 1.496 × its value: to two decimals 1.50, the edge where well-above
-    # starts, so the line gives the third decimal that keeps the figure in its band.
-    assert f"{acme.price_to_value:.2f}" == "1.50" and f"{acme.price_to_value:.3f}" == "1.496"
-    assert line == f"ACME  Mature Growth  value {acme.value:.2f}  above (1.496 × value)"
+    # ACME's price is about 1.600 × its value, on no designation edge to two decimals, so the line
+    # gives two; a ratio whose two decimals land on an edge is the next test's
+    assert f"{acme.price_to_value:.3f}" == "1.600"
+    assert line == f"ACME  Mature Growth  value {acme.value:.2f}  well-above (1.60 × value)"
 
 
 def test_cli_line_keeps_the_ratio_inside_its_band(env_with_deciles: Env) -> None:

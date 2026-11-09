@@ -77,9 +77,15 @@ GLOSSARY: dict[str, str] = {
         "The growth rate for years 4 to N before the fade: the base-rate median plus 2 points"
     ),
     "Runway N": "The years of growth above the terminal rate, set by the moat class",
-    "Runway return": "The return on new capital the charge uses in years 1 to N − 1",
+    "Runway return": (
+        "The return on new capital the charge starts at, held through the hold K, then faded to "
+        "the terminal return in year N (4.8)"
+    ),
     "Terminal return": "The return on new capital after the runway",
-    "Charge": "The share of earnings held back to pay for the next year's growth, g ÷ return",
+    "Charge": (
+        "The share of earnings held back to pay for the next year's revenue growth, h ÷ return; "
+        "above 100% when the growth outruns the return"
+    ),
     "Charge off": (
         "The runway years are not charged, because measured capital is at or below zero"
     ),

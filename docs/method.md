@@ -8,7 +8,7 @@
 | Rule of precedence | Where this document and any other document disagree, this document describes what runs. If the code disagrees with this document, one of them has a defect; fix the defect and keep the two aligned. |
 | Update rule | Every change to the engine, the classifier, the universe rule or a policy value changes this document in the same commit, and bumps the method version when the value of any row can move. |
 
-The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec, the growth routes spec and the 2026-11-03 spec of the rate limiter, the classifier fixes and the designation (`2026-11-03-classifier-designation-ends-design.md`) and the 2026-11-04 spec of the Methodology page, the settings and the watchlists (`2026-11-04-methodology-settings-watchlists-design.md`) and the 2026-11-06 spec of the engine round (`2026-11-06-engine-round-design.md`) and the 2026-11-06 spec of the agents, Tier 2 (`2026-11-06-tier-2-agents-design.md`), under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
+The reasons behind the rules are not restated here. They live in `docs/legacy/design.md` (the original design and the literature), `docs/legacy/research.md` (the founder's decisions D1 to D17), the mechanical screen spec, the calibration spec, the growth routes spec and the 2026-11-03 spec of the rate limiter, the classifier fixes and the designation (`2026-11-03-classifier-designation-ends-design.md`) and the 2026-11-04 spec of the Methodology page, the settings and the watchlists (`2026-11-04-methodology-settings-watchlists-design.md`) and the 2026-11-06 spec of the engine round (`2026-11-06-engine-round-design.md`) and the 2026-11-06 spec of the agents, Tier 2 (`2026-11-06-tier-2-agents-design.md`), and the 2026-11-09 spec of the engine round 2 (`2026-11-09-engine-round-2-design.md`), under `docs/superpowers/specs/`. Section 12 maps each rule to its source.
 
 ## 0. How to read this document
 
@@ -284,7 +284,7 @@ The aggregate is shown and feeds the "ten-year" sensitivity (5.8). It never ente
 
 ### 4.6 The runway return
 
-The return the charge uses in years 1 to N − 1. From the kept years, in this order:
+The return the charge starts at: it holds through the hold K and then fades to the terminal return in year N (4.8). From the kept years, in this order:
 
 1. **Unavailable** with fewer than five kept years: the charge uses the terminal return (4.7) in every year.
 2. **The five-year marginal return**: with at least six kept years, (NOPAT_last − NOPAT_first) ÷ (capital_last − capital_first), "last" the newest kept year and "first" the kept year five positions earlier, capital the average capital. Usable when capital grew, by at least a fifth of the first year's capital in size, and NOPAT grew.
@@ -292,7 +292,7 @@ The return the charge uses in years 1 to N − 1. From the kept years, in this o
 4. **Charge off** when the marginal is not usable and the three-year capital sum is at or below zero: the runway years are not charged (payout 100%), flag `charge-zeroed`. The terminal still charges (4.7).
 5. **The floor**: a chosen measure below r is replaced by r, flag `return-floored`. There is no cap.
 
-The row records which measure it used ("marginal", "three-year", "floor", "off", "unavailable") with the marginal, its usability, the three-year and the ten-year figures, and the value the charge used. The row also records the newest year's marginal return, the change in NOPAT over the change in average capital from the kept year before the newest to the newest, shown and never used: it has no usability test, and holds no figure with fewer than two kept years or no change in capital.
+The row records which measure it used ("marginal", "three-year", "floor", "off", "unavailable") with the marginal, its usability, the three-year and the ten-year figures, and the value the charge starts at. The row also records the newest year's marginal return (`runway_return.one_year`), the change in NOPAT over the change in average capital from the kept year before the newest to the newest, shown and never used: it has no usability test, and holds no figure with fewer than two kept years or no change in capital. The `heavy-capex` sentence (8) names it beside the measure the charge starts at, since a capital-spending surge still under way after the newest stored year is the agent's judgment, through `return.runway` (14.2), which replaces the value the charge starts at.
 
 ### 4.7 The terminal return
 
@@ -305,16 +305,25 @@ The same rule, applied to a given return, gives the terminal return for each sen
 
 ### 4.8 The charge and the value
 
-Earnings in year t are a total, on the one share count. Each year's reinvestment pays for the next year's growth:
+Earnings in year t are a total, on the one share count. Each year's reinvestment pays for the next year's growth h_{t+1} at the year's return:
 
-    cash_t = earnings_t × max(0, 1 − g_{t+1} ÷ return_t)
+    cash_t = earnings_t × (1 − h_{t+1} ÷ return_t)
 
-with return_t the runway return for t < N and the terminal return for t = N, and g_{N+1} = g_T. A year whose next growth is above its return pays out nothing, never less; the first such year raises `growth-above-return`. When the charge is off, cash_t = earnings_t for t < N.
+with no floor. A year whose growth outruns its return pays out less than nothing, the owner's money going in; the first such year raises `growth-above-return`, which counts the rest. When the charge is off (4.6 rule 4), cash_t = earnings_t for t < N. An infinite return charges nothing.
 
-    terminal multiple = (1 + g_T) × (1 − g_T ÷ terminal return) ÷ (r − g_T)
+**The growth the charge pays for, h.** The charge pays for revenue growth, not earnings growth: earnings growth above the revenue growth is margin change on the capital already in place and needs no new capital, and earnings growth below it still pays for the revenue. On the Mature Growth route h_2 and h_3 are the consensus revenue steps (5.3); a missing one, or one whose earlier year is not positive, takes the earnings step of the same year as resolved, an override included. Years 4 to 3 + the fade years fade from h_3 to the belief in equal steps, as 5.5 fades the earnings path (none when h_3 is at or below the belief), the years after grow at the belief, and the runway cuts the path as it cuts the earnings path; so h and the earnings growth differ only in the consensus and fade years. h_{N+1} = g_T. On the Mature Stable route h = g_T in every year (6.3).
+
+**The return by year.** The runway return R (4.6) holds through the hold K, then fades in a straight line to the terminal return T (4.7), which year N takes:
+
+    return_t = R                                   for t ≤ K
+    return_t = R + (T − R) × (t − K) ÷ (N − K)     for K < t ≤ N
+
+K is the last year t in 1 … N − 1 whose next earnings growth g_{t+1} is above the belief, 0 when none is, so a flat step inside the consensus steps or the fade does not end it. K is read once, from the row's own path at the belief in force (the mechanical belief or an override's, 14.2), and the implied growth (5.7) and every sensitivity (5.8) hold it fixed while the belief, the runway or the return moves, so the value stays continuous in the belief. With K = 0 (every Mature Stable row) the return fades from year 1; with K ≥ N − 1 (a short runway cut mid-fade) only year N takes T, the shape before method 1.0.
+
+    terminal multiple = (1 + g_T) × (1 − g_T ÷ T) ÷ (r − g_T)
     value = Σ_{t=1..N} cash_t ÷ (1 + r)^t + earnings_N × terminal multiple ÷ (1 + r)^N
 
-The value a share is the total ÷ the diluted share count.
+The value a share is the total ÷ the diluted share count. The intermediates carry `charge`: `growth_by_year`, h for years 2 to N + 1 (g_T last); `return_by_year`, years 1 to N; `hold_years`, K; and `revenue_steps`, the two consensus revenue steps as found, none where missing (none on a Mature Stable row). `charge.revenue_steps` and `charge.hold_years` are rebuild keys: a price refresh and the cross-check (6.4) rebuild the same charge from them.
 
 ### 4.9 The moat class
 
@@ -368,8 +377,8 @@ The base year is the fiscal year that holds most of the four NTM quarters; a tie
 - a mean of zero with no analyst count, or a count of zero, is no estimate;
 - step g_2 = year(base + 1) ÷ year(base) − 1, step g_3 = year(base + 2) ÷ year(base + 1) − 1; a step is missing when either year is missing or the earlier is not positive, and a missing step takes the belief;
 - a present step whose landing year has fewer than 5 analysts, or no count, flags `few-analysts`. The count is FMP's EPS analyst count on either series;
-- the path also reads the consensus revenue steps on the same years, by the same rule on the revenue mean and its analyst count, and keeps them beside the earnings steps for the charge of 4.8;
-- both earnings series are read: where a step has a rate on net income and a rate on EPS more than `step_series_gap_max` (5 points) apart in size, the note `step-series-disagree` names the step, its two rates and the share counts the two series imply for its two years (the net-income mean over the EPS mean). The path stays on the series chosen above, and the note names the step's override, `path.step_2` or `path.step_3`, as what decides.
+- the path also reads the consensus revenue steps on the same years, by the same rule on the revenue mean and its analyst count (a mean of zero with no revenue analyst count is no estimate), and keeps them beside the earnings steps for the charge of 4.8. A missing revenue step, or one whose earlier year is not positive, takes the earnings step of the same year in the charge; an earnings step override (`path.step_2`, `path.step_3`) moves that fallback and never a revenue step the consensus gives;
+- both earnings series are read: where a step has a rate on net income and a rate on EPS more than `step_series_gap_max` (5 points) apart in size, the note `step-series-disagree` names the step, its two rates and the share counts the two series imply for its two years (the net-income mean over the EPS mean) against the diluted count (4.2); a gap of exactly 5 points is silent. The path stays on the series chosen above, and the note names the step's override, `path.step_2` or `path.step_3`, as what decides. A step an override replaced drops out of the note, which names the steps the consensus still gives.
 
 ### 5.4 The belief
 
@@ -387,16 +396,16 @@ Earnings_1 = NTM net income; earnings_t = earnings_{t−1} × (1 + g_t).
 
 ### 5.6 The value
 
-Section 4.8 on this path, at the runway return (4.6) for years 1 to N − 1 and the terminal return (4.7) for year N and the terminal, N by the moat.
+Section 4.8 on this path, N by the moat: each year pays for the next year's revenue growth h at the runway return (4.6), held through the hold K and faded to the terminal return (4.7) in year N, which the terminal takes too.
 
 ### 5.7 The implied growth
 
-The belief b at which the value equals the price × shares, with the fade recomputed at each trial b. Solved by a scan from −50% to 200% a year in steps of 1% for the first sign change, then bisection to 1e-7. None when no belief in that range reaches the price. Also solved at each runway and at each return of the sensitivity.
+The belief b at which the value equals the price × shares, with both fades, the earnings path's and h's (4.8), recomputed at each trial b and the hold K fixed at the row's own. Solved by a scan from −50% to 200% a year in steps of 1% for the first sign change, then bisection to 1e-7. None when no belief in that range reaches the price. Also solved at each runway and at each return of the sensitivity.
 
 ### 5.8 Sensitivities
 
-- By runway: the value at N = 5, 10 and 20 under the row's own charge.
-- By return, four keys: `runway` (the row's own charge); `0.15` and `0.09`, each as the runway return with the moat's terminal rule (4.7) applied to it and the charge on in every runway year; `ten-year`, the ten-year aggregate the same way, not floored, or none when the aggregate is unavailable or not positive.
+- By runway: the value at N = 5, 10 and 20 under the row's own charge, its hold K included (at a runway of K + 1 or less, only year N takes T).
+- By return, four keys: `runway` (the row's own charge); `0.15` and `0.09`, each as the runway return R with the moat's terminal rule (4.7) applied to it as T and the charge on in every runway year; `ten-year`, the ten-year aggregate the same way, not floored, or none when the aggregate is unavailable or not positive. Each holds the row's own K, so its return holds and fades as the row's does (4.8). At the `0.09` key the return is r in every year, so the growth the charge pays for adds no value: on a path whose earnings and revenue steps agree, the value is the NTM earnings over r whatever the belief, so its implied growth is none unless the price sits exactly there, and earnings growth above the revenue growth adds the margin change the charge does not pay for, which moves with the belief only between the two year-3 steps.
 
 The value-spread flag reads the first three return keys, and separately the three runways: it fires when (highest − lowest) ÷ lowest is 30% or more, with a positive lowest value.
 
@@ -421,7 +430,9 @@ Without a positive market cap the income term is nil and the basis says "unavail
 
 ### 5.11 Flags
 
-In order: `sbc-basis-unknown`; `path-on-eps`, `few-analysts`, `step-series-disagree`; the ROIC flags of 4.5, the `line-not-presented` flags, then `charge-zeroed` or `return-floored`; `growth-above-return`; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`); `long-runway-high-growth`; `value-spread`. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
+In order: `sbc-basis-unknown`; `path-on-eps`, `few-analysts`, `step-series-disagree`; the ROIC flags of 4.5, the `line-not-presented` flags, then `charge-zeroed` or `return-floored`; `growth-above-return`; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`, `consensus-basis-unknown`); `long-runway-high-growth`; `value-spread`. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
+
+`growth-above-return` reads "In year t the charge pays for h of revenue growth at a return of r_t, so the year pays out less than nothing: the owner funds the growth.", naming the first such year, then the count of the rest, "1 more such year." or "k more such years.". `step-series-disagree` names each disagreeing step the consensus still gives and the share counts against the diluted count (5.3). The `heavy-capex` sentence names the return the charge starts at and the newest year's marginal return (8). `consensus-basis-unknown` follows `large-nri` and never fires without it.
 
 `long-runway-high-growth` fires on a 20-year runway when the belief or the implied growth is 10% or more.
 
@@ -431,7 +442,15 @@ DATA: the fiscal years on file, price, diluted shares, next earnings date, daily
 
 ### 5.13 Worked numbers
 
-The tests pin these. Terminal multiple at r 9%, g_T 3%, within 0.05: 17.2× at an infinite return, 15.5× (exactly 15.45) at 30%, 13.7× at 15%, 13.2× at 13%, 11.4× at 9%. The fade, the payout floor, the marginal return and the value figures of calibration spec section 7 (value 24,941.95 on its fade path at a 14.9% runway return and a 13% terminal; 19,699.10 without the fade; 20,520.66 with runway 5).
+The tests pin these. Terminal multiple at r 9%, g_T 3%, within 0.05: 17.2× at an infinite return, 15.5× (exactly 15.45) at 30%, 13.7× at 15%, 13.2× at 13%, 11.4× at 9%.
+
+The charge (spec 2026-11-09 13): r 9%, g_T 3%, runway return 20%, terminal return 13% (terminal multiple 13.2051), year-1 earnings 100, consensus earnings steps 25% and 20%, revenue steps 15% and 10%, belief 5%, fade 5 years.
+
+- Runway 5: earnings 100, 125, 150, 175.5, 200.07; the growth paid for 15%, 10%, 9%, 8%, then g_T; K = 4, so year 5 alone takes T. Cash by year 25, 62.5, 82.5, 105.3, 153.9; the years' present value 313.8675, the terminal's 1,717.0862, the value 2,030.9538. As 0.9 charged it (the earnings growth, floored at zero): cash 0, 0, 22.5, 52.65, 153.9 and the value 1,871.7834; the floor off alone, the earnings growth charged: −25, 0, 22.5, 52.65, 153.9 and 1,848.8476.
+- Runway 10: K = 6; the return 20% in years 1 to 6, then 18.25%, 16.5%, 14.75% and 13%. Cash by year 25, 62.5, 82.5, 105.3, 130.0455, 155.4544, 174.1333, 175.5221, 174.7913, 213.5764; the years' present value 745.0974, the terminal's 1,548.7248, the value 2,293.8222 (2,116.085 as 0.9 charged).
+- A missing year-3 revenue step takes the earnings step: on the runway-5 path h is 15%, 20%, then the fade from 20%, so years 3 and 4 pay for 17% and 14%; cash 25, 0, 22.5, 52.65, 153.9 (year 2 pays for 20% at a 20% return), the years' present value 177.6329 and the value 1,894.7191.
+- The Mature Stable path of 6.3: 1,315.0993.
+- `step-series-disagree`: net income 8.33 to 10.00 and EPS 0.83 to 1.10 on 10.0 shares give 20.0% against 32.5%, a gap of 12.5 points, which fires; 20.0% against 24.0% does not.
 
 ## 5a. The revenue-growth route (High Growth and Young Growth)
 
@@ -638,17 +657,17 @@ When the margin flag (8) fires and both the trailing operating margin and the te
 
 ### 6.3 The value
 
-The path grows at g_T in every year from E (year 1 is E, with no (1 + g_T) factor) to the moat's runway N. The value is section 4.8 on that path with the row's charge: the runway return in years 1 to N − 1, the terminal return in year N and the terminal, off in the runway years when 4.6 turns it off. When the runway return equals the terminal return with the charge on, this equals the one-stage formula E × (1 − g_T ÷ terminal return) ÷ (r − g_T). A row floored at r in every year values at EPV. A runway return above the terminal return, or a charge off, lifts the value, and more for a longer runway.
+The path grows at g_T in every year from E (year 1 is E, with no (1 + g_T) factor) to the moat's runway N. The value is section 4.8 on that path with the row's charge: h = g_T in every year, and no year grows above the belief g_T, so the hold K is 0 and the return fades in a straight line from the runway return in year 1 to the terminal return in year N and the terminal, R + (T − R) × t ÷ N in year t; off in the runway years when 4.6 turns it off. When the runway return equals the terminal return with the charge on, this equals the one-stage formula E × (1 − g_T ÷ terminal return) ÷ (r − g_T). A row floored at r in every year values at EPV. A runway return above the terminal return, or a charge off, lifts the value, and more for a longer runway. Worked (spec 2026-11-09 13.3): E 100, R 20%, T 13%, N 10, the return 19.3%, 18.6%, 17.9% … 13%; cash 84.456, 86.3871, 88.3096, 90.2135, 92.0871, 93.9159, 95.6823, 97.365, 98.9375, 100.3672; the value 1,315.0993 (1,335.796 with R held to year 9, as 0.9 charged); EPV 1,111.11.
 
 EPV = E ÷ r is shown as the no-growth value. The levels sit on the stable-growth value.
 
 ### 6.4 The growth-route cross-check
 
-On a valued row and on the refusal of 6.1: when the row's inputs allow the Mature Growth route (a positive anchor, a path without refusal), the intermediates carry that route's value a share under the row's own moat and returns, with the keys that rebuild its path, and its implied growth at the price. When the growth route would refuse, only its reason is carried. The levels and the designation never read it.
+On a valued row and on the refusal of 6.1: when the row's inputs allow the Mature Growth route (a positive anchor, a path without refusal), the intermediates carry that route's value a share under the row's own moat and returns, with the keys that rebuild its path and its charge (`charge`, 4.8, its hold read on the cross-check's own path), and its implied growth at the price. When the growth route would refuse, only its reason is carried. The levels and the designation never read it.
 
 ### 6.5 Expected return, multiples, flags and inputs
 
-The expected return of 5.10 with H rates of g_T. Trailing P/E reported and clean; no forward P/E. Flags: the ROIC flags of 4.5 and 4.6, `charge-zeroed` and `return-floored` included, then the trailing flags. Never `sbc-basis-unknown`, `path-on-eps`, `few-analysts`, `step-series-disagree`, `growth-above-return`, `long-runway-high-growth` or `value-spread`; so a thin consensus behind the cross-check does not show on a stable row, a known gap. Inputs: the common DATA inputs of 5.12 plus trailing net income; the RULE inputs plus the runway years and a belief of g_T.
+The expected return of 5.10 with H rates of g_T. Trailing P/E reported and clean; no forward P/E. Flags: the ROIC flags of 4.5 and 4.6, `charge-zeroed` and `return-floored` included, then the trailing flags, the `heavy-capex` sentence naming the return the charge starts at and `consensus-basis-unknown` following `large-nri` as on Mature Growth (8). Never `sbc-basis-unknown`, `path-on-eps`, `few-analysts`, `step-series-disagree`, `growth-above-return`, `long-runway-high-growth` or `value-spread`; so a thin consensus behind the cross-check does not show on a stable row, a known gap. Inputs: the common DATA inputs of 5.12 plus trailing net income; the RULE inputs plus the runway years and a belief of g_T.
 
 ## 6a. The Decline route
 
@@ -894,7 +913,7 @@ Eleven flags are quality warnings: they say the value may be wrong because the b
 | `sbc-basis-unknown` | no | the stock-compensation basis test lacked an input; on the revenue-growth route, only when the cross-check has a value |
 | `path-on-eps` | no | years 2 and 3 grow at the consensus EPS steps |
 | `few-analysts` | no | a present path step lands on a year with fewer than 5 analysts or no count: the EPS count on the earnings path (5.3), the revenue count on the revenue path (5a.2, 6a.2); on a Decline row years 2 and 3 only, since a thin year past 3 ends the consensus (6a.2) |
-| `step-series-disagree` | no | a Mature Growth path step has a rate on net income and a rate on EPS more than `step_series_gap_max` (5 points) apart in size; names each such step, its two rates and the share counts the two series imply for its two years (the net-income mean over the EPS mean), the series the path is on, and the step's override, `path.step_2` or `path.step_3`, as what decides (5.3) |
+| `step-series-disagree` | no | a Mature Growth path step has a rate on net income and a rate on EPS more than `step_series_gap_max` (5 points) apart in size, exactly 5 points being silent; names each such step, its two rates and the share counts the two series imply for its two years (the net-income mean over the EPS mean) against the diluted count, "(A and B against the diluted count C)", the series the path is on, and the step's override, `path.step_2` or `path.step_3`, as what decides; a step an override replaced drops out (5.3). Never on a Mature Stable row, whose cross-check reads both series (6.5) |
 | `path-held` | no | a consensus revenue step is missing, so its year holds the rate of the year before; names the fiscal years that left it missing and the rates held (5a.2, 6a.2) |
 | `path-on-trend` | no | a Decline row without a usable NTM consensus: years 1 to 3 of the run-off shrink at the decline rate, which then fades to zero by year N; the sentence names the rate as used (−50% on a floored row) and N (6a.2) |
 | `decline-rate-floored` | no | the five-year trend shrinks revenue faster than 50% a year, so the run-off uses −50% (6a.2) |
@@ -909,7 +928,7 @@ Eleven flags are quality warnings: they say the value may be wrong because the b
 | `line-not-presented:totalLiabilities` | no | the newest annual balance sheet of a Decline row lacks total liabilities, or none is on file, so no net-current-asset floor is applied (6a.6) |
 | `charge-zeroed` | no | the runway charge is off, 4.6 rule 4 |
 | `return-floored` | no | the chosen return measure was below r |
-| `growth-above-return` | no | a year's next growth exceeds its return; its payout is floored at zero |
+| `growth-above-return` | no | a year's growth paid for, h_{t+1} (4.8), exceeds its return, so the year pays out less than nothing: the owner funds the growth; names the first such year, the growth it pays for and its return, and counts the rest |
 | `tax-loss-history-unknown` | no | the revenue-growth forecast, the run-off or the Start-up ramp has a year whose EBIT is below zero, or the trailing margin (the ramp's starting operating income) is below zero; the tax carry starts at zero and the terminal is taxed in full (5a.6, 5a.7, 6a.3, 6b.6) |
 | `margin-ramp-in-dollars` | no | a revenue-growth row's trailing margin is below `loss_ramp_margin_bound` (−100%), so operating income moves in dollars from the trailing loss to the target margin's share of revenue in the convergence year; names the trailing margin and the ramp's two ends (5a.4) |
 | `return-above-peers` | no | the return on new capital at the target margin is above the mature peers' median ten-year ROIC (5a.11) |
@@ -924,9 +943,9 @@ Eleven flags are quality warnings: they say the value may be wrong because the b
 | `margin-flag` | yes | the trailing operating margin is 1.5 × its ten-year median or more (a positive median), or above its ten-year high by 10% of the high's size or more; needs 6 fiscal years with a margin. The word is "Newly profitable" when the median is at or below zero, "Possible cycle peak" when the window holds a loss year, else "Margin above history" |
 | `equity-raise` | yes | trailing stock issued is 1% of market cap or more |
 | `negative-fcf` | yes | trailing operating cash flow plus capital spending is below zero |
-| `heavy-capex` | yes | trailing capital spending is above 50% of a positive operating cash flow. On a Mature Growth or Mature Stable row whose runway return is neither off nor unavailable (4.6), the sentence goes on to name the return the charge starts at and its measure, then the newest year's marginal return and its fiscal year, and leaves a spending surge still under way to the agent's `return.runway` (14.2); without a newest-year figure it stops at the start |
+| `heavy-capex` | yes | trailing capital spending is above 50% of a positive operating cash flow. On a Mature Growth or Mature Stable row whose runway return is neither off nor unavailable (4.6), the sentence goes on: "The charge's return starts at R, <its measure>; the newest year's marginal return is Y%, on the capital added in fiscal <year>. The stored years end at fiscal <year>, so a return on a spending surge still under way is the agent's judgment: `return.runway`." (14.2). Under a `return.runway` override, on any measure: "starts at <the override>, the agent's override; <the measure> is <the measured return>; the newest year's …", the measure left out when the measured return is off or unavailable. Without a newest-year figure it stops after the start |
 | `large-nri` | yes | the non-recurring gap is 5% of trailing EPS or more, in either direction |
-| `consensus-basis-unknown` | no | a Mature Growth or Mature Stable row with `large-nri`, which it follows and never fires without: FMP's consensus names no basis, so whether the NTM anchor and the path carry the non-recurring items is unknown; names the gap a share and its share of trailing EPS, and leaves the basis to a report that reads the filing, through `earnings.ntm` or `earnings.nri_gap` (14.2) |
+| `consensus-basis-unknown` | no | a Mature Growth or Mature Stable row with `large-nri`, which it follows and never fires without: FMP's consensus names no basis, so whether the NTM anchor and the path carry the non-recurring items is unknown; names the gap a share and its share of trailing EPS, and leaves the basis to a report that reads the filing: "through `earnings.nri_gap`, and on Mature Growth `earnings.ntm`" (14.2), since Mature Stable reads no NTM earnings |
 | `long-runway-high-growth` | no | a 20-year runway with a belief or an implied growth of 10% or more |
 | `value-spread` | yes | the value spans 30% or more across the first three return keys or across the three runways; on the revenue-growth route, across the three target margins, or the value at the lowest is at or below zero while the median's is positive (5a.11) |
 
@@ -1006,7 +1025,9 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | The reinvestment charge, earnings × (1 − g ÷ return) | McKinsey value-driver formula (V99); design.md 6.5 change 1 |
 | One share count, net income not EPS | design.md 6.5 change 2 |
 | The marginal return on new capital; the fallback to the company's own return; the floor at r | Damodaran H21, H29; McKinsey T31, G42; Mauboussin G22; calibration spec 5.1 |
-| The payout floor; efficiency growth | Damodaran H12, H17; calibration spec 5.2 |
+| The charge without a floor: reinvestment above earnings is the owner's money going in | Damodaran, *Investment Valuation* 2e, ch. 11 and 12; *Return on Capital* pp. 60–61; McKinsey V99; Mauboussin V101; spec 2026-11-09 6.1 |
+| The charge on revenue growth; earnings growth above it is margin change, which needs no new capital | Damodaran H12, H13, H16; spec 2026-11-09 6.2 |
+| The runway return held through the high growth, then faded to the terminal return | Damodaran, *Return on Capital* pp. 58–60 (H29); H5; spec 2026-11-09 6.3 |
 | The fade in five equal steps | Damodaran's template H2; the one-step drop fits moderate growth only (G6); calibration spec 5.4 |
 | The terminal return: r by default, a modest excess for a wide moat, never below r | Damodaran T6; McKinsey G42; Mauboussin T25; Morningstar T36; design.md 6.6 |
 | Invested capital from the operating side, with goodwill, without cash; average capital; the statutory rate; leases | Damodaran H57; D2, D3, D3a, D3b, D17 |
@@ -1051,9 +1072,9 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Value at belief | The value a share at the growth belief; the one price target |
 | Belief | The growth rate for years 4 to N before the fade: the base-rate median plus 2 points |
 | Runway N | The years of growth above the terminal rate, set by the moat class |
-| Runway return | The return on new capital the charge uses in years 1 to N − 1 |
+| Runway return | The return on new capital the charge starts at, held through the hold K, then faded to the terminal return in year N (4.8) |
 | Terminal return | The return on new capital after the runway |
-| Charge | The share of earnings held back to pay for the next year's growth, g ÷ return |
+| Charge | The share of earnings held back to pay for the next year's revenue growth, h ÷ return; above 100% when the growth outruns the return |
 | Charge off | The runway years are not charged, because measured capital is at or below zero |
 | Fade | The five equal steps from the year-3 consensus growth down to the belief |
 | EPV | Earnings power value: clean trailing earnings ÷ r, the value with no growth |
@@ -1150,7 +1171,7 @@ An override, a drop and a recompute are refused with the price refresh's own sen
 - `moat.class` replaces the class (4.9), so the runway, the terminal return, the margin of safety and the levels move with it (4.7, 4.10); the cross-check (6.4) reads it too.
 - `margin.target` replaces the peers' median (5a.4, 6b.3), the peers' lowest and highest margins kept for the sensitivity; on a row with no counted peers, the override stands alone, its own low and high, and the row is not refused for its target margin.
 - `capital.sales_to_capital` replaces the measure (5a.5, 6a.4). Its record's `used` is "override", the measures kept beside it, so the peers neither flag `peers-from-industry` on Decline nor cite their rules for it.
-- `return.runway` replaces the runway return of the charge (4.6) and charges the runway years, even where the measured return had the charge off; the terminal return still follows the moat on the measured return (4.7), and `return-floored` and `charge-zeroed` are not raised.
+- `return.runway` replaces the runway return of the charge (4.6), the return its fade starts at (4.8), and charges the runway years, even where the measured return had the charge off; the terminal return still follows the moat on the measured return (4.7), and `return-floored` and `charge-zeroed` are not raised.
 - `earnings.nri_gap` replaces the non-recurring gap: Mature Stable's E (6.1), the clean EPS, EPV and `large-nri` (5.9), and the anchor's basis test (5.2), which reads trailing GAAP EPS less the agent's correction, the override less the gap found (nil without one): the test's mechanical reading moved by the correction alone, so a gap overridden at the figure found leaves the basis as it was. The cross-check (6.4) reads the gap too.
 - `earnings.cycle_gap`, the correction to mid-cycle earnings a share: the cycle gap lowers the anchor earnings, E on Mature Stable and the NTM EPS on Mature Growth, and feeds nothing else beyond the cross-check's anchor. The two gaps are taken off E on Mature Stable, and the cycle gap alone off the NTM EPS on Mature Growth. On Mature Stable the cycle gap comes after the engine's normalization: E, trailing net income less the non-recurring gap on the diluted shares, is scaled to the median margin when the margin flag fires (6.2), and the cycle gap on the diluted shares then comes off the E so scaled, so the engine's scaling and the agent's correction add. That E is `e_normalized`, the figure the value and EPV rest on (6.3) and the refusal of 6.1 reads; `e_trailing` stays E before both. On Mature Growth the NTM EPS is the consensus less the SBC adjustment, or an `earnings.ntm` override in its place, and then less the cycle gap (5.2); "no positive forward anchor" reads the figure so lowered, and the unit-error check reads the consensus as found, a check on the vendor's units. A negative gap lifts a trough's earnings to mid-cycle. The basis test, the clean EPS, the P/E, Mature Growth's EPV and `large-nri` read the non-recurring gap alone, and the `ntm_eps` and `ntm_net_income` DATA entries cite the consensus as found. The cross-check of a Mature Stable row (6.4) is the Mature Growth route's value on that row, so its NTM EPS is lowered as the route's is. The engine finds no cycle gap: a route writes `cycle_gap` into its intermediates only under the override.
 - `decline.rate` replaces d (6a.2), never floored: `decline-rate-floored` is not raised.

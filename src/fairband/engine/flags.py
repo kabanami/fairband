@@ -158,7 +158,7 @@ def basis_unknown_flag(nri: Flag | None, gap: float | None, eps_ttm: float | Non
         f"The non-recurring gap is {sign}${abs(gap):,.2f} a share, {abs(gap) / abs(eps_ttm):.1%} "
         "of trailing EPS. FMP's consensus names no basis, so whether the NTM anchor and the path "
         "carry such items is unknown; a report that reads the filing decides, through "
-        "`earnings.ntm` or `earnings.nri_gap`.",
+        "`earnings.nri_gap`, and on Mature Growth `earnings.ntm`.",
     )
 
 

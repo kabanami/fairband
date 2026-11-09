@@ -5,13 +5,22 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
+from support import engine_companies
 from support.stable_value import stable_dcf
 
 from fairband.engine import METHOD_VERSION, route_mature_growth
 from fairband.engine.classifier import Deciles
 from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
-from fairband.engine.mature_growth import Charge, GrowthPath, growth_rates, value_at_belief
+from fairband.engine.mature_growth import (
+    Charge,
+    GrowthPath,
+    growth_rates,
+    hold_years,
+    return_by_year,
+    value_at_belief,
+)
+from fairband.engine.overrides import Override, OverrideTag
 from fairband.engine.price_facts import price_facts
 from fairband.engine.roic import (
     CapitalYear,
@@ -54,6 +63,7 @@ MATURE_GROWTH_KEYS = {
     "charge_off",
     "fade_years",
     "growth_rates",
+    "charge",
     "shares",
     "value_total",
     "value_per_share",
@@ -84,6 +94,7 @@ MATURE_STABLE_KEYS = {
     "roic",
     "runway_return",
     "terminal_roic",
+    "charge",
     "runway",
     "epv",
     "epv_total",
@@ -112,6 +123,7 @@ CROSS_CHECK_KEYS = {
     "runway_return",
     "terminal_roic",
     "charge_off",
+    "charge",
     "implied_growth",
     "refusal",
 }
@@ -119,6 +131,24 @@ CROSS_CHECK_KEYS = {
 
 def codes(r: ValuationResult) -> list[str]:
     return [f.code for f in r.flags]
+
+
+def judged(*values: tuple[OverrideTag, float | str]) -> dict[OverrideTag, Override]:
+    """An agent's applied overrides of ``values``, by tag, as ``value_company`` takes them."""
+    at = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
+    return {
+        tag: Override(k, tag, value, "agent", "claude-opus-5-5", at, "because")
+        for k, (tag, value) in enumerate(values, start=1)
+    }
+
+
+def with_revenue(i: CompanyInputs, revenue: tuple[float, float, float]) -> CompanyInputs:
+    """``i`` with consensus revenue means for its three annual years, 20 revenue analysts each."""
+    rows = tuple(
+        replace(a, revenue=x, analysts_revenue=20)
+        for a, x in zip(i.annual_estimates, revenue, strict=True)
+    )
+    return replace(i, annual_estimates=rows)
 
 
 def flag(code: str) -> Flag:
@@ -163,15 +193,16 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     r = value_company(mg_inputs, deciles, policy, TODAY)
     capital = mg_inputs.capital_years
     assert r.symbol == "MGCO" and r.phase.phase == "Mature Growth" and r.phase.checks == ()
-    # the value moves 96% between a 9% return and the company's 43.1% marginal return on a
+    # the value moves 95% between a 9% return and the company's 43.1% marginal return on a
     # 20-year runway
     assert codes(r) == ["value-spread"]
     assert (r.price, r.price_date, r.data_date) == (150.0, date(2026, 10, 30), date(2026, 10, 30))
     assert (r.policy_version, r.method_version) == (policy.version, METHOD_VERSION)
     assert r.deciles_refresh_id == deciles.refresh_id
-    # $150 on a value of $133.37: 1.125 × the value, inside 0.85 to 1.15
-    assert r.value is not None and r.value == pytest.approx(133.37, abs=0.005)
-    assert (r.price_to_value, r.designation) == (150.0 / r.value, "near")
+    # $150 on a value of $127.68 ($133.37 under 0.9, the runway return held to year 19): 1.175
+    # × the value, above 1.15
+    assert r.value is not None and r.value == pytest.approx(127.675, abs=0.005)
+    assert (r.price_to_value, r.designation) == (150.0 / r.value, "above")
     im = r.intermediates
     assert set(im) == MATURE_GROWTH_KEYS
     assert im["anchor"] == {"ntm_eps_raw": 5.90, "sbc_adjustment_per_share": 0.0, "ntm_eps": 5.90}
@@ -213,9 +244,12 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert im["terminal_roic"] == policy.wide_terminal_roic_cap and im["charge_off"] is False
 
     # the value is the reverse DCF at the belief over the company's own runway and return, with
-    # year 3's 10% fading to the belief over years 4 to 8, the last of them on the belief exactly
+    # year 3's 10% fading to the belief over years 4 to 8, the last of them on the belief exactly;
+    # the return holds through year 6, whose next growth is the last above the belief, then fades
+    # to the terminal return in year 20 (spec 2026-11-09 6.3)
     growth = GrowthPath(5_900e6, (0.12, 0.10), 0.063, 20, fade_years=5)
-    charge = Charge(rr["value"], im["terminal_roic"], 0.09, 0.03)
+    charge = Charge(rr["value"], im["terminal_roic"], 0.09, 0.03, hold=6)
+    assert im["charge"]["hold_years"] == hold_years(growth) == 6
     assert im["growth_rates"] == pytest.approx(growth_rates(growth))
     assert len(im["growth_rates"]) == 19 and im["growth_rates"][2] == pytest.approx(0.0926)
     assert im["growth_rates"][6:] == [im["belief"]["rate"]] * 13
@@ -230,7 +264,7 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert list(by_roic) == ["runway", "0.15", "0.09", "ten-year"]
     assert by_roic["runway"] == r.value
     ten_year = Charge(
-        expected.ten_year, terminal_roic(expected.ten_year, "Wide", policy), 0.09, 0.03
+        expected.ten_year, terminal_roic(expected.ten_year, "Wide", policy), 0.09, 0.03, hold=6
     )
     assert by_roic["ten-year"] == pytest.approx(value_at_belief(growth, ten_year) / 1_000e6)
     assert by_roic["0.09"] < by_roic["0.15"] < by_roic["ten-year"] < by_roic["runway"]
@@ -498,6 +532,7 @@ def test_flags_in_order_without_duplicates(
         "growth-above-return",  # a year that pays out less than nothing
         "margin-flag",
         "large-nri",
+        "consensus-basis-unknown",  # FMP's consensus names no basis
         "long-runway-high-growth",
         "value-spread",
     ]
@@ -554,14 +589,180 @@ def test_growth_above_return_flag(
     r = value_company(steep, deciles, policy, TODAY)
     above = next(f for f in r.flags if f.code == "growth-above-return")
     assert above.word == "Growth above return"
-    # the first floored year is year 1, whose reinvestment pays for year 2's 50%
+    # with no consensus revenue the charge pays for the earnings growth: year 1 pays for year 2's
+    # 50%, year 2 for year 3's; year 3 pays for year 4's faded 41.3%, below the return
     assert above.sentence == (
-        "Year 2 growth of 50.0% exceeds the 43.1% return on new capital; year 1's payout is "
-        "floored at zero and the growth above the return is treated as efficiency growth, which "
-        "costs nothing."
+        "In year 1 the charge pays for 50.0% of revenue growth at a return of 43.1%, so the year "
+        "pays out less than nothing: the owner funds the growth. 1 more such year."
     )
     assert r.value is not None and r.value > 0
     assert "growth-above-return" not in codes(value_company(mg_inputs, deciles, policy, TODAY))
+
+
+def test_the_mature_growth_charge_intermediates(policy: Policy, deciles: Deciles) -> None:
+    # consensus revenue up 8% then 7% beside net income up 12% then 10%: the charge pays for the
+    # revenue growth, the margin change above it rides free (spec 2026-11-09 6.2)
+    inputs = with_revenue(engine_companies.mature_growth_inputs(), (24_000e6, 25_920e6, 27_734.4e6))
+    r = value_company(inputs, deciles, policy, TODAY)
+    im = r.intermediates
+    path, charge = route_mature_growth._rebuilt(im, policy)
+    ch = im["charge"]
+    assert ch["hold_years"] == hold_years(path) == charge.hold == 6
+    assert len(ch["return_by_year"]) == im["runway"] == 20
+    assert ch["return_by_year"][-1] == pytest.approx(im["terminal_roic"])
+    assert ch["return_by_year"][0] == pytest.approx(im["runway_return"]["value"])
+    assert ch["return_by_year"][5] == ch["return_by_year"][0]  # held through year 6
+    runway, terminal = im["runway_return"]["value"], im["terminal_roic"]
+    assert ch["return_by_year"][6] == pytest.approx(runway + (terminal - runway) / 14)
+    assert ch["return_by_year"] == pytest.approx(list(return_by_year(charge, 20)))
+    assert len(ch["growth_by_year"]) == im["runway"]
+    assert ch["growth_by_year"][-1] == pytest.approx(policy.terminal_growth)
+    # years 2 and 3 the revenue steps, then the fade from 7% to the 6.3% belief over years 4 to 8
+    assert ch["growth_by_year"][:7] == pytest.approx(
+        [0.08, 0.07, 0.0686, 0.0672, 0.0658, 0.0644, 0.063]
+    )
+    assert ch["revenue_steps"] == list(path.revenue_steps)
+    assert ch["revenue_steps"] == [pytest.approx(0.08), pytest.approx(0.07)]
+    assert im["growth_rates"][:2] == [pytest.approx(0.12), pytest.approx(0.10)]  # the earnings
+    assert "one_year" in im["runway_return"]
+    growth = GrowthPath(5_900e6, (0.12, 0.10), 0.063, 20, 5, revenue_steps=(0.08, 0.07))
+    assert im["value_total"] == pytest.approx(
+        value_at_belief(growth, Charge(runway, terminal, 0.09, 0.03, hold=6))
+    )
+    # charging the revenue growth, not the earnings growth, is worth more here
+    plain = value_company(engine_companies.mature_growth_inputs(), deciles, policy, TODAY)
+    assert plain.value is not None and r.value is not None and r.value > plain.value
+    assert plain.intermediates["charge"]["revenue_steps"] == [None, None]
+    assert result_from_json(result_to_json(r)) == r
+
+
+def test_growth_above_return_says_the_owner_funds_the_growth(
+    policy: Policy, deciles: Deciles
+) -> None:
+    # consensus revenue up 50% a year, above the 43.1% marginal return, while net income grows 12%
+    # then 10%: years 1 and 2 pay for revenue growth they cannot fund
+    revenue = (24_000e6, 36_000e6, 54_000e6)
+    r = value_company(
+        with_revenue(engine_companies.mature_growth_inputs(), revenue), deciles, policy, TODAY
+    )
+    above = next(f for f in r.flags if f.code == "growth-above-return")
+    assert "pays out less than nothing: the owner funds the growth" in above.sentence
+    assert above.sentence == (
+        "In year 1 the charge pays for 50.0% of revenue growth at a return of 43.1%, so the year "
+        "pays out less than nothing: the owner funds the growth. 1 more such year."
+    )
+    # a single such year names no more
+    single = with_revenue(engine_companies.mature_growth_inputs(), (24_000e6, 36_000e6, 39_600e6))
+    flags = value_company(single, deciles, policy, TODAY).flags
+    above = next(f for f in flags if f.code == "growth-above-return")
+    assert above.sentence.endswith("the owner funds the growth.")
+    plain = value_company(engine_companies.mature_growth_inputs(), deciles, policy, TODAY)
+    assert codes(plain) == ["value-spread"]
+
+
+def _charge_off(i: CompanyInputs) -> CompanyInputs:
+    """``i`` with invested capital at or below zero in every year: the runway charge is off."""
+    negative = tuple(
+        replace(y, total_current_liabilities=3 * (y.total_current_assets or 0))
+        for y in i.capital_years
+    )
+    return replace(i, capital_years=negative)
+
+
+def test_a_runway_override_starts_the_fade_even_with_the_charge_off(
+    policy: Policy, deciles: Deciles
+) -> None:
+    inputs = _charge_off(engine_companies.mature_growth_inputs())
+    assert value_company(inputs, deciles, policy, TODAY).intermediates["charge_off"] is True
+    r = value_company(inputs, deciles, policy, TODAY, judged(("return.runway", 0.20)))
+    ch = r.intermediates["charge"]
+    assert ch["return_by_year"][0] == pytest.approx(0.20)
+    assert r.intermediates["charge_off"] is False
+    # held through year 6, then faded to the Wide cap the measured return leaves as the terminal
+    assert ch["hold_years"] == 6 and ch["return_by_year"][5] == pytest.approx(0.20)
+    assert ch["return_by_year"][6] == pytest.approx(0.20 + (0.13 - 0.20) / 14)
+    assert ch["return_by_year"][-1] == r.intermediates["terminal_roic"] == 0.13
+
+
+def test_a_reprice_rebuilds_the_same_charge(policy: Policy, deciles: Deciles) -> None:
+    inputs = with_revenue(engine_companies.mature_growth_inputs(), (24_000e6, 25_920e6, 27_734.4e6))
+    r = value_company(inputs, deciles, policy, TODAY)
+    stored = result_from_json(result_to_json(r))  # from the intermediates alone
+    moved = reprice(stored, 200.0, date(2026, 11, 2), policy)
+    assert moved.value == r.value
+    assert moved.intermediates["charge"] == r.intermediates["charge"]
+    fresh = value_company(replace(inputs, price=200.0), deciles, policy, TODAY)
+    assert moved.intermediates["implied_growth"] == fresh.intermediates["implied_growth"]
+    assert moved.intermediates["implied_by_roic"] == fresh.intermediates["implied_by_roic"]
+    # the solve moves the belief alone: the hold and the revenue steps stay those of the row's own
+    # path at its belief, so the value at the implied growth on that charge is the price
+    implied = moved.intermediates["implied_growth"]
+    assert implied is not None and implied > 0.10  # above year 3's 10%, so no fade from it
+    path, charge = route_mature_growth._rebuilt(moved.intermediates, policy)
+    assert charge.hold == 6 and path.revenue_steps == pytest.approx((0.08, 0.07))
+    assert hold_years(replace(path, belief=implied)) != charge.hold
+    at_price = value_at_belief(replace(path, belief=implied), charge) / 1_000e6
+    assert at_price == pytest.approx(200.0, rel=1e-6)
+
+
+def test_the_heavy_capex_sentence_names_an_override_as_the_start(
+    policy: Policy, deciles: Deciles
+) -> None:
+    i = engine_companies.mature_growth_inputs()
+    assert i.trailing is not None
+    heavy = replace(i, trailing=replace(i.trailing, cfo=6_000e6, capex=-4_000e6))  # 66.7%
+    base = "Trailing capital spending is 66.7% of operating cash flow, above 50.0%."
+    newest = (
+        "the newest year's marginal return is 45.7%, on the capital added in fiscal 2025. The "
+        "stored years end at fiscal 2025, so a return on a spending surge still under way is the "
+        "agent's judgment: `return.runway`."
+    )
+    mechanical = value_company(heavy, deciles, policy, TODAY)
+    [sentence] = [f.sentence for f in mechanical.flags if f.code == "heavy-capex"]
+    assert sentence == (
+        f"{base} The charge's return starts at 43.1%, the five-year marginal; {newest}"
+    )
+    r = value_company(heavy, deciles, policy, TODAY, judged(("return.runway", 0.214)))
+    [sentence] = [f.sentence for f in r.flags if f.code == "heavy-capex"]
+    assert "starts at 21.4%, the agent's override; the five-year marginal is 43.1%" in sentence
+    assert sentence == (
+        f"{base} The charge's return starts at 21.4%, the agent's override; the five-year "
+        f"marginal is 43.1%; {newest}"
+    )
+
+
+def test_a_step_override_keeps_the_other_step_s_series_note(
+    policy: Policy, deciles: Deciles
+) -> None:
+    # net income up 50% a year against EPS up 12% then 10%: both steps disagree
+    i = engine_companies.mature_growth_inputs()
+    base, second, third = i.annual_estimates
+    inputs = replace(
+        i,
+        annual_estimates=(
+            base,
+            replace(second, net_income=1.50 * base.net_income),
+            replace(third, net_income=1.50 * 1.50 * base.net_income),
+        ),
+    )
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    [note] = [f.sentence for f in mechanical.flags if f.code == "step-series-disagree"]
+    assert note == (
+        "Step 2 reads 50.0% on net income and 12.0% on EPS: the two consensus series imply "
+        "different share counts (1.0B and 1.3B against the diluted count 1.0B); step 3 reads "
+        "50.0% on net income and 10.0% on EPS: the two consensus series imply different share "
+        "counts (1.3B and 1.8B against the diluted count 1.0B). The path is on net income; "
+        "`path.step_2` and `path.step_3` decide."
+    )
+    r = value_company(inputs, deciles, policy, TODAY, judged(("path.step_2", 0.20)))
+    [note] = [f.sentence for f in r.flags if f.code == "step-series-disagree"]
+    assert note == (
+        "Step 3 reads 50.0% on net income and 10.0% on EPS: the two consensus series imply "
+        "different share counts (1.3B and 1.8B against the diluted count 1.0B). The path is on "
+        "net income; `path.step_3` decides."
+    )
+    both = judged(("path.step_2", 0.20), ("path.step_3", 0.15))
+    assert "step-series-disagree" not in codes(value_company(inputs, deciles, policy, TODAY, both))
 
 
 def test_value_spread_leaves_out_the_ten_year_value(
@@ -685,11 +886,17 @@ def test_mature_stable_end_to_end(
     assert im["runway_return"]["value"] == pytest.approx(0.1825, abs=1e-4)
     assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
     assert im["epv"] == pytest.approx(3.30 / 0.09)  # a share, as the screen's EPV column
-    # charged as the growth route charges: 3% growth paid for at 18.25% for 19 years and at
-    # 13% in year 20 and the terminal; the one-stage value at 13% was $42.31
+    # 3% growth paid for at a return that fades from 18.25% from year 1, a hold of 0, to 13% in
+    # year 20 and the terminal ($44.71 with 18.25% held for 19 years); the one-stage value at 13%
+    # was $42.31
     runway_return = im["runway_return"]["value"]
     assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_300e6, runway_return, 0.13, 20))
-    assert im["stable_growth"] == pytest.approx(44.714, abs=1e-3)
+    assert im["stable_growth"] == pytest.approx(43.849, abs=1e-3)
+    ch = im["charge"]
+    assert ch["hold_years"] == 0 and ch["revenue_steps"] == [None, None]
+    assert ch["growth_by_year"] == [policy.terminal_growth] * 20
+    assert ch["return_by_year"][0] == pytest.approx(runway_return + (0.13 - runway_return) / 20)
+    assert ch["return_by_year"][-1] == 0.13 and len(ch["return_by_year"]) == 20
     assert im["median_margin"] == pytest.approx(0.20) and im["ttm_margin"] == pytest.approx(0.20)
     assert im["eps"] == {"reported": 3.40, "clean": pytest.approx(3.30), "forward": None}
     assert im["multiples"]["pe_forward"] is None
@@ -814,9 +1021,9 @@ def test_mature_stable_cross_check_present_with_a_path(
     assert r.levels == levels_for(r.value, "Wide", policy)
     assert result_from_json(result_to_json(r)) == r
     # the cross-check is the value the growth route reaches on the same company, with its implied
-    # growth at the price: none at $40, below the $48.12 the growth route gives at -50% a year
+    # growth at the price: none at $40, below the $48.43 the growth route gives at -50% a year
     assert inputs.trailing is not None
-    for price, implied in ((40.0, None), (120.0, pytest.approx(0.0747, abs=1e-4))):
+    for price, implied in ((40.0, None), (120.0, pytest.approx(0.0815, abs=1e-4))):
         priced = replace(inputs, price=price)
         r = value_company(priced, deciles, policy, TODAY)
         gr = r.intermediates["growth_route"]
@@ -824,11 +1031,47 @@ def test_mature_stable_cross_check_present_with_a_path(
         own = route_mature_growth.value_mature_growth(c)
         assert isinstance(own, Valued) and own.value != r.value
         im = own.intermediates
-        assert gr["value_per_share"] == own.value == pytest.approx(111.62, abs=0.01)
+        assert gr["value_per_share"] == own.value == pytest.approx(108.08, abs=0.01)
         assert gr["implied_growth"] == im["implied_growth"] == implied
         assert gr["runway_return"] == r.intermediates["runway_return"]
         for key in CROSS_CHECK_KEYS - {"value_per_share", "refusal"}:
             assert gr[key] == im[key], key
+
+
+def test_mature_stable_names_the_charge_s_start_and_the_basis_note(
+    ms_inputs: CompanyInputs, mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # capital spending at two thirds of operating cash flow, and a non-recurring gain of $0.40 a
+    # share, 11.8% of trailing EPS; the growth company's consensus, whose two series disagree
+    assert ms_inputs.trailing is not None
+    base, second, third = mg_inputs.annual_estimates
+    disagree = (
+        base,
+        replace(second, net_income=1.50 * base.net_income),
+        replace(third, net_income=1.50 * 1.50 * base.net_income),
+    )
+    inputs = replace(
+        _with_consensus(ms_inputs, replace(mg_inputs, annual_estimates=disagree)),
+        trailing=replace(ms_inputs.trailing, capex=-3_000e6),
+        gf_eps_without_nri=3.00,
+    )
+    r = value_company(inputs, deciles, policy, TODAY)
+    assert codes(r) == ["heavy-capex", "large-nri", "consensus-basis-unknown"]
+    heavy, _, basis = r.flags
+    assert heavy.sentence == (
+        "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The charge's "
+        "return starts at 18.3%, the three-year aggregate; the newest year's marginal return is "
+        "18.3%, on the capital added in fiscal 2025. The stored years end at fiscal 2025, so a "
+        "return on a spending surge still under way is the agent's judgment: `return.runway`."
+    )
+    assert basis.sentence == (
+        "The non-recurring gap is $0.40 a share, 11.8% of trailing EPS. FMP's consensus names no "
+        "basis, so whether the NTM anchor and the path carry such items is unknown; a report that "
+        "reads the filing decides, through `earnings.nri_gap`, and on Mature Growth "
+        "`earnings.ntm`."
+    )
+    # the cross-check reads the two series, and its notes stay off the stable row (method 6.5)
+    assert r.intermediates["growth_route"]["refusal"] is None
 
 
 def test_mature_stable_cross_check_absent_with_a_refusal(
@@ -940,7 +1183,8 @@ def test_mature_stable_reads_the_shared_terminal(
     ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     # a Wide stable row whose marginal return is above 13% and ten-year aggregate 10% charges at
-    # 28% through the runway and at 13% after: invested capital is $10 bn at each year end to
+    # a return fading from 28% to 13% in year 20 and after: invested capital is $10 bn at each
+    # year end to
     # 2023 and $20 bn at the ends of 2024 and 2025; NOPAT is $0.87 bn a year and $3.67 bn in
     # 2025. Average capital rises $10 bn from 2020 to 2025 and NOPAT $2.8 bn, a 28% marginal
     # return; $11.5 bn of NOPAT over $115 bn of average capital is 10%.
@@ -956,15 +1200,15 @@ def test_mature_stable_reads_the_shared_terminal(
     assert im["roic"]["aggregate"] == pytest.approx(0.10)
     assert r.intermediates["terminal_roic"] == 0.13 and im["runway"] == 20
     assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_300e6, 0.28, 0.13, 20))
-    assert im["stable_growth"] == pytest.approx(46.788, abs=1e-3)
+    assert im["stable_growth"] == pytest.approx(45.478, abs=1e-3)  # 46.788 held to year 19
 
 
 def test_mature_stable_narrow_moat_charges_its_own_return_for_ten_years(
     ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    # a Narrow moat: the terminal return is r and the runway 10 years, so the three-year return
-    # of 18.25% is charged through year 9 and r from year 10; the value sits above EPV, which
-    # the one-stage formula at r gave such a row before
+    # a Narrow moat: the terminal return is r and the runway 10 years, so the charge's return
+    # fades from the three-year 18.25% to r in year 10; the value sits above EPV, which the
+    # one-stage formula at r gave such a row before
     narrow = replace(ms_inputs, moat_score=policy.moat_narrow_min)
     r = value_company(narrow, deciles, policy, TODAY)
     im = r.intermediates
@@ -973,7 +1217,7 @@ def test_mature_stable_narrow_moat_charges_its_own_return_for_ten_years(
     runway_return = im["runway_return"]["value"]
     assert runway_return == pytest.approx(0.1825, abs=1e-4)
     assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_300e6, runway_return, 0.09, 10))
-    assert im["stable_growth"] == pytest.approx(40.377, abs=1e-3)
+    assert im["stable_growth"] == pytest.approx(39.123, abs=1e-3)  # 40.377 held to year 9
     assert im["epv"] == pytest.approx(36.667, abs=1e-3)
     years = next(i for i in r.inputs if i.name == "runway_years")
     assert (years.tag, years.value, years.note) == ("RULE", 10, "Narrow moat")
@@ -1158,7 +1402,7 @@ def test_reprice_keeps_value_changes_designation(
         r.data_date,
     )
     assert (p.price, p.price_date, p.designation) == (low, date(2026, 11, 2), "below")
-    assert p.price_to_value == low / r.value and r.designation == "near"
+    assert p.price_to_value == low / r.value and r.designation == "above"
     fresh = value_company(
         replace(mg_inputs, price=low, price_date=date(2026, 11, 2)), deciles, policy, TODAY
     )
@@ -1285,14 +1529,14 @@ def test_reprice_moves_the_designation_and_leaves_the_levels(
 def test_the_designation_reads_the_policy_edges(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    """At 1.125 × the value the row is near under v5's edges; with the third edge at 1.10 it is
-    above, at valuation and at a price refresh alike."""
-    assert value_company(mg_inputs, deciles, policy, TODAY).designation == "near"
-    narrow = replace(policy, fair_band=(0.85, 1.10))
-    r = value_company(mg_inputs, deciles, narrow, TODAY)
-    assert r.designation == "above"
+    """At 1.175 × the value the row is above under the default edges; with the third edge at 1.20
+    it is near, at valuation and at a price refresh alike."""
+    assert value_company(mg_inputs, deciles, policy, TODAY).designation == "above"
+    wide = replace(policy, fair_band=(0.85, 1.20))
+    r = value_company(mg_inputs, deciles, wide, TODAY)
+    assert r.designation == "near"
     assert r.price is not None and r.price_date is not None
-    assert reprice(r, r.price, r.price_date, policy).designation == "near"
+    assert reprice(r, r.price, r.price_date, policy).designation == "above"
 
 
 def test_reprice_a_refusal_moves_only_the_price(policy: Policy) -> None:

@@ -1,5 +1,5 @@
 """The report routes (spec 2026-11-06 Tier 2, 12, 13.1, 13.6 and 16) on the database of
-``conftest.py``: AAPL (the Mature Growth golden: a price of $150, a value of $133.37), AAL (Young
+``conftest.py``: AAPL (the Mature Growth golden: a price of $150, a value of $127.68), AAL (Young
 Growth, refused for its target margin) and HGCO (High Growth), each with one snapshot and a
 secondary valuation on it (``secondaries``): on AAL's refused snapshot the fallback a report needs,
 on AAPL's and HGCO's valued ones a record made before plan 3 that a report there need not name;
@@ -64,7 +64,7 @@ def _sections(sid: int, mode: str = "full report", *extra: Any) -> list[dict[str
         "The price of ",
         {"cite": "$150.00", "ref": f"{s}/price"},
         " is above the value at belief of ",
-        {"cite": "$133", "ref": f"{s}/value"},
+        {"cite": "$128", "ref": f"{s}/value"},
         ", discounted at ",
         {"cite": "9.0%", "ref": "policy:required_return"},
         ". Three reasons stand out in FY2025.",
@@ -280,7 +280,7 @@ def test_markdown_download(client: TestClient) -> None:
         "Appendix A",
         "Appendix B",
     ]
-    assert "The price of $150.00[^1] is above the value at belief of $133[^2]" in r.text
+    assert "The price of $150.00[^1] is above the value at belief of $128[^2]" in r.text
     assert f"[^1]: snapshot:{report['snapshotId']}/price — snapshot " in r.text
     assert "### Growth and profitability" in r.text  # section 4's chart tables
     r = client.get("/api/reports/99/markdown")
