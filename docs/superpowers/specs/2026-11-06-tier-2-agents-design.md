@@ -14,7 +14,9 @@ on the report page, and the Inbox view's count (11, 12, 13, 14, 15.3, 18.4, 18.5
 log's three rows of that date). Plan 1b (merged 2026-11-07) carries the report's side; plan 2
 (merged 2026-11-08) the page; plan 3 (merged 2026-11-08, `docs/superpowers/plans/2026-11-08-first-session-fixes.md`)
 the first live session's rulings; plan 4 (merged 2026-11-08, `docs/superpowers/plans/2026-11-08-second-run-page-fixes.md`)
-the page fixes of the second live session. The build rulings of the plans are marked in place and
+the page fixes of the second live session; plan 5
+(`docs/superpowers/plans/2026-11-09-playbook-price-and-words.md`) the latest price and the
+report's words, from the GOOG session of 2026-11-09. The build rulings of the plans are marked in place and
 listed in the log's last rows.
 
 This document adds to `docs/method.md` (sections 14, 15 and 16, and the versions table) and to the
@@ -556,6 +558,19 @@ only; the main text may say in words what an override changed and why (section 8
 else. `ReportReader` keeps its dotted underline on a cited number as the affordance, with the
 footnote number beside it.
 
+**The words (plan 5).** The founder, 2026-11-09, on the GOOG report: the agent wrote "The belief
+is 5.3%" and explained the term only when asked; the repository is to be open-sourced, so a
+reader has none of the method's context. The report writes what a figure is, not what Fairband
+calls it. The method's terms (`docs/method.md` 13, and the register's table) do not carry a
+sentence: the text gives the plain phrase, and the term once, in brackets after it, in section 8
+only, where the reader needs it to find the figure in Appendix A or on the Methodology page;
+outside section 8 the term does not appear. The names of Fairband's parts never appear: "Fairband"
+for the product, and what the thing did for the rest. Appendix B still lists the terms the text
+uses, which under this rule are the bracketed ones. The playbook's register carries the table of
+terms and phrases, the template's example is written in them, and step 12 reads the report once
+as such a reader before it is submitted (14). A warning at publish was considered and deferred
+(B-135): a word list is never complete, and a match is not a defect once the term was explained.
+
 **The text's shape (plan 3).** A part may hold line breaks, and the shape the agent writes is
 the shape the page shows. The founder, 2026-11-08, on the first live report: "the report is very
 difficult to read on the html page. Its like its a text dump." The agent's text was structured;
@@ -736,7 +751,10 @@ never beside a route's value), and a cyclical business is valued at mid-cycle.
 3. Read the company: `company`, `financials`, `financial_tables`, `estimates`, `peers`,
    `price_history`, `multiples_history`, the latest `report`, `notes`, `findings`, `overrides`,
    `reviews`, `secondary`, `kill_criteria`, `policy`, and `methodology` for the route. Section 4
-   of the report is written from the tables' cells. An `expiry` item is refreshed first.
+   of the report is written from the tables' cells. The company is refreshed first, a scoped
+   refresh on every item, so the report reads the latest price and the row's price, price ÷
+   value and designation are current when it publishes (B-126, plan 5; before plan 5 only an
+   `expiry` item was refreshed, and QCOM's report 2 of 8 Nov 2026 read the close of 4 Nov).
 4. The Fundamentals Analyst: the business and the industry from the filings (the host's own
    tools), `transcript` and `segments` from Fairband; record a `finding` for every number from
    outside Fairband that the report will cite, with its source.
@@ -782,12 +800,18 @@ never beside a route's value), and a cyclical business is valued at mid-cycle.
     the secondary valuation's value against its levels and the thesis; the report's reasons carry
     it. No DCF weighs on the stance where the route values the company (plan 3).
 12. The report: the twelve sections with every quantity cited; the judgments as the record of
-    the decisions; `report_submit`; on a rejection, fix each finding and submit again.
+    the decisions; read once as a reader who has never seen Fairband before it is submitted
+    (plan 5); `report_submit`; on a rejection, fix each finding and submit again.
 13. `inbox_complete`, or name the item in the submission.
 
 Rules the skill states: never write a number you did not get from a tool; cite every quantity;
-small counts in words; the register of design.md 9.2 (the answer first, short sentences, every
-term explained, rounded numbers); no first person, Fairband has no voice; the reason on an
+small counts in words; the register of design.md 9.2 (the answer first, short sentences, rounded
+numbers); the report writes what a figure is, not what Fairband calls it: the method's terms as
+`reference/register.md` writes them, the plain phrase in the text and the term once in brackets
+in section 8 only, and the names of Fairband's parts (the engine, the classifier, the route, the
+snapshot, the check, a flag, the bridge, a tag, an id) never (plan 5; the founder, 2026-11-09, on
+the GOOG report: "The belief is 5.3%" assumes a reader who knows the method, and the repository
+is to be open-sourced); no first person, Fairband has no voice; the reason on an
 override is your own words and is kept verbatim; the valuation and its detail are in section 8
 only, and the rest of the report argues the business; guidance is used only when it is clear, and
 the consensus is the fallback; a chosen threshold is never a finding; only
@@ -1298,3 +1322,4 @@ Plan 3, the first live session's rulings (the founder, 2026-11-08, on the QCOM r
 | 2026-11-08 | The first live session (QCOM, report 1, stance hold; the founder's three rulings): (1) no DCF where the route values the company: the secondary valuation is the fallback only, refused on a valued snapshot, required on a refused one, and no DCF weighs on the stance (11, 13.3, 14; reverses 2026-11-07's "always done"); (2) the report's text renders as the agent wrote it: paragraphs, lists, tables and bold from the parts, in the reader and under the drawer's Summary (13.1, 18.4); (3) the row's band, buy and trim levels, price ÷ value and designation follow the reviewed value, the engine's value kept in the Mechanical column, and the meters draw the review's band (18.1, 18.2, 18.4). Claude's calls: FMP's `dcf` figure read only on a refused row; the designation at the latest price on the effective edges; the second-marker patch left in the bundle. |
 | 2026-11-08 | Build rulings, plan 3 (Claude, during the build): an older secondary valuation on a company the route or the review values is linked to a new report only when the report cites it, so Appendix A carries no uncited DCF (Task 1); the fallback is for a company neither the route nor the review values, so a review that routes a refused row also bars the DCF (the final review); a review that refuses on a valued snapshot is the agent's to fix, the mechanical value stands meanwhile and no secondary is made, and the values are read in order, the reviewed value, else the snapshot's, else on a refused row the secondary's (Task 2); the drawer's level list under the meter follows the review, the Clean filter and the group view read the mechanical value, the designation at the latest price on the effective edges (Task 3); a table spans the reader's width, one margin per block, headers in the agent's case, a plain line after a list item starts a paragraph, a number alone on its line stays a quantity (Task 4). |
 | 2026-11-08 | The second live session (QCOM, report 2, stance hold, no secondary valuation since the route values the company; the founder's page feedback): `Request research` on a company with a report, under `Open the report` and on the report page (18.2, 18.4); a forward P/E log of fewer than five readings shown as a figure with its sentence, no line and no average (13.7, 18.4); the reader's text at 16px on a 24px line (18.4); the note's form, the request in the requester's own words on one line (8); the meter's head saying price ÷ value and the value's name in one form, its caption only the mechanical value, a level label anchored off the price marker (18.2); revisions and Inbox items named by number and by date and time (18.4, 18.5). The founder's ruling: an item posted over MCP for a chat request keeps origin `agent` (B-125). |
+| 2026-11-09 | The GOOG session (a full report, in progress): the agent read the stored price, since the playbook refreshed only an expired company (B-126; 14 step 3: a scoped refresh at the start of every item's step 3), and wrote the method's terms as if the reader knew them ("The belief is 5.3%"; B-134; 13.1 "The words", 14 step 12 and the rules: the plain phrase in the text, the term once in brackets in section 8 only, Fairband's parts never named, the report read once as a reader who has never seen Fairband before it is submitted). The founder: the repository is to be open-sourced. A words warning at publish deferred as B-135 by his ruling, a warning never a refusal, and only if the next two reports still carry the terms. Plan 5. |
