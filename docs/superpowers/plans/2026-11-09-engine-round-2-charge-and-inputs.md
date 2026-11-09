@@ -102,7 +102,7 @@ git commit -m "Add policy v10 with the step-series gap, the split tolerance and 
 - Test: `tests/engine/test_mature_growth.py`
 
 **Interfaces:**
-- Produces: `GrowthPath(year1, steps, belief, runway, fade_years=0, revenue_steps: tuple[float | None, float | None] | None = None)`; `Charge(runway_roic, terminal_roic, r, g_t, charge_off=False, hold: int = 0)`; `charge_growth(path) -> tuple[float, ...]` (h for years 2 to N, each revenue step falling back to the earnings step of the same year, faded as the earnings path fades); `hold_years(path) -> int` (the last t in 1 … N − 1 with g_{t+1} > belief, 0 when none); `return_by_year(charge, n) -> tuple[float, ...]` (spec 6.3); `cash_to_equity(ni, g_next, roic, charge_off=False) -> float` with no floor; `negative_years(path, charge) -> tuple[int, ...]` and `first_negative_year(path, charge) -> tuple[int, float, float] | None` in place of `floored_years` and `first_floored_year`; `value_at_belief` and `implied_growth` keep their signatures.
+- Produces: `GrowthPath(year1, steps, belief, runway, fade_years=0, revenue_steps: tuple[float | None, float | None] | None = None)`; `Charge(runway_roic, terminal_roic, r, g_t, charge_off=False, hold: int | None = None)`, where `hold=None` means the shape as built (R for years 1 to N − 1, T in year N) so that every caller not yet passing a hold keeps today's figures, and an integer hold gives spec 6.3's shape; `charge_growth(path) -> tuple[float, ...]` (h for years 2 to N, each revenue step falling back to the earnings step of the same year, faded as the earnings path fades); `hold_years(path) -> int` (the last t in 1 … N − 1 with g_{t+1} > belief, 0 when none); `return_by_year(charge, n) -> tuple[float, ...]` (spec 6.3; with `hold=None`, R for t < n and T at t = n); `cash_to_equity(ni, g_next, roic, charge_off=False) -> float` with no floor; `negative_years(path, charge) -> tuple[int, ...]` and `first_negative_year(path, charge) -> tuple[int, float, float] | None` in place of `floored_years` and `first_floored_year`; `value_at_belief` and `implied_growth` keep their signatures.
 
 - [ ] **Step 1: Write the failing tests.** Replace `test_cash_to_equity`, `test_payout_floor`, `test_first_floored_year` and `test_value_with_the_fade_and_the_floor` with tests on the spec's worked numbers (13.1 to 13.4):
 
@@ -146,6 +146,9 @@ def test_return_by_year_holds_then_fades() -> None:
     stable = Charge(0.20, 0.13, R, GT, hold=0)
     assert return_by_year(stable, 10)[0] == pytest.approx(0.193)
     assert return_by_year(stable, 1) == (0.13,)  # a one-year runway: T alone, no division by zero
+    as_built = Charge(0.20, 0.13, R, GT)  # hold None: R through year N − 1, T in year N
+    assert return_by_year(as_built, 5) == pytest.approx((0.20, 0.20, 0.20, 0.20, 0.13))
+    assert return_by_year(as_built, 1) == (0.13,)
 
 
 def test_cash_to_equity_has_no_floor() -> None:
@@ -188,17 +191,17 @@ Keep every other existing test; re-pin `test_value_timing_by_hand`, `test_implie
 Run: `uv run pytest -q tests/engine/test_mature_growth.py`
 Expected: FAIL (`revenue_steps`, `hold`, `charge_growth` undefined).
 
-- [ ] **Step 3: Implement in `mature_growth.py`.** `GrowthPath.revenue_steps`; `charge_growth(path)` as `growth_rates(replace(path, steps=resolved))` with `resolved[i] = revenue_steps[i] if not None else steps[i]`; `hold_years(path)`; `Charge.hold`; `return_by_year(charge, n)` per spec 6.3 with `n <= 1` or `hold >= n - 1` giving T in year N only; `_years` yielding `_Year(t, ni, h_next, return_t, charge_off and t < n)` with `h_next` from `charge_growth`; `cash_to_equity` without `max(0, …)`; rename `_floored`/`floored_years`/`first_floored_year` to `_negative`/`negative_years`/`first_negative_year` on `1 - h/roic < 0`. Rewrite the module docstring to spec 6.1 to 6.3. `implied_growth` is unchanged: it varies `path.belief`, and `Charge.hold` is fixed.
+- [ ] **Step 3: Implement in `mature_growth.py`.** `GrowthPath.revenue_steps`; `charge_growth(path)` as `growth_rates(replace(path, steps=resolved))` with `resolved[i] = revenue_steps[i] if not None else steps[i]`; `hold_years(path)`; `Charge.hold` (`int | None`, default `None`); `return_by_year(charge, n)` per spec 6.3, with `hold is None` or `hold >= n - 1` or `n <= 1` giving R for t < n and T in year n only; `_years` yielding `_Year(t, ni, h_next, return_t, charge_off and t < n)` with `h_next` from `charge_growth`; `cash_to_equity` without `max(0, …)`; rename `_floored`/`floored_years`/`first_floored_year` to `_negative`/`negative_years`/`first_negative_year` on `1 - h/roic < 0`. Rewrite the module docstring to spec 6.1 to 6.3. `implied_growth` is unchanged: it varies `path.belief`, and `Charge.hold` is fixed. In `route_mature_growth.py` rename the import and the call of `first_floored_year` to `first_negative_year` (the sentence changes in Task 5), so the suite imports.
 
-- [ ] **Step 4: Run the tests**
+- [ ] **Step 4: Run the tests and the goldens**
 
-Run: `uv run pytest -q tests/engine/test_mature_growth.py`
-Expected: PASS. Other test files fail on the renamed functions and the new keyword until Task 5; that is expected here.
+Run: `uv run pytest -q tests/engine/test_mature_growth.py tests/engine/test_golden.py tests/engine/test_route.py`
+Expected: the arithmetic tests PASS. The floor's removal alone moves a golden whose path has a year of growth above its return (MGCO's fixture floors: its steps 25% and 26% against a 14.9% return): re-capture that golden with the README command, with a README line naming spec 6.1 (the floor off) as the cause, and re-pin any route test that pinned the floored value. HGCO, YGCO, DCCO and SUCO must be unchanged. The fade and the revenue charge do not reach the routes until Task 5 (`hold=None`, `revenue_steps=None`).
 
-- [ ] **Step 5: Commit** (with the route's import renamed so the suite imports; the route's behaviour changes in Task 5)
+- [ ] **Step 5: Commit** (after the full checks)
 
 ```bash
-git add src/fairband/engine/mature_growth.py src/fairband/engine/route_mature_growth.py tests/engine/test_mature_growth.py
+git add src/fairband/engine/mature_growth.py src/fairband/engine/route_mature_growth.py tests/engine tests/fixtures/golden
 git commit -m "Charge the next year's revenue growth with no floor and fade the return from the hold to the terminal in the Mature Growth arithmetic"
 ```
 
@@ -211,7 +214,7 @@ git commit -m "Charge the next year's revenue growth with no floor and fade the 
 - Test: `tests/engine/test_roic.py`, `tests/engine/test_flags.py`
 
 **Interfaces:**
-- Produces: `RunwayReturn.one_year: float | None` (a new last field: the change in NOPAT over the change in average capital from the kept year before the newest to the newest, no usability test, `None` with fewer than two kept years or no change in capital); `charge_for(runway_roic, terminal, charge_off, policy, hold: int = 0) -> Charge`; `RoicTerms.charge(policy, hold: int = 0) -> Charge`; `RoicTerms.intermediates()["runway_return"]["one_year"]`; `flags.basis_unknown_flag(nri: Flag | None, gap: float | None, eps_ttm: float | None) -> Flag | None` (the `consensus-basis-unknown` note, only when `nri` is given); `route_steps.trailing_flags(i, t, gap, policy, rr: RunwayReturn | None = None)` which, only when `rr` is given (the two mature routes pass theirs; any other caller passes none and sees no change), appends `consensus-basis-unknown` after `large-nri` and extends the `heavy-capex` sentence per spec 6.3.
+- Produces: `RunwayReturn.one_year: float | None` (a new last field: the change in NOPAT over the change in average capital from the kept year before the newest to the newest, no usability test, `None` with fewer than two kept years or no change in capital); `charge_for(runway_roic, terminal, charge_off, policy, hold: int | None = None) -> Charge`; `RoicTerms.charge(policy, hold: int | None = None) -> Charge` (`None` keeps the shape as built, so the routes' figures do not move in this task); `RoicTerms.intermediates()["runway_return"]["one_year"]`; `flags.basis_unknown_flag(nri: Flag | None, gap: float | None, eps_ttm: float | None) -> Flag | None` (the `consensus-basis-unknown` note, only when `nri` is given); `route_steps.trailing_flags(i, t, gap, policy, rr: RunwayReturn | None = None)` which, only when `rr` is given (the two mature routes pass theirs; any other caller passes none and sees no change), appends `consensus-basis-unknown` after `large-nri` and extends the `heavy-capex` sentence per spec 6.3.
 
 - [ ] **Step 1: Write the failing tests.** In `test_roic.py`, beside `test_marginal_return_spec_example`:
 
@@ -255,7 +258,7 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(policy: Poli
 Run: `uv run pytest -q tests/engine/test_roic.py tests/engine/test_flags.py`
 Expected: FAIL (`one_year`, `basis_unknown_flag` missing).
 
-- [ ] **Step 3: Implement.** `roic.py`: add `one_year` to `RunwayReturn` (last), compute it in `runway_return` with `marginal_return(result.by_year, 1, 0.0)[0]` guarded by `len(by_year) >= 2`, on every branch (`unavailable`, `off`, the chosen). `route_steps.py`: `charge_for(..., hold=0)` passes `hold` to `Charge`; `RoicTerms.charge(policy, hold=0)`; `intermediates()` adds `"one_year": rr.one_year`; `trailing_flags(..., rr=None)` appends `basis_unknown_flag(nri, gap, t.eps_diluted)` and, when `rr is not None`, replaces the `heavy-capex` flag's sentence with the spec 6.3 text, naming the measure by `rr.used` ("the five-year marginal" or "the three-year aggregate"; with `used == "floor"` "floored at r"), the fiscal year of the newest kept ROIC year from `RoicTerms.result.by_year[-1].year`, and stopping after R without a one-year figure. `flags.py`: `basis_unknown_flag` with the sentence of spec 7, `Flag("consensus-basis-unknown", "Consensus basis unknown", …)`, a note (not in `QUALITY_WARNINGS`).
+- [ ] **Step 3: Implement.** `roic.py`: add `one_year` to `RunwayReturn` (last), compute it in `runway_return` with `marginal_return(result.by_year, 1, 0.0)[0]` guarded by `len(by_year) >= 2`, on every branch (`unavailable`, `off`, the chosen). `route_steps.py`: `charge_for(..., hold=None)` passes `hold` to `Charge`; `RoicTerms.charge(policy, hold=None)`; `intermediates()` adds `"one_year": rr.one_year`; `trailing_flags(..., rr=None)` appends `basis_unknown_flag(nri, gap, t.eps_diluted)` and, when `rr is not None`, replaces the `heavy-capex` flag's sentence with the spec 6.3 text, naming the measure by `rr.used` ("the five-year marginal" or "the three-year aggregate"; with `used == "floor"` "floored at r"), the fiscal year of the newest kept ROIC year from `RoicTerms.result.by_year[-1].year`, and stopping after R without a one-year figure. `flags.py`: `basis_unknown_flag` with the sentence of spec 7, `Flag("consensus-basis-unknown", "Consensus basis unknown", …)`, a note (not in `QUALITY_WARNINGS`).
 
 - [ ] **Step 4: Run the tests**
 
