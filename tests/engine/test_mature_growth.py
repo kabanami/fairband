@@ -247,6 +247,27 @@ def test_the_fallback_example() -> None:
     assert value_at_belief(path, TOY_CHARGE) == pytest.approx(1894.7191, abs=1e-3)
 
 
+def test_at_a_return_of_r_only_the_margin_change_moves_with_the_belief() -> None:
+    """Method 5.8: at a return equal to r in every year the value is year-1 earnings over r plus
+    the worth of the margin change (earnings growth above or below the revenue growth), which
+    moves with the belief only where the year-3 steps differ and the belief lies below either."""
+    at_r = Charge(0.09, 0.09, 0.09, 0.03, hold=6)
+    path = GrowthPath(100.0, (0.12, 0.10), 0.063, 20, 5, revenue_steps=(0.08, 0.07))
+
+    def value(p: GrowthPath, belief: float) -> float:
+        return value_at_belief(replace(p, belief=belief), at_r)
+
+    below = [value(path, b) for b in (-0.5, 0.0, 0.063, 0.08, 0.095)]
+    assert len(set(below)) == 5  # a fade runs on either path: the value moves
+    assert value(path, 0.10) == pytest.approx(value(path, 0.30))  # at or above both: no fade
+    assert implied_growth(1240.0, path, at_r) == pytest.approx(-0.3503, abs=1e-4)
+    agree_in_year_3 = replace(path, revenue_steps=(0.08, 0.10))
+    assert value(agree_in_year_3, -0.5) == pytest.approx(value(agree_in_year_3, 0.12))
+    no_revenue = replace(path, revenue_steps=None)
+    for belief in (-0.5, 0.063, 0.3):
+        assert value(no_revenue, belief) == pytest.approx(100.0 / 0.09)
+
+
 def test_negative_years_name_the_owner_s_money_going_in() -> None:
     path = replace(TOY, revenue_steps=None)
     assert negative_years(path, TOY_CHARGE) == (1,)

@@ -63,11 +63,12 @@ _CHARGE_START = {
     "three-year": "the three-year aggregate",
     "floor": "floored at the required return",
 }
-# The measured return beside an agent's ``return.runway``, which the charge starts at instead.
+# The measured return beside an agent's ``return.runway``, which the charge starts at instead:
+# the chosen measure before any floor.
 _MEASURED = {
     "marginal": "the five-year marginal is {}",
     "three-year": "the three-year aggregate is {}",
-    "floor": "the measured return is {}, floored at the required return",
+    "floor": "the measured return is {}, below the required return",
 }
 
 
@@ -364,8 +365,8 @@ def _heavy_capex(flag: Flag, roic: RoicTerms) -> Flag:
             "override"
         )
         measured = _MEASURED.get(rr.used)
-        if measured is not None:
-            start += f"; {measured.format(signed(rr.value))}"
+        if measured is not None and rr.chosen is not None:
+            start += f"; {measured.format(signed(rr.chosen))}"
     else:
         measure = _CHARGE_START.get(rr.used)
         if measure is None:

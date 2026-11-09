@@ -44,8 +44,9 @@ from fairband.policy.settings import EMPTY_SETTINGS_HASH, apply_overlay
 
 TODAY = date(2026, 10, 31)
 # At a return equal to r, growth adds no value and the value is year-1 earnings over r, whatever
-# the path: with the payout floor off (spec 2026-11-09 6.1), years 1 to 3, which pay for growth
-# above r, pay out less than nothing, where the floor added their cash back.
+# the path, when the charge pays for the earnings growth (MGCO has no consensus revenue): with the
+# payout floor off (spec 2026-11-09 6.1), years 1 to 3, which pay for growth above r, pay out less
+# than nothing, where the floor added their cash back.
 VALUE_AT_R = 5.90 / 0.09
 
 MATURE_GROWTH_KEYS = {
@@ -592,8 +593,8 @@ def test_growth_above_return_flag(
     # with no consensus revenue the charge pays for the earnings growth: year 1 pays for year 2's
     # 50%, year 2 for year 3's; year 3 pays for year 4's faded 41.3%, below the return
     assert above.sentence == (
-        "In year 1 the charge pays for 50.0% of revenue growth at a return of 43.1%, so the year "
-        "pays out less than nothing: the owner funds the growth. 1 more such year."
+        "In year 1 the charge pays for 50.0% of growth at a return of 43.1%, so the year pays out "
+        "less than nothing: the owner funds the growth. 1 more such year."
     )
     assert r.value is not None and r.value > 0
     assert "growth-above-return" not in codes(value_company(mg_inputs, deciles, policy, TODAY))
@@ -656,6 +657,13 @@ def test_growth_above_return_says_the_owner_funds_the_growth(
     flags = value_company(single, deciles, policy, TODAY).flags
     above = next(f for f in flags if f.code == "growth-above-return")
     assert above.sentence.endswith("the owner funds the growth.")
+    # no revenue mean for fiscal 2028: year 2's h is net income's 50% step, so "of growth"
+    i = engine_companies.mature_growth_inputs()
+    base, second, third = with_revenue(i, (24_000e6, 36_000e6, 39_600e6)).annual_estimates
+    rows = (base, replace(second, revenue=None, net_income=1.5 * base.net_income), third)
+    flags = value_company(replace(i, annual_estimates=rows), deciles, policy, TODAY).flags
+    above = next(f for f in flags if f.code == "growth-above-return")
+    assert above.sentence.startswith("In year 1 the charge pays for 50.0% of growth at ")
     plain = value_company(engine_companies.mature_growth_inputs(), deciles, policy, TODAY)
     assert codes(plain) == ["value-spread"]
 

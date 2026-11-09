@@ -415,14 +415,27 @@ def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:
     if first is None:
         return None
     t, h, ret = first
+    paid_for = "revenue growth" if _on_revenue(growth, t + 1) else "growth"
     sentence = (
-        f"In year {t} the charge pays for {h:.1%} of revenue growth at a return of {ret:.1%}, so "
-        "the year pays out less than nothing: the owner funds the growth."
+        f"In year {t} the charge pays for {h:.1%} of {paid_for} at a return of {ret:.1%}, so the "
+        "year pays out less than nothing: the owner funds the growth."
     )
     more = len(negative_years(growth, charge)) - 1
     if more:
         sentence += f" {more} more such year{'s' if more > 1 else ''}."
     return Flag("growth-above-return", "Growth above return", sentence)
+
+
+def _on_revenue(growth: GrowthPath, year: int) -> bool:
+    """Whether year ``year``'s h is a consensus revenue step: year 2's or year 3's own, or the fade
+    from year 3's to the belief; not where an earnings step stands in for a missing one, nor in
+    the belief years or after the runway."""
+    r2, r3 = growth.revenue_steps or (None, None)
+    if year == 2:
+        return r2 is not None
+    if r3 is None or year < 3 or year > growth.runway:
+        return False
+    return year == 3 or (r3 > growth.belief and year <= 3 + growth.fade_years)
 
 
 def _runways(policy: Policy) -> list[int]:

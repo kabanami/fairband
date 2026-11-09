@@ -267,10 +267,19 @@ def mature_terms(
     override: float | None = None,
 ) -> RoicTerms:
     """MGCO's returns with the runway return as an agent would meet it on a capex surge: the
-    measure ``used`` at 47.2% and the newest year's marginal return ``one_year``; with
-    ``override``, an agent's ``return.runway`` in place of the measure."""
+    measure ``used`` at 47.2%, or a floored one at 6.5% before its floor and r after it, and the
+    newest year's marginal return ``one_year``; with ``override``, an agent's ``return.runway`` in
+    place of the measure."""
     terms = RoicTerms.of(i.capital_years, "Wide", policy, runway_override=override)
-    rr = replace(terms.runway_return, used=used, value=0.4716, marginal=0.4716, one_year=one_year)
+    chosen, value = (0.065, policy.required_return) if used == "floor" else (0.4716, 0.4716)
+    rr = replace(
+        terms.runway_return,
+        used=used,
+        chosen=chosen,
+        value=value,
+        marginal=0.4716,
+        one_year=one_year,
+    )
     return replace(terms, runway_return=rr)
 
 
@@ -302,7 +311,7 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
     floor = heavy_capex(
         trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, "floor"))
     )
-    assert "starts at 47.2%, floored at the required return; the newest year's" in floor
+    assert "starts at 9.0%, floored at the required return; the newest year's" in floor
     # without a one-year figure the sentence stops at the start
     short = heavy_capex(
         trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, one_year=None))
@@ -341,9 +350,8 @@ def test_heavy_capex_names_an_override_as_the_start_and_the_measure_beside_it(
     )
     floor = mature_terms(mg_inputs, policy, "floor", override=0.214)
     assert (
-        "starts at 21.4%, the agent's override; the measured return is 47.2%, floored at the "
-        "required return; the newest"
-        in heavy_capex(trailing_flags(mg_inputs, t, None, policy, floor))
+        "starts at 21.4%, the agent's override; the measured return is 6.5%, below the required "
+        "return; the newest" in heavy_capex(trailing_flags(mg_inputs, t, None, policy, floor))
     )
     # a measured return that is off or unavailable has no measure to name; the start stands
     for used in ("off", "unavailable"):
