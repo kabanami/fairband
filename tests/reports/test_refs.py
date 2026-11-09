@@ -137,10 +137,20 @@ def test_review_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[s
     )
     buy = _resolve(conn, f"{r}/levels/buy", policy)
     assert buy is not None and buy.unit == "per-share" and buy.value != mechanical.buy_level
+    # the review's intermediates, by their path as a snapshot's are: the overridden belief, and
+    # the growth the price needs under the review (a belief override moves the value, not it)
+    belief = _resolve(conn, f"{r}/intermediates/belief/rate", policy)
+    assert belief == Resolved(0.08, None, None, snapshots["AAPL"])
+    growth = _resolve(conn, f"{r}/intermediates/implied_growth", policy)
+    assert growth is not None and isinstance(growth.value, float) and growth.unit is None
+    assert growth.value == pytest.approx(mechanical.result.intermediates["implied_growth"])
     for ref in (
         f"{r}/bridge/0/delta",
         f"{r}/bridge/2/delta",
         f"{r}/bridge/1/tag",
+        f"{r}/intermediates",
+        f"{r}/intermediates/no_such",
+        f"{r}/intermediates/belief",  # a table, not a figure
         "review:99/value",
     ):
         assert _resolve(conn, ref, policy) is None, ref
@@ -301,7 +311,8 @@ def test_the_secondary_projection_and_grid_refs_resolve(
 def test_sensitivity_refs(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
-    """A cell by its row and its column, each counted from 1; a refused cell holds no value."""
+    """A cell by its row and its column, each counted from 1; a refused cell holds no value. An
+    axis value by its row or its column, in its input's unit, a word axis's word."""
     sid = snapshots["AAPL"]
     grid = SensitivityGrid((0.05, 0.08), (0.10, 0.20, 0.30), ((120.5, None, 140.0),) * 2, None)
     found = insert_sensitivity(
@@ -310,10 +321,20 @@ def test_sensitivity_refs(
     theirs = insert_sensitivity(
         conn, "AAL", snapshots["AAL"], None, "phase", "moat.class", grid, "v", "h", AGENT, NOW
     )
+    moats = SensitivityGrid((0.05,), ("Wide", "Narrow"), ((120.0, 110.0),), None)
+    words = insert_sensitivity(
+        conn, "AAPL", sid, None, "growth.belief", "moat.class", moats, "v", "h", AGENT, NOW
+    )
     s = f"sensitivity:{found}"
     assert _resolve(conn, f"{s}/1/1", policy) == Resolved(120.5, "per-share", None, sid)
     assert _resolve(conn, f"{s}/2/3", policy) == Resolved(140.0, "per-share", None, sid)
     assert _resolve(conn, f"{s}/1/2", policy) == Resolved(None, "per-share", None, sid)
+    assert _resolve(conn, f"{s}/rows/1", policy) == Resolved(0.05, "percent", None, sid)
+    assert _resolve(conn, f"{s}/rows/2", policy) == Resolved(0.08, "percent", None, sid)
+    assert _resolve(conn, f"{s}/cols/3", policy) == Resolved(0.30, "percent", None, sid)
+    assert _resolve(conn, f"sensitivity:{words}/cols/2", policy) == Resolved(
+        "Narrow", None, None, sid
+    )
     for ref in (
         f"{s}/0/1",
         f"{s}/3/1",
@@ -321,7 +342,15 @@ def test_sensitivity_refs(
         f"{s}/1",
         f"{s}/1/1/1",
         f"{s}/x/1",
+        f"{s}/rows/0",
+        f"{s}/rows/3",
+        f"{s}/cols/4",
+        f"{s}/cols/x",
+        f"{s}/rows",
+        f"{s}/rows/1/1",
+        f"{s}/axes/1",
         f"sensitivity:{theirs}/1/1",  # another company's
+        f"sensitivity:{theirs}/rows/1",
         "sensitivity:999/1/1",
         "sensitivity:x/1/1",
     ):
@@ -781,6 +810,15 @@ def described(
         ),
         ("review:{review}/bridge/1/old", "review {review}, bridge line 1 (belief), the old figure"),
         ("review:{review}/bridge/1/new", "review {review}, bridge line 1 (belief), the new figure"),
+        ("review:{review}/intermediates/belief/rate", "review {review}, the belief"),
+        (
+            "review:{review}/intermediates/implied_growth",
+            "review {review}, the growth the price needs",
+        ),
+        (
+            "review:{review}/intermediates/growth_rates/0",  # an intermediate by its path
+            "review {review}, the growth rates 0",
+        ),
         ("secondary:{parts}/value", "secondary valuation {parts}, the value a share"),
         ("secondary:{parts}/firm_value", "secondary valuation {parts}, the firm value"),
         ("secondary:{parts}/levels/trim", "secondary valuation {parts}, the trim level"),
@@ -807,6 +845,11 @@ def described(
             "secondary valuation {drivers}, the revenue growth of year 2",
         ),
         ("sensitivity:{sensitivity}/1/2", "sensitivity {sensitivity}, row 1 column 2"),
+        ("sensitivity:{sensitivity}/rows/1", "sensitivity {sensitivity}, the belief of row 1"),
+        (
+            "sensitivity:{sensitivity}/cols/2",
+            "sensitivity {sensitivity}, the runway return of column 2",
+        ),
         ("fact:AAPL/revenue/2025", "the revenue line of fiscal 2025 on file"),
         ("fact:AAPL/capex/ttm", "the capital spending line of the trailing twelve months on file"),
         ("fact:AAPL/eps_diluted/2024", "the diluted EPS line of fiscal 2024 on file"),
@@ -854,6 +897,7 @@ def described(
         ("finding:999", "finding:999"),
         ("sensitivity:999/1/2", "sensitivity:999/1/2"),
         ("sensitivity:{sensitivity}/3/1", "sensitivity:{sensitivity}/3/1"),  # no third row
+        ("sensitivity:{sensitivity}/cols/3", "sensitivity:{sensitivity}/cols/3"),  # two columns
         ("secondary:999/value", "secondary:999/value"),
         ("secondary:{parts}/years/1/fcff", "secondary:{parts}/years/1/fcff"),  # the drivers form's
         ("secondary:{drivers}/years/4/fcff", "secondary:{drivers}/years/4/fcff"),  # three years

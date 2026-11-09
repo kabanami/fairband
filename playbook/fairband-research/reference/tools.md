@@ -67,7 +67,9 @@ be left out.
   step and `supersededBy`, the newer record that superseded it, if any; cite one's figures as
   `guidance:<id>/midpoint` and its siblings.
 - `overrides(symbol)`: the company's overrides, newest first, each with its state.
-- `reviews(symbol)`: the company's reviews, newest first, each with its bridge.
+- `reviews(symbol)`: the company's reviews, newest first, each with its bridge and without its
+  result. The review's intermediates, cited as `review:<id>/intermediates/<path>`, are in the
+  `result` of the review that `override_add` and `override_drop` answer.
 - `secondary(symbol)`: the company's secondary valuations, newest first.
 - `kill_criteria(symbol)`: the company's kill criteria, each with its state: `open`, `triggered`
   or `retired`.
@@ -153,9 +155,9 @@ vendor call. The refusals:
   not value needs one on it, except for a foreign filer or a snapshot with no diluted share count,
   which the secondary valuation refuses.
 - `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
-  across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`;
-  nothing is overridden. `current` marks the pair in force as `[i, j]`; a cell whose valuation
-  refuses is `null`.
+  across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`,
+  and its axes' values as `sensitivity:<id>/rows/<i>` and `/cols/<j>`; nothing is overridden.
+  `current` marks the pair in force as `[i, j]`; a cell whose valuation refuses is `null`.
 - `derive(symbol, derivations)`: compute figures from refs; it answers
   `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`.
 - `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`:

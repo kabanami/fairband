@@ -653,9 +653,11 @@ Nothing is overridden, and the review does not move.
 - The answer marks `current`, the pair in force as `[i, j]`, or `null` when no pair is.
 - A cell whose valuation refuses is `null`. A cite of it is `unresolved reference`.
 
-Cite a cell as `sensitivity:<id>/<i>/<j>`, rows and columns counted from 1. A reading is taken
-under the review in force; an override or a drop after it moves the review, and a cite of the
-reading is then `wrong snapshot`, "the review moved". Take the reading after your last override.
+Cite a cell as `sensitivity:<id>/<i>/<j>`, rows and columns counted from 1, and the axis value a
+row or a column names as `sensitivity:<id>/rows/<i>` or `/cols/<j>`, so a sentence that reads
+"at a 10% runway return the value is $120" cites both figures. A reading is taken under the
+review in force; an override or a drop after it moves the review, and a cite of the reading is
+then `wrong snapshot`, "the review moved". Take the reading after your last override.
 A grid the route reads well:
 
 | Route | Rows | Columns |

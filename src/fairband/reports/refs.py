@@ -9,8 +9,10 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   word input, a moat class say, the word that leads its note), ``/intermediates/<path>`` (an
   intermediate by its path of keys and list indexes, ``belief/rate``, ``growth_rates/0``) and
   ``/phase/<field>`` (a field of the classifier's evidence, ``phase``, ``growth_3y``);
-- ``review:<id>/value``, ``/price_to_value``, ``/levels/<name>`` and ``/bridge/<n>/delta``,
-  ``/old`` or ``/new``, the bridge's line ``n`` counted from 1;
+- ``review:<id>/value``, ``/price_to_value``, ``/levels/<name>``, ``/bridge/<n>/delta``,
+  ``/old`` or ``/new``, the bridge's line ``n`` counted from 1, and ``/intermediates/<path>``, an
+  intermediate of the reviewed result by its path as a snapshot's (the growth the price needs
+  under the review, ``implied_growth``);
 - ``secondary:<id>/value`` (the value a share), ``/firm_value``, ``/equity``, ``/debt``, ``/cash``,
   ``/shares``, ``/price_to_value``, ``/levels/<name>`` and ``/grid/<i>/<j>`` (the grid's row ``i``
   at its column ``j``, a value a share); on the parts form ``/parts/<n>/pv/<t>``,
@@ -22,7 +24,9 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   ``operating_margin``); every index (the part ``n``, the year ``t``, the row ``i`` and the column
   ``j``) counted from 1, and a form's paths naming nothing on the other form;
 - ``sensitivity:<id>/<i>/<j>``: a stored sensitivity reading's value a share at its row ``i`` and
-  its column ``j``, each counted from 1; a refused cell holds no value;
+  its column ``j``, each counted from 1; a refused cell holds no value; ``/rows/<i>`` and
+  ``/cols/<j>``: the axis value the row or the column names, in its input's unit, a word axis's
+  (a moat class) its word;
 - ``fact:<symbol>/<line>/<period>``: a stored statement line as the engine reads it, ``<line>``
   the engine's field name (``fairband.reports.tables.LINES`` for a fiscal year, read through
   ``year_lines``; the trailing figures' fields for ``ttm``) and ``<period>`` the fiscal year as
@@ -79,7 +83,8 @@ date or a name where one serves, a record's id where nothing else names it. ``sn
 classifier field by its name in words, ``field_words``, where no fixed words name it; the
 snapshot's price date); ``review:``
 "review 88, bridge line 1 (belief), the change in the value a share"; ``secondary:`` "secondary
-valuation 9, year 3 FCFF"; ``sensitivity:`` "sensitivity 7, row 1 column 2"; ``fact:`` "the
+valuation 9, year 3 FCFF"; ``sensitivity:`` "sensitivity 7, row 1 column 2" or "sensitivity 7, the
+belief of row 1", the axis's input by its label; ``fact:`` "the
 revenue line of fiscal 2025 on file"; ``table:`` "the growth table, revenue growth, fiscal 2025";
 ``estimate:`` "the consensus for Q4 of fiscal 2026, EPS"; ``close:`` "the close of 3 Nov 2026";
 ``multiple:`` "the trailing P/E, 30 Oct 2026" or "the forward P/E, the ten-year average";
@@ -123,7 +128,7 @@ from fairband.store.refreshes import latest_deciles
 from fairband.store.research import finding_row
 from fairband.store.reviews import review_row
 from fairband.store.secondary import derivation_row, secondary_row
-from fairband.store.sensitivities import sensitivity_row
+from fairband.store.sensitivities import SensitivityRow, sensitivity_row
 from fairband.store.snapshots import SnapshotRow, snapshot_row
 from fairband.store.vendor import response_payload, response_row
 from fairband.web.policy_rows import policy_json
@@ -291,6 +296,7 @@ _BRIDGE_WORDS = {
     "old": "the old figure",
     "new": "the new figure",
 }
+_AXES = {"rows": "row", "cols": "column"}  # a sensitivity reading's axes, each in words
 _SERIES_WORDS = {"pe": "the trailing P/E", "pe_forward": "the forward P/E"}
 _STAT_WORDS = {
     "avg_10y": "the ten-year average",
@@ -532,6 +538,8 @@ class Resolver:
             case "secondary", _ if self.resolve(ref) is not None:  # the record read, its path
                 words = _secondary_words(rest)
                 found = None if words is None else f"secondary valuation {head}, {words}"
+            case "sensitivity", [_, ("rows" | "cols") as axis, n] if self.resolve(ref) is not None:
+                found = self._sensitivity_axis_source(head, axis, n)
             case "sensitivity", [_, i, j] if self.resolve(ref) is not None:
                 found = f"sensitivity {head}, row {i} column {j}"
             case "fact", [_, line, period]:
@@ -618,6 +626,8 @@ class Resolver:
                 line = _nth(row.bridge, n)
                 if line is not None:
                     found = line[field], "per-share" if field == "delta" else _tag_unit(line["tag"])
+            case ["intermediates", *keys] if keys:
+                found = _at_path(row.result.intermediates, keys), None
         return None if found is None else _figure(*found, None, row.snapshot_id)
 
     def _secondary(self, path: str) -> Resolved | None:
@@ -663,16 +673,29 @@ class Resolver:
         return None if found is None else _figure(*found, None, row.snapshot_id)
 
     def _sensitivity(self, path: str) -> Resolved | None:
-        """A cell by its row and its column; a refused cell resolves with no value."""
+        """A cell by its row and its column, a refused cell resolving with no value; or an axis
+        value by its row or its column, in its input's unit."""
         pieces = path.split("/")
         row = sensitivity_row(self.conn, int(pieces[0])) if pieces[0].isdigit() else None
         if row is None or row.symbol != self.symbol or len(pieces) != 3:
             return None
+        if pieces[1] in _AXES:
+            values, tag = _axis(row, pieces[1])
+            value = _nth(values, pieces[2])
+            return None if value is None else _figure(value, _tag_unit(tag), None, row.snapshot_id)
         i = _index(row.cells, pieces[1])
         j = None if i is None else _index(row.cells[i], pieces[2])
         if i is None or j is None:
             return None
         return _figure(row.cells[i][j], "per-share", None, row.snapshot_id)
+
+    def _sensitivity_axis_source(self, head: str, axis: str, n: str) -> str | None:
+        """The reading, the axis's input by its label and the row or the column; read after
+        ``resolve``, so the reading is the company's and the axis has the value."""
+        row = sensitivity_row(self.conn, int(head))
+        assert row is not None  # resolved
+        _, tag = _axis(row, axis)
+        return f"sensitivity {head}, the {_LABELS.get(tag, tag)} of {_AXES[axis]} {n}"
 
     def _fact(self, path: str) -> Resolved | None:
         pieces = path.split("/")
@@ -840,7 +863,8 @@ class Resolver:
         return f"snapshot {row.id}, {words}{priced}"
 
     def _review_source(self, head: str, rest: Sequence[str]) -> str | None:
-        """The review and the path in words, a bridge line with its input's label."""
+        """The review and the path in words, a bridge line with its input's label, an
+        intermediate in the snapshot's words."""
         row = review_row(self.conn, int(head)) if head.isdigit() else None
         if row is None or row.symbol != self.symbol:
             return None
@@ -849,6 +873,8 @@ class Resolver:
                 line = _nth(row.bridge, n)
                 label = "" if line is None else f" ({_LABELS.get(line['tag'], line['tag'])})"
                 words: str | None = f"bridge line {n}{label}, {_BRIDGE_WORDS[field]}"
+            case ["intermediates", *path] if path:
+                words = _snapshot_words(rest)
             case _:
                 words = _figure_words(rest)
         return None if words is None else f"review {row.id}, {words}"
@@ -994,6 +1020,13 @@ def _input_value(value: float | None, unit: str, note: str | None) -> float | st
 def _tag_unit(tag: str) -> str | None:
     spec = next((s for s in TAGS.values() if s.tag == tag), None)
     return None if spec is None else unit_of(spec.unit)
+
+
+def _axis(row: SensitivityRow, axis: str) -> tuple[Sequence[float | str], str]:
+    """A sensitivity reading's axis values and the tag of the input they are values of."""
+    if axis == "rows":
+        return row.row_values, row.row_tag
+    return row.col_values, row.col_tag
 
 
 def _line_unit(line: str) -> str:

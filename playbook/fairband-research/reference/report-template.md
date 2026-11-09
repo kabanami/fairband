@@ -149,8 +149,10 @@ The kill criteria of section 11 test it.
 ### Section 8: valuation
 
 - **The phase.** The phase, the growth word and the margin direction behind it, any check flag,
-  the Dickinson stage, and why if an override changed it. Then the growth the price needs, and the
-  belief and why.
+  the Dickinson stage, and why if an override changed it. Then the growth the price needs,
+  `snapshot:<id>/intermediates/implied_growth`, or under your overrides the review's,
+  `review:<id>/intermediates/implied_growth`, which differs from the snapshot's; and the belief
+  and why.
 - **The value.** The value before any change to the inputs (the mechanical value) and after the
   changes that stand (the reviewed value). One sentence in words for each override that moved it,
   citing its bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
@@ -171,7 +173,8 @@ The kill criteria of section 11 test it.
   answer.
 - **A cyclical**: where it is in its cycle, and the mid-cycle basis the values rest on.
 - **The sensitivity grid**: the two inputs it sets, and the range of the value across them, two
-  cells `sensitivity:<id>/<i>/<j>`.
+  cells `sensitivity:<id>/<i>/<j>`, each beside the axis values it sits at,
+  `sensitivity:<id>/rows/<i>` and `/cols/<j>`.
 
 ### Section 9: price and multiples
 
