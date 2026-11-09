@@ -367,7 +367,9 @@ The base year is the fiscal year that holds most of the four NTM quarters; a tie
 - on net income when all three years have a positive net-income mean, else on EPS, flag `path-on-eps`;
 - a mean of zero with no analyst count, or a count of zero, is no estimate;
 - step g_2 = year(base + 1) ÷ year(base) − 1, step g_3 = year(base + 2) ÷ year(base + 1) − 1; a step is missing when either year is missing or the earlier is not positive, and a missing step takes the belief;
-- a present step whose landing year has fewer than 5 analysts, or no count, flags `few-analysts`. The count is FMP's EPS analyst count on either series.
+- a present step whose landing year has fewer than 5 analysts, or no count, flags `few-analysts`. The count is FMP's EPS analyst count on either series;
+- the path also reads the consensus revenue steps on the same years, by the same rule on the revenue mean and its analyst count, and keeps them beside the earnings steps for the charge of 4.8;
+- both earnings series are read: where a step has a rate on net income and a rate on EPS more than `step_series_gap_max` (5 points) apart in size, the note `step-series-disagree` names the step, its two rates and the share counts the two series imply for its two years (the net-income mean over the EPS mean). The path stays on the series chosen above, and the note names the step's override, `path.step_2` or `path.step_3`, as what decides.
 
 ### 5.4 The belief
 
@@ -419,7 +421,7 @@ Without a positive market cap the income term is nil and the basis says "unavail
 
 ### 5.11 Flags
 
-In order: `sbc-basis-unknown`; `path-on-eps`, `few-analysts`; the ROIC flags of 4.5, the `line-not-presented` flags, then `charge-zeroed` or `return-floored`; `growth-above-return`; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`); `long-runway-high-growth`; `value-spread`. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
+In order: `sbc-basis-unknown`; `path-on-eps`, `few-analysts`, `step-series-disagree`; the ROIC flags of 4.5, the `line-not-presented` flags, then `charge-zeroed` or `return-floored`; `growth-above-return`; the trailing flags (`margin-flag`, `equity-raise`, `negative-fcf`, `heavy-capex`, `large-nri`); `long-runway-high-growth`; `value-spread`. The result puts the assembly's flags and the classifier's checks before these, and keeps the first flag of each code.
 
 `long-runway-high-growth` fires on a 20-year runway when the belief or the implied growth is 10% or more.
 
@@ -646,7 +648,7 @@ On a valued row and on the refusal of 6.1: when the row's inputs allow the Matur
 
 ### 6.5 Expected return, multiples, flags and inputs
 
-The expected return of 5.10 with H rates of g_T. Trailing P/E reported and clean; no forward P/E. Flags: the ROIC flags of 4.5 and 4.6, `charge-zeroed` and `return-floored` included, then the trailing flags. Never `sbc-basis-unknown`, `path-on-eps`, `few-analysts`, `growth-above-return`, `long-runway-high-growth` or `value-spread`; so a thin consensus behind the cross-check does not show on a stable row, a known gap. Inputs: the common DATA inputs of 5.12 plus trailing net income; the RULE inputs plus the runway years and a belief of g_T.
+The expected return of 5.10 with H rates of g_T. Trailing P/E reported and clean; no forward P/E. Flags: the ROIC flags of 4.5 and 4.6, `charge-zeroed` and `return-floored` included, then the trailing flags. Never `sbc-basis-unknown`, `path-on-eps`, `few-analysts`, `step-series-disagree`, `growth-above-return`, `long-runway-high-growth` or `value-spread`; so a thin consensus behind the cross-check does not show on a stable row, a known gap. Inputs: the common DATA inputs of 5.12 plus trailing net income; the RULE inputs plus the runway years and a belief of g_T.
 
 ## 6a. The Decline route
 
@@ -892,6 +894,7 @@ Eleven flags are quality warnings: they say the value may be wrong because the b
 | `sbc-basis-unknown` | no | the stock-compensation basis test lacked an input; on the revenue-growth route, only when the cross-check has a value |
 | `path-on-eps` | no | years 2 and 3 grow at the consensus EPS steps |
 | `few-analysts` | no | a present path step lands on a year with fewer than 5 analysts or no count: the EPS count on the earnings path (5.3), the revenue count on the revenue path (5a.2, 6a.2); on a Decline row years 2 and 3 only, since a thin year past 3 ends the consensus (6a.2) |
+| `step-series-disagree` | no | a Mature Growth path step has a rate on net income and a rate on EPS more than `step_series_gap_max` (5 points) apart in size; names each such step, its two rates and the share counts the two series imply for its two years (the net-income mean over the EPS mean), the series the path is on, and the step's override, `path.step_2` or `path.step_3`, as what decides (5.3) |
 | `path-held` | no | a consensus revenue step is missing, so its year holds the rate of the year before; names the fiscal years that left it missing and the rates held (5a.2, 6a.2) |
 | `path-on-trend` | no | a Decline row without a usable NTM consensus: years 1 to 3 of the run-off shrink at the decline rate, which then fades to zero by year N; the sentence names the rate as used (−50% on a floored row) and N (6a.2) |
 | `decline-rate-floored` | no | the five-year trend shrinks revenue faster than 50% a year, so the run-off uses −50% (6a.2) |

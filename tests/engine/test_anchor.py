@@ -48,6 +48,21 @@ def a(
     return AnnualEstimate(fy, date(fy, 12, 31), eps, None, ni, n_eps, n_ni)
 
 
+def _annual(
+    base: int,
+    *,
+    net_income: tuple[float | None, ...] = (None, None, None),
+    eps: tuple[float | None, ...] = (None, None, None),
+    revenue: tuple[float | None, ...] = (None, None, None),
+    analysts: int | None = 10,
+) -> list[AnnualEstimate]:
+    """The consensus years from ``base``, each series year by year, every count ``analysts``."""
+    return [
+        AnnualEstimate(base + k, date(base + k, 12, 31), e, rev, ni, analysts, analysts, analysts)
+        for k, (e, rev, ni) in enumerate(zip(eps, revenue, net_income, strict=True))
+    ]
+
+
 def trailing(
     revenue: float | None = 100.0, eps: float | None = 4.0, sbc: float | None = 10.0
 ) -> TrailingFigures:
@@ -256,18 +271,122 @@ def test_base_fiscal_year_tie_takes_later() -> None:
 
 
 def test_path_on_net_income_then_eps_fallback(policy: Policy) -> None:
-    annual = [a(2027, 2.0, 200.0), a(2028, 2.4, 220.0), a(2029, 3.0, 264.0)]
+    # net income 18% and 25% against EPS 20% and 25%: inside the step-series gap
+    annual = [a(2027, 2.0, 200.0), a(2028, 2.4, 236.0), a(2029, 3.0, 295.0)]
     got = path_steps(annual, 2027, policy)
-    assert got.steps == pytest.approx((0.10, 0.20))
+    assert got.steps == pytest.approx((0.18, 0.25))
     assert not got.on_eps and got.flags == ()
 
-    no_ni = [a(2027, 2.0), a(2028, 2.4, 220.0), a(2029, 3.0, 264.0)]
+    no_ni = [a(2027, 2.0), a(2028, 2.4, 236.0), a(2029, 3.0, 295.0)]
     got = path_steps(no_ni, 2027, policy)
     assert got.steps == pytest.approx((0.20, 0.25))
     assert got.on_eps and codes(got.flags) == ["path-on-eps"]
 
-    loss_ni = [a(2027, 2.0, -5.0), a(2028, 2.4, 220.0), a(2029, 3.0, 264.0)]
+    loss_ni = [a(2027, 2.0, -5.0), a(2028, 2.4, 236.0), a(2029, 3.0, 295.0)]
     assert path_steps(loss_ni, 2027, policy).on_eps
+
+
+def test_path_carries_the_revenue_steps(policy: Policy) -> None:
+    annual = _annual(
+        2027,
+        revenue=(1000.0, 1150.0, 1265.0),
+        net_income=(100.0, 125.0, 150.0),
+        eps=(1.0, 1.25, 1.5),
+        analysts=20,
+    )
+    path = path_steps(annual, 2027, policy)
+    assert path.revenue_steps == pytest.approx((0.15, 0.10))
+    assert path.steps == pytest.approx((0.25, 0.20))
+    # the same base year: a year before it is not read
+    earlier = [AnnualEstimate(2026, date(2026, 12, 31), 0.5, 500.0, 50.0, 20, 20, 20), *annual]
+    assert path_steps(earlier, 2027, policy).revenue_steps == pytest.approx((0.15, 0.10))
+    # on the EPS path too
+    on_eps = [replace(x, net_income=None) for x in annual]
+    assert path_steps(on_eps, 2027, policy).revenue_steps == pytest.approx((0.15, 0.10))
+
+
+def test_a_missing_or_non_positive_revenue_leaves_the_step_none(policy: Policy) -> None:
+    earnings = {"net_income": (100.0, 125.0, 150.0), "eps": (1.0, 1.25, 1.5)}
+    middle = _annual(2027, revenue=(1000.0, None, 1265.0), **earnings)
+    assert path_steps(middle, 2027, policy).revenue_steps == (None, None)
+
+    base_zero = _annual(2027, revenue=(0.0, 1150.0, 1265.0), **earnings)
+    got = path_steps(base_zero, 2027, policy).revenue_steps
+    assert got[0] is None and got[1] == pytest.approx(0.10)
+
+    base_negative = _annual(2027, revenue=(-10.0, 1150.0, 1265.0), **earnings)
+    assert path_steps(base_negative, 2027, policy).revenue_steps[0] is None
+
+    # a mean of zero is a fall to zero with revenue analysts, and no estimate without them
+    zero = _annual(2027, revenue=(1000.0, 0.0, 1265.0), **earnings)
+    assert path_steps(zero, 2027, policy).revenue_steps == (-1.0, None)
+    no_count = [replace(x, analysts_revenue=None) for x in zero]
+    assert path_steps(no_count, 2027, policy).revenue_steps == (None, None)
+
+    short = _annual(2027, revenue=(1000.0, 1150.0), net_income=(100.0, 125.0), eps=(1.0, 1.25))
+    got = path_steps(short, 2027, policy).revenue_steps
+    assert got[0] == pytest.approx(0.15) and got[1] is None
+
+    assert path_steps([], 2027, policy).revenue_steps == (None, None)
+
+
+def test_step_series_disagree_names_both_rates(policy: Policy) -> None:
+    annual = _annual(2027, net_income=(8.33e9, 10.0e9, 12.0e9), eps=(0.83, 1.10, 1.32), analysts=20)
+    path = path_steps(annual, 2027, policy)
+    note = next(f for f in path.flags if f.code == "step-series-disagree")
+    assert "Step 2 reads 20.0% on net income and 32.5% on EPS" in note.sentence
+    assert "`path.step_2`" in note.sentence
+    assert "Step 3" not in note.sentence  # 20.0% against 20.0%
+    assert note == Flag(
+        "step-series-disagree",
+        "Step series disagree",
+        "Step 2 reads 20.0% on net income and 32.5% on EPS: the two consensus series imply "
+        "different share counts (10.0B against 9.1B). The path is on net income; `path.step_2` "
+        "decides.",
+    )
+    assert codes(path.flags) == ["step-series-disagree"]
+    assert path.steps == pytest.approx((10.0 / 8.33 - 1, 0.20))  # the path stays on net income
+
+
+def test_step_series_disagree_names_each_step_and_the_series_the_path_is_on(
+    policy: Policy,
+) -> None:
+    both = _annual(2027, net_income=(8.33e9, 10.0e9, 12.0e9), eps=(0.83, 1.10, 1.21))
+    assert path_steps(both, 2027, policy).flags[-1].sentence == (
+        "Step 2 reads 20.0% on net income and 32.5% on EPS: the two consensus series imply "
+        "different share counts (10.0B against 9.1B); step 3 reads 20.0% on net income and 10.0% "
+        "on EPS: the two consensus series imply different share counts (9.1B against 9.9B). The "
+        "path is on net income; `path.step_2` and `path.step_3` decide."
+    )
+
+    # no net income for fiscal 2029: the path is on EPS, and step 2 still reads both series
+    on_eps = _annual(2027, net_income=(100e6, 125e6, None), eps=(1.0, 1.10, 1.21), analysts=3)
+    path = path_steps(on_eps, 2027, policy)
+    assert codes(path.flags) == ["path-on-eps", "few-analysts", "step-series-disagree"]
+    assert path.flags[-1].sentence == (
+        "Step 2 reads 25.0% on net income and 10.0% on EPS: the two consensus series imply "
+        "different share counts (100.0M against 113.6M). The path is on EPS; `path.step_2` "
+        "decides."
+    )
+
+
+def test_step_series_disagree_without_a_count_for_the_landing_year(policy: Policy) -> None:
+    # a counted EPS mean of zero implies no share count, and a fall of 100%
+    annual = _annual(2027, net_income=(100e6, 120e6, 150e6), eps=(1.0, 0.0, 1.5))
+    note = path_steps(annual, 2027, policy).flags[-1]
+    assert note.sentence == (
+        "Step 2 reads 20.0% on net income and −100.0% on EPS: the two consensus series imply "
+        "different share counts. The path is on net income; `path.step_2` decides."
+    )
+
+
+def test_step_series_within_the_gap_is_silent(policy: Policy) -> None:
+    # 20.0% against 24.0%, then 20.0% against 20.0%
+    annual = _annual(2027, net_income=(100e6, 120e6, 144e6), eps=(1.0, 1.24, 1.488))
+    assert path_steps(annual, 2027, policy).flags == ()
+    # one series alone gives no comparison
+    no_eps = _annual(2027, net_income=(100e6, 150e6, 225e6), eps=(None, None, None))
+    assert "step-series-disagree" not in codes(path_steps(no_eps, 2027, policy).flags)
 
 
 def test_path_analysts_follow_the_series(policy: Policy) -> None:
@@ -282,14 +401,14 @@ def test_path_analysts_follow_the_series(policy: Policy) -> None:
 
 
 def test_path_few_analysts_flag(policy: Policy) -> None:
-    annual = [a(2027, 2.0, 200.0), a(2028, 2.4, 220.0), a(2029, 3.0, 264.0, n_ni=3)]
+    annual = [a(2027, 2.0, 200.0), a(2028, 2.4, 236.0), a(2029, 3.0, 295.0, n_ni=3)]
     got = path_steps(annual, 2027, policy)
     assert got.analysts == (10, 3) and codes(got.flags) == ["few-analysts"]
 
-    unknown = [a(2027, 2.0, 200.0), a(2028, 2.4, 220.0, n_ni=None), a(2029, 3.0, 264.0, n_ni=4)]
+    unknown = [a(2027, 2.0, 200.0), a(2028, 2.4, 236.0, n_ni=None), a(2029, 3.0, 295.0, n_ni=4)]
     assert codes(path_steps(unknown, 2027, policy).flags) == ["few-analysts"]
 
-    enough = [a(2027, 2.0, 200.0), a(2028, 2.4, 220.0, n_ni=5), a(2029, 3.0, 264.0, n_ni=5)]
+    enough = [a(2027, 2.0, 200.0), a(2028, 2.4, 236.0, n_ni=5), a(2029, 3.0, 295.0, n_ni=5)]
     assert path_steps(enough, 2027, policy).flags == ()
 
 

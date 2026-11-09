@@ -493,6 +493,7 @@ def test_flags_in_order_without_duplicates(
         "fcf-sign",  # the classifier
         "sbc-basis-unknown",  # the anchor
         "few-analysts",  # the path
+        "step-series-disagree",  # net income 50% a year against EPS 12% and 10%
         "roic-on-n-years",  # the ROIC
         "growth-above-return",  # a year that pays out less than nothing
         "margin-flag",
