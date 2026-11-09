@@ -64,19 +64,26 @@ that item instead.
 A full report covers the business, the industry and the value. A valuation review re-values the
 company and reuses the newest full report for the business and the industry.
 
-An item of origin `expiry` is a company whose validity window has ended: its snapshot is stale.
-Refresh it first, at the start of step 3.
+An item of origin `expiry` is a company whose validity window has ended. Step 3's refresh renews
+it, as it renews every company's.
 
 ### 3. Read the company
 
-First, the window. When the item's origin is `expiry`, or `company(symbol)` shows a `valid_until`
-before today, refresh the company before you read further:
+First, the refresh. Every item: refresh the company before you read it, so the report rests on
+the latest price and the row's price, price ÷ value and designation are current when the report
+publishes. The stored price is the last refresh's close, which may be days old.
 
 - Call `refresh_start("scoped", [symbol])`. When it is refused because a refresh is running, call
   `refresh_status()` until that one ends, then start yours.
 - Call `refresh_status()` until its `refresh` is `null`: no refresh is running, and `last` is the
   one you started.
-- Read `company(symbol)` again. The snapshot id is new.
+- When `last` ends with a `status` other than `done`, tell the user, and go on with the stored
+  snapshot; section 9 names the price's date.
+- Read `company(symbol)`. The snapshot id is the one the report cites; its `price_date` is the
+  latest close.
+
+A scoped refresh fetches the company's price and statements again and values it. It takes about
+a minute.
 
 Then read everything the page shows:
 
@@ -341,9 +348,8 @@ instead.
 - No first person. Fairband has no voice: never "I", "we" or "our".
 - The reason on an override is your own words. Fairband keeps it verbatim and shows it on the
   bridge.
-- Start a refresh only in three cases: a scoped refresh of a company whose window has ended (an
-  `expiry` item, or a `valid_until` before today; step 3); a revalue when a refusal asks for one;
-  or when the user asks.
+- Start a refresh only in three cases: the scoped refresh of the company at the start of step 3; a
+  revalue when a refusal asks for one; or when the user asks.
 - Only the lead agent calls `identify`; a subagent never does (step 1).
 
 ## Guidance

@@ -65,6 +65,8 @@ STEPS: dict[int, tuple[str, ...]] = {
         "kill_criteria",
         "policy",
         "methodology",
+        "refresh_start",
+        "refresh_status",
     ),
     4: ("transcript", "segments", "finding_add"),
     5: ("transcript_dates", "transcript", "finding_add", "guidance_add", "derive"),
@@ -321,6 +323,28 @@ def test_the_note_has_one_form() -> None:
     assert sentence in skill
     assert sentence in _tool_entry("inbox_post")
     assert "asked in chat on 2026-11-08 (the second run)" in skill  # the counter-example
+
+
+def test_every_item_is_refreshed_before_it_is_read() -> None:
+    """Spec 14 step 3 (plan 5, B-126): a scoped refresh of the company opens step 3 on every
+    item, so the report reads the latest price; before plan 5 only an expired company was
+    refreshed, and QCOM's report 2 of 8 Nov 2026 read the close of 4 Nov."""
+    _, body = _frontmatter(_read(SKILL))
+    steps = _steps(body)
+    three = _flat(steps[3])
+    assert "Every item: refresh the company before you read it" in three
+    assert 'Call `refresh_start("scoped", [symbol])`' in three
+    assert "call `refresh_status()` until that one ends, then start yours" in three
+    assert "When `last` ends with a `status` other than `done`" in three
+    assert "section 9 names the price's date" in three
+    skill = _flat(_read(SKILL))
+    assert (
+        "Start a refresh only in three cases: the scoped refresh of the company at the start of"
+        " step 3"
+    ) in skill
+    assert "`valid_until` before today" not in skill  # the old condition is gone
+    # step 2 no longer refreshes
+    assert "Refresh it first, at the start of step 3" not in _flat(steps[2])
 
 
 def _read(path: Path) -> str:
