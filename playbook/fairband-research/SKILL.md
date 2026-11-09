@@ -93,8 +93,9 @@ Then read everything the page shows:
 - `financials(symbol)`, `financial_tables(symbol)`, `estimates(symbol)`, `peers(symbol)` and
   `price_history(symbol)`: the stored figures, each with the ref to cite it by.
 - `multiples_history(symbol)`: the trailing and the forward P/E (the price over the earnings a
-  share) over the years on file, with their ten-year average, median, high and low, each with its
-  ref. Section 9 of the report sets the multiples against this history.
+  share) over the years on file, the last point of each month, with their ten-year average,
+  median, high and low, each with its ref. Section 9 of the report sets the multiples against
+  this history.
 - `report(symbol)`: the latest report, when there is one. `reports(symbol)` lists every revision.
   Its thesis is the one the last earnings call tests in step 5.
 - `notes(symbol)`, `findings(symbol)`, `guidance(symbol)`, `overrides(symbol)`, `reviews(symbol)`,
@@ -320,7 +321,9 @@ not read its method, and wants to know what the company is worth and why. Rewrit
 that needs the Methodology page to follow, by `reference/register.md`, "The words a report
 writes". Then read the summary alone: it must stand on its own, since many readers stop there.
 
-Submit with `report_submit`. The server publishes a report whole or rejects it whole. A structural
+Submit with `report_submit`. The server publishes a report whole or rejects it whole. Published,
+the answer is the report's id, symbol, time and work item; `report(symbol, id)` reads it whole, so
+read it only when you need to. A structural
 refusal (the section count, the stance, a judgment, a heading, or no secondary valuation on a
 refused snapshot) is one sentence: fix it and submit again. A valued snapshot needs no secondary
 valuation: Appendix A says "no secondary valuation: the route values the company". A refused

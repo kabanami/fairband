@@ -27,6 +27,14 @@ as one path segment. ``report`` without an id reads the company's latest report:
 newest first, then the first whole; with none, ``{"refused": "no report for <symbol>", "status":
 404}``. ``methodology`` without a section lists the page's sections (``GET /api/methodology``).
 
+Two tools answer less than their route, since the route's answer overflows a host's result and is
+saved to a file the agent then reads: ``multiples_history`` keeps the last point of each month of
+each series (the daily series runs to about 2,500 points over ten years) and the statistics and
+the rest of the series as the API answers them, every point with ``daily``; ``report_submit``
+answers a published report's ``id``, ``symbol``, ``createdAt`` and ``workItemId`` alone, and
+``report(symbol, id)`` reads it whole; a rejected report's findings are answered as the API
+answers them.
+
 The command's ``httpx.Client`` (``loopback``) reads no proxy or other setting from the
 environment, so a proxy variable never takes a call meant for the loopback.
 """
@@ -130,6 +138,33 @@ class _Unsent(Exception):
     """A call refused before it is sent: its sentence."""
 
 
+_SERIES = ("pe", "peForward")  # the multiples history's series
+_PUBLISHED = ("id", "symbol", "createdAt", "workItemId")  # what report_submit answers of a report
+
+
+def _month_ends(answered: dict[str, Any]) -> dict[str, Any]:
+    """The multiples history with each series' points thinned to the last point of each calendar
+    month, oldest first as the points are; the refs stay, since the route serves every point. A
+    refusal, or a series the read could not serve, stays as it is."""
+    out = dict(answered)
+    for name in _SERIES:
+        series = out.get(name)
+        if isinstance(series, dict) and isinstance(series.get("points"), list):
+            kept: dict[str, Any] = {}
+            for point in series["points"]:
+                kept[str(point["day"])[:7]] = point  # a later point of the month replaces it
+            out[name] = series | {"points": list(kept.values())}
+    return out
+
+
+def _published(answered: dict[str, Any]) -> dict[str, Any]:
+    """A published report's answer cut to ``_PUBLISHED``; a refusal as it is."""
+    report = answered.get("report")
+    if not isinstance(report, dict):
+        return answered
+    return {"report": {key: report.get(key) for key in _PUBLISHED}}
+
+
 def build_server(client: FairbandClient) -> MCPServer:
     """The server with spec 15's tools, each a call through ``client``."""
     server = MCPServer("fairband", version=__version__, instructions=INSTRUCTIONS)
@@ -194,11 +229,13 @@ def build_server(client: FairbandClient) -> MCPServer:
         return answer(lambda: client.get(_company(symbol, "price-history"), {"years": years}))
 
     @server.tool(
-        description="The trailing and forward P/E over the ten years on file, with their average,"
-        " median, high and low, each with its ref."
+        description="The trailing and forward P/E over the ten years on file, the last point of"
+        " each month (every daily point with daily), with their average, median, high and low,"
+        " each with its ref."
     )
-    def multiples_history(symbol: str) -> dict[str, Any]:
-        return answer(lambda: client.get(_company(symbol, "multiples-history")))
+    def multiples_history(symbol: str, daily: bool = False) -> dict[str, Any]:
+        answered = answer(lambda: client.get(_company(symbol, "multiples-history")))
+        return answered if daily else _month_ends(answered)
 
     @server.tool(
         description="The company's mature peers with their figures and their source, each figure"
@@ -525,8 +562,9 @@ def build_server(client: FairbandClient) -> MCPServer:
         return write(lambda: client.post(_company(symbol, "derivations"), body))
 
     @server.tool(
-        description="Submit a report with every quantity cited: published whole, or rejected whole"
-        " with each finding to fix."
+        description="Submit a report with every quantity cited: published whole, it answers the"
+        " report's id, symbol, time and work item (report reads it whole); rejected whole, each"
+        " finding to fix."
     )
     def report_submit(
         symbol: str,
@@ -547,7 +585,7 @@ def build_server(client: FairbandClient) -> MCPServer:
             "newsItems": _camel(news_items or []),
             "workItemId": work_item_id,
         }
-        return write(lambda: client.post(_company(symbol, "reports"), body))
+        return _published(write(lambda: client.post(_company(symbol, "reports"), body)))
 
     @server.tool(description="Add a kill criterion to the company.")
     def kill_criterion_add(symbol: str, text: str) -> dict[str, Any]:

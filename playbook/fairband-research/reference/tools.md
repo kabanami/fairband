@@ -47,12 +47,15 @@ be left out.
   its `estimate:` ref.
 - `price_history(symbol, years?)`: the stored daily closes, oldest first, each with its `close:`
   ref; `years` keeps the latest years only.
-- `multiples_history(symbol)`: the trailing P/E (`pe`, GuruFocus's daily series) and the forward
-  P/E (`peForward`, Fairband's own log, kept since `since`) over the ten years on file. Each point
-  is `{day, value, ref}`; each statistic, `avg10y`, `median10y`, `high10y` and `low10y`, is
-  `{value, unit, ref}`, its ref `multiple:<symbol>/pe/avg_10y` and its siblings. `peNote` says why
-  the trailing series could not be fetched or read, when it could not ("the series could not be
-  read"); the read then serves the newest one stored. Read this, not `pe_history`, for the points and the statistics with their refs.
+- `multiples_history(symbol, daily?)`: the trailing P/E (`pe`, GuruFocus's daily series) and the
+  forward P/E (`peForward`, Fairband's own log, kept since `since`) over the ten years on file,
+  the last point of each month; `daily` answers every point, about 2,500 a series, which
+  overflows the host's result. Each point is `{day, value, ref}`; each statistic, `avg10y`,
+  `median10y`, `high10y` and `low10y`, is `{value, unit, ref}` over every daily point, its ref
+  `multiple:<symbol>/pe/avg_10y` and its siblings. `peNote` says why the trailing series could
+  not be fetched or read, when it could not ("the series could not be read"); the read then
+  serves the newest one stored. Read this, not `pe_history`, for the points and the statistics
+  with their refs.
 - `peers(symbol)`: the company's mature peers with their figures, each with its `peer:` ref, and
   where the list of peers came from.
 - `watchlists()`: the watchlists with their companies.
@@ -161,7 +164,8 @@ vendor call. The refusals:
 - `derive(symbol, derivations)`: compute figures from refs; it answers
   `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`.
 - `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`:
-  submit a report; published whole, it answers `{report}`; rejected whole, the `findings`.
+  submit a report; published whole, it answers `{report: {id, symbol, createdAt, workItemId}}`,
+  and `report(symbol, id)` reads it whole; rejected whole, the `findings`.
 - `kill_criterion_add(symbol, text)`: add a kill criterion to the company.
 - `kill_criterion_set(id, state, reason)`: move a kill criterion to `open`, `triggered` or
   `retired`, with the reason.

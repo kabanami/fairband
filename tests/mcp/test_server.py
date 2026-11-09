@@ -530,7 +530,12 @@ def test_report_submit_passes_the_sections_through(api: FairbandClient, client: 
         ],
         "work_item_id": item["id"],
     }
-    report = _call(server, "report_submit", submission)["report"]
+    submitted = _call(server, "report_submit", submission)
+    report = _call(server, "report", {"symbol": "AAPL"})  # the latest, whole
+    # the submit answers the report's id, symbol, time and work item, not the whole report
+    assert submitted == {
+        "report": {key: report[key] for key in ("id", "symbol", "createdAt", "workItemId")}
+    }
     assert report["sections"] == sections
     assert (report["workItemId"], report["actor"], report["client"]) == (
         item["id"],
@@ -538,7 +543,6 @@ def test_report_submit_passes_the_sections_through(api: FairbandClient, client: 
         "probe/0",
     )
     assert [j["judgment"] for j in report["judgments"]] == ["phase", "moat", "belief", "roic"]
-    assert _call(server, "report", {"symbol": "AAPL"}) == report  # the latest, whole
     assert _call(server, "report", {"symbol": "AAPL", "id": report["id"]}) == report
     done = _call(server, "inbox_list", {"state": "done"})["items"]
     assert [(i["id"], i["reportId"]) for i in done] == [(item["id"], report["id"])]
@@ -548,6 +552,60 @@ def test_report_submit_passes_the_sections_through(api: FairbandClient, client: 
     ]
     texts = [k["text"] for k in _call(server, "kill_criteria", {"symbol": "AAPL"})["killCriteria"]]
     assert sorted(texts) == ["A second product recall.", "The services margin falls."]
+
+
+class _Canned:
+    """A client whose every read answers ``answer``, for a tool that reshapes the API's answer."""
+
+    identified = True
+
+    def __init__(self, answer: dict[str, Any]) -> None:
+        self.answer = answer
+
+    def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        return self.answer
+
+
+def _daily(name: str, days: list[str]) -> dict[str, Any]:
+    """A P/E series as the web read answers one, a point a day."""
+    return {
+        "points": [
+            {"day": day, "value": 20.0 + i, "ref": f"multiple:AAPL/{name}/{day}"}
+            for i, day in enumerate(days)
+        ],
+        "stats": {
+            "avg10y": {"value": 22.0, "unit": "multiple", "ref": f"multiple:AAPL/{name}/avg_10y"}
+        },
+        "since": "2016-10-30",
+        "responseId": 7,
+        "note": None,
+    }
+
+
+def test_multiples_history_answers_the_last_point_of_each_month_unless_daily() -> None:
+    """The web read answers every daily point, about 2,500 over ten years, which overflows the
+    host's result; the tool keeps the last point of each month, the statistics and the rest of each
+    series as they are; ``daily`` keeps every point; a series the read could not serve stays."""
+    days = ["2026-08-31", "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-30"]
+    canned = {
+        "symbol": "AAPL",
+        "pe": _daily("pe", days),
+        "peNote": None,
+        "peForward": _daily("pe_forward", days[1:]),
+    }
+    server = build_server(_Canned(canned))  # type: ignore[arg-type]
+    monthly = _call(server, "multiples_history", {"symbol": "AAPL"})
+    assert [p["day"] for p in monthly["pe"]["points"]] == ["2026-08-31", "2026-09-30", "2026-10-30"]
+    assert [p["day"] for p in monthly["peForward"]["points"]] == ["2026-09-30", "2026-10-30"]
+    assert monthly["pe"]["points"][1] == canned["pe"]["points"][3]  # the point as the read gave it
+    rest = {k: v for k, v in monthly["pe"].items() if k != "points"}
+    assert rest == {k: v for k, v in canned["pe"].items() if k != "points"}
+    assert monthly["symbol"] == "AAPL" and monthly["peNote"] is None
+    assert _call(server, "multiples_history", {"symbol": "AAPL", "daily": True}) == canned
+    unserved = canned | {"pe": None, "peNote": "no GuruFocus key"}
+    server = build_server(_Canned(unserved))  # type: ignore[arg-type]
+    answered = _call(server, "multiples_history", {"symbol": "AAPL"})
+    assert (answered["pe"], answered["peNote"]) == (None, "no GuruFocus key")
 
 
 @pytest.mark.usefixtures("secondaries")
