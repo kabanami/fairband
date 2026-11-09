@@ -56,6 +56,11 @@ and the `0.09` key keep their figures. `value-spread` reads 65.56 to 127.68, 94.
 MSCO's hold is 0, so its three-year 18.25% fades from year 1 to 13% in year 20: its value is 43.85
 a share (44.71), and its levels and expected return move with it; its designation stays near.
 
+MSCO re-captured under 1.0 on 2026-11-09 for one new key: its intermediates carry `charge_off`
+(false) beside `charge`, as Mature Growth's do, so the drawer reads whether the runway years went
+uncharged from the row rather than from the measure's word (method 4.8). Its figures are
+unchanged; the other five goldens are untouched.
+
 Run from the repository root:
 
 ```

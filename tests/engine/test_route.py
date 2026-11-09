@@ -96,6 +96,7 @@ MATURE_STABLE_KEYS = {
     "roic",
     "runway_return",
     "terminal_roic",
+    "charge_off",
     "charge",
     "runway",
     "epv",

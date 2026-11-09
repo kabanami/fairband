@@ -78,6 +78,7 @@ def _growth_row(
     hold: int = 6,
     one_year: float | None = 0.21,
     used: str = "marginal",
+    charge_off: bool = False,
 ) -> dict[str, Any]:
     """A Mature Growth row's intermediates: earnings growth ``earnings`` in years 2 and 3 and 6%
     after, the revenue steps ``revenue`` (``None`` takes that year's earnings growth), a 20% runway
@@ -88,6 +89,7 @@ def _growth_row(
         "path_steps": list(earnings),
         "growth_rates": [*earnings, *later],
         "runway_return": {"used": used, "one_year": one_year},
+        "charge_off": charge_off,
         "charge": {
             "growth_by_year": [*paid, *later, 0.03],
             "return_by_year": _returns(0.20, 0.13, runway, hold),
@@ -102,7 +104,7 @@ def test_mgco_holds_its_return_then_fades_on_its_earnings_growth() -> None:
     20-year runway; no revenue consensus, so the charge pays for the earnings growth, 12.0% then
     10.0%; the newest year's marginal return 45.7%."""
     assert _rows(_golden("MGCO")) == [
-        [RETURNS, "43.1% through year 6, then fading to 13.0% in year 20", False],
+        [RETURNS, "43.1% through year 6, then to 13.0% in year 20", False],
         [
             GROWTH,
             "12.0% then 10.0%, the earnings growth: years 2 and 3 have no revenue consensus",
@@ -117,7 +119,7 @@ def test_msco_fades_from_year_1_on_the_terminal_growth() -> None:
     18.0% there, to 13.0% in year 20; the path grows at the terminal growth, 3.0%, every year; the
     newest year's marginal return 18.3%."""
     assert _rows(_golden("MSCO")) == [
-        [RETURNS, "fading from 18.0% in year 1 to 13.0% in year 20", False],
+        [RETURNS, "from 18.0% in year 1 to 13.0% in year 20", False],
         [GROWTH, "3.0% a year, the terminal growth", False],
         [NEWEST, "18.3%", True],
     ]
@@ -132,7 +134,7 @@ def test_a_refused_mature_row_draws_its_charge_under_its_phase_s_route() -> None
         "Mature growth route",
         "Charge",
         RETURNS,
-        "43.1% through year 6, then fading to 13.0% in year 20",
+        "43.1% through year 6, then to 13.0% in year 20",
         GROWTH,
         "12.0% then 10.0%, the earnings growth: years 2 and 3 have no revenue consensus",
         NEWEST,
@@ -143,7 +145,7 @@ def test_a_refused_mature_row_draws_its_charge_under_its_phase_s_route() -> None
 def test_the_revenue_steps_stand_beside_the_earnings_growth() -> None:
     rows = _rows(_growth_row((0.15, 0.10)))
     assert rows[:2] == [
-        [RETURNS, "20.0% through year 6, then fading to 13.0% in year 10", False],
+        [RETURNS, "20.0% through year 6, then to 13.0% in year 10", False],
         [GROWTH, "15.0% then 10.0% on revenue, against earnings of 25.0% then 20.0%", False],
     ]
 
@@ -189,9 +191,18 @@ def test_a_return_that_does_not_move_reads_every_year() -> None:
 def test_a_charge_off_charges_the_last_year_alone() -> None:
     """Method 4.6 rule 4: with the runway charge off, years 1 to N − 1 are not charged and year N
     and the terminal charge at the terminal return."""
-    im = _growth_row((0.15, 0.10), used="off")
+    im = _growth_row((0.15, 0.10), used="off", charge_off=True)
     im["charge"]["return_by_year"] = [0.13] * 10
     assert _rows(im)[0] == [RETURNS, "no charge in years 1 to 9, then 13.0% in year 10", False]
+
+
+def test_an_override_charges_a_row_whose_measure_was_off() -> None:
+    """A ``return.runway`` override charges every year (method 14.2) though the measure still
+    reads "off": the row's ``charge_off`` decides, not the measure. An override below the Wide
+    cap starts the return under the terminal return, so it rises to it: "then to", not "fading"."""
+    im = _growth_row((0.15, 0.10), runway=20, used="off")
+    im["charge"]["return_by_year"] = _returns(0.11, 0.13, 20, 6)
+    assert _rows(im)[0] == [RETURNS, "11.0% through year 6, then to 13.0% in year 20", False]
 
 
 def test_no_newest_year_figure_leaves_its_row_out() -> None:

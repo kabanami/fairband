@@ -1563,7 +1563,8 @@
   function chargeRows(im) {
     var c = im.charge, rr = im.runway_return || {};
     var rows = [
-      ['Return by year', returnByYear(c.return_by_year, c.hold_years, rr.used === 'off'), false],
+      ['Return by year', returnByYear(c.return_by_year, c.hold_years, im.charge_off === true),
+        false],
       ['Growth the charge pays for', 'stable_growth' in im
         ? F.formatPercent(c.growth_by_year[c.growth_by_year.length - 1]) +
           ' a year, the terminal growth'
@@ -1576,18 +1577,21 @@
   }
 
   /* The return by year from its ends and the hold (method 4.8): years 1 to N - 1 uncharged when
-     the charge is off (4.6 rule 4); one figure when both ends read the same; with no hold, faded
-     from year 1; with the hold at N - 1 or more, held to year N - 1, the shape before method 1.0;
-     else held through the hold and faded to year N. */
+     the charge is off (4.6 rule 4; the row's charge_off, never the measure's word, since a
+     return.runway override charges a row whose measure was off); one figure when both ends read
+     the same; with no hold, a straight line from year 1; with the hold at N - 1 or more, held to
+     year N - 1, the shape before method 1.0; else held through the hold, then a straight line to
+     year N. The line falls, or rises where an override starts it below the terminal return, so
+     the words say neither. */
   function returnByYear(returns, hold, off) {
     var n = returns.length, first = F.formatPercent(returns[0]);
     var end = F.formatPercent(returns[n - 1]), last = end + ' in year ' + n;
     if (n === 1) return last;
     if (off) return 'no charge in years 1 to ' + (n - 1) + ', then ' + last;
     if (first === end) return first + ' in every year';
-    if (hold === 0) return 'fading from ' + first + ' in year 1 to ' + last;
+    if (hold === 0) return 'from ' + first + ' in year 1 to ' + last;
     if (hold >= n - 1) return first + ' through year ' + (n - 1) + ', then ' + last;
-    return first + ' through year ' + hold + ', then fading to ' + last;
+    return first + ' through year ' + hold + ', then to ' + last;
   }
 
   /* Years 2 and 3's growth the charge pays for, the consensus revenue steps, beside the earnings

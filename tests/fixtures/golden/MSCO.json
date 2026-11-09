@@ -447,6 +447,7 @@
     null
    ]
   },
+  "charge_off": false,
   "dividend_yield": 0.0375,
   "e_normalized": 3300000000.0,
   "e_trailing": 3300000000.0,

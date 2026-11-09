@@ -323,7 +323,7 @@ K is the last year t in 1 … N − 1 whose next earnings growth g_{t+1} is abov
     terminal multiple = (1 + g_T) × (1 − g_T ÷ T) ÷ (r − g_T)
     value = Σ_{t=1..N} cash_t ÷ (1 + r)^t + earnings_N × terminal multiple ÷ (1 + r)^N
 
-The value a share is the total ÷ the diluted share count. The intermediates carry `charge`: `growth_by_year`, h for years 2 to N + 1 (g_T last); `return_by_year`, years 1 to N; `hold_years`, K; and `revenue_steps`, the two consensus revenue steps as found, none where missing (none on a Mature Stable row). `charge.revenue_steps` and `charge.hold_years` are rebuild keys: a price refresh and the cross-check (6.4) rebuild the same charge from them.
+The value a share is the total ÷ the diluted share count. The intermediates carry `charge`: `growth_by_year`, h for years 2 to N + 1 (g_T last); `return_by_year`, years 1 to N; `hold_years`, K; and `revenue_steps`, the two consensus revenue steps as found, none where missing (none on a Mature Stable row). Beside it, `charge_off` says whether the runway years went uncharged (4.6 rule 4): false under a `return.runway` override, which charges them (14.2), whatever the measure (`runway_return.used`) reads. `charge.revenue_steps` and `charge.hold_years` are rebuild keys: a price refresh and the cross-check (6.4) rebuild the same charge from them.
 
 ### 4.9 The moat class
 
