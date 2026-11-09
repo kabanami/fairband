@@ -544,7 +544,13 @@ def test_the_overrides_table_names_the_eighteen_inputs() -> None:
     ):
         assert words in shares, words
     outside = _flat(" ".join(table["`value.outside`"]))
-    for words in ("after tax", "−1,000 to 1,000 dollars a share", "`earnings.nri_gap`", "twice"):
+    for words in (
+        "after tax",
+        "−1,000 to 1,000 dollars a share",
+        "`earnings.nri_gap`",
+        "twice",
+        "excludes its gains",
+    ):
         assert words in outside, words
     order = ", ".join(LABELS[tag] for tag in BRIDGE_ORDER)
     assert f"The lines run in the method's order: {order}." in _flat(skill)
@@ -570,14 +576,20 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         )
     }
     for code, words in (
-        ("heavy-capex", ("`roic`", "`return.runway`")),
+        ("heavy-capex", ("`roic`", "`return.runway`", "stops after the spending share")),
         ("growth-above-return", ("the owner funds the growth",)),
-        ("consensus-basis-unknown", ("`large-nri`", "`earnings.nri_gap`", "`earnings.ntm`")),
+        (
+            "consensus-basis-unknown",
+            ("`large-nri`", "`earnings.nri_gap`", "`earnings.ntm`", "guidance record", "exposure"),
+        ),
         ("step-series-disagree", ("both series", "`path.step_2`", "`path.step_3`")),
     ):
         assert code in flags, code
         for word in words:
             assert word in flags[code], (code, word)
+    # the runway return is decided on the two mature routes alone (the Task 8 review)
+    heavy = flags["heavy-capex"]
+    assert heavy.startswith("on Mature Growth and Mature Stable"), heavy
     row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
     cell = row["`snapshot:<id>/intermediates/<path>`"][0]
     for path in NEW_INTERMEDIATES:
@@ -593,8 +605,38 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         "`review:<id>/bridge/<n>/new`",
         "`earnings.nri_gap`",
         "NTM net income",
+        "why it is not added",
     ):
         assert words in valuation, words
+
+
+def test_nothing_counts_twice_route_by_route() -> None:
+    """The Task 8 review of the engine round 2, plan 1 (the controller's ruling, 2026-11-10): the
+    skill says route by route how an asset outside the business whose gains run through the
+    earnings is added once. On Mature Stable `earnings.nri_gap` strips the gains from the trailing
+    earnings; High Growth, Young Growth and Decline read operating income, which the gains never
+    enter; on Mature Growth no input strips them from the consensus (`earnings.nri_gap` reaches the
+    basis test alone, `earnings.ntm` needs a guidance record), so the asset is added only where the
+    consensus excludes its gains, and is otherwise left out and named in section 8."""
+    skill = _flat(_read(SKILL))
+    for words in (
+        "Mature Stable: strip the gains from the trailing earnings through `earnings.nri_gap`",
+        (
+            "High Growth, Young Growth and Decline: the value reads operating income, which the"
+            " gains never enter"
+        ),
+        (
+            "`earnings.nri_gap` reaches only the test of the anchor's stock-compensation basis,"
+            " and `earnings.ntm` needs a guidance record"
+        ),
+        (
+            "Add the asset only when the consensus excludes its gains. Otherwise leave it out of"
+            " `value.outside`"
+        ),
+    ):
+        assert words in skill, words
+    # the rule before the review, which told the agent to strip the gains on every route
+    assert "strip them through `earnings.nri_gap` in the same review" not in skill
 
 
 def _read(path: Path) -> str:

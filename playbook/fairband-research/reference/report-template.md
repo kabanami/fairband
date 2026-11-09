@@ -164,11 +164,15 @@ The kill criteria of section 11 test it.
   growth. Under heavy capital spending, cite the newest year's marginal return,
   `/runway_return/one_year`, beside the return you chose. Under your overrides cite the review's,
   `review:<id>/intermediates/charge/...`.
-- **The value outside the business**, where an override set one: what it is (a stake, an asset
-  held for sale, a settlement still owed), and its size a share after tax, cited as its bridge
-  line, `review:<id>/bridge/<n>/new`. Say that its gains come out of the earnings, through the
-  non-recurring gap's line (`earnings.nri_gap`), so nothing counts twice. Where the figure comes
-  from secondary coverage, not a filing, say so.
+- **The value outside the business**: where an override set one, what it is (a stake, an asset
+  held for sale, a settlement still owed), its size a share after tax, cited as its bridge line,
+  `review:<id>/bridge/<n>/new`, and how nothing counts twice. On Mature Stable its gains came out
+  of the trailing earnings through the non-recurring gap's line (`earnings.nri_gap`); on High
+  Growth, Young Growth and Decline the value reads operating income, which its gains never enter;
+  on Mature Growth the analysts' consensus excludes them. On Mature Growth where the consensus may
+  carry the asset's gains, no override adds it: name the asset and its size a share, cited as a
+  finding, and say why it is not added. Where the figure comes from secondary coverage, not a
+  filing, say so.
 - **The share count**, where an override set one: the shares committed but not yet in the count
   (a forward sale, a mandatory convertible), cited as its bridge line,
   `review:<id>/bridge/<n>/new`. The count is period-tied. A raised count raises the NTM net income

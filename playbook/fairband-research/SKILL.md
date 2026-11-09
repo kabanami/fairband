@@ -220,19 +220,24 @@ an input. Those are the candidate judgments.
 
 Four flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
-- `heavy-capex`: capital spending takes a large share of the operating cash flow. The sentence
-  names the return the charge starts at, its measure, and the newest year's marginal return on the
-  capital added in the last fiscal year on file. The stored years end there, so a return on a
-  spending surge still under way is yours to judge. Decide the runway return in the `roic`
-  judgment (see "The judgments"), through `return.runway` where the evidence moves it.
+- `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
+  of the operating cash flow, then names the return the charge starts at, its measure, and the
+  newest year's marginal return on the capital added in the last fiscal year on file; under your
+  `return.runway` override it names the override as the start. The stored years end there, so a
+  return on a spending surge still under way is yours to judge. Decide the runway return in the
+  `roic` judgment (see "The judgments"), through `return.runway` where the evidence moves it. On
+  the other routes, and where the charge is off or the return is unavailable, the sentence stops
+  after the spending share: there is no runway return to decide.
 - `growth-above-return`: the growth a year's reinvestment pays for outruns the return it earns, so
   the year pays out less than nothing: the owner funds the growth. The value already carries that
   cost. Read the growth the charge pays for and its return by year (`intermediates/charge`). A step
   or a runway return the thesis rejects is a decision of step 10.
 - `consensus-basis-unknown`: it fires with `large-nri`. Whether the analysts' EPS carries the
-  non-recurring items is unknown. Read the filing's non-recurring items and decide through
-  `earnings.nri_gap`, and on Mature Growth through `earnings.ntm` where a clear EPS guidance serves
-  (see "Guidance").
+  non-recurring items is unknown. Read the filing's non-recurring items. On Mature Stable, decide
+  the trailing earnings through `earnings.nri_gap`. On Mature Growth the value rests on the
+  consensus, and `earnings.nri_gap` reaches only the test of the anchor's stock-compensation
+  basis: the door is `earnings.ntm`, with a clear EPS guidance record (see "Guidance"). Without
+  one, section 8 states the exposure: the items a share the consensus may carry.
 - `step-series-disagree`: a consensus step read on net income and the same step read on EPS differ
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
@@ -489,7 +494,7 @@ not you, computes the value it gives.
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest annual balance sheet's debt or cash | 0 dollars or more; period-tied only |
 | `shares.diluted` | every route | the diluted share count, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first | above 0 shares; period-tied only |
-| `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Where the asset's gains run through the earnings, strip them through `earnings.nri_gap`, or the asset counts twice | −1,000 to 1,000 dollars a share; lasting or period-tied |
+| `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Nothing counts twice: on Mature Stable strip the asset's gains through `earnings.nri_gap`; on Mature Growth add it only when the consensus excludes its gains (see below) | −1,000 to 1,000 dollars a share; lasting or period-tied |
 
 The ranges are the policy's `override_ranges`; `policy()` gives the values in force.
 
@@ -521,8 +526,20 @@ The share count and the value outside the business:
   plus the figure, and the levels read the sum; the growth the price needs is solved against the
   price less the figure, the business's share of the price. Start-up does not read it. A filing is
   the usual evidence; a figure from secondary coverage is evidence too, and the report says so.
-  When GAAP earnings carry the asset's gains (mark-ups through other income), strip them through
-  `earnings.nri_gap` in the same review, or the asset counts twice.
+
+Nothing counts twice. Where GAAP earnings carry the asset's gains (mark-ups through other income),
+the route sets what you do:
+
+- Mature Stable: strip the gains from the trailing earnings through `earnings.nri_gap`, a figure a
+  share: the gap found, raised by the gains a share it does not already hold. Then add the asset.
+- High Growth, Young Growth and Decline: the value reads operating income, which the gains never
+  enter. Add the asset with no correction.
+- Mature Growth: the value rests on the analysts' consensus, and no input strips an asset's gains
+  from it. `earnings.nri_gap` reaches only the test of the anchor's stock-compensation basis, and
+  `earnings.ntm` needs a guidance record. Read the filing's other-income line against the
+  analysts' basis; `consensus-basis-unknown` says when that basis is unknown. Add the asset only
+  when the consensus excludes its gains. Otherwise leave it out of `value.outside`: section 8
+  names the asset and its size a share, and says why it is not added.
 
 The server checks an override by these rules, in this order, and answers the first one it breaks:
 
