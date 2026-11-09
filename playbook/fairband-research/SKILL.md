@@ -537,8 +537,9 @@ the route sets what you do:
   share: the gap found, raised by the gains a share it does not already hold. Then add the asset.
 - High Growth, Young Growth and Decline: the value reads operating income, which the gains never
   enter. Add the asset with no correction, unless it already sits in cash and short-term
-  investments, or in the current assets a Decline row's floor reads, which the route counts
-  already; then it is not outside the business and is not added.
+  investments, or, on a Decline row whose value the floor sets (`ncav-floor`), in the current
+  assets the floor reads, which the route counts already; then it is not outside the business and
+  is not added.
 - Mature Growth: the value rests on the analysts' consensus, and no input strips an asset's gains
   from it. `earnings.nri_gap` reaches only the test of the anchor's stock-compensation basis, and
   `earnings.ntm` needs a guidance record. Read the filing's other-income line against the

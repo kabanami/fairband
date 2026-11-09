@@ -652,20 +652,22 @@ def test_nothing_counts_twice_route_by_route() -> None:
             "Add the asset only when the consensus excludes its gains. Otherwise leave it out of"
             " `value.outside`"
         ),
-        # an asset a growth or Decline route counts already (5a.9, 6a.6; the fix round 2)
+        # an asset a growth or Decline route counts already (5a.9; 6a.6 only where the floor
+        # sets the value; the fix rounds 2 and 3)
         (
-            "unless it already sits in cash and short-term investments, or in the current assets"
-            " a Decline row's floor reads, which the route counts already; then it is not outside"
-            " the business and is not added"
+            "unless it already sits in cash and short-term investments, or, on a Decline row whose"
+            " value the floor sets (`ncav-floor`), in the current assets the floor reads, which the"
+            " route counts already; then it is not outside the business and is not added"
         ),
     ):
         assert words in skill, words
     template = _read(TEMPLATE)
     valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
     assert (
-        "An asset already in cash and short-term investments, or in the current assets a Decline"
-        " row's floor reads, is counted by the route already: it is not outside the business and"
-        " is not added."
+        "On High Growth, Young Growth and Decline, an asset already in cash and short-term"
+        " investments, or, on a Decline row whose value the floor sets (`ncav-floor`), in the"
+        " current assets the floor reads, is counted by the route already: it is not outside the"
+        " business and is not added."
     ) in valuation
     # the rule before the review, which told the agent to strip the gains on every route
     assert "strip them through `earnings.nri_gap` in the same review" not in skill
