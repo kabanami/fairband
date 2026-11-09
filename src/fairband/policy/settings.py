@@ -597,7 +597,9 @@ def check(policy: Policy) -> None:
     raises ``ValueError("<name>: <rule>")``. Ranges are inclusive, and a NaN or an infinity is
     outside every one. A rule between two settings names both, in the order of 8.2 and joined by
     a comma, so r against g_T reads ``"required_return, terminal_growth: …"``; the Settings page
-    then stands the sentence beside the one the user changed (B-75)."""
+    then stands the sentence beside the one the user changed (B-75). Then the ranges of the two
+    values policy v10 adds, which are not settings and so are only ever the file's (spec
+    2026-11-09, section 11)."""
     p, u, f = policy, policy.universe, policy.refresh
     # A. Valuation
     if not 0.04 <= p.required_return <= 0.20:
@@ -724,3 +726,8 @@ def check(policy: Policy) -> None:
         raise ValueError("refresh.reuse_hours: must be from 0 to 720")
     if not 0 <= f.gf_reuse_days <= 90:
         raise ValueError("refresh.gf_reuse_days: must be from 0 to 90")
+    # Policy values that are not settings
+    if not 0 <= p.step_series_gap_max <= 0.5:
+        raise ValueError("step_series_gap_max: must be from 0 to 50 points")
+    if not 0 <= p.split_implied_count_tolerance <= 0.5:
+        raise ValueError("split_implied_count_tolerance: must be from 0% to 50%")

@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v9.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v10.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v8 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v9 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -16,7 +16,10 @@ so a file outside them fails at load with the setting's name.
 The six values v8 adds for the agents and the one v9 adds (spec 2026-11-06 Tier 2, section 19)
 are not settings: the override ranges (v9 adds the cycle gap's), the evidence rule above the 90th
 percentile, the secondary valuation's bounds, its driver ranges (v9) and the stance words. An
-override range or a driver range whose low is not below its high fails at load.
+override range or a driver range whose low is not below its high fails at load. The two values v10
+adds (spec 2026-11-09, section 11), the step-series gap and the split implied-count tolerance, are
+not settings either, nor are the two override ranges it adds, the outside value's and the diluted
+count's; either value outside 0 to 0.5 fails at load.
 """
 
 import hashlib
@@ -30,7 +33,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v9.toml"
+_POLICY_FILE = "fairband-policy-v10.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -110,6 +113,8 @@ class Policy:
     loss_ramp_margin_bound: float
     roic_sensitivity: tuple[float, float]
     analyst_min: int
+    step_series_gap_max: float
+    split_implied_count_tolerance: float
     nri_flag_share: float
     value_spread_flag: float
     long_runway_growth_flag: float
@@ -157,7 +162,7 @@ class Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v9 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v10 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -214,6 +219,8 @@ def load_policy(path: Path | None = None) -> Policy:
         loss_ramp_margin_bound=read("loss_ramp_margin_bound", _num),
         roic_sensitivity=read("roic_sensitivity", _pair),
         analyst_min=read("analyst_min", _whole),
+        step_series_gap_max=read("step_series_gap_max", _num),
+        split_implied_count_tolerance=read("split_implied_count_tolerance", _num),
         nri_flag_share=read("nri_flag_share", _num),
         value_spread_flag=read("value_spread_flag", _num),
         long_runway_growth_flag=read("long_runway_growth_flag", _num),
