@@ -344,7 +344,8 @@ instead.
 - Write the thesis for every stance, a hold and an avoid included.
 - Use guidance only when it is clear. Otherwise the consensus stands.
 - Write in the register of design.md 9.2 (`reference/register.md`): the answer first; short
-  sentences, one idea each; every term explained the first time; rounded numbers.
+  sentences, one idea each; rounded numbers; the method's terms as `reference/register.md` writes
+  them, the plain phrase in the text and the term once in brackets in section 8 only.
 - No first person. Fairband has no voice: never "I", "we" or "our".
 - The reason on an override is your own words. Fairband keeps it verbatim and shows it on the
   bridge.

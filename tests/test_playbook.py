@@ -162,6 +162,59 @@ STALE = (
     "where the route refuses or no route fits",
     "on a refused row only",
 )
+# The names of Fairband's parts, which a report never writes (register, "The words a report writes").
+NEVER = (
+    "the engine",
+    "the classifier",
+    "the route",
+    "the snapshot",
+    "check flag",
+    "the bridge",
+    "a tag",
+    "an id",
+)
+# Method terms the register's table must map to a plain phrase.
+TERMS = (
+    "belief",
+    "mechanical value",
+    "reviewed value",
+    "override",
+    "review",
+    "bridge",
+    "buy level",
+    "margin of safety",
+    "fair band",
+    "trim level",
+    "designation",
+    "phase",
+    "moat",
+    "runway",
+    "runway return",
+    "held rate",
+    "target margin",
+    "sales-to-capital",
+    "hurdle rate",
+    "consensus",
+    "snapshot",
+    "validity window",
+    "secondary valuation",
+    "sensitivity grid",
+    "kill criterion",
+)
+# Terms the example's Summary writes as their phrase, never by name.
+SUMMARY_FREE = (
+    "belief",
+    "reviewed value",
+    "mechanical value",
+    "buy level",
+    "trim level",
+    "fair band",
+    "margin of safety",
+    "runway",
+    "override",
+    "snapshot",
+    "engine",
+)
 
 
 def test_the_skill_names_every_tool() -> None:
@@ -347,6 +400,51 @@ def test_every_item_is_refreshed_before_it_is_read() -> None:
     assert "Refresh it first, at the start of step 3" not in _flat(steps[2])
 
 
+def test_the_report_writes_the_plain_phrase_not_the_term() -> None:
+    """Spec 13.1 "The words" and 14 (plan 5, B-134): the register maps each method term to the
+    phrase the report writes; the term appears once, in brackets, in section 8 only; the names of
+    Fairband's parts never appear; the template's example and summary shape are written so."""
+    register = _read(REGISTER)
+    assert "## The words a report writes" in register
+    flat = _flat(register)
+    assert "Write what a figure is, not what Fairband calls it" in flat
+    assert "in brackets after the phrase, in section 8 only" in flat
+    for word in NEVER:
+        assert f'"{word}"' in flat, word  # each named in the never-list
+    rows = _table_rows(register[register.index("## The words a report writes") :])
+    for term in TERMS:
+        assert term in rows, term
+        assert rows[term] and not rows[term].startswith("the engine"), term
+    assert "every term explained the first time" not in _flat(_read(SKILL))
+    assert "the method's terms as `reference/register.md` writes them" in _flat(_read(SKILL))
+    # the old 9.2 bullet, which told the agent to write the term
+    assert "Name the input in words" not in flat
+    # the template: the shape, the example's text and the judgments
+    template = _read(TEMPLATE)
+    shape = _shape(template)
+    example = _example(template)
+    sections = {
+        s["heading"]: " ".join(p for p in s["parts"] if isinstance(p, str))
+        for s in example["sections"]
+    }
+    texts = [shape, *sections.values(), *(j["decision"] for j in example["judgments"])]
+    for text in texts:
+        low = text.lower()
+        for word in NEVER:
+            assert word not in low, (word, text[:80])
+    for term in SUMMARY_FREE:
+        assert term not in sections["Summary"].lower(), term
+        assert term not in shape.lower(), term
+    for term in ("belief", "runway return", "mechanical value", "reviewed value"):
+        bare = [m.start() for m in re.finditer(re.escape(term), sections["Valuation"])]
+        bracketed = [
+            m.start() + 5 for m in re.finditer(rf"\(the {re.escape(term)}\)", sections["Valuation"])
+        ]
+        assert bare == bracketed and len(bare) <= 1, term  # once, and only in brackets
+    for decision in (j["decision"] for j in example["judgments"]):
+        assert "belief" not in decision or "(the belief)" in decision, decision
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -419,3 +517,21 @@ def _example(text: str) -> dict[str, Any]:
     assert len(submissions) == 1
     found: dict[str, Any] = submissions[0]
     return found
+
+
+def _table_rows(text: str) -> dict[str, str]:
+    """The first Markdown table in ``text``: its first column to its second, the header and the
+    separator left out."""
+    rows = {}
+    for line in text.splitlines():
+        if line.startswith("| ") and not line.startswith("|---") and "| Term" not in line:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) >= 2 and cells[0] and not set(cells[0]) <= {"-", ":"}:
+                rows[cells[0]] = cells[1]
+    return rows
+
+
+def _shape(text: str) -> str:
+    """The summary page's shape: the fenced block after ``## The summary page``."""
+    after = text[text.index("## The summary page") :]
+    return re.search(r"^```\n(.*?)^```", after, re.MULTILINE | re.DOTALL)[1]

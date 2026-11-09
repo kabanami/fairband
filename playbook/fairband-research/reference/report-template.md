@@ -239,11 +239,12 @@ Stance: hold.
 The thesis: customers stay for years and now sign longer contracts, so revenue keeps compounding.
 The price already counts on that. The view waits for two quarters of churn under the new prices.
 
-The price of $234.70 is below the reviewed value of $283 a share, but above the buy level of $212.
-The fair band runs from $240 to $325.
+The price of $234.70 is below the value this report puts on the company, $283 a share, but above
+the price at which the discount is wide enough to buy, $212. Prices close to the value run from
+$240 to $325.
 
-Phase: Mature Growth. Revenue grew 11.0% a year over three years, which is high for its size.
-The operating margin is positive and rising. The business is not cyclical.
+The company is in its Mature Growth stage. Revenue grew 11.0% a year over three years, which is
+high for its size. The operating margin is positive and rising. The business is not cyclical.
 
 Reasons for:
 1. ...
@@ -304,15 +305,15 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
       "parts": [
         "Stance: hold.\n\nThe thesis: customers stay for years and now sign longer contracts, so revenue keeps compounding. The price already counts on that. The view waits for two quarters of churn under the new prices.\n\nThe price of ",
         {"cite": "$234.70", "ref": "snapshot:412/price"},
-        " is below the reviewed value of ",
+        " is below the value this report puts on the company, ",
         {"cite": "$283", "ref": "review:89/value"},
-        " a share, but above the buy level of ",
+        " a share, but above the price at which the discount is wide enough to buy, ",
         {"cite": "$212", "ref": "review:89/levels/buy"},
-        ". The reviewed value is the engine's value under this report's overrides. The buy level is that value less a margin of safety. The fair band runs from ",
+        ". Prices close to the value run from ",
         {"cite": "$240", "ref": "review:89/levels/fair_low"},
         " to ",
         {"cite": "$325", "ref": "review:89/levels/fair_high"},
-        ".\n\nPhase: Mature Growth. Revenue grew ",
+        ".\n\nThe company is in its Mature Growth stage. Revenue grew ",
         {"cite": "11.0%", "ref": "snapshot:412/phase/growth_3y"},
         " a year over three years, which is high for its size. The operating margin is positive and rising. The business is not cyclical.\n\nReasons for:\n\n1. Most revenue recurs each month.\n2. Customers rarely leave once their books run on the product.\n3. The company funds its growth from its own cash.\n\nMain risks:\n\n1. Customers may leave under the new prices.\n2. A payroll rival bundles accounting into its own product.\n3. Small firms cut spending in a recession.\n\nWhat would change the view:\n\n- Two quarters in a row of falling revenue.\n\nValid until 27 Jan 2027, the date of the next earnings report."
       ]
@@ -332,9 +333,9 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "78.4%", "ref": "table:EXMP/growth/gross_margin/2026", "period": "2026"},
         " in fiscal 2026, and the ROIC (the return on invested capital) of ",
         {"cite": "24.1%", "ref": "table:EXMP/returns/roic/2026", "period": "2026"},
-        " is well above the hurdle rate of ",
+        " is well above the yearly return of ",
         {"cite": "9.0%", "ref": "policy:required_return"},
-        "."
+        " that investors require to own the shares."
       ]
     },
     {
@@ -350,7 +351,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
       "parts": [
         "**The verdict.** The call of 28 Oct 2026, on the fourth quarter of fiscal 2026, confirmed the thesis. The price rose ",
         {"cite": "+6.1%", "ref": "derived:534"},
-        " on the next trading day.\n\n**The quarter against expectations.** The quarter beat the consensus on both lines.\n\n| | The quarter | A year before | The consensus | The surprise |\n|---|---|---|---|---|\n| Revenue | ",
+        " on the next trading day.\n\n**The quarter against expectations.** The quarter beat the analysts' average estimate on both lines.\n\n| | The quarter | A year before | The analysts' average | The surprise |\n|---|---|---|---|---|\n| Revenue | ",
         {"cite": "$412.3 million", "ref": "finding:120", "period": "2026-Q4"},
         " | ",
         {"cite": "$370.8 million", "ref": "finding:122", "period": "2025-Q4"},
@@ -368,7 +369,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "3.6%", "ref": "derived:532"},
         " |\n\nPrice drove the quarter more than volume: the new price list took effect for new customers in the quarter. There were no one-time items.\n\n**The story management is telling.** Management's frame: \"the system of record for the small firm\". Three claims carry it.\n\n| Claim | Evidence | Driver | Test |\n|---|---|---|---|\n| Customers now sign multi-year contracts. | Multi-year contracts were ",
         {"cite": "41.0%", "ref": "finding:124", "period": "2026-Q4"},
-        " of new bookings in the quarter. | The growth of years two and three. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | The moat. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The belief. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable: the bookings already show them. The price list is plausible: one quarter is too short to judge churn. Payroll is possible, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** Both records are clear and on a reported basis. The EPS outlook is new; the revenue outlook was raised from the call of July.\n\n| Metric | Period | Low | High | Midpoint | Basis | Against the prior record | Against the consensus |\n|---|---|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
+        " of new bookings in the quarter. | The growth of years two and three. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | The protection from rivals. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The growth assumed after the analysts' forecast years. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable: the bookings already show them. The price list is plausible: one quarter is too short to judge churn. Payroll is possible, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** Both records are clear and on a reported basis. The EPS outlook is new; the revenue outlook was raised from the call of July.\n\n| Metric | Period | Low | High | Midpoint | Basis | Against the prior record | Against the analysts' average |\n|---|---|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
         {"cite": "$7.00", "ref": "guidance:17/low"},
         " | ",
         {"cite": "$7.20", "ref": "guidance:17/high"},
@@ -380,13 +381,13 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "$1.84 billion", "ref": "guidance:18/high"},
         " | ",
         {"cite": "$1.82 billion", "ref": "guidance:18/midpoint"},
-        " | GAAP | raised | above |\n\nThe consensus for fiscal 2027 EPS is ",
+        " | GAAP | raised | above |\n\nThe analysts' average estimate for fiscal 2027 EPS is ",
         {"cite": "$6.95", "ref": "estimate:EXMP/2027/eps", "period": "2027"},
-        ". The valuation takes the EPS guidance: fiscal 2027 is the base year, the fiscal year that holds most of the four quarters after the last one reported, so its midpoint replaces the consensus as the anchor. The revenue guidance moves nothing on this route. A one-sided promise on the adjusted operating margin stays out of the value.\n\n**The positives and the negatives.** For: multi-year bookings, and an outlook above the consensus. Against: the count of new customers is no longer reported, and payroll's growth was not given.\n\n**The questions and answers.** Two analysts pressed on churn after the price rise; the answers named no figure. One asked about payroll; the answer was direct: payroll will be reported on its own next year.\n\n**What the thesis takes from it.** Revenue grew, so the kill criterion on falling revenue stays open. The one thing to watch next quarter is churn under the new prices. The price moved more than the value: it rose ",
+        ". The valuation takes the EPS guidance: fiscal 2027 is the base year, the fiscal year that holds most of the four quarters after the last one reported, so its midpoint replaces the analysts' average estimate as the earnings the value starts from. The revenue guidance moves nothing in this valuation. A one-sided promise on the adjusted operating margin stays out of the value.\n\n**The positives and the negatives.** For: multi-year bookings, and an outlook above the analysts' average estimate. Against: the count of new customers is no longer reported, and payroll's growth was not given.\n\n**The questions and answers.** Two analysts pressed on churn after the price rise; the answers named no figure. One asked about payroll; the answer was direct: payroll will be reported on its own next year.\n\n**What the thesis takes from it.** Revenue grew, so falling revenue, the event that would prove the view wrong, has not begun. The one thing to watch next quarter is churn under the new prices. The price moved more than the value: it rose ",
         {"cite": "+6.1%", "ref": "derived:534"},
         ", while the guidance added ",
         {"cite": "+$5", "ref": "review:89/bridge/1/delta"},
-        " a share to the reviewed value."
+        " a share to the value."
       ]
     },
     {
@@ -398,31 +399,31 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
     {
       "heading": "The thesis",
       "parts": [
-        "The thesis takes the call's three claims in turn. Accepted: customers sign for longer, so revenue holds up better in the coming years. Held open: the price list; churn over the next two quarters decides it, and a fall in revenue is the kill criterion. Rejected: payroll as a second engine of growth; the value gives payroll no growth of its own until it is reported.\n\nThe stance is hold. The price is fair: it already counts on the longer contracts. For the stance to be right, the price list has to hold with churn flat, and nothing more. The view waits for two quarters of churn under the new prices."
+        "The thesis takes the call's three claims in turn. Accepted: customers sign for longer, so revenue holds up better in the coming years. Held open: the price list; churn over the next two quarters decides it, and a fall in revenue would prove the view wrong. Rejected: payroll as a second engine of growth; the value gives payroll no growth of its own until it is reported.\n\nThe stance is hold. The price is fair: it already counts on the longer contracts. For the stance to be right, the price list has to hold with churn flat, and nothing more. The view waits for two quarters of churn under the new prices."
       ]
     },
     {
       "heading": "Valuation",
       "parts": [
-        "The classifier puts the company in ",
+        "Fairband puts the company in its ",
         {"cite": "Mature Growth", "ref": "snapshot:412/phase/phase"},
-        ": its revenue still grows fast for its size, and its operating margin is positive and rising. No check flag fired. The business is not cyclical, so the value rests on the earnings as they stand.\n\nThe price needs growth of ",
+        " stage: its revenue still grows fast for its size, and its operating margin is positive and rising. No warning was raised. The business is not cyclical, so the value rests on the earnings as they stand.\n\nThe price needs growth of ",
         {"cite": "8.2%", "ref": "snapshot:412/intermediates/implied_growth"},
-        " a year after the analysts' years. The mechanical value, the engine's with no override, is ",
+        " a year after the analysts' forecast years. The value before this report's changes (the mechanical value) is ",
         {"cite": "$247", "ref": "snapshot:412/value"},
-        " a share. Two overrides moved it to the reviewed value of ",
+        " a share. Two changes to the inputs moved it to ",
         {"cite": "$283", "ref": "review:89/value"},
-        ". The company's guidance for fiscal 2027 replaced the consensus as the earnings of the next twelve months: its midpoint of ",
+        " a share, the value under this report's changes (the reviewed value). The company's guidance for fiscal 2027 replaced the analysts' average estimate as the earnings of the next twelve months: its midpoint of ",
         {"cite": "$7.10", "ref": "guidance:17/midpoint"},
         " a share added ",
         {"cite": "+$5", "ref": "review:89/bridge/1/delta"},
-        ". The belief (the growth rate after the analysts' years) rose from ",
+        ". The growth rate the value assumes after the analysts' years (the belief) rose from ",
         {"cite": "7.1%", "ref": "review:89/bridge/2/old"},
         " to ",
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
         ", which added ",
         {"cite": "+$31", "ref": "review:89/bridge/2/delta"},
-        ". The reason: the new contracts run longer than the old ones.\n\nThe sensitivity grid sets the belief against the runway return (the return on new capital in the runway years). Across the values tried, the value a share runs from ",
+        ". The reason: the new contracts run longer than the old ones.\n\nA grid of the value under other assumptions (the sensitivity grid) sets that growth rate against the return the company earns on the money it reinvests in the coming years (the runway return). Across the figures tried, the value a share runs from ",
         {"cite": "$238", "ref": "sensitivity:57/1/1"},
         " to ",
         {"cite": "$331", "ref": "sensitivity:57/3/3"},
@@ -448,7 +449,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "36.56x", "ref": "snapshot:412/intermediates/multiples/pe_reported"},
         " on reported earnings, and ",
         {"cite": "36.11x", "ref": "snapshot:412/intermediates/multiples/pe_clean"},
-        " on the method's earnings without one-time items. Over the past ten years the trailing P/E averaged ",
+        " on earnings without one-time items. Over the past ten years the trailing P/E averaged ",
         {"cite": "27.80x", "ref": "multiple:EXMP/pe/avg_10y"},
         ", with a median of ",
         {"cite": "26.90x", "ref": "multiple:EXMP/pe/median_10y"},
@@ -460,7 +461,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "33.77x", "ref": "snapshot:412/intermediates/multiples/pe_forward"},
         ". Fairband began logging the forward P/E on 1 Nov 2026, so it has no history yet to set it against. It rests on growth of ",
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
-        " a year after the analysts' years. None of these multiples is a target."
+        " a year after the analysts' forecast years. None of these multiples is a target."
       ]
     },
     {
@@ -472,17 +473,17 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
     {
       "heading": "Risks and kill criteria",
       "parts": [
-        "The main risk is churn under the new prices. The thesis is wrong if revenue falls year on year in two quarters in a row, or if the ROIC falls below the hurdle rate of ",
+        "The main risk is churn under the new prices. The thesis is wrong if revenue falls year on year in two quarters in a row, or if the ROIC falls below the yearly return of ",
         {"cite": "9.0%", "ref": "policy:required_return"},
-        ". A payroll rival that bundles accounting is the second risk. A recession that cuts small firms' spending is the third."
+        " that investors require. A payroll rival that bundles accounting is the second risk. A recession that cuts small firms' spending is the third."
       ]
     },
     {
       "heading": "Key judgments",
       "parts": [
-        "The phase stands as the classifier gave it. The moat stands at ",
+        "The company's stage stands as Fairband gave it. The rating of what keeps rivals from taking the company's profits stands at ",
         {"cite": "Narrow", "ref": "snapshot:412/inputs/moat_class"},
-        ": customers face real costs to switch, but rivals sell close substitutes. The belief rose to the rate the longer contracts support, through an override. The return on capital the engine measured stands. A second override, outside the judgments, set the earnings of the next twelve months at the company's guidance."
+        ": customers face real costs to switch, but rivals sell close substitutes. The growth rate assumed after the analysts' years rose to the rate the longer contracts support (the belief), through a change to the inputs. The return on reinvested money Fairband measured stands. A second change to the inputs, outside the judgments, set the earnings of the next twelve months at the company's guidance."
       ]
     }
   ],
@@ -494,14 +495,14 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
     },
     {
       "judgment": "belief",
-      "decision": "The belief rises to the rate the longer contracts support.",
+      "decision": "The growth rate assumed after the analysts' years rose to the rate the longer contracts support (the belief).",
       "override_id": 302
     },
-    {"judgment": "roic", "decision": "The runway return the engine measured stands."}
+    {"judgment": "roic", "decision": "The return on reinvested money Fairband measured stands."}
   ],
   "kill_criteria": [
     {"text": "Revenue falls year on year in two quarters in a row."},
-    {"text": "The ROIC falls below the hurdle rate."}
+    {"text": "The ROIC falls below the yearly return investors require."}
   ],
   "news_items": [
     {

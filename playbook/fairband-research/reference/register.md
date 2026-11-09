@@ -8,10 +8,11 @@ sections, the judgments, every reason on an override and every note.
 - Two parts. The reader part, the sections you write, holds plain text and rounded numbers.
   Appendix A, which the server writes, holds the codes, the sources and the figures at full
   precision. Keep codes out of the reader part: no tag (`growth.belief`), no ref, no id, no
-  snake_case input name. Name the input in words: "the belief".
+  snake_case input name. Name the input by what it is, as the table below writes it.
 - Put the answer first in each section.
 - Keep sentences short, with one idea in each.
-- Explain each term the first time it appears, in brackets or in a short clause.
+- Write the method's terms as the table below writes them: the phrase in the text, the term once
+  in brackets in section 8 only.
 - Round numbers: prices to cents, values to whole dollars, percentages to one decimal. The check
   holds every cite to these roundings (`reference/citations.md`).
 - Keep the summary to one page and the reader part to about five pages.
@@ -23,8 +24,8 @@ sections, the judgments, every reason on an override and every note.
 
 - Never write in the first person. Fairband has no voice of its own: never "I", "we", "our" or
   "us". Write "the view is wrong if", not "our view is wrong if".
-- Write in the third person for what the engine does: "The engine recomputes the value after each
-  override." Write in the second person only for what the reader does.
+- Write in the third person for what Fairband does: "Fairband recomputes the value after each
+  change to an input." Write in the second person only for what the reader does.
 - Name the mechanism, not the feeling: "expired 3 Dec 2026", not "needs attention".
 - Use plain words. No idiom, no slang, no hype: write "the margin rose", not "the margin took off".
 - No emoji. No exclamation marks.
@@ -65,44 +66,63 @@ lower case: `claude-opus-5-5`, `gpt-5`. Set it in code type where the text allow
 "AI", "assistant", "bot" or a nickname, and never change its case: a reader searches their own
 logs for that string.
 
-## Plain meanings to reuse
+## The words a report writes
 
-The first time a report uses one of these terms, give its plain meaning.
+The report is read by people who have never seen Fairband and will not read its method. Write
+what a figure is, not what Fairband calls it. Fairband's own terms, the left column below, never
+carry a sentence: "The belief is 5.3%" tells such a reader nothing. Write the right column, and
+give the term once, in brackets after the phrase, in section 8 only, where the reader needs it to
+find the figure in Appendix A or on the Methodology page. Outside section 8 the term does not
+appear. The names of Fairband's parts never appear in a report: not "the engine", "the
+classifier", "the route", "the snapshot", "check flag", "the bridge", "a tag" or "an id". Write
+"Fairband" for the product and say what the thing did: "Fairband puts the company in its Mature
+Growth stage", "the data on file as of 4 Nov 2026".
 
-| Term | Plain meaning |
+| Term | Write instead |
 |---|---|
-| value, value at belief | the engine's value a share at the growth belief; the one price target |
-| mechanical value | the engine's value with no override |
-| reviewed value | the engine's value under the agent's overrides |
-| bridge | the steps from the mechanical value to the reviewed value, one for each override |
-| buy level | the value less a margin of safety |
-| margin of safety | the discount to the value that the moat sets |
-| fair band | the range of prices close to the value |
+| value at belief | the value a share: what one share is worth on the figures this report uses, and the one price target |
+| mechanical value | the value a share before this report's changes to the inputs |
+| reviewed value | the value a share under this report's changes to the inputs |
+| buy level | the price at which the discount to the value is wide enough to buy |
+| margin of safety | the discount to the value a buyer asks for, wider the less the business is protected from its rivals |
+| fair band | the range of prices close to the value, from a little below it to a little above it |
 | trim level | the price at which the stock is well above its value |
-| designation | where the price stands against the value; a fact about the price, never an action |
+| designation | where the price stands against the value, in one of five words from Well below to Well above; a fact about the price, never advice to act |
 | phase | the company's stage in its life cycle: Start-up, Young Growth, High Growth, Mature Growth, Mature Stable or Decline |
-| moat | what keeps rivals from taking the company's profits; its class is None, Narrow or Wide |
-| belief | the growth rate the value holds after the analysts' years |
-| held rate | the growth a young company's revenue holds after the analysts' years |
-| runway | the years the company's growth stays above the long-run rate, which the moat sets |
+| moat | what keeps rivals from taking the company's profits, rated None, Narrow or Wide |
+| belief | the growth rate the value assumes after the analysts' forecast years |
+| held rate | the growth a fast-growing company's revenue is assumed to keep after the analysts' forecast years, before it slows |
+| runway | the years the company's growth is assumed to stay above the long-run rate it settles to; more years for a business better protected from its rivals |
+| runway return | the return the company earns on the money it reinvests in the coming years, measured from its recent years |
+| target margin | the operating margin a growing company is assumed to reach by its tenth year: the typical margin of mature companies like it |
+| sales-to-capital | the revenue each dollar put into the business brings in; it sets how much the company must reinvest to grow |
+| hurdle rate | the yearly return investors require to own the shares; future cash is discounted to today at this rate |
+| consensus | the analysts' average estimate |
+| override | a change this report makes to one of the inputs the value rests on, with its reason and its evidence |
+| review | the valuation done again under this report's changes to the inputs: the new value, and the steps to it from the value before them |
+| bridge | the steps from the value before this report's changes to the value after them, one for each change |
+| snapshot | the data on file as of a date, the date written out |
+| validity window | the time the value stays current: until the company's next earnings report, or about three months when no report date is known |
+| secondary valuation | a fallback value a share, from a standard discounted cash flow on assumptions this report sets; made only where Fairband gives no value, before or after this report's changes to the inputs |
+| sensitivity grid | the value a share across a few figures for two inputs; it shows how much of the value rests on assumption, and is never a value itself |
+| kill criterion | a measurable event that would prove the report's view wrong |
+
+Some words belong to the field, not to Fairband: a reader of company research meets them
+elsewhere. Write them by name, and give the meaning the first time each appears, in a short clause
+or in brackets.
+
+| Term | Meaning |
+|---|---|
 | free cash flow | the cash the business makes after its investment |
 | ROIC | the return on invested capital: the profit after tax over the capital the business uses |
-| hurdle rate | the return an investor requires, r |
-| sales-to-capital | the revenue a dollar of invested capital buys |
-| target margin | the operating margin a young company reaches in year ten |
-| secondary valuation | the fallback value a share where neither the route nor the review values the company: the standard discounted cash flow, from drivers the agent sets (or a cash-flow path for each part), which the engine projects and discounts; none where the route or the review values the company |
-| validity window | the time a value stays current, to the next earnings report |
-| kill criterion | a measurable event that would prove the view wrong |
-| thesis | the report's own view of the business: which of management's claims it accepts, rejects or holds open, and what must be true for the stance to be right |
+| guidance | a figure the company itself gave for a future period; it enters the value only when it is clear, and the analysts' average estimate stands otherwise |
 | cyclical | a business whose profits rise and fall with its industry's cycle: memory chips, energy, steel, shipping and the like |
-| mid-cycle | the margin and the earnings a cyclical business makes across a whole cycle, neither at its peak nor at its trough; a cyclical is valued on them |
-| guidance | a figure the company itself gave for a future period; it enters the value only when it is clear, and the analysts' consensus stands otherwise |
-| consensus | the average of the analysts' estimates on file |
+| mid-cycle | the margin and the earnings a business makes across a whole cycle of its industry, neither at the top nor at the bottom; a business whose profits rise and fall with that cycle is valued on them |
+| thesis | the report's own view of the business: which of management's claims it accepts, rejects or holds open, and what must be true for the stance to be right |
 | the story | what management says the business will do, claim by claim |
 | possible | a claim that could come true: nothing rules it out |
 | plausible | a claim the evidence makes believable |
-| probable | a claim the evidence makes more likely than not; only a probable claim moves a figure in the value |
-| sensitivity grid | the value a share across a few values of two inputs; it shows how much of the value is assumption, and is never a value |
+| probable | a claim the evidence makes more likely than not; only such a claim moves a figure in the value |
 
 The three words possible, plausible and probable are Damodaran's. Use them for a verdict on a
 claim of the call and for nothing else.
