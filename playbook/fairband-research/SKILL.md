@@ -77,10 +77,9 @@ publishes. The stored price is the last refresh's close, which may be days old.
   `refresh_status()` until that one ends, then start yours.
 - Call `refresh_status()` until its `refresh` is `null`: no refresh is running, and `last` is the
   one you started.
-- When `last` ends with a `status` other than `done`, tell the user, and go on with the stored
-  snapshot; section 9 names the price's date.
-- Read `company(symbol)`. The snapshot id is the one the report cites; its `price_date` is the
-  latest close.
+- When `last` ends with a `status` other than `done`, tell the user, go on with the stored
+  snapshot, and write the price's date in section 9 of the report.
+- Then read the company as below. Its `price_date` is the refreshed close when the refresh ran.
 
 A scoped refresh fetches the company's price and statements again and values it. It takes about
 a minute.
@@ -161,7 +160,7 @@ Then build the seven parts:
    "Guidance" below). The section shows each record: the metric, the period, the low, the high,
    the midpoint, the basis, and whether it was raised, held or cut against the previous record and
    how it sits against the consensus. Then one sentence on what the valuation takes from it: the
-   override of step 10, or "the consensus stands".
+   override of step 10, or "the analysts' average estimate stands".
 5. **The positives and the negatives**, each tied to a figure or a quote.
 6. **The questions and answers.** The two or three analysts' pushbacks that matter to the thesis,
    and whether the answers were direct.

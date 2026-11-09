@@ -388,8 +388,10 @@ def test_every_item_is_refreshed_before_it_is_read() -> None:
     assert "Every item: refresh the company before you read it" in three
     assert 'Call `refresh_start("scoped", [symbol])`' in three
     assert "call `refresh_status()` until that one ends, then start yours" in three
+    assert "Call `refresh_status()` until its `refresh` is `null`" in three
     assert "When `last` ends with a `status` other than `done`" in three
-    assert "section 9 names the price's date" in three
+    assert "tell the user, go on with the stored snapshot" in three
+    assert "write the price's date in section 9 of the report" in three
     skill = _flat(_read(SKILL))
     assert (
         "Start a refresh only in three cases: the scoped refresh of the company at the start of"

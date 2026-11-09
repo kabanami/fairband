@@ -44,8 +44,8 @@ sections, the judgments, every reason on an override and every note.
 ## The words
 
 These are the product's terms. They are not interchangeable with their near-synonyms. They are
-for your records, your tool calls and Appendix A; the reader part of a report writes the phrases of
-"The words a report writes" below instead.
+for your records, your tool calls and Appendix A; the reader part of a report, the judgments'
+decisions included, writes the phrases of "The words a report writes" below instead.
 
 | Use | Not | Means |
 |---|---|---|
@@ -76,7 +76,8 @@ what a figure is, not what Fairband calls it. Fairband's own terms, the left col
 carry a sentence: "The belief is 5.3%" tells such a reader nothing. Write the right column, and
 give the term once, in brackets after the phrase, in section 8 only, where the reader needs it to
 find the figure in Appendix A or on the Methodology page. Outside section 8 the term does not
-appear. The names of Fairband's parts never appear in a report: not "the engine", "the
+appear. The report's fixed headings and the two mode names, full report and valuation review,
+stand as given. The names of Fairband's parts never appear in a report: not "the engine", "the
 classifier", "the route", "the snapshot", "check flag", "the bridge", "a tag" or "an id". Write
 "Fairband" for the product and say what the thing did: "Fairband puts the company in its Mature
 Growth stage", "the data on file as of 4 Nov 2026".

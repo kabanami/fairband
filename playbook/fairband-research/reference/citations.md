@@ -206,9 +206,10 @@ A risk or a kill criterion often names a line to cross. A threshold you choose i
 is never a finding. A number of your own in the text is `a number with no reference`. Write the
 event one of two ways:
 
-- Tie it to a stored figure, and cite that figure. "The ROIC falls below the hurdle rate of 9.0%"
-  cites `policy:required_return`, or the returns table's `hurdle_rate` cell. "The operating margin
-  falls below its 2025 level of 31.2%" cites that cell of the growth table.
+- Tie it to a stored figure, and cite that figure. "The ROIC falls below the yearly return of 9.0%
+  that investors require" cites `policy:required_return`, or the returns table's `hurdle_rate`
+  cell. "The operating margin falls below its 2025 level of 31.2%" cites that cell of the growth
+  table.
 - State it in words: "revenue falls two quarters in a row", "the operating margin turns negative".
 
 A kill criterion you record, with `kill_criterion_add` or in a report's `kill_criteria`, is text
