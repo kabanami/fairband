@@ -198,6 +198,7 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
         "marginal_usable": expected.marginal_usable,
         "three_year": expected.three_year,
         "ten_year": expected.ten_year,
+        "one_year": expected.one_year,
         "value": expected.value,
     }
     assert (rr["used"], rr["marginal_usable"], rr["ten_year"]) == (

@@ -292,7 +292,7 @@ The return the charge uses in years 1 to N − 1. From the kept years, in this o
 4. **Charge off** when the marginal is not usable and the three-year capital sum is at or below zero: the runway years are not charged (payout 100%), flag `charge-zeroed`. The terminal still charges (4.7).
 5. **The floor**: a chosen measure below r is replaced by r, flag `return-floored`. There is no cap.
 
-The row records which measure it used ("marginal", "three-year", "floor", "off", "unavailable") with the marginal, its usability, the three-year and the ten-year figures, and the value the charge used.
+The row records which measure it used ("marginal", "three-year", "floor", "off", "unavailable") with the marginal, its usability, the three-year and the ten-year figures, and the value the charge used. The row also records the newest year's marginal return, the change in NOPAT over the change in average capital from the kept year before the newest to the newest, shown and never used: it has no usability test, and holds no figure with fewer than two kept years or no change in capital.
 
 ### 4.7 The terminal return
 
@@ -921,8 +921,9 @@ Eleven flags are quality warnings: they say the value may be wrong because the b
 | `margin-flag` | yes | the trailing operating margin is 1.5 × its ten-year median or more (a positive median), or above its ten-year high by 10% of the high's size or more; needs 6 fiscal years with a margin. The word is "Newly profitable" when the median is at or below zero, "Possible cycle peak" when the window holds a loss year, else "Margin above history" |
 | `equity-raise` | yes | trailing stock issued is 1% of market cap or more |
 | `negative-fcf` | yes | trailing operating cash flow plus capital spending is below zero |
-| `heavy-capex` | yes | trailing capital spending is above 50% of a positive operating cash flow |
+| `heavy-capex` | yes | trailing capital spending is above 50% of a positive operating cash flow. On a Mature Growth or Mature Stable row whose runway return is neither off nor unavailable (4.6), the sentence goes on to name the return the charge starts at and its measure, then the newest year's marginal return and its fiscal year, and leaves a spending surge still under way to the agent's `return.runway` (14.2); without a newest-year figure it stops at the start |
 | `large-nri` | yes | the non-recurring gap is 5% of trailing EPS or more, in either direction |
+| `consensus-basis-unknown` | no | a Mature Growth or Mature Stable row with `large-nri`, which it follows and never fires without: FMP's consensus names no basis, so whether the NTM anchor and the path carry the non-recurring items is unknown; names the gap a share and its share of trailing EPS, and leaves the basis to a report that reads the filing, through `earnings.ntm` or `earnings.nri_gap` (14.2) |
 | `long-runway-high-growth` | no | a 20-year runway with a belief or an implied growth of 10% or more |
 | `value-spread` | yes | the value spans 30% or more across the first three return keys or across the three runways; on the revenue-growth route, across the three target margins, or the value at the lowest is at or below zero while the median's is positive (5a.11) |
 

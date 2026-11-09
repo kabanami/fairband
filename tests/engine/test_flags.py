@@ -7,6 +7,7 @@ from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import FiscalYear, Series
 from fairband.engine.flags import (
     QUALITY_WARNINGS,
+    basis_unknown_flag,
     flag_count,
     gate_flags,
     long_runway_flag,
@@ -15,6 +16,9 @@ from fairband.engine.flags import (
     nri_flag,
     value_spread_flag,
 )
+from fairband.engine.roic import Used
+from fairband.engine.route import CompanyInputs
+from fairband.engine.route_steps import RoicTerms, trailing_flags
 from fairband.engine.types import Flag
 from fairband.policy import Policy, load_policy
 
@@ -234,6 +238,93 @@ def test_nri_flag(policy: Policy) -> None:
     assert nri_flag(0.6, 0.0, policy) is None
     assert nri_flag(None, 10.0, policy) is None
     assert nri_flag(0.6, None, policy) is None
+
+
+def test_consensus_basis_unknown_follows_large_nri(policy: Policy) -> None:
+    nri = nri_flag(0.60, 5.00, policy)
+    note = basis_unknown_flag(nri, 0.60, 5.00)
+    assert note is not None and note.code == "consensus-basis-unknown"
+    assert "$0.60 a share, 12.0% of trailing EPS" in note.sentence
+    assert basis_unknown_flag(None, 0.10, 5.00) is None
+    assert note == Flag(
+        "consensus-basis-unknown",
+        "Consensus basis unknown",
+        "The non-recurring gap is $0.60 a share, 12.0% of trailing EPS. FMP's consensus names no "
+        "basis, so whether the NTM anchor and the path carry such items is unknown; a report that "
+        "reads the filing decides, through `earnings.ntm` or `earnings.nri_gap`.",
+    )
+    assert nri is not None and flag_count((nri, note)) == 1  # a note: only large-nri counts
+    negative = basis_unknown_flag(nri_flag(-0.60, 5.00, policy), -0.60, 5.00)
+    assert negative is not None and "is −$0.60 a share, 12.0% of trailing EPS" in negative.sentence
+
+
+def mature_terms(
+    i: CompanyInputs, policy: Policy, used: Used = "marginal", one_year: float | None = 0.2142
+) -> RoicTerms:
+    """MGCO's returns with the runway return as an agent would meet it on a capex surge: the
+    measure ``used`` at 47.2% and the newest year's marginal return ``one_year``."""
+    terms = RoicTerms.of(i.capital_years, "Wide", policy)
+    rr = replace(terms.runway_return, used=used, value=0.4716, marginal=0.4716, one_year=one_year)
+    return replace(terms, runway_return=rr)
+
+
+def heavy_capex(flags: tuple[Flag, ...]) -> str:
+    return next(f.sentence for f in flags if f.code == "heavy-capex")
+
+
+def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
+    mg_inputs: CompanyInputs, policy: Policy
+) -> None:
+    assert mg_inputs.trailing is not None
+    t = replace(mg_inputs.trailing, cfo=6_000e6, capex=-4_000e6)  # 66.7% of operating cash flow
+    roic = mature_terms(mg_inputs, policy)
+    assert roic.result.by_year[-1].year == 2025  # the newest kept ROIC year
+    heavy = heavy_capex(trailing_flags(mg_inputs, t, None, policy, roic))
+    assert "starts at 47.2%, the five-year marginal" in heavy
+    assert "newest year's marginal return is 21.4%" in heavy
+    assert "`return.runway`" in heavy
+    assert heavy == (
+        "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The charge's "
+        "return starts at 47.2%, the five-year marginal; the newest year's marginal return is "
+        "21.4%, on the capital added in 2025. The stored years end at 2025, so a return on a "
+        "spending surge still under way is the agent's judgment: `return.runway`."
+    )
+    three = heavy_capex(
+        trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, "three-year"))
+    )
+    assert "starts at 47.2%, the three-year aggregate; the newest year's" in three
+    floor = heavy_capex(
+        trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, "floor"))
+    )
+    assert "starts at 47.2%, floored at the required return; the newest year's" in floor
+    # without a one-year figure the sentence stops at the start
+    short = heavy_capex(
+        trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, one_year=None))
+    )
+    assert short == (
+        "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The charge's "
+        "return starts at 47.2%, the five-year marginal."
+    )
+    # no charge return to name, and the other routes, which pass no returns: as built
+    built = "Trailing capital spending is 66.7% of operating cash flow, above 50.0%."
+    for used in ("off", "unavailable"):
+        terms = mature_terms(mg_inputs, policy, used)
+        assert heavy_capex(trailing_flags(mg_inputs, t, None, policy, terms)) == built
+    assert heavy_capex(trailing_flags(mg_inputs, t, None, policy)) == built
+
+
+def test_consensus_basis_unknown_only_on_the_mature_routes(
+    mg_inputs: CompanyInputs, policy: Policy
+) -> None:
+    assert mg_inputs.trailing is not None
+    t = mg_inputs.trailing  # trailing EPS 5.30, so a gap of 0.60 is 11.3% of it
+    roic = mature_terms(mg_inputs, policy)
+    codes = [f.code for f in trailing_flags(mg_inputs, t, 0.60, policy, roic)]
+    assert codes[-2:] == ["large-nri", "consensus-basis-unknown"]
+    other_routes = trailing_flags(mg_inputs, t, 0.60, policy)  # large-nri, but no returns
+    assert [f.code for f in other_routes][-1] == "large-nri"
+    no_nri = trailing_flags(mg_inputs, t, 0.05, policy, roic)  # under 5% of EPS
+    assert {"large-nri", "consensus-basis-unknown"}.isdisjoint(f.code for f in no_nri)
 
 
 def test_long_runway_flag(policy: Policy) -> None:

@@ -38,6 +38,11 @@ over r on any path, 65.56 a share (68.14 under 0.9), so no belief reaches the pr
 `implied_by_roic` `0.09` is null (14.19%); the five-year runway's implied growth is 47.21%
 (46.57%); and `value-spread` reads its range from 65.56, a spread of 103.4% (95.7%).
 
+MGCO and MSCO re-captured under 1.0 on 2026-11-09 for one cause: `runway_return` in the
+intermediates gains `one_year`, the newest year's marginal return, shown and never used (spec
+2026-11-09 section 6.3): 45.75% on MGCO, 18.25% on MSCO. Every figure is unchanged; only the key
+is new.
+
 Run from the repository root:
 
 ```

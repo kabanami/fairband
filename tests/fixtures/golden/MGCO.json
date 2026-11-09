@@ -636,6 +636,7 @@
   "runway_return": {
    "marginal": 0.431464747667622,
    "marginal_usable": true,
+   "one_year": 0.4574548192771081,
    "ten_year": 0.22701985166668595,
    "three_year": 0.2681565915632047,
    "used": "marginal",

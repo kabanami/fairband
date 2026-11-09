@@ -18,6 +18,7 @@ from fairband.engine.roic import (
     terminal_roic,
     window_aggregate,
 )
+from fairband.engine.route_steps import RoicTerms, charge_for
 from fairband.policy import Moat, Policy, load_policy
 
 
@@ -264,6 +265,55 @@ def test_marginal_return_spec_example(policy: Policy) -> None:
     assert rr.charge_off is False and rr.flags == ()
 
 
+def test_the_one_year_marginal_is_shown_not_used(policy: Policy) -> None:
+    rr = runway_return(kept(SPEC), "Wide", policy)
+    by_year = kept(SPEC).by_year
+    expected = (by_year[-1].nopat - by_year[-2].nopat) / (
+        by_year[-1].average_capital - by_year[-2].average_capital
+    )
+    assert rr.one_year == pytest.approx(expected) == pytest.approx(50 / 200)
+    assert rr.value == pytest.approx(rr.marginal)  # the five-year measure still charges
+
+
+def test_the_one_year_marginal_is_none_without_two_years_or_a_capital_change(
+    policy: Policy,
+) -> None:
+    assert runway_return(kept(SPEC[-1:]), "Wide", policy).one_year is None  # one kept year
+    assert runway_return(kept([(100, 1000), (120, 1000)]), "Wide", policy).one_year is None
+    flat_end = runway_return(kept(SPEC[:-1] + [(360, 2100)]), "Wide", policy)
+    assert flat_end.one_year is None and flat_end.used == "marginal"
+
+
+@pytest.mark.parametrize(
+    ("pairs", "used", "one_year"),
+    [
+        (SPEC, "marginal", 50 / 200),
+        ([(n, 2000 + 10 * k) for k, (n, _) in enumerate(SPEC)], "three-year", 50 / 10),
+        ([(n * 0.3, c) for n, c in SPEC], "floor", 15 / 200),
+        ([(20.0, -50.0)] * 9 + [(10.0, -40.0)], "off", -10 / 10),
+        (SPEC[-4:], "unavailable", 50 / 200),
+    ],
+)
+def test_the_one_year_marginal_is_recorded_on_every_branch(
+    policy: Policy, pairs: list[tuple[float, float]], used: Used, one_year: float
+) -> None:
+    rr = runway_return(kept(pairs), "Wide", policy)
+    assert rr.used == used and rr.one_year == pytest.approx(one_year)
+
+
+def test_the_intermediates_record_the_one_year_marginal_and_the_charge_takes_a_hold(
+    policy: Policy,
+) -> None:
+    # NOPAT 20 + 5k on capital 100 + 10k: the newest kept year adds 5 of NOPAT on 10 of capital
+    years = [cy(2015 + k, oi=20.0 + 5 * k, ppe=100.0 + 10 * k) for k in range(11)]
+    terms = RoicTerms.of(years, "Wide", policy)
+    assert terms.intermediates()["runway_return"]["one_year"] == pytest.approx(0.5)
+    assert terms.charge(policy).hold is None  # the shape as built until a route passes a hold
+    assert terms.charge(policy, 4).hold == 4
+    assert charge_for(0.20, 0.13, False, policy, 4).hold == 4
+    assert charge_for(0.20, 0.13, False, policy).hold is None
+
+
 def test_fallback_when_capital_barely_grows(policy: Policy) -> None:
     flat = [(n, 2000 + 10 * k) for k, (n, _) in enumerate(SPEC)]
     rr = runway_return(kept(flat), "Wide", policy)
@@ -319,7 +369,7 @@ def test_charge_off_on_a_non_positive_three_year_sum(policy: Policy) -> None:
 def test_terminal_return(
     policy: Policy, moat: Moat, used: Used, chosen: float | None, expected: float
 ) -> None:
-    rr = RunwayReturn(used, None, False, None, None, chosen, 0.0, used == "off", ())
+    rr = RunwayReturn(used, None, False, None, None, chosen, 0.0, used == "off", (), None)
     assert terminal_return(rr, moat, policy) == pytest.approx(expected)
 
 

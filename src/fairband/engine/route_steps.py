@@ -30,7 +30,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any, cast
 
 from fairband.engine.anchor import TrailingFigures
-from fairband.engine.flags import gate_flags, margin_flag, nri_flag
+from fairband.engine.flags import basis_unknown_flag, gate_flags, margin_flag, nri_flag
 from fairband.engine.mature_growth import Charge
 from fairband.engine.multiples import multiples
 from fairband.engine.overrides import BRIDGE_ORDER, INPUT_OF, TAGS, Override, Overrides, OverrideTag
@@ -56,6 +56,13 @@ _UNKNOWN = Provenance("unknown", None, None, None)
 # intangibles total; no input bears the name, so the inputs read from invested capital carry it.
 _INTANGIBLES = "intangibles"
 _INTANGIBLES_NOTE = "invested capital uses the issuer's total intangibles excluding goodwill"
+# The measure the charge's return starts at, as the ``heavy-capex`` sentence names it; a runway
+# return that is off or unavailable names none.
+_CHARGE_START = {
+    "marginal": "the five-year marginal",
+    "three-year": "the three-year aggregate",
+    "floor": "floored at the required return",
+}
 
 
 @dataclass(frozen=True)
@@ -162,22 +169,33 @@ class RoicTerms:
                 "marginal_usable": rr.marginal_usable,
                 "three_year": rr.three_year,
                 "ten_year": rr.ten_year,
+                "one_year": rr.one_year,
                 "value": self.runway,
             },
             "terminal_roic": self.terminal,
         }
 
-    def charge(self, policy: Policy) -> Charge:
+    def charge(self, policy: Policy, hold: int | None = None) -> Charge:
         """This row's charge, as both routes apply it: its runway and terminal returns, off in
         the runway years when the marginal return is not usable and the three-year capital sum
-        is at or below zero."""
-        return charge_for(self.runway, self.terminal, self.charge_off, policy)
+        is at or below zero, and the ``hold`` of ``charge_for``."""
+        return charge_for(self.runway, self.terminal, self.charge_off, policy, hold)
 
 
-def charge_for(runway_roic: float, terminal: float, charge_off: bool, policy: Policy) -> Charge:
-    """The reinvestment charge at these returns: ``runway_roic`` in years 1 to N−1, ``terminal``
-    in year N and the terminal, and none in years 1 to N−1 when ``charge_off``."""
-    return Charge(runway_roic, terminal, policy.required_return, policy.terminal_growth, charge_off)
+def charge_for(
+    runway_roic: float,
+    terminal: float,
+    charge_off: bool,
+    policy: Policy,
+    hold: int | None = None,
+) -> Charge:
+    """The reinvestment charge at these returns: ``runway_roic`` held through year ``hold`` then
+    faded to ``terminal`` in year N, the terminal at ``terminal``, and none in years 1 to N−1 when
+    ``charge_off``. A ``hold`` of ``None`` is the shape as built: ``runway_roic`` in years 1 to
+    N−1."""
+    return Charge(
+        runway_roic, terminal, policy.required_return, policy.terminal_growth, charge_off, hold
+    )
 
 
 def chosen[T](c: Context | StartUpContext, tag: OverrideTag, computed: T) -> T:
@@ -300,13 +318,49 @@ def expected(
 
 
 def trailing_flags(
-    i: CompanyInputs, t: TrailingFigures, gap: float | None, policy: Policy
+    i: CompanyInputs,
+    t: TrailingFigures,
+    gap: float | None,
+    policy: Policy,
+    roic: RoicTerms | None = None,
 ) -> tuple[Flag, ...]:
-    """The margin flag, the three gate flags and the non-recurring flag, in that order."""
+    """The margin flag, the three gate flags and the non-recurring flag, in that order. The two
+    mature routes pass their ``roic``: ``consensus-basis-unknown`` then follows ``large-nri``,
+    and the ``heavy-capex`` sentence names the return the charge starts at and the newest year's
+    marginal return (spec 2026-11-09 6.3 and 7). The other routes pass none."""
+    gates = gate_flags(t, i.market_cap, policy)
+    nri = nri_flag(gap, t.eps_diluted, policy)
+    basis: Flag | None = None
+    if roic is not None:
+        gates = tuple(_heavy_capex(f, roic) if f.code == "heavy-capex" else f for f in gates)
+        basis = basis_unknown_flag(nri, gap, t.eps_diluted)
     return (
         present(margin_flag(i.series, ttm_margin(t), policy))
-        + gate_flags(t, i.market_cap, policy)
-        + present(nri_flag(gap, t.eps_diluted, policy))
+        + gates
+        + present(nri)
+        + present(basis)
+    )
+
+
+def _heavy_capex(flag: Flag, roic: RoicTerms) -> Flag:
+    """The ``heavy-capex`` flag with the runway return read beside it (spec 2026-11-09 6.3): the
+    return the charge starts at and its measure, then the newest year's marginal return and its
+    fiscal year, which leave a spending surge still under way to the agent's ``return.runway``.
+    Without a one-year figure the sentence stops at the start; as built when the runway return
+    is off or unavailable."""
+    rr = roic.runway_return
+    measure = _CHARGE_START.get(rr.used)
+    if measure is None:
+        return flag
+    start = f"{flag.sentence} The charge's return starts at {signed(rr.value)}, {measure}"
+    if rr.one_year is None or not roic.result.by_year:
+        return replace(flag, sentence=f"{start}.")
+    year = roic.result.by_year[-1].year
+    return replace(
+        flag,
+        sentence=f"{start}; the newest year's marginal return is {signed(rr.one_year)}, on the "
+        f"capital added in {year}. The stored years end at {year}, so a return on a spending "
+        "surge still under way is the agent's judgment: `return.runway`.",
     )
 
 

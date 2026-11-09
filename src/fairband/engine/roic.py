@@ -25,7 +25,9 @@ share of the earlier capital, and NOPAT grew. Otherwise it is the aggregate over
 fallback years, the last ones kept. The chosen measure is floored at r, with no cap. When the
 marginal is not usable and the fallback years' capital sums to zero or below, the runway charge
 is off. With fewer than ``min_years`` kept years the runway return is unavailable, and the charge
-uses the terminal return in every year.
+uses the terminal return in every year. Beside it the row records the newest year's marginal
+return, the change in NOPAT over the change in average capital from the kept year before the
+newest to the newest, with no usability test: it is shown and never used.
 
 The terminal return is r unless the moat is Wide. For Wide it is the chosen measure before the
 floor, capped at the policy's cap and never below r; the cap when the runway charge is off; r
@@ -103,7 +105,8 @@ class RunwayReturn:
     ``chosen`` is the measure before the floor (``None`` when the charge is off or the return is
     unavailable). ``value`` is what the charge uses: ``chosen`` floored at r, or the terminal
     return when the charge is off or the return is unavailable. ``flags`` are the ones this step
-    raises, which follow those of ``aggregate_roic``.
+    raises, which follow those of ``aggregate_roic``. ``one_year`` is the newest year's marginal
+    return, shown and never used: ``None`` with fewer than two kept years or no change in capital.
     """
 
     used: Used
@@ -115,6 +118,7 @@ class RunwayReturn:
     value: float
     charge_off: bool
     flags: tuple[Flag, ...]
+    one_year: float | None
 
 
 def invested_capital(y: CapitalYear) -> float | None:
@@ -244,13 +248,17 @@ def runway_return(
     """The return the charge uses in years 1 to N−1, from the kept years of ``result``: the
     marginal return when usable, else the aggregate over the fallback years, floored at r. The
     charge is off when the marginal is not usable and the fallback years' capital sums to zero or
-    below; the return is unavailable with fewer than ``min_years`` kept years.
+    below; the return is unavailable with fewer than ``min_years`` kept years. On every branch it
+    records the newest year's marginal return, which the charge never uses.
     """
     r = policy.required_return
     ten_year = result.aggregate
+    one_year, _ = marginal_return(result.by_year, 1, 0.0)  # None with fewer than two kept years
     if result.years_used < min_years:
         # aggregate_roic has flagged "roic-unavailable"; the charge takes the terminal return
-        unavailable = RunwayReturn("unavailable", None, False, None, ten_year, None, 0.0, False, ())
+        unavailable = RunwayReturn(
+            "unavailable", None, False, None, ten_year, None, 0.0, False, (), one_year
+        )
         return replace(unavailable, value=terminal_return(unavailable, moat, policy))
 
     span, growth_min = policy.marginal_return_span_years, policy.marginal_capital_growth_min
@@ -259,7 +267,9 @@ def runway_return(
     three_year, _ = window_aggregate(result.by_year, n)
     chosen = marginal if usable else three_year
     if chosen is None:  # the marginal is not usable and the fallback capital sums to zero or below
-        off = RunwayReturn("off", marginal, False, three_year, ten_year, None, 0.0, True, ())
+        off = RunwayReturn(
+            "off", marginal, False, three_year, ten_year, None, 0.0, True, (), one_year
+        )
         terminal = terminal_return(off, moat, policy)
         zeroed = Flag(
             "charge-zeroed",
@@ -283,7 +293,7 @@ def runway_return(
             ),
         )
     return RunwayReturn(
-        used, marginal, usable, three_year, ten_year, chosen, max(r, chosen), False, flags
+        used, marginal, usable, three_year, ten_year, chosen, max(r, chosen), False, flags, one_year
     )
 
 

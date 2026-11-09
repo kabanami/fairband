@@ -12,6 +12,10 @@ The gate flags are the three ``mech/1.2`` gate tests on the trailing figures, ke
 cash-flow statement signs capital spending as an outflow, so ``capex`` is negative for spending:
 free cash flow is ``cfo + capex`` and the spending is ``-capex``.
 
+The consensus-basis note follows ``large-nri`` on the mature routes (spec 2026-11-09 7): FMP's
+consensus names no basis, so whether the NTM anchor and the path carry the non-recurring items
+is unknown.
+
 ``QUALITY_WARNINGS`` are the eleven flags that say the value may be wrong because the business or
 its figures are unusual (spec 2026-11-04 9.5); ``flag_count`` counts them on a row. Every other
 flag is a note: the classifier checks, the thin-consensus flags, the unknown inputs, the engine's
@@ -138,6 +142,23 @@ def nri_flag(nri_gap_per_share: float | None, eps_ttm: float | None, policy: Pol
         "Large non-recurring item",
         f"The non-recurring gap of {nri_gap_per_share:.2f} per share is {gap / eps:.1%} of "
         f"trailing EPS of {eps_ttm:.2f}, at or above {policy.nri_flag_share:.1%}.",
+    )
+
+
+def basis_unknown_flag(nri: Flag | None, gap: float | None, eps_ttm: float | None) -> Flag | None:
+    """The ``consensus-basis-unknown`` note beside ``nri``, the row's ``large-nri``: the gap a
+    share with its sign and its share of trailing EPS in size; ``None`` without ``nri``, or
+    without the gap or a non-zero EPS."""
+    if nri is None or gap is None or eps_ttm is None or eps_ttm == 0:
+        return None
+    sign = "−" if gap < 0 else ""
+    return Flag(
+        "consensus-basis-unknown",
+        "Consensus basis unknown",
+        f"The non-recurring gap is {sign}${abs(gap):,.2f} a share, {abs(gap) / abs(eps_ttm):.1%} "
+        "of trailing EPS. FMP's consensus names no basis, so whether the NTM anchor and the path "
+        "carry such items is unknown; a report that reads the filing decides, through "
+        "`earnings.ntm` or `earnings.nri_gap`.",
     )
 
 
