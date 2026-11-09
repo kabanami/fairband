@@ -34,9 +34,10 @@ be left out.
 - `screen(sort?, direction?)`: the screen's rows, one a company, sorted by a column key;
   `direction` is `asc` or `desc`. A row's `fairValue`, band, levels, price ÷ value and designation
   follow the reviewed value where `reviewed` is filled; `mechanical` is the engine's value.
-- `company(symbol)`: the latest snapshot in full: `snapshot.id`, the `result` (the value, the
-  levels, the price, the inputs, the intermediates, the phase evidence, the flags, `valid_until`)
-  and the company's row in the universe.
+- `company(symbol)`: the latest snapshot in full: `snapshot.id`, `snapshot.refreshId` (the refresh
+  that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
+  intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
+  universe.
 - `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
   stored statements, each figure with its `fact:` ref.
 - `financial_tables(symbol)`: the six five-year tables of the report's section 4, `growth`,
@@ -165,7 +166,8 @@ vendor call. The refusals:
 - `news_item_add(symbol, date, headline, source, text, kill_criterion_id?)`: record a dated news
   item, tied to a kill criterion when one is named.
 - `refresh_start(kind, symbols?)`: start a refresh: `full`, `price`, `scoped` with `symbols`, or
-  `revalue`; a refresh already running refuses it.
+  `revalue`. It answers `{"refreshId": <id>}`, the started refresh's id. A refresh already running
+  refuses it (409), with that refresh's id as `running`.
 - `refresh_cancel()`: ask the running refresh to stop after the companies in flight.
 
 ## The records inside the arguments

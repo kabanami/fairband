@@ -402,6 +402,9 @@ def test_every_item_is_refreshed_before_it_is_read() -> None:
     check = "When its `snapshot.refreshId` is not the id you kept, the company was not refreshed"
     assert wait in three and check in three and three.index(wait) < three.index(check)
     assert "`last` is the one you started" not in three  # the old test of success is gone
+    # the tool list names both fields as the server answers them (web/app.py, web/rows.py)
+    assert '`{"refreshId": <id>}`' in _tool_entry("refresh_start")
+    assert "`snapshot.refreshId`" in _tool_entry("company")
     assert "Tell the user, go on with the stored snapshot" in three
     assert "write the price's date in section 9 of the report" in three
     skill = _flat(_read(SKILL))
