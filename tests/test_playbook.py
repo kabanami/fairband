@@ -590,6 +590,25 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
     # the runway return is decided on the two mature routes alone (the Task 8 review)
     heavy = flags["heavy-capex"]
     assert heavy.startswith("on Mature Growth and Mature Stable"), heavy
+    # a mature row with the charge off or the return unavailable still takes the judgment; only
+    # the other routes have no runway return to decide (the Task 8 fix round 2, method 14.4)
+    for words in (
+        (
+            "On a mature row whose charge is off or whose return is unavailable, the sentence"
+            " stops after the spending share until a `return.runway` override sets the start, and"
+            " the judgment still stands"
+        ),
+        "an off charge leaves the runway years uncharged",
+        "an unavailable return charges every year at the terminal return",
+        (
+            "On the other routes the sentence stops after the spending share, and there is no"
+            " runway return to decide."
+        ),
+    ):
+        assert words in heavy, words
+    assert "the return is unavailable, the sentence stops after the spending share: there" not in (
+        heavy
+    )
     row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
     cell = row["`snapshot:<id>/intermediates/<path>`"][0]
     for path in NEW_INTERMEDIATES:
@@ -633,8 +652,21 @@ def test_nothing_counts_twice_route_by_route() -> None:
             "Add the asset only when the consensus excludes its gains. Otherwise leave it out of"
             " `value.outside`"
         ),
+        # an asset a growth or Decline route counts already (5a.9, 6a.6; the fix round 2)
+        (
+            "unless it already sits in cash and short-term investments, or in the current assets"
+            " a Decline row's floor reads, which the route counts already; then it is not outside"
+            " the business and is not added"
+        ),
     ):
         assert words in skill, words
+    template = _read(TEMPLATE)
+    valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
+    assert (
+        "An asset already in cash and short-term investments, or in the current assets a Decline"
+        " row's floor reads, is counted by the route already: it is not outside the business and"
+        " is not added."
+    ) in valuation
     # the rule before the review, which told the agent to strip the gains on every route
     assert "strip them through `earnings.nri_gap` in the same review" not in skill
 

@@ -226,8 +226,11 @@ Four flags ask for a decision of yours. Read each sentence whole: it names its f
   `return.runway` override it names the override as the start. The stored years end there, so a
   return on a spending surge still under way is yours to judge. Decide the runway return in the
   `roic` judgment (see "The judgments"), through `return.runway` where the evidence moves it. On
-  the other routes, and where the charge is off or the return is unavailable, the sentence stops
-  after the spending share: there is no runway return to decide.
+  a mature row whose charge is off or whose return is unavailable, the sentence stops after the
+  spending share until a `return.runway` override sets the start, and the judgment still stands:
+  without one, an off charge leaves the runway years uncharged, and an unavailable return charges
+  every year at the terminal return. On the other routes the sentence stops after the spending
+  share, and there is no runway return to decide.
 - `growth-above-return`: the growth a year's reinvestment pays for outruns the return it earns, so
   the year pays out less than nothing: the owner funds the growth. The value already carries that
   cost. Read the growth the charge pays for and its return by year (`intermediates/charge`). A step
@@ -533,7 +536,9 @@ the route sets what you do:
 - Mature Stable: strip the gains from the trailing earnings through `earnings.nri_gap`, a figure a
   share: the gap found, raised by the gains a share it does not already hold. Then add the asset.
 - High Growth, Young Growth and Decline: the value reads operating income, which the gains never
-  enter. Add the asset with no correction.
+  enter. Add the asset with no correction, unless it already sits in cash and short-term
+  investments, or in the current assets a Decline row's floor reads, which the route counts
+  already; then it is not outside the business and is not added.
 - Mature Growth: the value rests on the analysts' consensus, and no input strips an asset's gains
   from it. `earnings.nri_gap` reaches only the test of the anchor's stock-compensation basis, and
   `earnings.ntm` needs a guidance record. Read the filing's other-income line against the

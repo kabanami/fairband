@@ -169,7 +169,9 @@ The kill criteria of section 11 test it.
   `review:<id>/bridge/<n>/new`, and how nothing counts twice. On Mature Stable its gains came out
   of the trailing earnings through the non-recurring gap's line (`earnings.nri_gap`); on High
   Growth, Young Growth and Decline the value reads operating income, which its gains never enter;
-  on Mature Growth the analysts' consensus excludes them. On Mature Growth where the consensus may
+  on Mature Growth the analysts' consensus excludes them. An asset already in cash and short-term
+  investments, or in the current assets a Decline row's floor reads, is counted by the route
+  already: it is not outside the business and is not added. On Mature Growth where the consensus may
   carry the asset's gains, no override adds it: name the asset and its size a share, cited as a
   finding, and say why it is not added. Where the figure comes from secondary coverage, not a
   filing, say so.
