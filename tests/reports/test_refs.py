@@ -793,6 +793,14 @@ def described(
             "snapshot:{snapshot}/intermediates/growth_rates/0",  # an intermediate by its path
             "snapshot {snapshot}, the growth rates 0, priced 30 Oct 2026",
         ),
+        (
+            "snapshot:{snapshot}/intermediates/charge/hold_years",
+            "snapshot {snapshot}, the years the runway return holds, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/intermediates/runway_return/one_year",
+            "snapshot {snapshot}, the newest year's marginal return, priced 30 Oct 2026",
+        ),
         ("snapshot:{snapshot}/phase/phase", "snapshot {snapshot}, the phase, priced 30 Oct 2026"),
         (
             "snapshot:{snapshot}/phase/growth_3y",
@@ -818,6 +826,10 @@ def described(
         (
             "review:{review}/intermediates/growth_rates/0",  # an intermediate by its path
             "review {review}, the growth rates 0",
+        ),
+        (
+            "review:{review}/intermediates/outside_value_per_share",  # written under the override
+            "review {review}, the value outside the business",
         ),
         ("secondary:{parts}/value", "secondary valuation {parts}, the value a share"),
         ("secondary:{parts}/firm_value", "secondary valuation {parts}, the firm value"),

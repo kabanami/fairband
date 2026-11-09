@@ -100,9 +100,11 @@ Mature Growth stage", "the data on file as of 4 Nov 2026".
 | held rate | the growth a fast-growing company's revenue is assumed to keep after the analysts' forecast years, before it slows |
 | runway | the years the company's growth is assumed to stay above the long-run rate it settles to; more years for a business better protected from its rivals |
 | runway return | the return the company earns on the money it reinvests in the coming years, measured from its recent years |
+| return by year | the return the company earns on new capital, which the value assumes holds for N years, then moves in steps to the long-run level |
 | target margin | the operating margin a growing company is assumed to reach by its tenth year: the typical margin of mature companies like it |
 | margin the price needs | the operating margin a growing company must reach by its tenth year for the value a share to equal the price |
 | sales-to-capital | the revenue each dollar put into the business brings in; it sets how much the company must reinvest to grow |
+| value outside the business | assets outside the business, worth about $X a share after tax, such as a stake in another company; or a liability outside the business, such as a settlement still owed |
 | decline rate | the yearly rate at which a shrinking company's revenue is assumed to fall after the analysts' forecast years, read from its past five years of revenue and easing in a straight line to nothing by the tenth year |
 | liquidation floor | the company's current assets less all its liabilities, a share; when it is above zero, the value of the business as a going concern is not taken below it |
 | distress-weighted value | the value a share of the business as a going concern and the value a share in a forced sale, weighted by the chance the company fails within ten years; that chance is read from how many times its operating profit covers its interest, and is nil when its cash covers its debt |

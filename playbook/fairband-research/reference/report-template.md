@@ -156,6 +156,23 @@ The kill criteria of section 11 test it.
 - **The value.** The value before any change to the inputs (the mechanical value) and after the
   changes that stand (the reviewed value). One sentence in words for each override that moved it,
   citing its bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
+- **The charge**, on Mature Growth and Mature Stable, where the report explains what the growth
+  costs: the return the company earns on new capital, year by year,
+  `snapshot:<id>/intermediates/charge/return_by_year/<n>` (counted from 0, year one first), held
+  for `/charge/hold_years` years, and the growth it pays for, `/charge/growth_by_year/<n>`. A year
+  whose growth outruns its return pays out less than nothing: say the owners fund that year's
+  growth. Under heavy capital spending, cite the newest year's marginal return,
+  `/runway_return/one_year`, beside the return you chose. Under your overrides cite the review's,
+  `review:<id>/intermediates/charge/...`.
+- **The value outside the business**, where an override set one: what it is (a stake, an asset
+  held for sale, a settlement still owed), and its size a share after tax, cited as its bridge
+  line, `review:<id>/bridge/<n>/new`. Say that its gains come out of the earnings, through the
+  non-recurring gap's line (`earnings.nri_gap`), so nothing counts twice. Where the figure comes
+  from secondary coverage, not a filing, say so.
+- **The share count**, where an override set one: the shares committed but not yet in the count
+  (a forward sale, a mandatory convertible), cited as its bridge line,
+  `review:<id>/bridge/<n>/new`. The count is period-tied. A raised count raises the NTM net income
+  with it, so say on what share basis the analysts' EPS stands.
 - **The guidance.** Where a guidance override moved an anchor or a step, one sentence names it
   and cites the record's figure, `guidance:<id>/midpoint`.
 - **The secondary valuation**, on a refused row with no reviewed value only: where neither the

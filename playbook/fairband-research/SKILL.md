@@ -218,6 +218,26 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
+Four flags ask for a decision of yours. Read each sentence whole: it names its figures.
+
+- `heavy-capex`: capital spending takes a large share of the operating cash flow. The sentence
+  names the return the charge starts at, its measure, and the newest year's marginal return on the
+  capital added in the last fiscal year on file. The stored years end there, so a return on a
+  spending surge still under way is yours to judge. Decide the runway return in the `roic`
+  judgment (see "The judgments"), through `return.runway` where the evidence moves it.
+- `growth-above-return`: the growth a year's reinvestment pays for outruns the return it earns, so
+  the year pays out less than nothing: the owner funds the growth. The value already carries that
+  cost. Read the growth the charge pays for and its return by year (`intermediates/charge`). A step
+  or a runway return the thesis rejects is a decision of step 10.
+- `consensus-basis-unknown`: it fires with `large-nri`. Whether the analysts' EPS carries the
+  non-recurring items is unknown. Read the filing's non-recurring items and decide through
+  `earnings.nri_gap`, and on Mature Growth through `earnings.ntm` where a clear EPS guidance serves
+  (see "Guidance").
+- `step-series-disagree`: a consensus step read on net income and the same step read on EPS differ
+  by more than five points. The sentence names both rates and the share counts each series implies
+  against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
+  the step it names.
+
 ### 9. The debate and the thesis
 
 Write the bull case and the bear case. Each argues the business and its outlook: demand and how
@@ -463,11 +483,13 @@ not you, computes the value it gives.
 | `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | the moat class; it sets the margin of safety, the runway and the terminal return | `None`, `Narrow` or `Wide` |
 | `margin.target` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten | −0.50 to 0.60 |
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | the revenue a dollar of invested capital buys | 0.1 to 10 |
-| `return.runway` | Mature Growth, Mature Stable | the return on new capital in the runway years | 0 to 1.00 |
+| `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end | 0 to 1.00 |
 | `earnings.nri_gap` | Mature Growth, Mature Stable | the non-recurring gap in the earnings a share | −100 to 100 dollars a share |
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest annual balance sheet's debt or cash | 0 dollars or more; period-tied only |
+| `shares.diluted` | every route | the diluted share count, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first | above 0 shares; period-tied only |
+| `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Where the asset's gains run through the earnings, strip them through `earnings.nri_gap`, or the asset counts twice | −1,000 to 1,000 dollars a share; lasting or period-tied |
 
 The ranges are the policy's `override_ranges`; `policy()` gives the values in force.
 
@@ -485,21 +507,40 @@ The two NTM anchors and the cycle gap:
   lifts a trough's earnings to mid-cycle. Set the figure from the evidence of step 7, by `derive`
   from stored figures where they serve.
 
+The share count and the value outside the business:
+
+- `shares.diluted` stands in for the reported count, for shares the company has committed to
+  issue that the count does not yet hold: a forward sale, a mandatory convertible. Every figure a
+  share reads it. The NTM net income is the analysts' EPS × the count, so a raised count raises it
+  too, and on Mature Growth, whose value rests on that EPS, the value a share moves only through
+  the stock compensation a share. So read the consensus EPS's own share basis first: where the EPS
+  does not yet count the new shares, a raised count does not dilute the value. Period-tied only:
+  each new statement asks the question again.
+- `value.outside` is a figure a share, after tax: a stake in another company, an asset held for
+  sale, or a liability such as a settlement still owed, negative. The value a share is the route's
+  plus the figure, and the levels read the sum; the growth the price needs is solved against the
+  price less the figure, the business's share of the price. Start-up does not read it. A filing is
+  the usual evidence; a figure from secondary coverage is evidence too, and the report says so.
+  When GAAP earnings carry the asset's gains (mark-ups through other income), strip them through
+  `earnings.nri_gap` in the same review, or the asset counts twice.
+
 The server checks an override by these rules, in this order, and answers the first one it breaks:
 
 1. `refused-locked`: a locked input (one no override may change). These are r (the hurdle rate),
    g_T (the terminal growth ceiling), the runway years, the fade years, the margin of safety, the
    fair band, the trim multiple, the terminal return, the deciles, the growth word, and every
    reported figure (the price, the shares, the market cap, the revenue, the operating income, the
-   EPS). Debt and cash change only through the two balance tags. The consensus of the next twelve
-   months changes only through the two NTM anchors.
+   EPS). Debt and cash change only through the two balance tags, and the diluted share count only
+   through `shares.diluted`. The consensus of the next twelve months changes only through the two
+   NTM anchors.
 2. `refused-not-input`: a tag that is not in the table.
 3. `refused-route`: a route that does not read the tag. The route follows an applied `phase`
    override, so override the phase first. The Mature Stable route reads no consensus step, so
    `path.step_2` and `path.step_3` are refused there. A company with no phase reads no input but its
    phase: set its phase first.
 4. `refused-unit`: a value outside the range, a word outside the words, a word where a number is
-   due, an NTM anchor at 0 or below, or a lasting override of a balance tag.
+   due, an NTM anchor or a share count at 0 or below, or a lasting override of a balance tag or of
+   the share count.
 5. `refused-evidence`: no evidence, "an override needs evidence". An NTM anchor with no item of
    kind `guidance`: "an NTM anchor override needs a guidance record among its evidence". A
    `growth.belief` or a `path.hold` above the sales class's 90th percentile (`sales_p90_5y` in the
@@ -515,12 +556,13 @@ An applied override answers `{override, review, bridge}`. The bridge starts at t
 (the engine's value with no override), adds one line for each override, and ends at the reviewed
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
 consensus step 3, held rate, belief, non-recurring gap, mid-cycle earnings, target margin, sales to
-capital, runway return, decline rate, moat, debt, cash. A line whose step refuses shows the refusal
-in place of a change. A review whose last line refuses has no value. On a refused row, where the
-mechanical value refuses too, the secondary valuation stands in for it. Where an override values a
-refused row, the reviewed value stands, and the server refuses a secondary valuation there. On a
-valued snapshot a refused review gets no stand-in: the server refuses one there, and the overrides
-are inconsistent with the route. Fix or drop the override whose bridge line refused (step 11).
+capital, runway return, decline rate, moat, debt, cash, diluted shares, outside the business. A
+line whose step refuses shows the refusal in place of a change. A review whose last line refuses
+has no value. On a refused row, where the mechanical value refuses too, the secondary valuation
+stands in for it. Where an override values a refused row, the reviewed value stands, and the server
+refuses a secondary valuation there. On a valued snapshot a refused review gets no stand-in: the
+server refuses one there, and the overrides are inconsistent with the route. Fix or drop the
+override whose bridge line refused (step 11).
 
 One input holds one applied override. A new override on the same tag replaces the old one. An
 override applies to the latest snapshot and to every later one. A period-tied override (a correction
@@ -686,7 +728,7 @@ is refused (400), naming the key. The debate lives in section 6, and the thesis 
 | `phase` | every report | the life-cycle phase the classifier gave, and whether it fits |
 | `moat` | every report | the moat class: how long the company can earn more than its cost of capital |
 | `belief` | every report | the growth rate the route holds: the belief on Mature Growth, the held rate on High Growth and Young Growth, the decline rate on Decline; on Mature Stable and Start-up, which hold none, the growth the evidence supports against the growth the price needs |
-| `roic` | Mature Growth, Mature Stable | the return on invested capital and the runway return |
+| `roic` | Mature Growth, Mature Stable | the return on invested capital and the runway return; when `heavy-capex` fires, read the newest year's marginal return (`intermediates/runway_return/one_year`) and the capital-spending guidance, decide the runway return and cite both figures |
 | `target_margin` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten |
 
 The route that decides the list is the current review's when the company has one, else the

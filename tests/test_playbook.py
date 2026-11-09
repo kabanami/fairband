@@ -17,7 +17,7 @@ import anyio
 import httpx
 from mcp import Client
 
-from fairband.engine.overrides import NO_GUIDANCE, anchor_misfit
+from fairband.engine.overrides import BRIDGE_ORDER, LABELS, NO_GUIDANCE, TAGS, anchor_misfit
 from fairband.engine.route import FOREIGN_FILER
 from fairband.mcp.client import NOT_RUNNING, FairbandClient
 from fairband.mcp.server import TOOL_NAMES, build_server
@@ -208,6 +208,31 @@ TERMS = (
     "secondary valuation",
     "sensitivity grid",
     "kill criterion",
+    "return by year",
+    "value outside the business",
+)
+# The phases each route values, as the overrides table names them; "every route" names all six.
+ROUTE_PHASES: dict[str, tuple[str, ...]] = {
+    "mature-growth": ("Mature Growth",),
+    "mature-stable": ("Mature Stable",),
+    "revenue-growth": ("High Growth", "Young Growth"),
+    "decline": ("Decline",),
+    "start-up": ("Start-up",),
+}
+PHASES = tuple(phase for phases in ROUTE_PHASES.values() for phase in phases)
+# The return judgment under heavy capital spending (spec 2026-11-09 12).
+ROIC_JUDGMENT = (
+    "the return on invested capital and the runway return; when `heavy-capex` fires, read the"
+    " newest year's marginal return (`intermediates/runway_return/one_year`) and the"
+    " capital-spending guidance, decide the runway return and cite both figures"
+)
+# The intermediates the engine round 2 adds, by their paths under `intermediates/`.
+NEW_INTERMEDIATES = (
+    "charge/return_by_year/<n>",
+    "charge/growth_by_year/<n>",
+    "charge/hold_years",
+    "runway_return/one_year",
+    "outside_value_per_share",
 )
 # Terms the example's Summary writes as their phrase, never by name.
 SUMMARY_FREE = (
@@ -494,6 +519,84 @@ def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
     assert twelve.index(sentence) < twelve.index("Submit with `report_submit`")
 
 
+def test_the_overrides_table_names_the_eighteen_inputs() -> None:
+    """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1): the skill's overrides table names
+    every input the engine takes, each once, with the routes that read it; the share count is
+    period-tied only and moves the next twelve months' net income with it, so the agent reads the
+    consensus EPS's share basis first; the value outside the business is after tax, and its gains
+    come out of the earnings through the non-recurring gap, so nothing counts twice; the bridge's
+    lines run in the engine's order; the tool list names the two new tags."""
+    skill = _read(SKILL)
+    table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
+    tags: list[str] = []
+    for first, (routes, _, _) in table.items():
+        named = re.findall(r"`([\w.]+)`", first)
+        tags += named
+        phases = set(PHASES) if routes == "every route" else {p for p in PHASES if p in routes}
+        for tag in named:
+            assert phases == {p for r in TAGS[tag].routes for p in ROUTE_PHASES[r]}, tag
+    assert len(tags) == len(set(tags)) == 18 and set(tags) == set(TAGS)
+    shares = _flat(" ".join(table["`shares.diluted`"]))
+    for words in (
+        "period-tied only",
+        "NTM net income",
+        "read the consensus EPS's own share basis first",
+    ):
+        assert words in shares, words
+    outside = _flat(" ".join(table["`value.outside`"]))
+    for words in ("after tax", "−1,000 to 1,000 dollars a share", "`earnings.nri_gap`", "twice"):
+        assert words in outside, words
+    order = ", ".join(LABELS[tag] for tag in BRIDGE_ORDER)
+    assert f"The lines run in the method's order: {order}." in _flat(skill)
+    entry = _tool_entry("override_add")
+    for words in ("eighteen", "`shares.diluted`", "`value.outside`"):
+        assert words in entry, words
+
+
+def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
+    """Spec 2026-11-09 6.3, 7, 9 and 12 (the engine round 2, plan 1): the return judgment reads
+    the newest year's marginal return and the capital-spending guidance when `heavy-capex` fires;
+    step 8 says what each flag that asks for a decision asks; the citations name the new
+    intermediates; section 8's detail names the charge, the value outside the business and the
+    share count, each with what it cites."""
+    skill = _read(SKILL)
+    judgments = _table(skill, ("Judgment", "On", "What it records"))
+    assert judgments["`roic`"] == ["Mature Growth, Mature Stable", ROIC_JUDGMENT]
+    eight = _steps(_frontmatter(skill)[1])[8]
+    flags = {
+        code: _flat(text)
+        for code, text in re.findall(
+            r"^- `([\w-]+)`: (.*?)(?=^- |^$|\Z)", eight, re.MULTILINE | re.DOTALL
+        )
+    }
+    for code, words in (
+        ("heavy-capex", ("`roic`", "`return.runway`")),
+        ("growth-above-return", ("the owner funds the growth",)),
+        ("consensus-basis-unknown", ("`large-nri`", "`earnings.nri_gap`", "`earnings.ntm`")),
+        ("step-series-disagree", ("both series", "`path.step_2`", "`path.step_3`")),
+    ):
+        assert code in flags, code
+        for word in words:
+            assert word in flags[code], (code, word)
+    row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
+    cell = row["`snapshot:<id>/intermediates/<path>`"][0]
+    for path in NEW_INTERMEDIATES:
+        assert f"`{path}`" in cell, path
+    template = _read(TEMPLATE)
+    valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
+    for words in (
+        "**The charge**",
+        "`snapshot:<id>/intermediates/charge/return_by_year/<n>`",
+        "`/charge/growth_by_year/<n>`",
+        "**The value outside the business**",
+        "**The share count**",
+        "`review:<id>/bridge/<n>/new`",
+        "`earnings.nri_gap`",
+        "NTM net income",
+    ):
+        assert words in valuation, words
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -569,9 +672,15 @@ def _example(text: str) -> dict[str, Any]:
 
 
 def _table_rows(text: str, header: tuple[str, str]) -> dict[str, str]:
-    """The Markdown table in ``text`` whose header row is ``header``, cell for cell: its first
-    column to its second, from the row after the separator to the first line that does not start
-    with ``|``."""
+    """The Markdown table in ``text`` whose header row is ``header``: its first column to its
+    second."""
+    return {first: rest[0] for first, rest in _table(text, header).items()}
+
+
+def _table(text: str, header: tuple[str, ...]) -> dict[str, list[str]]:
+    """The Markdown table in ``text`` whose header row is ``header``, cell for cell: each row's
+    first cell to its other cells, from the row after the separator to the first line that does
+    not start with ``|``."""
     lines = text.splitlines()
     start = next(i for i, line in enumerate(lines) if _cells(line) == list(header))
     rows = {}
@@ -580,7 +689,7 @@ def _table_rows(text: str, header: tuple[str, str]) -> dict[str, str]:
             break
         cells = _cells(line)
         if not set(cells[0]) <= {"-", ":"}:  # the separator row left out
-            rows[cells[0]] = cells[1]
+            rows[cells[0]] = cells[1:]
     return rows
 
 

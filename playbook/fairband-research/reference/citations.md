@@ -53,7 +53,7 @@ nothing.
 | `snapshot:<id>/value`, `/price`, `/levels/<name>`, the name `buy`, `fair_low`, `fair_high` or `trim` | the snapshot's value a share, price and levels | per-share |
 | `snapshot:<id>/price_to_value` | price ÷ value | multiple |
 | `snapshot:<id>/inputs/<name>` | a tagged input, by its name in `company`'s inputs; a word input (the moat class) reads its word | the input's |
-| `snapshot:<id>/intermediates/<path>` | an intermediate by its keys and list indexes, `belief/rate` | none |
+| `snapshot:<id>/intermediates/<path>` | an intermediate by its keys and list indexes, `belief/rate`; a list counts from 0. On Mature Growth and Mature Stable, the charge: `charge/return_by_year/<n>`, the return year n + 1 pays at, `charge/growth_by_year/<n>`, the growth year n + 1's reinvestment pays for (the next year's), and `charge/hold_years`, the years the runway return holds; `runway_return/one_year`, the newest year's marginal return, shown and never used by the charge. `outside_value_per_share`, the value outside the business, is written only under a `value.outside` override, so cite it from the review | none |
 | `snapshot:<id>/phase/<field>` | a field of the classifier's evidence: `phase`, `growth_3y`, `margin`, `growth_word`, `margin_direction` and the others | the field's |
 | `review:<id>/value`, `/price_to_value`, `/levels/<name>` | the review's value a share, price ÷ value and levels | per-share; multiple |
 | `review:<id>/bridge/<n>/delta`, `/old`, `/new` | the bridge's line n, counted from 1: its change, the input's old and new value | per-share; the input's |
