@@ -19,7 +19,8 @@ the implied growth at the price. The sensitivity is keyed ``"runway"``, the row'
 then the policy's ``roic_sensitivity`` values, each as the runway return with the moat's terminal
 rule applied to it; then ``"ten-year"``, the ten-year aggregate ROIC as the runway return, not
 floored, with the moat's terminal rule applied to it, ``None`` when the aggregate is unavailable
-or not positive; each on the row's hold. The value-spread flag reads the first three.
+or not positive; each on the row's hold. The value-spread flag reads the first three, and
+separately the runways, each the business's own value, before any figure outside it is added.
 
 ``growth_at_price`` rebuilds the growth path and the charges from the intermediates alone, the
 ``charge`` entry's revenue steps and hold among them, so a stored result moves to a new price
@@ -53,15 +54,18 @@ the row's moat, returns and two gaps, and the consensus and belief as found.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the route's value: the result's value is the route's value a share plus the figure, which
-the levels and the designation read, and so is each value by runway and by return; the
-intermediates' ``value_per_share`` stays the route's own, the business's, so the drawer's
-arithmetic reproduces, and ``outside_value_per_share`` carries the figure under the override
-only. A sum at or below zero refuses the row as a route value would. ``growth_at_price`` reads
-the price and the sum: the multiples, the growth share and the expected return read them as they
-are, and the implied growth, by runway and by return too, solves to the price less the figure,
-the business's share of the price, which it reads from the intermediates. The diluted share
-count is ``Context.shares``, an agent's ``shares.diluted`` in place of the reported count: NTM net
-income is the NTM EPS times it, and after-tax SBC a share divides by it.
+the levels and the designation read, and so is each value by runway and by return, though the
+value-spread flag reads them before the figure, the business's own; the intermediates'
+``value_per_share`` stays the route's own, the business's, so the drawer's arithmetic
+reproduces, and ``outside_value_per_share`` carries the figure under the override only. A sum at
+or below zero refuses the row as a route value would. ``growth_at_price`` reads the price and
+the sum: the multiples, the growth share and the expected return read them as they are, and the
+implied growth, by runway and by return too, solves to the price less the figure, the business's
+share of the price, which it reads from the intermediates. The diluted share count is
+``Context.shares``, an agent's ``shares.diluted`` in place of the reported count: NTM net income
+is the NTM EPS times it, and after-tax SBC a share divides by it. The ``ntm_net_income`` DATA
+entry stays on the reported count, ``None`` without one, so no entry cited to the vendor carries
+the agent's count.
 """
 
 from dataclasses import asdict, replace
@@ -143,14 +147,17 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     value_total = value_at_belief(growth, charge)
     value = value_total / c.shares
     outside = outside_value(c)
-    by_runway = {
-        str(n): value_at_belief(replace(growth, runway=n), charge) / c.shares + outside
+    # the business's own values: the value-spread flag reads these, the stored maps add the figure
+    own_by_runway = {
+        str(n): value_at_belief(replace(growth, runway=n), charge) / c.shares
         for n in _runways(policy)
     }
-    by_roic = {
-        key: None if ch is None else value_at_belief(growth, ch) / c.shares + outside
+    own_by_roic = {
+        key: None if ch is None else value_at_belief(growth, ch) / c.shares
         for key, ch in _roic_charges(charge, roic.usable, moat, policy).items()
     }
+    by_runway = {key: v + outside for key, v in own_by_runway.items()}
+    by_roic = {key: None if v is None else v + outside for key, v in own_by_roic.items()}
     gap = chosen(c, "earnings.nri_gap", nri_gap(i))
     e = eps(t, gap, anchor.ntm_eps_found)
     im: dict[str, Any] = {
@@ -191,8 +198,8 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         + present(_growth_above_return(growth, charge))
         + trailing_flags(i, t, gap, policy, roic)
     )
-    spread = present(value_spread_flag(list(by_roic.values())[:3], policy)) + present(
-        value_spread_flag(list(by_runway.values()), policy)
+    spread = present(value_spread_flag(list(own_by_roic.values())[:3], policy)) + present(
+        value_spread_flag(list(own_by_runway.values()), policy)
     )
     if value + outside <= 0:
         return Refused(_NOT_POSITIVE, flags + spread, im)
@@ -203,7 +210,9 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         data(i, "sbc_ttm", t.sbc, "USD", "statements"),
         # the consensus as found: an agent's guided EPS or cycle gap is its JUDGMENT entry
         data(i, "ntm_eps", anchor.ntm_eps_found, "USD a share", "estimates_quarter"),
-        data(i, "ntm_net_income", anchor.ntm_eps_found * c.shares, "USD", "estimates_quarter"),
+        data(
+            i, "ntm_net_income", _on_reported(anchor, i.shares_diluted), "USD", "estimates_quarter"
+        ),
         data(i, "path_step_2", path.steps[0], "ratio", "estimates_annual"),
         data(i, "path_step_3", path.steps[1], "ratio", "estimates_annual"),
         data(i, "street_ttm_eps", i.street_ttm_eps, "USD a share"),
@@ -455,6 +464,13 @@ def _on_revenue(growth: GrowthPath, year: int) -> bool:
     if r3 is None or year < 3 or year > growth.runway:
         return False
     return year == 3 or (r3 > growth.belief and year <= 3 + growth.fade_years)
+
+
+def _on_reported(anchor: Anchor, reported: float | None) -> float | None:
+    """The ``ntm_net_income`` DATA entry: the consensus NTM EPS as found on the reported count,
+    ``None`` without one, so an agent's ``shares.diluted`` never reaches an entry cited to the
+    vendor; the intermediates' ``ntm_net_income`` is on the count the route used."""
+    return None if reported is None else anchor.ntm_eps_found * reported
 
 
 def _runways(policy: Policy) -> list[int]:

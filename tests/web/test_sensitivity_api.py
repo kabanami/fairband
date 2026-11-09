@@ -215,7 +215,7 @@ def test_a_refused_cell_is_null_and_cannot_be_cited(
             "the Mature Growth route does not read margin.target",
         ),
         ({"rowValues": [0.05, 0.7]}, "growth.belief takes −20% to 60%"),
-        ({"colValues": [0.10, "high"]}, "return.runway takes 0% to 100%"),
+        ({"colValues": [0.10, "high"]}, "return.runway takes above 0% to 100%"),
         ({"rowValues": [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]}, "an axis holds one to five values"),
         ({"colValues": []}, "an axis holds one to five values"),
         ({"colTag": "growth.belief"}, "the two tags differ"),

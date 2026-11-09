@@ -552,6 +552,12 @@ def test_the_overrides_table_names_the_eighteen_inputs() -> None:
         "excludes its gains",
     ):
         assert words in outside, words
+    # the charge divides by the runway return, so the range excludes 0 (the final review's fix)
+    assert table["`return.runway`"][2] == "above 0 to 1.00"
+    # the outside figure is a share on the count in force, a new count's when one is set
+    assert "with `shares.diluted` also set, divide the asset's worth by the new count" in _flat(
+        skill
+    )
     order = ", ".join(LABELS[tag] for tag in BRIDGE_ORDER)
     assert f"The lines run in the method's order: {order}." in _flat(skill)
     entry = _tool_entry("override_add")

@@ -34,7 +34,9 @@ MGCO re-captured under 1.0 on 2026-11-09 for the payout floor's removal (spec 20
 return now pays out less than nothing. The row's own charge, at its 43.1% return, has no such
 year, so its value (133.37 a share), levels and designation are unchanged; the sensitivities that
 charge growth above their return move. At the 9% return, equal to r, the value is year-1 earnings
-over r on any path, 65.56 a share (68.14 under 0.9), so no belief reaches the price and
+over r on any path whose charge pays for its earnings growth, as MGCO's does with no consensus
+revenue (once the routes pass the revenue steps, below, a path with them adds its uncharged
+margin change, method 5.8), 65.56 a share (68.14 under 0.9), so no belief reaches the price and
 `implied_by_roic` `0.09` is null (14.19%); the five-year runway's implied growth is 47.21%
 (46.57%); and `value-spread` reads its range from 65.56, a spread of 103.4% (95.7%).
 

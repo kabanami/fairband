@@ -560,7 +560,8 @@ def test_income_needs_a_market_cap(
 def test_a_return_below_r_is_floored(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    # a 2% marginal return: the charge uses r, at which growth up to r adds no value
+    # a 2% marginal return: the charge uses r, and with no floor growth then adds no value at
+    # all, since the charge pays for the earnings growth (MGCO has no consensus revenue)
     poor = tuple(
         replace(y, operating_income=(y.operating_income or 0) / 22) for y in mg_inputs.capital_years
     )
@@ -1540,6 +1541,64 @@ def test_an_outside_value_that_sinks_the_value_refuses(
     assert r.intermediates["value_per_share"] == plain.intermediates["value_per_share"]
     assert r.intermediates["outside_value_per_share"] == -1000.0
     assert [x.name for x in r.inputs if x.tag == "JUDGMENT"] == ["value.outside"]
+
+
+@pytest.mark.parametrize("figure", [200.0, -100.0])
+@pytest.mark.parametrize("route", ["mature-growth", "revenue-growth"])
+def test_the_value_spread_reads_the_business_before_the_outside_value(
+    route: str, figure: float, policy: Policy, deciles: Deciles
+) -> None:
+    """The flag speaks of the business's sensitivity to its own inputs, so it reads the values by
+    return, runway and margin before the figure is added (method 14.4). A large stake would narrow
+    the spread or silence it; a large debt would push the lowest value to zero or below and
+    silence it, or on the revenue-growth route trip the unbounded sentence. The row still values at
+    the sum, and the stored maps keep the figure added."""
+    inputs = VALUED[route]()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    outside = value_company(inputs, deciles, policy, TODAY, judged(("value.outside", figure)))
+    assert plain.value is not None and outside.value == pytest.approx(plain.value + figure)
+    spread = [f for f in plain.flags if f.code == "value-spread"]
+    assert spread  # the plain row's flag fires, so there is a state to keep
+    assert [f for f in outside.flags if f.code == "value-spread"] == spread
+    for key in ("value_by_runway", "value_by_roic", "value_by_margin"):
+        found = plain.intermediates.get(key, {})
+        stored = outside.intermediates.get(key, {})
+        pairs = zip(stored.values(), found.values(), strict=True)
+        assert all(v == pytest.approx(w + figure) for v, w in pairs if w is not None), key
+
+
+def test_the_ntm_net_income_entry_stays_on_the_reported_count(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """No DATA entry carries an agent's figure under the vendor's provenance (method 14.4): under
+    a `shares.diluted` override the ``ntm_net_income`` entry is the consensus NTM EPS × the
+    reported count, cited to the estimates, while the intermediates hold the NTM net income on
+    the count the route used. With no reported count the entry has no figure."""
+    inputs = engine_companies.mature_growth_inputs()
+    assert inputs.shares_diluted is not None
+    count = inputs.shares_diluted * 1.06
+    plain = value_company(inputs, deciles, policy, TODAY)
+    more = value_company(inputs, deciles, policy, TODAY, judged(("shares.diluted", count)))
+
+    def entry(r: ValuationResult, name: str) -> Any:
+        [found] = [x for x in r.inputs if x.name == name]
+        return found
+
+    found = entry(more, "ntm_net_income")
+    assert found.tag == "DATA" and found.provenance == inputs.provenance["estimates_quarter"]
+    assert found.value == pytest.approx(entry(more, "ntm_eps").value * inputs.shares_diluted)
+    assert found == entry(plain, "ntm_net_income")
+    assert more.intermediates["ntm_net_income"] == pytest.approx(
+        entry(more, "ntm_eps").value * count
+    )
+    none = value_company(
+        replace(inputs, shares_diluted=None),
+        deciles,
+        policy,
+        TODAY,
+        judged(("shares.diluted", count)),
+    )
+    assert none.value is not None and entry(none, "ntm_net_income").value is None
 
 
 def test_shares_diluted_replaces_the_count_everywhere(policy: Policy, deciles: Deciles) -> None:

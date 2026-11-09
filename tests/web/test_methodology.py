@@ -148,12 +148,12 @@ def test_the_page_says_what_method_0_9_changed() -> None:
     assert "years 1 to 3" in trend[: trend.index("</li>")]
 
 
-def test_the_examples_state_method_0_9_s_rules() -> None:
-    """The examples, re-read from the 0.9 revalue (CLAUDE.md: a change of method version re-reads
-    its examples' figures): Microsoft's Stable margin raises no note, since Stable points to no
-    phase; 3M's run-off names the years the consensus gives and the fade to zero with a flat
-    terminal; the implied decline rate is named where the page sets it beside the trend's; the
-    growth section's notes name the dollar ramp's."""
+def test_the_examples_state_method_1_0_s_rules() -> None:
+    """The examples, dated to method 1.0 (CLAUDE.md: a change of method version re-reads its
+    examples' figures), keep the rules 0.9 brought: Microsoft's Stable margin raises no note,
+    since Stable points to no phase; 3M's run-off names the years the consensus gives and the fade
+    to zero with a flat terminal; the implied decline rate is named where the page sets it beside
+    the trend's; the growth section's notes name the dollar ramp's."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
     asof = html[html.index("Figures as of") :]
     asof = asof[: asof.index("</p>")]

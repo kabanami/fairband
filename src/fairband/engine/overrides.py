@@ -3,16 +3,16 @@ own reading of each input (spec 2026-11-06 Tier 2, 10.1 to 10.3; ``method.md`` 1
 
 An override changes one tagged input. ``TAGS`` names the eighteen inputs, the routes that read
 each, its unit and, for the two word inputs, its words; the numeric ranges are the policy's
-``override_ranges``, the ends included but the lower end, 0, of the two NTM anchors and the
-diluted share count, which each must be above (``TagSpec.low_open``). ``LABELS`` names each
-input's bridge line in a reader's words. ``check_override`` applies the rules in this order and
-answers with the first one broken: a locked input (``LOCKED``); a tag that is not an input; a
-route that does not read the tag; a value outside its words or its range, or a lasting override
-of a period-tied input; no evidence, an NTM anchor (``earnings.ntm``, ``revenue.ntm``) without a
-guidance record among its evidence, or a belief or held rate above the sales class's 90th
-percentile without a filing or a transcript (when the policy's
-``override_primary_evidence_above_p90`` holds). The rule reads the evidence's kinds alone: the
-records an NTM anchor cites must hold a gaap record of its metric for a fiscal year
+``override_ranges``, the ends included but the lower end, 0, of the two NTM anchors, the runway
+return and the diluted share count, which each must be above (``TagSpec.low_open``).
+``LABELS`` names each input's bridge line in a reader's words. ``check_override`` applies the
+rules in this order and answers with the first one broken: a locked input (``LOCKED``); a tag
+that is not an input; a route that does not read the tag; a value outside its words or its
+range, or a lasting override of a period-tied input; no evidence, an NTM anchor
+(``earnings.ntm``, ``revenue.ntm``) without a guidance record among its evidence, or a belief or
+held rate above the sales class's 90th percentile without a filing or a transcript (when the
+policy's ``override_primary_evidence_above_p90`` holds). The rule reads the evidence's kinds
+alone: the records an NTM anchor cites must hold a gaap record of its metric for a fiscal year
 (``ANCHOR_METRICS``, ``anchor_misfit``), which the override route checks on the records before
 the rules, since it reads them. A passing override is ``("applied", "")``; a refused one names
 its state and a sentence the agent can act on.
@@ -112,7 +112,8 @@ class TagSpec:
     its words (``None`` for a number, whose range is the policy's), whether only a period-tied
     override may change it, and whether its range's lower end is excluded: an NTM anchor must be
     above 0, as the route's own positive-anchor rule asks of the consensus, and so must a share
-    count, as the guard asks of the reported one."""
+    count, as the guard asks of the reported one, and the runway return, which the charge divides
+    by."""
 
     tag: OverrideTag
     routes: frozenset[Route]
@@ -172,7 +173,7 @@ TAGS: dict[OverrideTag, TagSpec] = {
         _spec("moat.class", _MATURE | _GROWTH | {"start-up"}, "class", _MOATS),
         _spec("margin.target", _GROWTH | {"start-up"}, "ratio"),
         _spec("capital.sales_to_capital", _GROWTH | {"decline"}, "multiple"),
-        _spec("return.runway", _MATURE, "ratio"),
+        _spec("return.runway", _MATURE, "ratio", low_open=True),
         _spec("earnings.nri_gap", _MATURE, "USD a share"),
         _spec("earnings.cycle_gap", _MATURE, "USD a share"),
         _spec("decline.rate", frozenset({"decline"}), "ratio"),
@@ -208,9 +209,9 @@ LABELS: dict[OverrideTag, str] = {
 
 # The route's own entry in a result's inputs that each tag stands for. The two gaps stand for
 # none: a route cites the gap found and the NTM consensus as found as data. An NTM anchor stands
-# for its consensus figure's entry; Mature Growth's NTM net income entry keeps the consensus. The
-# count stands for the reported count every result cites; the outside value for none, since the
-# engine reads no such figure.
+# for its consensus figure's entry; Mature Growth's NTM net income entry keeps the consensus, on
+# the reported count under a ``shares.diluted`` too. The count stands for the reported count
+# every result cites; the outside value for none, since the engine reads no such figure.
 INPUT_OF: dict[OverrideTag, str] = {
     "earnings.ntm": "ntm_eps",
     "revenue.ntm": "ntm_revenue",

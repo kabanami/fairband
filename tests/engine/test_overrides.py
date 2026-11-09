@@ -340,6 +340,20 @@ def test_an_ntm_anchor_is_above_zero(policy: Policy) -> None:
         assert checked(policy, tag, 0.01, route, guidance) == ("applied", "")
 
 
+def test_a_runway_return_is_above_zero(policy: Policy) -> None:
+    """The charge divides by the runway return, so 0 is not one it can take: the range's lower
+    end is excluded, as the NTM anchors' are, and the policy's pair stays [0, 1]."""
+    assert TAGS["return.runway"].low_open
+    assert policy.override_ranges["return.runway"] == (0.0, 1.0)
+    refusal = ("refused-unit", "return.runway takes above 0% to 100%")
+    for route in ("mature-growth", "mature-stable"):
+        assert checked(policy, "return.runway", 0.0, route) == refusal
+        assert checked(policy, "return.runway", -0.01, route) == refusal
+        assert checked(policy, "return.runway", 1.01, route) == refusal
+        assert checked(policy, "return.runway", 1.0, route) == ("applied", "")
+        assert checked(policy, "return.runway", 0.001, route) == ("applied", "")
+
+
 def test_a_range_with_no_upper_bound_names_its_lower_end_alone(policy: Policy) -> None:
     """The balance corrections' 10^15 dollars stands for no bound (spec 10.2: 0 or more), so the
     sentence names the lower end alone; a bounded range names both ends."""

@@ -43,8 +43,9 @@ intermediates alone, its price input with it; a refusal takes only the new price
 revenue-growth row whose intermediates hold ``revenue_path`` (refused for its target margin or
 its value), whose margin the price needs moves too, a Start-up row, whose market cap moves
 with the price and whose requirement and ``below-net-cash`` flag are rebuilt at it, and a Mature
-Stable row refused for its trailing earnings, whose cross-check's implied growth moves.
-``refusal_result`` is the shape of every refusal.
+Stable row refused for its trailing earnings or for a value not positive under the reinvestment
+charge, whose cross-check's implied growth moves. ``refusal_result`` is the shape of every
+refusal.
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
@@ -66,13 +67,15 @@ rebuilds at the price read; no result without the override carries it. A sensiti
 keyed by the runway in years ("5", "10", "20") or by the return of the charge: "runway", the
 row's own; the policy's ``roic_sensitivity`` values, "0.15" and "0.09", each as the runway
 return; then "ten-year", the ten-year aggregate ROIC as the runway return, ``None`` when it is
-unavailable or not positive. The value-spread flag reads the first three.
+unavailable or not positive. The value-spread flag reads the first three, the business's own
+values, before any value outside the business is added.
 
 - Mature Growth: ``anchor`` (ntm_eps_raw, sbc_adjustment_per_share, ntm_eps), ``sbc_basis``,
   ``ntm_net_income``, ``path`` (base_year, on_eps, analysts), ``path_steps``, ``belief`` (rate,
   sales_class, median), ``moat``, ``runway``, ``fade_years``, ``growth_rates`` (years 2 to the
   runway), ``roic`` (aggregate, years, by_year), ``runway_return`` (used, marginal,
-  marginal_usable, three_year, ten_year, value), ``terminal_roic``, ``charge_off``, ``shares``,
+  marginal_usable, three_year, ten_year, one_year, value), ``terminal_roic``, ``charge_off``,
+  ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps), ``shares``,
   ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
   ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported, clean, forward: the
   NTM EPS before any cycle gap), ``epv`` (a share), ``dividend_yield``,
@@ -82,15 +85,17 @@ unavailable or not positive. The value-spread flag reads the first three.
 - Mature Stable: ``e_trailing``, ``nri_gap``, ``cycle_gap`` (as on Mature Growth), ``ttm_margin``,
   ``median_margin``, ``margin_scaled``, ``e_normalized`` (the E the value rests on: scaled when
   flagged, then less any cycle gap), ``moat``, ``roic``, ``runway_return``, ``terminal_roic``,
-  ``runway``, ``epv`` and ``stable_growth`` (a share), ``epv_total`` and
-  ``stable_growth_total``, ``shares``, ``value_per_share``, ``eps``, ``dividend_yield``,
-  ``net_buyback_yield``, ``income_basis``, ``price_facts``, ``growth_route`` (the growth route's
-  cross-check: value_per_share, ntm_net_income, path_steps, belief, runway, fade_years,
-  runway_return, terminal_roic, charge_off, refusal ``None``; or only its refusal); at the price,
-  ``multiples``, ``expected_return`` and the cross-check's ``implied_growth``, rebuilt from its
-  own keys. A row refused for its trailing earnings holds ``e_trailing``, ``nri_gap``,
-  ``cycle_gap`` (under an override), ``eps``, ``shares``, ``moat``, ``growth_route`` (with its
-  ``implied_growth`` at the price) and ``price_facts``.
+  ``charge_off``, ``charge`` (as on Mature Growth, with no revenue steps), ``runway``, ``epv``
+  and ``stable_growth`` (a share), ``epv_total`` and ``stable_growth_total``, ``shares``,
+  ``value_per_share``, ``eps``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``,
+  ``price_facts``, ``growth_route`` (the growth route's cross-check: value_per_share,
+  ntm_net_income, path_steps, belief, runway, fade_years, runway_return, terminal_roic,
+  charge_off, charge, refusal ``None``; or only its refusal); at the price, ``multiples``,
+  ``expected_return`` and the cross-check's ``implied_growth``, rebuilt from its own keys. A row
+  refused for its value keeps the value side and the cross-check at the price. A row refused for
+  its trailing earnings holds ``e_trailing``, ``nri_gap``, ``cycle_gap`` (under an override),
+  ``eps``, ``shares``, ``moat``, ``growth_route`` (with its ``implied_growth`` at the price) and
+  ``price_facts``.
 - Revenue growth (High Growth and Young Growth): ``ntm_revenue``, ``path`` (base_year, analysts,
   held, sales_class, cap), ``path_steps``, ``revenue_path``, ``growth_rates`` (years 1 to 10),
   ``margin_start``, ``margin_path`` (start, target, by_year, ramp), ``target_margin`` (value,
@@ -360,12 +365,13 @@ def reprice(
     margin the price needs; a Start-up row, whose intermediates hold ``requirement``, moves
     its market cap with the price (``route_start_up.market_cap_at``), rebuilds its requirement at
     it and re-reads its ``below-net-cash`` flag; and a Mature Stable row refused for its trailing
-    earnings, whose intermediates hold ``growth_route`` and ``e_trailing``, moves the
-    cross-check's implied growth (``cross_check_at_price``; a refused cross-check stays as it
-    is). ``price_facts`` stay as they were. Every solve on the price targets the business's share
-    of it, the price less the intermediates' ``outside_value_per_share`` (nil without one;
-    ``route_steps.business_price``), the rebuilds reading the figure from the intermediates; the
-    designation, the multiples and the expected return read the price against the value, the sum.
+    earnings or for a value not positive under the reinvestment charge, whose intermediates hold
+    ``growth_route`` and ``e_trailing``, moves the cross-check's implied growth
+    (``cross_check_at_price``; a refused cross-check stays as it is). ``price_facts`` stay as
+    they were. Every solve on the price targets the business's share of it, the price less the
+    intermediates' ``outside_value_per_share`` (nil without one; ``route_steps.business_price``),
+    the rebuilds reading the figure from the intermediates; the designation, the multiples and the
+    expected return read the price against the value, the sum.
     Either way the ``price`` input becomes the new quote, so the drawer's arithmetic reproduces:
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.

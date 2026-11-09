@@ -491,7 +491,7 @@ not you, computes the value it gives.
 | `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | the moat class; it sets the margin of safety, the runway and the terminal return | `None`, `Narrow` or `Wide` |
 | `margin.target` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten | −0.50 to 0.60 |
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | the revenue a dollar of invested capital buys | 0.1 to 10 |
-| `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end | 0 to 1.00 |
+| `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end | above 0 to 1.00 |
 | `earnings.nri_gap` | Mature Growth, Mature Stable | the non-recurring gap in the earnings a share | −100 to 100 dollars a share |
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
@@ -525,10 +525,12 @@ The share count and the value outside the business:
   does not yet count the new shares, a raised count does not dilute the value. Period-tied only:
   each new statement asks the question again.
 - `value.outside` is a figure a share, after tax: a stake in another company, an asset held for
-  sale, or a liability such as a settlement still owed, negative. The value a share is the route's
-  plus the figure, and the levels read the sum; the growth the price needs is solved against the
-  price less the figure, the business's share of the price. Start-up does not read it. A filing is
-  the usual evidence; a figure from secondary coverage is evidence too, and the report says so.
+  sale, or a liability such as a settlement still owed, negative. The figure is a share on the
+  count in force: with `shares.diluted` also set, divide the asset's worth by the new count. The
+  value a share is the route's plus the figure, and the levels read the sum; the growth the price
+  needs is solved against the price less the figure, the business's share of the price. Start-up
+  does not read it. A filing is the usual evidence; a figure from secondary coverage is evidence
+  too, and the report says so.
 
 Nothing counts twice. Where GAAP earnings carry the asset's gains (mark-ups through other income),
 the route sets what you do:

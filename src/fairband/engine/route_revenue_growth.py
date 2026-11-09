@@ -100,15 +100,15 @@ they count as nil, and a replaced line raises no ``line-not-presented`` flag.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the equity a share: the result's value is the route's value a share plus the figure, which
-the levels and the designation read, and so is each value by margin, which the value-spread flag
-reads; ``value_per_share`` stays the business's, and ``outside_value_per_share``, a rebuild key
-under the override only, carries the figure. A sum at or below zero refuses "value not positive
-under the reinvestment charge". ``revenue_at_price`` reads the price and the sum: the multiples,
-the growth share and the expected return read them as they are, and the implied growth, the
-margin the price needs (a refusal's too) and the cross-check's implied growth solve to the price
-less the figure, the business's share of the price. The diluted share
-count is ``Context.shares`` and the rebuild key ``shares``, an agent's ``shares.diluted`` in place
-of the reported count, which the equity a share divides by.
+the levels and the designation read, and so is each value by margin, though the value-spread flag
+reads the values by margin before the figure, the business's own; ``value_per_share`` stays the
+business's, and ``outside_value_per_share``, a rebuild key under the override only, carries the
+figure. A sum at or below zero refuses "value not positive under the reinvestment charge".
+``revenue_at_price`` reads the price and the sum: the multiples, the growth share and the expected
+return read them as they are, and the implied growth, the margin the price needs (a refusal's
+too) and the cross-check's implied growth solve to the price less the figure, the business's share
+of the price. The diluted share count is ``Context.shares`` and the rebuild key ``shares``, an
+agent's ``shares.diluted`` in place of the reported count, which the equity a share divides by.
 """
 
 from collections.abc import Sequence
@@ -289,6 +289,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "median": v,
         "high": _at_margin(path, start, target.high, tax, s2c.value, moat, bridge, policy)[0],
     }
+    own_by_margin = {key: x.value_per_share for key, x in by_margin.items()}
     new_capital = return_on_new_capital(target.value, tax, s2c.value)
     peer_roic = peer_roic_median(i.peers)
     growth_route = growth_cross_check(c, moat, roic)
@@ -327,7 +328,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "firm_value": v.firm_value,
         "equity": v.equity,
         "value_per_share": value,
-        "value_by_margin": {key: x.value_per_share + outside for key, x in by_margin.items()},
+        "value_by_margin": {key: v + outside for key, v in own_by_margin.items()},
         "return_on_new_capital": new_capital,
         "peer_roic_median": peer_roic,
         "eps": e,
@@ -348,7 +349,8 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         + present(_return_above_peers(new_capital, peer_roic))
         + ((_FAILURE,) if young else ())
         + trailing_flags(i, t, gap, policy)
-        + present(_value_spread(im["value_by_margin"], target, policy))
+        # the business's own values by margin, before the figure outside it is added
+        + present(_value_spread(own_by_margin, target, policy))
     )
     if value + outside <= 0:
         return Refused(_NOT_POSITIVE, flags, im | implied_margin_at_price(im, c.price, policy))
