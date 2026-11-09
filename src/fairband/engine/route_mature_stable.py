@@ -37,6 +37,19 @@ of the charge; the cross-check reads the same moat, returns and gap. ``earnings.
 correction to mid-cycle earnings, comes off the normalized E, and off the cross-check's NTM
 anchor; ``e_trailing``, the clean EPS, the P/E and ``large-nri`` do not read it. ``cycle_gap`` is
 in the intermediates, a refusal's too, only under that override.
+
+``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
+after the stable-growth value: the result's value is that value a share plus the figure, which
+the levels and the designation read; ``value_per_share`` and ``stable_growth`` stay the
+business's, and ``outside_value_per_share`` carries the figure, a refusal's too, under the
+override only. A sum at or below zero refuses "value not positive under the reinvestment
+charge", which keeps the value side and the cross-check at the price; the mechanical value of a
+positive E, its returns at r or above, is always positive. ``stable_at_price`` reads the price
+and the sum: the multiples and the expected return read them as they are, and the cross-check's
+implied growth, a refusal's too, solves to the price less the figure, the business's share of
+the price. The diluted share count is ``Context.shares``, an agent's ``shares.diluted`` in place
+of the reported count: the non-recurring and cycle gaps come off E on it, and every value a share
+divides by it.
 """
 
 from typing import Any
@@ -55,6 +68,7 @@ from fairband.engine.route_steps import (
     Refused,
     RoicTerms,
     Valued,
+    business_price,
     chosen,
     common_inputs,
     common_rules,
@@ -67,12 +81,16 @@ from fairband.engine.route_steps import (
     multiples_at,
     nil,
     nri_gap,
+    outside_entry,
+    outside_value,
     price_facts_for,
     rule,
     trailing_flags,
     ttm_margin,
 )
 from fairband.policy import Policy
+
+_NOT_POSITIVE = "value not positive under the reinvestment charge"
 
 
 def value_mature_stable(c: Context) -> Valued | Refused:
@@ -92,16 +110,19 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         scaled = normalize_for_margin(e, margin, median, flagged)
     # the cycle gap comes off the E the engine normalized, so the scaling and the correction add
     e_normalized = scaled if scaled is None or cycle is None else scaled - cycle * c.shares
+    outside = outside_value(c)
+    business = c.price - outside  # the business's share of the price
     if e_normalized is None or e_normalized <= 0:
         # engine-round spec 9: the refusal keeps the cross-check, at the price
         refused: dict[str, Any] = {
             "e_trailing": e,
             "nri_gap": gap,
             **cycle_entry(cycle),
+            **outside_entry(c),
             "eps": eps(t, gap, None),
             "shares": c.shares,
             "moat": moat,
-            "growth_route": cross_check_at_price(growth_route, c.price, c.shares, policy),
+            "growth_route": cross_check_at_price(growth_route, business, c.shares, policy),
             "price_facts": price_facts_for(i.closes, c.price, c.today),
         }
         return Refused("no positive trailing earnings", (), refused, ())
@@ -128,12 +149,18 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "stable_growth_total": stable,
         "shares": c.shares,
         "value_per_share": value,
+        **outside_entry(c),
         "eps": eps(t, gap, None),
         **income(i.market_cap, t),
         "price_facts": price_facts_for(i.closes, c.price, c.today),
         "growth_route": growth_route,
     }
-    im |= stable_at_price(im, c.price, value, policy)
+    flags = roic.flags + trailing_flags(i, t, gap, policy, roic)
+    if value + outside <= 0:
+        # the sum decides; the refusal keeps the value side and the cross-check at the price
+        at_price = cross_check_at_price(growth_route, business, c.shares, policy)
+        return Refused(_NOT_POSITIVE, flags, im | {"growth_route": at_price})
+    im |= stable_at_price(im, c.price, value + outside, policy)
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "net_income_ttm", t.net_income, "USD", "statements"),
@@ -147,18 +174,19 @@ def value_mature_stable(c: Context) -> Valued | Refused:
             "the terminal growth, the expected return's growth for a stable company",
         ),
     )
-    flags = roic.flags + trailing_flags(i, t, gap, policy, roic)
-    return Valued("mature-stable", value, moat, im, inputs, flags)
+    return Valued("mature-stable", value + outside, moat, im, inputs, flags)
 
 
 def stable_at_price(
     im: dict[str, Any], price: float, value: float, policy: Policy
 ) -> dict[str, Any]:
-    """The intermediates that move with the price; growth runs at the terminal growth. The
-    growth-route cross-check takes its implied growth at the price."""
+    """The intermediates that move with the price, at ``price`` and the result's ``value`` a
+    share; growth runs at the terminal growth. The growth-route cross-check takes its implied
+    growth at the business's share of the price (``route_steps.business_price``)."""
     g_t = policy.terminal_growth
+    business = business_price(im, price)
     return {
         "multiples": multiples_at(price, im["eps"]),
         "expected_return": expected(price, value, im, (), policy.repricing_horizon_years, g_t),
-        "growth_route": cross_check_at_price(im["growth_route"], price, im["shares"], policy),
+        "growth_route": cross_check_at_price(im["growth_route"], business, im["shares"], policy),
     }

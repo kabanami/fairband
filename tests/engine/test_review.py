@@ -159,6 +159,42 @@ def test_the_cycle_gap_line_follows_the_non_recurring_gap(policy: Policy, decile
     assert judged == ["earnings.nri_gap", "earnings.cycle_gap"]
 
 
+def test_the_two_new_lines_close_the_bridge(policy: Policy, deciles: Deciles) -> None:
+    """Given out of order, the count's line and the outside value's close the bridge, in that
+    order (spec 2026-11-09 8). The count's old value is the engine's count, and on Mature Growth a
+    count raised with NTM net income leaves the value a share; the outside line's old value is the
+    engine's nil and its delta the figure. The JUDGMENT entries carry each input's unit."""
+    inputs = mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    count = mechanical.intermediates["shares"] * 1.06
+    overrides = [
+        OVERRIDE("value.outside", 12.0, 3),
+        OVERRIDE("shares.diluted", count, 2),
+        OVERRIDE("growth.belief", 0.08, 1),
+    ]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    assert [line.tag for line in review.bridge] == [
+        "growth.belief",
+        "shares.diluted",
+        "value.outside",
+    ]
+    _, shares, outside = review.bridge
+    assert shares.old == mechanical.intermediates["shares"] and shares.new == count
+    assert shares.delta == pytest.approx(0.0, abs=1e-9)
+    assert outside.old == 0.0 and outside.new == 12.0
+    assert outside.delta == pytest.approx(12.0)
+    assert review.result.value is not None and mechanical.value is not None
+    deltas = [line.delta for line in review.bridge if line.delta is not None]
+    assert sum(deltas) == pytest.approx(review.result.value - mechanical.value, abs=1e-9)
+    judged = [(i.name, i.unit) for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert judged == [
+        ("growth.belief", "ratio"),
+        ("shares.diluted", "shares"),
+        ("value.outside", "USD a share"),
+    ]
+    assert result_from_json(result_to_json(review.result)) == review.result
+
+
 def test_a_step_override_moves_the_charge_only_where_the_revenue_step_is_missing(
     policy: Policy, deciles: Deciles
 ) -> None:

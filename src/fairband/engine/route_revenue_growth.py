@@ -97,6 +97,18 @@ and highest margins kept (both the override's on a row with no counted peers, wh
 refused for its target). ``capital.sales_to_capital`` replaces the measure (``used``
 "override"). ``balance.debt`` and ``balance.cash`` replace the balance sheet's figures before
 they count as nil, and a replaced line raises no ``line-not-presented`` flag.
+
+``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
+after the equity a share: the result's value is the route's value a share plus the figure, which
+the levels and the designation read, and so is each value by margin, which the value-spread flag
+reads; ``value_per_share`` stays the business's, and ``outside_value_per_share``, a rebuild key
+under the override only, carries the figure. A sum at or below zero refuses "value not positive
+under the reinvestment charge". ``revenue_at_price`` reads the price and the sum: the multiples,
+the growth share and the expected return read them as they are, and the implied growth, the
+margin the price needs (a refusal's too) and the cross-check's implied growth solve to the price
+less the figure, the business's share of the price. The diluted share
+count is ``Context.shares`` and the rebuild key ``shares``, an agent's ``shares.diluted`` in place
+of the reported count, which the equity a share divides by.
 """
 
 from collections.abc import Sequence
@@ -148,6 +160,7 @@ from fairband.engine.route_steps import (
     RoicTerms,
     StartUpContext,
     Valued,
+    business_price,
     chosen,
     common_inputs,
     common_rules,
@@ -160,6 +173,8 @@ from fairband.engine.route_steps import (
     multiples_at,
     nil,
     nri_gap,
+    outside_entry,
+    outside_value,
     present,
     price_facts_for,
     rule,
@@ -237,6 +252,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
     roic = RoicTerms.of(i.capital_years, moat, policy)
     s2c = _sales_to_capital(c, roic)
+    outside = outside_value(c)
     rebuild: dict[str, Any] = {
         "revenue_path": {
             "revenue0": path.revenue0,
@@ -253,6 +269,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "cash": nil(chosen(c, "balance.cash", i.cash)),
         "shares": c.shares,
         "sales_to_capital": asdict(s2c),
+        **outside_entry(c),
     }
     path_and_capital = path_flags + roic.result.flags + bridge_flags(c) + present(from_industry(c))
     target = judged_target(c, target_margin(i.peers, policy))
@@ -310,7 +327,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "firm_value": v.firm_value,
         "equity": v.equity,
         "value_per_share": value,
-        "value_by_margin": {key: x.value_per_share for key, x in by_margin.items()},
+        "value_by_margin": {key: x.value_per_share + outside for key, x in by_margin.items()},
         "return_on_new_capital": new_capital,
         "peer_roic_median": peer_roic,
         "eps": e,
@@ -333,9 +350,9 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         + trailing_flags(i, t, gap, policy)
         + present(_value_spread(im["value_by_margin"], target, policy))
     )
-    if value <= 0:
+    if value + outside <= 0:
         return Refused(_NOT_POSITIVE, flags, im | implied_margin_at_price(im, c.price, policy))
-    im |= revenue_at_price(im, c.price, value, policy)
+    im |= revenue_at_price(im, c.price, value + outside, policy)
     industry = peer_industry(c)
     of_industry = "" if industry is None else f" of the {industry} industry"
     inputs = (
@@ -370,21 +387,26 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         ),
         *industry_peer_max_input(policy, industry),
     )
-    return Valued("revenue-growth", value, moat, im, inputs, flags)
+    return Valued("revenue-growth", value + outside, moat, im, inputs, flags)
 
 
 def revenue_at_price(
     im: dict[str, Any], price: float, value: float, policy: Policy
 ) -> dict[str, Any]:
-    """The intermediates that move with the price, from the value-side intermediates ``im``: the
-    implied growth and margin, the multiples, the growth share, the expected return on the revenue
-    path's years 2 to H + 1, and the cross-check's implied growth."""
+    """The intermediates that move with the price, from the value-side intermediates ``im``, at
+    ``price`` and the result's ``value`` a share: the implied growth and margin, the multiples,
+    the growth share, the expected return on the revenue path's years 2 to H + 1, and the
+    cross-check's implied growth. The three solves target the business's share of the price
+    (``route_steps.business_price``)."""
     s2c = im["sales_to_capital"]["value"]
     margin = _margin_path(im["margin_start"], im["margin_path"]["target"], policy)
     charge = RevenueCharge(policy.required_return, policy.terminal_growth, im["terminal_roic"], s2c)
     path, bridge = _rebuilt_path(im, policy), _rebuilt_bridge(im)
+    business = business_price(im, price)
     return {
-        "implied_growth": implied_hold_growth(price, path, margin, im["tax_rate"], charge, bridge),
+        "implied_growth": implied_hold_growth(
+            business, path, margin, im["tax_rate"], charge, bridge
+        ),
         **implied_margin_at_price(im, price, policy),
         "multiples": multiples_at(price, im["eps"]),
         "growth_share": None if im["epv"] is None else growth_share(im["epv"], price),
@@ -396,15 +418,15 @@ def revenue_at_price(
             policy.repricing_horizon_years,
             policy.terminal_growth,
         ),
-        "growth_route": cross_check_at_price(im["growth_route"], price, im["shares"], policy),
+        "growth_route": cross_check_at_price(im["growth_route"], business, im["shares"], policy),
     }
 
 
 def implied_margin_at_price(im: dict[str, Any], price: float, policy: Policy) -> dict[str, Any]:
     """The margin the price needs, from the rebuild keys in ``im``: the target margin at which the
-    value a share equals ``price``, the terminal return re-read and, on the dollar ramp, the ramp
-    rebuilt at each trial; ``None`` without a sales-to-capital or when the policy's bounds hold no
-    such margin."""
+    value a share equals the business's share of ``price`` (``route_steps.business_price``), the
+    terminal return re-read and, on the dollar ramp, the ramp rebuilt at each trial; ``None``
+    without a sales-to-capital or when the policy's bounds hold no such margin."""
     s2c = im["sales_to_capital"]["value"]
     if s2c is None:
         return {"implied_margin": None}
@@ -412,7 +434,7 @@ def implied_margin_at_price(im: dict[str, Any], price: float, policy: Policy) ->
     margin = _margin_path(start, start, policy)  # the solve sets the target
     path, bridge = _rebuilt_path(im, policy), _rebuilt_bridge(im)
     implied = implied_target_margin(
-        price, path, margin, im["tax_rate"], s2c, im["moat"], policy, bridge
+        business_price(im, price), path, margin, im["tax_rate"], s2c, im["moat"], policy, bridge
     )
     return {"implied_margin": implied}
 

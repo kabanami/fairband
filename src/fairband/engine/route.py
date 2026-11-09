@@ -13,19 +13,26 @@ refuses on its own guards. Mature Growth: no trailing revenue, no statutory tax 
 refusals (an incomplete NTM consensus, no positive forward anchor, a forward P/E unit error),
 consensus earnings that turn negative within the path, a value a share at or below zero under the
 reinvestment charge (which keeps the value-side intermediates). Mature Stable: no positive
-trailing earnings (which keeps the growth-route cross-check). Revenue growth and Decline: the
-refusals of their module docstrings, in their order. A refusal is a result with no value and a
-reason, never an exception.
+trailing earnings (which keeps the growth-route cross-check); a value a share plus an agent's
+value outside the business at or below zero under the reinvestment charge (which keeps the value
+side and the cross-check). On every valued route the value that decides is the sum. Revenue
+growth and Decline: the refusals of their module docstrings, in their order. A refusal is a
+result with no value and a reason, never an exception.
 
 Overrides (spec 2026-11-06 Tier 2, 10.4; ``method.md`` 14). ``value_company`` takes an agent's
 applied overrides by tag, empty for the mechanical method. A ``phase`` override replaces the
 classifier's phase right after the classification, its evidence otherwise as it was, so every
 guard and the route read the overridden phase: a Start-up row overridden to another phase takes
 that phase's route on a ``Context`` and is refused without trailing figures as any such row is,
-and a row overridden to Start-up takes the Start-up route. The routes read the other inputs
-through ``route_steps.chosen``. Every result, a refusal too, cites the JUDGMENT entries of the
-overrides last (``route_steps.judged_inputs``), in place of the route's own entries for the
-inputs they set.
+and a row overridden to Start-up takes the Start-up route. A ``shares.diluted`` override replaces
+the reported diluted count before the guard "no diluted share count", so every route reads the
+agent's count as ``Context.shares``. The routes read the other inputs through
+``route_steps.chosen``; ``value.outside`` each valued route adds to its own value a share, the
+result's value the sum, which the levels, the designation and the expected return read, its
+intermediates' ``value_per_share`` the route's own, and every solve on the price targeting the
+price less it, the business's share of the price (spec 2026-11-09 8). Every result, a refusal
+too, cites the JUDGMENT entries of the overrides last (``route_steps.judged_inputs``), in place of
+the route's own entries for the inputs they set.
 
 Every result of ``value_company`` cites the policy's version and its settings hash, and is valid
 until the next earnings date when that is after the data date, else for the policy's fallback
@@ -53,11 +60,13 @@ DATA input named in ``CompanyInputs.notes`` carries that note unless the route w
 cites the policy version.
 
 Intermediates hold JSON values only. Totals are in USD, per-share figures in USD a share, rates
-as fractions. A sensitivity map is keyed by the runway in years ("5", "10", "20") or by the
-return of the charge: "runway", the row's own; the policy's ``roic_sensitivity`` values, "0.15"
-and "0.09", each as the runway return; then "ten-year", the ten-year aggregate ROIC as the runway
-return, ``None`` when it is unavailable or not positive. The value-spread flag reads the first
-three.
+as fractions. Under a ``value.outside`` override a valued route's intermediates, and a refusal's
+that keeps the value side, carry ``outside_value_per_share``, the figure a share, which the
+rebuilds at the price read; no result without the override carries it. A sensitivity map is
+keyed by the runway in years ("5", "10", "20") or by the return of the charge: "runway", the
+row's own; the policy's ``roic_sensitivity`` values, "0.15" and "0.09", each as the runway
+return; then "ten-year", the ten-year aggregate ROIC as the runway return, ``None`` when it is
+unavailable or not positive. The value-spread flag reads the first three.
 
 - Mature Growth: ``anchor`` (ntm_eps_raw, sbc_adjustment_per_share, ntm_eps), ``sbc_basis``,
   ``ntm_net_income``, ``path`` (base_year, on_eps, analysts), ``path_steps``, ``belief`` (rate,
@@ -154,6 +163,7 @@ from fairband.engine.route_steps import (
     Refused,
     StartUpContext,
     Valued,
+    business_price,
     data,
     judged_inputs,
     price_facts_for,
@@ -247,7 +257,7 @@ def value_company(
         return refuse(FOREIGN_FILER)
     if phase.phase is None:
         return refuse(phase.reason or "unclassified")
-    price, shares, trailing = inputs.price, inputs.shares_diluted, inputs.trailing
+    price, shares, trailing = inputs.price, _shares(inputs, judged), inputs.trailing
     if price is None or not _positive(price):
         return refuse("no price")
     if shares is None or not _positive(shares):
@@ -263,6 +273,13 @@ def value_company(
     if isinstance(outcome, Refused):
         return refuse(outcome)
     return _valued(inputs, phase, price, policy, refresh_id, outcome, judged)
+
+
+def _shares(i: CompanyInputs, overrides: Overrides) -> float | None:
+    """The diluted share count: the override's when ``overrides`` holds one, else the reported
+    count (spec 2026-11-09 8)."""
+    override = overrides.get("shares.diluted")
+    return i.shares_diluted if override is None else cast(float, override.value)
 
 
 def _phase(found: PhaseEvidence, overrides: Overrides) -> PhaseEvidence:
@@ -345,7 +362,10 @@ def reprice(
     it and re-reads its ``below-net-cash`` flag; and a Mature Stable row refused for its trailing
     earnings, whose intermediates hold ``growth_route`` and ``e_trailing``, moves the
     cross-check's implied growth (``cross_check_at_price``; a refused cross-check stays as it
-    is). ``price_facts`` stay as they were.
+    is). ``price_facts`` stay as they were. Every solve on the price targets the business's share
+    of it, the price less the intermediates' ``outside_value_per_share`` (nil without one;
+    ``route_steps.business_price``), the rebuilds reading the figure from the intermediates; the
+    designation, the multiples and the expected return read the price against the value, the sum.
     Either way the ``price`` input becomes the new quote, so the drawer's arithmetic reproduces:
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
@@ -376,7 +396,8 @@ def reprice(
         if "revenue_path" in im:
             return replace(moved, intermediates=im | implied_margin_at_price(im, price, policy))
         if "growth_route" in im and "e_trailing" in im:
-            gr = cross_check_at_price(im["growth_route"], price, im["shares"], policy)
+            target = business_price(im, price)
+            gr = cross_check_at_price(im["growth_route"], target, im["shares"], policy)
             return replace(moved, intermediates=im | {"growth_route": gr})
         return moved
     im, flags = dict(result.intermediates), result.flags

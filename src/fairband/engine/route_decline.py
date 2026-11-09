@@ -84,6 +84,17 @@ measure (``used`` "override", so the peers raise no flag and cite no rule); ``ba
 ``balance.cash`` the balance sheet's figures before they count as nil, the rating read on a
 replaced debt figure. A row a ``phase`` override puts in Decline without a revenue trend or a
 positive last revenue, and no ``decline.rate`` override, is refused "no revenue trend".
+
+``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
+after the weighting: the result's value is the route's value a share plus the figure, which the
+levels and the designation read; ``value_per_share`` and its parts stay the business's, and
+``outside_value_per_share`` carries the figure under the override only. A sum at or below zero
+refuses "value not positive in the run-off", which keeps the figure beside the value side.
+``decline_at_price`` reads the price and the sum: the multiples and the expected return read them
+as they are, and the implied decline rate solves to the price less the figure, the business's
+share of the price. The diluted share count is ``Context.shares`` and the rebuild key
+``shares``, an agent's ``shares.diluted`` in place of the reported count, which every value a
+share divides by.
 """
 
 import math
@@ -119,6 +130,7 @@ from fairband.engine.route_steps import (
     Refused,
     RoicTerms,
     Valued,
+    business_price,
     chosen,
     common_inputs,
     data,
@@ -130,6 +142,8 @@ from fairband.engine.route_steps import (
     multiples_at,
     nil,
     nri_gap,
+    outside_entry,
+    outside_value,
     present,
     price_facts_for,
     rule,
@@ -295,6 +309,7 @@ def value_decline(c: Context) -> Valued | Refused:
         "distress_proceeds": policy.distress_sale_fraction * v.firm_value + cash,
         "distress_per_share": e.distress_per_share,
         "value_per_share": e.value_per_share,
+        **outside_entry(c),
         "altman_z": None if z is None or newest is None else {"year": newest.year, **asdict(z)},
         "piotroski_f": None if f is None else _f_intermediates(f, years),
         "capex_vs_depreciation": {"capex": t.capex, "depreciation": t.depreciation},
@@ -354,21 +369,22 @@ def value_decline(c: Context) -> Valued | Refused:
         rule(policy, "margin_of_safety", policy.margin_of_safety[moat], "ratio", f"{moat} moat"),
         *_peer_rules(c, used),
     )
-    value = e.value_per_share
-    if value <= 0:
+    value, outside = e.value_per_share, outside_value(c)
+    if value + outside <= 0:
         return Refused(_NOT_POSITIVE, flags, im, inputs)
-    im |= decline_at_price(im, c.price, value, policy)
-    return Valued("decline", value, moat, im, inputs, flags)
+    im |= decline_at_price(im, c.price, value + outside, policy)
+    return Valued("decline", value + outside, moat, im, inputs, flags)
 
 
 def decline_at_price(
     im: dict[str, Any], price: float, value: float, policy: Policy
 ) -> dict[str, Any]:
-    """The intermediates that move with the price, from the rebuild keys in ``im``: the decline
-    rate at which the run-off, the consensus years as found and the fade from that rate, floored
-    and weighted as built, is worth the price (``None`` when the scan finds none), the trailing
-    multiples, and the expected return growing at the path's own rates from year 2, zero past
-    year N."""
+    """The intermediates that move with the price, from the rebuild keys in ``im``, at ``price``
+    and the result's ``value`` a share: the decline rate at which the run-off, the consensus years
+    as found and the fade from that rate, floored and weighted as built, is worth the business's
+    share of the price (``route_steps.business_price``; ``None`` when the scan finds none), the
+    trailing multiples, and the expected return growing at the path's own rates from year 2,
+    zero past year N."""
 
     def value_at(trial: float) -> float:
         v = _valuation(im, _rates(im["runoff_path"], trial), policy)
@@ -376,7 +392,7 @@ def decline_at_price(
 
     horizon = policy.repricing_horizon_years
     return {
-        "implied_decline_rate": implied_decline_rate(value_at, price),
+        "implied_decline_rate": implied_decline_rate(value_at, business_price(im, price)),
         "multiples": multiples_at(price, im["eps"]),
         "expected_return": expected(price, value, im, im["growth_rates"][1:], horizon, 0.0),
     }

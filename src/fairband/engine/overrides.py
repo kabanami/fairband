@@ -1,20 +1,21 @@
 """Overrides: the inputs an agent may change, the rules an override must pass, and the engine's
 own reading of each input (spec 2026-11-06 Tier 2, 10.1 to 10.3; ``method.md`` 14).
 
-An override changes one tagged input. ``TAGS`` names the sixteen inputs, the routes that read
+An override changes one tagged input. ``TAGS`` names the eighteen inputs, the routes that read
 each, its unit and, for the two word inputs, its words; the numeric ranges are the policy's
-``override_ranges``, the ends included but the two NTM anchors' lower end, 0, which an anchor
-must be above (``TagSpec.low_open``). ``LABELS`` names each input's bridge line in a reader's
-words. ``check_override`` applies the rules in this order and answers with the first one broken:
-a locked input (``LOCKED``); a tag that is not an input; a route that does not read the tag; a
-value outside its words or its range, or a lasting override of a period-tied input; no evidence,
-an NTM anchor (``earnings.ntm``, ``revenue.ntm``) without a guidance record among its evidence,
-or a belief or held rate above the sales class's 90th percentile without a filing or a
-transcript (when the policy's ``override_primary_evidence_above_p90`` holds). The rule reads the
-evidence's kinds alone: the records an NTM anchor cites must hold a gaap record of its metric for
-a fiscal year (``ANCHOR_METRICS``, ``anchor_misfit``), which the override route checks on the
-records before the rules, since it reads them. A passing override is ``("applied", "")``; a
-refused one names its state and a sentence the agent can act on.
+``override_ranges``, the ends included but the lower end, 0, of the two NTM anchors and the
+diluted share count, which each must be above (``TagSpec.low_open``). ``LABELS`` names each
+input's bridge line in a reader's words. ``check_override`` applies the rules in this order and
+answers with the first one broken: a locked input (``LOCKED``); a tag that is not an input; a
+route that does not read the tag; a value outside its words or its range, or a lasting override
+of a period-tied input; no evidence, an NTM anchor (``earnings.ntm``, ``revenue.ntm``) without a
+guidance record among its evidence, or a belief or held rate above the sales class's 90th
+percentile without a filing or a transcript (when the policy's
+``override_primary_evidence_above_p90`` holds). The rule reads the evidence's kinds alone: the
+records an NTM anchor cites must hold a gaap record of its metric for a fiscal year
+(``ANCHOR_METRICS``, ``anchor_misfit``), which the override route checks on the records before
+the rules, since it reads them. A passing override is ``("applied", "")``; a refused one names
+its state and a sentence the agent can act on.
 ``check_input`` applies the first four alone, the fourth without the lifetime: the rules on the
 input and its value, which a sensitivity reading's values meet and no others, since a reading
 changes no input (``method.md`` 14.8).
@@ -29,11 +30,16 @@ mature route writes ``cycle_gap`` into its intermediates only under an override,
 Growth or Mature Stable result without one reads 0.0 (a refusal, the route its phase takes). The
 NTM earnings read the anchor the Mature Growth route stored, before the cycle gap came off it;
 the NTM revenue reads the year one the revenue-growth or Decline route stored, none on a Decline
-row with no usable consensus. An override at the engine's reading moves nothing.
+row with no usable consensus. The engine finds no value outside the business either: a valued
+route writes ``outside_value_per_share`` only under an override, so a result without one reads
+0.0 on every route but Start-up, which reads none. The diluted share count reads the count the
+result cites: its intermediates' ``shares``, else the reported count's DATA entry or the
+JUDGMENT entry in its place. An override at the engine's reading moves nothing.
 
 ``INPUT_OF`` names the route's own entry each tag stands for in a result's inputs: a result
 valued under an override cites the JUDGMENT entry in its place, so no DATA or RULE entry carries
-the agent's figure under the vendor's or the policy's provenance.
+the agent's figure under the vendor's or the policy's provenance. The outside value stands for
+none: the engine reads no such figure.
 """
 
 from collections.abc import Mapping, Sequence
@@ -61,8 +67,11 @@ OverrideTag = Literal[
     "decline.rate",
     "balance.debt",
     "balance.cash",
+    "shares.diluted",
+    "value.outside",
 ]
-# The bridge's order, the method's step order (spec 10.4).
+# The bridge's order, the method's step order (spec 10.4); the count and the value outside the
+# business last, after the balance sheet (spec 2026-11-09 8).
 BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "phase",
     "earnings.ntm",
@@ -80,6 +89,8 @@ BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "moat.class",
     "balance.debt",
     "balance.cash",
+    "shares.diluted",
+    "value.outside",
 )
 Lifetime = Literal["lasting", "period-tied"]
 State = Literal[
@@ -100,7 +111,8 @@ class TagSpec:
     """An input an agent may override: the routes that read it, the unit the engine reads it in,
     its words (``None`` for a number, whose range is the policy's), whether only a period-tied
     override may change it, and whether its range's lower end is excluded: an NTM anchor must be
-    above 0, as the route's own positive-anchor rule asks of the consensus."""
+    above 0, as the route's own positive-anchor rule asks of the consensus, and so must a share
+    count, as the guard asks of the reported one."""
 
     tag: OverrideTag
     routes: frozenset[Route]
@@ -166,6 +178,8 @@ TAGS: dict[OverrideTag, TagSpec] = {
         _spec("decline.rate", frozenset({"decline"}), "ratio"),
         _spec("balance.debt", _BALANCE, "USD", period_tied_only=True),
         _spec("balance.cash", _BALANCE, "USD", period_tied_only=True),
+        _spec("shares.diluted", _ALL, "shares", period_tied_only=True, low_open=True),
+        _spec("value.outside", _ALL - {"start-up"}, "USD a share"),
     )
 }
 
@@ -188,11 +202,15 @@ LABELS: dict[OverrideTag, str] = {
     "decline.rate": "decline rate",
     "balance.debt": "debt",
     "balance.cash": "cash",
+    "shares.diluted": "diluted shares",
+    "value.outside": "outside the business",
 }
 
 # The route's own entry in a result's inputs that each tag stands for. The two gaps stand for
 # none: a route cites the gap found and the NTM consensus as found as data. An NTM anchor stands
-# for its consensus figure's entry; Mature Growth's NTM net income entry keeps the consensus.
+# for its consensus figure's entry; Mature Growth's NTM net income entry keeps the consensus. The
+# count stands for the reported count every result cites; the outside value for none, since the
+# engine reads no such figure.
 INPUT_OF: dict[OverrideTag, str] = {
     "earnings.ntm": "ntm_eps",
     "revenue.ntm": "ntm_revenue",
@@ -205,8 +223,10 @@ INPUT_OF: dict[OverrideTag, str] = {
     "return.runway": "runway_return",
     "balance.debt": "debt",
     "balance.cash": "cash",
+    "shares.diluted": "shares_diluted",
 }
 
+# The reported figures, locked; the diluted count changes only through ``shares.diluted``.
 _REPORTED = ("price", "shares_diluted", "market_cap", "revenue", "operating_income", "eps")
 LOCKED: dict[str, str] = {
     "required_return": "r is a locked input: the hurdle rate",
@@ -343,12 +363,13 @@ def _number(value: object) -> TypeIs[float]:
 
 def range_text(low: float, high: float, unit: str, *, low_open: bool = False) -> str:
     """A range in the input's unit: percents for a ratio, dollars for money (a share for the two
-    gaps and the NTM EPS), the figures for a multiple; a negative end with the minus sign, and
-    "above" before a lower end the range excludes. An upper end of ``NO_BOUND`` or more stands for
-    no bound and is not written: the range names its lower end alone, "$0 or more", or "above $0"
+    gaps, the NTM EPS and the value outside the business), whole shares grouped by thousands for
+    the share count, the figures for a multiple; a negative end with the minus sign, and "above"
+    before a lower end the range excludes. An upper end of ``NO_BOUND`` or more stands for no
+    bound and is not written: the range names its lower end alone, "$0 or more", or "above $0"
     when it excludes it. The override's refusal and the secondary valuation's driver refusals
     write their ranges with it."""
-    per = " a share" if unit == "USD a share" else ""
+    per = {"USD a share": " a share", "shares": " shares"}.get(unit, "")
     if high >= NO_BOUND:
         bound = f"above {_end(low, unit)}" if low_open else f"{_end(low, unit)} or more"
         return f"{bound}{per}"
@@ -362,6 +383,8 @@ def _end(x: float, unit: str) -> str:
         return f"{_signed(x * 100)}%"
     if unit in ("USD", "USD a share"):
         return _dollars(x)
+    if unit == "shares":
+        return f"{x:,.0f}"
     return _signed(x)
 
 
@@ -434,6 +457,13 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
             return _at(im, "runoff_path", "d")
         case "balance.debt" | "balance.cash":
             return _balance(result, tag.removeprefix("balance."))
+        case "shares.diluted":
+            return im["shares"] if "shares" in im else _cited(result, "shares_diluted", tag)
+        case "value.outside":
+            # written only under an override; the engine's own reading is nil
+            if _route(result) not in TAGS[tag].routes:
+                return None
+            return im.get("outside_value_per_share", 0.0)
 
 
 def _route(result: ValuationResult) -> Route | None:
@@ -449,13 +479,14 @@ def _balance(result: ValuationResult, name: str) -> Any:
     as nil); on a result that cites an override in its place, the override's figure. ``None`` on
     a result that cites neither, a row refused before its route cites the line: its
     intermediates hold the nil the bridge counts, not the line."""
+    return _cited(result, name, f"balance.{name}")
+
+
+def _cited(result: ValuationResult, name: str, tag: str) -> Any:
+    """The value of the DATA input ``name`` the result cites, or of the JUDGMENT entry of ``tag``
+    in its place; ``None`` when it cites neither."""
     for x in result.inputs:
-        if (
-            x.name == name
-            and x.tag == "DATA"
-            or x.name == f"balance.{name}"
-            and x.tag == "JUDGMENT"
-        ):
+        if x.name == name and x.tag == "DATA" or x.name == tag and x.tag == "JUDGMENT":
             return x.value
     return None
 

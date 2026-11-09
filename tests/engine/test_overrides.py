@@ -211,8 +211,101 @@ def test_the_cycle_gap_is_a_mature_tag() -> None:
         "decline.rate": "decline rate",
         "balance.debt": "debt",
         "balance.cash": "cash",
+        "shares.diluted": "diluted shares",
+        "value.outside": "outside the business",
     }
     assert sorted(LABELS) == sorted(TAGS)
+
+
+def test_the_two_new_tags_rules(policy: Policy) -> None:
+    """The value outside the business on every valued route, the diluted count on every route
+    and period-tied only (spec 2026-11-09 8); both close the bridge, the count first."""
+    assert check_override(
+        "value.outside", 12.0, "mature-growth", policy, ["filing"], "lasting", None
+    ) == ("applied", "")
+    assert check_override(
+        "value.outside", 12.0, "start-up", policy, ["filing"], "lasting", None
+    ) == ("refused-route", "the Start-up route does not read value.outside")
+    assert (
+        check_override(
+            "value.outside", 1200.0, "mature-growth", policy, ["filing"], "lasting", None
+        )[0]
+        == "refused-unit"
+    )
+    assert check_override(
+        "shares.diluted", 1.06e9, "mature-growth", policy, ["filing"], "period-tied", None
+    ) == ("applied", "")
+    assert check_override(
+        "shares.diluted", 1.06e9, "mature-growth", policy, ["filing"], "lasting", None
+    ) == ("refused-unit", "shares.diluted is period-tied only")
+    assert (
+        check_override(
+            "shares.diluted", 0.0, "mature-growth", policy, ["filing"], "period-tied", None
+        )[0]
+        == "refused-unit"
+    )
+    assert BRIDGE_ORDER[-2:] == ("shares.diluted", "value.outside")
+    assert LABELS["shares.diluted"] == "diluted shares"
+    assert LABELS["value.outside"] == "outside the business"
+
+
+def test_the_two_new_tags_read_where_spec_8_says(policy: Policy) -> None:
+    """The outside value on every route but Start-up, a figure a share from −$1,000 to $1,000 and
+    any evidence; the count on every route, above 0 shares, never lasting; the ranges as the
+    refusals name them."""
+    outside, count = TAGS["value.outside"], TAGS["shares.diluted"]
+    assert outside.routes == {"mature-growth", "mature-stable", "revenue-growth", "decline"}
+    assert outside.unit == "USD a share" and not outside.period_tied_only
+    assert count.routes == TAGS["phase"].routes and count.unit == "shares"
+    assert count.period_tied_only and count.low_open
+    for route in ("mature-stable", "revenue-growth", "decline"):
+        assert checked(policy, "value.outside", -1000.0, route, ("url",)) == ("applied", "")
+    assert checked(policy, "value.outside", -1000.5, "decline") == (
+        "refused-unit",
+        "value.outside takes −$1,000 to $1,000 a share",
+    )
+    tied = checked(policy, "shares.diluted", 1e12, "start-up", lifetime="period-tied")
+    assert tied == ("applied", "")
+    assert checked(policy, "shares.diluted", -5.0, "decline", lifetime="period-tied") == (
+        "refused-unit",
+        "shares.diluted takes above 0 to 1,000,000,000,000 shares",
+    )
+    assert range_text(0.0, 1e12, "shares", low_open=True) == "above 0 to 1,000,000,000,000 shares"
+    # the reported count stays locked: the tag is the one door
+    assert checked(policy, "shares_diluted", 1.06e9, "mature-growth") == (
+        "refused-locked",
+        "shares_diluted is reported data",
+    )
+
+
+def test_the_two_new_readings(policy: Policy, deciles: Deciles) -> None:
+    """The engine finds no value outside the business, nil on every route that reads it and none
+    on Start-up; the count is the one the result cites, the reported one until an override sets
+    it, and on a row refused before its route the DATA entry or the JUDGMENT entry in its place."""
+    mg = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    assert "outside_value_per_share" not in mg.intermediates
+    assert current_reading(mg, "value.outside") == 0.0
+    assert current_reading(mg, "shares.diluted") == mg.intermediates["shares"] == 1_000e6
+    su = value_company(start_up_inputs(), deciles, policy, TODAY)
+    assert current_reading(su, "value.outside") is None
+    assert current_reading(su, "shares.diluted") == su.intermediates["shares"]
+    for build in (mature_stable_inputs, high_growth_inputs, decline_inputs):
+        r = value_company(build(), deciles, policy, TODAY)
+        assert current_reading(r, "value.outside") == 0.0
+        assert current_reading(r, "shares.diluted") == r.intermediates["shares"]
+    outside = {"value.outside": override("value.outside", 12.0)}
+    judged = value_company(mature_growth_inputs(), deciles, policy, TODAY, outside)
+    assert current_reading(judged, "value.outside") == 12.0
+    no_trailing = replace(mature_growth_inputs(), trailing=None)
+    refused = value_company(no_trailing, deciles, policy, TODAY)
+    assert refused.refusal == "no trailing figures" and "shares" not in refused.intermediates
+    assert current_reading(refused, "shares.diluted") == 1_000e6
+    assert current_reading(refused, "value.outside") == 0.0  # the route its phase takes
+    count = {"shares.diluted": override("shares.diluted", 1_060e6)}
+    refused = value_company(no_trailing, deciles, policy, TODAY, count)
+    assert current_reading(refused, "shares.diluted") == 1_060e6
+    names = [(x.name, x.tag, x.unit) for x in refused.inputs if "shares" in x.name]
+    assert names == [("shares.diluted", "JUDGMENT", "shares")]
 
 
 def test_the_two_ntm_anchors_are_tags(policy: Policy) -> None:

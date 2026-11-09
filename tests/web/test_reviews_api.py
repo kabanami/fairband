@@ -341,6 +341,67 @@ def test_a_period_tied_override_keeps_the_value_it_corrected(client: TestClient)
     assert len(_overrides(client, "HGCO")) == 2  # neither stored
 
 
+def test_the_two_new_inputs_through_the_api(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    stored_inputs: dict[str, CompanyInputs],
+) -> None:
+    """The value outside the business applies on AAPL with a filing and adds its figure; the
+    count refuses a lasting override and applies a period-tied one, which keeps the count it
+    corrected; the detail's bridge closes on the two lines under their labels. A Start-up row
+    reads the count and not the outside value (spec 2026-11-09 8)."""
+    filing = {"kind": "filing", "ref": "10-Q, note 7: equity investments", "note": ""}
+    outside = {
+        "tag": "value.outside",
+        "new": 12.0,
+        "reason": "a listed stake, after tax",
+        "evidence": [filing],
+        "lifetime": "lasting",
+    }
+    body = _post(client, outside)
+    mechanical = results["AAPL"].value
+    assert mechanical is not None
+    assert (body["override"]["state"], body["override"]["old"], body["override"]["unit"]) == (
+        "applied",
+        0.0,
+        "USD a share",
+    )
+    assert body["review"]["value"] == pytest.approx(mechanical + 12.0)
+    count = results["AAPL"].intermediates["shares"]
+    shares = outside | {"tag": "shares.diluted", "new": count * 1.06, "reason": "a forward sale"}
+    r = client.post("/api/companies/AAPL/overrides", json=shares, headers=AGENT)
+    assert (r.status_code, r.json()["detail"]) == (400, "shares.diluted is period-tied only")
+    tied = _post(client, shares | {"lifetime": "period-tied", "period": "Q3 2026"})["override"]
+    assert (tied["state"], tied["unit"], tied["old"], tied["correctedValue"]) == (
+        "applied",
+        "shares",
+        count,
+        count,
+    )
+    bridge = client.get("/api/companies/AAPL").json()["review"]["bridge"]
+    assert [(line["tag"], line["label"], line["unit"], line["old"]) for line in bridge] == [
+        ("shares.diluted", "diluted shares", "shares", count),
+        ("value.outside", "outside the business", "USD a share", 0.0),
+    ]
+    assert bridge[1]["delta"] == pytest.approx(12.0)
+
+    start_up = value_company(start_up_inputs(), universe_deciles(), policy, TODAY)
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, start_up, 1, clock=lambda: CREATED)
+    stored_inputs["SUCO"] = start_up_inputs()
+    r = client.post("/api/companies/SUCO/overrides", json=outside, headers=AGENT)
+    assert (r.status_code, r.json()["override"]["state"], r.json()["detail"]) == (
+        400,
+        "refused-route",
+        "the Start-up route does not read value.outside",
+    )
+    su_count = start_up.intermediates["shares"]
+    su_shares = shares | {"new": 2 * su_count, "lifetime": "period-tied", "period": "FY2025"}
+    assert _post(client, su_shares, "SUCO")["override"]["state"] == "applied"
+
+
 def test_a_start_up_put_in_young_growth_meets_the_evidence_rule(
     client: TestClient,
     db_path: Path,

@@ -50,6 +50,18 @@ the P/E and the ``ntm_eps`` and ``ntm_net_income`` data entries are the consensu
 (``Anchor.ntm_eps_found``), the ``ntm_eps`` entry giving way to the JUDGMENT entry under the
 guided EPS. ``cycle_gap`` is in the intermediates only under that override. The cross-check reads
 the row's moat, returns and two gaps, and the consensus and belief as found.
+
+``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
+after the route's value: the result's value is the route's value a share plus the figure, which
+the levels and the designation read, and so is each value by runway and by return; the
+intermediates' ``value_per_share`` stays the route's own, the business's, so the drawer's
+arithmetic reproduces, and ``outside_value_per_share`` carries the figure under the override
+only. A sum at or below zero refuses the row as a route value would. ``growth_at_price`` reads
+the price and the sum: the multiples, the growth share and the expected return read them as they
+are, and the implied growth, by runway and by return too, solves to the price less the figure,
+the business's share of the price, which it reads from the intermediates. The diluted share
+count is ``Context.shares``, an agent's ``shares.diluted`` in place of the reported count: NTM net
+income is the NTM EPS times it, and after-tax SBC a share divides by it.
 """
 
 from dataclasses import asdict, replace
@@ -89,6 +101,7 @@ from fairband.engine.route_steps import (
     Refused,
     RoicTerms,
     Valued,
+    business_price,
     charge_for,
     chosen,
     common_inputs,
@@ -102,6 +115,8 @@ from fairband.engine.route_steps import (
     multiples_at,
     nil,
     nri_gap,
+    outside_entry,
+    outside_value,
     present,
     price_facts_for,
     rule,
@@ -127,12 +142,13 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     growth, charge = _growth_and_charge(anchor, path, belief, moat, roic, policy)
     value_total = value_at_belief(growth, charge)
     value = value_total / c.shares
+    outside = outside_value(c)
     by_runway = {
-        str(n): value_at_belief(replace(growth, runway=n), charge) / c.shares
+        str(n): value_at_belief(replace(growth, runway=n), charge) / c.shares + outside
         for n in _runways(policy)
     }
     by_roic = {
-        key: None if ch is None else value_at_belief(growth, ch) / c.shares
+        key: None if ch is None else value_at_belief(growth, ch) / c.shares + outside
         for key, ch in _roic_charges(charge, roic.usable, moat, policy).items()
     }
     gap = chosen(c, "earnings.nri_gap", nri_gap(i))
@@ -160,6 +176,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "value_per_share": value,
         "value_by_runway": by_runway,
         "value_by_roic": by_roic,
+        **outside_entry(c),
         "nri_gap": gap,
         **cycle_entry(cycle_gap(c)),
         "eps": e,
@@ -177,9 +194,9 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     spread = present(value_spread_flag(list(by_roic.values())[:3], policy)) + present(
         value_spread_flag(list(by_runway.values()), policy)
     )
-    if value <= 0:
+    if value + outside <= 0:
         return Refused(_NOT_POSITIVE, flags + spread, im)
-    im |= growth_at_price(im, c.price, value, policy)
+    im |= growth_at_price(im, c.price, value + outside, policy)
     flags += present(long_runway(im, policy)) + spread
     inputs = (
         *common_inputs(i, t, roic),
@@ -201,7 +218,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
             f"plus inflation {policy.inflation_addition:.1%}",
         ),
     )
-    return Valued("mature-growth", value, moat, im, inputs, flags)
+    return Valued("mature-growth", value + outside, moat, im, inputs, flags)
 
 
 def growth_cross_check(c: Context, moat: Moat, roic: RoicTerms) -> dict[str, Any]:
@@ -332,9 +349,11 @@ def charge_entry(growth: GrowthPath, charge: Charge) -> dict[str, Any]:
 def growth_at_price(
     im: dict[str, Any], price: float, value: float, policy: Policy
 ) -> dict[str, Any]:
-    """The intermediates that move with the price, from the value-side intermediates ``im``."""
+    """The intermediates that move with the price, from the value-side intermediates ``im``, at
+    ``price`` and the result's ``value`` a share: the implied growth solves to the business's
+    share of the price (``route_steps.business_price``)."""
     growth, charge = _rebuilt(im, policy)
-    target = price * im["shares"]
+    target = business_price(im, price) * im["shares"]
     aggregate = im["roic"]["aggregate"]
     usable = aggregate if aggregate is not None and aggregate > 0 else None
     return {

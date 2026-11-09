@@ -17,10 +17,11 @@ from fairband.engine.mature_growth import (
     GrowthPath,
     growth_rates,
     hold_years,
+    implied_growth,
     return_by_year,
     value_at_belief,
 )
-from fairband.engine.overrides import Override, OverrideTag
+from fairband.engine.overrides import Override, OverrideTag, check_override, current_reading
 from fairband.engine.price_facts import price_facts
 from fairband.engine.roic import (
     CapitalYear,
@@ -1391,6 +1392,214 @@ def test_fallback_validity(mg_inputs: CompanyInputs, deciles: Deciles, policy: P
     for stale in (mg_inputs.data_date, date(2026, 7, 30)):
         r = value_company(replace(mg_inputs, next_earnings=stale), deciles, policy, TODAY)
         assert r.valid_until == fallback
+
+
+# --- The value outside the business and the share count (spec 2026-11-09 8) --------------------
+
+VALUED = {
+    "mature-growth": engine_companies.mature_growth_inputs,
+    "mature-stable": engine_companies.mature_stable_inputs,
+    "revenue-growth": engine_companies.high_growth_inputs,
+    "decline": engine_companies.decline_inputs,
+}
+# The solves each valued route runs on the price; the cross-check's implied growth among them.
+SOLVES = {
+    "mature-growth": ("implied_growth", "implied_growth_by_runway", "implied_by_roic"),
+    "mature-stable": ("growth_route",),
+    "revenue-growth": ("implied_growth", "implied_margin", "growth_route"),
+    "decline": ("implied_decline_rate",),
+}
+# The figures each valued route reads at the price as it is.
+AS_PRICED = {
+    "mature-growth": ("multiples", "growth_share"),
+    "mature-stable": ("multiples",),
+    "revenue-growth": ("multiples", "growth_share"),
+    "decline": ("multiples",),
+}
+# The value a share each valued route divides by the count: Decline's before the floor and the
+# weighting, which a count also moves through the floor's NCAV a share.
+PER_SHARE = {"revenue-growth": "value_per_share", "decline": "going_concern_per_share"}
+
+
+def test_value_outside_adds_to_the_value_and_targets_the_business_price(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 13.4: $12 a share outside the business on the route's value; the levels and the
+    designation read the sum, the implied growth solves to the price less the $12, and the values
+    by runway and by return each add it."""
+    inputs = engine_companies.mature_growth_inputs()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    outside = value_company(inputs, deciles, policy, TODAY, judged(("value.outside", 12.0)))
+    assert plain.value is not None and plain.price is not None
+    assert outside.value is not None and outside.levels is not None
+    assert outside.value == pytest.approx(plain.value + 12.0)
+    assert outside.levels == levels_for(outside.value, outside.intermediates["moat"], policy)
+    assert (outside.price_to_value, outside.designation) == designation_for(
+        plain.price, outside.value, policy.designation_edges
+    )
+    im = outside.intermediates
+    assert im["outside_value_per_share"] == 12.0
+    assert "outside_value_per_share" not in plain.intermediates
+    # the intermediates' value a share stays the business's, so the drawer's arithmetic reproduces
+    assert im["value_per_share"] == plain.intermediates["value_per_share"]
+    path, charge = route_mature_growth._rebuilt(im, policy)
+    target = (plain.price - 12.0) * plain.intermediates["shares"]
+    assert im["implied_growth"] == pytest.approx(implied_growth(target, path, charge, hi=2.0))
+    for key in ("value_by_runway", "value_by_roic"):
+        pairs = zip(im[key].values(), plain.intermediates[key].values(), strict=True)
+        assert all(v == pytest.approx(w + 12.0) for v, w in pairs if w is not None), key
+
+
+@pytest.mark.parametrize("route", sorted(VALUED))
+def test_every_valued_route_adds_the_outside_value(
+    route: str, policy: Policy, deciles: Deciles
+) -> None:
+    """Each valued route's value a share is its own plus the figure (here a quarter of the
+    price). Every solve on the price targets the business's share of it, as a row priced at the
+    price less the figure solves; the multiples and the growth share read the price as it is,
+    and the expected return's repricing term the sum against the price. A reprice moves the row
+    as a fresh valuation at the new price."""
+    inputs = VALUED[route]()
+    assert inputs.price is not None
+    figure = inputs.price / 4
+    plain = value_company(inputs, deciles, policy, TODAY)
+    outside = value_company(inputs, deciles, policy, TODAY, judged(("value.outside", figure)))
+    business = replace(inputs, price=inputs.price - figure)
+    at_business = value_company(business, deciles, policy, TODAY)
+    assert outside.route == plain.route == route
+    assert plain.value is not None and outside.value is not None
+    assert outside.value == pytest.approx(plain.value + figure)
+    assert outside.levels == levels_for(outside.value, outside.intermediates["moat"], policy)
+    assert outside.intermediates["value_per_share"] == plain.intermediates["value_per_share"]
+    for key in SOLVES[route]:
+        assert outside.intermediates[key] == at_business.intermediates[key], key
+    for key in AS_PRICED[route]:
+        assert outside.intermediates[key] == plain.intermediates[key], key
+    er, found = outside.intermediates["expected_return"], plain.intermediates["expected_return"]
+    horizon = policy.repricing_horizon_years
+    assert (er["income"], er["growth"]) == (found["income"], found["growth"])
+    assert er["repricing"] == pytest.approx(math.log(outside.value / inputs.price) / horizon)
+    if route == "revenue-growth":
+        pairs = zip(
+            outside.intermediates["value_by_margin"].values(),
+            plain.intermediates["value_by_margin"].values(),
+            strict=True,
+        )
+        assert all(v == pytest.approx(w + figure) for v, w in pairs)
+    moved = reprice(result_from_json(result_to_json(outside)), 2 * inputs.price, TODAY, policy)
+    fresh = value_company(
+        replace(inputs, price=2 * inputs.price),
+        deciles,
+        policy,
+        TODAY,
+        judged(("value.outside", figure)),
+    )
+    assert moved.value == outside.value and moved.levels == outside.levels
+    assert (moved.price_to_value, moved.designation) == (fresh.price_to_value, fresh.designation)
+    for key in (*SOLVES[route], *AS_PRICED[route], "expected_return"):
+        assert moved.intermediates[key] == fresh.intermediates[key], key
+
+
+def test_an_outside_value_above_the_price_values_the_row(policy: Policy, deciles: Deciles) -> None:
+    """A stake worth more than the price, the business priced below nothing: the row values at
+    the sum, the multiples and the expected return read the price, and the solve on the business's
+    share of the price finds no decline rate that reaches it."""
+    inputs = engine_companies.decline_inputs()
+    assert inputs.price == 3.0
+    plain = value_company(inputs, deciles, policy, TODAY)
+    r = value_company(inputs, deciles, policy, TODAY, judged(("value.outside", 12.0)))
+    assert plain.value is not None and r.value == pytest.approx(plain.value + 12.0)
+    assert r.designation == "well-below"
+    assert r.intermediates["multiples"] == plain.intermediates["multiples"]
+    repricing = r.intermediates["expected_return"]["repricing"]
+    assert repricing == pytest.approx(math.log(r.value / 3.0) / policy.repricing_horizon_years)
+    assert r.intermediates["implied_decline_rate"] is None
+    moved = reprice(r, 2.0, TODAY, policy)
+    assert moved.intermediates["implied_decline_rate"] is None and moved.designation == "well-below"
+
+
+@pytest.mark.parametrize(
+    ("route", "reason"),
+    [
+        ("mature-growth", "value not positive under the reinvestment charge"),
+        ("mature-stable", "value not positive under the reinvestment charge"),
+        ("revenue-growth", "value not positive under the reinvestment charge"),
+        ("decline", "value not positive in the run-off"),
+    ],
+)
+def test_an_outside_value_that_sinks_the_value_refuses(
+    route: str, reason: str, policy: Policy, deciles: Deciles
+) -> None:
+    """The sum decides: a figure that takes it to zero or below refuses the row with the route's
+    own reason, the value side kept with the figure beside it."""
+    inputs = VALUED[route]()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    r = value_company(inputs, deciles, policy, TODAY, judged(("value.outside", -1000.0)))
+    assert_refused(r, reason)
+    assert r.intermediates["value_per_share"] == plain.intermediates["value_per_share"]
+    assert r.intermediates["outside_value_per_share"] == -1000.0
+    assert [x.name for x in r.inputs if x.tag == "JUDGMENT"] == ["value.outside"]
+
+
+def test_shares_diluted_replaces_the_count_everywhere(policy: Policy, deciles: Deciles) -> None:
+    """Spec 13.4: a count raised 6% raises NTM net income 6% with it, the consensus EPS times the
+    count, so the Mature Growth value a share, which rests on that EPS, stands; the equity routes
+    divide by the count. The JUDGMENT entry stands in place of the reported count's."""
+    inputs = engine_companies.mature_growth_inputs()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    count = plain.intermediates["shares"] * 1.06
+    more = value_company(inputs, deciles, policy, TODAY, judged(("shares.diluted", count)))
+    assert plain.intermediates["sbc_basis"] == "includes-sbc"  # no SBC a share to move
+    assert more.intermediates["shares"] == pytest.approx(plain.intermediates["shares"] * 1.06)
+    assert more.intermediates["ntm_net_income"] == pytest.approx(
+        plain.intermediates["ntm_net_income"] * 1.06
+    )
+    assert more.value == pytest.approx(plain.value)
+    assert current_reading(plain, "shares.diluted") == pytest.approx(plain.intermediates["shares"])
+    assert current_reading(more, "shares.diluted") == count
+    cited = [(x.name, x.tag, x.value) for x in more.inputs if "shares" in x.name]
+    assert cited == [("shares.diluted", "JUDGMENT", count)]
+    for route, key in PER_SHARE.items():
+        found = value_company(VALUED[route](), deciles, policy, TODAY)
+        shares = found.intermediates["shares"]
+        doubled = value_company(
+            VALUED[route](), deciles, policy, TODAY, judged(("shares.diluted", 2 * shares))
+        )
+        assert doubled.intermediates["shares"] == 2 * shares
+        assert doubled.intermediates["equity"] == found.intermediates["equity"]
+        assert doubled.intermediates[key] == pytest.approx(found.intermediates[key] / 2), route
+
+
+def test_the_start_up_route_reads_the_count_and_no_outside_value(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """On a Start-up row the count sets the per-share figure, the cash floor, which halves when
+    the count doubles; the requirement is a total on the market cap, which no count moves. The
+    route reads no outside value: the rule refuses it, and the engine's reading is none."""
+    inputs = engine_companies.start_up_inputs()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    shares = plain.intermediates["shares"]
+    doubled = value_company(inputs, deciles, policy, TODAY, judged(("shares.diluted", 2 * shares)))
+    assert doubled.refusal == plain.refusal == "Start-up: no value by design"
+    assert doubled.route == "start-up" and doubled.intermediates["shares"] == 2 * shares
+    assert doubled.intermediates["cash_floor"] == pytest.approx(
+        plain.intermediates["cash_floor"] / 2
+    )
+    assert doubled.intermediates["requirement"] == plain.intermediates["requirement"]
+    assert check_override(
+        "value.outside", 12.0, "start-up", policy, ["filing"], "lasting", None
+    ) == ("refused-route", "the Start-up route does not read value.outside")
+    assert current_reading(plain, "value.outside") is None
+
+
+def test_a_share_count_override_passes_the_share_guard(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The count is read before the guard: an agent's count values a row with none reported."""
+    none = replace(mg_inputs, shares_diluted=None)
+    assert_refused(value_company(none, deciles, policy, TODAY), "no diluted share count")
+    r = value_company(none, deciles, policy, TODAY, judged(("shares.diluted", 1_000e6)))
+    assert r.value == value_company(mg_inputs, deciles, policy, TODAY).value
 
 
 # --- Reprice ------------------------------------------------------------------------------------

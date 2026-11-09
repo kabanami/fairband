@@ -19,6 +19,10 @@ value when one applies, else the route's own reading. ``judgment_inputs`` are th
 entries ``route`` cites for them. ``RoicTerms.of`` takes an overriding runway return as
 ``runway_override``: it replaces the runway return the charge uses, the start of its fade, and
 charges the runway years, and the terminal return still follows the moat on the measured return.
+``outside_value`` is an agent's value outside the business a share, nil without one: each valued
+route adds it to its own value a share, and every solve on the price targets the price less it,
+``business_price``, the business's share of the price (``method.md`` 14.4). The diluted share
+count reaches a route as ``Context.shares``, an agent's count in place of the reported one.
 """
 
 from __future__ import annotations
@@ -76,7 +80,7 @@ _MEASURED = {
 class Context:
     """A company past the guards of ``route.value_company``, with the classifier's evidence that
     put it in its phase (the Decline route reads its revenue trend) and the applied overrides by
-    tag."""
+    tag; ``shares`` is the diluted count, an agent's ``shares.diluted`` when one applies."""
 
     inputs: CompanyInputs
     trailing: TrailingFigures
@@ -91,8 +95,9 @@ class Context:
 @dataclass(frozen=True)
 class StartUpContext:
     """A Start-up company past the guards ``route.value_company`` runs before its route: a
-    positive price and diluted share count, and the trailing figures when there are any, since a
-    pre-revenue company may lack them; and the applied overrides by tag."""
+    positive price and diluted share count (an agent's ``shares.diluted`` when one applies), and
+    the trailing figures when there are any, since a pre-revenue company may lack them; and the
+    applied overrides by tag."""
 
     inputs: CompanyInputs
     trailing: TrailingFigures | None
@@ -267,6 +272,27 @@ def cycle_entry(cycle: float | None) -> dict[str, float]:
     """The intermediates' ``cycle_gap``, written only under an override, so a mechanical
     result's intermediates do not carry it."""
     return {} if cycle is None else {"cycle_gap": cycle}
+
+
+def outside_value(c: Context) -> float:
+    """An agent's value outside the business a share, after tax, which the valued routes add to
+    their value a share (spec 2026-11-09 8); nil without one: the engine finds none
+    (``overrides.current_reading`` reads its absence as nil)."""
+    return chosen(c, "value.outside", 0.0)
+
+
+def outside_entry(c: Context) -> dict[str, float]:
+    """The intermediates' ``outside_value_per_share``, written only under an override, so a
+    mechanical result's intermediates do not carry it."""
+    return {"outside_value_per_share": outside_value(c)} if "value.outside" in c.overrides else {}
+
+
+def business_price(im: dict[str, Any], price: float) -> float:
+    """The business's share of ``price``: the price less the intermediates'
+    ``outside_value_per_share``, the price itself without one. Every solve on the price targets
+    it (spec 2026-11-09 8), so a stored row moves to a new price from its intermediates alone."""
+    outside: float = im.get("outside_value_per_share", 0.0)
+    return price - outside
 
 
 def eps(t: TrailingFigures, gap: float | None, forward: float | None) -> dict[str, float | None]:
