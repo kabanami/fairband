@@ -76,19 +76,20 @@ publishes. The stored price is the last refresh's close, which may be days old.
 A scoped refresh fetches the company's price and statements again and values it. It takes about
 a minute.
 
-- Call `refresh_start("scoped", [symbol])`. When it is refused because a refresh is running, call
-  `refresh_status()` until that one ends, then start yours.
-- Call `refresh_status()` until its `refresh` is `null`: no refresh is running, and `last` is the
-  one you started.
-- When `last` ends with a `status` other than `done`, tell the user, go on with the stored
-  snapshot, and write the price's date in section 9 of the report.
-- Read the company as below. Its `price_date` is the refreshed close when the refresh ended
-  `done`.
+- Call `refresh_start("scoped", [symbol])` and keep the `refreshId` it answers. When it is refused
+  because a refresh is running, call `refresh_status()` until that one ends, then start yours.
+- Call `refresh_status()` until its `refresh` is `null`: no refresh is running.
+- Call `company(symbol)`. When its `snapshot.refreshId` is not the id you kept, the company was not
+  refreshed: its fetch failed inside the run, or another run wrote the snapshot. A run that ends
+  `done` does not prove the company was refreshed. Tell the user, go on with the stored snapshot,
+  and write the price's date in section 9 of the report. When it is the id you kept, its
+  `price_date` is the refreshed close.
+- Read the rest of the company as below.
 
 Then read everything the page shows:
 
-- `company(symbol)`: the latest snapshot (the company's frozen inputs and the engine's result on
-  them). Keep `snapshot.id`: the report cites this snapshot.
+- `company(symbol)`, read above: the latest snapshot (the company's frozen inputs and the engine's
+  result on them). Keep `snapshot.id`: the report cites this snapshot.
 - `financials(symbol)`, `financial_tables(symbol)`, `estimates(symbol)`, `peers(symbol)` and
   `price_history(symbol)`: the stored figures, each with the ref to cite it by.
 - `multiples_history(symbol)`: the trailing and the forward P/E (the price over the earnings a

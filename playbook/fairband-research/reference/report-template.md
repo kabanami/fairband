@@ -151,9 +151,9 @@ The kill criteria of section 11 test it.
 - **The phase.** The phase, the growth word and the margin direction behind it, any check flag,
   the Dickinson stage, and why if an override changed it. Then the growth the price needs, and the
   belief and why.
-- **The route's value.** The mechanical value (the engine's with no override) and the reviewed
-  value (under the overrides). One sentence in words for each override that moved it, citing its
-  bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
+- **The value.** The value before any change to the inputs (the mechanical value) and after the
+  changes that stand (the reviewed value). One sentence in words for each override that moved it,
+  citing its bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
 - **The guidance.** Where a guidance override moved an anchor or a step, one sentence names it
   and cites the record's figure, `guidance:<id>/midpoint`.
 - **The secondary valuation**, on a refused row with no reviewed value only: where neither the
@@ -241,11 +241,12 @@ The thesis: customers stay for years and now sign longer contracts, so revenue k
 The price already counts on that. The view waits for two quarters of churn under the new prices.
 
 The price of $234.70 is below the value this report puts on the company, $283 a share, but above
-the price at which the discount is wide enough to buy, $212. Prices close to the value run from
-$240 to $325.
+the price at which the discount to the value is wide enough to buy, $212. Prices close to the
+value run from $240 to $325.
 
 The company is in its Mature Growth stage. Revenue grew 11.0% a year over three years, which is
-high for its size. The operating margin is positive and rising. The business is not cyclical.
+high for its size. The operating margin is positive and rising. The business is not cyclical: its
+profits do not rise and fall with its industry's cycle.
 
 Reasons for:
 1. ...
@@ -308,7 +309,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "$234.70", "ref": "snapshot:412/price"},
         " is below the value this report puts on the company, ",
         {"cite": "$283", "ref": "review:89/value"},
-        " a share, but above the price at which the discount is wide enough to buy, ",
+        " a share, but above the price at which the discount to the value is wide enough to buy, ",
         {"cite": "$212", "ref": "review:89/levels/buy"},
         ". Prices close to the value run from ",
         {"cite": "$240", "ref": "review:89/levels/fair_low"},
@@ -316,7 +317,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "$325", "ref": "review:89/levels/fair_high"},
         ".\n\nThe company is in its Mature Growth stage. Revenue grew ",
         {"cite": "11.0%", "ref": "snapshot:412/phase/growth_3y"},
-        " a year over three years, which is high for its size. The operating margin is positive and rising. The business is not cyclical.\n\nReasons for:\n\n1. Most revenue recurs each month.\n2. Customers rarely leave once their books run on the product.\n3. The company funds its growth from its own cash.\n\nMain risks:\n\n1. Customers may leave under the new prices.\n2. A payroll rival bundles accounting into its own product.\n3. Small firms cut spending in a recession.\n\nWhat would change the view:\n\n- Two quarters in a row of falling revenue.\n\nValid until 27 Jan 2027, the date of the next earnings report."
+        " a year over three years, which is high for its size. The operating margin is positive and rising. The business is not cyclical: its profits do not rise and fall with its industry's cycle.\n\nReasons for:\n\n1. Most revenue recurs each month.\n2. Customers rarely leave once their books run on the product.\n3. The company funds its growth from its own cash.\n\nMain risks:\n\n1. Customers may leave under the new prices.\n2. A payroll rival bundles accounting into its own product.\n3. Small firms cut spending in a recession.\n\nWhat would change the view:\n\n- Two quarters in a row of falling revenue.\n\nValid until 27 Jan 2027, the date of the next earnings report."
       ]
     },
     {
@@ -370,7 +371,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "3.6%", "ref": "derived:532"},
         " |\n\nPrice drove the quarter more than volume: the new price list took effect for new customers in the quarter. There were no one-time items.\n\n**The story management is telling.** Management's frame: \"the system of record for the small firm\". Three claims carry it.\n\n| Claim | Evidence | Driver | Test |\n|---|---|---|---|\n| Customers now sign multi-year contracts. | Multi-year contracts were ",
         {"cite": "41.0%", "ref": "finding:124", "period": "2026-Q4"},
-        " of new bookings in the quarter. | The growth of years two and three. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | The protection from rivals. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The growth assumed after the analysts' forecast years. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable: the bookings already show them. The price list is plausible: one quarter is too short to judge churn. Payroll is possible, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** Both records are clear and on a reported basis. The EPS outlook is new; the revenue outlook was raised from the call of July.\n\n| Metric | Period | Low | High | Midpoint | Basis | Against the prior record | Against the analysts' average |\n|---|---|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
+        " of new bookings in the quarter. | The growth of years two and three. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | The protection from rivals. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The growth assumed after the analysts' forecast years. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable: the bookings already show them. The price list is plausible: one quarter is too short to judge churn. Payroll is possible, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** The company gave ranges for fiscal 2027 (its guidance), both on its reported figures. The EPS outlook is new; the revenue outlook was raised from the call of July.\n\n| Metric | Period | Low | High | Midpoint | Basis | Against the prior record | Against the analysts' average |\n|---|---|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
         {"cite": "$7.00", "ref": "guidance:17/low"},
         " | ",
         {"cite": "$7.20", "ref": "guidance:17/high"},
@@ -410,11 +411,11 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         {"cite": "Mature Growth", "ref": "snapshot:412/phase/phase"},
         " stage: its revenue still grows fast for its size, and its operating margin is positive and rising. Nothing in the figures puts that stage in doubt. The business is not cyclical, so the value rests on the earnings as they stand.\n\nThe price needs growth of ",
         {"cite": "8.2%", "ref": "snapshot:412/intermediates/implied_growth"},
-        " a year after the analysts' forecast years. The value before this report's changes (the mechanical value) is ",
+        " a year after the analysts' forecast years. The value a share on Fairband's own inputs, before any change to them (the mechanical value), is ",
         {"cite": "$247", "ref": "snapshot:412/value"},
-        " a share. Two changes to the inputs moved it to ",
+        ". Two changes to the inputs moved it to ",
         {"cite": "$283", "ref": "review:89/value"},
-        " a share, the value under this report's changes (the reviewed value). The company's guidance for fiscal 2027 replaced the analysts' average estimate as the earnings of the next twelve months: its midpoint of ",
+        " a share, the value after the changes that stand (the reviewed value). The company's guidance for fiscal 2027 replaced the analysts' average estimate as the earnings of the next twelve months: its midpoint of ",
         {"cite": "$7.10", "ref": "guidance:17/midpoint"},
         " a share added ",
         {"cite": "+$5", "ref": "review:89/bridge/1/delta"},
@@ -484,7 +485,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
       "parts": [
         "The company's stage stands as Fairband gave it. The rating of what keeps rivals from taking the company's profits stands at ",
         {"cite": "Narrow", "ref": "snapshot:412/inputs/moat_class"},
-        ": customers face real costs to switch, but rivals sell close substitutes. The growth rate assumed after the analysts' years rose to the rate the longer contracts support, through a change to the inputs. The return on reinvested money Fairband measured stands. A second change to the inputs, outside the judgments, set the earnings of the next twelve months at the company's guidance."
+        ", the middle of none, narrow and wide: customers face real costs to switch, but rivals sell close substitutes. The growth rate assumed after the analysts' years rose to the rate the longer contracts support, through a change to the inputs. The return on reinvested money, as Fairband measured it, stands. A second change to the inputs set the earnings of the next twelve months at the company's guidance."
       ]
     }
   ],
@@ -499,7 +500,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
       "decision": "The growth rate assumed after the analysts' years rose to the rate the longer contracts support.",
       "override_id": 302
     },
-    {"judgment": "roic", "decision": "The return on reinvested money Fairband measured stands."}
+    {"judgment": "roic", "decision": "The return on reinvested money, as Fairband measured it, stands."}
   ],
   "kill_criteria": [
     {"text": "Revenue falls year on year in two quarters in a row."},

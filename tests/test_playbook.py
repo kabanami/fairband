@@ -168,14 +168,16 @@ NEVER = (
     "the classifier",
     "the route",
     "the snapshot",
-    "check flag",
+    "the check",
+    "a flag",
     "the bridge",
     "a tag",
     "an id",
 )
-# Method terms the register's table must map to a plain phrase.
+# Method terms the register's table must map to a plain phrase, section 8's own among them.
 TERMS = (
     "belief",
+    "implied growth",
     "mechanical value",
     "reviewed value",
     "override",
@@ -187,12 +189,18 @@ TERMS = (
     "trim level",
     "designation",
     "phase",
+    "Dickinson stage",
     "moat",
     "runway",
     "runway return",
     "held rate",
     "target margin",
+    "margin the price needs",
     "sales-to-capital",
+    "decline rate",
+    "liquidation floor",
+    "distress-weighted value",
+    "price-implied requirement",
     "hurdle rate",
     "consensus",
     "snapshot",
@@ -381,16 +389,20 @@ def test_the_note_has_one_form() -> None:
 def test_every_item_is_refreshed_before_it_is_read() -> None:
     """Spec 14 step 3 (plan 5, B-126): a scoped refresh of the company opens step 3 on every
     item, so the report reads the latest price; before plan 5 only an expired company was
-    refreshed, and QCOM's report 2 of 8 Nov 2026 read the close of 4 Nov."""
+    refreshed, and QCOM's report 2 of 8 Nov 2026 read the close of 4 Nov. The snapshot's refresh
+    id, not the run's status, proves the company was refreshed: a scoped run whose fetch of the
+    company fails still ends `done` (the final review of plan 5)."""
     _, body = _frontmatter(_read(SKILL))
     steps = _steps(body)
     three = _flat(steps[3])
     assert "Every item: refresh the company before you read it" in three
-    assert 'Call `refresh_start("scoped", [symbol])`' in three
+    assert 'Call `refresh_start("scoped", [symbol])` and keep the `refreshId` it answers' in three
     assert "call `refresh_status()` until that one ends, then start yours" in three
-    assert "Call `refresh_status()` until its `refresh` is `null`" in three
-    assert "When `last` ends with a `status` other than `done`" in three
-    assert "tell the user, go on with the stored snapshot" in three
+    wait = "Call `refresh_status()` until its `refresh` is `null`"
+    check = "When its `snapshot.refreshId` is not the id you kept, the company was not refreshed"
+    assert wait in three and check in three and three.index(wait) < three.index(check)
+    assert "`last` is the one you started" not in three  # the old test of success is gone
+    assert "Tell the user, go on with the stored snapshot" in three
     assert "write the price's date in section 9 of the report" in three
     skill = _flat(_read(SKILL))
     assert (
@@ -430,22 +442,40 @@ def test_the_report_writes_the_plain_phrase_not_the_term() -> None:
         for s in example["sections"]
     }
     decisions = [j["decision"] for j in example["judgments"]]
-    for text in [shape, *sections.values(), *decisions]:
-        for word in NEVER:
+    # the page shows the kill criteria and the news items as well
+    shown = [k["text"] for k in example["kill_criteria"]] + [
+        n[key] for n in example["news_items"] for key in ("headline", "text")
+    ]
+    for text in [shape, *sections.values(), *decisions, *shown]:
+        for word in (*NEVER, "snapshot", "bridge"):  # their phrase stands alone, in section 8 too
             assert not _has(word, text), (word, text[:80])
     for term in SUMMARY_FREE:
         assert not _has(term, sections["Summary"]), term
         assert not _has(term, shape), term
+    # in section 8 a term stands only in brackets, a longer bracketed term's part counting as
+    # bracketed ("runway" in "(the runway return)"), and is named in brackets once at most
     valuation = sections["Valuation"].lower()
-    for term in ("belief", "runway return", "mechanical value", "reviewed value"):
-        bare = [m.start() for m in re.finditer(rf"\b{re.escape(term)}\b", valuation)]
-        bracketed = [m.start() + 5 for m in re.finditer(rf"\(the {re.escape(term)}\)", valuation)]
-        assert bare == bracketed and len(bare) == 1, term  # once, and only in brackets
-    # outside section 8 no term of the table appears: the shape, the other sections, the decisions
+    brackets = [
+        (m.start(), m.end(), m[1]) for m in re.finditer(r"\((?:the )?([^()]*)\)", valuation)
+    ]
+    for term in TERMS:
+        found = [m.span() for m in re.finditer(rf"\b{_term(term)}\b", valuation)]
+        bare = [s for s in found if not any(a < s[0] and s[1] < b for a, b, _ in brackets)]
+        assert bare == [], term
+        named = [n for _, _, n in brackets if re.fullmatch(_term(term), n)]
+        assert len(named) <= 1, term
+        if term in ("belief", "runway return", "mechanical value", "reviewed value"):
+            assert len(named) == 1, term
+    # outside section 8 no term of the table appears: the shape, the other sections, the
+    # decisions, the kill criteria and the news items
     others = [text for heading, text in sections.items() if heading != "Valuation"]
-    for text in [shape, *others, *decisions]:
+    for text in [shape, *others, *decisions, *shown]:
         for term in TERMS:
             assert not _has(term, text), (term, text[:80])
+    # the mechanical value is the value with no override at all, an earlier report's included,
+    # and the reviewed value the value under every applied one (the final review of plan 5)
+    for path in (REGISTER, TEMPLATE):
+        assert "this report's changes" not in _flat(_read(path)), path.name
 
 
 def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
@@ -557,9 +587,19 @@ def _cells(line: str) -> list[str]:
 
 
 def _has(word: str, text: str) -> bool:
-    """Whether ``word`` is in ``text`` as a whole word or phrase, case ignored: "an id" is not in
-    "an idea", nor "engine" in "engines"."""
-    return re.search(rf"\b{re.escape(word.lower())}\b", text.lower()) is not None
+    """Whether ``word`` is in ``text`` as a whole word or phrase, case ignored, its plural
+    included: "overrides" holds "override", and "kill criteria" "kill criterion"; "an id" is not
+    in "an idea", nor "review" in "reviewed"."""
+    return re.search(rf"\b{_term(word)}\b", text.lower()) is not None
+
+
+def _term(word: str) -> str:
+    """The pattern of ``word`` in lower case with its plural: an ending ``s`` or ``es``, or
+    "criteria" for "criterion"."""
+    pattern = re.escape(word.lower())
+    if pattern.endswith("criterion"):
+        return f"{pattern[: -len('on')]}(?:on|a)"
+    return f"{pattern}(?:e?s)?"
 
 
 def _shape(text: str) -> str:
