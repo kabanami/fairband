@@ -411,7 +411,7 @@ def test_the_report_writes_the_plain_phrase_not_the_term() -> None:
     assert "in brackets after the phrase, in section 8 only" in flat
     for word in NEVER:
         assert f'"{word}"' in flat, word  # each named in the never-list
-    rows = _table_rows(register[register.index("## The words a report writes") :])
+    rows = _table_rows(register, ("Term", "Write instead"))
     for term in TERMS:
         assert term in rows, term
         assert rows[term] and not rows[term].startswith("the engine"), term
@@ -427,22 +427,23 @@ def test_the_report_writes_the_plain_phrase_not_the_term() -> None:
         s["heading"]: " ".join(p for p in s["parts"] if isinstance(p, str))
         for s in example["sections"]
     }
-    texts = [shape, *sections.values(), *(j["decision"] for j in example["judgments"])]
-    for text in texts:
-        low = text.lower()
+    decisions = [j["decision"] for j in example["judgments"]]
+    for text in [shape, *sections.values(), *decisions]:
         for word in NEVER:
-            assert word not in low, (word, text[:80])
+            assert not _has(word, text), (word, text[:80])
     for term in SUMMARY_FREE:
-        assert term not in sections["Summary"].lower(), term
-        assert term not in shape.lower(), term
+        assert not _has(term, sections["Summary"]), term
+        assert not _has(term, shape), term
+    valuation = sections["Valuation"].lower()
     for term in ("belief", "runway return", "mechanical value", "reviewed value"):
-        bare = [m.start() for m in re.finditer(re.escape(term), sections["Valuation"])]
-        bracketed = [
-            m.start() + 5 for m in re.finditer(rf"\(the {re.escape(term)}\)", sections["Valuation"])
-        ]
-        assert bare == bracketed and len(bare) <= 1, term  # once, and only in brackets
-    for decision in (j["decision"] for j in example["judgments"]):
-        assert "belief" not in decision or "(the belief)" in decision, decision
+        bare = [m.start() for m in re.finditer(rf"\b{re.escape(term)}\b", valuation)]
+        bracketed = [m.start() + 5 for m in re.finditer(rf"\(the {re.escape(term)}\)", valuation)]
+        assert bare == bracketed and len(bare) == 1, term  # once, and only in brackets
+    # outside section 8 no term of the table appears: the shape, the other sections, the decisions
+    others = [text for heading, text in sections.items() if heading != "Valuation"]
+    for text in [shape, *others, *decisions]:
+        for term in TERMS:
+            assert not _has(term, text), (term, text[:80])
 
 
 def _read(path: Path) -> str:
@@ -519,16 +520,31 @@ def _example(text: str) -> dict[str, Any]:
     return found
 
 
-def _table_rows(text: str) -> dict[str, str]:
-    """The first Markdown table in ``text``: its first column to its second, the header and the
-    separator left out."""
+def _table_rows(text: str, header: tuple[str, str]) -> dict[str, str]:
+    """The Markdown table in ``text`` whose header row is ``header``, cell for cell: its first
+    column to its second, from the row after the separator to the first line that does not start
+    with ``|``."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if _cells(line) == list(header))
     rows = {}
-    for line in text.splitlines():
-        if line.startswith("| ") and not line.startswith("|---") and "| Term" not in line:
-            cells = [c.strip() for c in line.strip("|").split("|")]
-            if len(cells) >= 2 and cells[0] and not set(cells[0]) <= {"-", ":"}:
-                rows[cells[0]] = cells[1]
+    for line in lines[start + 1 :]:
+        if not line.startswith("|"):
+            break
+        cells = _cells(line)
+        if not set(cells[0]) <= {"-", ":"}:  # the separator row left out
+            rows[cells[0]] = cells[1]
     return rows
+
+
+def _cells(line: str) -> list[str]:
+    """A Markdown table line's cells, stripped."""
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _has(word: str, text: str) -> bool:
+    """Whether ``word`` is in ``text`` as a whole word or phrase, case ignored: "an id" is not in
+    "an idea", nor "engine" in "engines"."""
+    return re.search(rf"\b{re.escape(word.lower())}\b", text.lower()) is not None
 
 
 def _shape(text: str) -> str:

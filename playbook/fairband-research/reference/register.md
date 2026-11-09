@@ -8,11 +8,12 @@ sections, the judgments, every reason on an override and every note.
 - Two parts. The reader part, the sections you write, holds plain text and rounded numbers.
   Appendix A, which the server writes, holds the codes, the sources and the figures at full
   precision. Keep codes out of the reader part: no tag (`growth.belief`), no ref, no id, no
-  snake_case input name. Name the input by what it is, as the table below writes it.
+  snake_case input name. Name the input by what it is, in its phrase from "The words a report
+  writes" below.
 - Put the answer first in each section.
 - Keep sentences short, with one idea in each.
-- Write the method's terms as the table below writes them: the phrase in the text, the term once
-  in brackets in section 8 only.
+- Write the method's terms as "The words a report writes" below gives them: the phrase in the
+  text, the term once in brackets in section 8 only.
 - Round numbers: prices to cents, values to whole dollars, percentages to one decimal. The check
   holds every cite to these roundings (`reference/citations.md`).
 - Keep the summary to one page and the reader part to about five pages.
@@ -42,7 +43,9 @@ sections, the judgments, every reason on an override and every note.
 
 ## The words
 
-These are the product's terms. They are not interchangeable with their near-synonyms.
+These are the product's terms. They are not interchangeable with their near-synonyms. They are
+for your records, your tool calls and Appendix A; the reader part of a report writes the phrases of
+"The words a report writes" below instead.
 
 | Use | Not | Means |
 |---|---|---|
@@ -103,9 +106,12 @@ Growth stage", "the data on file as of 4 Nov 2026".
 | bridge | the steps from the value before this report's changes to the value after them, one for each change |
 | snapshot | the data on file as of a date, the date written out |
 | validity window | the time the value stays current: until the company's next earnings report, or about three months when no report date is known |
-| secondary valuation | a fallback value a share, from a standard discounted cash flow on assumptions this report sets; made only where Fairband gives no value, before or after this report's changes to the inputs |
+| secondary valuation | a fallback value a share, from a discounted cash flow, or a sum of parts, on assumptions this report sets; made only where Fairband gives no value, before or after this report's changes to the inputs |
 | sensitivity grid | the value a share across a few figures for two inputs; it shows how much of the value rests on assumption, and is never a value itself |
 | kill criterion | a measurable event that would prove the report's view wrong |
+
+Two rows, snapshot and bridge, name Fairband's parts: their phrase stands alone, in section 8 too,
+never followed by the term in brackets.
 
 Some words belong to the field, not to Fairband: a reader of company research meets them
 elsewhere. Write them by name, and give the meaning the first time each appears, in a short clause

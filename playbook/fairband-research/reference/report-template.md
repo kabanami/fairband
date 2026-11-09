@@ -57,7 +57,7 @@ Put the answer first in each section. Keep each sentence to one idea.
 | 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (the life-cycle stage, Introduction, Growth, Mature, Shake-out or Decline, that the signs of the three cash flows give), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; on a refused row with no reviewed value only, the secondary valuation in the route's place, and FMP's figure in one sentence when read (where the route or your review values the company, no second value and no DCF beside the route's value); for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
 | 9 | Price and multiples | both | The price facts, and the multiples against their own history. Detail below. |
 | 10 | Recent news | both | The dated items that matter to the value. |
-| 11 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold you choose is not a fact and never a finding: tie each event to a stored figure and cite it ("below the hurdle rate of 9.0%", citing `policy:required_return`), or state it in words ("revenue falls two quarters in a row"). A threshold no stored figure gives is a question for the founder (`reference/citations.md`, "A threshold you choose"). |
+| 11 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold you choose is not a fact and never a finding: tie each event to a stored figure and cite it ("below the yearly return of 9.0% that investors require", citing `policy:required_return`), or state it in words ("revenue falls two quarters in a row"). A threshold no stored figure gives is a question for the founder (`reference/citations.md`, "A threshold you choose"). |
 | 12 | Key judgments | both | The record: each judgment's decision in one sentence, naming in words the override it produced. Last, because it is the audit trail and not the reading. |
 
 A valuation review reuses the company's newest full report for the business and the industry. The
@@ -115,7 +115,7 @@ One page, in this order. Step 5 of `SKILL.md` says how to build each part.
 
    | Claim | Evidence | Driver | Test |
    |---|---|---|---|
-   | what management says will happen, with its figure and its timeline | what the numbers already show | the input it would move: the growth of years two and three, the belief, the held rate, the target margin, the reinvestment, the moat, the risk | what would show it true or false, and by when |
+   | what management says will happen, with its figure and its timeline | what the numbers already show | the input it would move, written as the register's phrase for it (`reference/register.md`, "The words a report writes"): the growth of years two and three, the belief, the held rate, the target margin, the reinvestment, the moat, the risk | what would show it true or false, and by when |
 
    Then a verdict on each claim, in one of three words. **Possible**: it could happen.
    **Plausible**: the evidence makes it believable. **Probable**: the evidence makes it more likely
@@ -123,7 +123,8 @@ One page, in this order. Step 5 of `SKILL.md` says how to build each part.
    call, and what management did not say.
 4. **The guidance.** A table of the records: the metric, the period, the low, the high, the
    midpoint, the basis, raised, held or cut against the prior record, and against the consensus.
-   Then one sentence on what the valuation takes from it: the override, or "the consensus stands".
+   Then one sentence on what the valuation takes from it: the override, or "the analysts' average
+   estimate stands".
 5. **The positives and the negatives**, each tied to a figure or a quote.
 6. **The questions and answers.** The two or three analysts' pushbacks that matter to the thesis,
    and whether the answers were direct.
@@ -407,7 +408,7 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
       "parts": [
         "Fairband puts the company in its ",
         {"cite": "Mature Growth", "ref": "snapshot:412/phase/phase"},
-        " stage: its revenue still grows fast for its size, and its operating margin is positive and rising. No warning was raised. The business is not cyclical, so the value rests on the earnings as they stand.\n\nThe price needs growth of ",
+        " stage: its revenue still grows fast for its size, and its operating margin is positive and rising. Nothing in the figures puts that stage in doubt. The business is not cyclical, so the value rests on the earnings as they stand.\n\nThe price needs growth of ",
         {"cite": "8.2%", "ref": "snapshot:412/intermediates/implied_growth"},
         " a year after the analysts' forecast years. The value before this report's changes (the mechanical value) is ",
         {"cite": "$247", "ref": "snapshot:412/value"},
