@@ -76,6 +76,13 @@ publishes. The stored price is the last refresh's close, which may be days old.
 A scoped refresh fetches the company's price and statements again and values it. It takes about
 a minute.
 
+When a stock split is announced or recent, the scoped refresh is the only remedy: a price refresh
+reprices the stored pre-split value at a post-split quote, which reads as a fall of half. After the
+refresh read `split-pending` on the row: it names the split and each figure read on the new basis,
+or that FMP's figures already read on it. The consensus and the guidance record move to the new
+basis on their own days, so a step or a guided figure that looks halved may be one not yet
+restated.
+
 - Call `refresh_start("scoped", [symbol])` and keep the `refreshId` it answers. When it is refused
   because a refresh is running, call `refresh_status()` until that one ends, then start yours.
 - Call `refresh_status()` until its `refresh` is `null`: no refresh is running.
@@ -218,7 +225,7 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
-Four flags ask for a decision of yours. Read each sentence whole: it names its figures.
+Five flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
 - `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
   of the operating cash flow, then names the return the charge starts at, its measure, and the
@@ -245,6 +252,11 @@ Four flags ask for a decision of yours. Read each sentence whole: it names its f
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
   the step it names.
+- `split-pending`: a split falls between the newest statement and the quote. The sentence names
+  what was read on the post-split basis (the count, the trailing EPS, the consensus EPS by year,
+  GuruFocus's EPS) or that FMP's figures already read on it. Check the consensus steps and any
+  guided figure against the new basis before you read them; a figure the sentence names as read as
+  stored for lack of a net-income mean may be on the old basis.
 
 ### 9. The debate and the thesis
 

@@ -37,7 +37,8 @@ be left out.
 - `company(symbol)`: the latest snapshot in full: `snapshot.id`, `snapshot.refreshId` (the refresh
   that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
   intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
-  universe.
+  universe. An input scaled for a split is an estimate under the method `split-scaled` with a
+  note naming the split, and the row's `split-pending` note names the rest.
 - `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
   stored statements, each figure with its `fact:` ref.
 - `financial_tables(symbol)`: the six five-year tables of the report's section 4, `growth`,
