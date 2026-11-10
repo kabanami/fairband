@@ -2,10 +2,12 @@
 
 ``splits_for`` reads the ``split`` observations back as one ``SplitRow`` a split, oldest first. The
 normalizer stores two observations a split, the numerator and the denominator, on the split date
-(``split_observations``); the store gives the newest of each, so a split refetched by every refresh
-reads once. A date that lacks one of the two, or whose denominator is zero, is skipped. The ratio,
-numerator ÷ denominator, is the new shares to one old share: 2 for a 2-for-1 split, 0.1 for a
-1-for-10 reverse split.
+(``split_observations``). Only the rows of the latest usable ``splits`` response are read: FMP's
+list at the newest fetch is the whole truth, so a split it no longer lists, withdrawn or re-dated,
+is not read though its observations stay on file; without a usable response there is no split. A
+date that lacks one of the two, or whose denominator is zero, is skipped. The ratio, numerator ÷
+denominator, is the new shares to one old share: 2 for a 2-for-1 split, 0.1 for a 1-for-10 reverse
+split.
 """
 
 import sqlite3
@@ -14,6 +16,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from fairband.store.observations import observations_for
+from fairband.store.vendor import latest_response
 
 
 @dataclass(frozen=True)
@@ -37,10 +40,13 @@ class SplitRow:
 
 
 def splits_for(conn: sqlite3.Connection, symbol: str) -> tuple[SplitRow, ...]:
-    """The splits on file for ``symbol``, oldest first."""
+    """The splits of the latest usable ``splits`` response for ``symbol``, oldest first."""
+    response = latest_response(conn, "fmp", "splits", symbol, {"symbol": symbol})
+    if response is None:
+        return ()
     fields: dict[date, dict[str, float]] = defaultdict(dict)
     for row in observations_for(conn, symbol, "split"):
-        if row.period is not None and row.value is not None:
+        if row.response_id == response.id and row.period is not None and row.value is not None:
             fields[row.period][row.field] = float(row.value)
     out: list[SplitRow] = []
     for when in sorted(fields):
@@ -52,5 +58,6 @@ def splits_for(conn: sqlite3.Connection, symbol: str) -> tuple[SplitRow, ...]:
 
 
 def _count(n: float) -> str:
-    """A whole number as an integer (``2``), any other in its shortest form (``1.5``)."""
-    return str(int(n)) if n.is_integer() else format(n, "g")
+    """A whole number as an integer (``2``), any other to two decimals with trailing zeros dropped
+    (``1.5``, ``1.05``)."""
+    return str(int(n)) if n.is_integer() else f"{n:.2f}".rstrip("0").rstrip(".")
