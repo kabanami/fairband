@@ -76,13 +76,6 @@ publishes. The stored price is the last refresh's close, which may be days old.
 A scoped refresh fetches the company's price and statements again and values it. It takes about
 a minute.
 
-When a stock split is announced or recent, the scoped refresh is the only remedy: a price refresh
-reprices the stored pre-split value at a post-split quote, which reads as a fall of half. After the
-refresh read `split-pending` on the row: it names the split and each figure read on the new basis,
-or that FMP's figures already read on it. The consensus and the guidance record move to the new
-basis on their own days, so a step or a guided figure that looks halved may be one not yet
-restated.
-
 - Call `refresh_start("scoped", [symbol])` and keep the `refreshId` it answers. When it is refused
   because a refresh is running, call `refresh_status()` until that one ends, then start yours.
 - Call `refresh_status()` until its `refresh` is `null`: no refresh is running.
@@ -92,6 +85,14 @@ restated.
   and write the price's date in section 9 of the report. When it is the id you kept, its
   `price_date` is the refreshed close.
 - Read the rest of the company as below.
+
+When a stock split has taken effect, this scoped refresh is the remedy: a price refresh reprices
+the stored pre-split value at the post-split quote, which reads as a fall by the split's ratio (a
+2-for-1 split halves the price ÷ value). FMP lists a split only from its effective date, so a split
+that is only announced changes nothing yet. After the refresh read `split-pending` on the row: it
+names the split and each figure read on the post-split basis, or why a side was read as stored. The
+consensus and the guidance record move to the new basis on their own days, so a step or a guided
+figure that looks halved may be one not yet restated.
 
 Then read everything the page shows:
 
@@ -253,10 +254,11 @@ Five flags ask for a decision of yours. Read each sentence whole: it names its f
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
   the step it names.
 - `split-pending`: a split falls between the newest statement and the quote. The sentence names
-  what was read on the post-split basis (the count, the trailing EPS, the consensus EPS by year,
-  GuruFocus's EPS) or that FMP's figures already read on it. Check the consensus steps and any
-  guided figure against the new basis before you read them; a figure the sentence names as read as
-  stored for lack of a net-income mean may be on the old basis.
+  each figure read on the post-split basis — the diluted count, the trailing EPS, the street
+  actuals, the consensus EPS by fiscal year and by quarter, GuruFocus's EPS — or says why a side
+  was read as stored: FMP's figures already on the new basis, no quote count, no diluted count, or
+  a count that fits both bases or neither. A figure read as stored may be on the old basis. Check
+  the consensus steps and any guided figure against the new basis before you read them.
 
 ### 9. The debate and the thesis
 
