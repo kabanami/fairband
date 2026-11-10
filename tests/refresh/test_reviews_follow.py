@@ -159,6 +159,35 @@ def test_a_price_refresh_reprices_the_review(env_valued: Env) -> None:
     ]
 
 
+def test_a_price_refresh_at_a_new_rate_moves_the_review_s_bridge_with_it(env_valued: Env) -> None:
+    """KRON reports in SEK (spec 2026-11-10 7.2): its review, revalued at USDSEK's 10.52, reprices
+    at the pair's new quote, 10.0. The mechanical value is the repriced snapshot's, each bridge
+    line's change a share moves by 10.52 ÷ 10.0 (its readings stay, in SEK), so the mechanical
+    value plus the changes is still the reviewed value."""
+    env = env_valued
+    _override(env, "KRON", "growth.belief", 0.08)
+    env.refresh().run("revalue")
+    with closing(env.connect()) as conn:
+        before = latest_review(conn, "KRON")
+    assert before is not None and before.result.intermediates["fx_rate"] == 10.52
+    env.router.bodies["batch-quote"] = _quotes({"ACME": 20.0, "KRON": 40.0, "MILD": 10.0})
+    [pair] = json.loads(_quotes({"USDSEK": 10.0}))
+    env.router.symbol_bodies[("quote", "USDSEK")] = json.dumps([pair]).encode()
+    env.refresh().run("price")
+    snapshot = env.snapshot("KRON")
+    with closing(env.connect()) as conn:
+        after = latest_review(conn, "KRON")
+    assert after is not None and after.snapshot_id == snapshot.id
+    assert snapshot.result.intermediates["fx_rate"] == after.result.intermediates["fx_rate"] == 10.0
+    assert snapshot.value is not None and after.value is not None
+    assert after.mechanical_value == snapshot.value != before.mechanical_value
+    [was], [line] = before.bridge, after.bridge
+    assert (line["old"], line["new"]) == (was["old"], was["new"])  # the readings stay
+    assert line["delta"] == pytest.approx(was["delta"] * 10.52 / 10.0)
+    assert after.mechanical_value + line["delta"] == pytest.approx(after.value)
+    assert after.value == pytest.approx(after.result.intermediates["value_in_currency"] / 10.0)
+
+
 def test_a_period_tied_override_drops_when_its_line_vanishes(env_valued: Env) -> None:
     """AXLE's override corrected a cash figure of $100; the revalue's result reads no cash line (a
     Mature Growth row cites none, as a sheet served without the line does on a route that reads

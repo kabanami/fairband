@@ -639,7 +639,7 @@ def _ramp_in_dollars(
 ) -> Flag | None:
     """``margin-ramp-in-dollars`` on the dollar ramp, naming the trailing margin, the trailing
     operating income and the target's share of revenue the ramp reaches in the convergence year,
-    in ``currency``."""
+    in ``currency``: "moves in dollars" on a USD row, "moves in SEK" on a row in SEK."""
     if not margin.in_dollars:
         return None
     e0, end = ramp_ends(revenue, margin, revenue0)
@@ -647,8 +647,8 @@ def _ramp_in_dollars(
         "margin-ramp-in-dollars",
         "Ramp in dollars",
         f"The trailing loss is larger than revenue (margin {signed(margin.start)}), so operating "
-        f"income moves in dollars from {millions(e0, currency)} to the target margin's "
-        f"{millions(end, currency)} "
+        f"income moves in {'dollars' if currency == 'USD' else currency} from "
+        f"{millions(e0, currency)} to the target margin's {millions(end, currency)} "
         f"by year {margin.convergence_year}, as the Start-up ramp does.",
     )
 

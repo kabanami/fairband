@@ -198,6 +198,7 @@ from fairband.engine.types import (
     Provenance,
     TaggedInput,
     ValuationResult,
+    money_of,
 )
 from fairband.policy import Policy, in_currency
 
@@ -393,6 +394,7 @@ def reprice(
     *,
     fx_rate: float | None = None,
     fx_date: date | None = None,
+    fx_observed_at: datetime | None = None,
     observed_at: datetime | None = None,
     entered_at: datetime | None = None,
 ) -> ValuationResult:
@@ -414,14 +416,16 @@ def reprice(
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
 
-    A row in another currency (its intermediates hold ``fx_rate``; spec 2026-11-10 7.2) reprices
+    A row in another currency (``types.money_of``; spec 2026-11-10 7.2) reprices
     at ``fx_rate``, the pair's quote of ``fx_date``, when given, else at the rate it holds: the
     new USD price comes into the currency at that rate, everything above moves on the price in
     the currency, the value in the currency and the policy restated by the row's differential,
     and the value a share is ``value_in_currency`` ÷ the rate, its levels the policy's on it; the
     designation reads the two USD figures. The intermediates' ``fx_rate`` and ``fx_date`` and the
-    ``fx_rate`` input take the rate given; ``fx-stale`` is on the row when its rate's date is
-    more than ``fx_stale_days`` before ``price_date``, and off otherwise. A USD row reads no rate:
+    ``fx_rate`` input take the rate given, the input as the price input moves: its value, its
+    ``as_of`` the quote's date and its ``observed_at`` ``fx_observed_at`` when given. ``fx-stale``
+    is on the row when its rate's date is more than ``fx_stale_days`` before ``price_date``, and
+    off otherwise. A USD row reads no rate:
     its rate is 1 on every day, and ``fx_rate`` moves nothing.
 
     A price or a rate that is not positive and finite raises ``ValueError``: the caller skips
@@ -433,7 +437,8 @@ def reprice(
     if not _positive(price):
         raise ValueError(f"price {price} must be positive and finite")
     im = result.intermediates
-    foreign = "fx_rate" in im
+    held, currency = money_of(result)
+    foreign = currency != "USD"
     if foreign and fx_rate is not None and not _positive(fx_rate):
         raise ValueError(f"rate {fx_rate} must be positive and finite")
     rate: float = 1.0
@@ -444,15 +449,17 @@ def reprice(
         for i in result.inputs
     )
     if foreign:
-        rate = im["fx_rate"] if fx_rate is None else fx_rate
+        rate = held if fx_rate is None else fx_rate
         when = _stored_date(im) if fx_date is None else fx_date
         local = in_currency(policy, im["inflation_differential"])
         im = im | {"fx_rate": rate, "fx_date": None if when is None else when.isoformat()}
         if fx_rate is not None:
-            inputs = tuple(_rated(i, rate, when) if i.name == "fx_rate" else i for i in inputs)
+            inputs = tuple(
+                _rated(i, rate, when, fx_observed_at) if i.name == "fx_rate" else i for i in inputs
+            )
         flags = tuple(f for f in flags if f.code != _FX_STALE)
         if when is not None and (price_date - when).days > policy.fx_stale_days:
-            stale = (_fx_stale(im["currency"], when, price_date),)
+            stale = (_fx_stale(currency, when, price_date),)
     in_local = price * rate
     if result.value is None or result.levels is None:
         moved = replace(
@@ -464,7 +471,7 @@ def reprice(
             flags=flags + stale,
         )
         if "requirement" in im:
-            was = _times(result.price, result.intermediates.get("fx_rate", 1.0))
+            was = _times(result.price, held)
             market_cap = market_cap_at(im["market_cap"], was, in_local)
             net_cash = below_net_cash(market_cap, im["debt"], im["cash"])
             return replace(
@@ -516,9 +523,14 @@ def _stored_date(im: dict[str, Any]) -> date | None:
     return None if stored is None else date.fromisoformat(stored)
 
 
-def _rated(i: TaggedInput, rate: float, when: date | None) -> TaggedInput:
-    """The ``fx_rate`` input at a new rate of ``when``, from the same source."""
-    return replace(i, value=rate, provenance=replace(i.provenance, as_of=when))
+def _rated(
+    i: TaggedInput, rate: float, when: date | None, observed_at: datetime | None
+) -> TaggedInput:
+    """The ``fx_rate`` input at a new rate of ``when``, from the same source, observed when the
+    pair's quote was (as it was without one)."""
+    p = i.provenance
+    stamp = p.observed_at if observed_at is None else observed_at
+    return replace(i, value=rate, provenance=replace(p, as_of=when, observed_at=stamp))
 
 
 def _quoted(

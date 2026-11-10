@@ -33,7 +33,10 @@ the repriced snapshot: the company's current review, when it is on the snapshot 
 ``route.reprice`` at the quote, so its value, levels, validity, bridge and override ids stay and
 its designation follows the price, written on the new snapshot with its log row; a review in
 another currency reprices at the pair's quote the snapshot took, its USD value moving with the
-rate. A company with
+rate, and so its mechanical value is the repriced snapshot's and each bridge line's change a
+share is scaled by the old rate ÷ the new one, its readings in the currency staying, so the
+mechanical value and the changes still sum to the reviewed value. A USD review keeps its
+mechanical value and bridge as they were. A company with
 no current review, or one on another snapshot, gets none.
 
 ``review_refusal`` gives the refusal snapshot of a company the refresh could not value (a failed
@@ -63,7 +66,7 @@ from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import ANCHOR_METRICS, OverrideTag, current_reading
 from fairband.engine.review import BridgeLine, Review, review_company
 from fairband.engine.route import CompanyInputs, refusal_result, reprice
-from fairband.engine.types import ValuationResult
+from fairband.engine.types import ValuationResult, money_of
 from fairband.policy import Policy
 from fairband.reports.refs import guidance_cited
 from fairband.store.db import transaction
@@ -193,9 +196,11 @@ def reprice_review(
     repriced: int,
     fx_rate: float | None = None,
     fx_date: date | None = None,
+    fx_observed_at: datetime | None = None,
 ) -> int | None:
     """The company's current review, when it is on snapshot ``repriced``, repriced at ``price``
-    (and, in another currency, at the pair's quote ``fx_rate`` of ``fx_date`` when given) and
+    (and, in another currency, at the pair's quote ``fx_rate`` of ``fx_date``, observed at
+    ``fx_observed_at``, when given) and
     written on ``snapshot_id``, the snapshot ``repriced`` became, with its log row; ``None``
     without such a review."""
     with transaction(conn):
@@ -215,6 +220,7 @@ def reprice_review(
                     repriced,
                     fx_rate,
                     fx_date,
+                    fx_observed_at,
                 )
         except Exception as exc:  # noqa: BLE001 - the snapshot stands; the review is the refusal
             mechanical = _snapshot_result(conn, snapshot_id)
@@ -235,6 +241,7 @@ def _reprice(
     repriced: int,
     fx_rate: float | None,
     fx_date: date | None,
+    fx_observed_at: datetime | None,
 ) -> int | None:
     current = latest_review(conn, symbol)
     if current is None or current.snapshot_id != repriced:
@@ -247,11 +254,18 @@ def _reprice(
         policy,
         fx_rate=fx_rate,
         fx_date=fx_date,
+        fx_observed_at=fx_observed_at,
         observed_at=observed_at,
         entered_at=entered_at,
     )
     bridge = tuple(BridgeLine(**line) for line in current.bridge)
-    review = Review(result, current.mechanical_value, bridge, current.override_ids)
+    mechanical_value = current.mechanical_value
+    was, currency = money_of(current.result)
+    if currency != "USD":  # the USD figures move with the rate (module docstring)
+        k = was / money_of(result)[0]
+        mechanical_value = mechanical.value
+        bridge = tuple(replace(b, delta=None if b.delta is None else b.delta * k) for b in bridge)
+    review = Review(result, mechanical_value, bridge, current.override_ids)
     review_id = insert_review(conn, review, symbol, snapshot_id, refresh_id, clock=clock)
     _log(conn, clock(), refresh_id, snapshot_id, review_id, mechanical, result)
     return review_id

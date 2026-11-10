@@ -28,14 +28,13 @@ from fairband.engine.overrides import (
     State,
     check_override,
     current_reading,
-    money_of,
     range_text,
     route_of,
     unit_in,
 )
 from fairband.engine.route import value_company
 from fairband.engine.route_steps import Context, chosen, judgment_inputs
-from fairband.engine.types import Provenance, Route
+from fairband.engine.types import Provenance, Route, money_of
 from fairband.policy import Policy
 
 TODAY = date(2026, 10, 31)

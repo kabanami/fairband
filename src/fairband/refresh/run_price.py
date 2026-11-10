@@ -30,13 +30,14 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   intermediates and the long-runway flag follow the price. A row in another currency reprices
   at its pair's quote, its rate and the quote's date (spec 2026-11-10 7.2): its USD value and
   levels move with the rate and ``fx-stale`` follows the rate's date; at the rate it holds, with
-  ``fx-stale`` once that rate is older than ``fx_stale_days``, when its pair's quote failed. A
-  refusal takes the new price, its date and the price input only, except a growth-route refusal
-  that carries ``revenue_path`` (refused for its target margin or for a value not positive),
-  which also recomputes the margin the price needs, and a Start-up refusal, which moves its
-  market cap with the price (the one it read × the new price ÷ the price it was read at, each in
-  the reporting currency), recomputes its requirement at it and re-reads ``below-net-cash``. A
-  snapshot valued under another policy version is ``failed``, "policy changed: run a revalue":
+  ``fx-stale`` once that rate is older than ``fx_stale_days``, when its pair's quote failed or
+  gave a price that is not positive and finite. A refusal takes the new price, its date and the
+  price input only, except a growth-route refusal that carries ``revenue_path`` (refused for its
+  target margin or for a value not positive), which also recomputes the margin the price needs,
+  and a Start-up refusal, which moves its market cap with the price (the one it read × the new
+  price ÷ the price it was read at, each in the reporting currency), recomputes its requirement
+  at it and re-reads ``below-net-cash``. A snapshot valued under another policy version is
+  ``failed``, "policy changed: run a revalue":
   its levels come from that policy. One valued under other
   settings (its settings hash unlike the run's, spec 2026-11-04 8.4) is ``failed``, "settings
   changed: run a revalue": its value and levels come from those settings. One valued under
@@ -62,6 +63,7 @@ repriced, with no ``fx`` stage, and the run ends ``failed``, "rate limited by FM
 """
 
 import logging
+import math
 import sqlite3
 import threading
 from collections import deque
@@ -73,6 +75,7 @@ from typing import Any
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.route import reprice
+from fairband.engine.types import money_of
 from fairband.policy import Policy
 from fairband.refresh.fetch import unusable
 from fairband.refresh.rates import FX_QUOTE, foreign_currencies, pair_of
@@ -336,9 +339,12 @@ class PriceRefresh:
             elif result.method_version != METHOD_VERSION:
                 reason = METHOD_CHANGED
             else:
-                pair = fx.get(result.intermediates.get("currency", "USD"))
+                pair = fx.get(money_of(result)[1])
+                if pair is not None and not (math.isfinite(pair.price) and pair.price > 0):
+                    pair = None  # a quote that is no rate: the snapshot's rate stands
                 rate = None if pair is None else pair.price
                 rate_date = None if pair is None else pair.as_of
+                rate_seen = None if pair is None else pair.observed_at
                 try:
                     new = reprice(
                         result,
@@ -347,6 +353,7 @@ class PriceRefresh:
                         self._policy,
                         fx_rate=rate,
                         fx_date=rate_date,
+                        fx_observed_at=rate_seen,
                         observed_at=quote.observed_at,
                         entered_at=quote.entered_at,
                     )
@@ -367,6 +374,7 @@ class PriceRefresh:
                             repriced=snapshots[symbol].id,
                             fx_rate=rate,
                             fx_date=rate_date,
+                            fx_observed_at=rate_seen,
                         )
                         upsert_item(self._conn, self._id, symbol, "repriced", None, self._clock())
                 except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own

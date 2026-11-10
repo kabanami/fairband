@@ -38,8 +38,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, FiniteFloat
 from pydantic.alias_generators import to_camel
 
-from fairband.engine.overrides import OverrideTag, check_input, money_of
+from fairband.engine.overrides import OverrideTag, check_input
 from fairband.engine.sensitivity import axes_refusal, sensitivity_grid
+from fairband.engine.types import money_of
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable

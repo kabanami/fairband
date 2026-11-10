@@ -25,7 +25,7 @@ override moves onto a route that reads the input (a Start-up put in Young Growth
 snapshot cites no trailing revenue. On a row in another currency (spec 2026-11-10 7.3) the class
 reads that revenue ÷ the snapshot's rate, in USD as the class bounds are, and the cap is restated
 by the row's inflation differential, as the routes read it; the money ranges are read in the
-currency at the snapshot's rate (``overrides.money_of``). An NTM anchor's override needs a
+currency at the snapshot's rate (``types.money_of``). An NTM anchor's override needs a
 ``guidance`` item among its evidence.
 The override is stored either way, with the engine's reading of the input on the snapshot as its
 old value and, for a period-tied one, as the value it corrected. A refused one answers 400 with
@@ -129,14 +129,13 @@ from fairband.engine.overrides import (
     anchor_misfit,
     check_override,
     current_reading,
-    money_of,
     route_of,
     unit_in,
 )
 from fairband.engine.roic import terminal_roic
 from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.secondary import Drivers, Part, SecondaryValuation, secondary_value
-from fairband.engine.types import Phase, Route, ValuationResult, result_to_json
+from fairband.engine.types import Phase, Route, ValuationResult, money_of, result_to_json
 from fairband.policy import Moat, Policy, in_currency
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable

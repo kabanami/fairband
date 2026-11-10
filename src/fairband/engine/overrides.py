@@ -22,9 +22,11 @@ changes no input (``method.md`` 14.8).
 
 A company in another currency (spec 2026-11-10 7.3): an input in ``USD`` or ``USD a share`` is
 read in the reporting currency, so its range's ends are the policy's × the rate (units of the
-currency per USD), an end that stands for no bound staying one, and the refusal names the
-currency: "earnings.ntm takes above 0 to 32,956 TWD a share". ``unit_in`` names such an input's
-unit in the currency.
+currency per USD), rounded half up to two decimals, the figure the refusal prints, an end that
+stands for no bound staying one, and the refusal names the currency: "earnings.ntm takes above 0
+to 32,956 TWD a share", "earnings.nri_gap takes −3,295.6 to 3,295.6 TWD a share". ``unit_in``
+names such an input's unit in the currency; ``types.money_of`` reads a snapshot's rate and
+currency.
 
 The routes read an override through ``route_steps.chosen``; ``route.value_company`` takes the
 applied ones as a mapping by tag. ``current_reading`` is the engine's reading of an input from a
@@ -51,6 +53,7 @@ none: the engine reads no such figure.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal, TypeIs, cast, get_args
 
 from fairband.engine.types import Phase, Route, ValuationResult
@@ -269,6 +272,7 @@ ANCHOR_METRICS: dict[str, str] = {"earnings.ntm": "eps", "revenue.ntm": "revenue
 NO_BOUND = 1e15
 # The units of money: a total and a figure a share, in USD as ``TAGS`` names them.
 _MONEY = frozenset({"USD", "USD a share"})
+_CENTS = Decimal("0.01")  # a money end in another currency is checked and printed to two decimals
 
 
 _ROUTE_OF: dict[Phase, Route] = {
@@ -364,18 +368,25 @@ def _unit_refusal(
     spec: TagSpec, value: float | str, policy: Policy, fx_rate: float, currency: str
 ) -> str | None:
     """Why ``value`` is not one the input takes, or ``None``: a word outside its words, a number
-    outside its range (the ends included), a money range's ends × ``fx_rate``."""
+    outside its range (the ends included), a money range's ends in another currency
+    ``_scaled`` by ``fx_rate``."""
     if spec.words is not None:
         if not isinstance(value, str) or value not in spec.words:
             return f"{spec.tag} takes {', '.join(spec.words[:-1])} or {spec.words[-1]}"
         return None
     low, high = policy.override_ranges[spec.tag]
-    if spec.unit in _MONEY:
-        low, high = low * fx_rate, high if high >= NO_BOUND else high * fx_rate
+    if spec.unit in _MONEY and currency != "USD":
+        low, high = _scaled(low, fx_rate), high if high >= NO_BOUND else _scaled(high, fx_rate)
     if not _number(value) or not _within(value, low, high, spec.low_open):
         found = range_text(low, high, spec.unit, low_open=spec.low_open, currency=currency)
         return f"{spec.tag} takes {found}"
     return None
+
+
+def _scaled(end: float, fx_rate: float) -> float:
+    """A money end in another currency: the policy's × the rate, rounded half up to two decimals,
+    so the range checked is the one its refusal prints."""
+    return float(Decimal(repr(end * fx_rate)).quantize(_CENTS, rounding=ROUND_HALF_UP))
 
 
 def _within(x: float, low: float, high: float, low_open: bool) -> bool:
@@ -395,7 +406,8 @@ def range_text(
     gaps, the NTM EPS and the value outside the business), whole shares grouped by thousands for
     the share count, the figures for a multiple; a negative end with the minus sign, and "above"
     before a lower end the range excludes. Money in another ``currency`` than USD is its figures
-    grouped by thousands with the unit after them, "above 0 to 32,956 TWD a share". An upper end
+    grouped by thousands, with the decimals each has up to two, and the unit after them, "above 0
+    to 32,956 TWD a share", "−3,295.6 to 3,295.6 TWD a share". An upper end
     of ``NO_BOUND`` or more stands for no bound and is not written: the range names its lower
     end alone, "$0 or more", "0 TWD or more", or "above $0" when it excludes it. The override's
     refusal and the secondary valuation's driver refusals write their ranges with it."""
@@ -421,7 +433,7 @@ def _end(x: float, unit: str, currency: str) -> str:
     if unit == "ratio":
         return f"{_signed(x * 100)}%"
     if unit in _MONEY:
-        return _dollars(x) if currency == "USD" else f"{'−' if x < 0 else ''}{abs(x):,.0f}"
+        return _dollars(x) if currency == "USD" else _figure(x)
     if unit == "shares":
         return f"{x:,.0f}"
     return _signed(x)
@@ -431,19 +443,15 @@ def _signed(x: float) -> str:
     return f"{'−' if x < 0 else ''}{abs(x):g}"
 
 
+def _figure(x: float) -> str:
+    """A money end in another currency, grouped by thousands with the decimals it has, at most
+    two (``_scaled`` rounds it to them), a negative one with the minus sign."""
+    text = f"{abs(x):,.2f}".rstrip("0").rstrip(".")
+    return f"{'−' if x < 0 else ''}{text}"
+
+
 def _dollars(x: float) -> str:
     return f"{'−' if x < 0 else ''}${abs(x):,.0f}"
-
-
-def money_of(result: ValuationResult) -> tuple[float, str]:
-    """The rate and the currency ``result``'s money inputs are in, which an override's range is
-    read at: its intermediates' ``fx_rate`` and ``currency`` for a row in another currency
-    (spec 2026-11-10 7.2), 1.0 and USD for any other."""
-    im = result.intermediates
-    rate, currency = im.get("fx_rate"), im.get("currency")
-    if isinstance(rate, int | float) and not isinstance(rate, bool) and isinstance(currency, str):
-        return float(rate), currency
-    return 1.0, "USD"
 
 
 def current_reading(result: ValuationResult, tag: OverrideTag) -> float | str | None:

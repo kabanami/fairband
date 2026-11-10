@@ -24,11 +24,12 @@ from fairband.engine.classifier import Deciles
 from fairband.engine.flags import basis_unknown_flag, nri_flag
 from fairband.engine.overrides import Override, OverrideTag, check_input, range_text
 from fairband.engine.review import review_company
-from fairband.engine.route import reprice, value_company
+from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.route_steps import millions
 from fairband.engine.sensitivity import sensitivity_grid
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy, in_currency
+from fairband.policy.inflation import load_inflation_table
 
 TODAY = date(2026, 10, 31)
 NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
@@ -75,16 +76,21 @@ def test_in_currency_restates_the_four_rates(policy: Policy) -> None:
 
 
 @pytest.mark.parametrize(
-    ("differential", "r", "g"),
-    [(-0.00509, 0.08445, 0.02476), (0.01097, 0.10195, None), (0.04034, 0.13398, None)],
-    ids=["TWD", "BRL", "KZT"],
+    ("code", "differential", "r", "g"),
+    [
+        ("TWD", -0.00509, 0.08445, 0.02476),
+        ("BRL", 0.01097, 0.10195, None),
+        ("KZT", 0.04034, 0.13398, None),
+    ],
 )
 def test_in_currency_on_the_packaged_table(
-    policy: Policy, differential: float, r: float, g: float | None
+    policy: Policy, code: str, differential: float, r: float, g: float | None
 ) -> None:
-    """Spec 11.1's figures, to three decimals of a percent: TWD's r 8.445% and g_T 2.476%, BRL's r
-    10.195%, KZT's r 13.398%."""
-    local = in_currency(policy, differential)
+    """Spec 11.1's figures on the packaged inflation table, to three decimals of a percent: TWD's
+    d −0.509%, r 8.445% and g_T 2.476%; BRL's d +1.097%, r 10.195%; KZT's d +4.034%, r 13.398%."""
+    d = load_inflation_table().differential(code)
+    assert d is not None and d == pytest.approx(differential, abs=1e-5)
+    local = in_currency(policy, d)
     assert local.required_return == pytest.approx(r, abs=1e-5)
     if g is not None:
         assert local.terminal_growth == pytest.approx(g, abs=1e-5)
@@ -237,7 +243,8 @@ def test_the_held_rate_cap_is_restated(policy: Policy, deciles: Deciles) -> None
 def test_reprice_moves_the_usd_value_with_the_rate(policy: Policy, deciles: Deciles) -> None:
     r = value_company(fx_inputs(), deciles, policy, TODAY)
     assert r.value is not None and r.levels is not None
-    moved = reprice(r, 55.0, date(2026, 11, 2), policy, fx_rate=8.5, fx_date=date(2026, 11, 2))
+    day = date(2026, 11, 2)
+    moved = reprice(r, 55.0, day, policy, fx_rate=8.5, fx_date=day, fx_observed_at=NOW)
     assert moved.value is not None and moved.levels is not None
     assert moved.intermediates["value_in_currency"] == r.intermediates["value_in_currency"]
     assert moved.value == pytest.approx(r.intermediates["value_in_currency"] / 8.5)
@@ -247,8 +254,10 @@ def test_reprice_moves_the_usd_value_with_the_rate(policy: Policy, deciles: Deci
     assert (moved.intermediates["fx_rate"], moved.intermediates["fx_date"]) == (8.5, "2026-11-02")
     # the at-price figures read the price in SEK, 55 × 8.5
     assert moved.intermediates["multiples"]["pe_reported"] == pytest.approx(467.5 / 42.4)
-    rate = inputs_of(moved)["fx_rate"]
-    assert (rate.value, rate.provenance.as_of) == (8.5, date(2026, 11, 2))
+    # the rate input moves as the price input does: its value, its date and the quote's stamp
+    rate, was = inputs_of(moved)["fx_rate"], inputs_of(r)["fx_rate"]
+    assert (rate.value, rate.provenance.as_of, rate.provenance.observed_at) == (8.5, day, NOW)
+    assert rate.provenance.source == was.provenance.source
     assert inputs_of(moved)["price"].value == 55.0
     kept = reprice(r, 55.0, date(2026, 11, 12), policy)  # no fresh pair quote
     assert kept.value == r.value and kept.levels == r.levels
@@ -266,17 +275,68 @@ def test_reprice_moves_the_usd_value_with_the_rate(policy: Policy, deciles: Deci
     )
 
 
-def test_reprice_at_the_same_rate_matches_the_engine(policy: Policy, deciles: Deciles) -> None:
-    """A reprice at the rate the row was valued at moves what the engine moves with the price:
-    the value and the levels stay, the at-price figures are the engine's at that price."""
-    r = value_company(fx_inputs(), deciles, policy, TODAY)
-    moved = reprice(r, 60.0, date(2026, 10, 31), policy, fx_rate=8.0, fx_date=date(2026, 10, 31))
-    again = value_company(replace(fx_inputs(), price=60.0), deciles, policy, TODAY)
-    assert (moved.value, moved.levels) == (r.value, r.levels)
-    assert moved.intermediates["implied_growth"] == pytest.approx(
-        again.intermediates["implied_growth"]
+def _refused_for_its_target_margin() -> CompanyInputs:
+    """HGCO with no peers: the revenue-growth refusal that keeps its rebuild keys and the margin
+    the price needs."""
+    return replace(high_growth_inputs(), peers=())
+
+
+def _refused_for_its_earnings() -> CompanyInputs:
+    """MSCO at a trailing loss, with MGCO's consensus and at $80: the Mature Stable refusal that
+    keeps the growth-route cross-check and its implied growth at the price."""
+    stable, growth = mature_stable_inputs(), mature_growth_inputs()
+    assert stable.trailing is not None
+    return replace(
+        stable,
+        price=80.0,
+        trailing=replace(stable.trailing, net_income=-100e6),
+        quarter_estimates=growth.quarter_estimates,
+        annual_estimates=growth.annual_estimates,
     )
-    assert moved.designation == again.designation
+
+
+REPRICED = {
+    **VALUED,
+    "revenue-growth-refused": _refused_for_its_target_margin,
+    "mature-stable-refused": _refused_for_its_earnings,
+}
+_RATE_KEYS = ("fx_rate", "fx_date")
+
+
+def _at_price(r: ValuationResult) -> dict[str, Any]:
+    """The intermediates but the rate's two, which say when the rate was read."""
+    return {k: v for k, v in r.intermediates.items() if k not in _RATE_KEYS}
+
+
+@pytest.mark.parametrize("case", sorted(REPRICED))
+def test_reprice_in_the_currency_matches_the_engine(
+    policy: Policy, deciles: Deciles, case: str
+) -> None:
+    """Every valued route, the revenue-growth refusal for its target margin (the margin the price
+    needs) and the Mature Stable refusal for its earnings (the cross-check), in SEK at 8.0. At
+    the rate it was valued at, a reprice is the engine at the new price: the same value, levels,
+    designation and intermediates. At a new rate, 10.0, every figure that moves with the price is
+    the one at the same price in SEK, and the value a share is ``value_in_currency`` ÷ 10.0."""
+    sek = in_sek(REPRICED[case]())
+    assert sek.price is not None
+    r = value_company(sek, deciles, policy, TODAY)
+    day = date(2026, 11, 2)
+    same = reprice(r, sek.price * 1.25, day, policy, fx_rate=8.0, fx_date=day)
+    again = value_company(replace(sek, price=sek.price * 1.25), deciles, policy, TODAY)
+    assert (same.value, same.levels, same.refusal) == (again.value, again.levels, again.refusal)
+    assert same.designation == again.designation
+    assert _at_price(same) == _at_price(again)
+    moved = reprice(r, sek.price, day, policy, fx_rate=10.0, fx_date=day)
+    in_sek_alike = reprice(r, sek.price * 10.0 / 8.0, day, policy, fx_rate=8.0, fx_date=day)
+    assert _at_price(moved) == _at_price(in_sek_alike)
+    assert moved.intermediates["fx_rate"] == 10.0
+    if r.value is None:
+        assert (moved.value, moved.levels, moved.refusal) == (None, None, r.refusal)
+    else:
+        assert moved.value == pytest.approx(r.intermediates["value_in_currency"] / 10.0)
+        assert moved.levels is not None and r.levels is not None
+        assert moved.levels.buy == pytest.approx(r.levels.buy * 8.0 / 10.0)
+        assert moved.price_to_value == pytest.approx(sek.price / moved.value)
 
 
 def test_reprice_moves_a_start_up_row_s_market_cap_in_the_currency(
@@ -378,6 +438,21 @@ def test_the_review_s_bridge_and_the_sensitivity_grid_are_in_usd(
     assert grid.cells[1][1] == pytest.approx(alone.value)  # FXCO's own moat is Wide
 
 
+def test_the_dollar_ramp_names_the_currency(policy: Policy, deciles: Deciles) -> None:
+    """HGCO at a trailing loss of 15,000 m, larger than its revenue, in SEK: the ramp moves in SEK
+    from SEK −120,000.0 million, the figures in SEK; the USD row's sentence says dollars."""
+    usd = high_growth_inputs()
+    assert usd.trailing is not None
+    lossy = replace(usd, trailing=replace(usd.trailing, operating_income=-15_000e6))
+    sek = value_company(in_sek(lossy), deciles, policy, TODAY)
+    dollar = value_company(lossy, deciles, policy, TODAY)
+    [ramp] = [f.sentence for f in sek.flags if f.code == "margin-ramp-in-dollars"]
+    assert "income moves in SEK from −SEK 120,000.0 million to the target margin's SEK " in ramp
+    assert "dollars" not in ramp
+    [ramp] = [f.sentence for f in dollar.flags if f.code == "margin-ramp-in-dollars"]
+    assert "income moves in dollars from −$15,000.0 million" in ramp
+
+
 def test_the_sentences_name_the_currency(policy: Policy) -> None:
     """A money figure a sentence prints is after ``$`` on a USD row and after the code on any
     other."""
@@ -393,9 +468,16 @@ def test_the_sentences_name_the_currency(policy: Policy) -> None:
 
 def test_override_ranges_read_in_the_currency(policy: Policy) -> None:
     """earnings.ntm's range, above 0 to 1,000 USD a share, is above 0 to 32,956 TWD a share at
-    32.956 TWD per USD; a figure inside the USD range but outside the currency's, and the other
-    way round (plan review focus 5)."""
+    32.956 TWD per USD and above 0 to 790 GBP a share at 0.79 GBP per USD: a figure outside the USD
+    range but inside the TWD one, and one inside the USD range but outside the GBP one (plan
+    review focus 5)."""
     twd = {"fx_rate": 32.956, "currency": "TWD"}
+    gbp = {"fx_rate": 0.79, "currency": "GBP"}
+    assert check_input("earnings.ntm", 900.0, "mature-growth", policy)[0] == "applied"
+    assert check_input("earnings.ntm", 900.0, "mature-growth", policy, **gbp) == (
+        "refused-unit",
+        "earnings.ntm takes above 0 to 790 GBP a share",
+    )
     assert check_input("earnings.ntm", 32_000.0, "mature-growth", policy, **twd)[0] == "applied"
     state, sentence = check_input("earnings.ntm", 33_000.0, "mature-growth", policy, **twd)
     assert state == "refused-unit"
@@ -411,6 +493,32 @@ def test_override_ranges_read_in_the_currency(policy: Policy) -> None:
     assert sentence == "value.outside takes −32,956 to 32,956 TWD a share"
     state, sentence = check_input("balance.debt", -1.0, "decline", policy, **twd)
     assert sentence == "balance.debt takes 0 TWD or more"
+
+
+def test_a_scaled_money_end_is_checked_as_it_is_printed(policy: Policy) -> None:
+    """A money end × the rate rounds half up to two decimals before the check and prints the
+    decimals it has: earnings.nri_gap's ±100 at 32.956 is ±3,295.6, so 3,295.6 passes and
+    3,295.8 is refused with the end it printed; at 0.16478 the end 16.478 is 16.48. A USD end
+    is a whole number, as before."""
+    twd = {"fx_rate": 32.956, "currency": "TWD"}
+    assert check_input("earnings.nri_gap", 3_295.6, "mature-growth", policy, **twd)[0] == "applied"
+    assert check_input("earnings.nri_gap", 3_295.8, "mature-growth", policy, **twd) == (
+        "refused-unit",
+        "earnings.nri_gap takes −3,295.6 to 3,295.6 TWD a share",
+    )
+    odd = {"fx_rate": 0.16478, "currency": "GBP"}
+    assert check_input("earnings.nri_gap", 16.48, "mature-growth", policy, **odd)[0] == "applied"
+    assert check_input("earnings.nri_gap", 16.481, "mature-growth", policy, **odd) == (
+        "refused-unit",
+        "earnings.nri_gap takes −16.48 to 16.48 GBP a share",
+    )
+    assert check_input("earnings.nri_gap", 100.5, "mature-growth", policy) == (
+        "refused-unit",
+        "earnings.nri_gap takes −$100 to $100 a share",
+    )
+    assert range_text(-3_295.6, 3_295.6, "USD a share", currency="TWD") == (
+        "−3,295.6 to 3,295.6 TWD a share"
+    )
 
 
 def test_range_text_names_the_currency() -> None:

@@ -189,9 +189,9 @@ def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
     assert was.value == pytest.approx(was.intermediates["value_in_currency"] / 10.52)
     [rate] = [i for i in kron.inputs if i.name == "fx_rate"]
     assert (rate.value, rate.unit, rate.provenance.as_of) == (10.6, "SEK per USD", PRICE_DATE)
-    assert kron == reprice(
-        was, 40.0, PRICE_DATE, env.policy, fx_rate=10.6, fx_date=PRICE_DATE, **stamps
-    )
+    assert rate.provenance.observed_at == env.clock.now  # the pair quote's, not the history's
+    rates = {"fx_rate": 10.6, "fx_date": PRICE_DATE, "fx_observed_at": env.clock.now}
+    assert kron == reprice(was, 40.0, PRICE_DATE, env.policy, **rates, **stamps)
 
     assert list(dict.fromkeys(p.stage for p in env.progress)) == [
         "quotes",
@@ -685,6 +685,25 @@ def test_a_failed_pair_quote_fails_no_company(env_valued: Env) -> None:
         10.52,
     )
     assert "fx-stale" not in [f.code for f in kron.flags]
+
+
+def test_a_pair_quote_that_is_no_rate_reprices_at_the_stored_rate(env_valued: Env) -> None:
+    """USDSEK answers the numeric string "1e400": a finite decimal the store keeps, but no float,
+    so no rate (spec 2026-11-10 7.1). KRON reprices at the rate its snapshot holds, as for a
+    failed pair, and is not marked "reprice failed"."""
+    env = env_valued
+    before = env.snapshot("KRON").result
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+    [row] = quote_rows({"USDSEK": 1.0})
+    huge = json.dumps([row | {"price": "1e400"}]).encode()
+    env.router.symbol_bodies[("quote", "USDSEK")] = huge
+
+    refresh_id = env.refresh().run("price")
+
+    assert env.last().calibration == {"total": 5, "repriced": 5, "failed": 0, "skipped": 0}
+    assert ("KRON", "repriced", None) in env.items(refresh_id)
+    kron = env.snapshot("KRON").result
+    assert (kron.price, kron.value, kron.intermediates["fx_rate"]) == (40.0, before.value, 10.52)
 
 
 def test_a_failed_pair_quote_past_the_bound_notes_a_stale_rate(env_valued: Env) -> None:

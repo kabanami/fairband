@@ -11,6 +11,10 @@ anywhere is refused, since RFC 8259 JSON has no such number.
 ``settings_hash``; it was valued under the policy file alone, so it reads the empty overlay's
 hash. A result classified before method 0.9 carries neither ``positive_years_last_five`` nor
 ``positive_years_on_file`` in its phase evidence, and reads ``None`` for both.
+
+``money_of`` reads the rate and the currency a result's money figures are in (spec 2026-11-10
+7.2): its intermediates' ``fx_rate`` and ``currency`` on a row in another currency, 1.0 and USD on
+any other, which carries neither.
 """
 
 import json
@@ -123,6 +127,17 @@ class ValuationResult:
     method_version: str
     settings_hash: str
     deciles_refresh_id: int | None
+
+
+def money_of(result: ValuationResult) -> tuple[float, str]:
+    """The rate, units of the currency per USD, and the currency of ``result``'s money figures:
+    its intermediates' ``fx_rate`` and ``currency`` for a row in another currency, 1.0 and USD for
+    any other (the module docstring)."""
+    im = result.intermediates
+    rate, currency = im.get("fx_rate"), im.get("currency")
+    if isinstance(rate, int | float) and not isinstance(rate, bool) and isinstance(currency, str):
+        return float(rate), currency
+    return 1.0, "USD"
 
 
 def result_to_json(r: ValuationResult) -> str:

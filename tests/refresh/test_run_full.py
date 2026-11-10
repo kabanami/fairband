@@ -57,9 +57,10 @@ NO_TARGET = "no target margin: 0 mature peers"
 # reporting in it, with the flags of the synthetic company it is (spec 2026-11-10 7), and NEWT
 # refused. Every company carries a flag (the synthetic company has no leases on its balance
 # sheet, among others), but only NEWT (growth word, free cash flow) is flagged by a classifier
-# check: ACME's and AXLE's margin directions read Stable, which points to no phase (method 0.9). NEWT's refusal for its target
-# margin keeps the flags of its revenue path (the annual consensus has no revenue for a path year,
-# so the path holds), of its capital build, and of the industry fallback for its peers.
+# check: ACME's and AXLE's margin directions read Stable, which points to no phase (method 0.9).
+# NEWT's refusal for its target margin keeps the flags of its revenue path (the annual consensus
+# has no revenue for a path year, so the path holds), of its capital build, and of the industry
+# fallback for its peers.
 CALIBRATION = {
     "total": 5,
     "valued": 4,
