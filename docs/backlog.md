@@ -18,7 +18,7 @@ file or theme, before the workspace is deleted.
 
 | ID | Item | Type | Origin | Why |
 |---|---|---|---|---|
-| B-28 | Foreign filers are refused: currency and share-unit handling not built (196 rows on 2026-11-01; 13 of the 112 Decline rows) | feature | first live run | the founder's order of 2026-11-06: after B-9 |
+| B-28 | Foreign filers are refused: currency and share-unit handling not built (196 rows on 2026-11-01; 13 of the 112 Decline rows) | feature | first live run | the founder's order of 2026-11-06: after B-9; plan 1 of the spec of 2026-11-10 merged 2026-11-11 (354c809, method 1.1, policy v11; 144 of 199 foreign rows valued in refresh 34, the readout in the spec's decision log); plan 2, the half-year window for the 26 half-year reporters, closes it |
 | B-87 | The screen after a refresh: B-68 (history and what changed), B-47 (a price fall with no consensus revision), B-32 (the industry filter) and B-31 (FIND performance), as one page piece | feature | founder, 2026-11-06 | the founder's order of 2026-11-06: after B-28; plan 2 (2026-11-08) built `/api/companies/{symbol}/band-history` (`web/history_api.py`: value, levels and price per snapshot) for the report page's band chart, which is B-68's per-company history read |
 
 ## Questions
