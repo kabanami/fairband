@@ -10,25 +10,37 @@ denominator, is the new shares to one old share: 2 for a 2-for-1 split, 0.1 for 
 split.
 
 ``apply_splits`` reads every share count and per-share figure on the share basis of the quote
-date. A split dated after the newest statement period end (the trailing figures' ``period_end``)
-and at or before the price date is pending (``pending_splits``); several compound, their ratios
-multiplied into ρ. The vendor check of 2026-11-10 found that FMP restates its statements, street
-actuals, consensus and closes to the post-split basis, but on no known day. The quote's market cap
-÷ its price gives the share count of the quote date, Q, so the rule scales only what the data shows
-pre-split, ``within(a, b)`` reading ``|a − b| ≤ tolerance × b`` (false for a ``b`` of zero):
+date. Each trailing period (``periods``: the four quarters, or the fiscal year on the fallback,
+oldest first) is read by its own period end: its ρ is the product of the ratios of the splits dated
+after its end and at or before the price date. A split is pending (``pending_splits``) when it
+falls after the oldest trailing period's end and at or before the price date, so for about a year
+after a split, until every trailing period postdates it. The vendor check of 2026-11-10 found that
+FMP restates its statements, street actuals, consensus and closes to the post-split basis, but on
+no known day. The quote's market cap ÷ its price gives the share count of the quote date, Q, so the
+rule scales only what the data shows pre-split, ``within(a, b)`` reading ``|a − b| ≤ tolerance ×
+b`` (false for a ``b`` of zero):
 
-- the statement side, the diluted count D, the trailing diluted EPS (the sum as a whole) and the
-  street trailing EPS: pre-split when D × ρ lies within the tolerance of Q and D does not; then the
-  count reads D × ρ and the two EPS figures ÷ ρ. Otherwise they are read as stored: post-split when
-  D lies within the tolerance of Q and D × ρ does not, undecided when both or neither do, and
-  untested without D or Q, the sentence saying which;
-- the consensus, each annual and quarterly row ending after the newest statement period end (the
-  rows the engine can read: the NTM quarters, the base year and the path years) with an EPS and a
-  net-income mean: its implied count I, the net income ÷ the EPS, within the tolerance of the
-  pre-split count P and not of the post-split count S reads its EPS ÷ ρ; S is D × ρ when the
-  statements were scaled, else D, and P is S ÷ ρ. A row without a net-income mean, or within both
-  counts or neither, is read as stored, and so is every row without a count D. A row ending at or
-  before the newest statement period end is already reported: read as stored and never named;
+- the diluted count D (the newest quarter's, else the newest fiscal year's): against Q with the
+  newest period's ρ, pre-split when D × ρ lies within the tolerance of Q and D does not, and then it
+  reads D × ρ. It is read as stored when D lies within Q and D × ρ does not (post-split), and with
+  the statements when both or neither do, or without Q, the sentence saying which. With every
+  pending split before the newest period's end, ρ is 1: D is on the quote's basis by construction
+  and needs no Q. S, the count on the quote's basis, is D × ρ when scaled, else D;
+- each trailing period with a split after its end, on its own count: the newest against Q by the
+  test D takes, the older ones against S, pre-split when the count × the period's ρ lies within the
+  tolerance and the count does not. A pre-split period's EPS and its street actual (the one at its
+  end) read ÷ its ρ; a period without a count is read as stored and named. The trailing EPS is then
+  the sum of the periods' EPS when each has one, and the street trailing EPS the sum of the four
+  actuals (``SplitFigures.street_ttm_eps``). So on the fiscal-year fallback the year is judged by
+  its own count, and a trailing sum of quarters on two bases is read on one;
+- the consensus, by the splits after the newest statement period end (none when the newest
+  period's ρ is 1): each annual and quarterly row ending after that end (the rows the engine can
+  read: the NTM quarters, the base year and the path years) with an EPS and a net-income mean: its
+  implied count I, the net income ÷ the EPS, within the tolerance of the pre-split count P and not
+  of the post-split count S reads its EPS ÷ ρ, with P = S ÷ ρ. A row without a net-income mean is
+  read as stored and named; a row within both counts or neither, or with an EPS of zero, is read as
+  stored; every row without a count D is read as stored. A row ending at or before the newest
+  statement period end is already reported: read as stored and never named;
 - GuruFocus's trailing EPS and EPS without non-recurring items, each observed before a pending
   split: ÷ the ratios of the pending splits dated after its observation;
 - the closes and the quote never: they are FMP's, already on the new basis.
@@ -37,11 +49,13 @@ The count, the trailing EPS, the street trailing EPS, GuruFocus's two EPS figure
 when scaled, are estimates under the method ``split-scaled`` and carry a note naming the split,
 keyed by the engine's DATA input names: ``shares_diluted``, ``eps_ttm``, ``street_ttm_eps``,
 ``gf_eps_ttm``, ``gf_eps_without_nri``, and ``ntm_eps`` when a scaled quarterly row is among the
-NTM quarters (``ntm_quarters``). No DATA input holds the annual consensus EPS (the path steps are
+NTM quarters (``ntm_quarters``). The notes of the two trailing EPS figures say "on 3 of 4 quarters"
+when not every period scaled. No DATA input holds the annual consensus EPS (the path steps are
 rates, unmoved when both years scale), so the ``split-pending`` sentence alone names it. A pending
-split puts the note ``split-pending`` on the row, its sentence naming the splits, the figures read
-on the new basis and those read as stored; without one every figure is read as stored and nothing
-is noted.
+split puts the note ``split-pending`` on the row, its sentence naming the splits and the newest
+period each follows, the figures read on the new basis and the periods they were scaled on, and
+the statement side's reason when it scaled nothing; without one every figure is read as stored and
+nothing is noted.
 """
 
 import math
@@ -50,9 +64,11 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import date
+from typing import Literal
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures, ntm_quarters
 from fairband.engine.types import Flag
+from fairband.refresh.inputs_statements import TrailingPeriod
 from fairband.store.observations import observations_for
 from fairband.store.vendor import latest_response
 
@@ -68,7 +84,14 @@ _NEITHER_BASIS = (
     "The diluted count matches neither basis of the quote's count, so the statements are read as "
     "stored."
 )
+_NOTHING_TO_SCALE = "No trailing EPS or street actuals are on file to scale."
+# The per-share DATA inputs the statement side may scale, in words.
+_PER_SHARE = {"eps_ttm": "the trailing EPS", "street_ttm_eps": "the street actuals"}
 _TAIL = "The closes and the quote are FMP's, already on it."
+_QUARTERS = 4  # the street's trailing EPS sums four quarters' actuals
+
+# Where a count stands against another: pre-split, post-split, or on both bases or neither.
+type _Basis = Literal["pre", "post", "both", "neither"]
 
 
 @dataclass(frozen=True)
@@ -93,17 +116,28 @@ class SplitRow:
 
 @dataclass(frozen=True)
 class SplitFigures:
-    """The figures the rule may scale, as assembly read them."""
+    """The figures the rule may scale, as assembly read them: ``periods`` are the trailing periods
+    behind ``trailing``, oldest first, and ``street_actuals`` the street actual at each trailing
+    quarter end, empty on the fiscal-year fallback or when one is missing."""
 
     shares_diluted: float | None
     trailing: TrailingFigures | None
-    street_ttm_eps: float | None
+    periods: tuple[TrailingPeriod, ...]
+    street_actuals: tuple[tuple[date, float], ...]
     gf_eps_ttm: float | None
     gf_eps_ttm_as_of: date | None
     gf_eps_without_nri: float | None
     gf_eps_without_nri_as_of: date | None
     quarter_estimates: tuple[QuarterEstimate, ...]
     annual_estimates: tuple[AnnualEstimate, ...]
+
+    @property
+    def street_ttm_eps(self) -> float | None:
+        """The street's trailing EPS: the sum of the four street actuals, ``None`` without
+        them."""
+        if len(self.street_actuals) != _QUARTERS:
+            return None
+        return sum(eps for _, eps in self.street_actuals)
 
 
 @dataclass(frozen=True)
@@ -121,6 +155,8 @@ class SplitOutcome:
 
 # One side of the rule: the figures as it leaves them, its notes by DATA input name, its sentences.
 type _Side = tuple[SplitFigures, dict[str, str], list[str]]
+# The trailing periods scaled, by their place in ``periods``, with the splits after each one's end.
+type _Scaled = dict[int, tuple[SplitRow, ...]]
 
 
 def splits_for(conn: sqlite3.Connection, symbol: str) -> tuple[SplitRow, ...]:
@@ -142,13 +178,13 @@ def splits_for(conn: sqlite3.Connection, symbol: str) -> tuple[SplitRow, ...]:
 
 
 def pending_splits(
-    splits: Sequence[SplitRow], statement_end: date | None, price_date: date | None
+    splits: Sequence[SplitRow], oldest_end: date | None, price_date: date | None
 ) -> tuple[SplitRow, ...]:
-    """The splits dated after ``statement_end`` and at or before ``price_date``, oldest first;
-    none when either date is unknown."""
-    if statement_end is None or price_date is None:
+    """The splits dated after ``oldest_end``, the oldest trailing period's end, and at or before
+    ``price_date``, oldest first; none when either date is unknown."""
+    if oldest_end is None or price_date is None:
         return ()
-    found = (s for s in splits if statement_end < s.date <= price_date)
+    found = (s for s in splits if oldest_end < s.date <= price_date)
     return tuple(sorted(found, key=lambda s: s.date))
 
 
@@ -162,60 +198,205 @@ def apply_splits(
     quote_price: float | None,
     tolerance: float,
 ) -> SplitOutcome:
-    """``figures`` on the share basis of the quote date (the module docstring states the rule)."""
-    pending = pending_splits(splits, statement_end, price_date)
+    """``figures`` on the share basis of the quote date (the module docstring states the rule);
+    ``statement_end`` is the newest trailing period's end."""
+    oldest = figures.periods[0].end if figures.periods else statement_end
+    pending = pending_splits(splits, oldest, price_date)
     if not pending or statement_end is None:
         return SplitOutcome(figures, None, {}, {})
     quote_count = (
         None if quote_market_cap is None or not quote_price else quote_market_cap / quote_price
     )
-    stated, statement_notes, statement = _statement_side(figures, pending, quote_count, tolerance)
+    stated, statement_notes, statement = _statement_side(
+        figures, pending, statement_end, quote_count, tolerance
+    )
     estimated, consensus_notes, consensus = _consensus_side(
-        stated, pending, statement_end, tolerance
+        stated, _after(pending, statement_end), statement_end, tolerance
     )
     out, gurufocus_notes, gurufocus = _gurufocus_side(estimated, pending)
-    sentence = " ".join([_head(pending, statement_end), *statement, *consensus, *gurufocus, _TAIL])
+    head = _head(pending, figures.periods, statement_end)
+    sentence = " ".join([head, *statement, *consensus, *gurufocus, _TAIL])
     notes = statement_notes | consensus_notes | gurufocus_notes
     flag = Flag("split-pending", "Split pending", sentence)
     return SplitOutcome(out, flag, notes, dict.fromkeys(notes, SPLIT_SCALED))
 
 
 def _statement_side(
-    figures: SplitFigures, pending: Sequence[SplitRow], quote_count: float | None, tolerance: float
+    figures: SplitFigures,
+    pending: Sequence[SplitRow],
+    statement_end: date,
+    quote_count: float | None,
+    tolerance: float,
 ) -> _Side:
-    """The diluted count × ρ and the trailing and street EPS ÷ ρ when the quote's count shows the
-    count pre-split; else as stored, the sentence saying why."""
-    count, ratio = figures.shares_diluted, _ratio(pending)
+    """The diluted count × the newest period's ρ when the quote's count shows it pre-split, then
+    each trailing period's EPS and street actual ÷ its own ρ when its own count shows it pre-split;
+    else as stored, the sentence saying why."""
+    count = figures.shares_diluted
     if count is None:
         return figures, {}, [_NO_COUNT]
-    if quote_count is None:
-        return figures, {}, [_NO_QUOTE_COUNT]
-    as_stored = _within(count, quote_count, tolerance)
-    as_scaled = _within(count * ratio, quote_count, tolerance)
-    if as_stored:
-        return figures, {}, [_BOTH_BASES if as_scaled else _POST_SPLIT]
-    if not as_scaled:
-        return figures, {}, [_NEITHER_BASIS]
-    r, named = _count(ratio), _named(pending)
-    notes = {"shares_diluted": f"×{r} for {named}"}
-    per_share: list[str] = []
-    trailing, street = figures.trailing, figures.street_ttm_eps
-    if trailing is not None and trailing.eps_diluted is not None:
-        trailing = replace(trailing, eps_diluted=trailing.eps_diluted / ratio)
-        notes["eps_ttm"] = f"÷{r} for {named}"
-        per_share.append("the trailing EPS")
-    if street is not None:
-        street = street / ratio
-        notes["street_ttm_eps"] = f"÷{r} for {named}"
-        per_share.append("the street actuals")
-    scaled = replace(
-        figures, shares_diluted=count * ratio, trailing=trailing, street_ttm_eps=street
+    newest = _after(pending, statement_end)
+    ratio = _ratio(newest)
+    scale_count = False
+    if newest:
+        if quote_count is None:
+            return figures, {}, [_NO_QUOTE_COUNT]
+        basis = _basis(count, ratio, quote_count, tolerance)
+        if basis == "both":
+            return figures, {}, [_BOTH_BASES]
+        if basis == "neither":
+            return figures, {}, [_NEITHER_BASIS]
+        scale_count = basis == "pre"
+    post_split = count * ratio if scale_count else count
+    scaled, uncounted, tested = _judge_periods(
+        figures.periods, pending, quote_count, post_split, tolerance
     )
-    if not per_share:
-        return scaled, notes, [f"The diluted count (×{r}) is read on the post-split basis."]
-    joint = ", " if len(per_share) == 2 else " and "
-    figures_read = f"The diluted count (×{r}){joint}{' and '.join(per_share)} (÷{r})"
-    return scaled, notes, [f"{figures_read} are read on the post-split basis."]
+    out, moved = _scale_periods(replace(figures, shares_diluted=post_split), scaled)
+    groups = _groups(scaled)
+    notes: dict[str, str] = {}
+    if scale_count:
+        notes["shares_diluted"] = f"×{_count(ratio)} for {_named(newest)}"
+    notes |= {name: _per_share_note(groups, len(figures.periods)) for name in moved}
+    fiscal_year = figures.trailing is not None and figures.trailing.on_fiscal_year
+    sentences: list[str] = []
+    if scale_count or moved:
+        spans = _spans(groups, figures.periods, fiscal_year)
+        per_share = [_PER_SHARE[name] for name in moved]
+        sentences.append(_scaled_sentence(ratio if scale_count else None, per_share, spans))
+    elif scaled:
+        sentences.append(_NOTHING_TO_SCALE)
+    elif newest or tested:
+        sentences.append(_POST_SPLIT)
+    if uncounted:
+        sentences.append(_uncounted(uncounted, figures.periods, fiscal_year))
+    return out, notes, sentences
+
+
+def _judge_periods(
+    periods: Sequence[TrailingPeriod],
+    pending: Sequence[SplitRow],
+    quote_count: float | None,
+    post_split: float,
+    tolerance: float,
+) -> tuple[_Scaled, list[int], bool]:
+    """Each period with a pending split after its end, on its own count: the newest against the
+    quote's count, as the diluted count is judged, the older ones against ``post_split``, S. The
+    pre-split periods with their splits, the periods without a count, and whether any was tested.
+    """
+    scaled: _Scaled = {}
+    uncounted: list[int] = []
+    tested = False
+    for k, period in enumerate(periods):
+        after = _after(pending, period.end)
+        if not after:
+            continue  # it postdates every pending split: on the quote's basis by construction
+        if period.shares_diluted is None:
+            uncounted.append(k)
+            continue
+        against = quote_count if k == len(periods) - 1 else post_split
+        if against is None:
+            continue
+        tested = True
+        if _basis(period.shares_diluted, _ratio(after), against, tolerance) == "pre":
+            scaled[k] = after
+    return scaled, uncounted, tested
+
+
+def _scale_periods(figures: SplitFigures, scaled: _Scaled) -> tuple[SplitFigures, list[str]]:
+    """Each scaled period's EPS and street actual ÷ its ρ; the trailing EPS then the sum of the
+    periods' when it was on file and each has one, the street's the sum of the four actuals. The
+    figures, and the DATA inputs whose figure moved (``eps_ttm``, ``street_ttm_eps``)."""
+    if not scaled:
+        return figures, []
+    ratios = {figures.periods[k].end: _ratio(after) for k, after in scaled.items()}
+    periods = tuple(
+        replace(p, eps_diluted=p.eps_diluted / ratios[p.end])
+        if p.end in ratios and p.eps_diluted is not None
+        else p
+        for p in figures.periods
+    )
+    moved: list[str] = []
+    trailing, actuals = figures.trailing, figures.street_actuals
+    each = [p.eps_diluted for p in periods if p.eps_diluted is not None]
+    if trailing is not None and trailing.eps_diluted is not None and len(each) == len(periods):
+        trailing = replace(trailing, eps_diluted=sum(each))
+        moved.append("eps_ttm")
+    if figures.street_ttm_eps is not None:
+        actuals = tuple((end, eps / ratios.get(end, 1)) for end, eps in actuals)
+        moved.append("street_ttm_eps")
+    scaled_figures = replace(figures, trailing=trailing, periods=periods, street_actuals=actuals)
+    return scaled_figures, moved
+
+
+def _groups(scaled: _Scaled) -> list[tuple[tuple[SplitRow, ...], list[int]]]:
+    """The scaled periods grouped by the splits after their ends, the oldest period's group first:
+    its splits are every split that scaled a period."""
+    groups: dict[tuple[SplitRow, ...], list[int]] = {}
+    for k in sorted(scaled):
+        groups.setdefault(scaled[k], []).append(k)
+    return list(groups.items())
+
+
+def _per_share_note(groups: Sequence[tuple[tuple[SplitRow, ...], list[int]]], n: int) -> str:
+    """``÷2 for the 2-for-1 split of 15 Oct 2026`` when every period scaled by one ratio, else
+    ``÷2 on 3 of 4 quarters for ...``, a part for each ratio."""
+    named = _named(groups[0][0])
+    if len(groups) == 1 and len(groups[0][1]) == n:
+        return f"÷{_count(_ratio(groups[0][0]))} for {named}"
+    parts = [f"÷{_count(_ratio(after))} on {len(ks)} of {n} quarters" for after, ks in groups]
+    return f"{' and '.join(parts)} for {named}"
+
+
+def _spans(
+    groups: Sequence[tuple[tuple[SplitRow, ...], list[int]]],
+    periods: Sequence[TrailingPeriod],
+    fiscal_year: bool,
+) -> str:
+    """``÷2 on the quarters to 30 Sep 2026``, a part for each ratio."""
+    return " and ".join(
+        f"÷{_count(_ratio(after))} on {_span(ks, periods, fiscal_year)}" for after, ks in groups
+    )
+
+
+def _span(ks: Sequence[int], periods: Sequence[TrailingPeriod], fiscal_year: bool) -> str:
+    """``the fiscal year``, ``the quarters to 30 Sep 2026`` when every quarter is among ``ks``,
+    else ``the quarter ending ...``, ``the quarters ending 31 Dec 2025 to 30 Jun 2026`` or, when
+    they do not follow one another, ``the quarters ending A, B and C``."""
+    if fiscal_year:
+        return "the fiscal year"
+    ends = [_day(periods[k].end) for k in ks]
+    if len(ks) == len(periods):
+        return f"the quarters to {ends[-1]}"
+    if len(ks) == 1:
+        return f"the quarter ending {ends[0]}"
+    if ks[-1] - ks[0] == len(ks) - 1:
+        return f"the quarters ending {ends[0]} to {ends[-1]}"
+    return f"the quarters ending {_and(ends)}"
+
+
+def _scaled_sentence(count_ratio: float | None, per_share: Sequence[str], spans: str) -> str:
+    """The figures read on the post-split basis: the count with its factor when it scaled, the
+    per-share figures with the periods they scaled on."""
+    if count_ratio is not None:
+        counted = f"The diluted count (×{_count(count_ratio)})"
+        if not per_share:
+            return f"{counted} is read on the post-split basis."
+        joint = ", " if len(per_share) == 2 else " and "
+        return (
+            f"{counted}{joint}{' and '.join(per_share)} ({spans}) are read on the post-split basis."
+        )
+    listed = " and ".join(per_share)
+    verb = "are" if len(per_share) == 2 else "is"
+    return f"{listed[0].upper()}{listed[1:]} ({spans}) {verb} read on the post-split basis."
+
+
+def _uncounted(ks: Sequence[int], periods: Sequence[TrailingPeriod], fiscal_year: bool) -> str:
+    """The periods without a share count, read as stored."""
+    if fiscal_year:
+        return "The fiscal year has no share count and is read as stored."
+    ends = _and([_day(periods[k].end) for k in ks])
+    if len(ks) == 1:
+        return f"The quarter ending {ends} has no share count and is read as stored."
+    return f"The quarters ending {ends} have no share count and are read as stored."
 
 
 def _consensus_side(
@@ -223,9 +404,10 @@ def _consensus_side(
 ) -> _Side:
     """Each consensus EPS ending after ``statement_end`` ÷ ρ whose implied count shows it
     pre-split, against S, the count as the statement side left it, and P = S ÷ ρ; every row as
-    stored without a count. The NTM EPS carries the note when a scaled row is among the NTM
-    quarters the engine reads (``ntm_quarters``), its span theirs."""
-    if figures.shares_diluted is None:
+    stored without a count, and without a split after ``statement_end``. The NTM EPS carries the
+    note when a scaled row is among the NTM quarters the engine reads (``ntm_quarters``), its span
+    theirs."""
+    if figures.shares_diluted is None or not pending:
         return figures, {}, []
     ratio = _ratio(pending)
     r, counts = _count(ratio), (figures.shares_diluted / ratio, figures.shares_diluted)
@@ -301,7 +483,7 @@ def _observed(
 ) -> tuple[float | None, str | None, str | None]:
     """A GuruFocus figure ÷ the ratios of the pending splits dated after its observation, its note
     and the sentence that says so; as stored, with neither, when no pending split followed it."""
-    after = () if as_of is None else tuple(s for s in pending if s.date > as_of)
+    after = () if as_of is None else _after(pending, as_of)
     if value is None or as_of is None or not after:
         return value, None, None
     ratio = _ratio(after)
@@ -310,9 +492,24 @@ def _observed(
     return value / ratio, note, f"GuruFocus's EPS observed {_day(as_of)} is read ÷{r}."
 
 
+def _after(splits: Sequence[SplitRow], day: date) -> tuple[SplitRow, ...]:
+    """The splits dated after ``day``, in their order."""
+    return tuple(s for s in splits if s.date > day)
+
+
 def _ratio(splits: Sequence[SplitRow]) -> float:
     """ρ, the splits' ratios compounded."""
     return math.prod(s.ratio for s in splits)
+
+
+def _basis(count: float, ratio: float, against: float, tolerance: float) -> _Basis:
+    """Where ``count`` stands against ``against``: pre-split when ``count × ratio`` lies within
+    the tolerance and ``count`` does not, post-split the other way round, else both or neither."""
+    stored = _within(count, against, tolerance)
+    scaled = _within(count * ratio, against, tolerance)
+    if stored == scaled:
+        return "both" if stored else "neither"
+    return "post" if stored else "pre"
 
 
 def _within(a: float, b: float, tolerance: float) -> bool:
@@ -320,12 +517,21 @@ def _within(a: float, b: float, tolerance: float) -> bool:
     return b != 0 and abs(a - b) <= tolerance * b
 
 
-def _head(pending: Sequence[SplitRow], statement_end: date) -> str:
-    """``A 2-for-1 split of 28 Jan 2027 falls after the newest statement (30 Sep 2026).``"""
+def _head(
+    pending: Sequence[SplitRow], periods: Sequence[TrailingPeriod], statement_end: date
+) -> str:
+    """``A 2-for-1 split of 28 Jan 2027 falls after the newest statement (30 Sep 2026).``, or,
+    when the oldest pending split falls within the trailing periods, ``... falls after the quarter
+    ending 31 Mar 2026.``, the newest period it follows."""
     splits = _and([f"{_article(s)} {s.word} of {_day(s.date)}" for s in pending])
     verb = "falls" if len(pending) == 1 else "fall"
-    newest = _day(statement_end)
-    return f"{splits[0].upper()}{splits[1:]} {verb} after the newest statement ({newest})."
+    first = pending[0].date
+    before = [p.end for p in periods if p.end < first]
+    if first > statement_end or not before:
+        where = f"the newest statement ({_day(statement_end)})"
+    else:
+        where = f"the quarter ending {_day(before[-1])}"
+    return f"{splits[0].upper()}{splits[1:]} {verb} after {where}."
 
 
 def _years_span(rows: Sequence[AnnualEstimate]) -> str:

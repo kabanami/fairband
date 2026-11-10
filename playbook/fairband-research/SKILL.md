@@ -253,12 +253,13 @@ Five flags ask for a decision of yours. Read each sentence whole: it names its f
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
   the step it names.
-- `split-pending`: a split falls between the newest statement and the quote. The sentence names
-  each figure read on the post-split basis — the diluted count, the trailing EPS, the street
-  actuals, the consensus EPS by fiscal year and by quarter, GuruFocus's EPS — or says why a side
-  was read as stored: FMP's figures already on the new basis, no quote count, no diluted count, or
-  a count that fits both bases or neither. A figure read as stored may be on the old basis. Check
-  the consensus steps and any guided figure against the new basis before you read them.
+- `split-pending`: a split falls after the oldest period of the trailing figures and on or before
+  the quote's date. The sentence names each figure read on the post-split basis — the diluted
+  count, the trailing EPS, the street actuals, the consensus EPS by fiscal year and by quarter,
+  GuruFocus's EPS — or says why a side was read as stored: FMP's figures already on the new basis,
+  no quote count, no diluted count, or a count that fits both bases or neither. A figure read as
+  stored may be on the old basis. Check the consensus steps and any guided figure against the new
+  basis before you read them.
 
 ### 9. The debate and the thesis
 

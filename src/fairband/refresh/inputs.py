@@ -15,8 +15,9 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   quarters chain (``ntm_quarters``). The labels are information on the kept row and decide
   nothing here;
 - the street's trailing EPS: the sum of the four ``street-actual`` values whose periods are exactly
-  the four trailing quarter ends; ``None`` when one is missing or the trailing figures are a fiscal
-  year, which leaves the SBC basis unknown (``mech/1.2``);
+  the four trailing quarter ends, each read on the quote date's basis by the split rule; ``None``
+  when one is missing or the trailing figures are a fiscal year, which leaves the SBC basis unknown
+  (``mech/1.2``);
 - the price and its date from the ``quote``; the market cap from the quote, else the profile, else
   the universe row; ``is_adr`` from the profile, else the universe row;
 - the country, which picks the statutory tax rate: the ``country`` of the latest stored profile
@@ -36,9 +37,9 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   is named in the input's note (``"longTermDebt not presented"``), and with both lines missing the
   figure is ``None``;
 - the peers and their source: ``peers.peer_figures`` on the given deciles; none without them;
-- the stock splits: a split dated after the newest statement period end and at or before the price
-  date puts every share count and per-share figure on the quote date's basis (``inputs_splits``),
-  with the ``split-pending`` note.
+- the stock splits: a split dated after the oldest trailing period's end and at or before the price
+  date puts every share count and per-share figure on the quote date's basis, each trailing period
+  read on its own count (``inputs_splits``), with the ``split-pending`` note.
 
 ``provenance`` holds an entry under each key the route cites (``route`` module docstring) whose
 input the store supplied; an input it did not supply has none and cites "unknown". The source names
@@ -142,7 +143,7 @@ def build_inputs(
     foreign = is_adr or currency != "USD"
     quarters = cite("estimates_quarter", _quarter_estimates(read("estimate-quarter"), calendar))
     annual = cite("estimates_annual", _annual_estimates(read("estimate-annual"), calendar))
-    street = cite("street_ttm_eps", _street_ttm_eps(read("street-actual"), stated))
+    actuals = cite("street_ttm_eps", _street_actuals(read("street-actual"), stated))
     moat = cite("moat_score", _value(_field(read("gf-score"), "moat_score"), _SUMMARY))
     ttm_row, clean_row = _field(ratios, "eps_ttm"), _field(ratios, "eps_without_nri")
     eps_ttm = cite("gf_eps_ttm", _value(ttm_row, _KEYRATIOS))
@@ -154,7 +155,8 @@ def build_inputs(
     read_figures = SplitFigures(
         shares_diluted=stated.shares_diluted,
         trailing=stated.trailing,
-        street_ttm_eps=street,
+        periods=stated.trailing_periods,
+        street_actuals=actuals,
         gf_eps_ttm=eps_ttm,
         gf_eps_ttm_as_of=None if ttm_row is None else ttm_row.as_of,
         gf_eps_without_nri=eps_clean,
@@ -286,13 +288,19 @@ def _one_per_period[E: (QuarterEstimate, AnnualEstimate)](
     return tuple(max(same, key=rank) for same in periods)
 
 
-def _street_ttm_eps(rows: Sequence[ObservationRow], stated: Statements) -> _Cited[float | None]:
+def _street_actuals(
+    rows: Sequence[ObservationRow], stated: Statements
+) -> _Cited[tuple[tuple[date, float], ...]]:
+    """The street actual at each trailing quarter end, in order; none when one is missing or the
+    trailing figures are a fiscal year. Their sum is the street's trailing EPS
+    (``SplitFigures.street_ttm_eps``)."""
     ends = stated.trailing_quarter_ends
     actual = {r.period: r for r in rows if r.field == "eps_actual" and r.value is not None}
     matched = [actual[end] for end in ends if end in actual]
     if not ends or len(matched) != len(ends):
-        return None, None
-    return sum(_float(r) or 0.0 for r in matched), _cite(_EARNINGS, matched)
+        return (), None
+    found = tuple((end, _float(actual[end]) or 0.0) for end in ends)
+    return found, _cite(_EARNINGS, matched)
 
 
 def _market_cap(

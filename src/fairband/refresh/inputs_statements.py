@@ -34,6 +34,9 @@ The interest expense and the depreciation and amortization (spec 2026-11-03 sect
 summed the same way; the interest expense counts each period by its size, as FMP signs it either
 way.
 The diluted share count is the newest quarter's weighted average, else the newest fiscal year's.
+The trailing periods are the periods the trailing figures read, oldest first, each with its own
+diluted EPS and weighted-average diluted count: the four quarters, or the one fiscal year on the
+fallback; the split rule judges each on its own count (``inputs_splits``).
 
 ``balance_lines`` reads the newest annual balance sheet's lines by FMP name, and
 ``stored_payload`` a payload the store keeps whole (the profile's, the peers'). ``balance_sums``
@@ -125,6 +128,16 @@ class FiscalCalendar:
 
 
 @dataclass(frozen=True)
+class TrailingPeriod:
+    """One period the trailing figures read: its end, its diluted EPS and its own diluted
+    weighted-average share count, each ``None`` where the statement lacks it."""
+
+    end: date
+    eps_diluted: float | None
+    shares_diluted: float | None
+
+
+@dataclass(frozen=True)
 class Statements:
     """The statement-side fields of ``CompanyInputs``; ``calendar`` is ``None`` and ``refusal`` is
     "no financial statements" when the store holds no annual income statement. ``tax_refusal``
@@ -138,6 +151,7 @@ class Statements:
     tax_rate_latest: float | None
     trailing: TrailingFigures | None
     trailing_quarter_ends: tuple[date, ...]  # empty on the fiscal-year fallback
+    trailing_periods: tuple[TrailingPeriod, ...]  # oldest first; the one year on the fallback
     shares_diluted: float | None
     currency: str | None  # the newest annual income statement's
     data_date: date
@@ -220,6 +234,7 @@ def statements_for(
             tax_rate_latest=None,
             trailing=None,
             trailing_quarter_ends=(),
+            trailing_periods=(),
             shares_diluted=None,
             currency=None,
             data_date=today,
@@ -234,7 +249,10 @@ def statements_for(
     capital, methods = _capital_years(years, balance, reported, rates)
     newest_rate = rates[years.span[-1]]
     quarters = periods["income-quarter"]
-    trailing, quarter_ends = _trailing(years, cash, quarters, _by_end(periods["cashflow-quarter"]))
+    trailing, trailing_periods = _trailing(
+        years, cash, quarters, _by_end(periods["cashflow-quarter"])
+    )
+    quarter_ends = () if trailing.on_fiscal_year else tuple(p.end for p in trailing_periods)
     shares, shares_source = _shares(quarters, periods["income-annual"])
 
     facts = [row for found in periods.values() for p in found for row in p.facts.values()]
@@ -266,6 +284,7 @@ def statements_for(
         tax_rate_latest=None if newest_rate is None else newest_rate.rate,
         trailing=trailing,
         trailing_quarter_ends=quarter_ends,
+        trailing_periods=trailing_periods,
         shares_diluted=shares,
         currency=periods["income-annual"][-1].currency,
         data_date=max(r.observed_at for r in facts).date(),
@@ -471,8 +490,9 @@ def _trailing(
     cash: dict[date, _Period],
     quarters: Sequence[_Period],
     quarter_cash: dict[date, _Period],
-) -> tuple[TrailingFigures, tuple[date, ...]]:
-    """The trailing figures and the quarter ends they sum, none on the fiscal-year fallback."""
+) -> tuple[TrailingFigures, tuple[TrailingPeriod, ...]]:
+    """The trailing figures and the periods they read, oldest first: the four quarters, or the
+    one fiscal year on the fallback."""
     last = list(quarters[-4:])
     on_fiscal_year = len(last) < 4 or not consecutive_quarters([q.end for q in last])
     if on_fiscal_year:
@@ -497,7 +517,8 @@ def _trailing(
         interest_expense=_total(incomes, "interestExpense", size=True),
         depreciation=_total(flows, "depreciationAndAmortization"),
     )
-    return figures, () if on_fiscal_year else tuple(q.end for q in incomes)
+    read = tuple(TrailingPeriod(i.end, i.value("epsDiluted"), i.value(_SHARES)) for i in incomes)
+    return figures, read
 
 
 def _shares(

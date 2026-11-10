@@ -15,7 +15,8 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from synthetic import M, add_company, bodies, estimates_quarter
+from support import engine_companies
+from synthetic import QUARTERS, M, add_company, bodies, estimates_quarter
 from vendor_double import FIXTURES, Clients, Clock, Router
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
@@ -33,6 +34,7 @@ from fairband.refresh.inputs_splits import (
     pending_splits,
     splits_for,
 )
+from fairband.refresh.inputs_statements import TrailingPeriod, statements_for
 from fairband.store.observations import insert_observations, observations_for
 
 TODAY = date(2026, 11, 1)
@@ -40,6 +42,10 @@ DECILES = Deciles((-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3), (0.0,) 
 # Spec 13.4: a split of 2 dated between a quarter ending 30 Sep and a price of 30 Oct.
 SPLIT = SplitRow(date(2026, 10, 15), 2.0, 1.0)
 END, PRICE_DATE = date(2026, 9, 30), date(2026, 10, 30)
+# The four trailing quarters to END, oldest first.
+ENDS = (date(2025, 12, 31), date(2026, 3, 31), date(2026, 6, 30), END)
+# A split between the second and the third trailing quarter.
+WITHIN = SplitRow(date(2026, 4, 15), 2.0, 1.0)
 # The DATA inputs the statement side marks when it scales.
 STATEMENT_KEYS = {"shares_diluted", "eps_ttm", "street_ttm_eps"}
 
@@ -133,15 +139,27 @@ def build(conn: sqlite3.Connection) -> CompanyInputs:
     return build_inputs(conn, "ACME", load_policy(), load_tax_table(), TODAY)
 
 
-def _trailing(eps: float) -> TrailingFigures:
-    return TrailingFigures(END, 4, False, None, None, None, eps, None, None, None, None, None, None)
+def _trailing(eps: float | None, end: date = END, quarters: int = 4) -> TrailingFigures:
+    yearly = quarters == 1
+    return TrailingFigures(
+        end, quarters, yearly, None, None, None, eps, None, None, None, None, None, None
+    )
 
 
-def _figures(count: float = 1000.0, eps: float = 4.0, street: float = 4.2) -> SplitFigures:
+def _figures(
+    count: float = 1000.0,
+    eps: float = 4.0,
+    street: float = 4.2,
+    counts: tuple[float | None, ...] | None = None,
+) -> SplitFigures:
+    """Four trailing quarters, each a quarter of ``eps`` and of ``street``, on ``counts`` (each
+    ``count`` unless given); the diluted count is ``count``."""
+    each = (count,) * 4 if counts is None else counts
     return SplitFigures(
         shares_diluted=count,
         trailing=_trailing(eps),
-        street_ttm_eps=street,
+        periods=tuple(TrailingPeriod(end, eps / 4, n) for end, n in zip(ENDS, each, strict=True)),
+        street_actuals=tuple((end, street / 4) for end in ENDS),
         gf_eps_ttm=None,
         gf_eps_ttm_as_of=None,
         gf_eps_without_nri=None,
@@ -164,11 +182,12 @@ def _apply(
     splits: tuple[SplitRow, ...] = (SPLIT,),
     market_cap: float | None = 2000.0 * 50,
     price: float | None = 50.0,
+    end: date = END,
 ) -> SplitOutcome:
     return apply_splits(
         figures,
         splits,
-        statement_end=END,
+        statement_end=end,
         price_date=PRICE_DATE,
         quote_market_cap=market_cap,
         quote_price=price,
@@ -200,7 +219,8 @@ def test_the_statements_are_scaled_when_the_quote_shows_them_pre_split() -> None
     out = _apply(_figures())
     f = out.figures
     assert f.trailing is not None
-    assert (f.shares_diluted, f.trailing.eps_diluted, f.street_ttm_eps) == (2000.0, 2.0, 2.1)
+    assert (f.shares_diluted, f.trailing.eps_diluted) == (2000.0, 2.0)
+    assert f.street_ttm_eps == pytest.approx(2.1)
     assert out.notes == {
         "shares_diluted": "×2 for the 2-for-1 split of 15 Oct 2026",
         "eps_ttm": "÷2 for the 2-for-1 split of 15 Oct 2026",
@@ -211,8 +231,9 @@ def test_the_statements_are_scaled_when_the_quote_shows_them_pre_split() -> None
     assert (out.flag.code, out.flag.word) == ("split-pending", "Split pending")
     assert out.flag.sentence == (
         "A 2-for-1 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
-        "The diluted count (×2), the trailing EPS and the street actuals (÷2) are read on the "
-        "post-split basis. The closes and the quote are FMP's, already on it."
+        "The diluted count (×2), the trailing EPS and the street actuals (÷2 on the quarters to "
+        "30 Sep 2026) are read on the post-split basis. The closes and the quote are FMP's, "
+        "already on it."
     )
 
 
@@ -395,10 +416,12 @@ def test_a_reverse_split_multiplies_the_per_share_figures() -> None:
     out = _apply(figures, splits=(reverse,), market_cap=100.0 * 50)
     f = out.figures
     assert f.trailing is not None
-    assert (f.shares_diluted, f.trailing.eps_diluted, f.street_ttm_eps) == (100.0, 40.0, 42.0)
+    assert (f.shares_diluted, f.trailing.eps_diluted) == (100.0, 40.0)
+    assert f.street_ttm_eps == pytest.approx(42.0)
     assert _sentence(out).startswith(
         "A 1-for-10 reverse split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
-        "The diluted count (×0.1), the trailing EPS and the street actuals (÷0.1)"
+        "The diluted count (×0.1), the trailing EPS and the street actuals (÷0.1 on the quarters "
+        "to 30 Sep 2026)"
     )
 
 
@@ -443,8 +466,10 @@ def test_build_inputs_reads_a_pending_split(store: Store) -> None:
     inputs = build(_acme_split(store))
     assert inputs.shares_diluted == pytest.approx(208 * M)
     assert inputs.trailing is not None
+    # the four trailing quarters, 101 m to 104 m shares, each × 2 within 15% of 208 m: all halve
     assert inputs.trailing.eps_diluted == pytest.approx(0.95)  # 1.90 halved
     assert inputs.street_ttm_eps == pytest.approx(1.05)  # 2.10 halved
+    assert inputs.notes["eps_ttm"] == "÷2 for the 2-for-1 split of 15 Oct 2026"
     # each implies 100 m, within 15% of 104 m
     assert [a.eps for a in inputs.annual_estimates] == pytest.approx([1.0, 1.1, 1.2])
     assert [q.eps for q in inputs.quarter_estimates] == pytest.approx([0.26, 0.27, 0.28])
@@ -501,3 +526,282 @@ def test_the_flag_reaches_the_snapshot(store: Store) -> None:
     for name in ("gf_eps_ttm", "gf_eps_without_nri"):
         assert (tagged[name].kind, tagged[name].estimate_method) == ("observed", None), name
     assert tagged["statements"].estimate_method is None  # the count of fiscal years, unscaled
+
+
+def test_assembly_reads_the_trailing_periods(store: Store) -> None:
+    """The four trailing quarters, oldest first, each with its own EPS and count; on the
+    fiscal-year fallback, the one year with its own."""
+    stated = statements_for(store(**bodies()), "ACME", "US", load_tax_table(), TODAY)
+    assert [(p.end, p.shares_diluted) for p in stated.trailing_periods] == [
+        (end, (100 + i) * M) for i, end in enumerate(QUARTERS) if i > 0
+    ]
+    eps = [p.eps_diluted for p in stated.trailing_periods]
+    assert eps == pytest.approx([0.46, 0.47, 0.48, 0.49])
+    assert stated.shares_diluted == 104 * M  # the newest quarter's
+
+
+def test_assembly_reads_the_fiscal_year_on_the_fallback(store: Store, clock: Clock) -> None:
+    gap = (QUARTERS[0], QUARTERS[1], QUARTERS[3], QUARTERS[4])  # not consecutive
+    conn = store(**bodies(quarters=gap))
+    stated = statements_for(conn, "ACME", "US", load_tax_table(), TODAY)
+    (year,) = stated.trailing_periods
+    assert (year.end, year.shares_diluted) == (date(2025, 12, 31), 100 * M)
+    assert year.eps_diluted == pytest.approx(1.5 + 0.15 * 11)
+    assert stated.shares_diluted == 104 * M  # the newest quarter's still (4.2)
+
+
+def test_a_split_within_the_trailing_quarters_scales_the_older_ones() -> None:
+    """(a) A split between the second and the third trailing quarter: the older two read 1,000
+    shares, the newer two and the quote 2,000. The newest quarter postdates the split, so the
+    count stands; the older two read pre-split against it and halve, the newer stand."""
+    figures = _figures(count=2000.0, counts=(1000.0, 1000.0, 2000.0, 2000.0))
+    out = _apply(figures, splits=(WITHIN,))
+    f = out.figures
+    assert f.shares_diluted == 2000.0
+    assert [p.eps_diluted for p in f.periods] == [0.5, 0.5, 1.0, 1.0]
+    assert f.trailing is not None and f.trailing.eps_diluted == 3.0
+    assert [eps for _, eps in f.street_actuals] == pytest.approx([0.525, 0.525, 1.05, 1.05])
+    assert f.street_ttm_eps == pytest.approx(3.15)
+    split = "the 2-for-1 split of 15 Apr 2026"
+    assert out.notes == {
+        "eps_ttm": f"÷2 on 2 of 4 quarters for {split}",
+        "street_ttm_eps": f"÷2 on 2 of 4 quarters for {split}",
+    }
+    assert out.estimate_methods == dict.fromkeys(("eps_ttm", "street_ttm_eps"), "split-scaled")
+    assert _sentence(out) == (
+        "A 2-for-1 split of 15 Apr 2026 falls after the quarter ending 31 Mar 2026. "
+        "The trailing EPS and the street actuals (÷2 on the quarters ending 31 Dec 2025 to "
+        "31 Mar 2026) are read on the post-split basis. The closes and the quote are FMP's, "
+        "already on it."
+    )
+
+
+def test_a_split_within_the_trailing_quarters_leaves_restated_quarters_alone() -> None:
+    """FMP restated the older two: every quarter reads 2,000, nothing scales, the note still
+    fires while a trailing quarter predates the split, and the consensus, which follows the newest
+    statement, is not tested."""
+    rows = (_annual(2027, 4.2, 4200.0),)
+    figures = replace(_figures(count=2000.0, eps=2.0, street=2.1), annual_estimates=rows)
+    out = _apply(figures, splits=(WITHIN,))
+    assert out.figures == figures and out.notes == {}
+    assert _sentence(out) == (
+        "A 2-for-1 split of 15 Apr 2026 falls after the quarter ending 31 Mar 2026. "
+        "FMP's statements and street actuals already read on the post-split basis. The closes and "
+        "the quote are FMP's, already on it."
+    )
+
+
+def test_a_split_after_every_trailing_quarter_scales_all_four_through_the_periods() -> None:
+    """(b) Four quarters on 1,000 shares, a split after the newest, the quote at 2,000: each
+    quarter halves and the count doubles (the rule before the periods, now through them)."""
+    out = _apply(_figures())
+    assert [p.eps_diluted for p in out.figures.periods] == [0.5] * 4
+    assert [eps for _, eps in out.figures.street_actuals] == pytest.approx([0.525] * 4)
+    assert out.figures.shares_diluted == 2000.0
+    assert "(÷2 on the quarters to 30 Sep 2026)" in _sentence(out)
+
+
+def test_restated_newest_and_pre_split_older_quarters_scale_the_older_alone() -> None:
+    """META's 10-K case: a split after the newest quarter, which FMP read post-split (2,000, the
+    quote's count), the older three still on 1,000: the count stands and the three halve."""
+    figures = _figures(count=2000.0, counts=(1000.0, 1000.0, 1000.0, 2000.0))
+    out = _apply(figures)
+    assert out.figures.shares_diluted == 2000.0
+    assert [p.eps_diluted for p in out.figures.periods] == [0.5, 0.5, 0.5, 1.0]
+    assert out.notes["eps_ttm"] == "÷2 on 3 of 4 quarters for the 2-for-1 split of 15 Oct 2026"
+    assert "shares_diluted" not in out.notes
+    assert _sentence(out).startswith(
+        "A 2-for-1 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
+        "The trailing EPS and the street actuals (÷2 on the quarters ending 31 Dec 2025 to "
+        "30 Jun 2026) are read on the post-split basis."
+    )
+
+
+def _year(count: float, eps: float = 4.0) -> SplitFigures:
+    """The fiscal-year fallback: one year ending 31 Dec 2025 on ``count`` shares; no street
+    actuals."""
+    end = date(2025, 12, 31)
+    return replace(
+        _figures(count=count, eps=eps),
+        trailing=_trailing(eps, end, quarters=1),
+        periods=(TrailingPeriod(end, eps, count),),
+        street_actuals=(),
+    )
+
+
+def test_the_fiscal_year_fallback_is_read_on_the_years_own_count() -> None:
+    """(c) One fiscal year on 1,000 shares, a split after its end: against a quote of 2,000 the
+    year's EPS halves and the count doubles; against 1,000 both stand, post-split."""
+    end = date(2025, 12, 31)
+    out = _apply(_year(1000.0), end=end)
+    assert out.figures.shares_diluted == 2000.0
+    assert out.figures.trailing is not None and out.figures.trailing.eps_diluted == 2.0
+    assert out.figures.periods[0].eps_diluted == 2.0
+    assert out.figures.street_ttm_eps is None
+    assert _sentence(out).startswith(
+        "A 2-for-1 split of 15 Oct 2026 falls after the newest statement (31 Dec 2025). "
+        "The diluted count (×2) and the trailing EPS (÷2 on the fiscal year) are read on the "
+        "post-split basis."
+    )
+    stands = _apply(_year(1000.0), market_cap=1000.0 * 50, end=end)
+    assert stands.figures == _year(1000.0)
+    assert "FMP's statements and street actuals already read on the post-split basis." in (
+        _sentence(stands)
+    )
+
+
+def test_the_fallback_year_is_judged_by_its_own_count_not_the_newest_quarters() -> None:
+    """The diluted count is the newest quarter's (4.2), here 2,000 from a quarter after the
+    split; the year itself reads 1,000. The count stands against the quote's 2,000 and the year,
+    by its own count, halves."""
+    figures = replace(_year(1000.0), shares_diluted=2000.0)
+    out = _apply(figures, end=date(2025, 12, 31))
+    assert out.figures.shares_diluted == 2000.0
+    assert out.figures.trailing is not None and out.figures.trailing.eps_diluted == 2.0
+    assert "shares_diluted" not in out.notes
+    assert "The trailing EPS (÷2 on the fiscal year) is read on the post-split basis." in (
+        _sentence(out)
+    )
+
+
+def test_a_quarter_without_a_count_is_named_and_read_as_stored() -> None:
+    """(d) The quarter ending 31 Mar 2026 has no count: its EPS and actual stand, the other three
+    halve."""
+    out = _apply(_figures(counts=(1000.0, None, 1000.0, 1000.0)))
+    assert [p.eps_diluted for p in out.figures.periods] == [0.5, 1.0, 0.5, 0.5]
+    assert out.figures.trailing is not None and out.figures.trailing.eps_diluted == 2.5
+    assert out.notes["eps_ttm"] == "÷2 on 3 of 4 quarters for the 2-for-1 split of 15 Oct 2026"
+    sentence = _sentence(out)
+    assert (
+        "The diluted count (×2), the trailing EPS and the street actuals (÷2 on the quarters "
+        "ending 31 Dec 2025, 30 Jun 2026 and 30 Sep 2026) are read on the post-split basis."
+        in sentence
+    )
+    assert "The quarter ending 31 Mar 2026 has no share count and is read as stored." in sentence
+
+
+def test_splits_on_either_side_of_a_quarter_scale_each_period_by_its_own_ratio() -> None:
+    """A 2-for-1 within the trailing quarters and a 3-for-2 after them: the older two quarters
+    (1,000 shares) read ÷3, the newer two (2,000) ÷1.5, the count ×1.5 against the quote's 3,000."""
+    after = SplitRow(date(2026, 10, 15), 3.0, 2.0)
+    figures = _figures(count=2000.0, counts=(1000.0, 1000.0, 2000.0, 2000.0))
+    out = _apply(figures, splits=(WITHIN, after), market_cap=3000.0 * 50)
+    assert out.figures.shares_diluted == 3000.0
+    assert [p.eps_diluted for p in out.figures.periods] == pytest.approx([1 / 3] * 2 + [2 / 3] * 2)
+    assert out.notes["eps_ttm"] == (
+        "÷3 on 2 of 4 quarters and ÷1.5 on 2 of 4 quarters for the 2-for-1 split of 15 Apr 2026 "
+        "and the 3-for-2 split of 15 Oct 2026"
+    )
+    assert out.notes["shares_diluted"] == "×1.5 for the 3-for-2 split of 15 Oct 2026"
+    assert _sentence(out).startswith(
+        "A 2-for-1 split of 15 Apr 2026 and a 3-for-2 split of 15 Oct 2026 fall after the quarter "
+        "ending 31 Mar 2026. The diluted count (×1.5), the trailing EPS and the street actuals (÷3 "
+        "on the quarters ending 31 Dec 2025 to 31 Mar 2026 and ÷1.5 on the quarters ending "
+        "30 Jun 2026 to 30 Sep 2026) are read on the post-split basis."
+    )
+
+
+def test_pre_split_quarters_without_a_trailing_sum_scale_nothing_and_say_so() -> None:
+    figures = _figures(count=2000.0, counts=(1000.0, 1000.0, 2000.0, 2000.0))
+    *older, newest = figures.periods
+    figures = replace(
+        figures,
+        trailing=_trailing(None),
+        periods=(*older, replace(newest, eps_diluted=None)),
+        street_actuals=(),
+    )
+    out = _apply(figures, splits=(WITHIN,))
+    assert out.figures.trailing == _trailing(None) and out.notes == {}
+    assert "No trailing EPS or street actuals are on file to scale." in _sentence(out)
+
+
+def test_a_fiscal_year_without_a_count_is_read_as_stored() -> None:
+    end = date(2025, 12, 31)
+    figures = replace(_year(1000.0), periods=(TrailingPeriod(end, 4.0, None),))
+    out = _apply(figures, end=end)
+    assert out.figures.shares_diluted == 2000.0
+    assert out.figures.trailing is not None and out.figures.trailing.eps_diluted == 4.0
+    assert (
+        "The diluted count (×2) is read on the post-split basis. The fiscal year has no share "
+        "count and is read as stored." in _sentence(out)
+    )
+
+
+def _split_inputs(inputs: CompanyInputs) -> CompanyInputs:
+    """``inputs`` after a 2-for-1 split on 15 Oct 2026 that FMP has restated nowhere but the
+    quote and the closes: the price halved, the market cap kept (so the quote reads twice the
+    count), every stored count and per-share figure on the old basis and the rule applied."""
+    assert inputs.trailing is not None and inputs.shares_diluted is not None
+    t, count = inputs.trailing, inputs.shares_diluted
+    assert t.eps_diluted is not None
+    street = inputs.street_ttm_eps
+    figures = SplitFigures(
+        shares_diluted=count,
+        trailing=t,
+        periods=tuple(TrailingPeriod(end, t.eps_diluted / 4, count) for end in ENDS),
+        street_actuals=() if street is None else tuple((end, street / 4) for end in ENDS),
+        gf_eps_ttm=inputs.gf_eps_ttm,
+        gf_eps_ttm_as_of=date(2026, 10, 10),
+        gf_eps_without_nri=inputs.gf_eps_without_nri,
+        gf_eps_without_nri_as_of=date(2026, 10, 10),
+        quarter_estimates=inputs.quarter_estimates,
+        annual_estimates=inputs.annual_estimates,
+    )
+    assert inputs.price is not None and inputs.market_cap is not None
+    out = apply_splits(
+        figures,
+        (SPLIT,),
+        statement_end=t.period_end,
+        price_date=inputs.price_date,
+        quote_market_cap=inputs.market_cap,
+        quote_price=inputs.price / 2,
+        tolerance=0.15,
+    )
+    f = out.figures
+    assert f.shares_diluted == 2 * count  # the rule read the stored count pre-split
+    return replace(
+        inputs,
+        price=inputs.price / 2,
+        shares_diluted=f.shares_diluted,
+        trailing=f.trailing,
+        street_ttm_eps=f.street_ttm_eps,
+        gf_eps_ttm=f.gf_eps_ttm,
+        gf_eps_without_nri=f.gf_eps_without_nri,
+        quarter_estimates=f.quarter_estimates,
+        annual_estimates=f.annual_estimates,
+        closes=tuple((day, close / 2) for day, close in inputs.closes),
+        input_flags=(*inputs.input_flags, *(() if out.flag is None else (out.flag,))),
+    )
+
+
+@pytest.mark.parametrize(
+    ("company", "route"),
+    [
+        (engine_companies.mature_growth_inputs, "mature-growth"),
+        (engine_companies.mature_stable_inputs, "mature-stable"),
+    ],
+    ids=["mature-growth", "mature-stable"],
+)
+def test_a_split_leaves_the_price_to_value_unchanged(
+    company: Callable[[], CompanyInputs], route: str
+) -> None:
+    """(f) The company unsplit, and split 2-for-1 with every stored figure on the old basis: the
+    rule puts each on the new one, so the price ÷ value is the same. The consensus quarters carry
+    a net-income mean, so the rule can test them."""
+    base = company()
+    assert base.shares_diluted is not None
+    quarters = tuple(
+        replace(q, net_income=q.eps * base.shares_diluted)
+        for q in base.quarter_estimates
+        if q.eps is not None
+    )
+    unsplit = replace(base, quarter_estimates=quarters)
+    split = _split_inputs(unsplit)
+    deciles, policy = engine_companies.universe_deciles(), load_policy()
+    before = value_company(unsplit, deciles, policy, TODAY)
+    after = value_company(split, deciles, policy, TODAY)
+    assert (before.route, after.route) == (route, route)
+    assert before.price_to_value is not None and after.price_to_value is not None
+    assert after.price_to_value == pytest.approx(before.price_to_value, abs=1e-9)
+    assert before.value is not None and after.value is not None
+    assert after.value == pytest.approx(before.value / 2, rel=1e-9)
