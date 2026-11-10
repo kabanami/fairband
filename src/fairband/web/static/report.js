@@ -136,9 +136,9 @@
     return ids;
   }
 
-  /* CompanyReport's order: the head, the meter, then the report with the line above it and
-     Request research under that line (plan 4), its references and its appendixes; without a
-     report, a note and Request research. The link back closes it. */
+  /* CompanyReport's order: the head, the company brief (B-149), the meter, then the report with
+     the line above it and Request research under that line (plan 4), its references and its
+     appendixes; without a report, a note and Request research. The link back closes it. */
   function page() {
     var d = state.detail;
     var report = state.report;
@@ -146,7 +146,7 @@
     if (state.error) shown = h('p', { className: 'body app-note' }, state.error);
     else if (!d) shown = h('h2', { className: 'ticker app-report__ticker' }, P.report.symbol);
     else {
-      shown = [head(d), band(d)].concat(report ? [
+      shown = [head(d), brief(d), band(d)].concat(report ? [
         meta(d, report), reader(report), references(report), appendixA(report), appendixB(report)
       ] : [noReport(d)]);
     }
@@ -191,6 +191,13 @@
       return { value: s.valuePerShare, basis: 'reviewed', note: 'secondary valuation' };
     }
     return null;
+  }
+
+  /* The company brief (B-149) under the head: the stored profile's description, whole, as the
+     drawer shows it under About; nothing without one. */
+  function brief(d) {
+    return d.brief ? h('p', { key: 'brief', className: 'body app-report__brief' }, d.brief)
+      : null;
   }
 
   /* The meter as the drawer draws it (FairbandPage.meter), its price in figure under the head's

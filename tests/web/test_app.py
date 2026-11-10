@@ -651,7 +651,10 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         "secondary",
         "report",
         "item",
+        "brief",
     }
+    # The company brief (B-149) is the stored profile's description; none is stored here.
+    assert body["brief"] is None
     # The agents' records the drawer's main view leads with (spec 2026-11-06 Tier 2, 18.2): none
     # here; tests/web/test_research_api.py writes each and reads its shape.
     assert (body["review"], body["secondary"], body["report"], body["item"]) == (None,) * 4
@@ -1400,6 +1403,19 @@ def test_revisions_and_items_are_named_by_number_and_time() -> None:
     )
 
 
+def test_the_report_page_shows_the_brief_under_the_head() -> None:
+    """B-149: the company brief, the stored profile's description, is a paragraph between the
+    head and the meter on the report page, and nothing without one."""
+    report = _code(_static_file("report.js"))
+    page = _function(report, "page")
+    assert "shown = [head(d), brief(d), band(d)].concat(report ? [" in page
+    brief = _function(report, "brief")
+    assert "d.brief ? h('p', { key: 'brief', className: 'body app-report__brief' }, d.brief)" in (
+        brief
+    )
+    assert ": null" in brief
+
+
 def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
     """Spec 2026-11-04 9.6: a delete's one affirmative button is the danger one. ConfirmDialog
     shows no revision without targetRevision and no Reject without onReject, and confirmVariant
@@ -1892,6 +1908,16 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
     head = main[: main.index("'Details ▾')")]
     for gone in ("F.ValidityWindow", "'Phase evidence'", "inputsTable(", "intermediates("):
         assert gone not in head, gone
+    # The company brief (B-149): one line in the head after the name, the sector and industry
+    # and the brief's first sentence (briefLine); the full text is behind Details, under About.
+    _in_order(
+        main,
+        "className: 'body app-drawer__name' }, body.company.name) : null,",
+        "briefLine(body.company, body.brief)",
+        "className: 'caption app-muted app-drawer__brief'",
+        "valued ? section('band', null, meter(body),",
+    )
+    assert "body.brief" not in head.replace("briefLine(body.company, body.brief)", "")
     meter = _function(script, "meter")
     assert "gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value')" in meter
     assert "levels(drawnLevels(body))," in main and "levels(r)" not in main
@@ -1958,6 +1984,7 @@ def test_details_order_is_pinned() -> None:
     details = _function(script, "details")
     _in_order(
         details,
+        "body.brief ? section('about', 'About',",
         "h(F.ValueBridge, {",
         "review && review.refusal ? section('review', 'Review',",
         "'app-secondary'",

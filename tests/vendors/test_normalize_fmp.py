@@ -19,6 +19,7 @@ from fairband.vendors.normalize_fmp import (
     estimate_observations,
     peer_symbols,
     price_closes,
+    profile_brief,
     profile_country,
     profile_observations,
     quote_observations,
@@ -424,6 +425,27 @@ def test_profile_country() -> None:
     assert profile_country({"country": " TW "}) == "TW"
     for missing in ([{}], [{"country": ""}], [{"country": None}], [{"country": 7}], [], None, "US"):
         assert profile_country(missing) is None
+
+
+def test_profile_brief() -> None:
+    """The company brief (B-149): the profile object's ``description``, stripped, from a list or
+    a bare object; ``None`` without a non-empty string."""
+    assert profile_brief(load("profile.ACME")) == (
+        "Acme Corp designs and builds industrial machinery for factories in North America. The "
+        "company sells presses, conveyors and spare parts through its own sales force."
+    )
+    assert profile_brief({"description": " Bare. "}) == "Bare."
+    for missing in (
+        [{}],
+        [{"description": ""}],
+        [{"description": "  "}],
+        [{"description": None}],
+        [{"description": 7}],
+        [],
+        None,
+        "Acme",
+    ):
+        assert profile_brief(missing) is None
 
 
 def test_price_closes() -> None:

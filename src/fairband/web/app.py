@@ -85,6 +85,7 @@ from fairband.config import Settings, utcnow
 from fairband.engine.types import result_to_json
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable, load_tax_table
+from fairband.refresh.inputs_statements import brief_for
 from fairband.refresh.passthrough import Passthrough
 from fairband.refresh.run import KINDS
 from fairband.refresh.worker import RefreshWorker
@@ -288,7 +289,9 @@ def create_app(
         value figure inside the word's band, and ``aging_fraction``, by which its validity window
         reads aging where the screen's Freshness column does; and the agents' records the drawer
         leads with (``research_api.agent_records``: ``review``, ``secondary``, ``report``,
-        ``item``)."""
+        ``item``); and the company brief (B-149), the latest stored profile's description, which
+        the drawer's head reads a line of, the report page and Details show whole, and the MCP
+        ``company`` tool carries."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
@@ -297,8 +300,10 @@ def create_app(
             if snapshot is None:
                 raise HTTPException(404, f"no snapshot for {symbol}")
             records = agent_records(conn, snapshot, today, read_under, taxed)
+            brief = brief_for(conn, symbol)
         return {
             "company": None if listed is None else company_json(listed),
+            "brief": brief,
             "snapshot": snapshot_json(snapshot),
             "result": json.loads(result_to_json(snapshot.result)),
             "today": today.isoformat(),

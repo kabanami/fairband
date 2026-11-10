@@ -195,7 +195,8 @@ def build_server(client: FairbandClient) -> MCPServer:
 
     @server.tool(
         description="The company's latest snapshot in full: value, levels, inputs, intermediates,"
-        " phase and flags."
+        " phase and flags; its universe row; and the company brief, FMP's paragraph on what the"
+        " company does."
     )
     def company(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_company(symbol)))

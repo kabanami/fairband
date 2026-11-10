@@ -198,7 +198,8 @@
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
     phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, plain: plain,
     footnotes: footnotes, asking: asking, requestResearch: requestResearch,
-    chargeRows: chargeRows, matureRoute: matureRoute
+    chargeRows: chargeRows, matureRoute: matureRoute,
+    briefLine: briefLine, firstSentence: firstSentence
   };
 
   function load() {
@@ -650,15 +651,16 @@
   }
 
   /* The drawer's main view (spec 2026-11-06 Tier 2, 18.2), in this order and nothing else: the
-     head; the meter with its levels and the route's lines under it, the review's band and levels
-     where the review counts and has a value, the mechanical value named in its caption (plan 3),
-     or in its place the refusal, as before; the stance line when a report exists, the report's
-     word in the row's chip classes, faded once the window of the snapshot it rests on has
-     expired, then who published it and when; the report's Summary, its first section, then Open
-     the report, a link to the report page; then Request research with its menu, the server's
-     refusal under it and the open item's line, with or without a report (plan 4: the founder
-     found none on a company with a report); then Details ▾, a disclosure over everything else
-     (details). */
+     head, with one line on the company under its name (B-149: the sector and industry, then the
+     first sentence of the company brief, briefLine); the meter with its levels and the route's
+     lines under it, the review's band and levels where the review counts and has a value, the
+     mechanical value named in its caption (plan 3), or in its place the refusal, as before; the
+     stance line when a report exists, the report's word in the row's chip classes, faded once
+     the window of the snapshot it rests on has expired, then who published it and when; the
+     report's Summary, its first section, then Open the report, a link to the report page; then
+     Request research with its menu, the server's refusal under it and the open item's line, with
+     or without a report (plan 4: the founder found none on a company with a report); then
+     Details ▾, a disclosure over everything else (details). */
   function sections(body) {
     var r = body.result;
     var im = r.intermediates;
@@ -674,7 +676,10 @@
         h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol),
         phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,
         body.company && body.company.name
-          ? h('p', { className: 'body app-drawer__name' }, body.company.name) : null),
+          ? h('p', { className: 'body app-drawer__name' }, body.company.name) : null,
+        briefLine(body.company, body.brief)
+          ? h('p', { className: 'caption app-muted app-drawer__brief' },
+            briefLine(body.company, body.brief)) : null),
       valued ? section('band', null, meter(body),
         levels(drawnLevels(body)),
         h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route),
@@ -849,13 +854,14 @@
     return marks;
   }
 
-  /* Details (spec 2026-11-06 Tier 2, 18.3), in order: the review, its bridge from the mechanical
-     value when it has a value, each line under its input's label, or its refusal; the secondary
-     valuation; the overrides, each a record, read-only; the guidance on file; the latest report's
-     judgments; the kill criteria; the news items; the notes, with Add a note; the findings; the
-     company's ledger rows; then what the drawer showed before Details, in its order. The review
-     and the secondary come with the detail; the rest is its own read (readResearch). A list with
-     nothing in it is left out, but for the notes, which carry the owner's field. */
+  /* Details (spec 2026-11-06 Tier 2, 18.3), in order: About, the company brief whole (B-149),
+     the stored profile's description; the review, its bridge from the mechanical value when it
+     has a value, each line under its input's label, or its refusal; the secondary valuation; the
+     overrides, each a record, read-only; the guidance on file; the latest report's judgments;
+     the kill criteria; the news items; the notes, with Add a note; the findings; the company's
+     ledger rows; then what the drawer showed before Details, in its order. The review and the
+     secondary come with the detail; the rest is its own read (readResearch). A list with nothing
+     in it is left out, but for the notes, which carry the owner's field. */
   function details(body) {
     var r = body.result;
     var im = r.intermediates;
@@ -868,6 +874,8 @@
     var rs = found && found.body;
     var draft = drafted(r.symbol);
     return h('div', { key: 'details', className: 'app-drawer__details' },
+      body.brief ? section('about', 'About',
+        h('p', { className: 'body' }, body.brief)) : null,
       review && review.value != null ? section('bridge', 'Review',
         h(F.ValueBridge, {
           mechanical: review.mechanical, reviewed: review.value,
@@ -1547,6 +1555,41 @@
 
   /* The route of a mature phase, for a refused row, which has none. */
   var MATURE = { 'Mature Growth': 'mature-growth', 'Mature Stable': 'mature-stable' };
+
+  /* The head's one line on the company (B-149): the universe row's sector and industry, then
+     the first sentence of the company brief, the stored profile's description, joined by middle
+     dots; the parts it has, nothing without any. The full brief is behind Details, under About,
+     and whole on the report page. */
+  function briefLine(company, brief) {
+    var parts = [];
+    if (company && company.sector) parts.push(company.sector);
+    if (company && company.industry) parts.push(company.industry);
+    var first = firstSentence(brief);
+    if (first) parts.push(first);
+    return parts.join(' · ');
+  }
+
+  /* The words a period follows without ending a sentence, as the live briefs have them: "KKR &
+     Co. Inc.", "Eaton Corp. PLC", "Dr. Reddy's", "St. Louis". */
+  var ABBREVIATIONS = ['co', 'corp', 'inc', 'ltd', 'st', 'dr', 'mr', 'mrs', 'ms', 'mt', 'jr', 'sr'];
+
+  /* The first sentence of a text: to the first period that white space and a capital letter
+     follow, where the word before the period is more than one letter, holds no period of its
+     own and is not one of ABBREVIATIONS, so "Apple Inc. designs", "the U.S. The", "Plan B. The"
+     and "St. Joe" do not end it; the whole text, trimmed, without such a period. */
+  function firstSentence(text) {
+    var s = (text == null ? '' : String(text)).trim();
+    var ends = /\.\s+(?=[A-Z])/g;
+    var found;
+    while ((found = ends.exec(s)) !== null) {
+      var word = s.slice(0, found.index).split(/\s+/).pop();
+      if (word.length > 1 && word.indexOf('.') === -1 &&
+          ABBREVIATIONS.indexOf(word.toLowerCase()) === -1) {
+        return s.slice(0, found.index + 1);
+      }
+    }
+    return s;
+  }
 
   /* A row on its earnings path (method 4.8, 5 and 6), valued or refused for a value at or below
      zero: the charge, in words (spec 2026-11-09 12), under the route's name, a refused row's by

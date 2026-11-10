@@ -25,8 +25,9 @@ label or a date:
 - ``profile``: ``is_adr`` (1 or 0 from the boolean ``isAdr``; no value when the flag is absent or
   not a boolean; unit ``None``) and ``market_cap`` (``marketCap``) from the profile object, which
   arrives as a one-item list or a bare object; ``period`` ``None``, ``as_of`` the observed date.
-  The screener carries no ``isAdr``, so the ADR flag is read from here. The country is not an
-  observation: ``profile_country`` reads it from the stored payload.
+  The screener carries no ``isAdr``, so the ADR flag is read from here. The country and the
+  company brief are not observations: ``profile_country`` and ``profile_brief`` read them from
+  the stored payload.
 
 The peers are not observations either: ``peer_symbols`` reads the ``stock-peers`` symbols from the
 stored payload, in the exchange form.
@@ -194,6 +195,14 @@ def profile_country(payload: Any) -> str | None:
     payload, as it reads the closes."""
     row = _profile(payload)
     return None if row is None else text(row.get("country"))
+
+
+def profile_brief(payload: Any) -> str | None:
+    """The company brief (B-149): the profile object's ``description``, FMP's paragraph on what
+    the company does, stripped; ``None`` without a non-empty string. The detail read hands it to
+    the drawer, the report page and the MCP ``company`` tool from the stored payload."""
+    row = _profile(payload)
+    return None if row is None else text(row.get("description"))
 
 
 def _profile(payload: Any) -> dict[str, Any] | None:

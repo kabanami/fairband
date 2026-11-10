@@ -54,6 +54,11 @@ CLOSES = [  # newest first, as FMP sends them
     {"symbol": "AAPL", "date": "2021-11-01", "close": 140.0},
 ]
 PEERS = [{"symbol": "HGCO"}, {"symbol": "AAL"}, {"symbol": "AAPL"}]
+BRIEF = (
+    "Mature Growth Co designs and sells accounting software to small firms in North America. "
+    "The company charges a subscription a seat."
+)
+PROFILE = [{"symbol": "AAPL", "country": "US", "isAdr": False, "description": BRIEF}]
 
 
 @pytest.fixture(autouse=True)
@@ -64,6 +69,7 @@ def stored(db_path: Path) -> None:
         "estimates-annual": ANNUAL,
         "price-history": CLOSES,
         "peers": PEERS,
+        "profile": PROFILE,
     }
     with closing(connect(db_path)) as conn:
         store_payloads(conn, "AAPL", statements | reads, CREATED)
@@ -122,6 +128,14 @@ def test_financials(client: TestClient) -> None:
                 at = period or str(row["year"])
                 assert row[_camel(name)]["ref"] == f"fact:AAPL/{name}/{at}"
                 assert period == "ttm" or name in LINES
+
+
+def test_the_detail_read_carries_the_brief(client: TestClient) -> None:
+    """B-149: the company brief is the latest stored profile's description, read whole, so the
+    drawer, the report page and the MCP ``company`` tool show it; a company without a stored
+    profile has none."""
+    assert _get(client, "/api/companies/AAPL")["brief"] == BRIEF
+    assert _get(client, "/api/companies/AAL")["brief"] is None
 
 
 def test_financials_without_statements(client: TestClient) -> None:

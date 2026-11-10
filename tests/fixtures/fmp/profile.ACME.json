@@ -17,6 +17,7 @@
     "isEtf": false,
     "isActivelyTrading": true,
     "isAdr": false,
-    "isFund": false
+    "isFund": false,
+    "description": "Acme Corp designs and builds industrial machinery for factories in North America. The company sells presses, conveyors and spare parts through its own sales force."
   }
 ]

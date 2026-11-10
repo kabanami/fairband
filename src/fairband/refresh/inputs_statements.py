@@ -65,7 +65,7 @@ from fairband.refresh.fetch import STATEMENT_YEARS
 from fairband.store.companies import CompanyRow
 from fairband.store.facts import FactRow, facts_for
 from fairband.store.vendor import latest_response, response_payload
-from fairband.vendors.normalize_fmp import profile_country
+from fairband.vendors.normalize_fmp import profile_brief, profile_country
 
 INCOME_SOURCE = "FMP income-statement"
 STATEMENTS_SOURCE = "FMP income-statement, balance-sheet-statement, cash-flow-statement"
@@ -289,6 +289,12 @@ def country_for(
     if company is not None and company.country:
         return company.country, SCREENER_SOURCE
     return "unknown", None
+
+
+def brief_for(conn: sqlite3.Connection, symbol: str) -> str | None:
+    """The company brief (B-149): the latest usable profile's description; ``None`` without
+    one."""
+    return profile_brief(stored_payload(conn, "profile", symbol))
 
 
 def balance_lines(conn: sqlite3.Connection, symbol: str) -> dict[str, float | None]:
