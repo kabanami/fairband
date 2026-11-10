@@ -35,7 +35,10 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   investments, from the newest annual balance sheet: a line it does not present counts as nil and
   is named in the input's note (``"longTermDebt not presented"``), and with both lines missing the
   figure is ``None``;
-- the peers and their source: ``peers.peer_figures`` on the given deciles; none without them.
+- the peers and their source: ``peers.peer_figures`` on the given deciles; none without them;
+- the stock splits: a split dated after the newest statement period end and at or before the price
+  date puts every share count and per-share figure on the quote date's basis (``inputs_splits``),
+  with the ``split-pending`` note.
 
 ``provenance`` holds an entry under each key the route cites (``route`` module docstring) whose
 input the store supplied; an input it did not supply has none and cites "unknown". The source names
@@ -56,6 +59,7 @@ from fairband.engine.route import CompanyInputs
 from fairband.engine.types import Flag, Provenance
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
+from fairband.refresh.inputs_splits import SplitFigures, apply_splits, splits_for
 from fairband.refresh.inputs_statements import (
     PROFILE_SOURCE,
     SCREENER_SOURCE,
@@ -140,12 +144,37 @@ def build_inputs(
     annual = cite("estimates_annual", _annual_estimates(read("estimate-annual"), calendar))
     street = cite("street_ttm_eps", _street_ttm_eps(read("street-actual"), stated))
     moat = cite("moat_score", _value(_field(read("gf-score"), "moat_score"), _SUMMARY))
-    eps_ttm = cite("gf_eps_ttm", _value(_field(ratios, "eps_ttm"), _KEYRATIOS))
-    eps_clean = cite("gf_eps_without_nri", _value(_field(ratios, "eps_without_nri"), _KEYRATIOS))
+    ttm_row, clean_row = _field(ratios, "eps_ttm"), _field(ratios, "eps_without_nri")
+    eps_ttm = cite("gf_eps_ttm", _value(ttm_row, _KEYRATIOS))
+    eps_clean = cite("gf_eps_without_nri", _value(clean_row, _KEYRATIOS))
     sums = balance_sums(balance_lines(conn, symbol))
     notes = _tax_note(country, origin, stated)
     notes.update({name: note for name, (_, note) in sums.items() if note is not None})
     peers = peer_figures(conn, symbol, deciles, policy, tax, today)
+    read_figures = SplitFigures(
+        shares_diluted=stated.shares_diluted,
+        trailing=stated.trailing,
+        street_ttm_eps=street,
+        gf_eps_ttm=eps_ttm,
+        gf_eps_ttm_as_of=None if ttm_row is None else ttm_row.as_of,
+        gf_eps_without_nri=eps_clean,
+        gf_eps_without_nri_as_of=None if clean_row is None else clean_row.as_of,
+        quarter_estimates=quarters,
+        annual_estimates=annual,
+    )
+    split = apply_splits(
+        read_figures,
+        splits_for(conn, symbol),
+        statement_end=None if stated.trailing is None else stated.trailing.period_end,
+        price_date=None if price is None else price.as_of,
+        quote_market_cap=_float(_field(quote, "market_cap")),
+        quote_price=_float(price),
+        tolerance=policy.split_implied_count_tolerance,
+    )
+    figures = split.figures
+    notes.update(split.notes)
+    if split.flag is not None:
+        flags = flags + (split.flag,)
     return CompanyInputs(
         symbol=symbol,
         name=company.name if company is not None and company.name else symbol,
@@ -155,24 +184,24 @@ def build_inputs(
         market_cap=cite("market_cap", _market_cap(quote, profile, company)),
         price=cite("price", _value(price, _QUOTE)),
         price_date=None if price is None else price.as_of,
-        shares_diluted=stated.shares_diluted,
+        shares_diluted=figures.shares_diluted,
         series=stated.series,
         capital_years=stated.capital_years,
         tax_rate_latest=stated.tax_rate_latest,
-        trailing=stated.trailing,
-        quarter_estimates=quarters,
-        annual_estimates=annual,
-        street_ttm_eps=street,
+        trailing=figures.trailing,
+        quarter_estimates=figures.quarter_estimates,
+        annual_estimates=figures.annual_estimates,
+        street_ttm_eps=figures.street_ttm_eps,
         moat_score=moat,
-        gf_eps_ttm=eps_ttm,
-        gf_eps_without_nri=eps_clean,
+        gf_eps_ttm=figures.gf_eps_ttm,
+        gf_eps_without_nri=figures.gf_eps_without_nri,
         next_earnings=cite("next_earnings", _next_earnings(read("earnings-date"), today)),
         closes=cite("closes", _closes(conn, symbol)),
         data_date=stated.data_date,
         provenance=provenance,
         input_flags=flags,
         refusal=stated.refusal or (None if foreign else stated.tax_refusal),
-        estimate_methods=stated.estimate_methods,
+        estimate_methods={**stated.estimate_methods, **split.estimate_methods},
         notes=notes,
         peers=peers.figures,
         peer_source=peers.source,
