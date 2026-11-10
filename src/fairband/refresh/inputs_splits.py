@@ -19,7 +19,9 @@ pre-split, ``within(a, b)`` reading ``|a − b| ≤ tolerance × b`` (false for 
 
 - the statement side, the diluted count D, the trailing diluted EPS (the sum as a whole) and the
   street trailing EPS: pre-split when D × ρ lies within the tolerance of Q and D does not; then the
-  count reads D × ρ and the two EPS figures ÷ ρ. Otherwise, or without Q, they are read as stored;
+  count reads D × ρ and the two EPS figures ÷ ρ. Otherwise they are read as stored: post-split when
+  D lies within the tolerance of Q and D × ρ does not, undecided when both or neither do, and
+  untested without D or Q, the sentence saying which;
 - the consensus, each annual and quarterly row with an EPS and a net-income mean: its implied
   count I, the net income ÷ the EPS, within the tolerance of the pre-split count P and not of the
   post-split count S reads its EPS ÷ ρ; S is D × ρ when the statements were scaled, else D, and P
@@ -29,9 +31,14 @@ pre-split, ``within(a, b)`` reading ``|a − b| ≤ tolerance × b`` (false for 
   split: ÷ the ratios of the pending splits dated after its observation;
 - the closes and the quote never: they are FMP's, already on the new basis.
 
-A scaled figure carries a note and the method ``split-scaled`` under its input name. A pending split
-puts the note ``split-pending`` on the row, its sentence naming the splits, the figures read on the
-new basis and those read as stored; without one every figure is read as stored and nothing is noted.
+The count, the trailing EPS and the NTM EPS, when scaled, are estimates under the method
+``split-scaled`` and carry a note naming the split, keyed by the engine's DATA input names:
+``shares_diluted``, ``eps_ttm``, and ``ntm_eps`` when a quarterly consensus row was scaled. No DATA
+input holds the annual consensus (the path steps are rates, unmoved when both years scale), the
+street actuals or the GuruFocus figures, so the ``split-pending`` sentence alone names them. A
+pending split puts the note ``split-pending`` on the row, its sentence naming the splits, the
+figures read on the new basis and those read as stored; without one every figure is read as stored
+and nothing is noted.
 """
 
 import math
@@ -47,8 +54,17 @@ from fairband.store.observations import observations_for
 from fairband.store.vendor import latest_response
 
 SPLIT_SCALED = "split-scaled"
+_NO_COUNT = "No diluted count is on file, so the statements and the consensus are read as stored."
 _NO_QUOTE_COUNT = "The quote gives no share count, so the statements are read as stored."
 _POST_SPLIT = "FMP's statements and street actuals already read on the post-split basis."
+_BOTH_BASES = (
+    "The diluted count lies within the tolerance of the quote's count on both bases, so the "
+    "statements are read as stored."
+)
+_NEITHER_BASIS = (
+    "The diluted count matches neither basis of the quote's count, so the statements are read as "
+    "stored."
+)
 _TAIL = "The closes and the quote are FMP's, already on it."
 
 
@@ -90,7 +106,8 @@ class SplitFigures:
 @dataclass(frozen=True)
 class SplitOutcome:
     """The figures, each one the rule scaled on the new basis; the ``split-pending`` note, ``None``
-    without a pending split; and the note and the method of each scaled input, by input name."""
+    without a pending split; and the note and the method of each scaled DATA input, by the
+    engine's input name (``shares_diluted``, ``eps_ttm``, ``ntm_eps``)."""
 
     figures: SplitFigures
     flag: Flag | None
@@ -98,7 +115,7 @@ class SplitOutcome:
     estimate_methods: dict[str, str]
 
 
-# One side of the rule: the figures as it leaves them, its notes by input name, its sentences.
+# One side of the rule: the figures as it leaves them, its notes by DATA input name, its sentences.
 type _Side = tuple[SplitFigures, dict[str, str], list[str]]
 
 
@@ -150,9 +167,9 @@ def apply_splits(
     )
     stated, statement_notes, statement = _statement_side(figures, pending, quote_count, tolerance)
     estimated, consensus_notes, consensus = _consensus_side(stated, pending, tolerance)
-    out, gurufocus_notes, gurufocus = _gurufocus_side(estimated, pending)
+    out, gurufocus = _gurufocus_side(estimated, pending)
     sentence = " ".join([_head(pending, statement_end), *statement, *consensus, *gurufocus, _TAIL])
-    notes = statement_notes | consensus_notes | gurufocus_notes
+    notes = statement_notes | consensus_notes
     flag = Flag("split-pending", "Split pending", sentence)
     return SplitOutcome(out, flag, notes, dict.fromkeys(notes, SPLIT_SCALED))
 
@@ -161,26 +178,28 @@ def _statement_side(
     figures: SplitFigures, pending: Sequence[SplitRow], quote_count: float | None, tolerance: float
 ) -> _Side:
     """The diluted count × ρ and the trailing and street EPS ÷ ρ when the quote's count shows the
-    count pre-split; else as stored, the sentence saying why when it can."""
-    if quote_count is None:
-        return figures, {}, [_NO_QUOTE_COUNT]
+    count pre-split; else as stored, the sentence saying why."""
     count, ratio = figures.shares_diluted, _ratio(pending)
     if count is None:
-        return figures, {}, []
-    post_split = _within(count, quote_count, tolerance)
-    if post_split or not _within(count * ratio, quote_count, tolerance):
-        return figures, {}, [_POST_SPLIT] if post_split else []
+        return figures, {}, [_NO_COUNT]
+    if quote_count is None:
+        return figures, {}, [_NO_QUOTE_COUNT]
+    as_stored = _within(count, quote_count, tolerance)
+    as_scaled = _within(count * ratio, quote_count, tolerance)
+    if as_stored:
+        return figures, {}, [_BOTH_BASES if as_scaled else _POST_SPLIT]
+    if not as_scaled:
+        return figures, {}, [_NEITHER_BASIS]
     r, named = _count(ratio), _named(pending)
     notes = {"shares_diluted": f"×{r} for {named}"}
     per_share: list[str] = []
     trailing, street = figures.trailing, figures.street_ttm_eps
     if trailing is not None and trailing.eps_diluted is not None:
         trailing = replace(trailing, eps_diluted=trailing.eps_diluted / ratio)
-        notes["statements"] = f"trailing EPS ÷ {r} for {named}"
+        notes["eps_ttm"] = f"÷{r} for {named}"
         per_share.append("the trailing EPS")
     if street is not None:
         street = street / ratio
-        notes["street_ttm_eps"] = f"÷{r} for {named}"
         per_share.append("the street actuals")
     scaled = replace(
         figures, shares_diluted=count * ratio, trailing=trailing, street_ttm_eps=street
@@ -194,7 +213,8 @@ def _statement_side(
 
 def _consensus_side(figures: SplitFigures, pending: Sequence[SplitRow], tolerance: float) -> _Side:
     """Each consensus EPS ÷ ρ whose implied count shows it pre-split, against S, the count as the
-    statement side left it, and P = S ÷ ρ; every row as stored without a count."""
+    statement side left it, and P = S ÷ ρ; every row as stored without a count. The NTM EPS, which
+    the quarterly rows make, carries the note when one of them was scaled."""
     if figures.shares_diluted is None:
         return figures, {}, []
     ratio = _ratio(pending)
@@ -206,13 +226,11 @@ def _consensus_side(figures: SplitFigures, pending: Sequence[SplitRow], toleranc
         figures.quarter_estimates, ratio, counts, tolerance
     )
     notes: dict[str, str] = {}
-    spans: list[str] = []
-    if annual_scaled:
-        spans.append(_years_span(annual_scaled))
-        notes["estimates_annual"] = f"EPS ÷ {r} for {spans[-1]}"
+    spans = [_years_span(annual_scaled)] if annual_scaled else []
     if quarters_scaled:
-        spans.append(_quarters_span(quarters_scaled))
-        notes["estimates_quarter"] = f"EPS ÷ {r} for {spans[-1]}"
+        span = _quarters_span(quarters_scaled)
+        spans.append(f"the {span}")
+        notes["ntm_eps"] = f"the consensus {span} ÷{r} for {_named(pending)}"
     sentences = [f"The consensus EPS for {' and for '.join(spans)} is read ÷{r}."] if spans else []
     left = [rows for rows in (_years_list(annual_left), _quarters_list(quarters_left)) if rows]
     if left:
@@ -245,27 +263,29 @@ def _consensus[E: (QuarterEstimate, AnnualEstimate)](
     return tuple(out), tuple(scaled), tuple(left)
 
 
-def _gurufocus_side(figures: SplitFigures, pending: Sequence[SplitRow]) -> _Side:
-    """Each GuruFocus EPS observed before a pending split ÷ the ratios of the pending splits dated
-    after its observation; one sentence for each observation date and ratio."""
-    notes: dict[str, str] = {}
-    read: dict[tuple[date, str], None] = {}
-    values: dict[str, float | None] = {}
-    for name, value, as_of in (
-        ("gf_eps_ttm", figures.gf_eps_ttm, figures.gf_eps_ttm_as_of),
-        ("gf_eps_without_nri", figures.gf_eps_without_nri, figures.gf_eps_without_nri_as_of),
-    ):
-        after = () if as_of is None else tuple(s for s in pending if s.date > as_of)
-        values[name] = value
-        if value is not None and as_of is not None and after:
-            r = _count(_ratio(after))
-            values[name] = value / _ratio(after)
-            notes[name] = f"÷{r} for {_named(after)}"
-            read[as_of, r] = None
-    scaled = replace(
-        figures, gf_eps_ttm=values["gf_eps_ttm"], gf_eps_without_nri=values["gf_eps_without_nri"]
+def _gurufocus_side(
+    figures: SplitFigures, pending: Sequence[SplitRow]
+) -> tuple[SplitFigures, list[str]]:
+    """Both GuruFocus EPS figures read by ``_observed``; one sentence for each observation date
+    and ratio. No DATA input holds them by name, so they carry no note."""
+    ttm, ttm_read = _observed(figures.gf_eps_ttm, figures.gf_eps_ttm_as_of, pending)
+    clean, clean_read = _observed(
+        figures.gf_eps_without_nri, figures.gf_eps_without_nri_as_of, pending
     )
-    return scaled, notes, [f"GuruFocus's EPS observed {_day(d)} is read ÷{r}." for d, r in read]
+    sentences = list(dict.fromkeys(s for s in (ttm_read, clean_read) if s is not None))
+    return replace(figures, gf_eps_ttm=ttm, gf_eps_without_nri=clean), sentences
+
+
+def _observed(
+    value: float | None, as_of: date | None, pending: Sequence[SplitRow]
+) -> tuple[float | None, str | None]:
+    """A GuruFocus figure ÷ the ratios of the pending splits dated after its observation, and the
+    sentence that says so; as stored, with none, when no pending split followed it."""
+    after = () if as_of is None else tuple(s for s in pending if s.date > as_of)
+    if value is None or as_of is None or not after:
+        return value, None
+    ratio = _ratio(after)
+    return value / ratio, f"GuruFocus's EPS observed {_day(as_of)} is read ÷{_count(ratio)}."
 
 
 def _ratio(splits: Sequence[SplitRow]) -> float:
@@ -293,7 +313,7 @@ def _years_span(rows: Sequence[AnnualEstimate]) -> str:
 
 def _quarters_span(rows: Sequence[QuarterEstimate]) -> str:
     quarters = "quarter" if len(rows) == 1 else "quarters"
-    return f"the {quarters} to {_day(rows[-1].period_end)}"
+    return f"{quarters} to {_day(rows[-1].period_end)}"
 
 
 def _years_list(rows: Sequence[AnnualEstimate]) -> str:

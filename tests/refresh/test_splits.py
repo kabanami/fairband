@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from synthetic import M, add_company, bodies
+from synthetic import M, add_company, bodies, estimates_quarter
 from vendor_double import FIXTURES, Clients, Clock, Router
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
@@ -193,18 +193,18 @@ def test_pending_splits_window() -> None:
 
 def test_the_statements_are_scaled_when_the_quote_shows_them_pre_split() -> None:
     """Spec 13.4: a count of 1,000 reads 2,000; the trailing EPS of $4 reads $2; the street
-    actuals $4.20 read $2.10; each is noted and an estimate under split-scaled."""
+    actuals $4.20 read $2.10; the count and the trailing EPS are noted and estimates under
+    split-scaled."""
     out = _apply(_figures())
     f = out.figures
     assert f.trailing is not None
     assert (f.shares_diluted, f.trailing.eps_diluted, f.street_ttm_eps) == (2000.0, 2.0, 2.1)
-    assert set(out.notes) >= {"shares_diluted", "statements", "street_ttm_eps"}
-    assert out.estimate_methods == {
-        "shares_diluted": "split-scaled",
-        "statements": "split-scaled",
-        "street_ttm_eps": "split-scaled",
+    # keyed by the engine's DATA inputs that hold a scaled figure; the street actuals have none
+    assert out.notes == {
+        "shares_diluted": "×2 for the 2-for-1 split of 15 Oct 2026",
+        "eps_ttm": "÷2 for the 2-for-1 split of 15 Oct 2026",
     }
-    assert out.notes["shares_diluted"] == "×2 for the 2-for-1 split of 15 Oct 2026"
+    assert out.estimate_methods == {"shares_diluted": "split-scaled", "eps_ttm": "split-scaled"}
     assert out.flag is not None
     assert (out.flag.code, out.flag.word) == ("split-pending", "Split pending")
     assert out.flag.sentence == (
@@ -241,9 +241,8 @@ def test_the_consensus_is_scaled_by_its_implied_count() -> None:
     rows = (_annual(2026, 4.2, 4200.0), _annual(2027, 2.1, 4200.0), _annual(2028, 4.4, None))
     out = _apply(replace(_figures(), annual_estimates=rows))
     assert [a.eps for a in out.figures.annual_estimates] == [2.1, 2.1, 4.4]
-    assert out.notes["estimates_annual"] == "EPS ÷ 2 for fiscal 2026"
-    assert out.estimate_methods["estimates_annual"] == "split-scaled"
-    assert "estimates_quarter" not in out.notes
+    # no DATA input holds the annual consensus: the sentence names it, no note does
+    assert set(out.notes) == set(out.estimate_methods) == {"shares_diluted", "eps_ttm"}
     sentence = _sentence(out)
     assert "The consensus EPS for fiscal 2026 is read ÷2." in sentence
     assert "The consensus EPS for fiscal 2028 has no net-income mean and is read as stored." in (
@@ -268,9 +267,11 @@ def test_quarterly_rows_scale_too_and_the_spans_read_first_to_last() -> None:
     out = _apply(replace(_figures(), annual_estimates=annual, quarter_estimates=quarters))
     assert [a.eps for a in out.figures.annual_estimates] == [2.0, 2.0, 2.0]
     assert [q.eps for q in out.figures.quarter_estimates] == [0.5, 0.55]
-    assert out.notes["estimates_annual"] == "EPS ÷ 2 for fiscal 2026 to 2028"
-    assert out.notes["estimates_quarter"] == "EPS ÷ 2 for the quarters to 31 Mar 2027"
-    assert out.estimate_methods["estimates_quarter"] == "split-scaled"
+    assert out.notes["ntm_eps"] == (
+        "the consensus quarters to 31 Mar 2027 ÷2 for the 2-for-1 split of 15 Oct 2026"
+    )
+    assert out.estimate_methods["ntm_eps"] == "split-scaled"
+    assert set(out.notes) == {"shares_diluted", "eps_ttm", "ntm_eps"}
     assert (
         "The consensus EPS for fiscal 2026 to 2028 and for the quarters to 31 Mar 2027 is read "
         "÷2." in _sentence(out)
@@ -279,24 +280,45 @@ def test_quarterly_rows_scale_too_and_the_spans_read_first_to_last() -> None:
 
 def test_the_sentence_agrees_in_number_and_names_the_quarters_left() -> None:
     """One quarter scaled reads "the quarter to"; quarters without a net-income mean are named by
-    period end; an 11-for-10 split takes "An"; a count within the tolerance of neither basis
-    leaves the statements as stored with no statement sentence."""
+    period end."""
     quarters = (
         _quarter(date(2026, 12, 31), 1.0, 1000.0),
         _quarter(date(2027, 3, 31), 1.1, None),
         _quarter(date(2027, 6, 30), 1.2, None),
     )
     out = _apply(replace(_figures(), quarter_estimates=quarters))
-    assert out.notes["estimates_quarter"] == "EPS ÷ 2 for the quarter to 31 Dec 2026"
+    assert out.notes["ntm_eps"] == (
+        "the consensus quarter to 31 Dec 2026 ÷2 for the 2-for-1 split of 15 Oct 2026"
+    )
     assert (
         "The consensus EPS for the quarters ending 31 Mar 2027 and 30 Jun 2027 has no net-income "
         "mean and is read as stored." in _sentence(out)
     )
+
+
+def test_a_count_matching_neither_basis_is_read_as_stored() -> None:
+    """A count of 1,000 against a quote count of 5,000: neither 1,000 nor 1,100 lies within 15%.
+    An 11-for-10 split takes "An"."""
     small = SplitRow(date(2026, 10, 15), 11.0, 10.0)
-    neither = _apply(_figures(), splits=(small,), market_cap=5000.0 * 50)
-    assert neither.figures == _figures() and neither.notes == {}
-    assert _sentence(neither) == (
+    out = _apply(_figures(), splits=(small,), market_cap=5000.0 * 50)
+    assert out.figures == _figures() and out.notes == {} and out.estimate_methods == {}
+    assert _sentence(out) == (
         "An 11-for-10 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
+        "The diluted count matches neither basis of the quote's count, so the statements are "
+        "read as stored. The closes and the quote are FMP's, already on it."
+    )
+
+
+def test_without_a_diluted_count_the_statements_and_the_consensus_are_read_as_stored() -> None:
+    """No count D: no test of the statements, and no P or S for the consensus, so a row implying
+    the pre-split count stands and a row without a mean goes unnamed."""
+    rows = (_annual(2026, 4.2, 4200.0), _annual(2027, 4.4, None))
+    figures = replace(_figures(), shares_diluted=None, annual_estimates=rows)
+    out = _apply(figures)
+    assert out.figures == figures and out.notes == {} and out.estimate_methods == {}
+    assert _sentence(out) == (
+        "A 2-for-1 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
+        "No diluted count is on file, so the statements and the consensus are read as stored. "
         "The closes and the quote are FMP's, already on it."
     )
 
@@ -311,6 +333,10 @@ def test_a_row_within_both_counts_is_left_alone() -> None:
     assert out.figures.annual_estimates[0].eps == 4.2
     # the count itself: 1,000 × 1.1 = 1,100 is within 15% of Q, but so is 1,000: left alone
     assert out.figures.shares_diluted == 1000.0
+    assert (
+        "The diluted count lies within the tolerance of the quote's count on both bases, so the "
+        "statements are read as stored." in _sentence(out)
+    )
 
 
 def test_gurufocus_figures_scale_by_observation_date() -> None:
@@ -324,9 +350,10 @@ def test_gurufocus_figures_scale_by_observation_date() -> None:
     )
     out = _apply(figures)
     assert (out.figures.gf_eps_ttm, out.figures.gf_eps_without_nri) == (3.0, 5.8)
-    assert out.notes["gf_eps_ttm"] and "gf_eps_without_nri" not in out.notes
-    assert out.estimate_methods["gf_eps_ttm"] == "split-scaled"
+    # no DATA input holds them by name: the sentence says so, no note does
+    assert set(out.notes) == set(out.estimate_methods) == {"shares_diluted", "eps_ttm"}
     assert "GuruFocus's EPS observed 10 Oct 2026 is read ÷2." in _sentence(out)
+    assert "GuruFocus's EPS observed 20 Oct 2026" not in _sentence(out)
 
 
 def test_a_reverse_split_multiplies_the_per_share_figures() -> None:
@@ -368,10 +395,10 @@ def _quote(price: float, count: float) -> list[dict[str, Any]]:
     return [{**row, "price": price, "marketCap": price * count}]
 
 
-def _acme_split(store: Store) -> sqlite3.Connection:
+def _acme_split(store: Store, **payloads: Any) -> sqlite3.Connection:
     """ACME split 2-for-1 on 2026-10-15, its quote at $25 on 208 m shares."""
     split = {"symbol": "ACME", "date": "2026-10-15", "numerator": 2, "denominator": 1}
-    return store(**bodies(), splits=[split], quote=_quote(25.0, 208 * M))
+    return store(**bodies(), splits=[split], quote=_quote(25.0, 208 * M), **payloads)
 
 
 def test_build_inputs_reads_a_pending_split(store: Store) -> None:
@@ -390,7 +417,11 @@ def test_build_inputs_reads_a_pending_split(store: Store) -> None:
     assert inputs.gf_eps_ttm == 6.11
     assert inputs.input_flags[-1].code == "split-pending"  # after the statements' flags
     assert inputs.estimate_methods["shares_diluted"] == "split-scaled"
+    assert inputs.estimate_methods["eps_ttm"] == "split-scaled"
     assert inputs.notes["shares_diluted"] == "×2 for the 2-for-1 split of 15 Oct 2026"
+    assert inputs.notes["ntm_eps"] == (
+        "the consensus quarters to 30 Jun 2027 ÷2 for the 2-for-1 split of 15 Oct 2026"
+    )
     assert inputs.market_cap == pytest.approx(25.0 * 208 * M) and inputs.price == 25.0
 
 
@@ -413,8 +444,24 @@ def test_build_inputs_without_a_pending_split_is_unchanged(
 
 
 def test_the_flag_reaches_the_snapshot(store: Store) -> None:
-    result = value_company(build(_acme_split(store)), DECILES, load_policy(), TODAY)
+    """The DATA inputs that hold a scaled figure read as estimates under ``split-scaled`` with the
+    split note: the count, the trailing EPS and, since quarterly rows scaled, the NTM EPS. Four
+    consensus quarters (each implying 100 m) give a full NTM window, so the row is valued."""
+    conn = _acme_split(store, **{"estimates-quarter": estimates_quarter()})
+    result = value_company(build(conn), DECILES, load_policy(), TODAY)
+    assert result.refusal is None
     assert "split-pending" in [f.code for f in result.flags]
-    [shares] = [i for i in result.inputs if i.name == "shares_diluted"]
-    assert shares.note == "×2 for the 2-for-1 split of 15 Oct 2026"
-    assert (shares.kind, shares.estimate_method) == ("estimate", "split-scaled")
+    tagged = {i.name: i for i in result.inputs}
+    split = "the 2-for-1 split of 15 Oct 2026"
+    for name, note in (
+        ("shares_diluted", f"×2 for {split}"),
+        ("eps_ttm", f"÷2 for {split}"),
+        ("ntm_eps", f"the consensus quarters to 30 Sep 2027 ÷2 for {split}"),
+    ):
+        found = tagged[name]
+        assert (found.kind, found.estimate_method, found.note) == (
+            "estimate",
+            "split-scaled",
+            note,
+        ), name
+    assert tagged["statements"].estimate_method is None  # the count of fiscal years, unscaled
