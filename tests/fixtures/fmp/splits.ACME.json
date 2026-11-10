@@ -1,0 +1,9 @@
+[
+  {
+    "symbol": "ACME",
+    "date": "2019-05-20",
+    "numerator": 2,
+    "denominator": 1,
+    "splitType": "forward"
+  }
+]

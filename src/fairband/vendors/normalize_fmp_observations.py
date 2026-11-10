@@ -1,4 +1,5 @@
-"""FMP estimates, earnings, quotes, profiles, closes, screener rows and peers to store rows.
+"""FMP estimates, earnings, quotes, profiles, splits, closes, screener rows and peers to store
+rows.
 
 Observations carry ``unit`` ``currency``, ``per-share``, ``shares``, ``count``, or ``None`` for a
 label or a date:
@@ -28,6 +29,10 @@ label or a date:
   The screener carries no ``isAdr``, so the ADR flag is read from here. The country and the
   company brief are not observations: ``profile_country`` and ``profile_brief`` read them from
   the stored payload.
+- ``split``: ``numerator`` and ``denominator`` (unit ``shares``) for each ``splits`` row with a
+  parseable ``date`` and two numbers above zero; ``period`` and ``as_of`` the split date. The two
+  stay apart so a sentence can say 2-for-1 or 1-for-10; ``inputs_splits.splits_for`` reads them
+  back as one split each and divides them for the ratio.
 
 The peers are not observations either: ``peer_symbols`` reads the ``stock-peers`` symbols from the
 stored payload, in the exchange form.
@@ -208,6 +213,22 @@ def profile_brief(payload: Any) -> str | None:
 def _profile(payload: Any) -> dict[str, Any] | None:
     """The profile object: a bare object, or the first object of a list."""
     return payload if isinstance(payload, dict) else next(objects(payload), None)
+
+
+def split_observations(
+    payload: Any, symbol: str, response_id: int, observed_at: datetime, entered_at: datetime
+) -> list[ObservationRow]:
+    """The numerator and the denominator of each split, keyed by the split date; a row needs a
+    date and two numbers above zero, and a payload that is not a list gives none."""
+    source = Source(symbol, response_id, observed_at, entered_at)
+    out: list[ObservationRow] = []
+    for row, when in dated(payload):
+        numerator, denominator = number(row.get("numerator")), number(row.get("denominator"))
+        if numerator is None or denominator is None or numerator <= 0 or denominator <= 0:
+            continue
+        out.append(source.observation("split", when, "numerator", numerator, SHARES, when))
+        out.append(source.observation("split", when, "denominator", denominator, SHARES, when))
+    return out
 
 
 def price_closes(payload: Any) -> list[tuple[date, float]]:

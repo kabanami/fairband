@@ -280,7 +280,7 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
         ("NEWT", "pending", None),
     ]
     assert deciles(env) is None and env.snapshots() == []
-    assert env.router.symbol_calls == Counter({"": 1, "ACME": 15, "AXLE": 15})
+    assert env.router.symbol_calls == Counter({"": 1, "ACME": 16, "AXLE": 16})
 
     env.router.symbol_calls.clear()
     env.progress.clear()
@@ -288,7 +288,7 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
     second = env.refresh().run("full")
     row = env.last()
     assert (row.id, row.status) == (second, "done") and second == first + 1
-    assert env.router.symbol_calls == Counter({"MILD": 15, "NEWT": 15})  # no screener call
+    assert env.router.symbol_calls == Counter({"MILD": 16, "NEWT": 16})  # no screener call
     assert Progress(second, "fetch", 4, 0, 0, None) in env.progress
     assert env.items(second) == [(symbol, "valued", None) for symbol in ADMITTED]
     assert {refresh for refresh, _ in universe(env).values()} == {second}
@@ -385,7 +385,7 @@ def test_a_single_429_does_not_end_the_run(env_fixture_universe: Env, sleeps: li
     # The quote is asked once a company, ACME's twice; every other call once.
     assert env.router.calls["quote"] == len(ADMITTED) + 1
     assert env.router.symbol_calls == Counter(
-        {"": 1, "ACME": 16, "AXLE": 15, "MILD": 15, "NEWT": 15}
+        {"": 1, "ACME": 17, "AXLE": 16, "MILD": 16, "NEWT": 16}
     )
     assert sleeps == [env.policy.refresh.rate_limit_hold_s]  # the one hold, and no other sleep
 
@@ -411,7 +411,7 @@ def test_a_single_429_holds_every_worker_on_a_paced_run(
     assert hold == env.policy.refresh.rate_limit_hold_s == 60
     gf_calls = env.router.calls["summary"] + env.router.calls["keyratios"]
     fmp_calls = sum(env.router.symbol_calls.values()) - gf_calls
-    assert fmp_calls == 1 + 13 * len(ADMITTED) + 1  # the screener, 13 a company, ACME's retry
+    assert fmp_calls == 1 + 14 * len(ADMITTED) + 1  # the screener, 14 a company, ACME's retry
     # k calls took the slots at 0 to k - 1 s before the hold (the first slot is now: no sleep);
     # the retry slept the hold; the hold put every later call at 60 s or after, one a second.
     k = len([s for s in sleeps if s < hold]) + 1

@@ -1,5 +1,5 @@
-"""Fetch one company: thirteen FMP calls and two GuruFocus calls (spec 6.5, and the peers of growth
-routes spec 5.5), each reused while fresh and stored whole.
+"""Fetch one company: fourteen FMP calls and two GuruFocus calls (spec 6.5, the peers of growth
+routes spec 5.5 and the splits of spec 2026-11-09 10.1), each reused while fresh and stored whole.
 
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
@@ -19,7 +19,10 @@ read back with ``response_payload`` and ``price_closes``, and it is usable when 
 Nor do the peers: their symbols stay in the stored payload, read back with ``peer_symbols``, and
 the payload is usable when it names a peer or is exactly the empty list (a company with no peers
 has none, and that answer is reused like any other); a list of objects without a ``symbol``, or
-anything but a list, is unusable. The peers are not required.
+anything but a list, is unusable. The peers are not required. The splits are stored as observations
+(dataset ``split``, ``split_observations``); any list is usable, the empty list among them (a
+company with no split has none, reused like any other answer), and anything but a list is
+unusable. The splits are not required either: without them the company is valued on what it has.
 
 A ``VendorError`` is stored as a response row with the error, its HTTP status if one came back and
 no payload, in a transaction of its own, and the fetch goes on with the next endpoint, except after
@@ -64,6 +67,7 @@ from fairband.vendors.normalize_fmp import (
     price_closes,
     profile_observations,
     quote_observations,
+    split_observations,
     statement_facts,
 )
 from fairband.vendors.normalize_gf import keyratios_observations, summary_observations
@@ -195,7 +199,7 @@ def provider_of(endpoint: str) -> Provider:
 
 
 def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
-    """The calls for ``symbol``, thirteen FMP and two GuruFocus, in fetch order."""
+    """The calls for ``symbol``, fourteen FMP and two GuruFocus, in fetch order."""
     start = _years_before(today, PRICE_YEARS)
 
     def on_fmp(
@@ -239,6 +243,7 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
             "earnings", {"limit": str(EARNINGS_ROWS)}, partial(fmp.earnings, symbol, EARNINGS_ROWS)
         ),
         on_fmp("peers", {}, partial(fmp.peers, symbol)),
+        on_fmp("splits", {}, partial(fmp.splits, symbol)),
         on_gf("summary", GuruFocus.summary),
         on_gf("keyratios", GuruFocus.keyratios),
     ]
@@ -290,7 +295,7 @@ def _rows(
     """The facts and observations one endpoint's parsed payload gives, citing ``_PENDING`` for
     the response; ``None`` when it gives none. The price history and the peers give no rows; the
     one's payload is usable when it holds a close, the other's when it names a peer or is exactly
-    ``[]``."""
+    ``[]``. The splits' payload is usable when it is a list, even one that gives no rows."""
     source = (symbol, _PENDING, observed, now)
     facts: list[FactRow] = []
     observations: list[ObservationRow] = []
@@ -315,6 +320,8 @@ def _rows(
             observations = earnings_observations(payload, *source, today=now.date())
         case "peers":
             return ([], []) if peer_symbols(payload, symbol) or payload == [] else None
+        case "splits":
+            return ([], split_observations(payload, *source)) if isinstance(payload, list) else None
         case "summary":
             observations = summary_observations(payload, *source)
         case "keyratios":

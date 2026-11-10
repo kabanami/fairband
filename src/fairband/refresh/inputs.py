@@ -85,6 +85,7 @@ _OBSERVATIONS = frozenset(
         "profile",
         "gf-score",
         "gf-ratio",
+        "split",
     }
 )
 _QUOTE, _PROFILE, _SCREENER = "FMP quote", PROFILE_SOURCE, SCREENER_SOURCE

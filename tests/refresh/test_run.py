@@ -86,7 +86,7 @@ def test_scoped_refresh_without_deciles_writes_refusal_snapshots(env: Env) -> No
         QUOTE_DATE,
         None,
     )
-    assert env.router.symbol_calls == Counter({"ACME": 15, "BOLT": 15})
+    assert env.router.symbol_calls == Counter({"ACME": 16, "BOLT": 16})
     with closing(env.connect()) as conn:
         versions = [r[0] for r in conn.execute("SELECT version FROM policy_versions")]
     assert versions == [env.policy.version]
@@ -149,13 +149,13 @@ def test_stop_after_first_then_continue(env: Env) -> None:
     assert (row.id, row.status, row.stage, row.message) == (first, "cancelled", "fetch", None)
     assert env.items(first) == [("ACME", "fetched", None), ("BOLT", "pending", None)]
     assert env.snapshots() == []
-    assert env.router.symbol_calls == Counter({"ACME": 15})
+    assert env.router.symbol_calls == Counter({"ACME": 16})
 
     env.router.symbol_calls.clear()
     env.clock.now += timedelta(hours=1)
     second = env.run(["ACME", "BOLT"])
     assert (env.last().id, env.last().status) == (second, "done")
-    assert env.router.symbol_calls == Counter({"BOLT": 15})  # ACME: no call
+    assert env.router.symbol_calls == Counter({"BOLT": 16})  # ACME: no call
     assert env.items(second) == [("ACME", "valued", None), ("BOLT", "valued", None)]
     assert [(symbol, refresh) for symbol, refresh, _ in env.snapshots()] == [
         ("ACME", second),
@@ -175,7 +175,7 @@ def test_fresh_company_not_fetched_again(env: Env) -> None:
 
     env.clock.now += timedelta(hours=2)  # 25 hours after the first fetch
     env.run(["ACME"])
-    assert sum(env.router.calls.values()) == 13  # FMP again; GuruFocus is reused for 7 days
+    assert sum(env.router.calls.values()) == 14  # FMP again; GuruFocus is reused for 7 days
 
 
 def test_failing_company_gets_refusal_row(
@@ -290,19 +290,19 @@ def test_rate_limit_stops_the_fetch_and_values_what_was_fetched(env: Env) -> Non
         ("BOLT", refresh_id, RATE_LIMITED),
         ("ACME", refresh_id, "no universe deciles yet"),
     ]
-    assert env.router.symbol_calls == Counter({"ACME": 15, "BOLT": 3})  # three tries, then stop
+    assert env.router.symbol_calls == Counter({"ACME": 16, "BOLT": 3})  # three tries, then stop
 
 
 def test_the_fetch_stage_logs_the_fmp_pace(env: Env, caplog: pytest.LogCaptureFixture) -> None:
     """One INFO line at the fetch stage's end gives the FMP limiter's share of the stage: the
-    fixtures' FMP client is not paced, so 13 calls a company with no wait and no hold. A second
+    fixtures' FMP client is not paced, so 14 calls a company with no wait and no hold. A second
     run within the reuse window fetches nothing, and its line counts its own stage only."""
     with caplog.at_level(logging.INFO, logger="fairband.refresh"):
         env.run(["ACME", "BOLT"])
         env.run(["ACME", "BOLT"])
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("FMP pace")]
     assert lines == [
-        "FMP pace: waited 0.0 s over 26 calls, 0 holds",
+        "FMP pace: waited 0.0 s over 28 calls, 0 holds",
         "FMP pace: waited 0.0 s over 0 calls, 0 holds",
     ]
 
@@ -331,7 +331,7 @@ def test_second_refresh_refused_while_running(env: Env) -> None:
     first = env.run(["ACME"], then=start_another)
     assert refused == [first]
     assert env.last().id == first and env.last().status == "done"
-    assert env.router.symbol_calls == Counter({"ACME": 15})
+    assert env.router.symbol_calls == Counter({"ACME": 16})
 
 
 def test_run_refuses_before_any_work(env: Env) -> None:

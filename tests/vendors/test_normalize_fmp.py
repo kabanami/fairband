@@ -24,6 +24,7 @@ from fairband.vendors.normalize_fmp import (
     profile_observations,
     quote_observations,
     screener_rows,
+    split_observations,
     statement_facts,
     value_as_date,
 )
@@ -416,6 +417,38 @@ def test_profile_observations_shapes() -> None:
         assert obs(rows, "profile", None, "market_cap").value is None
     for empty in ([], ["x"], None, "profile"):
         assert profile_observations(empty, "X", RID, OBSERVED, ENTERED) == []
+
+
+def test_split_observations() -> None:
+    """Two rows per split, dataset ``split``, the split date as the period and as_of; the
+    numerator and denominator kept apart so the sentence can read 2-for-1."""
+    rows = split_observations(load("splits.ACME"), "ACME", RID, OBSERVED, ENTERED)
+    assert [(r.dataset, r.period, r.field, r.value, r.unit, r.as_of) for r in rows] == [
+        ("split", date(2019, 5, 20), "numerator", Decimal(2), "shares", date(2019, 5, 20)),
+        ("split", date(2019, 5, 20), "denominator", Decimal(1), "shares", date(2019, 5, 20)),
+    ]
+    assert {r.response_id for r in rows} == {RID}
+
+
+def test_split_observations_shapes() -> None:
+    # a reverse split keeps its numbers; a row without a date, with a zero or missing number, or
+    # a non-list payload gives nothing
+    reverse = split_observations(
+        [{"date": "2025-01-02", "numerator": 1, "denominator": 10}], "X", RID, OBSERVED, ENTERED
+    )
+    assert [(r.field, r.value) for r in reverse] == [
+        ("numerator", Decimal(1)),
+        ("denominator", Decimal(10)),
+    ]
+    for bad in (
+        [{"numerator": 2, "denominator": 1}],
+        [{"date": "2025-01-02", "numerator": 0, "denominator": 1}],
+        [{"date": "2025-01-02", "numerator": 2}],
+        {"date": "2025-01-02"},
+        None,
+        "x",
+    ):
+        assert split_observations(bad, "X", RID, OBSERVED, ENTERED) == []
 
 
 def test_profile_country() -> None:

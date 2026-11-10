@@ -20,6 +20,7 @@ from fairband.vendors.normalize_fmp_observations import (
     profile_observations,
     quote_observations,
     screener_rows,
+    split_observations,
     value_as_date,
 )
 from fairband.vendors.normalize_fmp_statements import (
@@ -40,6 +41,7 @@ __all__ = [
     "profile_observations",
     "quote_observations",
     "screener_rows",
+    "split_observations",
     "statement_facts",
     "statement_fields",
     "value_as_date",

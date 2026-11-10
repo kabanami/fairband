@@ -11,8 +11,8 @@ Admitted, with the revenue growth over the last three fiscal years that the deci
   lists in an industry of its own, so the industry fallback for its peers finds no mature company.
 
 Not admitted: FIRB, a regional bank (recorded, excluded by industry), and TINY, below the $2 bn
-floor (skipped). The quote, profile, closes, annual consensus, peers and GuruFocus answers are
-ACME's fixtures with the symbol changed.
+floor (skipped). The quote, profile, closes, annual consensus, peers, splits and GuruFocus answers
+are ACME's fixtures with the symbol changed.
 """
 
 import json
@@ -31,6 +31,7 @@ _FIXTURES = {
     "quote": "fmp/quote.ACME.json",
     "price-history": "fmp/historical-price-eod-full.ACME.json",
     "peers": "fmp/stock-peers.ACME.json",
+    "splits": "fmp/splits.ACME.json",
     "summary": "gurufocus/summary.ACME.json",
     "keyratios": "gurufocus/keyratios.ACME.json",
 }

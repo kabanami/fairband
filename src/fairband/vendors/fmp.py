@@ -32,6 +32,9 @@ documented response example):
 - ``stock-peers``: ``symbol``; the answer is a list of objects, each with a ``symbol``. From the
   growth routes spec (2026-11-02); not checked here, the documentation page refusing an automated
   read.
+- ``splits``: ``symbol``; each row a ``date``, a ``numerator``, a ``denominator`` and a
+  ``splitType``, newest first; a split appears from its effective date (checked live 2026-11-10 on
+  NVDA, WMT and META).
 
 The agent's pass-throughs (spec 2026-11-06 Tier 2, 15.3), checked on 2026-11-06 against the
 stable documentation's examples as a web search returns them (the pages themselves refuse an
@@ -154,6 +157,9 @@ class Fmp:
 
     def peers(self, symbol: str) -> VendorResponse:
         return self._get("stock-peers", {"symbol": to_fmp_symbol(symbol)})
+
+    def splits(self, symbol: str) -> VendorResponse:
+        return self._get("splits", {"symbol": to_fmp_symbol(symbol)})
 
     def transcript(self, symbol: str, year: int, quarter: int) -> VendorResponse:
         params = {"symbol": to_fmp_symbol(symbol), "year": str(year), "quarter": str(quarter)}
