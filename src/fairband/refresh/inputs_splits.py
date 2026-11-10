@@ -29,7 +29,8 @@ b`` (false for a ``b`` of zero):
 - each trailing period with a split after its end, on its own count: the newest against Q by the
   test D takes, the older ones against S, pre-split when the count × the period's ρ lies within the
   tolerance and the count does not. A pre-split period's EPS and its street actual (the one at its
-  end) read ÷ its ρ; a period without a count is read as stored and named. The trailing EPS is then
+  end) read ÷ its ρ; a period without a count, or whose count fits both bases or neither, is read
+  as stored and named with its reason. The trailing EPS is then
   the sum of the periods' EPS when each has one, and the street trailing EPS the sum of the four
   actuals (``SplitFigures.street_ttm_eps``). So on the fiscal-year fallback the year is judged by
   its own count, and a trailing sum of quarters on two bases is read on one;
@@ -58,9 +59,10 @@ when not every period scaled. No DATA input holds the annual consensus EPS (the 
 rates, unmoved when both years scale), so the ``split-pending`` sentence alone names it. A pending
 split puts the note ``split-pending`` on the row, its sentence naming the splits and the newest
 trailing period they follow, the figures read on the new basis and the periods they were scaled
-on, and those read as stored with the reason: the statement side's when it scaled nothing, each
-period without a count, and each consensus row left; without one every figure is read as stored
-and nothing is noted.
+on, and those read as stored with the reason: the statement side's when it scaled nothing (FMP's
+figures already post-split only when the count and every period tested read post-split), each
+period left and each consensus row left; without one every figure is read as stored and nothing
+is noted.
 """
 
 import math
@@ -102,6 +104,15 @@ _QUARTERS = 4  # the street's trailing EPS sums four quarters' actuals
 
 # Where a count stands against another: pre-split, post-split, or on both bases or neither.
 type _Basis = Literal["pre", "post", "both", "neither"]
+# A trailing period's verdict: its count's basis, ``None`` without a count.
+type _Verdict = _Basis | None
+# Why a judged period is read as stored, said of one period and of several; ``{}`` is the count it
+# was judged against.
+_PERIOD_LEFT: dict[_Verdict, tuple[str, str]] = {
+    "both": ("fits both bases of {}", "fit both bases of {}"),
+    "neither": ("fits neither basis of {}", "fit neither basis of {}"),
+    None: ("has no share count", "have no share count"),
+}
 
 
 @dataclass(frozen=True)
@@ -257,9 +268,11 @@ def _statement_side(
             return figures, {}, [_NEITHER_BASIS]
         scale_count = basis == "pre"
     post_split = count * ratio if scale_count else count
-    scaled, uncounted, tested = _judge_periods(
-        figures.periods, pending, quote_count, post_split, tolerance
-    )
+    # The newest period has a split after its end only when ``newest`` has one, and Q is then known.
+    by_quote = post_split if quote_count is None else quote_count
+    verdicts = _judge_periods(figures.periods, pending, by_quote, post_split, tolerance)
+    scaled = {k: after for k, (verdict, after) in verdicts.items() if verdict == "pre"}
+    tested = [verdict for verdict, _ in verdicts.values() if verdict is not None]
     out, moved = _scale_periods(replace(figures, shares_diluted=post_split), scaled)
     groups = _groups(scaled)
     notes: dict[str, str] = {}
@@ -274,41 +287,34 @@ def _statement_side(
         sentences.append(_scaled_sentence(ratio if scale_count else None, per_share, spans))
     elif scaled:
         sentences.append(_NOTHING_TO_SCALE)
-    elif newest or tested:
+    elif (newest or tested) and all(verdict == "post" for verdict in tested):
         sentences.append(_POST_SPLIT)
-    if uncounted:
-        sentences.append(_uncounted(uncounted, figures.periods, fiscal_year))
+    sentences += _periods_left(verdicts, figures.periods, fiscal_year)
     return out, notes, sentences
 
 
 def _judge_periods(
     periods: Sequence[TrailingPeriod],
     pending: Sequence[SplitRow],
-    quote_count: float | None,
+    quote_count: float,
     post_split: float,
     tolerance: float,
-) -> tuple[_Scaled, list[int], bool]:
+) -> dict[int, tuple[_Verdict, tuple[SplitRow, ...]]]:
     """Each period with a pending split after its end, on its own count: the newest against the
-    quote's count, as the diluted count is judged, the older ones against ``post_split``, S. The
-    pre-split periods with their splits, the periods without a count, and whether any was tested.
+    quote's count, as the diluted count is judged, the older ones against ``post_split``, S. Its
+    verdict, ``None`` without a count, with the splits after its end, by its place in ``periods``.
     """
-    scaled: _Scaled = {}
-    uncounted: list[int] = []
-    tested = False
+    verdicts: dict[int, tuple[_Verdict, tuple[SplitRow, ...]]] = {}
     for k, period in enumerate(periods):
         after = _after(pending, period.end)
         if not after:
             continue  # it postdates every pending split: on the quote's basis by construction
         if period.shares_diluted is None:
-            uncounted.append(k)
+            verdicts[k] = (None, after)
             continue
         against = quote_count if k == len(periods) - 1 else post_split
-        if against is None:
-            continue
-        tested = True
-        if _basis(period.shares_diluted, _ratio(after), against, tolerance) == "pre":
-            scaled[k] = after
-    return scaled, uncounted, tested
+        verdicts[k] = (_basis(period.shares_diluted, _ratio(after), against, tolerance), after)
+    return verdicts
 
 
 def _scale_periods(figures: SplitFigures, scaled: _Scaled) -> tuple[SplitFigures, list[str]]:
@@ -399,14 +405,33 @@ def _scaled_sentence(count_ratio: float | None, per_share: Sequence[str], spans:
     return f"{listed[0].upper()}{listed[1:]} ({spans}) {verb} read on the post-split basis."
 
 
-def _uncounted(ks: Sequence[int], periods: Sequence[TrailingPeriod], fiscal_year: bool) -> str:
-    """The periods without a share count, read as stored."""
+def _periods_left(
+    verdicts: dict[int, tuple[_Verdict, tuple[SplitRow, ...]]],
+    periods: Sequence[TrailingPeriod],
+    fiscal_year: bool,
+) -> list[str]:
+    """A sentence for each reason judged periods are read as stored: a count fitting both bases or
+    neither of the count it was judged against (the quote's for the newest period, the newest
+    count for the others), or no share count."""
+    groups: dict[tuple[str, str], list[int]] = {}
+    for reason, (one, many) in _PERIOD_LEFT.items():
+        for k in sorted(k for k, (verdict, _) in verdicts.items() if verdict == reason):
+            against = "the quote's count" if k == len(periods) - 1 else "the newest count"
+            groups.setdefault((one.format(against), many.format(against)), []).append(k)
+    return [_left(ks, periods, fiscal_year, said) for said, ks in groups.items()]
+
+
+def _left(
+    ks: Sequence[int], periods: Sequence[TrailingPeriod], fiscal_year: bool, said: tuple[str, str]
+) -> str:
+    """``The quarter ending 31 Mar 2026 has no share count and is read as stored.``"""
+    one, many = said
     if fiscal_year:
-        return "The fiscal year has no share count and is read as stored."
+        return f"The fiscal year {one} and is read as stored."
     ends = _and([_day(periods[k].end) for k in ks])
     if len(ks) == 1:
-        return f"The quarter ending {ends} has no share count and is read as stored."
-    return f"The quarters ending {ends} have no share count and are read as stored."
+        return f"The quarter ending {ends} {one} and is read as stored."
+    return f"The quarters ending {ends} {many} and are read as stored."
 
 
 def _consensus_side(

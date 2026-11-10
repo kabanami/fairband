@@ -746,6 +746,101 @@ def test_a_fiscal_year_without_a_count_is_read_as_stored() -> None:
     )
 
 
+POST_SPLIT = "FMP's statements and street actuals already read on the post-split basis."
+TAIL = "The closes and the quote are FMP's, already on the post-split basis."
+
+
+def test_older_quarters_fitting_neither_basis_are_named_not_called_post_split() -> None:
+    """The newest quarter and the count read 2,400, the quote's count, and a split follows them:
+    both are post-split, but the older three read 1,000, and neither 1,000 nor 2,000 lies within
+    15% of 2,400. They are read as stored and named; the sentence claims no post-split basis."""
+    figures = _figures(count=2400.0, counts=(1000.0, 1000.0, 1000.0, 2400.0))
+    out = _apply(figures, market_cap=2400.0 * 50)
+    assert out.figures == figures and out.notes == {}
+    assert _sentence(out) == (
+        "A 2-for-1 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
+        "The quarters ending 31 Dec 2025, 31 Mar 2026 and 30 Jun 2026 fit neither basis of the "
+        f"newest count and are read as stored. {TAIL}"
+    )
+    assert POST_SPLIT not in _sentence(out)
+
+
+def test_a_split_within_the_year_with_older_quarters_fitting_neither_basis() -> None:
+    """Shares issued as well as split: the newer quarters read 2,400, the older 1,000, which
+    neither 1,000 nor 2,000 brings within 15% of 2,400."""
+    figures = _figures(count=2400.0, counts=(1000.0, 1000.0, 2400.0, 2400.0))
+    out = _apply(figures, splits=(WITHIN,), market_cap=2400.0 * 50)
+    assert out.figures == figures and out.notes == {}
+    assert _sentence(out) == (
+        "A 2-for-1 split of 15 Apr 2026 falls after the quarter ending 31 Mar 2026. "
+        "The quarters ending 31 Dec 2025 and 31 Mar 2026 fit neither basis of the newest count "
+        f"and are read as stored. {TAIL}"
+    )
+
+
+def test_a_stock_dividend_within_the_year_leaves_older_quarters_fitting_both_bases() -> None:
+    """A 21-for-20 split, an annual stock dividend: 1,000 and 1,050 both lie within 15% of the
+    newest count, 1,050, so the older quarters cannot be told apart and are named, every year."""
+    dividend = SplitRow(date(2026, 4, 15), 21.0, 20.0)
+    figures = _figures(count=1050.0, counts=(1000.0, 1000.0, 1050.0, 1050.0))
+    out = _apply(figures, splits=(dividend,), market_cap=1050.0 * 50)
+    assert out.figures == figures and out.notes == {}
+    assert _sentence(out) == (
+        "A 21-for-20 split of 15 Apr 2026 falls after the quarter ending 31 Mar 2026. "
+        "The quarters ending 31 Dec 2025 and 31 Mar 2026 fit both bases of the newest count and "
+        f"are read as stored. {TAIL}"
+    )
+
+
+def test_an_older_quarter_fitting_neither_basis_stays_beside_the_scaled_ones() -> None:
+    """The count reads pre-split and doubles; the oldest quarter reads 800, which neither 800 nor
+    1,600 brings within 15% of 2,000: it stays as stored and is named, the other three halve."""
+    out = _apply(_figures(counts=(800.0, 1000.0, 1000.0, 1000.0)))
+    assert out.figures.shares_diluted == 2000.0
+    assert [p.eps_diluted for p in out.figures.periods] == [1.0, 0.5, 0.5, 0.5]
+    assert out.figures.trailing is not None and out.figures.trailing.eps_diluted == 2.5
+    assert out.notes["eps_ttm"] == "÷2 on 3 of 4 quarters for the 2-for-1 split of 15 Oct 2026"
+    sentence = _sentence(out)
+    assert (
+        "The diluted count (×2), the trailing EPS and the street actuals (÷2 on the quarters "
+        "ending 31 Mar 2026 to 30 Sep 2026) are read on the post-split basis. The quarter ending "
+        "31 Dec 2025 fits neither basis of the newest count and is read as stored." in sentence
+    )
+    assert POST_SPLIT not in sentence
+
+
+def test_quarters_restated_for_the_first_of_two_splits_alone_are_named() -> None:
+    """A 2-for-1 within the year and a 3-for-2 after it; FMP restated every quarter for the first
+    alone (2,000). The newer two read ÷1.5 and the count ×1.5; the older two, restated for the
+    first split but not the second, fit neither 2,000 nor 6,000 against 3,000 and stay."""
+    after = SplitRow(date(2026, 10, 15), 3.0, 2.0)
+    figures = _figures(count=2000.0, counts=(2000.0,) * 4)
+    out = _apply(figures, splits=(WITHIN, after), market_cap=3000.0 * 50)
+    assert out.figures.shares_diluted == 3000.0
+    assert [p.eps_diluted for p in out.figures.periods] == pytest.approx([1.0, 1.0, 2 / 3, 2 / 3])
+    sentence = _sentence(out)
+    assert (
+        "The diluted count (×1.5), the trailing EPS and the street actuals (÷1.5 on the quarters "
+        "ending 30 Jun 2026 to 30 Sep 2026) are read on the post-split basis. The quarters ending "
+        "31 Dec 2025 and 31 Mar 2026 fit neither basis of the newest count and are read as "
+        "stored." in sentence
+    )
+    assert POST_SPLIT not in sentence
+
+
+def test_a_fallback_year_fitting_neither_basis_of_the_quotes_count_is_named() -> None:
+    """The newest period is judged against the quote's count: a year on 600 shares, the count and
+    the quote on 2,000."""
+    figures = replace(_year(600.0), shares_diluted=2000.0)
+    out = _apply(figures, end=date(2025, 12, 31))
+    assert out.figures == figures
+    assert (
+        "The fiscal year fits neither basis of the quote's count and is read as stored."
+        in _sentence(out)
+    )
+    assert POST_SPLIT not in _sentence(out)
+
+
 def test_consensus_rows_left_as_stored_are_named_with_their_reason() -> None:
     """Minor 2: no mean, a count fitting both bases, a count fitting neither, an EPS of zero. At
     a 50% tolerance the count of 1,000 fits both bases of the quote's 2,000, so the statements are

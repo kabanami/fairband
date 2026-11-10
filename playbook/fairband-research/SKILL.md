@@ -261,12 +261,12 @@ Five flags ask for a decision of yours. Read each sentence whole: it names its f
   count, the trailing EPS, the street actuals, the consensus EPS by fiscal year and by quarter,
   GuruFocus's EPS) or says why a side was read as stored: FMP's figures already on the new basis,
   no quote count, no diluted count, a count that fits both bases or neither, or a trailing period
-  without a share count, or, for a consensus year or quarter, no net-income mean, an EPS of zero,
-  or a count that fits both bases or neither. A figure read as stored may be on the old basis.
-  Check the consensus steps and any guided figure against the new basis before you read them. A
-  review's per-share overrides (`earnings.ntm`, `earnings.cycle_gap`, `earnings.nri_gap`,
-  `value.outside`) stay on the basis they were made on: after a split, drop and re-make them on
-  the new basis before you publish.
+  without a share count or with one that fits both bases or neither, or, for a consensus year or
+  quarter, no net-income mean, an EPS of zero, or a count that fits both bases or neither. A
+  figure read as stored may be on the old basis. Check the consensus steps and any guided figure
+  against the new basis before you read them. A review's per-share overrides (`earnings.ntm`,
+  `earnings.cycle_gap`, `earnings.nri_gap`, `value.outside`) stay on the basis they were made on:
+  after a split, drop and re-make them on the new basis before you publish.
 
 ### 9. The debate and the thesis
 
