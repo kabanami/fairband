@@ -31,8 +31,9 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   at the price date (``rates.rates_for``, at today without a price), stale when that close is more
   than ``fx_stale_days`` before it, cited as ``fx_rate`` (the source names where the close came
   from and the pair, ``FMP historical-price-eod/light USD<code>`` for the history's, ``FMP quote
-  USD<code>`` for a stored pair quote's, ``as_of`` the close's date); and the inflation differential of the inflation table (``policy.inflation``),
-  cited as ``inflation_differential`` (the table's source, as of its retrieval date) with a note
+  USD<code>`` for a stored pair quote's, ``as_of`` the close's date); and the inflation
+  differential of the inflation table (``policy.inflation``), cited as
+  ``inflation_differential`` (the table's source, as of its retrieval date) with a note
   naming both means, "TWD 1.600% against USD 2.120%, the IMF World Economic Outlook October 2026
   means of 2027 to 2031". A USD row has the rate 1, no rate date and d 0, cited nowhere;
 - the refusal, the first that applies (spec 2026-11-10 7.5): "no financial statements"; the
