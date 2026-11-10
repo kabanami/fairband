@@ -43,7 +43,8 @@ trailing GAAP EPS (``anchor.ntm_anchor``), so an override at the gap found moves
 above −100%, a replaced step not counted thin nor named in ``step-series-disagree``, the revenue
 steps the charge pays for left as found; ``growth.belief`` the belief's rate, and the hold read on
 it; ``earnings.ntm``, the NTM EPS from a clear guidance, which stands in for the consensus less
-the SBC adjustment, the four NTM quarters still required; ``earnings.cycle_gap`` the correction
+the SBC adjustment, the NTM window's periods still required (``anchor.ntm_window``: four quarters,
+or two half-years); ``earnings.cycle_gap`` the correction
 to mid-cycle earnings, which the NTM EPS, the consensus's or the guided one, is taken less, before
 the positive-anchor refusal (``anchor.ntm_anchor``). Nothing else reads the two: the basis test,
 the clean EPS, EPV and ``large-nri`` read the non-recurring gap alone, and the forward EPS of
@@ -80,7 +81,7 @@ from fairband.engine.anchor import (
     few_analysts,
     moat_class,
     ntm_anchor,
-    ntm_quarters,
+    ntm_window,
     path_steps,
     step_series_flag,
 )
@@ -287,25 +288,27 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         return Refused("no trailing revenue")
     if i.tax_rate_latest is None:
         return Refused("no statutory tax rate")
-    quarters = ntm_quarters(i.quarter_estimates, t.period_end) or ()
+    window = ntm_window(i.quarter_estimates, t.period_end, t.cadence)
+    periods, cadence = ((), t.cadence) if window is None else window
     gap: float | None = chosen(c, "earnings.nri_gap", None)
     correction = None if gap is None else gap - nil(nri_gap(i))
     guided: float | None = chosen(c, "earnings.ntm", None) if own else None
     anchor = ntm_anchor(
-        quarters,
+        periods,
         t,
         i.street_ttm_eps,
         c.shares,
         i.tax_rate_latest,
         c.price,
         policy,
+        cadence=cadence,
         nri_correction=correction,
         cycle_gap=cycle_gap(c),
         guided_eps=guided,
     )
     if anchor.refusal is not None:
         return Refused(anchor.refusal, anchor.flags)
-    base_year = base_fiscal_year(quarters)
+    base_year = base_fiscal_year(periods)
     path = path_steps(i.annual_estimates, base_year, policy)
     belief = belief_from_sales(t.revenue / i.fx_rate / 1e6, policy)  # the bounds are USD
     if own:

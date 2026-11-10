@@ -21,6 +21,7 @@ from support.engine_companies import (
     young_growth_inputs,
 )
 
+from fairband.engine.anchor import ntm_window
 from fairband.engine.route import value_company
 from fairband.engine.types import ValuationResult, result_to_json
 from fairband.policy import load_policy
@@ -53,3 +54,13 @@ def golden_dict(result: ValuationResult) -> dict[str, Any]:
 def test_defaults_match_the_golden(symbol: str) -> None:
     result = value_company(FIXTURES[symbol](), universe_deciles(), load_policy(), TODAY)
     assert golden_dict(result) == json.loads((GOLDEN / f"{symbol}.json").read_text())
+
+
+@pytest.mark.parametrize("symbol", sorted(FIXTURES))
+def test_the_fixtures_report_quarterly(symbol: str) -> None:
+    """Plan 2 of spec 2026-11-10 leaves a quarterly company as it was: each fixture's trailing
+    figures are on the quarterly cadence, and its NTM window, where it has one, four quarters."""
+    i = FIXTURES[symbol]()
+    assert i.trailing is not None and i.trailing.cadence == "quarterly"
+    window = ntm_window(i.quarter_estimates, i.trailing.period_end, i.trailing.cadence)
+    assert window is None or (len(window[0]), window[1]) == (4, "quarterly")

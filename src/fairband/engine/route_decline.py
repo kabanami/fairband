@@ -10,7 +10,8 @@ while a year has a revenue mean above zero and at least ``analyst_min`` revenue 
 K, at most ``runoff_years``; the first year that fails either test ends it at the year before,
 with no refusal and no flag: nothing is held past year 3 and a thin year is not read.
 From year K + 1 the decline rate d fades in a straight line to zero by year ``runoff_years``.
-Without a usable NTM consensus (no four consecutive quarters, one without a revenue mean, or a sum
+Without a usable NTM consensus (no NTM window, the revenue-growth route's: four consecutive
+quarters, or two half-years for a half-yearly reporter; a period without a revenue mean; or a sum
 at or below zero) the row is not refused: years 1 to 3 shrink at d, the years past 3 are not read,
 and the fade runs from year 4. d is the classifier's five-year revenue slope
 (``PhaseEvidence.revenue_slope``, which ``Context.evidence`` carries) over the last fiscal year's
@@ -74,9 +75,9 @@ trend's own figure.
 
 Overrides (``method.md`` 14) through ``route_steps.chosen``. ``decline.rate`` replaces d, never
 floored (``decline-rate-floored`` is not raised); ``revenue.ntm``, the NTM revenue from a clear
-guidance, the sum of the four NTM quarters' revenue means, which year 1, the rebuild key and
+guidance, the sum of the NTM window's revenue means, which year 1, the rebuild key and
 ``consensus-recovery`` then read, so a guided figure makes usable a consensus whose sum is at or
-below zero; it is not read without the quarters or with one lacking its mean, and the
+below zero; it is not read without the window or with a period lacking its mean, and the
 ``ntm_revenue`` data entry cites the consensus as found; ``path.step_2`` and ``path.step_3`` the
 consensus steps as the revenue-growth route reads them (``revenue_path_for``), not read on a row
 without a usable consensus, whose years 1 to 3 shrink at d; ``capital.sales_to_capital`` the
@@ -102,7 +103,7 @@ import statistics
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
-from fairband.engine.anchor import TrailingFigures, base_fiscal_year, moat_class, ntm_quarters
+from fairband.engine.anchor import TrailingFigures, base_fiscal_year, moat_class, ntm_window
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Series, operating_margin
 from fairband.engine.distress import FScore, Rating, ZScore, altman_z, ncav, piotroski_f, rate
@@ -206,9 +207,9 @@ _Used = Literal["own-latest", "peers", "override"]
 
 @dataclass(frozen=True)
 class _Consensus:
-    """Years 1 to K: the NTM revenue as found (``None`` without four quarters with a revenue
-    mean) and as year 1 reads it, an agent's guided NTM revenue in its place on the four
-    quarters; whether it is usable (on the four quarters and positive), the annual steps of years
+    """Years 1 to K: the NTM revenue as found (``None`` without a window whose periods each have
+    a revenue mean) and as year 1 reads it, an agent's guided NTM revenue in its place on the
+    window; whether it is usable (on the window and positive), the annual steps of years
     2 and 3 as found and which were held, the steps of years 4 to K (none without a usable
     consensus), whether g_2 or g_3 as resolved falls 100% or more, and the path's flags in
     order."""
@@ -421,17 +422,19 @@ def _consensus(c: Context, revenue0: float, d: float, floored: bool) -> _Consens
     """Years 1 to K and the path's flags: ``path-held``, ``decline-rate-floored``,
     ``path-on-trend`` without a usable NTM consensus, ``consensus-recovery``, ``few-analysts``.
     The years past 3 are read only on a usable consensus and only to ``runoff_years``. An agent's
-    guided NTM revenue stands in for the four quarters' sum before the positive test; without the
-    quarters, or with one lacking its revenue mean, it is not read."""
+    guided NTM revenue stands in for the window's sum before the positive test; without the
+    window (``anchor.ntm_window`` on the trailing cadence), or with a period lacking its revenue
+    mean, it is not read."""
     i, n = c.inputs, c.policy.runoff_years
     floor = (_floored(),) if floored else ()
-    quarters = ntm_quarters(i.quarter_estimates, c.trailing.period_end)
-    found = ntm_revenue(quarters)
-    ntm = found if quarters is None or found is None else chosen(c, "revenue.ntm", found)
-    if quarters is None or ntm is None or ntm <= 0:
+    window = ntm_window(i.quarter_estimates, c.trailing.period_end, c.trailing.cadence)
+    periods = None if window is None else window[0]
+    found = ntm_revenue(periods)
+    ntm = found if periods is None or found is None else chosen(c, "revenue.ntm", found)
+    if periods is None or ntm is None or ntm <= 0:
         on_trend = (*floor, _on_trend(d, n))
         return _Consensus(found, ntm, False, (None, None), (False, False), (), False, on_trend)
-    base = base_fiscal_year(quarters)
+    base = base_fiscal_year(periods)
     path, _, path_flags = revenue_path_for(
         revenue0, ntm, i.annual_estimates, base, None, c.policy, judged=judged_steps(c)
     )

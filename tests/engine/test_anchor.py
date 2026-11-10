@@ -9,10 +9,14 @@ from fairband.engine.anchor import (
     QuarterEstimate,
     TrailingFigures,
     base_fiscal_year,
+    base_year,
     belief_from_sales,
+    consecutive_periods,
     moat_class,
     ntm_anchor,
+    ntm_periods,
     ntm_quarters,
+    ntm_window,
     path_steps,
     sales_class,
     sbc_basis,
@@ -148,6 +152,80 @@ def test_ntm_quarters_none_when_fewer_than_four() -> None:
     assert ntm_quarters(ntm()[:3], date(2026, 6, 30)) is None
 
 
+def half(end: date, fy: int, eps: float | None = 1.0, rev: float | None = 30.0) -> QuarterEstimate:
+    """A half-year of consensus with ``eps`` and ``rev``."""
+    return QuarterEstimate(end, fy, "H1" if end.month <= 6 else "H2", eps, rev, None, 10)
+
+
+# Spec 2026-11-10 11.4: after a last reported half-year ending 2026-06-30.
+HALVES = [
+    half(date(2026, 6, 30), 2026),
+    half(date(2026, 12, 31), 2026),
+    half(date(2027, 6, 30), 2027),
+    half(date(2027, 12, 31), 2027),
+]
+
+
+def test_consecutive_periods_reads_the_cadence_s_bounds() -> None:
+    """80 to 100 days from one quarter end to the next, 170 to 195 from one half-year's."""
+    start = date(2026, 1, 1)
+
+    def apart(days: int) -> list[date]:
+        return [start, start + timedelta(days=days)]
+
+    assert all(consecutive_periods(apart(d), "quarterly") for d in (80, 91, 100))
+    assert not any(consecutive_periods(apart(d), "quarterly") for d in (79, 101, 181))
+    assert all(consecutive_periods(apart(d), "half-yearly") for d in (170, 181, 195))
+    assert not any(consecutive_periods(apart(d), "half-yearly") for d in (91, 169, 196))
+
+
+def test_ntm_periods_half_yearly() -> None:
+    """Spec 2026-11-10 11.4: the consensus rows ending 2026-12-31 and 2027-06-30 are the window;
+    the base fiscal year is 2027, one each and the tie to the later. The quarterly reading finds
+    no window in them, and one row after the last reported is no window."""
+    window = ntm_periods(HALVES, date(2026, 6, 30), "half-yearly")
+    assert window is not None
+    assert [q.period_end for q in window] == [date(2026, 12, 31), date(2027, 6, 30)]
+    assert base_fiscal_year(window) == 2027
+    assert ntm_periods(HALVES, date(2026, 6, 30), "quarterly") is None
+    assert ntm_periods(HALVES[:2], date(2026, 6, 30), "half-yearly") is None
+
+
+def test_ntm_quarters_is_the_quarterly_reading() -> None:
+    assert ntm_quarters(ntm(), date(2026, 6, 30)) == ntm_periods(
+        ntm(), date(2026, 6, 30), "quarterly"
+    )
+    assert ntm_periods(ntm(), date(2026, 6, 30), "half-yearly") is None
+
+
+def test_a_quarterly_reporter_never_reads_a_half_year_window() -> None:
+    """The ruling on spec 2026-11-10 8: a quarterly reporter's window is four consecutive
+    quarters only, so consensus rows about 180 days apart give it none (two quarters of a
+    consensus with gaps would otherwise sum as a year); a half-yearly reporter reads them as its
+    two half-years."""
+    assert ntm_window(HALVES, date(2026, 6, 30), "quarterly") is None
+    assert base_year(HALVES, date(2026, 6, 30)) is None
+    found = ntm_window(HALVES, date(2026, 6, 30), "half-yearly")
+    assert found is not None
+    window, cadence = found
+    assert cadence == "half-yearly"
+    assert [q.period_end for q in window] == [date(2026, 12, 31), date(2027, 6, 30)]
+    assert base_year(HALVES, date(2026, 6, 30), "half-yearly") == 2027
+
+
+def test_a_half_yearly_reporter_with_quarterly_consensus_reads_four_quarters() -> None:
+    """ABVX (spec 2026-11-10 8): half-year statements and quarterly consensus rows. The window is
+    the one its consensus cadence gives, four consecutive quarters, with the cadence
+    ``quarterly``; the base year is theirs."""
+    found = ntm_window(ntm(), date(2026, 6, 30), "half-yearly")
+    assert found is not None
+    window, cadence = found
+    assert cadence == "quarterly" and list(window) == ntm()
+    assert ntm_window(ntm(), date(2026, 6, 30), "quarterly") == (tuple(ntm()), "quarterly")
+    assert base_year(ntm(), date(2026, 6, 30), "half-yearly") == 2027
+    assert ntm_window(ntm()[:3], date(2026, 6, 30), "half-yearly") is None
+
+
 def test_sbc_basis() -> None:
     assert sbc_basis(5.0, 4.0, 1.5, 0.5) == "excludes-sbc"  # gap 1.0 ≥ 0.75
     assert sbc_basis(4.2, 4.0, 1.5, 0.5) == "includes-sbc"
@@ -214,6 +292,33 @@ def test_anchor_refusals(policy: Policy) -> None:
     got = ntm_anchor(ntm(eps=0.25), trailing(), 4.2, 10.0, 0.21, 1.0, policy)  # P/E 1
     assert got.refusal == "forward P/E below 2: unit error"
     assert ntm_anchor(ntm(eps=0.25), trailing(), 4.2, 10.0, 0.21, 2.0, policy).refusal is None
+
+
+def test_ntm_anchor_sums_two_half_years(policy: Policy) -> None:
+    """Two half-years at EPS 1.0 and 1.2: the raw anchor is 2.2 on the half-yearly cadence and
+    the count check asks for two; the quarterly cadence, the default, refuses them, and four
+    quarters on the half-yearly one are refused too."""
+    halves = [half(date(2026, 12, 31), 2026, 1.0), half(date(2027, 6, 30), 2027, 1.2)]
+    got = ntm_anchor(halves, trailing(), 4.2, 10.0, 0.21, 100.0, policy, cadence="half-yearly")
+    assert got.ntm_eps_raw == pytest.approx(2.2) and got.refusal is None
+    assert got.ntm_eps == pytest.approx(2.2) and got.ntm_net_income == pytest.approx(22.0)
+    quarterly = ntm_anchor(halves, trailing(), 4.2, 10.0, 0.21, 100.0, policy)
+    assert quarterly.refusal == "incomplete NTM consensus"
+    four = ntm_anchor(ntm(), trailing(), 4.2, 10.0, 0.21, 100.0, policy, cadence="half-yearly")
+    assert four.refusal == "incomplete NTM consensus"
+    gap = [half(date(2026, 12, 31), 2026, 1.0), half(date(2027, 6, 30), 2027, None)]
+    got = ntm_anchor(gap, trailing(), 4.2, 10.0, 0.21, 100.0, policy, cadence="half-yearly")
+    assert got.refusal == "incomplete NTM consensus"
+
+
+def test_the_sbc_scale_reads_the_two_half_years_revenue(policy: Policy) -> None:
+    """The SBC adjustment's scale is the window's revenue over the trailing revenue, as on four
+    quarters: two half-years of 60 against 100 scale 0.79 a share to 0.948."""
+    halves = [half(date(2026, 12, 31), 2026, 5.0, 60.0), half(date(2027, 6, 30), 2027, 5.0, 60.0)]
+    got = ntm_anchor(halves, trailing(), 5.0, 10.0, 0.21, 100.0, policy, cadence="half-yearly")
+    assert got.basis == "excludes-sbc"
+    assert got.sbc_adjustment_per_share == pytest.approx(0.948)
+    assert got.ntm_eps == pytest.approx(9.052)
 
 
 def test_a_cycle_gap_lowers_the_anchor_and_stays_out_of_the_basis_test(policy: Policy) -> None:

@@ -119,6 +119,7 @@ def test_financials(client: TestClient) -> None:
         4,
         False,
     )
+    assert trailing["cadence"] == "quarterly"  # it places the figures: no figure, no ref
     # the last four quarters: revenue $310 m to $340 m; EPS 0.46 to 0.49 a share
     assert trailing["revenue"] == _figure(1300 * M, "currency", "fact:AAPL/revenue/ttm")
     assert trailing["epsDiluted"]["unit"] == "per-share"
@@ -130,7 +131,7 @@ def test_financials(client: TestClient) -> None:
         (BalanceYear, balance, None),
         (TrailingFigures, [trailing], "ttm"),
     ):
-        plain = {"year", "period_end", "currency", "quarters", "on_fiscal_year"}
+        plain = {"year", "period_end", "currency", "quarters", "on_fiscal_year", "cadence"}
         names = [f for f in fields.__dataclass_fields__ if f not in plain]
         for row in rows:
             for name in names:

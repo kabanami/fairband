@@ -597,6 +597,50 @@ def test_a_split_within_the_trailing_quarters_scales_the_older_ones() -> None:
     )
 
 
+def _half_years(
+    count: float = 2000.0, counts: tuple[float, float] = (1000.0, 2000.0)
+) -> SplitFigures:
+    """A half-yearly reporter (spec 2026-11-10 8): two trailing half-years ending 31 Mar and
+    30 Sep 2026 on ``counts``, each at EPS 1.00 and a street actual of 1.05; the diluted count
+    ``count``."""
+    ends = (date(2026, 3, 31), END)
+    return replace(
+        _figures(count=count),
+        trailing=replace(_trailing(2.0, quarters=2), cadence="half-yearly"),
+        periods=tuple(TrailingPeriod(end, 1.0, n) for end, n in zip(ends, counts, strict=True)),
+        street_actuals=tuple((end, 1.05) for end in ends),
+    )
+
+
+def test_a_split_within_the_trailing_half_years_scales_the_older_one() -> None:
+    """The split rule judges two half-years as it judges four quarters: a split between them
+    leaves the newer, which postdates it, and halves the older, whose 1,000 shares read
+    pre-split against the newer's 2,000; the trailing EPS and the street's sum the two."""
+    out = _apply(_half_years(), splits=(WITHIN,))
+    f = out.figures
+    assert f.shares_diluted == 2000.0
+    assert [p.eps_diluted for p in f.periods] == [0.5, 1.0]
+    assert f.trailing is not None and f.trailing.eps_diluted == 1.5
+    assert [eps for _, eps in f.street_actuals] == pytest.approx([0.525, 1.05])
+    assert f.street_ttm_eps == pytest.approx(1.575)
+    assert out.estimate_methods == dict.fromkeys(("eps_ttm", "street_ttm_eps"), "split-scaled")
+
+
+def test_a_half_yearly_reporter_s_ntm_eps_note_reads_its_two_half_years() -> None:
+    """The split rule reads the NTM window the engine reads: a half-yearly reporter's two
+    consensus half-years, so when both scale the NTM EPS carries the note; a quarterly reporter
+    reads no window in them, so its NTM EPS is unmarked though both rows scale."""
+    rows = tuple(_quarter(end, 1.0, 1000.0) for end in (date(2027, 3, 31), date(2027, 9, 30)))
+    figures = replace(_half_years(count=1000.0, counts=(1000.0, 1000.0)), quarter_estimates=rows)
+    out = _apply(figures)
+    assert [q.eps for q in out.figures.quarter_estimates] == [0.5, 0.5]
+    assert out.estimate_methods["ntm_eps"] == "split-scaled" and "ntm_eps" in out.notes
+    assert out.figures.street_ttm_eps == pytest.approx(1.05)
+    quarterly = _apply(replace(_figures(), quarter_estimates=rows))
+    assert [q.eps for q in quarterly.figures.quarter_estimates] == [0.5, 0.5]
+    assert "ntm_eps" not in quarterly.notes and "ntm_eps" not in quarterly.estimate_methods
+
+
 def test_a_split_within_the_trailing_quarters_leaves_restated_quarters_alone() -> None:
     """FMP restated the older two: every quarter reads 2,000, nothing scales, the note still
     fires while a trailing quarter predates the split, and the consensus, which follows the newest

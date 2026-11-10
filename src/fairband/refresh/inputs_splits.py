@@ -10,11 +10,12 @@ denominator, is the new shares to one old share: 2 for a 2-for-1 split, 0.1 for 
 split.
 
 ``apply_splits`` reads every share count and per-share figure on the share basis of the quote
-date. Each trailing period (``periods``: the four quarters, or the fiscal year on the fallback,
-oldest first) is read by its own period end: its ρ is the product of the ratios of the splits dated
-after its end and at or before the price date. A split is pending (``pending_splits``) when it
-falls after the oldest trailing period's end and at or before the price date, so for about a year
-after a split, until every trailing period postdates it. The vendor check of 2026-11-10 found that
+date. Each trailing period (``periods``: the four quarters, or the two half-years of a half-yearly
+reporter, or the fiscal year on the fallback, oldest first) is read by its own period end: its ρ
+is the product of the ratios of the splits dated after its end and at or before the price date. A
+split is pending (``pending_splits``) when it falls after the oldest trailing period's end and at
+or before the price date, so for about a year after a split, until every trailing period
+postdates it. The vendor check of 2026-11-10 found that
 FMP restates its statements, street actuals, consensus and closes to the post-split basis, but on
 no known day. The quote's market cap ÷ its price gives the share count of the quote date, Q, so the
 rule scales only what the data shows pre-split, ``within(a, b)`` reading ``|a − b| ≤ tolerance ×
@@ -31,12 +32,12 @@ b`` (false for a ``b`` of zero):
   tolerance and the count does not. A pre-split period's EPS and its street actual (the one at its
   end) read ÷ its ρ; a period without a count, or whose count fits both bases or neither, is read
   as stored and named with its reason. The trailing EPS is then
-  the sum of the periods' EPS when each has one, and the street trailing EPS the sum of the four
-  actuals (``SplitFigures.street_ttm_eps``). So on the fiscal-year fallback the year is judged by
-  its own count, and a trailing sum of quarters on two bases is read on one;
+  the sum of the periods' EPS when each has one, and the street trailing EPS the sum of the
+  actuals, one a period (``SplitFigures.street_ttm_eps``). So on the fiscal-year fallback the year
+  is judged by its own count, and a trailing sum of periods on two bases is read on one;
 - the consensus, by the splits after the newest statement period end (none when the newest
   period's ρ is 1): each annual and quarterly row ending after that end (the rows the engine can
-  read: the NTM quarters, the base year and the path years) with an EPS and a net-income mean: its
+  read: the NTM window, the base year and the path years) with an EPS and a net-income mean: its
   implied count I, the net income ÷ the EPS, within the tolerance of the pre-split count P and not
   of the post-split count S reads its EPS ÷ ρ, with P = S ÷ ρ. A row without a net-income mean,
   with an EPS of zero, or with an implied count within both counts or neither is read as stored
@@ -53,9 +54,10 @@ A reverse split prints its inverse: ``÷10`` on the count and ``×10`` on the pe
 The count, the trailing EPS, the street trailing EPS, GuruFocus's two EPS figures and the NTM EPS,
 when scaled, are estimates under the method ``split-scaled`` and carry a note naming the split,
 keyed by the engine's DATA input names: ``shares_diluted``, ``eps_ttm``, ``street_ttm_eps``,
-``gf_eps_ttm``, ``gf_eps_without_nri``, and ``ntm_eps`` when a scaled quarterly row is among the
-NTM quarters (``ntm_quarters``). The notes of the two trailing EPS figures say "on 3 of 4 quarters"
-when not every period scaled. No DATA input holds the annual consensus EPS (the path steps are
+``gf_eps_ttm``, ``gf_eps_without_nri``, and ``ntm_eps`` when a scaled quarterly row is in the
+NTM window the engine reads (``ntm_window`` on the trailing figures' cadence: the four quarters,
+or the two half-years). The notes of the two trailing EPS figures say "on 3 of 4 quarters" when
+not every period scaled. No DATA input holds the annual consensus EPS (the path steps are
 rates, unmoved when both years scale), so the ``split-pending`` sentence alone names it. A pending
 split puts the note ``split-pending`` on the row, its sentence naming the splits and the newest
 trailing period they follow, the figures read on the new basis and the periods they were scaled
@@ -100,7 +102,13 @@ from dataclasses import dataclass, replace
 from datetime import date
 from typing import Literal
 
-from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures, ntm_quarters
+from fairband.engine.anchor import (
+    AnnualEstimate,
+    Cadence,
+    QuarterEstimate,
+    TrailingFigures,
+    ntm_window,
+)
 from fairband.engine.types import Flag
 from fairband.refresh.inputs_statements import TrailingPeriod
 from fairband.store.observations import observations_for
@@ -128,7 +136,6 @@ _NEITHER_COUNT = "a count fitting neither basis"
 # The per-share DATA inputs the statement side may scale, in words.
 _PER_SHARE = {"eps_ttm": "the trailing EPS", "street_ttm_eps": "the street actuals"}
 _TAIL = "The closes and the quote are FMP's, already on the post-split basis."
-_QUARTERS = 4  # the street's trailing EPS sums four quarters' actuals
 
 # Where a count stands against another: pre-split, post-split, or on both bases or neither.
 type _Basis = Literal["pre", "post", "both", "neither"]
@@ -202,7 +209,8 @@ class SplitRow:
 class SplitFigures:
     """The figures the rule may scale, as assembly read them: ``periods`` are the trailing periods
     behind ``trailing``, oldest first, and ``street_actuals`` the street actual at each trailing
-    quarter end, empty on the fiscal-year fallback or when one is missing."""
+    period end (four quarters or two half-years), empty on the fiscal-year fallback or when one is
+    missing."""
 
     shares_diluted: float | None
     trailing: TrailingFigures | None
@@ -217,9 +225,9 @@ class SplitFigures:
 
     @property
     def street_ttm_eps(self) -> float | None:
-        """The street's trailing EPS: the sum of the four street actuals, ``None`` without
-        them."""
-        if len(self.street_actuals) != _QUARTERS:
+        """The street's trailing EPS: the sum of the street actuals, one at each trailing period
+        end (four quarters or two half-years); ``None`` without them."""
+        if not self.street_actuals or len(self.street_actuals) != len(self.periods):
             return None
         return sum(eps for _, eps in self.street_actuals)
 
@@ -413,8 +421,9 @@ def _judge_periods(
 
 def _scale_periods(figures: SplitFigures, scaled: _Scaled) -> tuple[SplitFigures, list[str]]:
     """Each scaled period's EPS and street actual ÷ its ρ; the trailing EPS then the sum of the
-    periods' when it was on file and each has one, the street's the sum of the four actuals. The
-    figures, and the DATA inputs whose figure moved (``eps_ttm``, ``street_ttm_eps``)."""
+    periods' when it was on file and each has one, the street's the sum of the actuals, one a
+    period. The figures, and the DATA inputs whose figure moved (``eps_ttm``,
+    ``street_ttm_eps``)."""
     if not scaled:
         return figures, []
     ratios = {figures.periods[k].end: _ratio(after) for k, after in scaled.items()}
@@ -530,8 +539,8 @@ def _consensus_side(
     """Each consensus EPS ending after ``statement_end`` ÷ ρ whose implied count shows it
     pre-split, against S, the count as the statement side left it, and P = S ÷ ρ; every row as
     stored without a count, and without a split after ``statement_end``. The NTM EPS carries the
-    note when a scaled row is among the NTM quarters the engine reads (``ntm_quarters``), its span
-    theirs."""
+    note when a scaled row is in the NTM window the engine reads on the trailing figures' cadence
+    (``ntm_window``: the four quarters, or the two half-years), its span theirs."""
     if figures.shares_diluted is None or not pending:
         return figures, {}, []
     ratio = _ratio(pending)
@@ -546,7 +555,9 @@ def _consensus_side(
     if quarters_scaled:
         spans.append(f"the {_quarters_span(quarters_scaled)}")
     scaled_ends = {q.period_end for q in quarters_scaled}
-    ntm = ntm_quarters(figures.quarter_estimates, statement_end) or ()
+    cadence: Cadence = "quarterly" if figures.trailing is None else figures.trailing.cadence
+    window = ntm_window(figures.quarter_estimates, statement_end, cadence)
+    ntm = () if window is None else window[0]
     ntm_scaled = [q for q in ntm if q.period_end in scaled_ends]
     notes: dict[str, str] = {}
     if ntm_scaled:

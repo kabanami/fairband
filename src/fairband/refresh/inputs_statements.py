@@ -27,19 +27,24 @@ without a rate keeps a ``None`` rate. The country (``country_for``) is the ``cou
 latest stored profile payload that parses (the headquarters, spec 6.6), else the universe row's,
 else ``"unknown"``.
 
-Trailing figures (spec 6.6): the sums of the last four quarters when each ends 80 to 100 days after
-the one before (the anchor's rule), joined to the quarterly cash flow by period end, a sum ``None``
-when any quarter lacks its part; else the last fiscal year, flagged ``trailing-on-fiscal-year``.
-The last fiscal year stands in too when any of the four quarters' income statements names
-another currency than the newest annual one, the reporting currency (spec 2026-11-10 7): the
-note's sentence then names those quarters and their currency.
-The interest expense and the depreciation and amortization (spec 2026-11-03 section 11) are
-summed the same way; the interest expense counts each period by its size, as FMP signs it either
-way.
-The diluted share count is the newest quarter's weighted average, else the newest fiscal year's.
-The trailing periods are the periods the trailing figures read, oldest first, each with its own
-diluted EPS and weighted-average diluted count: the four quarters, or the one fiscal year on the
-fallback; the split rule judges each on its own count (``inputs_splits``).
+Trailing figures (spec 6.6, spec 2026-11-10 8): the reporting cadence is read from the quarterly
+statement rows (``cadence_of``): quarterly when the two newest end 80 to 100 days apart,
+half-yearly when 170 to 195 (FMP's quarterly rows of a half-year reporter are its half-years). The
+trailing figures are the sums of the last four quarters when the cadence is quarterly and each
+ends 80 to 100 days after the one before (the anchor's rule), or of the last two half-years when
+it is half-yearly and they end 170 to 195 days apart, joined to the quarterly cash flow by period
+end, a sum ``None`` when any period lacks its part; else the last fiscal year, flagged
+``trailing-on-fiscal-year``, on the quarterly cadence. The last fiscal year stands in too when any
+of those periods' income statements names another currency than the newest annual one, the
+reporting currency (spec 2026-11-10 7): the note's sentence then names those periods and their
+currency. The interest expense and the depreciation and amortization (spec 2026-11-03 section 11)
+are summed the same way; the interest expense counts each period by its size, as FMP signs it
+either way.
+The diluted share count is the newest quarterly row's weighted average, else the newest fiscal
+year's. The trailing periods are the periods the trailing figures read, oldest first, each with its
+own diluted EPS and weighted-average diluted count: the four quarters or the two half-years, or
+the one fiscal year on the fallback; the split rule judges each on its own count
+(``inputs_splits``).
 
 ``balance_lines`` reads the newest annual balance sheet's lines by FMP name, and
 ``stored_payload`` a payload the store keeps whole (the profile's, the peers'). ``balance_sums``
@@ -61,7 +66,16 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from fairband.engine.anchor import TrailingFigures, consecutive_quarters
+from fairband.engine.anchor import (
+    HALF_DAYS_MAX,
+    HALF_DAYS_MIN,
+    PERIODS_PER_YEAR,
+    QUARTER_DAYS_MAX,
+    QUARTER_DAYS_MIN,
+    Cadence,
+    TrailingFigures,
+    consecutive_periods,
+)
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import FiscalYear, Series
 from fairband.engine.roic import CapitalYear
@@ -94,6 +108,11 @@ _LEASES_ON_BALANCE_SHEET = date(2019, 12, 15)
 # A 52/53-week fiscal year ends up to six days either side of a fixed month and day.
 _YEAR_END_DRIFT = timedelta(days=7)
 _DAYS_A_YEAR = 365.25
+# A trailing period's name, one and several, under each cadence.
+_PERIOD_NOUNS: dict[Cadence, tuple[str, str]] = {
+    "quarterly": ("quarter", "quarters"),
+    "half-yearly": ("half-year", "half-years"),
+}
 # The newest annual balance sheet's lines each figure sums, by input name.
 _BALANCE_SUMS = {
     "debt": ("shortTermDebt", "longTermDebt"),
@@ -153,7 +172,7 @@ class Statements:
     balance_years: tuple[BalanceYear, ...]
     tax_rate_latest: float | None
     trailing: TrailingFigures | None
-    trailing_quarter_ends: tuple[date, ...]  # empty on the fiscal-year fallback
+    trailing_quarter_ends: tuple[date, ...]  # the periods' ends; empty on the fiscal-year fallback
     trailing_periods: tuple[TrailingPeriod, ...]  # oldest first; the one year on the fallback
     shares_diluted: float | None
     currency: str | None  # the newest annual income statement's
@@ -298,6 +317,20 @@ def statements_for(
         estimate_methods=methods,
         tax_year=None if newest_rate is None else newest_rate.year_used,
     )
+
+
+def cadence_of(ends: Sequence[date]) -> Cadence | None:
+    """The reporting cadence of statement periods ending ``ends``, oldest first (spec 2026-11-10
+    8): ``quarterly`` when the two newest end 80 to 100 days apart, ``half-yearly`` when 170 to
+    195, else ``None``, as with fewer than two."""
+    if len(ends) < 2:
+        return None
+    days = (ends[-1] - ends[-2]).days
+    if QUARTER_DAYS_MIN <= days <= QUARTER_DAYS_MAX:
+        return "quarterly"
+    if HALF_DAYS_MIN <= days <= HALF_DAYS_MAX:
+        return "half-yearly"
+    return None
 
 
 def country_for(
@@ -494,26 +527,26 @@ def _trailing(
     quarters: Sequence[_Period],
     quarter_cash: dict[date, _Period],
 ) -> tuple[TrailingFigures, tuple[TrailingPeriod, ...], Flag]:
-    """The trailing figures and the periods they read, oldest first: the four quarters, or the
-    one fiscal year on the fallback, with the ``trailing-on-fiscal-year`` note its reason gives
-    (the module docstring)."""
-    last = list(quarters[-4:])
+    """The trailing figures and the periods they read, oldest first: the four quarters or the two
+    half-years of the company's cadence, or the one fiscal year on the fallback, with the
+    ``trailing-on-fiscal-year`` note its reason gives (the module docstring)."""
+    cadence = cadence_of([q.end for q in quarters])
+    last = [] if cadence is None else _a_year_of(quarters, cadence)
     newest = years.span[-1]
     reporting = years.income[newest].currency
     others = [q for q in last if q.currency not in (None, reporting)] if reporting else []
     fallback = _on_fiscal_year(newest)
-    on_fiscal_year = len(last) < 4 or not consecutive_quarters([q.end for q in last])
-    if not on_fiscal_year and others:
-        on_fiscal_year, fallback = True, _in_another_currency(newest, others, reporting)
-    if on_fiscal_year:
-        income = years.income[years.span[-1]]
-        incomes, flows = [income], [cash.get(income.end, _NONE)]
-    else:
+    if cadence is not None and others:
+        last, fallback = [], _in_another_currency(newest, others, reporting, cadence)
+    if last:
         incomes, flows = last, [quarter_cash.get(q.end, _NONE) for q in last]
+    else:
+        income = years.income[newest]
+        incomes, flows = [income], [cash.get(income.end, _NONE)]
     figures = TrailingFigures(
         period_end=incomes[-1].end,
         quarters=len(incomes),
-        on_fiscal_year=on_fiscal_year,
+        on_fiscal_year=not last,
         revenue=_total(incomes, "revenue"),
         operating_income=_total(incomes, "operatingIncome"),
         net_income=_total(incomes, "netIncome"),
@@ -526,15 +559,28 @@ def _trailing(
         equity_issued=_total(flows, "commonStockIssuance"),
         interest_expense=_total(incomes, "interestExpense", size=True),
         depreciation=_total(flows, "depreciationAndAmortization"),
+        cadence=cadence if cadence is not None and last else "quarterly",
     )
     read = tuple(TrailingPeriod(i.end, i.value("epsDiluted"), i.value(_SHARES)) for i in incomes)
     return figures, read, fallback
 
 
+def _a_year_of(rows: Sequence[_Period], cadence: Cadence) -> list[_Period]:
+    """The last year of ``rows`` on ``cadence``: the last four quarters or the last two
+    half-years when there are as many and each ends the cadence's days after the one before
+    (``anchor.consecutive_periods``); none otherwise."""
+    count = PERIODS_PER_YEAR[cadence]
+    last = list(rows[-count:])
+    if len(last) < count or not consecutive_periods([p.end for p in last], cadence):
+        return []
+    return last
+
+
 def _shares(
     quarters: Sequence[_Period], annual: Sequence[_Period]
 ) -> tuple[float | None, Provenance | None]:
-    """The newest quarter's diluted weighted-average share count, else the newest year's."""
+    """The newest quarterly row's diluted weighted-average share count, else the newest
+    year's."""
     for periods in (quarters, annual):
         row = periods[-1].facts.get(_SHARES) if periods else None
         if row is not None and row.value is not None:
@@ -597,15 +643,19 @@ def _on_fiscal_year(year: int) -> Flag:
     return Flag(
         "trailing-on-fiscal-year",
         "Trailing on fiscal year",
-        "The quarters on file are not four consecutive quarters, so the trailing figures are "
-        f"fiscal {year}'s.",
+        "The statement periods on file are neither four consecutive quarters nor two consecutive "
+        f"half-years, so the trailing figures are fiscal {year}'s.",
     )
 
 
-def _in_another_currency(year: int, others: Sequence[_Period], reporting: str | None) -> Flag:
-    """The ``trailing-on-fiscal-year`` note when a trailing quarter is in another currency than the
-    fiscal years, its sentence naming the quarters by their currency: "The quarter to 2026-09-30
-    is in USD while the fiscal years are in CAD, so the trailing figures are fiscal 2025's"."""
+def _in_another_currency(
+    year: int, others: Sequence[_Period], reporting: str | None, cadence: Cadence
+) -> Flag:
+    """The ``trailing-on-fiscal-year`` note when a trailing period is in another currency than the
+    fiscal years, its sentence naming the periods, quarters or half-years by ``cadence``, by their
+    currency: "The quarter to 2026-09-30 is in USD while the fiscal years are in CAD, so the
+    trailing figures are fiscal 2025's"."""
+    one, many = _PERIOD_NOUNS[cadence]
     by_currency: dict[str | None, list[date]] = {}
     for q in others:
         by_currency.setdefault(q.currency, []).append(q.end)
@@ -613,7 +663,7 @@ def _in_another_currency(year: int, others: Sequence[_Period], reporting: str | 
     for currency, ends in by_currency.items():
         days = [end.isoformat() for end in ends]
         listed = days[0] if len(days) == 1 else f"{', '.join(days[:-1])} and {days[-1]}"
-        noun, verb = ("quarter", "is") if len(days) == 1 else ("quarters", "are")
+        noun, verb = (one, "is") if len(days) == 1 else (many, "are")
         named.append(f"the {noun} to {listed} {verb} in {currency}")
     first = " and ".join(named)
     return Flag(

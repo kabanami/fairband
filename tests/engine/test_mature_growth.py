@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from typing import cast
 
 import pytest
+from support.engine_companies import half_yearly
 
 from fairband.engine.classifier import Deciles
 from fairband.engine.mature_growth import (
@@ -440,3 +441,38 @@ def test_the_cross_check_reads_the_consensus_eps_as_found(
     judged = value_company(ms_inputs, deciles, policy, TODAY, _judged(earnings_ntm=9.0))
     assert judged.intermediates["growth_route"] == mechanical.intermediates["growth_route"]
     assert judged.value == mechanical.value
+
+
+# A half-yearly reporter (spec 2026-11-10 8): the NTM window is its two half-years, or the four
+# quarters its consensus gives.
+
+
+def test_a_half_yearly_reporter_values_on_its_two_half_years(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """MGCO reporting half-yearly, its consensus two half-years of 2.85 and 3.05 a share ending
+    2027-03-31 and 2027-09-30: the anchor sums the two to its four quarters' 5.90, the base year
+    is 2027 as on the quarters, and the value is the quarterly row's."""
+    quarterly = value_company(mg_inputs, deciles, policy, TODAY)
+    r = value_company(half_yearly(mg_inputs), deciles, policy, TODAY)
+    assert (r.route, r.refusal) == ("mature-growth", None)
+    assert r.intermediates["anchor"]["ntm_eps_raw"] == pytest.approx(2.85 + 3.05)
+    assert r.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.90)
+    assert r.intermediates["path"]["base_year"] == 2027
+    assert r.value is not None and r.value == pytest.approx(quarterly.value)
+
+
+def test_the_window_follows_the_trailing_cadence(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The ruling on spec 2026-11-10 8: a quarterly reporter reads no window in two half-years
+    and is refused "incomplete NTM consensus"; a half-yearly reporter whose consensus rows are
+    quarters (ABVX) reads the four quarters and values as the quarterly row."""
+    quarterly = value_company(mg_inputs, deciles, policy, TODAY)
+    halves = half_yearly(mg_inputs)
+    on_quarters = replace(halves, trailing=mg_inputs.trailing)
+    assert value_company(on_quarters, deciles, policy, TODAY).refusal == (
+        "incomplete NTM consensus"
+    )
+    abvx = value_company(replace(mg_inputs, trailing=halves.trailing), deciles, policy, TODAY)
+    assert abvx.value == quarterly.value and abvx.intermediates == quarterly.intermediates

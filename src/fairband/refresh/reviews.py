@@ -15,9 +15,9 @@ resting on the new snapshot:
 A lasting override of an NTM anchor (``earnings.ntm``, ``revenue.ntm``) drops the same way, "the
 guided year has passed", when the fiscal year its guidance record guides (``guidance.anchor_year``,
 the latest such year among the records it cites) is before the new snapshot's base year: the
-fiscal year that holds most of the four quarters after the last reported one, as every route
-reads it (``anchor.base_year`` on the new inputs). Without a base year, or without such a record,
-it stays.
+fiscal year that holds most of the NTM window after the last reported period (four quarters, or
+two half-years for a half-yearly reporter), as every route reads it (``anchor.base_year`` on the
+new inputs and their trailing cadence). Without a base year, or without such a record, it stays.
 
 With an override left, ``write_review`` reviews the new result under the rest on the new inputs,
 writes the review on the new snapshot, with the snapshot's validity window and its price facts
@@ -128,7 +128,11 @@ def _follow(
 ) -> int | None:
     symbol = result.symbol
     trailing = inputs.trailing
-    base = None if trailing is None else base_year(inputs.quarter_estimates, trailing.period_end)
+    base = (
+        None
+        if trailing is None
+        else base_year(inputs.quarter_estimates, trailing.period_end, trailing.cadence)
+    )
     kept = []
     for override in applied_overrides(conn, symbol):
         reason = _drop_reason(conn, override, result, base)

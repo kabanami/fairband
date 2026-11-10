@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pytest
-from support.engine_companies import annual, fiscal_years, with_ntm_revenue
+from support.engine_companies import annual, fiscal_years, half_yearly, with_ntm_revenue
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import Deciles, Series
@@ -686,8 +686,8 @@ def test_a_fiscal_year_fallback_still_rates_the_company(
     on_fiscal_year = Flag(
         "trailing-on-fiscal-year",
         "Trailing on fiscal year",
-        "The quarters on file are not four consecutive quarters, so the trailing figures are "
-        "fiscal 2025's.",
+        "The statement periods on file are neither four consecutive quarters nor two consecutive "
+        "half-years, so the trailing figures are fiscal 2025's.",
     )
     inputs = replace(decline_inputs, trailing=fiscal, input_flags=(on_fiscal_year,))
     r = value_company(inputs, deciles, policy, TODAY)
@@ -1159,3 +1159,23 @@ def test_the_ntm_revenue_override_is_read_on_a_consensus_with_its_quarters(
     assert unread.value == value_company(bare, deciles, policy, TODAY).value
     assert unread.intermediates["runoff_path"]["ntm_revenue"] is None
     assert "path-on-trend" in codes(unread)
+
+
+def test_a_half_yearly_reporter_reads_its_two_half_years(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-10 8: DCCO reporting half-yearly, its consensus two half-years of 488 m and
+    482 m of revenue ending 2027-03-31 and 2027-09-30. The window is the two: year 1 reads 970 m,
+    the base year is 2027 as on the quarters, and the value is the worked row's. A quarterly
+    reporter reads no window in them, so its years 1 to 3 shrink at d."""
+    halves = half_yearly(decline_inputs)
+    r = value_company(halves, deciles, policy, TODAY)
+    assert (r.route, r.refusal) == ("decline", None)
+    assert r.intermediates["runoff_path"]["ntm_revenue"] == pytest.approx(970 * M)
+    assert r.intermediates["runoff_path"]["steps"] == pytest.approx([-0.03, -0.03])
+    assert r.value == pytest.approx(VALUE, abs=1e-9)
+    assert "path-on-trend" not in codes(r)
+    on_quarters = replace(halves, trailing=decline_inputs.trailing)
+    on_trend = value_company(on_quarters, deciles, policy, TODAY)
+    assert on_trend.intermediates["runoff_path"]["ntm_revenue"] is None
+    assert "path-on-trend" in codes(on_trend)

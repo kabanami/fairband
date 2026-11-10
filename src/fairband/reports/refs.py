@@ -245,7 +245,16 @@ _POLICY_UNITS = {
 }
 # The fields of a statement or consensus record that place its figures.
 _PLAIN = frozenset(
-    {"year", "period_end", "currency", "quarters", "on_fiscal_year", "fiscal_year", "fiscal_period"}
+    {
+        "year",
+        "period_end",
+        "currency",
+        "quarters",
+        "on_fiscal_year",
+        "cadence",
+        "fiscal_year",
+        "fiscal_period",
+    }
 )
 _TRAILING_FIGURES = frozenset(f.name for f in fields(TrailingFigures)) - _PLAIN
 _PHASE_FIELDS = frozenset(f.name for f in fields(PhaseEvidence)) - {"checks"}

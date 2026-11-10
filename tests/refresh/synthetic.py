@@ -1,9 +1,10 @@
 """A synthetic company for the refresh tests: ACME's FMP payloads and its universe row.
 
 The router serves these payloads in place of the fixtures (``Router.bodies``). The company is
-twelve calendar fiscal years, 2014 to 2025, and five quarters to 2026-09-30; money is in USD, or
-in the currency ``bodies`` is given (the statements' ``reportedCurrency``). The consensus, quote,
-profile, closes and GuruFocus answers stay the ACME fixtures'.
+twelve calendar fiscal years, 2014 to 2025, and five quarters to 2026-09-30, or, reporting
+half-yearly, four half-years to 2026-06-30; money is in USD, or in the currency ``bodies`` is given
+(the statements' ``reportedCurrency``). The consensus, quote, profile, closes and GuruFocus answers
+stay the ACME fixtures'.
 """
 
 import sqlite3
@@ -12,6 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from fairband.engine.anchor import Cadence
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import CompanyRow, insert_companies
 from fairband.store.refreshes import create_refresh, finish_refresh
@@ -26,6 +28,8 @@ QUARTERS = (
     date(2026, 6, 30),
     date(2026, 9, 30),
 )
+# A half-yearly reporter's statement periods (spec 2026-11-10 11.4): 181, 184 and 181 days apart.
+HALF_YEARS = (date(2024, 12, 31), date(2025, 6, 30), date(2025, 12, 31), date(2026, 6, 30))
 # The statement lines the normalizer kept from 2026-11-03: a test drops their facts to stand for a
 # store from before.
 SIX_LINES = (
@@ -140,9 +144,10 @@ def balance_as_reported(years: Iterable[int]) -> Payload:
     return rows
 
 
-def income_quarter(ends: Iterable[date]) -> Payload:
-    """Quarter i of ``QUARTERS``: revenue $300 m + $10 m × i; diluted shares 100 m + 1 m × i; an
-    interest expense of $4 m, signed negative (FMP signs it either way)."""
+def income_quarter(ends: Iterable[date], periods: Sequence[date] = QUARTERS) -> Payload:
+    """Period i of ``periods`` (``QUARTERS``, or ``HALF_YEARS``), for each of ``ends``: revenue
+    $300 m + $10 m × i; diluted shares 100 m + 1 m × i; an interest expense of $4 m, signed
+    negative (FMP signs it either way)."""
     return [
         statement(
             end,
@@ -156,14 +161,14 @@ def income_quarter(ends: Iterable[date]) -> Payload:
             epsDiluted=0.45 + 0.01 * i,
             weightedAverageShsOutDil=(100 + i) * M,
         )
-        for i, end in enumerate(QUARTERS)
+        for i, end in enumerate(periods)
         if end in ends
     ]
 
 
-def cashflow_quarter(ends: Iterable[date]) -> Payload:
-    """The third quarter has no stock compensation; depreciation and amortization $15 m + $1 m × i
-    in quarter i."""
+def cashflow_quarter(ends: Iterable[date], periods: Sequence[date] = QUARTERS) -> Payload:
+    """The third period has no stock compensation; depreciation and amortization $15 m + $1 m × i
+    in period i of ``periods``."""
     return [
         statement(
             end,
@@ -177,14 +182,14 @@ def cashflow_quarter(ends: Iterable[date]) -> Payload:
             commonStockRepurchased=-15 * M,
             commonStockIssuance=1 * M,
         )
-        for i, end in enumerate(QUARTERS)
+        for i, end in enumerate(periods)
         if end in ends
     ]
 
 
-def earnings() -> Payload:
-    """A street actual of 0.50 + 0.01 × i for quarter i, reported 30 days after its end; the
-    next report on 2027-02-04."""
+def earnings(periods: Sequence[date] = QUARTERS) -> Payload:
+    """A street actual of 0.50 + 0.01 × i for period i of ``periods``, reported 30 days after its
+    end; the next report on 2027-02-04."""
     rows: Payload = [
         {"symbol": "ACME", "date": "2027-02-04", "epsActual": None, "periodEnding": "2026-12-31"}
     ]
@@ -195,7 +200,7 @@ def earnings() -> Payload:
             "epsActual": 0.50 + 0.01 * i,
             "periodEnding": end.isoformat(),
         }
-        for i, end in enumerate(QUARTERS)
+        for i, end in enumerate(periods)
     ]
     return rows
 
@@ -218,17 +223,23 @@ def estimates_quarter() -> Payload:
 
 
 def bodies(
-    years: Iterable[int] = YEARS, quarters: Iterable[date] = QUARTERS, currency: str = "USD"
+    years: Iterable[int] = YEARS,
+    quarters: Iterable[date] | None = None,
+    currency: str = "USD",
+    cadence: Cadence = "quarterly",
 ) -> dict[str, Any]:
     """The payloads by endpoint; the five statements name ``currency`` as their
-    ``reportedCurrency``, their figures unchanged."""
-    years, quarters = tuple(years), tuple(quarters)
+    ``reportedCurrency``, their figures unchanged. The quarterly statements and the street
+    actuals are at ``QUARTERS``, or at ``HALF_YEARS`` for a ``half-yearly`` company, with the
+    same figures period by period; ``quarters`` keeps only those statement periods."""
+    periods = HALF_YEARS if cadence == "half-yearly" else QUARTERS
+    years, kept = tuple(years), periods if quarters is None else tuple(quarters)
     statements = {
         "income-annual": income_annual(years),
         "balance-annual": balance_annual(years),
         "cashflow-annual": cashflow_annual(years),
-        "income-quarter": income_quarter(quarters),
-        "cashflow-quarter": cashflow_quarter(quarters),
+        "income-quarter": income_quarter(kept, periods),
+        "cashflow-quarter": cashflow_quarter(kept, periods),
     }
     return {
         **{
@@ -236,7 +247,7 @@ def bodies(
             for endpoint, rows in statements.items()
         },
         "balance-asreported-annual": balance_as_reported(years),
-        "earnings": earnings(),
+        "earnings": earnings(periods),
     }
 
 

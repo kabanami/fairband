@@ -12,13 +12,14 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   days apart (AAPL: 2027-12-26 and 2027-12-27 for fiscal 2028 Q1), so a row whose period end lies
   within ``SAME_PERIOD_DAYS`` of the period's first row is that period, whatever its label; the row
   kept has the larger EPS analyst count, a tie or no count keeping the later period end, so the NTM
-  quarters chain (``ntm_quarters``). The labels are information on the kept row and decide
+  window chains (``ntm_window``). The labels are information on the kept row and decide
   nothing here;
-- the street's trailing EPS: the sum of the four ``street-actual`` values whose periods are exactly
-  the four trailing quarter ends, each read on the quote date's basis by the split rule; ``None``
-  when one is missing or the trailing figures are a fiscal year, which leaves the SBC basis unknown
-  (``mech/1.2``). FMP states them in USD: for a company in another currency each comes into it at
-  its period end's rate, and a period end with no rate leaves them unknown;
+- the street's trailing EPS: the sum of the ``street-actual`` values whose periods are exactly the
+  trailing period ends, the four quarters' or the two half-years', each read on the quote date's
+  basis by the split rule; ``None`` when one is missing or the trailing figures are a fiscal year,
+  which leaves the SBC basis unknown (``mech/1.2``). FMP states them in USD: for a company in
+  another currency each comes into it at its period end's rate, and a period end with no rate
+  leaves them unknown;
 - the price and its date from the ``quote``; the market cap from the quote, else the profile, else
   the universe row; ``is_adr`` from the profile, else the universe row (``adr_flag``, which the
   company read shares);
@@ -426,9 +427,9 @@ def _one_per_period[E: (QuarterEstimate, AnnualEstimate)](
 def _street_actuals(
     rows: Sequence[ObservationRow], stated: Statements
 ) -> _Cited[tuple[tuple[date, float], ...]]:
-    """The street actual at each trailing quarter end, in order; none when one is missing or the
-    trailing figures are a fiscal year. Their sum is the street's trailing EPS
-    (``SplitFigures.street_ttm_eps``)."""
+    """The street actual at each trailing period end (``trailing_quarter_ends``: the four
+    quarters', or the two half-years'), in order; none when one is missing or the trailing figures
+    are a fiscal year. Their sum is the street's trailing EPS (``SplitFigures.street_ttm_eps``)."""
     ends = stated.trailing_quarter_ends
     actual = {r.period: r for r in rows if r.field == "eps_actual" and r.value is not None}
     matched = [actual[end] for end in ends if end in actual]

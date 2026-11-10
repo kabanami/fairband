@@ -147,7 +147,16 @@ from fairband.web.settings_api import effective
 
 # A record's fields that are not figures: they place the figures.
 _PLAIN = frozenset(
-    {"year", "period_end", "currency", "quarters", "on_fiscal_year", "fiscal_year", "fiscal_period"}
+    {
+        "year",
+        "period_end",
+        "currency",
+        "quarters",
+        "on_fiscal_year",
+        "cadence",
+        "fiscal_year",
+        "fiscal_period",
+    }
 )
 # The units of the statement figures by field; every other one is currency.
 _UNITS = {"eps_diluted": "per-share"} | ESTIMATE_UNITS

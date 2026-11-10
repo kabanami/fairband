@@ -446,6 +446,7 @@ def test_fact_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str
         "fact:AAPL/goodwill/2025",
         "fact:AAPL/revenue",
         "fact:AAPL/total_assets/ttm",  # not a trailing figure
+        "fact:AAPL/cadence/ttm",  # it places the trailing figures, as their period end does
         "fact:ACME/revenue/2025",  # another company's
         "fact:not a symbol/revenue/2025",
     ):

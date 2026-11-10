@@ -7,7 +7,13 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
-from support.engine_companies import annual, capital_years, fiscal_years, with_ntm_revenue
+from support.engine_companies import (
+    annual,
+    capital_years,
+    fiscal_years,
+    half_yearly,
+    with_ntm_revenue,
+)
 
 from fairband.engine.anchor import AnnualEstimate
 from fairband.engine.classifier import Deciles
@@ -1124,3 +1130,37 @@ def test_an_incomplete_ntm_consensus_still_refuses(
     r = value_company(no_quarters, deciles, policy, TODAY, judged)
     assert r.refusal == "incomplete NTM consensus"
     assert current_reading(r, "revenue.ntm") is None
+
+
+def test_a_half_yearly_reporter_reads_its_two_half_years(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-10 8: HGCO reporting half-yearly, its consensus two half-years of 5,800 m and
+    6,600 m of revenue ending 2027-03-31 and 2027-09-30, at 1.20 a share each. Year 1 reads
+    12,400 m, the base year is 2027 as on the quarters, the forward EPS sums the two half-years,
+    the growth-route cross-check reads the same window, and the value is the quarterly row's. A
+    quarterly reporter reads no window in them and is refused."""
+    positive = replace(
+        high_growth_inputs,
+        quarter_estimates=tuple(replace(q, eps=0.60) for q in high_growth_inputs.quarter_estimates),
+        annual_estimates=(
+            annual(2027, 250e6, 2.50, 3, 13_000e6, 20),
+            annual(2028, 320e6, 3.20, 3, 16_000e6, 15),
+            annual(2029, 400e6, 4.00, 3, 19_200e6, 12),
+        ),
+    )
+    quarterly = value_company(positive, deciles, policy, TODAY)
+    halves = half_yearly(positive)
+    r = value_company(halves, deciles, policy, TODAY)
+    assert (r.route, r.refusal) == ("revenue-growth", None)
+    im = r.intermediates
+    assert im["ntm_revenue"] == pytest.approx(12_400e6)
+    assert im["path"]["base_year"] == 2027
+    assert im["eps"]["forward"] == pytest.approx(2.40)
+    gr, found = im["growth_route"], quarterly.intermediates["growth_route"]
+    assert gr["refusal"] is None and gr["value_per_share"] == pytest.approx(
+        found["value_per_share"]
+    )
+    assert r.value is not None and r.value == pytest.approx(quarterly.value)
+    on_quarters = replace(halves, trailing=positive.trailing)
+    assert_refused(value_company(on_quarters, deciles, policy, TODAY), "incomplete NTM consensus")

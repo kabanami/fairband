@@ -24,7 +24,6 @@ from synthetic import (
     bodies,
     cashflow_annual,
     cashflow_quarter,
-    earnings,
     estimates_quarter,
     income_annual,
     income_quarter,
@@ -32,7 +31,14 @@ from synthetic import (
 )
 from vendor_double import FIXTURES, Clients, Clock, Router
 
-from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures, ntm_quarters
+from fairband.engine.anchor import (
+    AnnualEstimate,
+    Cadence,
+    QuarterEstimate,
+    TrailingFigures,
+    ntm_quarters,
+    ntm_window,
+)
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Deciles, FiscalYear
 from fairband.engine.roic import CapitalYear
@@ -43,7 +49,7 @@ from fairband.policy.inflation import load_inflation_table
 from fairband.policy.tax import LATEST_YEAR_METHOD, TaxTable, load_tax_table
 from fairband.refresh.fetch import fetch_company
 from fairband.refresh.inputs import build_inputs, series_for
-from fairband.refresh.inputs_statements import newest_debt_and_cash
+from fairband.refresh.inputs_statements import cadence_of, newest_debt_and_cash, statements_for
 from fairband.refresh.peers import peer_figures
 from fairband.refresh.rates import FX_QUOTE, fetch_rates
 from fairband.store.observations import insert_observations
@@ -205,11 +211,19 @@ def test_trailing_from_four_consecutive_quarters(conn_with_company: sqlite3.Conn
     assert "trailing-on-fiscal-year" not in codes(inputs)
 
 
-def test_street_eps_needs_each_trailing_quarter(store: Store) -> None:
-    """No street actual for the quarter ending 2026-03-31."""
-    actuals = [row for row in earnings() if row["periodEnding"] != "2026-03-31"]
-    inputs = build(store(**{**bodies(), "earnings": actuals}))
-    assert inputs.trailing is not None and inputs.trailing.quarters == 4
+@pytest.mark.parametrize(
+    ("cadence", "periods", "missing"),
+    [("quarterly", 4, "2026-03-31"), ("half-yearly", 2, "2025-12-31")],
+)
+def test_street_eps_needs_each_trailing_period(
+    store: Store, cadence: Cadence, periods: int, missing: str
+) -> None:
+    """No street actual at one trailing period end, a quarter's or a half-year's: none is read."""
+    payloads = bodies(cadence=cadence)
+    actuals = [row for row in payloads["earnings"] if row["periodEnding"] != missing]
+    inputs = build(store(**{**payloads, "earnings": actuals}))
+    assert inputs.trailing is not None and inputs.trailing.quarters == periods
+    assert inputs.trailing.cadence == cadence
     assert inputs.street_ttm_eps is None and "street_ttm_eps" not in inputs.provenance
 
 
@@ -278,6 +292,138 @@ def test_trailing_falls_back_when_quarters_not_consecutive(
     assert inputs.street_ttm_eps is None  # the SBC basis stays unknown
     assert "trailing-on-fiscal-year" in codes(inputs)
     assert inputs.shares_diluted == 104 * M
+
+
+ON_FISCAL_YEAR = (
+    "The statement periods on file are neither four consecutive quarters nor two consecutive "
+    "half-years, so the trailing figures are fiscal 2025's."
+)
+
+
+def test_quarterly_rows_read_as_today(conn_with_company: sqlite3.Connection) -> None:
+    """Rows 91 or 92 days apart (spec 2026-11-10 11.4): the quarterly cadence, four quarters."""
+    inputs = build(conn_with_company)
+    assert inputs.trailing is not None
+    assert (inputs.trailing.cadence, inputs.trailing.quarters) == ("quarterly", 4)
+
+
+def test_half_year_rows_give_a_two_period_trailing_sum(store: Store) -> None:
+    """Spec 2026-11-10 11.4: statement rows ending 2025-06-30, 2025-12-31 and 2026-06-30 (184 and
+    181 days apart) are half-years. The trailing figures sum the last two, joined to their cash
+    flows by period end; the trailing periods and the street actuals are the two, and the street
+    trailing EPS is the two actuals' sum."""
+    conn = store(**bodies(cadence="half-yearly"))
+    inputs = build(conn)
+    assert inputs.trailing == TrailingFigures(
+        period_end=date(2026, 6, 30),
+        quarters=2,
+        on_fiscal_year=False,
+        revenue=(320 + 330) * M,
+        operating_income=(64 + 66) * M,
+        net_income=(47 + 48) * M,
+        eps_diluted=pytest.approx(0.47 + 0.48),
+        sbc=None,  # the older half-year has none
+        cfo=(72 + 73) * M,
+        capex=-(22 + 23) * M,
+        dividends=-20 * M,
+        buybacks=-30 * M,
+        equity_issued=2 * M,
+        interest_expense=8 * M,  # two half-years of -$4 m, summed by size
+        depreciation=(17 + 18) * M,
+        cadence="half-yearly",
+    )
+    stated = statements_for(conn, "ACME", "US", load_tax_table(), TODAY)
+    assert [p.end for p in stated.trailing_periods] == [date(2025, 12, 31), date(2026, 6, 30)]
+    assert stated.trailing_quarter_ends == (date(2025, 12, 31), date(2026, 6, 30))
+    assert inputs.street_ttm_eps == pytest.approx(0.52 + 0.53)
+    assert inputs.shares_diluted == 103 * M  # the newest half-year's
+    assert "trailing-on-fiscal-year" not in codes(inputs)
+
+
+def test_two_half_years_not_consecutive_fall_back(store: Store) -> None:
+    """Rows ending 2025-06-30 and 2026-06-30 only, a year apart, are neither four consecutive
+    quarters nor two consecutive half-years: the trailing figures are fiscal 2025's, flagged, on
+    the quarterly cadence the fallback carries, with no trailing period ends and no street EPS."""
+    conn = store(**bodies(cadence="half-yearly", quarters=(date(2025, 6, 30), date(2026, 6, 30))))
+    inputs = build(conn)
+    t = inputs.trailing
+    assert t is not None and t.on_fiscal_year
+    assert (t.period_end, t.quarters, t.cadence) == (date(2025, 12, 31), 1, "quarterly")
+    assert statements_for(conn, "ACME", "US", load_tax_table(), TODAY).trailing_quarter_ends == ()
+    assert inputs.street_ttm_eps is None
+    [note] = [f for f in inputs.input_flags if f.code == "trailing-on-fiscal-year"]
+    assert note.sentence == ON_FISCAL_YEAR
+
+
+def test_the_quarterly_fallback_sentence_names_both_cadences(
+    conn_with_gap: sqlite3.Connection,
+) -> None:
+    """Four quarters that are not consecutive fall back with the same sentence."""
+    [note] = [f for f in build(conn_with_gap).input_flags if f.code == "trailing-on-fiscal-year"]
+    assert note.sentence == ON_FISCAL_YEAR
+
+
+def test_a_half_year_in_another_currency_sends_the_trailing_figures_to_the_fiscal_year(
+    store: Store,
+) -> None:
+    """Spec 2026-11-10 7 on half-years: the fiscal years report in CAD and the newest half-year in
+    USD, so the two are not summed; the note names the half-year."""
+    payloads = bodies(currency="CAD", cadence="half-yearly")
+    rows = payloads["income-quarter"]
+    rows[3] = {**rows[3], "reportedCurrency": "USD"}
+    inputs = build(store(**payloads))
+    t = inputs.trailing
+    assert t is not None and t.on_fiscal_year
+    assert (t.period_end, t.cadence) == (date(2025, 12, 31), "quarterly")
+    assert inputs.street_ttm_eps is None
+    [note] = [f for f in inputs.input_flags if f.code == "trailing-on-fiscal-year"]
+    assert note.sentence == (
+        "The half-year to 2026-06-30 is in USD while the fiscal years are in CAD, so the "
+        "trailing figures are fiscal 2025's."
+    )
+
+
+def test_a_half_yearly_reporter_with_quarterly_consensus_reads_four_quarters(
+    store: Store,
+) -> None:
+    """ABVX's shape (spec 2026-11-10 8): half-year statements and quarterly consensus rows. The
+    trailing figures are the two half-years, the street actuals those at their two ends, and the
+    NTM window the four quarters its consensus gives, on the quarterly cadence."""
+    ends = ("2026-09-30", "2026-12-31", "2027-03-31", "2027-06-30")
+    consensus = [{"symbol": "ACME", "date": d, "epsAvg": 0.25, "revenueAvg": 170 * M} for d in ends]
+    inputs = build(store(**{**bodies(cadence="half-yearly"), "estimates-quarter": consensus}))
+    t = inputs.trailing
+    assert t is not None and (t.cadence, t.quarters) == ("half-yearly", 2)
+    assert inputs.street_ttm_eps == pytest.approx(0.52 + 0.53)
+    window = ntm_window(inputs.quarter_estimates, t.period_end, t.cadence)
+    assert window is not None
+    periods, cadence = window
+    assert cadence == "quarterly"
+    assert [p.period_end.isoformat() for p in periods] == list(ends)
+
+
+@pytest.mark.parametrize(
+    ("days", "cadence"),
+    [
+        (79, None),
+        (80, "quarterly"),
+        (91, "quarterly"),
+        (100, "quarterly"),
+        (101, None),
+        (169, None),
+        (170, "half-yearly"),
+        (181, "half-yearly"),
+        (195, "half-yearly"),
+        (196, None),
+        (365, None),
+    ],
+)
+def test_the_cadence_reads_the_two_newest_period_ends(days: int, cadence: Cadence | None) -> None:
+    """Quarterly when the two newest rows end 80 to 100 days apart, half-yearly when 170 to 195,
+    else none; an older gap does not count, and one row has no cadence."""
+    newest = date(2026, 6, 30)
+    assert cadence_of([date(2024, 1, 1), newest - timedelta(days=days), newest]) == cadence
+    assert cadence_of([newest]) is None and cadence_of([]) is None
 
 
 def test_interest_expense_is_summed_as_its_size(store: Store) -> None:

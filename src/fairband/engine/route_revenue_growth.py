@@ -2,10 +2,11 @@
 spec 5), one route for both phases, on the core of ``revenue_growth``.
 
 What it reads. Year 0 is trailing revenue; year 1 is the NTM consensus revenue, the sum of the
-revenue means of the four quarters the earnings anchor picks (``anchor.ntm_quarters``). Years 2
-and 3 grow at the annual consensus revenue steps from the base year (``anchor.base_fiscal_year``),
-a mean of zero with no analyst count being no estimate (``anchor.consensus_value``); a missing step
-holds the rate of the year before, and a present step landing on a year with fewer than
+revenue means of the NTM window the earnings anchor reads (``anchor.ntm_window``: four quarters,
+or two half-years for a half-yearly reporter, spec 2026-11-10 8). Years 2 and 3 grow at the annual
+consensus revenue steps from the base year (``anchor.base_fiscal_year``), a mean of zero with no
+analyst count being no estimate (``anchor.consensus_value``); a missing step holds the rate of
+the year before, and a present step landing on a year with fewer than
 ``analyst_min`` revenue analysts, or no count, is thin. Years 4 to 10 hold and fade as
 ``revenue_growth.growth_rates`` says, the held rate g_3 as resolved capped at the 90th-percentile
 five-year sales growth of the sales class (``anchor.sales_class`` on trailing revenue, the class's
@@ -26,7 +27,7 @@ discounted at r in every year.
 
 Refusals, in this order: no trailing revenue (missing or not positive); no trailing operating
 income, without which there is no trailing margin to start from; no statutory tax rate; an
-incomplete NTM consensus (no four consecutive quarters, or one without a revenue mean); no
+incomplete NTM consensus (no window, or a period without a revenue mean); no
 positive consensus revenue (an NTM revenue at or below zero); consensus revenue that falls to zero
 or below within the path (g_2 or g_3 as resolved at or below −100%), with the path's flags; no
 target margin, "no target margin: <n> mature peers", n counting the peers with a margin on enough years;
@@ -85,8 +86,8 @@ routes are not raised: this route's charge does not read the runway return.
 run-off (spec 2026-11-06 6.1); this route's path ends its consensus at year 3.
 
 Overrides (``method.md`` 14) through ``route_steps.chosen``. ``revenue.ntm``, the NTM revenue from
-a clear guidance, replaces the figure the four NTM quarters give as year 1 and the rebuild key,
-before the positive check; without the quarters, or with one lacking its revenue mean, the row is
+a clear guidance, replaces the figure the NTM window gives as year 1 and the rebuild key, before
+the positive check; without the window, or with a period lacking its revenue mean, the row is
 refused as before, and the ``ntm_revenue`` data entry and the cross-check read the consensus as
 found. ``path.step_2`` and ``path.step_3`` replace the consensus steps before the cap, the fall
 check and the path's flags: a replaced step is never held, and ``few-analysts`` does not name it.
@@ -125,7 +126,7 @@ from fairband.engine.anchor import (
     growth_step,
     moat_class,
     ntm_anchor,
-    ntm_quarters,
+    ntm_window,
     sales_class,
 )
 from fairband.engine.flags import value_spread_flag
@@ -232,14 +233,15 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     tax = i.tax_rate_latest
     if tax is None:
         return Refused("no statutory tax rate")
-    quarters = ntm_quarters(i.quarter_estimates, t.period_end)
-    found = ntm_revenue(quarters)
-    if quarters is None or found is None:
+    window = ntm_window(i.quarter_estimates, t.period_end, t.cadence)
+    found = ntm_revenue(None if window is None else window[0])
+    if window is None or found is None:
         return Refused("incomplete NTM consensus")
+    periods, cadence = window
     ntm = chosen(c, "revenue.ntm", found)
     if ntm <= 0:
         return Refused("no positive consensus revenue")
-    base_year = base_fiscal_year(quarters)
+    base_year = base_fiscal_year(periods)
     sales = sales_class(t.revenue / i.fx_rate / 1e6, policy)  # the class bounds are USD
     path, analysts, path_flags = revenue_path_for(
         t.revenue, ntm, i.annual_estimates, base_year, sales, policy, judged=judged_steps(c)
@@ -294,7 +296,9 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     new_capital = return_on_new_capital(target.value, tax, s2c.value)
     peer_roic = peer_roic_median(i.peers)
     growth_route = growth_cross_check(c, moat, roic)
-    anchor = ntm_anchor(quarters, t, i.street_ttm_eps, c.shares, tax, c.price, policy)
+    anchor = ntm_anchor(
+        periods, t, i.street_ttm_eps, c.shares, tax, c.price, policy, cadence=cadence
+    )
     gap = nri_gap(i)
     e = eps(t, gap, anchor.ntm_eps if anchor.refusal is None else None)
     (g2, g3), held = resolved_steps(path)
@@ -442,13 +446,13 @@ def implied_margin_at_price(im: dict[str, Any], price: float, policy: Policy) ->
     return {"implied_margin": implied}
 
 
-def ntm_revenue(quarters: tuple[QuarterEstimate, ...] | None) -> float | None:
-    """The sum of the NTM quarters' revenue means; ``None`` without the quarters or with one that
-    lacks its mean."""
-    if quarters is None:
+def ntm_revenue(periods: tuple[QuarterEstimate, ...] | None) -> float | None:
+    """The sum of the NTM window's revenue means; ``None`` without the window or with a period
+    that lacks its mean."""
+    if periods is None:
         return None
-    means = [q.revenue for q in quarters if q.revenue is not None]
-    return sum(means) if len(means) == len(quarters) else None
+    means = [q.revenue for q in periods if q.revenue is not None]
+    return sum(means) if len(means) == len(periods) else None
 
 
 def revenue_path_for(

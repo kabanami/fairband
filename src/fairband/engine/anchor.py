@@ -1,9 +1,13 @@
 """The Mature Growth route's consensus inputs: the NTM anchor, the path and the belief (spec 6.6).
 
-Year 1 is the NTM anchor: the sum of the four consensus quarters after the last reported quarter,
-picked by period end and never by row order, and only when they are consecutive quarters; a row
-ending within ``SAME_PERIOD_DAYS`` after the last reported quarter is that quarter under the
-vendor's second fiscal calendar, not the first NTM quarter. The SBC basis test of ``mech/1.2``:
+Year 1 is the NTM anchor: the sum of the consensus periods of the NTM window after the last
+reported period, picked by period end and never by row order (``ntm_window``). The window is four
+consecutive quarters for a company that reports quarterly; for one that reports half-yearly
+(spec 2026-11-10 8) it is two consecutive half-years, else four consecutive quarters, the window
+its consensus cadence gives. The cadence is the trailing figures' (``TrailingFigures.cadence``),
+read from the spacing of the statement periods; a row ending within ``SAME_PERIOD_DAYS`` after
+the last reported period is that period under the vendor's second fiscal calendar, not the first
+of the window. The SBC basis test of ``mech/1.2``:
 when the street's trailing EPS sits above the GAAP trailing EPS by at least ``sbc_detect`` times
 the after-tax SBC per share, the consensus excludes stock compensation, and the anchor subtracts
 the after-tax SBC per share held at its trailing share of revenue (scaled by the NTM consensus
@@ -11,10 +15,10 @@ revenue over the trailing revenue, or unscaled when either is missing). A missin
 basis unknown; the consensus then stands as it is and is flagged.
 
 Years 2 and 3 are the next two steps of the annual consensus from the base year, the fiscal year
-that holds most of the NTM quarters (a tie takes the later). The steps read net income when the base
-year and the next two all have a positive consensus, else EPS, flagged. A step the consensus does
-not reach is ``None`` and takes the belief. Both earnings series are read and kept, and
-``step_series_flag`` notes a step whose rate on net income and rate on EPS lie more than
+that holds most of the window's periods (a tie takes the later). The steps read net income when
+the base year and the next two all have a positive consensus, else EPS, flagged. A step the
+consensus does not reach is ``None`` and takes the belief. Both earnings series are read and
+kept, and ``step_series_flag`` notes a step whose rate on net income and rate on EPS lie more than
 ``step_series_gap_max`` apart, with the diluted count the route holds (spec 2026-11-09 section 9).
 The revenue steps on the same years are kept as found, for the charge. The belief for
 years 4 to N is the Base Rate Book median for the sales class plus the inflation addition; the moat
@@ -32,11 +36,22 @@ from fairband.engine.types import Flag
 from fairband.policy import BaseRateClass, Moat, Policy
 
 SbcBasis = Literal["excludes-sbc", "includes-sbc", "unknown"]
+# How often a company reports, read from the spacing of its statement periods
+# (``inputs_statements.cadence_of``): the trailing figures and the NTM window sum a year of them.
+Cadence = Literal["quarterly", "half-yearly"]
 
 # Days from one quarter end to the next: 89 to 92 on calendar quarters, 91 or 98 on 52/53-week
 # fiscal years.
-_QUARTER_DAYS_MIN, _QUARTER_DAYS_MAX = 80, 100
-_NTM_QUARTERS = 4
+QUARTER_DAYS_MIN, QUARTER_DAYS_MAX = 80, 100
+# Days from one half-year end to the next: 178 to 184 on file, with 52/53-week years in reach
+# (spec 2026-11-10 8).
+HALF_DAYS_MIN, HALF_DAYS_MAX = 170, 195
+_DAYS_APART: dict[Cadence, tuple[int, int]] = {
+    "quarterly": (QUARTER_DAYS_MIN, QUARTER_DAYS_MAX),
+    "half-yearly": (HALF_DAYS_MIN, HALF_DAYS_MAX),
+}
+# The periods in a year under each cadence: the trailing figures and the NTM window sum as many.
+PERIODS_PER_YEAR: dict[Cadence, int] = {"quarterly": 4, "half-yearly": 2}
 # Period ends at most this many days apart are one period: FMP reports some companies under two
 # fiscal calendars, whose period ends for one quarter or year lie a day or a few days apart (AAPL).
 SAME_PERIOD_DAYS = 7
@@ -88,10 +103,12 @@ class AnnualEstimate:
 
 @dataclass(frozen=True)
 class TrailingFigures:
-    """The trailing twelve months: the last four quarters summed, or the last fiscal year when
-    ``on_fiscal_year``; a figure is ``None`` when any of the periods lacks it.
-    ``interest_expense`` sums each period's interest expense by its size (FMP signs it either way)
-    and ``depreciation`` the cash flow's depreciation and amortization as signed."""
+    """The trailing twelve months: the last four quarters summed, or the last two half-years for
+    a company whose ``cadence`` is half-yearly, ``quarters`` counting the periods summed; or the
+    last fiscal year when ``on_fiscal_year``, whose cadence is ``quarterly``. A figure is ``None``
+    when any of the periods lacks it. ``interest_expense`` sums each period's interest expense by
+    its size (FMP signs it either way) and ``depreciation`` the cash flow's depreciation and
+    amortization as signed."""
 
     period_end: date
     quarters: int
@@ -108,6 +125,7 @@ class TrailingFigures:
     equity_issued: float | None
     interest_expense: float | None = None
     depreciation: float | None = None
+    cadence: Cadence = "quarterly"
 
 
 @dataclass(frozen=True)
@@ -157,28 +175,57 @@ class Belief:
     median: float
 
 
-def ntm_quarters(
-    estimates: Sequence[QuarterEstimate], last_reported: date
+def ntm_window(
+    estimates: Sequence[QuarterEstimate], last_reported: date, cadence: Cadence
+) -> tuple[tuple[QuarterEstimate, ...], Cadence] | None:
+    """The NTM window every route reads after ``last_reported``, the trailing period end, and the
+    window's own cadence, which the anchor's count and the base year take. ``cadence`` is the
+    trailing figures': a quarterly reporter's window is four consecutive quarters only, never two
+    rows about half a year apart, which on a consensus with gaps would sum two quarters as a
+    year; a half-yearly reporter's is two consecutive half-years, else four consecutive quarters,
+    the window its consensus cadence gives (spec 2026-11-10 8: ABVX reports half-years, its
+    consensus quarters). ``None`` without one."""
+    tried: tuple[Cadence, ...] = (
+        ("half-yearly", "quarterly") if cadence == "half-yearly" else ("quarterly",)
+    )
+    for each in tried:
+        window = ntm_periods(estimates, last_reported, each)
+        if window is not None:
+            return window, each
+    return None
+
+
+def ntm_periods(
+    estimates: Sequence[QuarterEstimate], last_reported: date, cadence: Cadence
 ) -> tuple[QuarterEstimate, ...] | None:
-    """The first four quarters ending more than ``SAME_PERIOD_DAYS`` after ``last_reported``, by
-    period end, since a row ending sooner is the reported quarter under a second fiscal calendar;
-    ``None`` unless there are four and each ends 80 to 100 days after the one before."""
+    """The first ``PERIODS_PER_YEAR[cadence]`` consensus periods ending more than
+    ``SAME_PERIOD_DAYS`` after ``last_reported``, by period end, since a row ending sooner is the
+    reported period under a second fiscal calendar; ``None`` unless there are as many and each
+    ends the cadence's days after the one before (``consecutive_periods``)."""
+    count = PERIODS_PER_YEAR[cadence]
     after = sorted(
         (e for e in estimates if (e.period_end - last_reported).days > SAME_PERIOD_DAYS),
         key=lambda e: e.period_end,
     )
-    window = after[:_NTM_QUARTERS]
-    if len(window) < _NTM_QUARTERS or not consecutive_quarters([e.period_end for e in window]):
+    window = after[:count]
+    if len(window) < count or not consecutive_periods([e.period_end for e in window], cadence):
         return None
     return tuple(window)
 
 
-def consecutive_quarters(ends: Sequence[date]) -> bool:
-    """Each period end falls 80 to 100 days after the one before."""
-    return all(
-        _QUARTER_DAYS_MIN <= (later - earlier).days <= _QUARTER_DAYS_MAX
-        for earlier, later in pairwise(ends)
-    )
+def ntm_quarters(
+    estimates: Sequence[QuarterEstimate], last_reported: date
+) -> tuple[QuarterEstimate, ...] | None:
+    """The four consecutive quarters after ``last_reported`` (``ntm_periods`` on the quarterly
+    cadence)."""
+    return ntm_periods(estimates, last_reported, "quarterly")
+
+
+def consecutive_periods(ends: Sequence[date], cadence: Cadence) -> bool:
+    """Each period end falls 80 to 100 days after the one before on the quarterly cadence, 170 to
+    195 on the half-yearly one."""
+    low, high = _DAYS_APART[cadence]
+    return all(low <= (later - earlier).days <= high for earlier, later in pairwise(ends))
 
 
 def sbc_basis(
@@ -196,7 +243,7 @@ def sbc_basis(
 
 
 def ntm_anchor(
-    quarters: Sequence[QuarterEstimate],
+    periods: Sequence[QuarterEstimate],
     trailing: TrailingFigures,
     street_ttm_eps: float | None,
     shares: float,
@@ -204,21 +251,23 @@ def ntm_anchor(
     price: float,
     policy: Policy,
     *,
+    cadence: Cadence = "quarterly",
     nri_correction: float | None = None,
     cycle_gap: float | None = None,
     guided_eps: float | None = None,
 ) -> Anchor:
-    """The NTM EPS with stock compensation as a cost and the NTM net income on ``shares``. The
-    basis test reads trailing GAAP EPS as reported; with ``nri_correction``, an agent's
-    non-recurring gap less the gap found (``method.md`` 14), GAAP EPS less that correction, so a
-    gap overridden at the figure found leaves the test as it was. With ``guided_eps``, an agent's
-    NTM EPS from a clear guidance, that figure stands in for the consensus less the SBC
-    adjustment, the four quarters still required; with ``cycle_gap``, an agent's correction to
-    mid-cycle earnings a share, the NTM EPS is then taken less it, and "no positive forward
-    anchor" reads the figure so set and lowered. The unit-error check reads the consensus as
-    found, a check on the vendor's units (on a positive figure: a trough lifted by a negative gap
-    has no forward P/E to check), the raw sum and the adjustment are the consensus's, and the
-    basis test reads neither override."""
+    """The NTM EPS with stock compensation as a cost and the NTM net income on ``shares``, on the
+    window's ``periods``: ``PERIODS_PER_YEAR[cadence]`` of them, the window's cadence, each with
+    an EPS mean. The basis test reads trailing GAAP EPS as reported; with ``nri_correction``, an
+    agent's non-recurring gap less the gap found (``method.md`` 14), GAAP EPS less that
+    correction, so a gap overridden at the figure found leaves the test as it was. With
+    ``guided_eps``, an agent's NTM EPS from a clear guidance, that figure stands in for the
+    consensus less the SBC adjustment, the window's periods still required; with ``cycle_gap``,
+    an agent's correction to mid-cycle earnings a share, the NTM EPS is then taken less it, and
+    "no positive forward anchor" reads the figure so set and lowered. The unit-error check reads
+    the consensus as found, a check on the vendor's units (on a positive figure: a trough lifted
+    by a negative gap has no forward P/E to check), the raw sum and the adjustment are the
+    consensus's, and the basis test reads neither override."""
     sbc_per_share = None if trailing.sbc is None else trailing.sbc * (1 - tax_rate) / shares
     gaap = trailing.eps_diluted
     if gaap is not None and nri_correction is not None:
@@ -226,13 +275,14 @@ def ntm_anchor(
     basis = sbc_basis(street_ttm_eps, gaap, sbc_per_share, policy.sbc_detect)
     flags = (_SBC_UNKNOWN,) if basis == "unknown" else ()
 
-    eps = [x.eps for x in quarters if x.eps is not None]
-    if len(quarters) != _NTM_QUARTERS or len(eps) != _NTM_QUARTERS:
+    count = PERIODS_PER_YEAR[cadence]
+    eps = [x.eps for x in periods if x.eps is not None]
+    if len(periods) != count or len(eps) != count:
         return Anchor(0.0, 0.0, 0.0, 0.0, basis, flags, "incomplete NTM consensus")
     raw = sum(eps)
     adjustment = 0.0
     if basis == "excludes-sbc" and sbc_per_share is not None:
-        adjustment = sbc_per_share * _revenue_scale(quarters, trailing.revenue)
+        adjustment = sbc_per_share * _revenue_scale(periods, trailing.revenue)
     found = raw - adjustment
     anchor = found if guided_eps is None else guided_eps
     ntm_eps = anchor if cycle_gap is None else anchor - cycle_gap
@@ -245,18 +295,20 @@ def ntm_anchor(
     return Anchor(raw, adjustment, ntm_eps, ntm_eps * shares, basis, flags, refusal)
 
 
-def base_fiscal_year(quarters: Sequence[QuarterEstimate]) -> int:
-    """The fiscal year that holds most of the quarters; a tie takes the later year."""
-    counts = Counter(x.fiscal_year for x in quarters)
+def base_fiscal_year(periods: Sequence[QuarterEstimate]) -> int:
+    """The fiscal year that holds most of the window's periods; a tie takes the later year."""
+    counts = Counter(x.fiscal_year for x in periods)
     return max(counts, key=lambda year: (counts[year], year))
 
 
-def base_year(estimates: Sequence[QuarterEstimate], last_reported: date) -> int | None:
+def base_year(
+    estimates: Sequence[QuarterEstimate], last_reported: date, cadence: Cadence = "quarterly"
+) -> int | None:
     """The base year as every route that reads one finds it: the fiscal year that holds most of
-    the four quarters after ``last_reported`` (``ntm_quarters``, ``base_fiscal_year``); ``None``
-    without four consecutive ones."""
-    quarters = ntm_quarters(estimates, last_reported)
-    return None if quarters is None else base_fiscal_year(quarters)
+    the NTM window after ``last_reported`` on the trailing ``cadence`` (``ntm_window``,
+    ``base_fiscal_year``); ``None`` without a window."""
+    window = ntm_window(estimates, last_reported, cadence)
+    return None if window is None else base_fiscal_year(window[0])
 
 
 def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy) -> Path:

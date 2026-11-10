@@ -128,6 +128,31 @@ def with_ntm_revenue(i: CompanyInputs, revenue: float) -> CompanyInputs:
     return replace(i, quarter_estimates=quarters)
 
 
+def half_yearly(i: CompanyInputs) -> CompanyInputs:
+    """``i`` reporting half-yearly (spec 2026-11-10 8): its trailing figures the same sums on the
+    half-year cadence, two periods, and its four NTM quarters as two consensus half-years, each
+    the second of its two quarters with the two quarters' means summed."""
+    assert i.trailing is not None and len(i.quarter_estimates) == 4
+    q = i.quarter_estimates
+    halves = (_half_year(q[0], q[1], "H1"), _half_year(q[2], q[3], "H2"))
+    trailing = replace(i.trailing, quarters=2, cadence="half-yearly")
+    return replace(i, trailing=trailing, quarter_estimates=halves)
+
+
+def _half_year(first: QuarterEstimate, second: QuarterEstimate, label: str) -> QuarterEstimate:
+    return replace(
+        second,
+        fiscal_period=label,
+        eps=_plus(first.eps, second.eps),
+        revenue=_plus(first.revenue, second.revenue),
+        net_income=_plus(first.net_income, second.net_income),
+    )
+
+
+def _plus(a: float | None, b: float | None) -> float | None:
+    return None if a is None or b is None else a + b
+
+
 def universe_deciles() -> Deciles:
     """The classifier tests' universe: 8% revenue growth is decile 6 ("Moderate"), 2% is decile 4
     ("Low"); a margin slope of 1.5 points a year is decile 9 ("Rising"), -1.5 points decile 2

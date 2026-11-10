@@ -282,6 +282,21 @@ def test_the_foreign_filers_section_reads(client: TestClient) -> None:
     assert 'id="src-imf"' in sources and 'id="src-ias29"' in sources
 
 
+def test_the_page_names_the_half_year_window() -> None:
+    """Spec 2026-11-10 8 (plan 2): the Mature Growth steps say year 1 covers the next four
+    quarters, or two half-years for a company that reports twice a year, and the
+    ``trailing-on-fiscal-year`` note names both."""
+    flat = re.sub(r"\s+", " ", _static_file("methodology.html"))
+    mature = _section(flat, "mature-growth")
+    steps = mature[mature.index(">The steps</h3>") :]
+    covers = "It covers the next four quarters (two half-years for a company that reports twice a"
+    assert covers in steps[: steps.index("</ol>")]
+    flags = _section(flat, "flags")
+    note = flags[flags.index(">trailing-on-fiscal-year</code>") :]
+    names = "The last four quarters, or two half-years, do not follow each other"
+    assert names in note[: note.index("</li>")]
+
+
 def test_the_agents_section_reads(client: TestClient) -> None:
     """Spec 2026-11-06 Tier 2, 19, as amended: the section "Agents and reviews", before the
     sources and in the contents, says in plain words what an override is and that the engine

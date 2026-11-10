@@ -96,6 +96,13 @@ GLOSSARY: dict[str, str] = {
         "inflation table; it restates a nominal USD rate in the currency as (1 + rate) × (1 + d) "
         "− 1 (section 7)"
     ),
+    "Cadence": (
+        "How often a company reports, read from its two newest quarterly statement rows: "
+        "quarterly when they end 80 to 100 days apart, half-yearly when 170 to 195. The trailing "
+        "figures sum four quarters or two half-years, and the NTM window reads the next four "
+        "quarters or two half-years; the fiscal-year fallback reads as a quarterly reporter "
+        "(4.2, 5.2)"
+    ),
     "Belief": (
         "The growth rate for years 4 to N before the fade: the base-rate median plus 2 points"
     ),
