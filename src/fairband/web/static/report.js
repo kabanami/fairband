@@ -156,8 +156,11 @@
 
   /* ----------------------------------------------------------------- the head */
 
-  /* The ticker, the name and the phase badge; then the one headline figure, the page's only
-     figure-lg (CompanyReport's one hero), and the price beside it in figure. */
+  /* The ticker, the name and the phase badge, and under them, for a company in another currency
+     or an ADR, what its figures are in (FairbandPage.currencyLine, spec 2026-11-10 6.2 and 7.4:
+     "Reports in TWD; one ADS is five ordinary shares; every per-share figure here is per ADS;
+     valued at TWD 32.96 per USD"); then the one headline figure, the page's only figure-lg
+     (CompanyReport's one hero), and the price beside it in figure, both in US dollars. */
   function head(d) {
     var r = d.result;
     var phase = P.PHASE_NUMBER[r.phase.phase];
@@ -167,7 +170,9 @@
         h('h2', { className: 'ticker app-report__ticker' }, r.symbol),
         d.company && d.company.name
           ? h('p', { className: 'title app-report__name' }, d.company.name) : null,
-        phase ? h(F.PhaseBadge, { phase: phase }) : null),
+        phase ? h(F.PhaseBadge, { phase: phase }) : null,
+        P.currencyLine(d, true) ? h('p', { className: 'caption app-muted app-report__currency' },
+          P.currencyLine(d, true)) : null),
       h('div', { className: 'app-report__figures' },
         value ? h(F.ValueCell, {
           value: value.value, basis: value.basis, emphasis: 'strong', align: 'left'
@@ -333,7 +338,8 @@
       part('Bridge', bridge(a)),
       part('Overrides', a.overrides.length ? overrides(a) : none('None.')),
       part('Secondary valuation', secondary(a)),
-      part('Guidance on file', a.guidance.length ? P.guidanceTable(a.guidance) : none('None.')),
+      part('Guidance on file', a.guidance.length
+        ? P.guidanceTable(a.guidance, a.snapshot.currency) : none('None.')),
       part('Checks that ran', h('ul', { className: 'app-list' }, a.checks.map(function (c) {
         return h('li', { key: c.check },
           h('span', { className: 'label' }, c.check),
@@ -430,62 +436,70 @@
     });
   }
 
-  /* The secondary valuation (spec 11): its form and value a share as Details lists them, the walk
-     to equity, the agent's reason, its drivers in words or its parts, then its projection year by
-     year. Without one, the server's sentence why, as it arrives, or none. */
+  /* The secondary valuation (spec 11): its form and value a share as Details lists them; for a
+     company in another currency, the rate it ran at (spec 2026-11-10 7.6), its totals being in the
+     currency and its value a share in US dollars; the walk to equity, the agent's reason, its
+     drivers in words or its parts, then its projection year by year. Without one, the server's
+     sentence why, as it arrives, or none. */
   function secondary(a) {
     var s = a.secondary;
     if (!s) return none(a.noSecondary || 'None.');
+    var code = s.currency;
     return h(React.Fragment, null,
-      P.pairs(P.secondaryRows(s).concat([
-        ['Firm value', P.whole(s.firmValue), true],
-        ['Less debt', P.whole(s.debt), true],
-        ['Plus cash', P.whole(s.cash), true],
-        ['Equity', P.whole(s.equity), true],
-        ['Shares', P.plain(s.shares), true],
-        ['Debt and cash from', s.debtSource + ', ' + s.cashSource, false]
-      ])),
+      P.pairs(P.secondaryRows(s).concat(
+        code !== 'USD' ? [['Rate', code + ' ' + P.rate(s.fxRate) + ' per USD', true]] : [],
+        [
+          ['Firm value', P.whole(s.firmValue, code), true],
+          ['Less debt', P.whole(s.debt, code), true],
+          ['Plus cash', P.whole(s.cash, code), true],
+          ['Equity', P.whole(s.equity, code), true],
+          ['Shares', P.plain(s.shares), true],
+          ['Debt and cash from', s.debtSource + ', ' + s.cashSource, false]
+        ])),
       s.reason ? h('p', { className: 'body' }, s.reason) : null,
-      P.secondaryPath(s),
-      s.form === 'drivers' ? projection(s) : partsYears(s));
+      P.secondaryPath(s, code),
+      s.form === 'drivers' ? projection(s, code) : partsYears(s, code));
   }
 
   /* The drivers form's projection: a row a year, the revenue, EBIT, NOPAT, reinvestment, free cash
-     flow and its present value, totals in whole dollars; then the terminal. */
-  function projection(s) {
+     flow and its present value, totals in whole units of `code`; then the terminal. */
+  function projection(s, code) {
     var p = s.projection;
+    var total = function (v) { return P.whole(v, code); };
     if (!p) return null;
     return h(React.Fragment, null,
       P.figuresTable([
-        ['Revenue', column(p.years, 'revenue'), P.whole],
-        ['EBIT', column(p.years, 'ebit'), P.whole],
-        ['NOPAT', column(p.years, 'nopat'), P.whole],
-        ['Reinvestment', column(p.years, 'reinvestment'), P.whole],
-        ['FCFF', column(p.years, 'fcff'), P.whole],
-        ['PV', column(p.years, 'pv'), P.whole]
+        ['Revenue', column(p.years, 'revenue'), total],
+        ['EBIT', column(p.years, 'ebit'), total],
+        ['NOPAT', column(p.years, 'nopat'), total],
+        ['Reinvestment', column(p.years, 'reinvestment'), total],
+        ['FCFF', column(p.years, 'fcff'), total],
+        ['PV', column(p.years, 'pv'), total]
       ]),
       P.pairs([
-        ['Trailing revenue', P.whole(p.trailingRevenue), true],
+        ['Trailing revenue', total(p.trailingRevenue), true],
         ['Terminal return', F.formatPercent(p.terminalReturn), true],
-        ['Terminal free cash flow', P.whole(p.terminalFcff), true],
-        ['Terminal value at year ' + s.drivers.years, P.whole(p.terminal), true],
-        ['Its present value', P.whole(p.terminalPv), true]
+        ['Terminal free cash flow', total(p.terminalFcff), true],
+        ['Terminal value at year ' + s.drivers.years, total(p.terminal), true],
+        ['Its present value', total(p.terminalPv), true]
       ]));
   }
 
-  /* The parts form: each part's free cash flow and its present value a year, then its terminal. */
-  function partsYears(s) {
+  /* The parts form: each part's free cash flow and its present value a year, then its terminal,
+     totals in whole units of `code`. */
+  function partsYears(s, code) {
+    var total = function (v) { return P.whole(v, code); };
     return s.parts.map(function (p, i) {
       return h('div', { key: i, className: 'app-group' },
         h('h5', { className: 'label app-group__head' }, p.name),
         P.figuresTable([
-          ['FCFF', column(p.years, 'fcff'), P.whole],
-          ['PV', column(p.years, 'pv'), P.whole]
+          ['FCFF', column(p.years, 'fcff'), total],
+          ['PV', column(p.years, 'pv'), total]
         ]),
         P.pairs([
           ['Terminal growth', F.formatPercent(p.terminalGrowth), true],
-          ['Terminal value', P.whole(p.terminal), true],
-          ['Its present value', P.whole(p.terminalPv), true]
+          ['Terminal value', total(p.terminal), true],
+          ['Its present value', total(p.terminalPv), true]
         ]));
     });
   }

@@ -52,7 +52,7 @@ nothing.
 |---|---|---|
 | `snapshot:<id>/value`, `/price`, `/levels/<name>`, the name `buy`, `fair_low`, `fair_high` or `trim` | the snapshot's value a share, price and levels | per-share |
 | `snapshot:<id>/price_to_value` | price ÷ value | multiple |
-| `snapshot:<id>/inputs/<name>` | a tagged input, by its name in `company`'s inputs; a word input (the moat class) reads its word | the input's |
+| `snapshot:<id>/inputs/<name>` | a tagged input, by its name in `company`'s inputs; a word input (the moat class) reads its word. On a company in another currency, `fx_rate` is the exchange rate, units of the currency per US dollar, and `adr_ratio` on an ADR the ordinary shares one ADS stands for | the input's: currency for a code, per-share for `<code> a share`; none for `fx_rate`, multiple for `adr_ratio` |
 | `snapshot:<id>/intermediates/<path>` | an intermediate by its keys and list indexes, `belief/rate`; a list counts from 0. On Mature Growth and Mature Stable, the charge: `charge/return_by_year/<n>`, the return year n + 1 pays at, `charge/growth_by_year/<n>`, the growth year n + 1's reinvestment pays for (the next year's), and `charge/hold_years`, the years the runway return holds; `runway_return/one_year`, the newest year's marginal return, shown and never used by the charge. `outside_value_per_share`, the value outside the business, is written only under a `value.outside` override, so cite it from the review | none |
 | `snapshot:<id>/phase/<field>` | a field of the classifier's evidence: `phase`, `growth_3y`, `margin`, `growth_word`, `margin_direction` and the others | the field's |
 | `review:<id>/value`, `/price_to_value`, `/levels/<name>` | the review's value a share, price ÷ value and levels | per-share; multiple |
@@ -85,9 +85,9 @@ The cite is the stored value at the report's rounding, by the ref's unit:
 
 | Unit | Written to | Suffix | Example |
 |---|---|---|---|
-| currency (a total) | whole dollars, or a scale word at your own precision | `$` or none | `$391,035,000,000`, `$391.0 billion` |
+| currency (a total) | whole units, or a scale word at your own precision | `$` for US dollars, or none | `$391,035,000,000`, `$391.0 billion`; in TWD `3,809,054,300,000` after `TWD ` |
 | a share price: `snapshot:<id>/price`, `/inputs/price`, a `close:` | cents, always | `$` or none | `$234.70` |
-| per-share: a value, a level, an EPS | cents, or whole dollars | `$` or none | `$283`, `$6.42` |
+| per-share: a value, a level, an EPS | cents, or whole units | `$` for US dollars, or none | `$283`, `$6.42`; in TWD `12,807.36` after `TWD ` |
 | percent | one decimal of the fraction × 100 | `%` | `22.7%` |
 | multiple | two decimals | `x` or none | `1.18x` |
 | years | one decimal | `years` or none | `12.5 years` |
@@ -97,6 +97,14 @@ The cite is the stored value at the report's rounding, by the ref's unit:
 
 A change may carry a `+`, as a bridge line does: `+$28`, `+5.0%`. A difference of two percents may
 be written in points, `2.0 pp` or `2.0 percentage points`, compared as `2.0%` is.
+
+The currency. `$` for a figure in US dollars only: the price, the value a share, the levels, a
+close, a grid's or a reading's cells, and every figure of a company that reports in US dollars. A
+company in another currency (`company`'s `currency`) has its statements, consensus, inputs,
+guidance records, overrides and secondary valuation's totals in that currency. Cite such a figure
+with no `$`: put the code before the number in the plain part, `"TWD "` then
+`{"cite": "331.25", "ref": ...}`, or its sign for €, £ and ¥, `"€"` then the cite. The cite is the
+number alone, read in the ref's unit; a sign or a code alone in a plain part is no quantity.
 
 The number must lie within half a step of the stored value at that rounding. `22.7%` cites
 0.22702; `23%` does not. When in doubt, write exactly the decimals in the table: `22.7%` for
@@ -195,8 +203,9 @@ A number Fairband does not store (from a filing, a transcript you read elsewhere
 a report only as a finding. Record it with `finding_add(symbol, as_of, text, source, value, unit,
 period)`, then cite `finding:<id>`:
 
-- `value` in the unit: a total in dollars in full (`2100000000`), a percent as a fraction (`0.25`
-  for 25%), a per-share figure in dollars, a multiple, a count, a score or years;
+- `value` in the unit: a total in full (`2100000000`), a percent as a fraction (`0.25` for 25%), a
+  per-share figure, a multiple, a count, a score or years; money in the company's reporting
+  currency, as its statements are (dollars for a company that reports in them);
 - `period` as the fact's: `2025`, `2026-Q2` or `ttm`; the cite's period must match it;
 - `source` as `{kind, ref, note}`: where a reader finds the fact.
 

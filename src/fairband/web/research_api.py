@@ -11,7 +11,9 @@ it), each ``None`` without one:
   are (below), so a refused row's drawer can draw a valued review's band against today's price;
   ``mechanical`` the value the bridge starts from. Each bridge line is the stored step,
   ``{overrideId, tag, old, new, delta, refusal}``, with the input's label in a reader's words
-  (``overrides.LABELS``), its unit (``overrides.TAGS``) and the override's reason and writer.
+  (``overrides.LABELS``), its unit (``overrides.TAGS``) in the review's reporting currency
+  (``overrides.unit_in``: ``SEK a share`` for a money input of a row in SEK, spec 2026-11-10 7.3)
+  and the override's reason and writer.
 - ``secondary``: the newest secondary valuation when it counts, ``{id, form, valuePerShare,
   levels, priceToValue, designation, parts, drivers, createdAt, principal, actor}``: price ÷ value
   and its word at the latest snapshot's price on the effective policy's edges, as the snapshot's
@@ -43,7 +45,8 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
-from fairband.engine.overrides import LABELS, TAGS
+from fairband.engine.overrides import LABELS, TAGS, unit_in
+from fairband.engine.types import money_of
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
@@ -166,6 +169,7 @@ def _review(
     """The review, its designation at ``price``, the latest snapshot's."""
     levels = _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level)
     ratio, word = _standing(review.value, levels, price, edges)
+    currency = money_of(review.result)[1]
     return {
         "id": review.id,
         "value": review.value,
@@ -173,22 +177,26 @@ def _review(
         "priceToValue": ratio,
         "designation": word,
         "refusal": review.refusal,
-        "bridge": [_line(line, overrides.get(line["override_id"])) for line in review.bridge],
+        "bridge": [
+            _line(line, overrides.get(line["override_id"]), currency) for line in review.bridge
+        ],
         "overrideCount": len(review.override_ids),
         "mechanical": review.mechanical_value,
     }
 
 
-def _line(line: Mapping[str, Any], override: OverrideRow | None) -> dict[str, Any]:
-    """A bridge line with its input's label and unit and its override's reason and writer."""
+def _line(line: Mapping[str, Any], override: OverrideRow | None, currency: str) -> dict[str, Any]:
+    """A bridge line with its input's label, its unit in the review's ``currency`` and its
+    override's reason and writer."""
     tag = str(line["tag"])
+    unit = _UNITS.get(tag)
     return {
         "overrideId": line["override_id"],
         "tag": tag,
         "label": _LABELS.get(tag, tag),
         "old": line["old"],
         "new": line["new"],
-        "unit": _UNITS.get(tag),
+        "unit": None if unit is None else unit_in(unit, currency),
         "delta": line["delta"],
         "refusal": line["refusal"],
         "reason": None if override is None else override.reason,

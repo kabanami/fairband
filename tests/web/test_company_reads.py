@@ -7,24 +7,29 @@ consensus, four closes and a peers list naming HGCO and AAL; and the store gets 
 the engine's test universe, under which HGCO's statements classify as Mature Growth."""
 
 from contextlib import closing
+from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from refresh.synthetic import bodies, estimates_quarter
-from support.engine_companies import universe_deciles
+from support.engine_companies import fx_inputs, universe_deciles
 from support.payloads import store_payloads
-from support.web import CREATED, HEADER
+from support.web import CREATED, HEADER, TODAY, _company
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import FiscalYear
+from fairband.engine.route import value_company
 from fairband.policy import Policy
 from fairband.reports.refs import Resolver
 from fairband.reports.tables import LINES, TABLES
+from fairband.store.companies import insert_companies
 from fairband.store.db import connect
-from fairband.store.refreshes import save_deciles
+from fairband.store.refreshes import latest_refresh, save_deciles
+from fairband.store.snapshots import insert_snapshot
 
 M = 1_000_000
 ANNUAL = [  # FMP's order: the furthest year first
@@ -136,6 +141,45 @@ def test_the_detail_read_carries_the_brief(client: TestClient) -> None:
     profile has none."""
     assert _get(client, "/api/companies/AAPL")["brief"] == BRIEF
     assert _get(client, "/api/companies/AAL")["brief"] is None
+
+
+def test_the_detail_read_names_the_currency_the_rate_and_the_share_basis(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-10 7.4: the company read carries the reporting currency, the universe row's
+    ADR flag, the ADR ratio the share count was read by, and the rate with its date, from the
+    snapshot's result: FXCO, spec 11.2's company in SEK at 8.0 a dollar, listed as an ADR of five
+    ordinary shares; AAPL reports in USD as a direct listing, so it carries no ratio and no
+    rate; a company with no universe row has no ADR flag."""
+    adr = replace(fx_inputs(), is_adr=True, adr_ratio=5.0)
+    with closing(connect(db_path)) as conn:
+        refresh = latest_refresh(conn)
+        assert refresh is not None
+        row = _company("FXCO", refresh.id, "Foreign Filer Co", Decimal(5_000_000_000))
+        insert_companies(conn, [replace(row, currency="SEK", is_adr=True)])
+        insert_snapshot(conn, value_company(adr, universe_deciles(), policy, TODAY), refresh.id)
+        unlisted = replace(fx_inputs(), symbol="FXUN")
+        insert_snapshot(conn, value_company(unlisted, universe_deciles(), policy, TODAY), 1)
+    keys = ("currency", "isAdr", "adrRatio", "fxRate", "fxDate")
+    fxco = _get(client, "/api/companies/FXCO")
+    assert {key: fxco[key] for key in keys} == {
+        "currency": "SEK",
+        "isAdr": True,
+        "adrRatio": 5.0,
+        "fxRate": 8.0,
+        "fxDate": "2026-10-31",
+    }
+    aapl = _get(client, "/api/companies/AAPL")
+    assert {key: aapl[key] for key in keys} == {
+        "currency": "USD",
+        "isAdr": False,
+        "adrRatio": None,
+        "fxRate": None,
+        "fxDate": None,
+    }
+    unlisted_read = _get(client, "/api/companies/FXUN")
+    assert (unlisted_read["isAdr"], unlisted_read["adrRatio"]) == (None, None)
+    assert (unlisted_read["currency"], unlisted_read["fxRate"]) == ("SEK", 8.0)
 
 
 def test_financials_without_statements(client: TestClient) -> None:
@@ -288,6 +332,7 @@ def test_the_methodology_sections_are_listed(client: TestClient) -> None:
         "life-cycle",
         "classifier",
         "value",
+        "foreign-filers",
         "mature-growth",
         "mature-stable",
         "growth",
@@ -299,7 +344,8 @@ def test_the_methodology_sections_are_listed(client: TestClient) -> None:
         "your-settings",
     ]
     assert sections[0] == {"id": "what", "title": "What Fairband does"}
-    assert sections[6] == {"id": "growth", "title": "High Growth and Young Growth"}
+    assert sections[4] == {"id": "foreign-filers", "title": "Foreign filers"}
+    assert sections[7] == {"id": "growth", "title": "High Growth and Young Growth"}
 
 
 def test_a_methodology_section_reads_the_user_s_settings(client: TestClient) -> None:

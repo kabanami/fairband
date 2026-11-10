@@ -5,8 +5,10 @@
      examples' figures are typed from the drawer of each company's snapshot valued under method 0.9
      on 6 Nov 2026 (a revalue of the 5 Nov full refresh); the Mature Growth and Mature Stable
      examples' figures that the charge moves were re-read under method 1.0 on 9 Nov 2026 from the
-     same stored inputs, and the other routes' figures are unchanged by 1.0. They change with the
-     next method version (CLAUDE.md, "Read first"). -->
+     same stored inputs, and the other routes' figures are unchanged by 1.0. Method 1.1 (10 Nov
+     2026, foreign filers) values a company that reports in US dollars and is no depositary receipt
+     as 1.0 did, bit for bit, so every example's figures were re-read and stand under 1.1. They
+     change with the next method version (CLAUDE.md, "Read first"). -->
 <article class="app-prose">
 <p class="caption app-prose__note" data-live-note hidden></p>
 
@@ -70,6 +72,7 @@ its count of companies in the latest run.</desc>
 <li><a href="#methodology/life-cycle">The life cycle</a></li>
 <li><a href="#methodology/classifier">How a company gets its phase</a></li>
 <li><a href="#methodology/value">What a value means here</a></li>
+<li><a href="#methodology/foreign-filers">Foreign filers</a></li>
 <li><a href="#methodology/mature-growth">Mature Growth</a></li>
 <li><a href="#methodology/mature-stable">Mature Stable</a></li>
 <li><a href="#methodology/growth">High Growth and Young Growth</a></li>
@@ -84,7 +87,8 @@ its count of companies in the latest run.</desc>
 
 <p class="caption app-prose__asof">Each route section ends with a worked example on a real company.
 Figures as of the full refresh of <time datetime="2026-11-05">5 Nov 2026</time>, valued under
-method 1.0 on <time datetime="2026-11-09">9 Nov 2026</time>. Prices are the closes of
+method 1.0 on <time datetime="2026-11-09">9 Nov 2026</time> and unchanged under method 1.1.
+Prices are the closes of
 <time datetime="2026-11-04">4 Nov 2026</time>. Each example links to today's row, whose figures
 may differ.</p>
 
@@ -352,8 +356,8 @@ in words.</p>
 <ul class="body">
 <li>No ranking yet: no full refresh has ranked the universe.</li>
 <li>No phase: the company's figures cannot support one.</li>
-<li>A foreign filer: the company reports in another currency, or its shares trade as depositary
-receipts.</li>
+<li>A currency the method cannot price: unknown, with no exchange rate or inflation projection, or
+with inflation above the bound.</li>
 <li>An unclear share basis: a depositary receipt's newest share count matches the quote's on no
 basis.</li>
 <li>Missing figures: no price, no share count, no trailing revenue or earnings, or no tax rate for
@@ -365,6 +369,68 @@ negative.</li>
 <li>Start-up: no value by design, as the Start-up section explains.</li>
 <li>A failed fetch: the data vendor did not deliver a required statement or the price.</li>
 </ul>
+</section>
+
+<section id="foreign-filers">
+<h2 class="title">Foreign filers</h2>
+<p class="body">A foreign filer reports in a currency other than the US dollar, or its shares trade
+in the US as depositary receipts. Fairband values it on its phase's route, as it values any
+company. Two things are its own: the currency of its figures, and the share each figure is
+per.</p>
+
+<h3 class="heading">The reporting currency</h3>
+<p class="body">The reporting currency is the currency of its newest annual income statement. Every
+figure the route reads is in it: the statements, the analysts' forecasts and the balance sheet.
+The price comes into it at the exchange rate. So the route compares figures in one currency
+only.</p>
+
+<h3 class="heading">The exchange rate</h3>
+<p class="body">The exchange rate is the units of the currency one US dollar buys, from the data
+vendor's daily close. The value a share is the route's value divided by the rate on the price's
+day. The buy level, the fair band and the trim level are set on that dollar value. A price refresh
+reads the day's rate with the price, so both rest on one day. A note marks a rate older than
+<span data-policy="fx_stale_days">—</span> on the price's day.</p>
+
+<h3 class="heading">The inflation differential</h3>
+<p class="body">The hurdle rate, terminal growth and the growth caps are rates in US dollars. A
+currency with higher expected inflation needs higher rates. Fairband restates each rate by the
+inflation differential: the currency's expected inflation against the dollar's
+<a class="app-cite" href="#methodology/src-currency">[Damodaran 2002]</a>. Expected inflation is
+the mean of the IMF's projections for the five years ahead
+<a class="app-cite" href="#methodology/src-imf">[IMF]</a>. Here is the arithmetic for one
+currency.</p>
+<ol class="body app-prose__sum">
+<li>The currency's expected inflation is 4.04%, and the dollar's is 2.00%.</li>
+<li>The differential is 1.0404 ÷ 1.02 − 1 = 2.0%.</li>
+<li>A hurdle rate of 9.0% becomes 1.09 × 1.02 − 1 = 11.18% in that currency.</li>
+</ol>
+<p class="body">The flag thresholds and the margin bounds stay as they are. A threshold is a
+reader's mark, and a margin has no currency.</p>
+
+<h3 class="heading">The share basis</h3>
+<p class="body">A depositary receipt (an ADS) stands for a set number of the company's ordinary
+shares. The data vendor states the share count and the earnings a share per ADS, the unit the US
+price is in. Some periods on file hold a count off by that number. Fairband reads such a period on
+the price's basis, and the row gets a note. Every figure a share, the value among them, is per
+ADS.</p>
+
+<h3 class="heading">The bound</h3>
+<p class="body">A currency whose expected inflation is above
+<span data-policy="inflation_max">—</span> gets no value. Inflation that high breaks the growth
+figures the routes read <a class="app-cite" href="#methodology/src-ias29">[IAS 29]</a>.</p>
+
+<h3 class="heading">When there is no value</h3>
+<p class="body">Five refusals belong to foreign filers.</p>
+<ul class="body">
+<li>The reporting currency is unknown: neither the statements nor the listing name one.</li>
+<li>No exchange rate: the data vendor has no usable rate for the currency.</li>
+<li>No inflation projection: the IMF projects none for the currency's economy.</li>
+<li>Inflation above the bound: the currency's expected inflation is above
+<span data-policy="inflation_max">—</span>.</li>
+<li>An unclear share basis: the newest share count matches the price's on no basis.</li>
+</ul>
+<p class="body">The drawer and the report page name the reporting currency, the rate and the
+ordinary shares an ADS stands for.</p>
 </section>
 
 <section id="mature-growth">
@@ -925,7 +991,7 @@ so the share count and per-share figures read on the new basis.</span></li>
 periods, so those read on the quote's basis.</span></li>
 <li><span class="label">Rate stale</span> <code class="fb-tag figure-sm">fx-stale</code>
 <span class="body app-flags__what">The exchange rate of a company in another currency is older
-than the stale-rate bound allows.</span></li>
+than <span data-policy="fx_stale_days">—</span> on the price's day.</span></li>
 <li><span class="label">Long runway, high growth</span> <code class="fb-tag figure-sm">long-runway-high-growth</code>
 <span class="body app-flags__what">A runway of <span data-policy="runway_years.Wide">—</span>
 carries a belief or implied growth of <span data-policy="long_runway_growth_flag">—</span> or
@@ -1043,6 +1109,8 @@ forced-sale value.</li>
 <li id="src-young">Damodaran, “Valuing Young, Start-up and Growth Companies” (2009),
 <a href="https://pages.stern.nyu.edu/~adamodar/pdfiles/papers/younggrowth.pdf" target="_blank" rel="noreferrer">the paper</a>.
 The chance of failure and the revenue a Start-up's price needs.</li>
+<li id="src-currency">Damodaran, <cite>Investment Valuation</cite>, second edition (2002), chapter 7.
+The inflation differential that restates a discount rate in another currency.</li>
 <li id="src-ratings">Damodaran, the
 <a href="https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ratings.html" target="_blank" rel="noreferrer">ratings table</a>
 for large non-financial companies. The synthetic rating from interest cover.</li>
@@ -1070,6 +1138,13 @@ The value-driver formula behind the reinvestment charge.</li>
 <a href="https://www.oecd.org/" target="_blank" rel="noreferrer">oecd.org</a>. The tax rate by
 country and year. Taiwan's and Cyprus's, which the OECD series lacks, come from Taiwan's Income Tax
 Act (article 5) and Cyprus's Tax Department.</li>
+<li id="src-imf">IMF, World Economic Outlook, inflation, average consumer prices, at
+<a href="https://www.imf.org/external/datamapper/PCPIPCH@WEO" target="_blank" rel="noreferrer">imf.org</a>.
+The expected inflation of each currency, the mean of five years of projections.</li>
+<li id="src-ias29">IFRS Foundation, <cite>IAS 29, Financial Reporting in Hyperinflationary
+Economies</cite>, at
+<a href="https://www.ifrs.org/issued-standards/list-of-standards/ias-29-financial-reporting-in-hyperinflationary-economies/" target="_blank" rel="noreferrer">ifrs.org</a>.
+Why a currency with inflation above the bound gets no value.</li>
 <li id="src-method">Fairband's own method, docs/method.md in the repository. It states every rule on
 this page in full.</li>
 </ul>

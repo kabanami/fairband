@@ -97,6 +97,21 @@ figure that looks halved may be one not yet restated. While `split-pending` is o
 beside the snapshot's scaled inputs; cite the snapshot's inputs for the per-share figures and say
 so in section 9.
 
+A foreign filer reports in another currency than the US dollar, or trades as American depositary
+shares (ADS). `company` names its reporting currency (`currency`), whether it is an ADR
+(`isAdr`), the ordinary shares one ADS stands for (`adrRatio`), and the exchange rate with its
+date (`fxRate`, `fxDate`), units of the currency per US dollar. Every figure is in the reporting
+currency except the price, the value, the levels, a close and a grid's cells, which are US
+dollars: the statements, the consensus, the inputs (their unit names the code, `TWD` or
+`TWD a share`), the intermediates and a secondary valuation's totals. On an ADR every per-share
+figure is per ADS, the unit the quote prices, and the report says so once: "one ADS is five
+ordinary shares; every per-share figure here is per ADS". Any arithmetic across US dollars and
+the currency goes through `derive`, with the rate cited as `snapshot:<id>/inputs/fx_rate`: a
+`ratio` of a figure in the currency and the rate is that figure in US dollars. On such a company
+the override ranges in dollars are in the reporting currency (see "Overrides"), and a guidance
+record's figures are in the reporting currency, as the company states them. Step 8 reads
+`basis-scaled` and `fx-stale`.
+
 Then read everything the page shows:
 
 - `company(symbol)`, read above: the latest snapshot (the company's frozen inputs and the engine's
@@ -229,7 +244,7 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
-Five flags ask for a decision of yours. Read each sentence whole: it names its figures.
+Seven flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
 - `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
   of the operating cash flow, then names the return the charge starts at, its measure, and the
@@ -267,6 +282,17 @@ Five flags ask for a decision of yours. Read each sentence whole: it names its f
   against the new basis before you read them. A review's per-share overrides (`earnings.ntm`,
   `earnings.cycle_gap`, `earnings.nri_gap`, `value.outside`) stay on the basis they were made on:
   after a split, drop and re-make them on the new basis before you publish.
+- `basis-scaled`: an ADR's share count or trailing EPS was read on the quote's share basis by the
+  ADR ratio or its inverse, because FMP held a period's count off by it, or a trailing period was
+  read as stored for the basis. The sentence names the factor, the periods scaled, the stored
+  count against the quote's with the ADR ratio, and each period read as stored with its reason. A
+  period read as stored may sit on another basis: check its count and EPS against the filing's
+  ADS ratio before you read the trailing EPS, and say in section 8 which periods were scaled.
+- `fx-stale`: the rate the value was translated at, the pair's newest close, is more than
+  `fx_stale_days` (`policy()`) before the price date, so the value in US dollars rests on an old
+  rate. The sentence names the pair and both dates. Call `refresh_start("price")`, which quotes
+  the pairs, wait until `refresh_status()` shows no refresh running, and read `company` again;
+  when the note stays, section 8 says the rate is old.
 
 ### 9. The debate and the thesis
 
@@ -301,7 +327,9 @@ input, write an override (a change to one input, with its reason and its evidenc
 `override_add`. One override changes one input. Its answer carries the override's state and, when
 it applied, the review (the engine's value under the applied overrides) with its bridge (the
 change from the mechanical value, one line per override). Read both. `override_drop` drops an
-applied override. See "Overrides" below.
+applied override. See "Overrides" below. On a company in another currency a money override's
+`new` and its range are in the reporting currency a share or in total, and the bridge's change a
+share is in US dollars, as the value is.
 
 The guidance, at your best effort and never required. A clear full-year guidance for the right
 fiscal year may replace the consensus: an NTM anchor, `earnings.ntm` on Mature Growth or
@@ -425,7 +453,8 @@ Record one with `guidance_add(symbol, metric, period, low, high, basis, as_of, t
 - `metric`: `revenue`, `eps`, `operating_margin`, `free_cash_flow`, `capex`, `revenue_growth` or
   `eps_growth`.
 - `period`: a fiscal year, `2027`, or a quarter, `2027Q1`, written with no dash.
-- `low` and `high`: the range, equal for a point. Dollars in full; a percent as a fraction.
+- `low` and `high`: the range, equal for a point. Money in full, in the reporting currency as the
+  company states it (dollars for a company that reports in them); a percent as a fraction.
 - `basis`: `gaap`, `adjusted` or `constant-currency`.
 - `as_of`: the call's date, from `transcript_dates`.
 - `text`: the sentence, verbatim. `source`: the transcript's `response:<responseId>`, or a filing.
@@ -525,7 +554,10 @@ not you, computes the value it gives.
 | `shares.diluted` | every route | the diluted share count, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first | above 0 shares; period-tied only |
 | `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Nothing counts twice: on Mature Stable strip the asset's gains through `earnings.nri_gap`; on Mature Growth add it only when the consensus excludes its gains (see below) | −1,000 to 1,000 dollars a share; lasting or period-tied |
 
-The ranges are the policy's `override_ranges`; `policy()` gives the values in force.
+The ranges are the policy's `override_ranges`; `policy()` gives the values in force. On a company
+in another currency every range in dollars is in the reporting currency, each end × the
+snapshot's rate: at 32.96 TWD a dollar `earnings.ntm` takes above 0 to 32,960 TWD a share, and the
+refusal names the currency. Pass `new` in the currency too.
 
 The two NTM anchors and the cycle gap:
 
@@ -663,7 +695,7 @@ terminal_growth}`, every rate a fraction:
 - `sales_to_capital`: the revenue a dollar of new capital buys, 0.1 to 10. It sets how much each
   year reinvests to grow.
 - `terminal_growth`: the growth after year N, forever, from −1.00 to g_T (`0.03` at the
-  defaults).
+  defaults; the currency's g_T, restated, for a company in another currency).
 
 The ranges are the policy's `secondary_years_min`, `secondary_years_max` and
 `secondary_driver_ranges`; `policy()` gives the values in force.
@@ -700,8 +732,8 @@ the highest growth. Cite a cell as `secondary:<id>/grid/<i>/<j>`, rows and colum
 
 Use `parts` instead where a sum of parts fits better: a conglomerate, or a company whose cash
 flows you build segment by segment. `parts` is one to ten, each `{name, fcff, terminal_growth,
-note}`. `fcff` is the free cash flow to the firm in dollars for years one to N, N from three to
-fifteen. Each `terminal_growth` runs from −1.00 to g_T. On this form the grid's rows move every
+note}`. `fcff` is the free cash flow to the firm in the reporting currency for years one to N, N
+from three to fifteen. Each `terminal_growth` runs from −1.00 to g_T. On this form the grid's rows move every
 part's terminal growth together by one point down, none and one point up, each capped at g_T.
 
 ### Common to both
@@ -713,6 +745,11 @@ part's terminal growth together by one point down, none and one point up, each c
   passed needs its own evidence item, with `figure` set to `debt` or `cash`.
 - The levels take the moat class of the current review, else the snapshot's. A value a share at or
   below zero is kept as computed, with no levels.
+- A company in another currency is valued in its reporting currency, at r and g_T restated into
+  it: the terminal growth runs to the currency's g_T, which `policy()` does not show and the
+  refusal names. Pass the path, the debt and the cash in the currency. The value a share, its
+  levels and the grid's cells come back in US dollars, per ADS on an ADR; the firm value, the
+  equity, the projection and the parts stay in the currency, and the record carries the rate.
 
 The refusals, each a sentence, nothing stored: a blank reason; no evidence; both forms, "a
 secondary valuation takes drivers or parts, not both", or neither, "a secondary valuation needs

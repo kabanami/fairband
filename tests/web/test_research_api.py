@@ -16,13 +16,18 @@ from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
-from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
+from support.engine_companies import (
+    fx_inputs,
+    mature_growth_inputs,
+    universe_deciles,
+    young_growth_inputs,
+)
 from support.web import HEADER, NOW, TODAY
 
 from fairband.engine.designation import designation_for
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
-from fairband.engine.route import reprice
+from fairband.engine.route import reprice, value_company
 from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
@@ -243,6 +248,43 @@ def test_the_detail_carries_the_review_with_its_bridge(
             None,
             None,
         )
+
+
+def test_a_bridge_line_in_another_currency_names_its_code(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-10 7.3 and 7.4: a review's overrides on a company in another currency are in
+    its reporting currency, so a bridge line of a money input carries the code in its unit: FXCO,
+    in SEK, with an applied value.outside of SEK 40 a share reads "SEK a share", where AAPL's
+    would read "USD a share"."""
+    inputs = fx_inputs()
+    mechanical = value_company(inputs, universe_deciles(), policy, TODAY)
+    with closing(connect(db_path)) as conn:
+        snapshot_id = insert_snapshot(conn, mechanical, 1, clock=lambda: NOW)
+        override_id = insert_override(
+            conn,
+            "FXCO",
+            "value.outside",
+            None,
+            40.0,
+            "SEK a share",
+            "a stake held for sale",
+            [{"kind": "filing", "ref": "annual report 2025", "note": ""}],
+            "lasting",
+            None,
+            None,
+            snapshot_id,
+            AGENT,
+            NOW,
+            "applied",
+            "",
+        )
+        outside = Override(override_id, "value.outside", 40.0, "agent", AGENT.actor, NOW, "stake")
+        review = review_company(inputs, universe_deciles(), policy, TODAY, [outside], mechanical)
+        insert_review(conn, review, "FXCO", snapshot_id, None, clock=lambda: NOW)
+    assert review.result.value is not None
+    (line,) = _detail(client, "FXCO")["review"]["bridge"]
+    assert (line["tag"], line["new"], line["unit"]) == ("value.outside", 40.0, "SEK a share")
 
 
 def test_a_refused_review_carries_its_refusal(

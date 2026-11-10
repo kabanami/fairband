@@ -2,7 +2,8 @@
 design.md 9.4; ``method.md`` 16).
 
 Neither appendix is stored: both are generated at read time from the stored records, so the agent
-writes neither. Appendix A (``appendix_a``), the audit: the snapshot the report rests on; every
+writes neither. Appendix A (``appendix_a``), the audit: the snapshot the report rests on, with
+the reporting currency its money figures are in (``currency``, ``types.money_of``); every
 input with its tag (DATA, RULE or JUDGMENT), its value at full precision and its provenance (its
 source and its three dates: as of, observed, entered), the review's when the report rests on one
 (its JUDGMENT entries beside the snapshot's own), else the snapshot's; the overrides inside the
@@ -10,7 +11,9 @@ review with their reasons and evidence; the guidance on file, the company's guid
 written by the report's time, newest first, each with its figures, its basis, its call's date,
 whether a record on file by then superseded it, and the overrides inside the review that cite it;
 the bridge, each line with its input's label in a
-reader's words (``overrides.LABELS``); the secondary valuation's form, its drivers
+reader's words (``overrides.LABELS``); the secondary valuation's form, the currency of its totals
+(the snapshot's reporting currency) and the rate it ran at (``currency``, ``fxRate``; the
+export's line names both on a company in another currency, spec 2026-11-10 7.6), its drivers
 with the trailing revenue and the terminal return and its projection year by year, or its parts
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
 every part's (``GRID_ROWS``), with the rows in words as the export's grid table writes them
@@ -51,6 +54,7 @@ from typing import Any
 from pydantic.alias_generators import to_camel
 
 from fairband.engine.overrides import LABELS
+from fairband.engine.types import money_of
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
 from fairband.reports.charts import ChartTable, grid_row_words, shift_words
@@ -284,12 +288,14 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
     rules = _RULES | {"the stance word": f"one of {', '.join(policy.stance_words)}"}
     overrides = [] if review is None else _overrides(conn, review.override_ids)
     why = no_secondary(snapshot, review) if secondary is None else None
+    currency = money_of(snapshot.result)[1]
     return {
         "snapshot": {
             "id": snapshot.id,
             "dataDate": snapshot.data_date.isoformat(),
             "priceDate": None if snapshot.price_date is None else snapshot.price_date.isoformat(),
             "validUntil": snapshot.valid_until.isoformat(),
+            "currency": currency,
             "price": snapshot.price,
             "value": snapshot.value,
             "phase": snapshot.phase,
@@ -315,7 +321,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
         "overrides": overrides,
         "guidance": _guidance(conn, report, overrides),
         "bridge": None if review is None else _bridge(review),
-        "secondary": None if secondary is None else _secondary(secondary),
+        "secondary": None if secondary is None else _secondary(secondary, currency),
         "noSecondary": None if why is None else f"no secondary valuation: {why}",
         "checks": [{"check": check, "rule": rules[check]} for check in CHECKS],
         "versions": {
@@ -483,11 +489,15 @@ def _label(line: Mapping[str, Any]) -> str:
     return _LABELS.get(tag, tag)
 
 
-def _secondary(secondary: SecondaryRow) -> dict[str, Any]:
+def _secondary(secondary: SecondaryRow, currency: str) -> dict[str, Any]:
+    """The secondary valuation with ``currency``, the reporting currency of the snapshot it rests
+    on, its totals' (spec 2026-11-10 7.6), and the rate it ran at, units of it per USD."""
     drivers, projection, grid = secondary.drivers, secondary.projection, secondary.grid
     return {
         "id": secondary.id,
         "form": secondary.form,
+        "currency": currency,
+        "fxRate": secondary.fx_rate,
         "valuePerShare": secondary.value_per_share,
         "firmValue": secondary.firm_value,
         "debt": secondary.debt,
@@ -612,6 +622,10 @@ def _secondary_tables(secondary: Mapping[str, Any]) -> list[str]:
         f" {_cell(secondary['valuePerShare'])}"
     )
     lead = f"Secondary valuation {secondary['id']}, from {secondary['form']}"
+    code = secondary["currency"]
+    if code != "USD":  # its totals in the currency, its value a share in USD (spec 2026-11-10 7.6)
+        rate = _cell(secondary["fxRate"])
+        lead += f", in {code} at {rate} {code} per USD, its value a share in USD"
     out = [f"{lead}: {figures}. {secondary['reason']}", ""]
     if secondary["form"] == "drivers":
         out += _projection_tables(secondary["drivers"], secondary["projection"])

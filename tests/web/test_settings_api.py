@@ -296,11 +296,15 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "z_safe": 2.6,
         "f_score_low": 1,
         "implied_margin_bounds": [-0.5, 1.0],
+        "inflation_max": 0.1,  # the Methodology page names the two bounds (spec 2026-11-10 10)
+        "fx_stale_days": 7,
     }
     for name, value in read_only.items():
         entry = body["values"][name]
         assert (entry["value"], entry["setting"], entry["changed"]) == (value, False, False), name
         assert entry["source"], name
+    units = (body["values"]["inflation_max"]["unit"], body["values"]["fx_stale_days"]["unit"])
+    assert units == ("fraction", "days")
     assert set(body["values"]) == {s.name for s in SETTINGS} | set(read_only) | {
         "designation_edges",
         "wide_terminal_roic_cap",

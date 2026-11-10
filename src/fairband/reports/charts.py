@@ -3,7 +3,10 @@ where the report page draws a chart, the Markdown export carries its table twin 
 section's heading, before the prose, and the page titles its charts with the words here, so the
 two never differ. Every figure is written as a cite of it would read (``check.shown``), a day as
 the references write it (``refs.day_words``, "3 Nov 2026"), and a cell with no figure on file is
-empty.
+empty. A company in another currency (spec 2026-11-10 7.4) has its statements' totals and figures
+a share, and a sensitivity reading's money axis, in its reporting currency, the report's
+snapshot's: the code before the number, "SEK 2,100,000,000", "SEK 40.00"; the closes, the band,
+the values a share of a reading and of a grid are US dollars, `$` as before.
 
 ``chart_tables`` reads them from the store at export, no vendor called, by the heading of the
 section each leads:
@@ -36,7 +39,7 @@ from datetime import date
 from typing import Any
 
 from fairband.engine.overrides import LABELS, TAGS
-from fairband.engine.types import Levels
+from fairband.engine.types import Levels, money_of
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import stored_closes
@@ -47,7 +50,7 @@ from fairband.reports.tables import Table, financial_tables
 from fairband.store.reports import ReportRow
 from fairband.store.secondary import GRID_ROWS, secondary_row
 from fairband.store.sensitivities import SensitivityRow, sensitivity_row
-from fairband.store.snapshots import BandPoint, band_points
+from fairband.store.snapshots import BandPoint, band_points, snapshot_row
 
 TITLES = {
     "growth": "Growth and profitability",
@@ -96,26 +99,29 @@ def chart_tables(
     """The report's chart tables by the heading of the section they lead (module docstring);
     ``policy`` is the effective one and ``tax`` the statements' table."""
     symbol = report.symbol
+    snapshot = snapshot_row(conn, report.snapshot_id)
+    currency = "USD" if snapshot is None else money_of(snapshot.result)[1]
     return {
         "Financial performance and health": tuple(
-            _financial(table) for table in financial_tables(conn, symbol, policy, tax)
+            _financial(table, currency) for table in financial_tables(conn, symbol, policy, tax)
         ),
-        "Valuation": (*_sensitivities(conn, report), *_secondary_grid(conn, report)),
+        "Valuation": (*_sensitivities(conn, report, currency), *_secondary_grid(conn, report)),
         "Price and multiples": (_band(conn, symbol), *_multiples(conn, symbol)),
     }
 
 
-def reading_axes(reading: SensitivityRow) -> ReadingAxes:
+def reading_axes(reading: SensitivityRow, currency: str = "USD") -> ReadingAxes:
     """The reading's table title, "Sensitivity 7: the belief by the runway return", and its axes:
-    each input's label and its values as a cite of them reads, a word as it is."""
+    each input's label and its values as a cite of them reads, a word as it is; a money input's
+    values in ``currency``, the reading's snapshot's, an override's unit (spec 2026-11-10 7.3)."""
     row_label = _LABELS.get(reading.row_tag, reading.row_tag)
     col_label = _LABELS.get(reading.col_tag, reading.col_tag)
     return ReadingAxes(
         f"Sensitivity {reading.id}: the {row_label} by the {col_label}",
         row_label,
         col_label,
-        tuple(_input(v, reading.row_tag) for v in reading.row_values),
-        tuple(_input(v, reading.col_tag) for v in reading.col_values),
+        tuple(_input(v, reading.row_tag, currency) for v in reading.row_values),
+        tuple(_input(v, reading.col_tag, currency) for v in reading.col_values),
     )
 
 
@@ -138,21 +144,22 @@ def shift_words(x: float, *, top: bool = False) -> str:
     return f"{'−' if points < 0 else '+' if points > 0 else ''}{size}"
 
 
-def _financial(table: Table) -> ChartTable:
-    """A financial table titled by its name, a row a line in words, a column a fiscal year; no
-    rows without statements."""
+def _financial(table: Table, currency: str) -> ChartTable:
+    """A financial table titled by its name, a row a line in words, a column a fiscal year, a
+    total or a figure a share in the statements' ``currency``; no rows without statements."""
     periods = tuple(cell.period for cell in table.rows[0].cells) if table.rows else ()
     if not periods:
         return ChartTable(TITLES[table.name], ("Fiscal year",), ())
     rows = tuple(
-        (row_name(row.name), *(_shown(cell.value, cell.unit) for cell in row.cells))
+        (row_name(row.name), *(_shown(cell.value, cell.unit, currency) for cell in row.cells))
         for row in table.rows
     )
     return ChartTable(TITLES[table.name], ("Fiscal year", *periods), rows)
 
 
-def _sensitivities(conn: sqlite3.Connection, report: ReportRow) -> list[ChartTable]:
-    """The sensitivity readings of the company the sections cite, once each, in cite order."""
+def _sensitivities(conn: sqlite3.Connection, report: ReportRow, currency: str) -> list[ChartTable]:
+    """The sensitivity readings of the company the sections cite, once each, in cite order, a
+    money axis in the company's ``currency``."""
     cited: list[int] = []
     for _, part in parts(report.sections):
         ref = str(part.get("ref", "")).strip() if isinstance(part, Mapping) else ""
@@ -161,11 +168,11 @@ def _sensitivities(conn: sqlite3.Connection, report: ReportRow) -> list[ChartTab
         if form == "sensitivity" and head.isdecimal() and int(head) not in cited:
             cited.append(int(head))
     readings = (sensitivity_row(conn, reading_id) for reading_id in cited)
-    return [_reading(r) for r in readings if r is not None and r.symbol == report.symbol]
+    return [_reading(r, currency) for r in readings if r is not None and r.symbol == report.symbol]
 
 
-def _reading(reading: SensitivityRow) -> ChartTable:
-    axes = reading_axes(reading)
+def _reading(reading: SensitivityRow, currency: str) -> ChartTable:
+    axes = reading_axes(reading, currency)
     header = (axes.row_label, *(f"{axes.col_label} {word}" for word in axes.cols))
     rows = tuple(
         (word, *(_shown(cell, "per-share") for cell in cells))
@@ -262,11 +269,23 @@ def row_name(name: str) -> str:
     return words[:1].upper() + words[1:]
 
 
-def _input(value: float | str, tag: str) -> str:
-    """An input's value as a cite of it reads; a word as it is."""
-    return value if isinstance(value, str) else shown(value, _UNITS.get(tag))
+def _input(value: float | str, tag: str, currency: str) -> str:
+    """An input's value as a cite of it reads, a money input's in ``currency``; a word as it
+    is."""
+    return value if isinstance(value, str) else _in(value, _UNITS.get(tag), currency)
 
 
-def _shown(value: float | None, unit: str | None) -> str:
-    """A figure as a cite of it reads; an empty cell for none on file."""
-    return "" if value is None else shown(value, unit)
+def _shown(value: float | None, unit: str | None, currency: str = "USD") -> str:
+    """A figure as a cite of it reads, a total or a figure a share in ``currency``; an empty
+    cell for none on file."""
+    return "" if value is None else _in(value, unit, currency)
+
+
+def _in(value: float, unit: str | None, currency: str) -> str:
+    """A figure as a cite of it reads (``check.shown``), but a total or a figure a share in another
+    currency than USD with the code before it, "SEK 2,100,000,000", "SEK 40.00" (spec 2026-11-10
+    7.4)."""
+    if currency == "USD" or unit not in ("currency", "per-share"):
+        return shown(value, unit)
+    places = 0 if unit == "currency" else 2
+    return f"{'−' if value < 0 else ''}{currency} {abs(value):,.{places}f}"

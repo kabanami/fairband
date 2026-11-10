@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from refresh.synthetic import NOW
-from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.engine_companies import fx_inputs, mature_growth_inputs, universe_deciles
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
@@ -224,6 +224,51 @@ def test_appendix_a_labels_a_parts_grid_by_its_shift(
     assert "| Every part's terminal growth | r 8.0% | r 9.0% | r 10.0% |" in block
     for shift in ("−1 pp", "0 pp", "+0 pp, capped at g_T"):  # the part is at g_T
         assert f"| {shift} | " in block, shift
+
+
+def test_appendix_a_names_the_currency_and_the_rate_of_a_secondary_valuation(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-10 7.6: a secondary valuation of a company in another currency runs in it, its
+    totals in the currency and its value a share in USD, and the record carries the rate; Appendix
+    A names the currency and the rate where it states the valuation, the page's and the export's
+    alike. FXCO is in SEK at 8.0 a dollar; AAPL's, in USD, reads as before."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    fx = value_company(fx_inputs(), universe_deciles(), policy, TODAY)
+    sid = insert_snapshot(conn, fx, aapl.refresh_id, clock=lambda: NOW)
+    part = Part("the business", (800.0, 840.0, 882.0), 0.03, None)
+    valuation = secondary_value(
+        parts=[part], debt=0.0, cash=0.0, shares=100.0, price=400.0, moat="Wide", policy=policy
+    )
+    secondary_id = insert_secondary(
+        conn,
+        "FXCO",
+        sid,
+        [part],
+        valuation,
+        "the business in SEK",
+        EVIDENCE,
+        "none",
+        "none",
+        policy.version,
+        policy.settings_hash,
+        None,
+        AGENT,
+        NOW,
+        fx_rate=8.0,
+    )
+    report = _stored(conn, sid, secondary_id=secondary_id, symbol="FXCO")
+    a = appendix_a(conn, report, policy)
+    assert a["snapshot"]["currency"] == "SEK"  # the guidance's and the records' money figures
+    assert (a["secondary"]["currency"], a["secondary"]["fxRate"]) == ("SEK", 8.0)
+    block = markdown(report, a, [], [], {}).split("### Secondary valuation")[1]
+    lead = f"Secondary valuation {secondary_id}, from parts, in SEK at 8.0 SEK per USD, its value"
+    assert f"{lead} a share in USD: firm value " in block
+    usd = _stored(conn, snapshots["AAPL"], secondary_id=_secondary(conn, policy, snapshots["AAPL"]))
+    plain = appendix_a(conn, usd, policy)
+    assert plain["snapshot"]["currency"] == "USD"
+    assert (plain["secondary"]["currency"], plain["secondary"]["fxRate"]) == ("USD", 1.0)
 
 
 def test_appendix_a_is_generated_from_the_records(

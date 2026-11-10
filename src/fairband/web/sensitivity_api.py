@@ -25,7 +25,8 @@ camelCase, the pair in force as ``current``, ``[i, j]`` counted from 1 as the re
 and the words the report's Markdown writes the reading's table in (``charts.reading_axes``), which
 the report page draws its grid with (spec 18.4): ``title``, "Sensitivity 7: the belief by the
 runway return", ``rowLabel`` and ``colLabel``, each input's label, and ``rowWords`` and
-``colWords``, each value as a cite of it reads.
+``colWords``, each value as a cite of it reads, a money input's in the snapshot's reporting
+currency with its code (spec 2026-11-10 7.4).
 """
 
 import sqlite3
@@ -50,7 +51,7 @@ from fairband.store.ledger import record
 from fairband.store.overrides import OverrideRow, applied_overrides, as_override
 from fairband.store.reviews import latest_review
 from fairband.store.sensitivities import insert_sensitivity, sensitivity_row
-from fairband.store.snapshots import SnapshotRow
+from fairband.store.snapshots import SnapshotRow, snapshot_row
 from fairband.web.agents_api import WriterOf, record_json
 from fairband.web.reviews_api import (
     agents_only,
@@ -151,11 +152,13 @@ def add_sensitivity_routes(
 
 
 def _read(conn: sqlite3.Connection, sensitivity_id: int) -> dict[str, Any]:
-    """The reading as the API sends it; 404 without it."""
+    """The reading as the API sends it, a money axis in its snapshot's currency; 404 without
+    it."""
     found = sensitivity_row(conn, sensitivity_id)
     if found is None:
         raise HTTPException(404, f"no sensitivity {sensitivity_id}")
-    axes = reading_axes(found)
+    snapshot = snapshot_row(conn, found.snapshot_id)
+    axes = reading_axes(found, "USD" if snapshot is None else money_of(snapshot.result)[1])
     return record_json(found) | {
         "title": axes.title,
         "rowLabel": axes.row_label,

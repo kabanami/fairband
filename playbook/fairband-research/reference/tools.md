@@ -38,7 +38,12 @@ be left out.
   that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
   intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
   universe. An input scaled for a split is an estimate under the method `split-scaled` with a
-  note naming the split, and the row's `split-pending` note names the rest.
+  note naming the split, and the row's `split-pending` note names the rest. What the figures are
+  in: `currency`, the reporting currency; `isAdr`, the universe row's ADR flag; `adrRatio`, the
+  ordinary shares one ADS stands for, `null` without one; `fxRate` and `fxDate`, the exchange rate
+  the value was translated at, units of the currency per US dollar, and its close's date, `null`
+  on a company in US dollars. An input in the currency names its code as its unit (`TWD`,
+  `TWD a share`); one read on the ADS basis is an estimate under `basis-scaled`.
 - `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
   stored statements, each figure with its `fact:` ref.
 - `financial_tables(symbol)`: the six five-year tables of the report's section 4, `growth`,
@@ -74,7 +79,9 @@ be left out.
 - `reviews(symbol)`: the company's reviews, newest first, each with its bridge and without its
   result. The review's intermediates, cited as `review:<id>/intermediates/<path>`, are in the
   `result` of the review that `override_add` and `override_drop` answer.
-- `secondary(symbol)`: the company's secondary valuations, newest first.
+- `secondary(symbol)`: the company's secondary valuations, newest first, each with `fxRate`, the
+  rate it ran at, 1 for a company in US dollars: its totals are in the reporting currency, its
+  value a share and levels in US dollars.
 - `kill_criteria(symbol)`: the company's kill criteria, each with its state: `open`, `triggered`
   or `retired`.
 - `news_items(symbol)`: the company's news items.
@@ -161,13 +168,20 @@ vendor call. The refusals:
   not value needs one on it, except where the snapshot's refusal is one you cannot fix, which the
   secondary valuation refuses in the refusal's own words: "no diluted share count"; "reporting
   currency unknown", "no exchange rate for <code>", "no inflation projection for <code>" or
-  "<code>: expected inflation <π>% above the 10% bound"; "share basis unclear: ...".
+  "<code>: expected inflation <π>% above the 10% bound"; "share basis unclear: the newest
+  period's count <c> against the quote's <Q> (the ADR ratio <ρ>)". On a company in another
+  currency pass the path, the debt and the cash in the reporting currency; the value a share comes
+  back in US dollars. Its levels and its grid's cells are in US dollars too; its firm value, equity
+  and projection stay in the currency, and the record carries the rate as `fxRate`.
 - `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
   across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`,
   and its axes' values as `sensitivity:<id>/rows/<i>` and `/cols/<j>`; nothing is overridden.
   `current` marks the pair in force as `[i, j]`; a cell whose valuation refuses is `null`.
 - `derive(symbol, derivations)`: compute figures from refs; it answers
-  `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`.
+  `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`. On a company in another
+  currency the rate is `snapshot:<id>/inputs/fx_rate`: a `ratio` of a figure in the currency and
+  the rate is that figure in US dollars, a derivation with no unit, so its cite takes `$` or none
+  at the decimals you write.
 - `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`:
   submit a report; published whole, it answers `{report: {id, symbol, createdAt, workItemId}}`,
   and `report(symbol, id)` reads it whole; rejected whole, the `findings`.
@@ -197,8 +211,8 @@ vendor call. The refusals:
   `cash`, and one item at least names no `figure`: "the path needs its own evidence item".
 - A guidance record (`guidance_add`): the `metric` is `revenue`, `eps`, `operating_margin`,
   `free_cash_flow`, `capex`, `revenue_growth` or `eps_growth`; the `period` a fiscal year (`2027`)
-  or a quarter (`2027Q1`, no dash); `low` and `high` in the metric's unit, dollars in full, a
-  percent as a fraction; the `basis` `gaap`, `adjusted` or `constant-currency`; `as_of` the call's
+  or a quarter (`2027Q1`, no dash); `low` and `high` in the metric's unit, money in full in the
+  reporting currency as the company states it, a percent as a fraction; the `basis` `gaap`, `adjusted` or `constant-currency`; `as_of` the call's
   date; `text` the sentence verbatim; `source` a string, the transcript's `response:<id>` or a
   filing. A newer record of the same metric, period and basis supersedes the older, in the order of
   the calls' dates. A value the record cannot take is refused (400), nothing stored, with the first
@@ -213,15 +227,17 @@ vendor call. The refusals:
 - A finding's source (`finding_add`): `{kind, ref, note}`, the kind one of `filing`,
   `transcript`, `url`, `vendor` or `base-rate`. `as_of` is the date the fact describes, as
   `2026-09-30`. The `unit` is `currency`, `percent`, `multiple`, `count`, `per-share`, `score` or
-  `years`. The `value` is in that unit: dollars in full, a percent as a fraction. The `period` is a
-  fiscal year (`2025`), a quarter (`2026-Q2`) or `ttm`.
+  `years`. The `value` is in that unit: money in full in the reporting currency, as the
+  statements are, a percent as a fraction. The `period` is a fiscal year (`2025`), a quarter
+  (`2026-Q2`) or `ttm`.
 - The drivers (`secondary_valuation`): `{years, revenue_growth, operating_margin, tax_rate,
   sales_to_capital, terminal_growth}`, rates as fractions: `years` N from 3 to 15; the
   `revenue_growth` and `operating_margin` lists with an entry for each year; the terminal growth
-  from −1.00 to g_T. The ranges are the policy's `secondary_driver_ranges` (`SKILL.md`, "The
+  from −1.00 to g_T, the currency's restated on a company in another currency. The ranges are the
+  policy's `secondary_driver_ranges` (`SKILL.md`, "The
   secondary valuation").
-- A part (`secondary_valuation`): `{name, fcff, terminal_growth, note}`, `fcff` a list of dollars
-  for years one to N.
+- A part (`secondary_valuation`): `{name, fcff, terminal_growth, note}`, `fcff` a list of figures
+  in the reporting currency for years one to N.
 - A sensitivity axis (`sensitivity`): a tag of the overrides table the route reads, and one to five
   values in the unit an override of it takes: "an axis holds one to five values"; the two tags
   differ, "the two tags differ".

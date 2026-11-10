@@ -1,4 +1,4 @@
-"""The Methodology view (spec 2026-11-04 7): the fragment's thirteen sections, its diagram, its live
+"""The Methodology view (spec 2026-11-04 7): the fragment's fourteen sections, its diagram, its live
 spans and its examples; the script that fills the spans, wires the contents and the section hash
 and maps a route to its section; the drawer's link to the row's route section; and the prose rule
 of 7.1, every sentence of the fragment's prose at 25 words or fewer. The repository runs no
@@ -18,6 +18,7 @@ SECTIONS = [
     "life-cycle",
     "classifier",
     "value",
+    "foreign-filers",
     "mature-growth",
     "mature-stable",
     "growth",
@@ -159,6 +160,8 @@ def test_the_examples_state_method_1_0_s_rules() -> None:
     asof = asof[: asof.index("</p>")]
     assert "method 1.0" in asof and 'datetime="2026-11-09"' in asof
     assert "method 0.8" not in html and "method 0.9" not in asof
+    # method 1.1 values a company in US dollars bit for bit as 1.0 did, so the figures stand
+    assert "unchanged under method 1.1" in asof
     classifier = _section(html, "classifier")
     msft = classifier[classifier.index("Worked example: Microsoft") :]
     assert '<td class="body">Checks</td><td class="body fb-num">none</td>' in msft
@@ -217,6 +220,58 @@ def test_the_page_says_what_method_1_0_changed() -> None:
     flags = _section(html, "flags")
     above = flags[flags.index(">growth-above-return</code>") :]
     assert "pays out less than nothing" in above[: above.index("</li>")]
+
+
+def test_the_foreign_filers_section_reads(client: TestClient) -> None:
+    """Spec 2026-11-10 10: a section on foreign filers after the value's, in the contents, in the
+    page's register: the reporting currency, the rate, the inflation differential with one worked
+    example, the share basis and the bound, the two bounds live from the policy; the refusals'
+    words. The refusals list names the currency's refusals in place of the foreign filer's, and the
+    rate note names the stale-rate bound. No code chip outside the flags section."""
+    html = _static_file("methodology.html")
+    assert '<li><a href="#methodology/foreign-filers">Foreign filers</a></li>' in html
+    flat = re.sub(r"\s+", " ", html)
+    section = _section(flat, "foreign-filers")
+    for span in ('data-policy="inflation_max"', 'data-policy="fx_stale_days"'):
+        assert span in section, span
+    assert "data-find" not in section and "<code" not in section
+    assert ("foreign-filers", "Foreign filers") in section_index()
+    found = section_text("foreign-filers", client.get("/api/policy").json(), None)
+    assert found is not None
+    title, text = found
+    assert title == "Foreign filers"
+    for words in (
+        "reporting currency",
+        "the currency of its newest annual income statement",
+        "units of the currency one US dollar buys",
+        "divided by the rate on the price's day",
+        "inflation differential",
+        "1.0404 ÷ 1.02 − 1 = 2.0%",
+        "1.09 × 1.02 − 1 = 11.18%",
+        "per ADS",
+        "older than 7 days",
+        "above 10.0%",
+        # the refusals in words, one each
+        "The reporting currency is unknown",
+        "No exchange rate",
+        "No inflation projection",
+        "Inflation above the bound",
+        "An unclear share basis",
+    ):
+        assert words in text, words
+    assert "—" not in text and "  " not in text
+    value = _section(flat, "value")
+    refusals = value[value.index(">Refusals</h3>") :]
+    assert "A foreign filer:" not in refusals
+    assert (
+        "A currency the method cannot price: unknown, with no exchange rate or inflation"
+        " projection, or with inflation above the bound."
+    ) in refusals
+    flags = _section(flat, "flags")
+    stale = flags[flags.index(">fx-stale</code>") :]
+    assert 'older than <span data-policy="fx_stale_days">—</span>' in stale[: stale.index("</li>")]
+    sources = _section(flat, "sources")
+    assert 'id="src-imf"' in sources and 'id="src-ias29"' in sources
 
 
 def test_the_agents_section_reads(client: TestClient) -> None:

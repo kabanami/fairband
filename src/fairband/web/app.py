@@ -82,7 +82,7 @@ from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from fairband.config import Settings, utcnow
-from fairband.engine.types import result_to_json
+from fairband.engine.types import ValuationResult, money_of, result_to_json
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs_statements import brief_for
@@ -291,7 +291,13 @@ def create_app(
         leads with (``research_api.agent_records``: ``review``, ``secondary``, ``report``,
         ``item``); and the company brief (B-149), the latest stored profile's description, which
         the drawer's head reads a line of, the report page and Details show whole, and the MCP
-        ``company`` tool carries."""
+        ``company`` tool carries. And what the figures are in (spec 2026-11-10 7.4), which the
+        drawer's head, Details and the report page name: ``currency``, the reporting currency the
+        snapshot was valued in (``types.money_of``, USD for a row with no rate); ``isAdr``, the
+        universe row's ADR flag, ``None`` without a row; ``adrRatio``, the ADR ratio the share
+        count was read by, the result's ``adr_ratio`` input, ``None`` without one; ``fxRate`` and
+        ``fxDate``, the rate the value was translated at and its close's date, ``None`` on a row
+        with no rate."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
@@ -304,6 +310,7 @@ def create_app(
         return {
             "company": None if listed is None else company_json(listed),
             "brief": brief,
+            **_money_json(snapshot.result, listed),
             "snapshot": snapshot_json(snapshot),
             "result": json.loads(result_to_json(snapshot.result)),
             "today": today.isoformat(),
@@ -379,6 +386,21 @@ def create_app(
     add_multiples_routes(app, conn_factory, passthrough)
     add_vendor_routes(app, passthrough)
     return app
+
+
+def _money_json(result: ValuationResult, listed: CompanyRow | None) -> dict[str, Any]:
+    """What the snapshot's figures are in (``company``): the reporting currency, the universe
+    row's ADR flag, the ADR ratio input and, for a row in another currency, the rate and its
+    date."""
+    rate, currency = money_of(result)
+    foreign = currency != "USD"
+    return {
+        "currency": currency,
+        "isAdr": None if listed is None else listed.is_adr,
+        "adrRatio": next((i.value for i in result.inputs if i.name == "adr_ratio"), None),
+        "fxRate": rate if foreign else None,
+        "fxDate": result.intermediates.get("fx_date") if foreign else None,
+    }
 
 
 def _validation_detail(exc: RequestValidationError) -> str:

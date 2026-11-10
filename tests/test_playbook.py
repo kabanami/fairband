@@ -109,6 +109,11 @@ CANNOT_FIX = (
 )
 # The refusal the engine gave a foreign filer before method 1.1, which the playbook names no more.
 OLD_FOREIGN_FILER = "currency and share-unit handling not built yet"
+# The listed-share basis's refusal whole, as assembly words it (``refresh.inputs_splits``), with its
+# placeholders: the counts in millions to one decimal, and the ratio.
+BASIS_UNCLEAR = (
+    "share basis unclear: the newest period's count <c> against the quote's <Q> (the ADR ratio <ρ>)"
+)
 # The refusals the agent meets, as the server words them; the playbook quotes each verbatim.
 REFUSALS = (
     IDENTIFY_FIRST,
@@ -118,6 +123,7 @@ REFUSALS = (
     anchor_misfit("revenue.ntm"),
     GUIDANCE_REF,
     *CANNOT_FIX,
+    BASIS_UNCLEAR,
     NO_FMP_KEY,
     NO_GF_KEY,
     BUSY,
@@ -666,6 +672,67 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         "why it is not added",
     ):
         assert words in valuation, words
+
+
+def test_the_skill_reads_a_foreign_filer() -> None:
+    """Spec 2026-11-10 10: step 3 reads a foreign filer (every figure in the reporting currency but
+    the price, the value and the levels; per ADS on an ADR; the rate's ref for any arithmetic
+    across the two currencies, through `derive`; the override ranges and the guidance in the
+    currency); step 8 reads `basis-scaled` and `fx-stale`; the overrides' ranges in dollars are in
+    the currency; a part's free cash flow is in the currency; the citations' format rows name the
+    currency; the tools name the company read's fields and the secondary valuation's currency."""
+    skill = _read(SKILL)
+    steps = {n: _flat(text) for n, text in _steps(_frontmatter(skill)[1]).items()}
+    for words in (
+        "A foreign filer reports in another currency than the US dollar",
+        "`currency`",
+        "`adrRatio`",
+        "`fxRate`",
+        "every per-share figure is per ADS",
+        "`snapshot:<id>/inputs/fx_rate`",
+        "through `derive`",
+        "the override ranges in dollars are in the reporting currency",
+        "a guidance record's figures are in the reporting currency",
+    ):
+        assert words in steps[3], words
+    eight = _steps(_frontmatter(skill)[1])[8]
+    flags = {
+        code: _flat(text)
+        for code, text in re.findall(
+            r"^- `([\w-]+)`: (.*?)(?=^- |^$|\Z)", eight, re.MULTILINE | re.DOTALL
+        )
+    }
+    assert "Seven flags ask for a decision of yours." in steps[8]
+    for code, words in (
+        ("basis-scaled", ("the ADR ratio", "read as stored", "section 8")),
+        ("fx-stale", ("the rate", "price date", '`refresh_start("price")`')),
+    ):
+        assert code in flags, code
+        for word in words:
+            assert word in flags[code], (code, word)
+    flat = _flat(skill)
+    assert (
+        "On a company in another currency every range in dollars is in the reporting currency,"
+        " each end × the snapshot's rate"
+    ) in flat
+    assert "`fcff` is the free cash flow to the firm in the reporting currency" in flat
+    citations = _flat(_read(CITATIONS))
+    for words in (
+        "`$` for a figure in US dollars only",
+        "put the code before the number in the plain part",
+        "or its sign for €, £ and ¥",
+    ):
+        assert words in citations, words
+    company = _tool_entry("company")
+    for words in ("`currency`", "`isAdr`", "`adrRatio`", "`fxRate`", "`fxDate`"):
+        assert words in company, words
+    secondary = _tool_entry("secondary_valuation")
+    assert (
+        "On a company in another currency pass the path, the debt and the cash in the reporting"
+        " currency; the value a share comes back in US dollars."
+    ) in secondary
+    derive = _tool_entry("derive")
+    assert "`snapshot:<id>/inputs/fx_rate`" in derive
 
 
 def test_nothing_counts_twice_route_by_route() -> None:

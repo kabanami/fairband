@@ -65,8 +65,11 @@ cite may give by its size. The units are the reads': ``currency``
 ``count``, ``score``, ``years``; ``None`` for a word and wherever the record names no unit, an
 intermediate or a vendor field. An engine input's unit maps onto them: a currency code is
 ``currency``, ``<code> a share`` ``per-share``, ``ratio`` ``percent``, ``shares`` and the other
-counted things ``count``. The period is the fiscal year (``2025``), the quarter (``2026-Q4``),
-``ttm``, or the close's or the multiple's date for the forms that have one, a finding's and a
+counted things ``count``; so a figure of a company in another currency (spec 2026-11-10 7.4),
+its input, an override's bridge line or a sensitivity axis, reads as a USD one does. The ADR ratio
+(``adr_ratio``, ordinary shares per ADS) is a ``multiple``, not a fraction; the rate
+(``fx_rate``, ``<code> per USD``) has no unit. The period is the fiscal year (``2025``), the
+quarter (``2026-Q4``), ``ttm``, or the close's or the multiple's date for the forms that have one, a finding's and a
 guidance record's as recorded; ``None`` for the others. The snapshot is the record's own for
 ``snapshot:``, ``review:``, ``secondary:`` and ``sensitivity:``, and for ``derived:`` the
 snapshot its operands rest on; ``None`` for the others, a finding and a guidance record being
@@ -216,8 +219,9 @@ _DRIVER_LISTS = frozenset({"revenue_growth", "operating_margin"})
 # A guidance record's figures a ref names, and the record as an evidence item names it.
 _GUIDANCE_FIGURES = frozenset({"low", "high", "midpoint", "step"})
 _GUIDANCE_RECORD = re.compile(r"guidance:(\d+)")
-# The inputs whose engine unit names the currency of a figure that is a share's: the price.
-_INPUT_UNITS = {"price": "per-share"}
+# The inputs whose engine unit the read's units do not follow: the price, a figure a share whose
+# unit names its currency; the ADR ratio, ordinary shares per ADS, whose ``ratio`` is no fraction.
+_INPUT_UNITS = {"price": "per-share", "adr_ratio": "multiple"}
 # A step of a path that is not there, told apart from a figure stored as null.
 _ABSENT = object()
 # The lines the store signs as outflows (``cfi`` and ``cff`` are net flows, not these): the
@@ -332,6 +336,8 @@ _NAME_WORDS = {
     "capex": "capital spending",
     "sbc": "stock compensation",
 }
+_RATE_WORDS = "the exchange rate, units of the reporting currency per US dollar"
+_DIFFERENTIAL_WORDS = "the inflation differential against the US dollar"
 # A snapshot's paths a report cites most, in words; any other reads through ``field_words``.
 _SNAPSHOT_PATH_WORDS = {
     "intermediates/belief/rate": "the belief",
@@ -349,6 +355,17 @@ _SNAPSHOT_PATH_WORDS = {
     "intermediates/price_facts/change_3y": "the price change over three years",
     "intermediates/price_facts/change_5y": "the price change over five years",
     "intermediates/price_facts/drawdown_from_peak": "the drop from the last peak",
+    # a company in another currency (spec 2026-11-10 7.2): its rate, the rate's date, the
+    # currency, the differential and the route's value before translation; the rate and the
+    # differential are inputs too, read alike
+    "intermediates/value_in_currency": "the value a share in the reporting currency",
+    "intermediates/fx_rate": _RATE_WORDS,
+    "inputs/fx_rate": _RATE_WORDS,
+    "intermediates/fx_date": "the exchange rate's date",
+    "intermediates/currency": "the reporting currency",
+    "intermediates/inflation_differential": _DIFFERENTIAL_WORDS,
+    "inputs/inflation_differential": _DIFFERENTIAL_WORDS,
+    "inputs/adr_ratio": "the ADR ratio, ordinary shares per ADS",
     "phase/phase": "the phase",
     "phase/growth_3y": "the three-year revenue growth",
     "phase/dickinson": "the Dickinson stage",

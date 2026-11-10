@@ -181,9 +181,11 @@
      so it draws again as they load and change. The report page (report.js, 18.4) draws with the
      drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
-     evidence, pairs, a date, a total, a count, a report's footnote numbers, and Request research
-     with a request of its own (asking). The drawer's charge section and its rows are here for
-     the tests, which read them in node (tests/web/page.mjs). */
+     evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the
+     line that says what the figures are in (currencyLine), a report's footnote numbers, and
+     Request research with a request of its own (asking). The drawer's charge section and its
+     rows, an input's value and the intermediates are here for the tests, which read them in node
+     (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
@@ -195,11 +197,13 @@
     columns: function () { return state.columns; },
     openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
     meter: meter, inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
+    inputValue: inputValue,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
-    phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, plain: plain,
+    phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, money: money,
+    rate: rate, plain: plain,
     footnotes: footnotes, asking: asking, requestResearch: requestResearch,
-    chargeRows: chargeRows, matureRoute: matureRoute,
-    briefLine: briefLine, firstSentence: firstSentence
+    chargeRows: chargeRows, matureRoute: matureRoute, intermediates: intermediates,
+    briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine
   };
 
   function load() {
@@ -652,9 +656,11 @@
 
   /* The drawer's main view (spec 2026-11-06 Tier 2, 18.2), in this order and nothing else: the
      head, with one line on the company under its name (B-149: the sector and industry, then the
-     first sentence of the company brief, briefLine); the meter with its levels and the route's
-     lines under it, the review's band and levels where the review counts and has a value, the
-     mechanical value named in its caption (plan 3), or in its place the refusal, as before; the
+     first sentence of the company brief, briefLine), and for a company in another currency or an
+     ADR the line that says what its figures are in (currencyLine, spec 2026-11-10 7.4); the
+     meter with its levels and the route's lines under it, the review's band and levels where the
+     review counts and has a value, the mechanical value named in its caption (plan 3), or in its
+     place the refusal, as before; the
      stance line when a report exists, the report's word in the row's chip classes, faded once
      the window of the snapshot it rests on has expired, then who published it and when; the
      report's Summary, its first section, then Open the report, a link to the report page; then
@@ -679,12 +685,14 @@
           ? h('p', { className: 'body app-drawer__name' }, body.company.name) : null,
         briefLine(body.company, body.brief)
           ? h('p', { className: 'caption app-muted app-drawer__brief' },
-            briefLine(body.company, body.brief)) : null),
+            briefLine(body.company, body.brief)) : null,
+        currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },
+          currencyLine(body)) : null),
       valued ? section('band', null, meter(body),
         levels(drawnLevels(body)),
         h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route),
         youngGrowth(im.failure_probability),
-        crossCheck(im.growth_route),
+        crossCheck(im.growth_route, im.currency),
         growth ? discountedAt(r.inputs) : null) : null,
       /* A refused row shows in the screen's Reviewed column (spec 2026-11-06 Tier 2, 11 and
          18.1) the value of its review on the latest snapshot, else of its secondary valuation
@@ -705,7 +713,7 @@
         'implied_margin' in im ? pairs([
           ['Margin the price needs', F.formatPercent(im.implied_margin), true]
         ]) : null,
-        'e_trailing' in im ? crossCheck(im.growth_route) : null) : null,
+        'e_trailing' in im ? crossCheck(im.growth_route, im.currency) : null) : null,
       report ? h('p', { key: 'stance', className: 'app-stance' },
         h('span', {
           className: 'fb-stance fb-stance--' + report.stance +
@@ -859,12 +867,16 @@
      has a value, each line under its input's label, or its refusal; the secondary valuation; the
      overrides, each a record, read-only; the guidance on file; the latest report's judgments;
      the kill criteria; the news items; the notes, with Add a note; the findings; the company's
-     ledger rows; then what the drawer showed before Details, in its order. The review and the
-     secondary come with the detail; the rest is its own read (readResearch). A list with nothing
-     in it is left out, but for the notes, which carry the owner's field. */
+     ledger rows; then what the drawer showed before Details, in its order, the inputs led by the
+     line that says what the figures are in (currencyLine). The review and the secondary come with
+     the detail; the rest is its own read (readResearch). A list with nothing in it is left out,
+     but for the notes, which carry the owner's field. The money figures of the records are in the
+     company's reporting currency (spec 2026-11-10 7.3 and 7.6), the head's value and levels and
+     the secondary valuation's value a share in USD. */
   function details(body) {
     var r = body.result;
     var im = r.intermediates;
+    var code = body.currency; /* the reporting currency the records' money figures are in */
     var phase = PHASE_NUMBER[r.phase.phase];
     var growth = r.route === 'revenue-growth';
     var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
@@ -894,7 +906,7 @@
       secondary ? block('app-secondary', 'Secondary valuation',
         notFallback(body) ? h('p', { className: 'caption app-muted' }, notFallback(body)) : null,
         pairs(secondaryRows(secondary)),
-        secondaryPath(secondary),
+        secondaryPath(secondary, code),
         h('p', { className: 'app-chipline' }, h(F.PrincipalChip, {
           principal: secondary.principal, actor: secondary.actor,
           at: localIso(secondary.createdAt)
@@ -934,7 +946,7 @@
             state: g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy,
             citedBy: citedBy(rs.overrides, g.id)
           });
-        }))) : null,
+        }), code)) : null,
       rs && rs.judgments.length ? block('app-judgments', 'Judgments',
         h('ul', { className: 'app-list' }, rs.judgments.map(function (j) {
           return h('li', { key: j.id },
@@ -986,7 +998,7 @@
             h('span', { className: 'caption app-line' }, 'as of ', when(f.asOf),
               f.period ? ' · ' + f.period : null),
             h('p', { className: 'body' }, f.text, f.value != null ? h('span',
-              { className: 'figure-sm' }, ' ' + findingFigure(f.value, f.unit)) : null),
+              { className: 'figure-sm' }, ' ' + findingFigure(f.value, f.unit, code)) : null),
             h('p', { className: 'caption app-muted app-source' }, f.source.kind + ' ',
               h('code', { className: 'fb-tag figure-sm' }, f.source.ref),
               f.source.note ? ' — ' + f.source.note : null),
@@ -1020,7 +1032,9 @@
          intermediates only its route writes. */
       'runoff_path' in im ? declineRoute(r) : null,
       'requirement' in im ? startUpRoute(r) : null,
-      section('inputs', 'Inputs', inputsTable(r.inputs)),
+      section('inputs', 'Inputs',
+        currencyLine(body) ? h('p', { className: 'caption app-muted' }, currencyLine(body)) : null,
+        inputsTable(r.inputs)),
       section('intermediates', 'Intermediate results', intermediates(r.intermediates)),
       section('flags', 'Flags', r.flags.length ? h('ul', { className: 'app-list' },
         r.flags.map(function (f) {
@@ -1312,15 +1326,15 @@
   }
 
   /* The secondary valuation's path (spec 18.3): on the parts form each part's name and its value,
-     a total in whole dollars, with its note under it; on the drivers form the drivers in words,
-     the rates as percentages. */
-  function secondaryPath(s) {
+     a total in whole units of `code`, the reporting currency (spec 2026-11-10 7.6), with its note
+     under it; on the drivers form the drivers in words, the rates as percentages. */
+  function secondaryPath(s, code) {
     if (s.form === 'parts') {
       return h('ul', { className: 'app-list app-secondary__path' }, s.parts.map(function (p, i) {
         return h('li', { key: i },
           h('span', { className: 'app-line' },
             h('span', { className: 'body' }, p.name), ' ',
-            h('span', { className: 'figure-sm' }, whole(p.value))),
+            h('span', { className: 'figure-sm' }, whole(p.value, code))),
           p.note ? h('p', { className: 'caption app-muted' }, p.note) : null);
       }));
     }
@@ -1353,25 +1367,28 @@
   }
 
   /* A guidance figure in its metric's unit (store.guidance.UNITS): EPS to cents, a margin or a
-     growth rate as a percent, any other a total in whole dollars. A point is one figure. */
+     growth rate as a percent, any other a total in whole units. A point is one figure. The money
+     figures are in `code`, the reporting currency, as the company states them (spec 2026-11-10
+     7.3). */
   var GUIDED_PERCENT = ['operating_margin', 'revenue_growth', 'eps_growth'];
 
-  function guided(v, metric) {
-    if (metric === 'eps') return F.formatMoney(v);
+  function guided(v, metric, code) {
+    if (metric === 'eps') return money(v, code);
     if (GUIDED_PERCENT.indexOf(metric) !== -1) return F.formatPercent(v);
-    return whole(v);
+    return whole(v, code);
   }
 
-  function guidedRange(g) {
-    if (g.low === g.high) return guided(g.low, g.metric);
-    return guided(g.low, g.metric) + ' – ' + guided(g.high, g.metric);
+  function guidedRange(g, code) {
+    if (g.low === g.high) return guided(g.low, g.metric, code);
+    return guided(g.low, g.metric, code) + ' – ' + guided(g.high, g.metric, code);
   }
 
   /* The guidance on file (spec 18.3, and Appendix A's, 18.4): each record's metric, period and
      basis, its call's date and its state in words, the overrides citing it, then its range and
-     midpoint in the metric's unit. Each record brings its state and the ids citing it, which
-     Details reads from the research records and the report page from Appendix A. */
-  function guidanceTable(guidance) {
+     midpoint in the metric's unit, a money figure in `code`, the company's reporting currency.
+     Each record brings its state and the ids citing it, which Details reads from the research
+     records and the report page from Appendix A. */
+  function guidanceTable(guidance, code) {
     return h('table', { className: 'fb-table app-inputs' },
       h('thead', null, h('tr', null,
         h('th', { className: 'label' }, 'Guided'),
@@ -1387,16 +1404,17 @@
             g.citedBy.length ? h('span', { className: 'caption app-line' },
               'cited by override ' + g.citedBy.join(', ')) : null),
           h('td', { className: 'fb-num' },
-            h('span', { className: 'figure-sm app-line' }, guidedRange(g)),
+            h('span', { className: 'figure-sm app-line' }, guidedRange(g, code)),
             h('span', { className: 'caption app-muted app-line' },
-              'midpoint ' + guided(g.midpoint, g.metric))));
+              'midpoint ' + guided(g.midpoint, g.metric, code))));
       })));
   }
 
-  /* A finding's value in its unit (store.research.UNITS). */
-  function findingFigure(v, unit) {
-    if (unit === 'currency') return whole(v);
-    if (unit === 'per-share') return F.formatMoney(v);
+  /* A finding's value in its unit (store.research.UNITS), a total or a figure a share in `code`,
+     the company's reporting currency, as the statements' figures are. */
+  function findingFigure(v, unit, code) {
+    if (unit === 'currency') return whole(v, code);
+    if (unit === 'per-share') return money(v, code);
     if (unit === 'percent') return F.formatPercent(v);
     if (unit === 'multiple') return times(v);
     return plain(v);
@@ -1459,11 +1477,11 @@
 
   /* A Mature Stable or growth row's growth-route value, under the band (calibration spec 5.7,
      growth-routes spec 5.12), or under a Mature Stable refusal; a refused cross-check shows only
-     among the intermediates. */
-  function crossCheck(g) {
+     among the intermediates. The route computes it in `code`, the reporting currency. */
+  function crossCheck(g, code) {
     if (!g || g.value_per_share == null) return null;
     return h('p', { className: 'caption app-muted' }, 'Growth-route cross-check: ' +
-      F.formatMoney(g.value_per_share) + ' (implied growth ' + F.formatPercent(g.implied_growth) +
+      money(g.value_per_share, code) + ' (implied growth ' + F.formatPercent(g.implied_growth) +
       ')');
   }
 
@@ -1661,6 +1679,7 @@
      solves at the price, so the arithmetic reproduces from the drawer. */
   function revenueRoute(r) {
     var im = r.intermediates;
+    var code = im.currency;
     var held = heldYears(ruleValue(r.inputs, 'high_growth_years'));
     return section('revenue', ROUTES[r.route],
       group('years', 'Ten years', yearsTable(im)),
@@ -1669,14 +1688,14 @@
       group('capital', 'Sales-to-capital', pairs(salesToCapital(im.sales_to_capital))),
       group('bridge', 'Terminal and bridge to equity', pairs([
         ['Terminal return', F.formatPercent(im.terminal_roic), true],
-        ['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat), true],
-        ['Terminal value', whole(im.terminal_value), true],
-        ['Firm value', whole(im.firm_value), true],
-        ['Less debt', whole(im.debt), true],
-        ['Plus cash', whole(im.cash), true],
-        ['Equity', whole(im.equity), true],
+        ['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat, code), true],
+        ['Terminal value', whole(im.terminal_value, code), true],
+        ['Firm value', whole(im.firm_value, code), true],
+        ['Less debt', whole(im.debt, code), true],
+        ['Plus cash', whole(im.cash, code), true],
+        ['Equity', whole(im.equity, code), true],
         ['Shares', plain(im.shares), true],
-        ['Value a share', F.formatMoney(im.value_per_share), true]
+        ['Value a share', money(im.value_per_share, code), true]
       ])),
       group('solves', 'At the price', pairs([
         [held ? 'Implied growth held in ' + held : 'Implied growth held after year 3',
@@ -1700,18 +1719,21 @@
   }
 
   /* One row a year: the revenue, the margin, EBIT, tax, NOPAT, the reinvestment and the free cash
-     flow, totals to whole dollars. On the dollar ramp the margin is each year's operating income
-     over its revenue, the income moving in dollars (method 5a.4), and its head says so. */
+     flow, totals to whole units of the row's currency. On the dollar ramp the margin is each
+     year's operating income over its revenue, the income moving in dollars (method 5a.4), or in
+     the currency of a row in another, and its head says so. */
   function yearsTable(im) {
-    var ramp = im.margin_path.ramp === 'dollars' ? 'ramp in dollars' : null;
+    var ramp = im.margin_path.ramp === 'dollars'
+      ? 'ramp in ' + (foreign(im.currency) ? im.currency : 'dollars') : null;
+    var total = wholeIn(im.currency);
     return figuresTable([
-      ['Revenue', im.revenue_by_year, whole],
+      ['Revenue', im.revenue_by_year, total],
       ['Margin', im.margin_path.by_year, F.formatPercent, ramp],
-      ['EBIT', im.ebit_by_year, whole],
-      ['Tax', im.tax_by_year, whole],
-      ['NOPAT', im.nopat_by_year, whole],
-      ['Reinvestment', im.reinvestment_by_year, whole],
-      ['Free cash flow', im.fcff_by_year, whole]
+      ['EBIT', im.ebit_by_year, total],
+      ['Tax', im.tax_by_year, total],
+      ['NOPAT', im.nopat_by_year, total],
+      ['Reinvestment', im.reinvestment_by_year, total],
+      ['Free cash flow', im.fcff_by_year, total]
     ]);
   }
 
@@ -1787,13 +1809,13 @@
   /* A row valued on the run-off (spec 2026-11-03 section 10): the ten years, the margin held in
      each, the rating that sets π, the floor and the distress weighting, then Altman Z″ and
      Piotroski F, which decide nothing. A row refused for a value at or below zero shows all of
-     it but the decline rate at the price. */
+     it but the decline rate at the price. Its money figures are in the row's currency. */
   function declineRoute(r) {
     var im = r.intermediates;
     return section('decline', ROUTES.decline,
       group('runoff', 'Run-off', runoffTable(im), pairs(runoffSummary(im))),
       group('margin', 'Normalized margin', pairs(normalizedMargin(im.margin))),
-      group('rating', 'Rating', pairs(rating(im.rating))),
+      group('rating', 'Rating', pairs(rating(im.rating, im.currency))),
       group('floor', 'Floor and distress', pairs(floorAndDistress(im)), weighting(im)),
       group('altman', 'Altman Z″', altmanZ(im.altman_z)),
       group('piotroski', 'Piotroski F', piotroskiF(im.piotroski_f)));
@@ -1802,13 +1824,14 @@
   /* A fall in revenue releases the capital it needed, recovered in part; a rise reinvests in
      full; each in the year of the change, so no year has both (spec 10.4). */
   function runoffTable(im) {
+    var total = wholeIn(im.currency);
     return figuresTable([
-      ['Revenue', im.revenue_by_year, whole],
-      ['EBIT', im.ebit_by_year, whole],
-      ['NOPAT', im.nopat_by_year, whole],
-      ['Release', im.release_by_year, whole],
-      ['Reinvestment', im.reinvestment_by_year, whole],
-      ['Free cash flow', im.fcff_by_year, whole]
+      ['Revenue', im.revenue_by_year, total],
+      ['EBIT', im.ebit_by_year, total],
+      ['NOPAT', im.nopat_by_year, total],
+      ['Release', im.release_by_year, total],
+      ['Reinvestment', im.reinvestment_by_year, total],
+      ['Free cash flow', im.fcff_by_year, total]
     ]);
   }
 
@@ -1833,8 +1856,8 @@
       ['Decline rate', noted(F.formatPercent(path.d), fade), true],
       ['Sales-to-capital', noted(times(s.value), s.used === 'own-latest'
         ? 'own, newest year' : 'mature peers\' median'), true],
-      ['Terminal value', noted(whole(im.terminal_value), 'flat'), true],
-      ['Firm value', whole(im.firm_value), true]
+      ['Terminal value', noted(whole(im.terminal_value, im.currency), 'flat'), true],
+      ['Firm value', whole(im.firm_value, im.currency), true]
     ];
     if ('implied_decline_rate' in im) {
       rows.push(['Implied decline rate', im.implied_decline_rate == null
@@ -1860,8 +1883,8 @@
   /* The synthetic rating on EBIT at the normalized margin over the trailing interest, and its
      ten-year probability of default (spec 10.7): with no net debt there is nothing to default
      on; with no debt line on file, or net debt and no interest expense on file, no rating and
-     no π, the note saying which. */
-  function rating(g) {
+     no π, the note saying which. EBIT and the interest are in `code`, the row's currency. */
+  function rating(g, code) {
     var pi = 'π, ten-year default probability';
     if (g.note === 'no net debt') {
       return [['Rating', 'no net debt', false], [pi, F.formatPercent(g.pi), true]];
@@ -1872,8 +1895,8 @@
     }
     return [
       ['Rating', g.rating, false],
-      ['EBIT at the normalized margin', whole(g.ebit), true],
-      ['Interest expense, trailing', whole(g.interest), true],
+      ['EBIT at the normalized margin', whole(g.ebit, code), true],
+      ['Interest expense, trailing', whole(g.interest, code), true],
       ['Coverage', times(g.coverage), true],
       [pi, F.formatPercent(g.pi), true]
     ];
@@ -1883,17 +1906,17 @@
      floors it when above zero and above it (spec 10.6): no floor without one or at or below zero,
      and above zero a floor that binds or does not; the distress-sale value a share. */
   function floorAndDistress(im) {
-    var ncav = im.ncav_per_share;
+    var ncav = im.ncav_per_share, code = im.currency;
     var floor = ncav == null || ncav <= 0 ? 'no floor'
       : im.floored_per_share > im.going_concern_per_share ? 'the floor binds'
         : 'the floor does not bind';
     return [
-      ['Less debt', whole(im.debt), true],
-      ['Plus cash', whole(im.cash), true],
+      ['Less debt', whole(im.debt, code), true],
+      ['Plus cash', whole(im.cash, code), true],
       ['Shares', plain(im.shares), true],
-      ['Going concern a share', F.formatMoney(im.going_concern_per_share), true],
-      ['NCAV a share', noted(ncav == null ? '—' : F.formatMoney(ncav), floor), true],
-      ['Distress-sale value a share', noted(F.formatMoney(im.distress_per_share),
+      ['Going concern a share', money(im.going_concern_per_share, code), true],
+      ['NCAV a share', noted(money(ncav, code), floor), true],
+      ['Distress-sale value a share', noted(money(im.distress_per_share, code),
         F.formatPercent(im.distress_sale_fraction) + ' of firm value + cash − debt'), true]
     ];
   }
@@ -1901,8 +1924,8 @@
   /* The value a share (spec 10.7): the floored value weighted against the distress-sale value at
      π, or the floored value alone when π is unavailable. */
   function weighting(im) {
-    var pi = im.pi.value;
-    var floored = F.formatMoney(im.floored_per_share);
+    var pi = im.pi.value, code = im.currency;
+    var floored = money(im.floored_per_share, code);
     if (pi == null) {
       return h('p', { className: 'caption' }, 'π unavailable: the value is the floored value, ' +
         floored);
@@ -1910,8 +1933,8 @@
     return h('p', { className: 'caption' },
       h('span', { className: 'app-line' }, 'value = floored × (1 − π) + distress × π'),
       h('span', { className: 'app-line' }, '= ' + floored + ' × (1 − ' + F.formatPercent(pi) +
-        ') + ' + F.formatMoney(im.distress_per_share) + ' × ' + F.formatPercent(pi) + ' = ' +
-        F.formatMoney(im.value_per_share)));
+        ') + ' + money(im.distress_per_share, code) + ' × ' + F.formatPercent(pi) + ' = ' +
+        money(im.value_per_share, code)));
   }
 
   /* Altman Z″ on the newest annual balance sheet (spec 10.8): its four ratios, the score and the
@@ -1965,44 +1988,45 @@
 
   /* A Start-up row (spec 2026-11-03 section 9), a refusal by design: the revenue in year 10 the
      price needs at the mature peers' margin, the net cash a share as a floor and the years the
-     cash covers the burn. */
+     cash covers the burn. Its money figures are in the row's currency. */
   function startUpRoute(r) {
     var im = r.intermediates;
     return section('start-up', ROUTES['start-up'],
-      group('requirement', 'Revenue the price needs', requirement(im.requirement),
+      group('requirement', 'Revenue the price needs', requirement(im.requirement, im.currency),
         movedCap(im, r.inputs)),
       group('floor', 'Cash floor', pairs(cashFloor(im)), belowFloor(r)),
       group('burn', 'Burn cover', pairs(burnCover(im))));
   }
 
   /* The year-10 revenue at which the straight ramp from today's revenue and operating income to
-     the target margin is worth the enterprise value the price implies (spec 9.2), and the ramp;
-     or the reason the requirement is not computed. */
-  function requirement(req) {
+     the target margin is worth the enterprise value the price implies (spec 9.2), and the ramp,
+     totals in `code`, the row's currency; or the reason the requirement is not computed. */
+  function requirement(req, code) {
     var target = req.target_margin, s = req.sales_to_capital;
+    var total = wholeIn(code);
     var rows = req.reason ? [['Not computed', req.reason, false]]
-      : [['Year-10 revenue', whole(req.revenue_y10), true]];
+      : [['Year-10 revenue', total(req.revenue_y10), true]];
     if (!req.reason && req.revenue_0 > 0) {
       rows.push(['Against today', h(React.Fragment, null,
         decimals(req.revenue_y10 / req.revenue_0, 1),
         h('span', { className: 'caption' }, ' × the trailing revenue')), true]);
     }
     rows = rows.concat([
-      ['Trailing revenue', whole(req.revenue_0), true],
+      ['Trailing revenue', total(req.revenue_0), true],
       ['Enterprise value at the price', req.ev_price != null && req.ev_price <= 0
-        ? noted(whole(req.ev_price), 'net cash covers the price') : whole(req.ev_price), true],
+        ? noted(total(req.ev_price), 'net cash covers the price') : total(req.ev_price), true],
       ['Target margin', target == null ? '—'
         : noted(F.formatPercent(target.value), peersBehind(target)), true],
       ['Sales-to-capital', s == null ? '—' : noted(times(s.value), 'mature peers\' median'), true]
     ]);
     return h(React.Fragment, null, pairs(rows), req.path ? figuresTable([
-      ['Revenue', req.path.revenue, whole],
-      ['EBIT', req.path.ebit, whole],
-      ['NOPAT', req.path.nopat, whole],
-      ['Reinvestment', req.path.reinvestment, whole],
-      ['Free cash flow', req.path.fcff, whole]
+      ['Revenue', req.path.revenue, total],
+      ['EBIT', req.path.ebit, total],
+      ['NOPAT', req.path.nopat, total],
+      ['Reinvestment', req.path.reinvestment, total],
+      ['Free cash flow', req.path.fcff, total]
     ]) : null, req.path ? pairs([
-      ['Terminal value', whole(req.terminal_value), true],
+      ['Terminal value', total(req.terminal_value), true],
       ['Terminal return', F.formatPercent(req.terminal_roic), true]
     ]) : null);
   }
@@ -2019,15 +2043,17 @@
     var read = dataValue(inputs, 'market_cap');
     if (im.market_cap == null || read == null || im.market_cap === read) return null;
     return h('p', { className: 'caption' }, 'The market cap moved with the price: ' +
-      dollars(im.market_cap) + ' at this price, ' + dollars(read) + ' as read');
+      dollars(im.market_cap, im.currency) + ' at this price, ' + dollars(read, im.currency) +
+      ' as read');
   }
 
   /* The net cash a share (spec 9.4): (cash − debt) ÷ diluted shares. */
   function cashFloor(im) {
+    var code = im.currency;
     return [
-      ['Net cash a share', F.formatMoney(im.cash_floor), true],
-      ['Cash', whole(im.cash), true],
-      ['Less debt', whole(im.debt), true],
+      ['Net cash a share', money(im.cash_floor, code), true],
+      ['Cash', whole(im.cash, code), true],
+      ['Less debt', whole(im.debt, code), true],
       ['Shares', plain(im.shares), true]
     ];
   }
@@ -2051,13 +2077,13 @@
     if (cover == null && im.burn != null && im.cash_known === false) {
       return [
         ['Cash covers', 'unknown: no cash line on file', false],
-        ['Burn a year', whole(im.burn), true]
+        ['Burn a year', whole(im.burn, im.currency), true]
       ];
     }
     if (cover == null) return [['Trailing burn', noted('—', 'no trailing cash flows'), true]];
     return [
       ['Cash covers', decimals(cover, 1) + ' years', true],
-      ['Burn a year', whole(im.burn), true]
+      ['Burn a year', whole(im.burn, im.currency), true]
     ];
   }
 
@@ -2085,23 +2111,111 @@
     return decimals(n, Number.isInteger(n) ? 0 : 2);
   }
 
-  /* A total in whole dollars, with separators: $5,900,000,000. */
-  function dollars(v) { return (v < 0 ? '−$' : '$') + decimals(Math.abs(v), 0); }
+  /* Whether `code`, a figure's currency, is one other than USD: such a figure takes its code
+     before the number, a USD one, or one with none named, `$` as before (spec 2026-11-10 7.4). */
+  function foreign(code) { return !!code && code !== 'USD'; }
 
-  /* A total in whole dollars; an em dash for none. */
-  function whole(v) { return v == null ? '—' : dollars(v); }
+  /* A figure in a currency other than USD: the code before the number, to `dp` decimals,
+     SEK 837.14, −SEK 800,000,000. */
+  function coded(v, code, dp) {
+    return (v < 0 ? '−' : '') + code + ' ' + decimals(Math.abs(v), dp);
+  }
+
+  /* A total in whole dollars, with separators: $5,900,000,000; in another currency `code`,
+     whole units with its code: SEK 800,000,000. */
+  function dollars(v, code) {
+    return foreign(code) ? coded(v, code, 0) : (v < 0 ? '−$' : '$') + decimals(Math.abs(v), 0);
+  }
+
+  /* A total in whole units of `code`, USD when none; an em dash for none. */
+  function whole(v, code) { return v == null ? '—' : dollars(v, code); }
+
+  /* whole, in `code`, as a table's column format (figuresTable). */
+  function wholeIn(code) { return function (v) { return whole(v, code); }; }
+
+  /* A figure a share to cents: $104.64, or in another currency `code` SEK 837.14; an em dash for
+     none. */
+  function money(v, code) {
+    if (!foreign(code)) return F.formatMoney(v);
+    return v == null || isNaN(Number(v)) ? '—' : coded(Number(v), code, 2);
+  }
+
+  /* An exchange rate, units of a currency a US dollar: to two decimals, four below one, so a
+     euro's 0.8612 keeps its figures (32.96, 8.00, 0.8612). */
+  function rate(v) { return decimals(v, Math.abs(v) < 1 ? 4 : 2); }
+
+  /* The ADR ratio, ordinary shares per ADS: a number of shares, to four decimals at most (5,
+     1.5, 0.3333). */
+  function shares(v) {
+    return minus(Number(v).toLocaleString('en-US', { maximumFractionDigits: 4 }));
+  }
 
   /* A ratio of sales to capital, to two decimals with x: 1.38x; an em dash for none. */
   function times(v) { return v == null ? '—' : decimals(v, 2) + 'x'; }
 
-  /* By unit: a price to cents, a total to whole dollars, a ratio to one decimal of a percent.
-     A price and a total share the unit USD; a price is under a million. */
+  /* By unit: a price to cents, a total to whole units, a ratio to one decimal of a percent. A
+     price and a total share the unit USD; a price is under a million. On a row in another
+     currency a money input's unit is the code, SEK or SEK a share (spec 2026-11-10 7.4), and it
+     reads with the code; the rate, `<code> per USD`, reads as a rate; the ADR ratio, ordinary
+     shares per ADS, as a number of shares, though its unit is `ratio`. */
+  var CODE = /^[A-Z]{3}$/;
+  var CODE_A_SHARE = /^([A-Z]{3}) a share$/;
+  var PER_USD = / per USD$/;
+
   function inputValue(i) {
+    var unit = i.unit || '';
+    var share = CODE_A_SHARE.exec(unit);
     if (i.value == null) return '—';
-    if (i.unit === 'USD a share') return F.formatMoney(i.value);
-    if (i.unit === 'USD') return Math.abs(i.value) < 1e6 ? F.formatMoney(i.value) : dollars(i.value);
-    if (i.unit === 'ratio') return F.formatPercent(i.value);
+    if (i.name === 'adr_ratio') return shares(i.value);
+    if (PER_USD.test(unit)) return rate(i.value);
+    if (share) return money(i.value, share[1]);
+    if (CODE.test(unit)) {
+      return Math.abs(i.value) < 1e6 ? money(i.value, unit) : dollars(i.value, unit);
+    }
+    if (unit === 'ratio') return F.formatPercent(i.value);
     return plain(i.value);
+  }
+
+  /* What a company's figures are in (spec 2026-11-10 6.2, 7.4 and 10), the line under the head of
+     the drawer and of the report page and at the head of Details' inputs, from the company read:
+     the reporting currency, the ordinary shares an ADS stands for, and the rate its value was
+     translated at, "Reports in TWD; one ADS is five ordinary shares; valued at TWD 32.96 per
+     USD". The report page (`perAds`) adds that every figure a share is per ADS. A company in USD
+     that is no ADR, and has no ratio on file, has none: ''. */
+  function currencyLine(body, perAds) {
+    var code = body.currency || 'USD';
+    var listed = !!body.isAdr || body.adrRatio != null;
+    if (!foreign(code) && !listed) return '';
+    var parts = ['Reports in ' + code];
+    if (listed) {
+      parts.push(adsWords(body.adrRatio));
+      if (perAds) parts.push('every per-share figure here is per ADS');
+    }
+    if (foreign(code) && body.fxRate != null) {
+      parts.push('valued at ' + code + ' ' + rate(body.fxRate) + ' per USD');
+    }
+    return parts.join('; ');
+  }
+
+  /* The ordinary shares an ADS stands for, by the ADR ratio: "one ADS is five ordinary shares",
+     "three ADSs are one ordinary share" for a ratio of a third; a ratio within 1% of a whole
+     number reads as that number, in words up to ten. */
+  var NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+    'nine', 'ten'];
+
+  function adsWords(ratio) {
+    if (ratio == null) return 'the ADR ratio is not on file';
+    if (ratio < 1 && nearWhole(1 / ratio)) {
+      return counted(Math.round(1 / ratio)) + ' ADSs are one ordinary share';
+    }
+    var n = nearWhole(ratio) ? Math.round(ratio) : ratio;
+    return 'one ADS is ' + counted(n) + ' ordinary share' + (n === 1 ? '' : 's');
+  }
+
+  function nearWhole(x) { return Math.abs(x - Math.round(x)) <= 0.01 * x; }
+
+  function counted(n) {
+    return Number.isInteger(n) && n <= 10 ? NUMBER_WORDS[n] : shares(n);
   }
 
   /* Each input on one row, its nine fields stacked so they fit the rail: the name, tag, kind and
@@ -2139,28 +2253,36 @@
      changes, the drawdown, the path steps, the growth rates, the growth share). A dollar amount
      or a count whose key happens to end the same way (value_by_roic, stable_growth, roic's years)
      does not. A map keyed by runway years or by ROIC values takes its own key's reading, and so
-     does a bare value (runway_return's). */
+     does a bare value (runway_return's). The inflation differential is a fraction too. */
   var PERCENT = /(_growth|_yield|_return|margin|roic|belief)$/;
-  var ALSO_PERCENT = /^(implied_|change_|drawdown|path_steps$|growth_rates$|growth_share$)/;
+  var ALSO_PERCENT =
+    /^(implied_|change_|drawdown|path_steps$|growth_rates$|growth_share$|inflation_differential$)/;
   var NOT_PERCENT = /^(value_|stable_growth|years?$)/;
   /* Counts and years read whole. P/E multiples to one decimal with x. A figure a share (EPV, the
-     value, EPS, the non-recurring gap, the 52-week prices, the value maps by runway and by ROIC,
-     whatever the entry's key) reads to cents; a total (NOPAT, invested capital, net income,
-     earnings, anything at a million or more) to whole dollars. Any other number to two
-     decimals. */
+     value, the value in the reporting currency, EPS, the non-recurring gap, the 52-week prices,
+     the value maps by runway and by ROIC, whatever the entry's key) reads to cents; a total
+     (NOPAT, invested capital, net income, earnings, anything at a million or more) to whole
+     units. The rate reads as a rate. Any other number to two decimals. */
   var COUNT = /^(years?|base_year|runway|fade_years|analysts|shares)$/;
   var MULTIPLE = /^pe_/;
-  var PER_SHARE = /^(epv|value_per_share|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
+  var PER_SHARE =
+    /^(epv|value_per_share|value_in_currency|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
   var PER_SHARE_GROUP = /^(eps$|value_by_)/;
   var TOTAL = /(_total|nopat|average_capital|net_income)$|^e_/;
+  /* On a row in another currency every money figure is in it (spec 2026-11-10 7.2) but the price
+     facts, read from the USD closes, and the peers' market caps, which rank the peers. */
+  var USD_GROUPS = /^(price_facts|peers)$/;
 
-  function figure(v, key, group) {
+  /* A number by its key, a money figure in `code`, the row's reporting currency. */
+  function figure(v, key, group, code) {
+    var own = USD_GROUPS.test(group || '') ? null : code;
+    if (key === 'fx_rate') return rate(v);
     if (isPercent(key, group)) return F.formatPercent(v);
-    if (PER_SHARE_GROUP.test(group || '')) return F.formatMoney(v);  /* value_by_roic's runway */
+    if (PER_SHARE_GROUP.test(group || '')) return money(v, own);  /* value_by_roic's runway */
     if (COUNT.test(key)) return plain(v);
     if (MULTIPLE.test(key)) return decimals(v, 1) + 'x';
-    if (PER_SHARE.test(key)) return F.formatMoney(v);
-    if (TOTAL.test(key) || Math.abs(v) >= 1e6) return dollars(v);
+    if (PER_SHARE.test(key)) return money(v, own);
+    if (TOTAL.test(key) || Math.abs(v) >= 1e6) return dollars(v, own);
     return decimals(v, 2);
   }
 
@@ -2173,40 +2295,44 @@
   function isTable(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
 
   /* One value as text: null an em dash, a number by its key, a list inline (a list of tables one
-     table a line, its year first), a deeper table inline. */
-  function shown(v, key, group) {
+     table a line, its year first), a deeper table inline; a money figure in `code`. */
+  function shown(v, key, group, code) {
     if (v == null) return '—';
-    if (typeof v === 'number') return figure(v, key, group);
+    if (typeof v === 'number') return figure(v, key, group, code);
     if (Array.isArray(v)) {
-      if (!v.some(isTable)) return v.map(function (x) { return shown(x, key, group); }).join(', ');
+      if (!v.some(isTable)) {
+        return v.map(function (x) { return shown(x, key, group, code); }).join(', ');
+      }
       return v.map(function (x, n) {
-        return h('span', { key: n, className: 'app-line' }, shown(x, key, group));
+        return h('span', { key: n, className: 'app-line' }, shown(x, key, group, code));
       });
     }
     if (isTable(v)) {
       return Object.keys(v).sort(function (a, b) { return (b === 'year') - (a === 'year'); })
-        .map(function (k) { return k + ' ' + shown(v[k], k, key); }).join(' · ');
+        .map(function (k) { return k + ' ' + shown(v[k], k, key, code); }).join(' · ');
     }
     return String(v);
   }
 
   /* One group per top-level key: a table's entries, with a nested table flattened one level. EPV
      below zero capitalises a trailing loss, which also puts the growth share above 100%; its line
-     says so, so the reader is not misled. */
+     says so, so the reader is not misled. The money figures are in the row's currency, its
+     `currency`, USD on a row that names none. */
   function intermediates(im) {
+    var code = im.currency;
     return Object.keys(im).map(function (key) {
       var v = im[key];
       var rows = [];
       if (key === 'epv' && v < 0) {
-        rows.push([key, noted(shown(v, key, null), 'negative: trailing earnings are a loss'),
+        rows.push([key, noted(shown(v, key, null, code), 'negative: trailing earnings are a loss'),
           true]);
       } else if (!isTable(v)) {
-        rows.push([key, shown(v, key, null), true]);
+        rows.push([key, shown(v, key, null, code), true]);
       } else {
         Object.keys(v).forEach(function (k) {
-          if (!isTable(v[k])) return rows.push([k, shown(v[k], k, key), true]);
+          if (!isTable(v[k])) return rows.push([k, shown(v[k], k, key, code), true]);
           Object.keys(v[k]).forEach(function (kk) {
-            rows.push([k + '.' + kk, shown(v[k][kk], kk, k), true]);
+            rows.push([k + '.' + kk, shown(v[k][kk], kk, k, code), true]);
           });
         });
       }

@@ -27,8 +27,9 @@
   /* The server's stage names as the run bar's lowercase verb phrases (spec 4.3). */
   var STAGE_WORDS = {
     universe: 'reading the universe', deciles: 'ranking', fetch: 'fetching',
-    backfill: 'reading stored statements', value: 'valuing',
-    quotes: 'fetching prices', reprice: 'repricing', done: 'finishing'
+    rates: 'fetching exchange rates', backfill: 'reading stored statements', value: 'valuing',
+    quotes: 'fetching prices', fx: 'quoting exchange rates', reprice: 'repricing',
+    done: 'finishing'
   };
 
   /* The views in the header's order, each with its panel, a section of the page; then the report

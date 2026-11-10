@@ -213,6 +213,7 @@ SECTIONS = [
     "life-cycle",
     "classifier",
     "value",
+    "foreign-filers",
     "mature-growth",
     "mature-stable",
     "growth",
@@ -296,6 +297,25 @@ def test_inbox_post_says_what_the_note_holds(api: FairbandClient) -> None:
     tools = anyio.run(listed)
     post = next(t.description or "" for t in tools if t.name == "inbox_post")
     assert "its note the request in the requester's own words on one line" in post
+
+
+def test_company_names_the_currency_the_rate_and_the_share_basis(api: FairbandClient) -> None:
+    """Spec 2026-11-10 7.4: the ``company`` read (web and MCP) carries the reporting currency, the
+    ADR flag and ratio, and the rate with its date; the tool's description says so."""
+    server = build_server(api)
+
+    async def listed() -> list[Any]:
+        async with Client(server) as session:
+            return (await session.list_tools()).tools
+
+    tools = anyio.run(listed)
+    company = next(t.description or "" for t in tools if t.name == "company")
+    for words in (
+        "the reporting currency (`currency`)",
+        "the ADR flag and ratio (`isAdr`, `adrRatio`)",
+        "the exchange rate and its date (`fxRate`, `fxDate`)",
+    ):
+        assert words in company, words
 
 
 def test_a_write_before_identify_is_refused() -> None:
@@ -641,7 +661,8 @@ def test_methodology_lists_the_sections_without_one(api: FairbandClient) -> None
         ("methodology", {"section": "nope"}),
     )
     assert [s["id"] for s in listed["sections"]] == SECTIONS
-    assert listed["sections"][4] == {"id": "mature-growth", "title": "Mature Growth"}
+    assert listed["sections"][4] == {"id": "foreign-filers", "title": "Foreign filers"}
+    assert listed["sections"][5] == {"id": "mature-growth", "title": "Mature Growth"}
     assert (value["id"], value["title"]) == ("value", "What a value means here")
     assert unknown == {"refused": "no methodology section nope", "status": 404}
 

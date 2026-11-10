@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 from refresh.synthetic import NOW
-from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.engine_companies import fx_inputs, mature_growth_inputs, universe_deciles
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
@@ -154,6 +154,61 @@ def test_review_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[s
         "review:99/value",
     ):
         assert _resolve(conn, ref, policy) is None, ref
+
+
+def test_a_company_in_another_currency_resolves_its_rate_and_names_it(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-10 7.2 and 7.4 on FXCO, the company in SEK at 8.0 a dollar, here an ADR of five
+    ordinary shares: an input in SEK resolves to the read's unit as one in USD does (a total
+    ``currency``, a figure a share ``per-share``), so a bridge line of an override in SEK does too;
+    the rate is a figure with no unit, the ADR ratio a multiple, the differential a percent; and
+    the references list names the rate, its date, the currency, the differential and the value in
+    the currency in words."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    inputs = replace(fx_inputs(), is_adr=True, adr_ratio=5.0)
+    mechanical = value_company(inputs, universe_deciles(), policy, TODAY)
+    sid = insert_snapshot(conn, mechanical, aapl.refresh_id, clock=lambda: NOW)
+    outside = Override(9, "value.outside", 40.0, "agent", "claude-opus-5-5", NOW, "a stake")
+    review = review_company(inputs, universe_deciles(), policy, TODAY, [outside], mechanical)
+    review_id = insert_review(conn, review, "FXCO", sid, None, clock=lambda: NOW)
+    resolver = Resolver(conn, "FXCO", policy)
+    s = f"snapshot:{sid}"
+    for ref, value, unit in (
+        (f"{s}/inputs/fx_rate", 8.0, None),
+        (f"{s}/inputs/adr_ratio", 5.0, "multiple"),
+        (f"{s}/inputs/inflation_differential", 0.02, "percent"),
+        (f"{s}/inputs/market_cap", 40_000e6, "currency"),
+        (f"{s}/inputs/eps_ttm", 42.4, "per-share"),
+        (f"{s}/intermediates/fx_rate", 8.0, None),
+        (f"review:{review_id}/bridge/1/new", 40.0, "per-share"),
+    ):
+        found = resolver.resolve(ref)
+        assert found is not None, ref
+        assert (found.value, found.unit) == (pytest.approx(value), unit), ref
+    assert resolver.resolve(f"{s}/intermediates/currency") == Resolved("SEK", None, None, sid)
+    priced = "priced 31 Oct 2026"
+    for path, words in (
+        ("intermediates/value_in_currency", "the value a share in the reporting currency"),
+        (
+            "intermediates/fx_rate",
+            "the exchange rate, units of the reporting currency per US dollar",
+        ),
+        ("inputs/fx_rate", "the exchange rate, units of the reporting currency per US dollar"),
+        ("intermediates/fx_date", "the exchange rate's date"),
+        ("intermediates/currency", "the reporting currency"),
+        (
+            "intermediates/inflation_differential",
+            "the inflation differential against the US dollar",
+        ),
+        ("inputs/inflation_differential", "the inflation differential against the US dollar"),
+        ("inputs/adr_ratio", "the ADR ratio, ordinary shares per ADS"),
+    ):
+        assert resolver.describe(f"{s}/{path}") == f"snapshot {sid}, {words}, {priced}", path
+    assert resolver.describe(f"review:{review_id}/intermediates/fx_rate") == (
+        f"review {review_id}, the exchange rate, units of the reporting currency per US dollar"
+    )
 
 
 def _secondary_id(conn: sqlite3.Connection, policy: Policy, snapshot_id: int) -> int:

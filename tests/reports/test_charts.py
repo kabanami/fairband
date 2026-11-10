@@ -9,21 +9,30 @@ from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Any
 
-from refresh.synthetic import NOW
+from refresh.synthetic import NOW, bodies
+from support.engine_companies import fx_inputs, universe_deciles
 from support.payloads import store_payloads
+from support.web import TODAY
 
+from fairband.engine.route import value_company
 from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.sensitivity import SensitivityGrid
 from fairband.engine.types import Levels
 from fairband.policy import Policy
-from fairband.reports.charts import BAND_TITLE, ChartTable, chart_tables, shift_words
+from fairband.reports.charts import (
+    BAND_TITLE,
+    ChartTable,
+    chart_tables,
+    reading_axes,
+    shift_words,
+)
 from fairband.reports.check import HEADINGS, headings, shown
 from fairband.reports.tables import financial_tables
 from fairband.store.ledger import Writer
 from fairband.store.multiples import log_multiples
 from fairband.store.reports import ReportRow, insert_report, report_row
 from fairband.store.secondary import insert_secondary
-from fairband.store.sensitivities import insert_sensitivity
+from fairband.store.sensitivities import insert_sensitivity, sensitivity_row
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.store.vendor import record_response
 
@@ -222,6 +231,48 @@ def test_section_8_holds_the_cited_sensitivity_readings_and_the_secondary_grid(
     assert [row[0] for row in grid.rows] == ["1.0%", "2.0%", "3.0%"]
     assert (grid.rows[0][1], grid.rows[1][2]) == ("$44.22", "$39.89")  # spec 20.4's corner, value
     assert chart_tables(conn, _report(conn, sid), policy)["Valuation"] == ()
+
+
+def test_a_company_in_another_currency_names_its_code_on_its_figures(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-10 7.4 on FXCO, the company in SEK: the financial tables' totals and figures a
+    share are in the statements' currency, written with its code; a sensitivity reading's money
+    axis is in it too (an override's unit, 7.3), while its cells are US dollars a share, as the
+    value is; a percentage axis and a USD reading read as before."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    sid = insert_snapshot(
+        conn, value_company(fx_inputs(), universe_deciles(), policy, TODAY), aapl.refresh_id
+    )
+    statements = {e: p for e, p in bodies(currency="SEK").items() if e != "earnings"}
+    store_payloads(conn, "FXCO", statements, NOW)
+    grid = SensitivityGrid((40.0, 80.0), (0.08,), ((110.0,), (115.25,)), None)
+    reading = insert_sensitivity(
+        conn, "FXCO", sid, None, "value.outside", "growth.belief", grid, "v", "h", AGENT, NOW
+    )
+    sections = [{"heading": h, "parts": ["Plain words."]} for h in headings("full report")]
+    sections[7] = {
+        "heading": "Valuation",
+        "parts": [{"cite": "$110", "ref": f"sensitivity:{reading}/1/1"}],
+    }
+    report_id = insert_report(
+        conn, "FXCO", "full report", "hold", sections, None, sid, None, None, None, AGENT, NOW
+    )
+    report = report_row(conn, report_id)
+    assert report is not None
+    tables = chart_tables(conn, report, policy)
+    growth = {row[0]: row[1:] for row in tables[HEADINGS[3]][0].rows}
+    assert growth["Revenue"][-2:] == ("SEK 2,000,000,000", "SEK 2,100,000,000")
+    assert growth["Revenue growth"][-1] == "5.0%"
+    assert growth["EPS"][-1].startswith("SEK ") and "$" not in growth["EPS"][-1]
+    (valuation,) = tables["Valuation"]
+    assert valuation.header == ("outside the business", "belief 8.0%")
+    assert valuation.rows == (("SEK 40.00", "$110.00"), ("SEK 80.00", "$115.25"))
+    found = sensitivity_row(conn, reading)
+    assert found is not None
+    assert reading_axes(found, "SEK").rows == ("SEK 40.00", "SEK 80.00")
+    assert reading_axes(found, "USD").rows == ("$40.00", "$80.00")
 
 
 def test_a_parts_grid_reads_its_rows_as_shifts(

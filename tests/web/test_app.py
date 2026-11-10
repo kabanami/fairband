@@ -652,6 +652,12 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         "report",
         "item",
         "brief",
+        # what the figures are in (spec 2026-11-10 7.4): tests/web/test_company_reads.py
+        "currency",
+        "isAdr",
+        "adrRatio",
+        "fxRate",
+        "fxDate",
     }
     # The company brief (B-149) is the stored profile's description; none is stored here.
     assert body["brief"] is None
@@ -981,6 +987,10 @@ def test_controls_js_run_bar() -> None:
         ("quotes", "fetching prices"),
         ("reprice", "repricing"),
         ("done", "finishing"),
+        # the exchange rates of a full or scoped refresh and the pairs' quotes of a price refresh
+        # (spec 2026-11-10 7.1)
+        ("rates", "fetching exchange rates"),
+        ("fx", "quoting exchange rates"),
     ):
         assert f"{stage}: '{word}'" in script, stage
     assert "progressLine" not in script
@@ -1416,6 +1426,54 @@ def test_the_report_page_shows_the_brief_under_the_head() -> None:
     assert ": null" in brief
 
 
+def test_the_head_details_and_the_report_page_say_what_the_figures_are_in() -> None:
+    """Spec 2026-11-10 7.4 and 10: the line that names the reporting currency, the ADS and the rate
+    (``currencyLine``, its words in ``tests/web/test_drawer_currency.py``) is in the drawer's head
+    under the company's one line, at the head of Details' inputs, and in the report page's head
+    under the name, where it adds that every figure a share is per ADS (6.2); none on a domestic
+    row. The report page's line is under the name and the phase badge. The secondary valuation's
+    totals, its parts and the guidance read in the currency, and Appendix A names the rate where
+    it states the secondary valuation."""
+    script = _static_file("app.js")
+    main = _function(script, "sections")
+    _in_order(
+        main,
+        "className: 'caption app-muted app-drawer__brief'",
+        "currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },",
+        "valued ? section('band', null, meter(body),",
+    )
+    details = _function(script, "details")
+    _in_order(
+        details,
+        "section('inputs', 'Inputs',",
+        "currencyLine(body) ? h('p', { className: 'caption app-muted' }, currencyLine(body)) : null,",
+        "inputsTable(r.inputs)",
+    )
+    for call in (
+        "pairs(secondaryRows(secondary))",
+        "secondaryPath(secondary, code)",
+        "guidanceTable(rs.guidance.map(function (g) {",
+    ):
+        assert call in details, call
+    assert "}), code)) : null," in details  # the guidance table in the row's currency
+    report = _code(_static_file("report.js"))
+    head = _function(report, "head")
+    _in_order(
+        head,
+        "d.company && d.company.name",
+        "phase ? h(F.PhaseBadge, { phase: phase }) : null",
+        "P.currencyLine(d, true) ? h('p', { className: 'caption app-muted app-report__currency' },",
+    )
+    appendix = _function(report, "secondary")
+    for text in (
+        "var code = s.currency;",
+        "code !== 'USD' ? [['Rate', code + ' ' + P.rate(s.fxRate) + ' per USD', true]] : [],",
+        "['Firm value', P.whole(s.firmValue, code), true],",
+        "P.secondaryPath(s, code),",
+    ):
+        assert text in appendix, text
+
+
 def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
     """Spec 2026-11-04 9.6: a delete's one affirmative button is the danger one. ConfirmDialog
     shows no revision without targetRevision and no Reject without onReject, and confirmVariant
@@ -1691,7 +1749,7 @@ def test_app_js_names_the_revenue_route_and_draws_its_tables() -> None:
     ):
         assert key in script, key
     # the terminal value is the fully taxed year-10 NOPAT times the multiple: both lines show
-    assert "['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat), true]," in script
+    assert "['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat, code), true]," in script
     # spec 5.9: the flat required return, read from the row's RULE input, on every row of the
     # route; spec 5.13: a Young Growth row has no range in tier 1
     assert "'Discounted at the required return of ' +" in script
@@ -1744,10 +1802,12 @@ def test_app_js_drawer_draws_the_run_off_table() -> None:
     assert "'runoff_path' in im ? declineRoute(r) : null," in script
     for text in (
         "'Run-off'",
-        "['Release', im.release_by_year, whole],",
-        "['Reinvestment', im.reinvestment_by_year, whole],",
-        "['Free cash flow', im.fcff_by_year, whole]",
-        "['Terminal value', noted(whole(im.terminal_value), 'flat'), true],",
+        # a total in the row's currency (spec 2026-11-10 7.4)
+        "var total = wholeIn(im.currency);",
+        "['Release', im.release_by_year, total],",
+        "['Reinvestment', im.reinvestment_by_year, total],",
+        "['Free cash flow', im.fcff_by_year, total]",
+        "['Terminal value', noted(whole(im.terminal_value, im.currency), 'flat'), true],",
         "rows.push(['Implied decline rate', im.implied_decline_rate == null",
         "'Normalized margin'",
         "'Rating'",
@@ -1810,19 +1870,21 @@ def test_app_js_drawer_says_the_fade_the_ramp_and_the_stable_cross_check() -> No
         # no year reads the rate when the consensus reaches year N (review of task 7)
         ": 'the consensus runs to year ' + path.runoff_years;",
         "['Decline rate', noted(F.formatPercent(path.d), fade), true],",
-        "['Terminal value', noted(whole(im.terminal_value), 'flat'), true],",
+        "['Terminal value', noted(whole(im.terminal_value, im.currency), 'flat'), true],",
     ):
         assert text in summary, text
     assert "from year 4" not in summary and "every year: no usable consensus" not in summary
     years = script[script.index("function yearsTable(") :]
     years = years[: years.index("\n  }\n")]
-    assert "var ramp = im.margin_path.ramp === 'dollars' ? 'ramp in dollars' : null;" in years
+    # the ramp moves in dollars, or in the currency of a row in another (spec 2026-11-10 7.4)
+    assert "var ramp = im.margin_path.ramp === 'dollars'" in years
+    assert "? 'ramp in ' + (foreign(im.currency) ? im.currency : 'dollars') : null;" in years
     assert "['Margin', im.margin_path.by_year, F.formatPercent, ramp]," in years
     assert "c[3] ? noted(c[0], c[3]) : c[0]" in script
     refusal = script[script.index("r.refusal ? section('refusal', 'Refusal',") :]
     refusal = refusal[: refusal.index("section('window'")]
-    assert "'e_trailing' in im ? crossCheck(im.growth_route) : null" in refusal
-    assert script.count("crossCheck(im.growth_route)") == 2
+    assert "'e_trailing' in im ? crossCheck(im.growth_route, im.currency) : null" in refusal
+    assert script.count("crossCheck(im.growth_route, im.currency)") == 2
 
 
 def test_app_js_drawer_draws_the_charge_of_a_mature_row() -> None:
@@ -2044,7 +2106,7 @@ def test_details_order_is_pinned() -> None:
     table = _function(script, "guidanceTable")
     for text in (
         "'call ', when(g.asOf), ' · ', g.state",
-        "'midpoint ' + guided(g.midpoint, g.metric)",
+        "'midpoint ' + guided(g.midpoint, g.metric, code)",
         "g.citedBy.length ? h('span', { className: 'caption app-line' },",
         "'cited by override ' + g.citedBy.join(', ')",
     ):
@@ -2100,7 +2162,7 @@ def test_details_lists_the_secondarys_parts_or_drivers() -> None:
         block,
         "notFallback(body) ? h('p', { className: 'caption app-muted' }, notFallback(body)) : null,",
         "pairs(secondaryRows(secondary))",
-        "secondaryPath(secondary)",
+        "secondaryPath(secondary, code)",
         "h(F.PrincipalChip, {",
     )
     # on a company the route or the review values, the record on file is not the fallback, as
@@ -2119,7 +2181,7 @@ def test_details_lists_the_secondarys_parts_or_drivers() -> None:
         "if (s.form === 'parts') {",
         "s.parts.map(function (p, i) {",
         "h('span', { className: 'body' }, p.name)",
-        "h('span', { className: 'figure-sm' }, whole(p.value))",
+        "h('span', { className: 'figure-sm' }, whole(p.value, code))",
         "p.note ? h('p', { className: 'caption app-muted' }, p.note) : null",
         "var d = s.drivers;",
         "['Years', plain(d.years), true],",
@@ -2658,7 +2720,7 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
         "part('Overrides',",
         "part('Secondary valuation', secondary(a))",
         "part('Guidance on file',",
-        "P.guidanceTable(a.guidance)",
+        "P.guidanceTable(a.guidance, a.snapshot.currency)",
         "part('Checks that ran',",
         "part('Versions', versions(a.versions))",
         "part('Classifier evidence', P.phaseEvidence(classifier(a.classifier)))",
@@ -2703,9 +2765,9 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
         secondary,
         # the server's sentence as it arrives, never rewritten
         "if (!s) return none(a.noSecondary || 'None.');",
-        "P.pairs(P.secondaryRows(s).concat([",
-        "P.secondaryPath(s)",
-        "s.form === 'drivers' ? projection(s) : partsYears(s)",
+        "P.pairs(P.secondaryRows(s).concat(",
+        "P.secondaryPath(s, code)",
+        "s.form === 'drivers' ? projection(s, code) : partsYears(s, code)",
     )
     assert "sentence(" not in script and "toUpperCase()" not in script
     assert "P.figuresTable([" in _function(script, "projection")
