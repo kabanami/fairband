@@ -475,7 +475,8 @@ SETTINGS: tuple[Setting, ...] = (
         "refresh.reuse_hours",
         "refresh",
         "Reuse window, FMP",
-        "A refresh reuses FMP data fetched within this many hours.",
+        "A full refresh reuses FMP data fetched within this many hours; a scoped one fetches "
+        "again.",
         "hours",
         "run",
         "0 to 720",
@@ -485,7 +486,8 @@ SETTINGS: tuple[Setting, ...] = (
         "refresh.gf_reuse_days",
         "refresh",
         "Reuse window, GuruFocus",
-        "A refresh reuses GuruFocus data fetched within this many days.",
+        "A full refresh reuses GuruFocus data fetched within this many days; a scoped one "
+        "fetches again.",
         "days",
         "run",
         "0 to 90",

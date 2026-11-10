@@ -6,7 +6,10 @@ It takes the endpoints in a fixed order. For each one it:
 
 1. reuses the newest HTTP 200 response without an error to the same call (provider, endpoint,
    symbol and params) when it was observed less than ``reuse_hours`` (FMP) or ``gf_reuse_days``
-   (GuruFocus) before ``now``, unless ``force``: no call, no write (spec 6.2, D13);
+   (GuruFocus) before ``now``, unless ``force``: no call, no write (spec 6.2, D13). A scoped
+   refresh forces every call, whatever the window, so on a split's day it reads the splits FMP
+   lists from that day (spec 2026-11-09 10.3); a full refresh does not, so it continues after a
+   cancel (``run``);
 2. else calls the vendor, outside any transaction;
 3. then stores the response, its body scrubbed of ``secrets``, together with the facts and
    observations normalized from it in one transaction, so a response never stands without its rows.

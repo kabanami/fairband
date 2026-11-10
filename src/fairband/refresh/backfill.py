@@ -10,9 +10,9 @@ per response. A field already stored keeps its rows and nothing else is touched,
 writes nothing. A payload that does not parse writes nothing. The run logs one INFO line with the
 count it wrote.
 
-Every refresh that values runs it first (``run``): a revalue reads only the store, and a full or
-scoped refresh reuses responses observed within ``reuse_hours`` without a fetch, so a response
-stored before a line joined the normalizer has that line's facts only once this has run.
+Every refresh that values runs it first (``run``): a revalue reads only the store, and a full
+refresh reuses responses observed within ``reuse_hours`` without a fetch, so a response stored
+before a line joined the normalizer has that line's facts only once this has run.
 """
 
 import json

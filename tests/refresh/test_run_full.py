@@ -300,6 +300,22 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
     assert row.calibration is not None and row.calibration["total"] == 4
 
 
+def test_a_scoped_refresh_fetches_again_and_a_full_one_reuses(env_fixture_universe: Env) -> None:
+    """A scoped refresh fetches every call again, whatever the reuse window: on a split day the
+    splits a fetch of the evening before stored are empty, and the scoped refresh is the remedy
+    (method 10). A full refresh within the window reuses, so it continues after a cancel."""
+    env = env_fixture_universe
+    env.refresh().run("full")
+    assert env.router.symbol_calls["ACME"] == 16
+    env.clock.now += timedelta(minutes=5)
+    env.refresh().run("scoped", ["ACME"])
+    assert env.router.symbol_calls["ACME"] == 32  # the 14 FMP and 2 GuruFocus calls, again
+    env.clock.now += timedelta(minutes=5)
+    calls = Counter(env.router.symbol_calls)
+    assert env.refresh().run("full") > 0 and env.last().status == "done"
+    assert env.router.symbol_calls == calls  # the screener's and every company's reused
+
+
 @pytest.mark.parametrize(
     ("status", "body", "error", "message"),
     [

@@ -73,8 +73,8 @@ First, the refresh. Every item: refresh the company before you read it, so the r
 the latest price and the row's price, price ÷ value and designation are current when the report
 publishes. The stored price is the last refresh's close, which may be days old.
 
-A scoped refresh fetches the company's price and statements again and values it. It takes about
-a minute.
+A scoped refresh fetches the company's price and statements again (every call, whatever was
+fetched that day) and values it. It takes about a minute.
 
 - Call `refresh_start("scoped", [symbol])` and keep the `refreshId` it answers. When it is refused
   because a refresh is running, call `refresh_status()` until that one ends, then start yours.

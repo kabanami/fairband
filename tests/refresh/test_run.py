@@ -136,8 +136,8 @@ def test_stop_after_first_then_continue(env: Env) -> None:
     """The cancel lands in the fetch stage: ACME keeps its stored responses, BOLT is never
     started, and no snapshot is written, because a cancel ends the run after the current symbol
     and no later stage runs (a full refresh could not compute deciles from part of the
-    universe either). Nothing is lost: the next run reuses ACME's responses (no call), fetches
-    BOLT and values both."""
+    universe either). The next run, a scoped refresh, fetches both, ACME's every call again
+    (a full one reuses within the window: ``test_run_full``), and values both."""
     cancel = threading.Event()
 
     def stop_after_first(progress: Progress) -> None:
@@ -155,27 +155,27 @@ def test_stop_after_first_then_continue(env: Env) -> None:
     env.clock.now += timedelta(hours=1)
     second = env.run(["ACME", "BOLT"])
     assert (env.last().id, env.last().status) == (second, "done")
-    assert env.router.symbol_calls == Counter({"BOLT": 16})  # ACME: no call
+    assert env.router.symbol_calls == Counter({"ACME": 16, "BOLT": 16})
     assert env.items(second) == [("ACME", "valued", None), ("BOLT", "valued", None)]
-    assert [(symbol, refresh) for symbol, refresh, _ in env.snapshots()] == [
+    # both fetched at once: the snapshots follow the order the fetches finished
+    assert sorted((symbol, refresh) for symbol, refresh, _ in env.snapshots()) == [
         ("ACME", second),
         ("BOLT", second),
     ]
 
 
-def test_fresh_company_not_fetched_again(env: Env) -> None:
+def test_a_scoped_refresh_fetches_every_call_again(env: Env) -> None:
+    """Within the reuse window too, GuruFocus's two calls among them (method 10); a full
+    refresh's reuse is ``test_run_full``'s."""
     first = env.run(["ACME"])
     env.router.calls.clear()
     env.clock.now += timedelta(hours=23)
     second = env.run(["ACME"])
-    assert env.router.calls == Counter()
+    assert sum(env.router.calls.values()) == 16  # 14 FMP and 2 GuruFocus calls
+    assert env.router.calls["summary"] == env.router.calls["keyratios"] == 1
     assert env.last().status == "done"
     assert env.items(second) == [("ACME", "valued", None)]
     assert [refresh for _, refresh, _ in env.snapshots()] == [first, second]
-
-    env.clock.now += timedelta(hours=2)  # 25 hours after the first fetch
-    env.run(["ACME"])
-    assert sum(env.router.calls.values()) == 14  # FMP again; GuruFocus is reused for 7 days
 
 
 def test_failing_company_gets_refusal_row(
@@ -296,14 +296,14 @@ def test_rate_limit_stops_the_fetch_and_values_what_was_fetched(env: Env) -> Non
 def test_the_fetch_stage_logs_the_fmp_pace(env: Env, caplog: pytest.LogCaptureFixture) -> None:
     """One INFO line at the fetch stage's end gives the FMP limiter's share of the stage: the
     fixtures' FMP client is not paced, so 14 calls a company with no wait and no hold. A second
-    run within the reuse window fetches nothing, and its line counts its own stage only."""
+    scoped run makes every call again, and its line counts its own stage only."""
     with caplog.at_level(logging.INFO, logger="fairband.refresh"):
         env.run(["ACME", "BOLT"])
         env.run(["ACME", "BOLT"])
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("FMP pace")]
     assert lines == [
         "FMP pace: waited 0.0 s over 28 calls, 0 holds",
-        "FMP pace: waited 0.0 s over 0 calls, 0 holds",
+        "FMP pace: waited 0.0 s over 28 calls, 0 holds",
     ]
 
 

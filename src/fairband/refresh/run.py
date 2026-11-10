@@ -12,20 +12,21 @@ runs, ``create_refresh`` raises ``RefreshRunning``). A full refresh first runs:
 A scoped refresh takes the symbols it is given. Both then list each symbol ``pending`` and run:
 
 - ``fetch``: ``fetch_company`` for each symbol on a daemon thread of its own, with a connection of
-  its own from ``conn_factory``. At most ``policy.refresh.workers`` symbols are in flight, and the
-  run starts the next only after it has recorded a finished one. A symbol becomes ``fetching``,
-  then ``fetched``, or ``failed`` with the fetch's error and a refusal snapshot of that reason
-  ("data fetch failed: <endpoints>") that carries the price the store holds. The stage ends with
-  one INFO line on the FMP limiter's share of it: "FMP pace: waited <s> s over <n> calls, <h>
-  holds".
+  its own from ``conn_factory``; a scoped refresh forces every call (``force``), whatever the reuse
+  window, and a full refresh reuses within it. At most ``policy.refresh.workers`` symbols are in
+  flight, and the run starts the next only after it has recorded a finished one. A symbol becomes
+  ``fetching``, then ``fetched``, or ``failed`` with the fetch's error and a refusal snapshot of
+  that reason ("data fetch failed: <endpoints>") that carries the price the store holds. The stage
+  ends with one INFO line on the FMP limiter's share of it: "FMP pace: waited <s> s over <n> calls,
+  <h> holds".
 - ``deciles`` (full only): ``deciles_for_universe`` over every admitted symbol, from the statements
   the store holds, saved under the refresh (spec 6.6). When they rank no company on growth, the run
   ends ``failed``, "deciles rank no company", and saves none: empty deciles would put every later
   company in decile 1, and the last good universe's stay the ones a scoped refresh uses.
 - ``backfill``: ``backfill_statement_facts`` on the run's own connection writes the facts of the
   statement lines the normalizer gained after their responses were stored, from the stored
-  payloads (spec 2026-11-03 section 11): the fetch reuses a response observed within
-  ``reuse_hours`` without a call, so it may predate a line. The stage reports its start alone.
+  payloads (spec 2026-11-03 section 11): a full refresh's fetch reuses a response observed
+  within ``reuse_hours`` without a call, so it may predate a line. The stage reports its start alone.
 - ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs`` and
   ``value_company`` with the latest stored deciles (a full refresh's own; assembly classifies the
   company's peers on them), ``insert_snapshot``; the symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
@@ -57,10 +58,10 @@ snapshot has no multiples to log.
 
 The run stops early on two events. A cancel is read before each symbol starts, in both stages; the
 symbols in flight finish and the run ends ``cancelled``, with no further stage: a fetched symbol
-keeps its stored responses, which the next run reuses within ``reuse_hours``, and a valued one its
-snapshot. So a full refresh cancelled while it fetches saves no deciles and values nothing, and the
-next one, a new record over a universe built again, fetches only the companies not fetched within
-``reuse_hours``: it continues. A cancel that lands while the deciles are computed still saves them
+keeps its stored responses, which the next full run reuses within ``reuse_hours`` (a scoped one
+fetches every call again), and a valued one its snapshot. So a full refresh cancelled while it
+fetches saves no deciles and values nothing, and the next one, a new record over a universe built
+again, fetches only the companies not fetched within ``reuse_hours``: it continues. A cancel that lands while the deciles are computed still saves them
 (they rank the whole universe); the value stage then values nothing. An HTTP 429 (``FetchOutcome.rate_limited``) ends the fetching the
 same way; the symbol it hit gets the refusal "data fetch incomplete: rate limited" and is
 ``failed`` (spec 6.2: a failed fetch gets a row), the symbols never reached stay ``pending`` with
@@ -77,7 +78,7 @@ at once: their symbols go back to ``pending``, the run ends ``failed`` and the e
 A ``ThreadPoolExecutor``'s workers are joined when the interpreter exits, even after
 ``shutdown(wait=False)``, and ending the command with ``os._exit`` would skip its own cleanup (the
 signal handler, the clients, the output); a daemon thread is simply not joined. What a given-up
-fetch still stores is a response like any other, reused by the next run; ``fetches_in_flight``
+fetch still stores is a response like any other, reused by the next full run; ``fetches_in_flight``
 counts the fetch threads not ended, so a long-lived caller (the server's worker) can wait for them
 before it starts another run.
 
@@ -323,8 +324,9 @@ class Refresh:
     def _scoped(
         self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int, symbols: list[str]
     ) -> _Finish:
-        """The stages of a scoped refresh; the status and message to finish it with."""
-        fetched = self._fetch_pending(conn, fmp, refresh_id, symbols)
+        """The stages of a scoped refresh; the status and message to finish it with. Its fetch
+        makes every call again, whatever the reuse window (``force``)."""
+        fetched = self._fetch_pending(conn, fmp, refresh_id, symbols, force=True)
         stopped = self._stopped(conn, refresh_id, fetched)
         if stopped is not None:
             return stopped
@@ -349,11 +351,16 @@ class Refresh:
         return "done", None, calibration(symbols, {}, snapshots)
 
     def _fetch_pending(
-        self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int, symbols: Sequence[str]
+        self,
+        conn: sqlite3.Connection,
+        fmp: Fmp,
+        refresh_id: int,
+        symbols: Sequence[str],
+        force: bool = False,
     ) -> _Fetched:
-        """List each symbol ``pending``, then fetch them."""
+        """List each symbol ``pending``, then fetch them, each call made again with ``force``."""
         self._list_pending(conn, refresh_id, symbols)
-        return self._fetch_stage(conn, fmp, refresh_id, symbols)
+        return self._fetch_stage(conn, fmp, refresh_id, symbols, force)
 
     def _list_pending(
         self, conn: sqlite3.Connection, refresh_id: int, symbols: Sequence[str]
@@ -383,10 +390,16 @@ class Refresh:
         self._report(refresh_id, "done", valued, fetched.failed + len(fetched.symbols) - valued)
 
     def _fetch_stage(
-        self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int, symbols: Sequence[str]
+        self,
+        conn: sqlite3.Connection,
+        fmp: Fmp,
+        refresh_id: int,
+        symbols: Sequence[str],
+        force: bool,
     ) -> _Fetched:
-        """Fetch ``symbols`` until all are fetched, a cancel or a 429. An exception here gives up
-        the fetches in flight and puts their symbols back to ``pending`` before it propagates."""
+        """Fetch ``symbols`` until all are fetched, a cancel or a 429, each call made again with
+        ``force``. An exception here gives up the fetches in flight and puts their symbols back to
+        ``pending`` before it propagates."""
         self._stage(conn, refresh_id, "fetch", len(symbols))
         pace = fmp.limiter.totals()
         workers = self._policy.refresh.workers
@@ -404,7 +417,7 @@ class Refresh:
                     symbol = waiting.popleft()
                     now = self._clock()
                     upsert_item(conn, refresh_id, symbol, "fetching", None, now)
-                    self._start_fetch(fmp, symbol, now, finished)
+                    self._start_fetch(fmp, symbol, now, finished, force)
                     running.append(symbol)
                 if not running:
                     break
@@ -448,16 +461,22 @@ class Refresh:
         return _Fetched(tuple(fetched), failed, limited_by)
 
     def _start_fetch(
-        self, fmp: Fmp, symbol: str, now: datetime, finished: queue.Queue[_Result]
+        self,
+        fmp: Fmp,
+        symbol: str,
+        now: datetime,
+        finished: queue.Queue[_Result],
+        force: bool,
     ) -> None:
         """Fetch ``symbol`` on a daemon thread of its own (module docstring), with a connection
-        of its own; the outcome, or what the fetch raised, goes to ``finished``."""
+        of its own, each call made again with ``force``; the outcome, or what the fetch raised,
+        goes to ``finished``."""
 
         def fetch() -> None:
             try:
                 with closing(self._conn_factory()) as conn:
                     outcome = fetch_company(
-                        conn, fmp, self._gf, symbol, self._policy, now, self._secrets
+                        conn, fmp, self._gf, symbol, self._policy, now, self._secrets, force
                     )
             except BaseException as exc:  # noqa: BLE001 - handed to the run, which decides
                 finished.put((symbol, exc))
