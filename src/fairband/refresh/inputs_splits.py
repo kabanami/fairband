@@ -37,13 +37,17 @@ b`` (false for a ``b`` of zero):
   period's ρ is 1): each annual and quarterly row ending after that end (the rows the engine can
   read: the NTM quarters, the base year and the path years) with an EPS and a net-income mean: its
   implied count I, the net income ÷ the EPS, within the tolerance of the pre-split count P and not
-  of the post-split count S reads its EPS ÷ ρ, with P = S ÷ ρ. A row without a net-income mean is
-  read as stored and named; a row within both counts or neither, or with an EPS of zero, is read as
-  stored; every row without a count D is read as stored. A row ending at or before the newest
-  statement period end is already reported: read as stored and never named;
+  of the post-split count S reads its EPS ÷ ρ, with P = S ÷ ρ. A row without a net-income mean,
+  with an EPS of zero, or with an implied count within both counts or neither is read as stored
+  and named with its reason; every row without a count D is read as stored, the statement side's
+  sentence saying so. A row ending at or before the newest statement period end is already
+  reported: read as stored and never named;
 - GuruFocus's trailing EPS and EPS without non-recurring items, each observed before a pending
   split: ÷ the ratios of the pending splits dated after its observation;
-- the closes and the quote never: they are FMP's, already on the new basis.
+- the closes and the quote never: they are FMP's, already on the post-split basis.
+
+A reverse split prints its inverse: ``÷10`` on the count and ``×10`` on the per-share figures for a
+1-for-10.
 
 The count, the trailing EPS, the street trailing EPS, GuruFocus's two EPS figures and the NTM EPS,
 when scaled, are estimates under the method ``split-scaled`` and carry a note naming the split,
@@ -53,9 +57,10 @@ NTM quarters (``ntm_quarters``). The notes of the two trailing EPS figures say "
 when not every period scaled. No DATA input holds the annual consensus EPS (the path steps are
 rates, unmoved when both years scale), so the ``split-pending`` sentence alone names it. A pending
 split puts the note ``split-pending`` on the row, its sentence naming the splits and the newest
-period each follows, the figures read on the new basis and the periods they were scaled on, and
-the statement side's reason when it scaled nothing; without one every figure is read as stored and
-nothing is noted.
+trailing period they follow, the figures read on the new basis and the periods they were scaled
+on, and those read as stored with the reason: the statement side's when it scaled nothing, each
+period without a count, and each consensus row left; without one every figure is read as stored
+and nothing is noted.
 """
 
 import math
@@ -85,9 +90,14 @@ _NEITHER_BASIS = (
     "stored."
 )
 _NOTHING_TO_SCALE = "No trailing EPS or street actuals are on file to scale."
+# Why a consensus row ending after the newest statement is read as stored.
+_NO_MEAN = "no net-income mean"
+_ZERO_EPS = "an EPS of zero"
+_BOTH_COUNTS = "a count fitting both bases"
+_NEITHER_COUNT = "a count fitting neither basis"
 # The per-share DATA inputs the statement side may scale, in words.
 _PER_SHARE = {"eps_ttm": "the trailing EPS", "street_ttm_eps": "the street actuals"}
-_TAIL = "The closes and the quote are FMP's, already on it."
+_TAIL = "The closes and the quote are FMP's, already on the post-split basis."
 _QUARTERS = 4  # the street's trailing EPS sums four quarters' actuals
 
 # Where a count stands against another: pre-split, post-split, or on both bases or neither.
@@ -254,7 +264,7 @@ def _statement_side(
     groups = _groups(scaled)
     notes: dict[str, str] = {}
     if scale_count:
-        notes["shares_diluted"] = f"×{_count(ratio)} for {_named(newest)}"
+        notes["shares_diluted"] = f"{_times(ratio)} for {_named(newest)}"
     notes |= {name: _per_share_note(groups, len(figures.periods)) for name in moved}
     fiscal_year = figures.trailing is not None and figures.trailing.on_fiscal_year
     sentences: list[str] = []
@@ -341,8 +351,8 @@ def _per_share_note(groups: Sequence[tuple[tuple[SplitRow, ...], list[int]]], n:
     ``÷2 on 3 of 4 quarters for ...``, a part for each ratio."""
     named = _named(groups[0][0])
     if len(groups) == 1 and len(groups[0][1]) == n:
-        return f"÷{_count(_ratio(groups[0][0]))} for {named}"
-    parts = [f"÷{_count(_ratio(after))} on {len(ks)} of {n} quarters" for after, ks in groups]
+        return f"{_divided(_ratio(groups[0][0]))} for {named}"
+    parts = [f"{_divided(_ratio(after))} on {len(ks)} of {n} quarters" for after, ks in groups]
     return f"{' and '.join(parts)} for {named}"
 
 
@@ -353,7 +363,7 @@ def _spans(
 ) -> str:
     """``÷2 on the quarters to 30 Sep 2026``, a part for each ratio."""
     return " and ".join(
-        f"÷{_count(_ratio(after))} on {_span(ks, periods, fiscal_year)}" for after, ks in groups
+        f"{_divided(_ratio(after))} on {_span(ks, periods, fiscal_year)}" for after, ks in groups
     )
 
 
@@ -377,7 +387,7 @@ def _scaled_sentence(count_ratio: float | None, per_share: Sequence[str], spans:
     """The figures read on the post-split basis: the count with its factor when it scaled, the
     per-share figures with the periods they scaled on."""
     if count_ratio is not None:
-        counted = f"The diluted count (×{_count(count_ratio)})"
+        counted = f"The diluted count ({_times(count_ratio)})"
         if not per_share:
             return f"{counted} is read on the post-split basis."
         joint = ", " if len(per_share) == 2 else " and "
@@ -410,7 +420,7 @@ def _consensus_side(
     if figures.shares_diluted is None or not pending:
         return figures, {}, []
     ratio = _ratio(pending)
-    r, counts = _count(ratio), (figures.shares_diluted / ratio, figures.shares_diluted)
+    r, counts = _divided(ratio), (figures.shares_diluted / ratio, figures.shares_diluted)
     annual, annual_scaled, annual_left = _consensus(
         figures.annual_estimates, ratio, counts, statement_end, tolerance
     )
@@ -426,14 +436,14 @@ def _consensus_side(
     notes: dict[str, str] = {}
     if ntm_scaled:
         span = _quarters_span(ntm_scaled)
-        notes["ntm_eps"] = f"the consensus {span} ÷{r} for {_named(pending)}"
-    sentences = [f"The consensus EPS for {' and for '.join(spans)} is read ÷{r}."] if spans else []
-    left = [rows for rows in (_years_list(annual_left), _quarters_list(quarters_left)) if rows]
+        notes["ntm_eps"] = f"the consensus {span} {r} for {_named(pending)}"
+    sentences = [f"The consensus EPS for {' and for '.join(spans)} is read {r}."] if spans else []
+    left = [
+        *(f"{_years_list(rows)} ({reason})" for reason, rows in _by_reason(annual_left)),
+        *(f"{_quarters_list(rows)} ({reason})" for reason, rows in _by_reason(quarters_left)),
+    ]
     if left:
-        unmeaned = " and for ".join(left)
-        sentences.append(
-            f"The consensus EPS for {unmeaned} has no net-income mean and is read as stored."
-        )
+        sentences.append(f"The consensus EPS for {_and(left)} is read as stored.")
     scaled = replace(figures, annual_estimates=annual, quarter_estimates=quarters)
     return scaled, notes, sentences
 
@@ -444,25 +454,43 @@ def _consensus[E: (QuarterEstimate, AnnualEstimate)](
     counts: tuple[float, float],
     statement_end: date,
     tolerance: float,
-) -> tuple[tuple[E, ...], tuple[E, ...], tuple[E, ...]]:
-    """The rows with each pre-split EPS ÷ ``ratio``, the rows scaled, and the rows with an EPS and
-    no net-income mean; ``counts`` are the pre-split and the post-split counts. A row ending at or
-    before ``statement_end`` is already reported: kept as stored, neither scaled nor left."""
+) -> tuple[tuple[E, ...], tuple[E, ...], tuple[tuple[str, E], ...]]:
+    """The rows with each pre-split EPS ÷ ``ratio``, the rows scaled, and the rows with an EPS left
+    as stored, each with its reason; ``counts`` are the pre-split and the post-split counts. A row
+    whose implied count fits the post-split count alone is already on it, neither scaled nor left;
+    a row ending at or before ``statement_end`` is already reported, kept as stored, unnamed."""
     before, after = counts
     out: list[E] = []
     scaled: list[E] = []
-    left: list[E] = []
+    left: list[tuple[str, E]] = []
     for row in rows:
         if row.period_end > statement_end and row.eps is not None:
             if row.net_income is None:
-                left.append(row)
-            elif row.eps:
+                left.append((_NO_MEAN, row))
+            elif not row.eps:
+                left.append((_ZERO_EPS, row))
+            else:
                 implied = row.net_income / row.eps
-                if _within(implied, before, tolerance) and not _within(implied, after, tolerance):
+                pre, post = _within(implied, before, tolerance), _within(implied, after, tolerance)
+                if pre and post:
+                    left.append((_BOTH_COUNTS, row))
+                elif not pre and not post:
+                    left.append((_NEITHER_COUNT, row))
+                elif pre:
                     scaled.append(row)
                     row = replace(row, eps=row.eps / ratio)
         out.append(row)
     return tuple(out), tuple(scaled), tuple(left)
+
+
+def _by_reason[E: (QuarterEstimate, AnnualEstimate)](
+    left: Sequence[tuple[str, E]],
+) -> list[tuple[str, list[E]]]:
+    """The rows left as stored, grouped by reason in the order the reasons first appear."""
+    groups: dict[str, list[E]] = {}
+    for reason, row in left:
+        groups.setdefault(reason, []).append(row)
+    return list(groups.items())
 
 
 def _gurufocus_side(figures: SplitFigures, pending: Sequence[SplitRow]) -> _Side:
@@ -487,9 +515,9 @@ def _observed(
     if value is None or as_of is None or not after:
         return value, None, None
     ratio = _ratio(after)
-    r = _count(ratio)
-    note = f"÷{r} for {_named(after)}"
-    return value / ratio, note, f"GuruFocus's EPS observed {_day(as_of)} is read ÷{r}."
+    r = _divided(ratio)
+    note = f"{r} for {_named(after)}"
+    return value / ratio, note, f"GuruFocus's EPS observed {_day(as_of)} is read {r}."
 
 
 def _after(splits: Sequence[SplitRow], day: date) -> tuple[SplitRow, ...]:
@@ -510,6 +538,18 @@ def _basis(count: float, ratio: float, against: float, tolerance: float) -> _Bas
     if stored == scaled:
         return "both" if stored else "neither"
     return "post" if stored else "pre"
+
+
+def _times(ratio: float) -> str:
+    """A share count's factor: ``×2`` for a 2-for-1 split, its inverse ``÷10`` for a 1-for-10
+    reverse split."""
+    return f"×{_count(ratio)}" if ratio >= 1 else f"÷{_count(1 / ratio)}"
+
+
+def _divided(ratio: float) -> str:
+    """A per-share figure's factor: ``÷2`` for a 2-for-1 split, its inverse ``×10`` for a
+    1-for-10 reverse split."""
+    return f"÷{_count(ratio)}" if ratio >= 1 else f"×{_count(1 / ratio)}"
 
 
 def _within(a: float, b: float, tolerance: float) -> bool:

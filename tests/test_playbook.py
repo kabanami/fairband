@@ -432,6 +432,9 @@ def test_every_item_is_refreshed_before_it_is_read() -> None:
     assert "`snapshot.refreshId`" in _tool_entry("company")
     assert "Tell the user, go on with the stored snapshot" in three
     assert "write the price's date in section 9 of the report" in three
+    # a split's remedy is this refresh, every call made again (the whole-branch review of plan 2)
+    assert "When a stock split has taken effect, this scoped refresh is the remedy" in three
+    assert "(every call, whatever was fetched that day)" in three
     skill = _flat(_read(SKILL))
     assert (
         "Start a refresh only in three cases: the scoped refresh of the company at the start of"
@@ -589,6 +592,14 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
             ("`large-nri`", "`earnings.nri_gap`", "`earnings.ntm`", "guidance record", "exposure"),
         ),
         ("step-series-disagree", ("both series", "`path.step_2`", "`path.step_3`")),
+        (
+            "split-pending",
+            (
+                "no net-income mean",
+                "`earnings.cycle_gap`",
+                "drop and re-make them on the new basis",
+            ),
+        ),
     ):
         assert code in flags, code
         for word in words:
@@ -596,6 +607,12 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
     # the runway return is decided on the two mature routes alone (the Task 8 review)
     heavy = flags["heavy-capex"]
     assert heavy.startswith("on Mature Growth and Mature Stable"), heavy
+    # the split note's first sentence says when it fires (the whole-branch review of plan 2)
+    split = flags["split-pending"]
+    assert split.startswith(
+        "a split falls after the oldest period of the trailing figures and on or before the"
+        " quote's date."
+    ), split
     # a mature row with the charge off or the return unavailable still takes the judgment; only
     # the other routes have no runway return to decide (the Task 8 fix round 2, method 14.4)
     for words in (

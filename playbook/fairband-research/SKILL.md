@@ -92,7 +92,10 @@ the stored pre-split value at the post-split quote, which reads as a fall by the
 that is only announced changes nothing yet. After the refresh read `split-pending` on the row: it
 names the split and each figure read on the post-split basis, or why a side was read as stored. The
 consensus and the guidance record move to the new basis on their own days, so a step or a guided
-figure that looks halved may be one not yet restated.
+figure that looks halved may be one not yet restated. While `split-pending` is on the row,
+`financials`, `financial_tables` and `estimates` return the stored figures on their own basis
+beside the snapshot's scaled inputs; cite the snapshot's inputs for the per-share figures and say
+so in section 9.
 
 Then read everything the page shows:
 
@@ -254,12 +257,16 @@ Five flags ask for a decision of yours. Read each sentence whole: it names its f
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
   the step it names.
 - `split-pending`: a split falls after the oldest period of the trailing figures and on or before
-  the quote's date. The sentence names each figure read on the post-split basis — the diluted
+  the quote's date. The sentence names each figure read on the post-split basis (the diluted
   count, the trailing EPS, the street actuals, the consensus EPS by fiscal year and by quarter,
-  GuruFocus's EPS — or says why a side was read as stored: FMP's figures already on the new basis,
-  no quote count, no diluted count, or a count that fits both bases or neither. A figure read as
-  stored may be on the old basis. Check the consensus steps and any guided figure against the new
-  basis before you read them.
+  GuruFocus's EPS) or says why a side was read as stored: FMP's figures already on the new basis,
+  no quote count, no diluted count, a count that fits both bases or neither, or a trailing period
+  without a share count, or, for a consensus year or quarter, no net-income mean, an EPS of zero,
+  or a count that fits both bases or neither. A figure read as stored may be on the old basis.
+  Check the consensus steps and any guided figure against the new basis before you read them. A
+  review's per-share overrides (`earnings.ntm`, `earnings.cycle_gap`, `earnings.nri_gap`,
+  `value.outside`) stay on the basis they were made on: after a split, drop and re-make them on
+  the new basis before you publish.
 
 ### 9. The debate and the thesis
 

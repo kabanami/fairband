@@ -233,7 +233,7 @@ def test_the_statements_are_scaled_when_the_quote_shows_them_pre_split() -> None
         "A 2-for-1 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
         "The diluted count (×2), the trailing EPS and the street actuals (÷2 on the quarters to "
         "30 Sep 2026) are read on the post-split basis. The closes and the quote are FMP's, "
-        "already on it."
+        "already on the post-split basis."
     )
 
 
@@ -268,9 +268,7 @@ def test_the_consensus_is_scaled_by_its_implied_count() -> None:
     assert set(out.notes) == set(out.estimate_methods) == STATEMENT_KEYS
     sentence = _sentence(out)
     assert "The consensus EPS for fiscal 2026 is read ÷2." in sentence
-    assert "The consensus EPS for fiscal 2028 has no net-income mean and is read as stored." in (
-        sentence
-    )
+    assert "The consensus EPS for fiscal 2028 (no net-income mean) is read as stored." in sentence
 
 
 def test_the_consensus_test_reads_the_post_split_count_when_the_statements_were_restated() -> None:
@@ -343,8 +341,8 @@ def test_the_sentence_agrees_in_number_and_names_the_quarters_left() -> None:
     out = _apply(replace(_figures(), quarter_estimates=quarters))
     assert "The consensus EPS for the quarter to 31 Dec 2026 is read ÷2." in _sentence(out)
     assert (
-        "The consensus EPS for the quarters ending 31 Mar 2027 and 30 Jun 2027 has no net-income "
-        "mean and is read as stored." in _sentence(out)
+        "The consensus EPS for the quarters ending 31 Mar 2027 and 30 Jun 2027 (no net-income "
+        "mean) is read as stored." in _sentence(out)
     )
 
 
@@ -357,7 +355,7 @@ def test_a_count_matching_neither_basis_is_read_as_stored() -> None:
     assert _sentence(out) == (
         "An 11-for-10 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
         "The diluted count matches neither basis of the quote's count, so the statements are "
-        "read as stored. The closes and the quote are FMP's, already on it."
+        "read as stored. The closes and the quote are FMP's, already on the post-split basis."
     )
 
 
@@ -371,7 +369,7 @@ def test_without_a_diluted_count_the_statements_and_the_consensus_are_read_as_st
     assert _sentence(out) == (
         "A 2-for-1 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
         "No diluted count is on file, so the statements and the consensus are read as stored. "
-        "The closes and the quote are FMP's, already on it."
+        "The closes and the quote are FMP's, already on the post-split basis."
     )
 
 
@@ -388,6 +386,10 @@ def test_a_row_within_both_counts_is_left_alone() -> None:
     assert (
         "The diluted count lies within the tolerance of the quote's count on both bases, so the "
         "statements are read as stored." in _sentence(out)
+    )
+    assert (
+        "The consensus EPS for fiscal 2026 (a count fitting both bases) is read as stored."
+        in _sentence(out)
     )
 
 
@@ -420,8 +422,25 @@ def test_a_reverse_split_multiplies_the_per_share_figures() -> None:
     assert f.street_ttm_eps == pytest.approx(42.0)
     assert _sentence(out).startswith(
         "A 1-for-10 reverse split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
-        "The diluted count (×0.1), the trailing EPS and the street actuals (÷0.1 on the quarters "
-        "to 30 Sep 2026)"
+        "The diluted count (÷10), the trailing EPS and the street actuals (×10 on the quarters to "
+        "30 Sep 2026)"
+    )
+    split = "the 1-for-10 reverse split of 15 Oct 2026"
+    assert out.notes == {
+        "shares_diluted": f"÷10 for {split}",
+        "eps_ttm": f"×10 for {split}",
+        "street_ttm_eps": f"×10 for {split}",
+    }
+
+
+def test_a_large_reverse_split_prints_its_inverse_whole() -> None:
+    """A 1-for-200 prints ÷200 and ×200, never ×0.01 or ×0."""
+    reverse = SplitRow(date(2026, 10, 15), 1.0, 200.0)
+    out = _apply(_figures(count=1000.0), splits=(reverse,), market_cap=5.0 * 50)
+    assert out.notes["shares_diluted"] == "÷200 for the 1-for-200 reverse split of 15 Oct 2026"
+    assert out.notes["eps_ttm"] == "×200 for the 1-for-200 reverse split of 15 Oct 2026"
+    assert "The diluted count (÷200), the trailing EPS and the street actuals (×200" in (
+        _sentence(out)
     )
 
 
@@ -572,7 +591,7 @@ def test_a_split_within_the_trailing_quarters_scales_the_older_ones() -> None:
         "A 2-for-1 split of 15 Apr 2026 falls after the quarter ending 31 Mar 2026. "
         "The trailing EPS and the street actuals (÷2 on the quarters ending 31 Dec 2025 to "
         "31 Mar 2026) are read on the post-split basis. The closes and the quote are FMP's, "
-        "already on it."
+        "already on the post-split basis."
     )
 
 
@@ -587,7 +606,7 @@ def test_a_split_within_the_trailing_quarters_leaves_restated_quarters_alone() -
     assert _sentence(out) == (
         "A 2-for-1 split of 15 Apr 2026 falls after the quarter ending 31 Mar 2026. "
         "FMP's statements and street actuals already read on the post-split basis. The closes and "
-        "the quote are FMP's, already on it."
+        "the quote are FMP's, already on the post-split basis."
     )
 
 
@@ -724,6 +743,42 @@ def test_a_fiscal_year_without_a_count_is_read_as_stored() -> None:
     assert (
         "The diluted count (×2) is read on the post-split basis. The fiscal year has no share "
         "count and is read as stored." in _sentence(out)
+    )
+
+
+def test_consensus_rows_left_as_stored_are_named_with_their_reason() -> None:
+    """Minor 2: no mean, a count fitting both bases, a count fitting neither, an EPS of zero. At
+    a 50% tolerance the count of 1,000 fits both bases of the quote's 2,000, so the statements are
+    read as stored and the consensus counts are 500 and 1,000."""
+    rows = (
+        _annual(2027, 4.4, None),
+        _annual(2028, 2.0, 1200.0),  # implies 600: within 50% of both
+        _annual(2029, 1.0, 5000.0),  # implies 5,000: neither
+        _annual(2030, 0.0, 100.0),
+    )
+    out = apply_splits(
+        replace(_figures(), annual_estimates=rows),
+        (SPLIT,),
+        statement_end=END,
+        price_date=PRICE_DATE,
+        quote_market_cap=2000.0 * 50,
+        quote_price=50.0,
+        tolerance=0.5,
+    )
+    assert out.figures.annual_estimates == rows
+    assert (
+        "The consensus EPS for fiscal 2027 (no net-income mean), fiscal 2028 (a count fitting "
+        "both bases), fiscal 2029 (a count fitting neither basis) and fiscal 2030 (an EPS of "
+        "zero) is read as stored." in _sentence(out)
+    )
+
+
+def test_a_quarter_left_as_stored_is_named_by_its_period_end() -> None:
+    quarters = (_quarter(date(2026, 12, 31), 1.0, 5000.0),)  # implies 5,000: neither
+    out = _apply(replace(_figures(), quarter_estimates=quarters))
+    assert (
+        "The consensus EPS for the quarter ending 31 Dec 2026 (a count fitting neither basis) is "
+        "read as stored." in _sentence(out)
     )
 
 
