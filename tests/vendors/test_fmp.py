@@ -138,6 +138,12 @@ ROUTES = [
         {"symbol": "BRK-B", "from": "2021-11-01"},
     ),
     _route(
+        "fx-history",
+        lambda f: f.fx_history("USDTWD", date(2023, 11, 10)),
+        "historical-price-eod/light",
+        {"symbol": "USDTWD", "from": "2023-11-10"},
+    ),
+    _route(
         "transcript",
         lambda f: f.transcript("BRK.B", 2026, 3),
         "earning-call-transcript",

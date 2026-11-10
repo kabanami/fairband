@@ -1,7 +1,7 @@
-"""The full refresh over the six listings of ``fixture_universe`` and a migrated temporary database
-that holds no universe yet: the universe, the fetch, the deciles, the values and the calibration;
-the stops and the rerun that continues; the server's worker and the marking of a refresh a stop
-left running.
+"""The full refresh over the seven listings of ``fixture_universe`` and a migrated temporary
+database that holds no universe yet: the universe, the fetch, the rates, the deciles, the values
+and the calibration; the stops and the rerun that continues; the server's worker and the marking
+of a refresh a stop left running.
 """
 
 import json
@@ -54,21 +54,23 @@ RATE_LIMITED = "data fetch incomplete: rate limited"
 # fixture universe, nor has its industry one, so the revenue-growth route has no target margin.
 NO_TARGET = "no target margin: 0 mature peers"
 FOREIGN = "foreign filer: currency and share-unit handling not built yet"
-# The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused. Every company
+# The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused, and KRON, which
+# reports in SEK, refused as a foreign filer with its phase and the one flag its statements give
+# before the refusal. Every company
 # carries a flag (the synthetic company has no leases on its balance sheet, among others), but only
 # NEWT (growth word, free cash flow) is flagged by a classifier check: ACME's and AXLE's margin
 # directions read Stable, which points to no phase (method 0.9). NEWT's refusal for its target
 # margin keeps the flags of its revenue path (the annual consensus has no revenue for a path year,
 # so the path holds), of its capital build, and of the industry fallback for its peers.
 CALIBRATION = {
-    "total": 4,
+    "total": 5,
     "valued": 3,
-    "refused": {NO_TARGET: 1},
+    "refused": {NO_TARGET: 1, FOREIGN: 1},
     "phases": {
         "Start-up": 0,
         "Young Growth": 1,
         "High Growth": 0,
-        "Mature Growth": 2,
+        "Mature Growth": 3,
         "Mature Stable": 1,
         "Decline": 0,
         "unclassified": 0,
@@ -79,7 +81,7 @@ CALIBRATION = {
         "fcf-sign": 1,
         "growth-word-disagrees": 1,
         "large-nri": 3,
-        "leases-not-on-balance-sheet": 4,
+        "leases-not-on-balance-sheet": 5,
         "line-not-presented:current_lease_liability": 4,
         "line-not-presented:goodwill": 4,
         "line-not-presented:lease_rou_asset": 4,
@@ -90,7 +92,7 @@ CALIBRATION = {
         "value-spread": 2,
     },
     "universe": {
-        "admitted": 4,
+        "admitted": 5,
         "excluded": {
             "industry": 1,
             "name pattern": 0,
@@ -136,13 +138,14 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
         "ACME": (refresh_id, True),
         "AXLE": (refresh_id, True),
         "FIRB": (refresh_id, False),
+        "KRON": (refresh_id, True),
         "MILD": (refresh_id, True),
         "NEWT": (refresh_id, True),
     }
     saved = deciles(env)
     assert saved is not None
     # Every admitted company ranks on growth; NEWT's negative margin keeps it off the margin slope.
-    assert (saved.refresh_id, saved.n_growth, saved.n_margin) == (refresh_id, 4, 3)
+    assert (saved.refresh_id, saved.n_growth, saved.n_margin) == (refresh_id, 5, 4)
 
     assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
     snapshots = {symbol: env.snapshot(symbol) for symbol in ADMITTED}
@@ -152,6 +155,7 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
     assert {s: row.phase for s, row in snapshots.items()} == {
         "ACME": "Mature Growth",
         "AXLE": "Mature Growth",
+        "KRON": "Mature Growth",
         "MILD": "Mature Stable",
         "NEWT": "Young Growth",
     }
@@ -164,6 +168,8 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
         assert valued.route == route and valued.refusal is None
         assert valued.value is not None and valued.value > 0
     assert snapshots["NEWT"].refusal == NO_TARGET and snapshots["NEWT"].value is None
+    # Until the engine values foreign filers (spec 2026-11-10 7.2), KRON is refused as one.
+    assert snapshots["KRON"].refusal == FOREIGN and snapshots["KRON"].value is None
 
     calibration = row.calibration
     assert calibration == CALIBRATION
@@ -173,20 +179,27 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
     assert list(dict.fromkeys(p.stage for p in env.progress)) == [
         "universe",
         "fetch",
+        "rates",
         "deciles",
         "backfill",
         "value",
         "done",
     ]
-    assert [p for p in env.progress if p.stage in ("universe", "deciles", "done")] == [
+    stages = ("universe", "rates", "deciles", "done")
+    assert [p for p in env.progress if p.stage in stages] == [
         Progress(refresh_id, "universe", 0, 0, 0, None),
-        Progress(refresh_id, "universe", 4, 0, 0, None),
-        Progress(refresh_id, "deciles", 0, 0, 4, None),
-        Progress(refresh_id, "deciles", 4, 0, 0, None),
-        Progress(refresh_id, "done", 4, 0, 0, None),
+        Progress(refresh_id, "universe", 5, 0, 0, None),
+        Progress(refresh_id, "rates", 0, 0, 1, None),  # SEK, KRON's: USD fetches nothing
+        Progress(refresh_id, "rates", 1, 0, 0, None),
+        Progress(refresh_id, "deciles", 0, 0, 5, None),
+        Progress(refresh_id, "deciles", 5, 0, 0, None),
+        Progress(refresh_id, "done", 5, 0, 0, None),
     ]
     assert env.router.calls["screener"] == 1
-    assert set(env.router.symbol_calls) == {"", *ADMITTED}  # FIRB and TINY are never fetched
+    assert env.router.calls["fx-history"] == 1
+    assert env.router.requested["fx-history"] == {"symbol": "USDSEK", "from": "2023-11-01"}
+    # FIRB and TINY are never fetched
+    assert set(env.router.symbol_calls) == {"", *ADMITTED, "USDSEK"}
 
 
 def test_a_snapshot_logs_its_multiples(env_fixture_universe: Env) -> None:
@@ -276,11 +289,13 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
     assert env.items(first) == [
         ("ACME", "fetched", None),
         ("AXLE", "fetched", None),
+        ("KRON", "pending", None),
         ("MILD", "pending", None),
         ("NEWT", "pending", None),
     ]
     assert deciles(env) is None and env.snapshots() == []
     assert env.router.symbol_calls == Counter({"": 1, "ACME": 16, "AXLE": 16})
+    assert "rates" not in {p.stage for p in env.progress}  # a cancelled fetch runs no rates
 
     env.router.symbol_calls.clear()
     env.progress.clear()
@@ -288,8 +303,9 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
     second = env.refresh().run("full")
     row = env.last()
     assert (row.id, row.status) == (second, "done") and second == first + 1
-    assert env.router.symbol_calls == Counter({"MILD": 16, "NEWT": 16})  # no screener call
-    assert Progress(second, "fetch", 4, 0, 0, None) in env.progress
+    # No screener call; KRON's pair is fetched, now that KRON is.
+    assert env.router.symbol_calls == Counter({"MILD": 16, "NEWT": 16, "KRON": 16, "USDSEK": 1})
+    assert Progress(second, "fetch", 5, 0, 0, None) in env.progress
     assert env.items(second) == [(symbol, "valued", None) for symbol in ADMITTED]
     assert {refresh for refresh, _ in universe(env).values()} == {second}
     saved = deciles(env)
@@ -297,7 +313,7 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
     assert sorted(env.snapshots()) == sorted(
         (symbol, second, env.snapshot(symbol).refusal) for symbol in ADMITTED
     )
-    assert row.calibration is not None and row.calibration["total"] == 4
+    assert row.calibration is not None and row.calibration["total"] == 5
 
 
 def test_a_scoped_refresh_fetches_again_and_a_full_one_reuses(env_fixture_universe: Env) -> None:
@@ -370,6 +386,7 @@ def test_full_refresh_rate_limited_saves_no_deciles(env_fixture_universe: Env) -
     assert env.items(refresh_id) == [
         ("ACME", "valued", None),
         ("AXLE", "valued", None),
+        ("KRON", "pending", None),
         ("MILD", "failed", RATE_LIMITED),
         ("NEWT", "pending", None),
     ]
@@ -378,12 +395,14 @@ def test_full_refresh_rate_limited_saves_no_deciles(env_fixture_universe: Env) -
         ("AXLE", refresh_id, "no universe deciles yet"),
         ("MILD", refresh_id, RATE_LIMITED),
     ]
+    # A 429 in the fetch stage asks FMP for no rate.
     assert list(dict.fromkeys(p.stage for p in env.progress)) == [
         "universe",
         "fetch",
         "backfill",
         "value",
     ]
+    assert env.router.calls["fx-history"] == 0
 
 
 def test_a_single_429_does_not_end_the_run(env_fixture_universe: Env, sleeps: list[float]) -> None:
@@ -401,7 +420,7 @@ def test_a_single_429_does_not_end_the_run(env_fixture_universe: Env, sleeps: li
     # The quote is asked once a company, ACME's twice; every other call once.
     assert env.router.calls["quote"] == len(ADMITTED) + 1
     assert env.router.symbol_calls == Counter(
-        {"": 1, "ACME": 17, "AXLE": 16, "MILD": 16, "NEWT": 16}
+        {"": 1, "ACME": 17, "AXLE": 16, "KRON": 16, "MILD": 16, "NEWT": 16, "USDSEK": 1}
     )
     assert sleeps == [env.policy.refresh.rate_limit_hold_s]  # the one hold, and no other sleep
 
@@ -427,15 +446,17 @@ def test_a_single_429_holds_every_worker_on_a_paced_run(
     assert hold == env.policy.refresh.rate_limit_hold_s == 60
     gf_calls = env.router.calls["summary"] + env.router.calls["keyratios"]
     fmp_calls = sum(env.router.symbol_calls.values()) - gf_calls
-    assert fmp_calls == 1 + 14 * len(ADMITTED) + 1  # the screener, 14 a company, ACME's retry
+    # The screener, 14 a company, ACME's retry, then the rates stage's one call, KRON's USDSEK.
+    assert fmp_calls == 1 + 14 * len(ADMITTED) + 1 + 1
     # k calls took the slots at 0 to k - 1 s before the hold (the first slot is now: no sleep);
     # the retry slept the hold; the hold put every later call at 60 s or after, one a second.
     k = len([s for s in sleeps if s < hold]) + 1
     assert sorted(sleeps) == sorted([*range(1, k), hold, *range(hold, hold + fmp_calls - k)])
-    # The fetch stage's line: its calls (all but the screener's, which waited none), their waits
-    # (every sleep but the retry's hold) and the one hold.
-    waited = sum(sleeps) - hold
-    assert f"FMP pace: waited {waited:.1f} s over {fmp_calls - 1} calls, 1 holds" in caplog.text
+    # The fetch stage's line: its calls (all but the screener's, which waited none, and the pair's,
+    # the last, after the stage), their waits (every sleep but the retry's hold and the pair's) and
+    # the one hold.
+    waited = sum(sleeps) - hold - max(sleeps)
+    assert f"FMP pace: waited {waited:.1f} s over {fmp_calls - 2} calls, 1 holds" in caplog.text
 
 
 def test_full_refresh_admitting_no_company_fails(env_fixture_universe: Env) -> None:
@@ -530,6 +551,105 @@ def test_an_empty_quarterly_consensus_is_not_a_fetch_failure(env_fixture_univers
     assert (axle.phase, axle.refusal, axle.value) == ("Mature Growth", FOREIGN, None)
     assert (mild.phase, mild.route, mild.refusal) == ("Mature Stable", "mature-stable", None)
     assert mild.value is not None and mild.value > 0
+
+
+# --- the rates stage (spec 2026-11-10 7.1) ---------------------------------------------------
+
+
+def test_a_scoped_refresh_fetches_its_pair_again_and_a_revalue_fetches_none(
+    env_fixture_universe: Env,
+) -> None:
+    """A scoped refresh of KRON fetches USDSEK again within the reuse window, as it fetches
+    everything else; one of ACME, which reports in USD, asks for no pair; a revalue makes no call
+    and reads the rates on file."""
+    env = env_fixture_universe
+    env.refresh().run("full")
+    env.clock.now += timedelta(minutes=5)
+    env.router.calls.clear()
+    env.progress.clear()
+    kron = env.run(["KRON"])
+    assert env.router.calls["fx-history"] == 1
+    assert list(dict.fromkeys(p.stage for p in env.progress)) == [
+        "fetch",
+        "rates",
+        "backfill",
+        "value",
+        "done",
+    ]
+    assert [p for p in env.progress if p.stage == "rates"] == [
+        Progress(kron, "rates", 0, 0, 1, None),
+        Progress(kron, "rates", 1, 0, 0, None),
+    ]
+    env.router.calls.clear()
+    env.progress.clear()
+    acme = env.run(["ACME"])
+    assert env.router.calls["fx-history"] == 0
+    assert [p for p in env.progress if p.stage == "rates"] == [
+        Progress(acme, "rates", 0, 0, 0, None)
+    ]
+    env.router.calls.clear()
+    env.progress.clear()
+    env.refresh().run("revalue")
+    assert env.last().status == "done" and env.router.calls == Counter()
+    assert "rates" not in {p.stage for p in env.progress}
+
+
+def test_a_failed_pair_leaves_the_run_done(env_fixture_universe: Env) -> None:
+    """USDSEK's call fails: the stage counts SEK failed and the run goes on. KRON is still
+    assessed (refused as a foreign filer until the engine values one, spec 2026-11-10 7.2) and the
+    other four are valued as before."""
+    env = env_fixture_universe
+    env.router.fail.add("fx-history")
+    refresh_id = env.refresh().run("full")
+    row = env.last()
+    assert (row.status, row.message, row.calibration) == ("done", None, CALIBRATION)
+    assert Progress(refresh_id, "rates", 0, 1, 0, None) in env.progress
+    assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
+    assert env.snapshot("KRON").refusal == FOREIGN
+
+
+def test_a_429_in_the_rates_stage_ends_the_run(env_fixture_universe: Env) -> None:
+    """USDSEK answers 429: the run ends as after a 429 in the fetch stage, naming FMP; every
+    company fetched is valued, on the deciles on file (none: the run saves none)."""
+    env = env_fixture_universe
+    env.router.fail.add("fx-history")
+    env.router.fail_status = 429
+    refresh_id = env.refresh().run("full")
+    row = env.last()
+    assert (row.status, row.message, row.calibration) == (
+        "failed",
+        "rate limited by FMP: stopped after 5 companies",
+        None,
+    )
+    assert deciles(env) is None
+    assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
+    assert sorted(env.snapshots()) == [
+        (symbol, refresh_id, "no universe deciles yet") for symbol in ADMITTED
+    ]
+    assert list(dict.fromkeys(p.stage for p in env.progress)) == [
+        "universe",
+        "fetch",
+        "rates",
+        "backfill",
+        "value",
+    ]
+
+
+def test_a_cancel_in_the_rates_stage_ends_the_run(env_fixture_universe: Env) -> None:
+    """The cancel lands as the rates stage starts: it is read before the currency, so no pair is
+    asked for, and the run ends cancelled with no deciles and no values."""
+    env = env_fixture_universe
+    cancel = threading.Event()
+
+    def stop_at_rates(progress: Progress) -> None:
+        if progress.stage == "rates":
+            cancel.set()
+
+    env.refresh(cancel=cancel, then=stop_at_rates).run("full")
+    row = env.last()
+    assert (row.status, row.stage, row.calibration) == ("cancelled", "rates", None)
+    assert env.router.calls["fx-history"] == 0
+    assert deciles(env) is None and env.snapshots() == []
 
 
 # --- the server's worker and its startup -----------------------------------------------------
@@ -630,21 +750,24 @@ def test_cli_full_refresh_prints_calibration(
     out = capsys.readouterr().out.splitlines()
     assert out[:3] == [
         "universe: 0 done, 0 failed, 0 to go",
-        "universe: 4 done, 0 failed, 0 to go",
-        "fetch: 0 done, 0 failed, 4 to go",
+        "universe: 5 done, 0 failed, 0 to go",
+        "fetch: 0 done, 0 failed, 5 to go",
     ]
-    assert "deciles: 4 done, 0 failed, 0 to go" in out
-    assert out[out.index("done: 4 done, 0 failed, 0 to go") :] == [
-        "done: 4 done, 0 failed, 0 to go",
+    rates = out.index("rates: 0 done, 0 failed, 1 to go")
+    assert out[rates + 1] == "rates: 1 done, 0 failed, 0 to go"
+    assert "deciles: 5 done, 0 failed, 0 to go" in out
+    assert out[out.index("done: 5 done, 0 failed, 0 to go") :] == [
+        "done: 5 done, 0 failed, 0 to go",
         "refresh 1: done",
-        "4 companies · 3 valued · 1 flagged by a classifier check",
+        "5 companies · 3 valued · 1 flagged by a classifier check",
         "Start-up: 0",
         "Young Growth: 1",
         "High Growth: 0",
-        "Mature Growth: 2",
+        "Mature Growth: 3",
         "Mature Stable: 1",
         "Decline: 0",
         "unclassified: 0",
+        f"1 refused: {FOREIGN}",
         f"1 refused: {NO_TARGET}",
     ]
     assert env.last().calibration == CALIBRATION

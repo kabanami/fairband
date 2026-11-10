@@ -1,9 +1,10 @@
-"""The revalue over the four companies a full refresh of ``fixture_universe`` valued, on a
+"""The revalue over the five companies a full refresh of ``fixture_universe`` valued, on a
 migrated temporary database: a new snapshot of each company from the facts the store holds, with
 no vendor call and no FMP client, and the command.
 
 The full refresh values ACME, AXLE and MILD and refuses NEWT (Young Growth, with no mature peer
-for a target margin); the revalue, on the same facts and deciles, gives the same calibration.
+for a target margin) and KRON (a foreign filer); the revalue, on the same facts, rates and
+deciles, gives the same calibration.
 """
 
 import threading
@@ -29,6 +30,7 @@ from fairband.store.snapshots import SnapshotRow
 
 NO_TARGET = "no target margin: 0 mature peers"
 NO_STATEMENTS = "no financial statements"
+FOREIGN = "foreign filer: currency and share-unit handling not built yet"
 
 
 @pytest.fixture
@@ -69,15 +71,16 @@ def test_revalue_writes_new_snapshots_without_a_vendor_call(env_valued: Env) -> 
             before[symbol].phase,
         )
     assert row.calibration is not None and row.calibration["total"] == len(ADMITTED)
-    assert row.calibration["valued"] == 3 and row.calibration["refused"] == {NO_TARGET: 1}
+    assert row.calibration["valued"] == 3
+    assert row.calibration["refused"] == {NO_TARGET: 1, FOREIGN: 1}
     assert row.calibration["universe"] == {"admitted": len(ADMITTED), "excluded": {}}
-    # No universe, fetch or deciles stage: the backfill, then the value stage, its start and
+    # No universe, fetch, rates or deciles stage: the backfill, then the value stage, its start and
     # each company.
     assert [p.stage for p in env.progress] == (
         ["backfill"] + ["value"] * (1 + len(ADMITTED)) + ["done"]
     )
     last = env.progress[-1]
-    assert (last.stage, last.done, last.failed, last.remaining) == ("done", 4, 0, 0)
+    assert (last.stage, last.done, last.failed, last.remaining) == ("done", 5, 0, 0)
 
 
 def test_revalue_backfills_the_six_lines_before_valuing(env_valued: Env) -> None:
@@ -131,7 +134,7 @@ def test_revalue_refuses_a_company_without_facts(env_valued: Env) -> None:
     assert env.snapshot("NOFACTS").value is None and env.snapshot("NOFACTS").refusal
     assert env.snapshot("ACME").refresh_id == refresh_id and env.snapshot("ACME").value is not None
     assert row.calibration is not None and row.calibration["total"] == len(ADMITTED) + 1
-    assert row.calibration["refused"] == {NO_TARGET: 1, NO_STATEMENTS: 1}
+    assert row.calibration["refused"] == {NO_TARGET: 1, FOREIGN: 1, NO_STATEMENTS: 1}
     assert env.router.calls == Counter()
 
 
@@ -232,21 +235,23 @@ def test_cli_revalue_prints_calibration(
     assert cli.main(["refresh", "--kind", "revalue"]) == 0
     assert capsys.readouterr().out.splitlines() == [
         "backfill: 0 done, 0 failed, 0 to go",
-        "value: 0 done, 0 failed, 4 to go",
-        "value: 1 done, 0 failed, 3 to go",
-        "value: 2 done, 0 failed, 2 to go",
-        "value: 3 done, 0 failed, 1 to go",
-        "value: 4 done, 0 failed, 0 to go",
-        "done: 4 done, 0 failed, 0 to go",
+        "value: 0 done, 0 failed, 5 to go",
+        "value: 1 done, 0 failed, 4 to go",
+        "value: 2 done, 0 failed, 3 to go",
+        "value: 3 done, 0 failed, 2 to go",
+        "value: 4 done, 0 failed, 1 to go",
+        "value: 5 done, 0 failed, 0 to go",
+        "done: 5 done, 0 failed, 0 to go",
         "refresh 2: done",
-        "4 companies · 3 valued · 1 flagged by a classifier check",
+        "5 companies · 3 valued · 1 flagged by a classifier check",
         "Start-up: 0",
         "Young Growth: 1",
         "High Growth: 0",
-        "Mature Growth: 2",
+        "Mature Growth: 3",
         "Mature Stable: 1",
         "Decline: 0",
         "unclassified: 0",
+        f"1 refused: {FOREIGN}",
         f"1 refused: {NO_TARGET}",
     ]
     assert env.last().kind == "revalue"

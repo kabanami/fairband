@@ -15,6 +15,15 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   call's symbols ``failed`` ("quote failed: <class>: <message>") and the stage goes on; a symbol
   the payload gives no row for is ``failed``, "no quote price". Progress counts symbols: after
   each call, those quoted are done.
+- ``fx``: the pairs (``rates.pair_of``) of the currencies the quoted symbols' latest snapshots
+  name (the ``currency`` intermediate; USD and none left out), quoted in batches of up to
+  ``QUOTE_BATCH`` pairs, ``Fmp.quote`` as for the symbols (spec 2026-11-10 7.1). Each response is
+  stored as a quote's is, under the endpoint ``fx-quote``, the pair as its symbol (none for a
+  batch), with one ``fx-quote`` observation a pair (``fx_quote_observations``), the pair's close
+  on the quote's date that ``rates.rates_for`` reads with the pair's history. A pair whose call
+  fails or whose row is missing is logged and marks no symbol failed. Progress counts pairs. The
+  stage leaves each pair's quote by currency for the reprice; the engine translates no figure yet
+  (spec 2026-11-10 7.2), so the reprice reads none.
 - ``reprice``: for each quoted symbol, one at a time, ``reprice`` of its latest snapshot at the new
   price and the quote's date, and ``insert_snapshot`` under this refresh; the symbol is
   ``repriced``. The value, levels, validity and every input but the price stay; the price input
@@ -45,8 +54,8 @@ A failed or skipped symbol keeps the snapshot it had: no new row. A cancel, read
 and each symbol, ends the run ``cancelled`` with no further stage; the quotes stored stay. An HTTP
 429 stops the quotes as it stops a full refresh's fetch: the call's symbols are ``failed``
 ("quote incomplete: rate limited"), those never reached stay ``pending``, those quoted are still
-repriced, and the run ends ``failed``, "rate limited by FMP: stopped after <n> companies", n
-counting the symbols quoted or failed.
+repriced, with no ``fx`` stage, and the run ends ``failed``, "rate limited by FMP: stopped after
+<n> companies", n counting the symbols quoted or failed.
 """
 
 import logging
@@ -63,6 +72,7 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.route import reprice
 from fairband.policy import Policy
 from fairband.refresh.fetch import unusable
+from fairband.refresh.rates import FX_QUOTE, foreign_currencies, pair_of
 from fairband.refresh.reviews import reprice_review
 from fairband.store.companies import latest_companies
 from fairband.store.db import transaction
@@ -73,7 +83,7 @@ from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapsh
 from fairband.store.vendor import record_response
 from fairband.vendors.fmp import Fmp
 from fairband.vendors.http import VendorError
-from fairband.vendors.normalize_fmp import quote_observations
+from fairband.vendors.normalize_fmp import fx_quote_observations, quote_observations
 from fairband.vendors.scrub import scrub
 
 logger = logging.getLogger("fairband.refresh")
@@ -96,6 +106,20 @@ def rate_limited(provider: str, reached: int) -> str:
     """The message of a run a 429 stopped after ``reached`` companies."""
     noun = "company" if reached == 1 else "companies"
     return f"rate limited by {provider}: stopped after {reached} {noun}"
+
+
+@dataclass(frozen=True)
+class _Kind:
+    """What a quote call asks for: the endpoint it is stored under when it asks for one symbol and
+    for several, and the normalizer of each symbol's rows."""
+
+    one: str
+    several: str
+    observe: Callable[[Any, str, int, datetime, datetime], list[ObservationRow]]
+
+
+_SYMBOLS = _Kind("quote", "batch-quote", quote_observations)
+_PAIRS = _Kind(FX_QUOTE, FX_QUOTE, fx_quote_observations)
 
 
 @dataclass(frozen=True)
@@ -158,11 +182,12 @@ class PriceRefresh:
                     upsert_item(conn, self._id, symbol, "skipped", NO_SNAPSHOT, self._clock())
         quoted = self._quote_stage(quotable)
         if quoted.limited:
-            self._reprice_stage(quoted.quotes, snapshots)
+            self._reprice_stage(quoted.quotes, snapshots, {})
             return "failed", rate_limited("FMP", len(quoted.quotes) + quoted.failed), None
         if self._cancel.is_set():
             return "cancelled", None, None
-        repriced = self._reprice_stage(quoted.quotes, snapshots)
+        fx = self._fx_stage(quoted.quotes, snapshots)
+        repriced = self._reprice_stage(quoted.quotes, snapshots, fx)
         if repriced is None:
             return "cancelled", None, None
         failed = quoted.failed + len(quoted.quotes) - repriced
@@ -216,12 +241,44 @@ class PriceRefresh:
             self._report("quotes", len(quotes), failed, len(symbols) - len(quotes) - failed)
         return _Quoted(quotes, failed, limited)
 
-    def _call(self, group: list[str]) -> dict[str, _Quote | None] | VendorError:
+    def _fx_stage(
+        self, quotes: Mapping[str, _Quote], snapshots: Mapping[str, SnapshotRow]
+    ) -> dict[str, _Quote]:
+        """Quote the pairs of the currencies the quoted symbols' latest snapshots name, until all
+        are quoted or failed or a cancel; each pair's quote by currency."""
+        named = (snapshots[symbol].result.intermediates.get("currency") for symbol in quotes)
+        pairs = {pair_of(currency): currency for currency in foreign_currencies(named)}
+        self._stage("fx", len(pairs))
+        names = list(pairs)
+        rates: dict[str, _Quote] = {}
+        failed = 0
+        for start in range(0, len(names), QUOTE_BATCH):
+            if self._cancel.is_set():
+                break
+            group = names[start : start + QUOTE_BATCH]
+            outcome = self._call(group, _PAIRS)
+            if isinstance(outcome, VendorError):
+                logger.warning("%s: quote failed: %s", ",".join(group), self._describe(outcome))
+                failed += len(group)
+            else:
+                for pair in group:
+                    quote = outcome.get(pair)
+                    if quote is None:
+                        logger.warning("%s: %s", pair, NO_QUOTE)
+                        failed += 1
+                    else:
+                        rates[pairs[pair]] = quote
+            self._report("fx", len(rates), failed, len(names) - len(rates) - failed)
+        return rates
+
+    def _call(
+        self, group: list[str], kind: _Kind = _SYMBOLS
+    ) -> dict[str, _Quote | None] | VendorError:
         """One quote call for ``group``, stored; each symbol's quote, or the call's error."""
         if len(group) == 1:
-            endpoint, params, symbol = "quote", {"symbol": group[0]}, group[0]
+            endpoint, params, symbol = kind.one, {"symbol": group[0]}, group[0]
         else:
-            endpoint, params, symbol = "batch-quote", {"symbols": ",".join(group)}, None
+            endpoint, params, symbol = kind.several, {"symbols": ",".join(group)}, None
         now = self._clock()
         try:
             response = self._fmp.quote(group)  # outside any transaction
@@ -232,7 +289,7 @@ class PriceRefresh:
             )
             return exc
         observed = response.observed_at
-        rows = {s: quote_observations(response.json, s, _PENDING, observed, now) for s in group}
+        rows = {s: kind.observe(response.json, s, _PENDING, observed, now) for s in group}
         payload = scrub(response.text, self._secrets)
         error = None if any(rows.values()) else unusable(payload)
         with transaction(self._conn):
@@ -254,10 +311,14 @@ class PriceRefresh:
         return {s: _price(found, observed.date()) for s, found in rows.items()}
 
     def _reprice_stage(
-        self, quotes: Mapping[str, _Quote], snapshots: Mapping[str, SnapshotRow]
+        self,
+        quotes: Mapping[str, _Quote],
+        snapshots: Mapping[str, SnapshotRow],
+        fx: Mapping[str, _Quote],
     ) -> int | None:
         """Reprice each quoted symbol's latest snapshot; the number repriced, or ``None`` when a
-        cancel stopped the stage."""
+        cancel stopped the stage. ``fx`` holds the pairs' quotes by currency (the ``fx``
+        stage's), which the reprice reads once the engine translates (spec 2026-11-10 7.2)."""
         self._stage("reprice", len(quotes))
         repriced = failed = 0
         for symbol, quote in quotes.items():

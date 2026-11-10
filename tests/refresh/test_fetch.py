@@ -435,3 +435,16 @@ def test_splits_are_stored_and_not_required(
     assert failed["error"].startswith(
         "GET https://financialmodelingprep.com/stable/splits?symbol=ACME&apikey=<key> -> 500"
     )
+
+
+def test_a_pair_history_stores_no_rows_and_is_usable_with_a_close(clock: Clock) -> None:
+    """The rates stage's ``fx-history`` (spec 2026-11-10 7.1) is stored whole, as the price
+    history is: no rows, its closes left in the payload, usable when it holds a close. It is
+    FMP's."""
+    history = json.loads((FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json").read_text())
+    now = clock()
+    assert fetch_module._rows("fx-history", history, "USDSEK", now, now) == ([], [])
+    no_close = ([], [{"date": "2026-11-05", "price": 0}], {"symbol": "USDSEK"}, None)
+    for payload in no_close:
+        assert fetch_module._rows("fx-history", payload, "USDSEK", now, now) is None
+    assert fetch_module.provider_of("fx-history") == "fmp"

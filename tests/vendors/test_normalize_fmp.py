@@ -17,6 +17,8 @@ from fairband.vendors.normalize_fmp import (
     as_reported_balance_facts,
     earnings_observations,
     estimate_observations,
+    fx_closes,
+    fx_quote_observations,
     peer_symbols,
     price_closes,
     profile_brief,
@@ -496,6 +498,55 @@ def test_price_closes() -> None:
     ]
     assert price_closes(bad) == []
     assert price_closes(None) == []
+
+
+def test_fx_closes_oldest_first_skipping_bad_rows() -> None:
+    rows = [
+        {"symbol": "USDSEK", "date": "2026-11-05", "price": 10.6},
+        {"date": "2026-11-04", "price": "x"},
+        {"date": "2026-11-01", "price": 10.5},
+        {"price": 10.0},
+    ]
+    assert fx_closes(rows) == [(date(2026, 11, 1), 10.5), (date(2026, 11, 5), 10.6)]
+    assert fx_closes({}) == [] and fx_closes(None) == []
+    not_rates = [{"date": "2026-11-05", "price": 0}, {"date": "2026-11-04", "price": -1}]
+    assert fx_closes(not_rates) == []  # a rate of zero or below is no rate
+
+
+def test_fx_closes_reads_the_fixture() -> None:
+    closes = fx_closes(load("historical-price-eod-light.USDSEK"))
+    assert closes[0] == (date(2025, 9, 30), 7.7) and closes[-1] == (date(2026, 11, 5), 10.6)
+    assert dict(closes)[date(2026, 11, 1)] == 10.5
+    quarter_ends = (date(2025, 12, 31), date(2026, 3, 31), date(2026, 6, 30), date(2026, 9, 30))
+    assert [dict(closes)[end] for end in quarter_ends] == [7.8, 7.9, 8.1, 8.2]
+
+
+def test_fx_quote_observations_one_row_per_pair() -> None:
+    """Dataset ``fx-quote``, the pair as the symbol, one ``price`` row with no unit, keyed by the
+    quote's date (its ``timestamp``, else the observation day); a batch gives the pair's row."""
+    batch = [
+        {"symbol": "USDSEK", "price": 10.7, "timestamp": 1793390400},  # 2026-10-30 UTC
+        {"symbol": "USDTWD", "price": "32.956"},
+    ]
+    [sek] = fx_quote_observations(batch, "USDSEK", RID, OBSERVED, ENTERED)
+    assert sek == ObservationRow(
+        symbol="USDSEK",
+        dataset="fx-quote",
+        period=date(2026, 10, 30),
+        field="price",
+        value=Decimal("10.7"),
+        unit=None,
+        as_of=date(2026, 10, 30),
+        observed_at=OBSERVED,
+        entered_at=ENTERED,
+        response_id=RID,
+    )
+    [twd] = fx_quote_observations(batch, "USDTWD", RID, OBSERVED, ENTERED)
+    assert (twd.period, twd.as_of, twd.value) == (TODAY, TODAY, Decimal("32.956"))
+    assert fx_quote_observations(batch, "USDJPY", RID, OBSERVED, ENTERED) == []
+    for bad in ({"symbol": "USDSEK", "price": None}, {"symbol": "USDSEK", "price": 0}):
+        assert fx_quote_observations([bad], "USDSEK", RID, OBSERVED, ENTERED) == []
+    assert fx_quote_observations(None, "USDSEK", RID, OBSERVED, ENTERED) == []
 
 
 def test_screener_rows_symbol_forms() -> None:

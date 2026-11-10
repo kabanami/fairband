@@ -3,8 +3,9 @@ that writes a snapshot for a company with an applied override writes a review on
 for it. A revalue, a scoped or a full refresh recomputes it on the new inputs, after dropping a
 period-tied override whose input moved; a price refresh reprices it.
 
-The refresh tests run on the four companies a full refresh of ``fixture_universe`` valued: ACME and
-AXLE Mature Growth, MILD Mature Stable, NEWT refused for its target margin.
+The refresh tests run on the five companies a full refresh of ``fixture_universe`` valued: ACME and
+AXLE Mature Growth, MILD Mature Stable, NEWT refused for its target margin, KRON refused as a
+foreign filer.
 """
 
 import json

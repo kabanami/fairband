@@ -1,5 +1,5 @@
-"""FMP estimates, earnings, quotes, profiles, splits, closes, screener rows and peers to store
-rows.
+"""FMP estimates, earnings, quotes, profiles, splits, closes, exchange rates, screener rows and
+peers to store rows.
 
 Observations carry ``unit`` ``currency``, ``per-share``, ``shares``, ``count``, or ``None`` for a
 label or a date:
@@ -33,9 +33,15 @@ label or a date:
   parseable ``date`` and two numbers above zero; ``period`` and ``as_of`` the split date. The two
   stay apart so a sentence can say 2-for-1 or 1-for-10; ``inputs_splits.splits_for`` reads them
   back as one split each and divides them for the ratio.
+- ``fx-quote``: a forex pair's quote (``USDSEK``), stored under the pair as the symbol: one
+  ``price`` (unit ``None``: units of the currency per USD) from the row for the pair, when that
+  price is a number above zero; ``period`` and ``as_of`` the UTC date of the row's ``timestamp``
+  (else the observed date), so each quote is a dated close ``rates.rates_for`` merges with the
+  pair's history.
 
 The peers are not observations either: ``peer_symbols`` reads the ``stock-peers`` symbols from the
-stored payload, in the exchange form.
+stored payload, in the exchange form. Nor are a stock's closes or a pair's: ``price_closes`` and
+``fx_closes`` read them from the stored payload.
 
 A row without a parseable ``date`` is skipped and records nothing; nothing here raises on vendor
 data.
@@ -175,6 +181,20 @@ def quote_observations(
     ]
 
 
+def fx_quote_observations(
+    payload: Any, pair: str, response_id: int, observed_at: datetime, entered_at: datetime
+) -> list[ObservationRow]:
+    """The pair's ``price`` from the payload row for ``pair`` (a batch holds several), keyed by
+    the quote's date; none when no row matches or its price is not a number above zero."""
+    row = next((r for r in objects(payload) if r.get("symbol") == pair), None)
+    price = None if row is None else number(row.get("price"))
+    if row is None or price is None or price <= 0:
+        return []
+    day = _timestamp_date(row.get("timestamp")) or observed_at.date()
+    source = Source(pair, response_id, observed_at, entered_at)
+    return [source.observation("fx-quote", day, "price", price, None, day)]
+
+
 def profile_observations(
     payload: Any, symbol: str, response_id: int, observed_at: datetime, entered_at: datetime
 ) -> list[ObservationRow]:
@@ -241,6 +261,18 @@ def price_closes(payload: Any) -> list[tuple[date, float]]:
         close = number(row.get("close"))
         if close is not None:
             closes.append((when, float(close)))
+    return sorted(closes)
+
+
+def fx_closes(payload: Any) -> list[tuple[date, float]]:
+    """``(date, rate)`` per row of a forex pair's ``historical-price-eod/light`` history with a
+    date and a ``price`` above zero, oldest first; the rate is in units of the currency per
+    USD."""
+    closes = []
+    for row, when in dated(payload):
+        rate = number(row.get("price"))
+        if rate is not None and rate > 0:
+            closes.append((when, float(rate)))
     return sorted(closes)
 
 

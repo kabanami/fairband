@@ -29,6 +29,7 @@ _FMP_ENDPOINTS = {
     "balance-sheet-statement-as-reported": "balance-asreported",
     "analyst-estimates": "estimates",
     "historical-price-eod/full": "price-history",
+    "historical-price-eod/light": "fx-history",  # a forex pair's closes (``refresh.rates``)
     "company-screener": "screener",
     "stock-peers": "peers",
     "earning-call-transcript": "transcript",
@@ -48,7 +49,8 @@ class Router:
     """Answers each request with the fixture for its route and symbol.
 
     FMP requests read ``fmp/<route>[.<period>][.<symbol>].json`` (a slash in the route becomes a
-    dash), GuruFocus requests ``gurufocus/<route>.<symbol>.json``. ``calls`` counts the requests per
+    dash; a forex pair is the symbol, ``historical-price-eod-light.USDSEK.json``), GuruFocus
+    requests ``gurufocus/<route>.<symbol>.json``. ``calls`` counts the requests per
     endpoint, named as the fetch stores them (``income-annual``, ``quote``, ``summary``), and
     ``symbol_calls`` per symbol; a retry counts again, and ``requested`` keeps each endpoint's last
     query parameters, the key left out. An endpoint in ``fail``, or any request for a symbol in

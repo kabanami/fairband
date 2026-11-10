@@ -94,6 +94,7 @@ def test_scoped_refresh_without_deciles_writes_refusal_snapshots(env: Env) -> No
         Progress(refresh_id, "fetch", 0, 0, 2, None),
         Progress(refresh_id, "fetch", 1, 0, 1, None),
         Progress(refresh_id, "fetch", 2, 0, 0, None),
+        Progress(refresh_id, "rates", 0, 0, 0, None),  # both report in USD: no pair
         Progress(refresh_id, "backfill", 0, 0, 0, None),
         Progress(refresh_id, "value", 0, 0, 2, None),
         Progress(refresh_id, "value", 1, 0, 1, None),
@@ -401,6 +402,7 @@ def test_cli_refresh_prints_rows(
         "fetch: 0 done, 0 failed, 2 to go",
         "fetch: 1 done, 0 failed, 1 to go",
         "fetch: 2 done, 0 failed, 0 to go",
+        "rates: 0 done, 0 failed, 0 to go",
         "backfill: 0 done, 0 failed, 0 to go",
         "value: 0 done, 0 failed, 2 to go",
         "value: 1 done, 0 failed, 1 to go",

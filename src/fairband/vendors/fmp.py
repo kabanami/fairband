@@ -35,6 +35,10 @@ documented response example):
 - ``splits``: ``symbol``; each row a ``date``, a ``numerator``, a ``denominator`` and a
   ``splitType``, newest first; a split appears from its effective date (checked live 2026-11-10 on
   NVDA, WMT and META).
+- ``historical-price-eod/light`` on a forex pair: ``symbol`` (the pair, ``USDTWD``), ``from``;
+  daily rows ``{symbol, date, price, volume}``, newest first, the price in units of the currency
+  per USD. ``quote`` and ``batch-quote`` answer the pairs' quotes as they answer a stock's
+  (checked live 2026-11-10, spec 2026-11-10 section 5).
 
 The agent's pass-throughs (spec 2026-11-06 Tier 2, 15.3), checked on 2026-11-06 against the
 stable documentation's examples as a web search returns them (the pages themselves refuse an
@@ -154,6 +158,10 @@ class Fmp:
     def price_history(self, symbol: str, start: date) -> VendorResponse:
         params = {"symbol": to_fmp_symbol(symbol), "from": start.isoformat()}
         return self._get("historical-price-eod/full", params)
+
+    def fx_history(self, pair: str, start: date) -> VendorResponse:
+        """The daily closes of a forex pair (``USDSEK``) from ``start`` to the latest."""
+        return self._get("historical-price-eod/light", {"symbol": pair, "from": start.isoformat()})
 
     def peers(self, symbol: str) -> VendorResponse:
         return self._get("stock-peers", {"symbol": to_fmp_symbol(symbol)})

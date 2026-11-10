@@ -19,6 +19,13 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   that reason ("data fetch failed: <endpoints>") that carries the price the store holds. The stage
   ends with one INFO line on the FMP limiter's share of it: "FMP pace: waited <s> s over <n> calls,
   <h> holds".
+- ``rates``: on the run's own connection, ``rates.fetch_rates`` for each reporting currency of the
+  symbols fetched (``rates.currencies_of``: their newest annual income statements' currencies, USD
+  left out), one currency at a time, its pair's daily closes stored whole (spec 2026-11-10 7.1).
+  Like the fetch, a scoped refresh fetches each pair again whatever the reuse window, and a full
+  refresh reuses within it. A currency whose call fails or gives no close is counted failed and
+  the run goes on: its companies are still valued, on the rates on file. The stage runs only when
+  the fetch stage ran to its end, and reports after each currency.
 - ``deciles`` (full only): ``deciles_for_universe`` over every admitted symbol, from the statements
   the store holds, saved under the refresh (spec 6.6). When they rank no company on growth, the run
   ends ``failed``, "deciles rank no company", and saves none: empty deciles would put every later
@@ -61,13 +68,17 @@ symbols in flight finish and the run ends ``cancelled``, with no further stage: 
 keeps its stored responses, which the next full run reuses within ``reuse_hours`` (a scoped one
 fetches every call again), and a valued one its snapshot. So a full refresh cancelled while it
 fetches saves no deciles and values nothing, and the next one, a new record over a universe built
-again, fetches only the companies not fetched within ``reuse_hours``: it continues. A cancel that lands while the deciles are computed still saves them
-(they rank the whole universe); the value stage then values nothing. An HTTP 429 (``FetchOutcome.rate_limited``) ends the fetching the
-same way; the symbol it hit gets the refusal "data fetch incomplete: rate limited" and is
+again, fetches only the companies not fetched within ``reuse_hours``: it continues. A cancel that
+lands while the deciles are computed still saves them (they rank the whole universe); the value
+stage then values nothing. The ``rates`` stage reads a cancel before each currency, and the run
+then ends ``cancelled`` as after a cancel in the fetch stage. An HTTP 429
+(``FetchOutcome.rate_limited``) ends the fetching as a cancel does; the symbol it hit gets the
+refusal "data fetch incomplete: rate limited" and is
 ``failed`` (spec 6.2: a failed fetch gets a row), the symbols never reached stay ``pending`` with
 no snapshot, the symbols fetched are still valued (on the stored deciles: a full refresh saves
 none), and the run ends ``failed`` with "rate limited by <provider>: stopped after <n> companies",
-n counting the symbols fetched or failed; the backfill runs before that value stage too. An
+n counting the symbols fetched or failed; the backfill runs before that value stage too. A 429 in
+the ``rates`` stage ends the run the same way, naming FMP, every symbol fetched still valued. An
 exception outside a symbol's work ends the run ``failed`` with its class and message, and is
 raised again.
 
@@ -82,9 +93,9 @@ fetch still stores is a response like any other, reused by the next full run; ``
 counts the fetch threads not ended, so a long-lived caller (the server's worker) can wait for them
 before it starts another run.
 
-A price refresh takes no symbols; ``run_price.PriceRefresh`` runs its stages (``quotes``,
+A price refresh takes no symbols; ``run_price.PriceRefresh`` runs its stages (``quotes``, ``fx``,
 ``reprice``, ``done``) on the run's connection, and its module docstring says how. It values
-nothing and runs no backfill.
+nothing and runs no backfill. Neither it nor a revalue runs a ``rates`` stage.
 
 The record carries the policy's version and its settings hash (spec 2026-11-04, 8.4): the run
 values under the policy it was built with, the effective one its caller read when it started.
@@ -101,7 +112,7 @@ import threading
 from collections import Counter, deque
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from functools import partial
 from typing import Any, Literal
@@ -116,6 +127,7 @@ from fairband.refresh.backfill import backfill_statement_facts
 from fairband.refresh.deciles import deciles_for_universe
 from fairband.refresh.fetch import FetchOutcome, fetch_company, provider_of
 from fairband.refresh.inputs import build_inputs, latest_price
+from fairband.refresh.rates import FX_HISTORY, currencies_of, fetch_rates
 from fairband.refresh.reviews import follow_snapshot, review_refusal
 from fairband.refresh.run_price import PriceRefresh, rate_limited
 from fairband.refresh.universe import build_universe
@@ -289,6 +301,7 @@ class Refresh:
         if not symbols:
             return "failed", NO_COMPANY_ADMITTED, None
         fetched = self._fetch_pending(conn, fmp, refresh_id, symbols)
+        fetched = self._rates(conn, fmp, refresh_id, fetched, force=False)
         stopped = self._stopped(conn, refresh_id, fetched)
         if stopped is not None:
             return stopped
@@ -325,8 +338,9 @@ class Refresh:
         self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int, symbols: list[str]
     ) -> _Finish:
         """The stages of a scoped refresh; the status and message to finish it with. Its fetch
-        makes every call again, whatever the reuse window (``force``)."""
+        and its rates make every call again, whatever the reuse window (``force``)."""
         fetched = self._fetch_pending(conn, fmp, refresh_id, symbols, force=True)
+        fetched = self._rates(conn, fmp, refresh_id, fetched, force=True)
         stopped = self._stopped(conn, refresh_id, fetched)
         if stopped is not None:
             return stopped
@@ -368,6 +382,31 @@ class Refresh:
         with transaction(conn):
             for symbol in symbols:
                 upsert_item(conn, refresh_id, symbol, "pending", None, self._clock())
+
+    def _rates(
+        self, conn: sqlite3.Connection, fmp: Fmp, refresh_id: int, fetched: _Fetched, force: bool
+    ) -> _Fetched:
+        """The ``rates`` stage: the pair of each reporting currency of the symbols fetched, one
+        currency at a time, each call made again with ``force``. It runs only when the fetch stage
+        ran to its end; it stops at a cancel, read before each currency, and at a 429, after which
+        what it returns names FMP as the provider that stopped the run (``_stopped``)."""
+        if fetched.limited_by is not None or self._cancel.is_set():
+            return fetched
+        currencies = currencies_of(conn, fetched.symbols)
+        self._stage(conn, refresh_id, "rates", len(currencies))
+        done = failed = 0
+        for currency in currencies:
+            if self._cancel.is_set():
+                break
+            outcome = fetch_rates(
+                conn, fmp, [currency], self._policy, self._clock(), self._secrets, force
+            )
+            done += len(outcome.fetched)
+            failed += len(outcome.failed)
+            self._report(refresh_id, "rates", done, failed, len(currencies) - done - failed)
+            if outcome.rate_limited:
+                return replace(fetched, limited_by=_PROVIDER_NAMES[provider_of(FX_HISTORY)])
+        return fetched
 
     def _stopped(
         self, conn: sqlite3.Connection, refresh_id: int, fetched: _Fetched

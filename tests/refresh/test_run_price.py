@@ -1,10 +1,12 @@
-"""The price refresh over the four companies a full refresh of ``fixture_universe`` valued, on a
-migrated temporary database: the quotes, in one batch or one call a symbol, then a new snapshot
-of each company at its new price; the rows it leaves as they were, and the command.
+"""The price refresh over the five companies a full refresh of ``fixture_universe`` valued, on a
+migrated temporary database: the quotes, in one batch or one call a symbol, the pairs' quotes,
+then a new snapshot of each company at its new price; the rows it leaves as they were, and the
+command.
 
 The full refresh values ACME and AXLE (Mature Growth, $31.24 a share) and MILD (Mature Stable,
 $18.68) at $50: ACME and AXLE ``well-above`` (1.60 × the value), MILD ``well-above`` (2.68 ×). It
-refuses NEWT (Young Growth, with no mature peer for a target margin).
+refuses NEWT (Young Growth, with no mature peer for a target margin) and KRON, which reports in
+SEK (a foreign filer, until the engine values one).
 """
 
 import json
@@ -12,6 +14,7 @@ from collections import Counter
 from contextlib import closing
 from dataclasses import replace
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -31,10 +34,11 @@ from fairband.refresh.inputs import latest_price
 from fairband.refresh.run import Progress
 from fairband.store.companies import insert_companies, latest_companies
 from fairband.store.multiples import MultiplesRow, multiples_log_for
+from fairband.store.observations import observations_for
 from fairband.store.snapshots import SnapshotRow, insert_snapshot
 
 PRICE_DATE = date(2026, 10, 31)  # the new quotes' timestamp, a day after the fixtures'
-NEW_PRICES = {"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0, "NEWT": 60.0}
+NEW_PRICES = {"ACME": 20.0, "AXLE": 30.0, "KRON": 40.0, "MILD": 10.0, "NEWT": 60.0}
 POLICY_CHANGED = "policy changed: run a revalue"
 SETTINGS_CHANGED = "settings changed: run a revalue"
 METHOD_CHANGED = "method changed: run a revalue"
@@ -49,6 +53,28 @@ def quote_rows(prices: dict[str, float]) -> list[dict[str, Any]]:
 
 def batch(prices: dict[str, float]) -> bytes:
     return json.dumps(quote_rows(prices)).encode()
+
+
+def name_currencies(env: Env, currencies: dict[str, str]) -> None:
+    """Give each symbol a latest snapshot whose intermediates name its ``currency``, as the engine
+    will once it values foreign filers (spec 2026-11-10 7.2); none names one before."""
+    with closing(env.connect()) as conn:
+        for symbol, currency in currencies.items():
+            old = env.snapshot(symbol)
+            named = {**old.result.intermediates, "currency": currency}
+            insert_snapshot(conn, replace(old.result, intermediates=named), 1, clock=env.clock)
+
+
+def fx_responses(env: Env, after: int) -> list[tuple[str, str | None, str, int, bool]]:
+    """The pair quote responses stored after response ``after``, as ``quote_responses`` reads
+    the quotes."""
+    with closing(env.connect()) as conn:
+        rows = conn.execute(
+            "SELECT endpoint, symbol, params, http_status, error FROM vendor_responses"
+            " WHERE endpoint = 'fx-quote' AND id > ? ORDER BY id",
+            (after,),
+        ).fetchall()
+    return [(r[0], r[1], r[2], r[3], r[4] is not None) for r in rows]
 
 
 @pytest.fixture
@@ -102,13 +128,14 @@ def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
         "done",
         None,
     )
-    assert row.calibration == {"total": 4, "repriced": 4, "failed": 0, "skipped": 0}
+    assert row.calibration == {"total": 5, "repriced": 5, "failed": 0, "skipped": 0}
     assert env.items(refresh_id) == [(symbol, "repriced", None) for symbol in ADMITTED]
-    # One batch call for the four, never a call per symbol; nothing else is fetched.
+    # One batch call for the five, never a call per symbol; nothing else is fetched: no snapshot
+    # names a currency to quote a pair for (spec 2026-11-10 7.1).
     assert env.router.calls == {"batch-quote": 1}
-    assert env.router.requested["batch-quote"] == {"symbols": "ACME,AXLE,MILD,NEWT"}
+    assert env.router.requested["batch-quote"] == {"symbols": "ACME,AXLE,KRON,MILD,NEWT"}
     assert quote_responses(env, stored_before) == [
-        ("batch-quote", None, '{"symbols": "ACME,AXLE,MILD,NEWT"}', 200, False)
+        ("batch-quote", None, '{"symbols": "ACME,AXLE,KRON,MILD,NEWT"}', 200, False)
     ]
     with closing(env.connect()) as conn:  # the quote observations are stored
         assert latest_price(conn, "ACME") == (20.0, PRICE_DATE)
@@ -140,17 +167,24 @@ def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
     assert {s: (r.price, r.designation) for s, r in after.items()} == {
         "ACME": (20.0, "well-below"),
         "AXLE": (30.0, "near"),
+        "KRON": (40.0, None),
         "MILD": (10.0, "well-below"),
         "NEWT": (60.0, None),
     }
 
-    assert list(dict.fromkeys(p.stage for p in env.progress)) == ["quotes", "reprice", "done"]
-    assert [p for p in env.progress if p.stage in ("quotes", "done")] == [
-        Progress(refresh_id, "quotes", 0, 0, 4, None),
-        Progress(refresh_id, "quotes", 4, 0, 0, None),
-        Progress(refresh_id, "done", 4, 0, 0, None),
+    assert list(dict.fromkeys(p.stage for p in env.progress)) == [
+        "quotes",
+        "fx",
+        "reprice",
+        "done",
     ]
-    assert Progress(refresh_id, "reprice", 4, 0, 0, None) in env.progress
+    assert [p for p in env.progress if p.stage in ("quotes", "fx", "done")] == [
+        Progress(refresh_id, "quotes", 0, 0, 5, None),
+        Progress(refresh_id, "quotes", 5, 0, 0, None),
+        Progress(refresh_id, "fx", 0, 0, 0, None),
+        Progress(refresh_id, "done", 5, 0, 0, None),
+    ]
+    assert Progress(refresh_id, "reprice", 5, 0, 0, None) in env.progress
 
 
 def test_a_reprice_logs_the_multiples_of_the_day(env_valued: Env) -> None:
@@ -254,9 +288,9 @@ def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
     row = env.last()
     assert (row.status, row.calibration) == (
         "done",
-        {"total": 5, "repriced": 4, "failed": 0, "skipped": 1},
+        {"total": 6, "repriced": 5, "failed": 0, "skipped": 1},
     )
-    assert env.router.requested["batch-quote"] == {"symbols": "ACME,AXLE,MILD,NEWT"}
+    assert env.router.requested["batch-quote"] == {"symbols": "ACME,AXLE,KRON,MILD,NEWT"}
     assert env.items(refresh_id) == [
         *[(symbol, "repriced", None) for symbol in ADMITTED],
         ("ZERO", "skipped", "no snapshot to reprice"),
@@ -297,7 +331,7 @@ def test_price_refresh_reprices_a_decline_row(env_valued: Env) -> None:
 
     refresh_id = env.refresh().run("price")
 
-    assert env.last().calibration == {"total": 5, "repriced": 5, "failed": 0, "skipped": 0}
+    assert env.last().calibration == {"total": 6, "repriced": 6, "failed": 0, "skipped": 0}
     dcco = env.snapshot("DCCO")
     assert (dcco.refresh_id, dcco.route, dcco.price, dcco.designation) == (
         refresh_id,
@@ -337,19 +371,21 @@ def test_price_refresh_batch_fallback_per_symbol(env_valued: Env) -> None:
     assert (row.status, row.message, row.calibration) == (
         "done",
         None,
-        {"total": 4, "repriced": 3, "failed": 1, "skipped": 0},
+        {"total": 5, "repriced": 4, "failed": 1, "skipped": 0},
     )
-    assert env.router.calls == {"batch-quote": 1, "quote": 4}
+    assert env.router.calls == {"batch-quote": 1, "quote": 5}
     assert quote_responses(env, stored_before) == [
-        ("batch-quote", None, '{"symbols": "ACME,AXLE,MILD,NEWT"}', 402, True),
+        ("batch-quote", None, '{"symbols": "ACME,AXLE,KRON,MILD,NEWT"}', 402, True),
         ("quote", "ACME", '{"symbol": "ACME"}', 200, False),
         ("quote", "AXLE", '{"symbol": "AXLE"}', 200, False),
+        ("quote", "KRON", '{"symbol": "KRON"}', 200, False),
         ("quote", "MILD", '{"symbol": "MILD"}', 200, False),
         ("quote", "NEWT", '{"symbol": "NEWT"}', 402, True),
     ]
     items = env.items(refresh_id)
-    assert items[:3] == [(symbol, "repriced", None) for symbol in ("ACME", "AXLE", "MILD")]
-    symbol, status, reason = items[3]
+    repriced = ("ACME", "AXLE", "KRON", "MILD")
+    assert items[:4] == [(symbol, "repriced", None) for symbol in repriced]
+    symbol, status, reason = items[4]
     assert (symbol, status) == ("NEWT", "failed")
     assert reason is not None and reason.startswith("quote failed: VendorError: GET ")
     assert "402" in reason and FMP_KEY not in reason
@@ -357,6 +393,7 @@ def test_price_refresh_batch_fallback_per_symbol(env_valued: Env) -> None:
     assert {s: r.price for s, r in after.items()} == {
         "ACME": 20.0,
         "AXLE": 30.0,
+        "KRON": 40.0,
         "MILD": 10.0,
         "NEWT": 50.0,
     }
@@ -378,11 +415,12 @@ def test_price_refresh_policy_version_mismatch_fails_symbol(env_valued: Env) -> 
 
     assert (env.last().status, env.last().calibration) == (
         "done",
-        {"total": 4, "repriced": 3, "failed": 1, "skipped": 0},
+        {"total": 5, "repriced": 4, "failed": 1, "skipped": 0},
     )
     assert env.items(refresh_id) == [
         ("ACME", "failed", POLICY_CHANGED),
         ("AXLE", "repriced", None),
+        ("KRON", "repriced", None),
         ("MILD", "repriced", None),
         ("NEWT", "repriced", None),
     ]
@@ -406,11 +444,12 @@ def test_price_refresh_method_version_mismatch_fails_symbol(env_valued: Env) -> 
 
     assert (env.last().status, env.last().calibration) == (
         "done",
-        {"total": 4, "repriced": 3, "failed": 1, "skipped": 0},
+        {"total": 5, "repriced": 4, "failed": 1, "skipped": 0},
     )
     assert env.items(refresh_id) == [
         ("ACME", "repriced", None),
         ("AXLE", "failed", METHOD_CHANGED),
+        ("KRON", "repriced", None),
         ("MILD", "repriced", None),
         ("NEWT", "repriced", None),
     ]
@@ -435,7 +474,7 @@ def test_price_refresh_refuses_another_settings_hash_and_reprices_the_empty_one(
         )
     acme = env.snapshot("ACME")
     assert acme.settings_hash == acme.result.settings_hash == "other"
-    others = ("AXLE", "MILD", "NEWT")
+    others = ("AXLE", "KRON", "MILD", "NEWT")
     assert {env.snapshot(symbol).settings_hash for symbol in others} == {EMPTY_SETTINGS_HASH}
     env.router.bodies["batch-quote"] = batch(NEW_PRICES)
 
@@ -443,11 +482,12 @@ def test_price_refresh_refuses_another_settings_hash_and_reprices_the_empty_one(
 
     assert (env.last().status, env.last().calibration) == (
         "done",
-        {"total": 4, "repriced": 3, "failed": 1, "skipped": 0},
+        {"total": 5, "repriced": 4, "failed": 1, "skipped": 0},
     )
     assert env.items(refresh_id) == [
         ("ACME", "failed", SETTINGS_CHANGED),
         ("AXLE", "repriced", None),
+        ("KRON", "repriced", None),
         ("MILD", "repriced", None),
         ("NEWT", "repriced", None),
     ]
@@ -480,6 +520,7 @@ def test_price_refresh_checks_the_policy_then_the_settings_then_the_method(
     assert env.items(refresh_id) == [
         ("ACME", "failed", POLICY_CHANGED),
         ("AXLE", "failed", SETTINGS_CHANGED),
+        ("KRON", "repriced", None),
         ("MILD", "failed", METHOD_CHANGED),
         ("NEWT", "repriced", None),
     ]
@@ -487,7 +528,7 @@ def test_price_refresh_checks_the_policy_then_the_settings_then_the_method(
 
 def test_price_refresh_rate_limited(env_valued: Env, monkeypatch: pytest.MonkeyPatch) -> None:
     """One symbol a call, so the 429 lands on MILD: the quotes stop there, the symbols quoted
-    before it are repriced, NEWT is never reached and the run fails saying so."""
+    before it are repriced, NEWT is never reached and the run fails saying so, quoting no pair."""
     env = env_valued
     monkeypatch.setattr(run_price, "QUOTE_BATCH", 1)
     env.router.fail_symbols.add("MILD")
@@ -502,25 +543,113 @@ def test_price_refresh_rate_limited(env_valued: Env, monkeypatch: pytest.MonkeyP
     assert (row.status, row.stage, row.message, row.calibration) == (
         "failed",
         "reprice",
-        "rate limited by FMP: stopped after 3 companies",
+        "rate limited by FMP: stopped after 4 companies",
         None,
     )
     assert env.items(refresh_id) == [
         ("ACME", "repriced", None),
         ("AXLE", "repriced", None),
+        ("KRON", "repriced", None),
         ("MILD", "failed", "quote incomplete: rate limited"),
         ("NEWT", "pending", None),
     ]
-    # MILD's three tries (the client retries a 429), then nothing: NEWT is never asked for.
-    assert env.router.symbol_calls == Counter({"ACME": 1, "AXLE": 1, "MILD": 3})
+    # MILD's three tries (the client retries a 429), then nothing: NEWT is never asked for, nor
+    # is any pair (the fx stage does not run after a 429).
+    assert env.router.symbol_calls == Counter({"ACME": 1, "AXLE": 1, "KRON": 1, "MILD": 3})
+    assert "fx" not in {p.stage for p in env.progress}
     after = snapshots_of(env)
     assert {s: r.refresh_id for s, r in after.items()} == {
         "ACME": refresh_id,
         "AXLE": refresh_id,
+        "KRON": refresh_id,
         "MILD": 1,
         "NEWT": 1,
     }
     assert after["MILD"] == before["MILD"] and after["NEWT"] == before["NEWT"]
+
+
+def test_the_fx_stage_quotes_the_pairs_of_the_snapshots_currencies(env_valued: Env) -> None:
+    """Spec 2026-11-10 7.1: between the quotes and the reprice, one ``batch-quote`` call for the
+    pairs of the quoted companies' currencies (their latest snapshots' ``currency``, USD left
+    out), stored as the quote stage stores a batch: under the endpoint ``fx-quote``, no symbol,
+    the pairs as its params, and one ``fx-quote`` observation a pair, at the quote's price and
+    date. The reprice is as before: no rate reaches it until the engine translates."""
+    env = env_valued
+    name_currencies(env, {"KRON": "SEK", "MILD": "TWD", "ACME": "USD"})
+    before = snapshots_of(env)
+    [stamp] = {row["timestamp"] for row in quote_rows(NEW_PRICES)}
+    pairs = [
+        {"symbol": "USDSEK", "price": 10.7, "timestamp": stamp},
+        {"symbol": "USDTWD", "price": 32.5, "timestamp": stamp},
+    ]
+    # One body for both calls: each reads the rows it asked for.
+    env.router.bodies["batch-quote"] = json.dumps(quote_rows(NEW_PRICES) + pairs).encode()
+    stored_before = last_response_id(env)
+
+    refresh_id = env.refresh().run("price")
+
+    row = env.last()
+    assert (row.status, row.calibration) == (
+        "done",
+        {"total": 5, "repriced": 5, "failed": 0, "skipped": 0},
+    )
+    assert env.router.calls == {"batch-quote": 2}  # the companies', then the pairs'
+    assert env.router.requested["batch-quote"] == {"symbols": "USDSEK,USDTWD"}
+    assert fx_responses(env, stored_before) == [
+        ("fx-quote", None, '{"symbols": "USDSEK,USDTWD"}', 200, False)
+    ]
+    with closing(env.connect()) as conn:
+        stored = {
+            pair: [
+                (r.symbol, r.period, r.field, r.value, r.unit, r.as_of)
+                for r in observations_for(conn, pair, "fx-quote")
+            ]
+            for pair in ("USDSEK", "USDTWD")
+        }
+    assert stored == {
+        "USDSEK": [("USDSEK", PRICE_DATE, "price", Decimal("10.7"), None, PRICE_DATE)],
+        "USDTWD": [("USDTWD", PRICE_DATE, "price", Decimal("32.5"), None, PRICE_DATE)],
+    }
+    assert [p for p in env.progress if p.stage == "fx"] == [
+        Progress(refresh_id, "fx", 0, 0, 2, None),
+        Progress(refresh_id, "fx", 2, 0, 0, None),
+    ]
+    now = env.clock.now
+    mild = env.snapshot("MILD")
+    assert mild.result == reprice(
+        before["MILD"].result, 10.0, PRICE_DATE, env.policy, observed_at=now, entered_at=now
+    )
+
+
+def test_a_failed_pair_quote_fails_no_company(env_valued: Env) -> None:
+    """One pair, so one ``quote`` call for USDSEK, under the pair as its symbol; it fails, and
+    the run still ends done with every company repriced: a pair's failure is its own (the
+    company reprices at the rate its snapshot holds once the engine translates)."""
+    env = env_valued
+    name_currencies(env, {"KRON": "SEK"})
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+    env.router.fail_once[("quote", "USDSEK")] = env.policy.refresh.attempts
+    stored_before = last_response_id(env)
+
+    refresh_id = env.refresh().run("price")
+
+    row = env.last()
+    assert (row.status, row.message, row.calibration) == (
+        "done",
+        None,
+        {"total": 5, "repriced": 5, "failed": 0, "skipped": 0},
+    )
+    assert env.router.calls == {"batch-quote": 1, "quote": env.policy.refresh.attempts}
+    assert fx_responses(env, stored_before) == [
+        ("fx-quote", "USDSEK", '{"symbol": "USDSEK"}', 500, True)
+    ]
+    assert env.items(refresh_id) == [(symbol, "repriced", None) for symbol in ADMITTED]
+    assert [p for p in env.progress if p.stage == "fx"] == [
+        Progress(refresh_id, "fx", 0, 0, 1, None),
+        Progress(refresh_id, "fx", 0, 1, 0, None),
+    ]
+    with closing(env.connect()) as conn:
+        assert observations_for(conn, "USDSEK", "fx-quote") == []
 
 
 def test_price_refresh_without_a_universe_reprices_every_snapshot(
@@ -553,14 +682,16 @@ def test_cli_price_refresh(
     env.router.bodies["batch-quote"] = batch(NEW_PRICES)
     assert cli.main(["refresh", "--kind", "price"]) == 0
     assert capsys.readouterr().out.splitlines() == [
-        "quotes: 0 done, 0 failed, 4 to go",
-        "quotes: 4 done, 0 failed, 0 to go",
-        "reprice: 0 done, 0 failed, 4 to go",
-        "reprice: 1 done, 0 failed, 3 to go",
-        "reprice: 2 done, 0 failed, 2 to go",
-        "reprice: 3 done, 0 failed, 1 to go",
-        "reprice: 4 done, 0 failed, 0 to go",
-        "done: 4 done, 0 failed, 0 to go",
-        "refresh 2: done · 4 repriced, 0 failed, 0 skipped",
+        "quotes: 0 done, 0 failed, 5 to go",
+        "quotes: 5 done, 0 failed, 0 to go",
+        "fx: 0 done, 0 failed, 0 to go",
+        "reprice: 0 done, 0 failed, 5 to go",
+        "reprice: 1 done, 0 failed, 4 to go",
+        "reprice: 2 done, 0 failed, 3 to go",
+        "reprice: 3 done, 0 failed, 2 to go",
+        "reprice: 4 done, 0 failed, 1 to go",
+        "reprice: 5 done, 0 failed, 0 to go",
+        "done: 5 done, 0 failed, 0 to go",
+        "refresh 2: done · 5 repriced, 0 failed, 0 skipped",
     ]
     assert env.snapshot("ACME").price == 20.0

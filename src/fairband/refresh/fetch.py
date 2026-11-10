@@ -37,6 +37,11 @@ The stored ``params`` are the call's logical parameters (``symbol``, ``period``,
 the key, and the same call stores the same dict, so they are the reuse key. The price history's
 start date (five years before ``now``) is left out, so its key does not change at midnight and the
 24-hour rule alone decides its reuse.
+
+The refresh's ``rates`` stage stores each currency's pair history here too (``rates.fetch_rates``,
+spec 2026-11-10 7.1): endpoint ``fx-history``, the pair (``USDSEK``) as the symbol, stored whole
+with no rows like the price history, usable when it holds a close (``fx_closes``), its start date
+left out of the key in the same way.
 """
 
 import logging
@@ -66,6 +71,7 @@ from fairband.vendors.normalize_fmp import (
     as_reported_balance_facts,
     earnings_observations,
     estimate_observations,
+    fx_closes,
     peer_symbols,
     price_closes,
     profile_observations,
@@ -195,9 +201,9 @@ def fetch_company(
 
 
 def provider_of(endpoint: str) -> Provider:
-    """The provider of an endpoint name this module stores (``FetchOutcome.failed``): the two
-    GuruFocus endpoints are its bare route names, ``summary`` and ``keyratios``; every other
-    endpoint is FMP's."""
+    """The provider of an endpoint name this module stores (``FetchOutcome.failed``, and the
+    rates stage's ``fx-history``): the two GuruFocus endpoints are its bare route names,
+    ``summary`` and ``keyratios``; every other endpoint is FMP's."""
     return "gf" if endpoint in _GF_ENDPOINTS else "fmp"
 
 
@@ -296,9 +302,10 @@ def _rows(
     endpoint: str, payload: Any, symbol: str, observed: datetime, now: datetime
 ) -> _Rows | None:
     """The facts and observations one endpoint's parsed payload gives, citing ``_PENDING`` for
-    the response; ``None`` when it gives none. The price history and the peers give no rows; the
-    one's payload is usable when it holds a close, the other's when it names a peer or is exactly
-    ``[]``. The splits' payload is usable when it is a list, even one that gives no rows."""
+    the response; ``None`` when it gives none. The price history, a pair's history and the peers
+    give no rows; the two histories' payloads are usable when they hold a close, the peers' when
+    it names a peer or is exactly ``[]``. The splits' payload is usable when it is a list, even
+    one that gives no rows."""
     source = (symbol, _PENDING, observed, now)
     facts: list[FactRow] = []
     observations: list[ObservationRow] = []
@@ -313,6 +320,8 @@ def _rows(
             observations = quote_observations(payload, *source)
         case "price-history":
             return ([], []) if price_closes(payload) else None
+        case "fx-history":
+            return ([], []) if fx_closes(payload) else None
         case "estimates-annual":
             observations = estimate_observations(payload, symbol, "annual", _PENDING, observed, now)
         case "estimates-quarter":

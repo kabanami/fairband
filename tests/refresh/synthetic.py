@@ -1,8 +1,9 @@
 """A synthetic company for the refresh tests: ACME's FMP payloads and its universe row.
 
 The router serves these payloads in place of the fixtures (``Router.bodies``). The company is
-twelve calendar fiscal years, 2014 to 2025, and five quarters to 2026-09-30; money is in USD. The
-consensus, quote, profile, closes and GuruFocus answers stay the ACME fixtures'.
+twelve calendar fiscal years, 2014 to 2025, and five quarters to 2026-09-30; money is in USD, or
+in the currency ``bodies`` is given (the statements' ``reportedCurrency``). The consensus, quote,
+profile, closes and GuruFocus answers stay the ACME fixtures'.
 """
 
 import sqlite3
@@ -216,15 +217,25 @@ def estimates_quarter() -> Payload:
     ]
 
 
-def bodies(years: Iterable[int] = YEARS, quarters: Iterable[date] = QUARTERS) -> dict[str, Any]:
+def bodies(
+    years: Iterable[int] = YEARS, quarters: Iterable[date] = QUARTERS, currency: str = "USD"
+) -> dict[str, Any]:
+    """The payloads by endpoint; the five statements name ``currency`` as their
+    ``reportedCurrency``, their figures unchanged."""
     years, quarters = tuple(years), tuple(quarters)
-    return {
+    statements = {
         "income-annual": income_annual(years),
         "balance-annual": balance_annual(years),
         "cashflow-annual": cashflow_annual(years),
-        "balance-asreported-annual": balance_as_reported(years),
         "income-quarter": income_quarter(quarters),
         "cashflow-quarter": cashflow_quarter(quarters),
+    }
+    return {
+        **{
+            endpoint: [{**row, "reportedCurrency": currency} for row in rows]
+            for endpoint, rows in statements.items()
+        },
+        "balance-asreported-annual": balance_as_reported(years),
         "earnings": earnings(),
     }
 

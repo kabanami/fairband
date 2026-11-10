@@ -1,4 +1,4 @@
-"""The universe of the full-refresh tests: six screener listings and, for each admitted company,
+"""The universe of the full-refresh tests: seven screener listings and, for each admitted company,
 every answer its fetch asks for, served by symbol (``Router.symbol_bodies``).
 
 Admitted, with the revenue growth over the last three fiscal years that the deciles rank:
@@ -9,6 +9,10 @@ Admitted, with the revenue growth over the last three fiscal years that the deci
 - MILD: revenue up $30 m a year at 20% (2.4%). Decile 4, "Low": Mature Stable.
 - NEWT: revenue up $10 m a year at a -10% margin that does not improve (0.9%): Young Growth. It
   lists in an industry of its own, so the industry fallback for its peers finds no mature company.
+- KRON: ACME's synthetic company again, its statements in SEK (``reportedCurrency``), so a full
+  refresh fetches the pair USDSEK in its ``rates`` stage (the router serves the made-up
+  ``historical-price-eod-light.USDSEK.json``). Until the engine values foreign filers, it is
+  refused as one.
 
 Not admitted: FIRB, a regional bank (recorded, excluded by industry), and TINY, below the $2 bn
 floor (skipped). The quote, profile, closes, annual consensus, peers, splits and GuruFocus answers
@@ -22,7 +26,7 @@ from synthetic import M, Payload, bodies, estimates_quarter
 from vendor_double import FIXTURES, Router
 
 B = 1_000_000_000
-ADMITTED = ("ACME", "AXLE", "MILD", "NEWT")
+ADMITTED = ("ACME", "AXLE", "KRON", "MILD", "NEWT")
 
 # ACME's fixture for each endpoint the synthetic company does not cover.
 _FIXTURES = {
@@ -37,6 +41,8 @@ _FIXTURES = {
 }
 # Revenue step in $ m a year and operating margin in %, where the synthetic company's differ.
 _SHAPES = {"MILD": (30, 20), "NEWT": (10, -10)}
+# The statements' currency, where it is not USD.
+_CURRENCIES = {"KRON": "SEK"}
 
 
 def listing(symbol: str, market_cap: float, **fields: Any) -> dict[str, Any]:
@@ -63,6 +69,7 @@ SCREENER = [
     listing("TINY", 1 * B),
     listing("MILD", 3 * B),
     listing("NEWT", 2.5 * B, industry="Electrical Equipment & Parts"),
+    listing("KRON", 6 * B),
 ]
 
 
@@ -76,7 +83,10 @@ def serve_universe(router: Router) -> None:
 
 def company(symbol: str) -> dict[str, bytes]:
     """The answers for ``symbol`` by endpoint."""
-    payloads = {**bodies(), "estimates-quarter": estimates_quarter()}
+    payloads = {
+        **bodies(currency=_CURRENCIES.get(symbol, "USD")),
+        "estimates-quarter": estimates_quarter(),
+    }
     if symbol in _SHAPES:
         payloads["income-annual"] = reshaped(payloads["income-annual"], *_SHAPES[symbol])
     answers = {endpoint: json.dumps(payload) for endpoint, payload in payloads.items()}
