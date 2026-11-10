@@ -15,9 +15,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from refresh.synthetic import bodies, estimates_quarter
-from support.engine_companies import fx_inputs, universe_deciles
+from support.engine_companies import ars_refused_inputs, fx_inputs, universe_deciles
 from support.payloads import store_payloads
-from support.web import CREATED, HEADER, TODAY, _company
+from support.web import CREATED, HEADER, TODAY, universe_row
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.balance import BalanceYear
@@ -155,7 +155,7 @@ def test_the_detail_read_names_the_currency_the_rate_and_the_share_basis(
     with closing(connect(db_path)) as conn:
         refresh = latest_refresh(conn)
         assert refresh is not None
-        row = _company("FXCO", refresh.id, "Foreign Filer Co", Decimal(5_000_000_000))
+        row = universe_row("FXCO", refresh.id, "Foreign Filer Co", Decimal(5_000_000_000))
         insert_companies(conn, [replace(row, currency="SEK", is_adr=True)])
         insert_snapshot(conn, value_company(adr, universe_deciles(), policy, TODAY), refresh.id)
         unlisted = replace(fx_inputs(), symbol="FXUN")
@@ -180,6 +180,30 @@ def test_the_detail_read_names_the_currency_the_rate_and_the_share_basis(
     unlisted_read = _get(client, "/api/companies/FXUN")
     assert (unlisted_read["isAdr"], unlisted_read["adrRatio"]) == (None, None)
     assert (unlisted_read["currency"], unlisted_read["fxRate"]) == ("SEK", 8.0)
+
+
+def test_a_row_refused_for_its_currency_names_it_with_no_rate(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Fix round 1 of task 6: ARSX, an ADR of two shares refused for ARS's expected inflation,
+    has no rate. The read names ARS, never USD, and gives no rate and no rate date: the rate 1.0
+    ``money_of`` defaults to is no rate."""
+    with closing(connect(db_path)) as conn:
+        refresh = latest_refresh(conn)
+        assert refresh is not None
+        row = universe_row("ARSX", refresh.id, "Argentine Co", Decimal(5_000_000_000))
+        insert_companies(conn, [replace(row, is_adr=True)])
+        refused = value_company(ars_refused_inputs(), universe_deciles(), policy, TODAY)
+        insert_snapshot(conn, refused, refresh.id)
+    body = _get(client, "/api/companies/ARSX")
+    assert body["result"]["refusal"] == "ARS: expected inflation 12.1% above the 10% bound"
+    assert {key: body[key] for key in ("currency", "isAdr", "adrRatio", "fxRate", "fxDate")} == {
+        "currency": "ARS",
+        "isAdr": True,
+        "adrRatio": 2.0,
+        "fxRate": None,
+        "fxDate": None,
+    }
 
 
 def test_financials_without_statements(client: TestClient) -> None:

@@ -450,11 +450,13 @@ def test_a_missing_tax_rate_refuses_every_company(
     assert (inputs.is_adr, inputs.currency) == (is_adr, currency)
     assert inputs.refusal == "no statutory tax rate for RU 2015"
     assert inputs.tax_rate_latest is None and {y.tax_rate for y in inputs.capital_years} == {None}
+    assert not inputs.currency_refused  # refused before the currency's step
 
     deciles = Deciles((-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3), (0.0,) * 9, 1, 1, 1)
     result = value_company(inputs, deciles, policy, TODAY)
     assert result.refusal == "no statutory tax rate for RU 2015"
     assert result.phase.phase is not None
+    assert "currency" not in result.intermediates
 
 
 def _sek_store(
@@ -569,15 +571,18 @@ def test_a_currency_the_method_cannot_price_is_refused(
     inputs = build(conn)
     assert inputs.refusal == refusal
     assert (inputs.fx_rate, inputs.fx_date) == (1.0, None)
+    # the refusal is the currency's own, its code known: the engine names the code alone
+    assert inputs.currency_refused and inputs.currency == code
 
 
 def test_no_statements_comes_before_an_unknown_currency(store: Store, router: Router) -> None:
     """Without statements the universe row names no currency either: the statements' refusal is
-    the one given (spec 2026-11-10 7.5)."""
+    the one given (spec 2026-11-10 7.5), not one of the currency's."""
     router.fail.add("income-annual")
     conn = store(company=False)
     add_company(conn, currency=None)
-    assert build(conn).refusal == "no financial statements"
+    inputs = build(conn)
+    assert inputs.refusal == "no financial statements" and not inputs.currency_refused
 
 
 def test_provenance_dates(conn_with_company: sqlite3.Connection) -> None:
@@ -932,6 +937,7 @@ def test_market_values_fall_back(
     # no currency from the statements or the universe row: the refusal, no note
     assert inputs.currency == "unknown" and "currency-unknown" not in codes(inputs)
     assert inputs.refusal == "reporting currency unknown"
+    assert not inputs.currency_refused  # no code to name
     assert inputs.closes == () and "closes" not in inputs.provenance
     assert "price" not in inputs.provenance
 

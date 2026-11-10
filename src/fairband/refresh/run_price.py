@@ -16,7 +16,8 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   the payload gives no row for is ``failed``, "no quote price". Progress counts symbols: after
   each call, those quoted are done.
 - ``fx``: the pairs (``rates.pair_of``) of the currencies the quoted symbols' latest snapshots
-  name (the ``currency`` intermediate; USD and none left out), quoted in batches of up to
+  carry a rate in (``types.rated``: the ``currency`` and ``fx_rate`` intermediates; USD, none,
+  and a currency named without a rate, a refusal for it, left out), quoted in batches of up to
   ``QUOTE_BATCH`` pairs, ``Fmp.quote`` as for the symbols (spec 2026-11-10 7.1). Each response is
   stored as a quote's is, under the endpoint ``fx-quote``, the pair as its symbol (none for a
   batch), with one ``fx-quote`` observation a pair (``fx_quote_observations``), the pair's close
@@ -75,7 +76,7 @@ from typing import Any
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.route import reprice
-from fairband.engine.types import money_of
+from fairband.engine.types import money_of, rated
 from fairband.policy import Policy
 from fairband.refresh.fetch import unusable
 from fairband.refresh.rates import FX_QUOTE, foreign_currencies, pair_of
@@ -250,9 +251,12 @@ class PriceRefresh:
     def _fx_stage(
         self, quotes: Mapping[str, _Quote], snapshots: Mapping[str, SnapshotRow]
     ) -> dict[str, _Quote]:
-        """Quote the pairs of the currencies the quoted symbols' latest snapshots name, until all
-        are quoted or failed or a cancel; each pair's quote by currency."""
-        named = (snapshots[symbol].result.intermediates.get("currency") for symbol in quotes)
+        """Quote the pairs of the currencies the quoted symbols' latest snapshots carry a rate in,
+        until all are quoted or failed or a cancel; each pair's quote by currency. A snapshot that
+        names its currency with no rate, refused for it, quotes no pair: it is never read as
+        rated."""
+        results = (snapshots[symbol].result for symbol in quotes)
+        named = (money_of(result)[1] for result in results if rated(result))
         pairs = {pair_of(currency): currency for currency in foreign_currencies(named)}
         self._stage("fx", len(pairs))
         names = list(pairs)
@@ -339,7 +343,7 @@ class PriceRefresh:
             elif result.method_version != METHOD_VERSION:
                 reason = METHOD_CHANGED
             else:
-                pair = fx.get(money_of(result)[1])
+                pair = fx.get(money_of(result)[1]) if rated(result) else None
                 if pair is not None and not (math.isfinite(pair.price) and pair.price > 0):
                     pair = None  # a quote that is no rate: the snapshot's rate stands
                 rate = None if pair is None else pair.price

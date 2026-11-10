@@ -569,3 +569,25 @@ def fx_inputs() -> CompanyInputs:
         shares_diluted=100e6,
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 40.0, 50.0),
     )
+
+
+ABOVE_BOUND = "ARS: expected inflation 12.1% above the 10% bound"
+
+
+def ars_refused_inputs() -> CompanyInputs:
+    """ARSX, FXCO reporting in ARS and listed as an ADR of two ordinary shares, refused for its
+    currency's expected inflation as assembly hands such a row to the engine (spec 2026-11-10 7.3):
+    the code known, no rate read, so no rate, rate date or differential, and ``currency_refused``.
+    Its result carries the intermediate ``currency`` alone (fix round 1 of task 6)."""
+    return replace(
+        fx_inputs(),
+        symbol="ARSX",
+        currency="ARS",
+        is_adr=True,
+        adr_ratio=2.0,
+        refusal=ABOVE_BOUND,
+        fx_rate=1.0,
+        fx_date=None,
+        inflation_differential=0.0,
+        currency_refused=True,
+    )

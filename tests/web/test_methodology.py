@@ -11,6 +11,7 @@ from html import unescape
 from fastapi.testclient import TestClient
 from support.web import _static_file
 
+from fairband.refresh.rates import NO_RATE
 from fairband.web.methodology_text import section_index, section_text
 
 SECTIONS = [
@@ -251,18 +252,25 @@ def test_the_foreign_filers_section_reads(client: TestClient) -> None:
         "per ADS",
         "older than 7 days",
         "above 10.0%",
-        # the refusals in words, one each
-        "The reporting currency is unknown",
-        "No exchange rate",
-        "No inflation projection",
-        "Inflation above the bound",
-        "An unclear share basis",
+        # the four rates the method restates (method 7.5; fix round 1), the inflation addition in
+        # the page's own words, as the Mature Growth section names it
+        "The hurdle rate, terminal growth, the inflation the belief adds and the growth caps",
+        "restates each of the four by the inflation differential",
+        # the refusals quoted as the server words them, one each (fix round 1)
+        "“reporting currency unknown”",
+        f"“{NO_RATE.format(code='<code>')}”",
+        "“no inflation projection for <code>”",
+        "“<code>: expected inflation <π>% above the 10% bound”",
+        "“share basis unclear: ...”",
     ):
         assert words in text, words
     assert "—" not in text and "  " not in text
     value = _section(flat, "value")
     refusals = value[value.index(">Refusals</h3>") :]
     assert "A foreign filer:" not in refusals
+    # the share basis's refusal in one wording wherever the page names it (fix round 1)
+    basis = "a depositary receipt's newest share count matches the quote's on no basis"
+    assert basis in refusals and basis in section and "matches the price's" not in flat
     assert (
         "A currency the method cannot price: unknown, with no exchange rate or inflation"
         " projection, or with inflation above the bound."

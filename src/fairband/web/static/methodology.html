@@ -392,9 +392,9 @@ reads the day's rate with the price, so both rest on one day. A note marks a rat
 <span data-policy="fx_stale_days">—</span> on the price's day.</p>
 
 <h3 class="heading">The inflation differential</h3>
-<p class="body">The hurdle rate, terminal growth and the growth caps are rates in US dollars. A
-currency with higher expected inflation needs higher rates. Fairband restates each rate by the
-inflation differential: the currency's expected inflation against the dollar's
+<p class="body">The hurdle rate, terminal growth, the inflation the belief adds and the growth caps
+are rates in US dollars. A currency with higher expected inflation needs higher rates. Fairband
+restates each of the four by the inflation differential: the currency's expected inflation against the dollar's
 <a class="app-cite" href="#methodology/src-currency">[Damodaran 2002]</a>. Expected inflation is
 the mean of the IMF's projections for the five years ahead
 <a class="app-cite" href="#methodology/src-imf">[IMF]</a>. Here is the arithmetic for one
@@ -420,14 +420,17 @@ ADS.</p>
 figures the routes read <a class="app-cite" href="#methodology/src-ias29">[IAS 29]</a>.</p>
 
 <h3 class="heading">When there is no value</h3>
-<p class="body">Five refusals belong to foreign filers.</p>
+<p class="body">Five refusals belong to foreign filers. The row reads each in these words.</p>
 <ul class="body">
-<li>The reporting currency is unknown: neither the statements nor the listing name one.</li>
-<li>No exchange rate: the data vendor has no usable rate for the currency.</li>
-<li>No inflation projection: the IMF projects none for the currency's economy.</li>
-<li>Inflation above the bound: the currency's expected inflation is above
-<span data-policy="inflation_max">—</span>.</li>
-<li>An unclear share basis: the newest share count matches the price's on no basis.</li>
+<li>“reporting currency unknown”: neither the statements nor the listing name a currency.</li>
+<li>“no exchange rate for &lt;code&gt;”: the data vendor has no usable rate for the
+currency.</li>
+<li>“no inflation projection for &lt;code&gt;”: the IMF projects none for the currency's
+economy.</li>
+<li>“&lt;code&gt;: expected inflation &lt;π&gt;% above the 10% bound”: the currency's expected
+inflation is above <span data-policy="inflation_max">—</span>.</li>
+<li>“share basis unclear: ...”: a depositary receipt's newest share count matches the quote's on
+no basis.</li>
 </ul>
 <p class="body">The drawer and the report page name the reporting currency, the rate and the
 ordinary shares an ADS stands for.</p>

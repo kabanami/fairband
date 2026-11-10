@@ -212,11 +212,12 @@ vendor call. The refusals:
 - A guidance record (`guidance_add`): the `metric` is `revenue`, `eps`, `operating_margin`,
   `free_cash_flow`, `capex`, `revenue_growth` or `eps_growth`; the `period` a fiscal year (`2027`)
   or a quarter (`2027Q1`, no dash); `low` and `high` in the metric's unit, money in full in the
-  reporting currency as the company states it, a percent as a fraction; the `basis` `gaap`, `adjusted` or `constant-currency`; `as_of` the call's
-  date; `text` the sentence verbatim; `source` a string, the transcript's `response:<id>` or a
-  filing. A newer record of the same metric, period and basis supersedes the older, in the order of
-  the calls' dates. A value the record cannot take is refused (400), nothing stored, with the first
-  of these sentences that applies: "metric is one of revenue, eps, operating_margin,
+  reporting currency as the company states it, a percent as a fraction; the `basis` `gaap`,
+  `adjusted` or `constant-currency`; `as_of` the call's date; `text` the sentence verbatim;
+  `source` a string, the transcript's `response:<id>` or a filing. A newer record of the same
+  metric, period and basis supersedes the older, in the order of the calls' dates. A value the
+  record cannot take is refused (400), nothing stored, with the first of these sentences that
+  applies: "metric is one of revenue, eps, operating_margin,
   free_cash_flow, capex, revenue_growth or eps_growth"; "period is a fiscal year or a quarter
   (2026, 2026Q3)"; "low is above high"; "basis is one of gaap, adjusted or constant-currency"; "a
   guidance record needs its text"; "a guidance record needs its source". A low or a high that is
@@ -234,8 +235,7 @@ vendor call. The refusals:
   sales_to_capital, terminal_growth}`, rates as fractions: `years` N from 3 to 15; the
   `revenue_growth` and `operating_margin` lists with an entry for each year; the terminal growth
   from −1.00 to g_T, the currency's restated on a company in another currency. The ranges are the
-  policy's `secondary_driver_ranges` (`SKILL.md`, "The
-  secondary valuation").
+  policy's `secondary_driver_ranges` (`SKILL.md`, "The secondary valuation").
 - A part (`secondary_valuation`): `{name, fcff, terminal_growth, note}`, `fcff` a list of figures
   in the reporting currency for years one to N.
 - A sensitivity axis (`sensitivity`): a tag of the overrides table the route reads, and one to five

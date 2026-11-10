@@ -11,8 +11,8 @@ from the file's.
 Besides the forty settings, the page cites nine values that are not settings, read from the file
 only, among them the foreign filers' two bounds (the inflation bound and the stale-rate bound, spec
 2026-11-10 9), and the two the policy derives (the designation edges and the Wide moat's terminal
-return cap). The policy's tables (the base rates, the ratings, the default probabilities, the patterns,
-the industries) are never served, and nothing in the policy is a key.
+return cap). The policy's tables (the base rates, the ratings, the default probabilities, the
+patterns, the industries) are never served, and nothing in the policy is a key.
 """
 
 import json

@@ -22,15 +22,19 @@ from fastapi.testclient import TestClient
 from mcp import Client
 from mcp.server.mcpserver import MCPServer
 from mcp.types import Implementation
-from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.engine_companies import ars_refused_inputs, mature_growth_inputs, universe_deciles
 from support.web import CREATED, HEADER, HOST
+from support.web import TODAY as WEB_TODAY
 
+from fairband.engine.route import value_company
 from fairband.mcp.client import NO_ANSWER, NOT_ASCII, NOT_RUNNING, TIMEOUT_S, FairbandClient
 from fairband.mcp.server import BAD_SYMBOL, TOOL_NAMES, build_server, loopback
+from fairband.policy import Policy
 from fairband.reports.check import headings
 from fairband.store.db import connect
 from fairband.store.facts import FactRow, insert_facts
 from fairband.store.refreshes import save_deciles
+from fairband.store.snapshots import insert_snapshot
 from fairband.store.vendor import record_response
 from fairband.web import reviews_api
 from fairband.web.identity import IDENTIFY_FIRST
@@ -316,6 +320,23 @@ def test_company_names_the_currency_the_rate_and_the_share_basis(api: FairbandCl
         "the exchange rate and its date (`fxRate`, `fxDate`)",
     ):
         assert words in company, words
+
+
+def test_company_names_the_currency_of_a_row_refused_for_it(
+    api: FairbandClient, db_path: Path, policy: Policy
+) -> None:
+    """Fix round 1 of task 6: the ``company`` tool answers what the web read does for ARSX, an ADR
+    refused for ARS's expected inflation: ARS, with no rate and no rate date."""
+    with closing(connect(db_path)) as conn:
+        refused = value_company(ars_refused_inputs(), universe_deciles(), policy, WEB_TODAY)
+        insert_snapshot(conn, refused, 1)
+    [answer] = _session(build_server(api), ("company", {"symbol": "ARSX"}))
+    assert (answer["currency"], answer["adrRatio"], answer["fxRate"], answer["fxDate"]) == (
+        "ARS",
+        2.0,
+        None,
+        None,
+    )
 
 
 def test_a_write_before_identify_is_refused() -> None:

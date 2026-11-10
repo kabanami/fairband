@@ -38,7 +38,9 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   for <code>" without a usable history of the pair or without a close at or before the price
   date; "no inflation projection for <code>" for a currency the table lacks; "<code>: expected
   inflation <π>% above the <bound>% bound" for one whose mean projection is above
-  ``inflation_max``; the listed-share basis's ("share basis unclear: ...");
+  ``inflation_max``; the listed-share basis's ("share basis unclear: ..."). The three that name
+  a code are marked ``currency_refused``, so the engine names the code on the result with no
+  rate; the statements', the tax rate's and an unknown currency's are not;
 - the GuruFocus moat score and EPS, the next earnings date (``None`` when before ``today``) and the
   closes of the latest price-history payload (none when it is absent or does not parse).
   GuruFocus states its EPS in USD: for a company in another currency both come into it at the
@@ -241,6 +243,7 @@ def build_inputs(
         fx_date=None if money.rate is None else money.rate.date,
         inflation_differential=money.differential,
         fx_stale=money.rate is not None and money.rate.stale,
+        currency_refused=money.refused(stated),
     )
 
 
@@ -287,6 +290,13 @@ class _Money:
     def _at(self, day: date, policy: Policy) -> float | None:
         rate = None if self.series is None else self.series.at(day, policy.fx_stale_days)
         return None if rate is None else rate.rate
+
+    def refused(self, stated: Statements) -> bool:
+        """Whether the row's refusal is this currency's own, its code known (no rate, no inflation
+        projection, inflation above the bound): not a refusal before it, the statements' or the
+        tax rate's, nor an unknown currency's, which names no code."""
+        before = stated.refusal or stated.tax_refusal
+        return before is None and self.refusal is not None and self.currency is not None
 
 
 @cache

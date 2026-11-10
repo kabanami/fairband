@@ -82,7 +82,7 @@ from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from fairband.config import Settings, utcnow
-from fairband.engine.types import ValuationResult, money_of, result_to_json
+from fairband.engine.types import ValuationResult, money_of, rated, result_to_json
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs_statements import brief_for
@@ -293,11 +293,11 @@ def create_app(
         the drawer's head reads a line of, the report page and Details show whole, and the MCP
         ``company`` tool carries. And what the figures are in (spec 2026-11-10 7.4), which the
         drawer's head, Details and the report page name: ``currency``, the reporting currency the
-        snapshot was valued in (``types.money_of``, USD for a row with no rate); ``isAdr``, the
-        universe row's ADR flag, ``None`` without a row; ``adrRatio``, the ADR ratio the share
-        count was read by, the result's ``adr_ratio`` input, ``None`` without one; ``fxRate`` and
-        ``fxDate``, the rate the value was translated at and its close's date, ``None`` on a row
-        with no rate."""
+        snapshot was valued or refused in (``types.money_of``: USD for a USD row, the code for a
+        row refused for its currency); ``isAdr``, the universe row's ADR flag, ``None`` without a
+        row; ``adrRatio``, the ADR ratio the share count was read by, the result's ``adr_ratio``
+        input, ``None`` without one; ``fxRate`` and ``fxDate``, the rate the value was translated
+        at and its close's date, ``None`` on a row with no rate (``types.rated``)."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
@@ -390,16 +390,17 @@ def create_app(
 
 def _money_json(result: ValuationResult, listed: CompanyRow | None) -> dict[str, Any]:
     """What the snapshot's figures are in (``company``): the reporting currency, the universe
-    row's ADR flag, the ADR ratio input and, for a row in another currency, the rate and its
-    date."""
+    row's ADR flag, the ADR ratio input and, for a row that carries a rate (``types.rated``), the
+    rate and its date; a row refused for its currency names the code with neither, since the 1.0
+    ``money_of`` gives it is no rate."""
     rate, currency = money_of(result)
-    foreign = currency != "USD"
+    with_rate = rated(result)
     return {
         "currency": currency,
         "isAdr": None if listed is None else listed.is_adr,
         "adrRatio": next((i.value for i in result.inputs if i.name == "adr_ratio"), None),
-        "fxRate": rate if foreign else None,
-        "fxDate": result.intermediates.get("fx_date") if foreign else None,
+        "fxRate": rate if with_rate else None,
+        "fxDate": result.intermediates.get("fx_date") if with_rate else None,
     }
 
 

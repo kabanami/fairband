@@ -57,8 +57,10 @@ levels go back to USD at the rate: the value is the route's ÷ the rate, the lev
 on it, the designation the USD price against it. Such a row's results, a refusal's too, carry
 the intermediates ``currency``, ``fx_rate``, ``fx_date`` (ISO) and ``inflation_differential``,
 a valued one ``value_in_currency`` (the route's value a share), and the note ``fx-stale``, last,
-when assembly read its rate stale. A USD row carries none of them, and its figures are as before:
-its rate is 1 and its differential 0. ``reprice`` moves the USD value with the rate.
+when assembly read its rate stale. A row refused for its currency's own reason, with no rate
+(``CompanyInputs.currency_refused``), carries ``currency`` alone. A USD row carries none of
+them, and its figures are as before: its rate is 1 and its differential 0. ``reprice`` moves the
+USD value with the rate of a row that carries one (``types.rated``).
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
@@ -199,6 +201,7 @@ from fairband.engine.types import (
     TaggedInput,
     ValuationResult,
     money_of,
+    rated,
 )
 from fairband.policy import Policy, in_currency
 
@@ -228,7 +231,11 @@ class CompanyInputs:
     ``fx_rate`` is the currency's units per USD at the price date, read from the close of
     ``fx_date``, ``fx_stale`` when that close is older than the policy's stale bound, and
     ``inflation_differential`` the currency's d against USD. A USD row keeps the defaults: the
-    rate 1, no rate date, d 0.
+    rate 1, no rate date, d 0. ``currency_refused`` marks a row whose refusal is its currency's
+    own (no exchange rate, no inflation projection, inflation above the bound): its code known
+    from the statements and no rate read, so it keeps the defaults too, and its results name the
+    code alone. A row refused before the currency's step (its statements, its tax rate) or whose
+    currency is unknown is not so marked.
     """
 
     symbol: str
@@ -268,6 +275,7 @@ class CompanyInputs:
     fx_date: date | None = None
     inflation_differential: float = 0.0
     fx_stale: bool = False
+    currency_refused: bool = False
 
 
 def value_company(
@@ -425,8 +433,9 @@ def reprice(
     ``fx_rate`` input take the rate given, the input as the price input moves: its value, its
     ``as_of`` the quote's date and its ``observed_at`` ``fx_observed_at`` when given. ``fx-stale``
     is on the row when its rate's date is more than ``fx_stale_days`` before ``price_date``, and
-    off otherwise. A USD row reads no rate:
-    its rate is 1 on every day, and ``fx_rate`` moves nothing.
+    off otherwise. A row that carries no rate (``types.rated``) reads none: a USD row, whose rate
+    is 1 on every day, and a row refused for its currency's own reason, which names the code
+    alone; ``fx_rate`` moves nothing on either.
 
     A price or a rate that is not positive and finite raises ``ValueError``: the caller skips
     such a quote. The policy version is not checked: the caller passes the policy the result
@@ -438,7 +447,7 @@ def reprice(
         raise ValueError(f"price {price} must be positive and finite")
     im = result.intermediates
     held, currency = money_of(result)
-    foreign = currency != "USD"
+    foreign = rated(result)  # a row with no rate, USD or refused for its currency, reads none
     if foreign and fx_rate is not None and not _positive(fx_rate):
         raise ValueError(f"rate {fx_rate} must be positive and finite")
     rate: float = 1.0
@@ -665,9 +674,12 @@ def _foreign(i: CompanyInputs) -> bool:
 def _currency_entry(i: CompanyInputs, value: float | None) -> dict[str, Any]:
     """The intermediates of a row in another currency (spec 2026-11-10 7.2): the currency, the
     rate and its date, the differential and, on a valued row, ``value_in_currency``, the route's
-    value a share before translation; none for a USD row, whose intermediates stay as they were."""
+    value a share before translation; on a row refused for its currency's own reason, the code
+    alone, its figures being in it with no rate to read (the ruling of task 6's fix round 1);
+    none for a USD row, whose intermediates stay as they were, nor for a row refused before the
+    currency's step."""
     if not _foreign(i):
-        return {}
+        return {"currency": i.currency} if i.currency_refused and i.currency != "USD" else {}
     entry: dict[str, Any] = {
         "currency": i.currency,
         "fx_rate": i.fx_rate,

@@ -66,7 +66,7 @@ from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import ANCHOR_METRICS, OverrideTag, current_reading
 from fairband.engine.review import BridgeLine, Review, review_company
 from fairband.engine.route import CompanyInputs, refusal_result, reprice
-from fairband.engine.types import ValuationResult, money_of
+from fairband.engine.types import ValuationResult, money_of, rated
 from fairband.policy import Policy
 from fairband.reports.refs import guidance_cited
 from fairband.store.db import transaction
@@ -260,8 +260,8 @@ def _reprice(
     )
     bridge = tuple(BridgeLine(**line) for line in current.bridge)
     mechanical_value = current.mechanical_value
-    was, currency = money_of(current.result)
-    if currency != "USD":  # the USD figures move with the rate (module docstring)
+    was = money_of(current.result)[0]
+    if rated(current.result):  # the USD figures move with the rate (module docstring)
         k = was / money_of(result)[0]
         mechanical_value = mechanical.value
         bridge = tuple(replace(b, delta=None if b.delta is None else b.delta * k) for b in bridge)

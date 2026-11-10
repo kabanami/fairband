@@ -126,6 +126,11 @@ def test_an_override_or_a_bridge_line_reads_in_its_unit() -> None:
             TSM | {"currency": "EUR", "adrRatio": None, "fxRate": 0.86124},
             "Reports in EUR; the ADR ratio is not on file; valued at EUR 0.8612 per USD",
         ),
+        # refused for its currency (fix round 1): the code, but no rate, so no "valued at"
+        (
+            TSM | {"currency": "ARS", "adrRatio": 2.0, "fxRate": None, "fxDate": None},
+            "Reports in ARS; one ADS is two ordinary shares",
+        ),
     ],
 )
 def test_the_head_says_what_the_figures_are_in(body: dict[str, Any], line: str) -> None:

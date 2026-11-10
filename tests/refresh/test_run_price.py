@@ -63,13 +63,23 @@ def batch(prices: dict[str, float]) -> bytes:
     return json.dumps(quote_rows(prices)).encode()
 
 
-def name_currencies(env: Env, currencies: dict[str, str]) -> None:
-    """Give each symbol a latest snapshot whose intermediates name its ``currency``, as the engine
-    names a foreign filer's (spec 2026-11-10 7.2); a USD row's names none."""
+def name_currencies(
+    env: Env, currencies: dict[str, str], rates: dict[str, float] | None = None
+) -> None:
+    """Give each symbol a latest snapshot whose intermediates name its ``currency``: with its rate
+    from ``rates``, its date and a differential of 0, as the engine names a foreign filer's (spec
+    2026-11-10 7.2); without one, the code alone, as it names a row refused for its currency's own
+    reason (fix round 1's ruling); a USD row's names none."""
     with closing(env.connect()) as conn:
         for symbol, currency in currencies.items():
             old = env.snapshot(symbol)
             named = {**old.result.intermediates, "currency": currency}
+            if rates is not None and symbol in rates:
+                named |= {
+                    "fx_rate": rates[symbol],
+                    "fx_date": "2026-10-30",
+                    "inflation_differential": 0.0,
+                }
             insert_snapshot(conn, replace(old.result, intermediates=named), 1, clock=env.clock)
 
 
@@ -594,12 +604,16 @@ def test_price_refresh_rate_limited(env_valued: Env, monkeypatch: pytest.MonkeyP
 def test_the_fx_stage_quotes_the_pairs_of_the_snapshots_currencies(env_valued: Env) -> None:
     """Spec 2026-11-10 7.1: between the quotes and the reprice, one ``batch-quote`` call for the
     pairs of the quoted companies' currencies (their latest snapshots' ``currency``, USD left
-    out), stored as the quote stage stores a batch: under the endpoint ``fx-quote``, no symbol,
-    the pairs as its params, and one ``fx-quote`` observation a pair, at the quote's price and
-    date. KRON, valued in SEK, reprices at its pair's quote; MILD, a USD row whose snapshot is
-    made to name TWD, reads no rate and reprices as before."""
+    out, and a currency named without a rate left out), stored as the quote stage stores a batch:
+    under the endpoint ``fx-quote``, no symbol, the pairs as its params, and one ``fx-quote``
+    observation a pair, at the quote's price and date. KRON, valued in SEK, reprices at its pair's
+    quote, and NEWT, made to carry a TWD rate, at TWD's; MILD, whose snapshot is made to name ARS
+    without a rate as a row refused for its currency names it (fix round 1), quotes no pair, reads
+    no rate and reprices as before."""
     env = env_valued
-    name_currencies(env, {"KRON": "SEK", "MILD": "TWD", "ACME": "USD"})
+    name_currencies(
+        env, {"KRON": "SEK", "MILD": "ARS", "NEWT": "TWD", "ACME": "USD"}, rates={"NEWT": 32.0}
+    )
     before = snapshots_of(env)
     [stamp] = {row["timestamp"] for row in quote_rows(NEW_PRICES)}
     pairs = [
@@ -643,9 +657,11 @@ def test_the_fx_stage_quotes_the_pairs_of_the_snapshots_currencies(env_valued: E
     assert mild.result == reprice(
         before["MILD"].result, 10.0, PRICE_DATE, env.policy, observed_at=now, entered_at=now
     )
+    assert "fx_rate" not in mild.result.intermediates  # named ARS, never read as rated
     kron, was = env.snapshot("KRON").result, before["KRON"].result
     assert kron.value == pytest.approx(was.intermediates["value_in_currency"] / 10.7)
     assert kron.intermediates["fx_rate"] == 10.7
+    assert env.snapshot("NEWT").result.intermediates["fx_rate"] == 32.5
 
 
 def test_a_failed_pair_quote_fails_no_company(env_valued: Env) -> None:

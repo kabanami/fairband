@@ -13,8 +13,10 @@ hash. A result classified before method 0.9 carries neither ``positive_years_las
 ``positive_years_on_file`` in its phase evidence, and reads ``None`` for both.
 
 ``money_of`` reads the rate and the currency a result's money figures are in (spec 2026-11-10
-7.2): its intermediates' ``fx_rate`` and ``currency`` on a row in another currency, 1.0 and USD on
-any other, which carries neither.
+7.2): its intermediates' ``fx_rate`` and ``currency`` on a row in another currency; on a row
+refused for its currency's own reason, which names the code alone, that code and 1.0; 1.0 and USD
+on any other, which carries neither. 1.0 there is a default, not a rate: ``rated`` says whether a
+result carries a rate, and every reader that needs one asks it.
 """
 
 import json
@@ -131,13 +133,25 @@ class ValuationResult:
 
 def money_of(result: ValuationResult) -> tuple[float, str]:
     """The rate, units of the currency per USD, and the currency of ``result``'s money figures:
-    its intermediates' ``fx_rate`` and ``currency`` for a row in another currency, 1.0 and USD for
-    any other (the module docstring)."""
+    its intermediates' ``fx_rate`` and ``currency`` for a row in another currency, the currency
+    with 1.0 for a row that names it without a rate, 1.0 and USD for any other (the module
+    docstring)."""
+    currency = result.intermediates.get("currency")
+    code = currency if isinstance(currency, str) else "USD"
+    if rated(result):
+        return float(result.intermediates["fx_rate"]), code
+    return 1.0, code
+
+
+def rated(result: ValuationResult) -> bool:
+    """Whether ``result`` carries a rate: a row in another currency valued or refused at a rate
+    assembly read, its intermediates holding ``fx_rate`` and ``currency``. A USD row and a row
+    refused for its currency's own reason carry none."""
     im = result.intermediates
     rate, currency = im.get("fx_rate"), im.get("currency")
-    if isinstance(rate, int | float) and not isinstance(rate, bool) and isinstance(currency, str):
-        return float(rate), currency
-    return 1.0, "USD"
+    return (
+        isinstance(rate, int | float) and not isinstance(rate, bool) and isinstance(currency, str)
+    )
 
 
 def result_to_json(r: ValuationResult) -> str:

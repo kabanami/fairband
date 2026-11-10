@@ -24,7 +24,8 @@ HOST = "http://127.0.0.1:8470"  # a host the app trusts (D11)
 HEADER = {"X-Fairband-Request": "1"}  # the header a write must carry (D11)
 
 
-def _company(symbol: str, refresh_id: int, name: str, market_cap: Decimal) -> CompanyRow:
+def universe_row(symbol: str, refresh_id: int, name: str, market_cap: Decimal) -> CompanyRow:
+    """A universe row of a U.S. software company listed on NASDAQ in USD, admitted."""
     return CompanyRow(
         symbol=symbol,
         refresh_id=refresh_id,
@@ -41,6 +42,9 @@ def _company(symbol: str, refresh_id: int, name: str, market_cap: Decimal) -> Co
         exclusion_reason=None,
         observed_at=STARTED,
     )
+
+
+_company = universe_row  # the name the earlier modules import
 
 
 def _settings(tmp_path: Path, db_path: Path) -> Settings:

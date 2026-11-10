@@ -27,7 +27,7 @@ from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.route_steps import millions
 from fairband.engine.sensitivity import sensitivity_grid
-from fairband.engine.types import ValuationResult
+from fairband.engine.types import ValuationResult, money_of, rated
 from fairband.policy import Policy, in_currency
 from fairband.policy.inflation import load_inflation_table
 
@@ -378,17 +378,82 @@ def test_a_usd_adr_reads_as_a_domestic_row(policy: Policy, deciles: Deciles) -> 
 
 
 def test_the_assembly_s_currency_refusals_stand(policy: Policy, deciles: Deciles) -> None:
-    for reason in (
-        "reporting currency unknown",
-        "no exchange rate for SEK",
-        "no inflation projection for XXX",
-        "ARS: expected inflation 12.1% above the 10% bound",
+    """A refusal for the currency's own reason, its code known and no rate read (assembly's
+    ``currency_refused``), carries the intermediate ``currency`` alone: its figures are in that
+    currency, and it has no rate, rate date or differential. ``money_of`` gives the code with the
+    rate 1.0, a default, and ``rated`` says the row has no rate. An unknown currency carries
+    nothing (the controller's ruling of fix round 1)."""
+    for code, reason in (
+        ("SEK", "no exchange rate for SEK"),
+        ("XXX", "no inflation projection for XXX"),
+        ("ARS", "ARS: expected inflation 12.1% above the 10% bound"),
     ):
-        inputs = replace(in_sek(mature_growth_inputs()), refusal=reason, fx_date=None, fx_rate=1.0)
+        inputs = replace(
+            in_sek(mature_growth_inputs()),
+            currency=code,
+            refusal=reason,
+            fx_date=None,
+            fx_rate=1.0,
+            currency_refused=True,
+        )
         r = value_company(inputs, deciles, policy, TODAY)
         assert r.refusal == reason and r.phase.phase == "Mature Growth"
-        assert not CURRENCY_KEYS & set(r.intermediates)
+        assert CURRENCY_KEYS & set(r.intermediates) == {"currency"}
+        assert r.intermediates["currency"] == code
+        assert money_of(r) == (1.0, code) and not rated(r)
         assert "fx_rate" not in inputs_of(r)
+    unknown = replace(
+        in_sek(mature_growth_inputs()),
+        currency="unknown",
+        refusal="reporting currency unknown",
+        fx_date=None,
+        fx_rate=1.0,
+    )
+    r = value_company(unknown, deciles, policy, TODAY)
+    assert not CURRENCY_KEYS & set(r.intermediates) and money_of(r) == (1.0, "USD")
+
+
+def test_a_refusal_before_the_currency_step_carries_no_currency(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """A row refused for its tax rate, a step before the currency's, in a currency with no rate:
+    assembly does not mark it ``currency_refused``, so it carries nothing, as before."""
+    inputs = replace(
+        in_sek(mature_growth_inputs()),
+        currency="ARS",
+        refusal="no statutory tax rate for AR 2025",
+        fx_date=None,
+        fx_rate=1.0,
+    )
+    r = value_company(inputs, deciles, policy, TODAY)
+    assert not CURRENCY_KEYS & set(r.intermediates) and not rated(r)
+
+
+def test_a_reprice_leaves_a_currency_refusal_without_a_rate(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """A row refused for its currency carries no rate, so a reprice moves only its price, even
+    with a pair's quote given: it neither reads nor writes a rate."""
+    inputs = replace(
+        in_sek(mature_growth_inputs()),
+        currency="ARS",
+        refusal="ARS: expected inflation 12.1% above the 10% bound",
+        fx_date=None,
+        fx_rate=1.0,
+        currency_refused=True,
+    )
+    r = value_company(inputs, deciles, policy, TODAY)
+    moved = reprice(r, 55.0, date(2026, 11, 3), policy, fx_rate=1400.0, fx_date=date(2026, 11, 3))
+    assert moved.intermediates == r.intermediates and moved.flags == r.flags
+    assert (moved.price, moved.refusal) == (55.0, r.refusal) and not rated(moved)
+    # an override's range on such a row names its currency, unscaled: there is no rate
+    rate, code = money_of(r)
+    assert check_input(
+        "earnings.ntm", 1_500.0, "mature-growth", policy, fx_rate=rate, currency=code
+    ) == (
+        "refused-unit",
+        "earnings.ntm takes above 0 to 1,000 ARS a share",
+    )
 
 
 def test_a_stale_rate_is_noted(policy: Policy, deciles: Deciles) -> None:

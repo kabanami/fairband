@@ -733,8 +733,9 @@ the highest growth. Cite a cell as `secondary:<id>/grid/<i>/<j>`, rows and colum
 Use `parts` instead where a sum of parts fits better: a conglomerate, or a company whose cash
 flows you build segment by segment. `parts` is one to ten, each `{name, fcff, terminal_growth,
 note}`. `fcff` is the free cash flow to the firm in the reporting currency for years one to N, N
-from three to fifteen. Each `terminal_growth` runs from −1.00 to g_T. On this form the grid's rows move every
-part's terminal growth together by one point down, none and one point up, each capped at g_T.
+from three to fifteen. Each `terminal_growth` runs from −1.00 to g_T. On this form the grid's
+rows move every part's terminal growth together by one point down, none and one point up, each
+capped at g_T.
 
 ### Common to both
 

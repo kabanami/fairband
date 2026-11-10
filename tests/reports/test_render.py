@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from refresh.synthetic import NOW
-from support.engine_companies import fx_inputs, mature_growth_inputs, universe_deciles
+from support.engine_companies import (
+    ABOVE_BOUND,
+    ars_refused_inputs,
+    fx_inputs,
+    mature_growth_inputs,
+    universe_deciles,
+)
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
@@ -224,6 +230,23 @@ def test_appendix_a_labels_a_parts_grid_by_its_shift(
     assert "| Every part's terminal growth | r 8.0% | r 9.0% | r 10.0% |" in block
     for shift in ("−1 pp", "0 pp", "+0 pp, capped at g_T"):  # the part is at g_T
         assert f"| {shift} | " in block, shift
+
+
+def test_appendix_a_names_the_currency_of_a_row_refused_for_it(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Fix round 1 of task 6: a report on ARSX, refused for ARS's expected inflation, names ARS
+    as the currency of its figures, never USD; it has no secondary valuation, a refusal no agent
+    can fix, so no rate row either, and Appendix A names the refusal."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    refused = value_company(ars_refused_inputs(), universe_deciles(), policy, TODAY)
+    sid = insert_snapshot(conn, refused, aapl.refresh_id, clock=lambda: NOW)
+    report = _stored(conn, sid, symbol="ARSX")
+    a = appendix_a(conn, report, policy)
+    assert a["snapshot"]["currency"] == "ARS"
+    assert a["secondary"] is None
+    assert a["noSecondary"] == "no secondary valuation: " + ABOVE_BOUND
 
 
 def test_appendix_a_names_the_currency_and_the_rate_of_a_secondary_valuation(
