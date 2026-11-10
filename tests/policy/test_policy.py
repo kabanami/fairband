@@ -19,6 +19,7 @@ V6_SHA256 = "393d0f68f8fa5c67ce7f0a662c7cdfb4775e4709b28f1f85a3d43d628940d4ac"
 V7_SHA256 = "c964db4e36f8e233b866244b26db1c468f3c64f13e0c0bea985a0dbb8c551c91"
 V8_SHA256 = "129b080fff5d759e2b76cfe2d73ddfbcda68db8a50980d90ff7b4592c6cf8f06"
 V9_SHA256 = "31015452f41a00c3040688280a30eaad9473dfdb0dda9b78c6ee241ef3d0ea0a"
+V10_SHA256 = "09d375d874f9009303c0d9297fee53d4083ce42a48bb515b23982114042cccbd"
 # The six values policy v8 adds for the agents (spec 2026-11-06 Tier 2, section 19).
 V8_VALUES = {
     "override_ranges",
@@ -36,10 +37,13 @@ V9_VALUES = {"secondary_driver_ranges"}
 # pairs to ``override_ranges``, the outside value's and the diluted count's (spec 2026-11-09,
 # section 11).
 V10_VALUES = {"step_series_gap_max", "split_implied_count_tolerance"}
+# The two values policy v11 adds, the inflation bound and the stale-rate bound; it also adds the
+# rate history depth to ``refresh`` (spec 2026-11-10, section 9).
+V11_VALUES = {"inflation_max", "fx_stale_days"}
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v10.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v11.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -63,7 +67,7 @@ def _packaged_with(tmp_path: Path, name: str, value: str) -> Path:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v10" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v11" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -98,9 +102,12 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v10_is_the_packaged_policy() -> None:
+def test_v11_is_the_packaged_policy() -> None:
     policy = load_policy()
-    assert policy.version == "fairband-policy-v10"
+    assert policy.version == "fairband-policy-v11"
+    assert policy.inflation_max == 0.10
+    assert policy.fx_stale_days == 7
+    assert policy.refresh.fx_history_years == 3
     assert policy.step_series_gap_max == 0.05
     assert policy.split_implied_count_tolerance == 0.15
     assert policy.override_ranges["value.outside"] == (-1000.0, 1000.0)
@@ -136,7 +143,7 @@ def test_v10_is_the_packaged_policy() -> None:
         "tax_rate": (0.0, 0.50),
         "sales_to_capital": (0.1, 10.0),
     }
-    for name in sorted(V8_VALUES | V9_VALUES | V10_VALUES):
+    for name in sorted(V8_VALUES | V9_VALUES | V10_VALUES | V11_VALUES):
         assert policy.raw["values"][name]["source"].strip(), name
     assert policy.own_sales_to_capital_min_share == 0.5
     assert policy.loss_ramp_margin_bound == -1.0
@@ -297,7 +304,7 @@ def test_v10_is_v9_with_the_four_values_added() -> None:
     value's pair and the diluted count's; v10 adds the step-series gap and the split tolerance,
     none a setting (spec 2026-11-09, section 11)."""
     v9 = _file_values("fairband-policy-v9.toml")
-    v10 = load_policy().raw["values"]
+    v10 = _file_values("fairband-policy-v10.toml")
     assert v10.keys() - v9.keys() == V10_VALUES
     kept = v9.keys() - {"override_ranges"}
     assert {k: v10[k] for k in kept} == {k: v9[k] for k in kept}
@@ -309,6 +316,65 @@ def test_v10_is_v9_with_the_four_values_added() -> None:
     assert ranges10["source"] == ranges9["source"]
     assert "the outside value" in ranges10["note"] and "the diluted count" in ranges10["note"]
     assert not {s.name for s in SETTINGS} & (V10_VALUES | {"override_ranges"})
+
+
+def test_v11_is_v10_with_the_three_values_added() -> None:
+    """Every v10 value loads unchanged from v11, save the refresh values, which gain the rate
+    history depth and its source; v11 adds the inflation bound and the stale-rate bound, none a
+    setting (spec 2026-11-10, section 9)."""
+    v10 = _file_values("fairband-policy-v10.toml")
+    v11 = load_policy().raw["values"]
+    assert v11.keys() - v10.keys() == V11_VALUES
+    kept = v10.keys() - {"refresh"}
+    assert {k: v11[k] for k in kept} == {k: v10[k] for k in kept}
+    refresh10, refresh11 = v10["refresh"], v11["refresh"]
+    assert refresh11["value"] == refresh10["value"] | {"fx_history_years": 3}
+    assert refresh11["source"].startswith(refresh10["source"] + "; fx_history_years: ")
+    assert "spec 2026-11-10" in refresh11["source"]
+    for name in V11_VALUES:
+        assert "spec 2026-11-10" in v11[name]["source"], name
+    settings = {s.name for s in SETTINGS}
+    assert not settings & V11_VALUES and "refresh.fx_history_years" not in settings
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "rule"),
+    [
+        ("inflation_max", "0.0", "inflation_max: must be above 0 and below 1"),
+        ("inflation_max", "-0.05", "inflation_max: must be above 0 and below 1"),
+        ("inflation_max", "1.0", "inflation_max: must be above 0 and below 1"),
+        ("inflation_max", "nan", "inflation_max: must be above 0 and below 1"),
+        ("fx_stale_days", "0", "fx_stale_days: must be at least 1 day"),
+    ],
+)
+def test_a_v11_value_outside_its_range_is_refused(
+    tmp_path: Path, name: str, value: str, rule: str
+) -> None:
+    """Neither is a setting, so the file is the only way in; ``load_policy`` checks both."""
+    with pytest.raises(ValueError, match=f"^{re.escape(rule)}$"):
+        load_policy(_packaged_with(tmp_path, name, value))
+
+
+def _history_years(tmp_path: Path, years: int) -> Path:
+    """A copy of the packaged file with ``refresh.fx_history_years`` set to ``years``."""
+    text = _packaged_bytes().decode()
+    old = "\nfx_history_years = 3\n"
+    assert text.count(old) == 1
+    copy = tmp_path / "policy.toml"
+    copy.write_text(text.replace(old, f"\nfx_history_years = {years}\n"))
+    return copy
+
+
+def test_a_rate_history_shorter_than_a_year_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match=r"^refresh\.fx_history_years: must be at least 1 year$"):
+        load_policy(_history_years(tmp_path, 0))
+
+
+def test_the_v11_values_at_their_ends_load(tmp_path: Path) -> None:
+    assert load_policy(_packaged_with(tmp_path, "inflation_max", "0.001")).inflation_max == 0.001
+    assert load_policy(_packaged_with(tmp_path, "inflation_max", "0.999")).inflation_max == 0.999
+    assert load_policy(_packaged_with(tmp_path, "fx_stale_days", "1")).fx_stale_days == 1
+    assert load_policy(_history_years(tmp_path, 1)).refresh.fx_history_years == 1
 
 
 @pytest.mark.parametrize(
@@ -456,6 +522,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v10_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v10`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v10.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V10_SHA256
 
 
 def test_v9_is_byte_identical_under_its_hash() -> None:

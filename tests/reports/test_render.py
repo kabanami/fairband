@@ -253,7 +253,7 @@ def test_appendix_a_is_generated_from_the_records(
     stance = next(c for c in a["checks"] if c["check"] == "the stance word")
     assert stance["rule"] == "one of buy, hold, trim, avoid"
     assert a["versions"] == {
-        "method": "fairband-mechanical/1.0",
+        "method": "fairband-mechanical/1.1",
         "policy": policy.version,
         "settingsHash": policy.settings_hash,
         "review": "fairband-review/1",
