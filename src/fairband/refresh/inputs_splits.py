@@ -63,12 +63,39 @@ on, and those read as stored with the reason: the statement side's when it scale
 figures already post-split only when the count and every period tested read post-split), each
 period left and each consensus row left; without one every figure is read as stored and nothing
 is noted.
+
+``apply_splits`` first reads an ADR's statements on the quote's share basis (spec 2026-11-10
+section 6.1) when GuruFocus's depositary receipt ratio ρ, ordinary shares per ADS, is neither 0
+nor 1, the quote gives its count Q and a diluted count D is on file; every other row reads as the
+split rule alone reads it. FMP's statements hold the listed-share (ADS) count, but on some
+periods one off by ρ or its inverse (``_basis_side``):
+
+- a count c fits a factor f in 1, ρ and 1 ÷ ρ, tried in that order, when c × f, or c × f × the
+  ratio of the splits after its period's end, lies within the tolerance of the count it is judged
+  against. D is judged against Q, then each trailing period on its own count, the newest against
+  Q and the older ones against S, D on the quote's basis;
+- one factor fitting, or two that read c at one multiple (a depositary's ratio change that FMP
+  lists as a split), is the factor: the count reads × f and the period's EPS ÷ f, the trailing
+  EPS the sum of the periods' when each has one, and the split rule then judges the figures so
+  read as it judges any;
+- a period whose count fits no factor, or two at different multiples, is read as stored and
+  named with its reason, and so, when the rule notes anything, is a period without a count; D so
+  is the refusal "share basis unclear: the newest period's count <D> against the quote's <Q> (the
+  ADR ratio <ρ>)", every figure as given;
+- the street actuals, the consensus, GuruFocus's EPS and the closes are on the quote's basis
+  already and take no factor.
+
+The count and the trailing EPS so scaled are estimates under the method ``basis-scaled``, which
+takes the place of ``split-scaled`` on a figure both rules scaled, the note naming the split, then
+the factor. The row's note ``basis-scaled`` names the factor, the periods scaled and the two
+counts, and each period read as stored with its reason; with every factor 1 and no period so
+named there is none.
 """
 
 import math
 import sqlite3
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from typing import Literal
@@ -80,6 +107,7 @@ from fairband.store.observations import observations_for
 from fairband.store.vendor import latest_response
 
 SPLIT_SCALED = "split-scaled"
+BASIS_SCALED = "basis-scaled"
 _NO_COUNT = "No diluted count is on file, so the statements and the consensus are read as stored."
 _NO_QUOTE_COUNT = "The quote gives no share count, so the statements are read as stored."
 _POST_SPLIT = "FMP's statements and street actuals already read on the post-split basis."
@@ -113,6 +141,41 @@ _PERIOD_LEFT: dict[_Verdict, tuple[str, str]] = {
     "neither": ("fits neither basis of {}", "fit neither basis of {}"),
     None: ("has no share count", "have no share count"),
 }
+# Where a count stands on the listed-share basis when no one factor reads it: no factor fits, or
+# two at different multiples.
+type _Unclear = Literal["none", "two"]
+# Why a period is read as stored on the listed-share basis, as ``_PERIOD_LEFT`` says it.
+_BASIS_LEFT: dict[_Unclear | None, tuple[str, str]] = {
+    "none": ("fits no share basis of {}", "fit no share basis of {}"),
+    "two": ("fits two share bases of {}", "fit two share bases of {}"),
+    None: ("has no share count", "have no share count"),
+}
+# The stored count's share of the quote's, by the multiple it is read at, and a few numbers in
+# words; any other prints as a figure.
+_PART_OF = {
+    "2": "half of",
+    "3": "a third of",
+    "4": "a quarter of",
+    "5": "a fifth of",
+    "6": "a sixth of",
+    "7": "a seventh of",
+    "8": "an eighth of",
+    "9": "a ninth of",
+    "10": "a tenth of",
+    "20": "a twentieth of",
+}
+_WORDS = {
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+    "10": "ten",
+}
+_MILLION = 1_000_000
 
 
 @dataclass(frozen=True)
@@ -164,14 +227,18 @@ class SplitFigures:
 @dataclass(frozen=True)
 class SplitOutcome:
     """The figures, each one the rule scaled on the new basis; the ``split-pending`` note, ``None``
-    without a pending split; and the note and the method of each scaled DATA input, by the
+    without a pending split; the note and the method of each scaled DATA input, by the
     engine's input name (``shares_diluted``, ``eps_ttm``, ``street_ttm_eps``, ``gf_eps_ttm``,
-    ``gf_eps_without_nri``, ``ntm_eps``)."""
+    ``gf_eps_without_nri``, ``ntm_eps``); the ``basis-scaled`` note, ``None`` when the
+    listed-share basis read nothing to note; and the refusal "share basis unclear: ...", with the
+    figures as given."""
 
     figures: SplitFigures
     flag: Flag | None
     notes: dict[str, str]
     estimate_methods: dict[str, str]
+    basis_flag: Flag | None = None
+    refusal: str | None = None
 
 
 # One side of the rule: the figures as it leaves them, its notes by DATA input name, its sentences.
@@ -218,16 +285,43 @@ def apply_splits(
     quote_market_cap: float | None,
     quote_price: float | None,
     tolerance: float,
+    adr_ratio: float | None = None,
 ) -> SplitOutcome:
     """``figures`` on the share basis of the quote date (the module docstring states the rule);
-    ``statement_end`` is the newest trailing period's end."""
+    ``statement_end`` is the newest trailing period's end and ``adr_ratio`` GuruFocus's depositary
+    receipt ratio, ordinary shares per ADS."""
     oldest = figures.periods[0].end if figures.periods else statement_end
     pending = pending_splits(splits, oldest, price_date)
-    if not pending or statement_end is None:
-        return SplitOutcome(figures, None, {}, {})
     quote_count = (
         None if quote_market_cap is None or not quote_price else quote_market_cap / quote_price
     )
+    count = figures.shares_diluted
+    if adr_ratio is None or adr_ratio in (0, 1) or not quote_count or not count:
+        return _split_rule(figures, pending, statement_end, quote_count, tolerance)
+    newest = () if statement_end is None else _after(pending, statement_end)
+    basis = _basis_side(figures, count, _ratio(newest), pending, quote_count, adr_ratio, tolerance)
+    if basis.refusal is not None:
+        return basis
+    split = _split_rule(basis.figures, pending, statement_end, quote_count, tolerance)
+    notes = split.notes | {
+        name: f"{split.notes[name]} and {note}" if name in split.notes else note
+        for name, note in basis.notes.items()
+    }
+    methods = split.estimate_methods | basis.estimate_methods
+    return replace(split, notes=notes, estimate_methods=methods, basis_flag=basis.basis_flag)
+
+
+def _split_rule(
+    figures: SplitFigures,
+    pending: Sequence[SplitRow],
+    statement_end: date | None,
+    quote_count: float | None,
+    tolerance: float,
+) -> SplitOutcome:
+    """The split rule on ``figures``: the statements, the consensus and GuruFocus's EPS on the
+    basis of the quote date, with the ``split-pending`` note; as given without a pending split."""
+    if not pending or statement_end is None:
+        return SplitOutcome(figures, None, {}, {})
     stated, statement_notes, statement = _statement_side(
         figures, pending, statement_end, quote_count, tolerance
     )
@@ -413,12 +507,8 @@ def _periods_left(
     """A sentence for each reason judged periods are read as stored: a count fitting both bases or
     neither of the count it was judged against (the quote's for the newest period, the newest
     count for the others), or no share count."""
-    groups: dict[tuple[str, str], list[int]] = {}
-    for reason, (one, many) in _PERIOD_LEFT.items():
-        for k in sorted(k for k, (verdict, _) in verdicts.items() if verdict == reason):
-            against = "the quote's count" if k == len(periods) - 1 else "the newest count"
-            groups.setdefault((one.format(against), many.format(against)), []).append(k)
-    return [_left(ks, periods, fiscal_year, said) for said, ks in groups.items()]
+    reasons = {k: verdict for k, (verdict, _) in verdicts.items()}
+    return _named_left(reasons, _PERIOD_LEFT, periods, fiscal_year)
 
 
 def _left(
@@ -543,6 +633,222 @@ def _observed(
     r = _divided(ratio)
     note = f"{r} for {_named(after)}"
     return value / ratio, note, f"GuruFocus's EPS observed {_day(as_of)} is read {r}."
+
+
+def _basis_side(
+    figures: SplitFigures,
+    count: float,
+    split_ratio: float,
+    pending: Sequence[SplitRow],
+    quote_count: float,
+    adr_ratio: float,
+    tolerance: float,
+) -> SplitOutcome:
+    """The statements on the quote's share basis: the diluted count ``count`` × its factor
+    against the quote's count, by ``split_ratio``, the ratio of the splits after the newest
+    period's end, then each trailing period's count × its own factor and its EPS ÷ it; the
+    refusal when the count fits no factor or two. The split rule reads the figures it leaves."""
+    found = _factor(count, adr_ratio, split_ratio, quote_count, tolerance)
+    if isinstance(found, str):
+        refusal = (
+            f"share basis unclear: the newest period's count {_millions(count)} against the "
+            f"quote's {_millions(quote_count)} (the ADR ratio {_ratio_figure(adr_ratio)})"
+        )
+        return SplitOutcome(figures, None, {}, {}, refusal=refusal)
+    factor, read = found
+    readings = _read_periods(
+        figures.periods, pending, adr_ratio, quote_count, count * read, tolerance
+    )
+    left = {k: r for k, r in readings.items() if r is None or isinstance(r, str)}
+    scaled = {
+        k: f for k, f in readings.items() if f is not None and not isinstance(f, str) and f != 1
+    }
+    out, moved = _factor_periods(replace(figures, shares_diluted=count * factor), scaled)
+    if factor == 1 and not moved and not any(left.values()):
+        return SplitOutcome(out, None, {}, {})
+    relation = (
+        f"the stored count, {_millions(count)}, {_relation(read)} the quote's, "
+        f"{_millions(quote_count)}{_adr(adr_ratio)}"
+    )
+    groups: dict[float, list[int]] = {}
+    for k in sorted(scaled):
+        groups.setdefault(scaled[k], []).append(k)
+    notes: dict[str, str] = {}
+    if factor != 1:
+        notes["shares_diluted"] = f"{_times(factor)} to the quote's share basis: {relation}"
+    if moved:
+        notes["eps_ttm"] = _basis_note(list(groups.items()), len(figures.periods), adr_ratio)
+    fiscal_year = figures.trailing is not None and figures.trailing.on_fiscal_year
+    if factor != 1 or moved:
+        spans = _basis_spans(list(groups.items()), figures.periods, fiscal_year) if moved else None
+        lead = _basis_scaled(None if factor == 1 else factor, spans, relation)
+    else:
+        lead = f"{relation[0].upper()}{relation[1:]}."
+    named = _named_left(left, _BASIS_LEFT, figures.periods, fiscal_year)
+    flag = Flag(BASIS_SCALED, "Share basis scaled", " ".join([lead, *named]))
+    return SplitOutcome(out, None, notes, dict.fromkeys(notes, BASIS_SCALED), flag)
+
+
+def _factor(
+    count: float, adr_ratio: float, split_ratio: float, against: float, tolerance: float
+) -> tuple[float, float] | _Unclear:
+    """The factor in 1, ρ and 1 ÷ ρ, tried in that order, that brings ``count`` within
+    ``against`` as it is or × ``split_ratio``, with the multiple it reads ``count`` at: the factor,
+    × the split ratio when only the split brings it there. ``"none"`` when no factor fits;
+    ``"two"`` when two fit at different multiples (two at one multiple read alike, a ratio change
+    FMP lists as a split, and the first stands)."""
+    fits = [
+        (f, f * s)
+        for f in (1.0, adr_ratio, 1 / adr_ratio)
+        for s in dict.fromkeys((1.0, split_ratio))
+        if _within(count * f * s, against, tolerance)
+    ]
+    if not fits:
+        return "none"
+    first, read = fits[0]
+    if any(f != first and not math.isclose(m, read) for f, m in fits):
+        return "two"
+    return first, read
+
+
+def _read_periods(
+    periods: Sequence[TrailingPeriod],
+    pending: Sequence[SplitRow],
+    adr_ratio: float,
+    quote_count: float,
+    on_quote: float,
+    tolerance: float,
+) -> dict[int, float | _Unclear | None]:
+    """Each period's factor on its own count, by the splits after its own end: the newest against
+    the quote's count, the older ones against ``on_quote``, the diluted count on the quote's basis
+    (S); ``"none"`` or ``"two"`` when it is unclear, ``None`` without a count."""
+    readings: dict[int, float | _Unclear | None] = {}
+    for k, period in enumerate(periods):
+        if period.shares_diluted is None:
+            readings[k] = None
+            continue
+        against = quote_count if k == len(periods) - 1 else on_quote
+        split_ratio = _ratio(_after(pending, period.end))
+        found = _factor(period.shares_diluted, adr_ratio, split_ratio, against, tolerance)
+        readings[k] = found if isinstance(found, str) else found[0]
+    return readings
+
+
+def _factor_periods(figures: SplitFigures, scaled: dict[int, float]) -> tuple[SplitFigures, bool]:
+    """Each scaled period's count × its factor and its EPS ÷ it; the trailing EPS then the sum of
+    the periods' when it was on file and each has one. The figures, and whether the trailing EPS
+    moved."""
+    if not scaled:
+        return figures, False
+    periods = tuple(
+        _on_basis(p, scaled[k]) if k in scaled else p for k, p in enumerate(figures.periods)
+    )
+    trailing = figures.trailing
+    each = [p.eps_diluted for p in periods if p.eps_diluted is not None]
+    if trailing is None or trailing.eps_diluted is None or len(each) != len(periods):
+        return replace(figures, periods=periods), False
+    return replace(
+        figures, trailing=replace(trailing, eps_diluted=sum(each)), periods=periods
+    ), True
+
+
+def _on_basis(period: TrailingPeriod, factor: float) -> TrailingPeriod:
+    """``period`` with its count × ``factor`` and its EPS ÷ it."""
+    eps, count = period.eps_diluted, period.shares_diluted
+    return replace(
+        period,
+        eps_diluted=None if eps is None else eps / factor,
+        shares_diluted=None if count is None else count * factor,
+    )
+
+
+def _basis_note(groups: Sequence[tuple[float, list[int]]], n: int, adr_ratio: float) -> str:
+    """``÷10 to the quote's share basis (the ADR ratio 10)`` when every period scaled by one
+    factor, else ``... on 1 of 4 quarters``, a part for each factor."""
+    basis = f"to the quote's share basis{_adr(adr_ratio)}"
+    if len(groups) == 1:
+        factor, ks = groups[0]
+        share = "" if len(ks) == n else f" on {len(ks)} of {n} quarters"
+        return f"{_divided(factor)} {basis}{share}"
+    parts = [f"{_divided(factor)} on {len(ks)} of {n} quarters" for factor, ks in groups]
+    return f"{' and '.join(parts)} {basis}"
+
+
+def _basis_spans(
+    groups: Sequence[tuple[float, list[int]]],
+    periods: Sequence[TrailingPeriod],
+    fiscal_year: bool,
+) -> str:
+    """``÷10 on every trailing quarter``, ``÷5 on the quarter ending 30 Sep 2026``, a part for
+    each factor."""
+
+    def span(ks: Sequence[int]) -> str:
+        every = len(ks) == len(periods) and not fiscal_year
+        return "every trailing quarter" if every else _span(ks, periods, fiscal_year)
+
+    return " and ".join(f"{_divided(factor)} on {span(ks)}" for factor, ks in groups)
+
+
+def _basis_scaled(count_factor: float | None, spans: str | None, relation: str) -> str:
+    """The figures read on the quote's share basis: the count with its factor when it scaled,
+    the trailing EPS with the periods it scaled on, and why."""
+    if count_factor is None:
+        return f"The trailing EPS ({spans}) is read on the quote's share basis: {relation}."
+    counted = f"The diluted count ({_times(count_factor)})"
+    if spans is None:
+        return f"{counted} is read on the quote's share basis: {relation}."
+    return (
+        f"{counted} and the trailing EPS ({spans}) are read on the quote's share basis: {relation}."
+    )
+
+
+def _relation(read: float) -> str:
+    """How the stored count stands to the quote's, by the multiple it is read at: ``is a tenth
+    of`` at ×10, ``is twice`` at ÷2, ``lies within the tolerance of`` as stored."""
+    if read == 1:
+        return "lies within the tolerance of"
+    if read > 1:
+        n = _count(read)
+        return f"is {_PART_OF.get(n, f'1/{n} of')}"
+    n = _count(1 / read)
+    return "is twice" if n == "2" else f"is {n} times"
+
+
+def _adr(ratio: float) -> str:
+    """The ratio after a count: `` (the ADR ratio 10)``; below one with the ADSs to a share before
+    it, ``, three ADSs to one share (the ADR ratio 0.3333)``."""
+    named = f"(the ADR ratio {_ratio_figure(ratio)})"
+    if ratio > 1:
+        return f" {named}"
+    ads = _count(1 / ratio)
+    return f", {_WORDS.get(ads, ads)} ADSs to one share {named}"
+
+
+def _ratio_figure(ratio: float) -> str:
+    """The ADR ratio to four decimals at most: ``10``, ``0.3333``."""
+    return str(int(ratio)) if ratio.is_integer() else f"{ratio:.4f}".rstrip("0").rstrip(".")
+
+
+def _millions(count: float) -> str:
+    """``1,450.8 m``."""
+    return f"{count / _MILLION:,.1f} m"
+
+
+def _named_left[R](
+    reasons: Mapping[int, R],
+    said: Mapping[R, tuple[str, str]],
+    periods: Sequence[TrailingPeriod],
+    fiscal_year: bool,
+) -> list[str]:
+    """A sentence for each reason in ``said`` that periods are read as stored, in its order, the
+    periods by their place in ``periods``; ``{}`` in the words is the count each was judged
+    against (the quote's for the newest period, the newest count for the others)."""
+    groups: dict[tuple[str, str], list[int]] = {}
+    for reason, (one, many) in said.items():
+        for k in sorted(k for k, found in reasons.items() if found == reason):
+            against = "the quote's count" if k == len(periods) - 1 else "the newest count"
+            groups.setdefault((one.format(against), many.format(against)), []).append(k)
+    return [_left(ks, periods, fiscal_year, words) for words, ks in groups.items()]
 
 
 def _after(splits: Sequence[SplitRow], day: date) -> tuple[SplitRow, ...]:

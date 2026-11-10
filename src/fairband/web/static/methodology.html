@@ -354,6 +354,8 @@ in words.</p>
 <li>No phase: the company's figures cannot support one.</li>
 <li>A foreign filer: the company reports in another currency, or its shares trade as depositary
 receipts.</li>
+<li>An unclear share basis: a depositary receipt's newest share count matches the quote's on no
+basis.</li>
 <li>Missing figures: no price, no share count, no trailing revenue or earnings, or no tax rate for
 the country.</li>
 <li>Incomplete forecasts: the analysts' forecasts miss part of the next twelve months, or turn
@@ -921,6 +923,9 @@ consensus does not say whether its forecasts count such items.</span></li>
 <li><span class="label">Split pending</span> <code class="fb-tag figure-sm">split-pending</code>
 <span class="body app-flags__what">A stock split took effect during or after the trailing year,
 so the share count and per-share figures read on the new basis.</span></li>
+<li><span class="label">Share basis scaled</span> <code class="fb-tag figure-sm">basis-scaled</code>
+<span class="body app-flags__what">A depositary receipt's share count was off by its ratio on some
+periods, so those read on the quote's basis.</span></li>
 <li><span class="label">Long runway, high growth</span> <code class="fb-tag figure-sm">long-runway-high-growth</code>
 <span class="body app-flags__what">A runway of <span data-policy="runway_years.Wide">—</span>
 carries a belief or implied growth of <span data-policy="long_runway_growth_flag">—</span> or

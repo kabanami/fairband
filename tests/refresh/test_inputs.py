@@ -61,6 +61,7 @@ ROUTE_KEYS = {
     "next_earnings",
     "tax_rate_latest",
     "closes",
+    "adr_ratio",  # the ACME fixture's GuruFocus summary gives a ratio of 1
 }
 
 type Store = Callable[..., sqlite3.Connection]
@@ -426,6 +427,7 @@ def test_provenance_dates(conn_with_company: sqlite3.Connection) -> None:
     assert p["street_ttm_eps"] == Provenance("FMP earnings", date(2026, 10, 30), NOW, NOW)
     assert p["next_earnings"] == Provenance("FMP earnings", TODAY, NOW, NOW)
     assert p["moat_score"] == Provenance("GuruFocus summary", TODAY, NOW, NOW)
+    assert p["adr_ratio"] == p["moat_score"]
     assert p["gf_eps_ttm"] == p["gf_eps_without_nri"]
     assert p["gf_eps_ttm"] == Provenance("GuruFocus keyratios", TODAY, NOW, NOW)
     assert p["closes"] == Provenance("FMP historical-price-eod/full", date(2026, 10, 30), NOW, None)
@@ -819,3 +821,62 @@ def test_debt_and_cash_read_the_newest_balance_sheet(store: Store) -> None:
     assert newest_debt_and_cash(conn, "BOLT") == (None, None)  # no balance sheet on file
     assert inputs.notes["debt"] == "longTermDebt not presented"
     assert inputs.notes["cash"] == "cashAndCashEquivalents and shortTermInvestments not presented"
+
+
+def _summary(ratio: str | None) -> dict[str, Any]:
+    """The ACME GuruFocus summary with its depositary receipt ratio set to ``ratio``."""
+    body: dict[str, Any] = json.loads((FIXTURES / "gurufocus" / "summary.ACME.json").read_text())
+    body["summary"]["company_data"]["depositary_receipt_ratio"] = ratio
+    return body
+
+
+def _quote(count: float) -> list[dict[str, Any]]:
+    """The ACME quote at its price of $50 with a market cap of $50 × ``count``."""
+    (row,) = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    return [{**row, "marketCap": row["price"] * count}]
+
+
+def test_an_adr_reads_its_counts_on_the_quotes_share_basis(store: Store) -> None:
+    """ACME with a ratio of 10 and a quote at a tenth of its count (10.4 m against 104 m): each
+    quarter's count, 101 m to 104 m, fits the newest's on the quote's basis only × 1 ÷ 10, so the
+    count reads ÷ 10 and the trailing EPS × 10; the street actuals stand."""
+    conn = store(**bodies(), summary=_summary("10"), quote=_quote(10.4 * M))
+    inputs = build(conn)
+    assert inputs.adr_ratio == 10.0
+    assert inputs.provenance["adr_ratio"] == Provenance("GuruFocus summary", TODAY, NOW, NOW)
+    assert inputs.refusal is None
+    assert inputs.shares_diluted == pytest.approx(10.4 * M)
+    assert inputs.trailing is not None and inputs.trailing.eps_diluted == pytest.approx(19.0)
+    assert inputs.street_ttm_eps == pytest.approx(2.10)
+    assert {k: v for k, v in inputs.estimate_methods.items() if v == "basis-scaled"} == {
+        "shares_diluted": "basis-scaled",
+        "eps_ttm": "basis-scaled",
+    }
+    assert inputs.notes["eps_ttm"] == "×10 to the quote's share basis (the ADR ratio 10)"
+    assert codes(inputs)[-1] == "basis-scaled"
+
+
+@pytest.mark.parametrize("ratio", ["0", None], ids=["zero", "absent"])
+def test_a_direct_listing_has_no_ratio(store: Store, ratio: str | None) -> None:
+    """GuruFocus gives a direct listing the ratio 0: no ratio, and the counts read as stored."""
+    conn = store(**bodies(), summary=_summary(ratio), quote=_quote(10.4 * M))
+    inputs = build(conn)
+    assert inputs.adr_ratio is None and "adr_ratio" not in inputs.provenance
+    assert inputs.shares_diluted == 104 * M and inputs.refusal is None
+    assert "basis-scaled" not in codes(inputs)
+    assert "basis-scaled" not in inputs.estimate_methods.values()
+
+
+def test_the_basis_refusal_comes_before_the_tax_refusal(store: Store) -> None:
+    """A quote at an eighth of the count (13 m against 104 m), which neither 10, 1 ÷ 10 nor 1
+    explains: refused for the basis, though the tax table also lacks a year."""
+    conn = store(**bodies(), summary=_summary("10"), quote=_quote(13 * M))
+    refusal = (
+        "share basis unclear: the newest period's count 104.0 m against the quote's 13.0 m (the "
+        "ADR ratio 10)"
+    )
+    assert build(conn).refusal == refusal
+    from_2017 = {("United States", y): 0.25 for y in range(2017, 2027)}
+    late = TaxTable(from_2017, "t", {"US": "United States"})
+    assert build(conn, late).refusal == refusal
+    assert build(conn, late).shares_diluted == 104 * M

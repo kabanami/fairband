@@ -198,7 +198,10 @@ class CompanyInputs:
     peers with their figures and ``peer_source`` where they came from, ``debt`` and ``cash`` the
     newest annual balance sheet's (``None`` unknown); the revenue-growth and Decline routes read
     them, and none is stored with a result. ``balance_years`` holds one ``BalanceYear`` per fiscal
-    year of ``series`` with an annual balance sheet, oldest first; the Decline route reads them."""
+    year of ``series`` with an annual balance sheet, oldest first; the Decline route reads them.
+    ``adr_ratio`` is GuruFocus's depositary receipt ratio, ordinary shares per ADS, ``None`` for a
+    direct listing or without one on file; assembly has read the counts on the quote's basis by it.
+    """
 
     symbol: str
     name: str
@@ -232,6 +235,7 @@ class CompanyInputs:
     debt: float | None = None
     cash: float | None = None
     balance_years: tuple[BalanceYear, ...] = ()
+    adr_ratio: float | None = None
 
 
 def value_company(
@@ -515,16 +519,19 @@ def _refuse(
 
 def _base_inputs(i: CompanyInputs) -> tuple[TaggedInput, ...]:
     """The DATA inputs every result of ``value_company`` carries: what the guards and the
-    price facts read."""
+    price facts read, and, for an ADR or a row with a ratio on file, the ADR ratio the share
+    count was read by; a direct listing carries none."""
     years = [fy.year for fy in i.series]
     span = f"fiscal {years[0]} to {years[-1]}" if years else None
     earnings = None if i.next_earnings is None else i.next_earnings.isoformat()
+    listed = i.is_adr or i.adr_ratio is not None
     return (
         data(i, "statements", float(len(years)), "fiscal years", note=span),
         data(i, "price", i.price, "USD"),
         data(i, "shares_diluted", i.shares_diluted, "shares"),
         data(i, "next_earnings", None, "date", note=earnings),
         data(i, "closes", float(len(i.closes)), "daily closes"),
+        *((data(i, "adr_ratio", i.adr_ratio, "ratio"),) if listed else ()),
     )
 
 

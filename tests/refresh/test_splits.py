@@ -183,6 +183,7 @@ def _apply(
     market_cap: float | None = 2000.0 * 50,
     price: float | None = 50.0,
     end: date = END,
+    adr_ratio: float | None = None,
 ) -> SplitOutcome:
     return apply_splits(
         figures,
@@ -192,6 +193,7 @@ def _apply(
         quote_market_cap=market_cap,
         quote_price=price,
         tolerance=0.15,
+        adr_ratio=adr_ratio,
     )
 
 
@@ -955,3 +957,223 @@ def test_a_split_leaves_the_price_to_value_unchanged(
     assert after.price_to_value == pytest.approx(before.price_to_value, abs=1e-9)
     assert before.value is not None and after.value is not None
     assert after.value == pytest.approx(before.value / 2, rel=1e-9)
+
+
+# The listed-share basis (spec 2026-11-10 section 6.1): an ADR's counts on FMP's statements are
+# judged against the quote's by the ADR ratio ρ and its inverse, each period on its own.
+BASIS_KEYS = {"shares_diluted", "eps_ttm"}
+
+
+def _quoted(count: float) -> float:
+    """The market cap that gives a quote's count of ``count`` at ``_apply``'s price of 50."""
+    return count * 50
+
+
+def _basis_sentence(out: SplitOutcome) -> str:
+    assert out.basis_flag is not None
+    assert (out.basis_flag.code, out.basis_flag.word) == ("basis-scaled", "Share basis scaled")
+    return out.basis_flag.sentence
+
+
+def test_every_period_a_tenth_of_the_quote_reads_times_ten() -> None:
+    """Spec 11.3, CX: 145.8 m on every quarter against the quote's 1,450.8 m, ρ 10. Only × 10
+    brings the count within 15%, so every period reads × 10 on the count and ÷ 10 on the EPS;
+    the street actuals, on the quote's basis already, stand."""
+    figures = _figures(count=145.8 * M)
+    out = _apply(figures, splits=(), market_cap=_quoted(1450.8 * M), adr_ratio=10)
+    f = out.figures
+    assert f.shares_diluted == pytest.approx(1458.0 * M)
+    assert [p.eps_diluted for p in f.periods] == pytest.approx([0.1] * 4)
+    assert f.trailing is not None and f.trailing.eps_diluted == pytest.approx(0.4)
+    assert f.street_actuals == figures.street_actuals
+    assert out.notes == {
+        "shares_diluted": "×10 to the quote's share basis: the stored count, 145.8 m, is a tenth "
+        "of the quote's, 1,450.8 m (the ADR ratio 10)",
+        "eps_ttm": "÷10 to the quote's share basis (the ADR ratio 10)",
+    }
+    assert out.estimate_methods == dict.fromkeys(BASIS_KEYS, "basis-scaled")
+    assert out.flag is None and out.refusal is None
+    assert _basis_sentence(out) == (
+        "The diluted count (×10) and the trailing EPS (÷10 on every trailing quarter) are read on "
+        "the quote's share basis: the stored count, 145.8 m, is a tenth of the quote's, "
+        "1,450.8 m (the ADR ratio 10)."
+    )
+
+
+def test_only_the_newest_period_off_reads_on_one_of_four() -> None:
+    """Spec 11.3, UMC: the newest quarter 496.9 m, the older three 2,508.3 m, the quote's
+    2,494.4 m, ρ 5. The newest reads × 5, D = S = 2,484.5 m; the older three fit S as stored."""
+    figures = _figures(count=496.9 * M, counts=(2508.3 * M,) * 3 + (496.9 * M,))
+    out = _apply(figures, splits=(), market_cap=_quoted(2494.4 * M), adr_ratio=5)
+    f = out.figures
+    assert f.shares_diluted == pytest.approx(2484.5 * M)
+    assert [p.eps_diluted for p in f.periods] == pytest.approx([1.0, 1.0, 1.0, 0.2])
+    assert f.trailing is not None and f.trailing.eps_diluted == pytest.approx(3.2)
+    assert out.notes["eps_ttm"] == (
+        "÷5 to the quote's share basis (the ADR ratio 5) on 1 of 4 quarters"
+    )
+    assert out.estimate_methods == dict.fromkeys(BASIS_KEYS, "basis-scaled")
+    assert _basis_sentence(out) == (
+        "The diluted count (×5) and the trailing EPS (÷5 on the quarter ending 30 Sep 2026) are "
+        "read on the quote's share basis: the stored count, 496.9 m, is a fifth of the quote's, "
+        "2,494.4 m (the ADR ratio 5)."
+    )
+
+
+def test_the_inverse_ratio_reads_times_three() -> None:
+    """Spec 11.3, TAL: 184.0 m against the quote's 608.5 m, ρ 0.3333: 184.0 m ÷ ρ = 552.1 m lies
+    9.3% off, so f = 1 ÷ ρ, printed ×3 with the ratio in words."""
+    figures = _figures(count=184.0 * M)
+    out = _apply(figures, splits=(), market_cap=_quoted(608.5 * M), adr_ratio=0.3333)
+    assert out.figures.shares_diluted == pytest.approx(184.0 * M / 0.3333)
+    assert out.notes == {
+        "shares_diluted": "×3 to the quote's share basis: the stored count, 184.0 m, is a third "
+        "of the quote's, 608.5 m, three ADSs to one share (the ADR ratio 0.3333)",
+        "eps_ttm": "÷3 to the quote's share basis, three ADSs to one share (the ADR ratio 0.3333)",
+    }
+    assert [p.eps_diluted for p in out.figures.periods] == pytest.approx([0.3333] * 4)
+
+
+def test_a_newest_period_fitting_nothing_is_refused() -> None:
+    """Spec 11.3, KOF: the newest 1,680.7 m against the quote's 210.1 m, ρ 10: 1,680.7, 16,807 and
+    168.1 m fit nothing, though the quarters before hold 210.1 m."""
+    figures = _figures(count=1680.7 * M, counts=(210.1 * M,) * 3 + (1680.7 * M,))
+    out = _apply(figures, splits=(), market_cap=_quoted(210.1 * M), adr_ratio=10)
+    assert out.refusal == (
+        "share basis unclear: the newest period's count 1,680.7 m against the quote's 210.1 m "
+        "(the ADR ratio 10)"
+    )
+    assert out.figures == figures and out.notes == {} and out.estimate_methods == {}
+    assert out.flag is None and out.basis_flag is None
+
+
+def test_an_older_period_fitting_nothing_reads_as_stored_and_is_named() -> None:
+    """The newest fits as stored; the oldest quarter, 3,000 m against the newest's 1,000 m, fits
+    neither ×10 nor ÷10: it stays as stored and the sentence names it with its reason."""
+    figures = _figures(count=1000.0 * M, counts=(3000.0 * M,) + (1000.0 * M,) * 3)
+    out = _apply(figures, splits=(), market_cap=_quoted(1000.0 * M), adr_ratio=10)
+    assert out.figures == figures and out.notes == {} and out.estimate_methods == {}
+    assert out.refusal is None
+    assert _basis_sentence(out) == (
+        "The stored count, 1,000.0 m, lies within the tolerance of the quote's, 1,000.0 m (the ADR "
+        "ratio 10). The quarter ending 31 Dec 2025 fits no share basis of the newest count and is "
+        "read as stored."
+    )
+
+
+def test_an_older_period_off_by_the_ratio_scales_alone() -> None:
+    """The newest fits as stored; the oldest quarter holds a tenth of it and reads × 10 on its own,
+    so the count stands and the trailing EPS is scaled on one quarter."""
+    figures = _figures(count=1000.0 * M, counts=(100.0 * M,) + (1000.0 * M,) * 3)
+    out = _apply(figures, splits=(), market_cap=_quoted(1000.0 * M), adr_ratio=10)
+    assert out.figures.shares_diluted == 1000.0 * M
+    assert [p.eps_diluted for p in out.figures.periods] == pytest.approx([0.1, 1.0, 1.0, 1.0])
+    assert out.notes == {
+        "eps_ttm": "÷10 to the quote's share basis (the ADR ratio 10) on 1 of 4 quarters"
+    }
+    assert out.estimate_methods == {"eps_ttm": "basis-scaled"}
+    assert _basis_sentence(out) == (
+        "The trailing EPS (÷10 on the quarter ending 31 Dec 2025) is read on the quote's share "
+        "basis: the stored count, 1,000.0 m, lies within the tolerance of the quote's, 1,000.0 m "
+        "(the ADR ratio 10)."
+    )
+
+
+@pytest.mark.parametrize(
+    ("ratio", "count", "quoted"),
+    [(1.0, 680.6, 846.0), (None, 778.9, 1000.3), (0.0, 778.9, 1000.3), (None, 700.0, 1000.0)],
+    ids=["GRFS", "WSE", "zero", "domestic"],
+)
+@pytest.mark.parametrize("splits", [(), (SPLIT,)], ids=["no-split", "split"])
+def test_a_ratio_of_one_or_none_leaves_the_split_rule_as_built(
+    ratio: float | None, count: float, quoted: float, splits: tuple[SplitRow, ...]
+) -> None:
+    """GRFS (ρ 1, 680.6 m against 846.0 m), WSE (no ρ, 778.9 m against 1,000.3 m), a ratio of 0
+    and a domestic row 30% off the quote's count: the rule does not apply, so the outcome is the
+    split rule's, bit for bit."""
+    figures = _figures(count=count * M)
+    out = _apply(figures, splits=splits, market_cap=_quoted(quoted * M), adr_ratio=ratio)
+    assert out == _apply(figures, splits=splits, market_cap=_quoted(quoted * M))
+    assert out.basis_flag is None and out.refusal is None
+
+
+def test_without_the_quotes_count_every_period_reads_as_stored() -> None:
+    figures = _figures(count=145.8 * M)
+    assert _apply(figures, splits=(), market_cap=None, adr_ratio=10) == SplitOutcome(
+        figures, None, {}, {}
+    )
+
+
+def test_two_factors_fitting_reads_as_stored() -> None:
+    """A synthetic ρ of 1.2, where a count 10% under the one it is judged against fits both as
+    stored and × 1.2: the newest period so is the refusal; an older one reads as stored and is
+    named."""
+    under = _figures(count=900.0 * M)
+    out = _apply(under, splits=(), market_cap=_quoted(1000.0 * M), adr_ratio=1.2)
+    assert out.refusal == (
+        "share basis unclear: the newest period's count 900.0 m against the quote's 1,000.0 m "
+        "(the ADR ratio 1.2)"
+    )
+    figures = _figures(count=1000.0 * M, counts=(900.0 * M,) + (1000.0 * M,) * 3)
+    out = _apply(figures, splits=(), market_cap=_quoted(1000.0 * M), adr_ratio=1.2)
+    assert out.refusal is None and out.figures == figures and out.notes == {}
+    assert (
+        "The quarter ending 31 Dec 2025 fits two share bases of the newest count and is read as "
+        "stored." in _basis_sentence(out)
+    )
+
+
+def test_a_pending_split_and_a_factor_each_name_their_own_scaling() -> None:
+    """The 2-for-1 split after the newest quarter, every count a tenth of the quote's ÷ 2 (50 m
+    against 1,000 m), ρ 10: each period reads × 2 × 10 on the count and ÷ 20 on the EPS; the
+    street actuals, on the quote's basis but for the split, read ÷ 2."""
+    out = _apply(_figures(count=50.0 * M), market_cap=_quoted(1000.0 * M), adr_ratio=10)
+    f = out.figures
+    assert f.shares_diluted == pytest.approx(1000.0 * M)
+    assert [p.eps_diluted for p in f.periods] == pytest.approx([0.05] * 4)
+    assert f.trailing is not None and f.trailing.eps_diluted == pytest.approx(0.2)
+    assert f.street_ttm_eps == pytest.approx(2.1)
+    split = "the 2-for-1 split of 15 Oct 2026"
+    assert out.notes == {
+        "shares_diluted": f"×2 for {split} and ×10 to the quote's share basis: the stored count, "
+        "50.0 m, is a twentieth of the quote's, 1,000.0 m (the ADR ratio 10)",
+        "eps_ttm": f"÷2 for {split} and ÷10 to the quote's share basis (the ADR ratio 10)",
+        "street_ttm_eps": f"÷2 for {split}",
+    }
+    assert out.estimate_methods == {
+        "shares_diluted": "basis-scaled",
+        "eps_ttm": "basis-scaled",
+        "street_ttm_eps": "split-scaled",
+    }
+    assert _sentence(out) == (
+        "A 2-for-1 split of 15 Oct 2026 falls after the newest statement (30 Sep 2026). "
+        "The diluted count (×2), the trailing EPS and the street actuals (÷2 on the quarters to "
+        f"30 Sep 2026) are read on the post-split basis. {TAIL}"
+    )
+    assert _basis_sentence(out) == (
+        "The diluted count (×10) and the trailing EPS (÷10 on every trailing quarter) are read on "
+        "the quote's share basis: the stored count, 50.0 m, is a twentieth of the quote's, "
+        "1,000.0 m (the ADR ratio 10)."
+    )
+
+
+def test_a_ratio_change_read_as_a_split_is_the_split_rule_s() -> None:
+    """A depositary's ratio change from one share to two, which FMP lists as a 1-for-2 reverse
+    split of the ADS: the counts, 2,000 m against the quote's 1,000 m, fit both × 1 ÷ ρ for ρ 2 and
+    ÷ 2 for the split. The two read alike, so the split rule reads them, as built."""
+    reverse = SplitRow(date(2026, 10, 15), 1.0, 2.0)
+    figures = _figures(count=2000.0 * M)
+    out = _apply(figures, splits=(reverse,), market_cap=_quoted(1000.0 * M), adr_ratio=2)
+    assert out == _apply(figures, splits=(reverse,), market_cap=_quoted(1000.0 * M))
+    assert out.figures.shares_diluted == 1000.0 * M
+
+
+def test_the_fiscal_year_fallback_reads_the_factor_on_the_year() -> None:
+    end = date(2025, 12, 31)
+    figures = _year(100.0 * M)
+    out = _apply(figures, splits=(), market_cap=_quoted(1000.0 * M), end=end, adr_ratio=10)
+    assert out.figures.shares_diluted == pytest.approx(1000.0 * M)
+    assert out.figures.trailing is not None
+    assert out.figures.trailing.eps_diluted == pytest.approx(0.4)
+    assert out.notes["eps_ttm"] == "÷10 to the quote's share basis (the ADR ratio 10)"
+    assert "(÷10 on the fiscal year)" in _basis_sentence(out)

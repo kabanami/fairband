@@ -27,9 +27,10 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
 - the currency: the newest annual income statement's, else the universe row's, else ``"unknown"``
   flagged ``currency-unknown``. The route reads every currency but USD as a foreign filer, so an
   unknown one gets the foreign-filer refusal, which is the honest outcome;
-- the refusal: "no financial statements", else the statements' missing tax rate, except for a
-  foreign filer (an ADR, or a currency other than USD), whose missing rates stay ``None`` so the
-  route gives it the foreign-filer refusal of spec 11 with its phase;
+- the refusal: "no financial statements", else the listed-share basis's ("share basis unclear:
+  ..."), else the statements' missing tax rate, except for a foreign filer (an ADR, or a currency
+  other than USD), whose missing rates stay ``None`` so the route gives it the foreign-filer
+  refusal of spec 11 with its phase;
 - the GuruFocus moat score and EPS, the next earnings date (``None`` when before ``today``) and the
   closes of the latest price-history payload (none when it is absent or does not parse);
 - the debt, short-term plus long-term debt, and the cash, cash and equivalents plus short-term
@@ -39,7 +40,11 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
 - the peers and their source: ``peers.peer_figures`` on the given deciles; none without them;
 - the stock splits: a split dated after the oldest trailing period's end and at or before the price
   date puts every share count and per-share figure on the quote date's basis, each trailing period
-  read on its own count (``inputs_splits``), with the ``split-pending`` note.
+  read on its own count (``inputs_splits``), with the ``split-pending`` note;
+- the ADR ratio, the newest GuruFocus summary's ``depositary_receipt_ratio`` (ordinary shares per
+  ADS), ``None`` for a direct listing, whose ratio is 0, or without one: by it the split rule reads
+  an ADR's counts and trailing EPS on the quote's share basis first, with the ``basis-scaled``
+  note, or refuses the row when the newest count fits no basis.
 
 ``provenance`` holds an entry under each key the route cites (``route`` module docstring) whose
 input the store supplied; an input it did not supply has none and cites "unknown". The source names
@@ -144,7 +149,9 @@ def build_inputs(
     quarters = cite("estimates_quarter", _quarter_estimates(read("estimate-quarter"), calendar))
     annual = cite("estimates_annual", _annual_estimates(read("estimate-annual"), calendar))
     actuals = cite("street_ttm_eps", _street_actuals(read("street-actual"), stated))
-    moat = cite("moat_score", _value(_field(read("gf-score"), "moat_score"), _SUMMARY))
+    scores = read("gf-score")
+    moat = cite("moat_score", _value(_field(scores, "moat_score"), _SUMMARY))
+    adr_ratio = cite("adr_ratio", _adr_ratio(scores))
     ttm_row, clean_row = _field(ratios, "eps_ttm"), _field(ratios, "eps_without_nri")
     eps_ttm = cite("gf_eps_ttm", _value(ttm_row, _KEYRATIOS))
     eps_clean = cite("gf_eps_without_nri", _value(clean_row, _KEYRATIOS))
@@ -172,11 +179,11 @@ def build_inputs(
         quote_market_cap=_float(_field(quote, "market_cap")),
         quote_price=_float(price),
         tolerance=policy.split_implied_count_tolerance,
+        adr_ratio=adr_ratio,
     )
     figures = split.figures
     notes.update(split.notes)
-    if split.flag is not None:
-        flags = flags + (split.flag,)
+    flags = flags + tuple(f for f in (split.flag, split.basis_flag) if f is not None)
     return CompanyInputs(
         symbol=symbol,
         name=company.name if company is not None and company.name else symbol,
@@ -202,7 +209,7 @@ def build_inputs(
         data_date=stated.data_date,
         provenance=provenance,
         input_flags=flags,
-        refusal=stated.refusal or (None if foreign else stated.tax_refusal),
+        refusal=stated.refusal or split.refusal or (None if foreign else stated.tax_refusal),
         estimate_methods={**stated.estimate_methods, **split.estimate_methods},
         notes=notes,
         peers=peers.figures,
@@ -210,6 +217,7 @@ def build_inputs(
         debt=sums["debt"][0],
         cash=sums["cash"][0],
         balance_years=stated.balance_years,
+        adr_ratio=adr_ratio,
     )
 
 
@@ -321,6 +329,13 @@ def _is_adr(profile: Sequence[ObservationRow], company: CompanyRow | None) -> bo
     if row is not None and row.value is not None:
         return row.value == 1
     return company is not None and company.is_adr
+
+
+def _adr_ratio(rows: Sequence[ObservationRow]) -> _Cited[float | None]:
+    """GuruFocus's depositary receipt ratio, ordinary shares per ADS; none for a direct listing,
+    whose ratio is 0, or without one."""
+    found, source = _value(_field(rows, "depositary_receipt_ratio"), _SUMMARY)
+    return (found, source) if found else (None, None)
 
 
 def _next_earnings(rows: Sequence[ObservationRow], today: date) -> _Cited[date | None]:

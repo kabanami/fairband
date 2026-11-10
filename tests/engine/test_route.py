@@ -49,6 +49,8 @@ TODAY = date(2026, 10, 31)
 # payout floor off (spec 2026-11-09 6.1), years 1 to 3, which pay for growth above r, pay out less
 # than nothing, where the floor added their cash back.
 VALUE_AT_R = 5.90 / 0.09
+# The DATA inputs every result of ``value_company`` carries first, in order.
+BASE_INPUTS = ["statements", "price", "shares_diluted", "next_earnings", "closes"]
 
 MATURE_GROWTH_KEYS = {
     "anchor",
@@ -1291,6 +1293,38 @@ def test_refuses_foreign_filer(mg_inputs: CompanyInputs, deciles: Deciles, polic
         r = value_company(inputs, deciles, policy, TODAY)
         assert_refused(r, reason)
         assert r.phase.phase == "Mature Growth"
+
+
+def test_an_adr_s_results_carry_its_ratio(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The DATA input ``adr_ratio`` (unit ``ratio``) follows the base inputs on every result of an
+    ADR or a row with a ratio on file, citing the GuruFocus summary, ``None`` for an ADR without
+    one; a direct listing carries none (spec 2026-11-10 section 6.2), so the domestic rows' inputs
+    are as before."""
+    summary = Provenance("GuruFocus summary", date(2026, 10, 30), None, None)
+    cited = {**mg_inputs.provenance, "adr_ratio": summary}
+    for inputs, value, source in (
+        (replace(mg_inputs, is_adr=True), None, Provenance("unknown", None, None, None)),
+        (replace(mg_inputs, is_adr=True, adr_ratio=5.0, provenance=cited), 5.0, summary),
+        (replace(mg_inputs, adr_ratio=2.0, provenance=cited), 2.0, summary),
+    ):
+        r = value_company(inputs, deciles, policy, TODAY)
+        names = [i.name for i in r.inputs]
+        assert names[:6] == [*BASE_INPUTS, "adr_ratio"]
+        ratio = r.inputs[5]
+        assert (ratio.value, ratio.unit, ratio.tag, ratio.kind) == (
+            value,
+            "ratio",
+            "DATA",
+            "observed",
+        )
+        assert ratio.provenance == source
+    for r in (
+        value_company(mg_inputs, deciles, policy, TODAY),
+        value_company(replace(mg_inputs, currency="EUR"), deciles, policy, TODAY),
+    ):
+        assert "adr_ratio" not in [i.name for i in r.inputs]
 
 
 def test_a_decline_row_takes_its_route(
