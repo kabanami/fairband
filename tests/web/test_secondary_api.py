@@ -1,10 +1,12 @@
 """The secondary valuation and derivation routes (spec 2026-11-06 Tier 2, 11, 13.4 and 16), on the
 database of ``conftest.py``: AAPL (the Mature Growth golden: a Wide moat, 1 bn diluted shares, a
 price of $150), AAL and HGCO, each with one snapshot. Here AAPL also gets two hand-written annual
-balance sheets and income statements; FRGN (statements in euros), ADRX (an ADR in the universe)
-and NOSH (no diluted share count) get a snapshot each; and the override routes build each
-company's inputs as the conftest valued them, as ``test_reviews_api`` does. The drivers form's
-tests add spec 20.4's company (``_drivers_company``).
+balance sheets and income statements; FRGN (refused for its currency's expected inflation), BSIS
+(refused for its listed-share basis), ADRX (an ADR in USD in the universe), NOSH (no diluted share
+count) and FXCO (spec 2026-11-10 11.2's company in SEK, ``fx_inputs``) get a snapshot each; and
+the override routes build each company's inputs as the conftest valued them, as
+``test_reviews_api`` does. The drivers form's tests add spec 20.4's company (``_drivers_company``),
+and the currency's tests FXCO refused with its trailing revenue on file (``_fxco``).
 
 The secondary valuation is the fallback where neither the route nor the review values the
 company, and the route refuses one where either does (plan 3): AAL, refused for its target margin,
@@ -23,6 +25,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from support.engine_companies import (
+    SEK_DIFFERENTIAL,
+    SEK_RATE,
+    fx_inputs,
     high_growth_inputs,
     mature_growth_inputs,
     universe_deciles,
@@ -35,10 +40,11 @@ from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
+from fairband.engine.roic import terminal_roic
 from fairband.engine.route import CompanyInputs, reprice, value_company
-from fairband.engine.secondary import SECONDARY_METHOD
+from fairband.engine.secondary import SECONDARY_METHOD, Drivers, secondary_value
 from fairband.engine.types import ValuationResult
-from fairband.policy import Policy
+from fairband.policy import Policy, in_currency
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
 from fairband.store.companies import insert_companies
@@ -84,7 +90,12 @@ SHEETS = {
     },
 }
 REVENUE = {FY24: 20e9, FY25: 22e9}
-FOREIGN = "foreign filer: currency and share-unit handling not built yet"
+# Two refusals an agent cannot fix (spec 2026-11-10 7.6), as the engine words them.
+ABOVE_BOUND = "ARS: expected inflation 12.1% above the 10% bound"
+BASIS = (
+    "share basis unclear: the newest period's count 1,680.7 m against the quote's 210.1 m (the ADR"
+    " ratio 10)"
+)
 # The Mature Growth route's refusal that keeps the value-side intermediates (method 5.6).
 NOT_POSITIVE = "value not positive under the reinvestment charge"
 GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
@@ -117,7 +128,13 @@ PROJECTION = [
 
 
 def _fact(
-    dataset: str, end: date, field: str, value: float, response_id: int, symbol: str = "AAPL"
+    dataset: str,
+    end: date,
+    field: str,
+    value: float,
+    response_id: int,
+    symbol: str = "AAPL",
+    currency: str = "USD",
 ) -> FactRow:
     return FactRow(
         symbol=symbol,
@@ -127,8 +144,8 @@ def _fact(
         fiscal_period="FY",
         field=field,
         value=Decimal(repr(value)),
-        unit="USD",
-        currency="USD",
+        unit=currency,
+        currency=currency,
         kind="observed",
         estimate_method=None,
         missing_reason=None,
@@ -155,21 +172,24 @@ def _store_statements(conn: sqlite3.Connection) -> None:
 
 
 def _store_more_companies(conn: sqlite3.Connection, policy: Policy) -> None:
-    """FRGN refused as a foreign filer, as a snapshot valued before method 1.1 is (the engine
-    gives the refusal no longer: assembly hands it here), ADRX valued while its universe row is an
-    ADR, NOSH refused for its share count."""
+    """FRGN refused for its currency's expected inflation and BSIS for its listed-share basis, as
+    assembly hands the engine those refusals; ADRX valued while its universe row is an ADR in USD;
+    NOSH refused for its share count; FXCO valued in SEK."""
     refresh = latest_refresh(conn)
     assert refresh is not None
     golden = mature_growth_inputs()
     companies = {
-        "FRGN": replace(golden, symbol="FRGN", currency="EUR", refusal=FOREIGN),
+        "FRGN": replace(golden, symbol="FRGN", currency="ARS", refusal=ABOVE_BOUND),
+        "BSIS": replace(golden, symbol="BSIS", refusal=BASIS),
         "ADRX": replace(golden, symbol="ADRX"),
         "NOSH": replace(golden, symbol="NOSH", shares_diluted=None),
+        "FXCO": fx_inputs(),
     }
     adr = replace(_company("ADRX", refresh.id, "An ADR", Decimal(100_000_000_000)), is_adr=True)
     insert_companies(conn, [adr])
     results = {s: value_company(i, universe_deciles(), policy, TODAY) for s, i in companies.items()}
-    assert results["FRGN"].refusal == FOREIGN and results["ADRX"].value is not None
+    assert (results["FRGN"].refusal, results["BSIS"].refusal) == (ABOVE_BOUND, BASIS)
+    assert results["ADRX"].value is not None and results["FXCO"].value is not None
     assert results["NOSH"].refusal == "no diluted share count"
     for result in results.values():
         insert_snapshot(conn, result, refresh.id, clock=lambda: CREATED)
@@ -264,6 +284,25 @@ def _drivers_company(
                 CREATED,
             )
             insert_facts(conn, [_fact("income-annual", FY25, "revenue", revenue, response, symbol)])
+
+
+# FXCO's trailing revenue, spec 2026-11-10 11.2's 8,000 m in SEK, and spec 20.4's drivers on it
+# with a debt of 800 m and a cash of 400 m in SEK, each passed with its evidence item.
+SEK_REVENUE = 8_000e6
+ON_SEK = ON_DRIVERS | {"debt": 800e6, "cash": 400e6}
+
+
+def _fxco(db_path: Path) -> None:
+    """FXCO refused as the route refuses a value at or below zero (``_refuse``), so it takes the
+    fallback, its currency, rate and differential kept on the refused snapshot; and one fiscal year
+    on file, its revenue in SEK its trailing revenue."""
+    _refuse(db_path, "FXCO")
+    with closing(connect(db_path)) as conn:
+        response = record_response(
+            conn, "fmp", "income-statement", {"symbol": "FXCO"}, "FXCO", 200, "[]", None, CREATED
+        )
+        revenue = _fact("income-annual", FY25, "revenue", SEK_REVENUE, response, "FXCO", "SEK")
+        insert_facts(conn, [revenue])
 
 
 def _secondary(
@@ -405,6 +444,7 @@ def test_a_secondary_valuation_reads_the_balance_sheet(
     snapshot = client.get("/api/companies/AAPL").json()["snapshot"]
     body = _secondary(client, ONE_PART, symbol="aapl")
     assert (body["debt"], body["cash"], body["shares"]) == (2e9, 1e9, 1e9)  # FY2025's lines
+    assert body["fxRate"] == 1.0  # a USD row's rate
     assert (body["debtSource"], body["cashSource"]) == ("statements", "statements")
     value = (FIRM - 2e9 + 1e9) / 1e9
     assert body["firmValue"] == pytest.approx(FIRM, abs=1e-4 * SCALE)
@@ -715,13 +755,102 @@ def test_the_levels_follow_the_reviewed_moat(client: TestClient, policy: Policy)
     assert body["buyLevel"] != before["buyLevel"]
 
 
-@pytest.mark.parametrize("symbol", ["FRGN", "ADRX"])
-def test_a_foreign_filer_is_refused(client: TestClient, db_path: Path, symbol: str) -> None:
-    """FRGN refused as a foreign filer; ADRX, an ADR in the universe, once its route refuses."""
-    if symbol == "ADRX":
-        _refuse(db_path, symbol)
-    assert _refused(client, ONE_PART, symbol) == (400, {"detail": FOREIGN})
+@pytest.mark.parametrize(("symbol", "refusal"), [("FRGN", ABOVE_BOUND), ("BSIS", BASIS)])
+def test_a_refusal_an_agent_cannot_fix_refuses_the_call(
+    client: TestClient, symbol: str, refusal: str
+) -> None:
+    """A snapshot refused for a reason no call can meet, the currency's expected inflation above
+    the bound (FRGN) or the listed-share basis (BSIS), refuses the secondary valuation on either
+    form with the refusal's own sentence (spec 2026-11-10 7.6); nothing is stored."""
+    for body in (ONE_PART, ON_DRIVERS):
+        assert _refused(client, body, symbol) == (400, {"detail": refusal})
     assert _stored(client, symbol) == []
+
+
+def test_an_adr_in_usd_takes_the_fallback(client: TestClient, db_path: Path) -> None:
+    """ADRX, an ADR in the universe that reports in USD, is a domestic row (spec 2026-11-10 7.5):
+    once its route refuses it takes the fallback as any USD row does, at the rate 1, no balance
+    sheet on file."""
+    _refuse(db_path, "ADRX")
+    body = _secondary(client, ONE_PART, symbol="ADRX")
+    assert (body["fxRate"], body["debtSource"], body["cashSource"]) == (1.0, "none", "none")
+    assert body["valuePerShare"] == pytest.approx(FIRM / 1e9, abs=1e-4)
+
+
+def test_a_secondary_valuation_in_the_reporting_currency(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-10 7.6: FXCO reports in SEK at 8.0 a dollar, its differential 2%. The drivers
+    project its trailing revenue in SEK at r restated into SEK, 11.18%, the Wide moat's terminal
+    return its aggregate capped at that r plus four points; the totals stay in SEK; the value a
+    share, its levels and the grid's cells are ÷ 8.0, US dollars a share as the snapshot's, and
+    the designation reads the USD price against that value; the record carries the rate, and the
+    ledger names the value in dollars."""
+    _fxco(db_path)
+    local = in_currency(policy, SEK_DIFFERENTIAL)
+    assert local.required_return == pytest.approx(0.1118, abs=1e-12)
+    with closing(connect(db_path)) as conn:
+        snapshot = latest_snapshot(conn, "FXCO")
+    assert snapshot is not None and snapshot.value is None
+    body = _secondary(client, ON_SEK, symbol="FXCO")
+    assert body["snapshotId"] == snapshot.id
+    roic_t = terminal_roic(snapshot.result.intermediates["roic"]["aggregate"], "Wide", local)
+    assert roic_t == local.wide_terminal_roic_cap != policy.wide_terminal_roic_cap
+    engine = secondary_value(
+        drivers=Drivers(3, (0.10, 0.08, 0.05), (0.20, 0.20, 0.20), 0.25, 2.0, 0.02),
+        revenue_0=SEK_REVENUE,
+        roic_t=roic_t,
+        debt=800e6,
+        cash=400e6,
+        shares=100e6,
+        price=50.0 * SEK_RATE,
+        moat="Wide",
+        policy=local,
+    )
+    assert engine.grid is not None and engine.value_per_share > 0
+    assert body["fxRate"] == SEK_RATE
+    # the totals in SEK, as the engine made them
+    projection = body["projection"]
+    assert (projection["trailingRevenue"], projection["terminalReturn"]) == (SEK_REVENUE, roic_t)
+    assert (body["firmValue"], body["equity"]) == (engine.firm_value, engine.equity)
+    assert (body["debt"], body["cash"], body["shares"]) == (800e6, 400e6, 100e6)
+    # the value a share, the levels and the grid in USD; the designation on the USD price
+    value = engine.value_per_share / SEK_RATE
+    assert body["valuePerShare"] == value
+    levels = levels_for(value, "Wide", policy)
+    assert (body["buyLevel"], body["fairLow"], body["fairHigh"], body["trimLevel"]) == (
+        levels.buy,
+        levels.fair_low,
+        levels.fair_high,
+        levels.trim,
+    )
+    ratio, designation = designation_for(50.0, value, policy.designation_edges)
+    assert (body["priceToValue"], body["designation"]) == (ratio, designation)
+    grid = body["grid"]
+    assert (grid["rows"], grid["cols"]) == (list(engine.grid.rows), list(engine.grid.cols))
+    assert grid["cols"][1] == local.required_return
+    assert grid["cells"] == [[cell / SEK_RATE for cell in row] for row in engine.grid.cells]
+    assert grid["cells"][1][1] == body["valuePerShare"]  # the centre is the value
+    assert _stored(client, "FXCO") == [body]
+    [entry] = client.get("/api/companies/FXCO/ledger").json()["entries"]
+    assert entry["summary"].startswith(f"${value:,.2f} a share from drivers over three years")
+
+
+def test_the_terminal_growth_runs_to_g_t_restated(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """On FXCO the terminal growth's bound is g_T restated into SEK, 5.06% (spec 2026-11-10 7.3):
+    5%, above a USD row's 3.0%, is taken; 5.1% is refused, the sentence naming the bound."""
+    _fxco(db_path)
+    assert in_currency(policy, SEK_DIFFERENTIAL).terminal_growth == pytest.approx(0.0506)
+    above = ON_SEK | {"drivers": DRIVERS | {"terminalGrowth": 0.051}}
+    assert _refused(client, above, "FXCO") == (
+        400,
+        {"detail": "the terminal growth is −100% to g_T, 5.1%"},
+    )
+    assert _stored(client, "FXCO") == []
+    taken = _secondary(client, ON_SEK | {"drivers": DRIVERS | {"terminalGrowth": 0.05}}, "FXCO")
+    assert taken["drivers"]["terminalGrowth"] == 0.05
 
 
 def test_a_row_with_no_diluted_share_count_is_refused(client: TestClient) -> None:

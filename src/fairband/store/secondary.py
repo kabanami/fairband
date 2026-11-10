@@ -18,21 +18,28 @@ word, none of the four levels or the two on a value a share at or below zero; th
 evidence (JSON ``{kind, ref, note, figure}`` items); where the debt and the cash came from
 (``BalanceSource``), ``statements``, ``agent`` or ``none`` (no line on file, the figure 0.0); the
 writer and the time; the policy version, the settings hash and the deciles refresh it ran under;
-and the engine's ``SECONDARY_METHOD`` (a record written under ``fairband-secondary/1`` keeps it).
-``latest_secondary`` reads the company's newest, ``latest_secondaries`` every company's newest in
-one read (the screen's rows), ``secondaries_for`` every one, newest first, and ``secondary_row``
-one by its id.
+the engine's ``SECONDARY_METHOD`` (a record written under ``fairband-secondary/1`` keeps it); and
+its snapshot's rate as a REAL, units of the reporting currency per USD, 1.0 for a USD row and for
+every record made before method 1.1 (spec 2026-11-10 7.6): the totals, the projection and the
+parts are in the reporting currency, the value a share, the levels and the grid's cells in US
+dollars. ``latest_secondary`` reads the company's newest, ``latest_secondaries`` every company's
+newest in one read (the screen's rows), ``secondaries_for`` every one, newest first, and
+``secondary_row`` one by its id.
 
-``no_secondary`` says why a company can have none on a snapshot, the four refusals of the secondary
+``no_secondary`` says why a company can have none on a snapshot, the refusals of the secondary
 route that no call can meet (``method.md`` 15.4), in the route's order: the route values the
 company (the snapshot has a value), the review values the company (the company's current review
 counts on the snapshot and has a value: an override routed it), the secondary valuation being the
-fallback where neither does (plan 3); a foreign filer (``foreign_filer``: the snapshot refused as
-one, or the universe row an ADR or in a currency other than USD, a row naming none leaving it to
-the snapshot); and no positive diluted share count (``diluted_shares``: the snapshot's
-``shares_diluted`` input, else its intermediates' ``shares``). The caller passes the review:
-whether one counts on a snapshot is the reports' rule (``reports.refs.same_snapshot``), which reads
-this module.
+fallback where neither does (plan 3); a snapshot refused for a reason an agent cannot fix
+(``cannot_fix``), named by the refusal's own sentence; and no positive diluted share count
+(``diluted_shares``: the snapshot's ``shares_diluted`` input, else its intermediates' ``shares``).
+The caller passes the review: whether one counts on a snapshot is the reports' rule
+(``reports.refs.same_snapshot``), which reads this module. ``cannot_fix`` reads the refusals as
+the engine words them (spec 2026-11-10 7.5 and 7.6): "no diluted share count", the currency's
+four, "reporting currency unknown", "no exchange rate for <code>", "no inflation projection for
+<code>" and "<code>: expected inflation <π>% above the <bound>% bound", and the listed-share
+basis's "share basis unclear: ..."; and the refusal the engine gave a foreign filer before method
+1.1, which a snapshot on file may still carry.
 
 A derivation is one operation of an agent's arithmetic over two references: its operation, its
 refs, its years (a cagr's, else none), its value as ``repr`` text (none where the operation is
@@ -60,7 +67,6 @@ from fairband.engine.secondary import (
 )
 from fairband.engine.types import ValuationResult
 from fairband.store._codec import dump_float, dump_stamp, inserted_id, load_float, load_stamp
-from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.ledger import Principal, Writer
 from fairband.store.reviews import ReviewRow
@@ -73,10 +79,6 @@ BalanceSource = Literal["statements", "agent", "none"]
 # What a grid's rows hold, by form: the terminal growths; on the parts form the shift applied to
 # every part's terminal growth, since the parts' growths differ.
 GRID_ROWS: dict[Form, Literal["growths", "shifts"]] = {"drivers": "growths", "parts": "shifts"}
-
-# The refusal the engine gave a foreign filer before method 1.1 (spec 2026-11-10 7.5), which the
-# snapshots valued before still carry.
-FOREIGN_FILER = "foreign filer: currency and share-unit handling not built yet"
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,7 @@ class SecondaryRow:
     drivers: dict[str, Any] | None
     projection: dict[str, Any] | None
     grid: dict[str, Any] | None
+    fx_rate: float
 
 
 @dataclass(frozen=True)
@@ -149,10 +152,12 @@ def insert_secondary(
     *,
     revenue_0: float | None = None,
     roic_t: float | None = None,
+    fx_rate: float = 1.0,
 ) -> int:
     """Store ``valuation`` on snapshot ``snapshot_id``; return its id. ``parts`` are the parts
     it valued, none on the drivers form; ``revenue_0`` and ``roic_t``, the trailing revenue and
-    the terminal return the drivers were projected from, which the drivers form requires."""
+    the terminal return the drivers were projected from, which the drivers form requires;
+    ``fx_rate``, the snapshot's rate, 1.0 for a USD row."""
     projection: dict[str, Any] | None = None
     if valuation.projection is not None:
         if revenue_0 is None or roic_t is None:
@@ -205,6 +210,7 @@ def insert_secondary(
         _dumped(drivers),
         _dumped(projection),
         _dumped(_grid_json(valuation.grid)),
+        fx_rate,
     )
     with transaction(conn):
         cursor = conn.execute(
@@ -212,7 +218,7 @@ def insert_secondary(
             " client, parts, firm_value, debt, cash, shares, equity, value_per_share, buy_level,"
             " fair_low, fair_high, trim_level, price_to_value, designation, reason, evidence,"
             " debt_source, cash_source, policy_version, settings_hash, deciles_refresh_id,"
-            " secondary_method, form, drivers, projection, grid)"
+            " secondary_method, form, drivers, projection, grid, fx_rate)"
             f" VALUES ({', '.join('?' * len(row))})",
             row,
         )
@@ -252,32 +258,36 @@ def secondaries_for(conn: sqlite3.Connection, symbol: str) -> list[SecondaryRow]
     return [_secondary(r) for r in rows]
 
 
-def no_secondary(
-    conn: sqlite3.Connection, snapshot: SnapshotRow, review: ReviewRow | None
-) -> str | None:
+def no_secondary(snapshot: SnapshotRow, review: ReviewRow | None) -> str | None:
     """Why the company can have no secondary valuation on ``snapshot``, "the route values the
-    company", "the review values the company", "foreign filer" or "no diluted share count", in
-    the order the secondary route refuses them; ``None`` when it can have one. ``review`` is the
-    company's current review where it counts on ``snapshot`` (rests on it or on one it reprices),
-    else ``None``: the caller reads it, as the module docstring says."""
+    company", "the review values the company", the snapshot's refusal when it is one an agent
+    cannot fix (``cannot_fix``), or "no diluted share count", in the order the secondary route
+    refuses them; ``None`` when it can have one. ``review`` is the company's current review where
+    it counts on ``snapshot`` (rests on it or on one it reprices), else ``None``: the caller reads
+    it, as the module docstring says."""
     if snapshot.value is not None:
         return "the route values the company"
     if review is not None and review.value is not None:
         return "the review values the company"
-    if foreign_filer(conn, snapshot):
-        return "foreign filer"
+    if snapshot.refusal is not None and cannot_fix(snapshot.refusal):
+        return snapshot.refusal
     if diluted_shares(snapshot.result) is None:
         return "no diluted share count"
     return None
 
 
-def foreign_filer(conn: sqlite3.Connection, snapshot: SnapshotRow) -> bool:
-    """A foreign filer: the snapshot refused as one, or the universe row an ADR or in a currency
-    other than USD; a row naming no currency leaves it to the snapshot."""
-    if snapshot.refusal == FOREIGN_FILER:
-        return True
-    company = latest_company(conn, snapshot.symbol)
-    return company is not None and (company.is_adr or company.currency not in (None, "USD"))
+def cannot_fix(refusal: str | None) -> bool:
+    """Whether ``refusal`` is one no call of an agent can meet, so the company can have no
+    secondary valuation on the snapshot it refused (the module docstring)."""
+    if refusal is None:
+        return False
+    whole = (
+        "no diluted share count",
+        "reporting currency unknown",
+        "foreign filer: currency and share-unit handling not built yet",  # before method 1.1
+    )
+    leads = ("no exchange rate for ", "no inflation projection for ", "share basis unclear")
+    return refusal in whole or refusal.startswith(leads) or ": expected inflation " in refusal
 
 
 def diluted_shares(result: ValuationResult) -> float | None:
@@ -381,6 +391,7 @@ def _secondary(row: sqlite3.Row) -> SecondaryRow:
         drivers=_loaded(row["drivers"]),
         projection=_loaded(row["projection"]),
         grid=_loaded(row["grid"]),
+        fx_rate=float(row["fx_rate"]),
     )
 
 

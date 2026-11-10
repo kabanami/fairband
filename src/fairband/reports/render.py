@@ -16,8 +16,9 @@ year by year, and its grid, the rows the terminal growths or, on the parts form,
 every part's (``GRID_ROWS``), with the rows in words as the export's grid table writes them
 (``rowWords``, for the report page's chart), or, for a report with none whose company can have
 none on its snapshot, why (``noSecondary``, "no secondary valuation: the route values the company",
-"...: the review values the company" (the report's review has a value), "...: foreign filer" or
-"...: no diluted share count", ``store.secondary.no_secondary``); the checks that ran
+"...: the review values the company" (the report's review has a value), or "...: " and the
+snapshot's refusal when it is one an agent cannot fix, "...: no diluted share count" or "...: share
+basis unclear: ..." (spec 2026-11-10 7.6), ``store.secondary.no_secondary``); the checks that ran
 (``check.CHECKS``, each with its rule); the versions (method, policy, settings hash, review and
 secondary methods); and the classifier's evidence. Appendix B (``appendix_b``), the glossary: the
 terms of ``GLOSSARY`` that the sections' text uses, a term matched whole and in any case, a plural
@@ -256,8 +257,9 @@ _RULES: dict[str, str] = {
     ),
     "a secondary valuation on a refused snapshot": (
         "on a refused latest snapshot, the company's newest secondary valuation rests on it or on"
-        " one it reprices; none where the route or the review values the company, for a foreign"
-        " filer or for a snapshot with no diluted share count"
+        " one it reprices; none where the route or the review values the company, or where the"
+        " snapshot's refusal is one an agent cannot fix: no diluted share count, the reporting"
+        " currency's or the share basis's"
     ),
     UNRESOLVED: "every cite's reference names a stored value",
     WRONG_UNIT: "every cite reads its value in its unit at the report's rounding",
@@ -281,7 +283,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
     result = snapshot.result if review is None else review.result
     rules = _RULES | {"the stance word": f"one of {', '.join(policy.stance_words)}"}
     overrides = [] if review is None else _overrides(conn, review.override_ids)
-    why = no_secondary(conn, snapshot, review) if secondary is None else None
+    why = no_secondary(snapshot, review) if secondary is None else None
     return {
         "snapshot": {
             "id": snapshot.id,

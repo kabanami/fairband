@@ -273,7 +273,8 @@ cited, in section 8.
 The server checks the structure before it reads a number, in this order: the section count (twelve
 for a full report, ten for a valuation review); the stance word; the judgments the route needs, one
 of each; the headings, in order; and a secondary valuation on a refused snapshot (none where the
-route or your review values the company, and none for a foreign filer or a snapshot with no diluted
-share count). The first check that fails is answered with its one sentence (400), such as "the
+route or your review values the company, and none on a snapshot refused for a reason you cannot
+fix: no diluted share count, the reporting currency's or the share basis's). The first check that
+fails is answered with its one sentence (400), such as "the
 report needs a secondary valuation on snapshot <id>", and no number is checked. Fix the one thing
 the sentence names and submit again.

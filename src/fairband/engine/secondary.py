@@ -17,8 +17,9 @@ growth at or below zero releases no capital, so it creates none in the terminal 
 the policy's terminal return for the moat class, which the caller computes
 (``roic.terminal_roic``).
 
-The parts form, ``parts``, is plan 1's: a part is a name, the free cash flow to the firm in
-dollars for years 1 to N, a terminal growth g and a note, and each part is discounted at r:
+The parts form, ``parts``, is plan 1's: a part is a name, the free cash flow to the firm in the
+company's reporting currency for years 1 to N, a terminal growth g and a note, and each part is
+discounted at r:
 
     PV_t = fcff_t ÷ (1 + r)^t, t = 1 … N
     terminal = fcff_N × (1 + g) ÷ (r − g), discounted by (1 + r)^N
@@ -35,6 +36,11 @@ neither. A secondary valuation takes exactly one form. The rules it refuses rais
 with the rule's sentence, checked in this order: on the drivers form the years, each list's length,
 each driver's range (each entry of a list), the terminal growth; on the parts form the part count,
 each part's years, each part's terminal growth; then the share count.
+
+Every figure is in one currency, the company's reporting currency, the price among them, and the
+policy is the one restated into it (spec 2026-11-10 7.6); the caller takes the value a share, the
+levels, the designation and the grid's cells to US dollars on the way out
+(``web.reviews_api``). A USD row's figures and policy are as they were.
 
 The grid is a display, never a value: the value a share by the same arithmetic at the rates
 r − 1 pp, r and r + 1 pp (the columns) across the terminal growths g − 1 pp, g and
@@ -78,7 +84,7 @@ class Drivers:
 
 @dataclass(frozen=True)
 class Year:
-    """One year of the projection, in dollars."""
+    """One year of the projection, in the reporting currency."""
 
     t: int
     revenue: float
@@ -103,7 +109,8 @@ class Projection:
 
 @dataclass(frozen=True)
 class Part:
-    """One part of the path: the free cash flow to the firm for years 1 to N, in dollars."""
+    """One part of the path: the free cash flow to the firm for years 1 to N, in the reporting
+    currency."""
 
     name: str
     fcff: tuple[float, ...]

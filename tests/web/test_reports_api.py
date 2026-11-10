@@ -29,7 +29,6 @@ from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh
 from fairband.store.reviews import insert_review
-from fairband.store.secondary import FOREIGN_FILER
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -51,6 +50,14 @@ REFUSED_JUDGMENTS = [
 ]
 ROUTE_VALUES = "no secondary valuation: the route values the company"
 REVIEW_VALUES = "no secondary valuation: the review values the company"
+# Refusals an agent cannot fix (spec 2026-11-10 7.6), as the engine words them; and the one the
+# engine gave a foreign filer before method 1.1, which a snapshot on file may carry.
+ABOVE_BOUND = "ARS: expected inflation 12.1% above the 10% bound"
+BASIS = (
+    "share basis unclear: the newest period's count 1,680.7 m against the quote's 210.1 m (the ADR"
+    " ratio 10)"
+)
+FOREIGN_FILER = "foreign filer: currency and share-unit handling not built yet"
 
 
 def _snapshot_id(client: TestClient, symbol: str = "AAPL") -> int:
@@ -645,8 +652,10 @@ def _aal_review(
 @pytest.mark.parametrize(
     ("symbol", "changes", "why"),
     [
+        ("FRGN", {"currency": "ARS", "refusal": ABOVE_BOUND}, ABOVE_BOUND),
+        ("BSIS", {"refusal": BASIS}, BASIS),
         # a snapshot refused as a foreign filer before method 1.1, as one on file may be
-        ("FRGN", {"currency": "EUR", "refusal": FOREIGN_FILER}, "foreign filer"),
+        ("OLDF", {"currency": "EUR", "refusal": FOREIGN_FILER}, FOREIGN_FILER),
         ("NOSH", {"shares_diluted": None}, "no diluted share count"),
         ("PLAIN", {}, "the route values the company"),
     ],
@@ -659,9 +668,10 @@ def test_a_company_that_can_have_no_secondary_publishes_without_one(
     changes: dict[str, Any],
     why: str,
 ) -> None:
-    """The secondary route refuses a company the route values (plan 3), a foreign filer and a
-    snapshot with no diluted share count, so the report needs no secondary valuation there and
-    Appendix A names why."""
+    """The secondary route refuses a company the route values (plan 3) and a snapshot refused for a
+    reason an agent cannot fix, the currency's, the listed-share basis's or no diluted share count
+    (spec 2026-11-10 7.6), so the report needs no secondary valuation there and Appendix A names
+    why: the refusal in its own words."""
     inputs = replace(mature_growth_inputs(), symbol=symbol, **changes)
     result = value_company(inputs, universe_deciles(), policy, TODAY)
     with closing(connect(db_path)) as conn:

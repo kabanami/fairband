@@ -68,19 +68,28 @@ valuation being the fallback where the route refuses or no phase fits (spec 11 a
 reprices (``same_snapshot``) and has a value, an override having routed the company, 400 "the
 review values <symbol>: the secondary valuation is the fallback where neither the route nor the
 review values the company"; a ``guidance`` evidence item's 400, 404 and 409, as an override's; a
-foreign filer, the snapshot refused as one or its universe row an ADR or in a currency other than
-USD (a row naming none leaves it to the snapshot), 400 with section 7's sentence; no positive
-diluted share count on the snapshot (its ``shares_diluted`` input, else its intermediates'
-``shares``), 400 "no diluted share count"; on the drivers form, no positive trailing revenue, 400
-"no trailing revenue on file". The trailing revenue is read at the call as
-``fact:<symbol>/revenue/ttm`` resolves it, the statements' trailing figures as the engine reads
-them; the terminal return is ``terminal_roic`` on the moat the levels take and the aggregate ROIC
-of the snapshot's intermediates (``roic/aggregate``, which the mature routes write; none on the
-other routes, so r). The debt and the cash are the agent's when passed, else an applied
-``balance.*`` override's (both sourced ``agent``), else the newest annual balance sheet's as
-assembly reads them (``statements``), else nil with the source ``none`` when no line is on file.
-The levels take the current review's moat, else the snapshot's, else None; the designation the
-snapshot's price. A rule ``secondary_value`` refuses is a 400 with its sentence. The answer's
+snapshot refused for a reason no call can meet (``store.secondary.cannot_fix``: the reporting
+currency's four refusals, the listed-share basis's, no diluted share count; spec 2026-11-10 7.6),
+400 with the refusal's own sentence; no positive diluted share count on the snapshot (its
+``shares_diluted`` input, else its intermediates' ``shares``), 400 "no diluted share count"; on
+the drivers form, no positive trailing revenue, 400 "no trailing revenue on file". The trailing
+revenue is read at the call as ``fact:<symbol>/revenue/ttm`` resolves it, the statements'
+trailing figures as the engine reads them; the terminal return is ``terminal_roic`` on the moat the
+levels take and the aggregate ROIC of the snapshot's intermediates (``roic/aggregate``, which the
+mature routes write; none on the other routes, so r). The debt and the cash are the agent's when
+passed, else an applied ``balance.*`` override's (both sourced ``agent``), else the newest annual
+balance sheet's as assembly reads them (``statements``), else nil with the source ``none`` when no
+line is on file. The levels take the current review's moat, else the snapshot's, else None; the
+designation the snapshot's price. A company in another currency (spec 2026-11-10 7.6) is valued in
+its reporting currency on the policy restated by its snapshot's inflation differential
+(``policy.in_currency``): r, the terminal growth's bound g_T and the Wide moat's terminal return
+cap at r plus the spread are the currency's; the trailing revenue, the agent's path, debt and
+cash, an override's and the balance sheet's are in the currency; and the snapshot's USD price
+comes into it at the snapshot's rate (``types.money_of``). On the way out the totals stay in the
+currency; the value a share and the grid's cells are ÷ the rate, US dollars a share, the levels
+the policy's on that value and the designation the USD price against it, as a snapshot's
+(``_in_usd``); the record stores the rate. A USD row's rate is 1 and its differential 0, so its
+valuation is as before. A rule ``secondary_value`` refuses is a 400 with its sentence. The answer's
 drivers, projection and parts carry camelCase keys, and its grid ``rowsAre``, ``growths`` or
 ``shifts`` (``GRID_ROWS``). Anyone may make one, a tool's output rather than an override; the write
 is a ``secondary`` ledger row resting on the snapshot, its summary "<value> a share from drivers
@@ -110,6 +119,7 @@ import math
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
+from dataclasses import replace
 from datetime import date, datetime
 from typing import Any, Literal, cast, get_args
 
@@ -121,6 +131,8 @@ from pydantic.alias_generators import to_camel
 from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import sales_class
 from fairband.engine.classifier import Deciles
+from fairband.engine.designation import designation_for
+from fairband.engine.levels import levels_for
 from fairband.engine.overrides import (
     ANCHOR_METRICS,
     TAGS,
@@ -159,14 +171,13 @@ from fairband.store.overrides import (
 from fairband.store.refreshes import latest_deciles
 from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews_for
 from fairband.store.secondary import (
-    FOREIGN_FILER,
     GRID_ROWS,
     BalanceSource,
     Operation,
     SecondaryRow,
+    cannot_fix,
     derivation_row,
     diluted_shares,
-    foreign_filer,
     insert_derivation,
     insert_secondary,
     latest_secondary,
@@ -495,18 +506,21 @@ def add_review_routes(
                     " neither the route nor the review values the company",
                 )
             _require_guidance(conn, symbol, body.evidence)
-            if foreign_filer(conn, snapshot):
-                raise HTTPException(400, FOREIGN_FILER)
+            if snapshot.refusal is not None and cannot_fix(snapshot.refusal):
+                raise HTTPException(400, snapshot.refusal)
             shares = diluted_shares(snapshot.result)
             if shares is None:
                 raise HTTPException(400, "no diluted share count")
             moat = _moat(conn, snapshot)
+            # valued in the reporting currency, on the policy's rates restated into it
+            rate, _ = money_of(snapshot.result)
+            local = _in_currency(snapshot.result, current)
             revenue_0 = roic_t = None
             if drivers is not None:
                 revenue_0 = _trailing_revenue(Resolver(conn, symbol, current, tax))
                 if revenue_0 is None:
                     raise HTTPException(400, "no trailing revenue on file")
-                roic_t = terminal_roic(_aggregate_roic(snapshot.result), moat, current)
+                roic_t = terminal_roic(_aggregate_roic(snapshot.result), moat, local)
             (debt, debt_source), (cash, cash_source) = _balance(conn, symbol, body.debt, body.cash)
             try:
                 valuation = secondary_value(
@@ -517,12 +531,13 @@ def add_review_routes(
                     debt=debt,
                     cash=cash,
                     shares=shares,
-                    price=snapshot.price,
+                    price=None if snapshot.price is None else snapshot.price * rate,
                     moat=moat,
-                    policy=current,
+                    policy=local,
                 )
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from None
+            valuation = _in_usd(valuation, rate, snapshot.price, moat, current)
             secondary_id = insert_secondary(
                 conn,
                 symbol,
@@ -540,6 +555,7 @@ def add_review_routes(
                 at,
                 revenue_0=revenue_0,
                 roic_t=roic_t,
+                fx_rate=rate,
             )
             summary = f"{_valued_from(valuation)}: {gist(body.reason)}"
             record(
@@ -644,6 +660,32 @@ def _trailing_revenue(resolver: Resolver) -> float | None:
     found = resolver.resolve(fact_ref(resolver.symbol, "revenue", "ttm"))
     figure = None if found is None else _number(found.value, None)
     return figure[0] if figure is not None and figure[0] > 0 else None
+
+
+def _in_usd(
+    valuation: SecondaryValuation, rate: float, price: float | None, moat: Moat, policy: Policy
+) -> SecondaryValuation:
+    """``valuation``, made in the reporting currency, on the way out to US dollars at ``rate``, as
+    the route's value goes (spec 2026-11-10 7.6): its value a share and its grid's cells ÷ the
+    rate, its levels the policy's on that value and its designation the USD ``price`` against it,
+    where it has them; its totals, its projection and its parts stay in the currency. At a USD
+    row's rate of 1 every figure is as made."""
+    value = valuation.value_per_share / rate
+    levels = None if valuation.levels is None else levels_for(value, moat, policy)
+    price_to_value, designation = valuation.price_to_value, valuation.designation
+    if price_to_value is not None and price is not None:
+        price_to_value, designation = designation_for(price, value, policy.designation_edges)
+    grid = valuation.grid
+    if grid is not None:
+        grid = replace(grid, cells=tuple(tuple(c / rate for c in row) for row in grid.cells))
+    return replace(
+        valuation,
+        value_per_share=value,
+        levels=levels,
+        price_to_value=price_to_value,
+        designation=designation,
+        grid=grid,
+    )
 
 
 def _aggregate_roic(result: ValuationResult) -> float | None:
@@ -797,8 +839,13 @@ def _cap(result: ValuationResult, policy: Policy) -> float | None:
     if revenue is None:
         return None
     rate, _ = money_of(result)
-    local = in_currency(policy, result.intermediates.get("inflation_differential", 0.0))
-    return sales_class(revenue[0] / rate / 1e6, local).sales_p90_5y
+    return sales_class(revenue[0] / rate / 1e6, _in_currency(result, policy)).sales_p90_5y
+
+
+def _in_currency(result: ValuationResult, policy: Policy) -> Policy:
+    """``policy`` restated into the reporting currency of ``result`` by its inflation differential
+    (``policy.in_currency``); ``policy`` itself for a USD row, whose result carries none."""
+    return in_currency(policy, result.intermediates.get("inflation_differential", 0.0))
 
 
 def _record(

@@ -39,11 +39,12 @@ _ALL = [
     "004_settings_and_watchlists.sql",
     "005_agents.sql",
     "006_report.sql",
+    "007_secondary_fx.sql",
 ]
 # The agents' records (spec 2026-11-06 Tier 2, section 17), each table's columns the record's
-# fields in order, as 005 made them and 006 changed them: a judgment without its debate text, a
-# secondary valuation with its form, drivers, projection and grid; a work item's poster carries
-# its client as every other writer does.
+# fields in order, as 005 made them and 006 and 007 changed them: a judgment without its debate
+# text, a secondary valuation with its form, drivers, projection and grid, and its snapshot's rate
+# (spec 2026-11-10 7.6); a work item's poster carries its client as every other writer does.
 _AGENT_COLUMNS = {
     "ledger": [
         *("id", "at", "principal", "actor", "client", "kind", "symbol", "ref_table", "ref_id"),
@@ -90,6 +91,7 @@ _AGENT_COLUMNS = {
         *("fair_low", "fair_high", "trim_level", "price_to_value", "designation", "reason"),
         *("evidence", "debt_source", "cash_source", "policy_version", "settings_hash"),
         *("deciles_refresh_id", "secondary_method", "form", "drivers", "projection", "grid"),
+        "fx_rate",
     ],
     "derivations": [
         *("id", "symbol", "operation", "a", "b", "years", "value", "unit", "principal"),
@@ -148,7 +150,7 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
     assert migrate(conn) == _ALL
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -191,7 +193,7 @@ def test_designation_columns_join_a_database_at_001(
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
     assert migrate(conn) == _ALL[1:]
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -286,7 +288,7 @@ def test_migration_006_on_a_005_database_keeps_the_judgments(
     )
     conn.commit()
 
-    assert migrate(conn) == ["006_report.sql"]
+    assert migrate(conn) == ["006_report.sql", "007_secondary_fx.sql"]
 
     assert judgments_for(conn, 1) == [
         JudgmentRow(1, 1, "AAPL", "phase", "as is", None),
@@ -313,6 +315,36 @@ def test_migration_006_on_a_005_database_keeps_the_judgments(
     assert indexed("multiples_log") == [("u", ["symbol", "day"])]  # one row a company a day
     assert indexed("sensitivities") == [("c", ["symbol", "snapshot_id"])]
     assert indexed("guidance") == [("c", ["symbol"])]
+
+
+def test_migration_007_gives_a_secondary_valuation_its_rate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 006 holds a secondary valuation, made in USD as every one before method 1.1
+    was. 007 gives the record its snapshot's rate, a REAL that is 1.0 for a USD row (spec 2026-11-10
+    7.6), so the record made before reads at the rate 1."""
+    folder = _migrations_dir(tmp_path, {})
+    for filename in _ALL[1:6]:
+        (folder / filename).write_bytes(_packaged(filename))
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", folder)
+        assert migrate(conn) == _ALL[:6]
+    conn.execute(
+        "insert into secondary_valuations (symbol, snapshot_id, created_at, principal, parts,"
+        " firm_value, debt, cash, shares, equity, value_per_share, reason, evidence, debt_source,"
+        " cash_source, policy_version, settings_hash, secondary_method) values ('AAPL', 4,"
+        " '2026-11-06T09:30:00+00:00', 'agent', '[]', '100.0', '10.0', '5.0', '2.0', '95.0',"
+        " '47.5', 'a second view', '[]', 'none', 'none', 'fairband-policy-v10', 'h',"
+        " 'fairband-secondary/2')"
+    )
+    conn.commit()
+
+    assert migrate(conn) == ["007_secondary_fx.sql"]
+
+    columns = {r["name"]: r for r in conn.execute("pragma table_info(secondary_valuations)")}
+    rate = columns["fx_rate"]
+    assert (rate["type"], rate["notnull"], rate["dflt_value"]) == ("REAL", 1, "1.0")
+    assert conn.execute("select fx_rate from secondary_valuations").fetchone()[0] == 1.0
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -423,6 +455,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 004_settings_and_watchlists.sql",
         "Applied 005_agents.sql",
         "Applied 006_report.sql",
+        "Applied 007_secondary_fx.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()

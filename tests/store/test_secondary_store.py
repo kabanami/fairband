@@ -1,6 +1,6 @@
 """The secondary valuations and the derivations (spec 2026-11-06 Tier 2, 11 and 13.4): each read
-back exactly, the parts with their present values or the drivers with their projection, the grid,
-newest first."""
+back exactly, the parts with their present values or the drivers with their projection, the grid
+and the rate, newest first; and why a company can have none on a snapshot (spec 2026-11-10 7.6)."""
 
 import sqlite3
 from collections.abc import Callable
@@ -18,12 +18,14 @@ from fairband.engine.route import value_company
 from fairband.engine.secondary import SECONDARY_METHOD, Drivers, Part, secondary_value
 from fairband.engine.types import ValuationResult
 from fairband.policy import load_policy
+from fairband.refresh.rates import NO_RATE
 from fairband.store.companies import insert_companies
 from fairband.store.ledger import OWNER, Writer
 from fairband.store.reviews import ReviewRow, insert_review, latest_secondary_value, review_row
 from fairband.store.secondary import (
     DerivationRow,
     SecondaryRow,
+    cannot_fix,
     derivation_row,
     insert_derivation,
     insert_secondary,
@@ -43,6 +45,23 @@ PARTS = (Part("the business", PATH, 0.03, None), Part("a unit", (20.0,) * 5, 0.0
 # Spec 20.4's drivers, from a trailing revenue of 1,000 at a terminal return of 12%.
 DRIVERS = Drivers(3, (0.10, 0.08, 0.05), (0.20, 0.20, 0.20), 0.25, 2.0, 0.02)
 POLICY = load_policy()
+# The refusals an agent cannot fix (spec 2026-11-10 7.6), as the engine words them: no diluted
+# share count, the currency's four of 7.5 and the listed-share basis's.
+ABOVE_BOUND = "ARS: expected inflation 12.1% above the 10% bound"
+BASIS = (
+    "share basis unclear: the newest period's count 1,680.7 m against the quote's 210.1 m (the ADR"
+    " ratio 10)"
+)
+CANNOT_FIX = (
+    "no diluted share count",
+    "reporting currency unknown",
+    NO_RATE.format(code="SEK"),
+    "no inflation projection for XYZ",
+    ABOVE_BOUND,
+    BASIS,
+)
+# The refusal the engine gave a foreign filer before method 1.1, which an old snapshot carries.
+FOREIGN_FILER = "foreign filer: currency and share-unit handling not built yet"
 
 
 def _insert(
@@ -140,6 +159,7 @@ def test_a_secondary_valuation_reads_back_exactly(conn: sqlite3.Connection) -> N
             "cols": list(v.grid.cols),
             "cells": [list(row) for row in v.grid.cells],
         },
+        fx_rate=1.0,  # a USD row's
     )
     assert latest_secondary_value(conn, "AAPL") == v.value_per_share  # the review log's reader
     assert latest_secondary(conn, "MSFT") is None and secondaries_for(conn, "MSFT") == []
@@ -215,6 +235,37 @@ def test_a_drivers_valuation_reads_back_exactly(conn: sqlite3.Connection) -> Non
     assert found.secondary_method == SECONDARY_METHOD
 
 
+def test_the_record_carries_the_snapshot_s_rate(conn: sqlite3.Connection) -> None:
+    """A secondary valuation in another currency stores its snapshot's rate, units of the currency
+    per USD, read back exactly (spec 2026-11-10 7.6); one stored without a rate, a USD row's,
+    holds 1.0."""
+    v = secondary_value(
+        parts=PARTS, debt=200.0, cash=100.0, shares=100.0, price=15.0, moat="Wide", policy=POLICY
+    )
+    rated = insert_secondary(
+        conn,
+        "FXCO",
+        7,
+        PARTS,
+        v,
+        "the segments diverge",
+        [FILING],
+        "agent",
+        "statements",
+        POLICY.version,
+        "{}",
+        3,
+        AGENT,
+        NOW,
+        fx_rate=8.123456789,
+    )
+    found = latest_secondary(conn, "FXCO")
+    assert found is not None and (found.id, found.fx_rate) == (rated, 8.123456789)
+    _insert(conn)
+    usd = latest_secondary(conn, "AAPL")
+    assert usd is not None and usd.fx_rate == 1.0
+
+
 def test_a_valuation_with_no_grid_stores_none(conn: sqlite3.Connection) -> None:
     """A rate a point below r at or below the highest growth leaves no grid (method 15.5)."""
     low_r = replace(POLICY, required_return=0.035)
@@ -275,14 +326,39 @@ def test_latest_secondaries_newest_per_symbol(conn: sqlite3.Connection) -> None:
     assert found["AAPL"] == latest_secondary(conn, "AAPL")
 
 
+@pytest.mark.parametrize("refusal", [*CANNOT_FIX, FOREIGN_FILER])
+def test_cannot_fix_names_the_refusals_an_agent_cannot_fix(refusal: str) -> None:
+    """No diluted share count, the currency refusals of spec 2026-11-10 7.5 and the basis's, each
+    as the engine words it; and the foreign-filer refusal an old snapshot on file carries."""
+    assert cannot_fix(refusal)
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        None,
+        "no trailing revenue",
+        "value not positive under the reinvestment charge",
+        "no target margin: 2 mature peers",
+        "incomplete NTM consensus",
+        "Start-up: no value by design",
+        "foreign filer",  # the word alone is no refusal the engine gives
+    ],
+)
+def test_cannot_fix_leaves_every_other_refusal_to_the_fallback(refusal: str | None) -> None:
+    assert not cannot_fix(refusal)
+
+
 def test_no_secondary_names_the_valued_route_first(
     conn: sqlite3.Connection, new_refresh: Callable[[], int]
 ) -> None:
     """Why a company can have no secondary valuation on a snapshot, in the order the secondary
-    route refuses (method 15.4, plan 3): the route values it, before a foreign filer (ADRX, an ADR
-    the route values) and no diluted share count; then the review values it (AAL refused for its
-    target margin, valued by a margin override), before a foreign filer too; none on a refused
-    snapshot that can have one, nor where its review refused."""
+    route refuses (method 15.4, plan 3): the route values it (ADRX, an ADR the route values),
+    before a refusal an agent cannot fix; then the review values it (AAL refused for its target
+    margin, valued by a margin override), before such a refusal too; then that refusal in its own
+    words (spec 2026-11-10 7.6), an old snapshot's foreign-filer refusal among them, or no diluted
+    share count. None on a refused snapshot that can have one, nor where its review refused: an
+    ADR in USD the route refuses takes the fallback, the ADR flag being no ground."""
     refresh_id = new_refresh()
     adr = replace(_company("ADRX", refresh_id, "An ADR", Decimal(100_000_000_000)), is_adr=True)
     insert_companies(conn, [adr])
@@ -298,16 +374,20 @@ def test_no_secondary_names_the_valued_route_first(
 
     adr_valued = valued(symbol="ADRX")
     assert adr_valued.value is not None
-    assert no_secondary(conn, stored(adr_valued), None) == "the route values the company"
+    assert no_secondary(stored(adr_valued), None) == "the route values the company"
     adr_refused = valued(symbol="ADRX", refusal="a test refusal")
-    assert no_secondary(conn, stored(adr_refused), None) == "foreign filer"
+    assert no_secondary(stored(adr_refused), None) is None
+    above_bound = valued(symbol="ARSX", currency="ARS", refusal=ABOVE_BOUND)
+    assert no_secondary(stored(above_bound), None) == ABOVE_BOUND
+    old = valued(symbol="FRGN", currency="EUR", refusal=FOREIGN_FILER)
+    assert no_secondary(stored(old), None) == FOREIGN_FILER
     no_shares = valued(symbol="NOSH", shares_diluted=None)
-    assert no_secondary(conn, stored(no_shares), None) == "no diluted share count"
+    assert no_secondary(stored(no_shares), None) == "no diluted share count"
     young = replace(young_growth_inputs(), symbol="AAL", peers=())
     refused = value_company(young, universe_deciles(), POLICY, TODAY)
     assert refused.value is None and refused.refusal is not None
     on_refused = stored(refused)
-    assert no_secondary(conn, on_refused, None) is None
+    assert no_secondary(on_refused, None) is None
     # the review: valued, an override having routed the refused row; refused, as the row is
     target = Override(1, "margin.target", 0.2, "agent", AGENT.actor, NOW, "the peers by hand")
     routed = review_company(young, universe_deciles(), POLICY, TODAY, [target], refused)
@@ -317,11 +397,11 @@ def test_no_secondary_names_the_valued_route_first(
         replace(refused, refusal="the reviewed margin is refused"), None, (), (1,)
     )
     refused_review = _review(conn, still_refused, on_refused.id)
-    assert no_secondary(conn, on_refused, valued_review) == "the review values the company"
-    assert no_secondary(conn, on_refused, refused_review) is None
-    # the route's reason first, and the review's before a foreign filer's
-    assert no_secondary(conn, stored(adr_valued), valued_review) == "the route values the company"
-    assert no_secondary(conn, stored(adr_refused), valued_review) == "the review values the company"
+    assert no_secondary(on_refused, valued_review) == "the review values the company"
+    assert no_secondary(on_refused, refused_review) is None
+    # the route's reason first, and the review's before a refusal an agent cannot fix
+    assert no_secondary(stored(adr_valued), valued_review) == "the route values the company"
+    assert no_secondary(stored(above_bound), valued_review) == "the review values the company"
 
 
 def _review(conn: sqlite3.Connection, review: Review, snapshot_id: int) -> ReviewRow:

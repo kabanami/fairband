@@ -22,6 +22,7 @@ from fairband.mcp.client import NOT_RUNNING, FairbandClient
 from fairband.mcp.server import TOOL_NAMES, build_server
 from fairband.policy import load_policy
 from fairband.refresh.passthrough import BUSY, NO_GF_KEY
+from fairband.refresh.rates import NO_RATE
 from fairband.reports.check import (
     ALWAYS_JUDGED,
     FAILURES,
@@ -31,7 +32,7 @@ from fairband.reports.check import (
     quantities,
     structure_refusal,
 )
-from fairband.store.secondary import FOREIGN_FILER
+from fairband.store.secondary import cannot_fix
 from fairband.web.identity import IDENTIFY_FIRST
 from fairband.web.reviews_api import GUIDANCE_REF
 from fairband.web.vendor_api import NO_FMP_KEY
@@ -96,6 +97,18 @@ REF_FORMS = (
     "response",
     "policy",
 )
+# The refusals an agent cannot fix, which spare a report the secondary valuation (spec
+# 2026-11-10 7.6), as the server words them with their placeholders.
+CANNOT_FIX = (
+    "no diluted share count",
+    "reporting currency unknown",
+    NO_RATE.format(code="<code>"),
+    "no inflation projection for <code>",
+    "<code>: expected inflation <π>% above the 10% bound",
+    "share basis unclear",
+)
+# The refusal the engine gave a foreign filer before method 1.1, which the playbook names no more.
+OLD_FOREIGN_FILER = "currency and share-unit handling not built yet"
 # The refusals the agent meets, as the server words them; the playbook quotes each verbatim.
 REFUSALS = (
     IDENTIFY_FIRST,
@@ -104,7 +117,7 @@ REFUSALS = (
     anchor_misfit("earnings.ntm"),
     anchor_misfit("revenue.ntm"),
     GUIDANCE_REF,
-    FOREIGN_FILER,
+    *CANNOT_FIX,
     NO_FMP_KEY,
     NO_GF_KEY,
     BUSY,
@@ -136,9 +149,9 @@ REFUSED_REVIEW = (
 )
 # Step 11 on a refused row with nothing to weigh the price against (the final review of plan 3).
 THESIS_ALONE = (
-    "On a refused row with no reviewed value and no possible secondary valuation (a foreign filer, no"
-    " diluted share count), the stance rests on the thesis alone, and the report says so in section"
-    " 8."
+    "On a refused row with no reviewed value and no possible secondary valuation (a refusal you"
+    " cannot fix: no diluted share count, the reporting currency's or the share basis's), the stance"
+    " rests on the thesis alone, and the report says so in section 8."
 )
 # Step 3 on a secondary valuation made before the route or an override valued the company.
 HISTORY = (
@@ -355,8 +368,10 @@ def test_the_secondary_valuation_is_the_fallback_only() -> None:
         "- `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: the"
         " fallback where neither the route nor your review values the company:"
     )
-    for exemption in ("foreign filer", "no diluted share count"):  # step 10's two exemptions
+    for exemption in CANNOT_FIX:  # the refusals an agent cannot fix, in the server's words
         assert exemption in _tool_entry("secondary_valuation"), exemption
+        assert exemption in steps[10], exemption
+        assert cannot_fix(exemption.replace("<code>", "SEK").replace("<π>", "12.1")), exemption
     # FMP's figure takes the secondary valuation's scope, in step 10 and in the tool list
     assert DCF_SCOPE in steps[10]
     assert DCF_SCOPE in _tool_entry("dcf").lower()
@@ -365,6 +380,7 @@ def test_the_secondary_valuation_is_the_fallback_only() -> None:
         text = _flat(_read(path)).lower()
         for phrase in STALE:
             assert phrase not in text, (path.name, phrase)
+        assert OLD_FOREIGN_FILER not in text, path.name  # the server refuses no foreign filer
 
 
 def test_the_references_say_what_the_server_and_the_reader_do() -> None:

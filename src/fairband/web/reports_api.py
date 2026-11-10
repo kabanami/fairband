@@ -45,9 +45,11 @@ resting on that snapshot or one it reprices, else "the report needs a secondary 
 snapshot <id>", unless the company can have none there (``store.secondary.no_secondary``): its
 current review rests on that snapshot or one it reprices and has a value, "the review values the
 company" (an override routed it: the secondary valuation is the fallback where neither the route
-nor the review values the company, plan 3), a foreign filer, or no diluted share count; a valued
-latest snapshot needs none, the secondary route refusing one there (``no_secondary``'s first
-reason, "the route values the company"); a work item it names must be the company's (404 "no work
+nor the review values the company, plan 3), or the snapshot refused for a reason an agent cannot
+fix (``store.secondary.cannot_fix``: no diluted share count, the reporting currency's or the share
+basis's, spec 2026-11-10 7.6), the reason the refusal's own sentence; a valued latest snapshot
+needs none, the secondary route refusing one there (``no_secondary``'s first reason, "the route
+values the company"); a work item it names must be the company's (404 "no work
 item <id>", "... for <symbol>") and open (409 "work item <id> is <state>"). Then the number check
 (``check.check_sections`` over the sections, and ``check.check_judgments`` over the judgments'
 decisions, which hold no figure): with findings, the answer is 422
@@ -320,7 +322,7 @@ def add_report_routes(
             secondary = latest_secondary(conn, symbol)
             if secondary is not None and not same_snapshot(conn, secondary.snapshot_id, latest.id):
                 secondary = None
-            why = no_secondary(conn, latest, review)
+            why = no_secondary(latest, review)
             exempt = secondary is None and why is not None
             # where the route or the review values the company the report talks about that value
             # alone: a secondary on file (one made before plan 3, or before an override routed

@@ -332,10 +332,12 @@ company, make no secondary valuation and read no DCF beside the route's value.
   the secondary valuation is the fallback where neither the route nor the review values the
   company". The report check refuses a report on a refused snapshot that your review does not
   value, with no secondary valuation on it: "the report needs a secondary valuation on snapshot
-  <id>". Make it after any revalue, since one made before does not count. Two refusals exempt the
-  report: "foreign filer: currency and share-unit handling not built yet" and "no diluted share
-  count". The company can have no secondary valuation, so publish without one and name the reason
-  in section 8. See "The secondary valuation" below.
+  <id>". Make it after any revalue, since one made before does not count. A refusal you cannot
+  fix exempts the report: "no diluted share count"; the reporting currency's, "reporting currency
+  unknown", "no exchange rate for <code>", "no inflation projection for <code>" and "<code>:
+  expected inflation <π>% above the 10% bound"; and the share basis's, "share basis unclear: ...".
+  The company can have no secondary valuation, so publish without one and name the reason in
+  section 8. See "The secondary valuation" below.
 - **FMP's own figure**: `dcf(symbol)`: read it only where neither the route nor the review
   values the company, as a cross-check on the secondary valuation; never beside a route's value.
   It gives FMP's discounted cash flow value and its levered one. Section 8 may cite it in one
@@ -352,8 +354,9 @@ difference, a sum, a growth rate or a compound annual growth rate. Never compute
 Choose the stance: `buy`, `hold`, `trim` or `avoid`. Read the value against its levels. Take the
 reviewed value when the current review has one. Else take the snapshot's value. On a refused row
 with no reviewed value, take the secondary valuation's. On a refused row with no reviewed value and
-no possible secondary valuation (a foreign filer, no diluted share count), the stance rests on the
-thesis alone, and the report says so in section 8. When the current review refused on a valued
+no possible secondary valuation (a refusal you cannot fix: no diluted share count, the reporting
+currency's or the share basis's), the stance rests on the thesis alone, and the report says so in
+section 8. When the current review refused on a valued
 snapshot, the snapshot's value stands: fix or drop the override whose bridge line refused before
 you choose the stance. No stance rests on a refused review. No DCF weighs on the stance where the
 route or your review values the company: the founder's rule of 2026-11-08. `avoid` is for a company
@@ -378,9 +381,10 @@ refusal (the section count, the stance, a judgment, a heading, or no secondary v
 refused snapshot) is one sentence: fix it and submit again. A valued snapshot needs no secondary
 valuation: Appendix A says "no secondary valuation: the route values the company". A refused
 snapshot your review values needs none either: Appendix A says "no secondary valuation: the review
-values the company". A foreign filer and a snapshot with no diluted share count need none: the
-server refused one, section 8 says why, and Appendix A names the reason. A rejection (422) lists
-the findings: fix each one and submit again.
+values the company". A snapshot refused for a reason you cannot fix needs none (no diluted share
+count, the reporting currency's or the share basis's): the server refused one, section 8 says why,
+and Appendix A names the refusal in its own words. A rejection (422) lists the findings: fix each
+one and submit again.
 
 ### 13. Complete the work item
 
@@ -717,8 +721,10 @@ of its own; "settings changed: run a revalue" and its two siblings; where the la
 value, "the route values <symbol>: the secondary valuation is the fallback where it refuses";
 where the current review on that snapshot has one, "the review values <symbol>: the secondary
 valuation is the fallback where neither the route nor the review values the company"; a
-`guidance` item's 400, 404 and 409, as on an override; "foreign filer: currency and share-unit
-handling not built yet"; "no diluted share count"; on the drivers form, "no trailing revenue on
+`guidance` item's 400, 404 and 409, as on an override; a snapshot refused for a reason you cannot
+fix, in the refusal's own words: "reporting currency unknown", "no exchange rate for <code>", "no
+inflation projection for <code>", "<code>: expected inflation <π>% above the 10% bound" or "share
+basis unclear: ..."; "no diluted share count"; on the drivers form, "no trailing revenue on
 file". Then the bounds, each naming its rule with the policy's figures: "a secondary valuation
 runs 3 to 15 years"; "revenue_growth has 4 entries for 5 years" (or `operating_margin`); a driver
 out of its range, "tax_rate is 0% to 50%"; the terminal growth, "the terminal growth is −100% to

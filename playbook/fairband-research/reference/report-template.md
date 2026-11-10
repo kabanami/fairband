@@ -30,8 +30,9 @@ and its outlook.
 The server checks the structure first: the section count, the stance, the judgments, the headings,
 and a secondary valuation on a refused snapshot. A valued snapshot needs none, nor does a refused
 one your review values: the secondary valuation is the fallback where neither the route nor your
-review values the company, and the server refuses one where either does. A foreign filer or a
-snapshot with no diluted share count needs none either, since the secondary valuation refuses them.
+review values the company, and the server refuses one where either does. A snapshot refused for
+a reason you cannot fix (no diluted share count, the reporting currency's or the share basis's)
+needs none either, since the secondary valuation refuses it.
 Each failure is one sentence, such as "section 5 is headed 'The last earnings call', not
 'Life-cycle phase'" or "the report needs a secondary valuation on snapshot 388". Then it checks
 every number (`reference/citations.md`).
@@ -188,8 +189,9 @@ The kill criteria of section 11 test it.
   no secondary valuation: Appendix A says "no secondary valuation: the review values the company".
   The drivers in words, with their figures cited (`secondary:<id>/drivers/<name>`,
   `/drivers/<name>/<t>`); the value, `secondary:<id>/value`; the grid's range, two cells
-  `secondary:<id>/grid/<i>/<j>`. Where the server refused the secondary valuation as a foreign
-  filer or for no diluted share count, say so in one sentence: the report publishes without one.
+  `secondary:<id>/grid/<i>/<j>`. Where the server refused the secondary valuation for a refusal
+  you cannot fix (no diluted share count, the reporting currency's or the share basis's), say so in
+  one sentence: the report publishes without one.
   Where the route or your review values the company, write no second value and read no DCF beside
   the route's value.
 - **FMP's figure**, only where neither the route nor the review values the company, in one sentence

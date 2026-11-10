@@ -28,7 +28,7 @@ from fairband.store.overrides import insert_override
 from fairband.store.reports import ReportRow, insert_report, report_row
 from fairband.store.reviews import insert_review
 from fairband.store.secondary import insert_secondary
-from fairband.store.snapshots import snapshot_row
+from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.store.vendor import record_response
 
 METHOD = Path(__file__).parent.parent.parent / "docs" / "method.md"
@@ -411,9 +411,32 @@ def test_appendix_a_without_a_review_or_a_secondary(
     rule = next(c["rule"] for c in a["checks"] if c["check"] == CHECKS[4])
     assert rule == (
         "on a refused latest snapshot, the company's newest secondary valuation rests on it or on"
-        " one it reprices; none where the route or the review values the company, for a foreign"
-        " filer or for a snapshot with no diluted share count"
+        " one it reprices; none where the route or the review values the company, or where the"
+        " snapshot's refusal is one an agent cannot fix: no diluted share count, the reporting"
+        " currency's or the share basis's"
     )
+
+
+def test_appendix_a_names_a_refusal_an_agent_cannot_fix(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """A report with no secondary valuation on a snapshot refused for a reason an agent cannot
+    fix: Appendix A's reason is the refusal in its own words (spec 2026-11-10 7.6), on the page and
+    in the export."""
+    basis = (
+        "share basis unclear: the newest period's count 1,680.7 m against the quote's 210.1 m (the"
+        " ADR ratio 10)"
+    )
+    aal = snapshot_row(conn, snapshots["AAL"])
+    assert aal is not None
+    sid = insert_snapshot(
+        conn, replace(aal.result, refusal=basis), aal.refresh_id, clock=lambda: NOW
+    )
+    report = _stored(conn, sid, symbol="AAL")
+    a = appendix_a(conn, report, policy)
+    assert (a["secondary"], a["noSecondary"]) == (None, f"no secondary valuation: {basis}")
+    text = markdown(report, a, [], [], {})
+    assert f"### Secondary valuation\n\nno secondary valuation: {basis}\n" in text
 
 
 def test_the_bridge_without_a_review_names_the_value_that_stands(

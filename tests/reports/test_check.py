@@ -12,14 +12,15 @@ from typing import Any
 
 import pytest
 from refresh.synthetic import NOW
-from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.engine_companies import fx_inputs, mature_growth_inputs, universe_deciles
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
 from fairband.engine.review import review_company
 from fairband.engine.route import reprice, value_company
-from fairband.engine.types import Route
+from fairband.engine.types import Route, ValuationResult
 from fairband.policy import Policy
+from fairband.refresh.rates import NO_RATE
 from fairband.reports.check import (
     CHECKS,
     FAILURES,
@@ -49,8 +50,8 @@ from fairband.store.ledger import Writer
 from fairband.store.overrides import applied_overrides, drop_override, insert_override
 from fairband.store.research import add_finding
 from fairband.store.reviews import insert_review, review_row
-from fairband.store.secondary import insert_derivation
-from fairband.store.snapshots import insert_snapshot, snapshot_row
+from fairband.store.secondary import insert_derivation, no_secondary
+from fairband.store.snapshots import SnapshotRow, insert_snapshot, snapshot_row
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 SMALL_TALK = "Three reasons stand out in FY2025: the 10-K, Q3 and the plan for 2026."
@@ -585,6 +586,54 @@ def test_a_report_needs_a_secondary_valuation_on_the_snapshot(policy: Policy) ->
     )
     assert _refusal(policy, full, judged=JUDGED[:3], secondary_on_snapshot=False) == (
         "the report lacks the judgment roic"
+    )
+
+
+# The refusals an agent cannot fix (spec 2026-11-10 7.6), as the engine words them, and the
+# foreign-filer refusal a snapshot valued before method 1.1 carries.
+CANNOT_FIX = (
+    "no diluted share count",
+    "reporting currency unknown",
+    NO_RATE.format(code="SEK"),
+    "no inflation projection for XYZ",
+    "ARS: expected inflation 12.1% above the 10% bound",
+    (
+        "share basis unclear: the newest period's count 1,680.7 m against the quote's 210.1 m (the"
+        " ADR ratio 10)"
+    ),
+    "foreign filer: currency and share-unit handling not built yet",
+)
+
+
+def test_the_check_spares_a_refusal_an_agent_cannot_fix(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The last structural check is spared where the company can have no secondary valuation
+    (``no_secondary``, which the caller reads): a refused snapshot whose refusal no call can meet,
+    named in its own words, an old snapshot's foreign-filer refusal whole. A currency or the ADR
+    flag is no ground of its own: FXCO in SEK refused for a reason a secondary valuation meets
+    needs one on the snapshot."""
+    aal = snapshot_row(conn, snapshots["AAL"])
+    assert aal is not None
+
+    def stored(result: ValuationResult) -> SnapshotRow:
+        found = snapshot_row(conn, insert_snapshot(conn, result, aal.refresh_id, clock=lambda: NOW))
+        assert found is not None
+        return found
+
+    full = list(HEADINGS)
+    for refusal in CANNOT_FIX:
+        snapshot = stored(replace(aal.result, refusal=refusal))
+        why = no_secondary(snapshot, None)
+        assert why == refusal
+        assert _refusal(policy, full, secondary_on_snapshot=why is not None) is None
+    fixable = replace(fx_inputs(), refusal="a test refusal")
+    fxco = value_company(fixable, universe_deciles(), policy, TODAY)
+    assert fxco.intermediates["currency"] == "SEK"
+    why = no_secondary(stored(fxco), None)
+    assert why is None
+    assert _refusal(policy, full, secondary_on_snapshot=why is not None) == (
+        "the report needs a secondary valuation on snapshot 412"
     )
 
 

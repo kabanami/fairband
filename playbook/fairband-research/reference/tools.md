@@ -158,8 +158,10 @@ vendor call. The refusals:
   <symbol>: the secondary valuation is the fallback where it refuses"; where the current review
   values it: "the review values <symbol>: the secondary valuation is the fallback where neither
   the route nor the review values the company". A report on a refused snapshot your review does
-  not value needs one on it, except for a foreign filer or a snapshot with no diluted share count,
-  which the secondary valuation refuses.
+  not value needs one on it, except where the snapshot's refusal is one you cannot fix, which the
+  secondary valuation refuses in the refusal's own words: "no diluted share count"; "reporting
+  currency unknown", "no exchange rate for <code>", "no inflation projection for <code>" or
+  "<code>: expected inflation <π>% above the 10% bound"; "share basis unclear: ...".
 - `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
   across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`,
   and its axes' values as `sensitivity:<id>/rows/<i>` and `/cols/<j>`; nothing is overridden.
