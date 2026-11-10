@@ -17,8 +17,10 @@ status and scrubbed message; a 429 stops the loop.
 The price refresh stores each pair's quote as an observation (dataset ``fx-quote``, ``FX_QUOTE``,
 under the pair as the symbol, period and as-of the quote's date). ``rates_for`` reads a currency's
 series: the closes of its pair's latest usable history merged with every stored quote of the pair,
-a quote winning on its date. ``FxSeries.at`` reads the last close at or before a date, stale when
-it is more than ``fx_stale_days`` before it.
+a quote winning on its date, the dates a quote supplied kept (``FxSeries.quoted``). ``FxSeries.at``
+reads the last close at or before a date, stale when it is more than ``fx_stale_days`` before it,
+and says whether a quote supplied it (``Rate.quoted``), so the rate's input names the source the
+close came from.
 """
 
 import bisect
@@ -66,31 +68,35 @@ class Rate:
     date: date  # the close's date
     observed_at: datetime
     stale: bool  # the close is more than fx_stale_days before the date asked for
+    quoted: bool = False  # a stored pair quote supplied the close, not the pair's history
 
 
 @dataclass(frozen=True)
 class FxSeries:
     """A currency's daily closes against USD, and when the store observed them (the newest of the
-    history and the quotes read). USD's series holds no close: its rate is 1 on every day."""
+    history and the quotes read), with the dates whose close is a stored pair quote. USD's series
+    holds no close: its rate is 1 on every day."""
 
     currency: str
     closes: tuple[tuple[date, float], ...]  # oldest first; the history's and the pair's quotes
     observed_at: datetime
+    quoted: frozenset[date] = frozenset()  # the dates a stored pair quote supplied
 
     def at(self, day: date, stale_days: int) -> Rate | None:
         """The last close at or before ``day``; None without one. ``stale`` when that close is
-        more than ``stale_days`` before ``day``."""
+        more than ``stale_days`` before ``day``; ``quoted`` when a stored pair quote supplied it."""
         if self.currency == _USD:
             return Rate(1.0, day, self.observed_at, False)
         index = bisect.bisect_right(self.closes, day, key=lambda close: close[0])
         if index == 0:
             return None
         when, rate = self.closes[index - 1]
-        return Rate(rate, when, self.observed_at, (day - when).days > stale_days)
+        stale = (day - when).days > stale_days
+        return Rate(rate, when, self.observed_at, stale, when in self.quoted)
 
     def mean_at(self, days: Sequence[date], stale_days: int) -> Rate | None:
         """The mean of ``at`` over ``days``; None when any day has none (or no day is given);
-        stale when any is; the date the latest close read."""
+        stale when any is, and quoted when a quote supplied any; the date the latest close read."""
         rates = [self.at(day, stale_days) for day in days]
         found = [rate for rate in rates if rate is not None]
         if not found or len(found) < len(rates):
@@ -100,13 +106,15 @@ class FxSeries:
             max(rate.date for rate in found),
             self.observed_at,
             any(rate.stale for rate in found),
+            any(rate.quoted for rate in found),
         )
 
 
 def rates_for(conn: sqlite3.Connection, currency: str) -> FxSeries | None:
     """The latest usable fx-history response of the pair, its closes merged with every stored
-    fx-quote observation of the pair; None without a usable history (a code that names no pair
-    has none). USD gives a series whose ``at`` is always 1.0 on the day asked, never stale."""
+    fx-quote observation of the pair, the dates the quotes supplied kept; None without a usable
+    history (a code that names no pair has none). USD gives a series whose ``at`` is always 1.0 on
+    the day asked, never stale."""
     if currency == _USD:
         return FxSeries(_USD, (), _DEFINED)
     if not _CODE.fullmatch(currency):
@@ -123,12 +131,14 @@ def rates_for(conn: sqlite3.Connection, currency: str) -> FxSeries | None:
     if not closes:
         return None
     observed = response.observed_at
+    quoted: set[date] = set()
     for row in observations_for(conn, pair, FX_QUOTE):
         if row.field != "price" or row.period is None or row.value is None or row.value <= 0:
             continue
         closes[row.period] = float(row.value)
+        quoted.add(row.period)
         observed = max(observed, row.observed_at)
-    return FxSeries(currency, tuple(sorted(closes.items())), observed)
+    return FxSeries(currency, tuple(sorted(closes.items())), observed, frozenset(quoted))
 
 
 def currencies_of(conn: sqlite3.Connection, symbols: Sequence[str]) -> tuple[str, ...]:

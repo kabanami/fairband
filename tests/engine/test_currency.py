@@ -257,7 +257,9 @@ def test_reprice_moves_the_usd_value_with_the_rate(policy: Policy, deciles: Deci
     # the rate input moves as the price input does: its value, its date and the quote's stamp
     rate, was = inputs_of(moved)["fx_rate"], inputs_of(r)["fx_rate"]
     assert (rate.value, rate.provenance.as_of, rate.provenance.observed_at) == (8.5, day, NOW)
-    assert rate.provenance.source == was.provenance.source
+    # the close is the pair's quote now, not the history's: the source names it
+    assert was.provenance.source == "FMP historical-price-eod/light USDSEK"
+    assert rate.provenance.source == "FMP quote USDSEK"
     assert inputs_of(moved)["price"].value == 55.0
     kept = reprice(r, 55.0, date(2026, 11, 12), policy)  # no fresh pair quote
     assert kept.value == r.value and kept.levels == r.levels

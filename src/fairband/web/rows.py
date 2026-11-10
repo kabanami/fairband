@@ -28,7 +28,7 @@ from typing import Any
 from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
 from fairband.engine.levels import validity_state
-from fairband.engine.types import PHASE_NUMBER
+from fairband.engine.types import PHASE_NUMBER, money_of
 from fairband.refresh.run import UNCLASSIFIED, Progress
 from fairband.reports.refs import same_snapshot_rows
 from fairband.store.companies import CompanyRow
@@ -279,6 +279,11 @@ def screen_row(
     ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the price needs, a
     growth row's; a row refused for its target margin has the latter alone.
 
+    Every money column is in US dollars, as the value and the price are (spec 2026-11-10 7.4):
+    on a row in another currency the EPV, the cross-check's value a share and the year-10 revenue,
+    which the route wrote in the reporting currency, are ÷ the row's rate (``types.money_of``),
+    a USD row's ÷ 1.
+
     A Start-up row has ``requiredRevenue``, the year-10 revenue its price needs (``None`` when the
     requirement has a reason), and ``burnCover``, the years its cash covers the trailing burn
     (``None`` when not burning). A Decline row has its synthetic ``rating`` ("—" with no net debt,
@@ -292,6 +297,7 @@ def screen_row(
     multiples = _table(im, "multiples")
     facts = _table(im, "price_facts")
     rating = _table(im, "rating")
+    rate, _ = money_of(result)
     market_cap = None if company is None else company.market_cap
     row = {
         "ticker": snapshot.symbol,
@@ -316,7 +322,7 @@ def screen_row(
         "moat": None if snapshot.value is None else im.get("moat"),
         "impliedGrowth": im.get("implied_growth"),
         "expectedReturn": _table(im, "expected_return").get("total"),
-        "epv": im.get("epv"),
+        "epv": _in_usd(im.get("epv"), rate),
         "peReported": multiples.get("pe_reported"),
         "peClean": multiples.get("pe_clean"),
         "peForward": multiples.get("pe_forward"),
@@ -335,10 +341,10 @@ def screen_row(
         "dataDate": snapshot.data_date.isoformat(),
         "validUntil": snapshot.valid_until.isoformat(),
         "route": snapshot.route,
-        "growthRouteValue": _growth_route_value(snapshot),
+        "growthRouteValue": _growth_route_value(snapshot, rate),
         "targetMargin": _table(im, "target_margin").get("value"),
         "impliedMargin": im.get("implied_margin"),
-        "requiredRevenue": _table(im, "requirement").get("revenue_y10"),
+        "requiredRevenue": _in_usd(_table(im, "requirement").get("revenue_y10"), rate),
         "burnCover": _burn_cover(im),
         "rating": rating.get("rating"),
         "distressProbability": rating.get("pi"),
@@ -354,15 +360,22 @@ def screen_row(
     return row
 
 
-def _growth_route_value(snapshot: SnapshotRow) -> float | None:
-    """The growth route's value a share: a Mature Growth row's own value, a Mature Stable or
-    revenue-growth row's cross-check (calibration spec 5.7, growth-routes spec 5.12) when it has
-    one; ``None`` elsewhere."""
+def _growth_route_value(snapshot: SnapshotRow, rate: float) -> float | None:
+    """The growth route's value a share in US dollars: a Mature Growth row's own value, a Mature
+    Stable or revenue-growth row's cross-check (calibration spec 5.7, growth-routes spec 5.12),
+    in the reporting currency, ÷ ``rate``, when it has one; ``None`` elsewhere."""
     if snapshot.route == "mature-growth":
         return snapshot.value
     if snapshot.route in ("mature-stable", "revenue-growth"):
-        return _table(snapshot.result.intermediates, "growth_route").get("value_per_share")
+        cross_check = _table(snapshot.result.intermediates, "growth_route").get("value_per_share")
+        return _in_usd(cross_check, rate)
     return None
+
+
+def _in_usd(figure: float | None, rate: float) -> float | None:
+    """A money figure the route wrote in the row's reporting currency, in US dollars: ÷ the
+    row's ``rate`` (1 on a USD row); ``None`` as it is."""
+    return None if figure is None else figure / rate
 
 
 def _burn_cover(im: dict[str, Any]) -> float | None:

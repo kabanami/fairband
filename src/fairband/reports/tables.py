@@ -29,7 +29,9 @@ missing or its denominator is at or below zero.
   cell only, ``aggregate_roic`` over all the capital years as assembly reads it (the store keeps
   eleven statement years, so an earlier year has fewer than ten ROIC years behind it), the
   earlier cells ``None`` noted "the ten-year aggregate is the newest year's figure"; the hurdle
-  rate, the policy's r.
+  rate, the policy's r, which on a company in another currency, whose ROIC is in it, is restated
+  by the inflation differential of its latest snapshot when that snapshot carries a rate
+  (``policy.in_currency``, ``types.rated``; spec 2026-11-10 7.5), the r its route discounts at.
 - ``capital_allocation``: dividends (``dividends``) and buybacks (``buybacks``), negative as the
   cash flow signs them; the share count change, the diluted weighted-average share count over the
   year before's − 1; acquisitions, a line the store does not keep: ``None``, "not on file".
@@ -47,7 +49,8 @@ from typing import Literal
 
 from fairband.engine.distress import altman_z, piotroski_f
 from fairband.engine.roic import aggregate_roic
-from fairband.policy import Policy
+from fairband.engine.types import rated
+from fairband.policy import Policy, in_currency
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs_statements import (
     Statements,
@@ -58,6 +61,7 @@ from fairband.refresh.inputs_statements import (
 )
 from fairband.reports.refs import fact_ref, table_ref
 from fairband.store.companies import latest_company
+from fairband.store.snapshots import latest_snapshot
 
 TABLES = ("growth", "cash_flow", "solvency", "returns", "capital_allocation", "quality")
 YEARS = 5
@@ -136,11 +140,12 @@ def financial_tables(
 ) -> tuple[Table, ...]:
     """The six tables of ``symbol`` over its last five fiscal years on file, in ``TABLES``' order;
     every row without cells when the store holds no annual income statement. ``tax`` is the table
-    the capital years are taxed with, the packaged one when ``None``."""
+    the capital years are taxed with, the packaged one when ``None``; the hurdle rate is
+    ``policy``'s r, restated on a company in another currency (module docstring)."""
     country, _ = country_for(conn, symbol, latest_company(conn, symbol))
     taxed = load_tax_table() if tax is None else tax
     stated = statements_for(conn, symbol, country, taxed, _NO_DAY)
-    f = _Figures(symbol, annual_lines(conn, symbol), stated, policy)
+    f = _Figures(symbol, annual_lines(conn, symbol), stated, policy, _hurdle(conn, symbol, policy))
     return (
         _growth(f),
         _cash_flow(f),
@@ -149,6 +154,16 @@ def financial_tables(
         _capital_allocation(f),
         _quality(f),
     )
+
+
+def _hurdle(conn: sqlite3.Connection, symbol: str, policy: Policy) -> float:
+    """The policy's r in the currency the company's ROIC is in: restated by the inflation
+    differential of its latest snapshot when that snapshot carries a rate, else as it is."""
+    snapshot = latest_snapshot(conn, symbol)
+    if snapshot is None or not rated(snapshot.result):
+        return policy.required_return
+    differential = snapshot.result.intermediates["inflation_differential"]
+    return in_currency(policy, differential).required_return
 
 
 class _Figures:
@@ -160,9 +175,11 @@ class _Figures:
         sheets: Mapping[int, Mapping[str, Mapping[str, float | None]]],
         stated: Statements,
         policy: Policy,
+        hurdle: float,
     ) -> None:
         self.symbol = symbol
         self.policy = policy
+        self.hurdle = hurdle
         self.sheets = sheets
         self.lines = {year: _named(s) for year, s in sheets.items()}
         self.years = sorted(sheets)[-YEARS:]
@@ -299,7 +316,7 @@ def _returns(f: _Figures) -> Table:
             f.computed(t, "roic", "percent", lambda y: f.roic.get(y)),
             f.computed(t, "roe", "percent", roe),
             f.computed(t, "aggregate_roic_ten_year", "percent", aggregate),
-            f.computed(t, "hurdle_rate", "percent", lambda y: f.policy.required_return),
+            f.computed(t, "hurdle_rate", "percent", lambda y: f.hurdle),
         ),
     )
 

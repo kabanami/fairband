@@ -35,8 +35,10 @@ its designation follows the price, written on the new snapshot with its log row;
 another currency reprices at the pair's quote the snapshot took, its USD value moving with the
 rate, and so its mechanical value is the repriced snapshot's and each bridge line's change a
 share is scaled by the old rate ÷ the new one, its readings in the currency staying, so the
-mechanical value and the changes still sum to the reviewed value. A USD review keeps its
-mechanical value and bridge as they were. A company with
+mechanical value and the changes still sum to the reviewed value. The snapshot's rate decides
+(``types.rated``), not the review's: a refusal review of a failed follow, which carries no
+intermediates, on a snapshot in another currency shows the repriced snapshot's value too. A
+review on a USD snapshot keeps its mechanical value and bridge as they were. A company with
 no current review, or one on another snapshot, gets none.
 
 ``review_refusal`` gives the refusal snapshot of a company the refresh could not value (a failed
@@ -261,7 +263,7 @@ def _reprice(
     bridge = tuple(BridgeLine(**line) for line in current.bridge)
     mechanical_value = current.mechanical_value
     was = money_of(current.result)[0]
-    if rated(current.result):  # the USD figures move with the rate (module docstring)
+    if rated(mechanical):  # the USD figures move with the snapshot's rate (module docstring)
         k = was / money_of(result)[0]
         mechanical_value = mechanical.value
         bridge = tuple(replace(b, delta=None if b.delta is None else b.delta * k) for b in bridge)

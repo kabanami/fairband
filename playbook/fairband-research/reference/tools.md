@@ -33,17 +33,22 @@ be left out.
 
 - `screen(sort?, direction?)`: the screen's rows, one a company, sorted by a column key;
   `direction` is `asc` or `desc`. A row's `fairValue`, band, levels, price ÷ value and designation
-  follow the reviewed value where `reviewed` is filled; `mechanical` is the engine's value.
+  follow the reviewed value where `reviewed` is filled; `mechanical` is the engine's value. Every
+  money column is in US dollars, on a company in another currency too: its EPV, cross-check value
+  and required revenue are the route's figures in the currency ÷ the rate.
 - `company(symbol)`: the latest snapshot in full: `snapshot.id`, `snapshot.refreshId` (the refresh
   that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
   intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
   universe. An input scaled for a split is an estimate under the method `split-scaled` with a
   note naming the split, and the row's `split-pending` note names the rest. What the figures are
-  in: `currency`, the reporting currency; `isAdr`, the universe row's ADR flag; `adrRatio`, the
-  ordinary shares one ADS stands for, `null` without one; `fxRate` and `fxDate`, the exchange rate
-  the value was translated at, units of the currency per US dollar, and its close's date, `null`
-  on a company in US dollars. An input in the currency names its code as its unit (`TWD`,
-  `TWD a share`); one read on the ADS basis is an estimate under `basis-scaled`.
+  in: `currency`, the reporting currency; `isAdr`, the ADR flag as the valuation reads it, the
+  company profile's, else the universe row's; `adrRatio`, the ordinary shares one ADS stands for,
+  `null` without one; `fxRate` and `fxDate`, the exchange rate the value was translated at, units
+  of the currency per US dollar, and its close's date, `null` on a company in US dollars and on
+  one refused for its currency, which has no rate ("no exchange rate for <code>", "no inflation
+  projection for <code>" or "<code>: expected inflation <π>% above the 10% bound"). An input in
+  the currency names its code as its unit (`TWD`, `TWD a share`); one read on the ADS basis is an
+  estimate under `basis-scaled`.
 - `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
   stored statements, each figure with its `fact:` ref.
 - `financial_tables(symbol)`: the six five-year tables of the report's section 4, `growth`,

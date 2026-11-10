@@ -7,14 +7,20 @@ import sqlite3
 from datetime import date
 
 import pytest
+from refresh.synthetic import NOW, add_company, bodies
+from support.engine_companies import fx_inputs, universe_deciles
+from support.payloads import store_payloads
 
 from fairband.engine.roic import aggregate_roic
-from fairband.policy import Policy
+from fairband.engine.route import value_company
+from fairband.policy import Policy, in_currency
 from fairband.policy.tax import load_tax_table
 from fairband.refresh.inputs_statements import statements_for
+from fairband.reports.refs import Resolver
 from fairband.reports.tables import LINES, TABLES, Cell, Table, financial_tables
 from fairband.store.db import transaction
 from fairband.store.facts import facts_for
+from fairband.store.snapshots import insert_snapshot
 
 M = 1_000_000
 PERIODS = ["2021", "2022", "2023", "2024", "2025"]
@@ -124,6 +130,28 @@ def test_returns_read_the_engine_s_roic(conn: sqlite3.Connection, policy: Policy
     assert (aggregate["2025"].value, aggregate["2025"].note) == (engine.aggregate, None)
     earlier = [(aggregate[p].value, aggregate[p].note) for p in PERIODS[:-1]]
     assert earlier == [(None, "the ten-year aggregate is the newest year's figure")] * 4
+
+
+def test_the_hurdle_rate_of_a_company_in_another_currency_is_restated(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-10 7.5 on FXCO, in SEK at 8.0 a dollar with an inflation differential of 2%:
+    the ROIC beside the hurdle rate is in SEK, nominal, so the hurdle rate is the policy's r
+    restated by its latest snapshot's differential, 1.09 × 1.02 − 1 = 11.18%, the rate its route
+    discounts at; its ``table:`` ref resolves to it. ACME, a USD company, reads the policy's r."""
+    refresh_id = add_company(conn, symbols=("FXCO",))
+    fxco = value_company(fx_inputs(), universe_deciles(), policy, date(2026, 11, 1))
+    insert_snapshot(conn, fxco, refresh_id)
+    statements = {e: p for e, p in bodies(currency="SEK").items() if e != "earnings"}
+    store_payloads(conn, "FXCO", statements, NOW)
+    restated = in_currency(policy, fxco.intermediates["inflation_differential"]).required_return
+    assert restated == pytest.approx(0.1118)
+    hurdle = _row(financial_tables(conn, "FXCO", policy), "returns", "hurdle_rate")
+    assert [cell.value for cell in hurdle.values()] == [restated] * 5
+    found = Resolver(conn, "FXCO", policy).resolve("table:FXCO/returns/hurdle_rate/2025")
+    assert found is not None and found.value == restated
+    usd = _row(financial_tables(conn, "ACME", policy), "returns", "hurdle_rate")
+    assert [cell.value for cell in usd.values()] == [policy.required_return] * 5
 
 
 def test_every_cell_has_a_ref_that_resolves(conn: sqlite3.Connection, policy: Policy) -> None:

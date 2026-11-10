@@ -298,8 +298,12 @@ def _check_shares(shares: float) -> None:
 
 
 def _outside_g_range(g_t: float) -> str:
-    """The terminal growth's refusal, from ``_G_FLOOR`` to g_T, on both forms."""
-    return f"the terminal growth is −100% to g_T, {g_t:.1%}"
+    """The terminal growth's refusal, from ``_G_FLOOR`` to g_T, on both forms: g_T with the
+    decimals it needs, one at least and two at most, so a restated bound names the figure it
+    refuses against ("5.06%", not "5.1%"); a USD row's "3.0%"."""
+    two = f"{g_t:.2%}"
+    bound = f"{g_t:.1%}" if two[-2] == "0" else two
+    return f"the terminal growth is −100% to g_T, {bound}"
 
 
 def _discounted(part: Part, r: float) -> PartValue:

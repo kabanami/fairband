@@ -188,6 +188,39 @@ def test_a_price_refresh_at_a_new_rate_moves_the_review_s_bridge_with_it(env_val
     assert after.value == pytest.approx(after.result.intermediates["value_in_currency"] / 10.0)
 
 
+def test_a_failed_review_at_a_new_rate_shows_the_repriced_snapshot_s_value(
+    env_valued: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """KRON's review failed at the revalue: a refusal with no intermediates, so it names no rate,
+    over the snapshot valued at USDSEK's 10.52. The price refresh reprices the snapshot at the
+    pair's 10.0, so its USD value moves; the refusal review on it shows that value as its
+    mechanical value, the snapshot's rate deciding, not the review's."""
+    env = env_valued
+    _override(env, "KRON", "growth.belief", 0.08)
+
+    def falls_over(*args: object) -> None:
+        raise RuntimeError("the engine fell over")
+
+    monkeypatch.setattr(reviews, "review_company", falls_over)
+    env.refresh().run("revalue")
+    with closing(env.connect()) as conn:
+        before = latest_review(conn, "KRON")
+    assert before is not None and before.refusal is not None and before.refusal.startswith(FAILED)
+    assert "fx_rate" not in before.result.intermediates
+    assert before.mechanical_value == env.snapshot("KRON").value
+    env.router.bodies["batch-quote"] = _quotes({"ACME": 20.0, "KRON": 40.0, "MILD": 10.0})
+    [pair] = json.loads(_quotes({"USDSEK": 10.0}))
+    env.router.symbol_bodies[("quote", "USDSEK")] = json.dumps([pair]).encode()
+    env.refresh().run("price")
+    snapshot = env.snapshot("KRON")
+    with closing(env.connect()) as conn:
+        after = latest_review(conn, "KRON")
+    assert after is not None and after.snapshot_id == snapshot.id
+    assert snapshot.result.intermediates["fx_rate"] == 10.0
+    assert after.refusal == before.refusal and after.bridge == ()
+    assert after.mechanical_value == snapshot.value != before.mechanical_value
+
+
 def test_a_period_tied_override_drops_when_its_line_vanishes(env_valued: Env) -> None:
     """AXLE's override corrected a cash figure of $100; the revalue's result reads no cash line (a
     Mature Growth row cites none, as a sheet served without the line does on a route that reads

@@ -31,13 +31,14 @@ The override is stored either way, with the engine's reading of the input on the
 old value and, for a period-tied one, as the value it corrected. A refused one answers 400 with
 the rule's sentence and ``{override}``. An applied one drops the applied override on its tag
 ("replaced by override n") and the company's review is recomputed: ``build_inputs`` on the latest
-deciles and today's date; the engine with no override on them must give the snapshot's route and
-value a share, else the write is refused 409, "the store moved since snapshot <id>: run a
-revalue", and nothing is stored, since a store change after the snapshot (a full refresh's new
-deciles before its value stage, a peer's figures from a scoped refresh) would land on the bridge's
-first line as the agent's; then ``review_company`` over every applied override from the
-snapshot's result, the review written on the snapshot with its validity window and its log row;
-it answers 201 with ``{override, review, bridge}``.
+deciles and today's date, a row in another currency at the snapshot's own rate and its date, which
+are snapshot data as the price is (``built_inputs``); the engine with no override on them must
+give the snapshot's route and value a share, else the write is refused 409, "the store moved since
+snapshot <id>: run a revalue", and nothing is stored, since a store change after the snapshot (a
+full refresh's new deciles before its value stage, a peer's figures from a scoped refresh) would
+land on the bridge's first line as the agent's; then ``review_company`` over every applied
+override from the snapshot's result, the review written on the snapshot with its validity window
+and its log row; it answers 201 with ``{override, review, bridge}``.
 
 ``DELETE /api/overrides/{id}`` drops an applied override with ``{reason}`` (the same 409s; 404
 for no such override, 409 for one not applied) and recomputes the review over the rest, the
@@ -147,7 +148,14 @@ from fairband.engine.overrides import (
 from fairband.engine.roic import terminal_roic
 from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.secondary import Drivers, Part, SecondaryValuation, secondary_value
-from fairband.engine.types import Phase, Route, ValuationResult, money_of, result_to_json
+from fairband.engine.types import (
+    Phase,
+    Route,
+    ValuationResult,
+    money_of,
+    rated,
+    result_to_json,
+)
 from fairband.policy import Moat, Policy, in_currency
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
@@ -741,14 +749,38 @@ def snapshot_of(conn: sqlite3.Connection, symbol: str) -> SnapshotRow:
 def built_inputs(
     conn: sqlite3.Connection, snapshot: SnapshotRow, policy: Policy, tax: TaxTable, today: date
 ) -> tuple[CompanyInputs, Deciles | None]:
-    """The company's inputs as ``build_inputs`` builds them today on the latest deciles, with
-    those deciles; 409, "the store moved since snapshot <id>: run a revalue", when the engine on
-    them with no override does not give ``snapshot``'s route and value a share."""
+    """The company's inputs as ``build_inputs`` builds them today on the latest deciles, at
+    ``snapshot``'s own rate on a row in another currency (``_at_its_rate``), with those deciles;
+    409, "the store moved since snapshot <id>: run a revalue", when the engine on them with no
+    override does not give ``snapshot``'s route and value a share."""
     deciles = latest_deciles(conn)
-    inputs = build_inputs(conn, snapshot.symbol, policy, tax, today, deciles)
+    built = build_inputs(conn, snapshot.symbol, policy, tax, today, deciles)
+    inputs = _at_its_rate(built, snapshot.result, policy)
     if not _reproduces(value_company(inputs, deciles, policy, today), snapshot.result):
         raise HTTPException(409, f"the store moved since snapshot {snapshot.id}: run a revalue")
     return inputs, deciles
+
+
+def _at_its_rate(inputs: CompanyInputs, result: ValuationResult, policy: Policy) -> CompanyInputs:
+    """``inputs`` at the rate ``result`` was valued or last repriced at: its ``fx_rate`` and
+    ``fx_date`` intermediates, its ``fx_rate`` input's provenance, and stale as a reprice reads
+    it, the date more than ``fx_stale_days`` before the price date (spec 2026-11-10 7.1). The rate
+    is snapshot data, as the price is: a price refresh reprices at the pair's quote of the quote's
+    own date, which may be after the price date, and a scoped refresh of a company in the same
+    currency fetches the pair's history again, so the store's rate at the price date need not be
+    the snapshot's. ``inputs`` as built on a row that carries no rate (``types.rated``), and on
+    inputs in another currency than the snapshot's or with no rate of their own, which the
+    reproduction check then reads as the store moving."""
+    stored = result.intermediates.get("fx_date")
+    rate, currency = money_of(result)
+    if not rated(result) or stored is None or inputs.currency != currency or inputs.fx_date is None:
+        return inputs
+    when = date.fromisoformat(stored)
+    cited = next((i.provenance for i in result.inputs if i.name == "fx_rate"), None)
+    provenance = inputs.provenance if cited is None else inputs.provenance | {"fx_rate": cited}
+    priced = inputs.price_date
+    stale = priced is not None and (priced - when).days > policy.fx_stale_days
+    return replace(inputs, fx_rate=rate, fx_date=when, fx_stale=stale, provenance=provenance)
 
 
 def judged_route(

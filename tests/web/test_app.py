@@ -25,7 +25,9 @@ from support.engine_companies import (
     annual,
     decline_inputs,
     fiscal_years,
+    fx_inputs,
     high_growth_inputs,
+    in_sek,
     mature_growth_inputs,
     mature_stable_inputs,
     start_up_inputs,
@@ -601,6 +603,57 @@ def test_screen_row_carries_the_start_up_requirement(
     assert rows["SUNB"]["burnCover"] is None and rows["SUNB"]["requiredRevenue"] is not None
     assert others[1].intermediates["requirement"]["reason"] == "no target margin: 0 mature peers"
     assert rows["SUNP"]["requiredRevenue"] is None and rows["SUNP"]["burnCover"] == 4.0
+
+
+def test_a_row_in_another_currency_shows_its_money_columns_in_us_dollars(
+    db_path: Path, policy: Policy, client: TestClient
+) -> None:
+    """Spec 2026-11-10 7.4 (spec 2: the screen compares like with like): every money column is in
+    US dollars, as the value and the price are. FXCO, in SEK at 8.0 a dollar, shows its EPV as
+    the route's ÷ 8.0. A Mature Stable company with a cross-check and the Start-up company, each
+    in SEK at 8.0 with no inflation differential, show their USD twins' EPV, cross-check value and
+    year-10 revenue: the route's figures in SEK ÷ 8.0. The USD twins show the route's figures as
+    they are."""
+    growth = mature_growth_inputs()
+    stable = replace(
+        mature_stable_inputs(),
+        quarter_estimates=growth.quarter_estimates,
+        annual_estimates=growth.annual_estimates,
+    )
+    inputs = {
+        "FXCO": fx_inputs(),
+        "MSCO": stable,
+        "MSEK": in_sek(stable, differential=0.0),
+        "SUCO": start_up_inputs(),
+        "SUEK": in_sek(start_up_inputs(), differential=0.0),
+    }
+    found = {
+        symbol: value_company(replace(i, symbol=symbol), universe_deciles(), policy, TODAY)
+        for symbol, i in inputs.items()
+    }
+    _add_snapshots(db_path, *found.values())
+    rows = {row["ticker"]: row for row in _screen(client)["rows"]}
+
+    def im(symbol: str) -> dict[str, Any]:
+        return found[symbol].intermediates
+
+    assert rows["FXCO"]["epv"] == im("FXCO")["epv"] / 8.0
+    assert rows["FXCO"]["growthRouteValue"] == rows["FXCO"]["mechanical"]  # its own, in USD
+    cross_check = im("MSEK")["growth_route"]["value_per_share"]
+    assert (rows["MSEK"]["epv"], rows["MSEK"]["growthRouteValue"]) == (
+        im("MSEK")["epv"] / 8.0,
+        cross_check / 8.0,
+    )
+    assert rows["SUEK"]["requiredRevenue"] == im("SUEK")["requirement"]["revenue_y10"] / 8.0
+    for key in ("epv", "growthRouteValue", "mechanical"):
+        assert rows["MSEK"][key] == pytest.approx(rows["MSCO"][key]), key
+    assert rows["SUEK"]["requiredRevenue"] == pytest.approx(rows["SUCO"]["requiredRevenue"])
+    # a USD row's figures are the route's, unchanged
+    assert (rows["MSCO"]["epv"], rows["MSCO"]["growthRouteValue"]) == (
+        im("MSCO")["epv"],
+        im("MSCO")["growth_route"]["value_per_share"],
+    )
+    assert rows["SUCO"]["requiredRevenue"] == im("SUCO")["requirement"]["revenue_y10"]
 
 
 def test_screen_keeps_the_universe_when_a_refresh_admits_none(

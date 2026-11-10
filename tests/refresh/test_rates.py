@@ -134,15 +134,17 @@ def test_rates_for_merges_the_history_and_the_pair_quotes(
     assert rates_for(conn, "TWD") is None  # its pair was not fetched
 
     # A pair quote stored by a price refresh joins the closes; on a date the history holds, the
-    # quote wins.
+    # quote wins. A rate says whether a quote supplied its close, so its input names the source.
     store_pair_quote(conn, "USDSEK", 10.7, date(2026, 11, 6))
     store_pair_quote(conn, "USDSEK", 10.65, date(2026, 11, 2))
     later = NOW + timedelta(days=5)
     series = rates_for(conn, "SEK")
     assert series is not None and series.observed_at == later  # the newest of what it read
-    assert series.at(date(2026, 11, 6), 7) == Rate(10.7, date(2026, 11, 6), later, False)
-    assert series.at(date(2026, 11, 5), 7) == Rate(10.6, date(2026, 11, 5), later, False)
-    assert series.at(date(2026, 11, 2), 7) == Rate(10.65, date(2026, 11, 2), later, False)
+    assert series.quoted == frozenset({date(2026, 11, 6), date(2026, 11, 2)})
+    assert series.at(date(2026, 11, 6), 7) == Rate(10.7, date(2026, 11, 6), later, False, True)
+    assert series.at(date(2026, 11, 5), 7) == Rate(10.6, date(2026, 11, 5), later, False, False)
+    assert series.at(date(2026, 11, 2), 7) == Rate(10.65, date(2026, 11, 2), later, False, True)
+    assert series.at(date(2026, 11, 4), 7) == Rate(10.48, date(2026, 11, 4), later, False, False)
     assert len(series.closes) == 54
     # A pair quote alone, without a history, is no series.
     store_pair_quote(conn, "USDTWD", 32.9, date(2026, 11, 6))

@@ -85,6 +85,7 @@ from fairband.config import Settings, utcnow
 from fairband.engine.types import ValuationResult, money_of, rated, result_to_json
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable, load_tax_table
+from fairband.refresh.inputs import adr_flag
 from fairband.refresh.inputs_statements import brief_for
 from fairband.refresh.passthrough import Passthrough
 from fairband.refresh.run import KINDS
@@ -294,8 +295,9 @@ def create_app(
         ``company`` tool carries. And what the figures are in (spec 2026-11-10 7.4), which the
         drawer's head, Details and the report page name: ``currency``, the reporting currency the
         snapshot was valued or refused in (``types.money_of``: USD for a USD row, the code for a
-        row refused for its currency); ``isAdr``, the universe row's ADR flag, ``None`` without a
-        row; ``adrRatio``, the ADR ratio the share count was read by, the result's ``adr_ratio``
+        row refused for its currency); ``isAdr``, the ADR flag as assembly reads it, the latest
+        stored profile's, else the universe row's, ``None`` with neither (``inputs.adr_flag``);
+        ``adrRatio``, the ADR ratio the share count was read by, the result's ``adr_ratio``
         input, ``None`` without one; ``fxRate`` and ``fxDate``, the rate the value was translated
         at and its close's date, ``None`` on a row with no rate (``types.rated``)."""
         today = clock().date()
@@ -307,10 +309,11 @@ def create_app(
                 raise HTTPException(404, f"no snapshot for {symbol}")
             records = agent_records(conn, snapshot, today, read_under, taxed)
             brief = brief_for(conn, symbol)
+            adr = adr_flag(conn, symbol, listed)
         return {
             "company": None if listed is None else company_json(listed),
             "brief": brief,
-            **_money_json(snapshot.result, listed),
+            **_money_json(snapshot.result, adr),
             "snapshot": snapshot_json(snapshot),
             "result": json.loads(result_to_json(snapshot.result)),
             "today": today.isoformat(),
@@ -388,16 +391,16 @@ def create_app(
     return app
 
 
-def _money_json(result: ValuationResult, listed: CompanyRow | None) -> dict[str, Any]:
-    """What the snapshot's figures are in (``company``): the reporting currency, the universe
-    row's ADR flag, the ADR ratio input and, for a row that carries a rate (``types.rated``), the
-    rate and its date; a row refused for its currency names the code with neither, since the 1.0
+def _money_json(result: ValuationResult, adr: bool | None) -> dict[str, Any]:
+    """What the snapshot's figures are in (``company``): the reporting currency, the ADR flag
+    ``adr``, the ADR ratio input and, for a row that carries a rate (``types.rated``), the rate
+    and its date; a row refused for its currency names the code with neither, since the 1.0
     ``money_of`` gives it is no rate."""
     rate, currency = money_of(result)
     with_rate = rated(result)
     return {
         "currency": currency,
-        "isAdr": None if listed is None else listed.is_adr,
+        "isAdr": adr,
         "adrRatio": next((i.value for i in result.inputs if i.name == "adr_ratio"), None),
         "fxRate": rate if with_rate else None,
         "fxDate": result.intermediates.get("fx_date") if with_rate else None,

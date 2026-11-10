@@ -211,6 +211,7 @@ _BELOW_NET_CASH = "below-net-cash"
 _BURN_COVER_SHORT = "burn-cover-short"
 _FX_STALE = "fx-stale"
 _UNKNOWN = Provenance("unknown", None, None, None)
+_PAIR_QUOTE = "FMP quote"  # the source of a pair's quote, named with the pair as assembly names it
 
 
 @dataclass(frozen=True)
@@ -431,7 +432,8 @@ def reprice(
     and the value a share is ``value_in_currency`` ÷ the rate, its levels the policy's on it; the
     designation reads the two USD figures. The intermediates' ``fx_rate`` and ``fx_date`` and the
     ``fx_rate`` input take the rate given, the input as the price input moves: its value, its
-    ``as_of`` the quote's date and its ``observed_at`` ``fx_observed_at`` when given. ``fx-stale``
+    ``as_of`` the quote's date and its ``observed_at`` ``fx_observed_at`` when given, and its
+    source the pair's quote, ``FMP quote USD<code>``. ``fx-stale``
     is on the row when its rate's date is more than ``fx_stale_days`` before ``price_date``, and
     off otherwise. A row that carries no rate (``types.rated``) reads none: a USD row, whose rate
     is 1 on every day, and a row refused for its currency's own reason, which names the code
@@ -464,7 +466,8 @@ def reprice(
         im = im | {"fx_rate": rate, "fx_date": None if when is None else when.isoformat()}
         if fx_rate is not None:
             inputs = tuple(
-                _rated(i, rate, when, fx_observed_at) if i.name == "fx_rate" else i for i in inputs
+                _rated(i, rate, when, fx_observed_at, currency) if i.name == "fx_rate" else i
+                for i in inputs
             )
         flags = tuple(f for f in flags if f.code != _FX_STALE)
         if when is not None and (price_date - when).days > policy.fx_stale_days:
@@ -533,13 +536,16 @@ def _stored_date(im: dict[str, Any]) -> date | None:
 
 
 def _rated(
-    i: TaggedInput, rate: float, when: date | None, observed_at: datetime | None
+    i: TaggedInput, rate: float, when: date | None, observed_at: datetime | None, currency: str
 ) -> TaggedInput:
-    """The ``fx_rate`` input at a new rate of ``when``, from the same source, observed when the
-    pair's quote was (as it was without one)."""
+    """The ``fx_rate`` input at the pair's quote ``rate`` of ``when``, cited to the quote, FMP's
+    ``quote`` of the pair ``USD<code>``, observed when the quote was (as it was without a
+    stamp)."""
     p = i.provenance
     stamp = p.observed_at if observed_at is None else observed_at
-    return replace(i, value=rate, provenance=replace(p, as_of=when, observed_at=stamp))
+    source = f"{_PAIR_QUOTE} USD{currency}"
+    provenance = replace(p, source=source, as_of=when, observed_at=stamp)
+    return replace(i, value=rate, provenance=provenance)
 
 
 def _quoted(
@@ -676,8 +682,11 @@ def _currency_entry(i: CompanyInputs, value: float | None) -> dict[str, Any]:
     rate and its date, the differential and, on a valued row, ``value_in_currency``, the route's
     value a share before translation; on a row refused for its currency's own reason, the code
     alone, its figures being in it with no rate to read (the ruling of task 6's fix round 1);
-    none for a USD row, whose intermediates stay as they were, nor for a row refused before the
-    currency's step."""
+    none for a USD row, whose intermediates stay as they were. Assembly reads the currency on
+    every row, so a row refused before the currency's step (its statements, its tax rate) in
+    another currency with a rate on file carries the entry as a refusal does, and one whose
+    currency has no rate, no projection or inflation above the bound carries none, the earlier
+    refusal being its own."""
     if not _foreign(i):
         return {"currency": i.currency} if i.currency_refused and i.currency != "USD" else {}
     entry: dict[str, Any] = {

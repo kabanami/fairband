@@ -20,7 +20,8 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   (``mech/1.2``). FMP states them in USD: for a company in another currency each comes into it at
   its period end's rate, and a period end with no rate leaves them unknown;
 - the price and its date from the ``quote``; the market cap from the quote, else the profile, else
-  the universe row; ``is_adr`` from the profile, else the universe row;
+  the universe row; ``is_adr`` from the profile, else the universe row (``adr_flag``, which the
+  company read shares);
 - the country, which picks the statutory tax rate: the ``country`` of the latest stored profile
   payload (the headquarters, spec 6.6), else the universe row's, else ``"unknown"``
   (``country_for``). The tax rate's note (``notes``) names the country, where it came from, and the
@@ -28,8 +29,9 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
 - the currency: the newest annual income statement's, else the universe row's, else ``"unknown"``.
   For a currency other than USD (spec 2026-11-10 7): the rate, the close of the pair ``USD<code>``
   at the price date (``rates.rates_for``, at today without a price), stale when that close is more
-  than ``fx_stale_days`` before it, cited as ``fx_rate`` (the source names the pair, ``as_of`` the
-  close's date); and the inflation differential of the inflation table (``policy.inflation``),
+  than ``fx_stale_days`` before it, cited as ``fx_rate`` (the source names where the close came
+  from and the pair, ``FMP historical-price-eod/light USD<code>`` for the history's, ``FMP quote
+  USD<code>`` for a stored pair quote's, ``as_of`` the close's date); and the inflation differential of the inflation table (``policy.inflation``),
   cited as ``inflation_differential`` (the table's source, as of its retrieval date) with a note
   naming both means, "TWD 1.600% against USD 2.120%, the IMF World Economic Outlook October 2026
   means of 2027 to 2031". A USD row has the rate 1, no rate date and d 0, cited nowhere;
@@ -164,7 +166,7 @@ def build_inputs(
     money = _currency(conn, currency, day, inflation or _packaged_inflation(), policy)
     provenance.update(money.provenance)
     flags = stated.flags
-    is_adr = _is_adr(profile, company)
+    is_adr = _adr_flag(profile, company) is True
     quarters = cite("estimates_quarter", _quarter_estimates(read("estimate-quarter"), calendar))
     annual = cite("estimates_annual", _annual_estimates(read("estimate-annual"), calendar))
     street = _street_actuals(read("street-actual"), stated)
@@ -333,8 +335,9 @@ def _currency(
         f"{currency} {found.mean:.3%} against USD {usd.mean:.3%}, the IMF World Economic Outlook "
         f"{table.vintage} means of {found.years[0]} to {found.years[-1]}"
     )
+    source = f"{_QUOTE if rate.quoted else _FX_HISTORY} USD{currency}"  # where the close came from
     provenance = {
-        "fx_rate": Provenance(f"{_FX_HISTORY} USD{currency}", rate.date, rate.observed_at, None),
+        "fx_rate": Provenance(source, rate.date, rate.observed_at, None),
         "inflation_differential": Provenance(
             table.source, date.fromisoformat(table.retrieved), None, None
         ),
@@ -447,11 +450,17 @@ def _market_cap(
     return float(company.market_cap), Provenance(_SCREENER, stamp.date(), stamp, None)
 
 
-def _is_adr(profile: Sequence[ObservationRow], company: CompanyRow | None) -> bool:
+def adr_flag(conn: sqlite3.Connection, symbol: str, company: CompanyRow | None) -> bool | None:
+    """The company's ADR flag as ``build_inputs`` reads it: the latest stored profile's, else the
+    universe row ``company``'s; ``None`` with neither, which assembly reads as no ADR."""
+    return _adr_flag(observations_for(conn, symbol, "profile"), company)
+
+
+def _adr_flag(profile: Sequence[ObservationRow], company: CompanyRow | None) -> bool | None:
     row = _field(profile, "is_adr")
     if row is not None and row.value is not None:
         return row.value == 1
-    return company is not None and company.is_adr
+    return None if company is None else company.is_adr
 
 
 def _adr_ratio(rows: Sequence[ObservationRow]) -> _Cited[float | None]:

@@ -20,29 +20,47 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fixture_universe import ADMITTED, serve_universe
+from fastapi.testclient import TestClient
+from fixture_universe import ADMITTED, company, serve_universe
 from refresh_env import Env, use_cli
 from support.engine_companies import decline_inputs, universe_deciles
+from support.web import HEADER, HOST
 from synthetic import SIX_LINES
 from vendor_double import FIXTURES, FMP_KEY
 
 from fairband import __main__ as cli
+from fairband.config import DEFAULT_PORT, Settings
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import Provenance
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.refresh import run_price
-from fairband.refresh.inputs import latest_price
+from fairband.refresh.inputs import build_inputs, latest_price
 from fairband.refresh.run import Progress
 from fairband.store.companies import insert_companies, latest_companies
 from fairband.store.multiples import MultiplesRow, multiples_log_for
 from fairband.store.observations import observations_for
 from fairband.store.snapshots import SnapshotRow, insert_snapshot
+from fairband.web.app import create_app
+from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
+from fairband.web.reviews_api import built_inputs
 
 PRICE_DATE = date(2026, 10, 31)  # the new quotes' timestamp, a day after the fixtures'
 NEW_PRICES = {"ACME": 20.0, "AXLE": 30.0, "KRON": 40.0, "MILD": 10.0, "NEWT": 60.0}
 POLICY_CHANGED = "policy changed: run a revalue"
 SETTINGS_CHANGED = "settings changed: run a revalue"
 METHOD_CHANGED = "method changed: run a revalue"
+AGENT = HEADER | {
+    PRINCIPAL_HEADER: "agent",
+    ACTOR_HEADER: "claude-opus-5-5",
+    CLIENT_HEADER: "claude-code/2.1",
+}
+BELIEF = {
+    "tag": "growth.belief",
+    "new": 0.05,
+    "reason": "guidance raised",
+    "evidence": [{"kind": "transcript", "ref": "Q3 call", "note": ""}],
+    "lifetime": "lasting",
+}
 
 
 def quote_rows(prices: dict[str, float], days: int = 1) -> list[dict[str, Any]]:
@@ -200,6 +218,7 @@ def test_price_refresh_keeps_value_updates_designation(env_valued: Env) -> None:
     [rate] = [i for i in kron.inputs if i.name == "fx_rate"]
     assert (rate.value, rate.unit, rate.provenance.as_of) == (10.6, "SEK per USD", PRICE_DATE)
     assert rate.provenance.observed_at == env.clock.now  # the pair quote's, not the history's
+    assert rate.provenance.source == "FMP quote USDSEK"
     rates = {"fx_rate": 10.6, "fx_date": PRICE_DATE, "fx_observed_at": env.clock.now}
     assert kron == reprice(was, 40.0, PRICE_DATE, env.policy, **rates, **stamps)
 
@@ -740,6 +759,74 @@ def test_a_failed_pair_quote_past_the_bound_notes_a_stale_rate(env_valued: Env) 
         "The newest close of USDSEK on file is of 2026-10-30, 9 days before the price date "
         "2026-11-08."
     )
+
+
+def _override_answer(env: Env, symbol: str) -> tuple[int, Any]:
+    """An agent's growth.belief override of ``symbol`` posted to the app over the env's store: its
+    status and its answer."""
+    settings = Settings(env.db_path.parent, env.db_path.parent, env.db_path, DEFAULT_PORT)
+    app = create_app(settings, env.policy, env.connect, clock=env.clock, tax=env.tax)
+    with TestClient(app, base_url=HOST) as client:
+        r = client.post(f"/api/companies/{symbol}/overrides", json=BELIEF, headers=AGENT)
+    return r.status_code, r.json()
+
+
+def test_a_pair_quote_dated_after_the_price_date_reprices_a_snapshot_that_reproduces(
+    env_valued: Env,
+) -> None:
+    """Between 00:00 UTC and the US open the pair's quote is dated today while the stocks' last
+    trade is dated yesterday: here USDSEK's 10.6 is stamped 2026-11-01, a day after the stocks'
+    2026-10-31. KRON reprices at the pair's quote (spec 2026-11-10 7.1), while the store's rate
+    at its price date is still the history's 10.52 of 2026-10-30. The rate is snapshot data, as
+    the price is: the rebuild an override checks reproduction on values at the snapshot's own
+    rate and its date, so the snapshot reproduces and the override posts, no 409."""
+    env = env_valued
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+    serve_pair(env, 10.6, days=2)
+    env.refresh().run("price")
+    snapshot = env.snapshot("KRON")
+    im = snapshot.result.intermediates
+    assert (snapshot.price_date, im["fx_rate"], im["fx_date"]) == (PRICE_DATE, 10.6, "2026-11-01")
+    today = env.clock().date()
+    with closing(env.connect()) as conn:
+        assert build_inputs(conn, "KRON", env.policy, env.tax, today).fx_rate == 10.52
+        inputs, deciles = built_inputs(conn, snapshot, env.policy, env.tax, today)
+    assert (inputs.fx_rate, inputs.fx_date, inputs.fx_stale) == (10.6, date(2026, 11, 1), False)
+    assert value_company(inputs, deciles, env.policy, today).value == snapshot.value
+    status, body = _override_answer(env, "KRON")
+    assert status == 201, body
+    assert body["override"]["state"] == "applied"
+    assert body["review"]["mechanicalValue"] == snapshot.value
+
+
+def test_a_scoped_refresh_of_a_currency_mate_leaves_a_snapshot_reproducing(
+    env_valued: Env,
+) -> None:
+    """AXLE now reports in SEK, as KRON does, and USDSEK's history has moved its close of
+    2026-10-30, the day KRON was valued at, from 10.52 to 10.40. A scoped refresh of AXLE fetches
+    the pair's history again; KRON's snapshot still reproduces, at its own rate, and an override
+    of KRON posts."""
+    env = env_valued
+    for endpoint, body in company("KRON").items():
+        env.router.symbol_bodies[(endpoint, "AXLE")] = body.replace(b"KRON", b"AXLE")
+    history = json.loads((FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json").read_text())
+    moved = [r | {"price": 10.40} if r["date"] == "2026-10-30" else r for r in history]
+    env.router.symbol_bodies[("fx-history", "USDSEK")] = json.dumps(moved).encode()
+    valued = env.snapshot("KRON")
+    assert valued.result.intermediates["fx_rate"] == 10.52
+
+    env.run(["AXLE"])
+
+    assert env.router.calls["fx-history"] == 1
+    assert env.snapshot("AXLE").result.intermediates["currency"] == "SEK"
+    today = env.clock().date()
+    with closing(env.connect()) as conn:
+        assert build_inputs(conn, "KRON", env.policy, env.tax, today).fx_rate == 10.40
+        inputs, _ = built_inputs(conn, valued, env.policy, env.tax, today)
+    assert (inputs.fx_rate, inputs.fx_date) == (10.52, date(2026, 10, 30))
+    status, body = _override_answer(env, "KRON")
+    assert status == 201, body
+    assert body["review"]["mechanicalValue"] == valued.value
 
 
 def test_price_refresh_without_a_universe_reprices_every_snapshot(

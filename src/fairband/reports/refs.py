@@ -70,10 +70,10 @@ its input, an override's bridge line or a sensitivity axis, reads as a USD one d
 (``adr_ratio``, ordinary shares per ADS) is a ``multiple``, not a fraction; the rate
 (``fx_rate``, ``<code> per USD``) has no unit. The period is the fiscal year (``2025``), the
 quarter (``2026-Q4``), ``ttm``, or the close's or the multiple's date for the forms that have
-one, a finding's and a guidance record's as recorded; ``None`` for the others. The snapshot is the record's own for
-``snapshot:``, ``review:``, ``secondary:`` and ``sensitivity:``, and for ``derived:`` the
-snapshot its operands rest on; ``None`` for the others, a finding and a guidance record being
-facts of the company.
+one, a finding's and a guidance record's as recorded; ``None`` for the others. The snapshot is
+the record's own for ``snapshot:``, ``review:``, ``secondary:`` and ``sensitivity:``, and for
+``derived:`` the snapshot its operands rest on; ``None`` for the others, a finding and a guidance
+record being facts of the company.
 
 A ref resolves to ``None`` when it names nothing: a malformed ref, a record or a field that does
 not exist, a figure that is a table rather than a number or a word, or a record of another

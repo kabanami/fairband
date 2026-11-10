@@ -45,7 +45,10 @@ from fairband.refresh.fetch import fetch_company
 from fairband.refresh.inputs import build_inputs, series_for
 from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.peers import peer_figures
-from fairband.refresh.rates import fetch_rates
+from fairband.refresh.rates import FX_QUOTE, fetch_rates
+from fairband.store.observations import insert_observations
+from fairband.store.vendor import record_response
+from fairband.vendors.normalize_fmp import fx_quote_observations
 
 TODAY = date(2026, 11, 1)
 GOLDEN = Path(__file__).parent.parent / "fixtures" / "golden"
@@ -509,6 +512,24 @@ def test_a_company_in_another_currency_reads_its_rate_and_its_street_figures(
     result = value_company(inputs, DECILES, policy, TODAY)
     assert result.refusal is None and result.value is not None
     assert result.intermediates["value_in_currency"] == pytest.approx(result.value * 10.52)
+
+
+def test_a_rate_a_pair_quote_supplied_names_the_quote(
+    store: Store, clients: Clients, clock: Clock, policy: Policy
+) -> None:
+    """A price refresh stored USDSEK's quote of the price date, 2026-10-30, at 10.60: it wins over
+    the history's 10.52 of that day, and the rate's input names the quote, FMP's ``quote`` of the
+    pair, as of its date; a close the history supplied names the history (the test above)."""
+    conn = _sek_store(store, clients, clock, policy)
+    day = date(2026, 10, 30)
+    payload = [{"symbol": "USDSEK", "price": 10.6, "timestamp": 1793390400}]
+    response = record_response(
+        conn, "fmp", FX_QUOTE, {"symbol": "USDSEK"}, "USDSEK", 200, json.dumps(payload), None, NOW
+    )
+    insert_observations(conn, fx_quote_observations(payload, "USDSEK", response, NOW, NOW))
+    inputs = build(conn)
+    assert (inputs.fx_rate, inputs.fx_date) == (10.6, day)
+    assert inputs.provenance["fx_rate"] == Provenance("FMP quote USDSEK", day, NOW, None)
 
 
 def test_a_rate_older_than_the_bound_is_stale(

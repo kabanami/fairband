@@ -840,13 +840,14 @@ def test_the_terminal_growth_runs_to_g_t_restated(
     client: TestClient, db_path: Path, policy: Policy
 ) -> None:
     """On FXCO the terminal growth's bound is g_T restated into SEK, 5.06% (spec 2026-11-10 7.3):
-    5%, above a USD row's 3.0%, is taken; 5.1% is refused, the sentence naming the bound."""
+    5%, above a USD row's 3.0%, is taken; 5.1% is refused, the sentence naming the bound with the
+    decimals it needs, so it names a figure below the one refused."""
     _fxco(db_path)
     assert in_currency(policy, SEK_DIFFERENTIAL).terminal_growth == pytest.approx(0.0506)
     above = ON_SEK | {"drivers": DRIVERS | {"terminalGrowth": 0.051}}
     assert _refused(client, above, "FXCO") == (
         400,
-        {"detail": "the terminal growth is −100% to g_T, 5.1%"},
+        {"detail": "the terminal growth is −100% to g_T, 5.06%"},
     )
     assert _stored(client, "FXCO") == []
     taken = _secondary(client, ON_SEK | {"drivers": DRIVERS | {"terminalGrowth": 0.05}}, "FXCO")

@@ -126,8 +126,9 @@
     };
   }
 
-  /* ROIC against the hurdle rate the returns table carries, the policy's r, both percentages on
-     one axis with the gap filled (SpreadChart); a year missing either is left out. */
+  /* ROIC against the hurdle rate the returns table carries, the policy's r (restated into the
+     reporting currency on a company in another currency, as its ROIC is in it), both percentages
+     on one axis with the gap filled (SpreadChart); a year missing either is left out. */
   function spread(c, rows, tables) {
     var roic = rows[c.row], hurdle = rows[c.hurdle];
     var series = !roic || !hurdle ? [] : roic.cells.map(function (cell, i) {

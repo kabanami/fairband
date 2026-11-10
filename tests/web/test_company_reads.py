@@ -6,6 +6,7 @@ five quarters to 2026-09-30); AAPL gets the synthetic quarterly consensus, two y
 consensus, four closes and a peers list naming HGCO and AAL; and the store gets the deciles of
 the engine's test universe, under which HGCO's statements classify as Mature Growth."""
 
+import json
 from contextlib import closing
 from dataclasses import replace
 from decimal import Decimal
@@ -17,7 +18,7 @@ from fastapi.testclient import TestClient
 from refresh.synthetic import bodies, estimates_quarter
 from support.engine_companies import ars_refused_inputs, fx_inputs, universe_deciles
 from support.payloads import store_payloads
-from support.web import CREATED, HEADER, TODAY, universe_row
+from support.web import CREATED, HEADER, NOW, TODAY, universe_row
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.balance import BalanceYear
@@ -28,8 +29,11 @@ from fairband.reports.refs import Resolver
 from fairband.reports.tables import LINES, TABLES
 from fairband.store.companies import insert_companies
 from fairband.store.db import connect
+from fairband.store.observations import insert_observations
 from fairband.store.refreshes import latest_refresh, save_deciles
 from fairband.store.snapshots import insert_snapshot
+from fairband.store.vendor import record_response
+from fairband.vendors.normalize_fmp import profile_observations
 
 M = 1_000_000
 ANNUAL = [  # FMP's order: the furthest year first
@@ -180,6 +184,28 @@ def test_the_detail_read_names_the_currency_the_rate_and_the_share_basis(
     unlisted_read = _get(client, "/api/companies/FXUN")
     assert (unlisted_read["isAdr"], unlisted_read["adrRatio"]) == (None, None)
     assert (unlisted_read["currency"], unlisted_read["fxRate"]) == ("SEK", 8.0)
+
+
+def test_the_adr_flag_is_read_as_assembly_reads_it(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """The universe row's ADR flag is 0 on every row the screener lists, so the read takes the flag
+    as assembly does: the latest stored profile's, else the universe row's (method section 2).
+    FXCO's row says it is no ADR and its profile says it is one: the read says it is."""
+    with closing(connect(db_path)) as conn:
+        refresh = latest_refresh(conn)
+        assert refresh is not None
+        row = universe_row("FXCO", refresh.id, "Foreign Filer Co", Decimal(5_000_000_000))
+        insert_companies(conn, [replace(row, currency="SEK", is_adr=False)])
+        adr = replace(fx_inputs(), is_adr=True, adr_ratio=5.0)
+        insert_snapshot(conn, value_company(adr, universe_deciles(), policy, TODAY), refresh.id)
+        profile = [{"symbol": "FXCO", "country": "SE", "isAdr": True}]
+        response = record_response(
+            conn, "fmp", "profile", {"symbol": "FXCO"}, "FXCO", 200, json.dumps(profile), None, NOW
+        )
+        insert_observations(conn, profile_observations(profile, "FXCO", response, NOW, NOW))
+    assert _get(client, "/api/companies/FXCO")["isAdr"] is True
+    assert _get(client, "/api/companies/AAPL")["isAdr"] is False  # no flag stored: the row's
 
 
 def test_a_row_refused_for_its_currency_names_it_with_no_rate(
