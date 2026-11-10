@@ -10,6 +10,7 @@ import pytest
 from support.engine_companies import (
     decline_inputs,
     fiscal_years,
+    fx_inputs,
     high_growth_inputs,
     mature_growth_inputs,
     mature_stable_inputs,
@@ -27,8 +28,10 @@ from fairband.engine.overrides import (
     State,
     check_override,
     current_reading,
+    money_of,
     range_text,
     route_of,
+    unit_in,
 )
 from fairband.engine.route import value_company
 from fairband.engine.route_steps import Context, chosen, judgment_inputs
@@ -369,6 +372,34 @@ def test_a_range_with_no_upper_bound_names_its_lower_end_alone(policy: Policy) -
     assert range_text(0.0, 1e15, "USD", low_open=True) == "above $0"
     assert range_text(0.0, 1_000.0, "USD a share", low_open=True) == "above $0 to $1,000 a share"
     assert range_text(-0.2, 0.6, "ratio") == "−20% to 60%"
+
+
+def test_a_money_range_is_read_in_the_row_s_currency(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-10 7.3: on a row in another currency a money range is the policy's × the
+    snapshot's rate (``money_of``), an end of no bound staying one; the rule passes the rate
+    through ``check_override``; a ratio's range and every USD row's are as before."""
+    sek = value_company(fx_inputs(), deciles, policy, TODAY)
+    usd = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    assert (money_of(sek), money_of(usd)) == ((8.0, "SEK"), (1.0, "USD"))
+    rate, currency = money_of(sek)
+    debt = ("balance.debt", -1.0, "decline", policy, ["filing"], "period-tied", None)
+    assert check_override(*debt, fx_rate=rate, currency=currency) == (
+        "refused-unit",
+        "balance.debt takes 0 SEK or more",  # the end of no bound stays one
+    )
+    assert check_override(*debt) == ("refused-unit", "balance.debt takes $0 or more")
+    gap = ("earnings.nri_gap", 500.0, "mature-growth", policy, ["filing"], "lasting", None)
+    assert check_override(*gap, fx_rate=rate, currency=currency) == ("applied", "")
+    assert check_override(*gap) == ("refused-unit", "earnings.nri_gap takes −$100 to $100 a share")
+    assert check_override(*gap[:1], 900.0, *gap[2:], fx_rate=rate, currency=currency) == (
+        "refused-unit",
+        "earnings.nri_gap takes −800 to 800 SEK a share",
+    )
+    assert (unit_in("USD a share", "SEK"), unit_in("USD", "SEK"), unit_in("ratio", "SEK")) == (
+        "SEK a share",
+        "SEK",
+        "ratio",
+    )
 
 
 def test_an_ntm_anchor_needs_a_guidance_item(policy: Policy) -> None:

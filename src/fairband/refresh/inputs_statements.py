@@ -30,6 +30,9 @@ else ``"unknown"``.
 Trailing figures (spec 6.6): the sums of the last four quarters when each ends 80 to 100 days after
 the one before (the anchor's rule), joined to the quarterly cash flow by period end, a sum ``None``
 when any quarter lacks its part; else the last fiscal year, flagged ``trailing-on-fiscal-year``.
+The last fiscal year stands in too when any of the four quarters' income statements names
+another currency than the newest annual one, the reporting currency (spec 2026-11-10 7): the
+note's sentence then names those quarters and their currency.
 The interest expense and the depreciation and amortization (spec 2026-11-03 section 11) are
 summed the same way; the interest expense counts each period by its size, as FMP signs it either
 way.
@@ -249,7 +252,7 @@ def statements_for(
     capital, methods = _capital_years(years, balance, reported, rates)
     newest_rate = rates[years.span[-1]]
     quarters = periods["income-quarter"]
-    trailing, trailing_periods = _trailing(
+    trailing, trailing_periods, fallback = _trailing(
         years, cash, quarters, _by_end(periods["cashflow-quarter"])
     )
     quarter_ends = () if trailing.on_fiscal_year else tuple(p.end for p in trailing_periods)
@@ -274,7 +277,7 @@ def statements_for(
     flags = (
         _tax_flag(country, rates)
         + _leases_flag(years, balance, reported)
-        + (() if quarter_ends else (_on_fiscal_year(years.span[-1]),))
+        + (() if quarter_ends else (fallback,))
     )
     return Statements(
         calendar=years.calendar,
@@ -490,11 +493,18 @@ def _trailing(
     cash: dict[date, _Period],
     quarters: Sequence[_Period],
     quarter_cash: dict[date, _Period],
-) -> tuple[TrailingFigures, tuple[TrailingPeriod, ...]]:
+) -> tuple[TrailingFigures, tuple[TrailingPeriod, ...], Flag]:
     """The trailing figures and the periods they read, oldest first: the four quarters, or the
-    one fiscal year on the fallback."""
+    one fiscal year on the fallback, with the ``trailing-on-fiscal-year`` note its reason gives
+    (the module docstring)."""
     last = list(quarters[-4:])
+    newest = years.span[-1]
+    reporting = years.income[newest].currency
+    others = [q for q in last if q.currency not in (None, reporting)] if reporting else []
+    fallback = _on_fiscal_year(newest)
     on_fiscal_year = len(last) < 4 or not consecutive_quarters([q.end for q in last])
+    if not on_fiscal_year and others:
+        on_fiscal_year, fallback = True, _in_another_currency(newest, others, reporting)
     if on_fiscal_year:
         income = years.income[years.span[-1]]
         incomes, flows = [income], [cash.get(income.end, _NONE)]
@@ -518,7 +528,7 @@ def _trailing(
         depreciation=_total(flows, "depreciationAndAmortization"),
     )
     read = tuple(TrailingPeriod(i.end, i.value("epsDiluted"), i.value(_SHARES)) for i in incomes)
-    return figures, read
+    return figures, read, fallback
 
 
 def _shares(
@@ -589,6 +599,28 @@ def _on_fiscal_year(year: int) -> Flag:
         "Trailing on fiscal year",
         "The quarters on file are not four consecutive quarters, so the trailing figures are "
         f"fiscal {year}'s.",
+    )
+
+
+def _in_another_currency(year: int, others: Sequence[_Period], reporting: str | None) -> Flag:
+    """The ``trailing-on-fiscal-year`` note when a trailing quarter is in another currency than the
+    fiscal years, its sentence naming the quarters by their currency: "The quarter to 2026-09-30
+    is in USD while the fiscal years are in CAD, so the trailing figures are fiscal 2025's"."""
+    by_currency: dict[str | None, list[date]] = {}
+    for q in others:
+        by_currency.setdefault(q.currency, []).append(q.end)
+    named = []
+    for currency, ends in by_currency.items():
+        days = [end.isoformat() for end in ends]
+        listed = days[0] if len(days) == 1 else f"{', '.join(days[:-1])} and {days[-1]}"
+        noun, verb = ("quarter", "is") if len(days) == 1 else ("quarters", "are")
+        named.append(f"the {noun} to {listed} {verb} in {currency}")
+    first = " and ".join(named)
+    return Flag(
+        "trailing-on-fiscal-year",
+        "Trailing on fiscal year",
+        f"{first[0].upper()}{first[1:]} while the fiscal years are in {reporting}, so the "
+        f"trailing figures are fiscal {year}'s.",
     )
 
 

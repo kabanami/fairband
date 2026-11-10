@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 from fixture_universe import ADMITTED, SCREENER, serve_universe
 from refresh_env import Env, use_cli
 from synthetic import SIX_LINES
-from vendor_double import FMP_KEY
+from vendor_double import FIXTURES, FMP_KEY
 
 from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Settings
@@ -53,19 +53,17 @@ RATE_LIMITED = "data fetch incomplete: rate limited"
 # NEWT is Young Growth: its peers list (ACME's, the symbol changed) names no mature company of the
 # fixture universe, nor has its industry one, so the revenue-growth route has no target margin.
 NO_TARGET = "no target margin: 0 mature peers"
-FOREIGN = "foreign filer: currency and share-unit handling not built yet"
-# The fixture universe's calibration: ACME, AXLE and MILD valued, NEWT refused, and KRON, which
-# reports in SEK, refused as a foreign filer with its phase and the one flag its statements give
-# before the refusal. Every company
-# carries a flag (the synthetic company has no leases on its balance sheet, among others), but only
-# NEWT (growth word, free cash flow) is flagged by a classifier check: ACME's and AXLE's margin
-# directions read Stable, which points to no phase (method 0.9). NEWT's refusal for its target
+# The fixture universe's calibration: ACME, AXLE, KRON and MILD valued, KRON in SEK, its statements
+# reporting in it, with the flags of the synthetic company it is (spec 2026-11-10 7), and NEWT
+# refused. Every company carries a flag (the synthetic company has no leases on its balance
+# sheet, among others), but only NEWT (growth word, free cash flow) is flagged by a classifier
+# check: ACME's and AXLE's margin directions read Stable, which points to no phase (method 0.9). NEWT's refusal for its target
 # margin keeps the flags of its revenue path (the annual consensus has no revenue for a path year,
 # so the path holds), of its capital build, and of the industry fallback for its peers.
 CALIBRATION = {
     "total": 5,
-    "valued": 3,
-    "refused": {NO_TARGET: 1, FOREIGN: 1},
+    "valued": 4,
+    "refused": {NO_TARGET: 1},
     "phases": {
         "Start-up": 0,
         "Young Growth": 1,
@@ -77,19 +75,19 @@ CALIBRATION = {
     },
     "flagged": 1,
     "flags": {
-        "consensus-basis-unknown": 3,  # beside large-nri on the three mature rows
+        "consensus-basis-unknown": 4,  # beside large-nri on the four mature rows
         "fcf-sign": 1,
         "growth-word-disagrees": 1,
-        "large-nri": 3,
+        "large-nri": 4,
         "leases-not-on-balance-sheet": 5,
-        "line-not-presented:current_lease_liability": 4,
-        "line-not-presented:goodwill": 4,
-        "line-not-presented:lease_rou_asset": 4,
+        "line-not-presented:current_lease_liability": 5,
+        "line-not-presented:goodwill": 5,
+        "line-not-presented:lease_rou_asset": 5,
         "path-held": 1,
-        "path-on-eps": 2,
+        "path-on-eps": 3,
         "peers-from-industry": 1,
-        "sbc-basis-unknown": 2,
-        "value-spread": 2,
+        "sbc-basis-unknown": 3,
+        "value-spread": 3,
     },
     "universe": {
         "admitted": 5,
@@ -162,14 +160,25 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
     for symbol, route in (
         ("ACME", "mature-growth"),
         ("AXLE", "mature-growth"),
+        ("KRON", "mature-growth"),
         ("MILD", "mature-stable"),
     ):
         valued = snapshots[symbol]
         assert valued.route == route and valued.refusal is None
         assert valued.value is not None and valued.value > 0
     assert snapshots["NEWT"].refusal == NO_TARGET and snapshots["NEWT"].value is None
-    # Until the engine values foreign filers (spec 2026-11-10 7.2), KRON is refused as one.
-    assert snapshots["KRON"].refusal == FOREIGN and snapshots["KRON"].value is None
+    # KRON reports in SEK (spec 2026-11-10 7.2): valued in SEK at USDSEK's close of its quote's
+    # date, 2026-10-30, 10.52, its value a share in USD.
+    kron = snapshots["KRON"].result
+    assert kron.value is not None and kron.price == 50.0
+    assert kron.intermediates["currency"] == "SEK" and kron.intermediates["fx_rate"] == 10.52
+    assert kron.value == pytest.approx(kron.intermediates["value_in_currency"] / 10.52)
+    rate = next(i for i in kron.inputs if i.name == "fx_rate")
+    assert (rate.value, rate.unit, rate.provenance.as_of) == (
+        10.52,
+        "SEK per USD",
+        date(2026, 10, 30),
+    )
 
     calibration = row.calibration
     assert calibration == CALIBRATION
@@ -536,19 +545,27 @@ def test_a_growth_company_is_valued_on_its_mature_peers(env_fixture_universe: En
 
 def test_an_empty_quarterly_consensus_is_not_a_fetch_failure(env_fixture_universe: Env) -> None:
     """FMP answers ``[]`` for a company without quarterly coverage. AXLE reports in euros (a
-    foreign filer, which reports twice a year) and gets the foreign-filer refusal with its phase;
-    MILD is Mature Stable, whose route never reads the consensus, and gets its value."""
+    foreign filer, which reports twice a year): with its pair on file it takes its route in euros
+    and is refused for the consensus it lacks, with its phase (spec 2026-11-10 section 5); MILD is
+    Mature Stable, whose route never reads the consensus, and gets its value."""
     env = env_fixture_universe
     for symbol in ("AXLE", "MILD"):
         env.router.symbol_bodies[("estimates-quarter", symbol)] = b"[]"
     annual = json.loads(env.router.symbol_bodies[("income-annual", "AXLE")])
     euros = [{**row, "reportedCurrency": "EUR"} for row in annual]
     env.router.symbol_bodies[("income-annual", "AXLE")] = json.dumps(euros).encode()
+    sek = (FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json").read_bytes()
+    env.router.symbol_bodies[("fx-history", "USDEUR")] = sek.replace(b"USDSEK", b"USDEUR")
     refresh_id = env.refresh().run("full")
     assert env.last().status == "done"
     assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
     axle, mild = env.snapshot("AXLE"), env.snapshot("MILD")
-    assert (axle.phase, axle.refusal, axle.value) == ("Mature Growth", FOREIGN, None)
+    assert (axle.phase, axle.refusal, axle.value) == (
+        "Mature Growth",
+        "incomplete NTM consensus",
+        None,
+    )
+    assert axle.result.intermediates["currency"] == "EUR"
     assert (mild.phase, mild.route, mild.refusal) == ("Mature Stable", "mature-stable", None)
     assert mild.value is not None and mild.value > 0
 
@@ -596,16 +613,31 @@ def test_a_scoped_refresh_fetches_its_pair_again_and_a_revalue_fetches_none(
 
 def test_a_failed_pair_leaves_the_run_done(env_fixture_universe: Env) -> None:
     """USDSEK's call fails: the stage counts SEK failed and the run goes on. KRON is still
-    assessed (refused as a foreign filer until the engine values one, spec 2026-11-10 7.2) and the
-    other four are valued as before."""
+    assessed, refused for the rate it lacks with its phase and the one flag its statements give
+    before the refusal (spec 2026-11-10 7.1), and the other four are valued as before."""
     env = env_fixture_universe
     env.router.fail.add("fx-history")
     refresh_id = env.refresh().run("full")
     row = env.last()
-    assert (row.status, row.message, row.calibration) == ("done", None, CALIBRATION)
+    no_rate = "no exchange rate for SEK"
+    route_flags = (
+        "consensus-basis-unknown",
+        "large-nri",
+        "line-not-presented:current_lease_liability",
+        "line-not-presented:goodwill",
+        "line-not-presented:lease_rou_asset",
+        "path-on-eps",
+        "sbc-basis-unknown",
+        "value-spread",
+    )
+    flags = dict(CALIBRATION["flags"])
+    flags |= {code: flags[code] - 1 for code in route_flags}  # KRON's, from its route
+    expected = CALIBRATION | {"valued": 3, "refused": {NO_TARGET: 1, no_rate: 1}, "flags": flags}
+    assert (row.status, row.message, row.calibration) == ("done", None, expected)
     assert Progress(refresh_id, "rates", 0, 1, 0, None) in env.progress
     assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
-    assert env.snapshot("KRON").refusal == FOREIGN
+    kron = env.snapshot("KRON")
+    assert (kron.phase, kron.refusal, kron.value) == ("Mature Growth", no_rate, None)
 
 
 def test_a_429_in_the_rates_stage_ends_the_run(env_fixture_universe: Env) -> None:
@@ -759,7 +791,7 @@ def test_cli_full_refresh_prints_calibration(
     assert out[out.index("done: 5 done, 0 failed, 0 to go") :] == [
         "done: 5 done, 0 failed, 0 to go",
         "refresh 1: done",
-        "5 companies · 3 valued · 1 flagged by a classifier check",
+        "5 companies · 4 valued · 1 flagged by a classifier check",
         "Start-up: 0",
         "Young Growth: 1",
         "High Growth: 0",
@@ -767,7 +799,6 @@ def test_cli_full_refresh_prints_calibration(
         "Mature Stable: 1",
         "Decline: 0",
         "unclassified: 0",
-        f"1 refused: {FOREIGN}",
         f"1 refused: {NO_TARGET}",
     ]
     assert env.last().calibration == CALIBRATION

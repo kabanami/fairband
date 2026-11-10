@@ -1,9 +1,11 @@
 """Route dispatch: one ``CompanyInputs`` record in, one ``ValuationResult`` out (spec 6.6).
 
 ``value_company`` refuses before any arithmetic, in this order: no universe deciles yet (whatever
-else assembly found, which the next run with deciles judges); the refusal assembly set; a foreign
-filer (spec 11); an unclassified company (the classifier's reason); no positive price; no positive
-diluted share count. A Start-up row then takes its route (``route_start_up``, on a
+else assembly found, which the next run with deciles judges); the refusal assembly set, which
+holds, in order, no financial statements, a missing statutory tax rate, the currency's refusals
+and the listed-share basis's (spec 2026-11-10 7.5); an unclassified company (the classifier's
+reason); no positive price; no positive diluted share count. The ADR flag refuses nothing.
+A Start-up row then takes its route (``route_start_up``, on a
 ``StartUpContext`` whose trailing figures may be missing), always the refusal "Start-up: no value
 by design" with its route ``start-up``, its figures and its inputs. Every other row is refused
 without trailing figures; then the phase's route runs (``route_mature_growth``,
@@ -47,28 +49,43 @@ Stable row refused for its trailing earnings or for a value not positive under t
 charge, whose cross-check's implied growth moves. ``refusal_result`` is the shape of every
 refusal.
 
+A company in another currency (spec 2026-11-10 7.2 and 7.3). The route runs in the reporting
+currency: its context holds the USD price and market cap × the rate (``CompanyInputs.fx_rate``)
+and the policy restated by the inflation differential (``policy.in_currency``), and the sales
+class reads the trailing revenue ÷ the rate, its bounds being USD. The value a share and the
+levels go back to USD at the rate: the value is the route's ÷ the rate, the levels the policy's
+on it, the designation the USD price against it. Such a row's results, a refusal's too, carry
+the intermediates ``currency``, ``fx_rate``, ``fx_date`` (ISO) and ``inflation_differential``,
+a valued one ``value_in_currency`` (the route's value a share), and the note ``fx-stale``, last,
+when assembly read its rate stale. A USD row carries none of them, and its figures are as before:
+its rate is 1 and its differential 0. ``reprice`` moves the USD value with the rate.
+
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
 ``estimates_quarter``, ``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``gf_eps_ttm``,
-``gf_eps_without_nri``, ``next_earnings``, ``tax_rate_latest``, ``closes``. A missing key cites
-the source "unknown". A DATA input named in ``CompanyInputs.estimate_methods`` is an estimate
-under that method (a tax rate carried forward, say), and so are ``aggregate_roic`` and
-``runway_return`` under the method ``estimate_methods`` names ``intangibles`` (D17: invested
-capital took the issuer's as-reported intangibles total), the first with a note that says so, the
-second keeping its note on the measure the charge used; every other DATA input is observed. A
-DATA input named in ``CompanyInputs.notes`` carries that note unless the route writes its own
-(assembly's note on the tax rate names the country, the rate's year and its source). A RULE input
-cites the policy version.
+``gf_eps_without_nri``, ``next_earnings``, ``tax_rate_latest``, ``closes``, and on a row in
+another currency ``fx_rate``; the RULE input ``inflation_differential`` cites its key too, the
+inflation table, with its note. A missing key cites the source "unknown". A DATA input named in
+``CompanyInputs.estimate_methods`` is an estimate under that method (a tax rate carried forward,
+say), and so are ``aggregate_roic`` and ``runway_return`` under the method ``estimate_methods``
+names ``intangibles`` (D17: invested capital took the issuer's as-reported intangibles total),
+the first with a note that says so, the second keeping its note on the measure the charge used;
+every other DATA input is observed. A DATA input named in ``CompanyInputs.notes`` carries that
+note unless the route writes its own (assembly's note on the tax rate names the country, the
+rate's year and its source). Every other RULE input cites the policy version. The price input
+is the USD quote (unit ``USD``); every other money input is in the reporting currency, its unit
+the code or ``<code> a share`` (``route_steps.money`` and ``per_share``), the market cap the one
+the route read.
 
-Intermediates hold JSON values only. Totals are in USD, per-share figures in USD a share, rates
-as fractions. Under a ``value.outside`` override a valued route's intermediates, and a refusal's
-that keeps the value side, carry ``outside_value_per_share``, the figure a share, which the
-rebuilds at the price read; no result without the override carries it. A sensitivity map is
-keyed by the runway in years ("5", "10", "20") or by the return of the charge: "runway", the
-row's own; the policy's ``roic_sensitivity`` values, "0.15" and "0.09", each as the runway
-return; then "ten-year", the ten-year aggregate ROIC as the runway return, ``None`` when it is
-unavailable or not positive. The value-spread flag reads the first three, the business's own
-values, before any value outside the business is added.
+Intermediates hold JSON values only. Totals and per-share figures are in the reporting currency
+(USD for a USD row), rates as fractions. Under a ``value.outside`` override a valued route's
+intermediates, and a refusal's that keeps the value side, carry ``outside_value_per_share``, the
+figure a share, which the rebuilds at the price read; no result without the override carries
+it. A sensitivity map is keyed by the runway in years ("5", "10", "20") or by the return of the
+charge: "runway", the row's own; the policy's ``roic_sensitivity`` values, "0.15" and "0.09",
+each as the runway return; then "ten-year", the ten-year aggregate ROIC as the runway return,
+``None`` when it is unavailable or not positive. The value-spread flag reads the first three, the
+business's own values, before any value outside the business is added.
 
 - Mature Growth: ``anchor`` (ntm_eps_raw, sbc_adjustment_per_share, ntm_eps), ``sbc_basis``,
   ``ntm_net_income``, ``path`` (base_year, on_eps, analysts), ``path_steps``, ``belief`` (rate,
@@ -172,6 +189,7 @@ from fairband.engine.route_steps import (
     data,
     judged_inputs,
     price_facts_for,
+    rule,
 )
 from fairband.engine.types import (
     Flag,
@@ -181,13 +199,14 @@ from fairband.engine.types import (
     TaggedInput,
     ValuationResult,
 )
-from fairband.policy import Policy
+from fairband.policy import Policy, in_currency
 
-FOREIGN_FILER = "foreign filer: currency and share-unit handling not built yet"
 _LONG_RUNWAY = "long-runway-high-growth"
 _VALUE_SPREAD = "value-spread"
 _BELOW_NET_CASH = "below-net-cash"
 _BURN_COVER_SHORT = "burn-cover-short"
+_FX_STALE = "fx-stale"
+_UNKNOWN = Provenance("unknown", None, None, None)
 
 
 @dataclass(frozen=True)
@@ -201,6 +220,14 @@ class CompanyInputs:
     year of ``series`` with an annual balance sheet, oldest first; the Decline route reads them.
     ``adr_ratio`` is GuruFocus's depositary receipt ratio, ordinary shares per ADS, ``None`` for a
     direct listing or without one on file; assembly has read the counts on the quote's basis by it.
+
+    A company in another currency (spec 2026-11-10 section 7): ``currency`` is the reporting
+    currency, every money figure but ``price`` and ``market_cap`` (the quote's, in USD) and the
+    peers' market caps is in it, the street actuals and GuruFocus's EPS translated by assembly.
+    ``fx_rate`` is the currency's units per USD at the price date, read from the close of
+    ``fx_date``, ``fx_stale`` when that close is older than the policy's stale bound, and
+    ``inflation_differential`` the currency's d against USD. A USD row keeps the defaults: the
+    rate 1, no rate date, d 0.
     """
 
     symbol: str
@@ -236,6 +263,10 @@ class CompanyInputs:
     cash: float | None = None
     balance_years: tuple[BalanceYear, ...] = ()
     adr_ratio: float | None = None
+    fx_rate: float = 1.0
+    fx_date: date | None = None
+    inflation_differential: float = 0.0
+    fx_stale: bool = False
 
 
 def value_company(
@@ -262,8 +293,6 @@ def value_company(
 
     if inputs.refusal is not None:
         return refuse(inputs.refusal)
-    if inputs.is_adr or inputs.currency != "USD":
-        return refuse(FOREIGN_FILER)
     if phase.phase is None:
         return refuse(phase.reason or "unclassified")
     price, shares, trailing = inputs.price, _shares(inputs, judged), inputs.trailing
@@ -271,13 +300,16 @@ def value_company(
         return refuse("no price")
     if shares is None or not _positive(shares):
         return refuse("no diluted share count")
+    # the route runs in the reporting currency, on the policy's rates restated into it
+    local, rate = in_currency(policy, inputs.inflation_differential), inputs.fx_rate
+    in_local = replace(inputs, price=price * rate, market_cap=_times(inputs.market_cap, rate))
     if phase.phase == "Start-up":
-        start_up = StartUpContext(inputs, trailing, price, shares, policy, today, judged)
+        start_up = StartUpContext(in_local, trailing, price * rate, shares, local, today, judged)
         return replace(refuse(value_start_up(start_up)), route="start-up")
     if trailing is None:
         return refuse("no trailing figures")
 
-    c = Context(inputs, trailing, price, shares, policy, today, phase, judged)
+    c = Context(in_local, trailing, price * rate, shares, local, today, phase, judged)
     outcome = _route(c, phase.phase)
     if isinstance(outcome, Refused):
         return refuse(outcome)
@@ -359,6 +391,8 @@ def reprice(
     price_date: date,
     policy: Policy,
     *,
+    fx_rate: float | None = None,
+    fx_date: date | None = None,
     observed_at: datetime | None = None,
     entered_at: datetime | None = None,
 ) -> ValuationResult:
@@ -380,57 +414,111 @@ def reprice(
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
 
-    A price that is not positive and finite raises ``ValueError``: the caller skips such a quote.
-    The policy version is not checked: the caller passes the policy the result cites
-    (``result.policy_version`` and ``result.settings_hash``), since r, g_t, the runways, the ROIC
-    sensitivity and the repricing horizon come from it. The result keeps its own settings hash:
-    a reprice does not revalue.
+    A row in another currency (its intermediates hold ``fx_rate``; spec 2026-11-10 7.2) reprices
+    at ``fx_rate``, the pair's quote of ``fx_date``, when given, else at the rate it holds: the
+    new USD price comes into the currency at that rate, everything above moves on the price in
+    the currency, the value in the currency and the policy restated by the row's differential,
+    and the value a share is ``value_in_currency`` ÷ the rate, its levels the policy's on it; the
+    designation reads the two USD figures. The intermediates' ``fx_rate`` and ``fx_date`` and the
+    ``fx_rate`` input take the rate given; ``fx-stale`` is on the row when its rate's date is
+    more than ``fx_stale_days`` before ``price_date``, and off otherwise. A USD row reads no rate:
+    its rate is 1 on every day, and ``fx_rate`` moves nothing.
+
+    A price or a rate that is not positive and finite raises ``ValueError``: the caller skips
+    such a quote. The policy version is not checked: the caller passes the policy the result
+    cites (``result.policy_version`` and ``result.settings_hash``), since r, g_t, the runways, the
+    ROIC sensitivity and the repricing horizon come from it. The result keeps its own settings
+    hash: a reprice does not revalue.
     """
     if not _positive(price):
         raise ValueError(f"price {price} must be positive and finite")
+    im = result.intermediates
+    foreign = "fx_rate" in im
+    if foreign and fx_rate is not None and not _positive(fx_rate):
+        raise ValueError(f"rate {fx_rate} must be positive and finite")
+    rate: float = 1.0
+    local, flags = policy, result.flags
+    stale: tuple[Flag, ...] = ()
     inputs = tuple(
         _quoted(i, price, price_date, observed_at, entered_at) if i.name == "price" else i
         for i in result.inputs
     )
+    if foreign:
+        rate = im["fx_rate"] if fx_rate is None else fx_rate
+        when = _stored_date(im) if fx_date is None else fx_date
+        local = in_currency(policy, im["inflation_differential"])
+        im = im | {"fx_rate": rate, "fx_date": None if when is None else when.isoformat()}
+        if fx_rate is not None:
+            inputs = tuple(_rated(i, rate, when) if i.name == "fx_rate" else i for i in inputs)
+        flags = tuple(f for f in flags if f.code != _FX_STALE)
+        if when is not None and (price_date - when).days > policy.fx_stale_days:
+            stale = (_fx_stale(im["currency"], when, price_date),)
+    in_local = price * rate
     if result.value is None or result.levels is None:
-        moved = replace(result, price=price, price_date=price_date, inputs=inputs)
-        im = result.intermediates
+        moved = replace(
+            result,
+            price=price,
+            price_date=price_date,
+            inputs=inputs,
+            intermediates=im,
+            flags=flags + stale,
+        )
         if "requirement" in im:
-            market_cap = market_cap_at(im["market_cap"], result.price, price)
+            was = _times(result.price, result.intermediates.get("fx_rate", 1.0))
+            market_cap = market_cap_at(im["market_cap"], was, in_local)
             net_cash = below_net_cash(market_cap, im["debt"], im["cash"])
             return replace(
                 moved,
-                intermediates=im | start_up_at_price(im, market_cap, policy),
-                flags=_swap(result.flags, _BELOW_NET_CASH, net_cash, _BURN_COVER_SHORT),
+                intermediates=im | start_up_at_price(im, market_cap, local),
+                flags=_swap(flags, _BELOW_NET_CASH, net_cash, _BURN_COVER_SHORT) + stale,
             )
         if "revenue_path" in im:
-            return replace(moved, intermediates=im | implied_margin_at_price(im, price, policy))
+            return replace(moved, intermediates=im | implied_margin_at_price(im, in_local, local))
         if "growth_route" in im and "e_trailing" in im:
-            target = business_price(im, price)
-            gr = cross_check_at_price(im["growth_route"], target, im["shares"], policy)
+            target = business_price(im, in_local)
+            gr = cross_check_at_price(im["growth_route"], target, im["shares"], local)
             return replace(moved, intermediates=im | {"growth_route": gr})
         return moved
-    im, flags = dict(result.intermediates), result.flags
+    value, levels = result.value, result.levels
+    in_currency_value = value
+    if foreign:
+        in_currency_value = im["value_in_currency"]
+        value = in_currency_value / rate
+        levels = levels_for(value, im["moat"], policy)
+    im = dict(im)
     if result.route == "mature-growth":
-        im |= growth_at_price(im, price, result.value, policy)
-        flags = _swap(flags, _LONG_RUNWAY, long_runway(im, policy), _VALUE_SPREAD)
+        im |= growth_at_price(im, in_local, in_currency_value, local)
+        flags = _swap(flags, _LONG_RUNWAY, long_runway(im, local), _VALUE_SPREAD)
     elif result.route == "revenue-growth":
-        im |= revenue_at_price(im, price, result.value, policy)
+        im |= revenue_at_price(im, in_local, in_currency_value, local)
     elif result.route == "decline":
-        im |= decline_at_price(im, price, result.value, policy)
+        im |= decline_at_price(im, in_local, in_currency_value, local)
     else:
-        im |= stable_at_price(im, price, result.value, policy)
-    price_to_value, designation = designation_for(price, result.value, policy.designation_edges)
+        im |= stable_at_price(im, in_local, in_currency_value, local)
+    price_to_value, designation = designation_for(price, value, policy.designation_edges)
     return replace(
         result,
+        value=value,
+        levels=levels,
         price=price,
         price_date=price_date,
         price_to_value=price_to_value,
         designation=designation,
         inputs=inputs,
         intermediates=im,
-        flags=flags,
+        flags=flags + stale,
     )
+
+
+def _stored_date(im: dict[str, Any]) -> date | None:
+    """The date of the rate a row in another currency was valued or last repriced at."""
+    stored = im.get("fx_date")
+    return None if stored is None else date.fromisoformat(stored)
+
+
+def _rated(i: TaggedInput, rate: float, when: date | None) -> TaggedInput:
+    """The ``fx_rate`` input at a new rate of ``when``, from the same source."""
+    return replace(i, value=rate, provenance=replace(i.provenance, as_of=when))
 
 
 def _quoted(
@@ -460,12 +548,16 @@ def _valued(
     v: Valued,
     overrides: Overrides,
 ) -> ValuationResult:
-    price_to_value, designation = designation_for(price, v.value, policy.designation_edges)
+    """The valued result: the route's value a share and its levels translated to USD at the rate
+    (a USD row's rate is 1), the levels the policy's on the USD value, the designation the USD
+    price against it (spec 2026-11-10 7.2)."""
+    value = v.value / i.fx_rate
+    price_to_value, designation = designation_for(price, value, policy.designation_edges)
     return ValuationResult(
         symbol=i.symbol,
         route=v.route,
-        value=v.value,
-        levels=levels_for(v.value, v.moat, policy),
+        value=value,
+        levels=levels_for(value, v.moat, policy),
         price_to_value=price_to_value,
         designation=designation,
         price=price,
@@ -473,9 +565,9 @@ def _valued(
         data_date=i.data_date,
         valid_until=_valid_until(i, policy),
         phase=phase,
-        inputs=judged_inputs(_base_inputs(i) + v.inputs, overrides),
-        intermediates=v.intermediates,
-        flags=_unique(i.input_flags + phase.checks + v.flags),
+        inputs=judged_inputs(_base_inputs(i, policy) + v.inputs, overrides, i.currency),
+        intermediates=v.intermediates | _currency_entry(i, v.value),
+        flags=_unique(i.input_flags + phase.checks + v.flags + _stale_flag(i)),
         refusal=None,
         policy_version=policy.version,
         method_version=METHOD_VERSION,
@@ -506,25 +598,41 @@ def _refuse(
         price=price,
         price_date=None if price is None else i.price_date,
         phase=phase,
-        inputs=judged_inputs(_base_inputs(i) + found.inputs, overrides),
-        flags=_unique(i.input_flags + checks + found.flags),
+        inputs=judged_inputs(_base_inputs(i, policy) + found.inputs, overrides, i.currency),
+        flags=_unique(i.input_flags + checks + found.flags + _stale_flag(i)),
         deciles_refresh_id=refresh_id,
         intermediates={
             **found.intermediates,
             "price_facts": price_facts_for(i.closes, price, today),
+            **_currency_entry(i, None),
         },
     )
     return replace(result, valid_until=_valid_until(i, policy))
 
 
-def _base_inputs(i: CompanyInputs) -> tuple[TaggedInput, ...]:
-    """The DATA inputs every result of ``value_company`` carries: what the guards and the
-    price facts read, and, for an ADR or a row with a ratio on file, the ADR ratio the share
-    count was read by; a direct listing carries none."""
+def _base_inputs(i: CompanyInputs, policy: Policy) -> tuple[TaggedInput, ...]:
+    """The inputs every result of ``value_company`` carries: the DATA inputs the guards and the
+    price facts read (the price the USD quote); for an ADR or a row with a ratio on file, the ADR
+    ratio the share count was read by, a direct listing carrying none; and for a row in another
+    currency at a rate, the rate (``<code> per USD``) and the inflation differential, a RULE input
+    cited to the inflation table with its note (spec 2026-11-10 7.2 and 7.3). A USD row carries
+    neither."""
     years = [fy.year for fy in i.series]
     span = f"fiscal {years[0]} to {years[-1]}" if years else None
     earnings = None if i.next_earnings is None else i.next_earnings.isoformat()
     listed = i.is_adr or i.adr_ratio is not None
+    currency = (
+        (
+            data(i, "fx_rate", i.fx_rate, f"{i.currency} per USD"),
+            replace(
+                rule(policy, "inflation_differential", i.inflation_differential, "ratio"),
+                provenance=i.provenance.get("inflation_differential", _UNKNOWN),
+                note=i.notes.get("inflation_differential"),
+            ),
+        )
+        if _foreign(i)
+        else ()
+    )
     return (
         data(i, "statements", float(len(years)), "fiscal years", note=span),
         data(i, "price", i.price, "USD"),
@@ -532,7 +640,51 @@ def _base_inputs(i: CompanyInputs) -> tuple[TaggedInput, ...]:
         data(i, "next_earnings", None, "date", note=earnings),
         data(i, "closes", float(len(i.closes)), "daily closes"),
         *((data(i, "adr_ratio", i.adr_ratio, "ratio"),) if listed else ()),
+        *currency,
     )
+
+
+def _foreign(i: CompanyInputs) -> bool:
+    """Whether ``i`` reports in another currency than USD at a rate assembly read: its results
+    carry the currency's intermediates and inputs, and ``fx-stale`` when the rate is stale."""
+    return i.currency != "USD" and i.fx_date is not None
+
+
+def _currency_entry(i: CompanyInputs, value: float | None) -> dict[str, Any]:
+    """The intermediates of a row in another currency (spec 2026-11-10 7.2): the currency, the
+    rate and its date, the differential and, on a valued row, ``value_in_currency``, the route's
+    value a share before translation; none for a USD row, whose intermediates stay as they were."""
+    if not _foreign(i):
+        return {}
+    entry: dict[str, Any] = {
+        "currency": i.currency,
+        "fx_rate": i.fx_rate,
+        "fx_date": None if i.fx_date is None else i.fx_date.isoformat(),
+        "inflation_differential": i.inflation_differential,
+    }
+    return entry if value is None else entry | {"value_in_currency": value}
+
+
+def _stale_flag(i: CompanyInputs) -> tuple[Flag, ...]:
+    """``fx-stale`` for a row in another currency whose rate assembly read stale."""
+    if not _foreign(i) or not i.fx_stale or i.fx_date is None or i.price_date is None:
+        return ()
+    return (_fx_stale(i.currency, i.fx_date, i.price_date),)
+
+
+def _fx_stale(currency: str, fx_date: date, price_date: date) -> Flag:
+    """The ``fx-stale`` note: the rate's close and the price date, and the days between."""
+    days = (price_date - fx_date).days
+    return Flag(
+        _FX_STALE,
+        "Rate stale",
+        f"The newest close of USD{currency} on file is of {fx_date.isoformat()}, {days} days "
+        f"before the price date {price_date.isoformat()}.",
+    )
+
+
+def _times(x: float | None, k: float) -> float | None:
+    return None if x is None else x * k
 
 
 def _valid_until(i: CompanyInputs, policy: Policy) -> date:

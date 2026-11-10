@@ -11,8 +11,8 @@ Admitted, with the revenue growth over the last three fiscal years that the deci
   lists in an industry of its own, so the industry fallback for its peers finds no mature company.
 - KRON: ACME's synthetic company again, its statements in SEK (``reportedCurrency``), so a full
   refresh fetches the pair USDSEK in its ``rates`` stage (the router serves the made-up
-  ``historical-price-eod-light.USDSEK.json``). Until the engine values foreign filers, it is
-  refused as one.
+  ``historical-price-eod-light.USDSEK.json``), and the engine values it in SEK at the close of
+  its quote's date, 10.52 SEK per USD: Mature Growth, its value a share in USD.
 
 Not admitted: FIRB, a regional bank (recorded, excluded by industry), and TINY, below the $2 bn
 floor (skipped). The quote, profile, closes, annual consensus, peers, splits and GuruFocus answers

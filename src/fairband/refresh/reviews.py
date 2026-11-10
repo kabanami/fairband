@@ -31,7 +31,9 @@ it.
 ``reprice_review`` runs in the reprice stage of a price refresh, in the transaction that writes
 the repriced snapshot: the company's current review, when it is on the snapshot repriced, through
 ``route.reprice`` at the quote, so its value, levels, validity, bridge and override ids stay and
-its designation follows the price, written on the new snapshot with its log row. A company with
+its designation follows the price, written on the new snapshot with its log row; a review in
+another currency reprices at the pair's quote the snapshot took, its USD value moving with the
+rate. A company with
 no current review, or one on another snapshot, gets none.
 
 ``review_refusal`` gives the refusal snapshot of a company the refresh could not value (a failed
@@ -189,9 +191,12 @@ def reprice_review(
     observed_at: datetime,
     entered_at: datetime,
     repriced: int,
+    fx_rate: float | None = None,
+    fx_date: date | None = None,
 ) -> int | None:
     """The company's current review, when it is on snapshot ``repriced``, repriced at ``price``
-    and written on ``snapshot_id``, the snapshot ``repriced`` became, with its log row; ``None``
+    (and, in another currency, at the pair's quote ``fx_rate`` of ``fx_date`` when given) and
+    written on ``snapshot_id``, the snapshot ``repriced`` became, with its log row; ``None``
     without such a review."""
     with transaction(conn):
         try:
@@ -208,6 +213,8 @@ def reprice_review(
                     observed_at,
                     entered_at,
                     repriced,
+                    fx_rate,
+                    fx_date,
                 )
         except Exception as exc:  # noqa: BLE001 - the snapshot stands; the review is the refusal
             mechanical = _snapshot_result(conn, snapshot_id)
@@ -226,13 +233,22 @@ def _reprice(
     observed_at: datetime,
     entered_at: datetime,
     repriced: int,
+    fx_rate: float | None,
+    fx_date: date | None,
 ) -> int | None:
     current = latest_review(conn, symbol)
     if current is None or current.snapshot_id != repriced:
         return None
     mechanical = _snapshot_result(conn, snapshot_id)
     result = reprice(
-        current.result, price, price_date, policy, observed_at=observed_at, entered_at=entered_at
+        current.result,
+        price,
+        price_date,
+        policy,
+        fx_rate=fx_rate,
+        fx_date=fx_date,
+        observed_at=observed_at,
+        entered_at=entered_at,
     )
     bridge = tuple(BridgeLine(**line) for line in current.bridge)
     review = Review(result, current.mechanical_value, bridge, current.override_ids)

@@ -63,6 +63,18 @@ MSCO re-captured under 1.0 on 2026-11-09 for one new key: its intermediates carr
 uncharged from the row rather than from the measure's word (method 4.8). Its figures are
 unchanged; the other five goldens are untouched.
 
+FXCO captured under 1.1 on 2026-11-10 (spec 2026-11-10 section 7 and 11.2), the seventh golden:
+a company in another currency, `fx_inputs()`, the Mature Growth company at a tenth of its size
+(100 m shares) reporting in SEK at 8.0 SEK per USD on 2026-10-31 with an inflation differential of
+2%, quoting USD 50.00 for a market cap of USD 5,000 m. Its route reads a price of 400.00 and a
+market cap of 40,000 m in SEK on the policy's rates restated by the differential (r 11.18%, g_T
+5.06%, the inflation addition 4.04%); its value is 837.14 SEK a share, USD 104.64 at 8.0, so at USD
+50.00 it is well-below (0.478 × the value), its levels the policy's on the USD value. Its
+intermediates add `currency`, `fx_rate`, `fx_date`, `value_in_currency` and
+`inflation_differential`, and its inputs `fx_rate` (SEK per USD) and the RULE input
+`inflation_differential`; every other money input is in SEK. The six USD goldens are unchanged by
+method 1.1, bit for bit: a USD row carries none of these.
+
 Run from the repository root:
 
 ```

@@ -20,6 +20,12 @@ its state and a sentence the agent can act on.
 input and its value, which a sensitivity reading's values meet and no others, since a reading
 changes no input (``method.md`` 14.8).
 
+A company in another currency (spec 2026-11-10 7.3): an input in ``USD`` or ``USD a share`` is
+read in the reporting currency, so its range's ends are the policy's × the rate (units of the
+currency per USD), an end that stands for no bound staying one, and the refusal names the
+currency: "earnings.ntm takes above 0 to 32,956 TWD a share". ``unit_in`` names such an input's
+unit in the currency.
+
 The routes read an override through ``route_steps.chosen``; ``route.value_company`` takes the
 applied ones as a mapping by tag. ``current_reading`` is the engine's reading of an input from a
 result's intermediates, ``None`` where the result holds none: the bridge's old value and the
@@ -261,6 +267,8 @@ ANCHOR_METRICS: dict[str, str] = {"earnings.ntm": "eps", "revenue.ntm": "revenue
 # The policy's stand-in for a range with no upper bound (10^15 dollars: the balance corrections
 # and the NTM revenue); a refusal names such a range by its lower end alone.
 NO_BOUND = 1e15
+# The units of money: a total and a figure a share, in USD as ``TAGS`` names them.
+_MONEY = frozenset({"USD", "USD a share"})
 
 
 _ROUTE_OF: dict[Phase, Route] = {
@@ -294,11 +302,15 @@ def check_override(
     evidence_kinds: Sequence[str],
     lifetime: Lifetime,
     cap: float | None,
+    *,
+    fx_rate: float = 1.0,
+    currency: str = "USD",
 ) -> tuple[State, str]:
     """``("applied", "")``, or the first rule ``value`` breaks for ``tag`` on ``route``, in the
     order of the module's docstring, with its sentence. ``cap`` is the sales class's 90th
-    percentile, ``None`` when the row has none."""
-    state, message = check_input(tag, value, route, policy)
+    percentile, ``None`` when the row has none; ``fx_rate`` and ``currency`` are the row's, which
+    ``check_input`` reads a money range in."""
+    state, message = check_input(tag, value, route, policy, fx_rate=fx_rate, currency=currency)
     if state != "applied":
         return state, message
     if TAGS[cast(OverrideTag, tag)].period_tied_only and lifetime == "lasting":
@@ -322,10 +334,19 @@ def check_override(
     return "applied", ""
 
 
-def check_input(tag: str, value: float | str, route: Route, policy: Policy) -> tuple[State, str]:
+def check_input(
+    tag: str,
+    value: float | str,
+    route: Route,
+    policy: Policy,
+    *,
+    fx_rate: float = 1.0,
+    currency: str = "USD",
+) -> tuple[State, str]:
     """``("applied", "")``, or the first of the input's own rules ``value`` breaks for ``tag`` on
     ``route``, with its sentence: a locked input, a tag that is not an input, a route that does
-    not read it, a value outside its words or its range."""
+    not read it, a value outside its words or its range. A money input's range is read in the
+    row's ``currency`` at ``fx_rate``, its units per USD (the module docstring)."""
     if tag in LOCKED:
         return "refused-locked", LOCKED[tag]
     if tag not in TAGS:
@@ -333,22 +354,27 @@ def check_input(tag: str, value: float | str, route: Route, policy: Policy) -> t
     spec = TAGS[tag]
     if route not in spec.routes:
         return "refused-route", f"the {_ROUTE_NAMES[route]} route does not read {tag}"
-    unit = _unit_refusal(spec, value, policy)
+    unit = _unit_refusal(spec, value, policy, fx_rate, currency)
     if unit is not None:
         return "refused-unit", unit
     return "applied", ""
 
 
-def _unit_refusal(spec: TagSpec, value: float | str, policy: Policy) -> str | None:
+def _unit_refusal(
+    spec: TagSpec, value: float | str, policy: Policy, fx_rate: float, currency: str
+) -> str | None:
     """Why ``value`` is not one the input takes, or ``None``: a word outside its words, a number
-    outside its range (the ends included)."""
+    outside its range (the ends included), a money range's ends × ``fx_rate``."""
     if spec.words is not None:
         if not isinstance(value, str) or value not in spec.words:
             return f"{spec.tag} takes {', '.join(spec.words[:-1])} or {spec.words[-1]}"
         return None
     low, high = policy.override_ranges[spec.tag]
+    if spec.unit in _MONEY:
+        low, high = low * fx_rate, high if high >= NO_BOUND else high * fx_rate
     if not _number(value) or not _within(value, low, high, spec.low_open):
-        return f"{spec.tag} takes {range_text(low, high, spec.unit, low_open=spec.low_open)}"
+        found = range_text(low, high, spec.unit, low_open=spec.low_open, currency=currency)
+        return f"{spec.tag} takes {found}"
     return None
 
 
@@ -362,28 +388,40 @@ def _number(value: object) -> TypeIs[float]:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
-def range_text(low: float, high: float, unit: str, *, low_open: bool = False) -> str:
+def range_text(
+    low: float, high: float, unit: str, *, low_open: bool = False, currency: str = "USD"
+) -> str:
     """A range in the input's unit: percents for a ratio, dollars for money (a share for the two
     gaps, the NTM EPS and the value outside the business), whole shares grouped by thousands for
     the share count, the figures for a multiple; a negative end with the minus sign, and "above"
-    before a lower end the range excludes. An upper end of ``NO_BOUND`` or more stands for no
-    bound and is not written: the range names its lower end alone, "$0 or more", or "above $0"
-    when it excludes it. The override's refusal and the secondary valuation's driver refusals
-    write their ranges with it."""
-    per = {"USD a share": " a share", "shares": " shares"}.get(unit, "")
+    before a lower end the range excludes. Money in another ``currency`` than USD is its figures
+    grouped by thousands with the unit after them, "above 0 to 32,956 TWD a share". An upper end
+    of ``NO_BOUND`` or more stands for no bound and is not written: the range names its lower
+    end alone, "$0 or more", "0 TWD or more", or "above $0" when it excludes it. The override's
+    refusal and the secondary valuation's driver refusals write their ranges with it."""
+    if unit in _MONEY and currency != "USD":
+        per = f" {unit_in(unit, currency)}"
+    else:
+        per = {"USD a share": " a share", "shares": " shares"}.get(unit, "")
     if high >= NO_BOUND:
-        bound = f"above {_end(low, unit)}" if low_open else f"{_end(low, unit)} or more"
-        return f"{bound}{per}"
+        low_end = f"{_end(low, unit, currency)}{per}"
+        return f"above {low_end}" if low_open else f"{low_end} or more"
     above = "above " if low_open else ""
-    return f"{above}{_end(low, unit)} to {_end(high, unit)}{per}"
+    return f"{above}{_end(low, unit, currency)} to {_end(high, unit, currency)}{per}"
 
 
-def _end(x: float, unit: str) -> str:
+def unit_in(unit: str, currency: str) -> str:
+    """``unit``, an input's unit as ``TAGS`` names it, in a row's reporting ``currency``: ``USD``
+    and ``USD a share`` become the code and ``<code> a share``; any other unit stays."""
+    return unit.replace("USD", currency, 1) if unit in _MONEY else unit
+
+
+def _end(x: float, unit: str, currency: str) -> str:
     """One end of a range in the input's unit (``range_text``)."""
     if unit == "ratio":
         return f"{_signed(x * 100)}%"
-    if unit in ("USD", "USD a share"):
-        return _dollars(x)
+    if unit in _MONEY:
+        return _dollars(x) if currency == "USD" else f"{'−' if x < 0 else ''}{abs(x):,.0f}"
     if unit == "shares":
         return f"{x:,.0f}"
     return _signed(x)
@@ -395,6 +433,17 @@ def _signed(x: float) -> str:
 
 def _dollars(x: float) -> str:
     return f"{'−' if x < 0 else ''}${abs(x):,.0f}"
+
+
+def money_of(result: ValuationResult) -> tuple[float, str]:
+    """The rate and the currency ``result``'s money inputs are in, which an override's range is
+    read at: its intermediates' ``fx_rate`` and ``currency`` for a row in another currency
+    (spec 2026-11-10 7.2), 1.0 and USD for any other."""
+    im = result.intermediates
+    rate, currency = im.get("fx_rate"), im.get("currency")
+    if isinstance(rate, int | float) and not isinstance(rate, bool) and isinstance(currency, str):
+        return float(rate), currency
+    return 1.0, "USD"
 
 
 def current_reading(result: ValuationResult, tag: OverrideTag) -> float | str | None:

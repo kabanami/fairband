@@ -1,7 +1,8 @@
 """The six engine fixtures under the packaged policy at its defaults, against the result dicts
-captured from method 0.7 and policy v5 before the settings build (spec 2026-11-04, 2 and 11).
-The version fields are masked, and so is the policy name a RULE input cites in its provenance:
-the dict's figures are what must not move."""
+captured from method 0.7 and policy v5 before the settings build (spec 2026-11-04, 2 and 11), and
+FXCO, a company in SEK, captured under method 1.1 (spec 2026-11-10 11.2). The version fields are
+masked, and so is the policy name a RULE input cites in its provenance: the dict's figures are
+what must not move."""
 
 import json
 from datetime import date
@@ -11,6 +12,7 @@ from typing import Any
 import pytest
 from support.engine_companies import (
     decline_inputs,
+    fx_inputs,
     high_growth_inputs,
     mature_growth_inputs,
     mature_stable_inputs,
@@ -33,6 +35,7 @@ FIXTURES = {
     "YGCO": young_growth_inputs,
     "DCCO": decline_inputs,
     "SUCO": start_up_inputs,
+    "FXCO": fx_inputs,  # a company in SEK (spec 2026-11-10 11.2)
 }  # the fixtures' own symbols (tests/support/engine_companies.py)
 
 

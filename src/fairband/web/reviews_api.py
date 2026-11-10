@@ -22,8 +22,11 @@ new one included); an unclassified row with no phase override reads no input but
 evidence rule's cap is the ``sales_p90_5y`` of the sales class of the snapshot's trailing
 revenue (its ``revenue_ttm`` input), the class the routes find, so it holds on a row a phase
 override moves onto a route that reads the input (a Start-up put in Young Growth); none when the
-snapshot cites no trailing revenue. An NTM anchor's override needs a ``guidance`` item among its
-evidence.
+snapshot cites no trailing revenue. On a row in another currency (spec 2026-11-10 7.3) the class
+reads that revenue ÷ the snapshot's rate, in USD as the class bounds are, and the cap is restated
+by the row's inflation differential, as the routes read it; the money ranges are read in the
+currency at the snapshot's rate (``overrides.money_of``). An NTM anchor's override needs a
+``guidance`` item among its evidence.
 The override is stored either way, with the engine's reading of the input on the snapshot as its
 old value and, for a period-tied one, as the value it corrected. A refused one answers 400 with
 the rule's sentence and ``{override}``. An applied one drops the applied override on its tag
@@ -126,13 +129,15 @@ from fairband.engine.overrides import (
     anchor_misfit,
     check_override,
     current_reading,
+    money_of,
     route_of,
+    unit_in,
 )
 from fairband.engine.roic import terminal_roic
-from fairband.engine.route import FOREIGN_FILER, CompanyInputs, value_company
+from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.secondary import Drivers, Part, SecondaryValuation, secondary_value
 from fairband.engine.types import Phase, Route, ValuationResult, result_to_json
-from fairband.policy import Moat, Policy
+from fairband.policy import Moat, Policy, in_currency
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import build_inputs
@@ -155,6 +160,7 @@ from fairband.store.overrides import (
 from fairband.store.refreshes import latest_deciles
 from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews_for
 from fairband.store.secondary import (
+    FOREIGN_FILER,
     GRID_ROWS,
     BalanceSource,
     Operation,
@@ -382,7 +388,7 @@ def add_review_routes(
                 body.tag,
                 old,
                 body.new,
-                "" if spec is None else spec.unit,
+                "" if spec is None else unit_in(spec.unit, money_of(snapshot.result)[1]),
                 body.reason,
                 [e.model_dump() for e in body.evidence],
                 body.lifetime,
@@ -729,7 +735,18 @@ def _check(
         return route
     kinds = [e.kind for e in body.evidence]
     cap = _cap(snapshot.result, policy)
-    return check_override(body.tag, body.new, route, policy, kinds, body.lifetime, cap)
+    rate, currency = money_of(snapshot.result)
+    return check_override(
+        body.tag,
+        body.new,
+        route,
+        policy,
+        kinds,
+        body.lifetime,
+        cap,
+        fx_rate=rate,
+        currency=currency,
+    )
 
 
 def _require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[Evidence]) -> None:
@@ -773,11 +790,16 @@ def _reproduces(fresh: ValuationResult, snapshot: ValuationResult) -> bool:
 
 def _cap(result: ValuationResult, policy: Policy) -> float | None:
     """The 90th-percentile five-year sales growth of the sales class of the result's trailing
-    revenue (its ``revenue_ttm`` input), the class every route finds (``anchor.sales_class``);
-    ``None`` when the result cites no trailing revenue."""
+    revenue (its ``revenue_ttm`` input), the class every route finds (``anchor.sales_class``): on
+    a row in another currency, the revenue ÷ its rate and the cap restated by its differential
+    (``policy.in_currency``); ``None`` when the result cites no trailing revenue."""
     cited = next((x.value for x in result.inputs if x.name == "revenue_ttm"), None)
     revenue = _number(cited, None)
-    return None if revenue is None else sales_class(revenue[0] / 1e6, policy).sales_p90_5y
+    if revenue is None:
+        return None
+    rate, _ = money_of(result)
+    local = in_currency(policy, result.intermediates.get("inflation_differential", 0.0))
+    return sales_class(revenue[0] / rate / 1e6, local).sales_p90_5y
 
 
 def _record(

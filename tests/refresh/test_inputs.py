@@ -8,7 +8,7 @@ import json
 import sqlite3
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,7 @@ from synthetic import (
     cashflow_annual,
     cashflow_quarter,
     earnings,
+    estimates_quarter,
     income_annual,
     income_quarter,
     statement,
@@ -38,11 +39,13 @@ from fairband.engine.roic import CapitalYear
 from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.types import Provenance
 from fairband.policy import Policy, load_policy
+from fairband.policy.inflation import load_inflation_table
 from fairband.policy.tax import LATEST_YEAR_METHOD, TaxTable, load_tax_table
 from fairband.refresh.fetch import fetch_company
 from fairband.refresh.inputs import build_inputs, series_for
 from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.peers import peer_figures
+from fairband.refresh.rates import fetch_rates
 
 TODAY = date(2026, 11, 1)
 GOLDEN = Path(__file__).parent.parent / "fixtures" / "golden"
@@ -205,6 +208,47 @@ def test_street_eps_needs_each_trailing_quarter(store: Store) -> None:
     inputs = build(store(**{**bodies(), "earnings": actuals}))
     assert inputs.trailing is not None and inputs.trailing.quarters == 4
     assert inputs.street_ttm_eps is None and "street_ttm_eps" not in inputs.provenance
+
+
+@pytest.mark.parametrize(
+    ("currencies", "sentence"),
+    [
+        (
+            {4: "USD"},
+            (
+                "The quarter to 2026-09-30 is in USD while the fiscal years are in CAD, so the "
+                "trailing figures are fiscal 2025's."
+            ),
+        ),
+        (
+            {1: "USD", 2: "GBP", 4: "USD"},
+            (
+                "The quarters to 2025-12-31 and 2026-09-30 are in USD and the quarter to "
+                "2026-03-31 is in GBP while the fiscal years are in CAD, so the trailing figures "
+                "are fiscal 2025's."
+            ),
+        ),
+    ],
+    ids=["one", "several"],
+)
+def test_a_quarter_in_another_currency_sends_the_trailing_figures_to_the_fiscal_year(
+    store: Store, currencies: dict[int, str], sentence: str
+) -> None:
+    """The fiscal years report in CAD and a trailing quarter in another currency (spec 2026-11-10
+    7): the four quarters are not summed, the trailing figures are fiscal 2025's and the note
+    names the quarters, their currency and the years'; no street actual is read, as on any
+    fallback."""
+    payloads = bodies(currency="CAD")
+    quarters = payloads["income-quarter"]
+    for k, currency in currencies.items():
+        quarters[k] = {**quarters[k], "reportedCurrency": currency}
+    inputs = build(store(**payloads))
+    assert inputs.currency == "CAD"
+    assert inputs.trailing is not None and inputs.trailing.on_fiscal_year
+    assert inputs.trailing.period_end == date(2025, 12, 31)
+    assert inputs.street_ttm_eps is None
+    note = next(f for f in inputs.input_flags if f.code == "trailing-on-fiscal-year")
+    assert note.sentence == sentence
 
 
 def test_trailing_falls_back_when_quarters_not_consecutive(
@@ -392,24 +436,148 @@ def test_the_country_is_unknown_without_profile_or_universe_row(store: Store) ->
 @pytest.mark.parametrize(
     ("is_adr", "currency"), [(True, "USD"), (False, "RUB")], ids=["adr", "currency"]
 )
-def test_foreign_filer_outside_the_tax_table_is_refused_as_foreign(
+def test_a_missing_tax_rate_refuses_every_company(
     store: Store, policy: Policy, is_adr: bool, currency: str
 ) -> None:
-    """A Russian filer: no tax rate on file (Russia is not in the OECD series), so a U.S. filer
-    would be refused for it."""
+    """A Russian filer: no tax rate on file (Russia is not in the OECD series). The refusal holds
+    for an ADR and for a company in another currency as for a U.S. filer, and comes before the
+    currency's own refusals (spec 2026-11-10 7.5): RUB has no rate on file."""
     annual = [{**row, "reportedCurrency": currency} for row in income_annual(YEARS)]
     profiles = [{"symbol": "ACME", "isAdr": is_adr, "marketCap": 5_000 * M}]
     conn = store(company=False, profile=profiles, **{**bodies(), "income-annual": annual})
     add_company(conn, country="RU")
     inputs = build(conn)
     assert (inputs.is_adr, inputs.currency) == (is_adr, currency)
-    assert inputs.refusal is None
+    assert inputs.refusal == "no statutory tax rate for RU 2015"
     assert inputs.tax_rate_latest is None and {y.tax_rate for y in inputs.capital_years} == {None}
 
     deciles = Deciles((-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3), (0.0,) * 9, 1, 1, 1)
     result = value_company(inputs, deciles, policy, TODAY)
-    assert result.refusal == "foreign filer: currency and share-unit handling not built yet"
+    assert result.refusal == "no statutory tax rate for RU 2015"
     assert result.phase.phase is not None
+
+
+def _sek_store(
+    store: Store, clients: Clients, clock: Clock, policy: Policy, **payloads: Any
+) -> sqlite3.Connection:
+    """ACME with its statements in SEK, and ``payloads`` in place of its fixtures, and the pair
+    USDSEK's closes fetched, as KRON's are in a full refresh: 7.8, 7.9, 8.1 and 8.2 at the four
+    trailing quarter ends, 10.52 at the quote's date, 2026-10-30."""
+    conn = store(**{**bodies(currency="SEK"), **payloads})
+    fetch_rates(conn, clients.fmp, ("SEK",), policy, clock(), clients.secrets)
+    return conn
+
+
+def _pair_history(router: Router, code: str) -> None:
+    """Serve the made-up USDSEK closes as the pair ``USD<code>``'s."""
+    fixture = FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json"
+    body = fixture.read_bytes().replace(b"USDSEK", f"USD{code}".encode())
+    router.symbol_bodies[("fx-history", f"USD{code}")] = body
+
+
+def test_a_company_in_another_currency_reads_its_rate_and_its_street_figures(
+    store: Store, clients: Clients, clock: Clock, policy: Policy
+) -> None:
+    """Spec 2026-11-10 7.2: the rate is the close at the price date, the street actuals come in at
+    their period ends' rates and GuruFocus's EPS at their mean; the differential is the inflation
+    table's, cited with its note; the price and the market cap stay the quote's, in USD."""
+    consensus = {"estimates-quarter": estimates_quarter()}  # four NTM quarters, as KRON's
+    inputs = build(_sek_store(store, clients, clock, policy, **consensus))
+    table = load_inflation_table()
+    assert inputs.refusal is None and inputs.currency == "SEK"
+    assert (inputs.fx_rate, inputs.fx_date, inputs.fx_stale) == (10.52, date(2026, 10, 30), False)
+    assert (inputs.price, inputs.market_cap) == (50.0, 5_000 * M)
+    assert inputs.street_ttm_eps == pytest.approx(
+        0.51 * 7.8 + 0.52 * 7.9 + 0.53 * 8.1 + 0.54 * 8.2  # 16.807
+    )
+    assert inputs.gf_eps_ttm == pytest.approx(6.11 * 8.0)
+    assert inputs.gf_eps_without_nri == pytest.approx(5.87 * 8.0)
+    assert inputs.inflation_differential == pytest.approx(table.differential("SEK"))
+    assert inputs.provenance["fx_rate"] == Provenance(
+        "FMP historical-price-eod/light USDSEK", date(2026, 10, 30), NOW, None
+    )
+    assert inputs.provenance["inflation_differential"] == Provenance(
+        table.source, date(2026, 11, 10), None, None
+    )
+    assert inputs.notes["inflation_differential"] == (
+        "SEK 2.120% against USD 2.120%, the IMF World Economic Outlook October 2026 means of 2027 "
+        "to 2031"
+    )
+    assert "currency-unknown" not in codes(inputs)
+    result = value_company(inputs, DECILES, policy, TODAY)
+    assert result.refusal is None and result.value is not None
+    assert result.intermediates["value_in_currency"] == pytest.approx(result.value * 10.52)
+
+
+def test_a_rate_older_than_the_bound_is_stale(
+    store: Store, clients: Clients, clock: Clock, policy: Policy
+) -> None:
+    """The quote of 2026-11-20 reads the newest close, 2026-11-05's, 15 days before it."""
+    quote = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    stamp = int(datetime(2026, 11, 20, 21, tzinfo=UTC).timestamp())
+    conn = _sek_store(store, clients, clock, policy, quote=[{**quote[0], "timestamp": stamp}])
+    inputs = build(conn)
+    assert (inputs.fx_rate, inputs.fx_date, inputs.fx_stale) == (10.6, date(2026, 11, 5), True)
+    assert inputs.price_date == date(2026, 11, 20)
+
+
+def test_a_period_end_with_no_rate_leaves_the_street_figures_unknown(
+    store: Store, clients: Clients, clock: Clock, router: Router, policy: Policy
+) -> None:
+    """A history that starts after the oldest trailing quarter's end: the street actuals and
+    GuruFocus's EPS have no rate there, so they are unknown, never a refusal."""
+    fixture = FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json"
+    rows = [r for r in json.loads(fixture.read_text()) if r["date"] >= "2026-01-01"]
+    router.symbol_bodies[("fx-history", "USDSEK")] = json.dumps(rows).encode()
+    inputs = build(_sek_store(store, clients, clock, policy))
+    assert inputs.refusal is None and inputs.fx_rate == 10.52
+    assert (inputs.street_ttm_eps, inputs.gf_eps_ttm, inputs.gf_eps_without_nri) == (
+        None,
+        None,
+        None,
+    )
+    assert "street_ttm_eps" not in inputs.provenance
+
+
+@pytest.mark.parametrize(
+    ("code", "history", "refusal"),
+    [
+        ("SEK", False, "no exchange rate for SEK"),
+        ("XXX", False, "no exchange rate for XXX"),  # the rate first, then the projection
+        ("XXX", True, "no inflation projection for XXX"),
+        ("ARS", True, "ARS: expected inflation 12.1% above the 10% bound"),
+    ],
+)
+def test_a_currency_the_method_cannot_price_is_refused(
+    store: Store,
+    clients: Clients,
+    clock: Clock,
+    router: Router,
+    policy: Policy,
+    code: str,
+    history: bool,
+    refusal: str,
+) -> None:
+    """Spec 2026-11-10 7.5: no rate on file, then no inflation projection, then a projection above
+    the bound, each refuses the row with its sentence after the statements' and the tax rate's."""
+    if history:
+        _pair_history(router, code)
+        conn = store(**bodies(currency=code))
+        fetch_rates(conn, clients.fmp, (code,), policy, clock(), clients.secrets)
+    else:
+        conn = store(**bodies(currency=code))
+    inputs = build(conn)
+    assert inputs.refusal == refusal
+    assert (inputs.fx_rate, inputs.fx_date) == (1.0, None)
+
+
+def test_no_statements_comes_before_an_unknown_currency(store: Store, router: Router) -> None:
+    """Without statements the universe row names no currency either: the statements' refusal is
+    the one given (spec 2026-11-10 7.5)."""
+    router.fail.add("income-annual")
+    conn = store(company=False)
+    add_company(conn, currency=None)
+    assert build(conn).refusal == "no financial statements"
 
 
 def test_provenance_dates(conn_with_company: sqlite3.Connection) -> None:
@@ -761,7 +929,9 @@ def test_market_values_fall_back(
     assert (inputs.price, inputs.price_date) == (None, None)
     assert inputs.market_cap == market_cap and inputs.provenance["market_cap"].source == source
     assert inputs.is_adr is True
-    assert inputs.currency == "unknown" and "currency-unknown" in codes(inputs)
+    # no currency from the statements or the universe row: the refusal, no note
+    assert inputs.currency == "unknown" and "currency-unknown" not in codes(inputs)
+    assert inputs.refusal == "reporting currency unknown"
     assert inputs.closes == () and "closes" not in inputs.provenance
     assert "price" not in inputs.provenance
 
@@ -867,9 +1037,10 @@ def test_a_direct_listing_has_no_ratio(store: Store, ratio: str | None) -> None:
     assert "basis-scaled" not in inputs.estimate_methods.values()
 
 
-def test_the_basis_refusal_comes_before_the_tax_refusal(store: Store) -> None:
+def test_the_tax_refusal_comes_before_the_basis_refusal(store: Store) -> None:
     """A quote at an eighth of the count (13 m against 104 m), which neither 10, 1 ÷ 10 nor 1
-    explains: refused for the basis, though the tax table also lacks a year."""
+    explains: refused for the basis; with a tax table that lacks a year, refused for the tax rate
+    first (spec 2026-11-10 7.5)."""
     conn = store(**bodies(), summary=_summary("10"), quote=_quote(13 * M))
     refusal = (
         "share basis unclear: the newest period's count 104.0 m against the quote's 13.0 m (the "
@@ -878,5 +1049,5 @@ def test_the_basis_refusal_comes_before_the_tax_refusal(store: Store) -> None:
     assert build(conn).refusal == refusal
     from_2017 = {("United States", y): 0.25 for y in range(2017, 2027)}
     late = TaxTable(from_2017, "t", {"US": "United States"})
-    assert build(conn, late).refusal == refusal
+    assert build(conn, late).refusal == "no statutory tax rate for US 2015"
     assert build(conn, late).shares_diluted == 104 * M

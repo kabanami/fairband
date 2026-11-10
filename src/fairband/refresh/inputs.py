@@ -17,22 +17,32 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
 - the street's trailing EPS: the sum of the four ``street-actual`` values whose periods are exactly
   the four trailing quarter ends, each read on the quote date's basis by the split rule; ``None``
   when one is missing or the trailing figures are a fiscal year, which leaves the SBC basis unknown
-  (``mech/1.2``);
+  (``mech/1.2``). FMP states them in USD: for a company in another currency each comes into it at
+  its period end's rate, and a period end with no rate leaves them unknown;
 - the price and its date from the ``quote``; the market cap from the quote, else the profile, else
   the universe row; ``is_adr`` from the profile, else the universe row;
 - the country, which picks the statutory tax rate: the ``country`` of the latest stored profile
   payload (the headquarters, spec 6.6), else the universe row's, else ``"unknown"``
   (``country_for``). The tax rate's note (``notes``) names the country, where it came from, and the
   rate's year and source;
-- the currency: the newest annual income statement's, else the universe row's, else ``"unknown"``
-  flagged ``currency-unknown``. The route reads every currency but USD as a foreign filer, so an
-  unknown one gets the foreign-filer refusal, which is the honest outcome;
-- the refusal: "no financial statements", else the listed-share basis's ("share basis unclear:
-  ..."), else the statements' missing tax rate, except for a foreign filer (an ADR, or a currency
-  other than USD), whose missing rates stay ``None`` so the route gives it the foreign-filer
-  refusal of spec 11 with its phase;
+- the currency: the newest annual income statement's, else the universe row's, else ``"unknown"``.
+  For a currency other than USD (spec 2026-11-10 7): the rate, the close of the pair ``USD<code>``
+  at the price date (``rates.rates_for``, at today without a price), stale when that close is more
+  than ``fx_stale_days`` before it, cited as ``fx_rate`` (the source names the pair, ``as_of`` the
+  close's date); and the inflation differential of the inflation table (``policy.inflation``),
+  cited as ``inflation_differential`` (the table's source, as of its retrieval date) with a note
+  naming both means, "TWD 1.600% against USD 2.120%, the IMF World Economic Outlook October 2026
+  means of 2027 to 2031". A USD row has the rate 1, no rate date and d 0, cited nowhere;
+- the refusal, the first that applies (spec 2026-11-10 7.5): "no financial statements"; the
+  statements' missing tax rate, for every company; "reporting currency unknown"; "no exchange rate
+  for <code>" without a usable history of the pair or without a close at or before the price
+  date; "no inflation projection for <code>" for a currency the table lacks; "<code>: expected
+  inflation <π>% above the <bound>% bound" for one whose mean projection is above
+  ``inflation_max``; the listed-share basis's ("share basis unclear: ...");
 - the GuruFocus moat score and EPS, the next earnings date (``None`` when before ``today``) and the
-  closes of the latest price-history payload (none when it is absent or does not parse);
+  closes of the latest price-history payload (none when it is absent or does not parse).
+  GuruFocus states its EPS in USD: for a company in another currency both come into it at the
+  mean of the trailing periods' period-end rates, unknown when one has none;
 - the debt, short-term plus long-term debt, and the cash, cash and equivalents plus short-term
   investments, from the newest annual balance sheet: a line it does not present counts as nil and
   is named in the input's note (``"longTermDebt not presented"``), and with both lines missing the
@@ -57,13 +67,16 @@ dataset name is a programming error and raises ``ValueError``.
 import json
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass, field
 from datetime import date
+from functools import cache
 
 from fairband.engine.anchor import SAME_PERIOD_DAYS, AnnualEstimate, QuarterEstimate
 from fairband.engine.classifier import Deciles
 from fairband.engine.route import CompanyInputs
-from fairband.engine.types import Flag, Provenance
+from fairband.engine.types import Provenance
 from fairband.policy import Policy
+from fairband.policy.inflation import InflationTable, load_inflation_table
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs_splits import SplitFigures, apply_splits, splits_for
 from fairband.refresh.inputs_statements import (
@@ -78,6 +91,7 @@ from fairband.refresh.inputs_statements import (
     statements_for,
 )
 from fairband.refresh.peers import peer_figures
+from fairband.refresh.rates import NO_RATE, FxSeries, Rate, rates_for
 from fairband.store.companies import CompanyRow, latest_company
 from fairband.store.observations import ObservationRow, observations_for
 from fairband.store.vendor import latest_response, response_payload
@@ -102,15 +116,12 @@ _QUOTE, _PROFILE, _SCREENER = "FMP quote", PROFILE_SOURCE, SCREENER_SOURCE
 _ESTIMATES, _EARNINGS = "FMP analyst-estimates", "FMP earnings"
 _CLOSES = "FMP historical-price-eod/full"
 _SUMMARY, _KEYRATIOS = "GuruFocus summary", "GuruFocus keyratios"
-_UNKNOWN_CURRENCY = Flag(
-    "currency-unknown",
-    "Currency unknown",
-    "Neither the statements nor the universe row give the reporting currency, so the company is "
-    "treated as a foreign filer.",
-)
+_FX_HISTORY = "FMP historical-price-eod/light"
+_CURRENCY_UNKNOWN = "reporting currency unknown"
 
 type _Cited[T] = tuple[T, Provenance | None]
 type _Closes = tuple[tuple[date, float], ...]
+type _Actuals = tuple[tuple[date, float], ...]  # the street actual at each trailing period end
 
 
 def build_inputs(
@@ -120,9 +131,13 @@ def build_inputs(
     tax: TaxTable,
     today: date,
     deciles: Deciles | None = None,
+    *,
+    inflation: InflationTable | None = None,
 ) -> CompanyInputs:
     """Everything the engine reads for ``symbol``, from the store; ``deciles`` classify its peers,
-    and without them it has none. Only the peers read the policy, for the industry fallback."""
+    and without them it has none. The policy gives the peers' industry fallback, the split rule's
+    tolerance and the currency's bounds; ``inflation`` is the inflation table, the packaged one
+    unless given."""
     company = latest_company(conn, symbol)
     country, origin = country_for(conn, symbol, company)
     stated = statements_for(conn, symbol, country, tax, today)
@@ -143,20 +158,24 @@ def build_inputs(
     price = _field(quote, "price")
     calendar = stated.calendar
     currency = stated.currency or (None if company is None else company.currency)
-    flags = stated.flags if currency is not None else (*stated.flags, _UNKNOWN_CURRENCY)
+    day = price.as_of if price is not None and price.as_of is not None else today
+    money = _currency(conn, currency, day, inflation or _packaged_inflation(), policy)
+    provenance.update(money.provenance)
+    flags = stated.flags
     is_adr = _is_adr(profile, company)
-    foreign = is_adr or currency != "USD"
     quarters = cite("estimates_quarter", _quarter_estimates(read("estimate-quarter"), calendar))
     annual = cite("estimates_annual", _annual_estimates(read("estimate-annual"), calendar))
-    actuals = cite("street_ttm_eps", _street_actuals(read("street-actual"), stated))
+    street = _street_actuals(read("street-actual"), stated)
+    actuals = cite("street_ttm_eps", money.actuals(street, policy))
     scores = read("gf-score")
     moat = cite("moat_score", _value(_field(scores, "moat_score"), _SUMMARY))
     adr_ratio = cite("adr_ratio", _adr_ratio(scores))
     ttm_row, clean_row = _field(ratios, "eps_ttm"), _field(ratios, "eps_without_nri")
-    eps_ttm = cite("gf_eps_ttm", _value(ttm_row, _KEYRATIOS))
-    eps_clean = cite("gf_eps_without_nri", _value(clean_row, _KEYRATIOS))
+    ends = [period.end for period in stated.trailing_periods]
+    eps_ttm = cite("gf_eps_ttm", money.mean(_value(ttm_row, _KEYRATIOS), ends, policy))
+    eps_clean = cite("gf_eps_without_nri", money.mean(_value(clean_row, _KEYRATIOS), ends, policy))
     sums = balance_sums(balance_lines(conn, symbol))
-    notes = _tax_note(country, origin, stated)
+    notes = _tax_note(country, origin, stated) | money.notes
     notes.update({name: note for name, (_, note) in sums.items() if note is not None})
     peers = peer_figures(conn, symbol, deciles, policy, tax, today)
     read_figures = SplitFigures(
@@ -209,7 +228,7 @@ def build_inputs(
         data_date=stated.data_date,
         provenance=provenance,
         input_flags=flags,
-        refusal=stated.refusal or split.refusal or (None if foreign else stated.tax_refusal),
+        refusal=stated.refusal or stated.tax_refusal or money.refusal or split.refusal,
         estimate_methods={**stated.estimate_methods, **split.estimate_methods},
         notes=notes,
         peers=peers.figures,
@@ -218,6 +237,100 @@ def build_inputs(
         cash=sums["cash"][0],
         balance_years=stated.balance_years,
         adr_ratio=adr_ratio,
+        fx_rate=1.0 if money.rate is None else money.rate.rate,
+        fx_date=None if money.rate is None else money.rate.date,
+        inflation_differential=money.differential,
+        fx_stale=money.rate is not None and money.rate.stale,
+    )
+
+
+@dataclass(frozen=True)
+class _Money:
+    """The reporting currency as assembly reads it: its pair's series and the rate at the price
+    date (``None`` for USD, which needs none, and for a currency refused), its inflation
+    differential, the refusal when the method cannot price it, and the provenance and the notes of
+    the rate and the differential."""
+
+    currency: str | None
+    series: FxSeries | None = None
+    rate: Rate | None = None
+    differential: float = 0.0
+    refusal: str | None = None
+    provenance: dict[str, Provenance] = field(default_factory=dict)
+    notes: dict[str, str] = field(default_factory=dict)
+
+    def actuals(self, found: _Cited[_Actuals], policy: Policy) -> _Cited[_Actuals]:
+        """The street actuals, each at its period end's rate in the currency; none when a period
+        end has no rate. USD's as found."""
+        values, source = found
+        if self.currency == "USD" or not values:
+            return found
+        moved = []
+        for end, eps in values:
+            rate = self._at(end, policy)
+            if rate is None:
+                return (), None
+            moved.append((end, eps * rate))
+        return tuple(moved), source
+
+    def mean(
+        self, found: _Cited[float | None], ends: Sequence[date], policy: Policy
+    ) -> _Cited[float | None]:
+        """GuruFocus's EPS at the mean of the period ends' rates in the currency; unknown when
+        one has none. USD's as found."""
+        value, source = found
+        if self.currency == "USD" or value is None:
+            return found
+        rate = None if self.series is None else self.series.mean_at(ends, policy.fx_stale_days)
+        return (None, None) if rate is None else (value * rate.rate, source)
+
+    def _at(self, day: date, policy: Policy) -> float | None:
+        rate = None if self.series is None else self.series.at(day, policy.fx_stale_days)
+        return None if rate is None else rate.rate
+
+
+@cache
+def _packaged_inflation() -> InflationTable:
+    return load_inflation_table()
+
+
+def _currency(
+    conn: sqlite3.Connection,
+    currency: str | None,
+    day: date,
+    table: InflationTable,
+    policy: Policy,
+) -> _Money:
+    """The reporting ``currency`` at ``day``, the price date: its rate and differential, cited, or
+    the refusal (the module docstring)."""
+    if currency is None:
+        return _Money(None, refusal=_CURRENCY_UNKNOWN)
+    if currency == "USD":
+        return _Money(currency)
+    series = rates_for(conn, currency)
+    rate = None if series is None else series.at(day, policy.fx_stale_days)
+    if series is None or rate is None:
+        return _Money(currency, refusal=NO_RATE.format(code=currency))
+    found, differential = table.rate_for(currency), table.differential(currency)
+    usd = table.rate_for("USD")
+    if found is None or differential is None or usd is None:
+        return _Money(currency, series, refusal=f"no inflation projection for {currency}")
+    bound = policy.inflation_max
+    if found.mean > bound:
+        refusal = f"{currency}: expected inflation {found.mean:.1%} above the {bound:.0%} bound"
+        return _Money(currency, series, refusal=refusal)
+    note = (
+        f"{currency} {found.mean:.3%} against USD {usd.mean:.3%}, the IMF World Economic Outlook "
+        f"{table.vintage} means of {found.years[0]} to {found.years[-1]}"
+    )
+    provenance = {
+        "fx_rate": Provenance(f"{_FX_HISTORY} USD{currency}", rate.date, rate.observed_at, None),
+        "inflation_differential": Provenance(
+            table.source, date.fromisoformat(table.retrieved), None, None
+        ),
+    }
+    return _Money(
+        currency, series, rate, differential, None, provenance, {"inflation_differential": note}
     )
 
 

@@ -38,7 +38,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, FiniteFloat
 from pydantic.alias_generators import to_camel
 
-from fairband.engine.overrides import OverrideTag, check_input
+from fairband.engine.overrides import OverrideTag, check_input, money_of
 from fairband.engine.sensitivity import axes_refusal, sensitivity_grid
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
@@ -173,13 +173,16 @@ def _refusal(
     phases: Sequence[float | str | None] = next(
         (values for tag, values in axes if tag == "phase"), [None]
     )
+    rate, currency = money_of(snapshot.result)  # a money range in the row's currency
     for tag, values in axes:
         for value in values:
             for phase in [value] if tag == "phase" else phases:
                 route = judged_route(tag, applied, snapshot, phase)
                 if isinstance(route, tuple):  # an unclassified row: the refusal's sentence
                     return route[1]
-                state, message = check_input(tag, value, route, policy)
+                state, message = check_input(
+                    tag, value, route, policy, fx_rate=rate, currency=currency
+                )
                 if state != "applied":
                     return message
     return None

@@ -155,13 +155,14 @@ def _store_statements(conn: sqlite3.Connection) -> None:
 
 
 def _store_more_companies(conn: sqlite3.Connection, policy: Policy) -> None:
-    """FRGN refused as a foreign filer, ADRX valued while its universe row is an ADR, NOSH
-    refused for its share count."""
+    """FRGN refused as a foreign filer, as a snapshot valued before method 1.1 is (the engine
+    gives the refusal no longer: assembly hands it here), ADRX valued while its universe row is an
+    ADR, NOSH refused for its share count."""
     refresh = latest_refresh(conn)
     assert refresh is not None
     golden = mature_growth_inputs()
     companies = {
-        "FRGN": replace(golden, symbol="FRGN", currency="EUR"),
+        "FRGN": replace(golden, symbol="FRGN", currency="EUR", refusal=FOREIGN),
         "ADRX": replace(golden, symbol="ADRX"),
         "NOSH": replace(golden, symbol="NOSH", shares_diluted=None),
     }

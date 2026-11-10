@@ -170,6 +170,7 @@ from fairband.engine.route_steps import (
     from_capital,
     income,
     millions,
+    money,
     multiples_at,
     nil,
     nri_gap,
@@ -239,7 +240,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     if ntm <= 0:
         return Refused("no positive consensus revenue")
     base_year = base_fiscal_year(quarters)
-    sales = sales_class(t.revenue / 1e6, policy)
+    sales = sales_class(t.revenue / i.fx_rate / 1e6, policy)  # the class bounds are USD
     path, analysts, path_flags = revenue_path_for(
         t.revenue, ntm, i.annual_estimates, base_year, sales, policy, judged=judged_steps(c)
     )
@@ -345,7 +346,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         sbc
         + path_and_capital
         + ((TAX_LOSS,) if start < 0 or any(x < 0 for x in v.ebit) else ())
-        + present(_ramp_in_dollars(margin, v.revenue, path.revenue0))
+        + present(_ramp_in_dollars(margin, v.revenue, path.revenue0, i.currency))
         + present(_return_above_peers(new_capital, peer_roic))
         + ((_FAILURE,) if young else ())
         + trailing_flags(i, t, gap, policy)
@@ -360,7 +361,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     inputs = (
         *common_inputs(i, t, roic),
         # the consensus as found: an agent's guided NTM revenue is its JUDGMENT entry
-        data(i, "ntm_revenue", found, "USD", "estimates_quarter"),
+        data(i, "ntm_revenue", found, money(i), "estimates_quarter"),
         step_input(c, "path_step_2", path.steps[0], held[0]),
         step_input(c, "path_step_3", path.steps[1], held[1]),
         from_peers(
@@ -370,8 +371,8 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
             f"the median ten-year operating margin of {target.count} mature peers{of_industry}",
         ),
         *_sales_to_capital_input(c, s2c),
-        data(i, "debt", i.debt, "USD", "statements"),
-        data(i, "cash", i.cash, "USD", "statements"),
+        data(i, "debt", i.debt, money(i), "statements"),
+        data(i, "cash", i.cash, money(i), "statements"),
         *common_rules(policy, moat, terminal),
         rule(policy, "high_growth_years", policy.high_growth_years, "years"),
         _cap_input(policy, sales, capped, judged_hold),
@@ -634,10 +635,11 @@ def _at_margin(
 
 
 def _ramp_in_dollars(
-    margin: MarginPath, revenue: tuple[float, ...], revenue0: float
+    margin: MarginPath, revenue: tuple[float, ...], revenue0: float, currency: str
 ) -> Flag | None:
     """``margin-ramp-in-dollars`` on the dollar ramp, naming the trailing margin, the trailing
-    operating income and the target's share of revenue the ramp reaches in the convergence year."""
+    operating income and the target's share of revenue the ramp reaches in the convergence year,
+    in ``currency``."""
     if not margin.in_dollars:
         return None
     e0, end = ramp_ends(revenue, margin, revenue0)
@@ -645,7 +647,8 @@ def _ramp_in_dollars(
         "margin-ramp-in-dollars",
         "Ramp in dollars",
         f"The trailing loss is larger than revenue (margin {signed(margin.start)}), so operating "
-        f"income moves in dollars from {millions(e0)} to the target margin's {millions(end)} "
+        f"income moves in dollars from {millions(e0, currency)} to the target margin's "
+        f"{millions(end, currency)} "
         f"by year {margin.convergence_year}, as the Start-up ramp does.",
     )
 

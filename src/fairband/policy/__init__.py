@@ -24,12 +24,19 @@ count's; either value outside 0 to 0.5 fails at load. Nor are the three values v
 excluded, and the stale-rate bound and the rate history depth (``refresh.fx_history_years``),
 which fail below 1. The inflation table they work beside is a packaged table of its own
 (``fairband.policy.inflation``), as the tax table is.
+
+``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
+four nominal USD rates, the required return, the terminal growth, the inflation addition and each
+Base Rate Book class's ``sales_p90_5y``, by the currency's inflation differential d, each
+(1 + rate) × (1 + d) − 1; every rate derived from them (the Wide moat's terminal return cap)
+follows. The flag thresholds and the margin bounds are not restated, and the version, the hash
+and the settings hash stay: the restated policy is the same policy read in another currency.
 """
 
 import hashlib
 import tomllib
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import resources
 from itertools import pairwise
 from pathlib import Path
@@ -166,6 +173,26 @@ class Policy:
     def wide_terminal_roic_cap(self) -> float:
         """The Wide moat's terminal return cap: r + the spread."""
         return self.required_return + self.wide_terminal_roic_spread
+
+
+def in_currency(policy: Policy, differential: float) -> Policy:
+    """``policy`` restated into a currency whose inflation differential against USD is
+    ``differential`` (the module docstring); a differential of 0 gives ``policy`` itself."""
+    if differential == 0:
+        return policy
+
+    def restated(rate: float) -> float:
+        return (1 + rate) * (1 + differential) - 1
+
+    return replace(
+        policy,
+        required_return=restated(policy.required_return),
+        terminal_growth=restated(policy.terminal_growth),
+        inflation_addition=restated(policy.inflation_addition),
+        base_rates=tuple(
+            replace(c, sales_p90_5y=restated(c.sales_p90_5y)) for c in policy.base_rates
+        ),
+    )
 
 
 def load_policy(path: Path | None = None) -> Policy:

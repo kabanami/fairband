@@ -3,9 +3,11 @@ the figures that frame the price: the revenue in year 10 the price needs at the 
 margin, the net cash a share as a floor, and the years the cash covers the trailing burn.
 
 Which rows. A company the classifier puts in Start-up (revenue zero now or three years ago), past
-the guards ``route.value_company`` runs before it: no universe deciles, the assembly's refusal, a
-foreign filer, no price, no positive diluted share count. "No trailing figures" does not refuse: a
-pre-revenue company may lack them, and the route reads what exists. ``value_start_up`` always
+the guards ``route.value_company`` runs before it: no universe deciles, the assembly's refusal, no
+price, no positive diluted share count. "No trailing figures" does not refuse: a pre-revenue
+company may lack them, and the route reads what exists. A company in another currency reads its
+market cap in that currency and the policy's rates restated into it (``route`` module docstring),
+so the requirement, the cash floor and the burn are in the currency. ``value_start_up`` always
 returns the refusal "Start-up: no value by design" with its figures; what it cannot compute
 carries its own reason inside the intermediates.
 
@@ -85,6 +87,7 @@ from fairband.engine.route_steps import (
     StartUpContext,
     chosen,
     data,
+    money,
     nil,
     present,
     rule,
@@ -306,8 +309,8 @@ def _inputs(
         ()
         if t is None
         else (
-            data(i, "revenue_ttm", t.revenue, "USD", "statements"),
-            data(i, "operating_income_ttm", t.operating_income, "USD", "statements"),
+            data(i, "revenue_ttm", t.revenue, money(i), "statements"),
+            data(i, "operating_income_ttm", t.operating_income, money(i), "statements"),
         )
     )
     fiscal_income = (
@@ -318,7 +321,7 @@ def _inputs(
                 i,
                 "operating_income_fy",
                 fiscal.operating_income,
-                "USD",
+                money(i),
                 "statements",
                 f"fiscal {fiscal.year}: the trailing operating income is missing",
             ),
@@ -328,8 +331,8 @@ def _inputs(
         ()
         if t is None
         else (
-            data(i, "cfo_ttm", t.cfo, "USD", "statements"),
-            data(i, "capex_ttm", t.capex, "USD", "statements"),
+            data(i, "cfo_ttm", t.cfo, money(i), "statements"),
+            data(i, "capex_ttm", t.capex, money(i), "statements"),
         )
     )
     peers = (
@@ -349,15 +352,15 @@ def _inputs(
         else (from_peers(c, "sales_to_capital", s2c, f"{median}; a Start-up reads no own measure"),)
     )
     return (
-        data(i, "market_cap", i.market_cap, "USD"),
+        data(i, "market_cap", i.market_cap, money(i)),
         *trailing,
         *fiscal_income,
         *flows,
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),
         data(i, "moat_score", i.moat_score, "score"),
         *peers,
-        data(i, "debt", i.debt, "USD", "statements"),
-        data(i, "cash", i.cash, "USD", "statements"),
+        data(i, "debt", i.debt, money(i), "statements"),
+        data(i, "cash", i.cash, money(i), "statements"),
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "terminal_growth", policy.terminal_growth, "ratio"),
         rule(policy, "moat_class", None, "class", moat),

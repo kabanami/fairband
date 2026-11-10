@@ -79,6 +79,7 @@ from fairband.engine.route_steps import (
     eps,
     expected,
     income,
+    money,
     multiples_at,
     nil,
     nri_gap,
@@ -165,7 +166,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     im |= stable_at_price(im, c.price, value + outside, policy)
     inputs = (
         *common_inputs(i, t, roic),
-        data(i, "net_income_ttm", t.net_income, "USD", "statements"),
+        data(i, "net_income_ttm", t.net_income, money(i), "statements"),
         *common_rules(policy, moat, roic.terminal),
         rule(policy, "runway_years", runway, "years", f"{moat} moat"),
         rule(

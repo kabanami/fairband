@@ -368,10 +368,12 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
         "ncav-floor",
         "margin-ramp-in-dollars",
         "revenue-gap",
+        "fx-stale",
     ):
         assert f'<code class="fb-tag figure-sm">{code}</code>' in notes, code
     outside = html.replace(flags, "")
     assert "<code" not in outside
+    assert "currency-unknown" not in chips  # method 1.1 refuses an unknown currency instead
 
 
 def test_examples_open_today_s_row() -> None:

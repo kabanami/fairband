@@ -841,9 +841,6 @@ than three.</span></li>
 positive.</span></li>
 <li><span class="label">Currency change</span> <code class="fb-tag figure-sm">currency-change</code>
 <span class="body app-flags__what">The reporting currency changed between fiscal years.</span></li>
-<li><span class="label">Currency unknown</span> <code class="fb-tag figure-sm">currency-unknown</code>
-<span class="body app-flags__what">No statement gives the reporting currency, so the company is
-treated as a foreign filer.</span></li>
 <li><span class="label">Tax rate carried forward</span> <code class="fb-tag figure-sm">tax-carried-forward</code>
 <span class="body app-flags__what">A fiscal year newer than the tax table takes the table's newest
 rate.</span></li>
@@ -851,8 +848,8 @@ rate.</span></li>
 <span class="body app-flags__what">A balance sheet from before the current lease rules shows no
 lease assets.</span></li>
 <li><span class="label">Trailing on fiscal year</span> <code class="fb-tag figure-sm">trailing-on-fiscal-year</code>
-<span class="body app-flags__what">The last four quarters on file do not follow each other, so the
-last fiscal year stands in.</span></li>
+<span class="body app-flags__what">The last four quarters do not follow each other, or one is in
+another currency, so the fiscal year stands in.</span></li>
 <li><span class="label">SBC basis unknown</span> <code class="fb-tag figure-sm">sbc-basis-unknown</code>
 <span class="body app-flags__what">Fairband could not tell whether the consensus counts stock
 compensation as a cost.</span></li>
@@ -926,6 +923,9 @@ so the share count and per-share figures read on the new basis.</span></li>
 <li><span class="label">Share basis scaled</span> <code class="fb-tag figure-sm">basis-scaled</code>
 <span class="body app-flags__what">A depositary receipt's share count was off by its ratio on some
 periods, so those read on the quote's basis.</span></li>
+<li><span class="label">Rate stale</span> <code class="fb-tag figure-sm">fx-stale</code>
+<span class="body app-flags__what">The exchange rate of a company in another currency is older
+than the stale-rate bound allows.</span></li>
 <li><span class="label">Long runway, high growth</span> <code class="fb-tag figure-sm">long-runway-high-growth</code>
 <span class="body app-flags__what">A runway of <span data-policy="runway_years.Wide">—</span>
 carries a belief or implied growth of <span data-policy="long_runway_growth_flag">—</span> or

@@ -29,6 +29,7 @@ from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh
 from fairband.store.reviews import insert_review
+from fairband.store.secondary import FOREIGN_FILER
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -644,7 +645,8 @@ def _aal_review(
 @pytest.mark.parametrize(
     ("symbol", "changes", "why"),
     [
-        ("FRGN", {"currency": "EUR"}, "foreign filer"),
+        # a snapshot refused as a foreign filer before method 1.1, as one on file may be
+        ("FRGN", {"currency": "EUR", "refusal": FOREIGN_FILER}, "foreign filer"),
         ("NOSH", {"shares_diluted": None}, "no diluted share count"),
         ("PLAIN", {}, "the route values the company"),
     ],

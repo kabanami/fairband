@@ -1287,12 +1287,17 @@ def test_no_deciles_outranks_an_assembly_refusal(mg_inputs: CompanyInputs, polic
     assert r.flags == (flag("x"),) and r.price == 150.0
 
 
-def test_refuses_foreign_filer(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
-    reason = "foreign filer: currency and share-unit handling not built yet"
-    for inputs in (replace(mg_inputs, currency="EUR"), replace(mg_inputs, is_adr=True)):
-        r = value_company(inputs, deciles, policy, TODAY)
-        assert_refused(r, reason)
-        assert r.phase.phase == "Mature Growth"
+def test_an_adr_or_another_currency_is_no_ground_for_refusal(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Method 1.1 (spec 2026-11-10 7.5): the ADR flag refuses nothing, and a row in another
+    currency at a rate takes its route in that currency; the currency's refusals are assembly's
+    (``test_currency.py``)."""
+    usd = value_company(mg_inputs, deciles, policy, TODAY)
+    adr = value_company(replace(mg_inputs, is_adr=True), deciles, policy, TODAY)
+    assert adr.refusal is None and adr.value == usd.value
+    sek = value_company(engine_companies.in_sek(mg_inputs), deciles, policy, TODAY)
+    assert sek.refusal is None and sek.route == "mature-growth" and sek.value is not None
 
 
 def test_an_adr_s_results_carry_its_ratio(
@@ -1348,13 +1353,14 @@ def test_refusals_carry_the_price_facts(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     facts = asdict(price_facts(mg_inputs.closes, TODAY))
+    refused = replace(mg_inputs, refusal="no statutory tax rate for unknown 2015")
     for r in (
-        value_company(replace(mg_inputs, currency="EUR"), deciles, policy, TODAY),
+        value_company(refused, deciles, policy, TODAY),
         value_company(mg_inputs, None, policy, TODAY),
     ):
         assert r.value is None and r.intermediates == {"price_facts": facts}
     # a row with no price has no price facts
-    r = value_company(replace(mg_inputs, price=None, currency="EUR"), deciles, policy, TODAY)
+    r = value_company(replace(mg_inputs, price=None), deciles, policy, TODAY)
     assert r.intermediates == {"price_facts": None}
 
 

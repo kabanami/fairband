@@ -73,6 +73,24 @@ from fairband.store.snapshots import snapshot_row
 
 GLOSSARY: dict[str, str] = {
     "Value at belief": "The value a share at the growth belief; the one price target",
+    "ADS": (
+        "An American depositary share: the unit an ADR's quote prices, a number of ordinary "
+        "shares, its ADR ratio; FMP states an ADR's count, EPS and consensus per ADS, and every "
+        "per-share figure of an ADR is per ADS (section 7)"
+    ),
+    "Reporting currency": (
+        "The currency of the newest annual income statement, else the universe row's; the "
+        "currency the route values a company in (section 7)"
+    ),
+    "Pair": (
+        "The FMP forex symbol `USD<code>`, whose close is the currency's units per USD: the rate "
+        "a figure comes into the currency at (×) and goes back to USD at (÷) (section 7)"
+    ),
+    "Inflation differential": (
+        "d = (1 + π_currency) ÷ (1 + π_USD) − 1, π the mean of the IMF projections in the "
+        "inflation table; it restates a nominal USD rate in the currency as (1 + rate) × (1 + d) "
+        "− 1 (section 7)"
+    ),
     "Belief": (
         "The growth rate for years 4 to N before the fade: the base-rate median plus 2 points"
     ),

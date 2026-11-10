@@ -50,7 +50,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Literal
 
-from fairband.engine.route import FOREIGN_FILER
 from fairband.engine.secondary import (
     SECONDARY_METHOD,
     Form,
@@ -74,6 +73,10 @@ BalanceSource = Literal["statements", "agent", "none"]
 # What a grid's rows hold, by form: the terminal growths; on the parts form the shift applied to
 # every part's terminal growth, since the parts' growths differ.
 GRID_ROWS: dict[Form, Literal["growths", "shifts"]] = {"drivers": "growths", "parts": "shifts"}
+
+# The refusal the engine gave a foreign filer before method 1.1 (spec 2026-11-10 7.5), which the
+# snapshots valued before still carry.
+FOREIGN_FILER = "foreign filer: currency and share-unit handling not built yet"
 
 
 @dataclass(frozen=True)

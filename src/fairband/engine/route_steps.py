@@ -37,7 +37,15 @@ from fairband.engine.anchor import TrailingFigures
 from fairband.engine.flags import basis_unknown_flag, gate_flags, margin_flag, nri_flag
 from fairband.engine.mature_growth import Charge
 from fairband.engine.multiples import multiples
-from fairband.engine.overrides import BRIDGE_ORDER, INPUT_OF, TAGS, Override, Overrides, OverrideTag
+from fairband.engine.overrides import (
+    BRIDGE_ORDER,
+    INPUT_OF,
+    TAGS,
+    Override,
+    Overrides,
+    OverrideTag,
+    unit_in,
+)
 from fairband.engine.price_facts import price_facts
 from fairband.engine.returns import expected_return
 from fairband.engine.roic import (
@@ -220,15 +228,16 @@ def chosen[T](c: Context | StartUpContext, tag: OverrideTag, computed: T) -> T:
     return computed if found is None else cast(T, found.value)
 
 
-def judgment_inputs(overrides: Overrides) -> tuple[TaggedInput, ...]:
+def judgment_inputs(overrides: Overrides, currency: str = "USD") -> tuple[TaggedInput, ...]:
     """The JUDGMENT entries of the overrides, in the bridge's order: each named by its tag, its
-    number as the value (``None`` for a word, which leads the note), the input's unit, and the
-    override's provenance: the source "override <id>, <principal> <actor>", entered at the
-    override's time, the reason as the note."""
-    return tuple(_judgment(overrides[tag]) for tag in BRIDGE_ORDER if tag in overrides)
+    number as the value (``None`` for a word, which leads the note), the input's unit in the
+    row's ``currency`` (``overrides.unit_in``), and the override's provenance: the source
+    "override <id>, <principal> <actor>", entered at the override's time, the reason as the
+    note."""
+    return tuple(_judgment(overrides[tag], currency) for tag in BRIDGE_ORDER if tag in overrides)
 
 
-def _judgment(o: Override) -> TaggedInput:
+def _judgment(o: Override, currency: str) -> TaggedInput:
     """The override's entry; its source names the override, the principal and the actor, "override
     1, agent claude-opus-5-5", or the principal alone without an actor, "override 1, owner"."""
     record = "override" if o.id is None else f"override {o.id}"
@@ -240,19 +249,21 @@ def _judgment(o: Override) -> TaggedInput:
         note = f"{o.value}: {o.reason}"
     else:
         value = o.value
-    return TaggedInput(
-        o.tag, value, TAGS[o.tag].unit, "JUDGMENT", "judgment", provenance, note=note
-    )
+    unit = unit_in(TAGS[o.tag].unit, currency)
+    return TaggedInput(o.tag, value, unit, "JUDGMENT", "judgment", provenance, note=note)
 
 
-def judged_inputs(inputs: tuple[TaggedInput, ...], overrides: Overrides) -> tuple[TaggedInput, ...]:
+def judged_inputs(
+    inputs: tuple[TaggedInput, ...], overrides: Overrides, currency: str = "USD"
+) -> tuple[TaggedInput, ...]:
     """``inputs`` with the JUDGMENT entries of ``overrides`` in place of the route's own entries
-    for the inputs they set (``overrides.INPUT_OF``), last."""
+    for the inputs they set (``overrides.INPUT_OF``), last, their units in the row's
+    ``currency``."""
     if not overrides:
         return inputs
     replaced = {INPUT_OF[tag] for tag in overrides if tag in INPUT_OF}
     kept = tuple(x for x in inputs if x.name not in replaced)
-    return kept + judgment_inputs(overrides)
+    return kept + judgment_inputs(overrides, currency)
 
 
 def nri_gap(i: CompanyInputs) -> float | None:
@@ -368,7 +379,7 @@ def trailing_flags(
     basis: Flag | None = None
     if roic is not None:
         gates = tuple(_heavy_capex(f, roic) if f.code == "heavy-capex" else f for f in gates)
-        basis = basis_unknown_flag(nri, gap, t.eps_diluted)
+        basis = basis_unknown_flag(nri, gap, t.eps_diluted, i.currency)
     return (
         present(margin_flag(i.series, ttm_margin(t), policy))
         + gates
@@ -410,22 +421,33 @@ def _heavy_capex(flag: Flag, roic: RoicTerms) -> Flag:
 
 
 def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tuple[TaggedInput, ...]:
-    """The DATA inputs every route reads, beyond the ones every result carries."""
+    """The DATA inputs every route reads, beyond the ones every result carries; the market cap is
+    the one the route read, in the reporting currency."""
     return (
-        data(i, "market_cap", i.market_cap, "USD"),
-        data(i, "revenue_ttm", t.revenue, "USD", "statements"),
-        data(i, "operating_income_ttm", t.operating_income, "USD", "statements"),
-        data(i, "eps_ttm", t.eps_diluted, "USD a share", "statements"),
-        data(i, "dividends_ttm", t.dividends, "USD", "statements"),
-        data(i, "buybacks_ttm", t.buybacks, "USD", "statements"),
-        data(i, "equity_issued_ttm", t.equity_issued, "USD", "statements"),
+        data(i, "market_cap", i.market_cap, money(i)),
+        data(i, "revenue_ttm", t.revenue, money(i), "statements"),
+        data(i, "operating_income_ttm", t.operating_income, money(i), "statements"),
+        data(i, "eps_ttm", t.eps_diluted, per_share(i), "statements"),
+        data(i, "dividends_ttm", t.dividends, money(i), "statements"),
+        data(i, "buybacks_ttm", t.buybacks, money(i), "statements"),
+        data(i, "equity_issued_ttm", t.equity_issued, money(i), "statements"),
         from_capital(i, "aggregate_roic", roic.result.aggregate),
         from_capital(i, "runway_return", roic.runway, runway_note(roic.runway_return)),
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),  # the newest ROIC year's rate
         data(i, "moat_score", i.moat_score, "score"),
-        data(i, "gf_eps_ttm", i.gf_eps_ttm, "USD a share"),
-        data(i, "gf_eps_without_nri", i.gf_eps_without_nri, "USD a share"),
+        data(i, "gf_eps_ttm", i.gf_eps_ttm, per_share(i)),
+        data(i, "gf_eps_without_nri", i.gf_eps_without_nri, per_share(i)),
     )
+
+
+def money(i: CompanyInputs) -> str:
+    """The unit of a money total of ``i``: its reporting currency's code, ``USD`` or ``TWD``."""
+    return i.currency
+
+
+def per_share(i: CompanyInputs) -> str:
+    """The unit of a figure a share of ``i``: ``USD a share``, ``TWD a share``."""
+    return f"{i.currency} a share"
 
 
 def from_capital(
@@ -496,6 +518,8 @@ def signed(x: float) -> str:
     return f"{x:,.1%}".replace("-", "−")
 
 
-def millions(x: float) -> str:
-    """A dollar figure in millions to one decimal, a negative one with the minus sign."""
-    return f"{'−' if x < 0 else ''}${abs(x) / 1e6:,.1f} million"
+def millions(x: float, currency: str = "USD") -> str:
+    """A money figure in millions to one decimal, a negative one with the minus sign: a dollar
+    figure after ``$``, one in another currency after its code (``SEK 1,234.5 million``)."""
+    sign = "$" if currency == "USD" else f"{currency} "
+    return f"{'−' if x < 0 else ''}{sign}{abs(x) / 1e6:,.1f} million"

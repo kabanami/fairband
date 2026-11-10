@@ -145,17 +145,19 @@ def nri_flag(nri_gap_per_share: float | None, eps_ttm: float | None, policy: Pol
     )
 
 
-def basis_unknown_flag(nri: Flag | None, gap: float | None, eps_ttm: float | None) -> Flag | None:
+def basis_unknown_flag(
+    nri: Flag | None, gap: float | None, eps_ttm: float | None, currency: str = "USD"
+) -> Flag | None:
     """The ``consensus-basis-unknown`` note beside ``nri``, the row's ``large-nri``: the gap a
-    share with its sign and its share of trailing EPS in size; ``None`` without ``nri``, or
-    without the gap or a non-zero EPS."""
+    share with its sign, after ``$`` or the reporting ``currency``'s code, and its share of
+    trailing EPS in size; ``None`` without ``nri``, or without the gap or a non-zero EPS."""
     if nri is None or gap is None or eps_ttm is None or eps_ttm == 0:
         return None
-    sign = "−" if gap < 0 else ""
+    sign = ("−" if gap < 0 else "") + ("$" if currency == "USD" else f"{currency} ")
     return Flag(
         "consensus-basis-unknown",
         "Consensus basis unknown",
-        f"The non-recurring gap is {sign}${abs(gap):,.2f} a share, {abs(gap) / abs(eps_ttm):.1%} "
+        f"The non-recurring gap is {sign}{abs(gap):,.2f} a share, {abs(gap) / abs(eps_ttm):.1%} "
         "of trailing EPS. FMP's consensus names no basis, so whether the NTM anchor and the path "
         "carry such items is unknown; a report that reads the filing decides, through "
         "`earnings.nri_gap`, and on Mature Growth `earnings.ntm`.",

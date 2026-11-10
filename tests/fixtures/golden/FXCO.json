@@ -1,0 +1,779 @@
+{
+ "data_date": "2026-10-30",
+ "deciles_refresh_id": 1,
+ "designation": "well-below",
+ "flags": [
+  {
+   "code": "value-spread",
+   "sentence": "The value ranges from 331.15 to 837.14 across the ROIC values or runways tested, a spread of 152.8%, at or above 30.0%.",
+   "word": "Value spread"
+  }
+ ],
+ "inputs": [
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "statements",
+   "note": "fiscal 2015 to 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "fiscal years",
+   "value": 11.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "price",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP quote"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 50.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "shares_diluted",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "shares",
+   "value": 100000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "next_earnings",
+   "note": "2027-01-28",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP earnings-calendar"
+   },
+   "tag": "DATA",
+   "unit": "date",
+   "value": null
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "closes",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP historical-price-eod"
+   },
+   "tag": "DATA",
+   "unit": "daily closes",
+   "value": 522.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "fx_rate",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-31",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP historical-price-eod/light USDSEK"
+   },
+   "tag": "DATA",
+   "unit": "SEK per USD",
+   "value": 8.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "inflation_differential",
+   "note": "SEK 4.040% against USD 2.000%, the IMF World Economic Outlook October 2026 means of 2027 to 2031",
+   "provenance": {
+    "as_of": "2026-10-08",
+    "entered_at": null,
+    "observed_at": null,
+    "source": "IMF World Economic Outlook, October 2026: inflation, average consumer prices (PCPIPCH)"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.02
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "market_cap",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP quote"
+   },
+   "tag": "DATA",
+   "unit": "SEK",
+   "value": 40000000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "revenue_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "SEK",
+   "value": 18240000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "operating_income_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "SEK",
+   "value": 5600000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "eps_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "SEK a share",
+   "value": 42.4
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "dividends_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "SEK",
+   "value": -800000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "buybacks_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "SEK",
+   "value": -1600000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "equity_issued_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "SEK",
+   "value": 80000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "aggregate_roic",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": 0.22701985166668598
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "runway_return",
+   "note": "five-year marginal return on new capital",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": 0.43146474766762194
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "tax_rate_latest",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "OECD corporate tax statistics"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": 0.25
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "moat_score",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "GuruFocus summary"
+   },
+   "tag": "DATA",
+   "unit": "score",
+   "value": 8.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "gf_eps_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "GuruFocus keyratios"
+   },
+   "tag": "DATA",
+   "unit": "SEK a share",
+   "value": 42.4
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "gf_eps_without_nri",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "GuruFocus keyratios"
+   },
+   "tag": "DATA",
+   "unit": "SEK a share",
+   "value": 42.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "sbc_ttm",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP income-statement"
+   },
+   "tag": "DATA",
+   "unit": "SEK",
+   "value": 320000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "ntm_eps",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP analyst-estimates"
+   },
+   "tag": "DATA",
+   "unit": "SEK a share",
+   "value": 47.2
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "ntm_net_income",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP analyst-estimates"
+   },
+   "tag": "DATA",
+   "unit": "SEK",
+   "value": 4720000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "path_step_2",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP analyst-estimates"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": 0.1200000000000001
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "path_step_3",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP analyst-estimates"
+   },
+   "tag": "DATA",
+   "unit": "ratio",
+   "value": 0.10000000000000009
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "street_ttm_eps",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP earnings"
+   },
+   "tag": "DATA",
+   "unit": "SEK a share",
+   "value": 42.8
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "required_return",
+   "note": null,
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.11180000000000012
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "terminal_growth",
+   "note": null,
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.05059999999999998
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "moat_class",
+   "note": "Wide",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy"
+   },
+   "tag": "RULE",
+   "unit": "class",
+   "value": null
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "margin_of_safety",
+   "note": "Wide moat",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.25
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "terminal_roic",
+   "note": "Wide moat",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.15180000000000013
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "runway_years",
+   "note": "Wide moat",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy"
+   },
+   "tag": "RULE",
+   "unit": "years",
+   "value": 20
+  },
+  {
+   "estimate_method": null,
+   "kind": "rule",
+   "name": "belief",
+   "note": "sales class $2,000-3,000 Mn: Base Rate Book median 4.2% plus inflation 4.0%",
+   "provenance": {
+    "as_of": null,
+    "entered_at": null,
+    "observed_at": null,
+    "source": "policy"
+   },
+   "tag": "RULE",
+   "unit": "ratio",
+   "value": 0.0824
+  }
+ ],
+ "intermediates": {
+  "anchor": {
+   "ntm_eps": 47.2,
+   "ntm_eps_raw": 47.2,
+   "sbc_adjustment_per_share": 0.0
+  },
+  "belief": {
+   "median": 0.042,
+   "rate": 0.0824,
+   "sales_class": "$2,000-3,000 Mn"
+  },
+  "charge": {
+   "growth_by_year": [
+    0.1200000000000001,
+    0.10000000000000009,
+    0.09648000000000007,
+    0.09296000000000006,
+    0.08944000000000003,
+    0.08592000000000002,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.0824,
+    0.05059999999999998
+   ],
+   "hold_years": 6,
+   "return_by_year": [
+    0.43146474766762194,
+    0.43146474766762194,
+    0.43146474766762194,
+    0.43146474766762194,
+    0.43146474766762194,
+    0.43146474766762194,
+    0.41148869426279183,
+    0.39151264085796167,
+    0.37153658745313156,
+    0.3515605340483014,
+    0.3315844806434713,
+    0.31160842723864113,
+    0.291632373833811,
+    0.2716563204289809,
+    0.25168026702415075,
+    0.23170421361932061,
+    0.2117281602144905,
+    0.19175210680966037,
+    0.1717760534048302,
+    0.15180000000000013
+   ],
+   "revenue_steps": [
+    null,
+    null
+   ]
+  },
+  "charge_off": false,
+  "currency": "SEK",
+  "dividend_yield": 0.02,
+  "eps": {
+   "clean": 42.0,
+   "forward": 47.2,
+   "reported": 42.4
+  },
+  "epv": 375.67084078711946,
+  "expected_return": {
+   "growth": 0.10544500275066371,
+   "income": 0.057999999999999996,
+   "repricing": 0.2461761881874647,
+   "total": 0.40962119093812843
+  },
+  "fade_years": 5,
+  "fx_date": "2026-10-31",
+  "fx_rate": 8.0,
+  "growth_rates": [
+   0.1200000000000001,
+   0.10000000000000009,
+   0.09648000000000007,
+   0.09296000000000006,
+   0.08944000000000003,
+   0.08592000000000002,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824,
+   0.0824
+  ],
+  "growth_share": 0.06082289803220131,
+  "implied_by_roic": {
+   "0.09": -0.0371158218383789,
+   "0.15": -0.16908878326416013,
+   "runway": -0.11448665618896484,
+   "ten-year": -0.1311296463012695
+  },
+  "implied_growth": -0.11448665618896484,
+  "implied_growth_by_runway": {
+   "10": -0.2121975326538086,
+   "20": -0.11448665618896484,
+   "5": null
+  },
+  "income_basis": "flows over market cap",
+  "inflation_differential": 0.02,
+  "moat": "Wide",
+  "multiples": {
+   "pe_clean": 9.523809523809524,
+   "pe_forward": 8.47457627118644,
+   "pe_reported": 9.433962264150944
+  },
+  "net_buyback_yield": 0.038,
+  "nri_gap": 0.3999999999999986,
+  "ntm_net_income": 4720000000.0,
+  "path": {
+   "analysts": [
+    10,
+    6
+   ],
+   "base_year": 2027,
+   "on_eps": false
+  },
+  "path_steps": [
+   0.1200000000000001,
+   0.10000000000000009
+  ],
+  "price_facts": {
+   "change_1y": 0.11087420042643936,
+   "change_3y": null,
+   "change_5y": null,
+   "drawdown_from_peak": 0.0,
+   "high_52w": 50.0,
+   "low_52w": 45.02879078694818
+  },
+  "roic": {
+   "aggregate": 0.22701985166668598,
+   "by_year": [
+    {
+     "average_capital": 6905600000.0,
+     "nopat": 1069200000.0,
+     "roic": 0.15483086190917517,
+     "year": 2016
+    },
+    {
+     "average_capital": 7458048000.000001,
+     "nopat": 1259712000.0000002,
+     "roic": 0.16890639481000927,
+     "year": 2017
+    },
+    {
+     "average_capital": 8054691840.000002,
+     "nopat": 1473863040.0000005,
+     "roic": 0.1829819277108434,
+     "year": 2018
+    },
+    {
+     "average_capital": 8699067187.2,
+     "nopat": 1714216089.6000004,
+     "roic": 0.1970574606116775,
+     "year": 2019
+    },
+    {
+     "average_capital": 9394992562.176003,
+     "nopat": 1983592903.6800008,
+     "roic": 0.2111329935125116,
+     "year": 2020
+    },
+    {
+     "average_capital": 10146591967.150085,
+     "nopat": 2285099025.039361,
+     "roic": 0.22520852641334566,
+     "year": 2021
+    },
+    {
+     "average_capital": 10958319324.522093,
+     "nopat": 2622151131.232667,
+     "roic": 0.2392840593141798,
+     "year": 2022
+    },
+    {
+     "average_capital": 11834984870.48386,
+     "nopat": 2998506940.6566496,
+     "roic": 0.25335959221501386,
+     "year": 2023
+    },
+    {
+     "average_capital": 12781783660.12257,
+     "nopat": 3418297912.348582,
+     "roic": 0.26743512511584805,
+     "year": 2024
+    },
+    {
+     "average_capital": 13804326352.932377,
+     "nopat": 3886064995.0910187,
+     "roic": 0.28151065801668207,
+     "year": 2025
+    }
+   ],
+   "years": 10
+  },
+  "runway": 20,
+  "runway_return": {
+   "marginal": 0.43146474766762194,
+   "marginal_usable": true,
+   "one_year": 0.45745481927710735,
+   "ten_year": 0.22701985166668598,
+   "three_year": 0.26815659156320476,
+   "used": "marginal",
+   "value": 0.43146474766762194
+  },
+  "sbc_basis": "includes-sbc",
+  "shares": 100000000.0,
+  "terminal_roic": 0.15180000000000013,
+  "value_by_roic": {
+   "0.09": 331.14685527092973,
+   "0.15": 617.8976215908252,
+   "runway": 837.1414994276921,
+   "ten-year": 725.0137054426849
+  },
+  "value_by_runway": {
+   "10": 713.6963921246468,
+   "20": 837.1414994276921,
+   "5": 625.922090934873
+  },
+  "value_in_currency": 837.1414994276921,
+  "value_per_share": 837.1414994276921,
+  "value_total": 83714149942.76921
+ },
+ "levels": {
+  "buy": 78.48201557134614,
+  "fair_high": 120.33909054273073,
+  "fair_low": 88.94628431419228,
+  "trim": 156.96403114269228
+ },
+ "phase": {
+  "checks": [],
+  "dickinson": "Mature",
+  "fcf_sign": "positive",
+  "growth_3y": 0.08000000000000007,
+  "growth_decile": 6,
+  "growth_word": "Moderate",
+  "margin": 0.3,
+  "margin_direction": "Rising",
+  "margin_slope": 0.015000000000000003,
+  "phase": "Mature Growth",
+  "positive_years_last_five": 5,
+  "positive_years_on_file": 11,
+  "reason": null,
+  "revenue_slope": 1143425365.5859904,
+  "years_used": 11
+ },
+ "price": 50.0,
+ "price_date": "2026-10-31",
+ "price_to_value": 0.4778164746025112,
+ "refusal": null,
+ "route": "mature-growth",
+ "symbol": "FXCO",
+ "valid_until": "2027-01-28",
+ "value": 104.64268742846151
+}

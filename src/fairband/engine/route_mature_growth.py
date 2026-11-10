@@ -116,11 +116,13 @@ from fairband.engine.route_steps import (
     eps,
     expected,
     income,
+    money,
     multiples_at,
     nil,
     nri_gap,
     outside_entry,
     outside_value,
+    per_share,
     present,
     price_facts_for,
     rule,
@@ -207,15 +209,19 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     flags += present(long_runway(im, policy)) + spread
     inputs = (
         *common_inputs(i, t, roic),
-        data(i, "sbc_ttm", t.sbc, "USD", "statements"),
+        data(i, "sbc_ttm", t.sbc, money(i), "statements"),
         # the consensus as found: an agent's guided EPS or cycle gap is its JUDGMENT entry
-        data(i, "ntm_eps", anchor.ntm_eps_found, "USD a share", "estimates_quarter"),
+        data(i, "ntm_eps", anchor.ntm_eps_found, per_share(i), "estimates_quarter"),
         data(
-            i, "ntm_net_income", _on_reported(anchor, i.shares_diluted), "USD", "estimates_quarter"
+            i,
+            "ntm_net_income",
+            _on_reported(anchor, i.shares_diluted),
+            money(i),
+            "estimates_quarter",
         ),
         data(i, "path_step_2", path.steps[0], "ratio", "estimates_annual"),
         data(i, "path_step_3", path.steps[1], "ratio", "estimates_annual"),
-        data(i, "street_ttm_eps", i.street_ttm_eps, "USD a share"),
+        data(i, "street_ttm_eps", i.street_ttm_eps, per_share(i)),
         *common_rules(policy, moat, roic.terminal),
         rule(policy, "runway_years", growth.runway, "years", f"{moat} moat"),
         rule(
@@ -301,7 +307,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         return Refused(anchor.refusal, anchor.flags)
     base_year = base_fiscal_year(quarters)
     path = path_steps(i.annual_estimates, base_year, policy)
-    belief = belief_from_sales(t.revenue / 1e6, policy)
+    belief = belief_from_sales(t.revenue / i.fx_rate / 1e6, policy)  # the bounds are USD
     if own:
         path, belief = _judged(c, path, belief, base_year)
     if any(g is not None and g <= -1 for g in path.steps):

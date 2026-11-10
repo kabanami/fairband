@@ -18,7 +18,6 @@ import httpx
 from mcp import Client
 
 from fairband.engine.overrides import BRIDGE_ORDER, LABELS, NO_GUIDANCE, TAGS, anchor_misfit
-from fairband.engine.route import FOREIGN_FILER
 from fairband.mcp.client import NOT_RUNNING, FairbandClient
 from fairband.mcp.server import TOOL_NAMES, build_server
 from fairband.policy import load_policy
@@ -32,6 +31,7 @@ from fairband.reports.check import (
     quantities,
     structure_refusal,
 )
+from fairband.store.secondary import FOREIGN_FILER
 from fairband.web.identity import IDENTIFY_FIRST
 from fairband.web.reviews_api import GUIDANCE_REF
 from fairband.web.vendor_api import NO_FMP_KEY

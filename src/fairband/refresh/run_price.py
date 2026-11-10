@@ -22,19 +22,22 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   batch), with one ``fx-quote`` observation a pair (``fx_quote_observations``), the pair's close
   on the quote's date that ``rates.rates_for`` reads with the pair's history. A pair whose call
   fails or whose row is missing is logged and marks no symbol failed. Progress counts pairs. The
-  stage leaves each pair's quote by currency for the reprice; the engine translates no figure yet
-  (spec 2026-11-10 7.2), so the reprice reads none.
+  stage leaves each pair's quote by currency for the reprice.
 - ``reprice``: for each quoted symbol, one at a time, ``reprice`` of its latest snapshot at the new
   price and the quote's date, and ``insert_snapshot`` under this refresh; the symbol is
   ``repriced``. The value, levels, validity and every input but the price stay; the price input
   becomes the quote (its date and its row's stamps), and the designation, the price-dependent
-  intermediates and the long-runway flag follow the price. A refusal takes the new price, its
-  date and the price input only, except a growth-route refusal that carries ``revenue_path``
-  (refused for its target margin or for a value not positive), which also recomputes the margin
-  the price needs, and a Start-up refusal, which moves its market cap with the price (the one it
-  read × the new price ÷ the price it was read at), recomputes its requirement at it and
-  re-reads ``below-net-cash``. A snapshot valued under another policy version is ``failed``,
-  "policy changed: run a revalue": its levels come from that policy. One valued under other
+  intermediates and the long-runway flag follow the price. A row in another currency reprices
+  at its pair's quote, its rate and the quote's date (spec 2026-11-10 7.2): its USD value and
+  levels move with the rate and ``fx-stale`` follows the rate's date; at the rate it holds, with
+  ``fx-stale`` once that rate is older than ``fx_stale_days``, when its pair's quote failed. A
+  refusal takes the new price, its date and the price input only, except a growth-route refusal
+  that carries ``revenue_path`` (refused for its target margin or for a value not positive),
+  which also recomputes the margin the price needs, and a Start-up refusal, which moves its
+  market cap with the price (the one it read × the new price ÷ the price it was read at, each in
+  the reporting currency), recomputes its requirement at it and re-reads ``below-net-cash``. A
+  snapshot valued under another policy version is ``failed``, "policy changed: run a revalue":
+  its levels come from that policy. One valued under other
   settings (its settings hash unlike the run's, spec 2026-11-04 8.4) is ``failed``, "settings
   changed: run a revalue": its value and levels come from those settings. One valued under
   another method version is ``failed``, "method changed: run a revalue": its value is the old
@@ -318,7 +321,7 @@ class PriceRefresh:
     ) -> int | None:
         """Reprice each quoted symbol's latest snapshot; the number repriced, or ``None`` when a
         cancel stopped the stage. ``fx`` holds the pairs' quotes by currency (the ``fx``
-        stage's), which the reprice reads once the engine translates (spec 2026-11-10 7.2)."""
+        stage's): a snapshot in a currency with one reprices at its rate, with its review."""
         self._stage("reprice", len(quotes))
         repriced = failed = 0
         for symbol, quote in quotes.items():
@@ -333,12 +336,17 @@ class PriceRefresh:
             elif result.method_version != METHOD_VERSION:
                 reason = METHOD_CHANGED
             else:
+                pair = fx.get(result.intermediates.get("currency", "USD"))
+                rate = None if pair is None else pair.price
+                rate_date = None if pair is None else pair.as_of
                 try:
                     new = reprice(
                         result,
                         quote.price,
                         quote.as_of,
                         self._policy,
+                        fx_rate=rate,
+                        fx_date=rate_date,
                         observed_at=quote.observed_at,
                         entered_at=quote.entered_at,
                     )
@@ -357,6 +365,8 @@ class PriceRefresh:
                             observed_at=quote.observed_at,
                             entered_at=quote.entered_at,
                             repriced=snapshots[symbol].id,
+                            fx_rate=rate,
+                            fx_date=rate_date,
                         )
                         upsert_item(self._conn, self._id, symbol, "repriced", None, self._clock())
                 except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own

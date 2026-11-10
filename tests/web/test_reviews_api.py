@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from support.engine_companies import (
+    fx_inputs,
     high_growth_inputs,
     mature_growth_inputs,
     start_up_inputs,
@@ -434,6 +435,38 @@ def test_a_start_up_put_in_young_growth_meets_the_evidence_rule(
         "a held rate above the base rate's 90th percentile needs a filing or a transcript",
     )
     assert _post(client, hold, "SUCO")["override"]["state"] == "applied"  # a transcript
+
+
+def test_a_company_in_another_currency_reads_its_ranges_and_cap_in_it(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    stored_inputs: dict[str, CompanyInputs],
+) -> None:
+    """FXCO reports in SEK at 8.0 SEK per USD with an inflation differential of 2% (spec
+    2026-11-10 7.3): earnings.ntm takes above 0 to 8,000 SEK a share, the override's unit is in
+    SEK, and the evidence rule's cap is the 90th percentile of the class of its trailing revenue
+    in USD, 18,240 m SEK ÷ 8.0 = USD 2,280 m (20%), restated to 22.4%: a belief of 21% needs no
+    filing (the class of 18,240 m read as USD would cap it at 15%), one of 23% does."""
+    inputs = fx_inputs()
+    result = value_company(inputs, universe_deciles(), policy, TODAY)
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, result, 1, clock=lambda: CREATED)
+    stored_inputs["FXCO"] = inputs
+    eps = BELIEF_8 | {"tag": "earnings.ntm", "new": 9_000.0, "reason": "guided"}
+    r = client.post("/api/companies/FXCO/overrides", json=eps, headers=AGENT)
+    assert r.status_code == 400
+    assert (r.json()["override"]["state"], r.json()["detail"]) == (
+        "refused-unit",
+        "earnings.ntm takes above 0 to 8,000 SEK a share",
+    )
+    assert r.json()["override"]["unit"] == "SEK a share"
+    blog = {"kind": "url", "ref": "https://example.com/orders", "note": ""}
+    above = BELIEF_8 | {"new": 0.23, "evidence": [blog]}
+    r = client.post("/api/companies/FXCO/overrides", json=above, headers=AGENT)
+    assert (r.status_code, r.json()["override"]["state"]) == (400, "refused-evidence")
+    within = _post(client, BELIEF_8 | {"new": 0.21, "evidence": [blog]}, "FXCO")
+    assert within["override"]["state"] == "applied" and within["review"]["value"] is not None
 
 
 def _moved(snapshot_id: int) -> dict[str, str]:

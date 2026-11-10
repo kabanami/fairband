@@ -139,6 +139,7 @@ from fairband.engine.route_steps import (
     from_capital,
     income,
     millions,
+    money,
     multiples_at,
     nil,
     nri_gap,
@@ -326,7 +327,7 @@ def value_decline(c: Context) -> Valued | Refused:
         + present(_not_charged(found, unrated))
         + present(_z_distress(z, policy))
         + present(_f_score_low(f, policy))
-        + present(_reinvesting(t, v.revenue[-1] < revenue0))
+        + present(_reinvesting(t, v.revenue[-1] < revenue0, i.currency))
         + trailing_flags(i, t, gap, policy)
     )
     inputs = (
@@ -336,15 +337,15 @@ def value_decline(c: Context) -> Valued | Refused:
             i,
             "interest_expense",
             t.interest_expense,
-            "USD",
+            money(i),
             "statements",
             "trailing twelve months, each period's expense by its size",
         ),
         *_sales_to_capital_input(c, used, sales_to_capital),
-        data(i, "debt", i.debt, "USD", "statements"),
-        data(i, "cash", i.cash, "USD", "statements"),
+        data(i, "debt", i.debt, money(i), "statements"),
+        data(i, "cash", i.cash, money(i), "statements"),
         *_balance_inputs(c),
-        data(i, "depreciation", t.depreciation, "USD", "statements", "trailing twelve months"),
+        data(i, "depreciation", t.depreciation, money(i), "statements", "trailing twelve months"),
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "runoff_years", n, "years"),
         rule(
@@ -669,17 +670,17 @@ def _f_score_low(f: FScore | None, policy: Policy) -> Flag | None:
     )
 
 
-def _reinvesting(t: TrailingFigures, falls: bool) -> Flag | None:
+def _reinvesting(t: TrailingFigures, falls: bool, currency: str) -> Flag | None:
     """``reinvesting-in-decline`` when trailing capital spending exceeds trailing depreciation in
-    size while the run-off's revenue falls; neither missing."""
+    size while the run-off's revenue falls; neither missing. The figures are in ``currency``."""
     capex, depreciation = t.capex, t.depreciation
     if not falls or capex is None or depreciation is None or abs(capex) <= abs(depreciation):
         return None
     return Flag(
         "reinvesting-in-decline",
         "Reinvesting in decline",
-        f"Capital spending {millions(abs(capex))} exceeds depreciation "
-        f"{millions(abs(depreciation))} while revenue falls: Damodaran's denial.",
+        f"Capital spending {millions(abs(capex), currency)} exceeds depreciation "
+        f"{millions(abs(depreciation), currency)} while revenue falls: Damodaran's denial.",
     )
 
 
@@ -690,12 +691,12 @@ def _path_inputs(c: Context, path: _Consensus) -> tuple[TaggedInput, ...]:
     i = c.inputs
     if not path.usable:
         return (
-            data(i, "ntm_revenue", path.found, "USD", "estimates_quarter", _NO_CONSENSUS),
+            data(i, "ntm_revenue", path.found, money(i), "estimates_quarter", _NO_CONSENSUS),
             data(i, "path_step_2", None, "ratio", "estimates_annual", _NO_CONSENSUS),
             data(i, "path_step_3", None, "ratio", "estimates_annual", _NO_CONSENSUS),
         )
     return (
-        data(i, "ntm_revenue", path.found, "USD", "estimates_quarter"),
+        data(i, "ntm_revenue", path.found, money(i), "estimates_quarter"),
         step_input(c, "path_step_2", path.steps[0], path.held[0]),
         step_input(c, "path_step_3", path.steps[1], path.held[1]),
         *(step_input(c, f"path_step_{t}", g, False) for t, g in enumerate(path.beyond, start=4)),
@@ -734,7 +735,7 @@ def _balance_inputs(c: Context) -> tuple[TaggedInput, ...]:
         return ()
     newest = years[-1]
     found = [
-        data(i, name, getattr(newest, line), "USD", "statements", f"fiscal {newest.year}")
+        data(i, name, getattr(newest, line), money(i), "statements", f"fiscal {newest.year}")
         for line, name in _BALANCE_INPUTS.items()
     ]
     if len(years) >= 2:
@@ -744,7 +745,7 @@ def _balance_inputs(c: Context) -> tuple[TaggedInput, ...]:
                 i,
                 f"{_BALANCE_INPUTS[line]}_prior",
                 getattr(prior, line),
-                "USD",
+                money(i),
                 "statements",
                 f"fiscal {prior.year}",
             )

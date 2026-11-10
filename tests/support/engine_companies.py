@@ -6,10 +6,14 @@ The engine tests take them as fixtures (``tests/engine/conftest.py``); the web t
 and store the results. Money is in USD and shares in units. Fiscal years are calendar years 2015
 to 2025, the trailing twelve months end 2026-09-30, the data date is 2026-10-30 and the tests
 value on 2026-10-31.
+
+``in_sek`` restates any of them as a company reporting in SEK (spec 2026-11-10 section 7), and
+``fx_inputs`` is FXCO, spec 11.2's company in SEK.
 """
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
 from fairband.engine.balance import BalanceYear
@@ -473,4 +477,95 @@ def start_up_inputs() -> CompanyInputs:
         ),
         debt=0.0,
         cash=300.0,
+    )
+
+
+SEK_RATE = 8.0  # SEK per USD on the price date
+SEK_DIFFERENTIAL = 0.02  # spec 2026-11-10 11.1's test table: SEK at 4.04% against USD at 2.00%
+FX_DATE = date(2026, 10, 31)  # the price date and the rate's close of a company in SEK
+_PER_SHARE = frozenset({"eps", "eps_diluted"})  # the figures a share among the records' fields
+_NOT_MONEY = frozenset({"tax_rate"})  # the one float field of the records that is not money
+
+
+def _scaled[R](row: R, total: float, per_share: float) -> R:
+    """``row``, a record of the inputs, with every money figure × ``total`` and every figure a
+    share × ``per_share``: each float field but the tax rate."""
+    changes: dict[str, Any] = {}
+    for f in fields(row):  # type: ignore[arg-type]
+        value = getattr(row, f.name)
+        if isinstance(value, float) and f.name not in _NOT_MONEY:
+            changes[f.name] = value * (per_share if f.name in _PER_SHARE else total)
+    return replace(row, **changes)  # type: ignore[type-var]
+
+
+def _times(x: float | None, k: float) -> float | None:
+    return None if x is None else x * k
+
+
+def _restated(i: CompanyInputs, total: float, per_share: float) -> CompanyInputs:
+    """``i`` with every money figure of its statements, consensus and balance sheets × ``total``
+    and every figure a share × ``per_share``; its price, market cap, share count and peers as they
+    were."""
+    return replace(
+        i,
+        series=tuple(_scaled(fy, total, per_share) for fy in i.series),
+        capital_years=tuple(_scaled(cy, total, per_share) for cy in i.capital_years),
+        trailing=None if i.trailing is None else _scaled(i.trailing, total, per_share),
+        quarter_estimates=tuple(_scaled(q, total, per_share) for q in i.quarter_estimates),
+        annual_estimates=tuple(_scaled(a, total, per_share) for a in i.annual_estimates),
+        street_ttm_eps=_times(i.street_ttm_eps, per_share),
+        gf_eps_ttm=_times(i.gf_eps_ttm, per_share),
+        gf_eps_without_nri=_times(i.gf_eps_without_nri, per_share),
+        debt=_times(i.debt, total),
+        cash=_times(i.cash, total),
+        balance_years=tuple(_scaled(b, total, per_share) for b in i.balance_years),
+    )
+
+
+def in_sek(
+    i: CompanyInputs, rate: float = SEK_RATE, differential: float = SEK_DIFFERENTIAL
+) -> CompanyInputs:
+    """``i`` reporting in SEK, as assembly hands such a company to the engine: every money figure
+    of its statements, consensus and balance sheets × ``rate`` (SEK per USD on the price date,
+    2026-10-31), the street actuals and GuruFocus's EPS among them; the quote's price and market
+    cap in USD, the peers' market caps too; the rate and the inflation differential
+    ``differential`` cited, the differential with its note."""
+    restated = _restated(i, rate, rate)
+    imf = "IMF World Economic Outlook, October 2026: inflation, average consumer prices (PCPIPCH)"
+    return replace(
+        restated,
+        currency="SEK",
+        series=tuple(replace(fy, currency="SEK") for fy in restated.series),
+        price_date=FX_DATE,
+        fx_rate=rate,
+        fx_date=FX_DATE,
+        inflation_differential=differential,
+        provenance={
+            **i.provenance,
+            "fx_rate": Provenance("FMP historical-price-eod/light USDSEK", FX_DATE, OBSERVED, None),
+            "inflation_differential": Provenance(imf, date(2026, 10, 8), None, None),
+        },
+        notes={
+            **i.notes,
+            "inflation_differential": "SEK 4.040% against USD 2.000%, the IMF World Economic "
+            "Outlook October 2026 means of 2027 to 2031",
+        },
+    )
+
+
+def fx_inputs() -> CompanyInputs:
+    """FXCO, spec 2026-11-10 11.2's company: the Mature Growth company at a tenth of its size,
+    100 m shares, reporting in SEK at 8.0 SEK per USD on 2026-10-31 with an inflation differential
+    of 2%. It quotes USD 50.00 for a market cap of USD 5,000 m, so its route reads a price of
+    400.00 and a market cap of 40,000 m in SEK; every total is MGCO's × 0.8 and every figure a
+    share MGCO's × 8.0, in SEK."""
+    tenth = _restated(mature_growth_inputs(), 0.1, 1.0)
+    return replace(
+        in_sek(tenth),
+        symbol="FXCO",
+        name="Foreign Filer Co",
+        price=50.0,
+        market_cap=5_000e6,
+        shares_diluted=100e6,
+        closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 40.0, 50.0),
     )
