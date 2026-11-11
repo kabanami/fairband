@@ -35,17 +35,18 @@ parameters' types refuse, a ``year`` or an index that is not a whole number, is 
 400 (``year: ...``, ``app``). Without a pass-through (the server has no FMP key), a 503, "no FMP
 key", before the symbol and the other parameters are read, as the vendor route answers it. A
 symbol that is not one is a 400 with its sentence. Then the parameters judged before any call,
-each a 400: ``sheet``, ``row``, ``col``, ``offset`` or ``fromRow`` without
-``year`` and ``period``, one of them without the other, and on the search either missing,
-``NEEDS_PERIOD``; a ``period`` other than ``FY`` and ``Q1`` to ``Q4``, ``BAD_PERIOD``; a ``from``
-or a ``to`` that is no ISO date, or ``from`` after ``to``, ``BAD_WINDOW``. Then the fetch: every
-slot taken, a 503 with the pass-through's ``BUSY``; a failed vendor call a 502 with its sentence,
-scrubbed. Then what FMP answered: a report it does not hold (``{"Error Message": ...}``, stored
-with its error and never reused) a 404, ``NO_REPORT``; a filing list or a list of reports that is
-not a list a 502, ``NO_LIST`` or ``NO_REPORTS``. Then the view's own: a sheet no sheet serves as,
-a 404 (``NoSheet``); a ``row``, ``col``, ``offset`` or ``fromRow`` out of range, a 400,
-"<name> is 0 to <last>" (``OutOfRange``; on the filing list, with no filing kept, 0 alone is in
-range); a search text shorter than three characters once served, a 400, ``SHORT_TEXT``.
+so a refused request calls no vendor and stores nothing, each a 400: ``sheet``, ``row``, ``col``,
+``offset`` or ``fromRow`` without ``year`` and ``period``, one of them without the other, and on
+the search either missing, ``NEEDS_PERIOD``; a ``period`` other than ``FY`` and ``Q1`` to ``Q4``,
+``BAD_PERIOD``; a search text shorter than ``SEARCH_MIN`` (three) characters once served,
+``SHORT_TEXT``; a ``from`` or a ``to`` that is no ISO date, or ``from`` after ``to``,
+``BAD_WINDOW``. Then the fetch: every slot taken, a 503 with the pass-through's ``BUSY``; a failed
+vendor call a 502 with its sentence, scrubbed. Then what FMP answered: a report it does not hold
+(``{"Error Message": ...}``, stored with its error and never reused) a 404, ``NO_REPORT``; a
+filing list or a list of reports that is not a list a 502, ``NO_LIST`` or ``NO_REPORTS``. Then the
+view's own: a sheet no sheet serves as, a 404 (``NoSheet``); a ``row``, ``col``, ``offset`` or
+``fromRow`` out of range, a 400, "<name> is 0 to <last>" (``OutOfRange``; on the filing list,
+with no filing kept, 0 alone is in range).
 
 The routes are sync ones, as the vendor route is: FastAPI runs them on its thread pool, where a
 vendor call waits at most ten seconds for one of the pass-through's four slots, then for its slot
@@ -61,13 +62,17 @@ from fastapi import FastAPI, HTTPException, Query
 
 from fairband.policy.settings import exchange_symbol
 from fairband.refresh.passthrough import (
+    BAD_PERIOD,
     BAD_WINDOW,
+    FILING_PERIODS,
     NEEDS_PERIOD,
     Fetched,
     Passthrough,
     PassthroughBusy,
 )
 from fairband.reports.filing_report import (
+    SEARCH_MIN,
+    SHORT_TEXT,
     NoSheet,
     OutOfRange,
     cell_text,
@@ -182,12 +187,16 @@ def add_filing_routes(
         if passthrough is None:
             raise HTTPException(503, NO_FMP_KEY)
         company = _symbol(symbol)
-        fetched = _report(passthrough, company, year, period)
+        # Judged before the fetch, so a refused search calls no vendor and stores no report.
+        if year is None or period is None:
+            raise HTTPException(400, NEEDS_PERIOD)
+        if period not in FILING_PERIODS:
+            raise HTTPException(400, BAD_PERIOD)
         needle = served(text or "")
-        try:
-            found = search(fetched.payload, fetched.row.id, needle)
-        except ValueError as exc:  # SHORT_TEXT
-            raise HTTPException(400, str(exc)) from None
+        if len(needle) < SEARCH_MIN:
+            raise HTTPException(400, SHORT_TEXT)
+        fetched = _report(passthrough, company, year, period)
+        found = search(fetched.payload, fetched.row.id, needle)
         return {**_head(company, fetched), "year": year, "period": period, "text": needle, **found}
 
 

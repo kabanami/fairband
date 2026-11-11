@@ -1525,7 +1525,7 @@ Three routes serve them. Each may call FMP, so each needs the request header `X-
 - **The filing report**, `GET /api/companies/{symbol}/filing-report?year=&period=&sheet=&fromRow=&row=&col=&offset=`, four views by the parameters given; a parameter the view does not read is not read. Neither `year` nor `period`: `reports`, the reports on file as FMP orders them, each `{year, period}`, its fiscal year and period, a row without one of them left out and the links dropped. `year` and `period`: `year`, `period` and `sheets`, each `{name, title, rows, chars}`: the sheet's served name, its first row's served label (the sheet's title with its scale, `$ in Millions`), its row count and the length of its JSON text. With `sheet`: `sheet`, `title`, `rows` from `fromRow` (0 when left out), at most 100 and within the budget, and `nextRow`. A row is `{row, label, rowRef, cells}`: its index in the sheet from 0, its served label, its ref (the `filing:` ref without the column, so a cell's ref is the row's plus `/<col>`) and its cells in order, a number or a null as it is, a string served and, past 2,000 characters, cut, as `{text, chars}` with its full length. A row that is not a label with its cells (one key whose value is a list) is served with `label` and `rowRef` null and one cell, its JSON text, which no ref cites. With `sheet` and `row`: one cell's text, `sheet`, `row`, `col` (0 when left out), `label`, `chars`, `offset` (0 when left out), `text`, at most 20,000 characters from `offset`, and `nextOffset`, or null after the text's end; a number cell's text is its JSON text.
 - **The search**, `GET /api/companies/{symbol}/filing-report/search?year=&period=&text=`: the served text of every label and every cell of one report, a number by its JSON text, searched for `text`, served, without regard to case. A hit is a row, `{sheet, row, col, label, excerpt, offset, rowRef, numbers}`: `col` the first cell that matches, or null when only the label does; `excerpt` 300 characters each side of the first match; `offset` the match's place in the cell's served text (the label's when `col` is null), an `offset` the cell's view opens at; `numbers` the row's number cells as `{col, value}`. At most 20 hits and within the budget, in the report's order, and `more` true when a further row matched. The answer carries `year`, `period` and `text`, the text searched.
 
-The refusals, in the order they are judged:
+The refusals, in the order they are judged. Every one above "Every slot taken" is judged before any call, so a request it refuses calls no vendor and stores nothing:
 
 | Case | Status | Sentence |
 |---|---|---|
@@ -1535,6 +1535,7 @@ The refusals, in the order they are judged:
 | A symbol that is not one | 400 | `'<text>' is not a symbol` |
 | `sheet`, `row`, `col`, `offset`, `fromRow` or `text` without `year` and `period`, or one of the two without the other | 400 | `a filing report needs year and period` |
 | A `period` other than `FY` or `Q1` to `Q4` | 400 | `period is FY or Q1 to Q4` |
+| `text` shorter than three characters, served | 400 | `text needs three characters or more` |
 | `from` or `to` not an ISO date, or `from` after `to` | 400 | `from and to are ISO dates, from on or before to` |
 | Every slot taken | 503 | `the pass-throughs are busy: four calls are in flight, try again` |
 | The vendor call fails | 502 | the vendor's sentence, scrubbed of the key |
@@ -1542,4 +1543,3 @@ The refusals, in the order they are judged:
 | FMP's filing list, or its list of reports, is not a list | 502 | `FMP answered no filing list for <symbol>`, `FMP answered no filing reports for <symbol>` |
 | No sheet serves as `sheet` | 404 | `no sheet named <name>: ask without sheet for the sheet list` |
 | `row`, `col`, `fromRow` or `offset` out of range | 400 | `<name> is 0 to <last>`, or `<name> is out of range: there is none` where the sheet has no row or the row no cell; on the filing list, with no filing kept, 0 alone is in range |
-| `text` shorter than three characters, served | 400 | `text needs three characters or more` |

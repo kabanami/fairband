@@ -431,9 +431,14 @@ def test_a_search_without_its_report_is_400(with_passthrough: TestClient, vendor
     assert vendor.paths == []
 
 
-def test_a_short_search_text_is_400(with_passthrough: TestClient) -> None:
+def test_a_short_search_text_is_400(with_passthrough: TestClient, vendor: Vendor) -> None:
+    """Judged before the fetch, after the year and the period: a refused search calls no vendor
+    and stores no report."""
     for params in ({**Q1, "text": "ab"}, {**Q1, "text": " a  "}, Q1):
         assert _refused(with_passthrough.get(SEARCH, params=params)) == (400, SHORT_TEXT)
+    bad_period = {"year": "2027", "period": "Q5", "text": "ab"}
+    assert _refused(with_passthrough.get(SEARCH, params=bad_period)) == (400, BAD_PERIOD)
+    assert vendor.paths == []
 
 
 def test_a_filing_list_that_is_not_a_list_is_502(
