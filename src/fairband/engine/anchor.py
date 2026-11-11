@@ -105,10 +105,10 @@ class AnnualEstimate:
 class TrailingFigures:
     """The trailing twelve months: the last four quarters summed, or the last two half-years for
     a company whose ``cadence`` is half-yearly, ``quarters`` counting the periods summed; or the
-    last fiscal year when ``on_fiscal_year``, whose cadence is ``quarterly``. A figure is ``None``
-    when any of the periods lacks it. ``interest_expense`` sums each period's interest expense by
-    its size (FMP signs it either way) and ``depreciation`` the cash flow's depreciation and
-    amortization as signed."""
+    last fiscal year when ``on_fiscal_year``, whose cadence is the one the statement rows gave,
+    ``quarterly`` when they gave none. A figure is ``None`` when any of the periods lacks it.
+    ``interest_expense`` sums each period's interest expense by its size (FMP signs it either
+    way) and ``depreciation`` the cash flow's depreciation and amortization as signed."""
 
     period_end: date
     quarters: int
@@ -182,17 +182,37 @@ def ntm_window(
     window's own cadence, which the anchor's count and the base year take. ``cadence`` is the
     trailing figures': a quarterly reporter's window is four consecutive quarters only, never two
     rows about half a year apart, which on a consensus with gaps would sum two quarters as a
-    year; a half-yearly reporter's is two consecutive half-years, else four consecutive quarters,
-    the window its consensus cadence gives (spec 2026-11-10 8: ABVX reports half-years, its
-    consensus quarters). ``None`` without one."""
+    year; a half-yearly reporter's is two consecutive half-years, unless a consensus row ending
+    after ``last_reported`` sits 80 to 100 days from either of them (quarters with one missing,
+    WSE's consensus), else four consecutive quarters, the window its consensus cadence gives
+    (spec 2026-11-10 8: ABVX reports half-years, its consensus quarters). ``None`` without
+    one."""
     tried: tuple[Cadence, ...] = (
         ("half-yearly", "quarterly") if cadence == "half-yearly" else ("quarterly",)
     )
     for each in tried:
         window = ntm_periods(estimates, last_reported, each)
-        if window is not None:
-            return window, each
+        if window is None:
+            continue
+        if each == "half-yearly" and _quarter_beside(estimates, last_reported, window):
+            continue
+        return window, each
     return None
+
+
+def _quarter_beside(
+    estimates: Sequence[QuarterEstimate],
+    last_reported: date,
+    window: Sequence[QuarterEstimate],
+) -> bool:
+    """A consensus row ending after ``last_reported`` sits a quarter (80 to 100 days) from a
+    period of ``window``: its rows are quarters with one missing, not half-years."""
+    return any(
+        consecutive_periods(sorted((e.period_end, p.period_end)), "quarterly")
+        for e in estimates
+        if e.period_end > last_reported
+        for p in window
+    )
 
 
 def ntm_periods(

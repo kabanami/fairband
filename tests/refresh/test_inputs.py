@@ -340,10 +340,10 @@ def test_half_year_rows_give_a_two_period_trailing_sum(store: Store) -> None:
     assert "trailing-on-fiscal-year" not in codes(inputs)
 
 
-def test_two_half_years_not_consecutive_fall_back(store: Store) -> None:
-    """Rows ending 2025-06-30 and 2026-06-30 only, a year apart, are neither four consecutive
-    quarters nor two consecutive half-years: the trailing figures are fiscal 2025's, flagged, on
-    the quarterly cadence the fallback carries, with no trailing period ends and no street EPS."""
+def test_rows_a_year_apart_give_no_cadence_and_fall_back(store: Store) -> None:
+    """Rows ending 2025-06-30 and 2026-06-30 only, a year apart, give no cadence at all: the
+    trailing figures are fiscal 2025's, flagged, on the quarterly cadence a fallback carries when
+    the rows give none, with no trailing period ends and no street EPS."""
     conn = store(**bodies(cadence="half-yearly", quarters=(date(2025, 6, 30), date(2026, 6, 30))))
     inputs = build(conn)
     t = inputs.trailing
@@ -353,6 +353,35 @@ def test_two_half_years_not_consecutive_fall_back(store: Store) -> None:
     assert inputs.street_ttm_eps is None
     [note] = [f for f in inputs.input_flags if f.code == "trailing-on-fiscal-year"]
     assert note.sentence == ON_FISCAL_YEAR
+
+
+def test_a_quarterly_filer_missing_its_second_newest_quarter_falls_back(store: Store) -> None:
+    """The gap guard (BNY's shape): quarters to 2026-09-30 with 2026-06-30 missing put the two
+    newest rows 183 days apart, but the row before the older of them is a quarter earlier (90
+    days), so the rows give no cadence. The trailing figures are fiscal 2025's, flagged, and never
+    two quarters summed as a year."""
+    inputs = build(store(**bodies(quarters=[q for q in QUARTERS if q != date(2026, 6, 30)])))
+    t = inputs.trailing
+    assert t is not None and t.on_fiscal_year
+    assert (t.period_end, t.quarters, t.cadence) == (date(2025, 12, 31), 1, "quarterly")
+    assert t.revenue == 2100 * M
+    [note] = [f for f in inputs.input_flags if f.code == "trailing-on-fiscal-year"]
+    assert note.sentence == ON_FISCAL_YEAR
+
+
+def test_a_half_yearly_reporter_missing_an_older_half_year_stays_half_yearly(
+    store: Store,
+) -> None:
+    """MAAS's shape: half-years ending 2024-12-31, 2025-12-31 and 2026-06-30, the first half of
+    2025 missing. The row before the older of the two newest is a year earlier, not a quarter, so
+    the company reads half-yearly and its trailing figures are the last two half-years."""
+    ends = (date(2024, 12, 31), date(2025, 12, 31), date(2026, 6, 30))
+    inputs = build(store(**bodies(cadence="half-yearly", quarters=ends)))
+    t = inputs.trailing
+    assert t is not None
+    assert (t.cadence, t.quarters, t.on_fiscal_year) == ("half-yearly", 2, False)
+    assert (t.period_end, t.revenue) == (date(2026, 6, 30), (320 + 330) * M)
+    assert "trailing-on-fiscal-year" not in codes(inputs)
 
 
 def test_the_quarterly_fallback_sentence_names_both_cadences(
@@ -367,20 +396,30 @@ def test_a_half_year_in_another_currency_sends_the_trailing_figures_to_the_fisca
     store: Store,
 ) -> None:
     """Spec 2026-11-10 7 on half-years: the fiscal years report in CAD and the newest half-year in
-    USD, so the two are not summed; the note names the half-year."""
+    USD, so the two are not summed; the note names the half-year. The fallback keeps the
+    half-yearly cadence the rows gave, so the NTM window after the fiscal year is still the two
+    half-years its consensus gives."""
     payloads = bodies(currency="CAD", cadence="half-yearly")
     rows = payloads["income-quarter"]
     rows[3] = {**rows[3], "reportedCurrency": "USD"}
+    halves = ("2026-06-30", "2026-12-31")
+    payloads["estimates-quarter"] = [
+        {"symbol": "ACME", "date": d, "epsAvg": 1.0, "revenueAvg": 650 * M} for d in halves
+    ]
     inputs = build(store(**payloads))
     t = inputs.trailing
     assert t is not None and t.on_fiscal_year
-    assert (t.period_end, t.cadence) == (date(2025, 12, 31), "quarterly")
+    assert (t.period_end, t.quarters, t.cadence) == (date(2025, 12, 31), 1, "half-yearly")
     assert inputs.street_ttm_eps is None
     [note] = [f for f in inputs.input_flags if f.code == "trailing-on-fiscal-year"]
     assert note.sentence == (
         "The half-year to 2026-06-30 is in USD while the fiscal years are in CAD, so the "
         "trailing figures are fiscal 2025's."
     )
+    window = ntm_window(inputs.quarter_estimates, t.period_end, t.cadence)
+    assert window is not None
+    periods, cadence = window
+    assert cadence == "half-yearly" and [p.period_end.isoformat() for p in periods] == list(halves)
 
 
 def test_a_half_yearly_reporter_with_quarterly_consensus_reads_four_quarters(
@@ -424,6 +463,29 @@ def test_the_cadence_reads_the_two_newest_period_ends(days: int, cadence: Cadenc
     newest = date(2026, 6, 30)
     assert cadence_of([date(2024, 1, 1), newest - timedelta(days=days), newest]) == cadence
     assert cadence_of([newest]) is None and cadence_of([]) is None
+
+
+@pytest.mark.parametrize(
+    ("before", "cadence"),
+    [
+        (79, "half-yearly"),
+        (80, None),
+        (90, None),
+        (100, None),
+        (101, "half-yearly"),
+        (181, "half-yearly"),
+        (365, "half-yearly"),
+    ],
+)
+def test_a_quarter_before_the_two_newest_rows_rules_out_half_years(
+    before: int, cadence: Cadence | None
+) -> None:
+    """The gap guard: two newest rows 183 days apart read half-yearly only when the row before the
+    older of them, if there is one, does not end 80 to 100 days before it (a quarterly filer
+    missing its second-newest quarter)."""
+    older, newest = date(2026, 3, 31), date(2026, 9, 30)
+    assert cadence_of([older - timedelta(days=before), older, newest]) == cadence
+    assert cadence_of([older, newest]) == "half-yearly"
 
 
 def test_interest_expense_is_summed_as_its_size(store: Store) -> None:

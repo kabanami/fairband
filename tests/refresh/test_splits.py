@@ -598,7 +598,7 @@ def test_a_split_within_the_trailing_quarters_scales_the_older_ones() -> None:
 
 
 def _half_years(
-    count: float = 2000.0, counts: tuple[float, float] = (1000.0, 2000.0)
+    count: float = 2000.0, counts: tuple[float | None, float | None] = (1000.0, 2000.0)
 ) -> SplitFigures:
     """A half-yearly reporter (spec 2026-11-10 8): two trailing half-years ending 31 Mar and
     30 Sep 2026 on ``counts``, each at EPS 1.00 and a street actual of 1.05; the diluted count
@@ -624,21 +624,69 @@ def test_a_split_within_the_trailing_half_years_scales_the_older_one() -> None:
     assert [eps for _, eps in f.street_actuals] == pytest.approx([0.525, 1.05])
     assert f.street_ttm_eps == pytest.approx(1.575)
     assert out.estimate_methods == dict.fromkeys(("eps_ttm", "street_ttm_eps"), "split-scaled")
+    split = "the 2-for-1 split of 15 Apr 2026"
+    assert out.notes == {
+        "eps_ttm": f"÷2 on 1 of 2 half-years for {split}",
+        "street_ttm_eps": f"÷2 on 1 of 2 half-years for {split}",
+    }
+    assert _sentence(out) == (
+        "A 2-for-1 split of 15 Apr 2026 falls after the half-year ending 31 Mar 2026. "
+        "The trailing EPS and the street actuals (÷2 on the half-year ending 31 Mar 2026) are read "
+        "on the post-split basis. The closes and the quote are FMP's, already on the post-split "
+        "basis."
+    )
+
+
+def test_a_half_year_without_a_count_is_named_a_half_year() -> None:
+    """The split rule's words on a half-yearly reporter's periods: the older half-year, without a
+    count, is read as stored and named a half-year."""
+    out = _apply(_half_years(counts=(None, 2000.0)), splits=(WITHIN,))
+    assert [p.eps_diluted for p in out.figures.periods] == [1.0, 1.0]
+    assert (
+        "The half-year ending 31 Mar 2026 has no share count and is read as stored."
+        in _sentence(out)
+    )
 
 
 def test_a_half_yearly_reporter_s_ntm_eps_note_reads_its_two_half_years() -> None:
     """The split rule reads the NTM window the engine reads: a half-yearly reporter's two
-    consensus half-years, so when both scale the NTM EPS carries the note; a quarterly reporter
-    reads no window in them, so its NTM EPS is unmarked though both rows scale."""
+    consensus half-years, so when both scale the NTM EPS carries the note, which names them
+    half-years; a quarterly reporter reads no window in them, so its NTM EPS is unmarked though
+    both rows scale, and they stay quarters in its words."""
     rows = tuple(_quarter(end, 1.0, 1000.0) for end in (date(2027, 3, 31), date(2027, 9, 30)))
     figures = replace(_half_years(count=1000.0, counts=(1000.0, 1000.0)), quarter_estimates=rows)
     out = _apply(figures)
     assert [q.eps for q in out.figures.quarter_estimates] == [0.5, 0.5]
-    assert out.estimate_methods["ntm_eps"] == "split-scaled" and "ntm_eps" in out.notes
+    assert out.estimate_methods["ntm_eps"] == "split-scaled"
+    assert out.notes["ntm_eps"] == (
+        "the consensus half-years to 30 Sep 2027 ÷2 for the 2-for-1 split of 15 Oct 2026"
+    )
+    assert "The consensus EPS for the half-years to 30 Sep 2027 is read ÷2." in _sentence(out)
     assert out.figures.street_ttm_eps == pytest.approx(1.05)
     quarterly = _apply(replace(_figures(), quarter_estimates=rows))
     assert [q.eps for q in quarterly.figures.quarter_estimates] == [0.5, 0.5]
     assert "ntm_eps" not in quarterly.notes and "ntm_eps" not in quarterly.estimate_methods
+    assert "The consensus EPS for the quarters to 30 Sep 2027 is read ÷2." in _sentence(quarterly)
+
+
+def test_the_basis_notes_name_half_years() -> None:
+    """The listed-share basis's words on a half-yearly reporter (UMC's shape on two periods): the
+    newest half-year off by ρ 5 reads on 1 of 2 half-years, and every period off by ρ 10 on
+    every trailing half-year."""
+    figures = _half_years(count=496.9 * M, counts=(2508.3 * M, 496.9 * M))
+    out = _apply(figures, splits=(), market_cap=_quoted(2494.4 * M), adr_ratio=5)
+    assert [p.eps_diluted for p in out.figures.periods] == pytest.approx([1.0, 0.2])
+    assert out.notes["eps_ttm"] == (
+        "÷5 to the quote's share basis (the ADR ratio 5) on 1 of 2 half-years"
+    )
+    assert _basis_sentence(out) == (
+        "The diluted count (×5) and the trailing EPS (÷5 on the half-year ending 30 Sep 2026) are "
+        "read on the quote's share basis: the stored count, 496.9 m, is a fifth of the quote's, "
+        "2,494.4 m (the ADR ratio 5)."
+    )
+    every = _half_years(count=145.8 * M, counts=(145.8 * M, 145.8 * M))
+    out = _apply(every, splits=(), market_cap=_quoted(1450.8 * M), adr_ratio=10)
+    assert "the trailing EPS (÷10 on every trailing half-year)" in _basis_sentence(out)
 
 
 def test_a_split_within_the_trailing_quarters_leaves_restated_quarters_alone() -> None:

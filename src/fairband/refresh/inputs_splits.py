@@ -57,8 +57,10 @@ keyed by the engine's DATA input names: ``shares_diluted``, ``eps_ttm``, ``stree
 ``gf_eps_ttm``, ``gf_eps_without_nri``, and ``ntm_eps`` when a scaled quarterly row is in the
 NTM window the engine reads (``ntm_window`` on the trailing figures' cadence: the four quarters,
 or the two half-years). The notes of the two trailing EPS figures say "on 3 of 4 quarters" when
-not every period scaled. No DATA input holds the annual consensus EPS (the path steps are
-rates, unmoved when both years scale), so the ``split-pending`` sentence alone names it. A pending
+not every period scaled; a half-yearly reporter's notes name its periods half-years ("on 1 of 2
+half-years"), and the quarterly consensus rows are named by the NTM window's cadence, else the
+trailing figures'. No DATA input holds the annual consensus EPS (the path steps are rates,
+unmoved when both years scale), so the ``split-pending`` sentence alone names it. A pending
 split puts the note ``split-pending`` on the row, its sentence naming the splits and the newest
 trailing period they follow, the figures read on the new basis and the periods they were scaled
 on, and those read as stored with the reason: the statement side's when it scaled nothing (FMP's
@@ -110,7 +112,7 @@ from fairband.engine.anchor import (
     ntm_window,
 )
 from fairband.engine.types import Flag
-from fairband.refresh.inputs_statements import TrailingPeriod
+from fairband.refresh.inputs_statements import PERIOD_NOUNS, TrailingPeriod
 from fairband.store.observations import observations_for
 from fairband.store.vendor import latest_response
 
@@ -249,6 +251,22 @@ class SplitOutcome:
     refusal: str | None = None
 
 
+@dataclass(frozen=True)
+class _Words:
+    """How the notes name the trailing periods: the fiscal year on the fallback, else each period
+    a quarter or a half-year, ``one`` and ``many``, by the trailing figures' cadence."""
+
+    fiscal_year: bool
+    one: str
+    many: str
+
+    @classmethod
+    def of(cls, figures: SplitFigures) -> "_Words":
+        trailing = figures.trailing
+        one, many = PERIOD_NOUNS["quarterly" if trailing is None else trailing.cadence]
+        return cls(trailing is not None and trailing.on_fiscal_year, one, many)
+
+
 # One side of the rule: the figures as it leaves them, its notes by DATA input name, its sentences.
 type _Side = tuple[SplitFigures, dict[str, str], list[str]]
 # The trailing periods scaled, by their place in ``periods``, with the splits after each one's end.
@@ -337,7 +355,7 @@ def _split_rule(
         stated, _after(pending, statement_end), statement_end, tolerance
     )
     out, gurufocus_notes, gurufocus = _gurufocus_side(estimated, pending)
-    head = _head(pending, figures.periods, statement_end)
+    head = _head(pending, figures.periods, statement_end, _Words.of(figures))
     sentence = " ".join([head, *statement, *consensus, *gurufocus, _TAIL])
     notes = statement_notes | consensus_notes | gurufocus_notes
     flag = Flag("split-pending", "Split pending", sentence)
@@ -380,18 +398,18 @@ def _statement_side(
     notes: dict[str, str] = {}
     if scale_count:
         notes["shares_diluted"] = f"{_times(ratio)} for {_named(newest)}"
-    notes |= {name: _per_share_note(groups, len(figures.periods)) for name in moved}
-    fiscal_year = figures.trailing is not None and figures.trailing.on_fiscal_year
+    words = _Words.of(figures)
+    notes |= {name: _per_share_note(groups, len(figures.periods), words) for name in moved}
     sentences: list[str] = []
     if scale_count or moved:
-        spans = _spans(groups, figures.periods, fiscal_year)
+        spans = _spans(groups, figures.periods, words)
         per_share = [_PER_SHARE[name] for name in moved]
         sentences.append(_scaled_sentence(ratio if scale_count else None, per_share, spans))
     elif scaled:
         sentences.append(_NOTHING_TO_SCALE)
     elif (newest or tested) and all(verdict == "post" for verdict in tested):
         sentences.append(_POST_SPLIT)
-    sentences += _periods_left(verdicts, figures.periods, fiscal_year)
+    sentences += _periods_left(verdicts, figures.periods, words)
     return out, notes, sentences
 
 
@@ -455,41 +473,43 @@ def _groups(scaled: _Scaled) -> list[tuple[tuple[SplitRow, ...], list[int]]]:
     return list(groups.items())
 
 
-def _per_share_note(groups: Sequence[tuple[tuple[SplitRow, ...], list[int]]], n: int) -> str:
+def _per_share_note(
+    groups: Sequence[tuple[tuple[SplitRow, ...], list[int]]], n: int, words: _Words
+) -> str:
     """``÷2 for the 2-for-1 split of 15 Oct 2026`` when every period scaled by one ratio, else
-    ``÷2 on 3 of 4 quarters for ...``, a part for each ratio."""
+    ``÷2 on 3 of 4 quarters for ...`` (``on 1 of 2 half-years``), a part for each ratio."""
     named = _named(groups[0][0])
     if len(groups) == 1 and len(groups[0][1]) == n:
         return f"{_divided(_ratio(groups[0][0]))} for {named}"
-    parts = [f"{_divided(_ratio(after))} on {len(ks)} of {n} quarters" for after, ks in groups]
+    parts = [f"{_divided(_ratio(after))} on {len(ks)} of {n} {words.many}" for after, ks in groups]
     return f"{' and '.join(parts)} for {named}"
 
 
 def _spans(
     groups: Sequence[tuple[tuple[SplitRow, ...], list[int]]],
     periods: Sequence[TrailingPeriod],
-    fiscal_year: bool,
+    words: _Words,
 ) -> str:
     """``÷2 on the quarters to 30 Sep 2026``, a part for each ratio."""
     return " and ".join(
-        f"{_divided(_ratio(after))} on {_span(ks, periods, fiscal_year)}" for after, ks in groups
+        f"{_divided(_ratio(after))} on {_span(ks, periods, words)}" for after, ks in groups
     )
 
 
-def _span(ks: Sequence[int], periods: Sequence[TrailingPeriod], fiscal_year: bool) -> str:
+def _span(ks: Sequence[int], periods: Sequence[TrailingPeriod], words: _Words) -> str:
     """``the fiscal year``, ``the quarters to 30 Sep 2026`` when every quarter is among ``ks``,
     else ``the quarter ending ...``, ``the quarters ending 31 Dec 2025 to 30 Jun 2026`` or, when
-    they do not follow one another, ``the quarters ending A, B and C``."""
-    if fiscal_year:
+    they do not follow one another, ``the quarters ending A, B and C``; half-years so named."""
+    if words.fiscal_year:
         return "the fiscal year"
     ends = [_day(periods[k].end) for k in ks]
     if len(ks) == len(periods):
-        return f"the quarters to {ends[-1]}"
+        return f"the {words.many} to {ends[-1]}"
     if len(ks) == 1:
-        return f"the quarter ending {ends[0]}"
+        return f"the {words.one} ending {ends[0]}"
     if ks[-1] - ks[0] == len(ks) - 1:
-        return f"the quarters ending {ends[0]} to {ends[-1]}"
-    return f"the quarters ending {_and(ends)}"
+        return f"the {words.many} ending {ends[0]} to {ends[-1]}"
+    return f"the {words.many} ending {_and(ends)}"
 
 
 def _scaled_sentence(count_ratio: float | None, per_share: Sequence[str], spans: str) -> str:
@@ -511,26 +531,27 @@ def _scaled_sentence(count_ratio: float | None, per_share: Sequence[str], spans:
 def _periods_left(
     verdicts: dict[int, tuple[_Verdict, tuple[SplitRow, ...]]],
     periods: Sequence[TrailingPeriod],
-    fiscal_year: bool,
+    words: _Words,
 ) -> list[str]:
     """A sentence for each reason judged periods are read as stored: a count fitting both bases or
     neither of the count it was judged against (the quote's for the newest period, the newest
     count for the others), or no share count."""
     reasons = {k: verdict for k, (verdict, _) in verdicts.items()}
-    return _named_left(reasons, _PERIOD_LEFT, periods, fiscal_year)
+    return _named_left(reasons, _PERIOD_LEFT, periods, words)
 
 
 def _left(
-    ks: Sequence[int], periods: Sequence[TrailingPeriod], fiscal_year: bool, said: tuple[str, str]
+    ks: Sequence[int], periods: Sequence[TrailingPeriod], words: _Words, said: tuple[str, str]
 ) -> str:
-    """``The quarter ending 31 Mar 2026 has no share count and is read as stored.``"""
+    """``The quarter ending 31 Mar 2026 has no share count and is read as stored.``, a half-year
+    so named."""
     one, many = said
-    if fiscal_year:
+    if words.fiscal_year:
         return f"The fiscal year {one} and is read as stored."
     ends = _and([_day(periods[k].end) for k in ks])
     if len(ks) == 1:
-        return f"The quarter ending {ends} {one} and is read as stored."
-    return f"The quarters ending {ends} {many} and are read as stored."
+        return f"The {words.one} ending {ends} {one} and is read as stored."
+    return f"The {words.many} ending {ends} {many} and are read as stored."
 
 
 def _consensus_side(
@@ -540,7 +561,9 @@ def _consensus_side(
     pre-split, against S, the count as the statement side left it, and P = S ÷ ρ; every row as
     stored without a count, and without a split after ``statement_end``. The NTM EPS carries the
     note when a scaled row is in the NTM window the engine reads on the trailing figures' cadence
-    (``ntm_window``: the four quarters, or the two half-years), its span theirs."""
+    (``ntm_window``: the four quarters, or the two half-years), its span theirs. The quarterly
+    consensus rows are named by the window's cadence, else the trailing figures': quarters, or
+    half-years."""
     if figures.shares_diluted is None or not pending:
         return figures, {}, []
     ratio = _ratio(pending)
@@ -551,22 +574,26 @@ def _consensus_side(
     quarters, quarters_scaled, quarters_left = _consensus(
         figures.quarter_estimates, ratio, counts, statement_end, tolerance
     )
-    spans = [_years_span(annual_scaled)] if annual_scaled else []
-    if quarters_scaled:
-        spans.append(f"the {_quarters_span(quarters_scaled)}")
-    scaled_ends = {q.period_end for q in quarters_scaled}
     cadence: Cadence = "quarterly" if figures.trailing is None else figures.trailing.cadence
     window = ntm_window(figures.quarter_estimates, statement_end, cadence)
-    ntm = () if window is None else window[0]
+    ntm, rows_cadence = ((), cadence) if window is None else window
+    nouns = PERIOD_NOUNS[rows_cadence]
+    spans = [_years_span(annual_scaled)] if annual_scaled else []
+    if quarters_scaled:
+        spans.append(f"the {_quarters_span(quarters_scaled, nouns)}")
+    scaled_ends = {q.period_end for q in quarters_scaled}
     ntm_scaled = [q for q in ntm if q.period_end in scaled_ends]
     notes: dict[str, str] = {}
     if ntm_scaled:
-        span = _quarters_span(ntm_scaled)
+        span = _quarters_span(ntm_scaled, nouns)
         notes["ntm_eps"] = f"the consensus {span} {r} for {_named(pending)}"
     sentences = [f"The consensus EPS for {' and for '.join(spans)} is read {r}."] if spans else []
     left = [
         *(f"{_years_list(rows)} ({reason})" for reason, rows in _by_reason(annual_left)),
-        *(f"{_quarters_list(rows)} ({reason})" for reason, rows in _by_reason(quarters_left)),
+        *(
+            f"{_quarters_list(rows, nouns)} ({reason})"
+            for reason, rows in _by_reason(quarters_left)
+        ),
     ]
     if left:
         sentences.append(f"The consensus EPS for {_and(left)} is read as stored.")
@@ -687,15 +714,15 @@ def _basis_side(
     notes: dict[str, str] = {}
     if factor != 1:
         notes["shares_diluted"] = f"{_times(factor)} to the quote's share basis: {relation}"
+    words = _Words.of(figures)
     if moved:
-        notes["eps_ttm"] = _basis_note(list(groups.items()), len(figures.periods), adr_ratio)
-    fiscal_year = figures.trailing is not None and figures.trailing.on_fiscal_year
+        notes["eps_ttm"] = _basis_note(list(groups.items()), len(figures.periods), adr_ratio, words)
     if factor != 1 or moved:
-        spans = _basis_spans(list(groups.items()), figures.periods, fiscal_year) if moved else None
+        spans = _basis_spans(list(groups.items()), figures.periods, words) if moved else None
         lead = _basis_scaled(None if factor == 1 else factor, spans, relation)
     else:
         lead = f"{relation[0].upper()}{relation[1:]}."
-    named = _named_left(left, _BASIS_LEFT, figures.periods, fiscal_year)
+    named = _named_left(left, _BASIS_LEFT, figures.periods, words)
     flag = Flag(BASIS_SCALED, "Share basis scaled", " ".join([lead, *named]))
     return SplitOutcome(out, None, notes, dict.fromkeys(notes, BASIS_SCALED), flag)
 
@@ -773,29 +800,31 @@ def _on_basis(period: TrailingPeriod, factor: float) -> TrailingPeriod:
     )
 
 
-def _basis_note(groups: Sequence[tuple[float, list[int]]], n: int, adr_ratio: float) -> str:
+def _basis_note(
+    groups: Sequence[tuple[float, list[int]]], n: int, adr_ratio: float, words: _Words
+) -> str:
     """``÷10 to the quote's share basis (the ADR ratio 10)`` when every period scaled by one
-    factor, else ``... on 1 of 4 quarters``, a part for each factor."""
+    factor, else ``... on 1 of 4 quarters`` (``on 1 of 2 half-years``), a part for each factor."""
     basis = f"to the quote's share basis{_adr(adr_ratio)}"
     if len(groups) == 1:
         factor, ks = groups[0]
-        share = "" if len(ks) == n else f" on {len(ks)} of {n} quarters"
+        share = "" if len(ks) == n else f" on {len(ks)} of {n} {words.many}"
         return f"{_divided(factor)} {basis}{share}"
-    parts = [f"{_divided(factor)} on {len(ks)} of {n} quarters" for factor, ks in groups]
+    parts = [f"{_divided(factor)} on {len(ks)} of {n} {words.many}" for factor, ks in groups]
     return f"{' and '.join(parts)} {basis}"
 
 
 def _basis_spans(
     groups: Sequence[tuple[float, list[int]]],
     periods: Sequence[TrailingPeriod],
-    fiscal_year: bool,
+    words: _Words,
 ) -> str:
     """``÷10 on every trailing quarter``, ``÷5 on the quarter ending 30 Sep 2026``, a part for
-    each factor."""
+    each factor; half-years so named."""
 
     def span(ks: Sequence[int]) -> str:
-        every = len(ks) == len(periods) and not fiscal_year
-        return "every trailing quarter" if every else _span(ks, periods, fiscal_year)
+        every = len(ks) == len(periods) and not words.fiscal_year
+        return f"every trailing {words.one}" if every else _span(ks, periods, words)
 
     return " and ".join(f"{_divided(factor)} on {span(ks)}" for factor, ks in groups)
 
@@ -849,17 +878,17 @@ def _named_left[R](
     reasons: Mapping[int, R],
     said: Mapping[R, tuple[str, str]],
     periods: Sequence[TrailingPeriod],
-    fiscal_year: bool,
+    words: _Words,
 ) -> list[str]:
     """A sentence for each reason in ``said`` that periods are read as stored, in its order, the
-    periods by their place in ``periods``; ``{}`` in the words is the count each was judged
+    periods by their place in ``periods``; ``{}`` in the reason is the count each was judged
     against (the quote's for the newest period, the newest count for the others)."""
     groups: dict[tuple[str, str], list[int]] = {}
     for reason, (one, many) in said.items():
         for k in sorted(k for k, found in reasons.items() if found == reason):
             against = "the quote's count" if k == len(periods) - 1 else "the newest count"
             groups.setdefault((one.format(against), many.format(against)), []).append(k)
-    return [_left(ks, periods, fiscal_year, words) for words, ks in groups.items()]
+    return [_left(ks, periods, words, reason) for reason, ks in groups.items()]
 
 
 def _after(splits: Sequence[SplitRow], day: date) -> tuple[SplitRow, ...]:
@@ -900,11 +929,14 @@ def _within(a: float, b: float, tolerance: float) -> bool:
 
 
 def _head(
-    pending: Sequence[SplitRow], periods: Sequence[TrailingPeriod], statement_end: date
+    pending: Sequence[SplitRow],
+    periods: Sequence[TrailingPeriod],
+    statement_end: date,
+    words: _Words,
 ) -> str:
     """``A 2-for-1 split of 28 Jan 2027 falls after the newest statement (30 Sep 2026).``, or,
     when the oldest pending split falls within the trailing periods, ``... falls after the quarter
-    ending 31 Mar 2026.``, the newest period it follows."""
+    ending 31 Mar 2026.`` (``the half-year ending``), the newest period it follows."""
     splits = _and([f"{_article(s)} {s.word} of {_day(s.date)}" for s in pending])
     verb = "falls" if len(pending) == 1 else "fall"
     first = pending[0].date
@@ -912,7 +944,7 @@ def _head(
     if first > statement_end or not before:
         where = f"the newest statement ({_day(statement_end)})"
     else:
-        where = f"the quarter ending {_day(before[-1])}"
+        where = f"the {words.one} ending {_day(before[-1])}"
     return f"{splits[0].upper()}{splits[1:]} {verb} after {where}."
 
 
@@ -921,20 +953,23 @@ def _years_span(rows: Sequence[AnnualEstimate]) -> str:
     return f"fiscal {first}" if first == last else f"fiscal {first} to {last}"
 
 
-def _quarters_span(rows: Sequence[QuarterEstimate]) -> str:
-    quarters = "quarter" if len(rows) == 1 else "quarters"
-    return f"{quarters} to {_day(rows[-1].period_end)}"
+def _quarters_span(rows: Sequence[QuarterEstimate], nouns: tuple[str, str]) -> str:
+    """``quarters to 30 Sep 2027``, or ``half-years to ...`` by ``nouns``."""
+    one, many = nouns
+    return f"{one if len(rows) == 1 else many} to {_day(rows[-1].period_end)}"
 
 
 def _years_list(rows: Sequence[AnnualEstimate]) -> str:
     return f"fiscal {_and([str(a.fiscal_year) for a in rows])}" if rows else ""
 
 
-def _quarters_list(rows: Sequence[QuarterEstimate]) -> str:
+def _quarters_list(rows: Sequence[QuarterEstimate], nouns: tuple[str, str]) -> str:
+    """``the quarters ending A and B``, or ``the half-years ending ...`` by ``nouns``."""
     if not rows:
         return ""
-    quarters = "quarter" if len(rows) == 1 else "quarters"
-    return f"the {quarters} ending {_and([_day(q.period_end) for q in rows])}"
+    one, many = nouns
+    named = one if len(rows) == 1 else many
+    return f"the {named} ending {_and([_day(q.period_end) for q in rows])}"
 
 
 def _named(splits: Sequence[SplitRow]) -> str:

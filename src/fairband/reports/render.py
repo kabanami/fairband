@@ -98,10 +98,11 @@ GLOSSARY: dict[str, str] = {
     ),
     "Cadence": (
         "How often a company reports, read from its two newest quarterly statement rows: "
-        "quarterly when they end 80 to 100 days apart, half-yearly when 170 to 195. The trailing "
-        "figures sum four quarters or two half-years, and the NTM window reads the next four "
-        "quarters or two half-years; the fiscal-year fallback reads as a quarterly reporter "
-        "(4.2, 5.2)"
+        "quarterly when they end 80 to 100 days apart, half-yearly when 170 to 195 and the row "
+        "before them does not end a quarter before the older. The trailing figures sum four "
+        "quarters or two half-years, and the NTM window reads the next four quarters or two "
+        "half-years; the fiscal-year fallback keeps the cadence the rows gave, quarterly when "
+        "they gave none (4.2, 5.2)"
     ),
     "Belief": (
         "The growth rate for years 4 to N before the fade: the base-rate median plus 2 points"

@@ -492,14 +492,16 @@ The rules:
 
 Guidance enters the reviewed value only through an override, never the mechanical value. Each
 input takes the full-year guidance of one fiscal year, counted from the base year. The base year
-is the fiscal year that holds most of the four quarters after the last one reported, a tie taking
-the later year. Every route that reads a guidance-backed input finds it by this one rule; Mature
-Stable and Start-up have no base year and read none. Mature Growth, High Growth and Young Growth
-store it as `base_year` in the snapshot's `path` intermediate. A Decline snapshot does not store
-it: find it by the rule, from the quarters of `estimates`. On Decline without four consecutive
-NTM quarters there is no base year, and the route reads neither `revenue.ntm` nor the steps: such
-an override would apply and move nothing. Write none there; record the guidance and read it in
-section 5 only. The figure you pass as `new` comes from a tool:
+is the fiscal year that holds most of the window's periods after the last one reported: four
+quarters, or two half-years for a company that reports twice a year, a tie taking the later year.
+Every route that reads a guidance-backed input finds it by this one rule; Mature Stable and
+Start-up have no base year and read none. Mature Growth, High Growth and Young Growth store it as
+`base_year` in the snapshot's `path` intermediate. A Decline snapshot does not store it: find it
+by the rule, from the quarterly rows of `estimates`. On Decline without the window (four
+consecutive NTM quarters, or two half-years) there is no base year, and the route reads neither
+`revenue.ntm` nor the steps: such an override would apply and move nothing. Write none there;
+record the guidance and read it in section 5 only. The figure you pass as `new` comes from a
+tool:
 
 - `earnings.ntm` (Mature Growth): a full-year EPS guidance for the base year. `new` is the
   record's midpoint.

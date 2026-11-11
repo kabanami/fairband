@@ -213,6 +213,33 @@ def test_a_quarterly_reporter_never_reads_a_half_year_window() -> None:
     assert base_year(HALVES, date(2026, 6, 30), "half-yearly") == 2027
 
 
+def test_a_quarter_beside_the_pair_rules_out_a_half_year_window() -> None:
+    """The window's gap guard (WSE's consensus: quarters with 2027-06-30 missing). After a last
+    reported 2026-12-31 the first two rows, 2027-03-31 and 2027-09-30, are 183 days apart, but the
+    row ending 2027-12-31 sits 92 days from the second: they are quarters, not half-years, so a
+    half-yearly reporter reads no half-year window, and no four consecutive quarters either. With
+    the missing quarter on file the four quarters stand."""
+    last = date(2026, 12, 31)
+    rows = [
+        q("2027-03-31", 2027, "Q1", 1),
+        q("2027-09-30", 2027, "Q3", 1),
+        q("2027-12-31", 2027, "Q4", 1),
+        q("2028-03-31", 2028, "Q1", 1),
+    ]
+    assert ntm_periods(rows, last, "half-yearly") is not None  # the pair alone reads as halves
+    assert ntm_window(rows, last, "half-yearly") is None
+    assert base_year(rows, last, "half-yearly") is None
+    full = [*rows, q("2027-06-30", 2027, "Q2", 1)]
+    found = ntm_window(full, last, "half-yearly")
+    assert found is not None and found[1] == "quarterly"
+    assert [x.period_end.isoformat() for x in found[0]] == [
+        "2027-03-31",
+        "2027-06-30",
+        "2027-09-30",
+        "2027-12-31",
+    ]
+
+
 def test_a_half_yearly_reporter_with_quarterly_consensus_reads_four_quarters() -> None:
     """ABVX (spec 2026-11-10 8): half-year statements and quarterly consensus rows. The window is
     the one its consensus cadence gives, four consecutive quarters, with the cadence
