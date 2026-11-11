@@ -3,8 +3,9 @@
 Year 1 is the NTM anchor: the sum of the consensus periods of the NTM window after the last
 reported period, picked by period end and never by row order (``ntm_window``). The window is four
 consecutive quarters for a company that reports quarterly; for one that reports half-yearly
-(spec 2026-11-10 8) it is two consecutive half-years, else four consecutive quarters, the window
-its consensus cadence gives. The cadence is the trailing figures' (``TrailingFigures.cadence``),
+(spec 2026-11-10 8) it is two consecutive half-years with no consensus row 80 to 100 days from
+either (a quarterly consensus with a gap is no half-year pair), else four consecutive quarters,
+the window its consensus cadence gives. The cadence is the trailing figures' (``TrailingFigures.cadence``),
 read from the spacing of the statement periods; a row ending within ``SAME_PERIOD_DAYS`` after
 the last reported period is that period under the vendor's second fiscal calendar, not the first
 of the window. The SBC basis test of ``mech/1.2``:

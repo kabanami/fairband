@@ -37,10 +37,9 @@ the last two half-years when it is half-yearly and they end 170 to 195 days apar
 quarterly cash flow by period end, a sum ``None`` when any period lacks its part; else the last
 fiscal year, flagged ``trailing-on-fiscal-year``, on the cadence the rows gave, quarterly when
 they gave none (so its NTM window is the one that cadence reads). The last fiscal year stands in
-too when any
-of those periods' income statements names another currency than the newest annual one, the
-reporting currency (spec 2026-11-10 7): the note's sentence then names those periods and their
-currency. The interest expense and the depreciation and amortization (spec 2026-11-03 section 11)
+too when any of those periods' income statements names another currency than the newest annual
+one, the reporting currency (spec 2026-11-10 7): the note's sentence then names those periods
+and their currency. The interest expense and the depreciation and amortization (spec 2026-11-03 section 11)
 are summed the same way; the interest expense counts each period by its size, as FMP signs it
 either way.
 The diluted share count is the newest quarterly row's weighted average, else the newest fiscal
