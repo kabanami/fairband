@@ -21,10 +21,9 @@ call FMP, or GuruFocus for the trailing P/E series, on FastAPI's sync-route thre
 ``Passthrough`` that ``serve`` builds with the keys, FMP paced by the one limiter the worker's runs
 share, and answer the stored payload scrubbed, so no answer carries a key; without a pass-through
 (no FMP key) the route and the filing reads answer 503 and the read's trailing series is ``null``.
-What is bounded: four vendor
-calls in flight; a request that finds them all taken waits at most ten seconds for a slot, holding
-its pool thread meanwhile, and past that answers 503. FastAPI's own documentation routes are off;
-they would load their scripts from a CDN.
+What is bounded: four vendor calls in flight; a request that finds them all taken waits at most
+ten seconds for a slot, holding its pool thread meanwhile, and past that answers 503. FastAPI's
+own documentation routes are off; they would load their scripts from a CDN.
 
 The screen's rows are the latest universe's admitted companies, each with its latest snapshot,
 or a placeholder row "not yet valued" before its first; a company the latest universe does not
@@ -63,9 +62,9 @@ pass-through route (``/api/vendor/{kind}/{symbol}``), the multiples history read
 (``/api/companies/{symbol}/multiples-history``) and the filing reads
 (``/api/companies/{symbol}/filings``, ``/filing-report`` and ``/filing-report/search``): each
 spends a vendor's quota and stores its answer, and an image tag or a link on any other site passes
-the host check. The page's read and
-the MCP server's client send the header on every call. A cross-site form cannot send that header,
-and a cross-origin script cannot without a CORS preflight, which the app never answers.
+the host check. The page's read and the MCP server's client send the header on every call. A
+cross-site form cannot send that header, and a cross-origin script cannot without a CORS
+preflight, which the app never answers.
 """
 
 import json

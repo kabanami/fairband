@@ -162,11 +162,14 @@ resolve to nothing. A `filing:` cite takes no `period`: a cite given one fails `
 sheet's columns are periods or members (this year's quarter beside last year's, or one segment
 beside another), and the check cannot tell one column from another: read the column's words (the
 sheet's `columns`, or the hit's `column`) before you cite a number, and name that period in the
-sentence. A sentence of a note is a finding whose source is `{kind: "filing", ref: "response:<responseId>",
-note}`: the `responseId` the filing report answered, and the note naming the report and the sheet
-("10-Q of fiscal 2027 Q1, sheet LEASES"). `filing_report` reads another listed company's 10-K or
-10-Q by its symbol, but a `filing:` ref names a cell of the report's own company only, so a figure
-from it is a finding. A foreign filer files no 10-Q, so FMP holds mostly its annual reports.
+sentence. A filing cell holds the number at its sheet's scale, so do not `derive` a cell with a
+figure in full units (a `fact:` or a `table:` figure), nor two cells of sheets with different
+scales. A sentence of a note is a finding whose source is `{kind: "filing", ref:
+"response:<responseId>", note}`: the `responseId` the filing report answered, and the note naming
+the report and the sheet ("10-Q of fiscal 2027 Q1, sheet LEASES"). `filing_report` reads another
+listed company's 10-K or 10-Q by its symbol, but a `filing:` ref names a cell of the report's own
+company only, so a figure from it is a finding. A foreign filer files no 10-Q, so FMP holds
+mostly its annual reports.
 
 `filings(symbol)` lists every filing of the past year with its links, newest first, the ownership
 forms left out (`insider_trades` serves them): `link`, the filing's index page on sec.gov, and

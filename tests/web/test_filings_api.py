@@ -233,7 +233,14 @@ def test_a_filing_row_is_answered_as_fmp_gave_it(
 
 
 @pytest.mark.parametrize(
-    "query", ["from=2026-11-11&to=2025-11-11", "from=soon", "to=2026-13-01", "to=2026-10-31&from="]
+    "query",
+    [
+        "from=2026-11-11&to=2025-11-11",
+        "from=soon",
+        "to=2026-13-01",
+        "to=2026-10-31&from=",
+        "to=0001-06-01",  # a year before it is before the calendar's first (C.8)
+    ],
 )
 def test_a_bad_window_is_400(with_passthrough: TestClient, vendor: Vendor, query: str) -> None:
     assert _refused(with_passthrough.get(f"{FILINGS}?{query}")) == (400, BAD_WINDOW)
@@ -470,6 +477,43 @@ def test_search_finds_the_sentence_and_the_row(
     assert vendor.paths == [REPORT_JSON]
 
 
+def test_a_lower_case_period_reads_as_upper_case(
+    with_passthrough: TestClient, vendor: Vendor
+) -> None:
+    """The final review's C.2: ``q1`` and ``fy`` read as ``Q1`` and ``FY`` on both routes, so FMP
+    is asked for the upper-case period and a later ask in either case reuses the one report."""
+    asked: list[str] = []
+    stored = (FIXTURES / "financial-reports-json.ACME.json").read_bytes()
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.params["period"])
+        return httpx.Response(200, content=stored, headers={"Content-Type": "application/json"})
+
+    vendor.answer = answer
+    lower = with_passthrough.get(REPORT, params={"year": "2027", "period": "q1"}).json()
+    assert (lower["period"], lower["reused"]) == ("Q1", False)
+    upper = with_passthrough.get(REPORT, params=Q1).json()
+    assert (upper["responseId"], upper["reused"]) == (lower["responseId"], True)
+    searched = with_passthrough.get(SEARCH, params={**Q1, "period": "q1", "text": "lease"}).json()
+    assert (searched["period"], searched["reused"]) == ("Q1", True)
+    annual = {"year": "2026", "period": "fy", "text": "lease"}
+    found = with_passthrough.get(SEARCH, params=annual).json()
+    assert (found["period"], found["reused"]) == ("FY", False)
+    sheets = with_passthrough.get(REPORT, params={"year": "2026", "period": "Fy"}).json()
+    assert (sheets["period"], sheets["reused"]) == ("FY", True)
+    assert asked == ["Q1", "FY"]
+
+
+def test_a_sheet_with_white_space_is_read_by_its_served_name(with_passthrough: TestClient) -> None:
+    """The final review's C.1: ``sheet`` is served before it is matched, so "LEASES " reads the
+    sheet LEASES, and its rows' refs hold the served name."""
+    body = with_passthrough.get(REPORT, params={**Q1, "sheet": " LEASES "}).json()
+    assert body["sheet"] == "LEASES"
+    assert body["rows"][0]["rowRef"] == f"filing:{body['responseId']}/LEASES/0"
+    whole = with_passthrough.get(REPORT, params={**Q1, "sheet": "LEASES\xa0", "row": 2}).json()
+    assert (whole["sheet"], whole["label"]) == ("LEASES", "LEASES")
+
+
 def test_a_report_fmp_does_not_hold_is_404(with_passthrough: TestClient, vendor: Vendor) -> None:
     """Review Focus 2: FMP answers a period it does not hold with HTTP 200 and an error message;
     the answer is stored with its error and never reused, so a second ask calls FMP again."""
@@ -498,7 +542,7 @@ def test_a_report_fmp_does_not_hold_is_404(with_passthrough: TestClient, vendor:
         ("fromRow=0", 400, NEEDS_PERIOD),
         ("year=2027&sheet=LEASES", 400, NEEDS_PERIOD),
         ("year=2027&period=Q5", 400, BAD_PERIOD),
-        ("year=2027&period=q1", 400, BAD_PERIOD),
+        ("year=2027&period=q5", 400, BAD_PERIOD),  # q1 reads as Q1 (C.2)
         (
             "year=2027&period=Q1&sheet=Nope",
             404,

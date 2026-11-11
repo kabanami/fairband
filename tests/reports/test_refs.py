@@ -521,6 +521,27 @@ def test_a_quarter_not_on_file_is_unresolved(
     )
 
 
+def test_any_stored_period_label_resolves(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The final review's C.5: a stored period's label that is not of the quarter's form (a
+    half-year FMP stores as ``H1``) resolves as the quarters read serves it, the label its period;
+    a label not on file, and a year as digits alone not on file, name nothing."""
+    payloads = {e: p for e, p in bodies(cadence="half-yearly").items() if e != "earnings"}
+    newest = max(payloads["income-quarter"], key=lambda row: row["date"])
+    newest["period"] = "H1"
+    store_payloads(conn, "HALFQ", payloads, NOW)
+    labels = [h.period for h in stored_quarters(conn, "HALFQ").periods]
+    assert labels[-1] == "2026-H1"
+    resolver = Resolver(conn, "HALFQ", policy)
+    assert resolver.resolve("fact:HALFQ/revenue/2026-H1") == Resolved(
+        330 * M, "currency", "2026-H1", None
+    )
+    assert resolver.describe("fact:HALFQ/revenue/2026-H1") == "the revenue line of 2026-H1 on file"
+    for ref in ("fact:HALFQ/revenue/2026-H2", "fact:HALFQ/revenue/2031", "fact:HALFQ/revenue/H1"):
+        assert resolver.resolve(ref) is None, ref
+
+
 def test_table_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:
     tables = financial_tables(conn, "AAPL", policy)
     resolver = Resolver(conn, "AAPL", policy)  # the tables computed once for every cell

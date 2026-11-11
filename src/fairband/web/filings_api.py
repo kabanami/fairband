@@ -23,9 +23,10 @@ and ``responseId``, ``observedAt`` and ``reused`` of the stored response it was 
   ``period``: ``year``, ``period``, ``sheets`` from ``fromRow`` (0 when left out) and
   ``nextRow`` (``filing_report.sheet_list``). With ``sheet``: ``year``, ``period`` and the
   sheet's rows (``filing_report.sheet_rows``). With ``sheet`` and ``row``: ``year``, ``period``
-  and one cell's text (``filing_report.cell_text``), ``col`` and ``offset`` 0 when left out. A
-  parameter the view does not read is not read: ``row`` without ``sheet`` answers the sheet list,
-  ``fromRow`` with ``row`` the cell.
+  and one cell's text (``filing_report.cell_text``), ``col`` and ``offset`` 0 when left out.
+  ``sheet`` is served before it is matched, so "LEASES " reads LEASES. A parameter the view does
+  not read is not read: ``row`` without ``sheet`` answers the sheet list, ``fromRow`` with ``row``
+  the cell.
 - ``GET /api/companies/{symbol}/filing-report/search?year=&period=&text=`` answers ``year``,
   ``period``, ``text`` (the text searched, served), ``hits`` and ``more``
   (``filing_report.search``).
@@ -39,15 +40,17 @@ symbol that is not one is a 400 with its sentence. Then the parameters judged be
 so a refused request calls no vendor and stores nothing, each a 400: ``sheet``, ``row``, ``col``,
 ``offset`` or ``fromRow`` without ``year`` and ``period``, one of them without the other, and on
 the search either missing, ``NEEDS_PERIOD``; a ``period`` other than ``FY`` and ``Q1`` to ``Q4``,
-``BAD_PERIOD``; a search text shorter than ``SEARCH_MIN`` (three) characters once served,
-``SHORT_TEXT``; a ``from`` or a ``to`` that is no ISO date, or ``from`` after ``to``,
-``BAD_WINDOW``. Then the fetch: every slot taken, a 503 with the pass-through's ``BUSY``; a failed
-vendor call a 502 with its sentence, scrubbed. Then what FMP answered: a report it does not hold
-(``{"Error Message": ...}``, stored with its error and never reused) a 404, ``NO_REPORT``; a
-filing list or a list of reports that is not a list a 502, ``NO_LIST`` or ``NO_REPORTS``. Then the
-view's own: a sheet no sheet serves as, a 404 (``NoSheet``); a ``row``, ``col``, ``offset`` or
-``fromRow`` out of range, a 400, "<name> is 0 to <last>" (``OutOfRange``; on the filing list,
-with no filing kept, 0 alone is in range).
+``BAD_PERIOD`` (``period`` is read upper-cased first, so ``q1`` is ``Q1`` to the check, the
+vendor call and the reuse key); a search text shorter than ``SEARCH_MIN`` (three) characters once
+served, ``SHORT_TEXT``; a ``from`` or a ``to`` that is no ISO date, ``from`` after ``to``, or a
+``to`` whose default ``from`` would fall before the calendar's first day, ``BAD_WINDOW``. Then
+the fetch: every slot taken, a 503 with the pass-through's ``BUSY``; a failed vendor call a 502
+with its sentence, scrubbed. Then what FMP answered: a report it does not hold (``{"Error
+Message": ...}``, stored with its error and never reused) a 404, ``NO_REPORT``; a filing list or a
+list of reports that is not a list a 502, ``NO_LIST`` or ``NO_REPORTS``. Then the view's own: a
+sheet no sheet serves as, a 404 (``NoSheet``); a ``row``, ``col``, ``offset`` or ``fromRow`` out
+of range, a 400, "<name> is 0 to <last>" (``OutOfRange``; on the filing list, with no filing
+kept, 0 alone is in range).
 
 The routes are sync ones, as the vendor route is: FastAPI runs them on its thread pool, where a
 vendor call waits at most ten seconds for one of the pass-through's four slots, then for its slot
@@ -157,6 +160,7 @@ def add_filing_routes(
         if passthrough is None:
             raise HTTPException(503, NO_FMP_KEY)
         company = _symbol(symbol)
+        period = _upper(period)
         if year is None and period is None:
             if any(given is not None for given in (sheet, from_row, row, col, offset)):
                 raise HTTPException(400, NEEDS_PERIOD)
@@ -188,6 +192,7 @@ def add_filing_routes(
         if passthrough is None:
             raise HTTPException(503, NO_FMP_KEY)
         company = _symbol(symbol)
+        period = _upper(period)
         # Judged before the fetch, so a refused search calls no vendor and stores no report.
         if year is None or period is None:
             raise HTTPException(400, NEEDS_PERIOD)
@@ -242,11 +247,17 @@ def _head(symbol: str, fetched: Fetched) -> dict[str, Any]:
     }
 
 
+def _upper(period: str | None) -> str | None:
+    """``period`` upper-cased, so ``q1`` reads as ``Q1`` before it is judged, fetched and reused."""
+    return None if period is None else period.upper()
+
+
 def _year_before(end: str) -> str:
-    """``WINDOW_DAYS`` before the ISO date ``end``; ``BAD_WINDOW`` when it is no date."""
+    """``WINDOW_DAYS`` before the ISO date ``end``; ``BAD_WINDOW`` when it is no date, or when that
+    day would fall before the calendar's first (``end`` ``0001-06-01``)."""
     try:
         return (date.fromisoformat(end) - timedelta(days=WINDOW_DAYS)).isoformat()
-    except ValueError:
+    except (ValueError, OverflowError):
         raise HTTPException(400, BAD_WINDOW) from None
 
 

@@ -88,9 +88,11 @@ resolve to nothing. A sheet's columns are periods or members, and a `filing:` re
 period, so a cite of last year's column passes the check as this year's would: read the column's
 words (the sheet's `columns`, or the hit's `column`) before you cite a number, and name that period
 in the sentence. The references list names the column by its index and its words. The sheet's
-title names the scale (`$ in Millions`), and the cell holds the number at that scale. Cite the
-number as the cell holds it, with no period (a `filing:` ref has none, so a cite that names one
-fails), and write the scale word in the plain part after the cite:
+title names the scale (`$ in Millions`). A filing cell holds the number at its sheet's scale, so
+do not `derive` a cell with a figure in full units (a `fact:` or a `table:` figure), nor two cells
+of sheets with different scales. Cite the number as the cell holds it, with no period (a `filing:`
+ref has none, so a cite that names one fails), and write the scale word in the plain part after
+the cite:
 
 ```json
 [

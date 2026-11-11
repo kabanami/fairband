@@ -135,6 +135,41 @@ def test_two_sheets_that_serve_alike_name_the_first() -> None:
     assert cell(report, "A B", 0, 0) == 1
 
 
+def test_a_sheet_no_name_reaches_hands_out_no_ref() -> None:
+    """The final review's C.6: a hit in a sheet that serves the name of an earlier one answers
+    ``rowRef`` null, since its ref would resolve into the earlier sheet; its numbers keep their
+    own sheet's words. The sheet's rows are the earlier sheet's, whose refs resolve to them."""
+    report = _report(
+        **{
+            "A  B": [{"T": ["3 Months Ended"]}, {"first lease": [1]}],
+            "A B": [{"T": ["12 Months Ended"]}, {"second lease": [2]}],
+        }
+    )
+    first, second = search(report, 7, "lease")["hits"]
+    assert (first["sheet"], first["row"], first["rowRef"]) == ("A B", 1, "filing:7/A B/1")
+    assert (second["sheet"], second["row"], second["rowRef"]) == ("A B", 1, None)
+    assert second["numbers"] == [{"col": 0, "value": 2, "column": "12 Months Ended"}]
+    rows = sheet_rows(report, 7, "A B")
+    assert [(r["label"], r["rowRef"]) for r in rows["rows"]] == [
+        ("T", "filing:7/A B/0"),
+        ("first lease", "filing:7/A B/1"),
+    ]
+    assert rows["columns"] == ["3 Months Ended"] and cell(report, "A B", 1, 0) == 1
+
+
+def test_the_sheet_asked_for_is_served_before_it_is_matched() -> None:
+    """The final review's C.1: a ``sheet`` with white space at its ends, or a run of it, reads the
+    sheet that serves so, answered and cited by its served name."""
+    report = _report(**{"INCOME  STATEMENTS ": INCOME})
+    rows = sheet_rows(report, 7, " INCOME\xa0 STATEMENTS ")
+    assert rows["sheet"] == "INCOME STATEMENTS"
+    assert rows["rows"][2]["rowRef"] == "filing:7/INCOME STATEMENTS/2"
+    page = cell_text(report, "INCOME STATEMENTS ", 2, 1)
+    assert (page["sheet"], page["label"], page["text"]) == ("INCOME STATEMENTS", "Revenue", "310")
+    with pytest.raises(NoSheet, match="^no sheet named Nope: ask without sheet"):
+        sheet_rows(report, 7, " Nope ")
+
+
 def test_a_sheet_s_rows_carry_a_short_ref_and_the_cells() -> None:
     rows = sheet_rows(_leases(), 7, LEASES)
     assert rows["sheet"] == LEASES
@@ -507,6 +542,27 @@ def test_search_matches_plain_text_and_its_offset_opens_the_page() -> None:
 def test_search_reads_a_number_by_its_json_text() -> None:
     [hit] = search(_leases(), 7, "12.5")["hits"]
     assert (hit["row"], hit["col"], hit["excerpt"], hit["offset"]) == (1, 0, "12.5", 0)
+
+
+def test_a_number_as_printed_finds_its_cell() -> None:
+    """The final review's C.3: a number cell is also matched by the text with its commas
+    removed, so ``33,165`` finds the cell whose JSON text is ``33165``; a text cell is matched as
+    it reads."""
+    report = _report(
+        S=[
+            {"Azure revenue": [33165, 12.5]},
+            {"Note": ["Azure revenue was $33,165 million"]},
+            {"Units": ["33165 units"]},
+        ]
+    )
+    hits = search(report, 7, "33,165")["hits"]
+    assert [(h["row"], h["col"], h["excerpt"], h["offset"]) for h in hits] == [
+        (0, 0, "33165", 0),
+        (1, 0, "Azure revenue was $33,165 million", 19),
+    ]
+    [decimal] = search(report, 7, "12.5")["hits"]
+    assert (decimal["row"], decimal["col"], decimal["excerpt"]) == (0, 1, "12.5")
+    assert search(report, 7, ",,,")["hits"] == []  # no digit left: no number found by it
 
 
 def test_search_stops_at_twenty_hits_and_at_the_budget() -> None:

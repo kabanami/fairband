@@ -877,6 +877,22 @@ def test_a_filing_cell_is_cited_by_the_ref_the_answer_gives() -> None:
             assert words in text, words
     assert "`columns`" in _tool_entry("filing_report")
     assert "`{col, value, column}`" in _tool_entry("filing_search")
+    # the final review's C.4: a cell is at its sheet's scale, so it is not derived with full units
+    for text in (four, citations):
+        for words in (
+            "A filing cell holds the number at its sheet's scale",
+            "do not `derive` a cell with a figure in full units",
+            "nor two cells of sheets with different scales",
+        ):
+            assert words in text, words
+    search = _tool_entry("filing_search")
+    assert "`33,165` finds the number cell `33165`" in search  # C.3
+    assert "read the sheet the hits name" not in search  # C.9: a further match may sit elsewhere
+    # C.7: the newest four add to the trailing figures only when those sum four quarters
+    quarters = _tool_entry("quarters")
+    assert "the newest four add to the trailing figures" not in quarters
+    for words in ("the sum of four quarters", "the fiscal-year fallback", "the newest two add"):
+        assert words in quarters, words
     assert (
         '{"cite": "$12.5", "ref": "filing:<id>/Leases - Additional Informatio/2/0"}, " million'
     ) in citations

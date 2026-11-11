@@ -29,10 +29,11 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   (a moat class) its word;
 - ``fact:<symbol>/<line>/<period>``: a stored statement line as the engine reads it, ``<line>``
   the engine's field name (``fairband.reports.tables.LINES`` for a fiscal year, read through
-  ``year_lines``; the trailing figures' fields for ``ttm`` and for a quarter) and ``<period>`` the
-  fiscal year as text, a stored quarter's fiscal label written ``<YYYY>-Q<n>`` (``2027-Q1``, read
-  through ``inputs_statements.stored_quarters``: a quarter left out for its currency, or not on
-  file, names nothing; spec 2026-11-11 7.2) or ``ttm``;
+  ``year_lines``; the trailing figures' fields for ``ttm`` and for a quarter) and ``<period>``
+  ``ttm``, the fiscal year as digits alone, or any other text a stored period's fiscal label as
+  the quarters read serves it, ``<fiscalYear>-<fiscalPeriod>`` (``2027-Q1``, or a half-year's as
+  FMP stores it; read through ``inputs_statements.stored_quarters``: a period left out for its
+  currency, or not on file, names nothing; spec 2026-11-11 7.2);
 - ``table:<symbol>/<table>/<row>/<period>``: a cell of the financial tables (13.5);
 - ``estimate:<symbol>/<period>/<field>``: a stored consensus figure, ``<period>`` the fiscal year
   (``2026``) or the quarter (``2026-Q4``) and ``<field>`` the engine's name (``eps``,
@@ -404,8 +405,6 @@ _SNAPSHOT_PATH_WORDS = {
 _LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 _QUARTER = re.compile(r"(\d{4})-?(Q[1-4])")
-# A stored quarter's fiscal label as a ``fact:`` ref writes it, with its dash.
-_QUARTER_LABEL = re.compile(r"\d{4}-Q\d")
 
 
 @dataclass(frozen=True)
@@ -763,19 +762,21 @@ class Resolver:
                 return None
             value = getattr(trailing, line)
             return _figure(value, _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
-        if _QUARTER_LABEL.fullmatch(period):
-            quarter = self._quarters().get(period)
-            if quarter is None or line not in _QUARTER_FIGURES:
-                return None
-            value = getattr(quarter, line)
-            return _figure(value, _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
-        from fairband.reports.tables import LINES, year_lines  # tables builds its refs here
+        if period.isdecimal():  # a fiscal year
+            from fairband.reports.tables import LINES, year_lines  # tables builds its refs here
 
-        lines = self._once("lines", lambda: year_lines(self.conn, self.symbol))
-        year = lines.get(int(period)) if period.isdigit() else None
-        if year is None or line not in LINES:
+            lines = self._once("lines", lambda: year_lines(self.conn, self.symbol))
+            year = lines.get(int(period))
+            if year is None or line not in LINES:
+                return None
+            return _figure(year[line], _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
+        # any other period: a stored period's label as the quarters read serves it (``2027-Q1``,
+        # or a half-year's as FMP stores it), else nothing
+        quarter = self._quarters().get(period)
+        if quarter is None or line not in _QUARTER_FIGURES:
             return None
-        return _figure(year[line], _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
+        value = getattr(quarter, line)
+        return _figure(value, _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
 
     def _table(self, path: str) -> Resolved | None:
         pieces = path.split("/")

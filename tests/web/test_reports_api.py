@@ -13,9 +13,11 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
+from support.vendor import FIXTURES, Vendor
 from support.web import HEADER, NOW, TODAY
 
 from fairband.engine.overrides import Override
@@ -181,6 +183,48 @@ def test_a_clean_submission_publishes_and_completes_the_item(
     assert entries[5]["refId"] == report["id"] and entries[5]["snapshotId"] == sid
     assert entries[5]["summary"] == "full report revision 1: hold"
     assert entries[0]["summary"] == f"completed with report {report['id']}"
+
+
+def test_a_filing_cell_the_search_finds_is_cited_and_named(
+    with_passthrough: TestClient, vendor: Vendor
+) -> None:
+    """The final review's C.12, the filings feature end to end: the search finds the row of the
+    leases not yet commenced in AAPL's 10-Q (the synthetic ACME report, which the mock vendor
+    serves for AAPL); its ``rowRef`` plus the number's column is cited, the report publishes, and
+    its references name the filing, the sheet, the row and the column."""
+    stored = (FIXTURES / "financial-reports-json.ACME.json").read_bytes()
+    vendor.answer = lambda request: httpx.Response(
+        200, content=stored, headers={"Content-Type": "application/json"}
+    )
+    asked = {"year": "2027", "period": "Q1", "text": "not yet commenced"}
+    found = with_passthrough.get("/api/companies/AAPL/filing-report/search", params=asked).json()
+    [hit] = [h for h in found["hits"] if h["numbers"]]
+    [number] = hit["numbers"]
+    assert (number["value"], number["column"]) == (12.5, "3 Months Ended, Sep. 30, 2026")
+    ref = f"{hit['rowRef']}/{number['col']}"
+    sid = _snapshot_id(with_passthrough)
+    cited = [
+        " At the quarter's end, leases not yet commenced came to ",
+        {"cite": "$12.5", "ref": ref},
+        " million.",
+    ]
+    report = _published(
+        with_passthrough, _body(sid, sections=_sections(sid, "full report", *cited))
+    )
+    [reference] = [r for r in report["references"] if r["ref"] == ref]
+    assert reference == {
+        "n": 4,
+        "ref": f"filing:{found['responseId']}/Leases - Additional Informatio/2/0",
+        "source": (
+            "FMP filing report of fiscal 2027 Q1, Leases - Additional Informatio: Additional"
+            " leases, primarily for warehouses, that have not yet commenced, column 0 (3 Months"
+            " Ended, Sep. 30, 2026), observed 1 Nov 2026"
+        ),
+    }
+    # a cite of the wrong value is caught as any figure is
+    wrong = [{"cite": "$11.5", "ref": ref}, " million."]
+    refused = _submit(with_passthrough, _body(sid, sections=_sections(sid, "full report", *wrong)))
+    assert refused.status_code == 422
 
 
 def test_a_rejection_stores_nothing_but_the_ledger_row(client: TestClient) -> None:

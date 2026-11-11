@@ -55,7 +55,9 @@ be left out.
 - `quarters(symbol)`: the newest eight stored quarters, oldest first, each by its fiscal label
   (`period`, `2027-Q1`) with its `periodEnd`, and the trailing figures' lines, each with its
   `fact:` ref (`fact:<symbol>/revenue/2027-Q1`). A quarter's lines are its own terms of the
-  trailing sum, so the newest four add to the trailing figures. `otherCurrency` counts the stored
+  trailing sum: where the trailing figures are the sum of four quarters, the newest four add to
+  them; on the fiscal-year fallback (the row flagged `trailing-on-fiscal-year`) they do not, and
+  for a half-yearly reporter the newest two add. `otherCurrency` counts the stored
   quarters left out for another currency than the reporting one. A half-yearly reporter's
   periods are its half-years, served by the labels FMP stores for them, `Q2` and `Q4`
   (`2026-Q2`, `2026-Q4`). The diluted EPS is the statement's as stored: on a row flagged
@@ -201,16 +203,18 @@ under about 40,000 characters as you receive it. The counts below are upper boun
   its column's words in `columns`. Never build a `filing:` ref by hand: a sheet name with a `/` or
   a `~` is written `~1` or `~0` inside a ref.
 - `filing_search(symbol, year, period, text)`: a search of one filing report for `text`, three
-  characters or more, without regard to case, in every label and every cell, a number by its JSON
-  text. A hit is a row, in the report's order: `{sheet, row, col, label, excerpt, offset, rowRef,
-  numbers}`. `col` is the first cell that matches, or `null` when only the label does; `excerpt`
-  holds 300 characters each side of the first match; `offset` is the match's place in that cell's
-  text (the label's when `col` is `null`), so view 4 of `filing_report` opens the cell there;
-  `numbers` lists the row's number cells as `{col, value, column}`, `column` the column's words as
-  a sheet's `columns` gives them, or `null`. The answer holds at most 20 hits,
-  within the budget, with `more` `true` when a further row matched, and `year`, `period` and
-  `text`, the text searched. A search has no next page: when `more` is `true`, search a longer
-  text, or read the sheet the hits name with `filing_report`. Cite a number cell as the hit's
+  characters or more, without regard to case, in every label and every cell. A number cell is
+  found by its JSON text, or by `text` with its commas removed, so `33,165` finds the number cell
+  `33165`; a text cell is found as it reads. A hit is a row, in the report's order: `{sheet, row,
+  col, label, excerpt, offset, rowRef, numbers}`. `col` is the first cell that matches, or `null`
+  when only the label does; `excerpt` holds 300 characters each side of the first match; `offset`
+  is the match's place in that cell's text (the label's when `col` is `null`), so view 4 of
+  `filing_report` opens the cell there; `numbers` lists the row's number cells as `{col, value,
+  column}`, `column` the column's words as a sheet's `columns` gives them, or `null`. A hit in a
+  sheet that has the name of an earlier sheet has `rowRef` `null`: no ref reaches that sheet, so
+  its cells are findings. The answer holds at most 20 hits, within the budget, with `more` `true`
+  when a further row matched, and `year`, `period` and `text`, the text searched. A search has no
+  next page: when `more` is `true`, search a longer text. Cite a number cell as the hit's
   `rowRef` plus `/<col>`.
 
 ### The refusals
@@ -230,7 +234,7 @@ and store nothing:
 
 - "a filing report needs year and period" (400): `sheet`, `from_row`, `row`, `col` or `offset`
   without `year` and `period`, or one of the two without the other.
-- "period is FY or Q1 to Q4" (400).
+- "period is FY or Q1 to Q4" (400), in either case: `q1` reads as `Q1`.
 - "text needs three characters or more" (400): a search text shorter than three characters once
   its white space is served.
 - "from and to are ISO dates, from on or before to" (400): a `from_date` or a `to_date` that is no

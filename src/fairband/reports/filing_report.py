@@ -11,6 +11,17 @@ title, with its scale (``$ in Millions``), and its cells the columns' spans (``3
 a row labelled ``items`` near the top holds the columns' dates (``Sep. 30, 2026``). A title row may
 hold fewer cells than there are columns, one span over two dates.
 
+- Served text: a sheet's name, a label and a string cell are served with every run of white space,
+  the no-break space among it, as one space, and the ends trimmed (``served``). Offsets and lengths
+  count in the served text; the stored payload is not changed. A number cell's text is its JSON
+  text (``12.5``).
+- A sheet is named by its served name: every function matches the stored key by its served name,
+  the first where two keys serve alike; none is ``NoSheet``. The views a route serves
+  (``sheet_rows``, ``cell_text``) serve the ``sheet`` they are given before they match it, and
+  answer the served name; ``cell``, ``label`` and ``column``, which read a ref, take the served
+  name as the ref holds it. A later sheet whose key serves as an earlier one's cannot be reached
+  by name at all: a search hit in it answers ``rowRef`` null, since its ref would resolve into the
+  earlier sheet, and ``sheet_rows`` serves the earlier sheet, whose refs are its own.
 - A column's words (``column``): the cell of the row ``items`` at the column, where one of the
   sheet's first three rows is labelled ``items`` and has a cell there, after the title row's cell
   at the column when the title row holds exactly as many cells as the row ``items`` (else which
@@ -19,13 +30,9 @@ hold fewer cells than there are columns, one span over two dates.
   an empty cell gives no word; ``None`` where none does. A sheet's rows answer the words of each
   column as ``columns``, and a search hit each number cell's as its ``column``, so the agent reads
   which period or member a number is before it cites it.
-
-- Served text: a sheet's name, a label and a string cell are served with every run of white space,
-  the no-break space among it, as one space, and the ends trimmed (``served``). Offsets and lengths
-  count in the served text; the stored payload is not changed. A number cell's text is its JSON
-  text (``12.5``).
-- A sheet is named by its served name: every function takes ``sheet`` as one and matches the
-  stored key by its served name, the first where two keys serve alike; none is ``NoSheet``.
+- The search: case-blind, in the served text of every label and every cell; a number cell is
+  matched by its JSON text, and also by the text searched with its commas removed, so ``33,165``
+  finds the cell ``33165``; a text cell is matched as it reads.
 - A row of any other shape (a list, an object of other keys or of a value that is no list) is
   served with ``label`` and ``rowRef`` null and one cell, the row's JSON text, served as a string
   cell is: nothing of the row is dropped, the caps hold, and it holds no cell to cite.
@@ -140,7 +147,9 @@ def sheet_rows(
     index, its served label, its ref and its cells as served; ``columns`` the words of each
     column (``column``), as many as the widest row of the page holds, ``None`` where a column has
     none, so a later page names them too; ``nextRow`` the next ``from_row``, or ``None`` after the
-    last row."""
+    last row. ``sheet`` is served before it is matched, and the answer and the refs hold the served
+    name."""
+    sheet = served(sheet)
     rows = _sheet(report, sheet)
     if not 0 <= from_row < len(rows):
         raise OutOfRange("fromRow", len(rows) - 1)
@@ -165,7 +174,8 @@ def cell_text(
 ) -> dict[str, Any]:
     """One cell's served text (a number cell's JSON text) from ``offset``, at most ``PAGE_CHARS``
     of it, with the row's served label, the text's full length and ``nextOffset``, the next
-    ``offset``, or ``None`` after the text's end."""
+    ``offset``, or ``None`` after the text's end; ``sheet`` served before it is matched."""
+    sheet = served(sheet)
     rows = _sheet(report, sheet)
     if not 0 <= row < len(rows):
         raise OutOfRange("row", len(rows) - 1)
@@ -193,13 +203,16 @@ def search(report: Mapping[str, Any], response_id: int, text: str) -> dict[str, 
     report's order, one hit a row: as many as the count and the budget allow, and ``more`` true
     when a further row matched. A hit's place is the first cell that matches (``col``), else the
     label (``col`` ``None``); its excerpt runs ``SEARCH_WINDOW`` characters each side of the first
-    match in it, cut at the text's ends, and ``offset`` is the match's place in that text."""
+    match in it, cut at the text's ends, and ``offset`` is the match's place in that text. A number
+    cell also matches ``text`` with its commas removed, a number as it is printed (``33,165``)."""
     needle = served(text)
     if len(needle) < SEARCH_MIN:
         raise ValueError(SHORT_TEXT)
     # Case-blind one character for one, so an offset in the served text stays its own.
     pattern = re.compile(re.escape(needle), re.IGNORECASE)
-    found = list(islice(_hits(report, response_id, pattern), SEARCH_HITS + 1))
+    bare = needle.replace(",", "")  # a number as it is printed, ``33,165``, as its JSON text
+    printed = re.compile(re.escape(bare), re.IGNORECASE) if bare and bare != needle else None
+    found = list(islice(_hits(report, response_id, pattern, printed), SEARCH_HITS + 1))
     kept = fitting(found, SEARCH_HITS)
     return {"hits": found[:kept], "more": len(found) > kept}
 
@@ -332,18 +345,27 @@ def _served_row(response_id: int, sheet: str, n: int, row: Any) -> dict[str, Any
 
 
 def _hits(
-    report: Mapping[str, Any], response_id: int, pattern: re.Pattern[str]
+    report: Mapping[str, Any],
+    response_id: int,
+    pattern: re.Pattern[str],
+    printed: re.Pattern[str] | None,
 ) -> Iterator[dict[str, Any]]:
-    """The search's hits in the report's order, one a row, read as they are asked for."""
+    """The search's hits in the report's order, one a row, read as they are asked for. A row of
+    a sheet that serves as an earlier sheet's name has no ``rowRef``: its ref would name a row of
+    the earlier sheet."""
+    names: set[str] = set()
     for key, rows in _sheets(report):
         sheet = served(key)
+        reachable = sheet not in names
+        names.add(sheet)
         for n, row in enumerate(rows):
             label, cells = _read_row(row)
-            found = _first_match(pattern, label, cells)
+            found = _first_match(pattern, printed, label, cells)
             if found is None:
                 continue
             col, text, match = found
             start = max(match.start() - SEARCH_WINDOW, 0)
+            cited = reachable and label is not None
             yield {
                 "sheet": sheet,
                 "row": n,
@@ -351,7 +373,7 @@ def _hits(
                 "label": label,
                 "excerpt": text[start : match.end() + SEARCH_WINDOW],
                 "offset": match.start(),
-                "rowRef": None if label is None else row_ref(response_id, sheet, n),
+                "rowRef": row_ref(response_id, sheet, n) if cited else None,
                 "numbers": [
                     {"col": i, "value": c, "column": _column(rows, i)}
                     for i, c in enumerate(cells)
@@ -361,17 +383,24 @@ def _hits(
 
 
 def _first_match(
-    pattern: re.Pattern[str], label: str | None, cells: Sequence[Any]
+    pattern: re.Pattern[str],
+    printed: re.Pattern[str] | None,
+    label: str | None,
+    cells: Sequence[Any],
 ) -> tuple[int | None, str, re.Match[str]] | None:
-    """The first cell whose served text matches, else the served label (its column ``None``),
-    with the text and the match; ``None`` where nothing in the row matches."""
+    """The first cell whose served text matches (a number cell's also by ``printed``, the text
+    searched with its commas removed), else the served label (its column ``None``), with the text
+    and the match; ``None`` where nothing in the row matches."""
     for col, value in enumerate(cells):
         text = _text(value)
         match = pattern.search(text)
+        if match is None and printed is not None and _number(value):
+            match = printed.search(text)
         if match is not None:
             return col, text, match
-    match = None if label is None else pattern.search(label)
-    return None if label is None or match is None else (None, label, match)
+    if label is not None and (match := pattern.search(label)) is not None:
+        return None, label, match
+    return None
 
 
 def _printed(item: Any) -> int:
