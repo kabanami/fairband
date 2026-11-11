@@ -4,6 +4,7 @@
 m in fiscal 2025, up 5.0%; capital spending −$126 m); AAL, refused. A clean report publishes; each
 failure of spec 20.3 is one finding, located."""
 
+import json
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import replace
@@ -45,6 +46,7 @@ from fairband.reports.check import (
     shown,
     structure_refusal,
 )
+from fairband.reports.filing_report import row_ref
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import applied_overrides, drop_override, insert_override
@@ -52,6 +54,7 @@ from fairband.store.research import add_finding
 from fairband.store.reviews import insert_review, review_row
 from fairband.store.secondary import insert_derivation, no_secondary
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, snapshot_row
+from fairband.store.vendor import record_response
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 SMALL_TALK = "Three reasons stand out in FY2025: the 10-K, Q3 and the plan for 2026."
@@ -880,3 +883,30 @@ def test_a_bridge_line_and_a_change_in_points_are_cited(
     capex = "fact:AAPL/capex/2025"
     found = _one(_check(conn, policy, sid, _cite("+$126,000,000", capex)), sid, "+$126,000,000")
     assert found.what == WRONG_UNIT
+
+
+def test_a_filing_report_s_cell_is_cited_with_its_scale_word_outside(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-11, 5.5 and 8: a number cell of a stored filing report is cited as it is
+    stored, by its row's ref plus its column, the sheet's scale (``$ in Millions``) a plain word
+    after the cite; another number is a wrong number."""
+    sid = snapshots["AAPL"]
+    sheet = "Leases - Additional Informatio"
+    report = {
+        "symbol": "AAPL",
+        "period": "Q1",
+        "year": "2027",
+        sheet: [
+            {"Leases - Additional Information (Detail) $ in Millions": ["3 Months Ended"]},
+            {"Additional leases, primarily for warehouses, that have not yet commenced": [12.5]},
+        ],
+    }
+    params = {"symbol": "AAPL", "year": "2027", "period": "Q1"}
+    stored = record_response(
+        conn, "fmp", "filing-report", params, "AAPL", 200, json.dumps(report), None, NOW
+    )
+    ref = f"{row_ref(stored, sheet, 1)}/0"
+    assert _check(conn, policy, sid, _cite("$12.5", ref), " million") == []
+    found = _one(_check(conn, policy, sid, _cite("$13.5", ref), " million"), sid, "$13.5")
+    assert (found.what, found.detail) == (WRONG_UNIT, f"{ref} reads 12.5")

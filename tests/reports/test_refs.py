@@ -22,6 +22,7 @@ from fairband.policy import Policy
 from fairband.policy.tax import load_tax_table
 from fairband.refresh.inputs_statements import statements_for
 from fairband.reports.check import WRONG_UNIT, check_sections
+from fairband.reports.filing_report import row_ref, served
 from fairband.reports.refs import (
     Resolved,
     Resolver,
@@ -610,6 +611,55 @@ def test_response_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
         "response:999/0/revenue",
     ):
         assert _resolve(conn, ref, policy) is None, ref
+
+
+def test_a_filing_ref_resolves_whatever_the_sheet_s_name_holds(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Review Focus 1 (spec 2026-11-11, 5.5 and 5.6): a cell of a stored filing report by its
+    sheet's served name, its row and its column. The sheet's stored key holds a no-break space, a
+    run of spaces, a slash, a tilde, an apostrophe, a comma, a percent sign, a question mark, a
+    hash and an accent."""
+    key = "Rev\xa0by  Product/Region ~ O'Neil, 5% net? #1 é"
+    raw_label = "Additional leases, primarily for warehouses,\xa0that have  not yet commenced"
+    label = "Additional leases, primarily for warehouses, that have not yet commenced"
+    title = {"Rev by Product (Detail) $ in Millions": ["3 Months Ended", "Lease term"]}
+    report = {
+        "symbol": "AAPL",
+        "period": "Q1",
+        "year": "2027",
+        key: [title, {raw_label: [12.5, "1 year"]}],
+    }
+    params = {"symbol": "AAPL", "year": "2027", "period": "Q1"}
+    at = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
+    stored = record_response(
+        conn, "fmp", "filing-report", params, "AAPL", 200, json.dumps(report), None, at
+    )
+    segments = record_response(
+        conn, "fmp", "segments", {"symbol": "AAPL"}, "AAPL", 200, json.dumps(report), None, at
+    )
+    row = row_ref(stored, served(key), 1)
+    assert row == f"filing:{stored}/Rev by Product~1Region ~0 O'Neil, 5% net? #1 é/1"
+    assert _resolve(conn, f"{row}/0", policy) == Resolved(12.5, None, None, None)
+    assert _resolve(conn, f"{row}/1", policy) == Resolved("1 year", None, None, None)
+    assert resolve(conn, "AAL", f"{row}/0", policy) is None  # another company's resolver
+    for ref in (
+        f"{row_ref(segments, served(key), 1)}/0",  # a response of another endpoint
+        f"{row_ref(stored, 'Nope', 1)}/0",  # a sheet that is not there
+        f"{row_ref(stored, key, 1)}/0",  # the stored key, not the served name
+        f"{row_ref(stored, served(key), 9)}/0",  # row 9
+        f"{row}/9",  # col 9
+        row,  # three parts
+        f"{row}/0/0",  # five parts
+        f"filing:{stored}/{served(key)}/1/0",  # the slash not escaped: five parts
+        "filing:999/LEASES/1/0",
+    ):
+        assert _resolve(conn, ref, policy) is None, ref
+    resolver = Resolver(conn, "AAPL", policy)
+    assert resolver.describe(f"{row}/0") == (
+        f"FMP filing report of fiscal 2027 Q1, {served(key)}: {label}, observed 11 Nov 2026"
+    )
+    assert resolver.describe(f"{row}/9") == f"{row}/9"  # a ref that names nothing is its own
 
 
 def test_multiple_refs_resolve(

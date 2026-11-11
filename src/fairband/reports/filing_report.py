@@ -1,0 +1,307 @@
+"""A stored filing report read a part at a time (spec 2026-11-11, 5, 5.2, 5.3 and 5.5): the sheet
+list, a sheet's rows, one cell's text and a text search, each bounded, and the cell a ``filing:``
+ref names. Pure functions over the parsed payload of FMP's ``financial-reports-json``, stored under
+the endpoint ``filing-report``; the routes and the resolver read the store.
+
+A report is a JSON object: ``symbol``, ``period``, ``year``, then one key a sheet. A sheet is a key
+whose value is a list, of rows; a row is an object with one key, the row's label, whose value is
+the list of the row's cells (numbers, strings, empty strings). The first row's label is the sheet's
+title, with its scale (``$ in Millions``).
+
+- Served text: a sheet's name, a label and a string cell are served with every run of white space,
+  the no-break space among it, as one space, and the ends trimmed (``served``). Offsets and lengths
+  count in the served text; the stored payload is not changed. A number cell's text is its JSON
+  text (``12.5``).
+- A sheet is named by its served name: every function takes ``sheet`` as one and matches the
+  stored key by its served name, the first where two keys serve alike; none is ``NoSheet``.
+- A row of any other shape (a list, an object of other keys or of a value that is no list) is
+  served with ``label`` and ``rowRef`` null and one cell, the row's JSON text, served as a string
+  cell is: nothing of the row is dropped, the caps hold, and it holds no cell to cite.
+- The caps: 100 rows a sheet answer, a string cell cut at 2,000 characters there (as ``{text,
+  chars}``, the full length), a page of 20,000 characters of one cell, 20 hits of a search, 300
+  characters each side of a hit's match, and a search text of three characters or more.
+- The budget: a list an answer holds (a sheet's rows, the hits) stops before the item that would
+  take the list's compact JSON past 20,000 characters, one item at least (``fitting``), and the
+  answer says what remains (``nextRow``, ``more``).
+- An index out of range is ``OutOfRange``, "<name> is 0 to <last>", or "<name> is out of range:
+  there is none" where there is no index (a sheet with no row, a row with no cell). An offset runs
+  from 0 to the cell's length, so 0 is always in range.
+"""
+
+import json
+import re
+from collections.abc import Iterator, Mapping, Sequence
+from itertools import islice
+from typing import Any
+
+ENDPOINT = "filing-report"  # the stored endpoint a filing report is read from
+SHEET_ROWS = 100
+CELL_CHARS = 2_000
+PAGE_CHARS = 20_000
+SEARCH_HITS = 20
+SEARCH_WINDOW = 300
+SEARCH_MIN = 3
+LIST_CHARS = 20_000
+SHORT_TEXT = "text needs three characters or more"
+# What ``cell`` answers where the report holds no cell to cite: the resolver reads it as nothing.
+# A cell stored as null is a cell, ``None``.
+ABSENT = object()
+
+
+class NoSheet(LookupError):
+    """No sheet of the report serves as the name asked for."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"no sheet named {name}: ask without sheet for the sheet list")
+
+
+class OutOfRange(ValueError):
+    """An index past its range: ``row``, ``col``, ``fromRow`` or ``offset``, and its last value,
+    ``None`` or below 0 where there is none."""
+
+    def __init__(self, name: str, last: int | None) -> None:
+        if last is None or last < 0:
+            super().__init__(f"{name} is out of range: there is none")
+        else:
+            super().__init__(f"{name} is 0 to {last}")
+
+
+def served(text: str) -> str:
+    """``text`` with every run of white space, the no-break space among it, as one space and the
+    ends trimmed."""
+    return " ".join(text.split())
+
+
+def fitting(items: Sequence[Any], limit: int) -> int:
+    """How many leading items of ``items`` an answer holds: at most ``limit``, and as many as keep
+    the list's compact JSON at or under ``LIST_CHARS``; 1 at least when there is an item."""
+    count, size = 0, len("[]")
+    for item in items[:limit]:
+        size += len(_compact(item)) + (1 if count else 0)  # the item and its comma
+        if count and size > LIST_CHARS:
+            break
+        count += 1
+    return count
+
+
+def sheet_list(report: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Each sheet in the report's order: its served name, its title (the first row's label,
+    served), its row count and the length of its JSON text."""
+    return [
+        {
+            "name": served(key),
+            "title": _title(rows),
+            "rows": len(rows),
+            "chars": len(json.dumps(rows, ensure_ascii=False)),
+        }
+        for key, rows in _sheets(report)
+    ]
+
+
+def row_ref(response_id: int, sheet: str, row: int) -> str:
+    """The ref of a row of the stored report ``response_id``, the sheet by its served name with
+    ``~`` written ``~0`` and ``/`` written ``~1``; a cell's ref is the row's plus ``/<col>``."""
+    escaped = sheet.replace("~", "~0").replace("/", "~1")
+    return f"filing:{response_id}/{escaped}/{row}"
+
+
+def sheet_rows(
+    report: Mapping[str, Any], response_id: int, sheet: str, from_row: int = 0
+) -> dict[str, Any]:
+    """The sheet's rows from ``from_row``, as many as the count and the budget allow, each with its
+    index, its served label, its ref and its cells as served; ``nextRow`` the next ``from_row``, or
+    ``None`` after the last row."""
+    rows = _sheet(report, sheet)
+    if not 0 <= from_row < len(rows):
+        raise OutOfRange("fromRow", len(rows) - 1)
+    answered = [
+        _served_row(response_id, sheet, n, rows[n])
+        for n in range(from_row, min(from_row + SHEET_ROWS, len(rows)))
+    ]
+    kept = answered[: fitting(answered, SHEET_ROWS)]
+    after = from_row + len(kept)
+    return {
+        "sheet": sheet,
+        "title": _title(rows),
+        "rows": kept,
+        "nextRow": after if after < len(rows) else None,
+    }
+
+
+def cell_text(
+    report: Mapping[str, Any], sheet: str, row: int, col: int = 0, offset: int = 0
+) -> dict[str, Any]:
+    """One cell's served text (a number cell's JSON text) from ``offset``, at most ``PAGE_CHARS``
+    of it, with the row's served label, the text's full length and ``nextOffset``, the next
+    ``offset``, or ``None`` after the text's end."""
+    rows = _sheet(report, sheet)
+    if not 0 <= row < len(rows):
+        raise OutOfRange("row", len(rows) - 1)
+    label, cells = _read_row(rows[row])
+    if not 0 <= col < len(cells):
+        raise OutOfRange("col", len(cells) - 1)
+    text = _text(cells[col])
+    if not 0 <= offset <= len(text):
+        raise OutOfRange("offset", len(text))
+    end = offset + PAGE_CHARS
+    return {
+        "sheet": sheet,
+        "row": row,
+        "col": col,
+        "label": label,
+        "chars": len(text),
+        "offset": offset,
+        "text": text[offset:end],
+        "nextOffset": end if end < len(text) else None,
+    }
+
+
+def search(report: Mapping[str, Any], response_id: int, text: str) -> dict[str, Any]:
+    """The rows whose served label or cells hold ``text`` served, without regard to case, in the
+    report's order, one hit a row: as many as the count and the budget allow, and ``more`` true
+    when a further row matched. A hit's place is the first cell that matches (``col``), else the
+    label (``col`` ``None``); its excerpt runs ``SEARCH_WINDOW`` characters each side of the first
+    match in it, cut at the text's ends, and ``offset`` is the match's place in that text."""
+    needle = served(text)
+    if len(needle) < SEARCH_MIN:
+        raise ValueError(SHORT_TEXT)
+    # Case-blind one character for one, so an offset in the served text stays its own.
+    pattern = re.compile(re.escape(needle), re.IGNORECASE)
+    found = list(islice(_hits(report, response_id, pattern), SEARCH_HITS + 1))
+    kept = fitting(found, SEARCH_HITS)
+    return {"hits": found[:kept], "more": len(found) > kept}
+
+
+def cell(report: Mapping[str, Any], sheet: str, row: int, col: int) -> Any:
+    """The cell at the sheet (by its served name), the row and the column, as it is stored (a
+    number, a string); ``ABSENT`` where the sheet, the row or the cell is not there, or the row is
+    not a label with its cells."""
+    found = _labelled_at(report, sheet, row)
+    if found is None or not 0 <= col < len(found[1]):
+        return ABSENT
+    return found[1][col]
+
+
+def label(report: Mapping[str, Any], sheet: str, row: int) -> str | None:
+    """The row's served label; ``None`` where the sheet or the row is not there, or the row is not
+    a label with its cells."""
+    found = _labelled_at(report, sheet, row)
+    return None if found is None else served(found[0])
+
+
+def _sheets(report: Mapping[str, Any]) -> Iterator[tuple[str, list[Any]]]:
+    """Each sheet's stored key and its rows, in the report's order."""
+    for key, rows in report.items():
+        if isinstance(rows, list):
+            yield key, rows
+
+
+def _find(report: Mapping[str, Any], sheet: str) -> list[Any] | None:
+    """The rows of the first sheet whose served name is ``sheet``; ``None`` for none."""
+    return next((rows for key, rows in _sheets(report) if served(key) == sheet), None)
+
+
+def _sheet(report: Mapping[str, Any], sheet: str) -> list[Any]:
+    rows = _find(report, sheet)
+    if rows is None:
+        raise NoSheet(sheet)
+    return rows
+
+
+def _labelled(row: Any) -> tuple[str, list[Any]] | None:
+    """A row's stored label and cells; ``None`` for a row of another shape."""
+    if isinstance(row, Mapping) and len(row) == 1:
+        [(key, cells)] = row.items()
+        if isinstance(key, str) and isinstance(cells, list):
+            return key, cells
+    return None
+
+
+def _labelled_at(report: Mapping[str, Any], sheet: str, row: int) -> tuple[str, list[Any]] | None:
+    """The stored label and cells of the sheet's row; ``None`` where the sheet or the row is not
+    there, or the row is of another shape."""
+    rows = _find(report, sheet)
+    return None if rows is None or not 0 <= row < len(rows) else _labelled(rows[row])
+
+
+def _read_row(row: Any) -> tuple[str | None, list[Any]]:
+    """A row's served label and its cells as stored; a row of another shape has no label and one
+    cell, its JSON text."""
+    found = _labelled(row)
+    if found is None:
+        return None, [json.dumps(row, ensure_ascii=False)]
+    return served(found[0]), found[1]
+
+
+def _title(rows: Sequence[Any]) -> str | None:
+    """A sheet's title: its first row's served label."""
+    return None if not rows else _read_row(rows[0])[0]
+
+
+def _number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _text(value: Any) -> str:
+    """A cell's served text: a string served, anything else its JSON text (a number's, ``12.5``)."""
+    return served(value) if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+
+
+def _served_cell(value: Any) -> Any:
+    """A cell as a sheet's rows answer it: a number or a null as it is, else its served text, a
+    text longer than ``CELL_CHARS`` cut, with its full length."""
+    if _number(value) or value is None:
+        return value
+    text = _text(value)
+    if len(text) > CELL_CHARS:
+        return {"text": text[:CELL_CHARS], "chars": len(text)}
+    return text
+
+
+def _served_row(response_id: int, sheet: str, n: int, row: Any) -> dict[str, Any]:
+    label, cells = _read_row(row)
+    ref = None if label is None else row_ref(response_id, sheet, n)
+    return {"row": n, "label": label, "rowRef": ref, "cells": [_served_cell(c) for c in cells]}
+
+
+def _hits(
+    report: Mapping[str, Any], response_id: int, pattern: re.Pattern[str]
+) -> Iterator[dict[str, Any]]:
+    """The search's hits in the report's order, one a row, read as they are asked for."""
+    for key, rows in _sheets(report):
+        sheet = served(key)
+        for n, row in enumerate(rows):
+            label, cells = _read_row(row)
+            found = _first_match(pattern, label, cells)
+            if found is None:
+                continue
+            col, text, match = found
+            start = max(match.start() - SEARCH_WINDOW, 0)
+            yield {
+                "sheet": sheet,
+                "row": n,
+                "col": col,
+                "label": label,
+                "excerpt": text[start : match.end() + SEARCH_WINDOW],
+                "offset": match.start(),
+                "rowRef": None if label is None else row_ref(response_id, sheet, n),
+                "numbers": [{"col": i, "value": c} for i, c in enumerate(cells) if _number(c)],
+            }
+
+
+def _first_match(
+    pattern: re.Pattern[str], label: str | None, cells: Sequence[Any]
+) -> tuple[int | None, str, re.Match[str]] | None:
+    """The first cell whose served text matches, else the served label (its column ``None``),
+    with the text and the match; ``None`` where nothing in the row matches."""
+    for col, value in enumerate(cells):
+        text = _text(value)
+        match = pattern.search(text)
+        if match is not None:
+            return col, text, match
+    match = None if label is None else pattern.search(label)
+    return None if label is None or match is None else (None, label, match)
+
+
+def _compact(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))

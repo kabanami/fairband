@@ -49,6 +49,11 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   its metric's unit (``store.guidance.UNITS``), its step a percent, each of the record's period;
   a step the record does not take holds no figure;
 - ``derived:<id>``: a derivation's value and unit (13.4);
+- ``filing:<id>/<sheet>/<row>/<col>``: a cell of a stored filing report (spec 2026-11-11, 5.5) as
+  it is stored, a number or a string, the sheet by its served name (``~`` written ``~0`` and ``/``
+  ``~1``, as a pointer's token is) and the row and the cell by their indexes from 0
+  (``fairband.reports.filing_report``); a response of another endpoint, and a row that is not a
+  label with its cells, name nothing;
 - ``response:<id>/<json pointer>``: a field of a stored vendor response (RFC 6901, ``/0/revenue``);
 - ``policy:<name>``: a value the Methodology page cites from the policy, by its name or by its
   name and a moat class or an index (``runway_years.Wide``, ``fair_band.0``); the page's
@@ -93,7 +98,9 @@ revenue line of fiscal 2025 on file"; ``table:`` "the growth table, revenue grow
 ``multiple:`` "the trailing P/E, 30 Oct 2026" or "the forward P/E, the ten-year average";
 ``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
 ``guidance:`` "guidance record 5: EPS for fiscal 2027, the midpoint"; ``derived:`` "derivation 7:
-the ratio of <a> and <b>", the operands' refs; ``response:`` "FMP segments, observed 1 Nov 2026";
+the ratio of <a> and <b>", the operands' refs; ``filing:`` "FMP filing report of fiscal 2027 Q1,
+LEASES: <the row's served label>, observed 11 Nov 2026", the stored call's year and period, read
+as ``resolve`` reads it; ``response:`` "FMP segments, observed 1 Nov 2026";
 ``policy:`` "policy required_return, <the version>", the ``policy_version`` the resolver is given
 (the report's snapshot's), else the policy's. A ref whose form or record names nothing, a record
 of another company among them, is its own description; a ``secondary:`` or ``sensitivity:`` ref
@@ -123,6 +130,7 @@ from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import Statements, country_for, statements_for
 from fairband.refresh.peers import peer_figures
+from fairband.reports import filing_report
 from fairband.reports.multiples import SERIES, STATS, Series, stored_series
 from fairband.store.companies import latest_company
 from fairband.store.guidance import UNITS as GUIDANCE_UNITS
@@ -133,7 +141,7 @@ from fairband.store.reviews import review_row
 from fairband.store.secondary import derivation_row, secondary_row
 from fairband.store.sensitivities import SensitivityRow, sensitivity_row
 from fairband.store.snapshots import SnapshotRow, snapshot_row
-from fairband.store.vendor import response_payload, response_row
+from fairband.store.vendor import ResponseRow, response_payload, response_row
 from fairband.web.policy_rows import policy_json
 
 __all__ = [
@@ -542,6 +550,7 @@ class Resolver:
             "finding": self._finding,
             "guidance": self._guidance,
             "derived": self._derived,
+            "filing": self._filing,
             "response": self._response,
             "policy": self._policy,
         }
@@ -590,6 +599,8 @@ class Resolver:
                 found = self._guidance_source(head, name)
             case "derived", [_]:
                 found = self._derived_source(head)
+            case "filing", [_, sheet, row, _] if self.resolve(ref) is not None:
+                found = self._filing_source(head, _unescaped(sheet), int(row))
             case "response", _:
                 found = self._response_source(head)
             case "policy", _ if path:
@@ -851,6 +862,37 @@ class Resolver:
         keys = [_unescaped(k) for k in pointer.split("/")] if slash else []
         return _figure(_at_path(payload, keys), None)
 
+    def _filing(self, path: str) -> Resolved | None:
+        """A cell of a stored filing report by its sheet's served name, its row and its column
+        (``filing_report.cell``), with no unit and no period."""
+        pieces = path.split("/")
+        if len(pieces) != 4 or not (pieces[2].isdecimal() and pieces[3].isdecimal()):
+            return None
+        stored = self._filing_report(pieces[0])
+        if stored is None:
+            return None
+        sheet, row, col = _unescaped(pieces[1]), int(pieces[2]), int(pieces[3])
+        value = filing_report.cell(stored[1], sheet, row, col)
+        return None if value is filing_report.ABSENT else _figure(value, None)
+
+    def _filing_report(self, head: str) -> tuple[ResponseRow, Mapping[str, Any]] | None:
+        """The stored response ``head`` names and its parsed payload, read once: the company's, of
+        the endpoint ``filing_report.ENDPOINT``, an object; ``None`` otherwise."""
+
+        def read() -> tuple[ResponseRow, Mapping[str, Any]] | None:
+            row = response_row(self.conn, int(head)) if head.isdecimal() else None
+            if row is None or row.symbol != self.symbol or row.endpoint != filing_report.ENDPOINT:
+                return None
+            text = response_payload(self.conn, row.id)
+            try:
+                payload = None if text is None else json.loads(text)
+            except ValueError:
+                return None
+            return (row, payload) if isinstance(payload, Mapping) else None
+
+        found: tuple[ResponseRow, Mapping[str, Any]] | None = self._once(f"filing {head}", read)
+        return found
+
     def _policy(self, name: str) -> Resolved | None:
         values = self._once("policy", lambda: policy_json(self.policy, self.policy, {})["values"])
         cited = values.get(name)
@@ -938,6 +980,17 @@ class Resolver:
             return None
         vendor = _PROVIDER_WORDS.get(row.provider, row.provider)
         return f"{vendor} {row.endpoint}, observed {day_words(row.observed_at.date())}"
+
+    def _filing_source(self, head: str, sheet: str, row: int) -> str:
+        """The stored call's fiscal year and period, the sheet, the row's served label and the day
+        the report was observed; read after ``resolve``, so the report holds the row."""
+        stored = self._filing_report(head)
+        assert stored is not None  # resolved
+        response, report = stored
+        fiscal = f"fiscal {response.params.get('year')} {response.params.get('period')}"
+        cited = f"{sheet}: {filing_report.label(report, sheet, row)}"
+        observed = day_words(response.observed_at.date())
+        return f"FMP filing report of {fiscal}, {cited}, observed {observed}"
 
 
 def field_words(name: str) -> str:
