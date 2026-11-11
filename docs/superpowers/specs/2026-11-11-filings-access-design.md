@@ -196,7 +196,8 @@ A cell of a stored filing report is cited as
 the stored response's id, the sheet's served name (`~` written `~0` and `/` written `~1`, as a
 JSON pointer's token is), and the row's and the cell's indexes from 0. A `rowRef` is the ref
 without its last part, so a cell's ref is the row's plus `/<col>`. It resolves for the report's
-company to the cell: a number, or a string as it is stored, with no unit and no period, as a
+company to the cell: a number, or a string as it is served (the text the agent read, so a cite of
+a word fits it; *the build's ruling*, Task 2), with no unit and no period, as a
 `response:` field does. A response that is not a filing report, a sheet, a row or a cell that is
 not there, and a row that is not a label with its cells resolve to nothing. Where two sheets have
 one served name, the first is meant.
