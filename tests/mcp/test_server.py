@@ -43,12 +43,13 @@ PROBE = Implementation(name="probe", version="0")
 AGENT = {"agent": "claude-opus-5-5"}
 ITEM = {"symbol": "AAPL", "mode": "full report"}
 FILING = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": None}
-# Spec 15.2 to 15.4, in its order, with the filing reads (spec 2026-11-11, 6) after the
-# pass-throughs.
+# Spec 15.2 to 15.4, in its order, with ``quarters`` after ``financials`` and the filing reads
+# after the pass-throughs (spec 2026-11-11, 6).
 SPEC_TOOLS = (
     "screen",
     "company",
     "financials",
+    "quarters",
     "financial_tables",
     "estimates",
     "price_history",
@@ -107,6 +108,7 @@ READS: dict[str, tuple[dict[str, Any], str]] = {
     "screen": ({"sort": "price", "direction": "desc"}, "/api/screen?sort=price&dir=desc"),
     "company": ({"symbol": "AAPL"}, "/api/companies/AAPL"),
     "financials": ({"symbol": "AAPL"}, "/api/companies/AAPL/financials"),
+    "quarters": ({"symbol": "AAPL"}, "/api/companies/AAPL/quarters"),
     "financial_tables": ({"symbol": "AAPL"}, "/api/companies/AAPL/financial-tables"),
     "estimates": ({"symbol": "AAPL"}, "/api/companies/AAPL/estimates"),
     "price_history": ({"symbol": "AAPL", "years": 2}, "/api/companies/AAPL/price-history?years=2"),

@@ -2,9 +2,11 @@
 agent host starts. It holds no database connection and no key: every tool is one or two calls to
 the web API (``FairbandClient``), tools only, no resources or prompts. The tools are spec 15's,
 in its order (``TOOL_NAMES``), each with a one-sentence description and the arguments the spec
-names. The filing reads, ``filings``, ``filing_report`` and ``filing_search``, are the filings
-access spec's (2026-11-11, 6), after the pass-throughs: each is one call to its route
-(``fairband.web.filings_api``) and answers the route's JSON.
+names. The filings access spec (2026-11-11, 6) adds ``quarters``, the stored quarters, after
+``financials`` among the reads, and the filing reads, ``filings``, ``filing_report`` and
+``filing_search``, after the pass-throughs: each is one call to its route (``quarters`` to
+``fairband.web.reports_api``'s, the filing reads to ``fairband.web.filings_api``'s) and answers
+the route's JSON.
 
 A tool answers the API's JSON, an object; ``watchlists``, whose route answers a list, answers it as
 ``{"watchlists": [...]}``. A refusal is ``{"refused": <the API's sentence>, "status":
@@ -70,6 +72,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "screen",
     "company",
     "financials",
+    "quarters",  # spec 2026-11-11 filings access, 6 and 7.1
     "financial_tables",
     "estimates",
     "price_history",
@@ -214,6 +217,13 @@ def build_server(client: FairbandClient) -> MCPServer:
     )
     def financials(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_company(symbol, "financials")))
+
+    @server.tool(
+        description="The company's newest eight stored quarters, oldest first, by their fiscal"
+        " label (2027-Q1), each line with its ref."
+    )
+    def quarters(symbol: str) -> dict[str, Any]:
+        return answer(lambda: client.get(_company(symbol, "quarters")))
 
     @server.tool(
         description="The six five-year tables of a report's section 4, each cell with its ref to"

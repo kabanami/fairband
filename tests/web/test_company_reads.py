@@ -9,13 +9,14 @@ the engine's test universe, under which HGCO's statements classify as Mature Gro
 import json
 from contextlib import closing
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from refresh.synthetic import bodies, estimates_quarter
+from refresh.synthetic import bodies, cashflow_quarter, estimates_quarter, income_quarter
 from support.engine_companies import ars_refused_inputs, fx_inputs, universe_deciles
 from support.payloads import store_payloads
 from support.web import CREATED, HEADER, NOW, TODAY, universe_row
@@ -25,6 +26,7 @@ from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import FiscalYear
 from fairband.engine.route import value_company
 from fairband.policy import Policy
+from fairband.refresh.inputs_statements import QuarterFigures
 from fairband.reports.refs import Resolver
 from fairband.reports.tables import LINES, TABLES
 from fairband.store.companies import insert_companies
@@ -68,6 +70,7 @@ BRIEF = (
     "The company charges a subscription a seat."
 )
 PROFILE = [{"symbol": "AAPL", "country": "US", "isAdr": False, "description": BRIEF}]
+_QUARTER_DAYS = {3: 31, 6: 30, 9: 30, 12: 31}  # a calendar quarter's last day by its month
 
 
 @pytest.fixture(autouse=True)
@@ -238,6 +241,89 @@ def test_financials_without_statements(client: TestClient) -> None:
     assert r.status_code == 404 and r.json()["detail"] == "no financial statements for AAL"
     r = client.get("/api/companies/not%20one/financials")
     assert r.status_code == 400 and r.json()["detail"] == "'not one' is not a symbol"
+
+
+def test_quarters_lists_the_newest_stored_quarters(client: TestClient) -> None:
+    """Spec 2026-11-11, 7.1: AAPL's five stored quarters to 2026-09-30, oldest first, each by its
+    fiscal label and each line with its ``fact:`` ref of that label; the newest four add to the
+    trailing revenue ``financials`` serves, $1,300 m."""
+    body = _get(client, "/api/companies/aapl/quarters")
+    assert (body["symbol"], body["currency"], body["otherCurrency"]) == ("AAPL", "USD", 0)
+    quarters = body["quarters"]
+    assert [q["period"] for q in quarters] == [
+        "2025-Q3",
+        "2025-Q4",
+        "2026-Q1",
+        "2026-Q2",
+        "2026-Q3",
+    ]
+    newest = quarters[-1]
+    assert (newest["periodEnd"], newest["fiscalYear"], newest["fiscalPeriod"]) == (
+        "2026-09-30",
+        2026,
+        "Q3",
+    )
+    assert newest["revenue"] == _figure(340 * M, "currency", "fact:AAPL/revenue/2026-Q3")
+    assert newest["epsDiluted"]["unit"] == "per-share"
+    assert newest["epsDiluted"]["value"] == pytest.approx(0.49)
+    assert newest["capex"] == _figure(-24 * M, "currency", "fact:AAPL/capex/2026-Q3")
+    trailing = _get(client, "/api/companies/aapl/financials")["trailing"]
+    assert sum(q["revenue"]["value"] for q in quarters[-4:]) == trailing["revenue"]["value"]
+    assert trailing["revenue"]["value"] == 1300 * M
+    plain = {"period_end", "fiscal_year", "fiscal_period"}
+    names = [f for f in QuarterFigures.__dataclass_fields__ if f not in plain]
+    assert len(names) == 12  # the trailing figures' lines
+    for quarter in quarters:
+        assert set(quarter) == {"period", *map(_camel, plain), *map(_camel, names)}
+        for name in names:
+            assert quarter[_camel(name)]["ref"] == f"fact:AAPL/{name}/{quarter['period']}"
+
+
+def test_quarters_serves_the_newest_eight(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-11, 7.1 and 7.2: HGCO with twelve stored quarters, 2023-12-31 to 2026-09-30:
+    the read serves the newest eight, oldest first; an older quarter's ref still resolves."""
+    ends = [date(y, m, _QUARTER_DAYS[m]) for y in range(2023, 2027) for m in _QUARTER_DAYS][3:15]
+    payloads = {
+        "income-quarter": income_quarter(ends, ends),
+        "cashflow-quarter": cashflow_quarter(ends, ends),
+    }
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, "HGCO", payloads, CREATED)
+    quarters = _get(client, "/api/companies/HGCO/quarters")["quarters"]
+    assert [q["periodEnd"] for q in quarters] == [day.isoformat() for day in ends[-8:]]
+    assert (quarters[0]["period"], quarters[-1]["period"]) == ("2024-Q4", "2026-Q3")
+    assert quarters[-1]["revenue"]["value"] == (300 + 10 * 11) * M
+    with closing(connect(db_path)) as conn:
+        oldest = Resolver(conn, "HGCO", policy).resolve("fact:HGCO/revenue/2023-Q4")
+    assert oldest is not None and (oldest.value, oldest.period) == (300 * M, "2023-Q4")
+
+
+def test_quarters_without_quarterly_rows_is_empty(client: TestClient, db_path: Path) -> None:
+    """Spec 2026-11-11, 7.1: a company with annual statements and no quarterly rows has none."""
+    annual = ("income-annual", "balance-annual", "cashflow-annual")
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, "NOQ", {e: p for e, p in bodies().items() if e in annual}, CREATED)
+    assert _get(client, "/api/companies/NOQ/quarters") == {
+        "symbol": "NOQ",
+        "currency": "USD",
+        "quarters": [],
+        "otherCurrency": 0,
+    }
+
+
+def test_quarters_without_statements_is_404(client: TestClient) -> None:
+    r = client.get("/api/companies/AAL/quarters")
+    assert r.status_code == 404 and r.json()["detail"] == "no financial statements for AAL"
+    r = client.get("/api/companies/not%20one/quarters")
+    assert r.status_code == 400 and r.json()["detail"] == "'not one' is not a symbol"
+
+
+def test_financials_is_unchanged(client: TestClient) -> None:
+    """Spec 2026-11-11, 7.1: the quarters are a read of their own; ``financials`` gains no key."""
+    body = _get(client, "/api/companies/aapl/financials")
+    assert set(body) == {"symbol", "currency", "series", "trailing", "balanceYears"}
 
 
 def test_financial_tables(client: TestClient) -> None:
@@ -431,7 +517,8 @@ def test_every_ref_the_reads_hand_out_resolves_to_its_figure(
         for child in x.values() if isinstance(x, dict) else x if isinstance(x, list) else ():
             collect(child)
 
-    for read in ("financials", "financial-tables", "estimates", "price-history", "peers"):
+    reads = ("financials", "quarters", "financial-tables", "estimates", "price-history", "peers")
+    for read in reads:
         collect(_get(client, f"/api/companies/AAPL/{read}"))
     forms = {figure["ref"].partition(":")[0] for figure in served}
     assert forms == {"fact", "table", "estimate", "close", "peer"}

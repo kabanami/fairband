@@ -11,6 +11,11 @@ engine's snake_case name.
   figures (``TrailingFigures``, ``null`` without them) and the balance years (``BalanceYear``) as
   ``statements_for`` reads them, each figure with its ``fact:`` ref (``ttm`` for a trailing one);
   the EPS is per share, every other figure currency.
+- ``/quarters``: the newest ``QUARTERS_SERVED`` stored quarterly periods in the reporting currency,
+  oldest first, as ``stored_quarters`` reads them (spec 2026-11-11 7.1), each ``{period,
+  periodEnd, fiscalYear, fiscalPeriod}`` with a figure a line of the trailing figures, its ref
+  ``fact:<symbol>/<line>/<period>`` by the stored fiscal label (``2027-Q1``); ``otherCurrency``
+  counts the stored periods left out for another currency. ``financials`` does not serve them.
 - ``/financial-tables``: the six tables of ``fairband.reports.tables``, each cell
   ``{period, value, unit, ref, note}``.
 - ``/estimates``: the stored consensus as ``build_inputs`` reads it, the quarters and the fiscal
@@ -23,9 +28,9 @@ engine's snake_case name.
   reads them on the latest deciles (``peer_figures``), each figure with its ``peer:`` ref; none,
   and no source, before any deciles.
 
-The financials and the tables answer 404 "no financial statements for <symbol>" when the store
-holds no annual income statement; the other reads answer what the store holds, none included. A
-symbol that is not one is a 400.
+The financials, the quarters and the tables answer 404 "no financial statements for <symbol>" when
+the store holds no annual income statement; the other reads answer what the store holds, none
+included. A symbol that is not one is a 400.
 
 ``GET /api/methodology/{section}`` answers ``{id, title, text}`` for the Methodology page's
 ``<section id>`` (``methodology_text``), its live values from the effective policy and the latest
@@ -101,7 +106,13 @@ from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import build_inputs
-from fairband.refresh.inputs_statements import Statements, country_for, statements_for
+from fairband.refresh.inputs_statements import (
+    QuarterFigures,
+    Statements,
+    country_for,
+    statements_for,
+    stored_quarters,
+)
 from fairband.refresh.peers import peer_figures
 from fairband.reports.charts import chart_tables
 from fairband.reports.check import (
@@ -160,6 +171,9 @@ _PLAIN = frozenset(
 )
 # The units of the statement figures by field; every other one is currency.
 _UNITS = {"eps_diluted": "per-share"} | ESTIMATE_UNITS
+# The stored quarters the quarters read serves, the newest (spec 2026-11-11 7.1): the refresh
+# fetches eight a run and the store keeps every one it stored, so the answer stays this long.
+QUARTERS_SERVED = 8
 
 
 class _Body(BaseModel):
@@ -233,6 +247,19 @@ def add_report_routes(
             "balanceYears": [
                 _figures(by, _facts(symbol, str(by.year))) for by in stated.balance_years
             ],
+        }
+
+    @app.get("/api/companies/{symbol}/quarters")
+    def quarters(symbol: str) -> dict[str, Any]:
+        symbol = _symbol(symbol)
+        with closing(conn_factory()) as conn:
+            stated = statements(conn, symbol)
+            stored = stored_quarters(conn, symbol)
+        return {
+            "symbol": symbol,
+            "currency": stated.currency,
+            "quarters": [_quarter(symbol, q) for q in stored.periods[-QUARTERS_SERVED:]],
+            "otherCurrency": stored.other_currency,
         }
 
     @app.get("/api/companies/{symbol}/financial-tables")
@@ -567,6 +594,11 @@ def _figures(record: Any, ref: Callable[[str], str]) -> dict[str, Any]:
 def _facts(symbol: str, period: str) -> Callable[[str], str]:
     """The ``fact:`` ref of a line of ``period``."""
     return lambda line: fact_ref(symbol, line, period)
+
+
+def _quarter(symbol: str, quarter: QuarterFigures) -> dict[str, Any]:
+    """A stored quarter by its fiscal label, its placing fields and its lines' figures."""
+    return {"period": quarter.period, **_figures(quarter, _facts(symbol, quarter.period))}
 
 
 def _estimate(

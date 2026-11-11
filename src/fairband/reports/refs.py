@@ -29,8 +29,10 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   (a moat class) its word;
 - ``fact:<symbol>/<line>/<period>``: a stored statement line as the engine reads it, ``<line>``
   the engine's field name (``fairband.reports.tables.LINES`` for a fiscal year, read through
-  ``year_lines``; the trailing figures' fields for ``ttm``) and ``<period>`` the fiscal year as
-  text or ``ttm``;
+  ``year_lines``; the trailing figures' fields for ``ttm`` and for a quarter) and ``<period>`` the
+  fiscal year as text, a stored quarter's fiscal label written ``<YYYY>-Q<n>`` (``2027-Q1``, read
+  through ``inputs_statements.stored_quarters``: a quarter left out for its currency, or not on
+  file, names nothing; spec 2026-11-11 7.2) or ``ttm``;
 - ``table:<symbol>/<table>/<row>/<period>``: a cell of the financial tables (13.5);
 - ``estimate:<symbol>/<period>/<field>``: a stored consensus figure, ``<period>`` the fiscal year
   (``2026``) or the quarter (``2026-Q4``) and ``<field>`` the engine's name (``eps``,
@@ -83,8 +85,8 @@ record being facts of the company.
 
 A ref resolves to ``None`` when it names nothing: a malformed ref, a record or a field that does
 not exist, a figure that is a table rather than a number or a word, or a record of another
-company. A ``Resolver`` reads one company's refs with its statements, tables, consensus and peers
-read once; ``resolve`` reads one ref.
+company. A ``Resolver`` reads one company's refs with its statements, stored quarters, tables,
+consensus and peers read once; ``resolve`` reads one ref.
 
 ``Resolver.describe`` gives the references list a ref's source in words, one sentence a form: a
 date or a name where one serves, a record's id where nothing else names it. ``snapshot:`` "snapshot
@@ -94,7 +96,8 @@ snapshot's price date); ``review:``
 "review 88, bridge line 1 (belief), the change in the value a share"; ``secondary:`` "secondary
 valuation 9, year 3 FCFF"; ``sensitivity:`` "sensitivity 7, row 1 column 2" or "sensitivity 7, the
 belief of row 1", the axis's input by its label; ``fact:`` "the
-revenue line of fiscal 2025 on file"; ``table:`` "the growth table, revenue growth, fiscal 2025";
+revenue line of fiscal 2025 on file" or "the revenue line of Q1 of fiscal 2027 on file";
+``table:`` "the growth table, revenue growth, fiscal 2025";
 ``estimate:`` "the consensus for Q4 of fiscal 2026, EPS"; ``close:`` "the close of 3 Nov 2026";
 ``multiple:`` "the trailing P/E, 30 Oct 2026" or "the forward P/E, the ten-year average";
 ``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
@@ -129,7 +132,13 @@ from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs import build_inputs
-from fairband.refresh.inputs_statements import Statements, country_for, statements_for
+from fairband.refresh.inputs_statements import (
+    QuarterFigures,
+    Statements,
+    country_for,
+    statements_for,
+    stored_quarters,
+)
 from fairband.refresh.peers import peer_figures
 from fairband.reports import filing_report
 from fairband.reports.multiples import SERIES, STATS, Series, stored_series
@@ -266,6 +275,7 @@ _PLAIN = frozenset(
     }
 )
 _TRAILING_FIGURES = frozenset(f.name for f in fields(TrailingFigures)) - _PLAIN
+_QUARTER_FIGURES = frozenset(f.name for f in fields(QuarterFigures)) - _PLAIN
 _PHASE_FIELDS = frozenset(f.name for f in fields(PhaseEvidence)) - {"checks"}
 # ``statements_for`` and the peers read their day only as the data date of a store without
 # statements, which no ref reads.
@@ -392,6 +402,8 @@ _SNAPSHOT_PATH_WORDS = {
 _LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 _QUARTER = re.compile(r"(\d{4})-?(Q[1-4])")
+# A stored quarter's fiscal label as a ``fact:`` ref writes it, with its dash.
+_QUARTER_LABEL = re.compile(r"\d{4}-Q\d")
 
 
 @dataclass(frozen=True)
@@ -518,8 +530,8 @@ def unit_of(engine_unit: str | None) -> str | None:
 
 
 class Resolver:
-    """One company's refs, the store's statements, tables, consensus and peers read at most once
-    for all of them."""
+    """One company's refs, the store's statements, stored quarters, tables, consensus and peers
+    read at most once for all of them."""
 
     def __init__(
         self,
@@ -749,6 +761,12 @@ class Resolver:
                 return None
             value = getattr(trailing, line)
             return _figure(value, _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
+        if _QUARTER_LABEL.fullmatch(period):
+            quarter = self._quarters().get(period)
+            if quarter is None or line not in _QUARTER_FIGURES:
+                return None
+            value = getattr(quarter, line)
+            return _figure(value, _line_unit(line), period, outflow=line in _OUTFLOW_LINES)
         from fairband.reports.tables import LINES, year_lines  # tables builds its refs here
 
         lines = self._once("lines", lambda: year_lines(self.conn, self.symbol))
@@ -913,6 +931,14 @@ class Resolver:
             return statements_for(self.conn, self.symbol, country, self.tax, _NO_DAY)
 
         found: Statements = self._once("statements", read)
+        return found
+
+    def _quarters(self) -> dict[str, QuarterFigures]:
+        """The stored quarters in the reporting currency by their fiscal labels, read once."""
+        found: dict[str, QuarterFigures] = self._once(
+            "quarters",
+            lambda: {q.period: q for q in stored_quarters(self.conn, self.symbol).periods},
+        )
         return found
 
     def _inputs(self) -> CompanyInputs:

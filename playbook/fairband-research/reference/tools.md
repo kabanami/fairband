@@ -8,10 +8,10 @@ be left out.
 
 - A tool answers the web server's JSON, an object. Its keys are camelCase (`responseId`). A ref
   names a field by the engine's snake_case name (`snapshot:412/inputs/market_cap`).
-- The reads of stored figures, `financials`, `financial_tables`, `estimates`, `price_history`,
-  `peers` and `multiples_history`, give each figure with its `ref`. Cite the `ref` as given. For
-  every other figure, build the ref from its record's id (`reference/citations.md`). A percent is a
-  fraction: `0.112` is 11.2%.
+- The reads of stored figures, `financials`, `quarters`, `financial_tables`, `estimates`,
+  `price_history`, `peers` and `multiples_history`, give each figure with its `ref`. Cite the
+  `ref` as given. For every other figure, build the ref from its record's id
+  (`reference/citations.md`). A percent is a fraction: `0.112` is 11.2%.
 - A refusal is `{"refused": <sentence>, "status": <code>}`, with the rest of the answer beside it:
   a refused override's `override`, a rejected report's `findings`. The status says what kind of
   refusal it is: 400 a value the call cannot take, or a report's structural refusal; 404 a record
@@ -51,6 +51,13 @@ be left out.
   estimate under `basis-scaled`.
 - `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
   stored statements, each figure with its `fact:` ref.
+- `quarters(symbol)`: the newest eight stored quarters, oldest first, each by its fiscal label
+  (`period`, `2027-Q1`) with its `periodEnd`, and the trailing figures' lines, each with its
+  `fact:` ref (`fact:<symbol>/revenue/2027-Q1`). A quarter's lines are its own terms of the
+  trailing sum, so the newest four add to the trailing figures. `otherCurrency` counts the stored
+  quarters left out for another currency than the reporting one. A half-yearly reporter's
+  periods are its half-years. The diluted EPS is the statement's as stored: on a row flagged
+  `split-pending` or `basis-scaled` it may sit on another share basis than the quote's.
 - `financial_tables(symbol)`: the six five-year tables of the report's section 4, `growth`,
   `cash_flow`, `solvency`, `returns`, `capital_allocation` and `quality`, each cell
   `{period, value, unit, ref, note}`.

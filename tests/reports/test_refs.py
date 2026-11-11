@@ -9,8 +9,9 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
-from refresh.synthetic import NOW
+from refresh.synthetic import NOW, bodies
 from support.engine_companies import fx_inputs, mature_growth_inputs, universe_deciles
+from support.payloads import store_payloads
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
@@ -20,7 +21,7 @@ from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.sensitivity import SensitivityGrid
 from fairband.policy import Policy
 from fairband.policy.tax import load_tax_table
-from fairband.refresh.inputs_statements import statements_for
+from fairband.refresh.inputs_statements import statements_for, stored_quarters
 from fairband.reports.check import WRONG_UNIT, check_sections
 from fairband.reports.filing_report import row_ref, served
 from fairband.reports.refs import (
@@ -452,6 +453,72 @@ def test_fact_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str
         "fact:not a symbol/revenue/2025",
     ):
         assert _resolve(conn, ref, policy) is None, ref
+
+
+def test_a_quarter_s_fact_resolves(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-11, 7.2: ``fact:<symbol>/<line>/<YYYY>-Q<n>`` reads a stored quarter's line as
+    the quarters read serves it (ACME's synthetic quarters, the newest ending 2026-09-30 with
+    revenue of $340 m), the line's unit, the label its period, an outflow line marked as the
+    trailing one is."""
+    resolver = Resolver(conn, "AAPL", policy)  # the quarters read once for every ref
+    assert resolver.resolve("fact:AAPL/revenue/2026-Q3") == Resolved(
+        340 * M, "currency", "2026-Q3", None
+    )
+    assert resolver.resolve("fact:aapl/revenue/2025-Q3") == Resolved(
+        300 * M, "currency", "2025-Q3", None
+    )
+    eps = resolver.resolve("fact:AAPL/eps_diluted/2026-Q3")
+    assert eps is not None and (eps.unit, eps.period) == ("per-share", "2026-Q3")
+    assert eps.value == pytest.approx(0.49)
+    for line, outflow in (("capex", True), ("buybacks", True), ("cfo", False)):
+        found = resolver.resolve(f"fact:AAPL/{line}/2026-Q3")
+        assert found is not None and found.outflow is outflow, line
+    assert resolver.resolve("fact:AAPL/capex/2026-Q3") == Resolved(
+        -24 * M, "currency", "2026-Q3", None, outflow=True
+    )
+    # the interest expense by its size; a line the quarter lacks holds no figure
+    interest = resolver.resolve("fact:AAPL/interest_expense/2026-Q3")
+    assert interest == Resolved(4 * M, "currency", "2026-Q3", None)
+    assert resolver.resolve("fact:AAPL/sbc/2026-Q1") == Resolved(None, "currency", "2026-Q1", None)
+    for quarter in stored_quarters(conn, "AAPL").periods:
+        found = resolver.resolve(f"fact:AAPL/net_income/{quarter.period}")
+        assert found is not None and found.value == quarter.net_income, quarter.period
+    assert resolver.describe("fact:AAPL/revenue/2026-Q3") == (
+        "the revenue line of Q3 of fiscal 2026 on file"
+    )
+
+
+def test_a_quarter_not_on_file_is_unresolved(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Review Focus 5: a label not on file, a line that is not a quarter's, a label not written
+    ``<YYYY>-Q<n>`` and another company's quarter name nothing; nor does a quarter left out for its
+    currency (CADQ's two oldest quarters, in CAD beside annual statements in USD)."""
+    resolver = Resolver(conn, "AAPL", policy)
+    for ref in (
+        "fact:AAPL/revenue/1999-Q1",  # not on file
+        "fact:AAPL/total_assets/2026-Q3",  # a balance sheet line, no quarter's
+        "fact:AAPL/shares_diluted/2026-Q3",
+        "fact:AAPL/period_end/2026-Q3",  # it places the quarter's figures
+        "fact:AAPL/fiscal_period/2026-Q3",
+        "fact:AAPL/revenue/2026Q3",  # the label has its dash
+        "fact:AAPL/revenue/2026-q3",
+        "fact:AAPL/revenue/2026-Q3/x",
+        "fact:ACME/revenue/2026-Q3",  # another company's
+    ):
+        assert resolver.resolve(ref) is None, ref
+    payloads = {e: p for e, p in bodies().items() if e != "earnings"}
+    for row in payloads["income-quarter"][:2]:
+        row["reportedCurrency"] = "CAD"
+    store_payloads(conn, "CADQ", payloads, NOW)
+    other = Resolver(conn, "CADQ", policy)
+    assert other.resolve("fact:CADQ/revenue/2025-Q3") is None
+    assert other.resolve("fact:CADQ/revenue/2025-Q4") is None
+    assert other.resolve("fact:CADQ/revenue/2026-Q1") == Resolved(
+        320 * M, "currency", "2026-Q1", None
+    )
 
 
 def test_table_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:
@@ -974,6 +1041,7 @@ def described(
         ("fact:AAPL/revenue/2025", "the revenue line of fiscal 2025 on file"),
         ("fact:AAPL/capex/ttm", "the capital spending line of the trailing twelve months on file"),
         ("fact:AAPL/eps_diluted/2024", "the diluted EPS line of fiscal 2024 on file"),
+        ("fact:AAPL/eps_diluted/2026-Q3", "the diluted EPS line of Q3 of fiscal 2026 on file"),
         ("table:AAPL/growth/revenue_growth/2025", "the growth table, revenue growth, fiscal 2025"),
         (
             "table:AAPL/cash_flow/fcf_to_net_income/2025",

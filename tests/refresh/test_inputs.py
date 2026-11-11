@@ -49,7 +49,14 @@ from fairband.policy.inflation import load_inflation_table
 from fairband.policy.tax import LATEST_YEAR_METHOD, TaxTable, load_tax_table
 from fairband.refresh.fetch import fetch_company
 from fairband.refresh.inputs import build_inputs, series_for
-from fairband.refresh.inputs_statements import cadence_of, newest_debt_and_cash, statements_for
+from fairband.refresh.inputs_statements import (
+    QuarterFigures,
+    StoredQuarters,
+    cadence_of,
+    newest_debt_and_cash,
+    statements_for,
+    stored_quarters,
+)
 from fairband.refresh.peers import peer_figures
 from fairband.refresh.rates import FX_QUOTE, fetch_rates
 from fairband.store.observations import insert_observations
@@ -539,6 +546,135 @@ def test_interest_and_depreciation_are_missing_when_a_quarter_lacks_the_line(
     inputs = build(store(**{**bodies(), **payloads}))
     assert inputs.trailing is not None
     assert (inputs.trailing.interest_expense, inputs.trailing.depreciation) == expected
+
+
+# The trailing figures' lines, which a stored quarter holds too.
+TRAILING_LINES = (
+    "revenue",
+    "operating_income",
+    "net_income",
+    "eps_diluted",
+    "sbc",
+    "cfo",
+    "capex",
+    "dividends",
+    "buybacks",
+    "equity_issued",
+    "interest_expense",
+    "depreciation",
+)
+
+
+def test_the_stored_quarters_read_as_the_trailing_figures_read_them(store: Store) -> None:
+    """Spec 2026-11-11, 7.1: every stored quarter, oldest first, by its fiscal label as stored,
+    each line that period's own term of the trailing sum (the interest expense by its size, the
+    rest as signed), so the newest four add to the trailing figure of every line both hold."""
+    conn = store(**bodies())
+    stored = stored_quarters(conn, "ACME")
+    quarters = stored.periods
+    assert [q.period for q in quarters] == ["2025-Q3", "2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3"]
+    assert [q.period_end for q in quarters] == list(QUARTERS)
+    assert stored.other_currency == 0
+    assert quarters[-1] == QuarterFigures(
+        fiscal_year=2026,
+        fiscal_period="Q3",
+        period_end=date(2026, 9, 30),
+        revenue=340 * M,
+        operating_income=68 * M,
+        net_income=49 * M,
+        eps_diluted=pytest.approx(0.49),
+        sbc=5 * M,
+        cfo=74 * M,
+        capex=-24 * M,
+        dividends=-10 * M,
+        buybacks=-15 * M,
+        equity_issued=1 * M,
+        interest_expense=4 * M,  # -$4 m as stored, by its size
+        depreciation=19 * M,
+    )
+    assert quarters[2].sbc is None  # the third period has no stock compensation
+    trailing = build(conn).trailing
+    assert trailing is not None and (trailing.quarters, trailing.on_fiscal_year) == (4, False)
+    held = [line for line in TRAILING_LINES if getattr(trailing, line) is not None]
+    assert len(held) == 11  # all but the stock compensation
+    for line in held:
+        total = sum(getattr(q, line) for q in quarters[-4:])
+        assert total == pytest.approx(getattr(trailing, line)), line
+
+
+def test_a_half_yearly_reporter_s_stored_periods_are_its_half_years(store: Store) -> None:
+    """Spec 2026-11-11, 7.1: a half-yearly reporter's stored periods are served by their stored
+    labels, and the newest two add to its trailing figures."""
+    conn = store(**bodies(cadence="half-yearly"))
+    halves = stored_quarters(conn, "ACME").periods
+    assert [h.period for h in halves] == ["2024-Q4", "2025-Q2", "2025-Q4", "2026-Q2"]
+    trailing = build(conn).trailing
+    assert trailing is not None and trailing.cadence == "half-yearly"
+    assert halves[-2].revenue + halves[-1].revenue == trailing.revenue == (320 + 330) * M
+
+
+@pytest.mark.parametrize(
+    "kept",
+    [{"quarters": ()}, {"years": ()}],
+    ids=["no-quarterly-rows", "no-annual-income-statement"],
+)
+def test_no_quarter_rows_give_no_quarters(store: Store, kept: dict[str, Any]) -> None:
+    """Review Focus 5: a company stored without quarterly rows has no quarters; one without an
+    annual income statement has none either, its quarterly rows notwithstanding."""
+    assert stored_quarters(store(**bodies(**kept)), "ACME") == StoredQuarters((), 0)
+
+
+@pytest.mark.parametrize(
+    ("annual", "kept", "counted"),
+    [
+        ("USD", ["2026-Q1", "2026-Q2", "2026-Q3"], 2),
+        (None, ["2025-Q3", "2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3"], 0),
+    ],
+    ids=["usd-years", "years-without-a-currency"],
+)
+def test_a_quarter_in_another_currency_is_left_out_and_counted(
+    store: Store, annual: str | None, kept: list[str], counted: int
+) -> None:
+    """Review Focus 5 (spec 2026-11-11, 7.1): beside annual statements in USD, the two oldest
+    quarters reported in CAD are left out and counted, and a quarter with no currency on file
+    counts as the reporting one's, as the trailing figures judge a period; where the annual
+    statements name no currency, no quarter is left out."""
+    payloads = bodies()
+    payloads["income-annual"] = [
+        {**row, "reportedCurrency": annual} for row in payloads["income-annual"]
+    ]
+    rows = payloads["income-quarter"]
+    for k in (0, 1):
+        rows[k] = {**rows[k], "reportedCurrency": "CAD"}
+    rows[2] = {**rows[2], "reportedCurrency": None}
+    stored = stored_quarters(store(**payloads), "ACME")
+    assert [q.period for q in stored.periods] == kept
+    assert stored.other_currency == counted
+
+
+def test_a_period_without_a_fiscal_label_is_left_out(store: Store) -> None:
+    """Spec 2026-11-11, 7.1: a quarter stored without its fiscal year, and one without its fiscal
+    period, are left out and not counted."""
+    payloads = bodies()
+    rows = payloads["income-quarter"]
+    del rows[1]["fiscalYear"]
+    del rows[3]["period"]
+    stored = stored_quarters(store(**payloads), "ACME")
+    assert [q.period for q in stored.periods] == ["2025-Q3", "2026-Q1", "2026-Q3"]
+    assert stored.other_currency == 0
+
+
+def test_two_periods_with_one_label_keep_the_later_end(store: Store) -> None:
+    """Spec 2026-11-11, 7.1: two stored periods labelled 2025-Q4, ending 2025-09-30 and
+    2025-12-31: the one with the later end is kept, in its place."""
+    payloads = bodies()
+    payloads["income-quarter"][0] |= {"period": "Q4"}
+    stored = stored_quarters(store(**payloads), "ACME")
+    assert [q.period for q in stored.periods] == ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3"]
+    assert (stored.periods[0].period_end, stored.periods[0].revenue) == (
+        date(2025, 12, 31),
+        310 * M,
+    )
 
 
 def test_balance_years_read_the_lines_by_name(conn_with_company: sqlite3.Connection) -> None:

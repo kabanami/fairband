@@ -203,6 +203,25 @@ def test_a_quarter_reads_the_same_with_its_dash_or_without(
     assert (found.what, found.detail) == (WRONG_PERIOD, f"{ref} is for 2027Q1, not 2027-Q2")
 
 
+def test_a_quarter_s_line_is_cited_by_its_fiscal_label(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-11, 7.2: a stored quarter's revenue ($340 m in the quarter to 2026-09-30)
+    cited by its ``fact:`` ref, its period written with the dash or without, or not at all, passes
+    the check; its capital spending may be cited by its size; another quarter's label is a wrong
+    period."""
+    sid = snapshots["AAPL"]
+    ref = "fact:AAPL/revenue/2026-Q3"
+    for period in ("2026-Q3", "2026Q3", None):
+        assert _check(conn, policy, sid, _cite("$340,000,000", ref, period)) == [], period
+    assert _check(conn, policy, sid, _cite("$340 million", ref)) == []
+    assert _check(conn, policy, sid, _cite("$24 million", "fact:AAPL/capex/2026-Q3")) == []
+    found = _one(
+        _check(conn, policy, sid, _cite("$340,000,000", ref, "2026-Q2")), sid, "$340,000,000"
+    )
+    assert (found.what, found.detail) == (WRONG_PERIOD, f"{ref} is for 2026-Q3, not 2026-Q2")
+
+
 def test_unresolved_reference(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:

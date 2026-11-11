@@ -58,6 +58,17 @@ valuation.
 ``annual_lines`` reads each fiscal year's annual statements whole, by FMP name, joined as the
 series and the balance years join them: the lines the report's financial tables read beside the
 engine's records (``fairband.reports.tables``).
+
+``stored_quarters`` reads every stored period of the quarterly statements (spec 2026-11-11 7.1),
+oldest first, each joined to the quarterly cash flow of its period end (its cash-flow lines
+``None`` without one) and labelled by its stored fiscal year and period (``2027-Q1``). Its lines
+are read as the trailing figures read theirs, through one reading (``_lines``), so each is that
+period's own term of the trailing sum and the newest four of a quarterly reporter add to its
+trailing figures. A period whose currency is neither the reporting one (the newest annual income
+statement's) nor missing is left out and counted, as the trailing figures judge a period; with no
+reporting currency on file none is. A period without a fiscal year or a fiscal period is left out
+uncounted; of two with one label, the later period end is kept. Without an annual income statement
+there are none.
 """
 
 import json
@@ -159,6 +170,42 @@ class TrailingPeriod:
 
 
 @dataclass(frozen=True)
+class QuarterFigures:
+    """One stored period of the quarterly statements, its lines read as the trailing figures read
+    theirs (the module docstring); a line ``None`` where the period lacks it."""
+
+    fiscal_year: int
+    fiscal_period: str  # "Q1" to "Q4", as stored
+    period_end: date
+    revenue: float | None
+    operating_income: float | None
+    net_income: float | None
+    eps_diluted: float | None
+    sbc: float | None
+    cfo: float | None
+    capex: float | None
+    dividends: float | None
+    buybacks: float | None
+    equity_issued: float | None
+    interest_expense: float | None
+    depreciation: float | None
+
+    @property
+    def period(self) -> str:
+        """The stored fiscal label, ``2027-Q1``."""
+        return f"{self.fiscal_year}-{self.fiscal_period}"
+
+
+@dataclass(frozen=True)
+class StoredQuarters:
+    """Every stored quarterly period in the reporting currency, oldest first, and the count of the
+    stored periods left out for another currency."""
+
+    periods: tuple[QuarterFigures, ...]
+    other_currency: int
+
+
+@dataclass(frozen=True)
 class Statements:
     """The statement-side fields of ``CompanyInputs``; ``calendar`` is ``None`` and ``refusal`` is
     "no financial statements" when the store holds no annual income statement. ``tax_refusal``
@@ -198,6 +245,11 @@ class _Period:
     @property
     def fiscal_year(self) -> int | None:
         return next((r.fiscal_year for r in self.facts.values() if r.fiscal_year is not None), None)
+
+    @property
+    def fiscal_period(self) -> str | None:
+        found = (r.fiscal_period for r in self.facts.values() if r.fiscal_period is not None)
+        return next(found, None)
 
     @property
     def currency(self) -> str | None:
@@ -409,6 +461,31 @@ def annual_lines(
     return out
 
 
+def stored_quarters(conn: sqlite3.Connection, symbol: str) -> StoredQuarters:
+    """Every stored quarterly period of ``symbol`` in the reporting currency, oldest first, each
+    line read as the trailing figures read it, and the count of those left out for another
+    currency (the module docstring)."""
+    annual = _periods(conn, symbol, "income-annual")
+    if not annual:
+        return StoredQuarters((), 0)
+    reporting = annual[-1].currency
+    flows = _by_end(_periods(conn, symbol, "cashflow-quarter"))
+    by_label: dict[str, QuarterFigures] = {}
+    other_currency = 0
+    for income in _periods(conn, symbol, "income-quarter"):
+        year, period = income.fiscal_year, income.fiscal_period
+        if year is None or period is None:
+            continue
+        if reporting and income.currency not in (None, reporting):
+            other_currency += 1
+            continue
+        lines = _lines([income], [flows.get(income.end, _NONE)])
+        quarter = QuarterFigures(year, period, income.end, **lines)
+        by_label[quarter.period] = quarter  # oldest first: a later end replaces an earlier one
+    kept = sorted(by_label.values(), key=lambda q: q.period_end)
+    return StoredQuarters(tuple(kept), other_currency)
+
+
 def _sum_lines(
     lines: Mapping[str, float | None], names: Sequence[str]
 ) -> tuple[float | None, str | None]:
@@ -551,22 +628,31 @@ def _trailing(
         period_end=incomes[-1].end,
         quarters=len(incomes),
         on_fiscal_year=not last,
-        revenue=_total(incomes, "revenue"),
-        operating_income=_total(incomes, "operatingIncome"),
-        net_income=_total(incomes, "netIncome"),
-        eps_diluted=_total(incomes, "epsDiluted"),
-        sbc=_total(flows, "stockBasedCompensation"),
-        cfo=_total(flows, _CFO),
-        capex=_total(flows, "capitalExpenditure"),
-        dividends=_total(flows, "netDividendsPaid"),
-        buybacks=_total(flows, "commonStockRepurchased"),
-        equity_issued=_total(flows, "commonStockIssuance"),
-        interest_expense=_total(incomes, "interestExpense", size=True),
-        depreciation=_total(flows, "depreciationAndAmortization"),
         cadence="quarterly" if cadence is None else cadence,
+        **_lines(incomes, flows),
     )
     read = tuple(TrailingPeriod(i.end, i.value("epsDiluted"), i.value(_SHARES)) for i in incomes)
     return figures, read, fallback
+
+
+def _lines(incomes: Sequence[_Period], flows: Sequence[_Period]) -> dict[str, float | None]:
+    """The trailing figures' lines by the engine's names, summed over the income statements and
+    their cash flows (``_total``): the interest expense by each period's size, every other line
+    as signed. One period gives its own terms of the sum, the stored quarters' lines."""
+    return {
+        "revenue": _total(incomes, "revenue"),
+        "operating_income": _total(incomes, "operatingIncome"),
+        "net_income": _total(incomes, "netIncome"),
+        "eps_diluted": _total(incomes, "epsDiluted"),
+        "sbc": _total(flows, "stockBasedCompensation"),
+        "cfo": _total(flows, _CFO),
+        "capex": _total(flows, "capitalExpenditure"),
+        "dividends": _total(flows, "netDividendsPaid"),
+        "buybacks": _total(flows, "commonStockRepurchased"),
+        "equity_issued": _total(flows, "commonStockIssuance"),
+        "interest_expense": _total(incomes, "interestExpense", size=True),
+        "depreciation": _total(flows, "depreciationAndAmortization"),
+    }
 
 
 def _a_year_of(rows: Sequence[_Period], cadence: Cadence) -> list[_Period]:
