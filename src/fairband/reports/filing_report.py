@@ -27,19 +27,21 @@ hold fewer cells than there are columns, one span over two dates.
   at the column when the title row holds exactly as many cells as the row ``items`` (else which
   span is the column's is not known, and it is left out), the two joined with ", " (``3 Months
   Ended, Sep. 30, 2026``); with no row ``items``, the title row's cell at the column. A number or
-  an empty cell gives no word; ``None`` where none does. A sheet's rows answer the words of each
-  column as ``columns``, and a search hit each number cell's as its ``column``, so the agent reads
-  which period or member a number is before it cites it.
+  an empty cell gives no word; ``None`` where none does. The words are cut at ``WORD_CHARS``
+  characters. A sheet's rows answer the words of each column as ``columns``, a search hit those
+  of the cell it matched and of each number cell as ``column``, and a cell's text those of its
+  column, so the agent reads which period or member a number is before it cites it.
 - The search: case-blind, in the served text of every label and every cell; a number cell is
   matched by its JSON text, and also by the text searched with its commas removed, so ``33,165``
   finds the cell ``33165``; a text cell is matched as it reads.
 - A row of any other shape (a list, an object of other keys or of a value that is no list) is
   served with ``label`` and ``rowRef`` null and one cell, the row's JSON text, served as a string
   cell is: nothing of the row is dropped, the caps hold, and it holds no cell to cite.
-- The caps: 100 sheets a sheet list answer, 100 rows a sheet answer, a string cell cut at 2,000
-  characters there (as ``{text, chars}``, the full length), a page of 20,000 characters of one
-  cell, 20 hits of a search, 300 characters each side of a hit's match, and a search text of
-  three characters or more.
+- The caps: 100 sheets a sheet list answer, 100 rows a sheet answer, 100 cells a row there, a
+  string cell cut at 2,000 characters there (as ``{text, chars}``, the full length), a column's
+  words cut at 200 characters, a page of 20,000 characters of one cell, 20 hits of a search, 60
+  number cells a hit, 300 characters each side of a hit's match, and a search text of three
+  characters or more.
 - The budget: a list an answer holds (the sheets, a sheet's rows, the hits) stops before the item
   that would take the list past ``LIST_CHARS`` characters as the MCP process prints it, one item
   at least (``fitting``), and the answer says what remains (``nextRow``, ``more``). The MCP
@@ -48,6 +50,17 @@ hold fewer cells than there are columns, one span over two dates.
   measured as its JSON indented by two, 4 more a line, and 2 for its comma and line break
   (``_printed``). The budget holds an answer under about 40,000 characters as the agent's host
   receives it.
+- A wide row: FMP stores a note as one row, the note's whole text its first cell and the note's
+  tables flattened after it into string cells, most of them empty, thousands on a long note
+  (MSFT's ``INVESTMENTS``, 3,377). One row is the one item the budget always serves, so a row's
+  own cells are held too: the leading ``ROW_CELLS`` at most, and as many as keep them at or under
+  ``ROW_CHARS`` as printed (a cell sits four levels deep, 8 more a line), one at least, with
+  ``cellCount``, the count of all, on a row cut so. A sheet's ``columns`` are printed with its
+  rows, so they are as many as the widest row of the page serves, and a page's rows and the
+  words of the columns they reach are held to the budget together. A hit names the first
+  ``HIT_NUMBERS`` number cells of its row, with ``numberCount`` where the row holds more. No cut
+  changes an index: ``cell`` and ``cell_text`` read every cell, and the hit and the cell's text
+  name the column of a cell past a cut.
 - An index out of range is ``OutOfRange``, "<name> is 0 to <last>", or "<name> is out of range:
   there is none" where there is no index (a sheet with no row, a row with no cell). An offset runs
   from 0 to the cell's length, so 0 is always in range.
@@ -56,7 +69,7 @@ hold fewer cells than there are columns, one span over two dates.
 import json
 import re
 from collections.abc import Iterator, Mapping, Sequence
-from itertools import islice
+from itertools import accumulate, islice
 from typing import Any
 
 ENDPOINT = "filing-report"  # the stored endpoint a filing report is read from
@@ -67,6 +80,10 @@ SEARCH_HITS = 20
 SEARCH_WINDOW = 300
 SEARCH_MIN = 3
 LIST_CHARS = 30_000  # a list's budget, as the MCP process prints it (``_printed``)
+ROW_CELLS = 100  # the cells a served row holds at most
+ROW_CHARS = 10_000  # a served row's cells' budget, as printed
+HIT_NUMBERS = 60  # the number cells a search hit names at most
+WORD_CHARS = 200  # the characters of a column's words at most
 ITEMS = "items"  # the label of the row of a sheet's column dates
 SHORT_TEXT = "text needs three characters or more"
 # What ``cell`` answers where the report holds no cell to cite: the resolver reads it as nothing.
@@ -98,14 +115,14 @@ def served(text: str) -> str:
     return " ".join(text.split())
 
 
-def fitting(items: Sequence[Any], limit: int) -> int:
+def fitting(items: Sequence[Any], limit: int, budget: int = LIST_CHARS, indent: int = 4) -> int:
     """How many leading items of ``items`` an answer holds: at most ``limit``, and as many as keep
-    the list at or under ``LIST_CHARS`` as it is printed (``_printed``); 1 at least when there is
-    an item."""
+    the list at or under ``budget`` as it is printed, each item ``indent`` spaces deep
+    (``_printed``); 1 at least when there is an item."""
     count, size = 0, 0
     for item in items[:limit]:
-        size += _printed(item)
-        if count and size > LIST_CHARS:
+        size += _printed(item, indent)
+        if count and size > budget:
             break
         count += 1
     return count
@@ -144,11 +161,13 @@ def sheet_rows(
     report: Mapping[str, Any], response_id: int, sheet: str, from_row: int = 0
 ) -> dict[str, Any]:
     """The sheet's rows from ``from_row``, as many as the count and the budget allow, each with its
-    index, its served label, its ref and its cells as served; ``columns`` the words of each
-    column (``column``), as many as the widest row of the page holds, ``None`` where a column has
-    none, so a later page names them too; ``nextRow`` the next ``from_row``, or ``None`` after the
-    last row. ``sheet`` is served before it is matched, and the answer and the refs hold the served
-    name."""
+    index, its served label, its ref and its cells as served, a very wide or long row cut with
+    its ``cellCount`` (``_served_row``); ``columns`` the words of each column (``column``), as
+    many as the widest row of the page serves, ``None`` where a column has none, so a later page
+    names them too; ``nextRow`` the next ``from_row``, or ``None`` after the last row. The words
+    are printed with the rows, so the rows and the words of the columns they reach are held to
+    the budget together, one row at least. ``sheet`` is served before it is matched, and the
+    answer and the refs hold the served name."""
     sheet = served(sheet)
     rows = _sheet(report, sheet)
     if not 0 <= from_row < len(rows):
@@ -157,14 +176,21 @@ def sheet_rows(
         _served_row(response_id, sheet, n, rows[n])
         for n in range(from_row, min(from_row + SHEET_ROWS, len(rows)))
     ]
-    kept = answered[: fitting(answered, SHEET_ROWS)]
-    after = from_row + len(kept)
-    width = max(len(r["cells"]) for r in kept)
+    words = [_column(rows, col) for col in range(max(len(r["cells"]) for r in answered))]
+    named = list(accumulate((_printed(word) for word in words), initial=0))  # the first n words
+    # As ``fitting``, the rows and the words of the columns they reach held to the budget together.
+    count, size, width = 0, 0, 0
+    for row in answered:
+        reach, taken = max(width, len(row["cells"])), size + _printed(row)
+        if count and taken + named[reach] > LIST_CHARS:
+            break
+        count, size, width = count + 1, taken, reach
+    after = from_row + count
     return {
         "sheet": sheet,
         "title": _title(rows),
-        "columns": [_column(rows, col) for col in range(width)],
-        "rows": kept,
+        "columns": words[:width],
+        "rows": answered[:count],
         "nextRow": after if after < len(rows) else None,
     }
 
@@ -173,8 +199,9 @@ def cell_text(
     report: Mapping[str, Any], sheet: str, row: int, col: int = 0, offset: int = 0
 ) -> dict[str, Any]:
     """One cell's served text (a number cell's JSON text) from ``offset``, at most ``PAGE_CHARS``
-    of it, with the row's served label, the text's full length and ``nextOffset``, the next
-    ``offset``, or ``None`` after the text's end; ``sheet`` served before it is matched."""
+    of it, with the row's served label, the words of the cell's column (``column``), the text's
+    full length and ``nextOffset``, the next ``offset``, or ``None`` after the text's end;
+    ``sheet`` served before it is matched."""
     sheet = served(sheet)
     rows = _sheet(report, sheet)
     if not 0 <= row < len(rows):
@@ -190,6 +217,7 @@ def cell_text(
         "sheet": sheet,
         "row": row,
         "col": col,
+        "column": _column(rows, col),
         "label": label,
         "chars": len(text),
         "offset": offset,
@@ -201,10 +229,11 @@ def cell_text(
 def search(report: Mapping[str, Any], response_id: int, text: str) -> dict[str, Any]:
     """The rows whose served label or cells hold ``text`` served, without regard to case, in the
     report's order, one hit a row: as many as the count and the budget allow, and ``more`` true
-    when a further row matched. A hit's place is the first cell that matches (``col``), else the
-    label (``col`` ``None``); its excerpt runs ``SEARCH_WINDOW`` characters each side of the first
-    match in it, cut at the text's ends, and ``offset`` is the match's place in that text. A number
-    cell also matches ``text`` with its commas removed, a number as it is printed (``33,165``)."""
+    when a further row matched. A hit's place is the first cell that matches (``col``, with the
+    words of its column as ``column``), else the label (both ``None``); its excerpt runs
+    ``SEARCH_WINDOW`` characters each side of the first match in it, cut at the text's ends, and
+    ``offset`` is the match's place in that text. A number cell also matches ``text`` with its
+    commas removed, a number as it is printed (``33,165``)."""
     needle = served(text)
     if len(needle) < SEARCH_MIN:
         raise ValueError(SHORT_TEXT)
@@ -294,7 +323,8 @@ def _title(rows: Sequence[Any]) -> str | None:
 
 
 def _column(rows: Sequence[Any], col: int) -> str | None:
-    """The words that name the column ``col`` of a sheet of ``rows`` (``column``)."""
+    """The words that name the column ``col`` of a sheet of ``rows`` (``column``), their first
+    ``WORD_CHARS`` characters."""
     top = [_labelled(row) for row in rows[:3]]
     title = top[0] if top else None
     found = next(
@@ -302,13 +332,14 @@ def _column(rows: Sequence[Any], col: int) -> str | None:
         None,
     )
     if found is None:
-        return None if title is None else _word(title[1], col)
+        word = None if title is None else _word(title[1], col)
+        return None if word is None else word[:WORD_CHARS]
     at, dates = found
     span = None  # where the title row, not ``items`` itself, holds one cell a date
     if at > 0 and title is not None and len(title[1]) == len(dates):
         span = _word(title[1], col)
     words = [word for word in (span, _word(dates, col)) if word is not None]
-    return ", ".join(words) or None
+    return ", ".join(words)[:WORD_CHARS] or None
 
 
 def _word(cells: Sequence[Any], col: int) -> str | None:
@@ -339,9 +370,16 @@ def _served_cell(value: Any) -> Any:
 
 
 def _served_row(response_id: int, sheet: str, n: int, row: Any) -> dict[str, Any]:
+    """A row as a sheet's rows answer it: its index, its served label, its ref and its leading
+    cells as served, ``ROW_CELLS`` at most and as many as keep them at or under ``ROW_CHARS`` as
+    they are printed, one at least. A row cut so carries ``cellCount``, the count of all its
+    cells; the cut changes no index, so a cell past it is read and cited by its ``col`` as any."""
     label, cells = _read_row(row)
     ref = None if label is None else row_ref(response_id, sheet, n)
-    return {"row": n, "label": label, "rowRef": ref, "cells": [_served_cell(c) for c in cells]}
+    answered = [_served_cell(c) for c in cells[:ROW_CELLS]]
+    kept = answered[: fitting(answered, ROW_CELLS, ROW_CHARS, indent=8)]
+    out = {"row": n, "label": label, "rowRef": ref, "cells": kept}
+    return out if len(kept) == len(cells) else {**out, "cellCount": len(cells)}
 
 
 def _hits(
@@ -352,7 +390,8 @@ def _hits(
 ) -> Iterator[dict[str, Any]]:
     """The search's hits in the report's order, one a row, read as they are asked for. A row of
     a sheet that serves as an earlier sheet's name has no ``rowRef``: its ref would name a row of
-    the earlier sheet."""
+    the earlier sheet. A hit names the row's first ``HIT_NUMBERS`` number cells, and where the
+    row holds more, their count as ``numberCount``."""
     names: set[str] = set()
     for key, rows in _sheets(report):
         sheet = served(key)
@@ -366,20 +405,22 @@ def _hits(
             col, text, match = found
             start = max(match.start() - SEARCH_WINDOW, 0)
             cited = reachable and label is not None
-            yield {
+            numbers = [(i, c) for i, c in enumerate(cells) if _number(c)]
+            hit = {
                 "sheet": sheet,
                 "row": n,
                 "col": col,
+                "column": None if col is None else _column(rows, col),
                 "label": label,
                 "excerpt": text[start : match.end() + SEARCH_WINDOW],
                 "offset": match.start(),
                 "rowRef": row_ref(response_id, sheet, n) if cited else None,
                 "numbers": [
                     {"col": i, "value": c, "column": _column(rows, i)}
-                    for i, c in enumerate(cells)
-                    if _number(c)
+                    for i, c in numbers[:HIT_NUMBERS]
                 ],
             }
+            yield hit if len(numbers) <= HIT_NUMBERS else {**hit, "numberCount": len(numbers)}
 
 
 def _first_match(
@@ -403,9 +444,10 @@ def _first_match(
     return None
 
 
-def _printed(item: Any) -> int:
+def _printed(item: Any, indent: int = 4) -> int:
     """The length of ``item`` as the MCP process prints it inside an answer: its JSON indented by
-    two, 4 more for each of its lines (it sits two levels deep, in a list of the answer), and 2
-    for the comma and the line break after it."""
+    two, ``indent`` more for each of its lines (4 in a list of the answer, where it sits two
+    levels deep; 8 for a cell, in a row of that list), and 2 for the comma and the line break
+    after it."""
     text = json.dumps(item, ensure_ascii=False, indent=2)
-    return len(text) + 4 * (text.count("\n") + 1) + 2
+    return len(text) + indent * (text.count("\n") + 1) + 2

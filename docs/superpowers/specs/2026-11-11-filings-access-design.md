@@ -127,13 +127,14 @@ no-break space included, as one space, and its ends trimmed. Offsets and lengths
 served text. A sheet is named by its served name everywhere: in the sheet list, in the `sheet`
 parameter and in a ref. The stored payload is not changed.
 
-The budget: a list an answer holds (the sheets, a sheet's rows, the filings, the search hits)
-stops before the item that would take the list past 30,000 characters as the MCP process prints
-it (each item's JSON indented by two, four more spaces a line for its place in the answer, two
-for the comma and the line break), one item at least, and the answer says that more remains
-(`nextRow`, `more`). The counts below (100 rows, 20 hits) are upper bounds beside it. The first
-build measured 20,000 characters of compact JSON; the whole-branch review measured a 60-column
-sheet page at 63,172 characters printed, so the measure became the printed one.
+The budget: a list an answer holds (the sheets, a sheet's rows with the words of their columns,
+the filings, the search hits) stops before the item that would take the list past 30,000
+characters as the MCP process prints it (each item's JSON indented by two, four more spaces a
+line for its place in the answer, two for the comma and the line break), one item at least, and
+the answer says that more remains (`nextRow`, `more`). The counts below (100 rows, 20 hits) are
+upper bounds beside it. The first build measured 20,000 characters of compact JSON; the
+whole-branch review measured a 60-column sheet page at 63,172 characters printed, so the measure
+became the printed one.
 
 ### 5.1 `GET /api/companies/{symbol}/filings?from=&to=&forms=&fromRow=`
 
@@ -163,20 +164,28 @@ Four views, by the parameters given:
    (5.5), and its cells in order. A number cell is the number; a string cell is its served text,
    cut at 2,000 characters, and when cut it is `{text, chars}` with the full length. The view also
    answers `columns`, the words that name each column (5.6), so a later page still names them.
+   A row holds its leading cells alone, 100 at most and 10,000 characters of them as printed,
+   one at least, with `cellCount`, the count of all its cells, on a row cut so: FMP stores a
+   note as one row of thousands of cells, the note's text and then its tables flattened into
+   string cells (the fix of B-169). `columns` are as many as the widest row of the page
+   serves, each column's words cut at 200 characters, and a page's rows and the words of the
+   columns they reach are held to the budget together. No cut changes an index.
 4. **With `sheet` and `row`: one cell's text.** `col` is 0 when left out, `offset` 0. Answer:
-   `sheet`, `row`, `col`, `label`, `chars`, `offset`, `text` (at most 20,000 characters from
-   `offset`) and `nextOffset` (or null). A number cell answers its JSON text.
+   `sheet`, `row`, `col`, `column` (the words of the cell's column, so a cell past a cut is
+   named), `label`, `chars`, `offset`, `text` (at most 20,000 characters from `offset`) and
+   `nextOffset` (or null). A number cell answers its JSON text.
 
 ### 5.3 `GET /api/companies/{symbol}/filing-report/search?year=&period=&text=`
 
 A plain-text search of one report, without regard to case, in the served text of every label and
-every cell (a number by its JSON text). A hit is a row: `{sheet, row, col, label, excerpt, offset,
-rowRef, numbers}`. `col` is the first cell that matches, or null when only the label does;
-`excerpt` is 300 characters each side of the first match; `offset` is the match's place in that
-cell; `numbers` lists the row's number cells as `{col, value, column}`, `column` the words that
-name the column (5.6). A number as it is printed finds a number cell (`33,165` finds `33165`). At
-most 20 hits and within the budget, in the report's order, and `more` true when hits were left
-out; a search has no paging, so the agent searches a longer text.
+every cell (a number by its JSON text). A hit is a row: `{sheet, row, col, column, label, excerpt,
+offset, rowRef, numbers}`. `col` is the first cell that matches, or null when only the label
+does, and `column` the words of that cell's column; `excerpt` is 300 characters each side of the
+first match; `offset` is the match's place in that cell; `numbers` lists the row's number cells
+as `{col, value, column}`, `column` the words that name the column (5.6), the first 60 with
+`numberCount` where the row holds more. A number as it is printed finds a number cell (`33,165`
+finds `33165`). At most 20 hits and within the budget, in the report's order, and `more` true
+when hits were left out; a search has no paging, so the agent searches a longer text.
 
 ### 5.4 The refusals
 
@@ -393,3 +402,4 @@ process that runs research, so its MCP process loads the new tools; run the acce
 | 2026-11-11 | The builder check's five questions, each settled by Claude. (1) The caps alone do not hold an answer under 40,000 characters, and the MCP process prints JSON indented: every list is held to 20,000 characters of compact JSON, the filing list pages by `fromRow` as a sheet does, and `leftOut` is a count. (2) The store keeps every quarter it ever stored, and `financials` with the quarters would pass the size goal: the quarters are a read and a tool of their own, `quarters`, the newest eight, and `financials` does not change; the founder's item 3 named `financials`, and this is the one place the build departs from its letter. (3) A row's label as stored holds white space the agent cannot see, so a JSON pointer through it would fail: a cell is cited by a new form, `filing:<responseId>/<sheet>/<row>/<col>`, indexes and the sheet's served name alone. (4) The references list names the filing, the sheet and the row of a `filing:` ref. (5) A stored quarter in another currency than the reporting one is left out of `quarters` and counted, and its `fact:` ref resolves to nothing, as the trailing figures do not sum such periods. |
 | 2026-11-11 | The build's rulings (Claude, as controller of a subagent-driven build; every implementer and reviewer on Opus 5.5 at xhigh), each in place above. From the tasks: a `filing:` ref resolves a string cell as it is served; a row that is not a label with its cells has no ref; an index asked of an empty sheet or row is refused "<name> is out of range: there is none"; a short search text is refused before the report is fetched; the refusals run in the order header, no key, parameters, fetch, view, the no-key 503 before the parameters as the vendor route has it; a filing-list row that is not an object is dropped and counted; the playbook narrows "another company's filings" (a listed company's report is read by `filing_report` under its own symbol, its figures findings) and opens an exhibit by the filing's `link`; the agent cites a cell by copying the row's `rowRef`, never a ref built by hand. From the whole-branch review, which found no Critical issue and two Important ones: the budget is measured as the answer is printed, 30,000 characters a list, and the sheet list is budgeted and paged (the compact measure let a 60-column sheet page print at 63,172 characters); a cited cell's column is named, in the sheet view's `columns`, in a hit's numbers and in the references list, since a `filing:` ref has no period and a wrong-column cite passes the check. Also from it: the `sheet` asked for is served before it is matched; a lower-case `period` is read; a number as printed finds a number cell; the `fact:` reader resolves any stored label; a hit carries no ref into a second sheet of one served name; the newest four add to the trailing figures only where those are the sum of four quarters; a window before the calendar's first year is a 400; one test runs a searched cell through a published report. Not built, in the backlog: a huge ref id that raises in the `filing:` and `response:` readers, a retention rule for stored filing reports, and a test of a quarter without a cash-flow period. |
 | 2026-11-11 | The live acceptance of section 11, after the merge (main 8ca733b, pushed; the server restarted on 8470 from main), for MSFT over a fresh MCP process. The four checks pass. `filing_search` for "not yet commenced" in the 10-Q of fiscal 2027 Q1 answers the row "Additional leases, primarily for datacenters, that have not yet commenced" of the sheet `Leases - Additional Information` with 364.6, its column named "3 Months Ended, Sep. 30, 2026 USD ($)". The row's ref plus `/0` (`filing:95094/Leases - Additional Information/4/0`) resolves to 364.6, and the references list names the filing, the sheet, the row and the column. `filings` lists the 44 filings of the default year that pass the form filter (146 left out), the 10-Q of 28 Oct 2026 with its link among them. `quarters` lists eight quarters, 2025-Q2 to 2027-Q1, whose newest four revenues add to the trailing revenue exactly ($346,445 million). Each of these answers is under 40,000 characters as the MCP tool returns it, and so is a search for "revenue" in the 10-K of fiscal 2026 (10,566 characters, 20 hits, `more` true). FMP's `Q4` entry of fiscal 2026 holds the 10-K itself (document type 10-K, fiscal period focus FY), the same filing as `FY`. One defect against the goal of section 2, which the reviews had parked as rare (B-168, 1): a census of every sheet page of the two reports (239 answers, 197 sheets) found 8 answers over 40,000 characters, the longest 83,642 (the 10-K's `INVESTMENTS` from row 3). The cause: each note sheet holds one row with the note's whole text as its first cell and the note's tables flattened after it into string cells, most of them empty: 3,377 cells on the 10-Q's `INVESTMENTS`, 3,523 on the 10-K's, and 41 rows of the 10-Q wider than 60 cells. The budget always serves one row whole, and `columns` prints a line for each of its cells. Filed as B-169, a fix, in Now. The build ran on 2026-11-11 alone; the date 2026-11-12 that this log and the backlog carried was an error and is corrected. |
+| 2026-11-11 | B-169 fixed, the defect of the live acceptance (Claude's rulings; found, built test-first and measured the same day). A served row holds its leading cells alone, 100 at most and as many as keep them at or under 10,000 characters as printed, one at least, with `cellCount`, the count of all, on a row cut so; a sheet's `columns` are as many as the widest row of the page serves; a search hit names the first 60 number cells of its row, with `numberCount` where the row holds more (B-168, 1, closed with it). No cut changes an index, so the cell's view and a `filing:` ref read every cell. Not built: a page of a row's further cells (`fromCol`), since a note's numbers sit as number cells in its detail sheets and the search finds any cell; add it if a session needs it. One reviewer (Opus 5.5 at xhigh) read the fix and found two gaps, both closed in it: a cell past a cut had no column named, so the hit names the column of the cell it matched and the cell's view the column of its cell (`column`); a column's words had no limit, so they are cut at 200 characters, and a page's rows and the words of the columns they reach are held to the budget together. The row's 10,000 characters are measured where a cell prints, four levels deep. Measured with the fix on the three stored MSFT reports (the 10-Q of fiscal 2027 Q1, the 10-K of fiscal 2026 under `FY` and under `Q4`): every sheet list page, every page of every sheet and five searches of each, 364 answers, the longest 30,211 characters as printed, where the longest was 83,642. The tools reference words `Q4`: where FMP lists one for a US filer, it holds the 10-K again. |

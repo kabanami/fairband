@@ -14,7 +14,11 @@ import pytest
 
 from fairband.reports.filing_report import (
     ABSENT,
+    HIT_NUMBERS,
     LIST_CHARS,
+    ROW_CELLS,
+    ROW_CHARS,
+    WORD_CHARS,
     NoSheet,
     OutOfRange,
     cell,
@@ -49,12 +53,12 @@ def _report(**sheets: list[Any]) -> dict[str, Any]:
     return {"symbol": "ACME", "period": "Q1", "year": "2027", **sheets}
 
 
-def _printed(items: list[Any]) -> int:
-    """A list's length as the budget measures it: each item's JSON indented by two, 4 more for
-    each of its lines (it sits two levels deep in the answer), and 2 for its comma and line
-    break."""
+def _printed(items: list[Any], indent: int = 4) -> int:
+    """A list's length as the budget measures it: each item's JSON indented by two, ``indent``
+    more for each of its lines (4 where it sits two levels deep in the answer, 8 for a cell of a
+    row), and 2 for its comma and line break."""
     texts = [json.dumps(item, ensure_ascii=False, indent=2) for item in items]
-    return sum(len(text) + 4 * (text.count("\n") + 1) + 2 for text in texts)
+    return sum(len(text) + indent * (text.count("\n") + 1) + 2 for text in texts)
 
 
 def _shown(answer: dict[str, Any]) -> int:
@@ -379,6 +383,137 @@ def test_a_search_of_wide_rows_answers_within_the_goal() -> None:
     assert _shown({**HEAD, "text": "segment revenue", **found}) <= GOAL
 
 
+def _note(cells: int) -> list[Any]:
+    """A note's row as FMP stores it: the note's whole text, then its tables flattened into string
+    cells, four of five empty; ``cells`` cells in all."""
+    return ["NOTE 4. " + "x" * 30_000, *("" if c % 5 else f"Cell {c}" for c in range(1, cells))]
+
+
+def test_a_very_wide_row_is_cut_with_its_cell_count() -> None:
+    """B-169, the live acceptance of 2026-11-11: a note sheet holds one row of thousands of cells
+    (MSFT's ``INVESTMENTS``, 3,377). A served row holds ``ROW_CELLS`` cells at most, with the
+    count of all of them as ``cellCount``; ``columns`` follows the cells served; a cell past the
+    cut is read and cited by its index as before."""
+    rows = [{"INVESTMENTS": [""]}, {"INVESTMENTS": _note(3_377)}, {"Total": [1.5, 2.5]}]
+    report = _report(INVESTMENTS=rows)
+    page = sheet_rows(report, 7, "INVESTMENTS")
+    wide, small = page["rows"][1], page["rows"][2]
+    assert len(wide["cells"]) == ROW_CELLS == 100 and wide["cellCount"] == 3_377
+    assert wide["cells"][0] == {"text": ("NOTE 4. " + "x" * 30_000)[:2_000], "chars": 30_008}
+    assert wide["cells"][5] == "Cell 5"
+    assert small == {
+        "row": 2,
+        "label": "Total",
+        "rowRef": "filing:7/INVESTMENTS/2",
+        "cells": [1.5, 2.5],
+    }
+    assert len(page["columns"]) == 100 and page["nextRow"] is None
+    assert _shown({**HEAD, **page}) <= GOAL
+    assert cell(report, "INVESTMENTS", 1, 3_375) == "Cell 3375"
+    assert cell_text(report, "INVESTMENTS", 1, 3_375)["text"] == "Cell 3375"
+
+
+def test_a_row_of_long_texts_is_cut_at_the_row_budget() -> None:
+    """A row's cells stop before the cell that would take them past ``ROW_CHARS`` as they are
+    printed, one cell at least, so one row never fills an answer."""
+    report = _report(POLICIES=[{"Policies": ["p" * 2_500] * 30}, {"one": ["q" * 2_500]}])
+    page = sheet_rows(report, 7, "POLICIES")
+    cut, whole = page["rows"]
+    assert 1 <= len(cut["cells"]) < 30 and cut["cellCount"] == 30
+    assert _printed(cut["cells"], 8) <= ROW_CHARS == 10_000  # a cell sits 8 deep
+    assert _printed([*cut["cells"], {"text": "p" * 2_000, "chars": 2_500}], 8) > ROW_CHARS
+    # the cells print as the budget measured them, but for the last cell's comma
+    shown = pydantic_core.to_json({"rows": [cut]}, indent=2).decode()
+    cells = shown.split('"cells": [\n')[1].split("\n      ]")[0]
+    assert len(cells) + 2 == _printed(cut["cells"], 8)
+    assert whole["cells"] == [{"text": "q" * 2_000, "chars": 2_500}] and "cellCount" not in whole
+    assert _shown({**HEAD, **page}) <= GOAL
+
+
+def test_a_sheet_s_columns_count_in_its_budget() -> None:
+    """B-168 (1): the columns' words are printed with every page, so a page's rows and the words
+    of their columns are held to the budget together: 100 rows by 100 columns under words of 150
+    characters print within the goal on every page, and the pages leave no gap and no repeat."""
+    words = [f"Sep. 30, {2026 - c} " + "member " * 20 for c in range(100)]
+    head = [{"WIDE (Detail) - USD ($) $ in Millions": [""] * 100}, {"items": words}]
+    body = [{f"line {n}": [(7 * c) % 97 for c in range(100)]} for n in range(98)]
+    report = _report(WIDE=head + body)
+    seen: list[int] = []
+    start: int | None = 0
+    while start is not None:
+        page = sheet_rows(report, 7, "WIDE", start)
+        assert len(page["columns"]) == 100 and page["columns"][1] == served(words[1])
+        assert _shown({**HEAD, **page}) <= GOAL
+        seen += [r["row"] for r in page["rows"]]
+        start = page["nextRow"]
+    assert seen == list(range(100))
+
+
+def test_a_hit_holds_sixty_numbers_at_most_with_their_count() -> None:
+    """B-168 (1): a hit on a row of 400 number cells names the first ``HIT_NUMBERS`` of them and
+    the count of all as ``numberCount``, and prints within the goal; a hit that names every
+    number cell of its row carries no count."""
+    report = _report(WIDE=[{"WIDE (Detail)": [""]}, {"Segment revenue": list(range(400))}])
+    found = search(report, 7, "segment revenue")
+    (hit,) = found["hits"]
+    assert len(hit["numbers"]) == HIT_NUMBERS == 60 and hit["numberCount"] == 400
+    assert [n["col"] for n in hit["numbers"]] == list(range(60))
+    assert _shown({**HEAD, "text": "segment revenue", **found}) <= GOAL
+    assert "numberCount" not in search(_leases(), 7, "not yet commenced")["hits"][0]
+
+
+def test_a_cell_past_a_cut_is_named_by_its_column() -> None:
+    """The fix's review, Important 1: ``columns`` stops at the cells served and a hit's numbers at
+    60, so the hit names the column of the cell it matched, and the cell's view the column of the
+    cell it reads: a cell past either cut is cited with its period known."""
+    title = {"WIDE (Detail)": [f"Period {c}" for c in range(400)]}
+    report = _report(WIDE=[title, {"Segment revenue": list(range(1_000, 1_400))}])
+    (hit,) = search(report, 7, "1399")["hits"]
+    assert (hit["col"], hit["column"], hit["numberCount"]) == (399, "Period 399", 400)
+    assert [n["col"] for n in hit["numbers"]] == list(range(60))  # the matched cell is not among
+    page = sheet_rows(report, 7, "WIDE")
+    assert len(page["columns"]) == 100 and page["rows"][1]["cellCount"] == 400
+    read = cell_text(report, "WIDE", 1, 399)
+    assert (read["text"], read["column"]) == ("1399", "Period 399")
+
+
+def test_a_row_of_a_hundred_cells_is_whole() -> None:
+    report = _report(S=[{"whole": list(range(100))}, {"cut": list(range(101))}])
+    whole, cut = sheet_rows(report, 7, "S")["rows"]
+    assert len(whole["cells"]) == 100 and "cellCount" not in whole
+    assert len(cut["cells"]) == 100 and cut["cellCount"] == 101
+
+
+def test_a_column_s_words_are_cut_at_two_hundred_characters() -> None:
+    """The fix's review, Important 2: a column's words are printed with every page and every
+    number of a hit, so they are held to ``WORD_CHARS``. A sheet of 100 columns under words of 400
+    characters pages within the goal, the rows and the words in one budget; a hit on a row of 60
+    numbers under a title row of long texts prints within it too."""
+    assert WORD_CHARS == 200
+    long = [f"{c:03d} " + "member " * 57 for c in range(100)]  # 402 characters served
+    report = _report(WIDE=[{"WIDE": long}, *({f"line {n}": list(range(100))} for n in range(99))])
+    seen: list[int] = []
+    widths: list[int] = []
+    start: int | None = 0
+    while start is not None:
+        page = sheet_rows(report, 7, "WIDE", start)
+        widths.append(max(len(r["cells"]) for r in page["rows"]))
+        assert page["columns"] == [served(word)[:200] for word in long][: widths[-1]]
+        assert _printed(page["rows"]) + _printed(page["columns"]) <= LIST_CHARS
+        assert _shown({**HEAD, **page}) <= GOAL
+        seen += [r["row"] for r in page["rows"]]
+        start = page["nextRow"]
+    assert seen == list(range(100))
+    # the title row, its long cells cut at the row budget, is a page by itself: a row of 100
+    # numbers beside it would bring the words of 100 columns
+    assert widths[0] < 100 and set(widths[1:]) == {100}
+    assert column(report, "WIDE", 7) == served(long[7])[:200]  # the references list's words too
+    texts = _report(S=[{"S": ["t" * 2_000] * 60}, {"Segment revenue": list(range(60))}])
+    found = search(texts, 7, "segment revenue")
+    assert found["hits"][0]["numbers"][59] == {"col": 59, "value": 59, "column": "t" * 200}
+    assert _shown({**HEAD, "text": "segment revenue", **found}) <= GOAL
+
+
 def test_a_cell_page_is_twenty_thousand_characters() -> None:
     text = "a" * 20_000 + "b" * 20_000 + "c" * 5_000
     report = _report(NOTES=[{"Notes (Detail)": ["3 Months Ended"]}, {"Note  1": [text]}])
@@ -387,6 +522,7 @@ def test_a_cell_page_is_twenty_thousand_characters() -> None:
         "sheet": "NOTES",
         "row": 1,
         "col": 0,
+        "column": "3 Months Ended",  # the title row's cell: the sheet has no row of dates
         "label": "Note 1",
         "chars": 45_000,
         "offset": 0,
@@ -459,6 +595,7 @@ def test_a_row_of_another_shape_is_served_as_its_json() -> None:
         "sheet": "ODD",
         "row": 0,
         "col": 0,
+        "column": None,
         "label": None,
         "excerpt": '["loose"]',
         "offset": 2,
@@ -498,6 +635,7 @@ def test_search_finds_a_label_and_a_cell() -> None:
         "sheet": LEASES,
         "row": 1,
         "col": None,
+        "column": None,  # the label matched, no cell
         "label": LABEL,
         "excerpt": LABEL,  # cut at the label's ends
         "offset": LABEL.index(needle),
@@ -509,6 +647,7 @@ def test_search_finds_a_label_and_a_cell() -> None:
         "sheet": "LEASES",
         "row": 1,
         "col": 0,
+        "column": "3 Months Ended",
         "label": "LEASES",
         "excerpt": note[at - 300 : at + len(needle) + 300],
         "offset": at,

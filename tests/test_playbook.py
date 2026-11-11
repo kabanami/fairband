@@ -865,8 +865,21 @@ def test_a_filing_cell_is_cited_by_the_ref_the_answer_gives() -> None:
     assert "files no 10-Q for its fourth quarter" in steps[5]
     assert "files no 10-Q for its fourth quarter" in _tool_entry("filing_report")
     assert '`filings(symbol, "6-K")`' in steps[5]  # a foreign filer's press release
+    assert "it holds the 10-K again" in _tool_entry("filing_report")  # FMP's `Q4` entry, B-169
     assert "read it whole with `row` and `col`" in _tool_entry("filing_report")
     assert "search a longer text" in _tool_entry("filing_search")  # `more` has no page
+    # B-169: a note's row of thousands of cells is cut, and a hit's numbers are, each with a count
+    for words in (
+        "100 at most and 10,000 characters of them as printed",
+        "`cellCount`, the count of all its cells",
+        "A cell past the cut is read with `row` and `col`, or found by `filing_search`",
+    ):
+        assert words in _tool_entry("filing_report"), words
+    assert "with `numberCount`, the count of all" in _tool_entry("filing_search")
+    # the fix's review: a cell past a cut has its column named, and a column's words are cut
+    assert "`column` (the words of the cell's column, or `null`)" in _tool_entry("filing_report")
+    assert "A column's words are cut at 200 characters" in _tool_entry("filing_report")
+    assert "`column` the words of that cell's column, or `null`" in _tool_entry("filing_search")
     # the final review's B.5: a cell's column is a period or a member, read before it is cited
     for text in (four, citations):
         for words in (

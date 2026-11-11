@@ -363,6 +363,37 @@ def test_a_wide_sheet_and_its_search_answer_within_the_goal(
     assert vendor.paths == [REPORT_JSON]
 
 
+def test_a_note_s_wide_row_is_cut_and_its_cells_stay_in_reach(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path, policy: Policy
+) -> None:
+    """B-169, the live acceptance of 2026-11-11: a note's row of 3,377 cells is served as its first
+    100 with ``cellCount``, and the page prints within the goal; a cell past the cut is read by
+    its index and cited by its ref; a hit on a row of 400 number cells names 60 of them with
+    ``numberCount``."""
+    note = ["NOTE 4. " + "x" * 30_000, *("" if c % 5 else f"Cell {c}" for c in range(1, 3_377))]
+    title = {"INVESTMENTS": ["Sep. 30, 2026"]}
+    rows = [title, {"INVESTMENTS": note}, {"Fair value by line": list(range(400))}]
+    report = {"symbol": "ACME", "period": "Q1", "year": "2027", "INVESTMENTS": rows}
+    vendor.answer = lambda request: _json(report)
+    sheet = {**Q1, "sheet": "INVESTMENTS"}
+    answer = with_passthrough.get(REPORT, params=sheet).json()
+    wide, numbers = answer["rows"][1], answer["rows"][2]
+    assert (len(wide["cells"]), wide["cellCount"]) == (100, 3_377)
+    assert (len(numbers["cells"]), numbers["cellCount"]) == (100, 400)
+    assert "cellCount" not in answer["rows"][0]
+    assert len(answer["columns"]) == 100 and answer["nextRow"] is None and _shown(answer) <= GOAL
+    far = with_passthrough.get(REPORT, params={**sheet, "row": 1, "col": 3_375}).json()
+    assert (far["text"], far["chars"], far["column"]) == ("Cell 3375", 9, None)
+    near = with_passthrough.get(REPORT, params={**sheet, "row": 2}).json()
+    assert (near["text"], near["column"]) == ("0", "Sep. 30, 2026")  # the view names its column
+    with closing(connect(db_path)) as conn:
+        cited = resolve(conn, "ACME", f"{numbers['rowRef']}/399", policy)
+    assert cited == Resolved(399, None, None, None)
+    found = with_passthrough.get(SEARCH, params={**Q1, "text": "fair value by line"}).json()
+    (hit,) = found["hits"]
+    assert (len(hit["numbers"]), hit["numberCount"]) == (60, 400) and _shown(found) <= GOAL
+
+
 def test_a_sheet_and_a_cited_cell(
     with_passthrough: TestClient, vendor: Vendor, db_path: Path, policy: Policy
 ) -> None:
