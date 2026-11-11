@@ -51,6 +51,7 @@ STEPS: dict[int, tuple[str, ...]] = {
     3: (
         "company",
         "financials",
+        "quarters",
         "financial_tables",
         "estimates",
         "peers",
@@ -69,8 +70,8 @@ STEPS: dict[int, tuple[str, ...]] = {
         "refresh_start",
         "refresh_status",
     ),
-    4: ("transcript", "segments", "finding_add"),
-    5: ("transcript_dates", "transcript", "finding_add", "guidance_add", "derive"),
+    4: ("filing_report", "filing_search", "filings", "transcript", "segments", "finding_add"),
+    5: ("transcript_dates", "transcript", "quarters", "finding_add", "guidance_add", "derive"),
     6: ("news", "news_item_add"),
     7: ("financial_tables", "finding_add"),
     8: ("company", "methodology"),
@@ -778,6 +779,64 @@ def test_nothing_counts_twice_route_by_route() -> None:
     ) in valuation
     # the rule before the review, which told the agent to strip the gains on every route
     assert "strip them through `earnings.nri_gap` in the same review" not in skill
+
+
+def test_the_agent_reads_fairband_before_it_goes_outside() -> None:
+    """Spec 2026-11-11, 8: the filing report, the filing list and the quarters come from Fairband;
+    the host's tools read only what Fairband does not hold; a subagent is briefed after the check."""
+    skill = _read(SKILL)
+    steps = _steps(_frontmatter(skill)[1])
+    four, five = _flat(steps[4]), _flat(steps[5])
+    for words in (
+        "Read Fairband first",
+        "`filing_report(symbol)` lists the reports FMP holds",
+        "the row's ref plus `/<col>`",
+        "the sheet's title names the scale",
+        "the scale word stands outside the cite",
+        '{kind: "filing", ref: "response:<responseId>", note}',
+        "an 8-K's exhibits",
+        "by its `finalLink`",
+    ):
+        assert words in four, words
+    assert "`quarters(symbol)`" in five and "`fact:`" in five
+    assert (
+        "record each quarter's figure as a finding from the 10-Q or the press release" not in five
+    )
+    assert "`split-pending` or `basis-scaled`" in five
+    rules = _flat(skill[skill.index("## The rules") : skill.index("## Guidance")])
+    assert "Before you brief a subagent to fetch a figure, check what Fairband holds" in rules
+    tools = _flat(_read(TOOLS))
+    for words in (
+        "at most 100 rows",
+        "20,000 characters of the answer's list",
+        "2,000 characters",
+        "a page of 20,000 characters",
+        "at most 20 hits",
+        "the newest eight",
+    ):
+        assert words in tools, words
+    citations = _read(CITATIONS)
+    assert "`fact:<symbol>/<line>/<year, quarter or ttm>`" in citations
+    assert "`filing:<id>/<sheet>/<row>/<col>`" in citations
+
+
+def test_a_filing_cell_is_cited_by_the_ref_the_answer_gives() -> None:
+    """The reviews of the filings access plan: a cell's ref is copied from its row's `rowRef`,
+    never built by hand, since a sheet name with a slash is written `~1` inside a ref; the worked
+    cite keeps the scale word outside the cite; the tool list says what each filing read answers
+    and how a half-yearly reporter's periods are labelled."""
+    never = "Never build a `filing:` ref by hand"
+    assert never in _flat(_steps(_frontmatter(_read(SKILL))[1])[4])
+    citations = _flat(_read(CITATIONS))
+    assert never in citations
+    assert (
+        '{"cite": "$12.5", "ref": "filing:<id>/Leases - Additional Informatio/2/0"}, " million'
+    ) in citations
+    tools = _flat(_read(TOOLS))
+    assert "Seven vendor reads" not in tools  # the count before the filing reads
+    for words in ("`nextRow`", "`nextOffset`", "`more`", "`truncated`", "the past 365 days"):
+        assert words in tools, words
+    assert "`Q2` and `Q4`" in _tool_entry("quarters")
 
 
 def _read(path: Path) -> str:

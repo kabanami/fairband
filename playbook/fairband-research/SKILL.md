@@ -118,6 +118,8 @@ Then read everything the page shows:
   result on them). Keep `snapshot.id`: the report cites this snapshot.
 - `financials(symbol)`, `financial_tables(symbol)`, `estimates(symbol)`, `peers(symbol)` and
   `price_history(symbol)`: the stored figures, each with the ref to cite it by.
+- `quarters(symbol)`: the newest eight stored quarters, oldest first, each by its fiscal label
+  (`2027-Q1`) and each line with its `fact:` ref. Step 5 reads the last quarter from it.
 - `multiples_history(symbol)`: the trailing and the forward P/E (the price over the earnings a
   share) over the years on file, the last point of each month, with their ten-year average,
   median, high and low, each with its ref. Section 9 of the report sets the multiples against
@@ -138,15 +140,49 @@ criterion (a measurable event that would prove the view wrong). When one has hap
 
 ### 4. The fundamentals: the business and the industry
 
-Read the filings with the host's own tools: the 10-K, the 10-Q, the proxy statement, the company's
-own site. From Fairband, read `segments(symbol)` for the revenue by product and by region, and
+Read Fairband first. FMP holds a company's 10-Ks and 10-Qs as filing reports, and Fairband serves
+them a part at a time (`reference/tools.md`):
+
+- `filing_report(symbol)` lists the reports FMP holds, a 10-K as `FY` and a 10-Q as its quarter,
+  each with its fiscal year.
+- `filing_report(symbol, year, period)` lists the sheets of one report: the statements, each note
+  as text and each note's detail tables. Each sheet has its name, its title and its row count.
+- `filing_search(symbol, year, period, text)` finds a sentence or a row's label in one report.
+  Each hit names its sheet and its row, with an excerpt, the row's number cells and its `rowRef`.
+- `filing_report` with `sheet` reads a table, a page of rows at a time. With `sheet` and `row` it
+  reads a long cell's text, such as a note's, a page at a time.
+
+A number cell is cited as the row's ref plus `/<col>`, with no finding: the sheet's title names
+the scale (`$ in Millions`), the cite is the number as the cell holds it, and the scale word stands
+outside the cite, in the plain part after it (`reference/citations.md`). Copy the row's `rowRef`
+from the answer and add the cell's index, counted from 0. Never build a `filing:` ref by hand: a
+sheet name with a `/` is written `~1` inside a ref, so a ref built by hand resolves to nothing. A
+sentence of a note is a finding whose source is `{kind: "filing", ref: "response:<responseId>",
+note}`: the `responseId` the filing report answered, and the note naming the report and the sheet
+("10-Q of fiscal 2027 Q1, sheet LEASES"). A `filing:` ref names a cell of the report's own company
+only, so a figure from another company's report is a finding. A foreign filer files no 10-Q, so FMP
+holds mostly its annual reports.
+
+`filings(symbol)` lists every filing of the past year with its links, newest first, the ownership
+forms left out (`insider_trades` serves them): `link`, the filing's index page on sec.gov, and
+`finalLink`, its main document. `forms` names the forms to list (`8-K`), and `from_date` and
+`to_date` move the window.
+
+The host's own tools read only what Fairband does not hold: an 8-K's exhibits (the press release,
+recast figures), Item 1, the MD&A, the risk factors, the proxy statement, another company's filings
+and the company's own site. The filing report holds none of these. Open a filing by its
+`finalLink`, or an exhibit by the filing's `link`, never by a search of EDGAR.
+
+From Fairband, read `segments(symbol)` for the revenue by product and by region, and
 `transcript(symbol, year, quarter)` for the earlier earnings calls; the last call is step 5's.
 `insider_trades(symbol)` shows what the insiders bought and sold.
 
 Record a finding (a dated fact with its source) with `finding_add` for every number from outside
-Fairband that the report will cite. Fairband's own figures need no finding. `financials`,
-`financial_tables`, `estimates`, `price_history`, `peers` and `multiples_history` give each figure
-with its ref; for the others, build the ref from the record's id (`reference/citations.md`).
+Fairband that the report will cite. Fairband's own figures need no finding, a filing report's
+number cell among them. `financials`, `quarters`, `financial_tables`, `estimates`, `price_history`,
+`peers` and `multiples_history` give each figure with its ref, and `filing_report` and
+`filing_search` give each row's `rowRef`; for the others, build the ref from the record's id
+(`reference/citations.md`).
 
 ### 5. The last earnings call
 
@@ -159,7 +195,8 @@ year, its quarter and its date. Never guess a year. Read the newest call with
 
 When the vendor has no transcript of the newest quarter, say so in the section. Read the
 company's earnings press release with the host's own tools instead. The quarter's figures still
-come from the filings, as findings.
+come from `quarters`. The press release is an exhibit of an 8-K (a 6-K for a foreign filer):
+`filings(symbol, "8-K")` lists the 8-Ks, and a filing's `link` opens its exhibits.
 
 Then build the seven parts:
 
@@ -168,14 +205,22 @@ Then build the seven parts:
    `derive` `growth` of the first close after the call over the last close before it, two `close:`
    refs from `price_history`.
 2. **The quarter against expectations.** Revenue, EPS, the operating margin and free cash flow,
-   each against the same quarter a year before and against the consensus for the quarter.
-   Fairband's refs name fiscal years and the trailing twelve months, not single quarters, so record
-   each quarter's figure as a finding from the 10-Q or the press release, with its period
-   (`2026-Q3`). The consensus for the quarter is the `estimates` quarter's ref, when the store
-   holds it (revenue and EPS). The surprise is `derive` `growth` of the actual over the consensus;
-   the change on the year is `growth` of the actual over the prior year's. Then name what drove the
-   quarter: price, volume, mix, currency, one-time items. Name the one-time items: the engine
-   anchors on earnings without them.
+   each against the same quarter a year before and against the consensus for the quarter. The
+   quarter's revenue, EPS, operating income and cash flow are the figures of `quarters(symbol)`,
+   cited by their `fact:` refs (`fact:<symbol>/revenue/2026-Q3`), with the quarter as their period;
+   the same quarter a year before is among the eight. The operating margin is the `derive` `ratio`
+   of the quarter's operating income to its revenue. The free cash flow is the `derive` `sum` of
+   its cash from operations and its capital spending, which the store holds negative. On a row
+   flagged `split-pending` or `basis-scaled`, check a quarter's EPS against the flag's note before
+   you cite it: the stored EPS may sit on another share basis than the quote's. A figure the stored
+   statements do not hold (a segment's revenue, a customer count, a non-GAAP figure) comes from the
+   quarter's filing report, a number cell by its row's ref and a sentence of a note as a finding
+   (step 4); else it is a finding from the document the filing list links. The consensus for the
+   quarter is the `estimates` quarter's ref, when the store holds it (revenue and EPS). The
+   surprise is `derive` `growth` of the actual over the consensus; the change on the year is
+   `growth` of the actual over the prior year's. Then name what drove the quarter: price, volume,
+   mix, currency, one-time items. Name the one-time items: the engine anchors on earnings without
+   them.
 3. **The story management is telling.** Quote the frame in their words. Then take three to five
    claims. For each: the claim with its figure and its timeline; the evidence for it in the
    numbers; the driver it moves, written as the register's phrase for it (`reference/register.md`,
@@ -445,6 +490,9 @@ instead.
 - Start a refresh only in three cases: the scoped refresh of the company at the start of step 3; a
   revalue when a refusal asks for one; or when the user asks.
 - Only the lead agent calls `identify`; a subagent never does (step 1).
+- Before you brief a subagent to fetch a figure, check what Fairband holds: the statements, the
+  quarters and the filing report. Brief a subagent only for what is not there, and give it the
+  document's link.
 
 ## Guidance
 

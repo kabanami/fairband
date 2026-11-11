@@ -56,8 +56,11 @@ be left out.
   `fact:` ref (`fact:<symbol>/revenue/2027-Q1`). A quarter's lines are its own terms of the
   trailing sum, so the newest four add to the trailing figures. `otherCurrency` counts the stored
   quarters left out for another currency than the reporting one. A half-yearly reporter's
-  periods are its half-years. The diluted EPS is the statement's as stored: on a row flagged
-  `split-pending` or `basis-scaled` it may sit on another share basis than the quote's.
+  periods are its half-years, served by the labels FMP stores for them, `Q2` and `Q4`
+  (`2026-Q2`, `2026-Q4`). The diluted EPS is the statement's as stored: on a row flagged
+  `split-pending` or `basis-scaled` it may sit on another share basis than the quote's. It calls
+  no vendor. Without an annual income statement on file it answers "no financial statements for
+  <symbol>" (404), as `financials` does.
 - `financial_tables(symbol)`: the six five-year tables of the report's section 4, `growth`,
   `cash_flow`, `solvency`, `returns`, `capital_allocation` and `quality`, each cell
   `{period, value, unit, ref, note}`.
@@ -109,8 +112,17 @@ be left out.
 
 ## The vendor pass-throughs
 
-Seven vendor reads the engine does not use, six from FMP and one from GuruFocus. The server fetches
-each with its own key and stores it, so a report can cite it.
+Ten vendor reads the engine does not use: seven pass-throughs, six from FMP and one from
+GuruFocus, then three filing reads from FMP. The server fetches each with its own key and stores
+the response, so a report can cite it. It reuses a response it fetched within the reuse window, so
+a repeated call costs no vendor call.
+
+### The seven pass-throughs
+
+Each answers the stored response whole, `{responseId, observedAt, reused, payload}`. `segments`
+and `dcf` answer two of them, `{responses: {product: ..., geographic: ...}}` and `{responses:
+{dcf: ..., levered: ...}}`. Cite a field of a payload as `response:<responseId>/<json pointer>`,
+such as `response:731/0/revenue`.
 
 - `transcript(symbol, year, quarter)`: the earnings call transcript of one fiscal quarter, the
   quarter 1 to 4. Take the year and the quarter from `transcript_dates`.
@@ -128,31 +140,96 @@ each with its own key and stores it, so a report can cite it.
   the whole daily series, thousands of rows. Read `multiples_history` instead for the points and
   the statistics with their refs; it reads the same stored series.
 
-Each answers `{responseId, observedAt, reused, payload}`. `segments` and `dcf` answer two of them,
-`{responses: {product: ..., geographic: ...}}` and `{responses: {dcf: ..., levered: ...}}`. Cite
-a field of a payload as `response:<responseId>/<json pointer>`, such as `response:731/0/revenue`.
-The server reuses a response it fetched within the reuse window, so a repeated call costs no
-vendor call. The refusals:
+### The three filing reads
+
+They serve FMP's filing list and its filing reports, a 10-Q or a 10-K as JSON, a part at a time,
+so no answer holds a whole report. Each answer carries `symbol`, and `responseId`, `observedAt`
+and `reused` of the stored response it was read from, beside its own keys below. A filing report
+is reused for thirty days, since a filing does not change once filed. A sheet's name, a label and
+a text cell are served with every run of white space as one space and the ends trimmed; an offset
+or a length counts in that text.
+
+The budget: a list an answer holds (the filings, a sheet's rows, the hits) stops before the item
+that would take its compact JSON past 20,000 characters, one item at least, and the answer says
+that more remains (`nextRow`, `more`). The counts below are upper bounds beside it.
+
+- `filings(symbol, forms?, from_date?, to_date?, from_row?)`: the company's filings from FMP's
+  filing list, newest first. The window runs from `from_date` to `to_date`, ISO dates: the past
+  365 days when they are left out, `to_date` today and `from_date` 365 days before `to_date`.
+  `forms` is a comma list of form types, matched whole and without regard to case
+  (`10-K,10-Q,8-K`), or `all`; left out, every form but the ownership forms `3`, `4`, `5` and
+  `144` and their amendments (`4/A`), which `insider_trades` serves. The answer: `from` and `to`,
+  the window; `filings`, from `from_row` of the kept filings (0 when left out), at most 100 within
+  the budget, each `{formType, filingDate, acceptedDate, link, finalLink}`, `link` the filing's
+  index page on sec.gov, which lists its exhibits, and `finalLink` its main document; `nextRow`,
+  the next `from_row`, or `null`; `count`, the filings the filter kept; `leftOut`, the rows it
+  dropped; and `truncated`, `true` when FMP answered 1,000 filings, the most Fairband asks it for,
+  so older filings of the window are missing: ask again with an earlier `to_date` for them.
+- `filing_report(symbol, year?, period?, sheet?, from_row?, row?, col?, offset?)`: FMP's filing
+  report, a part at a time. Four views, by the arguments given; an argument the view does not read
+  is not read:
+  1. Neither `year` nor `period`: `reports`, the reports FMP holds as it orders them, each
+     `{year, period}`, a 10-K as `FY` and a 10-Q as its quarter, `Q1` to `Q4`.
+  2. `year` and `period`: `year`, `period` and `sheets`, each `{name, title, rows, chars}`: the
+     sheet's name, its title (its first row's label, which names the scale, `$ in Millions`), its
+     row count and the length of its JSON text. The sheets are the statements, each note as text
+     and each note's detail tables. FMP cuts a sheet's name at 31 characters and makes it unique
+     (`SEGMENT INFORMATION AND GEOGR_1`): pass `sheet` as the list names it.
+  3. With `sheet`: `sheet`, `title` and `rows` from `from_row` (0 when left out), at most 100 rows
+     an answer, and at most 20,000 characters of the answer's list (its compact JSON), with
+     `nextRow`, the next `from_row`, or `null` after the last row. A row is `{row, label, rowRef,
+     cells}`: its index in the sheet from 0, its label, its ref and its cells in order. A number
+     cell is the number. A cell longer than 2,000 characters is cut, with its length, as `{text,
+     chars}`: read it whole with `row`. A row of another shape has `label` and `rowRef` `null` and
+     one cell, its JSON text: it holds no cell to cite.
+  4. With `sheet` and `row`: one cell's text, `col` and `offset` 0 when left out. The answer:
+     `sheet`, `row`, `col`, `label`, `chars` (the text's whole length), `offset`, `text` (a page of
+     20,000 characters from `offset`) and `nextOffset`, the next `offset`, or `null` after the
+     text's end. A number cell answers its JSON text.
+
+  Cite a number cell as its row's `rowRef` plus `/<col>` (`filing:812/LEASES/2/0`). Never build a
+  `filing:` ref by hand: a sheet name with a `/` is written `~1` inside a ref.
+- `filing_search(symbol, year, period, text)`: a search of one filing report for `text`, three
+  characters or more, without regard to case, in every label and every cell, a number by its JSON
+  text. A hit is a row, in the report's order: `{sheet, row, col, label, excerpt, offset, rowRef,
+  numbers}`. `col` is the first cell that matches, or `null` when only the label does; `excerpt`
+  holds 300 characters each side of the first match; `offset` is the match's place in that cell's
+  text (the label's when `col` is `null`), so view 4 of `filing_report` opens the cell there;
+  `numbers` lists the row's number cells as `{col, value}`. The answer holds at most 20 hits,
+  within the budget, with `more` `true` when a further row matched, and `year`, `period` and
+  `text`, the text searched. Cite a number cell as the hit's `rowRef` plus `/<col>`.
+
+### The refusals
+
+The vendor reads' refusals:
 
 - "the pass-throughs are busy: four calls are in flight, try again" (503): wait a little and call
   again.
-- "no FMP key" (503): the server has no FMP key, so it serves no pass-through; use the host's own
-  tools and record findings.
+- "no FMP key" (503): the server has no FMP key, so it serves no pass-through and no filing read;
+  use the host's own tools and record findings.
 - "no GuruFocus key: the pe-history pass-through is off" (503): the server has no GuruFocus key;
   `multiples_history` still serves the trailing series stored before, if any, and the forward one.
 - A vendor call that failed (502), with the vendor's sentence.
 
-Three filing reads serve FMP's filing list and its filing reports, a 10-Q or a 10-K as JSON,
-stored the same way and answered a part at a time:
+The filing reads add their own. The first four refuse before any vendor call, so they cost none
+and store nothing:
 
-- `filings(symbol, forms?, from_date?, to_date?, from_row?)`: the company's filings, newest first,
-  each with its form type, its dates and its links, over the last year and without the ownership
-  forms unless `from_date`, `to_date` or `forms` say otherwise.
-- `filing_report(symbol, year?, period?, sheet?, from_row?, row?, col?, offset?)`: a filing report
-  a part at a time, by the arguments given: the reports on file, a report's sheets, a sheet's rows
-  or one cell's text; cite a cell as `filing:<id>/<sheet>/<row>/<col>`.
-- `filing_search(symbol, year, period, text)`: the rows of one filing report whose label or a cell
-  holds the text, each with an excerpt, its number cells and its `rowRef`.
+- "a filing report needs year and period" (400): `sheet`, `from_row`, `row`, `col` or `offset`
+  without `year` and `period`, or one of the two without the other.
+- "period is FY or Q1 to Q4" (400).
+- "text needs three characters or more" (400): a search text shorter than three characters once
+  its white space is served.
+- "from and to are ISO dates, from on or before to" (400): a `from_date` or a `to_date` that is no
+  ISO date, or a `from_date` after the `to_date`.
+- "FMP holds no filing report for <symbol> <year> <period>: ask without year and period for the
+  reports on file" (404): call `filing_report(symbol)` and take a year and a period it lists.
+- "FMP answered no filing list for <symbol>" or "FMP answered no filing reports for <symbol>"
+  (502): FMP's answer was not a list.
+- "no sheet named <name>: ask without sheet for the sheet list" (404): take the sheet's `name`
+  from the sheet list as it stands.
+- "<name> is 0 to <last>" (400), or "<name> is out of range: there is none" where the sheet has no
+  row or the row no cell: a `row`, `col`, `offset` or `from_row` past its end, named as the web
+  server names it (`fromRow`). On the filing list, with no filing kept, 0 alone is in range.
 
 ## The writes
 

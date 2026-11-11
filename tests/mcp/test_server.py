@@ -851,7 +851,9 @@ def test_the_filing_tools_say_how_a_cell_is_cited(api: FairbandClient) -> None:
 
     described = {tool.name: tool.description or "" for tool in anyio.run(listed)}
     for name in ("filing_report", "filing_search"):
-        assert "filing:<id>/<sheet>/<row>/<col>" in described[name], name
+        # copied from the answer, never built by hand: a sheet's slash is ~1 inside the ref
+        assert "cite a cell as its row's rowRef plus /<col>" in described[name], name
+        assert len(described[name]) <= 250, name
 
 
 def test_server_down_is_one_sentence(down: FairbandClient) -> None:

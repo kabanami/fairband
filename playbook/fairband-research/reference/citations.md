@@ -36,8 +36,9 @@ section, each with its source in words. Write no footnote, no mark and no refere
 the cite is all the server needs.
 
 Copy each ref from the tool that gave the figure. The reads of stored figures give each one with
-its `ref`: `financials`, `financial_tables`, `estimates`, `price_history`, `peers` and
-`multiples_history`. Build every other ref from its record's id. `company` gives `snapshot.id`;
+its `ref`: `financials`, `quarters`, `financial_tables`, `estimates`, `price_history`, `peers` and
+`multiples_history`. `filing_report` and `filing_search` give each row of a filing report with its
+`rowRef`. Build every other ref from its record's id. `company` gives `snapshot.id`;
 `reviews` and the answers of `override_add` and `override_drop` give the review's id; `secondary`
 and `secondary_valuation` give the secondary valuation's; `sensitivity` gives the reading's;
 `guidance` and `guidance_add` give a guidance record's; `finding_add` and `findings` give a
@@ -79,6 +80,21 @@ nothing.
 | `policy:<name>` | a policy value, by its name, or with a moat class or an index: `runway_years.Wide`, `fair_band.0` | the value's |
 
 A record holds a percent as a fraction: 0.112. The cite writes it as a percentage: `11.2%`.
+
+A filing report's cell. Copy its ref from the answer: the row's `rowRef` plus `/<col>`, the cell's
+index counted from 0. Never build a `filing:` ref by hand: a sheet name with a `/` is written `~1`
+inside a ref, so a ref built from the name as you read it resolves to nothing. The sheet's title
+names the scale (`$ in Millions`), and the cell holds the number at that scale. Cite the number as
+the cell holds it, with no period (a `filing:` ref has none, so a cite that names one fails), and
+write the scale word in the plain part after the cite:
+
+```json
+[
+  "Leases not yet commenced came to ",
+  {"cite": "$12.5", "ref": "filing:<id>/Leases - Additional Informatio/2/0"},
+  " million."
+]
+```
 
 ## How to write the number
 
@@ -200,9 +216,10 @@ These forms count, so reword them:
 
 ## A figure from outside Fairband: a finding first
 
-A number Fairband does not store (from a filing, a transcript you read elsewhere, a web page) enters
-a report only as a finding. Record it with `finding_add(symbol, as_of, text, source, value, unit,
-period)`, then cite `finding:<id>`:
+A number Fairband does not store (from a sentence of a filing, a document the filing report does
+not hold, a transcript you read elsewhere, a web page) enters a report only as a finding. A filing
+report's number cell is stored: cite its `filing:` ref, with no finding. Record a finding with
+`finding_add(symbol, as_of, text, source, value, unit, period)`, then cite `finding:<id>`:
 
 - `value` in the unit: a total in full (`2100000000`), a percent as a fraction (`0.25` for 25%), a
   per-share figure, a multiple, a count, a score or years; money in the company's reporting

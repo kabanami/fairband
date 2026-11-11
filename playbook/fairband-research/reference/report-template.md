@@ -109,8 +109,8 @@ One page, in this order. Step 5 of `SKILL.md` says how to build each part.
    thesis. The price's move on the next trading day, a `derive` `growth` of two closes.
 2. **The quarter against expectations.** A table of revenue, EPS, the operating margin and free
    cash flow: the quarter, the same quarter a year before, the consensus for the quarter and the
-   surprise. Every cell is a finding, a stored estimate or a derivation. Then what drove the
-   quarter: price, volume, mix, currency, one-time items.
+   surprise. Every cell is a stored quarter's figure from `quarters`, a stored estimate or a
+   derivation. Then what drove the quarter: price, volume, mix, currency, one-time items.
 3. **The story management is telling.** The frame in their words, quoted. Then three to five
    claims, in a table of four columns:
 
@@ -387,17 +387,17 @@ their ratio. Every plain part holds no quantity; every figure is a cite.
         "**The verdict.** The call of 28 Oct 2026, on the fourth quarter of fiscal 2026, confirmed the thesis. The price rose ",
         {"cite": "+6.1%", "ref": "derived:534"},
         " on the next trading day.\n\n**The quarter against expectations.** The quarter beat the analysts' average estimate on both lines.\n\n| | The quarter | A year before | The analysts' average | The surprise |\n|---|---|---|---|---|\n| Revenue | ",
-        {"cite": "$412.3 million", "ref": "finding:120", "period": "2026-Q4"},
+        {"cite": "$412.3 million", "ref": "fact:EXMP/revenue/2026-Q4", "period": "2026-Q4"},
         " | ",
-        {"cite": "$370.8 million", "ref": "finding:122", "period": "2025-Q4"},
+        {"cite": "$370.8 million", "ref": "fact:EXMP/revenue/2025-Q4", "period": "2025-Q4"},
         " | ",
         {"cite": "$405.1 million", "ref": "estimate:EXMP/2026-Q4/revenue", "period": "2026-Q4"},
         " | ",
         {"cite": "1.8%", "ref": "derived:531"},
         " |\n| EPS | ",
-        {"cite": "$1.74", "ref": "finding:121", "period": "2026-Q4"},
+        {"cite": "$1.74", "ref": "fact:EXMP/eps_diluted/2026-Q4", "period": "2026-Q4"},
         " | ",
-        {"cite": "$1.52", "ref": "finding:123", "period": "2025-Q4"},
+        {"cite": "$1.52", "ref": "fact:EXMP/eps_diluted/2025-Q4", "period": "2025-Q4"},
         " | ",
         {"cite": "$1.68", "ref": "estimate:EXMP/2026-Q4/eps", "period": "2026-Q4"},
         " | ",
