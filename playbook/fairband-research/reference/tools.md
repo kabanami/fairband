@@ -150,9 +150,10 @@ is reused for thirty days, since a filing does not change once filed. A sheet's 
 a text cell are served with every run of white space as one space and the ends trimmed; an offset
 or a length counts in that text.
 
-The budget: a list an answer holds (the filings, a sheet's rows, the hits) stops before the item
-that would take its compact JSON past 20,000 characters, one item at least, and the answer says
-that more remains (`nextRow`, `more`). The counts below are upper bounds beside it.
+The budget: a list an answer holds (the filings, the sheets, a sheet's rows, the hits) stops
+before the item that would take it past 30,000 characters as the tool prints it, its JSON indented,
+one item at least, and the answer says that more remains (`nextRow`, `more`). So an answer stays
+under about 40,000 characters as you receive it. The counts below are upper bounds beside it.
 
 - `filings(symbol, forms?, from_date?, to_date?, from_row?)`: the company's filings from FMP's
   filing list, newest first. The window runs from `from_date` to `to_date`, ISO dates: the past
@@ -173,13 +174,15 @@ that more remains (`nextRow`, `more`). The counts below are upper bounds beside 
      `{year, period}`, a 10-K as `FY` and a 10-Q as its quarter, `Q1` to `Q4`. Take `year` and
      `period` from this list. A US filer files no 10-Q for its fourth quarter: its 10-K, `FY`,
      reports the whole year.
-  2. `year` and `period`: `year`, `period` and `sheets`, each `{name, title, rows, chars}`: the
-     sheet's name, its title (its first row's label, which names the scale, `$ in Millions`), its
-     row count and the length of its JSON text. The sheets are the statements, each note as text
-     and each note's detail tables. FMP cuts a sheet's name at 31 characters and makes it unique
+  2. `year` and `period`: `year`, `period` and `sheets` from `from_row` (0 when left out), at most
+     100 sheets an answer within the budget, with `nextRow`, the next `from_row`, or `null` after
+     the last sheet. Each sheet is `{name, title, rows, chars}`: the sheet's name, its title (its
+     first row's label, which names the scale, `$ in Millions`), its row count and the length of
+     its JSON text. The sheets are the statements, each note as text and each note's detail
+     tables. FMP cuts a sheet's name at 31 characters and makes it unique
      (`SEGMENT INFORMATION AND GEOGR_1`): pass `sheet` as the list names it.
   3. With `sheet`: `sheet`, `title` and `rows` from `from_row` (0 when left out), at most 100 rows
-     an answer, and at most 20,000 characters of the answer's list (its compact JSON), with
+     an answer, and at most 30,000 characters of the answer's list as it is printed, with
      `nextRow`, the next `from_row`, or `null` after the last row. A row is `{row, label, rowRef,
      cells}`: its index in the sheet from 0, its label, its ref and its cells in order. A number
      cell is the number. A cell longer than 2,000 characters is cut, with its length, as `{text,

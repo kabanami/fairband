@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pydantic_core
 import pytest
 from fastapi.testclient import TestClient
 from support.vendor import FIXTURES, KEY, Vendor
@@ -36,8 +37,28 @@ ADDITIONAL = "Leases - Additional Informatio"
 LABEL = "Additional leases, primarily for warehouses, that have not yet commenced"
 
 
-def _compact(items: Any) -> str:
-    return json.dumps(items, ensure_ascii=False, separators=(",", ":"))
+GOAL = 40_000  # the most an answer prints as, the spec's goal
+
+
+def _printed(items: list[Any]) -> int:
+    """A list's length as the budget measures it (the final review's A.1): each item's JSON
+    indented by two, 4 more for each of its lines and 2 for its comma and line break."""
+    texts = [json.dumps(item, ensure_ascii=False, indent=2) for item in items]
+    return sum(len(text) + 4 * (text.count("\n") + 1) + 2 for text in texts)
+
+
+def _shown(answer: Any) -> int:
+    """The length of a whole answer as the MCP process prints it, indented by two."""
+    return len(pydantic_core.to_json(answer, indent=2))
+
+
+def _wide(cells: list[Any], rows: int = 100) -> dict[str, Any]:
+    """A filing report of one sheet ``WIDE``, ``rows`` rows by 60 columns: the title row of 60
+    spans, the row ``items`` of 60 dates, then rows of ``cells``."""
+    dates = [f"Sep. 30, {2026 - c}" for c in range(60)]
+    head = [{"WIDE (Detail) - USD ($) $ in Millions": ["3 Months Ended"] * 60}, {"items": dates}]
+    body = [{f"Segment revenue, line {n}": cells} for n in range(rows - 2)]
+    return {"symbol": "ACME", "period": "Q1", "year": "2027", "WIDE": head + body}
 
 
 def _json(body: Any) -> httpx.Response:
@@ -133,8 +154,9 @@ def test_a_long_filing_list_pages_within_the_budget(
     with_passthrough: TestClient, vendor: Vendor
 ) -> None:
     """1,000 rows with links of real length: the answer stops before the row that would take the
-    list's compact JSON past 20,000 characters, well before 100, and ``fromRow=<nextRow>`` goes on
-    with no gap; FMP's page is full, so the list is ``truncated``."""
+    list past 30,000 characters as it is printed, before 100, and ``fromRow=<nextRow>`` goes on
+    with no gap and no repeat to the last row, each answer within the goal as the agent's host
+    receives it; FMP's page is full, so the list is ``truncated``."""
     edgar = "https://www.sec.gov/Archives/edgar/data/1000001"
     rows = [
         {
@@ -152,13 +174,21 @@ def test_a_long_filing_list_pages_within_the_budget(
     first = with_passthrough.get(FILINGS).json()
     assert (first["count"], first["leftOut"], first["truncated"]) == (1000, 0, True)
     page = first["filings"]
-    assert 0 < len(page) < 100 and len(_compact(page)) <= LIST_CHARS
+    assert 0 < len(page) < 100 and _printed(page) <= LIST_CHARS
     assert first["nextRow"] == len(page)
     assert [f["link"] for f in page] == [r["link"] for r in rows[: len(page)]]
     following = with_passthrough.get(FILINGS, params={"fromRow": first["nextRow"]}).json()
     assert following["filings"][0]["link"] == rows[first["nextRow"]]["link"]  # no gap
-    assert len(_compact([*page, following["filings"][0]])) > LIST_CHARS  # the budget ended it
+    assert _printed([*page, following["filings"][0]]) > LIST_CHARS  # the budget ended it
     assert following["reused"] is True
+    links: list[str] = []
+    start: int | None = 0
+    while start is not None:
+        answer = with_passthrough.get(FILINGS, params={"fromRow": start}).json()
+        assert _shown(answer) <= GOAL
+        links += [f["link"] for f in answer["filings"]]
+        start = answer["nextRow"]
+    assert links == [r["link"] for r in rows]  # no gap and no repeat
     for past in (1000, -1):
         refused = with_passthrough.get(FILINGS, params={"fromRow": past})
         assert _refused(refused) == (400, "fromRow is 0 to 999")
@@ -265,6 +295,64 @@ def test_the_sheet_list(with_passthrough: TestClient, vendor: Vendor) -> None:
     assert body["sheets"][3]["rows"] == 4 and body["sheets"][3]["chars"] > 0
     assert (body["year"], body["period"]) == (2027, "Q1") and isinstance(body["responseId"], int)
     assert (body["symbol"], body["observedAt"], body["reused"]) == ("ACME", NOW.isoformat(), False)
+    assert body["nextRow"] is None
+    later = with_passthrough.get(REPORT, params={**Q1, "fromRow": 3}).json()
+    assert [s["name"] for s in later["sheets"]] == [ADDITIONAL, "Revenue by Product/Region"]
+    assert later["nextRow"] is None
+    refused = with_passthrough.get(REPORT, params={**Q1, "fromRow": 5})
+    assert _refused(refused) == (400, "fromRow is 0 to 4")
+    assert vendor.paths == [REPORT_JSON]
+
+
+def test_a_long_sheet_list_pages(with_passthrough: TestClient, vendor: Vendor) -> None:
+    """The final review's A.2: 300 sheets with titles of 70 characters, a hundred an answer, each
+    within the goal, ``fromRow=<nextRow>`` going on with no gap and no repeat."""
+    words = "(Detail) - USD ($) $ in Millions, Revenues by Product and by Geographic Region"
+    sheets = {
+        f"SHEET {n:03d}": [{f"Sheet {n:03d} {words}"[:70]: ["3 Months Ended"]}] for n in range(300)
+    }
+    vendor.answer = lambda request: _json(
+        {"symbol": "ACME", "period": "FY", "year": "2026", **sheets}
+    )
+    names: list[str] = []
+    start: int | None = 0
+    while start is not None:
+        params = {"year": "2026", "period": "FY", "fromRow": str(start)}
+        answer = with_passthrough.get(REPORT, params=params).json()
+        assert len(answer["sheets"]) == 100 and _shown(answer) <= GOAL
+        names += [s["name"] for s in answer["sheets"]]
+        start = answer["nextRow"]
+    assert names == list(sheets)  # no gap and no repeat
+    assert vendor.paths == [REPORT_JSON]
+
+
+@pytest.mark.parametrize(
+    "cells",
+    [[(7 * c) % 97 for c in range(60)], ["" if c % 10 else 12.5 for c in range(60)]],
+    ids=["numbers", "empty-strings"],
+)
+def test_a_wide_sheet_and_its_search_answer_within_the_goal(
+    with_passthrough: TestClient, vendor: Vendor, cells: list[Any]
+) -> None:
+    """The final review's A.4: a sheet of 100 rows by 60 columns pages within the goal with no gap
+    and no repeat; a search of its rows answers within the goal, the hits of rows with 60 number
+    cells stopped by the budget before 20, those of mostly empty cells at 20."""
+    vendor.answer = lambda request: _json(_wide(cells))
+    rows: list[int] = []
+    start: int | None = 0
+    while start is not None:
+        params = {**Q1, "sheet": "WIDE", "fromRow": str(start)}
+        answer = with_passthrough.get(REPORT, params=params).json()
+        assert 1 <= len(answer["rows"]) < 100 and _shown(answer) <= GOAL
+        rows += [r["row"] for r in answer["rows"]]
+        start = answer["nextRow"]
+    assert rows == list(range(100))
+    found = with_passthrough.get(SEARCH, params={**Q1, "text": "segment revenue"}).json()
+    numbers = sum(not isinstance(c, str) for c in cells)
+    assert len(found["hits"]) < 20 if numbers == 60 else len(found["hits"]) == 20
+    assert found["more"] is True and all(len(h["numbers"]) == numbers for h in found["hits"])
+    assert [h["row"] for h in found["hits"]] == list(range(2, 2 + len(found["hits"])))
+    assert _printed(found["hits"]) <= LIST_CHARS and _shown(found) <= GOAL
     assert vendor.paths == [REPORT_JSON]
 
 

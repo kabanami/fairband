@@ -18,12 +18,18 @@ title, with its scale (``$ in Millions``).
 - A row of any other shape (a list, an object of other keys or of a value that is no list) is
   served with ``label`` and ``rowRef`` null and one cell, the row's JSON text, served as a string
   cell is: nothing of the row is dropped, the caps hold, and it holds no cell to cite.
-- The caps: 100 rows a sheet answer, a string cell cut at 2,000 characters there (as ``{text,
-  chars}``, the full length), a page of 20,000 characters of one cell, 20 hits of a search, 300
-  characters each side of a hit's match, and a search text of three characters or more.
-- The budget: a list an answer holds (a sheet's rows, the hits) stops before the item that would
-  take the list's compact JSON past 20,000 characters, one item at least (``fitting``), and the
-  answer says what remains (``nextRow``, ``more``).
+- The caps: 100 sheets a sheet list answer, 100 rows a sheet answer, a string cell cut at 2,000
+  characters there (as ``{text, chars}``, the full length), a page of 20,000 characters of one
+  cell, 20 hits of a search, 300 characters each side of a hit's match, and a search text of
+  three characters or more.
+- The budget: a list an answer holds (the sheets, a sheet's rows, the hits) stops before the item
+  that would take the list past ``LIST_CHARS`` characters as the MCP process prints it, one item
+  at least (``fitting``), and the answer says what remains (``nextRow``, ``more``). The MCP
+  process prints an answer's JSON indented by two, which makes a list of small items 2.5 to 4
+  times longer than its compact JSON; an item sits two levels deep in the answer, so each is
+  measured as its JSON indented by two, 4 more a line, and 2 for its comma and line break
+  (``_printed``). The budget holds an answer under about 40,000 characters as the agent's host
+  receives it.
 - An index out of range is ``OutOfRange``, "<name> is 0 to <last>", or "<name> is out of range:
   there is none" where there is no index (a sheet with no row, a row with no cell). An offset runs
   from 0 to the cell's length, so 0 is always in range.
@@ -42,7 +48,7 @@ PAGE_CHARS = 20_000
 SEARCH_HITS = 20
 SEARCH_WINDOW = 300
 SEARCH_MIN = 3
-LIST_CHARS = 20_000
+LIST_CHARS = 30_000  # a list's budget, as the MCP process prints it (``_printed``)
 SHORT_TEXT = "text needs three characters or more"
 # What ``cell`` answers where the report holds no cell to cite: the resolver reads it as nothing.
 # A cell stored as null is a cell, ``None``.
@@ -75,28 +81,37 @@ def served(text: str) -> str:
 
 def fitting(items: Sequence[Any], limit: int) -> int:
     """How many leading items of ``items`` an answer holds: at most ``limit``, and as many as keep
-    the list's compact JSON at or under ``LIST_CHARS``; 1 at least when there is an item."""
-    count, size = 0, len("[]")
+    the list at or under ``LIST_CHARS`` as it is printed (``_printed``); 1 at least when there is
+    an item."""
+    count, size = 0, 0
     for item in items[:limit]:
-        size += len(_compact(item)) + (1 if count else 0)  # the item and its comma
+        size += _printed(item)
         if count and size > LIST_CHARS:
             break
         count += 1
     return count
 
 
-def sheet_list(report: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Each sheet in the report's order: its served name, its title (the first row's label,
-    served), its row count and the length of its JSON text."""
-    return [
+def sheet_list(report: Mapping[str, Any], from_row: int = 0) -> dict[str, Any]:
+    """The sheets from ``from_row`` in the report's order, as many as the count and the budget
+    allow, each its served name, its title (the first row's label, served), its row count and the
+    length of its JSON text; ``nextRow`` the next ``from_row``, or ``None`` after the last
+    sheet."""
+    sheets = list(_sheets(report))
+    if not 0 <= from_row < len(sheets):
+        raise OutOfRange("fromRow", len(sheets) - 1)
+    answered = [
         {
             "name": served(key),
             "title": _title(rows),
             "rows": len(rows),
             "chars": len(json.dumps(rows, ensure_ascii=False)),
         }
-        for key, rows in _sheets(report)
+        for key, rows in sheets[from_row : from_row + SHEET_ROWS]
     ]
+    kept = answered[: fitting(answered, SHEET_ROWS)]
+    after = from_row + len(kept)
+    return {"sheets": kept, "nextRow": after if after < len(sheets) else None}
 
 
 def row_ref(response_id: int, sheet: str, row: int) -> str:
@@ -306,5 +321,9 @@ def _first_match(
     return None if label is None or match is None else (None, label, match)
 
 
-def _compact(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+def _printed(item: Any) -> int:
+    """The length of ``item`` as the MCP process prints it inside an answer: its JSON indented by
+    two, 4 more for each of its lines (it sits two levels deep, in a list of the answer), and 2
+    for the comma and the line break after it."""
+    text = json.dumps(item, ensure_ascii=False, indent=2)
+    return len(text) + 4 * (text.count("\n") + 1) + 2

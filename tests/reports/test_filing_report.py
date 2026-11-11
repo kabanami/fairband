@@ -1,14 +1,20 @@
 """The views of a stored filing report (spec 2026-11-11, 5, 5.2, 5.3, 5.5): the served text, the
 sheet list, a sheet's rows, one cell's text and a text search, each within its caps and the
-budget, and the cell a ``filing:`` ref names; on reports built here in FMP's shape, synthetic."""
+budget, and the cell a ``filing:`` ref names; on reports built here in FMP's shape, synthetic.
+
+The budget is measured as the MCP process prints an answer (the final review's ruling of
+2026-11-11): ``_printed`` is the ruled measure of a list, and ``_shown`` the length of a whole
+answer as ``pydantic_core`` prints it, indented by two."""
 
 import json
 from typing import Any
 
+import pydantic_core
 import pytest
 
 from fairband.reports.filing_report import (
     ABSENT,
+    LIST_CHARS,
     NoSheet,
     OutOfRange,
     cell,
@@ -25,6 +31,16 @@ from fairband.reports.filing_report import (
 LEASES = "Leases - Additional Informatio"
 RAW_LABEL = "Additional leases, primarily for warehouses,\xa0that have  not yet commenced"
 LABEL = "Additional leases, primarily for warehouses, that have not yet commenced"
+# The keys the route puts beside a view's own, at their longest likely length.
+HEAD = {
+    "symbol": "ACME",
+    "responseId": 123_456,
+    "observedAt": "2026-11-11T09:30:00.123456+00:00",
+    "reused": False,
+    "year": 2027,
+    "period": "Q1",
+}
+GOAL = 40_000  # the most an answer prints as, the spec's goal
 
 
 def _report(**sheets: list[Any]) -> dict[str, Any]:
@@ -32,9 +48,26 @@ def _report(**sheets: list[Any]) -> dict[str, Any]:
     return {"symbol": "ACME", "period": "Q1", "year": "2027", **sheets}
 
 
-def _compact(items: list[Any]) -> int:
-    """The length of a list's compact JSON, as the budget counts it."""
-    return len(json.dumps(items, ensure_ascii=False, separators=(",", ":")))
+def _printed(items: list[Any]) -> int:
+    """A list's length as the budget measures it: each item's JSON indented by two, 4 more for
+    each of its lines (it sits two levels deep in the answer), and 2 for its comma and line
+    break."""
+    texts = [json.dumps(item, ensure_ascii=False, indent=2) for item in items]
+    return sum(len(text) + 4 * (text.count("\n") + 1) + 2 for text in texts)
+
+
+def _shown(answer: dict[str, Any]) -> int:
+    """The length of a whole answer as the MCP process prints it."""
+    return len(pydantic_core.to_json(answer, indent=2))
+
+
+def _wide(cells: list[Any], rows: int = 100) -> dict[str, Any]:
+    """A report of one sheet ``WIDE`` of ``rows`` rows by 60 columns in FMP's shape: the title row
+    of 60 spans, the row ``items`` of 60 dates, then rows of ``cells``."""
+    dates = [f"Sep. 30, {2026 - c}" for c in range(60)]
+    head = [{"WIDE (Detail) - USD ($) $ in Millions": ["3 Months Ended"] * 60}, {"items": dates}]
+    body = [{f"Segment revenue, line {n}": cells} for n in range(rows - 2)]
+    return _report(WIDE=head + body)
 
 
 def _leases() -> dict[str, Any]:
@@ -58,7 +91,9 @@ def test_the_sheet_list_names_each_sheet_with_its_title_and_size() -> None:
             ]
         }
     )
-    [sheet] = sheet_list(report)
+    listed = sheet_list(report)
+    [sheet] = listed["sheets"]
+    assert listed["nextRow"] is None
     assert (sheet["name"], sheet["title"], sheet["rows"]) == (
         "INCOME STATEMENTS",
         "INCOME STATEMENTS - USD ($) $ in Millions",
@@ -69,9 +104,32 @@ def test_the_sheet_list_names_each_sheet_with_its_title_and_size() -> None:
     assert sheet_rows(report, 7, "INCOME STATEMENTS")["sheet"] == "INCOME STATEMENTS"
 
 
+def test_the_sheet_list_pages_a_hundred_sheets_within_the_budget() -> None:
+    """The final review's A.2: 300 sheets with titles of 70 characters, a hundred an answer from
+    ``from_row``, with ``nextRow``; no gap and no repeat; each answer prints within the goal."""
+    words = "(Detail) - USD ($) $ in Millions, Revenues by Product and by Geographic Region"
+    titles = [f"Sheet {n:03d} {words}"[:70] for n in range(300)]
+    assert {len(t) for t in titles} == {70}
+    report = _report(**{f"SHEET {n:03d}": [{titles[n]: ["3 Months Ended"]}] for n in range(300)})
+    seen: list[str] = []
+    start: int | None = 0
+    while start is not None:
+        listed = sheet_list(report, start)
+        assert 1 <= len(listed["sheets"]) <= 100
+        assert _printed(listed["sheets"]) <= LIST_CHARS
+        assert _shown({**HEAD, **listed}) <= GOAL
+        seen += [s["name"] for s in listed["sheets"]]
+        start = listed["nextRow"]
+    assert seen == [f"SHEET {n:03d}" for n in range(300)]  # no gap and no repeat
+    assert sheet_list(report, 200)["sheets"][0]["title"] == titles[200]
+    for past in (300, -1):
+        with pytest.raises(OutOfRange, match=r"^fromRow is 0 to 299$"):
+            sheet_list(report, past)
+
+
 def test_two_sheets_that_serve_alike_name_the_first() -> None:
     report = _report(**{"A  B": [{"first": [1]}], "A B": [{"second": [2]}]})
-    assert [s["name"] for s in sheet_list(report)] == ["A B", "A B"]
+    assert [s["name"] for s in sheet_list(report)["sheets"]] == ["A B", "A B"]
     assert sheet_rows(report, 7, "A B")["rows"][0]["label"] == "first"
     assert cell(report, "A B", 0, 0) == 1
 
@@ -137,23 +195,64 @@ def test_the_budget_ends_a_page_before_a_hundred_rows() -> None:
     while start is not None:
         page = sheet_rows(report, 7, "NOTES", start)
         assert 1 <= len(page["rows"]) < 100
-        assert len(json.dumps(page["rows"], ensure_ascii=False, separators=(",", ":"))) <= 20_000
+        assert _printed(page["rows"]) <= LIST_CHARS and _shown({**HEAD, **page}) <= GOAL
         seen += [r["row"] for r in page["rows"]]
         start = page["nextRow"]
     assert seen == list(range(60))  # no gap and no repeat
     # one item longer than the budget by itself is still served, alone
-    assert fitting([{"a": "x" * 30_000}, {"b": 1}], 100) == 1 and fitting([], 100) == 0
+    assert fitting([{"a": "x" * 40_000}, {"b": 1}], 100) == 1 and fitting([], 100) == 0
 
 
 def test_fitting_holds_the_list_at_or_under_the_budget() -> None:
-    """The count stops at the limit, and at the item that would take the list's compact JSON past
-    20,000 characters; a list of exactly 20,000 characters fits whole."""
+    """The final review's A.1: the count stops at the limit, and at the item that would take the
+    list past 30,000 characters as it is printed, each item its JSON indented by two, 4 more a line
+    and 2 for its comma and line break; a list of exactly 30,000 fits whole. A string of n
+    characters prints as n + 2 on one line, so it measures n + 8."""
+    assert LIST_CHARS == 30_000
     assert fitting([1, 2, 3], 2) == 2
-    # quoted, 9,998 and 9,999 characters; with "[", "," and "]", 20,000; é counts as one
-    items = ["é" * 9_996, "x" * 9_997]
-    assert _compact(items) == 20_000 and fitting(items, 100) == 2
+    items = ["é" * 14_992, "x" * 14_992]  # é counts as one character
+    assert _printed(items) == 30_000 and fitting(items, 100) == 2
     assert fitting([*items, 1], 100) == 2
-    assert fitting(["x" * 9_997, "x" * 9_997], 100) == 1  # 20,001 characters
+    assert fitting(["x" * 14_993, "x" * 14_992], 100) == 1  # 30,001 characters
+    # an object's lines each take 4 more: {"a": 1} prints as 3 lines, 12 + 12 + 2 characters
+    assert _printed([{"a": 1}]) == len('{\n  "a": 1\n}') + 12 + 2 == 26
+    assert fitting([{"a": 1}, "x" * 29_966], 100) == 2  # 26 + 29,974
+    assert fitting([{"a": 1}, "x" * 29_967], 100) == 1
+
+
+@pytest.mark.parametrize(
+    "cells",
+    [
+        [(7 * c) % 97 for c in range(60)],  # small numbers
+        ["" if c % 10 else 12.5 for c in range(60)],  # mostly empty-string cells
+    ],
+    ids=["numbers", "empty-strings"],
+)
+def test_a_wide_sheet_pages_within_the_goal(cells: list[Any]) -> None:
+    """The final review's A.4: a sheet of 100 rows by 60 columns prints within the goal on every
+    page, as the agent's host receives it, and the pages leave no gap and no repeat."""
+    report = _wide(cells)
+    seen: list[int] = []
+    start: int | None = 0
+    while start is not None:
+        page = sheet_rows(report, 7, "WIDE", start)
+        assert 1 <= len(page["rows"]) < 100  # the budget ends each page
+        assert _printed(page["rows"]) <= LIST_CHARS and _shown({**HEAD, **page}) <= GOAL
+        seen += [r["row"] for r in page["rows"]]
+        start = page["nextRow"]
+    assert seen == list(range(100))
+
+
+def test_a_search_of_wide_rows_answers_within_the_goal() -> None:
+    """The final review's A.4: 25 rows match, each with 60 number cells; the hits stop at the
+    budget, in the report's order from the first match, with ``more``."""
+    report = _wide([(7 * c) % 97 for c in range(60)], rows=27)
+    found = search(report, 7, "segment revenue")
+    assert 1 <= len(found["hits"]) < 20 and found["more"] is True
+    assert [h["row"] for h in found["hits"]] == list(range(2, 2 + len(found["hits"])))
+    assert all(len(h["numbers"]) == 60 for h in found["hits"])
+    assert _printed(found["hits"]) <= LIST_CHARS
+    assert _shown({**HEAD, "text": "segment revenue", **found}) <= GOAL
 
 
 def test_a_cell_page_is_twenty_thousand_characters() -> None:
@@ -193,7 +292,12 @@ def test_a_cell_page_is_twenty_thousand_characters() -> None:
 
 def test_an_empty_sheet_or_row_has_no_index() -> None:
     report = _report(EMPTY=[], S=[{"no cells": []}])
-    assert sheet_list(report)[0] == {"name": "EMPTY", "title": None, "rows": 0, "chars": 2}
+    assert sheet_list(report)["sheets"][0] == {
+        "name": "EMPTY",
+        "title": None,
+        "rows": 0,
+        "chars": 2,
+    }
     with pytest.raises(OutOfRange, match="^fromRow is out of range: there is none$"):
         sheet_rows(report, 7, "EMPTY")
     with pytest.raises(OutOfRange, match="^row is out of range: there is none$"):
@@ -221,7 +325,7 @@ def test_a_row_of_another_shape_is_served_as_its_json() -> None:
         (None, ['{"a": 1, "b": 2}'], None),
         (None, ['{"note": "not a list"}'], None),
     ]
-    assert sheet_list(report)[0]["title"] is None
+    assert sheet_list(report)["sheets"][0]["title"] is None
     assert cell(report, "ODD", 0, 0) is ABSENT and label(report, "ODD", 0) is None
     assert cell(report, "ODD", 2, 0) is ABSENT and label(report, "ODD", 2) is None
     page = cell_text(report, "ODD", 1)
@@ -327,7 +431,7 @@ def test_search_stops_at_twenty_hits_and_at_the_budget() -> None:
     wide = _report(S=[{"z" * 1_800 + f" {n}": [wide_cell]} for n in range(12)])
     found = search(wide, 7, "lease")
     assert 1 <= len(found["hits"]) < 12 and found["more"] is True
-    assert _compact(found["hits"]) <= 20_000
+    assert _printed(found["hits"]) <= LIST_CHARS
     assert [h["row"] for h in found["hits"]] == list(range(len(found["hits"])))
     assert all(len(json.dumps(h)) > 2_400 for h in found["hits"])
 

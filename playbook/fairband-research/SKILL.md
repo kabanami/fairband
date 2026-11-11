@@ -146,7 +146,8 @@ them a part at a time (`reference/tools.md`):
 - `filing_report(symbol)` lists the reports FMP holds, a 10-K as `FY` and a 10-Q as its quarter,
   each with its fiscal year.
 - `filing_report(symbol, year, period)` lists the sheets of one report: the statements, each note
-  as text and each note's detail tables. Each sheet has its name, its title and its row count.
+  as text and each note's detail tables. Each sheet has its name, its title and its row count. A
+  long list comes a page at a time: pass its `nextRow` as `from_row` for the next page.
 - `filing_search(symbol, year, period, text)` finds a sentence or a row's label in one report.
   Each hit names its sheet and its row, with an excerpt, the row's number cells and its `rowRef`.
 - `filing_report` with `sheet` reads a table, a page of rows at a time. With `sheet` and `row` it

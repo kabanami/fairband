@@ -827,13 +827,17 @@ def test_the_agent_reads_fairband_before_it_goes_outside() -> None:
     tools = _flat(_read(TOOLS))
     for words in (
         "at most 100 rows",
-        "20,000 characters of the answer's list",
+        "at most 30,000 characters of the answer's list as it is printed",
         "2,000 characters",
         "a page of 20,000 characters",
         "at most 20 hits",
         "the newest eight",
     ):
         assert words in tools, words
+    assert "compact JSON" not in tools  # the budget is measured as the answer is printed
+    # the sheet list pages as a sheet's rows do (the final review's A.2)
+    sheets = _tool_entry("filing_report")
+    assert "at most 100 sheets" in sheets and "`nextRow`" in sheets
     citations = _read(CITATIONS)
     assert "`fact:<symbol>/<line>/<year, quarter or ttm>`" in citations
     assert "`filing:<id>/<sheet>/<row>/<col>`" in citations

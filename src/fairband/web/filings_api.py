@@ -20,11 +20,12 @@ and ``responseId``, ``observedAt`` and ``reused`` of the stored response it was 
   answers one of four views by the parameters given. Neither ``year`` nor ``period``: ``reports``,
   the filing reports on file as FMP orders them, each ``{year, period}`` from its ``fiscalYear``
   and ``period`` (a row without one of them is dropped, and no link is answered). ``year`` and
-  ``period``: ``year``, ``period`` and ``sheets`` (``filing_report.sheet_list``). With ``sheet``:
-  ``year``, ``period`` and the sheet's rows (``filing_report.sheet_rows``). With ``sheet`` and
-  ``row``: ``year``, ``period`` and one cell's text (``filing_report.cell_text``), ``col`` and
-  ``offset`` 0 when left out. A parameter the view does not read is not read: ``row`` without
-  ``sheet`` answers the sheet list, ``fromRow`` with ``row`` the cell.
+  ``period``: ``year``, ``period``, ``sheets`` from ``fromRow`` (0 when left out) and
+  ``nextRow`` (``filing_report.sheet_list``). With ``sheet``: ``year``, ``period`` and the
+  sheet's rows (``filing_report.sheet_rows``). With ``sheet`` and ``row``: ``year``, ``period``
+  and one cell's text (``filing_report.cell_text``), ``col`` and ``offset`` 0 when left out. A
+  parameter the view does not read is not read: ``row`` without ``sheet`` answers the sheet list,
+  ``fromRow`` with ``row`` the cell.
 - ``GET /api/companies/{symbol}/filing-report/search?year=&period=&text=`` answers ``year``,
   ``period``, ``text`` (the text searched, served), ``hits`` and ``more``
   (``filing_report.search``).
@@ -168,7 +169,7 @@ def add_filing_routes(
         head = {**_head(company, fetched), "year": year, "period": period}
         try:
             if sheet is None:
-                return {**head, "sheets": sheet_list(report)}
+                return {**head, **sheet_list(report, from_row or 0)}
             if row is None:
                 return {**head, **sheet_rows(report, response_id, sheet, from_row or 0)}
             return {**head, **cell_text(report, sheet, row, col or 0, offset or 0)}
