@@ -7,7 +7,18 @@ resolver read the store.
 A report is a JSON object: ``symbol``, ``period``, ``year``, then one key a sheet. A sheet is a key
 whose value is a list, of rows; a row is an object with one key, the row's label, whose value is
 the list of the row's cells (numbers, strings, empty strings). The first row's label is the sheet's
-title, with its scale (``$ in Millions``).
+title, with its scale (``$ in Millions``), and its cells the columns' spans (``3 Months Ended``);
+a row labelled ``items`` near the top holds the columns' dates (``Sep. 30, 2026``). A title row may
+hold fewer cells than there are columns, one span over two dates.
+
+- A column's words (``column``): the cell of the row ``items`` at the column, where one of the
+  sheet's first three rows is labelled ``items`` and has a cell there, after the title row's cell
+  at the column when the title row holds exactly as many cells as the row ``items`` (else which
+  span is the column's is not known, and it is left out), the two joined with ", " (``3 Months
+  Ended, Sep. 30, 2026``); with no row ``items``, the title row's cell at the column. A number or
+  an empty cell gives no word; ``None`` where none does. A sheet's rows answer the words of each
+  column as ``columns``, and a search hit each number cell's as its ``column``, so the agent reads
+  which period or member a number is before it cites it.
 
 - Served text: a sheet's name, a label and a string cell are served with every run of white space,
   the no-break space among it, as one space, and the ends trimmed (``served``). Offsets and lengths
@@ -49,6 +60,7 @@ SEARCH_HITS = 20
 SEARCH_WINDOW = 300
 SEARCH_MIN = 3
 LIST_CHARS = 30_000  # a list's budget, as the MCP process prints it (``_printed``)
+ITEMS = "items"  # the label of the row of a sheet's column dates
 SHORT_TEXT = "text needs three characters or more"
 # What ``cell`` answers where the report holds no cell to cite: the resolver reads it as nothing.
 # A cell stored as null is a cell, ``None``.
@@ -125,8 +137,10 @@ def sheet_rows(
     report: Mapping[str, Any], response_id: int, sheet: str, from_row: int = 0
 ) -> dict[str, Any]:
     """The sheet's rows from ``from_row``, as many as the count and the budget allow, each with its
-    index, its served label, its ref and its cells as served; ``nextRow`` the next ``from_row``, or
-    ``None`` after the last row."""
+    index, its served label, its ref and its cells as served; ``columns`` the words of each
+    column (``column``), as many as the widest row of the page holds, ``None`` where a column has
+    none, so a later page names them too; ``nextRow`` the next ``from_row``, or ``None`` after the
+    last row."""
     rows = _sheet(report, sheet)
     if not 0 <= from_row < len(rows):
         raise OutOfRange("fromRow", len(rows) - 1)
@@ -136,9 +150,11 @@ def sheet_rows(
     ]
     kept = answered[: fitting(answered, SHEET_ROWS)]
     after = from_row + len(kept)
+    width = max(len(r["cells"]) for r in kept)
     return {
         "sheet": sheet,
         "title": _title(rows),
+        "columns": [_column(rows, col) for col in range(width)],
         "rows": kept,
         "nextRow": after if after < len(rows) else None,
     }
@@ -200,6 +216,14 @@ def cell(report: Mapping[str, Any], sheet: str, row: int, col: int) -> Any:
     return served(value) if isinstance(value, str) else value
 
 
+def column(report: Mapping[str, Any], sheet: str, col: int) -> str | None:
+    """The served words that name the column ``col`` of the sheet (by its served name): its span
+    and its date, its date, or its title row's cell (module docstring); ``None`` where the sheet is
+    not there or nothing names the column."""
+    rows = _find(report, sheet)
+    return None if rows is None else _column(rows, col)
+
+
 def label(report: Mapping[str, Any], sheet: str, row: int) -> str | None:
     """The row's served label; ``None`` where the sheet or the row is not there, or the row is not
     a label with its cells."""
@@ -256,6 +280,31 @@ def _title(rows: Sequence[Any]) -> str | None:
     return None if not rows else _read_row(rows[0])[0]
 
 
+def _column(rows: Sequence[Any], col: int) -> str | None:
+    """The words that name the column ``col`` of a sheet of ``rows`` (``column``)."""
+    top = [_labelled(row) for row in rows[:3]]
+    title = top[0] if top else None
+    found = next(
+        ((n, row[1]) for n, row in enumerate(top) if row is not None and served(row[0]) == ITEMS),
+        None,
+    )
+    if found is None:
+        return None if title is None else _word(title[1], col)
+    at, dates = found
+    span = None  # where the title row, not ``items`` itself, holds one cell a date
+    if at > 0 and title is not None and len(title[1]) == len(dates):
+        span = _word(title[1], col)
+    words = [word for word in (span, _word(dates, col)) if word is not None]
+    return ", ".join(words) or None
+
+
+def _word(cells: Sequence[Any], col: int) -> str | None:
+    """The served text of the string cell ``col``; ``None`` where there is none, or the cell is a
+    number, empty or no string."""
+    value = cells[col] if 0 <= col < len(cells) else None
+    return (served(value) or None) if isinstance(value, str) else None
+
+
 def _number(value: Any) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
@@ -303,7 +352,11 @@ def _hits(
                 "excerpt": text[start : match.end() + SEARCH_WINDOW],
                 "offset": match.start(),
                 "rowRef": None if label is None else row_ref(response_id, sheet, n),
-                "numbers": [{"col": i, "value": c} for i, c in enumerate(cells) if _number(c)],
+                "numbers": [
+                    {"col": i, "value": c, "column": _column(rows, i)}
+                    for i, c in enumerate(cells)
+                    if _number(c)
+                ],
             }
 
 

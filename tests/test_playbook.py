@@ -867,6 +867,16 @@ def test_a_filing_cell_is_cited_by_the_ref_the_answer_gives() -> None:
     assert '`filings(symbol, "6-K")`' in steps[5]  # a foreign filer's press release
     assert "read it whole with `row` and `col`" in _tool_entry("filing_report")
     assert "search a longer text" in _tool_entry("filing_search")  # `more` has no page
+    # the final review's B.5: a cell's column is a period or a member, read before it is cited
+    for text in (four, citations):
+        for words in (
+            "A sheet's columns are periods or members",
+            "read the column's words (the sheet's `columns`, or the hit's `column`) before you cite",
+            "name that period in the sentence",
+        ):
+            assert words in text, words
+    assert "`columns`" in _tool_entry("filing_report")
+    assert "`{col, value, column}`" in _tool_entry("filing_search")
     assert (
         '{"cite": "$12.5", "ref": "filing:<id>/Leases - Additional Informatio/2/0"}, " million'
     ) in citations

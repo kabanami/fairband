@@ -103,8 +103,10 @@ revenue line of fiscal 2025 on file" or "the revenue line of Q1 of fiscal 2027 o
 ``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
 ``guidance:`` "guidance record 5: EPS for fiscal 2027, the midpoint"; ``derived:`` "derivation 7:
 the ratio of <a> and <b>", the operands' refs; ``filing:`` "FMP filing report of fiscal 2027 Q1,
-LEASES: <the row's served label>, observed 11 Nov 2026", the stored call's year and period, read
-as ``resolve`` reads it; ``response:`` "FMP segments, observed 1 Nov 2026";
+LEASES: <the row's served label>, column 0 (3 Months Ended, Sep. 30, 2026), observed 11 Nov
+2026", the stored call's year and period, the column with its words where the sheet names it
+(``filing_report.column``; "column 0" alone where it does not), read as ``resolve`` reads it;
+``response:`` "FMP segments, observed 1 Nov 2026";
 ``policy:`` "policy required_return, <the version>", the ``policy_version`` the resolver is given
 (the report's snapshot's), else the policy's. A ref whose form or record names nothing, a record
 of another company among them, is its own description; a ``secondary:`` or ``sensitivity:`` ref
@@ -612,8 +614,8 @@ class Resolver:
                 found = self._guidance_source(head, name)
             case "derived", [_]:
                 found = self._derived_source(head)
-            case "filing", [_, sheet, row, _] if self.resolve(ref) is not None:
-                found = self._filing_source(head, _unescaped(sheet), int(row))
+            case "filing", [_, sheet, row, col] if self.resolve(ref) is not None:
+                found = self._filing_source(head, _unescaped(sheet), int(row), int(col))
             case "response", _:
                 found = self._response_source(head)
             case "policy", _ if path:
@@ -1008,16 +1010,19 @@ class Resolver:
         vendor = _PROVIDER_WORDS.get(row.provider, row.provider)
         return f"{vendor} {row.endpoint}, observed {day_words(row.observed_at.date())}"
 
-    def _filing_source(self, head: str, sheet: str, row: int) -> str:
-        """The stored call's fiscal year and period, the sheet, the row's served label and the day
-        the report was observed; read after ``resolve``, so the report holds the row."""
+    def _filing_source(self, head: str, sheet: str, row: int, col: int) -> str:
+        """The stored call's fiscal year and period, the sheet, the row's served label, the column
+        with its words where the sheet names it (``filing_report.column``) and the day the report
+        was observed; read after ``resolve``, so the report holds the cell."""
         stored = self._filing_report(head)
         assert stored is not None  # resolved
         response, report = stored
         fiscal = f"fiscal {response.params.get('year')} {response.params.get('period')}"
         cited = f"{sheet}: {filing_report.label(report, sheet, row)}"
+        words = filing_report.column(report, sheet, col)
+        named = f"column {col}" if words is None else f"column {col} ({words})"
         observed = day_words(response.observed_at.date())
-        return f"FMP filing report of {fiscal}, {cited}, observed {observed}"
+        return f"FMP filing report of {fiscal}, {cited}, {named}, observed {observed}"
 
 
 def field_words(name: str) -> str:

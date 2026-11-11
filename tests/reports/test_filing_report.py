@@ -19,6 +19,7 @@ from fairband.reports.filing_report import (
     OutOfRange,
     cell,
     cell_text,
+    column,
     fitting,
     label,
     row_ref,
@@ -154,6 +155,94 @@ def test_a_sheet_s_rows_carry_a_short_ref_and_the_cells() -> None:
         row_ref(7, "Revenue by Product/Region ~ net", 3)
         == "filing:7/Revenue by Product~1Region ~0 net/3"
     )
+
+
+INCOME = [
+    {"INCOME STATEMENTS - USD ($) $ in Millions": [" 3 Months\xa0Ended", "3 Months Ended"]},
+    {"items": ["Sep. 30, 2026", "Sep. 30, 2025"]},
+    {"Revenue": [340, 310]},
+    {"Operating income": [68, 60]},
+]
+
+
+def test_a_column_is_named_by_its_span_and_its_date() -> None:
+    """The final review's B.1: a title row as long as the row ``items`` gives each column its span
+    before its date, both served; a column past the row is named by nothing."""
+    report = _report(**{"INCOME  STATEMENTS ": INCOME})
+    assert column(report, "INCOME STATEMENTS", 0) == "3 Months Ended, Sep. 30, 2026"
+    assert column(report, "INCOME STATEMENTS", 1) == "3 Months Ended, Sep. 30, 2025"
+    for col in (2, -1):
+        assert column(report, "INCOME STATEMENTS", col) is None
+    assert column(report, "Nope", 0) is None
+
+
+def test_a_span_over_two_dates_is_left_out() -> None:
+    """A title row of fewer cells than the row ``items`` (one span over two dates) does not say
+    which span is a column's: the date alone names it."""
+    report = _report(
+        S=[
+            {"Balance (Detail) $ in Millions": ["3 Months Ended"]},
+            {"items": ["Sep. 30, 2026", "Sep. 30, 2025"]},
+            {"Leases": [12.5, 11.0]},
+        ]
+    )
+    assert [column(report, "S", c) for c in range(3)] == ["Sep. 30, 2026", "Sep. 30, 2025", None]
+
+
+def test_a_sheet_without_an_items_row_is_named_by_its_title_row() -> None:
+    """No row ``items`` among the first three: the title row's cell names the column; a number or
+    an empty cell names nothing, and the row ``items`` past the third row is no such row."""
+    report = _report(
+        S=[
+            {"Revenue by Product (Detail) $ in Millions": ["3 Months Ended", "", 2026]},
+            {"Widgets": [210, 190, 7]},
+            {"Gadgets": [130, 120, 7]},
+            {"items": ["Sep. 30, 2026", "Sep. 30, 2025", "Sep. 30, 2024"]},
+        ]
+    )
+    assert [column(report, "S", c) for c in range(4)] == ["3 Months Ended", None, None, None]
+    # an items row whose cell is empty: the span alone
+    spans = _report(S=[{"T": ["3 Months Ended", "9 Months Ended"]}, {"items": ["", "Sep. 30"]}])
+    assert [column(spans, "S", c) for c in range(2)] == [
+        "3 Months Ended",
+        "9 Months Ended, Sep. 30",
+    ]
+
+
+def test_a_row_of_another_shape_names_no_column() -> None:
+    """A title row or a row ``items`` that is not a label with its cells gives no words."""
+    report = _report(
+        ODD=[["3 Months Ended"], {"items": ["Sep. 30, 2026"]}, {"Leases": [12.5]}],
+        LOOSE=[{"T": ["3 Months Ended"]}, {"items": "Sep. 30, 2026"}, {"Leases": [12.5]}],
+    )
+    assert column(report, "ODD", 0) == "Sep. 30, 2026"  # no title row: the date alone
+    assert column(report, "LOOSE", 0) == "3 Months Ended"  # no items row: the span alone
+    assert column(_report(EMPTY=[], BARE=[["x"]]), "EMPTY", 0) is None
+    assert column(_report(BARE=[["x"]]), "BARE", 0) is None
+
+
+def test_a_sheet_s_rows_name_their_columns_on_every_page() -> None:
+    """The final review's B.2: ``columns`` is as long as the widest row of the page, each a
+    column's words or ``None``; a later page, with no title row on it, still names them."""
+    report = _report(**{"INCOME  STATEMENTS ": INCOME})
+    first = sheet_rows(report, 7, "INCOME STATEMENTS")
+    named = ["3 Months Ended, Sep. 30, 2026", "3 Months Ended, Sep. 30, 2025"]
+    assert first["columns"] == named
+    assert sheet_rows(report, 7, "INCOME STATEMENTS", 3)["columns"] == named
+    wider = _report(S=[{"T": ["3 Months Ended"]}, {"Leases": [12.5, 11.0, 9.0]}])
+    assert sheet_rows(wider, 7, "S")["columns"] == ["3 Months Ended", None, None]
+    assert sheet_rows(wider, 7, "S", 0)["rows"][0]["cells"] == ["3 Months Ended"]
+    assert sheet_rows(_report(S=[{"no cells": []}]), 7, "S")["columns"] == []
+
+
+def test_a_search_hit_names_each_number_s_column() -> None:
+    """The final review's B.3: each of a hit's number cells carries its column's words."""
+    report = _report(**{"INCOME  STATEMENTS ": INCOME})
+    [hit] = search(report, 7, "operating income")["hits"]
+    assert hit["numbers"] == [
+        {"col": 0, "value": 68, "column": "3 Months Ended, Sep. 30, 2026"},
+        {"col": 1, "value": 60, "column": "3 Months Ended, Sep. 30, 2025"},
+    ]
 
 
 def test_a_long_cell_is_cut_with_its_length() -> None:
@@ -378,7 +467,7 @@ def test_search_finds_a_label_and_a_cell() -> None:
         "excerpt": LABEL,  # cut at the label's ends
         "offset": LABEL.index(needle),
         "rowRef": f"filing:7/{LEASES}/1",
-        "numbers": [{"col": 0, "value": 12.5}],
+        "numbers": [{"col": 0, "value": 12.5, "column": "3 Months Ended"}],
     }
     at = note.index(needle)
     assert note_hit == {
@@ -397,7 +486,7 @@ def test_search_finds_a_label_and_a_cell() -> None:
     assert (hit["col"], hit["excerpt"], hit["numbers"]) == (
         1,
         "of which not yet commenced: 2",
-        [{"col": 0, "value": 3}],
+        [{"col": 0, "value": 3, "column": None}],  # the title row: its own cell is a number
     )
 
 

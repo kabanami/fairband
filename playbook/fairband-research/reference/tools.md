@@ -181,27 +181,33 @@ under about 40,000 characters as you receive it. The counts below are upper boun
      its JSON text. The sheets are the statements, each note as text and each note's detail
      tables. FMP cuts a sheet's name at 31 characters and makes it unique
      (`SEGMENT INFORMATION AND GEOGR_1`): pass `sheet` as the list names it.
-  3. With `sheet`: `sheet`, `title` and `rows` from `from_row` (0 when left out), at most 100 rows
-     an answer, and at most 30,000 characters of the answer's list as it is printed, with
-     `nextRow`, the next `from_row`, or `null` after the last row. A row is `{row, label, rowRef,
-     cells}`: its index in the sheet from 0, its label, its ref and its cells in order. A number
-     cell is the number. A cell longer than 2,000 characters is cut, with its length, as `{text,
-     chars}`: read it whole with `row` and `col`. A row of another shape has `label` and `rowRef`
-     `null` and one cell, its JSON text: it holds no cell to cite.
+  3. With `sheet`: `sheet`, `title`, `columns` and `rows` from `from_row` (0 when left out), at
+     most 100 rows an answer, and at most 30,000 characters of the answer's list as it is printed,
+     with `nextRow`, the next `from_row`, or `null` after the last row. `columns` names each column
+     of the page's rows, by index from 0: its span and its date from the sheet's top rows
+     (`3 Months Ended, Sep. 30, 2026`), its date alone where one span covers two dates, or its
+     title row's cell on a sheet with no row of dates; `null` where nothing names it. A later page
+     names them too. A row is `{row, label, rowRef, cells}`: its index in the
+     sheet from 0, its label, its ref and its cells in order. A number cell is the number. A cell
+     longer than 2,000 characters is cut, with its length, as `{text, chars}`: read it whole with
+     `row` and `col`. A row of another shape has `label` and `rowRef` `null` and one cell, its
+     JSON text: it holds no cell to cite.
   4. With `sheet` and `row`: one cell's text, `col` and `offset` 0 when left out. The answer:
      `sheet`, `row`, `col`, `label`, `chars` (the text's whole length), `offset`, `text` (a page of
      20,000 characters from `offset`) and `nextOffset`, the next `offset`, or `null` after the
      text's end. A number cell answers its JSON text.
 
-  Cite a number cell as its row's `rowRef` plus `/<col>` (`filing:812/LEASES/2/0`). Never build a
-  `filing:` ref by hand: a sheet name with a `/` or a `~` is written `~1` or `~0` inside a ref.
+  Cite a number cell as its row's `rowRef` plus `/<col>` (`filing:812/LEASES/2/0`), after reading
+  its column's words in `columns`. Never build a `filing:` ref by hand: a sheet name with a `/` or
+  a `~` is written `~1` or `~0` inside a ref.
 - `filing_search(symbol, year, period, text)`: a search of one filing report for `text`, three
   characters or more, without regard to case, in every label and every cell, a number by its JSON
   text. A hit is a row, in the report's order: `{sheet, row, col, label, excerpt, offset, rowRef,
   numbers}`. `col` is the first cell that matches, or `null` when only the label does; `excerpt`
   holds 300 characters each side of the first match; `offset` is the match's place in that cell's
   text (the label's when `col` is `null`), so view 4 of `filing_report` opens the cell there;
-  `numbers` lists the row's number cells as `{col, value}`. The answer holds at most 20 hits,
+  `numbers` lists the row's number cells as `{col, value, column}`, `column` the column's words as
+  a sheet's `columns` gives them, or `null`. The answer holds at most 20 hits,
   within the budget, with `more` `true` when a further row matched, and `year`, `period` and
   `text`, the text searched. A search has no next page: when `more` is `true`, search a longer
   text, or read the sheet the hits name with `filing_report`. Cite a number cell as the hit's

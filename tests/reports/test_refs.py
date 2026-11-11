@@ -691,7 +691,7 @@ def test_a_filing_ref_resolves_whatever_the_sheet_s_name_holds(
     key = "Rev\xa0by  Product/Region ~ O'Neil, 5% net? #1 é"
     raw_label = "Additional leases, primarily for warehouses,\xa0that have  not yet commenced"
     label = "Additional leases, primarily for warehouses, that have not yet commenced"
-    title = {"Rev by Product (Detail) $ in Millions": ["3 Months Ended", "Lease term", "Note"]}
+    title = {"Rev by Product (Detail) $ in Millions": ["3 Months Ended", "Lease term", ""]}
     report = {
         "symbol": "AAPL",
         "period": "Q1",
@@ -726,9 +726,12 @@ def test_a_filing_ref_resolves_whatever_the_sheet_s_name_holds(
     ):
         assert _resolve(conn, ref, policy) is None, ref
     resolver = Resolver(conn, "AAPL", policy)
+    # the final review's B.4: the column by its index and, where the sheet names it, its words
+    cited = f"FMP filing report of fiscal 2027 Q1, {served(key)}: {label}"
     assert resolver.describe(f"{row}/0") == (
-        f"FMP filing report of fiscal 2027 Q1, {served(key)}: {label}, observed 11 Nov 2026"
+        f"{cited}, column 0 (3 Months Ended), observed 11 Nov 2026"
     )
+    assert resolver.describe(f"{row}/2") == f"{cited}, column 2, observed 11 Nov 2026"
     assert resolver.describe(f"{row}/9") == f"{row}/9"  # a ref that names nothing is its own
 
 

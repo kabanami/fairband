@@ -373,10 +373,24 @@ def test_a_sheet_and_a_cited_cell(
     row = body["rows"][2]
     assert (row["row"], row["label"], row["cells"]) == (2, LABEL, [12.5])
     assert row["rowRef"] == f"filing:{body['responseId']}/{ADDITIONAL}/2"
+    assert body["columns"] == ["3 Months Ended, Sep. 30, 2026"]  # the span and the date
     with closing(connect(db_path)) as conn:
         cited = resolve(conn, "ACME", f"{row['rowRef']}/0", policy)
     assert cited == Resolved(12.5, None, None, None)
     assert vendor.paths == [REPORT_JSON]
+
+
+def test_a_sheet_names_its_columns(with_passthrough: TestClient) -> None:
+    """The final review's B.2: the statement's two columns by their spans and dates, on its first
+    page and on a later one; a sheet with no row ``items`` by its title row's spans."""
+    income = {**Q1, "sheet": "INCOME STATEMENTS"}
+    named = ["3 Months Ended, Sep. 30, 2026", "3 Months Ended, Sep. 30, 2025"]
+    assert with_passthrough.get(REPORT, params=income).json()["columns"] == named
+    later = with_passthrough.get(REPORT, params={**income, "fromRow": 3}).json()
+    assert [r["label"] for r in later["rows"]] == ["Operating income"]
+    assert later["columns"] == named
+    region = with_passthrough.get(REPORT, params={**Q1, "sheet": "Revenue by Product/Region"})
+    assert region.json()["columns"] == ["3 Months Ended", "3 Months Ended"]
 
 
 def test_a_sheet_name_with_odd_characters_round_trips(
@@ -445,7 +459,10 @@ def test_search_finds_the_sentence_and_the_row(
 ) -> None:
     body = with_passthrough.get(SEARCH, params={**Q1, "text": "not yet  commenced "}).json()
     assert [(h["sheet"], h["col"]) for h in body["hits"]] == [("LEASES", 0), (ADDITIONAL, None)]
-    assert body["hits"][1]["numbers"] == [{"col": 0, "value": 12.5}] and body["more"] is False
+    assert body["hits"][1]["numbers"] == [
+        {"col": 0, "value": 12.5, "column": "3 Months Ended, Sep. 30, 2026"}
+    ]
+    assert body["more"] is False
     assert body["hits"][1]["rowRef"] == f"filing:{body['responseId']}/{ADDITIONAL}/2"
     assert body["hits"][1]["label"] == LABEL
     assert (body["year"], body["period"], body["text"]) == (2027, "Q1", "not yet commenced")

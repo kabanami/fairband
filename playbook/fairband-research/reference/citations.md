@@ -84,13 +84,17 @@ A record holds a percent as a fraction: 0.112. The cite writes it as a percentag
 A filing report's cell. Copy its ref from the answer: the row's `rowRef` plus `/<col>`, the cell's
 index counted from 0. Never build a `filing:` ref by hand: a sheet name with a `/` or a `~` is
 written otherwise inside a ref (`~1`, `~0`), so a ref built from the name as you read it may
-resolve to nothing. The sheet's title names the scale (`$ in Millions`), and the cell holds the
-number at that scale. Cite the number as the cell holds it, with no period (a `filing:` ref has
-none, so a cite that names one fails), and write the scale word in the plain part after the cite:
+resolve to nothing. A sheet's columns are periods or members, and a `filing:` ref names no
+period, so a cite of last year's column passes the check as this year's would: read the column's
+words (the sheet's `columns`, or the hit's `column`) before you cite a number, and name that period
+in the sentence. The references list names the column by its index and its words. The sheet's
+title names the scale (`$ in Millions`), and the cell holds the number at that scale. Cite the
+number as the cell holds it, with no period (a `filing:` ref has none, so a cite that names one
+fails), and write the scale word in the plain part after the cite:
 
 ```json
 [
-  "Leases not yet commenced came to ",
+  "At the quarter's end, leases not yet commenced came to ",
   {"cite": "$12.5", "ref": "filing:<id>/Leases - Additional Informatio/2/0"},
   " million."
 ]

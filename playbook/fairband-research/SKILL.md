@@ -159,7 +159,10 @@ outside the cite, in the plain part after it (`reference/citations.md`). Copy th
 from the answer and add the cell's index, counted from 0. Never build a `filing:` ref by hand: a
 sheet name with a `/` or a `~` is written otherwise inside a ref, so a ref built by hand may
 resolve to nothing. A `filing:` cite takes no `period`: a cite given one fails `wrong period`. A
-sentence of a note is a finding whose source is `{kind: "filing", ref: "response:<responseId>",
+sheet's columns are periods or members (this year's quarter beside last year's, or one segment
+beside another), and the check cannot tell one column from another: read the column's words (the
+sheet's `columns`, or the hit's `column`) before you cite a number, and name that period in the
+sentence. A sentence of a note is a finding whose source is `{kind: "filing", ref: "response:<responseId>",
 note}`: the `responseId` the filing report answered, and the note naming the report and the sheet
 ("10-Q of fiscal 2027 Q1, sheet LEASES"). `filing_report` reads another listed company's 10-K or
 10-Q by its symbol, but a `filing:` ref names a cell of the report's own company only, so a figure
