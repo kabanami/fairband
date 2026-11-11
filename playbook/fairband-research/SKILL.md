@@ -323,7 +323,11 @@ Seven flags ask for a decision of yours. Read each sentence whole: it names its 
   the trailing earnings through `earnings.nri_gap`. On Mature Growth the value rests on the
   consensus, and `earnings.nri_gap` reaches only the test of the anchor's stock-compensation
   basis: the door is `earnings.ntm`, with a clear EPS guidance record (see "Guidance"). Without
-  one, section 8 states the exposure: the items a share the consensus may carry.
+  one, section 8 states the exposure: the items a share the consensus may carry. Amortization of
+  acquired intangibles that an adjusted EPS leaves out is not such an item, and no input corrects
+  for it: the invested capital keeps the goodwill and the acquired intangibles, so the cost of
+  the acquisitions is in the return the growth is charged at. Section 8 says that the anchor is
+  before this amortization, with its size a share from the filing; do not report it as a gap.
 - `step-series-disagree`: a consensus step read on net income and the same step read on EPS differ
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,

@@ -154,7 +154,12 @@ The kill criteria of section 11 test it.
   the Dickinson stage, and why if an override changed it. Then the growth the price needs,
   `snapshot:<id>/intermediates/implied_growth`, or under your overrides the review's,
   `review:<id>/intermediates/implied_growth`, which differs from the snapshot's; and the belief
-  and why.
+  and why. On a row whose runway return is the hurdle rate (the flag `return-floored`, or your
+  `return.runway` at that rate), growth adds no value, so `implied_growth` is null or does not
+  measure the business's growth: do not cite it. Say in words that no growth rate reaches the
+  price at that return, and give the growth the price needs at a 15% return,
+  `snapshot:<id>/intermediates/implied_by_roic/0.15` (under your overrides the review's), named
+  as that case.
 - **The value.** The value before any change to the inputs (the mechanical value) and after the
   changes that stand (the reviewed value). One sentence in words for each override that moved it,
   citing its bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
