@@ -1,6 +1,6 @@
 """The vendor pass-through routes through the app, with a ``Passthrough`` over FMP, and GuruFocus
-where a test gives it one, on a mock transport that serves the fixtures, and the ``serve`` command
-that builds it beside the worker on one limiter. The keys are fake."""
+where a test gives it one, on a mock transport that serves the fixtures (``support.vendor``), and
+the ``serve`` command that builds it beside the worker on one limiter. The keys are fake."""
 
 import json
 import logging
@@ -14,7 +14,8 @@ import httpx
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
-from support.web import HEADER, HOST, NOW, _settings
+from support.vendor import FIXTURES, GF_FIXTURES, GF_TOKEN, KEY, Vendor, passthrough_client
+from support.web import HEADER, HOST, NOW
 
 from fairband import __main__ as cli
 from fairband.config import Keys
@@ -23,78 +24,18 @@ from fairband.refresh import passthrough as passthrough_module
 from fairband.refresh.passthrough import Passthrough
 from fairband.store.db import connect
 from fairband.store.settings import write_settings
-from fairband.vendors import fmp as fmp_api
 from fairband.vendors import gurufocus as gurufocus_api
 from fairband.vendors.fmp import Fmp
 from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.http import VendorHttp
 from fairband.vendors.limiter import RateLimiter
-from fairband.web.app import create_app
 
-FIXTURES = Path(__file__).parent.parent / "fixtures" / "fmp"
-GF_FIXTURES = FIXTURES.parent / "gurufocus"
-KEY = "fake-fmp-key-0003"  # not a real key
-GF_TOKEN = "fakegfhalf3:fakegfhalf4"  # not a real token
 Q3 = {"year": "2026", "quarter": "3"}
 NO_GF_KEY = "no GuruFocus key: the pe-history pass-through is off"
 
 
 def _fixture(name: str, fixtures: Path = FIXTURES) -> Any:
     return json.loads((fixtures / name).read_text())
-
-
-class Vendor:
-    """FMP and GuruFocus on a mock transport: an FMP request reads ``fmp/<route>.<symbol>.json``
-    (a slash in the route becomes a dash; news names its symbol in ``symbols``), a GuruFocus one
-    ``gurufocus/<route>.<symbol>.json``, 404 without one; ``answer``, when set, makes each
-    response instead. ``paths`` keeps each request's path, a GuruFocus token in it replaced by
-    ``<token>``."""
-
-    def __init__(self) -> None:
-        self.paths: list[str] = []
-        self.answer: Any = None  # a function of the request to its response
-        self.transport = httpx.MockTransport(self._handle)
-
-    def _handle(self, request: httpx.Request) -> httpx.Response:
-        self.paths.append(request.url.path.replace(GF_TOKEN, "<token>"))
-        if self.answer is not None:
-            response: httpx.Response = self.answer(request)
-            return response
-        if request.url.host == "api.gurufocus.com":
-            *_, symbol, route = request.url.path.split("/")
-            fixture = GF_FIXTURES / f"{route}.{symbol}.json"
-        else:
-            route = request.url.path.removeprefix("/stable/").replace("/", "-")
-            params = request.url.params
-            fixture = FIXTURES / f"{route}.{params.get('symbol') or params.get('symbols')}.json"
-        if not fixture.is_file():
-            return httpx.Response(404, json={"Error Message": "no fixture"})
-        return httpx.Response(
-            200, content=fixture.read_bytes(), headers={"Content-Type": "application/json"}
-        )
-
-
-@pytest.fixture
-def vendor() -> Vendor:
-    return Vendor()
-
-
-@pytest.fixture
-def fmp(policy: Policy, vendor: Vendor) -> Iterator[Fmp]:
-    with VendorHttp(
-        fmp_api.BASE_URL,
-        [KEY],
-        policy.refresh,
-        transport=vendor.transport,
-        sleep=lambda _: None,
-        clock=lambda: NOW,
-    ) as http:
-        yield Fmp(http, KEY)
-
-
-@pytest.fixture
-def passthrough(db_path: Path, policy: Policy, fmp: Fmp) -> Passthrough:
-    return Passthrough(fmp, lambda: connect(db_path), policy, lambda: NOW, (KEY,))
 
 
 @pytest.fixture
@@ -110,24 +51,6 @@ def gurufocus(policy: Policy, vendor: Vendor) -> Iterator[GuruFocus]:
         yield GuruFocus(http, GF_TOKEN)
 
 
-def _client(tmp_path: Path, db_path: Path, policy: Policy, passthrough: Passthrough) -> TestClient:
-    def conn_factory() -> Any:
-        return connect(db_path)
-
-    settings = _settings(tmp_path, db_path)
-    app = create_app(settings, policy, conn_factory, clock=lambda: NOW, passthrough=passthrough)
-    return TestClient(app, base_url=HOST, headers=HEADER)  # a read that may call a vendor (D11)
-
-
-@pytest.fixture
-def with_passthrough(
-    tmp_path: Path, db_path: Path, policy: Policy, passthrough: Passthrough
-) -> Iterator[TestClient]:
-    """A pass-through over FMP alone: no GuruFocus key."""
-    with _client(tmp_path, db_path, policy, passthrough) as client:
-        yield client
-
-
 @pytest.fixture
 def with_gurufocus(
     tmp_path: Path, db_path: Path, policy: Policy, fmp: Fmp, gurufocus: GuruFocus
@@ -135,7 +58,7 @@ def with_gurufocus(
     """A pass-through over FMP and GuruFocus."""
     secrets = (KEY, GF_TOKEN)
     both = Passthrough(fmp, lambda: connect(db_path), policy, lambda: NOW, secrets, gurufocus)
-    with _client(tmp_path, db_path, policy, both) as client:
+    with passthrough_client(tmp_path, db_path, policy, both) as client:
         yield client
 
 

@@ -5,9 +5,10 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 (``reviews_api``), the sensitivity reading's routes (``sensitivity_api``), the company reads, the
 Methodology section read and the report routes (``reports_api``), the drawer's research read
 (``research_api``), the multiples history read (``multiples_api``), the band's history read
-(``history_api``), the vendor pass-through route (``vendor_api``), and the policy values and
-growth deciles the Methodology page cites (spec 2026-11-04 7.4). The company detail carries the
-agents' records the drawer leads with (``research_api.agent_records``).
+(``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
+(``filings_api``), and the policy values and growth deciles the Methodology page cites (spec
+2026-11-04 7.4). The company detail carries the agents' records the drawer leads with
+(``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -15,11 +16,12 @@ the page, its script, the design system copy and the vendored React, so the page
 no network. Nothing here reads a key. The refresh routes hand the work to the ``RefreshWorker``,
 whose thread calls the vendors; without one they answer 503. ``serve`` always passes one; without
 an FMP key its runs refuse every kind but a revalue, and a refusal is a 400. The pass-through
-route and the multiples history read alone call a vendor from a request: they call FMP, or
-GuruFocus for the trailing P/E series, on FastAPI's sync-route thread through the ``Passthrough``
-that ``serve`` builds with the keys, FMP paced by the one limiter the worker's runs share, and
-answer the stored payload scrubbed, so no answer carries a key; without a pass-through (no FMP key)
-the route answers 503 and the read's trailing series is ``null``. What is bounded: four vendor
+route, the multiples history read and the filing reads alone call a vendor from a request: they
+call FMP, or GuruFocus for the trailing P/E series, on FastAPI's sync-route thread through the
+``Passthrough`` that ``serve`` builds with the keys, FMP paced by the one limiter the worker's runs
+share, and answer the stored payload scrubbed, so no answer carries a key; without a pass-through
+(no FMP key) the route and the filing reads answer 503 and the read's trailing series is ``null``.
+What is bounded: four vendor
 calls in flight; a request that finds them all taken waits at most ten seconds for a slot, holding
 its pool thread meanwhile, and past that answers 503. FastAPI's own documentation routes are off;
 they would load their scripts from a CDN.
@@ -56,10 +58,12 @@ company's review over its applied overrides.
 D11, for a server bound to 127.0.0.1: ``TrustedHostMiddleware`` answers 400 to a request whose
 ``Host`` is neither ``127.0.0.1`` nor ``localhost`` (any port), so a page on another name that
 resolves here (DNS rebinding) cannot read the API; and a request other than ``GET`` or ``HEAD``
-must carry ``X-Fairband-Request: 1``, else 403. So must the two reads that may call a vendor, the
-pass-through route (``/api/vendor/{kind}/{symbol}``) and the multiples history read
-(``/api/companies/{symbol}/multiples-history``): each spends a vendor's quota and stores its
-answer, and an image tag or a link on any other site passes the host check. The page's read and
+must carry ``X-Fairband-Request: 1``, else 403. So must the reads that may call a vendor, the
+pass-through route (``/api/vendor/{kind}/{symbol}``), the multiples history read
+(``/api/companies/{symbol}/multiples-history``) and the filing reads
+(``/api/companies/{symbol}/filings``, ``/filing-report`` and ``/filing-report/search``): each
+spends a vendor's quota and stores its answer, and an image tag or a link on any other site passes
+the host check. The page's read and
 the MCP server's client send the header on every call. A cross-site form cannot send that header,
 and a cross-origin script cannot without a CORS preflight, which the app never answers.
 """
@@ -110,6 +114,7 @@ from fairband.store.snapshots import (
 )
 from fairband.store.watchlists import memberships
 from fairband.web.agents_api import add_agent_routes
+from fairband.web.filings_api import add_filing_routes
 from fairband.web.guidance_api import add_guidance_routes
 from fairband.web.history_api import add_history_routes
 from fairband.web.multiples_api import add_multiples_routes
@@ -146,7 +151,13 @@ REQUEST_HEADER = "X-Fairband-Request"
 _SAFE_METHODS = ("GET", "HEAD")
 # The reads that may call a vendor (D11, B-109), as their routes match a path: no segment holds a
 # slash.
-_VENDOR_READS = re.compile(r"/api/vendor/[^/]+/[^/]+|/api/companies/[^/]+/multiples-history")
+_VENDOR_READS = re.compile(
+    r"/api/vendor/[^/]+/[^/]+"
+    r"|/api/companies/[^/]+/multiples-history"
+    r"|/api/companies/[^/]+/filings"
+    r"|/api/companies/[^/]+/filing-report"
+    r"|/api/companies/[^/]+/filing-report/search"
+)
 _NO_WORKER = "no refresh worker"
 
 
@@ -388,6 +399,7 @@ def create_app(
     add_history_routes(app, conn_factory)
     add_multiples_routes(app, conn_factory, passthrough)
     add_vendor_routes(app, passthrough)
+    add_filing_routes(app, passthrough, clock)
     return app
 
 
