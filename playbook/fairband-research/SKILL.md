@@ -342,8 +342,9 @@ year. Where the guidance is not clear, or is for any other year, the consensus s
 A cyclical, valued at mid-cycle:
 
 - on Mature Growth and Mature Stable, the anchor's earnings at mid-cycle through
-  `earnings.cycle_gap` (a positive figure lowers them), and on Mature Growth the belief at the
-  growth rate through the cycle;
+  `earnings.cycle_gap` (a positive figure lowers them), its figure set by the one formula of "The
+  cycle gap's figure" under "Overrides", and on Mature Growth the belief at the growth rate
+  through the cycle;
 - on High Growth and Young Growth, the target margin (`margin.target`) at the mid-cycle margin, and
   the held rate (`path.hold`) at the growth rate through the cycle;
 - a kill criterion on the operating margin against its median.
@@ -572,8 +573,49 @@ The two NTM anchors and the cycle gap:
   else: the NTM EPS on Mature Growth, the normalized earnings on Mature Stable. On Mature Stable,
   when the `margin-flag` fires, the engine has already scaled the earnings to the ten-year median
   margin. The gap adds to that scaling, so set it for what the median misses. A negative figure
-  lifts a trough's earnings to mid-cycle. Set the figure from the evidence of step 7, by `derive`
-  from stored figures where they serve.
+  lifts a trough's earnings to mid-cycle. Set the figure by the formula below.
+
+The cycle gap's figure. One formula sets it, on the margin inside the anchor's own earnings (the
+founder's ruling of 2026-11-11):
+
+    full gap = NTM EPS − NTM EPS ÷ (NTM net margin ÷ mid-cycle net margin)
+
+- The NTM EPS is `snapshot:<id>/inputs/ntm_eps`. The NTM net margin is
+  `snapshot:<id>/inputs/ntm_net_income` over the analysts' revenue for the same periods: the sum
+  of the NTM window's `estimate:<symbol>/<period>/revenue`, by chained `derive` `sum` calls.
+- The mid-cycle net margin is the middle one of the five net margins in the growth table, a cite
+  `table:<symbol>/growth/net_margin/<year>` named as that year's margin. The year may differ from
+  step 7's, which reads the operating margin.
+- Three more `derive` calls give the figure: the `ratio` of the NTM net margin to the mid-cycle
+  one, the `ratio` of the NTM EPS to that (the mid-cycle EPS), and the `difference` of the NTM EPS
+  and the mid-cycle EPS.
+- Never set the gap from a trailing margin or from an operating margin. The analysts' forecast for
+  a cyclical rises at a peak as at a trough, so the margin inside the NTM EPS sits above the
+  trailing one, and a gap read on the trailing margin leaves that rise in the value.
+- Where `earnings.ntm` sets the anchor, measure the gap on that figure in the same way.
+- On Mature Stable the anchor is the trailing earnings. Where the `margin-flag` fired, the gap is
+  only what the median misses, as above. Where it did not, use the same form on the trailing
+  figures: the trailing earnings a share, and the trailing net income over the trailing revenue.
+
+How much of the gap to take:
+
+- Take the full gap. A business you called cyclical in step 7 is valued on a repeat of its cycle.
+- Take half of it only where a filing or a transcript shows a lasting cause for part of the
+  margin's rise: a price rise under contract, a change of mix already in the reported margins, or
+  a margin that held through the last downturn. The override's evidence cites it, and its reason
+  says "half" and why. Half is the `derive` `ratio` of the full gap to two. `derive` takes no
+  constant, so build the two: the `sum` of a figure with itself, then the `ratio` of that sum to
+  the figure.
+- Never take less than half.
+- A trough mirrors it. The formula gives a negative figure: take it in full, or in half where the
+  evidence shows that part of the fall lasts.
+- Put `earnings.cycle_gap` on one axis of the sensitivity reading, with nil, half the gap and the
+  full gap among its values. Section 8 says which one the value rests on and why, and gives the
+  value at the other two.
+- The gap lowers every year of the path, the years that orders already cover too. Where the
+  company reports such orders, section 8 says the value leans low by those years' excess. Do not
+  keep the peak years through a `path.step_3` drop on a business that still grows: on Mature
+  Growth a step 3 at or below the belief makes every later year grow at the belief.
 
 The share count and the value outside the business:
 
@@ -804,6 +846,10 @@ A grid the route reads well:
 | Mature Stable | `return.runway` | `moat.class` |
 | High Growth, Young Growth | `margin.target` | `path.hold` |
 | Decline | `decline.rate` | `capital.sales_to_capital` |
+
+For a cyclical on Mature Growth or Mature Stable, `earnings.cycle_gap` takes one axis in place of
+`return.runway`, with nil, half the gap and the full gap among its values (see "The cycle gap's
+figure").
 
 Put the input's current value in the middle of each axis, so the grid reads around it. A Start-up
 company has no route value, so it has no grid: its section 8 states the price-implied requirement,

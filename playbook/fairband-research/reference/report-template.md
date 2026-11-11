@@ -197,7 +197,11 @@ The kill criteria of section 11 test it.
 - **FMP's figure**, only where neither the route nor the review values the company, in one sentence
   when read, beside the secondary valuation: `response:<responseId>/<json pointer>` of the `dcf`
   answer.
-- **A cyclical**: where it is in its cycle, and the mid-cycle basis the values rest on.
+- **A cyclical**: where it is in its cycle, and the mid-cycle basis the values rest on: the net
+  margin of the middle year against the margin inside the analysts' earnings, whether the cut to
+  mid-cycle earnings is the full gap or half of it and why, and the value with the other one and
+  with no cut, cells of the sensitivity grid. Where orders already cover the coming years, one
+  sentence says the cut lowers those years too, so the value leans low.
 - **The sensitivity grid**: the two inputs it sets, and the range of the value across them, two
   cells `sensitivity:<id>/<i>/<j>`, each beside the axis values it sits at,
   `sensitivity:<id>/rows/<i>` and `/cols/<j>`.
