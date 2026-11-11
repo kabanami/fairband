@@ -50,8 +50,9 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   a step the record does not take holds no figure;
 - ``derived:<id>``: a derivation's value and unit (13.4);
 - ``filing:<id>/<sheet>/<row>/<col>``: a cell of a stored filing report (spec 2026-11-11, 5.5) as
-  it is stored, a number or a string, the sheet by its served name (``~`` written ``~0`` and ``/``
-  ``~1``, as a pointer's token is) and the row and the cell by their indexes from 0
+  it is served, a number as stored or a string as the reads show it, so a cite of a word fits the
+  text the agent read; the sheet by its served name (``~`` written ``~0`` and ``/`` ``~1``, as a
+  pointer's token is) and the row and the cell by their indexes from 0
   (``fairband.reports.filing_report``); a response of another endpoint, and a row that is not a
   label with its cells, name nothing;
 - ``response:<id>/<json pointer>``: a field of a stored vendor response (RFC 6901, ``/0/revenue``);
@@ -864,7 +865,7 @@ class Resolver:
 
     def _filing(self, path: str) -> Resolved | None:
         """A cell of a stored filing report by its sheet's served name, its row and its column
-        (``filing_report.cell``), with no unit and no period."""
+        (``filing_report.cell``: a string as it is served), with no unit and no period."""
         pieces = path.split("/")
         if len(pieces) != 4 or not (pieces[2].isdecimal() and pieces[3].isdecimal()):
             return None

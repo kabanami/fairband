@@ -619,16 +619,17 @@ def test_a_filing_ref_resolves_whatever_the_sheet_s_name_holds(
     """Review Focus 1 (spec 2026-11-11, 5.5 and 5.6): a cell of a stored filing report by its
     sheet's served name, its row and its column. The sheet's stored key holds a no-break space, a
     run of spaces, a slash, a tilde, an apostrophe, a comma, a percent sign, a question mark, a
-    hash and an accent."""
+    hash and an accent. A string cell resolves as it is served, the text the agent read, so a cite
+    of a word fits it; a null cell holds no value."""
     key = "Rev\xa0by  Product/Region ~ O'Neil, 5% net? #1 é"
     raw_label = "Additional leases, primarily for warehouses,\xa0that have  not yet commenced"
     label = "Additional leases, primarily for warehouses, that have not yet commenced"
-    title = {"Rev by Product (Detail) $ in Millions": ["3 Months Ended", "Lease term"]}
+    title = {"Rev by Product (Detail) $ in Millions": ["3 Months Ended", "Lease term", "Note"]}
     report = {
         "symbol": "AAPL",
         "period": "Q1",
         "year": "2027",
-        key: [title, {raw_label: [12.5, "1 year"]}],
+        key: [title, {raw_label: [12.5, "1  year ", None]}],
     }
     params = {"symbol": "AAPL", "year": "2027", "period": "Q1"}
     at = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
@@ -641,7 +642,9 @@ def test_a_filing_ref_resolves_whatever_the_sheet_s_name_holds(
     row = row_ref(stored, served(key), 1)
     assert row == f"filing:{stored}/Rev by Product~1Region ~0 O'Neil, 5% net? #1 é/1"
     assert _resolve(conn, f"{row}/0", policy) == Resolved(12.5, None, None, None)
+    # stored "1  year ": the word as served
     assert _resolve(conn, f"{row}/1", policy) == Resolved("1 year", None, None, None)
+    assert _resolve(conn, f"{row}/2", policy) == Resolved(None, None, None, None)
     assert resolve(conn, "AAL", f"{row}/0", policy) is None  # another company's resolver
     for ref in (
         f"{row_ref(segments, served(key), 1)}/0",  # a response of another endpoint

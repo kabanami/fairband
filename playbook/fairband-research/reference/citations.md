@@ -74,7 +74,7 @@ nothing.
 | `peer:<symbol>/<peer>/<field>` | a mature peer's `market_cap`, `margin`, `margin_years`, `sales_to_capital` or `roic` | currency, percent, count, multiple, percent |
 | `finding:<id>` | a finding's value, unit and period, as recorded | the finding's |
 | `derived:<id>` | a derivation's value | the derivation's |
-| `filing:<id>/<sheet>/<row>/<col>` | a cell of a stored filing report as it is stored, a number or a word: the sheet by its name as the sheet list gives it, `~` written `~0` and `/` written `~1`, and the row and the cell by their indexes from 0. A row's `rowRef` plus `/<col>`, such as `filing:812/LEASES/2/0`; a row with no `rowRef` holds no cell to cite | none |
+| `filing:<id>/<sheet>/<row>/<col>` | a cell of a stored filing report as served, a number or a word as the tool shows it: the sheet by its name as the sheet list gives it, `~` written `~0` and `/` written `~1`, and the row and the cell by their indexes from 0. A row's `rowRef` plus `/<col>`, such as `filing:812/LEASES/2/0`; a row with no `rowRef` holds no cell to cite | none |
 | `response:<id>/<json pointer>` | a field of a stored vendor response, such as `response:731/0/revenue` | none |
 | `policy:<name>` | a policy value, by its name, or with a moat class or an index: `runway_years.Wide`, `fair_band.0` | the value's |
 

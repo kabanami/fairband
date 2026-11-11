@@ -239,10 +239,12 @@ def test_a_row_of_another_shape_is_served_as_its_json() -> None:
     }
 
 
-def test_a_cell_is_read_as_stored() -> None:
-    report = _report(**{LEASES: [{"title": ["1  year"]}, {RAW_LABEL: [12.5, None]}]})
+def test_a_cell_is_read_as_served() -> None:
+    """A number as it is stored, a string as the views serve it (the coordinator's ruling of
+    2026-11-11, spec 5.5): the text the agent read, so a cite of a word fits it."""
+    report = _report(**{LEASES: [{"title": [" 1 \xa0year "]}, {RAW_LABEL: [12.5, None]}]})
     assert cell(report, LEASES, 1, 0) == 12.5
-    assert cell(report, LEASES, 0, 0) == "1  year"  # a string as it is stored
+    assert cell(report, LEASES, 0, 0) == "1 year"  # a string as it is served
     assert cell(report, LEASES, 1, 1) is None  # a null cell is a cell
     assert label(report, LEASES, 1) == LABEL
     for sheet, row, col in ((LEASES, 1, 2), (LEASES, 2, 0), ("Nope", 0, 0), (LEASES, -1, 0)):

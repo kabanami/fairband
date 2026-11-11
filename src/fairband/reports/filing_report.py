@@ -1,7 +1,8 @@
 """A stored filing report read a part at a time (spec 2026-11-11, 5, 5.2, 5.3 and 5.5): the sheet
 list, a sheet's rows, one cell's text and a text search, each bounded, and the cell a ``filing:``
-ref names. Pure functions over the parsed payload of FMP's ``financial-reports-json``, stored under
-the endpoint ``filing-report``; the routes and the resolver read the store.
+ref names, a string cell as it is served. Pure functions over the parsed payload of FMP's
+``financial-reports-json``, stored under the endpoint ``filing-report``; the routes and the
+resolver read the store.
 
 A report is a JSON object: ``symbol``, ``period``, ``year``, then one key a sheet. A sheet is a key
 whose value is a list, of rows; a row is an object with one key, the row's label, whose value is
@@ -173,13 +174,15 @@ def search(report: Mapping[str, Any], response_id: int, text: str) -> dict[str, 
 
 
 def cell(report: Mapping[str, Any], sheet: str, row: int, col: int) -> Any:
-    """The cell at the sheet (by its served name), the row and the column, as it is stored (a
-    number, a string); ``ABSENT`` where the sheet, the row or the cell is not there, or the row is
-    not a label with its cells."""
+    """The cell at the sheet (by its served name), the row and the column: a number as it is
+    stored, a string as it is served, the text the views show, so a cite of a word fits it;
+    ``ABSENT`` where the sheet, the row or the cell is not there, or the row is not a label with
+    its cells."""
     found = _labelled_at(report, sheet, row)
     if found is None or not 0 <= col < len(found[1]):
         return ABSENT
-    return found[1][col]
+    value = found[1][col]
+    return served(value) if isinstance(value, str) else value
 
 
 def label(report: Mapping[str, Any], sheet: str, row: int) -> str | None:
