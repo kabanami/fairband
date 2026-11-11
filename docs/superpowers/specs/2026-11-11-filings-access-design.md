@@ -4,8 +4,9 @@ Status: written 2026-11-11. The founder read the Microsoft session (report 16), 
 sent subagents to SEC EDGAR for figures FMP already serves, accepted four items ("build items 1 to
 4 now") and skipped the questions, so every detail below that the four items do not fix is *my
 call* (Claude's) and can be overturned. The decision log at the end lists them. Builder check: done
-2026-11-11; its five questions are settled in the last row of the log and written into sections 2,
-5, 5.5, 5.6 and 7.
+2026-11-11; its five questions are settled in the log and written into sections 2, 5, 5.5, 5.6
+and 7. Built 2026-11-11 and 2026-11-12, six tasks and one fix wave after the whole-branch review;
+the build's rulings are the log's last row, and the sections below say what was built.
 
 This document adds to `docs/method.md` in section 16.2 (one new ref form and one new period of an
 old one) and wherever that document describes the agent's reads and pass-throughs. The Tier 2 spec
@@ -48,7 +49,7 @@ Goals:
 - An agent cites a single quarter's statement lines from the store.
 - No answer of the new reads is longer than about 40,000 characters as the agent's host receives
   it. The MCP process prints an answer's JSON indented, which lengthens it, so each list a route
-  answers is held to 20,000 characters of compact JSON (section 5).
+  answers is held to 30,000 characters as it is printed (section 5).
 
 Non-goals:
 
@@ -126,10 +127,13 @@ no-break space included, as one space, and its ends trimmed. Offsets and lengths
 served text. A sheet is named by its served name everywhere: in the sheet list, in the `sheet`
 parameter and in a ref. The stored payload is not changed.
 
-The budget: a list an answer holds (a sheet's rows, the filings, the search hits) stops before
-the item that would take the list's compact JSON past 20,000 characters, one item at least, and
-the answer says that more remains (`nextRow`, `more`). The counts below (100 rows, 20 hits) are
-upper bounds beside it.
+The budget: a list an answer holds (the sheets, a sheet's rows, the filings, the search hits)
+stops before the item that would take the list past 30,000 characters as the MCP process prints
+it (each item's JSON indented by two, four more spaces a line for its place in the answer, two
+for the comma and the line break), one item at least, and the answer says that more remains
+(`nextRow`, `more`). The counts below (100 rows, 20 hits) are upper bounds beside it. The first
+build measured 20,000 characters of compact JSON; the whole-branch review measured a 60-column
+sheet page at 63,172 characters printed, so the measure became the printed one.
 
 ### 5.1 `GET /api/companies/{symbol}/filings?from=&to=&forms=&fromRow=`
 
@@ -149,14 +153,16 @@ Four views, by the parameters given:
 
 1. **Neither `year` nor `period`: the reports on file.** `reports`, as FMP orders them, each
    `{year, period}`; the links are dropped.
-2. **`year` and `period`: the sheet list.** `year`, `period`, `sheets`, each `{name, title, rows,
-   chars}`: the sheet's served name, the first row's label, its row count and the length of its
-   JSON text.
+2. **`year` and `period`: the sheet list.** `year`, `period`, `sheets` from `fromRow` (0 when
+   left out), at most 100 and within the budget, each `{name, title, rows, chars}`: the sheet's
+   served name, the first row's label, its row count and the length of its JSON text; and
+   `nextRow`. `period` is read without regard to case.
 3. **With `sheet`: the sheet's rows.** `sheet`, `title`, `rows` from `fromRow` (0 when left out),
    at most 100 and within the budget, and `nextRow` (the next `fromRow`, or null). A row is
    `{row, label, rowRef, cells}`: its index in the sheet from 0, its label, the ref of the row
    (5.5), and its cells in order. A number cell is the number; a string cell is its served text,
-   cut at 2,000 characters, and when cut it is `{text, chars}` with the full length.
+   cut at 2,000 characters, and when cut it is `{text, chars}` with the full length. The view also
+   answers `columns`, the words that name each column (5.6), so a later page still names them.
 4. **With `sheet` and `row`: one cell's text.** `col` is 0 when left out, `offset` 0. Answer:
    `sheet`, `row`, `col`, `label`, `chars`, `offset`, `text` (at most 20,000 characters from
    `offset`) and `nextOffset` (or null). A number cell answers its JSON text.
@@ -167,8 +173,10 @@ A plain-text search of one report, without regard to case, in the served text of
 every cell (a number by its JSON text). A hit is a row: `{sheet, row, col, label, excerpt, offset,
 rowRef, numbers}`. `col` is the first cell that matches, or null when only the label does;
 `excerpt` is 300 characters each side of the first match; `offset` is the match's place in that
-cell; `numbers` lists the row's number cells as `{col, value}`. At most 20 hits and within the
-budget, in the report's order, and `more` true when hits were left out.
+cell; `numbers` lists the row's number cells as `{col, value, column}`, `column` the words that
+name the column (5.6). A number as it is printed finds a number cell (`33,165` finds `33165`). At
+most 20 hits and within the budget, in the report's order, and `more` true when hits were left
+out; a search has no paging, so the agent searches a longer text.
 
 ### 5.4 The refusals
 
@@ -183,7 +191,9 @@ budget, in the report's order, and `more` true when hits were left out.
 | FMP holds no such report | 404 | `FMP holds no filing report for <symbol> <year> <period>: ask without year and period for the reports on file` |
 | No such sheet | 404 | `no sheet named <name>: ask without sheet for the sheet list` |
 | `row`, `col`, `fromRow` or `offset` out of range | 400 | `<name> is 0 to <last>` |
-| `text` shorter than three characters after trimming | 400 | `text needs three characters or more` |
+| `text` shorter than three characters as served, judged before the report is fetched | 400 | `text needs three characters or more` |
+| An index asked of a sheet with no rows or a row with no cells | 400 | `<name> is out of range: there is none` |
+| The request header is missing | 403 | the app's guard, before anything else |
 | `from` or `to` not a date, or `from` after `to` | 400 | `from and to are ISO dates, from on or before to` |
 | FMP's filing list, or its list of reports, is not a list | 502 | `FMP answered no filing list for <symbol>`, `FMP answered no filing reports for <symbol>` |
 
@@ -200,7 +210,7 @@ company to the cell: a number, or a string as it is served (the text the agent r
 a word fits it; *the build's ruling*, Task 2), with no unit and no period, as a
 `response:` field does. A response that is not a filing report, a sheet, a row or a cell that is
 not there, and a row that is not a label with its cells resolve to nothing. Where two sheets have
-one served name, the first is meant.
+one served name, the first is meant, and a row of the second carries no ref.
 
 Why a form of its own (*my call*, after the builder check): a JSON pointer into the stored
 payload would hold the row's label as stored, long and with white space the agent cannot see,
@@ -210,9 +220,16 @@ still reads any field of the payload as it stands.
 ### 5.6 The references list
 
 A report's references list names a `filing:` ref as `FMP filing report of fiscal <year> <period>,
-<sheet>: <label>, observed <day>`: the year and the period of the stored call, the sheet's served
-name, the row's served label and the day the response was observed. So the reader sees which
-filing and which row a figure came from.
+<sheet>: <label>, column <col> (<words>), observed <day>`: the year and the period of the stored
+call, the sheet's served name, the row's served label, the column and the day the response was
+observed. So the reader sees which filing, which row and which period a figure came from.
+
+A column's words: the cell at the column of the sheet's row labelled `items` (the column's date,
+`Sep. 30, 2026`), with the title row's cell before it (the span, `3 Months Ended`) where the title
+row is as wide as the `items` row; on a sheet with no `items` row, the title row's cell. A column
+with no such words is named by its index alone. A `filing:` ref has no period, so the check
+cannot catch a figure cited from the wrong column; the words are how the agent and the reader see
+it (the whole-branch review's finding).
 
 ## 6. The MCP tools
 
@@ -248,8 +265,9 @@ pass the size goal.
 - `period` is the stored fiscal label, `<fiscalYear>-<fiscalPeriod>` (`2027-Q1`), the form a
   consensus quarter already takes (`estimate:MSFT/2027-Q1/eps`).
 - A quarter's figure for a line is that period's own term in the trailing figure's sum, signed
-  and read as the trailing figures read it. So on a quarterly reporter with four stored quarters
-  or more, the newest four add to the trailing figure of every line both hold.
+  and read as the trailing figures read it. So where the trailing figures are the sum of four
+  quarters, the newest four add to the trailing figure of every line both hold; not on the
+  fiscal-year fallback, and a half-yearly reporter's newest two add.
 - A period in another currency than the reporting one is left out and counted in
   `otherCurrency`: the trailing figures do not sum such periods either. A period with no
   currency on file counts as the reporting one's, as the trailing figures read it.
@@ -262,7 +280,7 @@ pass the size goal.
 ### 7.2 The `fact:` ref of a quarter
 
 `fact:<symbol>/<line>/<period>` takes a third period form beside the fiscal year and `ttm`: the
-quarter's label (`fact:MSFT/revenue/2027-Q1`). It resolves to the figure of that period and line
+stored period's label (`fact:MSFT/revenue/2027-Q1`), whatever label the store holds. It resolves to the figure of that period and line
 as 7.1 reads it, for any stored period in the reporting currency, the newest eight or older, with
 the line's unit and the quarter as its period, so a cite's period `2027-Q1` (or `2027Q1`) fits and
 another is `wrong period`. A period in another currency, or not on file, resolves to nothing. The
@@ -283,8 +301,13 @@ since no stored value changes its meaning (*my call*).
   scale word stands outside the cite. A sentence of a note is a finding whose source is `{kind:
   "filing", ref: "response:<responseId>", note}`, the note naming the report and the sheet.
   `filings(symbol)` gives the link of every filing. The host's own tools read only what Fairband
-  does not hold: an 8-K's exhibits (the press release, recast figures), Item 1, the MD&A, the risk
-  factors, the proxy statement and another company's filings, each opened by its `finalLink`.
+  does not hold: an 8-K's exhibits (the press release, recast figures), the 10-K's Item 1, the
+  MD&A, the risk factors, the proxy statement and a filing FMP holds no report for (another
+  company's S-1). A filing opens by its `finalLink`, an exhibit by the filing's `link`. Another
+  listed company's 10-K or 10-Q is read with `filing_report` under its own symbol, and a figure
+  from it is a finding, since a `filing:` ref names a cell of the report's own company. A sheet's
+  columns are periods: the agent reads a column's words before it cites a number. A cell is at
+  its sheet's scale, so it is not put through `derive` with a figure in full units.
 - **Step 5**, part 2: the quarter's figures are `quarters`' figures, cited by their `fact:` refs.
   The sentence that sends the agent to the 10-Q or the press release for them goes. A quarter's
   EPS on a row flagged `split-pending` or `basis-scaled` is checked against the note first.
@@ -368,3 +391,4 @@ process that runs research, so its MCP process loads the new tools; run the acce
 | 2026-11-11 | The founder, on the Microsoft session: FMP should serve the filings, and Fairband should make them available. The live probe agreed: 6 of the 11 EDGAR findings of report 16 are in FMP's `financial-reports-json` (OpenAI revenue of $10.0 billion in the quarter and $24.1 billion in fiscal 2026, the 24% stake, the leases not yet commenced of $364.6 billion and $329.1 billion, Azure revenue of $33,165 million), and 5 are not (three recast figures of an 8-K exhibit, the employee count of Item 1, Anthropic's S-1). The founder: "build items 1 to 4 now", by the superpowers method, and "skip" the questions. |
 | 2026-11-11 | Claude's calls, the founder having skipped the questions: `filing_search` beside `filing_report`, since a note is one cell of up to 91,000 characters and the facts wanted were all found by text; the reports on file as `filing_report` without a period, from a third pass-through kind; the scale word outside a cell's cite; the caps (100 rows, 2,000 characters a cell in a sheet, 20,000 a page, 20 hits, 300 characters each side); served text with white space collapsed; the filing list's default of one year without the ownership forms; 30 days of reuse for a report; the quarters as a third period of `fact:`, their lines the trailing figures', the EPS as stored; no version change; no page code change; no sec.gov fetch. |
 | 2026-11-11 | The builder check's five questions, each settled by Claude. (1) The caps alone do not hold an answer under 40,000 characters, and the MCP process prints JSON indented: every list is held to 20,000 characters of compact JSON, the filing list pages by `fromRow` as a sheet does, and `leftOut` is a count. (2) The store keeps every quarter it ever stored, and `financials` with the quarters would pass the size goal: the quarters are a read and a tool of their own, `quarters`, the newest eight, and `financials` does not change; the founder's item 3 named `financials`, and this is the one place the build departs from its letter. (3) A row's label as stored holds white space the agent cannot see, so a JSON pointer through it would fail: a cell is cited by a new form, `filing:<responseId>/<sheet>/<row>/<col>`, indexes and the sheet's served name alone. (4) The references list names the filing, the sheet and the row of a `filing:` ref. (5) A stored quarter in another currency than the reporting one is left out of `quarters` and counted, and its `fact:` ref resolves to nothing, as the trailing figures do not sum such periods. |
+| 2026-11-12 | The build's rulings (Claude, as controller of a subagent-driven build; every implementer and reviewer on Opus 5.5 at xhigh), each in place above. From the tasks: a `filing:` ref resolves a string cell as it is served; a row that is not a label with its cells has no ref; an index asked of an empty sheet or row is refused "<name> is out of range: there is none"; a short search text is refused before the report is fetched; the refusals run in the order header, no key, parameters, fetch, view, the no-key 503 before the parameters as the vendor route has it; a filing-list row that is not an object is dropped and counted; the playbook narrows "another company's filings" (a listed company's report is read by `filing_report` under its own symbol, its figures findings) and opens an exhibit by the filing's `link`; the agent cites a cell by copying the row's `rowRef`, never a ref built by hand. From the whole-branch review, which found no Critical issue and two Important ones: the budget is measured as the answer is printed, 30,000 characters a list, and the sheet list is budgeted and paged (the compact measure let a 60-column sheet page print at 63,172 characters); a cited cell's column is named, in the sheet view's `columns`, in a hit's numbers and in the references list, since a `filing:` ref has no period and a wrong-column cite passes the check. Also from it: the `sheet` asked for is served before it is matched; a lower-case `period` is read; a number as printed finds a number cell; the `fact:` reader resolves any stored label; a hit carries no ref into a second sheet of one served name; the newest four add to the trailing figures only where those are the sum of four quarters; a window before the calendar's first year is a 400; one test runs a searched cell through a published report. Not built, in the backlog: a huge ref id that raises in the `filing:` and `response:` readers, a retention rule for stored filing reports, and a test of a quarter without a cash-flow period. |
