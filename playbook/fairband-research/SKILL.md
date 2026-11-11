@@ -156,22 +156,24 @@ A number cell is cited as the row's ref plus `/<col>`, with no finding: the shee
 the scale (`$ in Millions`), the cite is the number as the cell holds it, and the scale word stands
 outside the cite, in the plain part after it (`reference/citations.md`). Copy the row's `rowRef`
 from the answer and add the cell's index, counted from 0. Never build a `filing:` ref by hand: a
-sheet name with a `/` is written `~1` inside a ref, so a ref built by hand resolves to nothing. A
+sheet name with a `/` or a `~` is written otherwise inside a ref, so a ref built by hand may
+resolve to nothing. A `filing:` cite takes no `period`: a cite given one fails `wrong period`. A
 sentence of a note is a finding whose source is `{kind: "filing", ref: "response:<responseId>",
 note}`: the `responseId` the filing report answered, and the note naming the report and the sheet
-("10-Q of fiscal 2027 Q1, sheet LEASES"). A `filing:` ref names a cell of the report's own company
-only, so a figure from another company's report is a finding. A foreign filer files no 10-Q, so FMP
-holds mostly its annual reports.
+("10-Q of fiscal 2027 Q1, sheet LEASES"). `filing_report` reads another listed company's 10-K or
+10-Q by its symbol, but a `filing:` ref names a cell of the report's own company only, so a figure
+from it is a finding. A foreign filer files no 10-Q, so FMP holds mostly its annual reports.
 
 `filings(symbol)` lists every filing of the past year with its links, newest first, the ownership
 forms left out (`insider_trades` serves them): `link`, the filing's index page on sec.gov, and
 `finalLink`, its main document. `forms` names the forms to list (`8-K`), and `from_date` and
 `to_date` move the window.
 
-The host's own tools read only what Fairband does not hold: an 8-K's exhibits (the press release,
-recast figures), Item 1, the MD&A, the risk factors, the proxy statement, another company's filings
-and the company's own site. The filing report holds none of these. Open a filing by its
-`finalLink`, or an exhibit by the filing's `link`, never by a search of EDGAR.
+The host's own tools read only what Fairband does not hold: a filing FMP holds no report for, such
+as an 8-K's exhibits (the press release, recast figures), the proxy statement or another company's
+S-1; the parts of a 10-K or a 10-Q the filing report leaves out, the 10-K's Item 1, the MD&A and
+the risk factors; and the company's own site. Open a filing by its `finalLink`, or an exhibit by the
+filing's `link`, never by a search of EDGAR.
 
 From Fairband, read `segments(symbol)` for the revenue by product and by region, and
 `transcript(symbol, year, quarter)` for the earlier earnings calls; the last call is step 5's.
@@ -195,8 +197,9 @@ year, its quarter and its date. Never guess a year. Read the newest call with
 
 When the vendor has no transcript of the newest quarter, say so in the section. Read the
 company's earnings press release with the host's own tools instead. The quarter's figures still
-come from `quarters`. The press release is an exhibit of an 8-K (a 6-K for a foreign filer):
-`filings(symbol, "8-K")` lists the 8-Ks, and a filing's `link` opens its exhibits.
+come from `quarters`. The press release is an exhibit of an 8-K, or of a 6-K for a foreign filer:
+`filings(symbol, "8-K")` lists the 8-Ks, `filings(symbol, "6-K")` a foreign filer's 6-Ks, and a
+filing's `link` opens its exhibits.
 
 Then build the seven parts:
 
@@ -215,12 +218,14 @@ Then build the seven parts:
    you cite it: the stored EPS may sit on another share basis than the quote's. A figure the stored
    statements do not hold (a segment's revenue, a customer count, a non-GAAP figure) comes from the
    quarter's filing report, a number cell by its row's ref and a sentence of a note as a finding
-   (step 4); else it is a finding from the document the filing list links. The consensus for the
-   quarter is the `estimates` quarter's ref, when the store holds it (revenue and EPS). The
-   surprise is `derive` `growth` of the actual over the consensus; the change on the year is
-   `growth` of the actual over the prior year's. Then name what drove the quarter: price, volume,
-   mix, currency, one-time items. Name the one-time items: the engine anchors on earnings without
-   them.
+   (step 4); else it is a finding from the document the filing list links. Take the report's year
+   and period from the list `filing_report(symbol)` answers. A US filer files no 10-Q for its
+   fourth quarter: its 10-K, `FY`, reports the whole year, so a fourth quarter's figure the 10-K
+   does not give is a finding from the press release. The consensus for the quarter is the
+   `estimates` quarter's ref, when the store holds it (revenue and EPS). The surprise is `derive`
+   `growth` of the actual over the consensus; the change on the year is `growth` of the actual
+   over the prior year's. Then name what drove the quarter: price, volume, mix, currency, one-time
+   items. Name the one-time items: the engine anchors on earnings without them.
 3. **The story management is telling.** Quote the frame in their words. Then take three to five
    claims. For each: the claim with its figure and its timeline; the evidence for it in the
    numbers; the driver it moves, written as the register's phrase for it (`reference/register.md`,

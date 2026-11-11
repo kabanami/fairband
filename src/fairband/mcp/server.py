@@ -425,7 +425,7 @@ def build_server(client: FairbandClient) -> MCPServer:
     @server.tool(
         description="A 10-Q or a 10-K from FMP a part at a time, by the arguments given: the"
         " reports on file, a report's sheets (year and period), a sheet's rows (and sheet) or one"
-        " cell's text (and row); cite a cell as its row's rowRef plus /<col>."
+        " cell's text (and row); cite a cell as its row's rowRef plus /<col>, never built by hand."
     )
     def filing_report(
         symbol: str,
@@ -451,7 +451,7 @@ def build_server(client: FairbandClient) -> MCPServer:
     @server.tool(
         description="The rows of one filing report from FMP whose label or a cell holds a text,"
         " case-blind, at most 20, each with an excerpt, its number cells and its rowRef; cite a"
-        " cell as its row's rowRef plus /<col>."
+        " cell as its row's rowRef plus /<col>, never built by hand."
     )
     def filing_search(symbol: str, year: int, period: str, text: str) -> dict[str, Any]:
         params = {"year": year, "period": period, "text": text}

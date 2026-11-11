@@ -82,11 +82,11 @@ nothing.
 A record holds a percent as a fraction: 0.112. The cite writes it as a percentage: `11.2%`.
 
 A filing report's cell. Copy its ref from the answer: the row's `rowRef` plus `/<col>`, the cell's
-index counted from 0. Never build a `filing:` ref by hand: a sheet name with a `/` is written `~1`
-inside a ref, so a ref built from the name as you read it resolves to nothing. The sheet's title
-names the scale (`$ in Millions`), and the cell holds the number at that scale. Cite the number as
-the cell holds it, with no period (a `filing:` ref has none, so a cite that names one fails), and
-write the scale word in the plain part after the cite:
+index counted from 0. Never build a `filing:` ref by hand: a sheet name with a `/` or a `~` is
+written otherwise inside a ref (`~1`, `~0`), so a ref built from the name as you read it may
+resolve to nothing. The sheet's title names the scale (`$ in Millions`), and the cell holds the
+number at that scale. Cite the number as the cell holds it, with no period (a `filing:` ref has
+none, so a cite that names one fails), and write the scale word in the plain part after the cite:
 
 ```json
 [

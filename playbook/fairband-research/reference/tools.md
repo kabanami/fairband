@@ -10,8 +10,9 @@ be left out.
   names a field by the engine's snake_case name (`snapshot:412/inputs/market_cap`).
 - The reads of stored figures, `financials`, `quarters`, `financial_tables`, `estimates`,
   `price_history`, `peers` and `multiples_history`, give each figure with its `ref`. Cite the
-  `ref` as given. For every other figure, build the ref from its record's id
-  (`reference/citations.md`). A percent is a fraction: `0.112` is 11.2%.
+  `ref` as given. `filing_report` and `filing_search` give each row of a filing report with its
+  `rowRef`: cite a cell as the `rowRef` plus `/<col>`. For every other figure, build the ref from
+  its record's id (`reference/citations.md`). A percent is a fraction: `0.112` is 11.2%.
 - A refusal is `{"refused": <sentence>, "status": <code>}`, with the rest of the answer beside it:
   a refused override's `override`, a rejected report's `findings`. The status says what kind of
   refusal it is: 400 a value the call cannot take, or a report's structural refusal; 404 a record
@@ -169,7 +170,9 @@ that more remains (`nextRow`, `more`). The counts below are upper bounds beside 
   report, a part at a time. Four views, by the arguments given; an argument the view does not read
   is not read:
   1. Neither `year` nor `period`: `reports`, the reports FMP holds as it orders them, each
-     `{year, period}`, a 10-K as `FY` and a 10-Q as its quarter, `Q1` to `Q4`.
+     `{year, period}`, a 10-K as `FY` and a 10-Q as its quarter, `Q1` to `Q4`. Take `year` and
+     `period` from this list. A US filer files no 10-Q for its fourth quarter: its 10-K, `FY`,
+     reports the whole year.
   2. `year` and `period`: `year`, `period` and `sheets`, each `{name, title, rows, chars}`: the
      sheet's name, its title (its first row's label, which names the scale, `$ in Millions`), its
      row count and the length of its JSON text. The sheets are the statements, each note as text
@@ -180,15 +183,15 @@ that more remains (`nextRow`, `more`). The counts below are upper bounds beside 
      `nextRow`, the next `from_row`, or `null` after the last row. A row is `{row, label, rowRef,
      cells}`: its index in the sheet from 0, its label, its ref and its cells in order. A number
      cell is the number. A cell longer than 2,000 characters is cut, with its length, as `{text,
-     chars}`: read it whole with `row`. A row of another shape has `label` and `rowRef` `null` and
-     one cell, its JSON text: it holds no cell to cite.
+     chars}`: read it whole with `row` and `col`. A row of another shape has `label` and `rowRef`
+     `null` and one cell, its JSON text: it holds no cell to cite.
   4. With `sheet` and `row`: one cell's text, `col` and `offset` 0 when left out. The answer:
      `sheet`, `row`, `col`, `label`, `chars` (the text's whole length), `offset`, `text` (a page of
      20,000 characters from `offset`) and `nextOffset`, the next `offset`, or `null` after the
      text's end. A number cell answers its JSON text.
 
   Cite a number cell as its row's `rowRef` plus `/<col>` (`filing:812/LEASES/2/0`). Never build a
-  `filing:` ref by hand: a sheet name with a `/` is written `~1` inside a ref.
+  `filing:` ref by hand: a sheet name with a `/` or a `~` is written `~1` or `~0` inside a ref.
 - `filing_search(symbol, year, period, text)`: a search of one filing report for `text`, three
   characters or more, without regard to case, in every label and every cell, a number by its JSON
   text. A hit is a row, in the report's order: `{sheet, row, col, label, excerpt, offset, rowRef,
@@ -197,7 +200,9 @@ that more remains (`nextRow`, `more`). The counts below are upper bounds beside 
   text (the label's when `col` is `null`), so view 4 of `filing_report` opens the cell there;
   `numbers` lists the row's number cells as `{col, value}`. The answer holds at most 20 hits,
   within the budget, with `more` `true` when a further row matched, and `year`, `period` and
-  `text`, the text searched. Cite a number cell as the hit's `rowRef` plus `/<col>`.
+  `text`, the text searched. A search has no next page: when `more` is `true`, search a longer
+  text, or read the sheet the hits name with `filing_report`. Cite a number cell as the hit's
+  `rowRef` plus `/<col>`.
 
 ### The refusals
 

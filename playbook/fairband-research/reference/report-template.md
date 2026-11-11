@@ -132,7 +132,8 @@ One page, in this order. Step 5 of `SKILL.md` says how to build each part.
 7. **What the thesis takes from it.** The kill criteria touched, the one thing to watch next
    quarter, and the gap: how far the price moved against how far the reviewed value moved.
 
-When the vendor has no transcript, say so first, and build the parts from the press release.
+When the vendor has no transcript, say so first, and build the parts from the press release. The
+quarter's figures still come from `quarters`.
 
 ### Section 7: the thesis
 
@@ -323,10 +324,13 @@ guided fiscal 2027: guidance records 17 (EPS) and 18 (revenue). The agent's over
 earnings, citing record 17 (override 301), and of the belief (override 302) made review 89.
 The route values the company, so the report makes no secondary valuation and reads no DCF, and
 Appendix A says "no secondary valuation: the route values the company". Sensitivity reading 57
-sets the belief against the runway return. The derivations: 531 and 532 the surprises, `growth` of
-the quarter's finding over the consensus; 534 the next-day move, `growth` of the close of 29 Oct
-2026 over the close of 28 Oct 2026; 535 and 536 the two differences of the year's range, and 537
-their ratio. Every plain part holds no quantity; every figure is a cite.
+sets the belief against the runway return. The quarter's revenue and EPS, and the same quarter a
+year before, are the stored quarters' figures from `quarters`, each cited by its `fact:` ref;
+finding 124, the share of bookings, is a figure the statements do not hold. The derivations: 531
+and 532 the surprises, `growth` of the quarter's stored figure (its `fact:` ref) over the
+consensus; 534 the next-day move, `growth` of the close of 29 Oct 2026 over the close of 28 Oct
+2026; 535 and 536 the two differences of the year's range, and 537 their ratio. Every plain part
+holds no quantity; every figure is a cite.
 
 ```json
 {

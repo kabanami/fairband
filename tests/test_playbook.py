@@ -803,6 +803,25 @@ def test_the_agent_reads_fairband_before_it_goes_outside() -> None:
         "record each quarter's figure as a finding from the 10-Q or the press release" not in five
     )
     assert "`split-pending` or `basis-scaled`" in five
+    # the quarter's figures and their two derivations (the fix round of Task 6)
+    for words in (
+        "The quarter's figures still come from `quarters`.",
+        (
+            "The operating margin is the `derive` `ratio` of the quarter's operating income to its"
+            " revenue."
+        ),
+        (
+            "The free cash flow is the `derive` `sum` of its cash from operations and its capital"
+            " spending"
+        ),
+    ):
+        assert words in five, words
+    template = _flat(_read(TEMPLATE))
+    assert (
+        "When the vendor has no transcript, say so first, and build the parts from the press"
+        " release. The quarter's figures still come from `quarters`."
+    ) in template
+    assert "the quarter's finding" not in template  # the example cites the stored quarters
     rules = _flat(skill[skill.index("## The rules") : skill.index("## Guidance")])
     assert "Before you brief a subagent to fetch a figure, check what Fairband holds" in rules
     tools = _flat(_read(TOOLS))
@@ -826,9 +845,24 @@ def test_a_filing_cell_is_cited_by_the_ref_the_answer_gives() -> None:
     cite keeps the scale word outside the cite; the tool list says what each filing read answers
     and how a half-yearly reporter's periods are labelled."""
     never = "Never build a `filing:` ref by hand"
-    assert never in _flat(_steps(_frontmatter(_read(SKILL))[1])[4])
+    steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
+    four = steps[4]
+    assert never in four
     citations = _flat(_read(CITATIONS))
     assert never in citations
+    for text in (four, citations):  # a hand-built ref may resolve, to the wrong sheet or none
+        assert "may resolve to nothing" in text
+        assert "resolves to nothing" not in text.replace("may resolve to nothing", "")
+    assert "A `filing:` cite takes no `period`" in four  # a cite given one fails wrong period
+    # another listed company's report is read but not cited; what FMP holds no report for is not
+    assert "a figure from it is a finding" in four
+    assert "a filing FMP holds no report for" in four
+    # the year and the period come from the list; no 10-Q for a US filer's fourth quarter
+    assert "files no 10-Q for its fourth quarter" in steps[5]
+    assert "files no 10-Q for its fourth quarter" in _tool_entry("filing_report")
+    assert '`filings(symbol, "6-K")`' in steps[5]  # a foreign filer's press release
+    assert "read it whole with `row` and `col`" in _tool_entry("filing_report")
+    assert "search a longer text" in _tool_entry("filing_search")  # `more` has no page
     assert (
         '{"cite": "$12.5", "ref": "filing:<id>/Leases - Additional Informatio/2/0"}, " million'
     ) in citations

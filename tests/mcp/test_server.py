@@ -853,6 +853,7 @@ def test_the_filing_tools_say_how_a_cell_is_cited(api: FairbandClient) -> None:
     for name in ("filing_report", "filing_search"):
         # copied from the answer, never built by hand: a sheet's slash is ~1 inside the ref
         assert "cite a cell as its row's rowRef plus /<col>" in described[name], name
+        assert "never built by hand" in described[name], name
         assert len(described[name]) <= 250, name
 
 
