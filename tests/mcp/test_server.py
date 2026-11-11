@@ -43,7 +43,8 @@ PROBE = Implementation(name="probe", version="0")
 AGENT = {"agent": "claude-opus-5-5"}
 ITEM = {"symbol": "AAPL", "mode": "full report"}
 FILING = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": None}
-# Spec 15.2 to 15.4, in its order.
+# Spec 15.2 to 15.4, in its order, with the filing reads (spec 2026-11-11, 6) after the
+# pass-throughs.
 SPEC_TOOLS = (
     "screen",
     "company",
@@ -77,6 +78,9 @@ SPEC_TOOLS = (
     "transcript_dates",
     "dcf",
     "pe_history",
+    "filings",
+    "filing_report",
+    "filing_search",
     "identify",
     "inbox_post",
     "inbox_claim",
@@ -134,6 +138,33 @@ READS: dict[str, tuple[dict[str, Any], str]] = {
     "transcript_dates": ({"symbol": "AAPL"}, "/api/vendor/transcript-dates/AAPL"),
     "dcf": ({"symbol": "AAPL"}, "/api/vendor/dcf/AAPL"),
     "pe_history": ({"symbol": "AAPL"}, "/api/vendor/pe-history/AAPL"),
+    "filings": (
+        {
+            "symbol": "AAPL",
+            "forms": "10-K,10-Q",
+            "from_date": "2026-01-01",
+            "to_date": "2026-11-11",
+            "from_row": 50,
+        },
+        "/api/companies/AAPL/filings?forms=10-K%2C10-Q&from=2026-01-01&to=2026-11-11&fromRow=50",
+    ),
+    "filing_report": (
+        {
+            "symbol": "aapl",
+            "year": 2027,
+            "period": "Q1",
+            "sheet": "Revenue by Product/Region",
+            "from_row": 100,
+        },
+        (
+            "/api/companies/AAPL/filing-report"
+            "?year=2027&period=Q1&sheet=Revenue+by+Product%2FRegion&fromRow=100"
+        ),
+    ),
+    "filing_search": (
+        {"symbol": "AAPL", "year": 2027, "period": "Q1", "text": "not yet commenced"},
+        "/api/companies/AAPL/filing-report/search?year=2027&period=Q1&text=not+yet+commenced",
+    ),
 }
 # Each write tool with arguments of the right types.
 WRITES: dict[str, dict[str, Any]] = {
@@ -394,9 +425,10 @@ def test_every_read_tool_reads_its_route(api: FairbandClient, client: TestClient
         else:
             refusal = {"refused": expected.json()["detail"], "status": expected.status_code}
             assert answer == refusal, name
-    # the seven pass-throughs reach the route, which has no FMP key here
-    vendor = answers[-7:]
-    assert vendor == [{"refused": "no FMP key", "status": 503}] * 7
+    # the seven pass-throughs and the three filing reads reach their routes, which have no FMP key
+    # here
+    vendor = answers[-10:]
+    assert vendor == [{"refused": "no FMP key", "status": 503}] * 10
 
 
 def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
@@ -707,12 +739,15 @@ def test_a_symbol_outside_the_symbol_characters_is_refused_before_any_call() -> 
             ("financials", {"symbol": ".."}),
             ("report", {"symbol": ".."}),
             ("transcript", {"symbol": "..", "year": 2025, "quarter": 3}),
+            ("filings", {"symbol": ".."}),
+            ("filing_report", {"symbol": ".."}),
+            ("filing_search", {"symbol": "..", "year": 2027, "period": "Q1", "text": "leases"}),
             ("identify", AGENT),
             ("note_add", {"symbol": "..", "text": "a note"}),
         )
     refused = {"refused": BAD_SYMBOL}
     assert BAD_SYMBOL == "a symbol is letters, digits, dots and dashes"
-    assert answers[: len(symbols) + 3] == [refused] * (len(symbols) + 3)
+    assert answers[: len(symbols) + 6] == [refused] * (len(symbols) + 6)
     assert answers[-1] == refused
     assert called == []
 
@@ -736,6 +771,85 @@ def test_a_symbol_is_upper_cased(api: FairbandClient, client: TestClient) -> Non
             ("segments", {"symbol": "bf-b"}),
         )
     assert paths == ["/api/companies/BRK.B", "/api/vendor/segments/BF-B"]
+
+
+def _sent(*calls: tuple[str, dict[str, Any]]) -> list[tuple[str, dict[str, str]]]:
+    """The path and the query parameters of each request the calls send, in one session against
+    a web server that answers every read with ``{}``."""
+    requests: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(answer), base_url=HOST) as http:
+        _session(build_server(FairbandClient(http)), *calls)
+    return [(request.url.path, dict(request.url.params)) for request in requests]
+
+
+def test_the_filing_tools_send_the_route_s_parameters() -> None:
+    """Spec 2026-11-11, 6: each filing tool is one call to its route, its arguments sent by the
+    route's names (``from_date`` as ``from``, ``to_date`` as ``to``, ``from_row`` as ``fromRow``);
+    a sheet's name goes as it is, a slash and spaces in it, as the ``sheet`` parameter; an
+    argument left out is not sent."""
+    sheet = "Revenue by Product/Region"
+    sent = _sent(
+        ("filings", READS["filings"][0]),
+        ("filings", {"symbol": "aapl", "to_date": "2026-11-11"}),
+        ("filing_report", READS["filing_report"][0]),
+        ("filing_report", {"symbol": "AAPL", "year": 2027, "period": "Q1"}),
+        (
+            "filing_report",
+            {"symbol": "AAPL", "year": 2027, "period": "Q1", "sheet": sheet, "row": 2, "col": 0},
+        ),
+        ("filing_report", {"symbol": "AAPL", "year": 2027, "period": "Q1", "sheet": sheet}),
+        (
+            "filing_report",
+            {"symbol": "AAPL", "year": 2027, "period": "FY", "sheet": sheet, "row": 1, "offset": 9},
+        ),
+        ("filing_search", READS["filing_search"][0]),
+    )
+    filings = "/api/companies/AAPL/filings"
+    report = "/api/companies/AAPL/filing-report"
+    assert sent == [
+        (
+            filings,
+            {"forms": "10-K,10-Q", "from": "2026-01-01", "to": "2026-11-11", "fromRow": "50"},
+        ),
+        (filings, {"to": "2026-11-11"}),
+        (report, {"year": "2027", "period": "Q1", "sheet": sheet, "fromRow": "100"}),
+        (report, {"year": "2027", "period": "Q1"}),
+        (report, {"year": "2027", "period": "Q1", "sheet": sheet, "row": "2", "col": "0"}),
+        (report, {"year": "2027", "period": "Q1", "sheet": sheet}),
+        (report, {"year": "2027", "period": "FY", "sheet": sheet, "row": "1", "offset": "9"}),
+        (
+            "/api/companies/AAPL/filing-report/search",
+            {"year": "2027", "period": "Q1", "text": "not yet commenced"},
+        ),
+    ]
+
+
+def test_filing_report_with_a_symbol_alone_sends_no_parameter() -> None:
+    """The reports on file (spec 2026-11-11, 5.2, view 1): neither year nor period, nor any other
+    parameter, goes with the call."""
+    sent = _sent(("filing_report", {"symbol": "msft"}), ("filings", {"symbol": "msft"}))
+    assert sent == [
+        ("/api/companies/MSFT/filing-report", {}),
+        ("/api/companies/MSFT/filings", {}),
+    ]
+
+
+def test_the_filing_tools_say_how_a_cell_is_cited(api: FairbandClient) -> None:
+    """Spec 2026-11-11, 5.5 and 6: the tools that answer a filing report's rows say how a cell of
+    one is cited."""
+
+    async def listed() -> list[Any]:
+        async with Client(build_server(api)) as session:
+            return (await session.list_tools()).tools
+
+    described = {tool.name: tool.description or "" for tool in anyio.run(listed)}
+    for name in ("filing_report", "filing_search"):
+        assert "filing:<id>/<sheet>/<row>/<col>" in described[name], name
 
 
 def test_server_down_is_one_sentence(down: FairbandClient) -> None:

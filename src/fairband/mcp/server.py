@@ -2,7 +2,9 @@
 agent host starts. It holds no database connection and no key: every tool is one or two calls to
 the web API (``FairbandClient``), tools only, no resources or prompts. The tools are spec 15's,
 in its order (``TOOL_NAMES``), each with a one-sentence description and the arguments the spec
-names.
+names. The filing reads, ``filings``, ``filing_report`` and ``filing_search``, are the filings
+access spec's (2026-11-11, 6), after the pass-throughs: each is one call to its route
+(``fairband.web.filings_api``) and answers the route's JSON.
 
 A tool answers the API's JSON, an object; ``watchlists``, whose route answers a list, answers it as
 ``{"watchlists": [...]}``. A refusal is ``{"refused": <the API's sentence>, "status":
@@ -98,6 +100,10 @@ TOOL_NAMES: tuple[str, ...] = (
     "transcript_dates",
     "dcf",
     "pe_history",
+    # spec 2026-11-11 filings access, 6, the filing reads
+    "filings",
+    "filing_report",
+    "filing_search",
     # 15.4, the writes
     "identify",
     "inbox_post",
@@ -388,6 +394,58 @@ def build_server(client: FairbandClient) -> MCPServer:
     )
     def pe_history(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_vendor("pe-history", symbol)))
+
+    # spec 2026-11-11 filings access, 6, the filing reads: FMP's, fetched and stored by the server
+
+    @server.tool(
+        description="The company's filings from FMP, newest first, each with its form type, its"
+        " dates and its links, over the last year and without the ownership forms unless"
+        " from_date, to_date or forms say otherwise."
+    )
+    def filings(
+        symbol: str,
+        forms: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        from_row: int | None = None,
+    ) -> dict[str, Any]:
+        params = {"forms": forms, "from": from_date, "to": to_date, "fromRow": from_row}
+        return answer(lambda: client.get(_company(symbol, "filings"), params))
+
+    @server.tool(
+        description="A 10-Q or a 10-K from FMP a part at a time, by the arguments given: the"
+        " reports on file, a report's sheets (year and period), a sheet's rows (and sheet) or one"
+        " cell's text (and row); cite a cell as filing:<id>/<sheet>/<row>/<col>."
+    )
+    def filing_report(
+        symbol: str,
+        year: int | None = None,
+        period: str | None = None,
+        sheet: str | None = None,
+        from_row: int | None = None,
+        row: int | None = None,
+        col: int | None = None,
+        offset: int | None = None,
+    ) -> dict[str, Any]:
+        params = {
+            "year": year,
+            "period": period,
+            "sheet": sheet,
+            "fromRow": from_row,
+            "row": row,
+            "col": col,
+            "offset": offset,
+        }
+        return answer(lambda: client.get(_company(symbol, "filing-report"), params))
+
+    @server.tool(
+        description="The rows of one filing report from FMP whose label or a cell holds a text,"
+        " case-blind, at most 20, each with an excerpt, its number cells and its rowRef; cite a"
+        " cell as filing:<id>/<sheet>/<row>/<col>."
+    )
+    def filing_search(symbol: str, year: int, period: str, text: str) -> dict[str, Any]:
+        params = {"year": year, "period": period, "text": text}
+        return answer(lambda: client.get(_company(symbol, "filing-report/search"), params))
 
     # 15.4, the writes
 

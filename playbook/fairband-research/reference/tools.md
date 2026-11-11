@@ -135,6 +135,18 @@ vendor call. The refusals:
   `multiples_history` still serves the trailing series stored before, if any, and the forward one.
 - A vendor call that failed (502), with the vendor's sentence.
 
+Three filing reads serve FMP's filing list and its filing reports, a 10-Q or a 10-K as JSON,
+stored the same way and answered a part at a time:
+
+- `filings(symbol, forms?, from_date?, to_date?, from_row?)`: the company's filings, newest first,
+  each with its form type, its dates and its links, over the last year and without the ownership
+  forms unless `from_date`, `to_date` or `forms` say otherwise.
+- `filing_report(symbol, year?, period?, sheet?, from_row?, row?, col?, offset?)`: a filing report
+  a part at a time, by the arguments given: the reports on file, a report's sheets, a sheet's rows
+  or one cell's text; cite a cell as `filing:<id>/<sheet>/<row>/<col>`.
+- `filing_search(symbol, year, period, text)`: the rows of one filing report whose label or a cell
+  holds the text, each with an excerpt, its number cells and its `rowRef`.
+
 ## The writes
 
 - `identify(agent)`: name the model identifier you run as; every later write is recorded under it.
