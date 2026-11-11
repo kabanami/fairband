@@ -1,0 +1,74 @@
+[
+  {
+    "symbol": "ACME",
+    "cik": "0000000001",
+    "filingDate": "2026-10-30 00:00:00",
+    "acceptedDate": "2026-10-30 00:00:00",
+    "formType": "8-K",
+    "link": "https://www.sec.gov/Archives/edgar/data/1/000000000126000008/0000000001-26-000008-index.htm",
+    "finalLink": "https://www.sec.gov/Archives/edgar/data/1/000000000126000008/acme-8k_20261030.htm"
+  },
+  {
+    "symbol": "ACME",
+    "cik": "0000000001",
+    "filingDate": "2026-10-29 00:00:00",
+    "acceptedDate": "2026-10-29 00:00:00",
+    "formType": "4",
+    "link": "https://www.sec.gov/Archives/edgar/data/1/000000000126000007/0000000001-26-000007-index.htm",
+    "finalLink": "https://www.sec.gov/Archives/edgar/data/1/000000000126000007/xslF345X05/form4.xml"
+  },
+  {
+    "symbol": "ACME",
+    "cik": "0000000001",
+    "filingDate": "2026-10-28 00:00:00",
+    "acceptedDate": "2026-10-28 00:00:00",
+    "formType": "10-Q",
+    "link": "https://www.sec.gov/Archives/edgar/data/1/000000000126000006/0000000001-26-000006-index.htm",
+    "finalLink": "https://www.sec.gov/Archives/edgar/data/1/000000000126000006/acme-20260930.htm"
+  },
+  {
+    "symbol": "ACME",
+    "cik": "0000000001",
+    "filingDate": "2026-09-30 00:00:00",
+    "acceptedDate": "2026-09-30 00:00:00",
+    "formType": "8-K",
+    "link": "https://www.sec.gov/Archives/edgar/data/1/000000000126000005/0000000001-26-000005-index.htm",
+    "finalLink": "https://www.sec.gov/Archives/edgar/data/1/000000000126000005/acme-8k_20260930.htm"
+  },
+  {
+    "symbol": "ACME",
+    "cik": "0000000001",
+    "filingDate": "2026-09-15 00:00:00",
+    "acceptedDate": "2026-09-15 00:00:00",
+    "formType": "4/A",
+    "link": "https://www.sec.gov/Archives/edgar/data/1/000000000126000004/0000000001-26-000004-index.htm",
+    "finalLink": "https://www.sec.gov/Archives/edgar/data/1/000000000126000004/xslF345X05/form4a.xml"
+  },
+  {
+    "symbol": "ACME",
+    "cik": "0000000001",
+    "filingDate": "2026-09-14 00:00:00",
+    "acceptedDate": "2026-09-14 00:00:00",
+    "formType": "144",
+    "link": "https://www.sec.gov/Archives/edgar/data/1/000000000126000003/0000000001-26-000003-index.htm",
+    "finalLink": "https://www.sec.gov/Archives/edgar/data/1/000000000126000003/xsl144X01/primary_doc.xml"
+  },
+  {
+    "symbol": "ACME",
+    "cik": "0000000001",
+    "filingDate": "2026-07-30 00:00:00",
+    "acceptedDate": "2026-07-30 00:00:00",
+    "formType": "10-K",
+    "link": "https://www.sec.gov/Archives/edgar/data/1/000000000126000002/0000000001-26-000002-index.htm",
+    "finalLink": "https://www.sec.gov/Archives/edgar/data/1/000000000126000002/acme-20260630.htm"
+  },
+  {
+    "symbol": "ACME",
+    "cik": "0000000001",
+    "filingDate": "2026-07-29 00:00:00",
+    "acceptedDate": "2026-07-29 00:00:00",
+    "formType": "DEF 14A",
+    "link": "https://www.sec.gov/Archives/edgar/data/1/000000000126000001/0000000001-26-000001-index.htm",
+    "finalLink": "https://www.sec.gov/Archives/edgar/data/1/000000000126000001/acme-def14a_2026.htm"
+  }
+]

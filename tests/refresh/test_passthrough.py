@@ -1,8 +1,10 @@
 """The vendor pass-throughs on the fixture router: each kind's call, stored scrubbed and reused
-inside ``reuse_hours`` (seven days for GuruFocus's P/E series), the one limiter the worker's client
-and the pass-through's share, and the slots that bound the vendor calls in flight."""
+inside ``reuse_hours`` (seven days for GuruFocus's P/E series, thirty for a filing report), the
+filing kinds' parameters and unusable payloads, the one limiter the worker's client and the
+pass-through's share, and the slots that bound the vendor calls in flight."""
 
 import json
+import re
 import threading
 import time
 from collections.abc import Iterator
@@ -20,6 +22,8 @@ from fairband.refresh import passthrough as passthrough_module
 from fairband.refresh.clients import build_clients, build_fmp
 from fairband.refresh.fetch import fetch_company
 from fairband.refresh.passthrough import (
+    FILING_KINDS,
+    FILING_REPORT_REUSE_HOURS,
     KINDS,
     PASSTHROUGH_SLOTS,
     PASSTHROUGH_WAIT_S,
@@ -27,6 +31,7 @@ from fairband.refresh.passthrough import (
     Passthrough,
     PassthroughBusy,
     PassthroughNoKey,
+    filing_report_usable,
 )
 from fairband.reports.refs import Resolved, resolve
 from fairband.store.vendor import response_payload, response_row
@@ -38,6 +43,8 @@ from fairband.vendors.http import VendorError, VendorHttp
 from fairband.vendors.limiter import PaceTotals, RateLimiter
 
 Q3 = {"year": "2026", "quarter": "3"}
+WINDOW = {"from": "2025-11-11", "to": "2026-11-11"}
+REPORT = {"year": "2027", "period": "Q1"}
 
 
 def _fixture(name: str, vendor: str = "fmp") -> Any:
@@ -67,6 +74,194 @@ def test_kinds() -> None:
         "dcf",
         "pe-history",
     )
+
+
+def test_the_filing_kinds_are_not_the_generic_route_s() -> None:
+    """Spec 2026-11-11, 4: the three kinds sit in a list of their own; ``KINDS`` stays the
+    generic route's (``test_kinds``)."""
+    assert FILING_KINDS == ("filings", "filing-reports", "filing-report")
+    assert not set(FILING_KINDS) & set(KINDS)
+
+
+def test_the_filing_list_is_one_call_stored_with_its_window(env: Env) -> None:
+    """One call for the window, its page of 1,000 rows in the reuse key: the same window is
+    reused inside ``reuse_hours``, another window is another call."""
+    passthrough = _passthrough(env)
+    [(part, first)] = passthrough.fetch("filings", "ACME", WINDOW).items()
+    assert part == "filings" and env.router.calls == {"sec-filings": 1}
+    assert env.router.requested["sec-filings"] == {
+        "symbol": "ACME",
+        "from": "2025-11-11",
+        "to": "2026-11-11",
+        "page": "0",
+        "limit": "1000",
+    }
+    params = {"symbol": "ACME", "from": "2025-11-11", "to": "2026-11-11", "limit": "1000"}
+    assert _stored(env, first.row.id) == ("sec-filings", "ACME", params, None)
+    assert first.row.provider == "fmp"
+    assert first.payload == _fixture("sec-filings-search-symbol.ACME.json")
+    again = passthrough.fetch("filings", "ACME", WINDOW)["filings"]
+    assert again.reused is True and again.row == first.row
+    other = passthrough.fetch("filings", "ACME", {"from": "2026-01-01", "to": "2026-11-11"})
+    assert other["filings"].reused is False
+    assert _stored(env, other["filings"].row.id)[2] == {**params, "from": "2026-01-01"}
+    assert env.router.calls == {"sec-filings": 2}
+    env.clock.now += timedelta(hours=env.policy.refresh.reuse_hours)
+    assert passthrough.fetch("filings", "ACME", WINDOW)["filings"].reused is False
+    assert env.router.calls == {"sec-filings": 3}
+
+
+def test_the_reports_on_file_are_one_call(env: Env) -> None:
+    """FMP's list of the filing reports it holds: one call, stored and reused inside
+    ``reuse_hours``, called again after it."""
+    passthrough = _passthrough(env)
+    [(part, first)] = passthrough.fetch("filing-reports", "ACME", {}).items()
+    again = passthrough.fetch("filing-reports", "ACME", {})["filing-reports"]
+    assert part == "filing-reports"
+    assert env.router.calls == {"filing-report-dates": 1}
+    assert env.router.requested["filing-report-dates"] == {"symbol": "ACME"}
+    assert (first.reused, again.reused) == (False, True) and first.row == again.row
+    assert first.payload == _fixture("financial-reports-dates.ACME.json")
+    stored = ("filing-report-dates", "ACME", {"symbol": "ACME"}, None)
+    assert _stored(env, first.row.id) == stored
+    env.clock.now += timedelta(hours=env.policy.refresh.reuse_hours)
+    assert passthrough.fetch("filing-reports", "ACME", {})["filing-reports"].reused is False
+    assert env.router.calls == {"filing-report-dates": 2}
+
+
+def test_a_report_is_reused_for_thirty_days(env: Env) -> None:
+    """A filing does not change once filed: a usable report is reused inside
+    ``FILING_REPORT_REUSE_HOURS`` (720) whatever ``reuse_hours`` is."""
+    assert FILING_REPORT_REUSE_HOURS == 720 and env.policy.refresh.reuse_hours < 720
+    passthrough = _passthrough(env)
+    first = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
+    report = {"symbol": "ACME", "year": "2027", "period": "Q1"}
+    assert env.router.requested["filing-report"] == report
+    assert _stored(env, first.row.id) == ("filing-report", "ACME", report, None)
+    assert first.payload == _fixture("financial-reports-json.ACME.json")
+    env.clock.now += timedelta(hours=FILING_REPORT_REUSE_HOURS - 1)
+    assert passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"].reused is True
+    env.clock.now += timedelta(hours=1)
+    again = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
+    assert again.reused is False and again.row.id != first.row.id
+    assert env.router.calls == {"filing-report": 2}
+    with closing(env.connect()) as conn:  # a ref made on the first row still has its payload
+        assert response_payload(conn, first.row.id) is not None
+
+
+def test_a_report_fmp_does_not_hold_is_stored_unusable_and_never_reused(env: Env) -> None:
+    """FMP answers a period it does not hold with HTTP 200 and ``{"Error Message": ...}``: stored
+    with the error ``unusable payload: ...``, answered as fetched, never reused."""
+    env.router.bodies["filing-report"] = b'{"Error Message": "No Data for this symbol"}'
+    passthrough = _passthrough(env)
+    first = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
+    assert first.payload == {"Error Message": "No Data for this symbol"}
+    assert first.row.error is not None and first.row.error.startswith("unusable payload")
+    second = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
+    assert second.reused is False and second.row.id > first.row.id
+    assert env.router.calls == {"filing-report": 2}
+
+
+@pytest.mark.parametrize(
+    ("payload", "usable"),
+    [
+        ({"symbol": "ACME", "period": "Q1", "year": "2027", "LEASES": [{"LEASES": ["x"]}]}, True),
+        ({"symbol": "ACME", "Error Message": "No Data", "LEASES": []}, False),
+        ({"Error Message": "No Data for this symbol"}, False),
+        ({"symbol": "ACME", "period": "Q1", "year": "2027"}, False),  # no sheet
+        ([], False),
+        ("No Data", False),
+    ],
+)
+def test_a_filing_report_is_usable_when_it_holds_a_sheet(payload: Any, usable: bool) -> None:
+    assert filing_report_usable(payload) is usable
+
+
+@pytest.mark.parametrize(
+    ("kind", "endpoint", "params", "unread", "error"),
+    [
+        (
+            "filings",
+            "sec-filings",
+            WINDOW,
+            {"Error Message": "Invalid"},
+            'unusable payload: {"Error Message": "Invalid"}',
+        ),
+        ("filing-reports", "filing-report-dates", {}, {}, "unusable payload: {}"),
+    ],
+)
+def test_a_filing_list_that_is_not_a_list_is_stored_unusable(
+    env: Env, kind: str, endpoint: str, params: dict[str, str], unread: Any, error: str
+) -> None:
+    """A filing list or a list of reports that is not a list is stored with its error, answered
+    as fetched, and never reused."""
+    env.router.bodies[endpoint] = json.dumps(unread).encode()
+    passthrough = _passthrough(env)
+    first = passthrough.fetch(kind, "ACME", params)[kind]
+    assert (first.reused, first.payload, first.row.error) == (False, unread, error)
+    assert passthrough.fetch(kind, "ACME", params)[kind].reused is False
+    assert env.router.calls == {endpoint: 2}
+
+
+@pytest.mark.parametrize(
+    ("kind", "params", "sentence"),
+    [
+        ("filing-report", {"year": "2027"}, "a filing report needs year and period"),
+        ("filing-report", {"period": "Q1"}, "a filing report needs year and period"),
+        ("filing-report", {"year": "2027", "period": "Q5"}, "period is FY or Q1 to Q4"),
+        ("filing-report", {"year": "2027", "period": "q1"}, "period is FY or Q1 to Q4"),
+        (
+            "filing-report",
+            {"year": "soon", "period": "Q1"},
+            "year must be a whole number, not 'soon'",
+        ),
+        ("filings", {}, "from and to are ISO dates, from on or before to"),
+        ("filings", {"from": "2025-11-11"}, "from and to are ISO dates, from on or before to"),
+        ("filings", {"to": "2026-11-11"}, "from and to are ISO dates, from on or before to"),
+        (
+            "filings",
+            {"from": "2026-11-11", "to": "2025-11-11"},
+            "from and to are ISO dates, from on or before to",
+        ),
+        (
+            "filings",
+            {"from": "yesterday", "to": "2026-11-11"},
+            "from and to are ISO dates, from on or before to",
+        ),
+        (
+            "filings",
+            {"from": "2025-11-11", "to": "2026-13-01"},
+            "from and to are ISO dates, from on or before to",
+        ),
+    ],
+)
+def test_a_bad_filing_request_is_a_value_error_before_any_call(
+    env: Env, kind: str, params: dict[str, str], sentence: str
+) -> None:
+    with pytest.raises(ValueError, match=re.escape(sentence)):
+        _passthrough(env).fetch(kind, "ACME", params)
+    assert not env.router.calls
+
+
+def test_a_key_inside_a_link_does_not_reach_the_store(env: Env) -> None:
+    """Spec 2026-11-11, 10: FMP's list of reports answers links; one that carried the key is
+    stored scrubbed, and the answer carries ``<key>`` in its place."""
+    body = json.dumps(
+        [
+            {
+                "symbol": "ACME",
+                "fiscalYear": 2027,
+                "period": "Q1",
+                "linkJson": f"https://example.invalid/r?apikey={FMP_KEY}",
+            }
+        ]
+    )
+    env.router.bodies["filing-report-dates"] = body.encode()
+    fetched = _passthrough(env).fetch("filing-reports", "ACME", {})["filing-reports"]
+    with closing(env.connect()) as conn:
+        assert FMP_KEY not in (response_payload(conn, fetched.row.id) or "")
+    assert FMP_KEY not in json.dumps(fetched.payload)
+    assert fetched.payload[0]["linkJson"] == "https://example.invalid/r?apikey=<key>"
 
 
 def test_a_transcript_is_fetched_stored_and_reused(env: Env) -> None:
@@ -243,6 +438,36 @@ def test_a_fetched_response_is_citable(env: Env) -> None:
             "gurufocus/pettm.ACME.json",
             id="pe-history",
         ),
+        pytest.param(
+            "filings",
+            WINDOW,
+            "fmp",
+            "sec-filings",
+            {**WINDOW, "symbol": "ACME", "limit": "1000"},  # the page size is in the reuse key
+            {**WINDOW, "symbol": "ACME", "page": "0", "limit": "1000"},
+            "fmp/sec-filings-search-symbol.ACME.json",
+            id="filings",
+        ),
+        pytest.param(
+            "filing-reports",
+            {},
+            "fmp",
+            "filing-report-dates",
+            {"symbol": "ACME"},
+            {"symbol": "ACME"},
+            "fmp/financial-reports-dates.ACME.json",
+            id="filing-reports",
+        ),
+        pytest.param(
+            "filing-report",
+            REPORT,
+            "fmp",
+            "filing-report",
+            {**REPORT, "symbol": "ACME"},
+            {**REPORT, "symbol": "ACME"},
+            "fmp/financial-reports-json.ACME.json",
+            id="filing-report",
+        ),
     ],
 )
 def test_each_kind_stores_its_call(
@@ -292,7 +517,7 @@ def test_a_vendor_error_is_stored_and_raised_scrubbed(env: Env) -> None:
 @pytest.mark.parametrize(
     ("kind", "params", "message"),
     [
-        ("filings", {}, "unknown vendor kind: filings"),
+        ("sec-filings", {}, "unknown vendor kind: sec-filings"),  # an endpoint, not a kind
         ("transcript", {"year": "2026"}, "a transcript needs year and quarter"),
         ("transcript", {"quarter": "3"}, "a transcript needs year and quarter"),
         ("transcript", {"year": "2026", "quarter": "5"}, "quarter must be 1 to 4"),

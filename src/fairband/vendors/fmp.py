@@ -63,6 +63,22 @@ Checked live on 2026-11-07 (spec 2026-11-06 Tier 2, 15.3):
 
 - ``earning-call-transcript-dates``: ``symbol``; the fiscal year, the quarter and the date of every
   call on file, newest first.
+
+The filing routes, checked live on 2026-11-11 (spec 2026-11-11 filings access, 3):
+
+- ``sec-filings-search/symbol``: ``symbol``, ``from`` and ``to`` (both required, else HTTP 400),
+  ``page``, ``limit``. Rows newest first, each ``symbol``, ``cik``, ``filingDate`` and
+  ``acceptedDate`` (``2026-10-28 00:00:00``), ``formType``, ``link`` (the filing's index page on
+  sec.gov) and ``finalLink`` (the main document). The default limit is 100; ``limit=1000``
+  answers up to 1,000 rows, so this adapter asks for page 0 of ``FILINGS_LIMIT`` (1,000) rows.
+- ``financial-reports-dates``: ``symbol``; the filing reports on file, newest first, each
+  ``symbol``, ``fiscalYear``, ``period`` (``FY``, ``Q1`` to ``Q4``), ``linkJson`` and
+  ``linkXlsx``. An unknown symbol answers ``[]``.
+- ``financial-reports-json``: ``symbol``, ``year`` (the fiscal year), ``period``; the 10-Q or the
+  10-K as one JSON object, ``symbol``, ``period`` and ``year`` then one key a sheet, each sheet a
+  list of rows, a row an object with one key, its label, whose value is the list of its cells.
+  A period FMP does not hold, or an unknown symbol, answers HTTP 200 with
+  ``{"Error Message": ...}``; a period that is not one of the five answers HTTP 400.
 """
 
 from collections.abc import Mapping, Sequence
@@ -80,6 +96,7 @@ type Period = Literal["annual", "quarter"]
 QUARTER_ESTIMATE_LIMIT = 40
 ANNUAL_ESTIMATE_LIMIT = 6
 INSIDER_TRADES_LIMIT = 100  # the documented example's page size
+FILINGS_LIMIT = 1000  # the filing list's page: one call answers up to 1,000 rows (2026-11-11)
 
 _STATEMENT_ROUTES: dict[StatementKind, str] = {
     "income": "income-statement",
@@ -198,6 +215,27 @@ class Fmp:
     def dcf_levered(self, symbol: str) -> VendorResponse:
         """FMP's discounted cash flow value a share on the levered free cash flow."""
         return self._get("levered-discounted-cash-flow", {"symbol": to_fmp_symbol(symbol)})
+
+    def filings(self, symbol: str, start: date, end: date) -> VendorResponse:
+        """Every filing from ``start`` to ``end``, newest first: the first page, of
+        ``FILINGS_LIMIT`` rows."""
+        params = {
+            "symbol": to_fmp_symbol(symbol),
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "page": "0",
+            "limit": str(FILINGS_LIMIT),
+        }
+        return self._get("sec-filings-search/symbol", params)
+
+    def filing_report_dates(self, symbol: str) -> VendorResponse:
+        """The fiscal year and the period of every filing report on file, newest first."""
+        return self._get("financial-reports-dates", {"symbol": to_fmp_symbol(symbol)})
+
+    def filing_report(self, symbol: str, year: int, period: str) -> VendorResponse:
+        """The filing report of the fiscal ``year`` and ``period`` (``FY``, ``Q1`` to ``Q4``)."""
+        params = {"symbol": to_fmp_symbol(symbol), "year": str(year), "period": period}
+        return self._get("financial-reports-json", params)
 
     def _get(self, route: str, params: Mapping[str, str]) -> VendorResponse:
         return self._http.get(route, {**params, "apikey": self._api_key})

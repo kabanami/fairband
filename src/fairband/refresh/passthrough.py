@@ -25,15 +25,35 @@ The kinds and the endpoints they are stored under, provider ``fmp`` but the last
   dated row, or none with a point above zero (``normalize_gf.pe_ttm_rows``), is unusable: stored
   with the error ``unusable payload: ...``, answered as fetched, never reused.
 
+The filing kinds, ``FILING_KINDS`` (spec 2026-11-11 filings access, 4), from FMP, are fetched and
+stored as the others are, but they are not kinds of the generic route, whose answer is the whole
+payload: ``KINDS`` stays that route's list, and ``unknown_kind`` names it alone.
+
+- ``filings``: ``sec-filings``, every filing from ``from`` to ``to``, ISO dates, both required and
+  ``from`` on or before ``to`` (else ``BAD_WINDOW``), a page of ``FILINGS_LIMIT`` rows, which the
+  reuse key holds;
+- ``filing-reports``: ``filing-report-dates``, the fiscal year and the period of every filing
+  report on file, newest first;
+- ``filing-report``: ``filing-report``, the 10-Q or the 10-K of the fiscal ``year`` and ``period``
+  (``FILING_PERIODS``: ``FY``, ``Q1`` to ``Q4``), both required (``NEEDS_PERIOD``, ``BAD_PERIOD``),
+  reused inside ``FILING_REPORT_REUSE_HOURS`` (thirty days) whatever ``reuse_hours`` is, since a
+  filing does not change once filed.
+
+A ``filings`` or a ``filing-reports`` payload is usable when it is a list, a ``filing-report`` one
+when ``filing_report_usable``: FMP answers a period it does not hold, or an unknown symbol, with
+HTTP 200 and ``{"Error Message": ...}``. An unusable one is stored with the error ``unusable
+payload: ...``, answered as fetched, never reused, as ``pe-history``'s is.
+
 For each call, as ``fetch_company`` does: the newest HTTP 200 response to the same call (provider,
 endpoint, symbol and the call's logical params, ``symbol`` among them) stored without an error is
 reused when it was observed less than its reuse window before the clock (``reuse_hours`` but for
-``pe-history``); else the vendor is called, outside any transaction, and the response is stored
-with its body scrubbed of ``secrets``. The answer's payload is the stored text parsed, so it
-carries no key either. A body that is not JSON is stored with the error ``unusable payload: ...``
-and raises a ``VendorError``; a ``VendorError`` is stored as a response row with its message and
-status and no payload, then raised, its message scrubbed (the GuruFocus token travels in the URL
-path, which the message names). None of the three is reused.
+``pe-history`` and ``filing-report``); else the vendor is called, outside any transaction, and the
+response is stored with its body scrubbed of ``secrets`` (a key inside a link FMP answers among
+them). The answer's payload is the stored text parsed, so it carries no key either. A body that
+is not JSON is stored with the error ``unusable payload: ...`` and raises a ``VendorError``; a
+``VendorError`` is stored as a response row with its message and status and no payload, then
+raised, its message scrubbed (the GuruFocus token travels in the URL path, which the message
+names). None of the three is reused.
 
 The FMP calls go through the FMP client the server builds on the limiter its refresh runs share,
 so the pass-throughs keep the refresh's pace; the GuruFocus client is not paced, as the refresh's
@@ -50,7 +70,7 @@ import threading
 from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import partial
 from typing import Any
 
@@ -64,7 +84,7 @@ from fairband.store.vendor import (
     response_row,
 )
 from fairband.vendors import gurufocus as gurufocus_api
-from fairband.vendors.fmp import INSIDER_TRADES_LIMIT, Fmp
+from fairband.vendors.fmp import FILINGS_LIMIT, INSIDER_TRADES_LIMIT, Fmp
 from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.http import VendorError, VendorResponse
 from fairband.vendors.normalize_gf import pe_ttm_rows
@@ -79,6 +99,12 @@ KINDS = (
     "dcf",
     "pe-history",
 )
+FILING_KINDS = ("filings", "filing-reports", "filing-report")  # not the generic route's
+FILING_PERIODS = ("FY", "Q1", "Q2", "Q3", "Q4")
+FILING_REPORT_REUSE_HOURS = 720  # a filing does not change once filed: thirty days of reuse
+BAD_PERIOD = "period is FY or Q1 to Q4"
+NEEDS_PERIOD = "a filing report needs year and period"
+BAD_WINDOW = "from and to are ISO dates, from on or before to"
 NEWS_LIMIT = 20
 NEWS_LIMIT_MAX = 100
 PE_HISTORY_REUSE_HOURS = 168  # a daily series: seven days of reuse, whatever reuse_hours is
@@ -277,7 +303,67 @@ class Passthrough:
                         usable=_reads_as_series,
                     )
                 ]
+            case "filings":
+                start, end = _window(params)
+                # The page size is in the reuse key, as insider-trades' is.
+                logical = {
+                    "symbol": symbol,
+                    "from": start.isoformat(),
+                    "to": end.isoformat(),
+                    "limit": str(FILINGS_LIMIT),
+                }
+                send = partial(fmp.filings, symbol, start, end)
+                return [_Call(kind, "sec-filings", logical, send, usable=_is_list)]
+            case "filing-reports":
+                send = partial(fmp.filing_report_dates, symbol)
+                logical = {"symbol": symbol}
+                return [_Call(kind, "filing-report-dates", logical, send, usable=_is_list)]
+            case "filing-report":
+                year, period = _whole(params, "year"), params.get("period")
+                if year is None or period is None:
+                    raise ValueError(NEEDS_PERIOD)
+                if period not in FILING_PERIODS:
+                    raise ValueError(BAD_PERIOD)
+                logical = {"symbol": symbol, "year": str(year), "period": period}
+                return [
+                    _Call(
+                        kind,
+                        "filing-report",
+                        logical,
+                        partial(fmp.filing_report, symbol, year, period),
+                        reuse=timedelta(hours=FILING_REPORT_REUSE_HOURS),
+                        usable=filing_report_usable,
+                    )
+                ]
         raise ValueError(unknown_kind(kind))
+
+
+def filing_report_usable(payload: Any) -> bool:
+    """Whether a ``filing-report`` payload is a report: an object without the key ``Error
+    Message`` that holds a sheet, a key whose value is a list. FMP answers a period it does not
+    hold, or an unknown symbol, with HTTP 200 and ``{"Error Message": ...}``."""
+    return (
+        isinstance(payload, dict)
+        and "Error Message" not in payload
+        and any(isinstance(value, list) for value in payload.values())
+    )
+
+
+def _is_list(payload: Any) -> bool:
+    """Whether a ``filings`` or a ``filing-reports`` payload reads: a list."""
+    return isinstance(payload, list)
+
+
+def _window(params: Mapping[str, str]) -> tuple[date, date]:
+    """The filing list's ``from`` and ``to``: ISO dates, both required, ``from`` on or before
+    ``to``, else ``BAD_WINDOW``."""
+    try:
+        start, end = date.fromisoformat(params["from"]), date.fromisoformat(params["to"])
+    except (KeyError, ValueError):
+        raise ValueError(BAD_WINDOW) from None
+    if start > end:
+        raise ValueError(BAD_WINDOW)
+    return start, end
 
 
 def _reads_as_series(payload: Any) -> bool:
@@ -288,7 +374,8 @@ def _reads_as_series(payload: Any) -> bool:
 
 
 def unknown_kind(kind: str) -> str:
-    """The sentence that refuses a kind outside ``KINDS``."""
+    """The sentence that refuses a kind outside ``KINDS``; it names ``KINDS`` alone, the generic
+    route's list, and ``fetch`` raises it for a kind in neither that list nor ``FILING_KINDS``."""
     return f"unknown vendor kind: {kind} ({_KIND_LIST})"
 
 

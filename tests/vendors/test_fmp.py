@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from fairband.policy import load_policy
-from fairband.vendors.fmp import BASE_URL, Fmp
+from fairband.vendors.fmp import BASE_URL, FILINGS_LIMIT, Fmp
 from fairband.vendors.http import VendorHttp, VendorResponse
 
 KEY = "test-fmp-key"  # not a real key
@@ -196,6 +196,29 @@ def test_routes_and_params(
 ) -> None:
     call(fmp)
     assert _sent(recorder.last) == (f"/stable/{route}", {**params, "apikey": KEY})
+
+
+def test_the_filing_routes(fmp: Fmp, recorder: Recorder) -> None:
+    """Spec 2026-11-11, 3: the three routes and their parameters, the key apart."""
+    assert FILINGS_LIMIT == 1000
+    fmp.filings("BRK.B", date(2025, 11, 11), date(2026, 11, 11))
+    path, params = _sent(recorder.last)
+    assert params.pop("apikey") == KEY
+    assert (path, params) == (
+        "/stable/sec-filings-search/symbol",
+        {"symbol": "BRK-B", "from": "2025-11-11", "to": "2026-11-11", "page": "0", "limit": "1000"},
+    )
+    fmp.filing_report_dates("ACME")
+    path, params = _sent(recorder.last)
+    assert params.pop("apikey") == KEY
+    assert (path, params) == ("/stable/financial-reports-dates", {"symbol": "ACME"})
+    fmp.filing_report("ACME", 2027, "Q1")
+    path, params = _sent(recorder.last)
+    assert params.pop("apikey") == KEY
+    assert (path, params) == (
+        "/stable/financial-reports-json",
+        {"symbol": "ACME", "year": "2027", "period": "Q1"},
+    )
 
 
 def test_quote_needs_a_symbol(fmp: Fmp, recorder: Recorder) -> None:

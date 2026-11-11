@@ -21,7 +21,8 @@ GF_TOKEN = "fakegfhalf:fakegfhalf2"  # not a real token; a real one has two halv
 
 # The FMP route to the name ``fairband.refresh.fetch`` (or ``fairband.refresh.passthrough``)
 # stores its endpoint under; a request's ``period``, when it sends one, is appended
-# (``income-statement`` + annual → ``income-annual``).
+# (``income-statement`` + annual → ``income-annual``), but on the routes of
+# ``_FISCAL_PERIOD_ROUTES``.
 _FMP_ENDPOINTS = {
     "income-statement": "income",
     "balance-sheet-statement": "balance",
@@ -40,7 +41,13 @@ _FMP_ENDPOINTS = {
     "insider-trading/search": "insider-trades",
     "discounted-cash-flow": "dcf",
     "levered-discounted-cash-flow": "dcf-levered",
+    "sec-filings-search/symbol": "sec-filings",
+    "financial-reports-dates": "filing-report-dates",
+    "financial-reports-json": "filing-report",
 }
+# The routes whose ``period`` is a fiscal period (``Q1``), not ``annual`` or ``quarter``: it names
+# neither the fixture nor the endpoint (``financial-reports-json.ACME.json``, ``filing-report``).
+_FISCAL_PERIOD_ROUTES = {"financial-reports-json"}
 # The routes that name their one company in a parameter other than ``symbol``.
 _SYMBOL_PARAMS = {"news/stock": "symbols"}
 
@@ -49,7 +56,8 @@ class Router:
     """Answers each request with the fixture for its route and symbol.
 
     FMP requests read ``fmp/<route>[.<period>][.<symbol>].json`` (a slash in the route becomes a
-    dash; a forex pair is the symbol, ``historical-price-eod-light.USDSEK.json``), GuruFocus
+    dash; a forex pair is the symbol, ``historical-price-eod-light.USDSEK.json``; a filing
+    report's fiscal period is left out, ``financial-reports-json.ACME.json``), GuruFocus
     requests ``gurufocus/<route>.<symbol>.json``. ``calls`` counts the requests per
     endpoint, named as the fetch stores them (``income-annual``, ``quote``, ``summary``), and
     ``symbol_calls`` per symbol; a retry counts again, and ``requested`` keeps each endpoint's last
@@ -101,7 +109,7 @@ def _resolve(request: httpx.Request) -> tuple[str, str, Path]:
         *_, symbol, route = request.url.path.split("/")  # /public/user/<token>/stock/<s>/<route>
         return route, symbol, FIXTURES / "gurufocus" / f"{route}.{symbol}.json"
     route = request.url.path.removeprefix("/stable/")
-    period = request.url.params.get("period")
+    period = None if route in _FISCAL_PERIOD_ROUTES else request.url.params.get("period")
     symbol = request.url.params.get(_SYMBOL_PARAMS.get(route, "symbol"), "")
     name = _FMP_ENDPOINTS.get(route, route)
     parts = (route.replace("/", "-"), period, symbol)

@@ -1,0 +1,107 @@
+{
+  "symbol": "ACME",
+  "period": "Q1",
+  "year": "2027",
+  "Cover Page": [
+    {
+      "Cover Page": [
+        "3 Months Ended"
+      ]
+    },
+    {
+      "Document Type": [
+        "10-Q"
+      ]
+    },
+    {
+      "Entity Registrant Name": [
+        "ACME Corporation"
+      ]
+    }
+  ],
+  "INCOME STATEMENTS": [
+    {
+      "INCOME STATEMENTS - USD ($) $ in Millions": [
+        "3 Months Ended",
+        "3 Months Ended"
+      ]
+    },
+    {
+      "items": [
+        "Sep. 30, 2026",
+        "Sep. 30, 2025"
+      ]
+    },
+    {
+      "Revenue": [
+        340,
+        310
+      ]
+    },
+    {
+      "Operating income": [
+        68,
+        60
+      ]
+    }
+  ],
+  "LEASES": [
+    {
+      "LEASES": [
+        "3 Months Ended"
+      ]
+    },
+    {
+      "items": [
+        "Sep. 30, 2026"
+      ]
+    },
+    {
+      "LEASES": [
+        "NOTE 9 - LEASES   We have operating and finance leases for warehouses, distribution centers, offices and certain equipment. Our leases have remaining lease terms of 1 year to 15 years, some of which include options to extend the leases for up to 5 years, and some of which include options to terminate the leases within 1 year.   The components of lease expense were as follows:   (In millions)    Three Months Ended September 30,    2026    2025    Operating lease cost    $\u00a041    $ 37    Finance lease cost:    Amortization of right-of-use assets    $ 9    $ 8    Interest on lease liabilities    2    2    Total finance lease cost    $ 11    $ 10      Supplemental cash flow information related to leases was as follows:   (In millions)    Three Months Ended September 30,    2026    2025    Cash paid for amounts included in the measurement of lease liabilities:    Operating cash flows from operating leases    $ 39    $ 35    Operating cash flows from finance leases    2    2    Financing cash flows from finance leases    7    6    Right-of-use assets obtained in exchange for lease obligations:    Operating leases    58    44    Finance leases    12    15      Supplemental balance sheet information related to leases was as follows:   (In millions, except lease term and discount rate)    September 30, 2026    June 30, 2026    Operating Leases    Operating lease right-of-use assets    $ 612    $ 590    Other current liabilities    $ 128    $ 121    Operating lease liabilities    531    515    Total operating lease liabilities    $ 659    $ 636    Finance Leases    Property and equipment, at cost    $ 214    $ 202    Accumulated depreciation    (61)    (52)    Property and equipment, net    $ 153    $ 150    Other current liabilities    $ 31    $ 29    Other long-term liabilities    129    128    Total finance lease liabilities    $ 160    $ 157    Weighted Average Remaining Lease Term    Operating leases    7 years    7 years    Finance leases    9 years    9 years    Weighted Average Discount Rate    Operating leases    3.4%    3.3%    Finance leases    4.1%    4.0%      The maturities of lease liabilities as of September 30, 2026 were as follows:   (In millions)    Operating Leases    Finance Leases    Year Ending June 30,    2027 (excluding the three months ended September 30, 2026)    $ 112    $ 26    2028    141    34    2029    118    31    2030    96    27    2031    74    22    Thereafter    211    41    Total lease payments    752    181    Less imputed interest    (93)    (21)    Total    $ 659    $ 160      As of September 30, 2026, we had additional leases, primarily for warehouses, that had not yet commenced of $12.5 million. These leases will commence between fiscal year 2027 and fiscal year 2028 with lease terms of 1 year to 10 years.   We also have leases with variable lease payments, primarily for property taxes and common area maintenance, which are expensed as incurred and were not material for the periods presented.  "
+      ]
+    }
+  ],
+  "Leases - Additional Informatio": [
+    {
+      "Leases - Additional Information (Detail) $ in Millions": [
+        "3 Months Ended"
+      ]
+    },
+    {
+      "items": [
+        "Sep. 30, 2026"
+      ]
+    },
+    {
+      "Additional leases, primarily for warehouses, that have  not yet\u00a0commenced": [
+        12.5
+      ]
+    },
+    {
+      "Lease terms, minimum/maximum ~ years": [
+        "1 year"
+      ]
+    }
+  ],
+  "Revenue by Product/Region": [
+    {
+      "Revenue by Product/Region (Detail) - USD ($) $ in Millions": [
+        "3 Months Ended",
+        "3 Months Ended"
+      ]
+    },
+    {
+      "Widgets": [
+        210,
+        190
+      ]
+    },
+    {
+      "Gadgets, other": [
+        130,
+        120
+      ]
+    }
+  ]
+}
