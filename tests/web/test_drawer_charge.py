@@ -205,6 +205,54 @@ def test_an_override_charges_a_row_whose_measure_was_off() -> None:
     assert _rows(im)[0] == [RETURNS, "11.0% through year 6, then to 13.0% in year 20", False]
 
 
+def _lifted_row(
+    measure: float | None, marginal_usable: bool = True, capital_free: bool = False
+) -> dict[str, Any]:
+    """A row whose measure with goodwill, 6.2% on the five-year marginal or 4.1% on the
+    three-year, is below the hurdle rate, with ``measure`` on capital without goodwill."""
+    im = _growth_row((0.15, 0.10), one_year=None, used="without-goodwill")
+    im["runway_return"] |= {
+        "marginal": 0.062,
+        "marginal_usable": marginal_usable,
+        "three_year": 0.041,
+        "without_goodwill": {
+            "marginal": measure,
+            "marginal_usable": measure is not None,
+            "three_year": None,
+            "measure": measure,
+            "capital_free": capital_free,
+        },
+    }
+    return im
+
+
+def test_a_return_read_without_goodwill_shows_both_measures() -> None:
+    """Method 4.6 rule 5: the measure below the hurdle rate, then the same measure on capital
+    without goodwill and intangibles, under the return by year, which shows the start."""
+    with_goodwill, without = "Return with goodwill", "Return without goodwill"
+    assert _rows(_lifted_row(0.527))[2:] == [
+        [with_goodwill, "6.2%, below the hurdle rate", True],
+        [without, "52.7%", True],
+    ]
+    assert _rows(_lifted_row(0.223, marginal_usable=False))[2:] == [
+        [with_goodwill, "4.1%, below the hurdle rate", True],
+        [without, "22.3%", True],
+    ]
+    assert _rows(_lifted_row(None, capital_free=True))[2:] == [
+        [with_goodwill, "6.2%, below the hurdle rate", True],
+        [without, "no capital without goodwill", False],
+    ]
+
+
+def test_a_row_on_another_measure_shows_no_goodwill_rows() -> None:
+    """The measures without goodwill are recorded on every row (MGCO's golden holds them) and
+    drawn only where the charge read them."""
+    assert [row[0] for row in _rows(_golden("MGCO"))] == [RETURNS, GROWTH, NEWEST]
+    floored = _lifted_row(0.05)
+    floored["runway_return"]["used"] = "floor"
+    assert [row[0] for row in _rows(floored)] == [RETURNS, GROWTH]
+
+
 def test_no_newest_year_figure_leaves_its_row_out() -> None:
     rows = _rows(_growth_row((0.15, 0.10), one_year=None))
     assert [row[0] for row in rows] == [RETURNS, GROWTH]

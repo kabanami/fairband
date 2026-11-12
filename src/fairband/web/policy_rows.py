@@ -36,6 +36,7 @@ READ_ONLY: dict[str, str] = {
     "implied_margin_bounds": "fraction",
     "inflation_max": "fraction",
     "fx_stale_days": "days",
+    "return_without_goodwill_cap": "fraction",
 }
 # The derived values, with their unit and the source line the file no longer holds.
 DERIVED: dict[str, tuple[str, str]] = {

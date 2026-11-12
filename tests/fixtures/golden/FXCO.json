@@ -656,60 +656,70 @@
    "by_year": [
     {
      "average_capital": 6905600000.0,
+     "average_goodwill_and_intangibles": 1248000000.0,
      "nopat": 1069200000.0,
      "roic": 0.15483086190917517,
      "year": 2016
     },
     {
      "average_capital": 7458048000.000001,
+     "average_goodwill_and_intangibles": 1347840000.0000002,
      "nopat": 1259712000.0000002,
      "roic": 0.16890639481000927,
      "year": 2017
     },
     {
      "average_capital": 8054691840.000002,
+     "average_goodwill_and_intangibles": 1455667200.0000005,
      "nopat": 1473863040.0000005,
      "roic": 0.1829819277108434,
      "year": 2018
     },
     {
      "average_capital": 8699067187.2,
+     "average_goodwill_and_intangibles": 1572120576.0000005,
      "nopat": 1714216089.6000004,
      "roic": 0.1970574606116775,
      "year": 2019
     },
     {
      "average_capital": 9394992562.176003,
+     "average_goodwill_and_intangibles": 1697890222.0800009,
      "nopat": 1983592903.6800008,
      "roic": 0.2111329935125116,
      "year": 2020
     },
     {
      "average_capital": 10146591967.150085,
+     "average_goodwill_and_intangibles": 1833721439.8464007,
      "nopat": 2285099025.039361,
      "roic": 0.22520852641334566,
      "year": 2021
     },
     {
      "average_capital": 10958319324.522093,
+     "average_goodwill_and_intangibles": 1980419155.034113,
      "nopat": 2622151131.232667,
      "roic": 0.2392840593141798,
      "year": 2022
     },
     {
      "average_capital": 11834984870.48386,
+     "average_goodwill_and_intangibles": 2138852687.4368422,
      "nopat": 2998506940.6566496,
      "roic": 0.25335959221501386,
      "year": 2023
     },
     {
      "average_capital": 12781783660.12257,
+     "average_goodwill_and_intangibles": 2309960902.43179,
      "nopat": 3418297912.348582,
      "roic": 0.26743512511584805,
      "year": 2024
     },
     {
      "average_capital": 13804326352.932377,
+     "average_goodwill_and_intangibles": 2494757774.626333,
      "nopat": 3886064995.0910187,
      "roic": 0.28151065801668207,
      "year": 2025
@@ -725,7 +735,14 @@
    "ten_year": 0.22701985166668598,
    "three_year": 0.26815659156320476,
    "used": "marginal",
-   "value": 0.43146474766762194
+   "value": 0.43146474766762194,
+   "without_goodwill": {
+    "capital_free": false,
+    "marginal": 0.5266407949472444,
+    "marginal_usable": true,
+    "measure": 0.5266407949472444,
+    "three_year": 0.32730878087861753
+   }
   },
   "sbc_basis": "includes-sbc",
   "shares": 100000000.0,

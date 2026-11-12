@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v11.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v12.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v10 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v11 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -23,11 +23,14 @@ count's; either value outside 0 to 0.5 fails at load. Nor are the three values v
 2026-11-10, section 9): the inflation bound, which fails at load outside 0 to 1, the ends
 excluded, and the stale-rate bound and the rate history depth (``refresh.fx_history_years``),
 which fail below 1. The inflation table they work beside is a packaged table of its own
-(``fairband.policy.inflation``), as the tax table is.
+(``fairband.policy.inflation``), as the tax table is. Nor is the value v12 adds (``method.md`` 4.6
+rule 5), the cap on the runway return read on capital without goodwill and intangibles: it fails
+at load unless above 20%, the highest required return a setting allows, and at most 100%.
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
-four nominal USD rates, the required return, the terminal growth, the inflation addition and each
-Base Rate Book class's ``sales_p90_5y``, by the currency's inflation differential d, each
+five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap
+on the return without goodwill and each Base Rate Book class's ``sales_p90_5y``, by the
+currency's inflation differential d, each
 (1 + rate) × (1 + d) − 1; every rate derived from them (the Wide moat's terminal return cap)
 follows. The flag thresholds and the margin bounds are not restated, and the version, the hash
 and the settings hash stay: the restated policy is the same policy read in another currency.
@@ -44,7 +47,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v11.toml"
+_POLICY_FILE = "fairband-policy-v12.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -114,6 +117,7 @@ class Policy:
     marginal_return_span_years: int
     marginal_capital_growth_min: float
     fallback_return_years: int
+    return_without_goodwill_cap: float
     fade_years: int
     high_growth_years: int
     margin_convergence_year: int
@@ -189,6 +193,7 @@ def in_currency(policy: Policy, differential: float) -> Policy:
         required_return=restated(policy.required_return),
         terminal_growth=restated(policy.terminal_growth),
         inflation_addition=restated(policy.inflation_addition),
+        return_without_goodwill_cap=restated(policy.return_without_goodwill_cap),
         base_rates=tuple(
             replace(c, sales_p90_5y=restated(c.sales_p90_5y)) for c in policy.base_rates
         ),
@@ -196,7 +201,7 @@ def in_currency(policy: Policy, differential: float) -> Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v11 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v12 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -242,6 +247,7 @@ def load_policy(path: Path | None = None) -> Policy:
         marginal_return_span_years=read("marginal_return_span_years", _whole),
         marginal_capital_growth_min=read("marginal_capital_growth_min", _num),
         fallback_return_years=read("fallback_return_years", _whole),
+        return_without_goodwill_cap=read("return_without_goodwill_cap", _num),
         fade_years=read("fade_years", _whole),
         high_growth_years=read("high_growth_years", _whole),
         margin_convergence_year=read("margin_convergence_year", _whole),

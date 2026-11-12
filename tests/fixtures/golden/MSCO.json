@@ -491,60 +491,70 @@
    "by_year": [
     {
      "average_capital": 16766000000.0,
+     "average_goodwill_and_intangibles": 3030000000.0,
      "nopat": 3060000000.0,
      "roic": 0.1825122271263271,
      "year": 2016
     },
     {
      "average_capital": 17101320000.0,
+     "average_goodwill_and_intangibles": 3090600000.0,
      "nopat": 3121200000.0,
      "roic": 0.1825122271263271,
      "year": 2017
     },
     {
      "average_capital": 17443346400.0,
+     "average_goodwill_and_intangibles": 3152412000.0000005,
      "nopat": 3183624000.000001,
      "roic": 0.18251222712632714,
      "year": 2018
     },
     {
      "average_capital": 17792213328.0,
+     "average_goodwill_and_intangibles": 3215460240.0000005,
      "nopat": 3247296480.0,
      "roic": 0.1825122271263271,
      "year": 2019
     },
     {
      "average_capital": 18148057594.56,
+     "average_goodwill_and_intangibles": 3279769444.8,
      "nopat": 3312242409.6000004,
      "roic": 0.1825122271263271,
      "year": 2020
     },
     {
      "average_capital": 18511018746.451202,
+     "average_goodwill_and_intangibles": 3345364833.6960006,
      "nopat": 3378487257.792001,
      "roic": 0.18251222712632711,
      "year": 2021
     },
     {
      "average_capital": 18881239121.380226,
+     "average_goodwill_and_intangibles": 3412272130.3699207,
      "nopat": 3446057002.94784,
      "roic": 0.1825122271263271,
      "year": 2022
     },
     {
      "average_capital": 19258863903.80783,
+     "average_goodwill_and_intangibles": 3480517572.977319,
      "nopat": 3514978143.006797,
      "roic": 0.18251222712632706,
      "year": 2023
     },
     {
      "average_capital": 19644041181.883987,
+     "average_goodwill_and_intangibles": 3550127924.436865,
      "nopat": 3585277705.8669333,
      "roic": 0.1825122271263271,
      "year": 2024
     },
     {
      "average_capital": 20036922005.521667,
+     "average_goodwill_and_intangibles": 3621130482.925603,
      "nopat": 3656983259.984272,
      "roic": 0.1825122271263271,
      "year": 2025
@@ -560,7 +570,14 @@
    "ten_year": 0.1825122271263271,
    "three_year": 0.1825122271263271,
    "used": "three-year",
-   "value": 0.1825122271263271
+   "value": 0.1825122271263271,
+   "without_goodwill": {
+    "capital_free": false,
+    "marginal": 0.22277227722772283,
+    "marginal_usable": false,
+    "measure": 0.22277227722772275,
+    "three_year": 0.22277227722772275
+   }
   },
   "shares": 1000000000.0,
   "stable_growth": 43.84887769764159,

@@ -22,17 +22,30 @@ The runway return feeds the charge in years 1 to N−1. It is the marginal retur
 the change in NOPAT over the change in average capital from the kept year the policy's span
 before the newest to the newest, when that is usable: capital grew, by at least the policy's
 share of the earlier capital, and NOPAT grew. Otherwise it is the aggregate over the policy's
-fallback years, the last ones kept. The chosen measure is floored at r, with no cap. When the
+fallback years, the last ones kept. A chosen measure at or above r stands, with no cap. When the
 marginal is not usable and the fallback years' capital sums to zero or below, the runway charge
 is off. With fewer than ``min_years`` kept years the runway return is unavailable, and the charge
 uses the terminal return in every year. Beside it the row records the newest year's marginal
 return, the change in NOPAT over the change in average capital from the kept year before the
 newest to the newest, with no usability test: it is shown and never used.
 
+A chosen measure below r is read again on capital without goodwill and intangibles (``method.md``
+4.6 rule 5): a past purchase's price sits in the capital and can push the measure below r while
+the business itself earns more on what it reinvests. The same order runs on each kept year's
+average capital less its average goodwill and intangibles, NOPAT unchanged: the marginal return
+when usable there, else the fallback aggregate. Above r, the charge starts at that return, at
+most the policy's ``return_without_goodwill_cap``, since the measure leaves out capital the
+company paid for. When the marginal is not usable there and the fallback years' capital without
+goodwill sums to zero or below while their NOPAT sums above zero, the business needs no capital
+of its own and the charge starts at the cap. Otherwise the floor stands: the charge starts at r.
+The measures without goodwill are recorded on every row with ``min_years`` kept years, for the
+agent, whichever measure the charge took.
+
 The terminal return is r unless the moat is Wide. For Wide it is the chosen measure before the
-floor, capped at the policy's cap and never below r; the cap when the runway charge is off; r
-when the runway return is unavailable. ``terminal_roic`` is the same rule on a given ROIC, for
-the sensitivity.
+floor, capped at the policy's cap and never below r; on a row whose charge starts at the return
+without goodwill, that start under the same cap; the cap when the runway charge is off; r when
+the runway return is unavailable. ``terminal_roic`` is the same rule on a given ROIC, for the
+sensitivity.
 """
 
 from collections.abc import Sequence
@@ -78,12 +91,15 @@ class CapitalYear:
 
 @dataclass(frozen=True)
 class RoicYear:
-    """A kept year: ``roic`` is ``None`` when the average capital is exactly zero."""
+    """A kept year: ``roic`` is ``None`` when the average capital is exactly zero. The average
+    capital holds ``average_goodwill_and_intangibles``, the mean of goodwill plus intangibles at
+    the year's opening and closing balance sheets, a line not presented counting as nil."""
 
     year: int
     nopat: float
     average_capital: float
     roic: float | None
+    average_goodwill_and_intangibles: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -94,8 +110,27 @@ class RoicResult:
     flags: tuple[Flag, ...]
 
 
-# The measure the runway return took: "floor" when the chosen measure was below r.
-Used = Literal["marginal", "three-year", "floor", "off", "unavailable"]
+# The measure the runway return took. When the chosen measure was below r: "without-goodwill"
+# when the return on capital without goodwill and intangibles lifted the start above r, else
+# "floor".
+Used = Literal["marginal", "three-year", "without-goodwill", "floor", "off", "unavailable"]
+
+
+@dataclass(frozen=True)
+class WithoutGoodwill:
+    """The runway measures read on capital without goodwill and intangibles, NOPAT unchanged.
+
+    ``measure`` is the marginal return when usable there, else the fallback aggregate
+    (``three_year``, ``None`` when its capital sums to zero or below). ``capital_free`` says the
+    marginal is not usable there and the fallback years' capital sums to zero or below while
+    their NOPAT sums above zero: the business needs no capital of its own.
+    """
+
+    marginal: float | None
+    marginal_usable: bool
+    three_year: float | None
+    measure: float | None
+    capital_free: bool
 
 
 @dataclass(frozen=True)
@@ -103,10 +138,13 @@ class RunwayReturn:
     """The return the charge uses in the runway years and the measures it was chosen from.
 
     ``chosen`` is the measure before the floor (``None`` when the charge is off or the return is
-    unavailable). ``value`` is what the charge uses: ``chosen`` floored at r, or the terminal
+    unavailable). ``value`` is what the charge uses: ``chosen`` when it is at or above r; below
+    r, the return without goodwill under its cap when that is above r, else r; the terminal
     return when the charge is off or the return is unavailable. ``flags`` are the ones this step
     raises, which follow those of ``aggregate_roic``. ``one_year`` is the newest year's marginal
     return, shown and never used: ``None`` with fewer than two kept years or no change in capital.
+    ``without_goodwill`` holds the measures on capital without goodwill and intangibles, read by
+    the charge only when ``chosen`` is below r: ``None`` when the return is unavailable.
     """
 
     used: Used
@@ -119,6 +157,7 @@ class RunwayReturn:
     charge_off: bool
     flags: tuple[Flag, ...]
     one_year: float | None
+    without_goodwill: WithoutGoodwill | None = None
 
 
 def invested_capital(y: CapitalYear) -> float | None:
@@ -157,7 +196,8 @@ def aggregate_roic(years: Sequence[CapitalYear], min_years: int = _MIN_YEARS) ->
             continue
         average = (start + end) / 2
         roic = profit / average if average != 0 else None
-        kept.append((RoicYear(closing.year, profit, average, roic), opening, closing))
+        goodwill = (_goodwill_and_intangibles(opening) + _goodwill_and_intangibles(closing)) / 2
+        kept.append((RoicYear(closing.year, profit, average, roic, goodwill), opening, closing))
     kept = kept[-_WINDOW:]
     by_year = tuple(row for row, _, _ in kept)
     n = len(by_year)
@@ -242,14 +282,36 @@ def marginal_return(
     return delta_nopat / delta_capital, usable
 
 
+def without_goodwill(by_year: Sequence[RoicYear], policy: Policy) -> WithoutGoodwill:
+    """The runway measures of ``by_year`` on capital without goodwill and intangibles: each kept
+    year's average capital less its average goodwill and intangibles, its NOPAT unchanged, under
+    the policy's marginal span, usability test and fallback window."""
+    rows = tuple(
+        replace(
+            y, average_capital=y.average_capital - y.average_goodwill_and_intangibles, roic=None
+        )
+        for y in by_year
+    )
+    span, growth_min = policy.marginal_return_span_years, policy.marginal_capital_growth_min
+    marginal, usable = marginal_return(rows, span, growth_min)
+    n = policy.fallback_return_years
+    three_year, _ = window_aggregate(rows, n)
+    capital_free = not usable and three_year is None and sum(y.nopat for y in rows[-n:]) > 0
+    return WithoutGoodwill(
+        marginal, usable, three_year, marginal if usable else three_year, capital_free
+    )
+
+
 def runway_return(
     result: RoicResult, moat: Moat, policy: Policy, min_years: int = _MIN_YEARS
 ) -> RunwayReturn:
     """The return the charge uses in years 1 to N−1, from the kept years of ``result``: the
-    marginal return when usable, else the aggregate over the fallback years, floored at r. The
-    charge is off when the marginal is not usable and the fallback years' capital sums to zero or
-    below; the return is unavailable with fewer than ``min_years`` kept years. On every branch it
-    records the newest year's marginal return, which the charge never uses.
+    marginal return when usable, else the aggregate over the fallback years. A measure below r
+    gives way to the return on capital without goodwill and intangibles, under its cap, when that
+    is above r, and to r otherwise. The charge is off when the marginal is not usable and the
+    fallback years' capital sums to zero or below; the return is unavailable with fewer than
+    ``min_years`` kept years. On every branch it records the newest year's marginal return, which
+    the charge never uses.
     """
     r = policy.required_return
     ten_year = result.aggregate
@@ -266,9 +328,10 @@ def runway_return(
     n = policy.fallback_return_years
     three_year, _ = window_aggregate(result.by_year, n)
     chosen = marginal if usable else three_year
+    organic = without_goodwill(result.by_year, policy)
     if chosen is None:  # the marginal is not usable and the fallback capital sums to zero or below
         off = RunwayReturn(
-            "off", marginal, False, three_year, ten_year, None, 0.0, True, (), one_year
+            "off", marginal, False, three_year, ten_year, None, 0.0, True, (), one_year, organic
         )
         terminal = terminal_return(off, moat, policy)
         zeroed = Flag(
@@ -282,26 +345,65 @@ def runway_return(
 
     flags: tuple[Flag, ...] = ()
     used: Used = "marginal" if usable else "three-year"
+    value = chosen
     if chosen < r:
-        used = "floor"
-        flags = (
-            Flag(
-                "return-floored",
-                "Return floored",
-                f"The {_measure(usable)} return of {chosen:.1%} is below the required return, "
-                f"so the charge uses {r:.1%}.",
-            ),
-        )
+        below = f"The {_measure(usable)} return of {chosen:.1%} is below the required return"
+        lifted = _lifted(organic, policy)
+        if lifted is None:
+            used, value = "floor", r
+            flags = (
+                Flag("return-floored", "Return floored", f"{below}, so the charge uses {r:.1%}."),
+            )
+        else:
+            used, value = "without-goodwill", lifted
+            flags = (
+                Flag(
+                    "return-without-goodwill",
+                    "Return without goodwill",
+                    f"{below}. {_lifted_words(organic, lifted, policy)}",
+                ),
+            )
     return RunwayReturn(
-        used, marginal, usable, three_year, ten_year, chosen, max(r, chosen), False, flags, one_year
+        used, marginal, usable, three_year, ten_year, chosen, value, False, flags, one_year, organic
+    )
+
+
+def _lifted(organic: WithoutGoodwill, policy: Policy) -> float | None:
+    """The return a charge whose measure is below r starts at instead, from the measures without
+    goodwill and intangibles: the cap when the business needs no capital of its own; the measure
+    when it is above r, at most the cap; ``None`` when the floor stands."""
+    cap = policy.return_without_goodwill_cap
+    if organic.capital_free:
+        return cap
+    if organic.measure is not None and organic.measure > policy.required_return:
+        return min(organic.measure, cap)
+    return None
+
+
+def _lifted_words(organic: WithoutGoodwill, lifted: float, policy: Policy) -> str:
+    """The second sentence of the ``return-without-goodwill`` flag: the measure the start came
+    from, and the cap where it applied."""
+    if organic.measure is None:  # the business needs no capital of its own
+        return (
+            "Capital without goodwill and intangibles sums to zero or below over the last "
+            f"{policy.fallback_return_years} ROIC years, so the charge starts at the cap, "
+            f"{lifted:.1%}."
+        )
+    capped = " above the cap," if organic.measure > lifted else ""
+    return (
+        f"On capital without goodwill and intangibles the {_measure(organic.marginal_usable)} "
+        f"return is {organic.measure:.1%},{capped} so the charge starts at {lifted:.1%}."
     )
 
 
 def terminal_return(rr: RunwayReturn, moat: Moat, policy: Policy) -> float:
-    """The terminal return: Wide reads the chosen measure before the floor, under the rule of
+    """The terminal return: Wide reads the chosen measure before the floor, or the charge's
+    start on a row that starts at the return without goodwill, under the rule of
     ``terminal_roic``, and takes the cap when the runway charge is off; otherwise r."""
     if moat == "Wide" and rr.used == "off":
         return policy.wide_terminal_roic_cap
+    if rr.used == "without-goodwill":
+        return terminal_roic(rr.value, moat, policy)
     return terminal_roic(rr.chosen, moat, policy)
 
 
@@ -320,20 +422,40 @@ def runway_note(rr: RunwayReturn) -> str:
             return "five-year marginal return on new capital"
         case "three-year":
             return "three-year aggregate ROIC (marginal not usable)"
+        case "without-goodwill":
+            return f"{_without_goodwill_note(rr)}; with them the {_was(rr)}"
         case "floor":
-            return (
-                f"floored at the required return; the {_measure(rr.marginal_usable)} was "
-                f"{rr.chosen:.1%}"
-            )
+            return f"floored at the required return; the {_was(rr)}"
         case "off":
             return "charge off: capital at or below zero"
         case "unavailable":
             return f"unavailable: fewer than {_MIN_YEARS} ROIC years"
 
 
+def _was(rr: RunwayReturn) -> str:
+    """The measure below r that the charge did not take, as a note names it."""
+    return f"{_measure(rr.marginal_usable)} was {rr.chosen:.1%}"
+
+
+def _without_goodwill_note(rr: RunwayReturn) -> str:
+    """The start of the note on a runway return read on capital without goodwill."""
+    organic = rr.without_goodwill
+    if organic is None or organic.measure is None:
+        return "the cap: capital without goodwill and intangibles at or below zero"
+    words = (
+        f"{_measure(organic.marginal_usable)} return on capital without goodwill and intangibles"
+    )
+    return f"{words}, {organic.measure:.1%}, capped" if organic.measure > rr.value else words
+
+
 def _measure(marginal_usable: bool) -> str:
-    """The measure a floored runway return was chosen from, as a flag or a note names it."""
+    """A runway measure as a flag or a note names it: the marginal when usable, else the
+    fallback aggregate."""
     return "five-year marginal" if marginal_usable else "three-year"
+
+
+def _goodwill_and_intangibles(y: CapitalYear) -> float:
+    return _nil(y.goodwill) + _nil(y.intangibles)
 
 
 def _nil(x: float | None) -> float:

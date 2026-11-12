@@ -191,7 +191,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/1.1"
+    assert METHOD_VERSION == "fairband-mechanical/1.2"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -235,6 +235,7 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
         "three_year": expected.three_year,
         "ten_year": expected.ten_year,
         "one_year": expected.one_year,
+        "without_goodwill": asdict(expected.without_goodwill),  # type: ignore[arg-type]
         "value": expected.value,
     }
     assert (rr["used"], rr["marginal_usable"], rr["ten_year"]) == (
@@ -576,6 +577,38 @@ def test_a_return_below_r_is_floored(
     assert floored.sentence.startswith("The five-year marginal return of 2.0%")
     [note] = [i.note for i in r.inputs if i.name == "runway_return"]
     assert note == "floored at the required return; the five-year marginal was 2.0%"
+
+
+def test_a_return_below_r_starts_at_the_return_without_goodwill(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # goodwill at five times revenue, as after a large purchase: the five-year marginal return
+    # falls to 6.2%, below r, while the business earns 52.7% on its own capital; the charge
+    # starts at the cap in place of r, so growth adds value again (method 4.6 rule 5)
+    bought = tuple(replace(y, goodwill=50 * (y.goodwill or 0)) for y in mg_inputs.capital_years)
+    r = value_company(replace(mg_inputs, capital_years=bought), deciles, policy, TODAY)
+    im = r.intermediates
+    rr = im["runway_return"]
+    assert rr["used"] == "without-goodwill" and rr["marginal_usable"]
+    assert rr["marginal"] == pytest.approx(0.0625, abs=5e-5)
+    assert rr["without_goodwill"]["measure"] == pytest.approx(0.5266, abs=5e-5)
+    assert rr["value"] == policy.return_without_goodwill_cap == 0.25
+    assert im["terminal_roic"] == policy.wide_terminal_roic_cap  # a Wide moat: 25% under r + 4
+    assert im["charge"]["return_by_year"][0] == 0.25
+    assert r.refusal is None and r.value is not None and r.value > VALUE_AT_R
+    assert "return-floored" not in codes(r)
+    lifted = next(f for f in r.flags if f.code == "return-without-goodwill")
+    assert lifted.sentence == (
+        "The five-year marginal return of 6.2% is below the required return. On capital without "
+        "goodwill and intangibles the five-year marginal return is 52.7%, above the cap, so the "
+        "charge starts at 25.0%."
+    )
+    [note] = [i.note for i in r.inputs if i.name == "runway_return"]
+    assert note == (
+        "five-year marginal return on capital without goodwill and intangibles, 52.7%, capped; "
+        "with them the five-year marginal was 6.2%"
+    )
+    assert result_from_json(result_to_json(r)) == r
 
 
 def test_growth_above_return_flag(
@@ -988,6 +1021,28 @@ def test_mature_stable_raises_the_return_floored_flag(
         assert note == "floored at the required return; the three-year was 1.8%"
         assert im["terminal_roic"] == policy.required_return
         assert r.value == pytest.approx(im["epv"])
+
+
+def test_mature_stable_starts_at_the_return_without_goodwill(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    # goodwill at five times revenue: the three-year return falls to 2.6%, below r, while the
+    # business earns 22.3% on its own capital, under the cap; the charge starts there, so the
+    # 3% growth adds value and the row is worth more than its EPV (method 4.6 rule 5)
+    bought = tuple(replace(y, goodwill=50 * (y.goodwill or 0)) for y in ms_inputs.capital_years)
+    r = value_company(replace(ms_inputs, capital_years=bought), deciles, policy, TODAY)
+    im = r.intermediates
+    rr = im["runway_return"]
+    assert rr["used"] == "without-goodwill" and not rr["marginal_usable"]
+    assert rr["three_year"] == pytest.approx(0.0264, abs=5e-5)
+    assert rr["value"] == rr["without_goodwill"]["measure"] == pytest.approx(0.2228, abs=5e-5)
+    assert "return-without-goodwill" in codes(r) and "return-floored" not in codes(r)
+    [note] = [i.note for i in r.inputs if i.name == "runway_return"]
+    assert note == (
+        "three-year return on capital without goodwill and intangibles; with them the "
+        "three-year was 2.6%"
+    )
+    assert r.value is not None and r.value > im["epv"]
 
 
 def test_mature_stable_without_the_nri_gap(
@@ -1868,7 +1923,7 @@ def test_result_cites_the_settings_hash(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
-    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.1"
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.2"
     custom = apply_overlay(policy, {"required_return": 0.1})
     valued = value_company(mg_inputs, deciles, custom, TODAY)
     assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH

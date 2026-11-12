@@ -54,11 +54,12 @@ def flag_codes(r: ValuationResult) -> list[str]:
 # --- the rates in the currency (spec 7.3, 11.1) ---
 
 
-def test_in_currency_restates_the_four_rates(policy: Policy) -> None:
+def test_in_currency_restates_the_five_rates(policy: Policy) -> None:
     local = in_currency(policy, 0.02)
     assert local.required_return == pytest.approx(0.11180)
     assert local.terminal_growth == pytest.approx(0.05060)
     assert local.inflation_addition == pytest.approx(0.04040)
+    assert local.return_without_goodwill_cap == pytest.approx(1.25 * 1.02 - 1)
     for found, base in zip(local.base_rates, policy.base_rates, strict=True):
         assert found.sales_p90_5y == pytest.approx((1 + base.sales_p90_5y) * 1.02 - 1)
         assert (found.upper_musd, found.median, found.label) == (

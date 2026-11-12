@@ -600,8 +600,9 @@ def check(policy: Policy) -> None:
     outside every one. A rule between two settings names both, in the order of 8.2 and joined by
     a comma, so r against g_T reads ``"required_return, terminal_growth: …"``; the Settings page
     then stands the sentence beside the one the user changed (B-75). Then the ranges of the two
-    values policy v10 adds and the three v11 adds, which are not settings and so are only ever
-    the file's (spec 2026-11-09, section 11; spec 2026-11-10, section 9)."""
+    values policy v10 adds, the three v11 adds and the one v12 adds, which are not settings and
+    so are only ever the file's (spec 2026-11-09, section 11; spec 2026-11-10, section 9;
+    ``method.md`` 4.6 rule 5)."""
     p, u, f = policy, policy.universe, policy.refresh
     # A. Valuation
     if not 0.04 <= p.required_return <= 0.20:
@@ -739,3 +740,5 @@ def check(policy: Policy) -> None:
         raise ValueError("fx_stale_days: must be at least 1 day")
     if not f.fx_history_years >= 1:
         raise ValueError("refresh.fx_history_years: must be at least 1 year")
+    if not 0.20 < p.return_without_goodwill_cap <= 1:
+        raise ValueError("return_without_goodwill_cap: must be above 20% and at most 100%")

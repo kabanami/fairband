@@ -300,6 +300,11 @@ pays out less than nothing: the owners put money in to fund the growth.</p>
 in equal steps to the terminal return by the end of the runway
 <a class="app-cite" href="#methodology/src-template">[Damodaran templates]</a>. A company with no
 growth above the belief starts the fade in year 1.</p>
+<p class="body">A large purchase can push a company's measured return below the hurdle rate, because
+the price paid sits in its capital. In that case Fairband measures the return again without goodwill
+and acquired intangibles, the price of past purchases. When that return is above the hurdle rate,
+the charge starts there, at most <span data-policy="return_without_goodwill_cap">—</span>.
+Otherwise the charge starts at the hurdle rate, and growth adds nothing to the value.</p>
 
 <h3 class="heading">The moat and the runway</h3>
 <p class="body">A moat is a lasting edge over competitors
@@ -958,9 +963,12 @@ ten.</span></li>
 <li><span class="label">Charge zeroed</span> <code class="fb-tag figure-sm">charge-zeroed</code>
 <span class="body app-flags__what">Measured capital is zero or less, so the runway years carry no
 charge.</span></li>
+<li><span class="label">Return without goodwill</span> <code class="fb-tag figure-sm">return-without-goodwill</code>
+<span class="body app-flags__what">The return on new capital was below the hurdle rate. Without
+goodwill and acquired intangibles it was above, so the charge starts there.</span></li>
 <li><span class="label">Return floored</span> <code class="fb-tag figure-sm">return-floored</code>
 <span class="body app-flags__what">The company's return on new capital was below the hurdle rate,
-so the hurdle rate replaced it.</span></li>
+with and without goodwill, so the hurdle rate replaced it.</span></li>
 <li><span class="label">Growth above return</span> <code class="fb-tag figure-sm">growth-above-return</code>
 <span class="body app-flags__what">The growth a year pays for exceeds its return, so that year
 pays out less than nothing.</span></li>

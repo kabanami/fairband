@@ -442,6 +442,7 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
     for code in (
         "few-analysts",
         "margin-direction-disagrees",
+        "return-without-goodwill",
         "return-floored",
         "ncav-floor",
         "margin-ramp-in-dollars",

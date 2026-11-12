@@ -491,8 +491,21 @@ def test_a_methodology_section_reads_the_user_s_settings(client: TestClient) -> 
     value = _get(client, "/api/methodology/value")["text"]
     assert "Every route discounts at the hurdle rate, 10.0%." in value
     settings = _get(client, "/api/methodology/your-settings")["text"]
-    assert "The policy file is fairband-policy-v11." in settings
+    assert "The policy file is fairband-policy-v12." in settings
     assert settings.endswith("1 setting differs from the defaults.")
+
+
+def test_the_value_section_says_how_a_return_below_the_hurdle_rate_is_read(
+    client: TestClient,
+) -> None:
+    """Method 4.6 rules 5 and 6 in the reader's words, the cap from the policy."""
+    value = " ".join(_get(client, "/api/methodology/value")["text"].split())
+    assert (
+        "Fairband measures the return again without goodwill and acquired intangibles, the "
+        "price of past purchases."
+    ) in value
+    assert "the charge starts there, at most 25.0%." in value
+    assert "Otherwise the charge starts at the hurdle rate" in value
 
 
 def test_the_classifier_section_reads_the_decile_edges(client: TestClient) -> None:

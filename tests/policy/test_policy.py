@@ -40,10 +40,14 @@ V10_VALUES = {"step_series_gap_max", "split_implied_count_tolerance"}
 # The two values policy v11 adds, the inflation bound and the stale-rate bound; it also adds the
 # rate history depth to ``refresh`` (spec 2026-11-10, section 9).
 V11_VALUES = {"inflation_max", "fx_stale_days"}
+V11_SHA256 = "97b03abbddcf6c8dccec9a61b56e4d2248c152e85a365dc2119667ee62992c95"
+# The value policy v12 adds, the cap on the return read on capital without goodwill and
+# intangibles (method 4.6 rule 5; founder 2026-11-12).
+V12_VALUES = {"return_without_goodwill_cap"}
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v11.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v12.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -67,7 +71,7 @@ def _packaged_with(tmp_path: Path, name: str, value: str) -> Path:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v11" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v12" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -102,9 +106,10 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v11_is_the_packaged_policy() -> None:
+def test_v12_is_the_packaged_policy() -> None:
     policy = load_policy()
-    assert policy.version == "fairband-policy-v11"
+    assert policy.version == "fairband-policy-v12"
+    assert policy.return_without_goodwill_cap == 0.25
     assert policy.inflation_max == 0.10
     assert policy.fx_stale_days == 7
     assert policy.refresh.fx_history_years == 3
@@ -143,7 +148,7 @@ def test_v11_is_the_packaged_policy() -> None:
         "tax_rate": (0.0, 0.50),
         "sales_to_capital": (0.1, 10.0),
     }
-    for name in sorted(V8_VALUES | V9_VALUES | V10_VALUES | V11_VALUES):
+    for name in sorted(V8_VALUES | V9_VALUES | V10_VALUES | V11_VALUES | V12_VALUES):
         assert policy.raw["values"][name]["source"].strip(), name
     assert policy.own_sales_to_capital_min_share == 0.5
     assert policy.loss_ramp_margin_bound == -1.0
@@ -323,7 +328,7 @@ def test_v11_is_v10_with_the_three_values_added() -> None:
     history depth and its source; v11 adds the inflation bound and the stale-rate bound, none a
     setting (spec 2026-11-10, section 9)."""
     v10 = _file_values("fairband-policy-v10.toml")
-    v11 = load_policy().raw["values"]
+    v11 = _file_values("fairband-policy-v11.toml")
     assert v11.keys() - v10.keys() == V11_VALUES
     kept = v10.keys() - {"refresh"}
     assert {k: v11[k] for k in kept} == {k: v10[k] for k in kept}
@@ -335,6 +340,33 @@ def test_v11_is_v10_with_the_three_values_added() -> None:
         assert "spec 2026-11-10" in v11[name]["source"], name
     settings = {s.name for s in SETTINGS}
     assert not settings & V11_VALUES and "refresh.fx_history_years" not in settings
+
+
+def test_v12_is_v11_with_the_cap_added() -> None:
+    """Every v11 value loads unchanged from v12; v12 adds the cap on the return read on capital
+    without goodwill and intangibles, not a setting (method 4.6 rule 5)."""
+    v11 = _file_values("fairband-policy-v11.toml")
+    v12 = load_policy().raw["values"]
+    assert v12.keys() - v11.keys() == V12_VALUES
+    assert {k: v12[k] for k in v11} == v11
+    assert "founder 2026-11-12" in v12["return_without_goodwill_cap"]["source"]
+    assert "no source gives the number" in v12["return_without_goodwill_cap"]["source"]
+    assert not {s.name for s in SETTINGS} & V12_VALUES
+
+
+@pytest.mark.parametrize("value", ["0.20", "0.09", "1.01", "nan"])
+def test_a_cap_outside_its_range_is_refused(tmp_path: Path, value: str) -> None:
+    """The cap is no setting, so the file is the only way in. It stays above 20%, the highest
+    required return a setting allows, so the capped return is always above r."""
+    rule = "return_without_goodwill_cap: must be above 20% and at most 100%"
+    with pytest.raises(ValueError, match=f"^{re.escape(rule)}$"):
+        load_policy(_packaged_with(tmp_path, "return_without_goodwill_cap", value))
+
+
+@pytest.mark.parametrize("value", ["0.201", "1.0"])
+def test_a_cap_at_either_end_loads(tmp_path: Path, value: str) -> None:
+    policy = load_policy(_packaged_with(tmp_path, "return_without_goodwill_cap", value))
+    assert policy.return_without_goodwill_cap == float(value)
 
 
 @pytest.mark.parametrize(
@@ -522,6 +554,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v11_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v11`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v11.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V11_SHA256
 
 
 def test_v10_is_byte_identical_under_its_hash() -> None:

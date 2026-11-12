@@ -1620,9 +1620,13 @@
   /* The charge's rows (spec 2026-11-09 6.2 and 6.3): the return each year's reinvestment pays
      at; the growth it pays for in years 2 and 3 beside the earnings growth, or on a Mature Stable
      row the terminal growth in every year; and the newest year's marginal return, shown and
-     never used, when there is one. */
+     never used, when there is one. Where the measure was below the hurdle rate and the charge
+     read the return without goodwill (method 4.6 rule 5), both measures follow: the one below
+     the hurdle rate, then the same measure on capital without goodwill and intangibles, or the
+     words for a business with no capital without them. The return by year shows the start. */
   function chargeRows(im) {
     var c = im.charge, rr = im.runway_return || {};
+    var organic = rr.used === 'without-goodwill' ? rr.without_goodwill : null;
     var rows = [
       ['Return by year', returnByYear(c.return_by_year, c.hold_years, im.charge_off === true),
         false],
@@ -1633,6 +1637,14 @@
     ];
     if (rr.one_year != null) {
       rows.push(['Newest year\'s marginal return', F.formatPercent(rr.one_year), true]);
+    }
+    if (organic) {
+      rows.push(['Return with goodwill',
+        F.formatPercent(rr.marginal_usable ? rr.marginal : rr.three_year) +
+        ', below the hurdle rate', true]);
+      rows.push(organic.measure == null
+        ? ['Return without goodwill', 'no capital without goodwill', false]
+        : ['Return without goodwill', F.formatPercent(organic.measure), true]);
     }
     return rows;
   }

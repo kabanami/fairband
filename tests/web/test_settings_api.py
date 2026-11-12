@@ -63,11 +63,11 @@ def test_get_settings_shape(client: TestClient) -> None:
     }
     assert r["description"].startswith("The yearly return you require")
     assert body["current"] == {
-        "policyVersion": "fairband-policy-v11",
+        "policyVersion": "fairband-policy-v12",
         "settingsHash": EMPTY_SETTINGS_HASH,
     }
     assert body["valuedUnder"] == {
-        "policyVersion": "fairband-policy-v11",
+        "policyVersion": "fairband-policy-v12",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "fullRefreshAt": STARTED.isoformat(),
         "universeChanged": False,
@@ -274,7 +274,7 @@ def test_a_stored_row_the_policy_refuses_is_a_409_until_reset(
 def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> None:
     body = client.get("/api/policy").json()
     assert (body["version"], body["settingsHash"], body["changed"]) == (
-        "fairband-policy-v11",
+        "fairband-policy-v12",
         EMPTY_SETTINGS_HASH,
         0,
     )
@@ -298,6 +298,7 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "implied_margin_bounds": [-0.5, 1.0],
         "inflation_max": 0.1,  # the Methodology page names the two bounds (spec 2026-11-10 10)
         "fx_stale_days": 7,
+        "return_without_goodwill_cap": 0.25,  # the Methodology page names the cap (method 4.6)
     }
     for name, value in read_only.items():
         entry = body["values"][name]

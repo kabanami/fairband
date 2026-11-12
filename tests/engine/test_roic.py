@@ -8,6 +8,7 @@ from fairband.engine.roic import (
     RoicYear,
     RunwayReturn,
     Used,
+    WithoutGoodwill,
     aggregate_roic,
     invested_capital,
     nopat,
@@ -411,3 +412,243 @@ def test_runway_note_names_the_measure(policy: Policy) -> None:
     ]
     for pairs, note in cases:
         assert runway_note(runway_return(kept(pairs), "Wide", policy)) == note
+
+
+# --- The return without goodwill and intangibles (method 4.6 rule 5) ---------------------------
+
+
+def kept_with(triples: list[tuple[float, float, float]], first_year: int = 2017) -> RoicResult:
+    """Kept ROIC years from ``(nopat, average_capital, average goodwill and intangibles)``."""
+    rows = tuple(
+        RoicYear(first_year + k, n, c, n / c if c else None, g)
+        for k, (n, c, g) in enumerate(triples)
+    )
+    return RoicResult(
+        aggregate=window_aggregate(rows, 10)[0], years_used=len(rows), by_year=rows, flags=()
+    )
+
+
+def bought(goodwill: float, nopat_each: float = 100.0) -> RoicResult:
+    """Ten flat years of a company that bought a business: capital 2,000, of which ``goodwill``
+    is goodwill and intangibles. Capital never changes, so no marginal return exists."""
+    return kept_with([(nopat_each, 2000.0, goodwill)] * 10)
+
+
+def test_a_kept_year_records_its_average_goodwill_and_intangibles() -> None:
+    years = [
+        replace(cy(2015 + k), goodwill=30.0 + 10 * k, intangibles=None if k == 0 else 10.0)
+        for k in range(3)
+    ]
+    first, second = aggregate_roic(years, min_years=1).by_year
+    # opening 30 + nil, closing 40 + 10; then opening 50, closing 50 + 10
+    assert first.average_goodwill_and_intangibles == pytest.approx(40.0)
+    assert second.average_goodwill_and_intangibles == pytest.approx(55.0)
+    assert first.average_capital == pytest.approx((130.0 + 150.0) / 2)  # capital keeps both
+
+
+def test_a_measure_below_r_reads_the_return_without_goodwill(policy: Policy) -> None:
+    rr = runway_return(bought(1500.0), "Narrow", policy)  # 5% with them, 20% without
+    assert rr.chosen == pytest.approx(0.05) and rr.marginal is None
+    assert rr.used == "without-goodwill" and rr.value == pytest.approx(0.20)
+    assert rr.charge_off is False
+    assert rr.without_goodwill == WithoutGoodwill(
+        marginal=None,
+        marginal_usable=False,
+        three_year=pytest.approx(0.20),
+        measure=pytest.approx(0.20),
+        capital_free=False,
+    )
+    [flag] = rr.flags
+    assert (flag.code, flag.word) == ("return-without-goodwill", "Return without goodwill")
+    assert flag.sentence == (
+        "The three-year return of 5.0% is below the required return. On capital without "
+        "goodwill and intangibles the three-year return is 20.0%, so the charge starts at 20.0%."
+    )
+
+
+def test_the_return_without_goodwill_is_capped(policy: Policy) -> None:
+    assert policy.return_without_goodwill_cap == 0.25
+    rr = runway_return(bought(1800.0), "Narrow", policy)  # 100 on 200: 50% without them
+    assert rr.used == "without-goodwill" and rr.value == 0.25
+    assert rr.without_goodwill is not None and rr.without_goodwill.measure == pytest.approx(0.5)
+    [flag] = rr.flags
+    assert flag.sentence == (
+        "The three-year return of 5.0% is below the required return. On capital without "
+        "goodwill and intangibles the three-year return is 50.0%, above the cap, so the charge "
+        "starts at 25.0%."
+    )
+
+
+def test_the_floor_stands_when_the_return_without_goodwill_is_not_above_r(
+    policy: Policy,
+) -> None:
+    for goodwill, without in ((500.0, 100 / 1500), (0.0, 0.05)):
+        rr = runway_return(bought(goodwill), "Narrow", policy)
+        assert rr.used == "floor" and rr.value == 0.09, goodwill
+        assert [f.code for f in rr.flags] == ["return-floored"]
+        assert rr.without_goodwill is not None
+        assert rr.without_goodwill.measure == pytest.approx(without)
+    # 9 on 100 without goodwill is r exactly, and only a return above r lifts the start
+    at_r = runway_return(kept_with([(9.0, 1000.0, 900.0)] * 10), "Narrow", policy)
+    assert at_r.without_goodwill is not None and at_r.without_goodwill.measure == 0.09
+    assert at_r.used == "floor" and at_r.value == 0.09
+
+
+def test_capital_at_or_below_zero_without_goodwill_takes_the_cap(policy: Policy) -> None:
+    rr = runway_return(bought(2100.0), "Narrow", policy)  # capital of −100 without them
+    assert rr.used == "without-goodwill" and rr.value == 0.25
+    assert rr.without_goodwill == WithoutGoodwill(None, False, None, None, True)
+    [flag] = rr.flags
+    assert flag.sentence == (
+        "The three-year return of 5.0% is below the required return. Capital without goodwill "
+        "and intangibles sums to zero or below over the last 3 ROIC years, so the charge starts "
+        "at the cap, 25.0%."
+    )
+    exactly_zero = runway_return(bought(2000.0), "Narrow", policy)
+    assert exactly_zero.used == "without-goodwill" and exactly_zero.value == 0.25
+
+
+def test_a_loss_on_no_capital_without_goodwill_stays_at_the_floor(policy: Policy) -> None:
+    for nopat_each in (-10.0, 0.0):
+        rr = runway_return(bought(2100.0, nopat_each), "Narrow", policy)
+        assert rr.used == "floor" and rr.value == 0.09
+        assert rr.without_goodwill == WithoutGoodwill(None, False, None, None, False)
+
+
+def test_the_marginal_without_goodwill_is_read_when_usable_there(policy: Policy) -> None:
+    # NOPAT 100 + 10k on own capital 500 + 50k; a purchase adds 2,000 of goodwill from year 5.
+    # With it the five-year marginal is 50 ÷ 2,250 = 2.2%, usable and below r; without it
+    # 50 ÷ 250 = 20%, usable too.
+    triples = [
+        (100.0 + 10 * k, 500.0 + 50 * k + (2000.0 if k >= 5 else 0.0), 2000.0 if k >= 5 else 0.0)
+        for k in range(10)
+    ]
+    rr = runway_return(kept_with(triples), "Narrow", policy)
+    assert rr.marginal == pytest.approx(50 / 2250) and rr.marginal_usable
+    assert rr.used == "without-goodwill" and rr.value == pytest.approx(0.20)
+    assert rr.without_goodwill is not None and rr.without_goodwill.marginal_usable
+    assert rr.without_goodwill.marginal == pytest.approx(0.20)
+    [flag] = rr.flags
+    assert flag.sentence == (
+        "The five-year marginal return of 2.2% is below the required return. On capital without "
+        "goodwill and intangibles the five-year marginal return is 20.0%, so the charge starts "
+        "at 20.0%."
+    )
+
+
+def test_a_usable_marginal_without_goodwill_at_or_below_r_keeps_the_floor(
+    policy: Policy,
+) -> None:
+    # as above with NOPAT growing 2 a year: 10 ÷ 250 = 4% without goodwill, usable, below r; the
+    # three-year return without goodwill, far above r, is not read
+    triples = [
+        (100.0 + 2 * k, 500.0 + 50 * k + (2000.0 if k >= 5 else 0.0), 2000.0 if k >= 5 else 0.0)
+        for k in range(10)
+    ]
+    rr = runway_return(kept_with(triples), "Narrow", policy)
+    assert rr.used == "floor" and rr.value == 0.09
+    assert rr.without_goodwill is not None
+    assert rr.without_goodwill.measure == pytest.approx(0.04)
+    assert rr.without_goodwill.three_year is not None and rr.without_goodwill.three_year > 0.09
+
+
+def test_a_measure_at_or_above_r_never_reads_the_return_without_goodwill(
+    policy: Policy,
+) -> None:
+    rows = kept_with([(n, c, 500.0) for n, c in SPEC])
+    rr = runway_return(rows, "Wide", policy)
+    assert rr.used == "marginal" and rr.value == pytest.approx(0.20) and rr.flags == ()
+    # recorded all the same, for the agent: the same change in NOPAT on the same change in capital
+    assert rr.without_goodwill is not None
+    assert rr.without_goodwill.measure == pytest.approx(0.20)
+    at_r = runway_return(bought(1500.0, 180.0), "Narrow", policy)  # 9% with goodwill, 36% without
+    assert at_r.used == "three-year" and at_r.value == pytest.approx(0.09) and at_r.flags == ()
+
+
+def test_the_return_without_goodwill_is_recorded_only_with_five_kept_years(
+    policy: Policy,
+) -> None:
+    short = runway_return(kept_with([(100.0, 2000.0, 1500.0)] * 4), "Wide", policy)
+    assert short.used == "unavailable" and short.without_goodwill is None
+    off = runway_return(kept([(20.0, -50.0)] * 10), "Wide", policy)
+    assert off.used == "off" and off.without_goodwill is not None
+
+
+@pytest.mark.parametrize(
+    ("moat", "goodwill", "expected"),
+    [
+        ("Wide", 1500.0, 0.13),  # 20% without goodwill, capped at r plus the spread
+        ("Wide", 2000.0 - 100 / 0.11, 0.11),  # 11% without goodwill
+        ("Wide", 2100.0, 0.13),  # no capital without goodwill: the cap of 25%, then 13%
+        ("Wide", 500.0, 0.09),  # the floor stands
+        ("Narrow", 1500.0, 0.09),
+        ("None", 1500.0, 0.09),
+    ],
+)
+def test_the_terminal_return_follows_the_return_without_goodwill(
+    policy: Policy, moat: Moat, goodwill: float, expected: float
+) -> None:
+    rr = runway_return(bought(goodwill), moat, policy)
+    assert terminal_return(rr, moat, policy) == pytest.approx(expected)
+
+
+def test_runway_note_names_the_return_without_goodwill(policy: Policy) -> None:
+    measure = "three-year return on capital without goodwill and intangibles"
+    was = "with them the three-year was 5.0%"
+    cases = {
+        1500.0: f"{measure}; {was}",
+        1800.0: f"{measure}, 50.0%, capped; {was}",
+        2100.0: f"the cap: capital without goodwill and intangibles at or below zero; {was}",
+    }
+    for goodwill, note in cases.items():
+        assert runway_note(runway_return(bought(goodwill), "Narrow", policy)) == note
+
+
+def test_the_intermediates_record_the_return_without_goodwill(policy: Policy) -> None:
+    # 11 balance sheets: net PP&E 500 and goodwill 1,500, operating income 100, tax 0
+    years = [replace(cy(2015 + k, oi=100.0, ppe=500.0), goodwill=1500.0) for k in range(11)]
+    terms = RoicTerms.of(years, "Wide", policy)
+    im = terms.intermediates()
+    assert im["runway_return"]["used"] == "without-goodwill"
+    assert im["runway_return"]["value"] == pytest.approx(0.20)
+    assert im["runway_return"]["without_goodwill"] == {
+        "marginal": None,
+        "marginal_usable": False,
+        "three_year": pytest.approx(0.20),
+        "measure": pytest.approx(0.20),
+        "capital_free": False,
+    }
+    assert im["terminal_roic"] == pytest.approx(0.13)
+    assert im["roic"]["by_year"][-1]["average_goodwill_and_intangibles"] == pytest.approx(1500.0)
+    assert [f.code for f in terms.flags] == ["return-without-goodwill"]
+    short = RoicTerms.of(years[-4:], "Wide", policy)
+    assert short.intermediates()["runway_return"]["without_goodwill"] is None
+
+
+@pytest.mark.parametrize(
+    ("override", "terminal"),
+    [(0.09, 0.09), (0.11, 0.11), (0.20, 0.13), (0.05, 0.09)],
+)
+def test_an_override_on_a_return_without_goodwill_sets_the_terminal_return_too(
+    policy: Policy, override: float, terminal: float
+) -> None:
+    """The agent's ``return.runway`` judges the return without goodwill, so on such a row the
+    Wide moat's terminal return follows the override, not the measure: an agent who finds the
+    growth is bought can take the whole lift back (method 14.4)."""
+    years = [replace(cy(2015 + k, oi=100.0, ppe=500.0), goodwill=1500.0) for k in range(11)]
+    terms = RoicTerms.of(years, "Wide", policy, runway_override=override)
+    assert terms.runway_return.used == "without-goodwill" and terms.overridden
+    assert terms.runway == override and terms.terminal == pytest.approx(terminal)
+    assert terms.flags == terms.result.flags  # the measured return's flag is not raised
+    assert RoicTerms.of(years, "Narrow", policy, runway_override=override).terminal == 0.09
+
+
+def test_an_override_on_any_other_measure_leaves_the_terminal_on_the_measured_return(
+    policy: Policy,
+) -> None:
+    years = [cy(2015 + k, oi=20.0 + 5 * k, ppe=100.0 + 10 * k) for k in range(11)]  # marginal 50%
+    terms = RoicTerms.of(years, "Wide", policy, runway_override=0.10)
+    assert terms.runway_return.used == "marginal" and terms.terminal == pytest.approx(0.13)
+    floored = [cy(2015 + k, oi=2.0, ppe=100.0) for k in range(11)]  # 2% and no goodwill
+    terms = RoicTerms.of(floored, "Wide", policy, runway_override=0.20)
+    assert terms.runway_return.used == "floor" and terms.terminal == 0.09

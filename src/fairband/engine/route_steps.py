@@ -56,6 +56,7 @@ from fairband.engine.roic import (
     runway_note,
     runway_return,
     terminal_return,
+    terminal_roic,
 )
 from fairband.engine.types import Flag, Kind, PhaseEvidence, Provenance, Route, TaggedInput
 from fairband.policy import Moat, Policy
@@ -73,13 +74,19 @@ _INTANGIBLES_NOTE = "invested capital uses the issuer's total intangibles exclud
 _CHARGE_START = {
     "marginal": "the five-year marginal",
     "three-year": "the three-year aggregate",
+    "without-goodwill": "the return on capital without goodwill and intangibles",
     "floor": "floored at the required return",
 }
 # The measured return beside an agent's ``return.runway``, which the charge starts at instead:
-# the chosen measure before any floor.
+# the chosen measure before any floor, and, where the measure is below r and the return without
+# goodwill would lift the start, that start (the second figure).
 _MEASURED = {
     "marginal": "the five-year marginal is {}",
     "three-year": "the three-year aggregate is {}",
+    "without-goodwill": (
+        "the measured return is {}, below the required return, and the charge would start at "
+        "{}, on capital without goodwill and intangibles"
+    ),
     "floor": "the measured return is {}, below the required return",
 }
 
@@ -166,13 +173,18 @@ class RoicTerms:
     ) -> RoicTerms:
         """The returns of ``years`` under ``moat``; with ``runway_override``, an agent's runway
         return in place of the measured one: it charges the runway years, and the flags of the
-        measured return (``return-floored``, ``charge-zeroed``) are not raised."""
+        measured return (``return-floored``, ``return-without-goodwill``, ``charge-zeroed``) are
+        not raised. The terminal return stays on the measured return, save on a row whose
+        measured start is the return without goodwill: the override judges that measure, so the
+        moat's terminal rule reads the override there (``method.md`` 14.4)."""
         result = aggregate_roic(years)
         rr = runway_return(result, moat, policy)
         terminal = terminal_return(rr, moat, policy)
         aggregate = result.aggregate
         usable = aggregate if aggregate is not None and aggregate > 0 else None
         if runway_override is not None:
+            if rr.used == "without-goodwill":
+                terminal = terminal_roic(runway_override, moat, policy)
             return cls(result, rr, usable, runway_override, terminal, False, result.flags, True)
         flags = result.flags + rr.flags
         return cls(result, rr, usable, rr.value, terminal, rr.charge_off, flags)
@@ -192,6 +204,9 @@ class RoicTerms:
                 "three_year": rr.three_year,
                 "ten_year": rr.ten_year,
                 "one_year": rr.one_year,
+                "without_goodwill": (
+                    None if rr.without_goodwill is None else asdict(rr.without_goodwill)
+                ),
                 "value": self.runway,
             },
             "terminal_roic": self.terminal,
@@ -403,7 +418,7 @@ def _heavy_capex(flag: Flag, roic: RoicTerms) -> Flag:
         )
         measured = _MEASURED.get(rr.used)
         if measured is not None and rr.chosen is not None:
-            start += f"; {measured.format(signed(rr.chosen))}"
+            start += f"; {measured.format(signed(rr.chosen), signed(rr.value))}"
     else:
         measure = _CHARGE_START.get(rr.used)
         if measure is None:
