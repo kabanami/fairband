@@ -551,9 +551,18 @@ def test_growth_that_was_bought_keeps_the_floor(policy: Policy) -> None:
     rr = runway_return(kept_with(triples), "Wide", policy)
     assert rr.marginal == pytest.approx(0.04) and rr.marginal_usable
     level = pytest.approx(0.28)
-    assert rr.without_goodwill == WithoutGoodwill(None, False, level, level, False)
+    assert rr.without_goodwill == WithoutGoodwill(None, False, level, level, False, bought=True)
     assert rr.used == "floor" and rr.value == 0.09
-    assert [f.code for f in rr.flags] == ["return-floored"]
+    [flag] = rr.flags
+    assert flag.code == "return-floored" and flag.sentence == (
+        "The five-year marginal return of 4.0% is below the required return, so the charge uses "
+        "9.0%. The return on capital without goodwill and intangibles is not read: purchases "
+        "carried the growth of the capital."
+    )
+    assert runway_note(rr) == (
+        "floored at the required return; the five-year marginal was 4.0%; purchases carried "
+        "the capital's growth"
+    )
     assert terminal_return(rr, "Wide", policy) == 0.09
     # a business with no capital of its own (−100 in every year) whose capital with goodwill
     # grew from 1,000 to 2,000 by a purchase: the same 4.0%, usable, and the floor too
@@ -563,8 +572,60 @@ def test_growth_that_was_bought_keeps_the_floor(policy: Policy) -> None:
     ]
     rr = runway_return(kept_with(free), "Wide", policy)
     assert rr.marginal == pytest.approx(0.04) and rr.marginal_usable
-    assert rr.without_goodwill == WithoutGoodwill(None, False, None, None, True)
+    assert rr.without_goodwill == WithoutGoodwill(None, False, None, None, True, bought=True)
     assert rr.used == "floor" and rr.value == 0.09
+
+
+def test_growth_is_bought_only_where_goodwill_grew(policy: Policy) -> None:
+    """The three tests of bought growth stand together: a usable marginal with goodwill, none
+    usable without it, and goodwill and intangibles that grew over the span. With one missing
+    the measures without goodwill are read (the second review of 2026-11-12)."""
+    # nothing was bought: goodwill flat at 1,000, the business's own capital −800 to −750, so
+    # capital grew 200 to 250, a quarter, and NOPAT 100 to 102: the marginal with goodwill is
+    # 4.0% and usable, the one without is not (50 is under a fifth of 800), yet the business
+    # needs no capital of its own, and the charge starts at the cap
+    flat = [(100.0 if k < 5 else 102.0, 200.0 if k < 5 else 250.0, 1000.0) for k in range(10)]
+    rr = runway_return(kept_with(flat), "Narrow", policy)
+    assert rr.marginal == pytest.approx(0.04) and rr.marginal_usable
+    assert rr.without_goodwill == WithoutGoodwill(
+        pytest.approx(0.04), False, None, None, True, bought=False
+    )
+    assert rr.used == "without-goodwill" and rr.value == 0.25
+    # goodwill grew, 1,000 to 1,250, and capital with it by a sixth only, under the fifth a
+    # marginal needs: the three-year level with goodwill is read, below r, and the level without
+    # it, 110 ÷ 500 = 22%, starts the charge. A purchase this small against the capital is the
+    # rule's known edge (method 4.6)
+    small = [
+        (100.0 if k < 5 else 110.0, 1500.0 if k < 5 else 1750.0, 1000.0 if k < 5 else 1250.0)
+        for k in range(10)
+    ]
+    rr = runway_return(kept_with(small), "Narrow", policy)
+    assert not rr.marginal_usable and rr.without_goodwill is not None
+    assert rr.without_goodwill.bought is False
+    assert rr.used == "without-goodwill" and rr.value == pytest.approx(0.22)
+    # a company that bought and grew its own capital by more than a fifth reads the marginal
+    # without goodwill (AMD's shape): the purchases' earnings are in it, and the cap bounds it
+    both = [
+        (100.0 + 10 * k, 500.0 + 50 * k + (2000.0 if k >= 5 else 0.0), 2000.0 if k >= 5 else 0.0)
+        for k in range(10)
+    ]
+    rr = runway_return(kept_with(both), "Narrow", policy)
+    assert rr.without_goodwill is not None and rr.without_goodwill.bought is False
+    assert rr.used == "without-goodwill" and rr.value == pytest.approx(0.20)
+    # a row at or above r records the test all the same, and never reads it
+    above = runway_return(
+        kept_with([(n * 3, c, g) for n, c, g in triples_of_a_purchase()]), "Wide", policy
+    )
+    assert above.used == "marginal" and above.without_goodwill is not None
+    assert above.without_goodwill.bought is True and above.flags == ()
+
+
+def triples_of_a_purchase() -> list[tuple[float, float, float]]:
+    """Own capital flat at 500; NOPAT 100 to 140 through 1,000 of goodwill bought in year 5."""
+    return [
+        (100.0 if k < 5 else 140.0, 500.0 + (1000.0 if k >= 5 else 0.0), 1000.0 if k >= 5 else 0.0)
+        for k in range(10)
+    ]
 
 
 def test_a_usable_marginal_without_goodwill_at_or_below_r_keeps_the_floor(
@@ -648,6 +709,7 @@ def test_the_intermediates_record_the_return_without_goodwill(policy: Policy) ->
         "three_year": pytest.approx(0.20),
         "measure": pytest.approx(0.20),
         "capital_free": False,
+        "bought": False,
     }
     assert im["terminal_roic"] == pytest.approx(0.13)
     assert im["roic"]["by_year"][-1]["average_goodwill_and_intangibles"] == pytest.approx(1500.0)
@@ -660,34 +722,38 @@ def test_the_intermediates_record_the_return_without_goodwill(policy: Policy) ->
     ("override", "terminal"),
     [(0.09, 0.09), (0.11, 0.11), (0.20, 0.13), (0.05, 0.09)],
 )
-def test_an_override_on_a_measure_below_r_sets_the_terminal_return_too(
+def test_an_override_on_a_return_without_goodwill_sets_the_terminal_return_too(
     policy: Policy, override: float, terminal: float
 ) -> None:
-    """Where the measure is below r, the agent's ``return.runway`` judges the return the engine
-    could not measure, so the Wide moat's terminal return follows the override: on a row the
-    engine started at the return without goodwill, an agent who finds the growth is bought takes
-    the whole lift back; on a floored row, one who finds it built gives it the whole return
+    """On a row the engine started at the return without goodwill, the engine's own terminal
+    return rests on that start, so the agent's ``return.runway``, which judges it, moves the Wide
+    moat's terminal return too: an agent who finds the growth is bought takes the whole lift back
     (method 14.4)."""
-    lifted = [replace(cy(2015 + k, oi=100.0, ppe=500.0), goodwill=1500.0) for k in range(11)]
-    floored = [cy(2015 + k, oi=2.0, ppe=100.0) for k in range(11)]  # 2% and no goodwill
-    for years, used in ((lifted, "without-goodwill"), (floored, "floor")):
-        terms = RoicTerms.of(years, "Wide", policy, runway_override=override)
-        assert terms.runway_return.used == used and terms.overridden
-        assert terms.runway == override and terms.terminal == pytest.approx(terminal)
-        assert terms.flags == terms.result.flags  # the measured return's flag is not raised
-        assert RoicTerms.of(years, "Narrow", policy, runway_override=override).terminal == 0.09
+    years = [replace(cy(2015 + k, oi=100.0, ppe=500.0), goodwill=1500.0) for k in range(11)]
+    terms = RoicTerms.of(years, "Wide", policy, runway_override=override)
+    assert terms.runway_return.used == "without-goodwill" and terms.overridden
+    assert terms.runway == override and terms.terminal == pytest.approx(terminal)
+    assert terms.flags == terms.result.flags  # the measured return's flag is not raised
+    assert RoicTerms.of(years, "Narrow", policy, runway_override=override).terminal == 0.09
 
 
-def test_an_override_on_a_measure_at_or_above_r_leaves_the_terminal_on_the_measured_return(
+def test_an_override_on_any_other_measure_leaves_the_terminal_on_the_measured_return(
     policy: Policy,
 ) -> None:
+    """Every other row keeps the rule it had before method 1.2: the override sets the runway
+    return, and the terminal return stays on the measure. So the same override never makes a
+    floored row worth more than one whose measure stands just above r (the second review of
+    2026-11-12)."""
     years = [cy(2015 + k, oi=20.0 + 5 * k, ppe=100.0 + 10 * k) for k in range(11)]  # marginal 50%
     terms = RoicTerms.of(years, "Wide", policy, runway_override=0.10)
     assert terms.runway_return.used == "marginal" and terms.terminal == pytest.approx(0.13)
-    low = [cy(2015 + k, oi=10.0, ppe=100.0) for k in range(11)]  # 10%: above r, under the cap
-    terms = RoicTerms.of(low, "Wide", policy, runway_override=0.25)
-    assert terms.runway_return.used == "three-year" and terms.terminal == pytest.approx(0.10)
-    # no measure to judge: the charge off, or the return unavailable, keeps its terminal return
+    low = [cy(2015 + k, oi=9.5, ppe=100.0) for k in range(11)]  # 9.5%: above r, under the cap
+    above = RoicTerms.of(low, "Wide", policy, runway_override=0.15)
+    assert above.runway_return.used == "three-year" and above.terminal == pytest.approx(0.095)
+    floored = [cy(2015 + k, oi=8.9, ppe=100.0) for k in range(11)]  # 8.9% and no goodwill
+    below = RoicTerms.of(floored, "Wide", policy, runway_override=0.15)
+    assert below.runway_return.used == "floor" and below.terminal == 0.09
+    assert below.terminal < above.terminal  # the weaker row never gets the better terminal
     off = [cy(2015 + k, oi=20.0, ppe=-50.0) for k in range(11)]
     assert RoicTerms.of(off, "Wide", policy, runway_override=0.10).terminal == 0.13
     assert RoicTerms.of(years[-4:], "Wide", policy, runway_override=0.20).terminal == 0.09

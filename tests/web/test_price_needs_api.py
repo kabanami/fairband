@@ -197,4 +197,4 @@ def test_a_refused_row_reads_the_review_that_values_it(
     assert needs == price_needs(
         "revenue-growth", review.result.intermediates, "well-above", policy.required_return
     )
-    assert "operating margin" in needs and "by year 10" in needs
+    assert "target operating margin" in needs and "by year" not in needs

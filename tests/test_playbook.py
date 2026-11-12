@@ -702,14 +702,18 @@ def test_the_agent_judges_the_return_without_goodwill() -> None:
         "That takes the terminal return's part back too.",
         "Decide it in the `roic` judgment.",
         "`intermediates/runway_return/without_goodwill/measure`",
-        # the engine keeps the floor where the stored years' growth was bought, and the agent
-        # with evidence of growth of its own raises the return, the terminal's part included
+        # the engine keeps the floor where purchases carried the capital's growth, and records it
         (
-            "Where capital grew by purchases and the business's own capital did not, the engine "
-            "keeps the floor (`return-floored`)"
+            "Where purchases carried the growth of the capital "
+            "(`intermediates/runway_return/without_goodwill/bought`), the engine keeps the floor "
+            "(`return-floored`)"
         ),
-        "On a floored row the override sets the terminal return too",
-        # above the hurdle rate the override raises the start only (method 14.4)
+        # only a row the engine started at the return without goodwill lets the override set the
+        # terminal return; a floored row and one above the hurdle rate keep theirs (method 14.4)
+        (
+            "On a floored row the override raises the start, and the terminal return stays at the "
+            "hurdle rate"
+        ),
         "the terminal return stays on the measure",
         # on a row started at the return without goodwill neither the earnings nor the return
         # carry the purchases' cost, which the older ruling on amortization relied on
@@ -726,10 +730,13 @@ def test_the_agent_judges_the_return_without_goodwill() -> None:
         "the note `return-without-goodwill`",
         "`/runway_return/without_goodwill/measure`",
         "why the growth ahead is the business's own",
-        # a business with no capital of its own without them has no such figure to cite
+        # a business with no capital of its own without them has no such figure to cite; the
+        # start is the runway return's value, since year 1 of a row with no hold has faded
         "Where the business has no capital of its own without them, that figure is null",
+        "cite the start alone, `/runway_return/value`",
     ):
         assert words in valuation, words
+    assert "cite the start alone, `/charge/return_by_year/0`" not in valuation
     row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
     cell = row["`snapshot:<id>/intermediates/<path>`"][0]
     assert "`runway_return/without_goodwill/measure`" in cell
@@ -798,8 +805,10 @@ def test_the_report_leads_with_what_the_price_needs() -> None:
         "on Decline `/implied_decline_rate`",
         "`/implied_margin`",
         "Where no rate reaches the price, say so in words and cite no figure.",
-        # a row charged at the hurdle rate: the growth at the 15% return, named as that case
-        "`/implied_by_roic/0.15`",
+        # a row charged at the hurdle rate: on Mature Growth the growth at the 15% return, named
+        # as that case; Mature Stable stores no such figure, so it says it in words
+        "on Mature Growth give the growth the price needs at a 15% return, `/implied_by_roic/0.15`",
+        "On Mature Stable no such figure is stored: say it in words.",
     ):
         assert words in valuation, words
     summary = _flat(

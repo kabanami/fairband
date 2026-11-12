@@ -329,11 +329,14 @@ Eight flags ask for a decision of yours. Read each sentence whole: it names its 
   bought one by one) are capital of its own, and the balance sheet's line does not split them
   from the ones a purchase put there: where they are a large part of what the measure left out,
   set `return.runway` lower, with the evidence. Decide it in the `roic` judgment. Two cases have
-  no flag of their own. Where capital grew by purchases and the business's own capital did not,
-  the engine keeps the floor (`return-floored`), since the stored years' growth was bought: read
+  no flag of their own. Where purchases carried the growth of the capital
+  (`intermediates/runway_return/without_goodwill/bought`), the engine keeps the floor
+  (`return-floored`), and its sentence says so: capital grew by a fifth with goodwill, not
+  without it, and goodwill and intangibles grew. Read
   `intermediates/runway_return/without_goodwill`, and raise `return.runway` only with evidence
-  that the growth ahead is the business's own. On a floored row the override sets the terminal
-  return too. And a measure just above the hurdle rate that a purchase holds down keeps its
+  that the growth ahead is the business's own. On a floored row the override raises the start,
+  and the terminal return stays at the hurdle rate. And a measure just above the hurdle rate
+  that a purchase holds down keeps its
   measure: read `intermediates/runway_return/without_goodwill/measure`, and where the growth
   ahead is the business's own, `return.runway` may take it, at most the cap; there the override
   raises the start only, and the terminal return stays on the measure.

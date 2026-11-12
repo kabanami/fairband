@@ -10,10 +10,14 @@ It computes nothing and moves nothing: the value, the levels and the designation
 are.
 
 A mature row charged at the required return in every year is a case of its own. There growth
-adds no value, so the solve finds no rate whatever the price (5.8), and "no rate in the range"
-would give the wrong reason. The sentence says that the route charges growth at the hurdle rate,
-and on Mature Growth it names the growth the price needs at the sensitivity's return above r
-(``implied_by_roic``), when that has one.
+adds no value: the solve's rate is often none and, when it finds one, comes from the uncharged
+margin change alone and never measures the business's growth (5.8). So "no rate in the range"
+would give the wrong reason, and a rate found there is not named. The sentence says that the
+route charges growth at the hurdle rate, and on Mature Growth it names the growth the price
+needs at the sensitivity's return above r (``implied_by_roic``), when that has one.
+
+The margin the price needs is a target margin, the one the path reaches in the convergence year,
+a setting that can lie past the forecast's last year; the sentence names the target and no year.
 
 A row with no route's figures (a Start-up row, a refusal, a snapshot valued before a key
 existed) has no sentence, and neither has a Mature Stable row whose cross-check refused, which
@@ -21,7 +25,6 @@ solved nothing at the price. A revenue-growth row under a ``high_growth_years`` 
 holds no year at the held rate, so only its margin speaks.
 """
 
-import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -66,20 +69,20 @@ def price_needs(
 def _mature_growth(im: Mapping[str, Any], r: float | None) -> str:
     holds = f"The route holds {_percent(im['belief']['rate'])}."
     implied, runway = im["implied_growth"], im["runway"]
-    if implied is not None:
+    if _charged_at_r(im, r):  # before the solve's rate, which measures no growth here (5.8)
+        case = _case_above_r(im.get("implied_by_roic") or {}, r)
+        if case is None:
+            return f"{_AT_R} {holds}"
+        at, growth = case
         return (
-            f"The price needs long-run earnings growth of {_percent(implied)} a year to year "
-            f"{runway}. {holds}"
+            f"{_AT_R} At a return of {_percent(at)} on new capital, the price needs long-run "
+            f"earnings growth of {_percent(growth)} a year to year {runway}. {holds}"
         )
-    if not _charged_at_r(im, r):
+    if implied is None:
         return f"No long-run earnings growth rate {_NO_RATE}. {holds}"
-    case = _case_above_r(im.get("implied_by_roic") or {}, r)
-    if case is None:
-        return f"{_AT_R} {holds}"
-    at, growth = case
     return (
-        f"{_AT_R} At a return of {_percent(at)} on new capital, the price needs long-run "
-        f"earnings growth of {_percent(growth)} a year to year {runway}. {holds}"
+        f"The price needs long-run earnings growth of {_percent(implied)} a year to year "
+        f"{runway}. {holds}"
     )
 
 
@@ -89,36 +92,34 @@ def _mature_stable(im: Mapping[str, Any], r: float | None) -> str | None:
         return None
     holds = f"This route holds terminal growth, {_percent(im['charge']['growth_by_year'][-1])}."
     implied = cross_check["implied_growth"]
-    if implied is not None:
-        return (
-            "On the growth route's path, the price needs long-run earnings growth of "
-            f"{_percent(implied)} a year to year {im['runway']}. {holds}"
-        )
-    if _charged_at_r(im, r):
+    if _charged_at_r(im, r):  # before the solve's rate, as on Mature Growth
         return f"{_AT_R} {holds}"
-    return f"On the growth route's path, no long-run earnings growth rate {_NO_RATE}. {holds}"
+    if implied is None:
+        return f"On the growth route's path, no long-run earnings growth rate {_NO_RATE}. {holds}"
+    return (
+        "On the growth route's path, the price needs long-run earnings growth of "
+        f"{_percent(implied)} a year to year {im['runway']}. {holds}"
+    )
 
 
 def _revenue_growth(im: Mapping[str, Any]) -> str:
     implied, margin = im["implied_growth"], im["implied_margin"]
     last = im["revenue_path"]["high_growth_years"]
-    path = im["margin_path"]
-    target, by_year = _percent(path["target"]), f"by year {_reached(path)}"
+    target = _percent(im["margin_path"]["target"])
     margin_needs = (
         None
         if margin is None
-        else f"needs an operating margin of {_percent(margin)} {by_year}, against a target of "
-        f"{target}."
+        else f"needs a target operating margin of {_percent(margin)}, against {target}."
     )
     if last < 4:  # no held year: year 4 already fades, so only the margin speaks
         if margin_needs is None:
-            return f"No operating margin {by_year} {_NO_RATE}. The route holds {target}."
+            return f"No target operating margin {_NO_RATE}. The route holds {target}."
         return f"The price {margin_needs}"
     held = _percent(im["growth_rates"][3])
     years = "in year 4" if last == 4 else f"in years 4 to {last}"
     if implied is None and margin_needs is None:
         return (
-            f"No revenue growth rate {years} and no operating margin {by_year}, in the ranges "
+            f"No revenue growth rate {years} and no target operating margin, in the ranges "
             f"the route reads, reaches the price. The route holds {held} and {target}."
         )
     growth = (
@@ -128,7 +129,7 @@ def _revenue_growth(im: Mapping[str, Any]) -> str:
         f"{held} held."
     )
     if margin_needs is None:
-        return f"{growth} No operating margin {by_year} {_NO_RATE}."
+        return f"{growth} No target operating margin {_NO_RATE}."
     return f"{growth} {'The price' if implied is None else 'Or it'} {margin_needs}"
 
 
@@ -162,16 +163,6 @@ def _case_above_r(by_roic: Mapping[str, Any], r: float | None) -> tuple[float, f
         if r is not None and at > r and growth is not None:
             cases.append((at, float(growth)))
     return max(cases) if cases else None
-
-
-def _reached(path: Mapping[str, Any]) -> int:
-    """The first year the stored margin path stands at its target, the convergence year; the
-    path's last year when it never does."""
-    margins, target = path["by_year"], path["target"]
-    for year, margin in enumerate(margins, 1):
-        if math.isclose(margin, target, rel_tol=1e-9, abs_tol=1e-12):
-            return year
-    return len(margins)
 
 
 def _percent(x: float) -> str:

@@ -572,6 +572,7 @@
    "used": "three-year",
    "value": 0.1825122271263271,
    "without_goodwill": {
+    "bought": false,
     "capital_free": false,
     "marginal": 0.22277227722772283,
     "marginal_usable": false,

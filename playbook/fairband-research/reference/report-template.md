@@ -159,9 +159,10 @@ The kill criteria of section 11 test it.
   Write it beside the figure the value rests on. On High Growth and Young Growth give the margin
   the price needs too, `/implied_margin`, beside the margin the value rests on. Where no rate
   reaches the price, say so in words and cite no figure. Where `priceNeeds` says the growth is
-  charged at the hurdle rate, growth adds no value at that return: say so, and give the growth
-  the price needs at a 15% return, `/implied_by_roic/0.15`, named as that case (see "The phase"
-  below). Then say in one sentence whether the evidence supports that need. A value far below
+  charged at the hurdle rate, growth adds no value at that return: say so, and on Mature Growth
+  give the growth the price needs at a 15% return, `/implied_by_roic/0.15`, named as that case
+  (see "The phase" below). On Mature Stable no such figure is stored: say it in words. Then say
+  in one sentence whether the evidence supports that need. A value far below
   the price says only that the method cannot reach the price; this part says what the price asks
   of the business.
 - **The phase.** The phase, the growth word and the margin direction behind it, any check flag,
@@ -192,7 +193,7 @@ The kill criteria of section 11 test it.
   goodwill and intangibles, `/runway_return/without_goodwill/measure`, say that the return with
   them is below the yearly return investors require, and say why the growth ahead is the
   business's own, not bought. Where the business has no capital of its own without them, that
-  figure is null: say so in words and cite the start alone, `/charge/return_by_year/0`. Under
+  figure is null: say so in words and cite the start alone, `/runway_return/value`. Under
   your overrides cite the review's,
   `review:<id>/intermediates/charge/...`.
 - **The value outside the business**: where an override set one, what it is (a stake, an asset

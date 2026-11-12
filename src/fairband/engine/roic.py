@@ -38,10 +38,11 @@ most the policy's ``return_without_goodwill_cap``, since the measure leaves out 
 company paid for. When the marginal is not usable there and the fallback years' capital without
 goodwill sums to zero or below while their NOPAT sums above zero, the business needs no capital
 of its own and the charge starts at the cap. Otherwise the floor stands: the charge starts at r.
-It stands too where the growth was bought: the marginal with goodwill was usable, so capital
-grew, and the marginal without it is not, so the business's own capital did not grow with it.
-The level of return on that flat capital counts the bought earnings and none of their price, so
-it is not read. The measures without goodwill are recorded on every row with ``min_years`` kept
+It stands too where purchases carried the capital's growth over the marginal span: the marginal
+with goodwill is usable, so capital grew by the policy's share and NOPAT grew; the marginal
+without goodwill is not; and goodwill and intangibles grew. The level of return on the
+business's own capital then counts the bought earnings and none of their price, so it is not
+read. The measures without goodwill are recorded on every row with ``min_years`` kept
 years, for the agent, whichever measure the charge took.
 
 The terminal return is r unless the moat is Wide. For Wide it is the chosen measure before the
@@ -126,7 +127,10 @@ class WithoutGoodwill:
     ``measure`` is the marginal return when usable there, else the fallback aggregate
     (``three_year``, ``None`` when its capital sums to zero or below). ``capital_free`` says the
     marginal is not usable there and the fallback years' capital sums to zero or below while
-    their NOPAT sums above zero: the business needs no capital of its own.
+    their NOPAT sums above zero: the business needs no capital of its own. ``bought`` says
+    purchases carried the growth of the capital over the marginal span: the marginal with
+    goodwill is usable, the one without is not, and goodwill and intangibles grew. Then the
+    charge does not read these measures, whatever they say (``method.md`` 4.6 rule 5).
     """
 
     marginal: float | None
@@ -134,6 +138,7 @@ class WithoutGoodwill:
     three_year: float | None
     measure: float | None
     capital_free: bool
+    bought: bool = False
 
 
 @dataclass(frozen=True)
@@ -142,7 +147,8 @@ class RunwayReturn:
 
     ``chosen`` is the measure before the floor (``None`` when the charge is off or the return is
     unavailable). ``value`` is what the charge uses: ``chosen`` when it is at or above r; below
-    r, the return without goodwill under its cap when that is above r, else r; the terminal
+    r, the return without goodwill under its cap when that is above r and purchases did not
+    carry the capital's growth (``without_goodwill.bought``), else r; the terminal
     return when the charge is off or the return is unavailable. ``flags`` are the ones this step
     raises, which follow those of ``aggregate_roic``. ``one_year`` is the newest year's marginal
     return, shown and never used: ``None`` with fewer than two kept years or no change in capital.
@@ -288,7 +294,8 @@ def marginal_return(
 def without_goodwill(by_year: Sequence[RoicYear], policy: Policy) -> WithoutGoodwill:
     """The runway measures of ``by_year`` on capital without goodwill and intangibles: each kept
     year's average capital less its average goodwill and intangibles, its NOPAT unchanged, under
-    the policy's marginal span, usability test and fallback window."""
+    the policy's marginal span, usability test and fallback window; and whether purchases
+    carried the capital's growth over the span (``WithoutGoodwill.bought``)."""
     rows = tuple(
         replace(
             y, average_capital=y.average_capital - y.average_goodwill_and_intangibles, roic=None
@@ -300,8 +307,15 @@ def without_goodwill(by_year: Sequence[RoicYear], policy: Policy) -> WithoutGood
     n = policy.fallback_return_years
     three_year, _ = window_aggregate(rows, n)
     capital_free = not usable and three_year is None and sum(y.nopat for y in rows[-n:]) > 0
+    _, usable_with_goodwill = marginal_return(by_year, span, growth_min)
+    bought = (
+        usable_with_goodwill  # so the span exists: capital grew by the share, and NOPAT grew
+        and not usable
+        and by_year[-1].average_goodwill_and_intangibles
+        > by_year[-1 - span].average_goodwill_and_intangibles
+    )
     return WithoutGoodwill(
-        marginal, usable, three_year, marginal if usable else three_year, capital_free
+        marginal, usable, three_year, marginal if usable else three_year, capital_free, bought
     )
 
 
@@ -311,7 +325,8 @@ def runway_return(
     """The return the charge uses in years 1 to N−1, from the kept years of ``result``: the
     marginal return when usable, else the aggregate over the fallback years. A measure below r
     gives way to the return on capital without goodwill and intangibles, under its cap, when that
-    is above r, and to r otherwise. The charge is off when the marginal is not usable and the
+    is above r and purchases did not carry the capital's growth, and to r otherwise. The charge
+    is off when the marginal is not usable and the
     fallback years' capital sums to zero or below; the return is unavailable with fewer than
     ``min_years`` kept years. On every branch it records the newest year's marginal return, which
     the charge never uses.
@@ -351,11 +366,21 @@ def runway_return(
     value = chosen
     if chosen < r:
         below = f"The {_measure(usable)} return of {chosen:.1%} is below the required return"
-        lifted = _lifted(organic, policy, bought=usable and not organic.marginal_usable)
+        lifted = _lifted(organic, policy)
         if lifted is None:
             used, value = "floor", r
+            why = (
+                " The return on capital without goodwill and intangibles is not read: purchases "
+                "carried the growth of the capital."
+                if organic.bought
+                else ""
+            )
             flags = (
-                Flag("return-floored", "Return floored", f"{below}, so the charge uses {r:.1%}."),
+                Flag(
+                    "return-floored",
+                    "Return floored",
+                    f"{below}, so the charge uses {r:.1%}.{why}",
+                ),
             )
         else:
             used, value = "without-goodwill", lifted
@@ -371,14 +396,14 @@ def runway_return(
     )
 
 
-def _lifted(organic: WithoutGoodwill, policy: Policy, *, bought: bool) -> float | None:
+def _lifted(organic: WithoutGoodwill, policy: Policy) -> float | None:
     """The return a charge whose measure is below r starts at instead, from the measures without
     goodwill and intangibles: the cap when the business needs no capital of its own; the measure
-    when it is above r, at most the cap; ``None`` when the floor stands. It stands too when the
-    growth was ``bought``: the marginal with goodwill was usable and the one without is not, so
-    capital grew by purchases and not on the business's own account, and the level of return on
-    its own capital says nothing of what its growth costs."""
-    if bought:
+    when it is above r, at most the cap; ``None`` when the floor stands. It stands too where
+    purchases carried the capital's growth (``organic.bought``): the level of return on the
+    business's own capital then counts the bought earnings and none of their price, and says
+    nothing of what the growth costs."""
+    if organic.bought:
         return None
     cap = policy.return_without_goodwill_cap
     if organic.capital_free:
@@ -433,7 +458,9 @@ def runway_note(rr: RunwayReturn) -> str:
         case "without-goodwill":
             return f"{_without_goodwill_note(rr)}; with them the {_was(rr)}"
         case "floor":
-            return f"floored at the required return; the {_was(rr)}"
+            bought = rr.without_goodwill is not None and rr.without_goodwill.bought
+            why = "; purchases carried the capital's growth" if bought else ""
+            return f"floored at the required return; the {_was(rr)}{why}"
         case "off":
             return "charge off: capital at or below zero"
         case "unavailable":

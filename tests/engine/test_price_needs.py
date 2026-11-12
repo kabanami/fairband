@@ -37,17 +37,14 @@ def stable_row(
     }
 
 
-def revenue_row(
-    implied: float | None, margin: float | None, last: int = 5, reached: int = 10
-) -> dict[str, Any]:
-    """A row that holds 20% to year ``last`` and reaches its 11.1% target in year ``reached``."""
-    ramp = [0.111 * min(year, reached) / reached for year in range(1, 11)]
+def revenue_row(implied: float | None, margin: float | None, last: int = 5) -> dict[str, Any]:
+    """A row that holds 20% to year ``last`` on a target margin of 11.1%."""
     return {
         "implied_growth": implied,
         "implied_margin": margin,
         "growth_rates": [0.35, 0.21, 0.20, 0.20, 0.20, 0.166, 0.132, 0.098, 0.064, 0.03],
         "revenue_path": {"high_growth_years": last},
-        "margin_path": {"target": 0.111, "by_year": ramp},
+        "margin_path": {"target": 0.111},
     }
 
 
@@ -90,6 +87,13 @@ def test_a_row_charged_at_the_hurdle_rate_says_growth_adds_no_value() -> None:
     plain = f"No long-run earnings growth rate {NO_RATE}. The route holds 5.3%."
     assert price_needs("mature-growth", at_r, WELL_ABOVE) == plain
     assert price_needs("mature-growth", at_r | {"charge_off": True}, WELL_ABOVE, R) == plain
+    # a rate the solve finds at r comes from the uncharged margin change alone and never
+    # measures the business's growth (5.8), so the reason still leads and the rate is not named
+    found = at_r | {"implied_growth": 0.42}
+    assert price_needs("mature-growth", found, WELL_ABOVE, R) == (
+        f"{lead} At a return of 15.0% on new capital, the price needs long-run earnings growth of "
+        "10.7% a year to year 20. The route holds 5.3%."
+    )
 
 
 def test_a_mature_stable_row_reads_the_growth_route_s_path() -> None:
@@ -122,28 +126,18 @@ NO_GROWTH = f"No revenue growth rate in years 4 to 5 {NO_RATE}."
 @pytest.mark.parametrize(
     ("implied", "margin", "sentence"),
     [
-        (
-            0.45,
-            0.352,
-            (
-                f"{GROWTH} Or it needs an operating margin of 35.2% by year 10, against a target of "
-                "11.1%."
-            ),
-        ),
-        (0.45, None, f"{GROWTH} No operating margin by year 10 {NO_RATE}."),
+        (0.45, 0.352, f"{GROWTH} Or it needs a target operating margin of 35.2%, against 11.1%."),
+        (0.45, None, f"{GROWTH} No target operating margin {NO_RATE}."),
         (
             None,
             0.352,
-            (
-                f"{NO_GROWTH} The price needs an operating margin of 35.2% by year 10, against a target "
-                "of 11.1%."
-            ),
+            f"{NO_GROWTH} The price needs a target operating margin of 35.2%, against 11.1%.",
         ),
         (
             None,
             None,
             (
-                "No revenue growth rate in years 4 to 5 and no operating margin by year 10, in the "
+                "No revenue growth rate in years 4 to 5 and no target operating margin, in the "
                 "ranges the route reads, reaches the price. The route holds 20.0% and 11.1%."
             ),
         ),
@@ -164,24 +158,22 @@ def test_the_held_years_follow_the_high_growth_setting() -> None:
     assert seven.startswith("The price needs revenue growth of 45.0% a year in years 4 to 7,")
     assert four.startswith("The price needs revenue growth of 45.0% a year in year 4, against")
     assert price_needs("revenue-growth", revenue_row(0.45, 0.352, last=3), WELL_ABOVE, R) == (
-        "The price needs an operating margin of 35.2% by year 10, against a target of 11.1%."
+        "The price needs a target operating margin of 35.2%, against 11.1%."
     )
     assert price_needs("revenue-growth", revenue_row(0.45, None, last=3), WELL_ABOVE, R) == (
-        f"No operating margin by year 10 {NO_RATE}. The route holds 11.1%."
+        f"No target operating margin {NO_RATE}. The route holds 11.1%."
     )
 
 
-def test_the_margin_s_year_is_the_year_the_path_reaches_the_target() -> None:
-    """``margin_convergence_year`` is a setting of 1 to 10: the sentence names the year the
-    stored margin path first stands at its target, not the forecast's length."""
-    needs = price_needs("revenue-growth", revenue_row(None, 0.352, reached=5), WELL_ABOVE, R)
-    assert needs is not None
-    assert needs.endswith(
-        "The price needs an operating margin of 35.2% by year 5, against a target of 11.1%."
-    )
-    never = revenue_row(None, 0.352) | {"margin_path": {"target": 0.111, "by_year": [0.05] * 10}}
-    needs = price_needs("revenue-growth", never, WELL_ABOVE, R)
-    assert needs is not None and "by year 10, against" in needs  # the path's last year
+def test_the_margin_sentence_names_the_target_and_no_year() -> None:
+    """The margin the price needs is a target margin, reached in the convergence year, a setting
+    that can lie past a forecast of the high-growth and fade years (three and five at a setting
+    of 3). So the sentence names the target and no year: a year read from the stored path would
+    name a margin the path never reaches (the second review of 2026-11-12)."""
+    for last in (3, 4, 5, 9):
+        needs = price_needs("revenue-growth", revenue_row(0.45, 0.352, last=last), WELL_ABOVE, R)
+        assert needs is not None and "by year" not in needs
+        assert needs.endswith("a target operating margin of 35.2%, against 11.1%.")
 
 
 def test_a_decline_row_names_the_decline_rate_with_its_sign() -> None:

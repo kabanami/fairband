@@ -78,9 +78,11 @@ method 1.1, bit for bit: a USD row carries none of these.
 MGCO, MSCO and FXCO re-captured under 1.2 on 2026-11-12 for new keys only (method 4.6 rule 5):
 `runway_return` gains `without_goodwill`, the runway measures on capital without goodwill and
 intangibles (MGCO and FXCO: a usable five-year marginal of 52.7%; MSCO: the three-year, 22.3%),
-and each kept year of `roic.by_year` gains `average_goodwill_and_intangibles`. Each fixture's
-measure is above r, so no charge reads the new measures and every figure is unchanged. The four
-other goldens carry neither record and are untouched.
+and each kept year of `roic.by_year` gains `average_goodwill_and_intangibles`. The record holds
+`bought` too, false on all three: whether purchases carried the capital's growth, under which
+the charge reads none of the measures. Each fixture's measure is above r, so no charge reads
+the new measures and every figure is unchanged. The four other goldens carry neither record and
+are untouched.
 
 Run from the repository root:
 

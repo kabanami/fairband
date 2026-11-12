@@ -506,8 +506,9 @@ def test_the_value_section_says_how_a_return_below_the_hurdle_rate_is_read(
     ) in value
     assert "acquired intangibles" not in value  # the line holds licences and the like too
     assert "the charge starts there, at most 25.0%." in value
-    assert "Where the company's capital grew only through purchases, the hurdle rate stays." in (
-        value
+    assert (
+        "Where purchases carried the growth of the company's capital, the hurdle rate stays."
+        in (value)
     )
     assert "Otherwise the charge starts at the hurdle rate" in value
 
@@ -522,6 +523,11 @@ def test_the_value_section_says_what_a_price_well_above_the_value_shows(
         "the price. The drawer and the report page then lead with what the price needs."
     ) in value
     assert "When no rate in the route's range reaches the price, the page says so." in value
+    # a row charged at the hurdle rate gives that reason, never "no rate" (method 4.11)
+    assert (
+        "Where growth is charged at the hurdle rate, it adds no value, and the page says that "
+        "instead."
+    ) in value
 
 
 def test_the_classifier_section_reads_the_decile_edges(client: TestClient) -> None:

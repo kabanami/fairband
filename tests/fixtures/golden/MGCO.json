@@ -703,6 +703,7 @@
    "used": "marginal",
    "value": 0.431464747667622,
    "without_goodwill": {
+    "bought": false,
     "capital_free": false,
     "marginal": 0.5266407949472446,
     "marginal_usable": true,
