@@ -314,9 +314,11 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
     )
     assert "starts at 9.0%, floored at the required return; the newest year's" in floor
     lifted = mature_terms(mg_inputs, policy, "without-goodwill")
+    # the words fit a start at the measure, a start at the cap under a higher measure, and the
+    # cap alone where the business has no capital of its own: none calls the start "the return"
     assert (
-        "starts at 20.0%, the return on capital without goodwill and intangibles; the newest "
-        "year's" in heavy_capex(trailing_flags(mg_inputs, t, None, policy, lifted))
+        "starts at 20.0%, read on capital without goodwill and intangibles, at most the cap; the "
+        "newest year's" in heavy_capex(trailing_flags(mg_inputs, t, None, policy, lifted))
     )
     # without a one-year figure the sentence stops at the start
     short = heavy_capex(

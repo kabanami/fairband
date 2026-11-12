@@ -92,8 +92,9 @@ business's own values, before any value outside the business is added.
 - Mature Growth: ``anchor`` (ntm_eps_raw, sbc_adjustment_per_share, ntm_eps), ``sbc_basis``,
   ``ntm_net_income``, ``path`` (base_year, on_eps, analysts), ``path_steps``, ``belief`` (rate,
   sales_class, median), ``moat``, ``runway``, ``fade_years``, ``growth_rates`` (years 2 to the
-  runway), ``roic`` (aggregate, years, by_year), ``runway_return`` (used, marginal,
-  marginal_usable, three_year, ten_year, one_year, value), ``terminal_roic``, ``charge_off``,
+  runway), ``roic`` (aggregate, years, by_year, each kept year with its
+  average_goodwill_and_intangibles), ``runway_return`` (used, marginal, marginal_usable,
+  three_year, ten_year, one_year, without_goodwill, value), ``terminal_roic``, ``charge_off``,
   ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps), ``shares``,
   ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
   ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported, clean, forward: the

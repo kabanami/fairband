@@ -321,15 +321,22 @@ Eight flags ask for a decision of yours. Read each sentence whole: it names its 
   earns more on what it reinvests. That reading is right only where the growth ahead is built,
   not bought. Read how the company grew: its purchases against its own capital spending over
   the stored years, and what the call says of deals ahead. Where it grows by purchases, the
-  price of the purchases is the cost of its growth: set `return.runway` at the hurdle rate, which
-  takes the terminal return's part back too. Where the purchase was one event and the growth
-  ahead is the business's own, the start stands. Intangibles the business needs to operate
-  (licences, spectrum, product rights bought one by one) are capital of its own: where they are a
-  large part of what the measure left out, set `return.runway` lower, with the evidence. Decide
-  it in the `roic` judgment. The reverse case has no flag: a measure just above the hurdle rate
-  that a purchase holds down keeps its measure. On such a row read
-  `intermediates/runway_return/without_goodwill/measure`; where the growth ahead is the
-  business's own, `return.runway` may take it, at most the cap.
+  price of the purchases is the cost of its growth: set `return.runway` at the row's hurdle rate,
+  the `required_return` input of `company`, which is restated on a company in another currency
+  (`policy()` answers the US dollar rate). That takes the terminal return's part back too. Where
+  the purchase was one event and the growth ahead is the business's own, the start stands.
+  Intangibles the business needs to operate (licences, spectrum, a franchise, product rights
+  bought one by one) are capital of its own, and the balance sheet's line does not split them
+  from the ones a purchase put there: where they are a large part of what the measure left out,
+  set `return.runway` lower, with the evidence. Decide it in the `roic` judgment. Two cases have
+  no flag of their own. Where capital grew by purchases and the business's own capital did not,
+  the engine keeps the floor (`return-floored`), since the stored years' growth was bought: read
+  `intermediates/runway_return/without_goodwill`, and raise `return.runway` only with evidence
+  that the growth ahead is the business's own. On a floored row the override sets the terminal
+  return too. And a measure just above the hurdle rate that a purchase holds down keeps its
+  measure: read `intermediates/runway_return/without_goodwill/measure`, and where the growth
+  ahead is the business's own, `return.runway` may take it, at most the cap; there the override
+  raises the start only, and the terminal return stays on the measure.
 - `growth-above-return`: the growth a year's reinvestment pays for outruns the return it earns, so
   the year pays out less than nothing: the owner funds the growth. The value already carries that
   cost. Read the growth the charge pays for and its return by year (`intermediates/charge`). A step
@@ -342,8 +349,11 @@ Eight flags ask for a decision of yours. Read each sentence whole: it names its 
   one, section 8 states the exposure: the items a share the consensus may carry. Amortization of
   acquired intangibles that an adjusted EPS leaves out is not such an item, and no input corrects
   for it: the invested capital keeps the goodwill and the acquired intangibles, so the cost of
-  the acquisitions is in the return the growth is charged at. Section 8 says that the anchor is
-  before this amortization, with its size a share from the filing; do not report it as a gap.
+  the acquisitions is in the return the growth is charged at. On a row whose charge starts at the
+  return without goodwill, the return leaves that cost out too: that is right for a purchase
+  made once, whose cost is spent, and wrong for a company that keeps buying, which is the
+  decision of `return-without-goodwill` above. Section 8 says that the anchor is before this
+  amortization, with its size a share from the filing; do not report it as a gap.
 - `step-series-disagree`: a consensus step read on net income and the same step read on EPS differ
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
@@ -374,8 +384,8 @@ Eight flags ask for a decision of yours. Read each sentence whole: it names its 
 Where the price is well above the value, the answer of `company` carries `priceNeeds`: what the
 price needs of the business, beside what the route holds. A value far below the price says only
 that the method cannot reach the price. So judge the need itself: can the business grow, earn or
-hold up as the price needs, and what evidence says so? Step 9 argues it, and the Summary and
-section 8 lead with it (`reference/report-template.md`).
+hold up as the price needs, and what evidence says so? Step 9 argues it; section 8 leads with it
+and the Summary says it after the value (`reference/report-template.md`).
 
 ### 9. The debate and the thesis
 

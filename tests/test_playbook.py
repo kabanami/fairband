@@ -693,17 +693,41 @@ def test_the_agent_judges_the_return_without_goodwill() -> None:
         ),
         "(`policy()`, `return_without_goodwill_cap`)",
         "That reading is right only where the growth ahead is built, not bought.",
-        ("set `return.runway` at the hurdle rate, which takes the terminal return's part back too"),
+        # the hurdle rate is the row's own: restated on a company in another currency, where
+        # `policy()` answers the US dollar rate (the review of 2026-11-12)
+        (
+            "set `return.runway` at the row's hurdle rate, the `required_return` input of "
+            "`company`, which is restated on a company in another currency"
+        ),
+        "That takes the terminal return's part back too.",
         "Decide it in the `roic` judgment.",
         "`intermediates/runway_return/without_goodwill/measure`",
+        # the engine keeps the floor where the stored years' growth was bought, and the agent
+        # with evidence of growth of its own raises the return, the terminal's part included
+        (
+            "Where capital grew by purchases and the business's own capital did not, the engine "
+            "keeps the floor (`return-floored`)"
+        ),
+        "On a floored row the override sets the terminal return too",
+        # above the hurdle rate the override raises the start only (method 14.4)
+        "the terminal return stays on the measure",
+        # on a row started at the return without goodwill neither the earnings nor the return
+        # carry the purchases' cost, which the older ruling on amortization relied on
+        (
+            "On a row whose charge starts at the return without goodwill, the return leaves that "
+            "cost out too"
+        ),
     ):
         assert words in eight, words
+    assert "bought intangibles" not in _read(TEMPLATE)  # the line holds licences too
     template = _read(TEMPLATE)
     valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
     for words in (
         "the note `return-without-goodwill`",
         "`/runway_return/without_goodwill/measure`",
         "why the growth ahead is the business's own",
+        # a business with no capital of its own without them has no such figure to cite
+        "Where the business has no capital of its own without them, that figure is null",
     ):
         assert words in valuation, words
     row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
@@ -759,6 +783,8 @@ def test_the_report_leads_with_what_the_price_needs() -> None:
         "Where the price is well above the value, the answer of `company` carries `priceNeeds`",
         "A value far below the price says only that the method cannot reach the price.",
         "So judge the need itself",
+        # section 8 leads with it; the Summary says it after the value (the template's order)
+        "section 8 leads with it and the Summary says it after the value",
     ):
         assert words in eight, words
     assert "`priceNeeds`" in _tool_entry("company")
@@ -766,9 +792,14 @@ def test_the_report_leads_with_what_the_price_needs() -> None:
     valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
     assert valuation.index("- **What the price needs**") < valuation.index("- **The phase.**")
     for words in (
-        "`snapshot:<id>/intermediates/implied_growth`",
+        # each route stores the figure under its own path (the review of 2026-11-12)
+        "on Mature Growth, High Growth and Young Growth `snapshot:<id>/intermediates/implied_growth`",
+        "on Mature Stable `/growth_route/implied_growth`",
+        "on Decline `/implied_decline_rate`",
         "`/implied_margin`",
         "Where no rate reaches the price, say so in words and cite no figure.",
+        # a row charged at the hurdle rate: the growth at the 15% return, named as that case
+        "`/implied_by_roic/0.15`",
     ):
         assert words in valuation, words
     summary = _flat(

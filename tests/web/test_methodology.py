@@ -161,8 +161,9 @@ def test_the_examples_state_method_1_0_s_rules() -> None:
     asof = asof[: asof.index("</p>")]
     assert "method 1.0" in asof and 'datetime="2026-11-09"' in asof
     assert "method 0.8" not in html and "method 0.9" not in asof
-    # method 1.1 values a company in US dollars bit for bit as 1.0 did, so the figures stand
-    assert "unchanged under method 1.1" in asof
+    # method 1.1 values a company in US dollars bit for bit as 1.0 did, and method 1.2 moves only
+    # a row whose return is below the hurdle rate, which no example is, so the figures stand
+    assert "unchanged under methods 1.1 and 1.2" in asof
     classifier = _section(html, "classifier")
     msft = classifier[classifier.index("Worked example: Microsoft") :]
     assert '<td class="body">Checks</td><td class="body fb-num">none</td>' in msft
@@ -252,10 +253,11 @@ def test_the_foreign_filers_section_reads(client: TestClient) -> None:
         "per ADS",
         "older than 7 days",
         "above 10.0%",
-        # the four rates the method restates (method 7.5; fix round 1), the inflation addition in
-        # the page's own words, as the Mature Growth section names it
+        # the five rates the method restates (method 7.5; fix round 1; the cap of method 1.2), the
+        # inflation addition in the page's own words, as the Mature Growth section names it
         "The hurdle rate, terminal growth, the inflation the belief adds and the growth caps",
-        "restates each of the four by the inflation differential",
+        "So is the cap on a return measured without goodwill.",
+        "restates each of the five by the inflation differential",
         # the refusals quoted as the server words them, one each (fix round 1)
         "“reporting currency unknown”",
         f"“{NO_RATE.format(code='<code>')}”",

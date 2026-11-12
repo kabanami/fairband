@@ -501,10 +501,14 @@ def test_the_value_section_says_how_a_return_below_the_hurdle_rate_is_read(
     """Method 4.6 rules 5 and 6 in the reader's words, the cap from the policy."""
     value = " ".join(_get(client, "/api/methodology/value")["text"].split())
     assert (
-        "Fairband measures the return again without goodwill and acquired intangibles, the "
-        "price of past purchases."
+        "Fairband measures the return again without goodwill and intangibles, which mostly "
+        "come from past purchases."
     ) in value
+    assert "acquired intangibles" not in value  # the line holds licences and the like too
     assert "the charge starts there, at most 25.0%." in value
+    assert "Where the company's capital grew only through purchases, the hurdle rate stays." in (
+        value
+    )
     assert "Otherwise the charge starts at the hurdle rate" in value
 
 

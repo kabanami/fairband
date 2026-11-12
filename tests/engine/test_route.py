@@ -1,5 +1,6 @@
 import json
 import math
+from collections.abc import Callable
 from dataclasses import asdict, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -1489,6 +1490,33 @@ def test_fallback_validity(mg_inputs: CompanyInputs, deciles: Deciles, policy: P
     for stale in (mg_inputs.data_date, date(2026, 7, 30)):
         r = value_company(replace(mg_inputs, next_earnings=stale), deciles, policy, TODAY)
         assert r.valid_until == fallback
+
+
+@pytest.mark.parametrize(
+    "inputs", [engine_companies.high_growth_inputs, engine_companies.decline_inputs]
+)
+def test_the_routes_that_read_no_runway_return_never_raise_its_flags(
+    inputs: Callable[[], CompanyInputs], deciles: Deciles, policy: Policy
+) -> None:
+    """Method 5a.13 and 6a.10: the revenue-growth and Decline routes do not charge at the runway
+    return, so neither the floor's flag nor the return without goodwill's shows on them, whatever
+    the capital reads; and the value does not move with it."""
+    company = inputs()
+    plain = value_company(company, deciles, policy, TODAY)
+    for scale, income in ((50, 1.0), (1, 1 / 22), (50, 1 / 22)):
+        years = tuple(
+            replace(
+                y,
+                goodwill=scale * (y.goodwill or 0),
+                operating_income=None
+                if y.operating_income is None
+                else y.operating_income * income,
+            )
+            for y in company.capital_years
+        )
+        r = value_company(replace(company, capital_years=years), deciles, policy, TODAY)
+        assert r.route == plain.route and r.route in ("revenue-growth", "decline")
+        assert not {"return-without-goodwill", "return-floored"} & set(codes(r)), (scale, income)
 
 
 # --- The value outside the business and the share count (spec 2026-11-09 8) --------------------

@@ -18,7 +18,8 @@ method), and a route reads each input of ``overrides.TAGS`` through ``chosen``: 
 value when one applies, else the route's own reading. ``judgment_inputs`` are the JUDGMENT
 entries ``route`` cites for them. ``RoicTerms.of`` takes an overriding runway return as
 ``runway_override``: it replaces the runway return the charge uses, the start of its fade, and
-charges the runway years, and the terminal return still follows the moat on the measured return.
+charges the runway years, and the terminal return still follows the moat on the measured return,
+save on a row whose measure is below r, where the moat's rule reads the override (14.4).
 ``outside_value`` is an agent's value outside the business a share, nil without one: each valued
 route adds it to its own value a share, and every solve on the price targets the price less it,
 ``business_price``, the business's share of the price (``method.md`` 14.4). The diluted share
@@ -74,7 +75,7 @@ _INTANGIBLES_NOTE = "invested capital uses the issuer's total intangibles exclud
 _CHARGE_START = {
     "marginal": "the five-year marginal",
     "three-year": "the three-year aggregate",
-    "without-goodwill": "the return on capital without goodwill and intangibles",
+    "without-goodwill": "read on capital without goodwill and intangibles, at most the cap",
     "floor": "floored at the required return",
 }
 # The measured return beside an agent's ``return.runway``, which the charge starts at instead:
@@ -175,15 +176,16 @@ class RoicTerms:
         return in place of the measured one: it charges the runway years, and the flags of the
         measured return (``return-floored``, ``return-without-goodwill``, ``charge-zeroed``) are
         not raised. The terminal return stays on the measured return, save on a row whose
-        measured start is the return without goodwill: the override judges that measure, so the
-        moat's terminal rule reads the override there (``method.md`` 14.4)."""
+        measure is below r, floored or started at the return without goodwill: there the engine
+        has no measure of its own for the terminal, the override judges the return, and the
+        moat's terminal rule reads the override (``method.md`` 14.4)."""
         result = aggregate_roic(years)
         rr = runway_return(result, moat, policy)
         terminal = terminal_return(rr, moat, policy)
         aggregate = result.aggregate
         usable = aggregate if aggregate is not None and aggregate > 0 else None
         if runway_override is not None:
-            if rr.used == "without-goodwill":
+            if rr.used in ("without-goodwill", "floor"):
                 terminal = terminal_roic(runway_override, moat, policy)
             return cls(result, rr, usable, runway_override, terminal, False, result.flags, True)
         flags = result.flags + rr.flags

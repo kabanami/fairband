@@ -51,7 +51,7 @@ from fastapi import FastAPI, HTTPException
 
 from fairband.engine.overrides import LABELS, TAGS, unit_in
 from fairband.engine.price_needs import price_needs
-from fairband.engine.types import money_of
+from fairband.engine.types import ValuationResult, money_of
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
@@ -174,13 +174,27 @@ def _price_needs(
 ) -> str | None:
     """What the price needs (``engine.price_needs``, ``method.md`` 4.11) of the value the meter
     draws: the counted ``review``'s when it has a value, read from the review's own result at
-    its word at the latest snapshot's price, else the snapshot's."""
+    its word at the latest snapshot's price, else the snapshot's; each with the required return
+    its own result read, so a row charged at r in every year gives that reason."""
     if review is not None and review.value is not None:
         levels = _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level)
         _, word = _standing(review.value, levels, snapshot.price, edges)
-        return price_needs(review.result.route, review.result.intermediates, word)
+        reviewed = review.result
+        return price_needs(reviewed.route, reviewed.intermediates, word, _required_return(reviewed))
     result = snapshot.result
-    return price_needs(result.route, result.intermediates, snapshot.designation)
+    return price_needs(
+        result.route, result.intermediates, snapshot.designation, _required_return(result)
+    )
+
+
+def _required_return(result: ValuationResult) -> float | None:
+    """The required return ``result``'s route read, its RULE input: the policy's r as the row was
+    valued, restated in the reporting currency of a company in another one; ``None`` on a result
+    without the input (a refusal before the route's rules)."""
+    for tagged in result.inputs:
+        if tagged.name == "required_return":
+            return tagged.value
+    return None
 
 
 def _review(

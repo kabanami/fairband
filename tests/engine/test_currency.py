@@ -97,6 +97,37 @@ def test_in_currency_on_the_packaged_table(
         assert local.terminal_growth == pytest.approx(g, abs=1e-5)
 
 
+def test_a_currency_row_reads_the_return_without_goodwill_under_the_restated_cap(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Method 4.6 rule 5 on a company in SEK (d 0.02): the cap is restated as r is, so a return
+    of 52.7% without goodwill starts the charge at 1.25 × 1.02 − 1 = 27.5%, above the restated
+    r of 11.18%, and the Wide terminal return is the restated r plus the spread."""
+    bought = tuple(replace(y, goodwill=50 * (y.goodwill or 0)) for y in fx_inputs().capital_years)
+    r = value_company(replace(fx_inputs(), capital_years=bought), deciles, policy, TODAY)
+    local = in_currency(policy, 0.02)
+    rr = r.intermediates["runway_return"]
+    assert rr["used"] == "without-goodwill"
+    assert rr["value"] == pytest.approx(0.275) == pytest.approx(local.return_without_goodwill_cap)
+    assert r.intermediates["terminal_roic"] == pytest.approx(local.wide_terminal_roic_cap)
+    lifted = next(f for f in r.flags if f.code == "return-without-goodwill")
+    assert lifted.sentence.endswith("above the cap, so the charge starts at 27.5%.")
+    floor = value_company(
+        replace(
+            fx_inputs(),
+            capital_years=tuple(
+                replace(y, operating_income=(y.operating_income or 0) / 22)
+                for y in fx_inputs().capital_years
+            ),
+        ),
+        deciles,
+        policy,
+        TODAY,
+    )
+    assert floor.intermediates["runway_return"]["value"] == pytest.approx(0.1118)
+    assert r.value is not None and floor.value is not None and r.value > floor.value
+
+
 # --- the translation (spec 7.2, 11.2) ---
 
 

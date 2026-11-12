@@ -7,8 +7,12 @@
      examples' figures that the charge moves were re-read under method 1.0 on 9 Nov 2026 from the
      same stored inputs, and the other routes' figures are unchanged by 1.0. Method 1.1 (10 Nov
      2026, foreign filers) values a company that reports in US dollars and is no depositary receipt
-     as 1.0 did, bit for bit, so every example's figures were re-read and stand under 1.1. They
-     change with the next method version (CLAUDE.md, "Read first"). -->
+     as 1.0 did, bit for bit, so every example's figures were re-read and stand under 1.1. Method
+     1.2 (12 Nov 2026, the return without goodwill) moves only a row whose measured return is
+     below the hurdle rate; no example is one (Microsoft 20.4%, Coca-Cola 30.5%, the others on
+     routes that do not read it), and a revalue of a copy of the live data on 12 Nov 2026 kept
+     all six examples' values, so the figures were re-read and stand under 1.2. They change with
+     the next method version that moves one (CLAUDE.md, "Read first"). -->
 <article class="app-prose">
 <p class="caption app-prose__note" data-live-note hidden></p>
 
@@ -87,7 +91,7 @@ its count of companies in the latest run.</desc>
 
 <p class="caption app-prose__asof">Each route section ends with a worked example on a real company.
 Figures as of the full refresh of <time datetime="2026-11-05">5 Nov 2026</time>, valued under
-method 1.0 on <time datetime="2026-11-09">9 Nov 2026</time> and unchanged under method 1.1.
+method 1.0 on <time datetime="2026-11-09">9 Nov 2026</time> and unchanged under methods 1.1 and 1.2.
 Prices are the closes of
 <time datetime="2026-11-04">4 Nov 2026</time>. Each example links to today's row, whose figures
 may differ.</p>
@@ -302,9 +306,10 @@ in equal steps to the terminal return by the end of the runway
 growth above the belief starts the fade in year 1.</p>
 <p class="body">A large purchase can push a company's measured return below the hurdle rate, because
 the price paid sits in its capital. In that case Fairband measures the return again without goodwill
-and acquired intangibles, the price of past purchases. When that return is above the hurdle rate,
+and intangibles, which mostly come from past purchases. When that return is above the hurdle rate,
 the charge starts there, at most <span data-policy="return_without_goodwill_cap">—</span>.
-Otherwise the charge starts at the hurdle rate, and growth adds nothing to the value.</p>
+Otherwise the charge starts at the hurdle rate, and growth adds nothing to the value. Where the
+company's capital grew only through purchases, the hurdle rate stays.</p>
 
 <h3 class="heading">The moat and the runway</h3>
 <p class="body">A moat is a lasting edge over competitors
@@ -402,8 +407,9 @@ reads the pair's newest quote with the price. The quote's day can be one after t
 
 <h3 class="heading">The inflation differential</h3>
 <p class="body">The hurdle rate, terminal growth, the inflation the belief adds and the growth caps
-are rates in US dollars. A currency with higher expected inflation needs higher rates. Fairband
-restates each of the four by the inflation differential: the currency's expected inflation against the dollar's
+are rates in US dollars. So is the cap on a return measured without goodwill. A currency with
+higher expected inflation needs higher rates. Fairband
+restates each of the five by the inflation differential: the currency's expected inflation against the dollar's
 <a class="app-cite" href="#methodology/src-currency">[Damodaran 2002]</a>. Expected inflation is
 the mean of the IMF's projections for the five years ahead
 <a class="app-cite" href="#methodology/src-imf">[IMF]</a>. Here is the arithmetic for one
@@ -969,10 +975,11 @@ ten.</span></li>
 charge.</span></li>
 <li><span class="label">Return without goodwill</span> <code class="fb-tag figure-sm">return-without-goodwill</code>
 <span class="body app-flags__what">The return on new capital was below the hurdle rate. Without
-goodwill and acquired intangibles it was above, so the charge starts there.</span></li>
+goodwill and intangibles it was above, so the charge starts there.</span></li>
 <li><span class="label">Return floored</span> <code class="fb-tag figure-sm">return-floored</code>
-<span class="body app-flags__what">The company's return on new capital was below the hurdle rate,
-with and without goodwill, so the hurdle rate replaced it.</span></li>
+<span class="body app-flags__what">The return on new capital was below the hurdle rate. The return
+without goodwill was no higher, or the company's growth was bought, so the hurdle rate replaced
+it.</span></li>
 <li><span class="label">Growth above return</span> <code class="fb-tag figure-sm">growth-above-return</code>
 <span class="body app-flags__what">The growth a year pays for exceeds its return, so that year
 pays out less than nothing.</span></li>

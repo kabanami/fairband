@@ -38,8 +38,11 @@ most the policy's ``return_without_goodwill_cap``, since the measure leaves out 
 company paid for. When the marginal is not usable there and the fallback years' capital without
 goodwill sums to zero or below while their NOPAT sums above zero, the business needs no capital
 of its own and the charge starts at the cap. Otherwise the floor stands: the charge starts at r.
-The measures without goodwill are recorded on every row with ``min_years`` kept years, for the
-agent, whichever measure the charge took.
+It stands too where the growth was bought: the marginal with goodwill was usable, so capital
+grew, and the marginal without it is not, so the business's own capital did not grow with it.
+The level of return on that flat capital counts the bought earnings and none of their price, so
+it is not read. The measures without goodwill are recorded on every row with ``min_years`` kept
+years, for the agent, whichever measure the charge took.
 
 The terminal return is r unless the moat is Wide. For Wide it is the chosen measure before the
 floor, capped at the policy's cap and never below r; on a row whose charge starts at the return
@@ -348,7 +351,7 @@ def runway_return(
     value = chosen
     if chosen < r:
         below = f"The {_measure(usable)} return of {chosen:.1%} is below the required return"
-        lifted = _lifted(organic, policy)
+        lifted = _lifted(organic, policy, bought=usable and not organic.marginal_usable)
         if lifted is None:
             used, value = "floor", r
             flags = (
@@ -368,10 +371,15 @@ def runway_return(
     )
 
 
-def _lifted(organic: WithoutGoodwill, policy: Policy) -> float | None:
+def _lifted(organic: WithoutGoodwill, policy: Policy, *, bought: bool) -> float | None:
     """The return a charge whose measure is below r starts at instead, from the measures without
     goodwill and intangibles: the cap when the business needs no capital of its own; the measure
-    when it is above r, at most the cap; ``None`` when the floor stands."""
+    when it is above r, at most the cap; ``None`` when the floor stands. It stands too when the
+    growth was ``bought``: the marginal with goodwill was usable and the one without is not, so
+    capital grew by purchases and not on the business's own account, and the level of return on
+    its own capital says nothing of what its growth costs."""
+    if bought:
+        return None
     cap = policy.return_without_goodwill_cap
     if organic.capital_free:
         return cap

@@ -152,12 +152,18 @@ The kill criteria of section 11 test it.
 
 - **What the price needs**, where the price is well above the value (the answer of `company`
   carries `priceNeeds`): the section leads with it, in one or two sentences of your own. The
-  growth the price needs, `snapshot:<id>/intermediates/implied_growth` (under your overrides the
-  review's), beside the growth the value rests on; on High Growth and Young Growth the margin the
-  price needs too, `/implied_margin`, beside the margin the value rests on. Where no rate reaches
-  the price, say so in words and cite no figure. Then say in one sentence whether the evidence
-  supports that need. A value far below the price says only that the method cannot reach the
-  price; this part says what the price asks of the business.
+  figure the price needs sits under its route's own path: on Mature Growth, High Growth and Young
+  Growth `snapshot:<id>/intermediates/implied_growth`; on Mature Stable
+  `/growth_route/implied_growth`, the growth on the path with the analysts' forecast; on Decline
+  `/implied_decline_rate`; under your overrides the review's, `review:<id>/intermediates/...`.
+  Write it beside the figure the value rests on. On High Growth and Young Growth give the margin
+  the price needs too, `/implied_margin`, beside the margin the value rests on. Where no rate
+  reaches the price, say so in words and cite no figure. Where `priceNeeds` says the growth is
+  charged at the hurdle rate, growth adds no value at that return: say so, and give the growth
+  the price needs at a 15% return, `/implied_by_roic/0.15`, named as that case (see "The phase"
+  below). Then say in one sentence whether the evidence supports that need. A value far below
+  the price says only that the method cannot reach the price; this part says what the price asks
+  of the business.
 - **The phase.** The phase, the growth word and the margin direction behind it, any check flag,
   the Dickinson stage, and why if an override changed it. Then the growth the price needs,
   `snapshot:<id>/intermediates/implied_growth`, or under your overrides the review's,
@@ -183,9 +189,11 @@ The kill criteria of section 11 test it.
   growth. Under heavy capital spending, cite the newest year's marginal return,
   `/runway_return/one_year`, beside the return you chose. Where the return starts at the figure
   without goodwill (the note `return-without-goodwill`), cite the return on the capital without
-  goodwill and bought intangibles, `/runway_return/without_goodwill/measure`, say that the return
-  with them is below the yearly return investors require, and say why the growth ahead is the
-  business's own, not bought. Under your overrides cite the review's,
+  goodwill and intangibles, `/runway_return/without_goodwill/measure`, say that the return with
+  them is below the yearly return investors require, and say why the growth ahead is the
+  business's own, not bought. Where the business has no capital of its own without them, that
+  figure is null: say so in words and cite the start alone, `/charge/return_by_year/0`. Under
+  your overrides cite the review's,
   `review:<id>/intermediates/charge/...`.
 - **The value outside the business**: where an override set one, what it is (a stake, an asset
   held for sale, a settlement still owed), its size a share after tax, cited as its bridge line,
