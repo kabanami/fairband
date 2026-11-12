@@ -705,6 +705,9 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         "report",
         "item",
         "brief",
+        # what the price needs when it is well above the value (method 4.11): none here, the
+        # price being above the value only; tests/web/test_price_needs_api.py
+        "priceNeeds",
         # what the figures are in (spec 2026-11-10 7.4): tests/web/test_company_reads.py
         "currency",
         "isAdr",
@@ -717,6 +720,7 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
     # The agents' records the drawer's main view leads with (spec 2026-11-06 Tier 2, 18.2): none
     # here; tests/web/test_research_api.py writes each and reads its shape.
     assert (body["review"], body["secondary"], body["report"], body["item"]) == (None,) * 4
+    assert body["priceNeeds"] is None and body["result"]["designation"] == "above"
     # The policy's edges, by which the drawer keeps its price ÷ value figure inside the band.
     assert body["designationEdges"] == [0.65, 0.85, 1.15, 1.5]
     # The fraction of the window from which the drawer's validity window reads aging.

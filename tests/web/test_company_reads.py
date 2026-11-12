@@ -508,6 +508,18 @@ def test_the_value_section_says_how_a_return_below_the_hurdle_rate_is_read(
     assert "Otherwise the charge starts at the hurdle rate" in value
 
 
+def test_the_value_section_says_what_a_price_well_above_the_value_shows(
+    client: TestClient,
+) -> None:
+    """Method 4.11 in the reader's words, under the table of the price's words."""
+    value = " ".join(_get(client, "/api/methodology/value")["text"].split())
+    assert (
+        "When the word is Well above, the value alone says only that the method cannot reach "
+        "the price. The drawer and the report page then lead with what the price needs."
+    ) in value
+    assert "When no rate in the route's range reaches the price, the page says so." in value
+
+
 def test_the_classifier_section_reads_the_decile_edges(client: TestClient) -> None:
     text = _get(client, "/api/methodology/classifier")["text"]
     # the engine's test universe: edges at -10%, -5%, 0%, 3%, 6%, 9%, 12%, 18% and 30%, read

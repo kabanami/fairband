@@ -206,10 +206,13 @@
   }
 
   /* The meter as the drawer draws it (FairbandPage.meter), its price in figure under the head's
-     one figure-lg; a refused row's refusal under it, as the drawer has it in the meter's place. */
+     one figure-lg; a refused row's refusal under it, as the drawer has it in the meter's place.
+     Above it, what the price needs when it is well above the value (FairbandPage.priceNeeds,
+     method 4.11). */
   function band(d) {
     var r = d.result;
     return h('section', { key: 'band', className: 'app-report__band' },
+      P.priceNeeds(d),
       P.meter(d, false),
       r.refusal ? h('p', { className: 'body app-refusal' }, r.refusal) : null);
   }

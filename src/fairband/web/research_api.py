@@ -30,6 +30,10 @@ it), each ``None`` without one:
 - ``item``: the company's open work item, ``{id, state, mode, claimedBy, createdAt}``,
   ``createdAt`` the time it was posted.
 
+Beside them it gives ``priceNeeds`` (``method.md`` 4.11): the sentences on what the price needs
+when it is well above the value the meter draws, the review's when the review counts and has a
+value, else the snapshot's; ``None`` otherwise.
+
 ``GET /api/companies/{symbol}/research`` answers what Details lists (18.3), each record as its own
 read serves it: ``overrides``, ``guidance``, ``killCriteria``, ``newsItems``, ``notes`` and
 ``findings`` newest first; ``judgments``, the latest report's, in the order the agent gave them;
@@ -46,6 +50,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from fairband.engine.overrides import LABELS, TAGS, unit_in
+from fairband.engine.price_needs import price_needs
 from fairband.engine.types import money_of
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
@@ -83,12 +88,16 @@ def agent_records(
     cited = snapshot_rows(conn, rested_on(snapshot, review, secondary, report))
     item = open_item(conn, symbol)
     edges = policy.designation_edges
+    counted = review if review is not None and counts_on(snapshot, cited, review) else None
     return {
         "review": (
-            _review(review, {o.id: o for o in overrides_for(conn, symbol)}, snapshot.price, edges)
-            if review is not None and counts_on(snapshot, cited, review)
-            else None
+            None
+            if counted is None
+            else _review(
+                counted, {o.id: o for o in overrides_for(conn, symbol)}, snapshot.price, edges
+            )
         ),
+        "priceNeeds": _price_needs(snapshot, counted, edges),
         "secondary": (
             _secondary(secondary, snapshot.price, edges)
             if secondary is not None and counts_on(snapshot, cited, secondary)
@@ -158,6 +167,20 @@ def _standing(
     if levels is None:
         return None, None
     return standing(value, price, edges)
+
+
+def _price_needs(
+    snapshot: SnapshotRow, review: ReviewRow | None, edges: tuple[float, float, float, float]
+) -> str | None:
+    """What the price needs (``engine.price_needs``, ``method.md`` 4.11) of the value the meter
+    draws: the counted ``review``'s when it has a value, read from the review's own result at
+    its word at the latest snapshot's price, else the snapshot's."""
+    if review is not None and review.value is not None:
+        levels = _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level)
+        _, word = _standing(review.value, levels, snapshot.price, edges)
+        return price_needs(review.result.route, review.result.intermediates, word)
+    result = snapshot.result
+    return price_needs(result.route, result.intermediates, snapshot.designation)
 
 
 def _review(
