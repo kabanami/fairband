@@ -40,7 +40,9 @@ be left out.
 - `company(symbol)`: the latest snapshot in full: `snapshot.id`, `snapshot.refreshId` (the refresh
   that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
   intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
-  universe. An input scaled for a split is an estimate under the method `split-scaled` with a
+  universe. `priceNeeds`: where the price is well above the value, one or two sentences on what
+  the price needs of the business beside what the route holds, read under your review when it
+  has a value; `null` otherwise. An input scaled for a split is an estimate under the method `split-scaled` with a
   note naming the split, and the row's `split-pending` note names the rest. What the figures are
   in: `currency`, the reporting currency; `isAdr`, the ADR flag as the valuation reads it, the
   company profile's, else the universe row's; `adrRatio`, the ordinary shares one ADS stands for,

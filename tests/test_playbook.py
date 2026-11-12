@@ -245,8 +245,12 @@ PHASES = tuple(phase for phases in ROUTE_PHASES.values() for phase in phases)
 ROIC_JUDGMENT = (
     "the return on invested capital and the runway return; when `heavy-capex` fires, read the"
     " newest year's marginal return (`intermediates/runway_return/one_year`) and the"
-    " capital-spending guidance, decide the runway return and cite both figures"
+    " capital-spending guidance, decide the runway return and cite both figures; when"
+    " `return-without-goodwill` fires, decide whether the growth ahead is built or bought; and"
+    " whether the higher case stood (step 10)"
 )
+# The judgments that record a growth, a margin or a return, each tested for a higher figure.
+HIGHER_CASE_JUDGMENTS = ("`belief`", "`roic`", "`target_margin`")
 # The intermediates the engine round 2 adds, by their paths under `intermediates/`.
 NEW_INTERMEDIATES = (
     "charge/return_by_year/<n>",
@@ -676,6 +680,106 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         assert words in valuation, words
 
 
+def test_the_agent_judges_the_return_without_goodwill() -> None:
+    """Method 4.6 rule 5 and 14.4 (the founder's ruling of 2026-11-12): the engine starts the
+    charge at the return without goodwill where the measure is below the hurdle rate, and the
+    agent decides whether the growth ahead is built or bought, with the door back."""
+    skill = _read(SKILL)
+    eight = _flat(_steps(_frontmatter(skill)[1])[8])
+    for words in (
+        (
+            "- `return-without-goodwill`: the measured return on new capital was below the hurdle "
+            "rate, and the charge starts at the return on capital without goodwill and intangibles"
+        ),
+        "(`policy()`, `return_without_goodwill_cap`)",
+        "That reading is right only where the growth ahead is built, not bought.",
+        ("set `return.runway` at the hurdle rate, which takes the terminal return's part back too"),
+        "Decide it in the `roic` judgment.",
+        "`intermediates/runway_return/without_goodwill/measure`",
+    ):
+        assert words in eight, words
+    template = _read(TEMPLATE)
+    valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
+    for words in (
+        "the note `return-without-goodwill`",
+        "`/runway_return/without_goodwill/measure`",
+        "why the growth ahead is the business's own",
+    ):
+        assert words in valuation, words
+    row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
+    cell = row["`snapshot:<id>/intermediates/<path>`"][0]
+    assert "`runway_return/without_goodwill/measure`" in cell
+
+
+def test_the_agent_tests_the_higher_case_of_each_input() -> None:
+    """The founder's ruling of 2026-11-12, on the low-values investigation: the reviews lowered
+    21 values of 28 and raised 3, and no agent raised a growth input in 29 reports. Step 10 tests
+    each growth, margin and return input in both directions; the judgment says whether the higher
+    case stood; section 8 records each test."""
+    skill = _read(SKILL)
+    ten = _flat(_steps(_frontmatter(skill)[1])[10])
+    for words in (
+        "Test each input in both directions.",
+        "write the strongest case for a higher figure of each of these",
+        (
+            "- the growth: the belief on Mature Growth, the held rate on High Growth and Young "
+            "Growth, the decline rate on Decline;"
+        ),
+        "- the margin: the target margin on High Growth, Young Growth and Start-up;",
+        (
+            "- the return on new capital: the runway return on Mature Growth and Mature Stable, the "
+            "sales-to-capital on High Growth and Young Growth."
+        ),
+        "The case is evidence, not hope",
+        "Accept it or reject it, with the reason.",
+        "Reject it where it rests on a forecast or a story alone.",
+        "Test the lower case with the same care.",
+    ):
+        assert words in ten, words
+    judgments = _table(skill, ("Judgment", "On", "What it records"))
+    for kind in HIGHER_CASE_JUDGMENTS:
+        assert judgments[kind][1].endswith("whether the higher case stood (step 10)"), kind
+    for kind in ("`phase`", "`moat`"):
+        assert "higher case" not in judgments[kind][1], kind
+    template = _read(TEMPLATE)
+    valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
+    assert (
+        "- **The higher case.** For the growth, the margin and the return on new capital, as "
+        "the company's route reads them: the strongest evidence for a higher figure, and why it "
+        "stood or did not"
+    ) in valuation
+
+
+def test_the_report_leads_with_what_the_price_needs() -> None:
+    """Method 4.11 (the founder's ruling of 2026-11-12): where the price is well above the
+    value, the detail carries what the price needs, and the report leads with it."""
+    skill = _read(SKILL)
+    eight = _flat(_steps(_frontmatter(skill)[1])[8])
+    for words in (
+        "Where the price is well above the value, the answer of `company` carries `priceNeeds`",
+        "A value far below the price says only that the method cannot reach the price.",
+        "So judge the need itself",
+    ):
+        assert words in eight, words
+    assert "`priceNeeds`" in _tool_entry("company")
+    template = _read(TEMPLATE)
+    valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
+    assert valuation.index("- **What the price needs**") < valuation.index("- **The phase.**")
+    for words in (
+        "`snapshot:<id>/intermediates/implied_growth`",
+        "`/implied_margin`",
+        "Where no rate reaches the price, say so in words and cite no figure.",
+    ):
+        assert words in valuation, words
+    summary = _flat(
+        template[template.index("## The summary page") : template.index("## A cited part")]
+    )
+    assert (
+        "Where the price is well above the value, the paragraph on the price says what the "
+        "price needs"
+    ) in summary
+
+
 def test_the_skill_reads_a_foreign_filer() -> None:
     """Spec 2026-11-10 10: step 3 reads a foreign filer (every figure in the reporting currency but
     the price, the value and the levels; per ADS on an ADR; the rate's ref for any arithmetic
@@ -704,7 +808,7 @@ def test_the_skill_reads_a_foreign_filer() -> None:
             r"^- `([\w-]+)`: (.*?)(?=^- |^$|\Z)", eight, re.MULTILINE | re.DOTALL
         )
     }
-    assert "Seven flags ask for a decision of yours." in steps[8]
+    assert "Eight flags ask for a decision of yours." in steps[8]
     for code, words in (
         ("basis-scaled", ("the ADR ratio", "read as stored", "section 8")),
         ("fx-stale", ("the rate", "price date", '`refresh_start("price")`')),

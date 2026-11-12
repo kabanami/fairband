@@ -301,7 +301,7 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
-Seven flags ask for a decision of yours. Read each sentence whole: it names its figures.
+Eight flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
 - `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
   of the operating cash flow, then names the return the charge starts at, its measure, and the
@@ -314,6 +314,22 @@ Seven flags ask for a decision of yours. Read each sentence whole: it names its 
   without one, an off charge leaves the runway years uncharged, and an unavailable return charges
   every year at the terminal return. On the other routes the sentence stops after the spending
   share, and there is no runway return to decide.
+- `return-without-goodwill`: the measured return on new capital was below the hurdle rate, and
+  the charge starts at the return on capital without goodwill and intangibles, at most the cap
+  (`policy()`, `return_without_goodwill_cap`). The sentence names both measures and the start. A
+  past purchase's price sits in the capital and can hold the measure down while the business
+  earns more on what it reinvests. That reading is right only where the growth ahead is built,
+  not bought. Read how the company grew: its purchases against its own capital spending over
+  the stored years, and what the call says of deals ahead. Where it grows by purchases, the
+  price of the purchases is the cost of its growth: set `return.runway` at the hurdle rate, which
+  takes the terminal return's part back too. Where the purchase was one event and the growth
+  ahead is the business's own, the start stands. Intangibles the business needs to operate
+  (licences, spectrum, product rights bought one by one) are capital of its own: where they are a
+  large part of what the measure left out, set `return.runway` lower, with the evidence. Decide
+  it in the `roic` judgment. The reverse case has no flag: a measure just above the hurdle rate
+  that a purchase holds down keeps its measure. On such a row read
+  `intermediates/runway_return/without_goodwill/measure`; where the growth ahead is the
+  business's own, `return.runway` may take it, at most the cap.
 - `growth-above-return`: the growth a year's reinvestment pays for outruns the return it earns, so
   the year pays out less than nothing: the owner funds the growth. The value already carries that
   cost. Read the growth the charge pays for and its return by year (`intermediates/charge`). A step
@@ -355,6 +371,12 @@ Seven flags ask for a decision of yours. Read each sentence whole: it names its 
   the pairs, wait until `refresh_status()` shows no refresh running, and read `company` again;
   when the note stays, section 8 says the rate is old.
 
+Where the price is well above the value, the answer of `company` carries `priceNeeds`: what the
+price needs of the business, beside what the route holds. A value far below the price says only
+that the method cannot reach the price. So judge the need itself: can the business grow, earn or
+hold up as the price needs, and what evidence says so? Step 9 argues it, and the Summary and
+section 8 lead with it (`reference/report-template.md`).
+
 ### 9. The debate and the thesis
 
 Write the bull case and the bear case. Each argues the business and its outlook: demand and how
@@ -391,6 +413,25 @@ change from the mechanical value, one line per override). Read both. `override_d
 applied override. See "Overrides" below. On a company in another currency a money override's
 `new` and its range are in the reporting currency a share or in total, and the bridge's change a
 share is in US dollars, as the value is.
+
+Test each input in both directions. A review that only finds reasons to lower a value is half a
+review. Before you settle a judgment, write the strongest case for a higher figure of each of
+these, from the evidence of steps 4 to 7:
+
+- the growth: the belief on Mature Growth, the held rate on High Growth and Young Growth, the
+  decline rate on Decline;
+- the margin: the target margin on High Growth, Young Growth and Start-up;
+- the return on new capital: the runway return on Mature Growth and Mature Stable, the
+  sales-to-capital on High Growth and Young Growth.
+
+The case is evidence, not hope: the company's own record above the median for its size, orders or
+contracts that cover years of the path, the company's own margin where its business is mature,
+capital the growth ahead does not need. Accept it or reject it, with the reason. Accept it where
+a filing or a transcript carries it, and write the override; a belief or a held rate above the
+sales class's 90th percentile needs that evidence in any case. Reject it where it rests on a
+forecast or a story alone. Test the lower case with the same care. Section 8 records each test
+in one sentence (the template's "The higher case"), and the judgment's decision says whether the
+higher case stood.
 
 The guidance, at your best effort and never required. A clear full-year guidance for the right
 fiscal year may replace the consensus: an NTM anchor, `earnings.ntm` on Mature Growth or
@@ -930,9 +971,9 @@ is refused (400), naming the key. The debate lives in section 6, and the thesis 
 |---|---|---|
 | `phase` | every report | the life-cycle phase the classifier gave, and whether it fits |
 | `moat` | every report | the moat class: how long the company can earn more than its cost of capital |
-| `belief` | every report | the growth rate the route holds: the belief on Mature Growth, the held rate on High Growth and Young Growth, the decline rate on Decline; on Mature Stable and Start-up, which hold none, the growth the evidence supports against the growth the price needs |
-| `roic` | Mature Growth, Mature Stable | the return on invested capital and the runway return; when `heavy-capex` fires, read the newest year's marginal return (`intermediates/runway_return/one_year`) and the capital-spending guidance, decide the runway return and cite both figures |
-| `target_margin` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten |
+| `belief` | every report | the growth rate the route holds: the belief on Mature Growth, the held rate on High Growth and Young Growth, the decline rate on Decline; on Mature Stable and Start-up, which hold none, the growth the evidence supports against the growth the price needs; and whether the higher case stood (step 10) |
+| `roic` | Mature Growth, Mature Stable | the return on invested capital and the runway return; when `heavy-capex` fires, read the newest year's marginal return (`intermediates/runway_return/one_year`) and the capital-spending guidance, decide the runway return and cite both figures; when `return-without-goodwill` fires, decide whether the growth ahead is built or bought; and whether the higher case stood (step 10) |
+| `target_margin` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten; and whether the higher case stood (step 10) |
 
 The route that decides the list is the current review's when the company has one, else the
 snapshot's. The decision holds no figure, not even a cited one: the check rejects any quantity

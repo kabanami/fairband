@@ -150,6 +150,14 @@ The kill criteria of section 11 test it.
 
 ### Section 8: valuation
 
+- **What the price needs**, where the price is well above the value (the answer of `company`
+  carries `priceNeeds`): the section leads with it, in one or two sentences of your own. The
+  growth the price needs, `snapshot:<id>/intermediates/implied_growth` (under your overrides the
+  review's), beside the growth the value rests on; on High Growth and Young Growth the margin the
+  price needs too, `/implied_margin`, beside the margin the value rests on. Where no rate reaches
+  the price, say so in words and cite no figure. Then say in one sentence whether the evidence
+  supports that need. A value far below the price says only that the method cannot reach the
+  price; this part says what the price asks of the business.
 - **The phase.** The phase, the growth word and the margin direction behind it, any check flag,
   the Dickinson stage, and why if an override changed it. Then the growth the price needs,
   `snapshot:<id>/intermediates/implied_growth`, or under your overrides the review's,
@@ -163,13 +171,21 @@ The kill criteria of section 11 test it.
 - **The value.** The value before any change to the inputs (the mechanical value) and after the
   changes that stand (the reviewed value). One sentence in words for each override that moved it,
   citing its bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
+- **The higher case.** For the growth, the margin and the return on new capital, as the
+  company's route reads them: the strongest evidence for a higher figure, and why it stood or
+  did not, one sentence each, the figures cited. Where it stood, the override's bridge line above
+  carries it; where it did not, the sentence names what the evidence lacked.
 - **The charge**, on Mature Growth and Mature Stable, where the report explains what the growth
   costs: the return the company earns on new capital, year by year,
   `snapshot:<id>/intermediates/charge/return_by_year/<n>` (counted from 0, year one first), held
   for `/charge/hold_years` years, and the growth it pays for, `/charge/growth_by_year/<n>`. A year
   whose growth outruns its return pays out less than nothing: say the owners fund that year's
   growth. Under heavy capital spending, cite the newest year's marginal return,
-  `/runway_return/one_year`, beside the return you chose. Under your overrides cite the review's,
+  `/runway_return/one_year`, beside the return you chose. Where the return starts at the figure
+  without goodwill (the note `return-without-goodwill`), cite the return on the capital without
+  goodwill and bought intangibles, `/runway_return/without_goodwill/measure`, say that the return
+  with them is below the yearly return investors require, and say why the growth ahead is the
+  business's own, not bought. Under your overrides cite the review's,
   `review:<id>/intermediates/charge/...`.
 - **The value outside the business**: where an override set one, what it is (a stake, an asset
   held for sale, a settlement still owed), its size a share after tax, cited as its bridge line,
@@ -302,6 +318,11 @@ What would change the view:
 
 Valid until 27 Jan 2027, the date of the next earnings report.
 ```
+
+Where the price is well above the value, the paragraph on the price says what the price needs,
+in one plain sentence after the value: "The price needs earnings to grow 11.9% a year for twenty
+years; the value rests on 5.3%." Both figures are cites. Where no rate reaches the price, the
+sentence says so and cites none.
 
 A part may hold line breaks. The reader renders this subset and no more: a blank line between
 paragraphs; a list, its items `- ` bullets (not `* `) or `1. ` numbers, one a line, with no blank
