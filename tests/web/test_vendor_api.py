@@ -228,15 +228,17 @@ def test_insider_trades_answer_the_newest_trades_up_to_a_limit(
     page = [trade | {"reportingName": name} for name in names]
     vendor.answer = lambda request: httpx.Response(200, json=page)
     url = "/api/vendor/insider-trades/ACME"
+    for bad in ("0", "101"):  # refused before any call: FMP is not asked
+        refused = with_passthrough.get(url, params={"limit": bad})
+        assert (refused.status_code, refused.json()["detail"]) == (400, "limit is 1 to 100")
+    assert vendor.paths == []
     cut = with_passthrough.get(url, params={"limit": "2"}).json()
     assert [t["reportingName"] for t in cut["payload"]] == ["Roe Jane", "Doe John"]
     assert (cut["tradeCount"], cut["reused"]) == (3, False)
     whole = with_passthrough.get(url).json()
     assert [t["reportingName"] for t in whole["payload"]] == names
     assert (whole["tradeCount"], whole["reused"], whole["responseId"]) == (3, True, 1)
-    for bad in ("0", "101"):
-        refused = with_passthrough.get(url, params={"limit": bad})
-        assert (refused.status_code, refused.json()["detail"]) == (400, "limit is 1 to 100")
+    assert vendor.paths == ["/stable/insider-trading/search"]
 
 
 def test_a_body_that_is_not_json_is_502(

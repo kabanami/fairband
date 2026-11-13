@@ -86,7 +86,10 @@ them: the server computed them.
 - `capital_allocation`: dividends, buybacks, the change in the share count, acquisitions.
 - `quality`: Altman's Z″ and Piotroski's F.
 
-A cell with no value is not on file: say so in words, and give its `note` when it has one.
+A cell with no value holds no figure: say so in words, and give its `note` when it has one, which
+says why (a line not on file, an interest expense stored as zero). A cell can also hold a figure
+and a note: a year's ROIC on invested capital at or below zero has no meaning, so give the note's
+words beside the figure, or leave the figure out and say why.
 Acquisitions and Beneish's M are not on file yet. Lead with the part that holds the measures that
 matter most for the phase (Damodaran):
 
@@ -284,9 +287,11 @@ link, since a link names the `derived:` id the call before it answered:
    forward revenue's `estimate:` ref, or EBITDA.
 
 A snapshot refused before its route holds no `inputs/market_cap`. There, start from a `product` of
-`snapshot:<id>/price` and the newest year's diluted shares, `fact:<symbol>/shares_diluted/<year>`,
-a currency total, and use its `derived:` id in link 1. On an ADR or a company in another currency,
-say in words that the figure is approximate.
+`snapshot:<id>/price` and `snapshot:<id>/inputs/shares_diluted`, the market cap in US dollars, and
+use its `derived:` id in link 1. On a company in another currency the tables are in that currency
+and the price is not: first take a `product` of that id and `snapshot:<id>/inputs/fx_rate`, the
+market cap in the currency, a derivation with no unit, and use that one in link 1. A snapshot with
+no `inputs/shares_diluted` gives no enterprise value: say so in words.
 
 EBITDA is a `sum` of the `operating_income` and `depreciation` `fact:` lines. P/B is a `ratio` of
 the market cap and the `equity` `fact:` line.

@@ -10,7 +10,8 @@ record needs its text", "a guidance record needs its source"; a low or a high th
 finite number is refused by the body's types, a 400 too. For a fiscal-year revenue or EPS record
 the server reads the actual of the fiscal year before the guided one from the
 statements as ``fact:<symbol>/revenue/<year>`` or ``fact:<symbol>/eps_diluted/<year>`` resolves
-it; with no actual on file the record takes no step. The company needs no snapshot. The call's
+it; with no actual on file the record takes no step, and neither does a record on a basis other
+than ``gaap``, whatever the actual (``store.guidance``). The company needs no snapshot. The call's
 date orders the records of one metric, period and basis (``store.guidance``): a record of a call
 on or after the current one's supersedes it, whose ``supersededBy`` then names it, and a record of
 an earlier call is stored already superseded.

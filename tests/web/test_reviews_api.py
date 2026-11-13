@@ -593,6 +593,13 @@ def test_an_ntm_override_cites_a_guidance_record(
     cite = {"kind": "guidance", "ref": f"guidance:{theirs}", "note": "FY2027 EPS"}
     r = client.post("/api/companies/AAPL/overrides", json=ntm | {"evidence": [cite]}, headers=AGENT)
     assert (r.status_code, r.json()) == (404, {"detail": f"no guidance record {theirs} for AAPL"})
+    # an id past the store's integers names no record either: a 404, not a server error
+    huge = cite | {"ref": "guidance:99999999999999999999"}
+    r = client.post("/api/companies/AAPL/overrides", json=ntm | {"evidence": [huge]}, headers=AGENT)
+    assert (r.status_code, r.json()) == (
+        404,
+        {"detail": "no guidance record 99999999999999999999 for AAPL"},
+    )
     bad = cite | {"ref": "the Q3 call"}
     r = client.post("/api/companies/AAPL/overrides", json=ntm | {"evidence": [bad]}, headers=AGENT)
     assert (r.status_code, r.json()) == (

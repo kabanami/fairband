@@ -104,6 +104,28 @@ def test_a_step_needs_a_fiscal_year_revenue_or_eps_and_a_positive_base(
     assert year_before("eps", "2026Q3") is None and year_before("capex", "2026") is None
 
 
+def test_a_step_stored_on_another_basis_is_not_read(conn: sqlite3.Connection) -> None:
+    """A record written before the store kept the step to the ``gaap`` basis holds a rate across
+    two bases (an adjusted EPS of $11.50 over a GAAP $6.00: 91.7%): the read leaves it out, as a
+    new record leaves it unstored, and a GAAP record's step stands."""
+    adjusted = _add(conn, "eps", "2026", 11.5, 11.5, 6.0, basis="adjusted")
+    constant = _add(conn, "revenue", "2026", 1_200.0, 1_200.0, 1_000.0, basis="constant-currency")
+    gaap = _add(conn, "eps", "2026", 6.3, 6.6, 6.0)
+    conn.execute("UPDATE guidance SET step = '0.9167' WHERE id = ?", (adjusted,))
+    conn.execute("UPDATE guidance SET step = '0.2' WHERE id = ?", (constant,))
+    conn.commit()
+    for record_id in (adjusted, constant):
+        row = guidance_row(conn, record_id)
+        assert row is not None and row.step is None, record_id
+    kept = guidance_row(conn, gaap)
+    assert kept is not None and kept.step == pytest.approx(0.075)
+    assert {g.id: g.step for g in guidance_for(conn, "AAPL")} == {
+        adjusted: None,
+        constant: None,
+        gaap: pytest.approx(0.075),
+    }
+
+
 def test_a_newer_record_supersedes_the_older(conn: sqlite3.Connection) -> None:
     """Same metric and period: the old one's ``superseded_by`` is the new id, both listed newest
     first; another period, metric or company is left as it was."""

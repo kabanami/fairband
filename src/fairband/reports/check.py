@@ -94,7 +94,7 @@ from decimal import Decimal
 from fairband.engine.types import Route
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
-from fairband.reports.refs import Resolved, Resolver, rests_on, same_snapshot
+from fairband.reports.refs import Resolved, Resolver, record_id_of, rests_on, same_snapshot
 from fairband.store.reviews import latest_review, latest_review_on, review_row
 from fairband.store.sensitivities import sensitivity_row
 
@@ -368,9 +368,9 @@ def cited_records(
         if rested is not None:
             snapshots.append(rested)
         form, _, path = ref.partition(":")
-        head = path.partition("/")[0]
-        if head.isdigit() and form in ("review", "secondary"):
-            (reviews if form == "review" else secondaries).append(int(head))
+        cited = record_id_of(path.partition("/")[0])
+        if cited is not None and form in ("review", "secondary"):
+            (reviews if form == "review" else secondaries).append(cited)
     return (
         min(snapshots, default=None),
         max(reviews, default=None),
@@ -489,8 +489,8 @@ def _stale_review(conn: sqlite3.Connection, symbol: str, ref: str) -> str | None
     """Why a ``review:`` cite of the company is not of its current review, the newest on its
     snapshot that the current one is or reprices; ``None`` when it is, or for another ref."""
     form, _, path = ref.strip().partition(":")
-    head = path.partition("/")[0]
-    cited = review_row(conn, int(head)) if form == "review" and head.isdigit() else None
+    record = record_id_of(path.partition("/")[0])
+    cited = review_row(conn, record) if form == "review" and record is not None else None
     if cited is None or cited.symbol != symbol:
         return None
     current = latest_review(conn, symbol)
@@ -512,8 +512,10 @@ def _stale_reading(conn: sqlite3.Connection, symbol: str, ref: str) -> str | Non
     stored review; a reading taken under none is stale once a review is current on its snapshot);
     ``None`` when it is not, or for another ref."""
     form, _, path = ref.strip().partition(":")
-    head = path.partition("/")[0]
-    reading = sensitivity_row(conn, int(head)) if form == "sensitivity" and head.isdigit() else None
+    record = record_id_of(path.partition("/")[0])
+    reading = None
+    if form == "sensitivity" and record is not None:
+        reading = sensitivity_row(conn, record)
     if reading is None or reading.symbol != symbol:
         return None
     if reading.review_id is None:

@@ -583,9 +583,11 @@ The server computes the midpoint. For a fiscal-year revenue or EPS record on the
 also computes the step: the growth from the year before's actual on file, so you never compute
 that rate. The step is the track-record figure: the guided growth set against what the company
 last delivered, for section 5. It is never an override's `new`. An `adjusted` or a
-`constant-currency` record takes no step, since the actual on file is the GAAP one: for the growth
+`constant-currency` record takes no step, since the actual on file is the GAAP one. For the growth
 of an adjusted figure, record the year before's adjusted actual from the release as a finding and
-`derive` the `growth` of the record's midpoint over it.
+`derive` the `growth` of the record's midpoint over it. For a constant-currency figure, `derive`
+the `growth` of the midpoint over the year before's `fact:` line, and call it growth at constant
+currency.
 
 A newer record of the same metric, period and basis supersedes the older one, in the order of the
 calls' dates. Record the previous call's figure too, so the section can say raised, held or cut:

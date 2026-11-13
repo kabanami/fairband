@@ -165,7 +165,7 @@ from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.reviews import write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
-from fairband.reports.refs import Resolver, fact_ref, guidance_cited, same_snapshot
+from fairband.reports.refs import MAX_ID, Resolver, fact_ref, guidance_cited, same_snapshot
 from fairband.store.db import transaction
 from fairband.store.guidance import anchor_year, guidance_row
 from fairband.store.ledger import Writer, record
@@ -835,7 +835,7 @@ def _require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[
         cited = guidance_cited(item.ref)
         if cited is None:
             raise HTTPException(400, GUIDANCE_REF)
-        found = guidance_row(conn, cited)
+        found = None if cited > MAX_ID else guidance_row(conn, cited)  # no row has such an id
         if found is None or found.symbol != symbol:
             raise HTTPException(404, f"no guidance record {cited} for {symbol}")
         if found.superseded_by is not None:

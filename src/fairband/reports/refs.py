@@ -76,7 +76,8 @@ intermediate or a vendor field. An engine input's unit maps onto them: a currenc
 ``currency``, ``<code> a share`` ``per-share``, ``ratio`` ``percent``, ``shares`` and the other
 counted things ``count``; so a figure of a company in another currency (spec 2026-11-10 7.4),
 its input, an override's bridge line or a sensitivity axis, reads as a USD one does. The ADR ratio
-(``adr_ratio``, ordinary shares per ADS) is a ``multiple``, not a fraction; the rate
+(``adr_ratio``, ordinary shares per ADS) and the sales-to-capital (``sales_to_capital``, revenue
+over invested capital) are each a ``multiple``, not a fraction; the rate
 (``fx_rate``, ``<code> per USD``) has no unit. The period is the fiscal year (``2025``), the
 quarter (``2026-Q4``), ``ttm``, or the close's or the multiple's date for the forms that have
 one, a finding's and a guidance record's as recorded; ``None`` for the others. The snapshot is
@@ -159,6 +160,7 @@ from fairband.web.policy_rows import policy_json
 
 __all__ = [
     "ESTIMATE_UNITS",
+    "MAX_ID",
     "PEER_UNITS",
     "Resolved",
     "Resolver",
@@ -170,6 +172,7 @@ __all__ = [
     "guidance_cited",
     "multiple_ref",
     "peer_ref",
+    "record_id_of",
     "resolve",
     "rests_on",
     "same_snapshot",
@@ -247,7 +250,7 @@ _INPUT_UNITS = {"price": "per-share", "adr_ratio": "multiple", "sales_to_capital
 # A step of a path that is not there, told apart from a figure stored as null.
 _ABSENT = object()
 # The largest integer SQLite holds: an id past it names no row.
-_MAX_ID = 2**63 - 1
+MAX_ID = 2**63 - 1
 # The lines the store signs as outflows (``cfi`` and ``cff`` are net flows, not these): the
 # statement lines, the tables' rows of them and the snapshot's trailing inputs.
 _OUTFLOW_LINES = frozenset({"capex", "dividends", "buybacks"})
@@ -495,7 +498,7 @@ def rests_on(conn: sqlite3.Connection, ref: str) -> int | None:
     ``None`` for the other forms and for a record that does not exist."""
     form, path = _split(ref)
     head = path.partition("/")[0]
-    record_id = _record_id(head)
+    record_id = record_id_of(head)
     if record_id is None:
         return None
     if form == "snapshot":
@@ -1186,18 +1189,19 @@ def _whole(text: str) -> int | None:
     return int(text) if text.isascii() and text.isdigit() else None
 
 
-def _record_id(text: str) -> int | None:
+def record_id_of(text: str) -> int | None:
     """``text`` as a record's id; ``None`` when it is no whole number, or one past the largest
-    integer SQLite holds, which names no row and which the driver refuses to bind."""
+    integer SQLite holds (``MAX_ID``), which names no row and which the driver refuses to bind.
+    Every reader of an id an agent wrote goes through it, the check's own among them."""
     number = _whole(text)
-    return None if number is None or number > _MAX_ID else number
+    return None if number is None or number > MAX_ID else number
 
 
 def _row[T](
     read: Callable[[sqlite3.Connection, int], T | None], conn: sqlite3.Connection, text: str
 ) -> T | None:
     """The record ``read`` finds under the id ``text`` names; ``None`` where it names none."""
-    record_id = _record_id(text)
+    record_id = record_id_of(text)
     return None if record_id is None else read(conn, record_id)
 
 

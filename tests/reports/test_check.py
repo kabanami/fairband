@@ -691,6 +691,31 @@ def test_cited_records(conn: sqlite3.Connection, policy: Policy, snapshots: dict
     assert cited_records(conn, _report(["no cites"])) == (None, None, None)
 
 
+@pytest.mark.parametrize(
+    "ref",
+    [
+        "review:99999999999999999999/value",
+        "review:²/value",
+        "sensitivity:99999999999999999999/1/1",
+        "sensitivity:²/1/1",
+        "secondary:99999999999999999999/value",
+        "secondary:²/value",
+    ],
+)
+def test_a_cite_of_an_id_no_row_can_have_is_one_finding(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int], ref: str
+) -> None:
+    """The check reads a review's, a reading's and a secondary valuation's id itself, before and
+    after it resolves the cite: a made-up id past the store's integers, or a digit that is not an
+    ASCII one, is an unresolved reference, and the cited records leave it out. Nothing is raised,
+    so a report that cites it is refused with the finding."""
+    sid = snapshots["AAPL"]
+    found = _one(_check(conn, policy, sid, _cite("$128", ref)), sid, "$128")
+    assert found.what == UNRESOLVED
+    sections = _report([*_clean(sid), _cite("$128", ref)])
+    assert cited_records(conn, sections) == (sid, None, None)
+
+
 def test_a_scale_word_cites_a_total_at_its_own_precision(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:

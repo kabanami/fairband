@@ -9,8 +9,10 @@ midpoint, ``(low + high) / 2``, and, for a fiscal-year ``revenue`` or ``eps`` re
 ``gaap`` basis given the actual of the year before the guided one (``year_before``), the step, the
 midpoint over that actual less one, so the agent never computes a rate; no step otherwise, nor on
 a base at or below zero, from which growth has no meaning. The actual is the statement's line, a
-GAAP figure, so an adjusted or a constant-currency record takes no step: a rate across two bases
-is no growth.
+GAAP figure, so a record on another basis takes no step: an adjusted figure over a GAAP actual
+is a rate across two bases, no growth, and a constant-currency figure over it is growth at
+constant currency, a rate the agent derives and names as such. A step such a record holds from
+before this rule is not read.
 
 The call's date orders a company's records of one metric, period and basis, of which one at most
 is current (``superseded_by`` empty): a GAAP and an adjusted figure of one call both stay current.
@@ -225,7 +227,8 @@ def _guidance(row: sqlite3.Row) -> GuidanceRow:
         low=low,
         high=high,
         midpoint=midpoint,
-        step=load_float(row["step"]),
+        # a record written before the step was kept to the gaap basis may hold one: not read
+        step=load_float(row["step"]) if row["basis"] == "gaap" else None,
         basis=row["basis"],
         as_of=load_date(row["as_of"]),
         text=row["text"],
