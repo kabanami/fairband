@@ -1020,6 +1020,32 @@ def test_derivations_in_one_call(client: TestClient, results: dict[str, Valuatio
     )
 
 
+def test_a_product_takes_the_unit_its_operands_give(client: TestClient) -> None:
+    """``product`` is a × b. A figure times a multiple or a percent keeps its unit; a figure a
+    share times a count is a total in the currency; any other pair has no unit."""
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    s = f"snapshot:{snapshot_id}"
+    r = _derive(
+        client,
+        {"operation": "product", "a": f"{s}/price", "b": f"{s}/inputs/shares_diluted"},
+        {"operation": "product", "a": "policy:required_return", "b": f"{s}/inputs/revenue_ttm"},
+        {"operation": "product", "a": "policy:required_return", "b": "policy:terminal_growth"},
+        {"operation": "product", "a": f"{s}/price_to_value", "b": f"{s}/value"},
+        {"operation": "product", "a": f"{s}/inputs/revenue_ttm", "b": f"{s}/inputs/eps_ttm"},
+    )
+    assert r.status_code == 201, r.text
+    found = r.json()["derivations"]
+    assert [(d["value"], d["unit"]) for d in found] == [
+        (pytest.approx(150.0 * 1e9), "currency"),  # the price times 1 bn diluted shares
+        (pytest.approx(0.09 * 22_800e6), "currency"),  # 9% of the trailing revenue
+        (pytest.approx(0.0027), "percent"),  # 9% of 3%
+        (pytest.approx(150.0), "per-share"),  # price ÷ value times the value: the price
+        (pytest.approx(22_800e6 * 5.30), None),  # dollars times dollars a share: no unit
+    ]
+    entries = client.get("/api/companies/AAPL/ledger").json()["entries"]
+    assert entries[-1]["summary"] == f"product of {s}/price and {s}/inputs/shares_diluted"
+
+
 def test_a_division_by_zero_has_no_value(client: TestClient) -> None:
     snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
     zero = f"snapshot:{snapshot_id}/intermediates/price_facts/drawdown_from_peak"  # 0.0

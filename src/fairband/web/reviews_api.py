@@ -100,10 +100,12 @@ company's, newest first.
 ``POST /api/companies/{symbol}/derivations`` takes ``{derivations: [{operation, a, b, years?}]}``
 and answers 201 with ``{derivations: [{id, value, unit}]}``, each stored with a ``derivation``
 ledger row resting on the latest snapshot (none without one). The operations: ``ratio`` a ÷ b,
-``difference`` a − b, ``sum`` a + b, ``growth`` a ÷ b − 1 and ``cagr`` (a ÷ b)^(1/years) − 1,
-whose ``years`` (one or more) is required. The unit: ``multiple`` for a ratio of two values in
-one unit, else none; ``percent`` for growth and cagr; a difference or a sum keeps its operands'
-unit when they share one, else none. A division by zero, a cagr over a negative ratio or a result
+``difference`` a − b, ``sum`` a + b, ``product`` a × b, ``growth`` a ÷ b − 1 and ``cagr``
+(a ÷ b)^(1/years) − 1, whose ``years`` (one or more) is required. The unit: ``multiple`` for a
+ratio of two values in one unit, else none; ``percent`` for growth and cagr; a difference or a
+sum keeps its operands' unit when they share one, else none; a product with a multiple, then
+with a percent, keeps the other operand's unit, a figure a share times a count is a ``currency``
+total, and any other product has none. A division by zero, a cagr over a negative ratio or a result
 that is not finite has no value and no unit. The refs resolve as a report's do
 (``fairband.reports.refs``, every form of spec 13.2, a ``table:`` cell included, under the
 effective policy), their units the reads' (``currency``, ``per-share``, ``percent`` ...); a ref
@@ -966,6 +968,8 @@ def _derived(
         value, unit = x - y, shared
     elif operation == "sum":
         value, unit = x + y, shared
+    elif operation == "product":
+        value, unit = x * y, _product_unit(x_unit, y_unit)
     elif y == 0:
         value, unit = None, None
     elif operation == "ratio":
@@ -979,3 +983,12 @@ def _derived(
     if value is None or not math.isfinite(value):
         return None, None
     return value, unit
+
+
+def _product_unit(a: str | None, b: str | None) -> str | None:
+    """A product's unit: a multiple, then a percent, leaves the other operand's unit; a figure a
+    share times a count is a total in the currency; any other pair has none."""
+    for scalar in ("multiple", "percent"):
+        if scalar in (a, b):
+            return b if a == scalar else a
+    return "currency" if {a, b} == {"per-share", "count"} else None

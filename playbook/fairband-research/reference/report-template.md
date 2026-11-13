@@ -283,6 +283,11 @@ link, since a link names the `derived:` id the call before it answered:
 3. `ratio` of that `derived:` id and the figure EV is set against: the revenue's `fact:` ref, a
    forward revenue's `estimate:` ref, or EBITDA.
 
+A snapshot refused before its route holds no `inputs/market_cap`. There, start from a `product` of
+`snapshot:<id>/price` and the newest year's diluted shares, `fact:<symbol>/shares_diluted/<year>`,
+a currency total, and use its `derived:` id in link 1. On an ADR or a company in another currency,
+say in words that the figure is approximate.
+
 EBITDA is a `sum` of the `operating_income` and `depreciation` `fact:` lines. P/B is a `ratio` of
 the market cap and the `equity` `fact:` line.
 

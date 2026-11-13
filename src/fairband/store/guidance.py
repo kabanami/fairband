@@ -5,10 +5,12 @@ A record: the company, the metric (one of ``METRICS``), the period (a fiscal yea
 quarter, ``2026Q3``), its low and its high (equal for a point; a percent as a fraction), the
 basis (one of ``BASES``), ``as_of`` the call's date, the sentence verbatim, the source (the
 transcript's ``response:`` ref, or a filing), and the writer and the time. The store computes the
-midpoint, ``(low + high) / 2``, and, for a fiscal-year ``revenue`` or ``eps`` record given the
-actual of the year before the guided one (``year_before``), the step, the midpoint over that
-actual less one, so the agent never computes a rate; no step otherwise, nor on a base
-at or below zero, from which growth has no meaning.
+midpoint, ``(low + high) / 2``, and, for a fiscal-year ``revenue`` or ``eps`` record on the
+``gaap`` basis given the actual of the year before the guided one (``year_before``), the step, the
+midpoint over that actual less one, so the agent never computes a rate; no step otherwise, nor on
+a base at or below zero, from which growth has no meaning. The actual is the statement's line, a
+GAAP figure, so an adjusted or a constant-currency record takes no step: a rate across two bases
+is no growth.
 
 The call's date orders a company's records of one metric, period and basis, of which one at most
 is current (``superseded_by`` empty): a GAAP and an adjusted figure of one call both stay current.
@@ -130,14 +132,15 @@ def insert_guidance(
     base_actual: float | None,
 ) -> int:
     """Record the guidance, its step from ``base_actual`` (the actual on file of the year before
-    the guided one, or
-    ``None``) when it takes one, and order it against the company's current record of the same
-    metric, period and basis by the call's date (module docstring); return its id."""
+    the guided one, or ``None``) when it takes one, a ``gaap`` record alone, and order it against
+    the company's current record of the same metric, period and basis by the call's date (module
+    docstring); return its id."""
     symbol = exchange_symbol(symbol)
     _check(metric, period, low, high, basis, text, source)
     midpoint = (low + high) / 2
     step = None
-    if year_before(metric, period) is not None and base_actual is not None and base_actual > 0:
+    stepped = basis == "gaap" and year_before(metric, period) is not None
+    if stepped and base_actual is not None and base_actual > 0:
         step = midpoint / base_actual - 1
     row = (
         symbol,

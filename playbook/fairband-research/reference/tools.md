@@ -134,7 +134,9 @@ such as `response:731/0/revenue`.
 - `news(symbol, limit?)`: recent stock news: 20 items, or `limit` up to 100.
 - `segments(symbol)`: the revenue by product and by region, two responses under `product` and
   `geographic`.
-- `insider_trades(symbol)`: the insiders' trades.
+- `insider_trades(symbol, limit?)`: the insiders' newest trades: 25, or `limit` up to 100.
+  `tradeCount` says how many are on file; a trade keeps its place in the stored page, so its
+  `response:` ref is the same at any limit.
 - `transcript_dates(symbol)`: the fiscal year, the quarter and the date of every earnings call on
   file, newest first. It finds the last call, so you never guess a year.
 - `dcf(symbol)`: FMP's discounted cash flow value and its levered one, two responses under `dcf`
@@ -281,8 +283,8 @@ and store nothing:
   Fairband with its source, so a report can cite it as `finding:<id>`.
 - `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source)`: record a figure
   the company guided on a call for a future period, low and high equal for a point; it answers the
-  record with the midpoint and, for a fiscal-year revenue or EPS figure, the step the server
-  computed. An override cites it in its evidence as `guidance:<id>`; a report cites its figures.
+  record with the midpoint and, for a fiscal-year revenue or EPS figure on the `gaap` basis, the
+  step the server computed. An override cites it in its evidence as `guidance:<id>`; a report cites its figures.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input of
   the eighteen in `SKILL.md`'s table, the diluted share count (`shares.diluted`) and the value
   outside the business (`value.outside`) among them; applied, it answers `{override, review,
@@ -374,8 +376,8 @@ and store nothing:
   values in the unit an override of it takes: "an axis holds one to five values"; the two tags
   differ, "the two tags differ".
 - A derivation (`derive`): `{operation, a, b, years?}`. The operation is `ratio` (a ÷ b),
-  `difference` (a − b), `sum` (a + b), `growth` (a ÷ b − 1) or `cagr`, the compound annual growth
-  over `years`. `a` and `b` are refs.
+  `difference` (a − b), `sum` (a + b), `product` (a × b), `growth` (a ÷ b − 1) or `cagr`, the
+  compound annual growth over `years`. `a` and `b` are refs.
 - A section (`report_submit`): `{heading, parts}`, a part a plain string or a cite
   `{cite, ref, period?}`.
 - A judgment (`report_submit`): `{judgment, decision, override_id?}`, the judgment one of

@@ -5,10 +5,13 @@ reused, payload}``: the stored vendor response to the call, reused when it was o
 reuse window, else fetched and stored (``fairband.refresh.passthrough``), its payload scrubbed of
 the keys; a report cites a field of it as ``response:<responseId>/<json pointer>``. The kinds are
 ``transcript`` (``year`` and ``quarter`` required), ``news`` (``limit``, 1 to 100, 20 when left
-out), ``segments``, ``insider-trades``, ``transcript-dates`` (the fiscal year, the quarter and
-the date of every call on file) and ``dcf`` from FMP, and ``pe-history`` from GuruFocus, reused
-for seven days; ``segments`` and ``dcf`` are two responses each, answered as ``{responses:
-{product: {...}, geographic: {...}}}`` and ``{responses: {dcf: {...}, levered: {...}}}``.
+out), ``segments``, ``insider-trades`` (``limit``, 1 to 100, answers the first of the stored
+page's trades, every one when left out, with ``tradeCount``, the trades the page holds; a trade
+keeps its place, so a ``response:`` ref names it at any limit), ``transcript-dates`` (the fiscal
+year, the quarter and the date of every call on file) and ``dcf`` from FMP, and ``pe-history``
+from GuruFocus, reused for seven days; ``segments`` and ``dcf`` are two responses each, answered
+as ``{responses: {product: {...}, geographic: {...}}}`` and ``{responses: {dcf: {...}, levered:
+{...}}}``.
 
 The route may call a vendor, so a request carries ``X-Fairband-Request: 1`` as a write does,
 else 403 before anything else is read (``app``, D11). An unknown kind, a symbol that is not one or
@@ -67,6 +70,8 @@ def add_vendor_routes(app: FastAPI, passthrough: Passthrough | None) -> None:
             raise HTTPException(502, str(exc)) from None
         if len(parts) > 1:  # segments and dcf: two calls, each its part
             return {"responses": {part: _answer(fetched) for part, fetched in parts.items()}}
+        if kind == "insider-trades":
+            return _trades(parts[kind], limit)
         return _answer(parts[kind])
 
 
@@ -77,3 +82,13 @@ def _answer(fetched: Fetched) -> dict[str, Any]:
         "reused": fetched.reused,
         "payload": fetched.payload,
     }
+
+
+def _trades(fetched: Fetched, limit: int | None) -> dict[str, Any]:
+    """The insider trades' answer: the first ``limit`` trades of the stored page, every one
+    without a limit, and ``tradeCount``, the trades the stored page holds. A cut keeps each
+    trade's place, so ``response:<id>/<n>/...`` names the same trade whatever the limit."""
+    answer, page = _answer(fetched), fetched.payload
+    if not isinstance(page, list):
+        return answer
+    return answer | {"payload": page if limit is None else page[:limit], "tradeCount": len(page)}

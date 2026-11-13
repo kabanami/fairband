@@ -102,6 +102,49 @@ def test_snapshot_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
         assert _resolve(conn, ref, policy) is None, ref
 
 
+@pytest.mark.parametrize("record", ["99999999999999999999", "²"])
+@pytest.mark.parametrize(
+    "form",
+    [
+        "snapshot:{}/value",
+        "review:{}/value",
+        "secondary:{}/value",
+        "sensitivity:{}/0/0",
+        "finding:{}",
+        "guidance:{}/midpoint",
+        "derived:{}",
+        "response:{}/0/content",
+        "filing:{}/S/1/0",
+    ],
+)
+def test_an_id_no_row_can_have_names_nothing(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int], form: str, record: str
+) -> None:
+    """A made-up id past SQLite's integers, or a digit that is not an ASCII one, names no record:
+    the ref resolves to nothing, as an unknown id does, and nothing is raised, so a report that
+    cites it is refused for an unresolved reference and the server does not fail."""
+    ref = form.format(record)
+    resolver = Resolver(conn, "AAPL", policy)
+    assert resolver.resolve(ref) is None
+    assert resolver.describe(ref) == ref
+    assert rests_on(conn, ref) is None
+
+
+def test_a_digit_that_is_not_ascii_is_no_index(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """``str.isdigit`` takes "²" for a digit and ``int`` does not: a bridge line or a list item
+    numbered so is absent, on a record that exists."""
+    review_id = _review_id(conn, policy, snapshots["AAPL"])
+    assert _resolve(conn, f"review:{review_id}/bridge/1/delta", policy) is not None
+    assert _resolve(conn, f"review:{review_id}/bridge/²/delta", policy) is None
+    stored = record_response(
+        conn, "fmp", "news", {"symbol": "AAPL"}, "AAPL", 200, '[{"shares": 5}]', None, NOW
+    )
+    assert _resolve(conn, f"response:{stored}/0/shares", policy) == Resolved(5.0, None, None, None)
+    assert _resolve(conn, f"response:{stored}/²/shares", policy) is None
+
+
 def test_a_refused_snapshot_resolves_to_no_value(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:

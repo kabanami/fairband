@@ -241,10 +241,13 @@ _DRIVER_LISTS = frozenset({"revenue_growth", "operating_margin"})
 _GUIDANCE_FIGURES = frozenset({"low", "high", "midpoint", "step"})
 _GUIDANCE_RECORD = re.compile(r"guidance:(\d+)")
 # The inputs whose engine unit the read's units do not follow: the price, a figure a share whose
-# unit names its currency; the ADR ratio, ordinary shares per ADS, whose ``ratio`` is no fraction.
-_INPUT_UNITS = {"price": "per-share", "adr_ratio": "multiple"}
+# unit names its currency; the ADR ratio, ordinary shares per ADS, and the sales-to-capital,
+# revenue over invested capital, whose ``ratio`` is no fraction.
+_INPUT_UNITS = {"price": "per-share", "adr_ratio": "multiple", "sales_to_capital": "multiple"}
 # A step of a path that is not there, told apart from a figure stored as null.
 _ABSENT = object()
+# The largest integer SQLite holds: an id past it names no row.
+_MAX_ID = 2**63 - 1
 # The lines the store signs as outflows (``cfi`` and ``cff`` are net flows, not these): the
 # statement lines, the tables' rows of them and the snapshot's trailing inputs.
 _OUTFLOW_LINES = frozenset({"capex", "dividends", "buybacks"})
@@ -492,9 +495,9 @@ def rests_on(conn: sqlite3.Connection, ref: str) -> int | None:
     ``None`` for the other forms and for a record that does not exist."""
     form, path = _split(ref)
     head = path.partition("/")[0]
-    if not head.isdigit():
+    record_id = _record_id(head)
+    if record_id is None:
         return None
-    record_id = int(head)
     if form == "snapshot":
         return None if snapshot_row(conn, record_id) is None else record_id
     if form == "review":
@@ -638,7 +641,7 @@ class Resolver:
 
     def _snapshot(self, path: str) -> Resolved | None:
         head, _, rest = path.partition("/")
-        row = snapshot_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(snapshot_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
         result = row.result
@@ -667,7 +670,7 @@ class Resolver:
 
     def _review(self, path: str) -> Resolved | None:
         head, _, rest = path.partition("/")
-        row = review_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(review_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
         pieces = rest.split("/")
@@ -689,7 +692,7 @@ class Resolver:
 
     def _secondary(self, path: str) -> Resolved | None:
         head, _, rest = path.partition("/")
-        row = secondary_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(secondary_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
         pieces = rest.split("/")
@@ -733,7 +736,7 @@ class Resolver:
         """A cell by its row and its column, a refused cell resolving with no value; or an axis
         value by its row or its column, in its input's unit."""
         pieces = path.split("/")
-        row = sensitivity_row(self.conn, int(pieces[0])) if pieces[0].isdigit() else None
+        row = _row(sensitivity_row, self.conn, pieces[0])
         if row is None or row.symbol != self.symbol or len(pieces) != 3:
             return None
         if pieces[1] in _AXES:
@@ -855,28 +858,28 @@ class Resolver:
         return None if figures is None else _figure(getattr(figures, field), PEER_UNITS[field])
 
     def _finding(self, path: str) -> Resolved | None:
-        row = finding_row(self.conn, int(path)) if path.isdigit() else None
+        row = _row(finding_row, self.conn, path)
         if row is None or row.symbol != self.symbol:
             return None
         return _figure(row.value, row.unit, row.period, None)
 
     def _guidance(self, path: str) -> Resolved | None:
         head, _, field = path.partition("/")
-        row = guidance_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(guidance_row, self.conn, head)
         if row is None or row.symbol != self.symbol or field not in _GUIDANCE_FIGURES:
             return None
         unit = "percent" if field == "step" else GUIDANCE_UNITS[row.metric]
         return _figure(getattr(row, field), unit, row.period)
 
     def _derived(self, path: str) -> Resolved | None:
-        row = derivation_row(self.conn, int(path)) if path.isdigit() else None
+        row = _row(derivation_row, self.conn, path)
         if row is None or row.symbol != self.symbol:
             return None
         return _figure(row.value, row.unit, None, rests_on(self.conn, f"derived:{path}"))
 
     def _response(self, path: str) -> Resolved | None:
         head, slash, pointer = path.partition("/")
-        row = response_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(response_row, self.conn, head)
         text = None if row is None else response_payload(self.conn, row.id)
         if row is None or row.symbol != self.symbol or text is None:
             return None
@@ -905,7 +908,7 @@ class Resolver:
         the endpoint ``filing_report.ENDPOINT``, an object; ``None`` otherwise."""
 
         def read() -> tuple[ResponseRow, Mapping[str, Any]] | None:
-            row = response_row(self.conn, int(head)) if head.isdecimal() else None
+            row = _row(response_row, self.conn, head)
             if row is None or row.symbol != self.symbol or row.endpoint != filing_report.ENDPOINT:
                 return None
             text = response_payload(self.conn, row.id)
@@ -956,10 +959,10 @@ class Resolver:
     def _snapshot_source(self, head: str, rest: Sequence[str]) -> str | None:
         """The snapshot, the path in words and the snapshot's price date."""
         words = _snapshot_words(rest)
-        if words is None or not head.isdigit():
+        if words is None:
             return None
         row: SnapshotRow | None = self._once(
-            f"snapshot {head}", lambda: snapshot_row(self.conn, int(head))
+            f"snapshot {head}", lambda: _row(snapshot_row, self.conn, head)
         )
         if row is None or row.symbol != self.symbol:
             return None
@@ -969,7 +972,7 @@ class Resolver:
     def _review_source(self, head: str, rest: Sequence[str]) -> str | None:
         """The review and the path in words, a bridge line with its input's label, an
         intermediate in the snapshot's words."""
-        row = review_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(review_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
         match rest:
@@ -985,14 +988,14 @@ class Resolver:
 
     def _finding_source(self, head: str) -> str | None:
         """The finding and its source as recorded."""
-        row = finding_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(finding_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
         return f"finding {row.id}: {row.source_ref}"
 
     def _guidance_source(self, head: str, name: str) -> str | None:
         """The guidance record, its metric and period, and the figure named."""
-        row = guidance_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(guidance_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
         guided = f"{field_words(row.metric)} for {_period_words(row.period)}"
@@ -1000,7 +1003,7 @@ class Resolver:
 
     def _derived_source(self, head: str) -> str | None:
         """The derivation, its operation and its operands' refs."""
-        row = derivation_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(derivation_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
         over = "" if row.years is None else f" over {row.years} years"
@@ -1008,7 +1011,7 @@ class Resolver:
 
     def _response_source(self, head: str) -> str | None:
         """The vendor, the endpoint and the day the response was observed."""
-        row = response_row(self.conn, int(head)) if head.isdigit() else None
+        row = _row(response_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
         vendor = _PROVIDER_WORDS.get(row.provider, row.provider)
@@ -1161,7 +1164,8 @@ def _nth(items: Sequence[Any], n: str) -> Any:
 
 def _index(items: Sequence[Any], n: str) -> int | None:
     """The index of the item numbered ``n`` from 1; ``None`` where there is none."""
-    return int(n) - 1 if n.isdigit() and 1 <= int(n) <= len(items) else None
+    number = _whole(n)
+    return number - 1 if number is not None and 1 <= number <= len(items) else None
 
 
 def _at_path(x: Any, keys: Sequence[str]) -> Any:
@@ -1169,11 +1173,32 @@ def _at_path(x: Any, keys: Sequence[str]) -> Any:
     for key in keys:
         if isinstance(x, Mapping):
             x = x.get(key, _ABSENT)
-        elif isinstance(x, list | tuple) and key.isdigit() and int(key) < len(x):
-            x = x[int(key)]
+        elif isinstance(x, list | tuple) and (k := _whole(key)) is not None and k < len(x):
+            x = x[k]
         else:
             return _ABSENT
     return x
+
+
+def _whole(text: str) -> int | None:
+    """``text`` as a whole number, ASCII digits alone: ``str.isdigit`` takes "²" for a digit and
+    ``int`` refuses it. ``None`` for anything else."""
+    return int(text) if text.isascii() and text.isdigit() else None
+
+
+def _record_id(text: str) -> int | None:
+    """``text`` as a record's id; ``None`` when it is no whole number, or one past the largest
+    integer SQLite holds, which names no row and which the driver refuses to bind."""
+    number = _whole(text)
+    return None if number is None or number > _MAX_ID else number
+
+
+def _row[T](
+    read: Callable[[sqlite3.Connection, int], T | None], conn: sqlite3.Connection, text: str
+) -> T | None:
+    """The record ``read`` finds under the id ``text`` names; ``None`` where it names none."""
+    record_id = _record_id(text)
+    return None if record_id is None else read(conn, record_id)
 
 
 def _unescaped(key: str) -> str:

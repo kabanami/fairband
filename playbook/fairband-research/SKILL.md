@@ -184,7 +184,8 @@ filing's `link`, never by a search of EDGAR.
 
 From Fairband, read `segments(symbol)` for the revenue by product and by region, and
 `transcript(symbol, year, quarter)` for the earlier earnings calls; the last call is step 5's.
-`insider_trades(symbol)` shows what the insiders bought and sold.
+`insider_trades(symbol)` shows what the insiders bought and sold, the newest 25 trades unless you
+ask for more with `limit`.
 
 Record a finding (a dated fact with its source) with `finding_add` for every number from outside
 Fairband that the report will cite. Fairband's own figures need no finding, a filing report's
@@ -578,10 +579,13 @@ Record one with `guidance_add(symbol, metric, period, low, high, basis, as_of, t
 - `as_of`: the call's date, from `transcript_dates`.
 - `text`: the sentence, verbatim. `source`: the transcript's `response:<responseId>`, or a filing.
 
-The server computes the midpoint. For a fiscal-year revenue or EPS record it also computes the
-step: the growth from the year before's actual on file, so you never compute that rate. The step
-is the track-record figure: the guided growth set against what the company last delivered, for
-section 5. It is never an override's `new`.
+The server computes the midpoint. For a fiscal-year revenue or EPS record on the `gaap` basis it
+also computes the step: the growth from the year before's actual on file, so you never compute
+that rate. The step is the track-record figure: the guided growth set against what the company
+last delivered, for section 5. It is never an override's `new`. An `adjusted` or a
+`constant-currency` record takes no step, since the actual on file is the GAAP one: for the growth
+of an adjusted figure, record the year before's adjusted actual from the release as a finding and
+`derive` the `growth` of the record's midpoint over it.
 
 A newer record of the same metric, period and basis supersedes the older one, in the order of the
 calls' dates. Record the previous call's figure too, so the section can say raised, held or cut:

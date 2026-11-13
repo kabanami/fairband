@@ -217,6 +217,28 @@ def test_no_key_in_the_answer(
     assert "apikey=<key>" in caplog.text and KEY not in caplog.text
 
 
+def test_insider_trades_answer_the_newest_trades_up_to_a_limit(
+    with_passthrough: TestClient, vendor: Vendor
+) -> None:
+    """FMP's page, up to 100 trades with the newest first, is stored whole. ``limit`` cuts the
+    answer to the first of them, so a ``response:`` ref names a trade by the same place in the
+    stored page, and ``tradeCount`` says how many the stored page holds."""
+    trade = _fixture("insider-trading-search.ACME.json")[0]
+    names = ["Roe Jane", "Doe John", "Poe Ann"]
+    page = [trade | {"reportingName": name} for name in names]
+    vendor.answer = lambda request: httpx.Response(200, json=page)
+    url = "/api/vendor/insider-trades/ACME"
+    cut = with_passthrough.get(url, params={"limit": "2"}).json()
+    assert [t["reportingName"] for t in cut["payload"]] == ["Roe Jane", "Doe John"]
+    assert (cut["tradeCount"], cut["reused"]) == (3, False)
+    whole = with_passthrough.get(url).json()
+    assert [t["reportingName"] for t in whole["payload"]] == names
+    assert (whole["tradeCount"], whole["reused"], whole["responseId"]) == (3, True, 1)
+    for bad in ("0", "101"):
+        refused = with_passthrough.get(url, params={"limit": bad})
+        assert (refused.status_code, refused.json()["detail"]) == (400, "limit is 1 to 100")
+
+
 def test_a_body_that_is_not_json_is_502(
     with_passthrough: TestClient, vendor: Vendor, db_path: Path
 ) -> None:

@@ -53,7 +53,7 @@ nothing.
 |---|---|---|
 | `snapshot:<id>/value`, `/price`, `/levels/<name>`, the name `buy`, `fair_low`, `fair_high` or `trim` | the snapshot's value a share, price and levels | per-share |
 | `snapshot:<id>/price_to_value` | price ÷ value | multiple |
-| `snapshot:<id>/inputs/<name>` | a tagged input, by its name in `company`'s inputs; a word input (the moat class) reads its word. On a company in another currency, `fx_rate` is the exchange rate, units of the currency per US dollar, and `adr_ratio` on an ADR the ordinary shares one ADS stands for | the input's: currency for a code, per-share for `<code> a share`; none for `fx_rate`, multiple for `adr_ratio` |
+| `snapshot:<id>/inputs/<name>` | a tagged input, by its name in `company`'s inputs; a word input (the moat class) reads its word. On a company in another currency, `fx_rate` is the exchange rate, units of the currency per US dollar, and `adr_ratio` on an ADR the ordinary shares one ADS stands for | the input's: currency for a code, per-share for `<code> a share`; none for `fx_rate`, multiple for `adr_ratio` and for `sales_to_capital` (write it `1.21x`) |
 | `snapshot:<id>/intermediates/<path>` | an intermediate by its keys and list indexes, `belief/rate`; a list counts from 0. On Mature Growth and Mature Stable, the charge: `charge/return_by_year/<n>`, the return year n + 1 pays at, `charge/growth_by_year/<n>`, the growth year n + 1's reinvestment pays for (the next year's), and `charge/hold_years`, the years the runway return holds; `runway_return/one_year`, the newest year's marginal return, shown and never used by the charge; `runway_return/without_goodwill/measure`, the return on capital without goodwill and intangibles, which the charge starts at, under its cap, only where the measure with them is below the hurdle rate (the note `return-without-goodwill`). `outside_value_per_share`, the value outside the business, is written only under a `value.outside` override, so cite it from the review | none |
 | `snapshot:<id>/phase/<field>` | a field of the classifier's evidence: `phase`, `growth_3y`, `margin`, `growth_word`, `margin_direction` and the others | the field's |
 | `review:<id>/value`, `/price_to_value`, `/levels/<name>` | the review's value a share, price ÷ value and levels | per-share; multiple |
@@ -66,7 +66,7 @@ nothing.
 | `secondary:<id>/parts/<n>/pv/<t>`, `/parts/<n>/fcff/<t>`, `/parts/<n>/value`, `/parts/<n>/terminal`, `/parts/<n>/terminal_pv`, `/parts/<n>/terminal_growth` | on the parts form, part n's present value and free cash flow of year t, its value, its terminal value, the terminal's present value and its terminal growth; n and t counted from 1 | currency; percent for the terminal growth |
 | `sensitivity:<id>/<i>/<j>` | a sensitivity reading's value a share at row i and column j, each counted from 1; a refused cell holds no value | per-share |
 | `sensitivity:<id>/rows/<i>`, `/cols/<j>` | the axis value row i or column j names: the rate, growth or margin the cells of that row or column were read at, in its input's unit; a word axis (the moat class) its word. Cite it beside the cell, so the sentence "at a 10% runway return the value is $120" traces both figures | the input's |
-| `guidance:<id>/low`, `/high`, `/midpoint`, `/step` | a guidance record's figures, of its period; the step only on a fiscal-year revenue or EPS record with the year before's actual on file | the metric's: currency for revenue, free cash flow and capex, per-share for EPS, percent for the margin and the two growth rates; percent for the step |
+| `guidance:<id>/low`, `/high`, `/midpoint`, `/step` | a guidance record's figures, of its period; the step only on a `gaap` fiscal-year revenue or EPS record with the year before's actual on file | the metric's: currency for revenue, free cash flow and capex, per-share for EPS, percent for the margin and the two growth rates; percent for the step |
 | `multiple:<symbol>/<series>/<date>`, `multiple:<symbol>/<series>/<stat>` | a point of the trailing (`pe`) or the forward (`pe_forward`) P/E history by its date, or a statistic over the ten years to the series' newest day: `avg_10y`, `median_10y`, `high_10y`, `low_10y`; a date with no point (a loss, a day off the series) names nothing | multiple |
 | `fact:<symbol>/<line>/<year, quarter or ttm>` | a stored statement line as the engine reads it: a fiscal year's, a stored quarter's by its fiscal label (`2027-Q1`), or the trailing figures'. `quarters` gives a quarter's lines with their refs | currency; per-share for EPS; count for the diluted shares |
 | `table:<symbol>/<table>/<row>/<year>` | a cell of `financial_tables` | the row's |
@@ -264,6 +264,7 @@ Every figure you would compute goes through `derive(symbol, derivations)`, then 
 | `ratio` | a ÷ b | multiple for two figures in one unit, else none |
 | `difference` | a − b | the shared unit, else none |
 | `sum` | a + b | the shared unit, else none |
+| `product` | a × b | the other operand's unit when one is a multiple or a percent; currency for a figure a share times a count; else none |
 | `growth` | a ÷ b − 1 | percent |
 | `cagr` | (a ÷ b)^(1 ÷ years) − 1 | percent |
 

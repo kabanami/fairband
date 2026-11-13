@@ -13,7 +13,12 @@ from typing import Any
 
 import pytest
 from refresh.synthetic import NOW
-from support.engine_companies import fx_inputs, mature_growth_inputs, universe_deciles
+from support.engine_companies import (
+    fx_inputs,
+    mature_growth_inputs,
+    universe_deciles,
+    young_growth_inputs,
+)
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
@@ -159,6 +164,27 @@ def test_wrong_unit_on_a_suffix(
     found = _one(_check(conn, policy, sid, _cite("12.3x", roic)), sid, "12.3x")
     assert found.what == WRONG_UNIT
     assert found.detail == f"'12.3x' does not fit a percent figure: {roic} reads 22.7%"
+
+
+def test_sales_to_capital_is_cited_as_a_multiple(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The growth routes' sales-to-capital input carries the engine unit ``ratio`` and is revenue
+    over capital, 1.38 on the Young Growth company: a report writes it "1.38x", and "138.4%" does
+    not fit it."""
+    stored = snapshot_row(conn, snapshots["AAPL"])
+    assert stored is not None
+    young = value_company(young_growth_inputs(), universe_deciles(), policy, TODAY)
+    sid = insert_snapshot(conn, young, stored.refresh_id, clock=lambda: NOW)
+    ref = f"snapshot:{sid}/inputs/sales_to_capital"
+
+    def check(text: str) -> list[Finding]:
+        sections = _report(["Revenue is ", _cite(text, ref), " the capital."])
+        return check_sections(conn, "YGCO", sid, sections, policy)
+
+    assert check("1.38x") == []
+    (finding,) = check("138.4%")
+    assert finding.what == WRONG_UNIT
 
 
 def test_wrong_period(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:

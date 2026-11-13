@@ -20,11 +20,14 @@ missing or its denominator is at or below zero.
   long-term debt, as assembly reads them (``balance_sums``: a line not presented counts as nil
   and the cell's note names it, both missing ``None``); net debt (debt − cash) over EBITDA,
   operating income plus depreciation and amortization; the interest coverage, operating income
-  over the interest expense by its size; the current ratio; the cash runway in ``years``, cash
+  over the interest expense by its size, ``None`` noted "the interest expense on file is zero"
+  on an expense of zero; the current ratio; the cash runway in ``years``, cash
   over the operating cash outflow when operating cash flow is below zero, else ``None`` noted
   "operating cash flow is not negative".
 - ``returns``: ROIC by year, ``roic.aggregate_roic``'s kept year on the capital years
-  (``statements_for``, taxed at the company's country as assembly taxes it); ROE, net income over
+  (``statements_for``, taxed at the company's country as assembly taxes it), the engine's figure
+  noted "average invested capital is at or below zero" on such a year, where the figure has the
+  wrong sign or none and no meaning; ROE, net income over
   the average of the opening and closing equity; the ten-year aggregate ROIC in the newest year's
   cell only, ``aggregate_roic`` over all the capital years as assembly reads it (the store keeps
   eleven statement years, so an earlier year has fewer than ten ROIC years behind it), the
@@ -67,6 +70,8 @@ TABLES = ("growth", "cash_flow", "solvency", "returns", "capital_allocation", "q
 YEARS = 5
 NOT_ON_FILE = "not on file"
 NEWEST_ONLY = "the ten-year aggregate is the newest year's figure"
+NO_INTEREST = "the interest expense on file is zero"
+NO_CAPITAL = "average invested capital is at or below zero"
 
 Unit = Literal["currency", "percent", "multiple", "count", "per-share", "score", "years"]
 
@@ -186,6 +191,7 @@ class _Figures:
         self.balance = {y.year: y for y in stated.balance_years}
         engine = aggregate_roic(stated.capital_years)
         self.roic = {y.year: y.roic for y in engine.by_year}
+        self.capital = {y.year: y.average_capital for y in engine.by_year}
         self.aggregate = engine.aggregate
 
     def line(self, name: str, year: int) -> float | None:
@@ -268,6 +274,12 @@ def _solvency(f: _Figures) -> Table:
         net = None if debt is None or cash is None else debt - cash
         return _per(net, _sum(f.line("operating_income", y), f.line("depreciation", y)))
 
+    def coverage(y: int) -> _Reading:
+        interest = f.line("interest_expense", y)
+        if interest == 0:
+            return None, NO_INTEREST
+        return _per(f.line("operating_income", y), interest)
+
     def runway(y: int) -> _Reading:
         cfo = f.line("cfo", y)
         if cfo is not None and cfo >= 0:
@@ -281,12 +293,7 @@ def _solvency(f: _Figures) -> Table:
             f.computed(t, "cash", "currency", lambda y: f.balance_sum("cash", y)),
             f.computed(t, "debt", "currency", lambda y: f.balance_sum("debt", y)),
             f.computed(t, "net_debt_to_ebitda", "multiple", net_debt_to_ebitda),
-            f.computed(
-                t,
-                "interest_coverage",
-                "multiple",
-                lambda y: _per(f.line("operating_income", y), f.line("interest_expense", y)),
-            ),
+            f.computed(t, "interest_coverage", "multiple", coverage),
             f.computed(
                 t,
                 "current_ratio",
@@ -306,6 +313,10 @@ def _returns(f: _Figures) -> Table:
         average = None if closing is None or opening is None else (closing + opening) / 2
         return _per(f.line("net_income", y), average)
 
+    def roic(y: int) -> _Reading:
+        capital = f.capital.get(y)
+        return f.roic.get(y), NO_CAPITAL if capital is not None and capital <= 0 else None
+
     def aggregate(y: int) -> _Reading:
         return f.aggregate if y == f.years[-1] else (None, NEWEST_ONLY)
 
@@ -313,7 +324,7 @@ def _returns(f: _Figures) -> Table:
     return Table(
         t,
         (
-            f.computed(t, "roic", "percent", lambda y: f.roic.get(y)),
+            f.computed(t, "roic", "percent", roic),
             f.computed(t, "roe", "percent", roe),
             f.computed(t, "aggregate_roic_ten_year", "percent", aggregate),
             f.computed(t, "hurdle_rate", "percent", lambda y: f.hurdle),

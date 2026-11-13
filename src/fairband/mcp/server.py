@@ -379,9 +379,12 @@ def build_server(client: FairbandClient) -> MCPServer:
     def segments(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_vendor("segments", symbol)))
 
-    @server.tool(description="Insider trades from FMP, stored so a report can cite them.")
-    def insider_trades(symbol: str) -> dict[str, Any]:
-        return answer(lambda: client.get(_vendor("insider-trades", symbol)))
+    @server.tool(
+        description="The newest insider trades from FMP, 25 or limit up to 100, with tradeCount,"
+        " the trades on file; stored so a report can cite them."
+    )
+    def insider_trades(symbol: str, limit: int = 25) -> dict[str, Any]:
+        return answer(lambda: client.get(_vendor("insider-trades", symbol), {"limit": limit}))
 
     @server.tool(
         description="The fiscal year, quarter and date of every earnings call FMP has on file,"

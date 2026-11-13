@@ -11,7 +11,8 @@ The kinds and the endpoints they are stored under, provider ``fmp`` but the last
 - ``segments``: two calls, ``segments-product`` and ``segments-geographic``, the revenue by product
   and by region, answered as the parts ``product`` and ``geographic``;
 - ``insider-trades``: ``insider-trades``, the newest insider trades, a page of
-  ``INSIDER_TRADES_LIMIT``, which the reuse key holds;
+  ``INSIDER_TRADES_LIMIT``, which the reuse key holds; a ``limit`` (1 to that size) is checked
+  here and cuts the route's answer, never the call or the stored page;
 - ``transcript-dates``: ``transcript-dates``, the fiscal year, the quarter and the date of every
   earnings call on file, newest first, so the agent asks ``transcript`` for a call that exists;
 - ``dcf``: two calls, ``dcf`` and ``dcf-levered``, FMP's discounted cash flow value and its levered
@@ -272,6 +273,11 @@ class Passthrough:
                     _Call("geographic", "segments-geographic", {"symbol": symbol}, geographic),
                 ]
             case "insider-trades":
+                # ``limit`` cuts the answer, not the call (``vendor_api``): the page is fetched and
+                # stored whole.
+                limit = _whole(params, "limit")
+                if limit is not None and not 1 <= limit <= INSIDER_TRADES_LIMIT:
+                    raise ValueError(f"limit is 1 to {INSIDER_TRADES_LIMIT}")
                 # The page size is in the reuse key, so a changed one never reuses older rows.
                 logical = {"symbol": symbol, "limit": str(INSIDER_TRADES_LIMIT)}
                 send = partial(fmp.insider_trades, symbol)

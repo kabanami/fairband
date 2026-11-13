@@ -126,6 +126,19 @@ def test_the_step_reads_the_eps_line_and_needs_a_base_on_file(
     assert found["step"] is None and found["midpoint"] == pytest.approx(0.31)
 
 
+def test_only_a_gaap_record_takes_a_step(client: TestClient, db_path: Path) -> None:
+    """The actual of the year before is the statement's, a GAAP figure: an adjusted or a
+    constant-currency record takes no step from it, since a rate across two bases is no growth
+    (an adjusted EPS guidance of $11.50 on a GAAP actual of $6.00 would read 91.7%)."""
+    _store_line(db_path, "epsDiluted", 2025, 6.0)
+    _store_line(db_path, "revenue", 2025, 20e9)
+    eps = REVENUE_2026 | {"metric": "eps", "low": 11.5, "high": 11.5}
+    assert _post(client, eps | {"basis": "adjusted"})["step"] is None
+    assert _post(client, eps)["step"] == pytest.approx(11.5 / 6.0 - 1)
+    assert _post(client, REVENUE_2026 | {"basis": "constant-currency"})["step"] is None
+    assert _post(client, REVENUE_2026 | {"basis": "adjusted"})["step"] is None
+
+
 @pytest.mark.parametrize(
     ("changes", "detail"),
     [

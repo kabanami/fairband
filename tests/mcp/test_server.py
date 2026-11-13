@@ -831,6 +831,17 @@ def test_the_filing_tools_send_the_route_s_parameters() -> None:
     ]
 
 
+def test_insider_trades_asks_for_25_trades_unless_told() -> None:
+    """FMP's page of 100 trades overflows the host's result (49.5k characters for one company):
+    the tool asks the route for the newest 25, or for ``limit`` of them."""
+    sent = _sent(
+        ("insider_trades", {"symbol": "amd"}),
+        ("insider_trades", {"symbol": "AMD", "limit": 100}),
+    )
+    trades = "/api/vendor/insider-trades/AMD"
+    assert sent == [(trades, {"limit": "25"}), (trades, {"limit": "100"})]
+
+
 def test_filing_report_with_a_symbol_alone_sends_no_parameter() -> None:
     """The reports on file (spec 2026-11-11, 5.2, view 1): neither year nor period, nor any other
     parameter, goes with the call."""

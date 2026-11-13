@@ -72,7 +72,7 @@ from fairband.store.ledger import Principal, Writer
 from fairband.store.reviews import ReviewRow
 from fairband.store.snapshots import SnapshotRow
 
-Operation = Literal["ratio", "difference", "sum", "growth", "cagr"]
+Operation = Literal["ratio", "difference", "sum", "product", "growth", "cagr"]
 # Where a secondary valuation's debt or cash came from: the newest balance sheet; the agent's
 # figure or an applied balance override; or no line on file, counted as nil.
 BalanceSource = Literal["statements", "agent", "none"]

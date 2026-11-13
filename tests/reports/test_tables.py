@@ -231,6 +231,43 @@ def test_a_cash_runway_when_operating_cash_flow_is_negative(
     assert runway["2024"].value is None
 
 
+def test_no_interest_coverage_on_an_interest_expense_of_zero_says_why(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """The vendor stores some companies' interest expense as 0: the year has no coverage, and the
+    cell says why, so the gap does not read as a year not on file."""
+    with transaction(conn):
+        conn.execute(
+            "UPDATE facts SET value = '0' WHERE symbol = 'ACME' AND dataset = 'income-annual'"
+            " AND field = 'interestExpense' AND period_end = '2025-12-31'"
+        )
+    coverage = _row(financial_tables(conn, "ACME", policy), "solvency", "interest_coverage")
+    assert (coverage["2025"].value, coverage["2025"].note) == (
+        None,
+        "the interest expense on file is zero",
+    )
+    assert coverage["2024"].value is not None and coverage["2024"].note is None
+
+
+def test_a_roic_on_capital_at_or_below_zero_says_so(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """A company its customers pay ahead can hold invested capital below zero, on which a year's
+    ROIC has the wrong sign and no meaning: the cell keeps the engine's figure and its note names
+    the capital."""
+    with transaction(conn):
+        conn.execute(
+            "UPDATE facts SET value = '9000000000' WHERE symbol = 'ACME'"
+            " AND dataset = 'balance-annual' AND field = 'totalCurrentLiabilities'"
+            " AND period_end IN ('2024-12-31', '2025-12-31')"
+        )
+    roic = _row(financial_tables(conn, "ACME", policy), "returns", "roic")
+    assert roic["2025"].value is not None and roic["2025"].value < 0
+    assert roic["2025"].note == "average invested capital is at or below zero"
+    assert roic["2023"].value is not None and roic["2023"].value > 0
+    assert roic["2023"].note is None
+
+
 def test_a_company_without_statements_has_no_cells(
     conn: sqlite3.Connection, policy: Policy
 ) -> None:
