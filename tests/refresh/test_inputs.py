@@ -1150,6 +1150,39 @@ def test_the_consensus_is_one_answer_s_rows(store: Store, clock: Clock) -> None:
     ]
 
 
+def test_an_empty_answer_leaves_the_earlier_answer_read(store: Store, clock: Clock) -> None:
+    """FMP answers both consensus calls with an empty list once. The empty answers are stored as
+    errors with no rows, so the earlier answer's rows are still read, and the consensus is cited
+    as of the earlier answer's date, not the later fetch's."""
+    _on_a_september_year(
+        store,
+        quarters=[
+            {"date": "2026-12-27", "epsAvg": 2.9, "numAnalystsEps": 13},
+            {"date": "2027-03-27", "epsAvg": 2.2, "numAnalystsEps": 10},
+        ],
+        years=[{"date": "2027-09-27", "epsAvg": 9.5, "numAnalystsEps": 30}],
+    )
+    first = clock.now.date()
+    clock.now += timedelta(days=2)  # past the reuse window: the next fetch asks FMP again
+    conn = store(company=False, **{"estimates-quarter": [], "estimates-annual": []})
+    for endpoint in ("estimates-quarter", "estimates-annual"):
+        stored = conn.execute(
+            "SELECT error FROM vendor_responses WHERE endpoint = ? ORDER BY id", (endpoint,)
+        ).fetchall()
+        assert [row["error"] is None for row in stored] == [True, False], endpoint
+    inputs = build(conn)
+    assert [(q.period_end, q.eps, q.analysts) for q in inputs.quarter_estimates] == [
+        (date(2026, 12, 27), 2.9, 13),
+        (date(2027, 3, 27), 2.2, 10),
+    ]
+    assert [(a.period_end, a.eps, a.analysts_eps) for a in inputs.annual_estimates] == [
+        (date(2027, 9, 27), 9.5, 30)
+    ]
+    assert inputs.provenance["estimates_quarter"].as_of == first
+    assert inputs.provenance["estimates_annual"].as_of == first
+    assert clock.now.date() != first
+
+
 @pytest.mark.parametrize(
     "rows",
     [
