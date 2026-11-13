@@ -1,7 +1,8 @@
 """A review follows its company's snapshots (spec 2026-11-06 Tier 2, 10.5 and 10.6): every refresh
 that writes a snapshot for a company with an applied override writes a review on it, and a log row
 for it. A revalue, a scoped or a full refresh recomputes it on the new inputs, after dropping a
-period-tied override whose input moved; a price refresh reprices it.
+period-tied override when a newer period is on file or its input moved (spec 2026-11-13 11a); a
+price refresh reprices it.
 
 The refresh tests run on the five companies a full refresh of ``fixture_universe`` valued: ACME,
 AXLE and KRON (in SEK) Mature Growth, MILD Mature Stable, NEWT refused for its target margin.
@@ -9,6 +10,7 @@ AXLE and KRON (in SEK) Mature Growth, MILD Mature Stable, NEWT refused for its t
 
 import json
 import sqlite3
+from collections.abc import Callable
 from contextlib import closing
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
@@ -16,12 +18,18 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from fixture_universe import serve_universe
 from refresh_env import Env
-from support.engine_companies import high_growth_inputs, mature_growth_inputs, universe_deciles
+from support.engine_companies import (
+    high_growth_inputs,
+    mature_growth_inputs,
+    quarter,
+    universe_deciles,
+)
 from vendor_double import FIXTURES
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.overrides import Lifetime, OverrideTag, current_reading
 from fairband.engine.route import CompanyInputs, value_company
+from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.refresh import reviews
@@ -31,14 +39,17 @@ from fairband.store.ledger import SYSTEM, Writer, entries
 from fairband.store.overrides import insert_override, override_row
 from fairband.store.refreshes import create_refresh
 from fairband.store.reviews import latest_review, review_log, reviews_for
-from fairband.store.snapshots import insert_snapshot
+from fairband.store.snapshots import insert_snapshot, snapshot_row
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 EVIDENCE = [{"kind": "transcript", "ref": "Q3 call", "note": ""}]
 CHANGED = "the input the override corrected changed"
-MOVED = "the statements moved past the override's snapshot"
+NEWER = "a newer period is on file than the one the override corrected"
 PASSED = "the guided year has passed"
 FAILED = "review failed"
+HGCO_TODAY = date(2026, 10, 31)  # the day HGCO is valued
+HGCO_AT = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)  # the time its snapshots and override are made
+Follow = Callable[[CompanyInputs], int | None]
 
 
 @pytest.fixture
@@ -252,51 +263,63 @@ def test_a_period_tied_override_drops_when_its_line_vanishes(env_valued: Env) ->
     assert entry.summary == f"balance.cash dropped: {CHANGED}"
 
 
-def test_a_period_tied_override_drops_when_the_data_date_moves(env_valued: Env) -> None:
-    """The override corrected AXLE's reading, none, so a revalue on the same statements keeps it;
-    a full refresh past the reuse window fetches the statements again and moves the data date."""
+def test_a_period_tied_override_stays_when_the_same_statements_are_fetched_again(
+    env_valued: Env,
+) -> None:
+    """A full refresh past the reuse window fetches AXLE's statements again and moves its data
+    date; the statements hold the same periods, so the correction stays applied."""
     env = env_valued
     cash = _override(env, "AXLE", "balance.cash", 120.0, "period-tied", None)
     made_on = env.snapshot("AXLE")
-    env.refresh().run("revalue")
+    env.clock.now += timedelta(days=2)
+    env.refresh().run("full")
+    assert env.snapshot("AXLE").data_date > made_on.data_date
     with closing(env.connect()) as conn:
         kept = override_row(conn, cash)
         review = latest_review(conn, "AXLE")
     assert kept is not None and kept.state == "applied"
     assert review is not None and review.override_ids == (cash,)
-    assert env.snapshot("AXLE").data_date == made_on.data_date
-
-    env.clock.now += timedelta(days=2)
-    refresh_id = env.refresh().run("full")
-    snapshot = env.snapshot("AXLE")
-    assert snapshot.refresh_id == refresh_id and snapshot.data_date > made_on.data_date
-    with closing(env.connect()) as conn:
-        dropped = override_row(conn, cash)
-        current = latest_review(conn, "AXLE")
-        [entry, *_] = entries(conn, "AXLE")
-    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", MOVED)
-    assert current is None
-    assert (entry.principal, entry.kind, entry.ref_id, entry.snapshot_id) == (
-        "system",
-        "override-drop",
-        cash,
-        snapshot.id,
-    )
 
 
-def test_a_period_tied_override_follows_its_line(conn: sqlite3.Connection, policy: Policy) -> None:
-    """HGCO's revenue-growth result cites its cash line: an override that corrected the figure
-    holds while the next snapshot reads it, and drops when the line is gone."""
-    today, deciles = date(2026, 10, 31), universe_deciles()
-    at = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)
-    inputs = high_growth_inputs()
-    first = value_company(inputs, deciles, policy, today)
+def _as_live(inputs: CompanyInputs) -> CompanyInputs:
+    """``inputs`` with the statements' and the share count's dates as assembly writes them: the
+    statements at the newest fiscal year's end (31 Dec 2025 for HGCO), the share count at the
+    newest period's, the trailing period end (30 Sep 2026)."""
+    assert inputs.trailing is not None
+    p = inputs.provenance
+    dated = {
+        "statements": replace(p["statements"], as_of=inputs.series[-1].period_end),
+        "shares_diluted": replace(p["shares_diluted"], as_of=inputs.trailing.period_end),
+    }
+    return replace(inputs, provenance=p | dated)
+
+
+def _hgco_with_a_cash_correction(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    strip: str | None = None,
+    keep_inputs: tuple[str, ...] | None = None,
+) -> tuple[int, Follow, CompanyInputs]:
+    """HGCO valued, its snapshot stored (without the intermediate ``strip``, and with its inputs
+    cut to ``keep_inputs``, when given, as a snapshot from before 1.3 is stored) and a
+    period-tied override of its cash line made on it: the override's id, ``follow``, which values
+    the inputs it is given, stores the snapshot and follows it, and the inputs."""
+    deciles = universe_deciles()
+    inputs = _as_live(high_growth_inputs())
+    first = value_company(inputs, deciles, policy, HGCO_TODAY)
     figure = current_reading(first, "balance.cash")
     assert isinstance(figure, float)
+    stored = first
+    if strip is not None:
+        stored = replace(
+            stored, intermediates={k: v for k, v in first.intermediates.items() if k != strip}
+        )
+    if keep_inputs is not None:
+        stored = replace(stored, inputs=tuple(i for i in first.inputs if i.name in keep_inputs))
     refresh_id = create_refresh(
-        conn, "revalue", None, policy.version, METHOD_VERSION, at, EMPTY_SETTINGS_HASH
+        conn, "revalue", None, policy.version, METHOD_VERSION, HGCO_AT, EMPTY_SETTINGS_HASH
     )
-    made_on = insert_snapshot(conn, first, refresh_id, clock=lambda: at)
+    made_on = insert_snapshot(conn, stored, refresh_id, clock=lambda: HGCO_AT)
     cash = insert_override(
         conn,
         "HGCO",
@@ -311,18 +334,57 @@ def test_a_period_tied_override_follows_its_line(conn: sqlite3.Connection, polic
         figure,
         made_on,
         AGENT,
-        at,
+        HGCO_AT,
         "applied",
         "",
     )
 
     def follow(inputs: CompanyInputs) -> int | None:
-        result = value_company(inputs, deciles, policy, today)
-        snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: at)
+        result = value_company(inputs, deciles, policy, HGCO_TODAY)
+        snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: HGCO_AT)
         return follow_snapshot(
-            conn, inputs, result, snapshot_id, deciles, policy, today, refresh_id, lambda: at
+            conn,
+            inputs,
+            result,
+            snapshot_id,
+            deciles,
+            policy,
+            HGCO_TODAY,
+            refresh_id,
+            lambda: HGCO_AT,
         )
 
+    return cash, follow, inputs
+
+
+def _made_on(conn: sqlite3.Connection, override_id: int) -> ValuationResult:
+    """The result of the snapshot override ``override_id`` was made on, as stored."""
+    override = override_row(conn, override_id)
+    assert override is not None
+    found = snapshot_row(conn, override.snapshot_id)
+    assert found is not None
+    return found.result
+
+
+def _a_quarter_on(inputs: CompanyInputs) -> CompanyInputs:
+    """HGCO a quarter on: the trailing period end moves from 30 Sep to 31 Dec 2026, and the
+    consensus quarters with it (Q4 2026 reported, Q4 2027 added), so the route still values the
+    company on the same base year and reads the same cash line."""
+    assert inputs.trailing is not None
+    later = inputs.trailing.period_end + timedelta(days=92)
+    assert later == date(2026, 12, 31)
+    ahead = quarter(date(2027, 12, 31), 2027, "Q4", -0.40, 3_600e6)
+    return replace(
+        inputs,
+        trailing=replace(inputs.trailing, period_end=later),
+        quarter_estimates=(*inputs.quarter_estimates[1:], ahead),
+    )
+
+
+def test_a_period_tied_override_follows_its_line(conn: sqlite3.Connection, policy: Policy) -> None:
+    """HGCO's revenue-growth result cites its cash line: an override that corrected the figure
+    holds while the next snapshot reads it, and drops when the line is gone."""
+    cash, follow, inputs = _hgco_with_a_cash_correction(conn, policy)
     review_id = follow(inputs)
     found = latest_review(conn, "HGCO")
     assert found is not None and (found.id, found.override_ids) == (review_id, (cash,))
@@ -334,6 +396,71 @@ def test_a_period_tied_override_follows_its_line(conn: sqlite3.Connection, polic
     assert [(e.principal, e.kind) for e in entries(conn, "HGCO")] == [
         (SYSTEM.principal, "override-drop")
     ]
+
+
+def test_a_period_tied_override_drops_when_a_newer_period_is_on_file(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """HGCO reports a new quarter: the trailing period end moves from 30 Sep to 31 Dec, and the
+    correction of the old period drops, though the cash line reads the same."""
+    cash, follow, inputs = _hgco_with_a_cash_correction(conn, policy)
+    assert follow(inputs) is not None
+    later = _a_quarter_on(inputs)
+    reading = current_reading(
+        value_company(later, universe_deciles(), policy, HGCO_TODAY), "balance.cash"
+    )
+    corrected = override_row(conn, cash)
+    assert corrected is not None and reading == corrected.corrected_value == 3_000e6
+    assert follow(later) is None
+    dropped = override_row(conn, cash)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
+    [entry] = entries(conn, "HGCO")
+    assert (entry.principal, entry.kind, entry.summary) == (
+        SYSTEM.principal,
+        "override-drop",
+        f"balance.cash dropped: {NEWER}",
+    )
+
+
+def test_an_override_on_a_snapshot_from_before_1_3_is_judged_by_its_share_count_s_date(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """A result stored before 1.3 has no ``trailing_end``; its period is the ``as_of`` of its
+    diluted share count, 30 Sep 2026, the newest period the statements hold. Its trailing inputs
+    cite the newest fiscal year's end, 31 Dec 2025, and are not read: on the same statements the
+    correction stays; a quarter later it drops."""
+    cash, follow, inputs = _hgco_with_a_cash_correction(conn, policy, strip="trailing_end")
+    made_on = _made_on(conn, cash)
+    assert "trailing_end" not in made_on.intermediates
+    cited = {i.name: i.provenance.as_of for i in made_on.inputs}
+    assert cited["revenue_ttm"] == cited["eps_ttm"] == date(2025, 12, 31)
+    assert cited["shares_diluted"] == date(2026, 9, 30)
+    assert follow(inputs) is not None
+    kept = override_row(conn, cash)
+    assert kept is not None and kept.state == "applied"
+    assert follow(_a_quarter_on(inputs)) is None
+    dropped = override_row(conn, cash)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
+
+
+def test_an_override_on_a_snapshot_from_before_1_3_with_no_period_follows_its_reading(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """A result stored before 1.3 with neither ``trailing_end`` nor a diluted share count gives no
+    period to read: the correction stays when the period moves and drops only on a changed
+    reading."""
+    cash, follow, inputs = _hgco_with_a_cash_correction(
+        conn, policy, strip="trailing_end", keep_inputs=("price", "cash")
+    )
+    made_on = _made_on(conn, cash)
+    assert {i.name for i in made_on.inputs} == {"price", "cash"}
+    later = _a_quarter_on(inputs)
+    assert follow(later) is not None
+    kept = override_row(conn, cash)
+    assert kept is not None and kept.state == "applied"
+    assert follow(replace(later, cash=None)) is None
+    dropped = override_row(conn, cash)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
 
 
 def test_a_lasting_ntm_override_drops_when_its_guided_year_passes(

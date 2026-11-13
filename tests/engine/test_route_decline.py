@@ -85,11 +85,14 @@ DECLINE_KEYS = {
     "net_buyback_yield",
     "income_basis",
     "price_facts",
+    "trailing_end",
     "implied_decline_rate",
     "multiples",
     "expected_return",
 }
 PRICE_KEYS = ("implied_decline_rate", "multiples", "expected_return")
+# What a plain refusal keeps: the price facts and the trailing period end every refusal carries.
+PLAIN_REFUSAL_KEYS = {"price_facts", "trailing_end"}
 NOT_POSITIVE = "value not positive in the run-off"
 FMP_SOURCE = "FMP stock-peers and the peers' statements"
 PEERS = (
@@ -277,10 +280,10 @@ def test_the_refusal_order(decline_inputs: CompanyInputs, deciles: Deciles, poli
     falls = (a[0], replace(a[1], revenue=0.0), a[2])
     r = valued(replace(dc, annual_estimates=falls, capital_years=(), peers=()))
     assert_refused(r, "consensus revenue falls to zero or below within the path")
-    assert r.intermediates.keys() == {"price_facts"}
+    assert r.intermediates.keys() == PLAIN_REFUSAL_KEYS
     r = valued(replace(dc, capital_years=(), peers=()))
     assert_refused(r, "no sales-to-capital")
-    assert r.intermediates.keys() == {"price_facts"}
+    assert r.intermediates.keys() == PLAIN_REFUSAL_KEYS
     # a chronic loss: the run-off at a normalized margin of −3% is worth less than nothing
     chronic = with_margins(dc, [-0.02, -0.03, -0.03, -0.03, -0.03])
     r = valued(chronic)

@@ -73,6 +73,7 @@ REVENUE_GROWTH_KEYS = {
     "net_buyback_yield",
     "income_basis",
     "price_facts",
+    "trailing_end",
     "growth_route",
     "implied_growth",
     "implied_margin",
@@ -80,8 +81,10 @@ REVENUE_GROWTH_KEYS = {
     "growth_share",
     "expected_return",
 }
+# What a plain refusal keeps: the price facts and the trailing period end every refusal carries.
+PLAIN_REFUSAL_KEYS = {"price_facts", "trailing_end"}
 # What a row refused for its target margin keeps: the keys that rebuild the margin the price
-# needs, that margin, and the price facts every refusal carries.
+# needs, that margin, and the keys every refusal carries.
 TARGET_REFUSAL_KEYS = {
     "revenue_path",
     "margin_start",
@@ -93,6 +96,7 @@ TARGET_REFUSAL_KEYS = {
     "sales_to_capital",
     "implied_margin",
     "price_facts",
+    "trailing_end",
 }
 # The fixture's sales class from its $10 bn of trailing revenue, and that class's cap on the held
 # rate; the year-3 consensus of 20% is above it.
@@ -302,12 +306,12 @@ def test_refusal_order(high_growth_inputs: CompanyInputs, deciles: Deciles, poli
     falls = (a[0], replace(a[1], revenue=0.0, analysts_revenue=15), a[2])
     r = valued(replace(hg, quarter_estimates=zero_ntm, annual_estimates=falls, peers=()))
     assert_refused(r, "no positive consensus revenue")
-    assert r.intermediates.keys() == {"price_facts"}
+    assert r.intermediates.keys() == PLAIN_REFUSAL_KEYS
     # an annual mean of zero with analysts is an estimate: year 2 falls 100%, before the margin
     thin_falls = (a[0], replace(a[1], revenue=0.0, analysts_revenue=3), a[2])
     r = valued(replace(hg, annual_estimates=thin_falls, peers=()))
     assert_refused(r, "consensus revenue falls to zero or below within the path")
-    assert r.intermediates.keys() == {"price_facts"} and codes(r)[-1] == "few-analysts"
+    assert r.intermediates.keys() == PLAIN_REFUSAL_KEYS and codes(r)[-1] == "few-analysts"
     r = valued(replace(hg, peers=hg.peers[:2]))
     assert_refused(r, "no target margin: 2 mature peers")
     assert r.intermediates["implied_margin"] is not None and "revenue_path" in r.intermediates
@@ -331,7 +335,7 @@ def test_no_sales_to_capital_refuses(
     )
     r = value_company(short, deciles, policy, TODAY)
     assert_refused(r, "no sales-to-capital")
-    assert r.intermediates.keys() == {"price_facts"}  # a plain refusal: nothing to reprice
+    assert r.intermediates.keys() == PLAIN_REFUSAL_KEYS  # a plain refusal: nothing to reprice
 
 
 def test_peers_sales_to_capital_when_the_own_measure_is_not_usable(

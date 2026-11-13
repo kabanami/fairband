@@ -40,7 +40,9 @@ Every result of ``value_company`` cites the policy's version and its settings ha
 until the next earnings date when that is after the data date, else for the policy's fallback
 days. Its flags are the assembly's, the classifier's checks and the route's, the first of each
 code kept. Its intermediates hold ``price_facts``, the price columns of spec 6.3, on a refusal
-too (``None`` for a row without a price). ``reprice`` moves a result to a new price from its
+too (``None`` for a row without a price), and ``trailing_end``, the trailing period end as an ISO
+date, on every result whose inputs have trailing figures, a refusal too: the period a period-tied
+override corrects (spec 2026-11-13 11a). ``reprice`` moves a result to a new price from its
 intermediates alone, its price input with it; a refusal takes only the new price, except a
 revenue-growth row whose intermediates hold ``revenue_path`` (refused for its target margin or
 its value), whose margin the price needs moves too, a Start-up row, whose market cap moves
@@ -417,11 +419,11 @@ def reprice(
     it and re-reads its ``below-net-cash`` flag; and a Mature Stable row refused for its trailing
     earnings or for a value not positive under the reinvestment charge, whose intermediates hold
     ``growth_route`` and ``e_trailing``, moves the cross-check's implied growth
-    (``cross_check_at_price``; a refused cross-check stays as it is). ``price_facts`` stay as
-    they were. Every solve on the price targets the business's share of it, the price less the
-    intermediates' ``outside_value_per_share`` (nil without one; ``route_steps.business_price``),
-    the rebuilds reading the figure from the intermediates; the designation, the multiples and the
-    expected return read the price against the value, the sum.
+    (``cross_check_at_price``; a refused cross-check stays as it is). ``price_facts`` and
+    ``trailing_end`` stay as they were. Every solve on the price targets the business's share of
+    it, the price less the intermediates' ``outside_value_per_share`` (nil without one;
+    ``route_steps.business_price``), the rebuilds reading the figure from the intermediates; the
+    designation, the multiples and the expected return read the price against the value, the sum.
     Either way the ``price`` input becomes the new quote, so the drawer's arithmetic reproduces:
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
@@ -594,7 +596,7 @@ def _valued(
         valid_until=_valid_until(i, policy),
         phase=phase,
         inputs=judged_inputs(_base_inputs(i, policy) + v.inputs, overrides, i.currency),
-        intermediates=v.intermediates | _currency_entry(i, v.value),
+        intermediates=v.intermediates | _currency_entry(i, v.value) | _trailing_entry(i),
         flags=_unique(i.input_flags + phase.checks + v.flags + _stale_flag(i)),
         refusal=None,
         policy_version=policy.version,
@@ -633,6 +635,7 @@ def _refuse(
             **found.intermediates,
             "price_facts": price_facts_for(i.closes, price, today),
             **_currency_entry(i, None),
+            **_trailing_entry(i),
         },
     )
     return replace(result, valid_until=_valid_until(i, policy))
@@ -697,6 +700,12 @@ def _currency_entry(i: CompanyInputs, value: float | None) -> dict[str, Any]:
         "inflation_differential": i.inflation_differential,
     }
     return entry if value is None else entry | {"value_in_currency": value}
+
+
+def _trailing_entry(i: CompanyInputs) -> dict[str, Any]:
+    """``trailing_end``, the trailing period end as an ISO date, the period a period-tied
+    override corrects (spec 2026-11-13 11a); none for a row with no trailing figures."""
+    return {} if i.trailing is None else {"trailing_end": i.trailing.period_end.isoformat()}
 
 
 def _stale_flag(i: CompanyInputs) -> tuple[Flag, ...]:

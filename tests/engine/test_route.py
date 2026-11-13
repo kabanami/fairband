@@ -81,6 +81,7 @@ MATURE_GROWTH_KEYS = {
     "net_buyback_yield",
     "income_basis",
     "price_facts",
+    "trailing_end",
     "implied_growth",
     "implied_growth_by_runway",
     "implied_by_roic",
@@ -113,6 +114,7 @@ MATURE_STABLE_KEYS = {
     "net_buyback_yield",
     "income_basis",
     "price_facts",
+    "trailing_end",
     "growth_route",
     "multiples",
     "expected_return",
@@ -1174,6 +1176,7 @@ REFUSED_STABLE_KEYS = {
     "moat",
     "growth_route",
     "price_facts",
+    "trailing_end",
 }
 
 
@@ -1410,14 +1413,33 @@ def test_refusals_carry_the_price_facts(
 ) -> None:
     facts = asdict(price_facts(mg_inputs.closes, TODAY))
     refused = replace(mg_inputs, refusal="no statutory tax rate for unknown 2015")
+    trailing = {"trailing_end": "2026-09-30"}  # every refusal of a row with trailing figures
     for r in (
         value_company(refused, deciles, policy, TODAY),
         value_company(mg_inputs, None, policy, TODAY),
     ):
-        assert r.value is None and r.intermediates == {"price_facts": facts}
+        assert r.value is None and r.intermediates == {"price_facts": facts} | trailing
     # a row with no price has no price facts
     r = value_company(replace(mg_inputs, price=None), deciles, policy, TODAY)
-    assert r.intermediates == {"price_facts": None}
+    assert r.intermediates == {"price_facts": None} | trailing
+
+
+def test_a_result_carries_its_trailing_period_end(
+    mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 11a: a valued result and a result refused in its route carry the trailing
+    period end, the period a period-tied override corrects, as an ISO date; a row with no
+    trailing figures carries none."""
+    loss = _loss_making(ms_inputs)
+    valued = value_company(mg_inputs, deciles, policy, TODAY)
+    refused = value_company(loss, deciles, policy, TODAY)
+    assert valued.value is not None and refused.refusal == "no positive trailing earnings"
+    assert mg_inputs.trailing is not None and loss.trailing is not None
+    assert valued.intermediates["trailing_end"] == mg_inputs.trailing.period_end.isoformat()
+    assert refused.intermediates["trailing_end"] == loss.trailing.period_end.isoformat()
+    assert valued.intermediates["trailing_end"] == "2026-09-30"
+    bare = value_company(replace(ms_inputs, trailing=None), deciles, policy, TODAY)
+    assert bare.refusal == "no trailing figures" and "trailing_end" not in bare.intermediates
 
 
 def test_a_start_up_row_takes_its_route_and_an_unclassified_row_is_refused(

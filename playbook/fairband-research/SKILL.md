@@ -817,9 +817,10 @@ override whose bridge line refused (step 11).
 
 One input holds one applied override. A new override on the same tag replaces the old one. An
 override applies to the latest snapshot and to every later one. A period-tied override (a correction
-of one period's vendor error) drops by itself once the company's data date moves or the engine's
-own reading of the input changes. Add a note with `note_add(symbol, text, override_id)` when the
-reason needs more words.
+of one period's vendor error) holds until the company reports a new period or the figure it
+corrected changes; then the system drops it by itself. A refresh that fetches the same statements
+again keeps it. Add a note with `note_add(symbol, text, override_id)` when the reason needs more
+words.
 
 An override, a drop, a secondary valuation and a sensitivity reading are refused with "settings
 changed: run a revalue" (or "policy changed", or "method changed") when the latest snapshot was

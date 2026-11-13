@@ -84,6 +84,12 @@ the charge reads none of the measures. Each fixture's measure is above r, so no 
 the new measures and every figure is unchanged. The four other goldens carry neither record and
 are untouched.
 
+All seven re-captured under 1.3 on 2026-11-13 for one new key (spec 2026-11-13 11a; method
+14.6): the intermediates gain `trailing_end`, the trailing period end as an ISO date, the period a
+period-tied override corrects, so the drop of such an override follows the period and not the
+day the statements were fetched. Every fixture's trailing figures end on 2026-09-30, SUCO's
+refusal included. No other key or figure of any golden moves.
+
 Run from the repository root:
 
 ```

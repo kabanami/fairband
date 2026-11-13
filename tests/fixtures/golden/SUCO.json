@@ -490,7 +490,8 @@
    "terminal_roic": 0.09,
    "terminal_value": 3703.124208711001
   },
-  "shares": 100.0
+  "shares": 100.0,
+  "trailing_end": "2026-09-30"
  },
  "levels": null,
  "phase": {

@@ -1081,6 +1081,7 @@
   ],
   "tax_rate": 0.25,
   "terminal_value": 538829278.8342032,
+  "trailing_end": "2026-09-30",
   "value_per_share": 4.953312779039694
  },
  "levels": {

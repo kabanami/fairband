@@ -29,6 +29,7 @@ START_UP_KEYS = {
     "burn_cover_years",
     "burn",
     "price_facts",
+    "trailing_end",
     "debt",
     "cash",
     "cash_known",
@@ -76,12 +77,12 @@ def trailing(inputs: CompanyInputs) -> TrailingFigures:
     return inputs.trailing
 
 
-def assert_start_up(r: ValuationResult) -> None:
+def assert_start_up(r: ValuationResult, trailing: bool = True) -> None:
     """A Start-up row: its route, the one reason, no value, levels or designation, and every
-    figure kept through a JSON round trip."""
+    figure kept through a JSON round trip; without ``trailing`` figures, no ``trailing_end``."""
     assert (r.route, r.refusal, r.phase.phase) == ("start-up", REASON, "Start-up")
     assert (r.value, r.levels, r.price_to_value, r.designation) == (None,) * 4
-    assert set(r.intermediates) == START_UP_KEYS
+    assert set(r.intermediates) == (START_UP_KEYS if trailing else START_UP_KEYS - {"trailing_end"})
     assert set(r.intermediates["requirement"]) == REQUIREMENT_KEYS
     assert result_from_json(result_to_json(r)) == r
 
@@ -302,7 +303,7 @@ def test_a_start_up_without_trailing_figures_still_runs(
     from no revenue and the last fiscal year's operating income, and there is no burn cover."""
     su = start_up_inputs
     r = value_company(replace(su, trailing=None), deciles, policy, TODAY)
-    assert_start_up(r)
+    assert_start_up(r, trailing=False)
     req = requirement(r)
     assert (req["revenue_0"], req["operating_income_0"]) == (0.0, -50.0)  # fiscal 2025's loss
     assert req["revenue_y10"] == pytest.approx(R10, abs=1e-6)

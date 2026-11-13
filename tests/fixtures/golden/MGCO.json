@@ -714,6 +714,7 @@
   "sbc_basis": "includes-sbc",
   "shares": 1000000000.0,
   "terminal_roic": 0.13,
+  "trailing_end": "2026-09-30",
   "value_by_roic": {
    "0.09": 65.55555555555543,
    "0.15": 101.67206933536774,

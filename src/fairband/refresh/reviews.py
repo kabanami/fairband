@@ -4,13 +4,21 @@
 ``follow_snapshot`` runs in the value stage of a full, scoped or revalue refresh, in the
 transaction that writes the company's snapshot. A company with no applied override gets nothing.
 Otherwise each period-tied override is checked first, and drops, by the system, with a ledger row
-resting on the new snapshot:
+resting on the new snapshot, on the first of these that holds (spec 2026-11-13 11a):
 
-- "the statements moved past the override's snapshot": the company's data date is after the data
-  date of the snapshot the override was made on;
+- "a newer period is on file than the one the override corrected": the new inputs' trailing
+  period end is after the trailing period end of the snapshot the override was made on
+  (``_trailing_end``); without both period ends this test is not read;
 - "the input the override corrected changed": the engine's reading of the input on the new result
   (``overrides.current_reading``) is not the value the override corrected; a reading of none
   against a figure, or a figure against none, is a change.
+
+The day the statements were fetched, the data date, drops nothing: a refetch of the same
+statements leaves the correction applied. A snapshot's trailing period end is its result's
+``trailing_end``; a result stored before method 1.3 carries none, and its period end is the
+``as_of`` of its ``shares_diluted`` input, which assembly dates at the newest period the
+statements hold. Its trailing inputs (``revenue_ttm``, ``eps_ttm``, ``operating_income_ttm``)
+cite the newest fiscal year's end and are not read.
 
 A lasting override of an NTM anchor (``earnings.ntm``, ``revenue.ntm``) drops the same way, "the
 guided year has passed", when the fiscal year its guidance record guides (``guidance.anchor_year``,
@@ -86,7 +94,7 @@ from fairband.store.snapshots import snapshot_row
 
 logger = logging.getLogger("fairband.refresh")
 
-MOVED = "the statements moved past the override's snapshot"
+NEWER = "a newer period is on file than the one the override corrected"
 CHANGED = "the input the override corrected changed"
 PASSED = "the guided year has passed"
 
@@ -133,9 +141,10 @@ def _follow(
         if trailing is None
         else base_year(inputs.quarter_estimates, trailing.period_end, trailing.cadence)
     )
+    trailing_end = None if trailing is None else trailing.period_end
     kept = []
     for override in applied_overrides(conn, symbol):
-        reason = _drop_reason(conn, override, result, base)
+        reason = _drop_reason(conn, override, result, base, trailing_end)
         if reason is None:
             kept.append(override)
             continue
@@ -356,18 +365,34 @@ def _write_refusal(
 
 
 def _drop_reason(
-    conn: sqlite3.Connection, override: OverrideRow, result: ValuationResult, base: int | None
+    conn: sqlite3.Connection,
+    override: OverrideRow,
+    result: ValuationResult,
+    base: int | None,
+    trailing_end: date | None,
 ) -> str | None:
-    """Why ``override`` no longer holds on ``result``, whose base year is ``base``, or ``None``
-    (module docstring)."""
+    """Why ``override`` no longer holds on ``result``, whose base year is ``base`` and whose
+    trailing period end is ``trailing_end``, or ``None`` (module docstring)."""
     if override.lifetime == "lasting":
         return _guided_year_passed(conn, override, base)
     made_on = snapshot_row(conn, override.snapshot_id)
-    if made_on is not None and result.data_date > made_on.data_date:
-        return MOVED
+    corrected = None if made_on is None else _trailing_end(made_on.result)
+    if trailing_end is not None and corrected is not None and trailing_end > corrected:
+        return NEWER
     if current_reading(result, cast(OverrideTag, override.tag)) != override.corrected_value:
         return CHANGED
     return None
+
+
+def _trailing_end(result: ValuationResult) -> date | None:
+    """The trailing period end of the snapshot ``result``: its ``trailing_end``; without one (a
+    result stored before method 1.3), the ``as_of`` of its ``shares_diluted`` input, the newest
+    period the statements hold; else ``None`` (module docstring)."""
+    stored = result.intermediates.get("trailing_end")
+    if stored is not None:
+        return date.fromisoformat(stored)
+    shares = next((i for i in result.inputs if i.name == "shares_diluted"), None)
+    return None if shares is None else shares.provenance.as_of
 
 
 def _guided_year_passed(

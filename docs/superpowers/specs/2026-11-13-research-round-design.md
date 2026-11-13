@@ -284,7 +284,9 @@ The day the statements were fetched drops nothing. A refetch of the same stateme
 correction applied. The lasting overrides and the guided-year rule of 14.6 are untouched.
 
 Where a snapshot made before 1.3 does not carry its trailing period end as a figure of its own,
-the builder reads it from the `as_of` its trailing inputs cite; from 1.3 on, a result carries it.
+the builder reads it from the `as_of` of its diluted share count, which assembly dates at the
+newest period the statements hold; the trailing inputs' own `as_of` is the fiscal year's end and
+is not read. From 1.3 on, a result carries the period end.
 
 The playbook's line on when a period-tied override ends changes with the rule: it holds until
 the company reports a new period or the figure it corrected changes.
@@ -431,7 +433,7 @@ Plan 1:
 - A period-tied override stays applied when the same statements are fetched again on a later
   day; it drops with the first sentence of 11a when the trailing period end moves, and with the
   second when its reading changes; an override made on a snapshot from before 1.3 is judged by
-  the `as_of` of that snapshot's trailing inputs.
+  the `as_of` of that snapshot's diluted share count.
 
 Plan 2:
 - A company with a quarterly sheet newer than its annual one: each route of 12.2 reads the
@@ -529,6 +531,7 @@ runs and the live step.
 | 2026-11-13 | B-174: the minority interest subtracted at book on the three firm-value routes, with `balance.minority` as the agent's correction. |
 | 2026-11-13 | The life of a period-tied correction: it drops when a newer period is on file or its reading changed, not when the statements are fetched again. Founder, on the design check's finding that any full refresh drops all ten on file (SYM, CLS, FRVO, RKLB), choosing this over keeping the rule and making the corrections again. Built in plan 1. |
 | 2026-11-13 | Settled by Claude after the design check, each marked *my call* where it stands: no new rule for an override that an applied `earnings.ntm` makes moot (a bridge line of zero); a period-tied consensus override that drops at plan 1's revalue for a changed reading is the right outcome; a quarterly balance sheet in another currency is skipped; the Start-up cash floor subtracts the minority interest. |
+| 2026-11-13 | A snapshot from before 1.3 gives its trailing period end by the `as_of` of its diluted share count, not of its trailing inputs, whose `as_of` is the fiscal year's end (found by the implementer of plan 1's Task 3; the trailing inputs would have dropped all ten corrections on file at the first revalue). Claude's ruling. |
 
 Builder check: done 2026-11-13, one round (Opus 5.5, xhigh). It found two statements about the
 method that were wrong (the drop rule of 12.4; a refusal for an override that moves nothing,
