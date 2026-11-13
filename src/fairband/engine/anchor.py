@@ -7,8 +7,9 @@ consecutive quarters for a company that reports quarterly; for one that reports 
 either (a quarterly consensus with a gap is no half-year pair), else four consecutive quarters,
 the window its consensus cadence gives. The cadence is the trailing figures' (``TrailingFigures.cadence``),
 read from the spacing of the statement periods; a row ending within ``SAME_PERIOD_DAYS`` after
-the last reported period is that period under the vendor's second fiscal calendar, not the first
-of the window. The SBC basis test of ``mech/1.2``:
+the last reported period is that period, whose end in the consensus can lie a day or a few days
+from the statements' (a 52/53-week year), not the first of the window. The SBC basis test of
+``mech/1.2``:
 when the street's trailing EPS sits above the GAAP trailing EPS by at least ``sbc_detect`` times
 the after-tax SBC per share, the consensus excludes stock compensation, and the anchor subtracts
 the after-tax SBC per share held at its trailing share of revenue (scaled by the NTM consensus
@@ -53,8 +54,11 @@ _DAYS_APART: dict[Cadence, tuple[int, int]] = {
 }
 # The periods in a year under each cadence: the trailing figures and the NTM window sum as many.
 PERIODS_PER_YEAR: dict[Cadence, int] = {"quarterly": 4, "half-yearly": 2}
-# Period ends at most this many days apart are one period: FMP reports some companies under two
-# fiscal calendars, whose period ends for one quarter or year lie a day or a few days apart (AAPL).
+# Period ends at most this many days apart are one period. The statements and the consensus can end
+# one period a day or a few days apart (a 52/53-week year), so a consensus row ending this soon
+# after the trailing period end is the period just reported. Assembly merges two consensus rows
+# this close as a guard for two rows of one period inside one vendor answer; no stored answer held
+# such a pair on 2026-11-13 (spec 2026-11-13 6).
 SAME_PERIOD_DAYS = 7
 # A step's two rates that lie exactly ``step_series_gap_max`` apart are within the gap, whatever
 # binary floating point does to the rates: without it, five points fire on one step and not another.
@@ -221,8 +225,9 @@ def ntm_periods(
 ) -> tuple[QuarterEstimate, ...] | None:
     """The first ``PERIODS_PER_YEAR[cadence]`` consensus periods ending more than
     ``SAME_PERIOD_DAYS`` after ``last_reported``, by period end, since a row ending sooner is the
-    reported period under a second fiscal calendar; ``None`` unless there are as many and each
-    ends the cadence's days after the one before (``consecutive_periods``)."""
+    reported period, its consensus end a day or a few days from the statements'; ``None`` unless
+    there are as many and each ends the cadence's days after the one before
+    (``consecutive_periods``)."""
     count = PERIODS_PER_YEAR[cadence]
     after = sorted(
         (e for e in estimates if (e.period_end - last_reported).days > SAME_PERIOD_DAYS),

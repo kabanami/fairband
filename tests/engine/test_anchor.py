@@ -131,8 +131,9 @@ def test_ntm_quarters_skips_reported_quarters() -> None:
 def test_ntm_quarters_skip_a_row_within_a_week_after_the_last_reported(
     days: int, first: date
 ) -> None:
-    """A row ending up to seven days after the last reported quarter is that quarter under a
-    second fiscal calendar, not the first NTM quarter; a row a day later starts the chain."""
+    """A row ending up to seven days after the last reported quarter is that quarter, its
+    consensus end a few days from the statements', not the first NTM quarter; a row a day later
+    starts the chain."""
     after = date(2026, 6, 30) + timedelta(days=days)
     got = ntm_quarters([q(str(after), 2026, "Q4", 1), *ntm()], date(2026, 6, 30))
     assert got is not None and got[0].period_end == first
