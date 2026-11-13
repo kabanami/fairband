@@ -185,8 +185,8 @@ each reason that holds:
 
 Stock pay is material when its after-tax figure a share is `sbc_material_share` (2%) of the
 street trailing EPS or more, on a street EPS above zero. Expected on today's screen: about 50, 44
-and 60 rows. Neither note shows in a review under an applied `earnings.sbc_basis`: the agent
-decided.
+and 60 rows. In a review, `sbc-basis-uncertain` does not show under an applied
+`earnings.sbc_basis`, nor `stock-pay-missing` under an applied `earnings.sbc`: the agent decided.
 
 ### 7.2 Two inputs
 
@@ -416,7 +416,7 @@ Plan 1:
   and an `estimate:` ref read the newest answer's rows alone, whatever the analyst counts. An
   empty newest answer leaves the older rows read.
 - `stock-pay-missing` on a zero trailing figure and on one zero quarter, each with a fiscal year
-  above zero; silent on a history of zeros.
+  above zero; silent on a history of zeros, and under an applied `earnings.sbc`.
 - `sbc-basis-uncertain`, one test for each reason at its edge (2%, half the rate, 10 times), and
   silent just inside each; silent under an applied `earnings.sbc_basis`.
 - `earnings.sbc_basis` in both directions moves the NTM EPS by exactly the adjustment; with
