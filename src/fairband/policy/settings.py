@@ -26,6 +26,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import pairwise
+from math import isfinite
 from typing import Any, Literal
 
 from fairband.policy import (
@@ -600,9 +601,9 @@ def check(policy: Policy) -> None:
     outside every one. A rule between two settings names both, in the order of 8.2 and joined by
     a comma, so r against g_T reads ``"required_return, terminal_growth: …"``; the Settings page
     then stands the sentence beside the one the user changed (B-75). Then the ranges of the two
-    values policy v10 adds, the three v11 adds and the one v12 adds, which are not settings and
-    so are only ever the file's (spec 2026-11-09, section 11; spec 2026-11-10, section 9;
-    ``method.md`` 4.6 rule 5)."""
+    values policy v10 adds, the three v11 adds, the one v12 adds and the four v13 adds, which are
+    not settings and so are only ever the file's (spec 2026-11-09, section 11; spec 2026-11-10,
+    section 9; ``method.md`` 4.6 rule 5; spec 2026-11-13, sections 7.1 and 8)."""
     p, u, f = policy, policy.universe, policy.refresh
     # A. Valuation
     if not 0.04 <= p.required_return <= 0.20:
@@ -742,3 +743,12 @@ def check(policy: Policy) -> None:
         raise ValueError("refresh.fx_history_years: must be at least 1 year")
     if not 0.20 < p.return_without_goodwill_cap <= 1:
         raise ValueError("return_without_goodwill_cap: must be above 20% and at most 100%")
+    if not 0 <= p.sbc_material_share <= 1:
+        raise ValueError("sbc_material_share: must be from 0% to 100%")
+    if not 0 <= p.sbc_basis_tax_share <= 1:
+        raise ValueError("sbc_basis_tax_share: must be from 0% to 100%")
+    if not (isfinite(p.sbc_basis_gap_multiple) and p.sbc_basis_gap_multiple > 0):
+        raise ValueError("sbc_basis_gap_multiple: must be above 0")
+    band_low, band_high = p.share_count_gap_band
+    if not (isfinite(band_low) and isfinite(band_high) and band_low < 1 < band_high):
+        raise ValueError("share_count_gap_band: the low must be below 1 and the high above 1")

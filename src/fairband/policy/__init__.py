@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v12.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v13.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v11 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v12 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -25,7 +25,12 @@ excluded, and the stale-rate bound and the rate history depth (``refresh.fx_hist
 which fail below 1. The inflation table they work beside is a packaged table of its own
 (``fairband.policy.inflation``), as the tax table is. Nor is the value v12 adds (``method.md`` 4.6
 rule 5), the cap on the runway return read on capital without goodwill and intangibles: it fails
-at load unless above 20%, the highest required return a setting allows, and at most 100%.
+at load unless above 20%, the highest required return a setting allows, and at most 100%. Nor
+are the four values v13 adds (spec 2026-11-13, sections 7.1 and 8): the share of the street EPS
+at which stock pay is material and the share of the statutory tax rate, each failing at load
+outside 0 to 1; the multiple of the stock pay a share, failing at or below 0; and the
+share-count band, whose low must be below 1 and whose high above 1. Nor is the trailing stock
+pay's override range v13 adds, nor the runway return's, which v13 widens to 500%.
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
 five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap
@@ -47,7 +52,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v12.toml"
+_POLICY_FILE = "fairband-policy-v13.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -142,6 +147,10 @@ class Policy:
     capex_ocf_flag: float
     equity_raise_share: float
     sbc_detect: float
+    sbc_material_share: float
+    sbc_basis_tax_share: float
+    sbc_basis_gap_multiple: float
+    share_count_gap_band: tuple[float, float]
     forward_pe_unit_error: float
     validity_fallback_days: int
     aging_fraction: float
@@ -201,7 +210,7 @@ def in_currency(policy: Policy, differential: float) -> Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v12 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v13 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -272,6 +281,10 @@ def load_policy(path: Path | None = None) -> Policy:
         capex_ocf_flag=read("capex_ocf_flag", _num),
         equity_raise_share=read("equity_raise_share", _num),
         sbc_detect=read("sbc_detect", _num),
+        sbc_material_share=read("sbc_material_share", _num),
+        sbc_basis_tax_share=read("sbc_basis_tax_share", _num),
+        sbc_basis_gap_multiple=read("sbc_basis_gap_multiple", _num),
+        share_count_gap_band=read("share_count_gap_band", _pair),
         forward_pe_unit_error=read("forward_pe_unit_error", _num),
         validity_fallback_days=read("validity_fallback_days", _whole),
         aging_fraction=read("aging_fraction", _num),

@@ -205,6 +205,28 @@ def test_a_refused_cell_is_null_and_cannot_be_cited(
     ]
 
 
+def test_a_runway_axis_holds_the_engine_s_own_measure(
+    client: TestClient, stored_inputs: dict[str, CompanyInputs], policy: Policy
+) -> None:
+    """Spec 2026-11-13 10: an axis is checked as an override is, so it takes a runway return up
+    to 500%, 332.6% (AAPL's own measure on the live screen) among them, and that row holds
+    values."""
+    grid = {
+        "rowTag": "return.runway",
+        "rowValues": [0.2, 3.326],
+        "colTag": "growth.belief",
+        "colValues": [0.05, 0.08],
+    }
+    found = _post(client, grid)
+    assert found["rowValues"] == [0.2, 3.326]
+    second = found["cells"][1]
+    assert second == [
+        _engine(stored_inputs["AAPL"], policy, {"return.runway": 3.326, "growth.belief": b})
+        for b in (0.05, 0.08)
+    ]
+    assert all(cell is not None and cell > 0 for cell in second)
+
+
 @pytest.mark.parametrize(
     "change,sentence",
     [
@@ -215,7 +237,7 @@ def test_a_refused_cell_is_null_and_cannot_be_cited(
             "the Mature Growth route does not read margin.target",
         ),
         ({"rowValues": [0.05, 0.7]}, "growth.belief takes −20% to 60%"),
-        ({"colValues": [0.10, "high"]}, "return.runway takes above 0% to 100%"),
+        ({"colValues": [0.10, "high"]}, "return.runway takes above 0% to 500%"),
         ({"rowValues": [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]}, "an axis holds one to five values"),
         ({"colValues": []}, "an axis holds one to five values"),
         ({"colTag": "growth.belief"}, "the two tags differ"),

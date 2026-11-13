@@ -8,11 +8,13 @@ Mid band's floor, under a changed size floor) is served as the effective policy 
 not read changed: resetting it would change nothing. A derived value is changed when it differs
 from the file's.
 
-Besides the forty settings, the page cites nine values that are not settings, read from the file
-only, among them the foreign filers' two bounds (the inflation bound and the stale-rate bound, spec
-2026-11-10 9), and the two the policy derives (the designation edges and the Wide moat's terminal
-return cap). The policy's tables (the base rates, the ratings, the default probabilities, the
-patterns, the industries) are never served, and nothing in the policy is a key.
+Besides the forty settings, the page cites fourteen values that are not settings, read from the
+file only, among them the foreign filers' two bounds (the inflation bound and the stale-rate bound,
+spec 2026-11-10 9), the cap on the return without goodwill (``method.md`` 4.6), the three
+stock-pay thresholds and the share-count band (spec 2026-11-13 7.1 and 8), and the two the policy
+derives (the designation edges and the Wide moat's terminal return cap). The policy's tables (the
+base rates, the ratings, the default probabilities, the patterns, the industries) are never
+served, and nothing in the policy is a key.
 """
 
 import json
@@ -37,6 +39,10 @@ READ_ONLY: dict[str, str] = {
     "inflation_max": "fraction",
     "fx_stale_days": "days",
     "return_without_goodwill_cap": "fraction",
+    "sbc_material_share": "fraction",
+    "sbc_basis_tax_share": "fraction",
+    "sbc_basis_gap_multiple": "times",
+    "share_count_gap_band": "times",
 }
 # The derived values, with their unit and the source line the file no longer holds.
 DERIVED: dict[str, tuple[str, str]] = {

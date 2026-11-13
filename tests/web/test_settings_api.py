@@ -63,11 +63,11 @@ def test_get_settings_shape(client: TestClient) -> None:
     }
     assert r["description"].startswith("The yearly return you require")
     assert body["current"] == {
-        "policyVersion": "fairband-policy-v12",
+        "policyVersion": "fairband-policy-v13",
         "settingsHash": EMPTY_SETTINGS_HASH,
     }
     assert body["valuedUnder"] == {
-        "policyVersion": "fairband-policy-v12",
+        "policyVersion": "fairband-policy-v13",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "fullRefreshAt": STARTED.isoformat(),
         "universeChanged": False,
@@ -274,7 +274,7 @@ def test_a_stored_row_the_policy_refuses_is_a_409_until_reset(
 def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> None:
     body = client.get("/api/policy").json()
     assert (body["version"], body["settingsHash"], body["changed"]) == (
-        "fairband-policy-v12",
+        "fairband-policy-v13",
         EMPTY_SETTINGS_HASH,
         0,
     )
@@ -299,6 +299,11 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "inflation_max": 0.1,  # the Methodology page names the two bounds (spec 2026-11-10 10)
         "fx_stale_days": 7,
         "return_without_goodwill_cap": 0.25,  # the Methodology page names the cap (method 4.6)
+        # the stock-pay thresholds and the share-count band (spec 2026-11-13 7.1 and 8)
+        "sbc_material_share": 0.02,
+        "sbc_basis_tax_share": 0.5,
+        "sbc_basis_gap_multiple": 10.0,
+        "share_count_gap_band": [0.7, 1.3],
     }
     for name, value in read_only.items():
         entry = body["values"][name]
@@ -306,6 +311,16 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         assert entry["source"], name
     units = (body["values"]["inflation_max"]["unit"], body["values"]["fx_stale_days"]["unit"])
     assert units == ("fraction", "days")
+    units = tuple(
+        body["values"][name]["unit"]
+        for name in (
+            "sbc_material_share",
+            "sbc_basis_tax_share",
+            "sbc_basis_gap_multiple",
+            "share_count_gap_band",
+        )
+    )
+    assert units == ("fraction", "fraction", "times", "times")
     assert set(body["values"]) == {s.name for s in SETTINGS} | set(read_only) | {
         "designation_edges",
         "wide_terminal_roic_cap",

@@ -44,10 +44,21 @@ V11_SHA256 = "97b03abbddcf6c8dccec9a61b56e4d2248c152e85a365dc2119667ee62992c95"
 # The value policy v12 adds, the cap on the return read on capital without goodwill and
 # intangibles (method 4.6 rule 5; founder 2026-11-12).
 V12_VALUES = {"return_without_goodwill_cap"}
+V12_SHA256 = "eb1bb08f7f03676d83e97a2a61c0d82695f7c34a22e9308dd25135f3af908957"
+# The four values policy v13 adds, the three stock-pay thresholds and the share-count band; it
+# also adds the trailing stock pay's pair to ``override_ranges`` and widens the runway return's
+# (spec 2026-11-13, sections 7.1, 8, 10 and 14).
+V13_VALUES = {
+    "sbc_material_share",
+    "sbc_basis_tax_share",
+    "sbc_basis_gap_multiple",
+    "share_count_gap_band",
+}
+BAND_RULE = "the low must be below 1 and the high above 1"
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v12.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v13.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -71,7 +82,7 @@ def _packaged_with(tmp_path: Path, name: str, value: str) -> Path:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v12" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v13" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -106,9 +117,22 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v12_is_the_packaged_policy() -> None:
+def test_v13_is_the_packaged_policy() -> None:
+    p = load_policy()
+    assert p.version == "fairband-policy-v13"
+    assert (p.sbc_material_share, p.sbc_basis_tax_share, p.sbc_basis_gap_multiple) == (
+        0.02,
+        0.5,
+        10.0,
+    )
+    assert p.share_count_gap_band == (0.7, 1.3)
+    assert p.override_ranges["return.runway"] == (0.0, 5.0)
+    assert p.override_ranges["earnings.sbc"] == (0.0, 1e15)
+
+
+def test_the_packaged_policy_keeps_the_earlier_versions_values() -> None:
+    """The values v8 to v12 added, as v13 carries them; the override ranges as v13 has them."""
     policy = load_policy()
-    assert policy.version == "fairband-policy-v12"
     assert policy.return_without_goodwill_cap == 0.25
     assert policy.inflation_max == 0.10
     assert policy.fx_stale_days == 7
@@ -124,7 +148,7 @@ def test_v12_is_the_packaged_policy() -> None:
         "path.step_3": (-0.80, 3.00),
         "margin.target": (-0.50, 0.60),
         "capital.sales_to_capital": (0.1, 10.0),
-        "return.runway": (0.0, 1.0),
+        "return.runway": (0.0, 5.0),
         "earnings.nri_gap": (-100.0, 100.0),
         "earnings.cycle_gap": (-100.0, 100.0),
         "earnings.ntm": (0.0, 1000.0),
@@ -134,6 +158,7 @@ def test_v12_is_the_packaged_policy() -> None:
         "balance.cash": (0.0, 1e15),
         "value.outside": (-1000.0, 1000.0),
         "shares.diluted": (0.0, 1e12),
+        "earnings.sbc": (0.0, 1e15),
     }
     assert policy.override_primary_evidence_above_p90 is True
     assert (
@@ -148,7 +173,7 @@ def test_v12_is_the_packaged_policy() -> None:
         "tax_rate": (0.0, 0.50),
         "sales_to_capital": (0.1, 10.0),
     }
-    for name in sorted(V8_VALUES | V9_VALUES | V10_VALUES | V11_VALUES | V12_VALUES):
+    for name in sorted(V8_VALUES | V9_VALUES | V10_VALUES | V11_VALUES | V12_VALUES | V13_VALUES):
         assert policy.raw["values"][name]["source"].strip(), name
     assert policy.own_sales_to_capital_min_share == 0.5
     assert policy.loss_ramp_margin_bound == -1.0
@@ -346,12 +371,75 @@ def test_v12_is_v11_with_the_cap_added() -> None:
     """Every v11 value loads unchanged from v12; v12 adds the cap on the return read on capital
     without goodwill and intangibles, not a setting (method 4.6 rule 5)."""
     v11 = _file_values("fairband-policy-v11.toml")
-    v12 = load_policy().raw["values"]
+    v12 = _file_values("fairband-policy-v12.toml")
     assert v12.keys() - v11.keys() == V12_VALUES
     assert {k: v12[k] for k in v11} == v11
     assert "founder 2026-11-12" in v12["return_without_goodwill_cap"]["source"]
     assert "no source gives the number" in v12["return_without_goodwill_cap"]["source"]
     assert not {s.name for s in SETTINGS} & V12_VALUES
+
+
+def test_v13_is_v12_with_the_four_values_added_and_two_ranges() -> None:
+    """Every v12 value loads unchanged from v13 but the override ranges, which gain
+    ``earnings.sbc`` and widen ``return.runway``; each new value's source names the spec."""
+    v12 = _file_values("fairband-policy-v12.toml")
+    v13 = load_policy().raw["values"]
+    assert v13.keys() - v12.keys() == V13_VALUES
+    kept = v12.keys() - {"override_ranges"}
+    assert {k: v13[k] for k in kept} == {k: v12[k] for k in kept}
+    old, new = v12["override_ranges"]["value"], v13["override_ranges"]["value"]
+    assert new == old | {"return.runway": [0.0, 5.0], "earnings.sbc": [0.0, 1e15]}
+    for name in V13_VALUES:
+        assert "spec 2026-11-13" in v13[name]["source"], name
+    assert v13["override_ranges"]["source"] == v12["override_ranges"]["source"]
+    assert "the trailing stock pay" in v13["override_ranges"]["note"]
+    assert not {s.name for s in SETTINGS} & V13_VALUES
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "rule"),
+    [
+        ("sbc_material_share", "-0.01", "sbc_material_share: must be from 0% to 100%"),
+        ("sbc_material_share", "1.01", "sbc_material_share: must be from 0% to 100%"),
+        ("sbc_material_share", "nan", "sbc_material_share: must be from 0% to 100%"),
+        ("sbc_basis_tax_share", "-0.01", "sbc_basis_tax_share: must be from 0% to 100%"),
+        ("sbc_basis_tax_share", "1.01", "sbc_basis_tax_share: must be from 0% to 100%"),
+        ("sbc_basis_tax_share", "nan", "sbc_basis_tax_share: must be from 0% to 100%"),
+        ("sbc_basis_gap_multiple", "0.0", "sbc_basis_gap_multiple: must be above 0"),
+        ("sbc_basis_gap_multiple", "-1.0", "sbc_basis_gap_multiple: must be above 0"),
+        ("sbc_basis_gap_multiple", "nan", "sbc_basis_gap_multiple: must be above 0"),
+        ("sbc_basis_gap_multiple", "inf", "sbc_basis_gap_multiple: must be above 0"),
+        ("share_count_gap_band", "[1.0, 1.3]", "share_count_gap_band: " + BAND_RULE),
+        ("share_count_gap_band", "[0.7, 1.0]", "share_count_gap_band: " + BAND_RULE),
+        ("share_count_gap_band", "[1.3, 0.7]", "share_count_gap_band: " + BAND_RULE),
+        ("share_count_gap_band", "[nan, 1.3]", "share_count_gap_band: " + BAND_RULE),
+        ("share_count_gap_band", "[0.7, inf]", "share_count_gap_band: " + BAND_RULE),
+    ],
+)
+def test_a_v13_value_outside_its_range_is_refused(
+    tmp_path: Path, name: str, value: str, rule: str
+) -> None:
+    """None is a setting, so the file is the only way in; ``load_policy`` checks all four. A NaN
+    or an infinity is outside every range."""
+    with pytest.raises(ValueError, match=f"^{re.escape(rule)}$"):
+        load_policy(_packaged_with(tmp_path, name, value))
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "read"),
+    [
+        ("sbc_material_share", "0.0", 0.0),
+        ("sbc_material_share", "1.0", 1.0),
+        ("sbc_basis_tax_share", "0.0", 0.0),
+        ("sbc_basis_tax_share", "1.0", 1.0),
+        ("sbc_basis_gap_multiple", "0.001", 0.001),
+        ("share_count_gap_band", "[0.999, 1.001]", (0.999, 1.001)),
+    ],
+)
+def test_the_v13_values_at_their_ends_load(
+    tmp_path: Path, name: str, value: str, read: object
+) -> None:
+    assert getattr(load_policy(_packaged_with(tmp_path, name, value)), name) == read
 
 
 @pytest.mark.parametrize("value", ["0.20", "0.09", "1.01", "nan"])
@@ -554,6 +642,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v12_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v12`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v12.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V12_SHA256
 
 
 def test_v11_is_byte_identical_under_its_hash() -> None:

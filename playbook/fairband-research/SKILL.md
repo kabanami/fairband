@@ -673,7 +673,7 @@ not you, computes the value it gives.
 | `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | the moat class; it sets the margin of safety, the runway and the terminal return | `None`, `Narrow` or `Wide` |
 | `margin.target` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten | −0.50 to 0.60 |
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | the revenue a dollar of invested capital buys | 0.1 to 10 |
-| `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end | above 0 to 1.00 |
+| `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end | above 0 to 5.00 |
 | `earnings.nri_gap` | Mature Growth, Mature Stable | the non-recurring gap in the earnings a share | −100 to 100 dollars a share |
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
