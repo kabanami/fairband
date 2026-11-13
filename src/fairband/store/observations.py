@@ -3,10 +3,12 @@
 One row per field per period (``period`` is ``None`` for a value with no period, such as a moat
 score), citing the response it came from; ``value`` is decimal text. ``observations_for`` reads,
 for each period and field, the row from the newest response (by response id, then row id).
+``answer_observations`` reads one response whole: the newest that holds a row of the dataset for
+the symbol, so a period the vendor dropped or moved in a newer answer leaves no row behind.
 """
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -71,6 +73,25 @@ def observations_for(conn: sqlite3.Connection, symbol: str, dataset: str) -> lis
         ") WHERE newest = 1 ORDER BY period, field",
         (symbol, dataset),
     )
+    return _loaded(rows)
+
+
+def answer_observations(
+    conn: sqlite3.Connection, symbol: str, dataset: str
+) -> list[ObservationRow]:
+    """Every row of the newest response (the largest response id) that holds a row of ``dataset``
+    for ``symbol``, ordered by period (``None`` first), then field, then row id; empty when no
+    response holds one. Rows of an older response are not read, whatever periods they hold."""
+    rows = conn.execute(
+        "SELECT * FROM observations WHERE symbol = ? AND dataset = ? AND response_id = ("
+        " SELECT MAX(response_id) FROM observations WHERE symbol = ? AND dataset = ?"
+        ") ORDER BY period, field, id",
+        (symbol, dataset, symbol, dataset),
+    )
+    return _loaded(rows)
+
+
+def _loaded(rows: Iterable[sqlite3.Row]) -> list[ObservationRow]:
     return [
         ObservationRow(
             symbol=r["symbol"],

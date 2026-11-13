@@ -372,9 +372,9 @@ def test_estimates(client: TestClient) -> None:
 def test_the_estimates_read_shows_one_row_per_period(
     client: TestClient, db_path: Path, policy: Policy
 ) -> None:
-    """FMP's two fiscal calendars give HGCO two rows for 2026 Q4 and two for 2027, a day apart:
-    the read serves one row per period, the one with the larger EPS analyst count, and its refs
-    resolve to that row."""
+    """One answer gives HGCO two rows for 2026 Q4 and two for 2027, a day apart: the read serves
+    one row per period, the one with the larger EPS analyst count, and its refs resolve to that
+    row."""
     quarters = [
         {"symbol": "HGCO", "date": "2026-12-30", "epsAvg": 0.40, "numAnalystsEps": 4},
         {"symbol": "HGCO", "date": "2026-12-31", "epsAvg": 0.52, "numAnalystsEps": 11},
@@ -400,6 +400,50 @@ def test_the_estimates_read_shows_one_row_per_period(
         for ref, value in (("estimate:HGCO/2026-Q4/eps", 0.52), ("estimate:HGCO/2027/eps", 3.63)):
             found = resolver.resolve(ref)
             assert found is not None and found.value == value, ref
+
+
+def test_the_estimates_read_serves_the_newest_answer(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """FMP moved HGCO's period ends by a day between two answers. The read serves the newer
+    answer's rows alone, though the older rows have more analysts, and a far year only the older
+    answer held is not served; the refs resolve as the read serves."""
+    older = {
+        "estimates-quarter": [
+            {"symbol": "HGCO", "date": "2026-12-31", "epsAvg": 0.52, "numAnalystsEps": 11},
+            {"symbol": "HGCO", "date": "2027-03-31", "epsAvg": 0.54, "numAnalystsEps": 10},
+        ],
+        "estimates-annual": [
+            {"symbol": "HGCO", "date": "2027-12-31", "epsAvg": 3.63, "numAnalystsEps": 8},
+            {"symbol": "HGCO", "date": "2028-12-31", "epsAvg": 4.1, "numAnalystsEps": 5},
+        ],
+    }
+    newer = {
+        "estimates-quarter": [
+            {"symbol": "HGCO", "date": "2026-12-30", "epsAvg": 0.50, "numAnalystsEps": 4},
+            {"symbol": "HGCO", "date": "2027-03-30", "epsAvg": 0.53, "numAnalystsEps": 4},
+        ],
+        "estimates-annual": [
+            {"symbol": "HGCO", "date": "2027-12-30", "epsAvg": 3.5, "numAnalystsEps": 3},
+        ],
+    }
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, "HGCO", older, CREATED)
+        store_payloads(conn, "HGCO", newer, NOW)
+    body = _get(client, "/api/companies/HGCO/estimates")
+    assert [(q["period"], q["periodEnd"]) for q in body["quarters"]] == [
+        ("2026-Q4", "2026-12-30"),
+        ("2027-Q1", "2027-03-30"),
+    ]
+    assert body["quarters"][0]["eps"] == _figure(0.50, "per-share", "estimate:HGCO/2026-Q4/eps")
+    assert [(a["period"], a["periodEnd"]) for a in body["annual"]] == [("2027", "2027-12-30")]
+    assert body["annual"][0]["eps"] == _figure(3.5, "per-share", "estimate:HGCO/2027/eps")
+    with closing(connect(db_path)) as conn:
+        resolver = Resolver(conn, "HGCO", policy)
+        for ref, value in (("estimate:HGCO/2026-Q4/eps", 0.50), ("estimate:HGCO/2027/eps", 3.5)):
+            found = resolver.resolve(ref)
+            assert found is not None and found.value == value, ref
+        assert resolver.resolve("estimate:HGCO/2028/eps") is None
 
 
 def test_price_history(client: TestClient) -> None:

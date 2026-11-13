@@ -633,6 +633,23 @@ def test_estimate_close_and_peer_refs(
         assert _resolve(conn, ref, policy) is None, ref
 
 
+def test_an_estimate_ref_reads_the_newest_answer(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """FMP moved AAPL's fiscal 2027 a day, to 2027-12-30, in a newer answer with fewer analysts
+    than the stored one's 8: the ref of fiscal 2027 resolves the newer figure, and fiscal 2026,
+    which the newer answer leaves out, resolves nothing."""
+    moved = [{"symbol": "AAPL", "date": "2027-12-30", "epsAvg": 3.5, "numAnalystsEps": 6}]
+    store_payloads(conn, "AAPL", {"estimates-annual": moved}, NOW)
+    assert _resolve(conn, "estimate:AAPL/2027/eps", policy) == Resolved(
+        3.5, "per-share", "2027", None
+    )
+    assert _resolve(conn, "estimate:AAPL/2027/analysts_eps", policy) == Resolved(
+        6.0, "count", "2027", None
+    )
+    assert _resolve(conn, "estimate:AAPL/2026/eps", policy) is None
+
+
 def test_finding_and_derived_refs(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:

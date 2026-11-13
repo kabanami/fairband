@@ -8,12 +8,14 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   ``AnnualEstimate`` per period of the ``estimate-annual`` rows, in period-end order, an annual one
   with its EPS, net-income and revenue analyst counts; the fiscal year is FMP's when stored, else
   derived from the company's fiscal-year end (``FiscalCalendar``), and so is the quarter label.
-  FMP reports some companies under two fiscal calendars, two rows for one period with period ends
-  days apart (AAPL: 2027-12-26 and 2027-12-27 for fiscal 2028 Q1), so a row whose period end lies
-  within ``SAME_PERIOD_DAYS`` of the period's first row is that period, whatever its label; the row
-  kept has the larger EPS analyst count, a tie or no count keeping the later period end, so the NTM
-  window chains (``ntm_window``). The labels are information on the kept row and decide
-  nothing here;
+  Each of the two datasets is read from one vendor answer, the newest that holds a row for the
+  company (``answer_observations``, spec 2026-11-13 6): FMP moves a period end by a day between
+  answers, and an older answer's row would stand beside the new one. An empty answer stores no
+  rows, so the earlier answer's rows still serve. Inside the answer, as a guard, a row whose period
+  end lies within ``SAME_PERIOD_DAYS`` of the period's first row is that period, whatever its
+  label; the row kept has the larger EPS analyst count, a tie or no count keeping the later period
+  end, so the NTM window chains (``ntm_window``). The labels are information on the kept row and
+  decide nothing here;
 - the street's trailing EPS: the sum of the ``street-actual`` values whose periods are exactly the
   trailing period ends, the four quarters' or the two half-years', each read on the quote date's
   basis by the split rule; ``None`` when one is missing or the trailing figures are a fiscal year,
@@ -99,7 +101,7 @@ from fairband.refresh.inputs_statements import (
 from fairband.refresh.peers import peer_figures
 from fairband.refresh.rates import NO_RATE, FxSeries, Rate, rates_for
 from fairband.store.companies import CompanyRow, latest_company
-from fairband.store.observations import ObservationRow, observations_for
+from fairband.store.observations import ObservationRow, answer_observations, observations_for
 from fairband.store.vendor import latest_response, response_payload
 from fairband.vendors.normalize_fmp import price_closes, value_as_date
 
@@ -118,6 +120,9 @@ _OBSERVATIONS = frozenset(
         "split",
     }
 )
+# Read from one vendor answer, the newest that holds rows (spec 2026-11-13 6); every other
+# dataset is read by the newest row of each period and field.
+_ONE_ANSWER = frozenset({"estimate-annual", "estimate-quarter"})
 _QUOTE, _PROFILE, _SCREENER = "FMP quote", PROFILE_SOURCE, SCREENER_SOURCE
 _ESTIMATES, _EARNINGS = "FMP analyst-estimates", "FMP earnings"
 _CLOSES = "FMP historical-price-eod/full"
@@ -158,6 +163,8 @@ def build_inputs(
     def read(dataset: str) -> list[ObservationRow]:
         if dataset not in _OBSERVATIONS:
             raise ValueError(f"not an observation dataset: {dataset}")
+        if dataset in _ONE_ANSWER:
+            return answer_observations(conn, symbol, dataset)
         return observations_for(conn, symbol, dataset)
 
     quote, profile, ratios = read("quote"), read("profile"), read("gf-ratio")
@@ -406,10 +413,10 @@ def _annual_estimates(
 def _one_per_period[E: (QuarterEstimate, AnnualEstimate)](
     estimates: Iterable[E], analysts: Callable[[E], int | None]
 ) -> tuple[E, ...]:
-    """One estimate per period, in period-end order. Walking the rows by period end, a row ending
-    within ``SAME_PERIOD_DAYS`` of the current period's first row joins that period, as the rows
-    FMP gives for one period under two fiscal calendars do; of a period's rows, the one kept has
-    the most EPS ``analysts``, a tie or no count taking the later period end; a count beats none."""
+    """One estimate per period, in period-end order: a guard for two rows of one period inside one
+    answer. Walking the rows by period end, a row ending within ``SAME_PERIOD_DAYS`` of the current
+    period's first row joins that period; of a period's rows, the one kept has the most EPS
+    ``analysts``, a tie or no count taking the later period end; a count beats none."""
     periods: list[list[E]] = []
     for estimate in sorted(estimates, key=lambda e: e.period_end):
         if periods and (estimate.period_end - periods[-1][0].period_end).days <= SAME_PERIOD_DAYS:

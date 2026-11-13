@@ -1075,9 +1075,9 @@ def _on_a_september_year(
 
 
 def test_one_consensus_row_per_fiscal_period(store: Store) -> None:
-    """FMP reports AAPL under two fiscal calendars: two rows for one fiscal period, their period
-    ends a day apart. The row kept has the larger EPS analyst count, the earlier end's when it has
-    it, and a count beats none; a period with one row keeps it; the rows stay in period-end order."""
+    """One answer holds two rows for one fiscal period, their period ends a day apart. The row kept
+    has the larger EPS analyst count, the earlier end's when it has it, and a count beats none; a
+    period with one row keeps it; the rows stay in period-end order."""
     conn = _on_a_september_year(
         store,
         quarters=[
@@ -1114,6 +1114,40 @@ def test_one_consensus_row_per_fiscal_period(store: Store) -> None:
     assert inputs.annual_estimates == (
         AnnualEstimate(2028, date(2028, 9, 29), 8.5, 450_000 * M, 125_000 * M, 38, 38, 36),
     )
+
+
+def test_the_consensus_is_one_answer_s_rows(store: Store, clock: Clock) -> None:
+    """FMP moved the period ends by a day between two answers. The older answer's rows have
+    more analysts; they are not read, and a far year only the older answer held is not
+    revived."""
+    _on_a_september_year(
+        store,
+        quarters=[
+            {"date": "2026-12-27", "epsAvg": 2.9, "numAnalystsEps": 13},
+            {"date": "2027-03-27", "epsAvg": 2.2, "numAnalystsEps": 10},
+        ],
+        years=[
+            {"date": "2027-09-27", "epsAvg": 9.5, "numAnalystsEps": 30},
+            {"date": "2028-09-27", "epsAvg": 10.6, "numAnalystsEps": 22},
+        ],
+    )
+    clock.now += timedelta(days=2)  # past the reuse window: the next fetch asks FMP again
+    newer = {
+        "estimates-quarter": [
+            {"date": "2026-12-26", "epsAvg": 2.8, "numAnalystsEps": 6},
+            {"date": "2027-03-26", "epsAvg": 2.1, "numAnalystsEps": 6},
+        ],
+        "estimates-annual": [{"date": "2027-09-26", "epsAvg": 9.4, "numAnalystsEps": 28}],
+    }
+    conn = store(company=False, **newer)  # the statements' bodies stay as the first call set them
+    inputs = build(conn)
+    assert [(q.period_end, q.eps, q.analysts) for q in inputs.quarter_estimates] == [
+        (date(2026, 12, 26), 2.8, 6),
+        (date(2027, 3, 26), 2.1, 6),
+    ]
+    assert [(a.period_end, a.eps, a.analysts_eps) for a in inputs.annual_estimates] == [
+        (date(2027, 9, 26), 9.4, 28)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1254,7 +1288,7 @@ def test_quarters_that_share_a_calendar_label_are_kept_apart(store: Store) -> No
 
 def test_the_reported_quarter_s_duplicate_is_not_an_ntm_quarter(store: Store) -> None:
     """The quarter just reported, ending 2026-09-30 in the statements, comes twice in the
-    consensus, and the row kept is the second calendar's, a day after the trailing period end.
+    consensus, and the row kept is the one ending a day after the trailing period end.
     The NTM quarters skip it: the first ends 80 to 100 days after the trailing period end, and
     the golden's arithmetic values Mature Growth Co from the four after it."""
     mgco = mature_growth_inputs()
