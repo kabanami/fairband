@@ -813,6 +813,18 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         "`earnings.nri_gap`",
         "NTM net income",
         "why it is not added",
+        # what step 8 asks section 8 to say (the whole-branch review of the research round's
+        # plan 1, its Minor 4): a class the count leaves out, and why a share-count warning stays
+        "a share class or units that convert to shares that the count leaves out",
+        "Where `share-count-gap` stays because the market cap leaves a class out",
+        # the stock pay's basis with its passage, and a nil the filings confirm
+        "**The stock pay**, on Mature Growth",
+        "whether the company's adjusted EPS leaves out stock pay",
+        "the passage cited as a finding",
+        "where the filings show nil too, say so",
+        # the exposure under a thin NTM consensus
+        "**The thin NTM consensus**, where `thin-ntm` shows",
+        "the thin periods and their share of the NTM EPS",
     ):
         assert words in valuation, words
 

@@ -385,8 +385,8 @@ Twelve flags ask for a decision of yours. Read each sentence whole: it names its
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
   the step it names.
-- `share-count-gap`: the quote's market cap and the price times the diluted count disagree by more
-  than the band (`policy()`, `share_count_gap_band`). The sentence gives both figures and the
+- `share-count-gap`: the market cap and the price times the diluted count disagree by more than
+  the band (`policy()`, `share_count_gap_band`). The sentence gives both figures and the
   ratio of the market cap to the price times the count. Two readings. The count may leave out a
   share class or units that convert to shares, as an Up-C's units do, and the value a share can
   then be wrong by the ratio. Or the market cap may leave a class out, as on a company whose

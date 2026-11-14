@@ -175,8 +175,9 @@ class Anchor:
 
     @property
     def ntm_eps_found(self) -> float:
-        """The NTM EPS as the engine finds it, before any override: the consensus less the SBC
-        adjustment, the figure ``ntm_eps`` is without one."""
+        """The NTM EPS before an agent's guided EPS and cycle gap: the consensus less the SBC
+        adjustment in force, which an agent's stock pay or basis moves (``method.md`` 14.4), the
+        figure ``ntm_eps`` is without those two."""
         return self.ntm_eps_raw - self.sbc_adjustment_per_share
 
 

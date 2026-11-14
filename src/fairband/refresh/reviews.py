@@ -16,8 +16,10 @@ resting on the new snapshot, on the first of these that holds (spec 2026-11-13 1
 The day the statements were fetched, the data date, drops nothing: a refetch of the same
 statements leaves the correction applied. A snapshot's trailing period end is its result's
 ``trailing_end``; a result stored before method 1.3 carries none, and its period end is the
-``as_of`` of its ``shares_diluted`` input, which assembly dates at the newest period the
-statements hold. Its trailing inputs (``revenue_ttm``, ``eps_ttm``, ``operating_income_ttm``)
+``as_of`` of its ``shares_diluted`` input, which assembly dates at the newest quarterly row's
+period end, the fiscal year's when that row holds no count (``method.md`` 4.2), so such a
+snapshot may read as an older period, and its correction then drops as "a newer period is on
+file". Its trailing inputs (``revenue_ttm``, ``eps_ttm``, ``operating_income_ttm``)
 cite the newest fiscal year's end and are not read.
 
 A lasting override of an NTM anchor (``earnings.ntm``, ``revenue.ntm``) drops the same way, "the
@@ -387,7 +389,8 @@ def _drop_reason(
 def _trailing_end(result: ValuationResult) -> date | None:
     """The trailing period end of the snapshot ``result``: its ``trailing_end``; without one (a
     result stored before method 1.3), the ``as_of`` of its ``shares_diluted`` input, the newest
-    period the statements hold; else ``None`` (module docstring)."""
+    quarterly row's period end, the fiscal year's when that row holds no count; else ``None``
+    (module docstring)."""
     stored = result.intermediates.get("trailing_end")
     if stored is not None:
         return date.fromisoformat(stored)

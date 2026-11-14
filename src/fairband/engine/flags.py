@@ -8,8 +8,9 @@ high by ``margin_flag_above_high`` of the high's size or more, so a loss-making 
 profitable fires too. Its word reads the history: "Newly profitable" for a median at or below
 zero, "Possible cycle peak" for a loss year in the window, else "Margin above history".
 ``margin_history`` is no flag: the ten-year median operating margin on the flag's window and the
-ten-year median net margin on the same rule, each with its count of years, which every routed
-result carries for the research agent's judgment of a cyclical company (spec 2026-11-13 11).
+ten-year median net margin on the same rule, each with its count of years, which every result
+whose series is not empty carries, a refusal too, for the research agent's judgment of a cyclical
+company (spec 2026-11-13 11).
 
 The gate flags are the three ``mech/1.2`` gate tests on the trailing figures, kept as flags. The
 cash-flow statement signs capital spending as an outflow, so ``capex`` is negative for spending:
@@ -34,10 +35,10 @@ test reads it, by ``sbc_basis_gap_multiple`` times the after-tax stock pay a sha
 adjusted figure leaves out far more than stock pay. The stock pay is the one the anchor read, an
 agent's ``earnings.sbc`` in place of the stored figure (spec 2026-11-13 7.2).
 
-The share-count warning (spec 2026-11-13 8): ``share-count-gap`` when the quote's market cap over
-the price times the diluted count is outside ``share_count_gap_band``, an edge being inside. The
-market cap and the price are the quote's, in US dollars on every row, so the ratio has one
-currency; the count is the one the row reads. Either figure may be the wrong one: the count may
+The share-count warning (spec 2026-11-13 8): ``share-count-gap`` when the market cap over the
+price times the diluted count is outside ``share_count_gap_band``, an edge being inside. The
+market cap is the quote's, else the profile's or the screener's, and the price the quote's, both
+in US dollars on every row, so the ratio has one currency; the count is the one the row reads. Either figure may be the wrong one: the count may
 leave out a share class or units that convert to shares, so that the value a share of the row can
 be wrong by the ratio, or the market cap may leave a class out.
 
@@ -278,10 +279,10 @@ def share_count_flag(
 ) -> Flag | None:
     """``share-count-gap`` when ``market_cap`` ÷ (``price`` × ``shares``) is below the low of
     ``share_count_gap_band`` or above its high: the sentence gives both figures, the ratio to two
-    decimals, the band and the two readings. ``market_cap`` and ``price`` are the quote's, in US
-    dollars; ``shares`` is the diluted count in force. ``None`` inside the band, its edges
-    included, or without the three figures, a figure at or below zero or not finite being
-    none."""
+    decimals, the band and the two readings. ``market_cap`` is the quote's, else the profile's or
+    the screener's, and ``price`` the quote's, both in US dollars; ``shares`` is the diluted count
+    in force. ``None`` inside the band, its edges included, or without the three figures, a figure
+    at or below zero or not finite being none."""
     if market_cap is None or price is None or shares is None:
         return None
     if not all(math.isfinite(x) and x > 0 for x in (market_cap, price, shares)):

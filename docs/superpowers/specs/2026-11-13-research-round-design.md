@@ -285,8 +285,9 @@ correction applied. The lasting overrides and the guided-year rule of 14.6 are u
 
 Where a snapshot made before 1.3 does not carry its trailing period end as a figure of its own,
 the builder reads it from the `as_of` of its diluted share count, which assembly dates at the
-newest period the statements hold; the trailing inputs' own `as_of` is the fiscal year's end and
-is not read. From 1.3 on, a result carries the period end.
+newest quarterly row's period end, the fiscal year's when that row holds no count (method 4.2),
+so such a snapshot may read as an older period, and its correction then drops as "a newer period
+is on file"; the trailing inputs' own `as_of` is the fiscal year's end and is not read. From 1.3 on, a result carries the period end.
 
 The playbook's line on when a period-tied override ends changes with the rule: it holds until
 the company reports a new period or the figure it corrected changes.

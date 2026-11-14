@@ -39,9 +39,10 @@ the route's own entries for the inputs they set.
 Every result of ``value_company`` cites the policy's version and its settings hash, and is valid
 until the next earnings date when that is after the data date, else for the policy's fallback
 days. Its flags are the assembly's, ``share-count-gap`` (``flags.share_count_flag``, on the
-quote's market cap and price, both USD, and the count in force: spec 2026-11-13 8), the
-classifier's checks and the route's, the first of each code kept; ``reprice`` keeps the
-share-count warning, one quote's market cap and price keeping their ratio. Its intermediates hold
+market cap, the quote's or else the profile's or the screener's, and the quote's price, both USD,
+and the count in force: spec 2026-11-13 8), the classifier's checks and the route's, the first of
+each code kept; ``reprice`` keeps the share-count warning as it was, its ratio not moving with
+the price. Its intermediates hold
 ``price_facts``, the price columns of spec 6.3, on a refusal too (``None`` for a row without a
 price), and ``trailing_end``, the trailing period end as an ISO date, on every result whose
 inputs have trailing figures, a refusal too: the period a period-tied override corrects (spec
@@ -748,9 +749,10 @@ def _margin_entry(i: CompanyInputs) -> dict[str, Any]:
 
 
 def _share_count(i: CompanyInputs, overrides: Overrides, policy: Policy) -> tuple[Flag, ...]:
-    """``share-count-gap`` on the quote's market cap and price, both in US dollars, and the count
-    in force: an agent's ``shares.diluted``, else the count assembly read after the split rule and
-    the ADR basis rule (spec 2026-11-13 8)."""
+    """``share-count-gap`` on the market cap, the quote's or else the profile's or the screener's,
+    and the quote's price, both in US dollars, and the count in force: an agent's
+    ``shares.diluted``, else the count assembly read after the split rule and the ADR basis rule
+    (spec 2026-11-13 8)."""
     found = share_count_flag(i.market_cap, i.price, _shares(i, overrides), policy)
     return () if found is None else (found,)
 

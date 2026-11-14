@@ -212,9 +212,19 @@ The kill criteria of section 11 test it.
   finding, and say why it is not added. Where the figure comes from secondary coverage, not a
   filing, say so.
 - **The share count**, where an override set one: the shares committed but not yet in the count
-  (a forward sale, a mandatory convertible), cited as its bridge line,
-  `review:<id>/bridge/<n>/new`. The count is period-tied. A raised count raises the NTM net income
-  with it, so say on what share basis the analysts' EPS stands.
+  (a forward sale, a mandatory convertible), or a share class or units that convert to shares
+  that the count leaves out, cited as its bridge line, `review:<id>/bridge/<n>/new`. The count is
+  period-tied. A raised count raises the NTM net income with it, so say on what share basis the
+  analysts' EPS stands. Where `share-count-gap` stays because the market cap leaves a class out,
+  say why the count stands.
+- **The stock pay**, on Mature Growth: whether the company's adjusted EPS leaves out stock pay,
+  as its own definition in the release says, the passage cited as a finding, and the basis
+  override where the row read otherwise. Where `stock-pay-missing` showed, the trailing stock pay
+  from the filings' cash flow statements, cited as its bridge line,
+  `review:<id>/bridge/<n>/new`; where the filings show nil too, say so: the figure stands.
+- **The thin NTM consensus**, where `thin-ntm` shows: the exposure, the thin periods and their
+  share of the NTM EPS, each period's EPS cited, `estimate:<symbol>/<period>/eps`. Under a
+  guidance override of the anchor the note does not show, and the guidance below covers it.
 - **The guidance.** Where a guidance override moved an anchor or a step, one sentence names it
   and cites the record's figure, `guidance:<id>/midpoint`.
 - **The secondary valuation**, on a refused row with no reviewed value only: where neither the
@@ -235,8 +245,8 @@ The kill criteria of section 11 test it.
   ten-year median net margin, `snapshot:<id>/intermediates/margin_history/net/median`, named
   with its count of years where fewer than ten, against the margin inside the analysts' earnings,
   whether the cut to mid-cycle earnings is the full gap or half of it and why, and the value with
-  the other one and with no cut, cells of the sensitivity grid. Where orders already cover the coming years, one
-  sentence says the cut lowers those years too, so the value leans low.
+  the other one and with no cut, cells of the sensitivity grid. Where orders already cover the
+  coming years, one sentence says the cut lowers those years too, so the value leans low.
 - **The sensitivity grid**: the two inputs it sets, and the range of the value across them, two
   cells `sensitivity:<id>/<i>/<j>`, each beside the axis values it sits at,
   `sensitivity:<id>/rows/<i>` and `/cols/<j>`.

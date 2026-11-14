@@ -57,9 +57,9 @@ or two half-years); ``earnings.cycle_gap`` the correction
 to mid-cycle earnings, which the NTM EPS, the consensus's or the guided one, is taken less, before
 the positive-anchor refusal (``anchor.ntm_anchor``). Nothing else reads the two: the basis test,
 the clean EPS, EPV and ``large-nri`` read the non-recurring gap alone, and the forward EPS of
-the P/E and the ``ntm_eps`` and ``ntm_net_income`` data entries are the consensus as found
-(``Anchor.ntm_eps_found``), the ``ntm_eps`` entry giving way to the JUDGMENT entry under the
-guided EPS. ``cycle_gap`` is in the intermediates only under that override. The cross-check reads
+the P/E and the ``ntm_eps`` and ``ntm_net_income`` data entries are the consensus less the
+stock-pay adjustment in force (``Anchor.ntm_eps_found``), which the two stock-pay inputs move,
+the ``ntm_eps`` entry giving way to the JUDGMENT entry under the guided EPS. ``cycle_gap`` is in the intermediates only under that override. The cross-check reads
 the row's moat, returns and two gaps, and the consensus and belief as found.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
@@ -232,7 +232,9 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "sbc_ttm", t.sbc, money(i), "statements"),
-        # the consensus as found: an agent's guided EPS or cycle gap is its JUDGMENT entry
+        # the consensus less the stock-pay adjustment in force, which an agent's stock pay or basis,
+        # or a gap that changes the basis, moves (method 14.4); a guided EPS or a cycle gap is its
+        # own JUDGMENT entry
         data(i, "ntm_eps", anchor.ntm_eps_found, per_share(i), "estimates_quarter"),
         data(
             i,
