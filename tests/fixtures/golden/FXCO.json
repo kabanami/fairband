@@ -508,9 +508,12 @@
  ],
  "intermediates": {
   "anchor": {
+   "annual": null,
    "ntm_eps": 47.2,
    "ntm_eps_raw": 47.2,
-   "sbc_adjustment_per_share": 0.0
+   "periods_sum": 47.2,
+   "sbc_adjustment_per_share": 0.0,
+   "source": "periods"
   },
   "belief": {
    "median": 0.042,

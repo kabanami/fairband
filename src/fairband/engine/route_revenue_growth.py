@@ -310,7 +310,15 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     peer_roic = peer_roic_median(i.peers)
     growth_route = growth_cross_check(c, moat, roic)
     anchor = ntm_anchor(
-        periods, t, i.street_ttm_eps, c.shares, tax, c.price, policy, cadence=cadence
+        periods,
+        t,
+        i.street_ttm_eps,
+        c.shares,
+        tax,
+        c.price,
+        policy,
+        cadence=cadence,
+        annual=i.annual_estimates,
     )
     gap = nri_gap(i)
     e = eps(t, gap, anchor.ntm_eps if anchor.refusal is None else None)

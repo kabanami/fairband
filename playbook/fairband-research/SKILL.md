@@ -374,13 +374,19 @@ Twelve flags ask for a decision of yours. Read each sentence whole: it names its
   `earnings.ntm` the note does not show, and neither stock-pay input is needed: the guided EPS
   stands in for the analysts' EPS less the charge.
 - `thin-ntm`: on Mature Growth, a period the analysts' NTM EPS sums has fewer than `analyst_min`
-  EPS analysts (`policy()`), or no count, so the earnings the value starts from rest on thin
-  evidence. The sentence gives how many of the window's periods are thin, the smallest count and
-  its period. Read the annual estimates of the fiscal years the window spans and their analyst
-  counts (`estimates`), and the company's guidance (see "Guidance"). Where a clear EPS guidance
-  record covers the window, decide through `earnings.ntm`; the note does not show once it
-  applies. Without one, the figure stands, and section 8 states the exposure: the thin periods
-  and their share of the NTM EPS.
+  EPS analysts (`policy()`), or no count, and the annual consensus cannot stand in: a fiscal year
+  the window spans has fewer than `analyst_min` EPS analysts, no count or no annual EPS estimate.
+  So neither the quarters nor the annual consensus has `analyst_min` analysts, and the earnings
+  the value starts from rest on thin evidence. Where the annual consensus can stand in, the
+  engine reads it in place of the periods, each fiscal year weighted by its share of the window,
+  and the note does not show; read the anchor's source at
+  `snapshot:<id>/intermediates/anchor/source`, `periods` or `annual`. The sentence gives how many
+  of the window's periods are thin, the smallest count and its period, and the first fiscal year
+  that keeps the annual consensus out. Read the annual estimates of the fiscal years the window
+  spans and their analyst counts (`estimates`), and the company's guidance (see "Guidance").
+  Where a clear EPS guidance record covers the window, decide through `earnings.ntm`; the note
+  does not show once it applies. Without one, the figure stands, and section 8 states the
+  exposure: the thin periods and their share of the NTM EPS.
 - `step-series-disagree`: a consensus step read on net income and the same step read on EPS differ
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,

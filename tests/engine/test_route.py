@@ -219,7 +219,14 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert (r.price_to_value, r.designation) == (150.0 / r.value, "above")
     im = r.intermediates
     assert set(im) == MATURE_GROWTH_KEYS
-    assert im["anchor"] == {"ntm_eps_raw": 5.90, "sbc_adjustment_per_share": 0.0, "ntm_eps": 5.90}
+    assert im["anchor"] == {
+        "ntm_eps_raw": 5.90,
+        "sbc_adjustment_per_share": 0.0,
+        "ntm_eps": 5.90,
+        "source": "periods",  # 20 analysts a quarter: the window is not thin (spec 2026-11-13 9a)
+        "periods_sum": 5.90,
+        "annual": None,
+    }
     assert im["sbc_basis"] == "includes-sbc"
     assert im["sbc_ttm"] == 400e6  # the stored trailing stock pay, the figure the anchor read
     assert im["ntm_net_income"] == pytest.approx(5_900e6)
@@ -1677,9 +1684,10 @@ def test_a_thin_ntm_quarter_notes_the_anchor(
 ) -> None:
     """MGCO's NTM EPS sums four quarters of 20 analysts each. With the last on 4 the row carries
     ``thin-ntm`` in the place right after ``few-analysts``, before ``value-spread``; a note, it
-    moves no figure and is not counted. On 5 analysts, ``analyst_min``, it is silent; with no
-    count it reads "no count". Under an applied ``earnings.ntm`` it does not show: the anchor is
-    the guidance."""
+    moves no figure and is not counted. MGCO's annual consensus starts at fiscal 2027, so the
+    annual figure does not stand in (spec 2026-11-13 9a) and the note names fiscal 2026. On 5
+    analysts, ``analyst_min``, it is silent; with no count it reads "no count". Under an applied
+    ``earnings.ntm`` it does not show: the anchor is the guidance."""
     plain = value_company(mg_inputs, deciles, policy, TODAY)
     r = value_company(_thin_quarter(mg_inputs, 4), deciles, policy, TODAY)
     assert codes(plain) == ["value-spread"] and codes(r) == ["thin-ntm", "value-spread"]
@@ -1690,7 +1698,8 @@ def test_a_thin_ntm_quarter_notes_the_anchor(
         "thin-ntm",
         "Thin NTM consensus",
         "1 of the 4 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
-        "thinnest, ending 30 Sep 2027, has 4 analysts, so year 1 rests on thin evidence.",
+        "thinnest, ending 30 Sep 2027, has 4 analysts, and fiscal 2026 has no annual EPS "
+        "estimate, so year 1 rests on thin evidence.",
     )
     at_five = value_company(_thin_quarter(mg_inputs, 5), deciles, policy, TODAY)
     assert codes(at_five) == ["value-spread"]
@@ -1706,21 +1715,128 @@ def test_a_thin_ntm_quarter_notes_the_anchor(
     assert "thin-ntm" in codes(stepped)  # only the input that sets the anchor silences it
 
 
+ANNUAL_ANCHOR_NOTE = (
+    "fiscal 2026 × 1/4 + fiscal 2027 × 3/4, the annual consensus: a period of the NTM window has "
+    "fewer than 5 EPS analysts"
+)
+
+
+def _annual_window(i: CompanyInputs) -> CompanyInputs:
+    """``i`` with the first of its four NTM quarters, fiscal 2026's Q4, on 3 analysts, and an
+    annual consensus for fiscal 2026 of $5.70 a share on 12 analysts before fiscal 2027's, cited
+    as of a day of its own, so a citation shows which estimates it names (spec 2026-11-13 9a)."""
+    q = i.quarter_estimates
+    fy2026 = engine_companies.annual(2026, 5_700e6, 5.70, 12)
+    cited = replace(i.provenance["estimates_annual"], as_of=date(2026, 10, 29))
+    return replace(
+        i,
+        quarter_estimates=(replace(q[0], analysts=3), *q[1:]),
+        annual_estimates=(fy2026, *i.annual_estimates),
+        provenance=i.provenance | {"estimates_annual": cited},
+    )
+
+
+def test_a_thin_window_reads_the_annual_consensus(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 9a: MGCO's NTM window is fiscal 2026's Q4 and fiscal 2027's Q1 to Q3. With
+    the first on 3 analysts and fiscal 2026 at $5.70 on 12, year 1 reads 0.25 × 5.70 + 0.75 × 6.00
+    = 5.925 where the periods sum to 5.90: the value moves and ``thin-ntm`` does not show. The
+    ``ntm_eps`` and ``ntm_net_income`` entries cite the annual estimates, the weights their note.
+    Without fiscal 2026's row the annual figure does not exist: the value is the fixture's, and
+    ``thin-ntm`` names the year in the place right after ``few-analysts``."""
+    plain = value_company(mg_inputs, deciles, policy, TODAY)
+    thin = _annual_window(mg_inputs)
+    r = value_company(thin, deciles, policy, TODAY)
+    assert r.intermediates["anchor"] == {
+        "ntm_eps_raw": pytest.approx(5.925),
+        "sbc_adjustment_per_share": 0.0,
+        "ntm_eps": pytest.approx(5.925),
+        "source": "annual",
+        "periods_sum": pytest.approx(5.90),
+        "annual": [
+            {"fiscal_year": 2026, "weight": 0.25, "eps": 5.70, "analysts": 12},
+            {"fiscal_year": 2027, "weight": 0.75, "eps": 6.00, "analysts": 12},
+        ],
+    }
+    assert r.intermediates["ntm_net_income"] == pytest.approx(5_925e6)
+    assert r.intermediates["path"] == plain.intermediates["path"]  # the base year stays 2027
+    assert r.value is not None and plain.value is not None and r.value > plain.value
+    assert codes(r) == codes(plain) == ["value-spread"]
+    for name, figure in (("ntm_eps", 5.925), ("ntm_net_income", 5_925e6)):
+        [entry] = [x for x in r.inputs if x.name == name]
+        assert entry.provenance == thin.provenance["estimates_annual"], name
+        assert entry.provenance != thin.provenance["estimates_quarter"], name
+        assert (entry.value, entry.note) == (pytest.approx(figure), ANNUAL_ANCHOR_NOTE), name
+
+    without = replace(thin, annual_estimates=mg_inputs.annual_estimates)
+    w = value_company(without, deciles, policy, TODAY)
+    assert w.value == plain.value and w.levels == plain.levels
+    assert (w.intermediates["anchor"]["source"], w.intermediates["anchor"]["annual"]) == (
+        "periods",
+        None,
+    )
+    assert codes(w) == ["thin-ntm", "value-spread"]
+    assert w.flags[0].sentence == (
+        "1 of the 4 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
+        "thinnest, ending 31 Dec 2026, has 3 analysts, and fiscal 2026 has no annual EPS "
+        "estimate, so year 1 rests on thin evidence."
+    )
+    [entry] = [x for x in w.inputs if x.name == "ntm_eps"]
+    assert (entry.provenance, entry.note) == (thin.provenance["estimates_quarter"], None)
+
+
+def test_the_annual_anchor_reaches_the_cross_check_and_moves_no_stable_value(
+    ms_inputs: CompanyInputs, mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 9a: the rule reaches every reading of the anchor. A Mature Stable row with
+    MGCO's consensus on the thin window of ``_annual_window``: the growth-route cross-check reads
+    year 1 at 5.925 a share on 1 bn shares and its value moves; the row's value, levels,
+    designation and refusal do not."""
+    found = value_company(_with_consensus(ms_inputs, mg_inputs), deciles, policy, TODAY)
+    thin = _with_consensus(ms_inputs, _annual_window(mg_inputs))
+    r = value_company(thin, deciles, policy, TODAY)
+    gr, was = r.intermediates["growth_route"], found.intermediates["growth_route"]
+    assert gr["refusal"] is None and was["refusal"] is None
+    assert gr["ntm_net_income"] == pytest.approx(5_925e6)
+    assert was["ntm_net_income"] == pytest.approx(5_900e6)
+    assert gr["value_per_share"] > was["value_per_share"]
+    assert (r.value, r.levels, r.designation, r.refusal) == (
+        found.value,
+        found.levels,
+        found.designation,
+        found.refusal,
+    )
+    assert "thin-ntm" not in codes(r)
+
+
 def test_a_half_yearly_reporter_s_thin_note_reads_its_two_half_years(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """Spec 2026-11-10 8: a half-yearly reporter's NTM window is two half-years, so the note
     counts the window's own periods, not four: MGCO's quarters as two half-years ending 31 Mar
-    and 30 Sep 2027, the first on 3 analysts."""
+    and 30 Sep 2027, both in fiscal 2027, the first on 3 analysts. Fiscal 2027's annual EPS of
+    $6.00 on 12 analysts stands in for the thin window whole (spec 2026-11-13 9a): year 1 reads
+    6.00, not the halves' 5.90, and no note shows. With that year's EPS on 4 analysts the halves'
+    sum stands, the value is the halves', and the note names the year."""
     halves = engine_companies.half_yearly(mg_inputs)
     first, second = halves.quarter_estimates
     thin = replace(halves, quarter_estimates=(replace(first, analysts=3), second))
-    r = value_company(thin, deciles, policy, TODAY)
+    annual = value_company(thin, deciles, policy, TODAY)
+    assert annual.intermediates["anchor"]["ntm_eps_raw"] == pytest.approx(6.00)
+    assert annual.intermediates["anchor"]["annual"] == [
+        {"fiscal_year": 2027, "weight": 1.0, "eps": 6.00, "analysts": 12}
+    ]
+    assert "thin-ntm" not in codes(annual)
+    fy2027, *later = thin.annual_estimates
+    four = replace(thin, annual_estimates=(replace(fy2027, analysts_eps=4), *later))
+    r = value_company(four, deciles, policy, TODAY)
     assert r.value is not None and r.value == value_company(halves, deciles, policy, TODAY).value
     [note] = [f for f in r.flags if f.code == "thin-ntm"]
-    assert note.sentence.startswith(
+    assert note.sentence == (
         "1 of the 2 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
-        "thinnest, ending 31 Mar 2027, has 3 analysts,"
+        "thinnest, ending 31 Mar 2027, has 3 analysts, and the annual consensus of fiscal 2027 "
+        "has 4 EPS analysts, so year 1 rests on thin evidence."
     )
 
 

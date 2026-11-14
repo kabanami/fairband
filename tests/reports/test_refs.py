@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from refresh.synthetic import NOW, bodies
 from support.engine_companies import (
+    annual,
     decline_inputs,
     fx_inputs,
     mature_growth_inputs,
@@ -371,6 +372,41 @@ def test_the_minority_interest_resolves_and_reads_in_words(
         found = resolver.resolve(ref)
         assert found is not None and (found.value, found.snapshot_id) == (50e6, sid), path
         assert resolver.describe(ref) == f"snapshot {sid}, {words}, priced 30 Oct 2026", path
+
+
+def test_the_anchor_s_source_resolves_and_reads_in_words(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-13 9a: the playbook has an agent read where year 1 came from at
+    `snapshot:<id>/intermediates/anchor/source`. The Mature Growth golden with its first NTM
+    quarter, fiscal 2026's Q4, on 3 analysts and fiscal 2026's annual EPS of $5.70 on 12 reads
+    the annual consensus; the references list names the source, the periods' sum and each year
+    the figure weighs in words."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    base = replace(mature_growth_inputs(), symbol="AAPL")
+    q = base.quarter_estimates
+    thin = replace(
+        base,
+        quarter_estimates=(replace(q[0], analysts=3), *q[1:]),
+        annual_estimates=(annual(2026, 5_700e6, 5.70, 12), *base.annual_estimates),
+    )
+    mechanical = value_company(thin, universe_deciles(), policy, TODAY)
+    sid = insert_snapshot(conn, mechanical, aapl.refresh_id, clock=lambda: NOW)
+    resolver = Resolver(conn, "AAPL", policy)
+    s = f"snapshot:{sid}/intermediates/anchor"
+    for path, value, words in (
+        ("source", "annual", "the source of the NTM EPS, the periods or the annual consensus"),
+        ("periods_sum", pytest.approx(5.90), "the sum of the NTM window's EPS means"),
+        ("annual/0/fiscal_year", 2026.0, "the fiscal year of the NTM EPS's annual year 0"),
+        ("annual/1/weight", 0.75, "the weight of the NTM EPS's annual year 1"),
+        ("annual/1/eps", 6.00, "the annual EPS mean of the NTM EPS's annual year 1"),
+        ("annual/0/analysts", 12.0, "the EPS analysts of the NTM EPS's annual year 0"),
+    ):
+        found = resolver.resolve(f"{s}/{path}")
+        assert found is not None and (found.value, found.snapshot_id) == (value, sid), path
+        assert resolver.describe(f"{s}/{path}") == f"snapshot {sid}, {words}, priced 30 Oct 2026"
+    assert resolver.resolve(f"{s}/annual") is None  # a list, not a figure
 
 
 def _secondary_id(conn: sqlite3.Connection, policy: Policy, snapshot_id: int) -> int:

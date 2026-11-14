@@ -21,6 +21,13 @@ right after ``few-analysts``, silent under an applied ``earnings.ntm`` for the s
 ``charge`` in the intermediates records the growth paid for, the return by year, the hold and the
 revenue steps as found; ``sbc_ttm`` the trailing stock pay the anchor read.
 
+On a thin NTM window, one with a period of fewer than ``analyst_min`` EPS analysts or no count,
+the anchor reads the annual consensus where every fiscal year of the window has an annual EPS
+estimate on ``analyst_min`` EPS analysts or more (``anchor.annual_ntm``, spec 2026-11-13 9a),
+and ``thin-ntm`` shows only where it does not. The ``anchor`` entry records the
+source, the periods' sum and each year with its weight, and on the annual source the ``ntm_eps``
+and ``ntm_net_income`` DATA entries cite the annual estimates, the weights their note.
+
 The value is also computed at each policy runway and at each return of the sensitivity, and so is
 the implied growth at the price. The sensitivity is keyed ``"runway"``, the row's own charge;
 then the policy's ``roic_sensitivity`` values, each as the runway return with the moat's terminal
@@ -83,6 +90,7 @@ reported count.
 
 from collections.abc import Sequence
 from dataclasses import asdict, replace
+from fractions import Fraction
 from typing import Any, Literal
 
 from fairband.engine.anchor import (
@@ -190,6 +198,11 @@ def value_mature_growth(c: Context) -> Valued | Refused:
             "ntm_eps_raw": anchor.ntm_eps_raw,
             "sbc_adjustment_per_share": anchor.sbc_adjustment_per_share,
             "ntm_eps": anchor.ntm_eps,
+            # what the raw figure read (spec 2026-11-13 9a): the window's periods or the annual
+            # consensus, each fiscal year with its weight
+            "source": anchor.source,
+            "periods_sum": anchor.periods_sum,
+            "annual": None if anchor.source == "periods" else [asdict(x) for x in anchor.annual],
         },
         "sbc_basis": anchor.basis,
         "sbc_ttm": anchor.sbc_ttm,
@@ -232,19 +245,21 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         return Refused(_NOT_POSITIVE, flags + spread, im)
     im |= growth_at_price(im, c.price, value + outside, policy)
     flags += present(long_runway(im, policy)) + spread
+    estimates, weights = _anchor_cited(anchor, policy)
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "sbc_ttm", t.sbc, money(i), "statements"),
         # the consensus less the stock-pay adjustment in force, which an agent's stock pay or basis,
         # a gap that changes the basis, or an agent's count moves (method 14.4); a guided EPS or a
         # cycle gap is its own JUDGMENT entry
-        data(i, "ntm_eps", anchor.ntm_eps_found, per_share(i), "estimates_quarter"),
+        data(i, "ntm_eps", anchor.ntm_eps_found, per_share(i), estimates, weights),
         data(
             i,
             "ntm_net_income",
             _on_reported(anchor, i.shares_diluted),
             money(i),
-            "estimates_quarter",
+            estimates,
+            weights,
         ),
         data(i, "path_step_2", path.steps[0], "ratio", "estimates_annual"),
         data(i, "path_step_3", path.steps[1], "ratio", "estimates_annual"),
@@ -340,6 +355,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         guided_eps=guided,
         sbc_override=sbc,
         basis_override=basis,
+        annual=i.annual_estimates,
     )
     if anchor.refusal is not None:
         notes: tuple[Flag, ...] = ()
@@ -364,13 +380,18 @@ def _judged(
     """The route's own path and belief: under the step and belief overrides, an overriding step
     replaces the consensus's; ``few-analysts`` and ``step-series-disagree`` name only the steps the
     consensus still gives, the latter against the diluted count (spec 2026-11-09 9). ``thin-ntm``
-    (spec 2026-11-13 9) reads the NTM window's ``periods``, the ones the anchor sums, and takes
-    the place right after ``few-analysts``; it is silent under an applied ``earnings.ntm``, whose
+    (spec 2026-11-13 9) reads the NTM window's ``periods``, the ones the anchor sums, and the
+    annual consensus that stands in for them where it can (spec 2026-11-13 9a), and takes the
+    place right after ``few-analysts``; it is silent under an applied ``earnings.ntm``, whose
     anchor is the guidance."""
     read = (_STEP_TAGS[0] not in c.overrides, _STEP_TAGS[1] not in c.overrides)
     consensus = tuple(step if r else None for r, step in zip(read, path.steps, strict=True))
     thin = few_analysts(base_year, (consensus[0], consensus[1]), path.analysts, c.policy)
-    thin_ntm = None if "earnings.ntm" in c.overrides else thin_ntm_flag(periods, c.policy)
+    thin_ntm = (
+        None
+        if "earnings.ntm" in c.overrides
+        else thin_ntm_flag(periods, c.inputs.annual_estimates, c.policy)
+    )
     disagree = step_series_flag(path, c.shares, c.policy, read)
     flags = (
         tuple(f for f in path.flags if f.code != "few-analysts") + present(thin) + present(thin_ntm)
@@ -554,6 +575,22 @@ def _on_revenue(growth: GrowthPath, year: int) -> bool:
     if r3 is None or year < 3 or year > growth.runway:
         return False
     return year == 3 or (r3 > growth.belief and year <= 3 + growth.fade_years)
+
+
+def _anchor_cited(anchor: Anchor, policy: Policy) -> tuple[str, str | None]:
+    """The estimates the ``ntm_eps`` and ``ntm_net_income`` DATA entries cite, and their note: the
+    quarterly consensus with no note of its own on the periods' sum; the annual consensus on the
+    annual figure (spec 2026-11-13 9a), the note giving each year's weight, "fiscal 2026 × 1/4 +
+    fiscal 2027 × 3/4, the annual consensus: ...", a weight of a whole year reading 1."""
+    if anchor.source == "periods":
+        return "estimates_quarter", None
+    weights = " + ".join(
+        f"fiscal {x.fiscal_year} × {Fraction(x.weight).limit_denominator()}" for x in anchor.annual
+    )
+    return "estimates_annual", (
+        f"{weights}, the annual consensus: a period of the NTM window has fewer than "
+        f"{policy.analyst_min} EPS analysts"
+    )
 
 
 def _on_reported(anchor: Anchor, reported: float | None) -> float | None:

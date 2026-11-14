@@ -668,6 +668,25 @@ def test_the_citations_name_the_newest_sheet_and_the_minority_interest() -> None
         assert words in intermediates, words
 
 
+def test_the_citations_name_the_anchor_s_source() -> None:
+    """Spec 2026-11-13 9a: on Mature Growth the citations name what the analysts' NTM EPS read,
+    the window's periods or the annual consensus, the periods' sum, and each year the annual
+    figure weighs."""
+    row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
+    intermediates = _flat(row["`snapshot:<id>/intermediates/<path>`"][0])
+    for words in (
+        "On Mature Growth, `anchor/source`, what the analysts' NTM EPS read",
+        "`periods`, the sum of the NTM window's EPS means",
+        "`annual`, the annual consensus weighted by the window's periods",
+        "`anchor/periods_sum`",
+        "`anchor/annual/<n>/fiscal_year`",
+        "`anchor/annual/<n>/weight`",
+        "`anchor/annual/<n>/eps`",
+        "`anchor/annual/<n>/analysts`",
+    ):
+        assert words in intermediates, words
+
+
 def test_the_cycle_formula_reads_the_ten_year_median_net_margin() -> None:
     """Spec 2026-11-13 11: the cycle formula changes one term, the mid-cycle net margin, now the
     snapshot's ten-year median net margin in place of the middle of the growth table's five
@@ -754,6 +773,11 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
             "thin-ntm",
             (
                 "`analyst_min`",
+                # the anchor on a thin window (spec 2026-11-13 9a): the note means neither stands
+                "and the annual consensus cannot stand in",
+                "So neither the quarters nor the annual consensus has `analyst_min` analysts",
+                "read the anchor's source at `snapshot:<id>/intermediates/anchor/source`",
+                "the first fiscal year that keeps the annual consensus out",
                 "how many of the window's periods are thin, the smallest count and its period",
                 "the annual estimates of the fiscal years the window spans",
                 "their analyst counts",

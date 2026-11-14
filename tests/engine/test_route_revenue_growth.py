@@ -1078,6 +1078,42 @@ def test_cross_check_present_with_a_positive_anchor(
     assert codes(p)[len(p.phase.checks) :][0] == "sbc-basis-unknown"
 
 
+def test_the_forward_eps_reads_the_annual_anchor_on_a_thin_window(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 9a: the rule reaches every reading of the anchor, the forward EPS of this
+    route's multiples among them. HGCO with quarters of 0.60 a share, the first, fiscal 2026's
+    Q4, on 3 analysts, and annual EPS of 2.00 for fiscal 2026 and 2.50 for fiscal 2027 on 12
+    analysts: 0.25 × 2.00 + 0.75 × 2.50 = 2.375 where the quarters sum to 2.40. The cross-check
+    follows; the value rests on the revenue path, which the rule does not reach, and stays."""
+    hg = high_growth_inputs
+    positive = replace(
+        hg,
+        quarter_estimates=tuple(replace(q, eps=0.60) for q in hg.quarter_estimates),
+        annual_estimates=(
+            annual(2027, 250e6, 2.50, 12, 13_000e6, 20),
+            annual(2028, 320e6, 3.20, 12, 16_000e6, 15),
+            annual(2029, 400e6, 4.00, 12, 19_200e6, 12),
+        ),
+    )
+    first, *rest = positive.quarter_estimates
+    thin = replace(
+        positive,
+        quarter_estimates=(replace(first, analysts=3), *rest),
+        annual_estimates=(annual(2026, 200e6, 2.00, 12), *positive.annual_estimates),
+    )
+    p = value_company(positive, deciles, policy, TODAY)
+    r = value_company(thin, deciles, policy, TODAY)
+    assert p.intermediates["eps"]["forward"] == pytest.approx(2.40)
+    assert r.intermediates["eps"]["forward"] == pytest.approx(2.375)
+    assert r.intermediates["multiples"]["pe_forward"] == pytest.approx(150 / 2.375)
+    assert r.intermediates["growth_route"]["ntm_net_income"] == pytest.approx(2.375 * 100e6)
+    assert p.intermediates["growth_route"]["ntm_net_income"] == pytest.approx(2.40 * 100e6)
+    assert r.intermediates["ntm_revenue"] == p.intermediates["ntm_revenue"]
+    assert (r.value, r.levels, r.refusal) == (p.value, p.levels, p.refusal)
+    assert r.value is not None and "thin-ntm" not in codes(r)
+
+
 def test_value_spread_flag_over_the_margins(
     high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

@@ -468,6 +468,10 @@ income year by year. Each year pays for the growth of the year after.</p>
 <ol class="body">
 <li>Year 1 is the analysts' consensus (their average forecast) of earnings. It covers the next
 four quarters (two half-years for a company that reports twice a year).</li>
+<li>Where one of those quarters or half-years has fewer than
+<span data-policy="analyst_min">—</span> analysts, year 1 reads the consensus for their fiscal
+years instead. Each year counts by its share of the quarters or half-years. This holds only where
+each of those years has <span data-policy="analyst_min">—</span> analysts or more.</li>
 <li>Years 2 and 3 grow at the consensus growth for the next two fiscal years.</li>
 <li>From year 4, growth fades in equal steps over <span data-policy="fade_years">—</span> to the
 belief (the long-run growth the engine assumes).</li>
@@ -500,7 +504,8 @@ too. A wide spread means the value depends heavily on those choices.</p>
 
 <h3 class="heading">Flags on this route</h3>
 <p class="body">A consensus year with fewer than <span data-policy="analyst_min">—</span> analysts
-behind it gets a note. So does a quarter or half-year of the next twelve months. A year whose
+behind it gets a note. So does a quarter or half-year of the next twelve months, where the
+consensus for its fiscal years cannot take its place. A year whose
 growth exceeds its return gets a note, and pays out less than
 nothing.
 A value that moves by <span data-policy="value_spread_flag">—</span> or more across the runways or
@@ -972,7 +977,9 @@ income.</span></li>
 <span data-policy="analyst_min">—</span> analysts behind it.</span></li>
 <li><span class="label">Thin NTM consensus</span> <code class="fb-tag figure-sm">thin-ntm</code>
 <span class="body app-flags__what">A Mature Growth company's next twelve months sum a quarter or
-half-year with fewer than <span data-policy="analyst_min">—</span> analysts, or no count. It does
+half-year with fewer than <span data-policy="analyst_min">—</span> analysts, or no count. The
+consensus for their fiscal years cannot take their place: one of those years has fewer than
+<span data-policy="analyst_min">—</span> analysts, no count or no estimate. It does
 not show where an agent sets that figure from guidance.</span></li>
 <li><span class="label">Step series disagree</span> <code class="fb-tag figure-sm">step-series-disagree</code>
 <span class="body app-flags__what">Year 2 or 3 grows at rates more than 5 points apart on the

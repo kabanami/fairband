@@ -134,6 +134,15 @@ So `debt`, `cash`, the new entry and DCCO's `floor_current_assets` and `floor_to
 are as of 2025-12-31; no figure depends on the date. MGCO, MSCO and FXCO read no balance sheet and
 are untouched.
 
+MGCO and FXCO re-captured under 1.4 on 2026-11-14 for three new keys, the NTM anchor on a thin
+window (spec 2026-11-13 9a; method 5.2): the Mature Growth `anchor` entry gains `source`, what
+the raw NTM EPS read, `periods_sum`, the sum of the window's EPS means, and `annual`, each fiscal
+year the annual figure weighs, null on the periods' source. Each fixture's NTM quarters have 20
+analysts, so the window is not thin: the source is `periods`, the sum is the raw figure (5.90 on
+MGCO, 47.20 SEK on FXCO) and the DATA entries still cite the quarterly consensus. No other key or
+figure of either golden moves; the five goldens on other routes carry no `anchor` entry and are
+untouched.
+
 Run from the repository root:
 
 ```

@@ -332,6 +332,32 @@ def test_the_page_names_the_half_year_window() -> None:
     assert names in note[: note.index("</li>")]
 
 
+def test_the_page_states_the_anchor_on_a_thin_window() -> None:
+    """Spec 2026-11-13 9a: the Mature Growth steps say a quarter or half-year with too few
+    analysts sends year 1 to the consensus for its fiscal years, each by its share, where each
+    of those years has enough analysts; the route's flags and the ``thin-ntm`` entry say the note
+    shows only where that consensus cannot take its place."""
+    flat = re.sub(r"\s+", " ", _static_file("methodology.html"))
+    mature = _section(flat, "mature-growth")
+    steps = mature[mature.index(">The steps</h3>") :]
+    steps = steps[: steps.index("</ol>")]
+    analysts = '<span data-policy="analyst_min">—</span>'
+    for words in (
+        f"Where one of those quarters or half-years has fewer than {analysts} analysts",
+        "year 1 reads the consensus for their fiscal years instead",
+        "Each year counts by its share of the quarters or half-years",
+        f"This holds only where each of those years has {analysts} analysts or more",
+    ):
+        assert words in steps, words
+    route_flags = mature[mature.index(">Flags on this route</h3>") :]
+    assert "where the consensus for its fiscal years cannot take its place" in route_flags
+    flags = _section(flat, "flags")
+    thin = flags[flags.index(">thin-ntm</code>") :]
+    thin = thin[: thin.index("</li>")]
+    assert "The consensus for their fiscal years cannot take their place" in thin
+    assert f"has fewer than {analysts} analysts, no count or no estimate" in thin
+
+
 def test_the_agents_section_reads(client: TestClient) -> None:
     """Spec 2026-11-06 Tier 2, 19, as amended: the section "Agents and reviews", before the
     sources and in the contents, says in plain words what an override is and that the engine
