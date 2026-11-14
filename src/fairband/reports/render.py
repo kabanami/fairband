@@ -209,7 +209,8 @@ GLOSSARY: dict[str, str] = {
     ),
     "NCAV": (
         "Graham's net current asset value: total current assets less total liabilities; less the "
-        "minority interest and over the diluted shares, the run-off's floor when above zero (6a.6)"
+        "minority interest and over the count in force, the diluted shares plus any committed "
+        "shares, the run-off's floor when above zero (6a.6, 14.4)"
     ),
     "Requirement": (
         "A Start-up row's price-implied requirement: the revenue in year 10 at which a ten-year "
@@ -217,8 +218,8 @@ GLOSSARY: dict[str, str] = {
         "interest, less cash (6b.2)"
     ),
     "Cash floor": (
-        "A Start-up row's net cash a share, (cash − debt − minority interest) ÷ diluted shares "
-        "(6b.4)"
+        "A Start-up row's net cash a share, (cash − debt − minority interest) ÷ the count in "
+        "force, the diluted shares plus any committed shares (6b.4, 14.4)"
     ),
     "Burn cover": (
         "The years a Start-up row's cash covers its trailing burn, the trailing operating cash "

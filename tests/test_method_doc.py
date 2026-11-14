@@ -41,6 +41,49 @@ def test_the_share_count_gap_reads_the_count_without_the_committed_shares() -> N
     ) in row
 
 
+def test_every_value_a_share_divides_by_the_count_in_force() -> None:
+    """Spec 2026-11-14 4 (Task 2's review, fix round 1): the sections that define a value a share
+    divide by the count in force, the diluted count plus any committed shares, as the routes do;
+    none divides by the diluted shares alone. (The stock pay a share of 5.2 stays on the diluted
+    shares: the count the consensus is on.)"""
+    text = METHOD.read_text(encoding="utf-8")
+    for line in (
+        (
+            "The value a share is the total ÷ the count in force: the diluted share count (4.2), "
+            "plus any committed shares (14.4)."
+        ),
+        "    value a share = equity ÷ the count in force\n",
+        (
+            "    going-concern value a share = (firm value − debt − minority interest + cash) ÷ the "
+            "count in force\n"
+        ),
+        "    floor a share = (NCAV − minority interest) ÷ the count in force\n",
+        (
+            "    distress-sale value a share = max(0, distress proceeds − debt − minority interest)"
+            " ÷ the count in force\n"
+        ),
+        "    cash floor = (cash − debt − minority interest) ÷ the count in force\n",
+        (
+            "| NCAV | Graham's net current asset value: total current assets less total "
+            "liabilities; less the minority interest and over the count in force,"
+        ),
+        (
+            "| Cash floor | A Start-up row's net cash a share, (cash − debt − minority interest) ÷ "
+            "the count in force,"
+        ),
+    ):
+        assert line in text, line
+    for old in (
+        "The value a share is the total ÷ the diluted share count.",
+        "value a share = equity ÷ diluted shares",
+        "+ cash) ÷ diluted shares",
+        "(NCAV − minority interest) ÷ diluted shares",
+        "debt − minority interest) ÷ diluted shares",
+        "over the diluted shares",
+    ):
+        assert old not in text, old
+
+
 def test_section_15_names_the_bounds_and_the_two_versions() -> None:
     section = _section(15)
     bounds = ("secondary_parts_max", "secondary_years_min", "secondary_years_max")

@@ -570,11 +570,13 @@ def test_the_glossary_takes_the_minority_interest_off() -> None:
     )
     assert GLOSSARY["NCAV"].startswith(
         "Graham's net current asset value: total current assets less total liabilities; less the "
-        "minority interest and over the diluted shares, the run-off's floor when above zero"
+        "minority interest and over the count in force, the diluted shares plus any committed "
+        "shares, the run-off's floor when above zero"
     )
     assert "market cap plus debt and the minority interest, less cash" in GLOSSARY["Requirement"]
     assert GLOSSARY["Cash floor"].startswith(
-        "A Start-up row's net cash a share, (cash − debt − minority interest) ÷ diluted shares"
+        "A Start-up row's net cash a share, (cash − debt − minority interest) ÷ the count in "
+        "force, the diluted shares plus any committed shares"
     )
 
 
