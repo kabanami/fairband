@@ -63,7 +63,9 @@ Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the 
 terminal return; ``margin.target`` the peers' median (the override alone on a row with no
 counted peers, as the revenue-growth route reads it); ``balance.debt`` and ``balance.cash`` the
 balance sheet's figures, which the requirement, the cash floor and the burn cover read, a
-replaced cash figure known. The result stays the refusal "Start-up: no value by design".
+replaced cash figure known; ``balance.minority`` the sheet's minority interest
+(``route_steps.minority``), which the requirement and the cash floor read. The result stays the
+refusal "Start-up: no value by design".
 """
 
 from typing import Any

@@ -640,7 +640,7 @@ terminal value, discounted at the hurdle rate, give the firm value. Cash is adde
 minority interest are taken off. The result is divided by the shares.</p>
 <p class="body">The minority interest is the share of the company's subsidiaries that outside owners
 hold. Fairband takes it at its book value on the balance sheet, though a market value would be the
-better figure.</p>
+better figure. An agent may set a market value in its place, with evidence.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The margin the price needs is the target margin at which the value equals today's
@@ -1060,18 +1060,18 @@ Fairband's tools) makes to one input of the engine. It carries a reason and evid
 filing or a finding (a dated fact with its source). The engine values the company again under its
 overrides: the reviewed value. An agent never writes a value. The mechanical value (the engine's
 value with no override) does not move.</p>
-<p class="body">An agent may change twenty inputs, such as the phase, the belief and the moat, each
-within set bounds. One is the diluted share count, for shares promised but not yet counted, or for
-a share class the count leaves out. Another is the value outside the business, such as a stake in
-another company. It adds to the route's value a share. Two set the stock pay a Mature Growth value
-charges. One is the trailing figure from the filings. The other says whether the analysts' EPS
+<p class="body">An agent may change twenty-one inputs, such as the phase, the belief and the moat,
+each within set bounds. One is the diluted share count, for shares promised but not yet counted, or
+for a share class the count leaves out. Another is the value outside the business, such as a stake
+in another company. It adds to the route's value a share. Two set the stock pay a Mature Growth
+value charges. One is the trailing figure from the filings. The other says whether the analysts' EPS
 leaves stock pay out, as the company defines its adjusted EPS. Locked inputs, such as the hurdle
-rate, terminal growth and the reported figures, take no override. An agent adds and drops
-overrides; you read them. A refresh also drops a period-tied override (one that corrects a single
-period's figure) once the company reports a newer period or that figure changes. The review (the
-overrides and the value they give) moves to each new snapshot, the company's figures from a
-refresh. An overridden input is tagged JUDGMENT, beside DATA (a figure from the vendor) and RULE (a
-value from the policy).</p>
+rate, terminal growth and the reported figures, take no override. An agent adds and drops overrides;
+you read them. A refresh also drops a period-tied override (one that corrects a single period's
+figure) once the company reports a newer period or that figure changes. The review (the overrides
+and the value they give) moves to each new snapshot, the company's figures from a refresh. An
+overridden input is tagged JUDGMENT, beside DATA (a figure from the vendor) and RULE (a value from
+the policy).</p>
 
 <h3 class="heading">The bridge</h3>
 <p class="body">The bridge leads from the mechanical value to the reviewed value, one line for each

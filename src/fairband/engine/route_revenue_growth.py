@@ -104,7 +104,8 @@ so ``consensus-above-base-rate`` is not raised and the cap's input says it does 
 and highest margins kept (both the override's on a row with no counted peers, which then is not
 refused for its target). ``capital.sales_to_capital`` replaces the measure (``used``
 "override"). ``balance.debt`` and ``balance.cash`` replace the balance sheet's figures before
-they count as nil, and a replaced line raises no ``line-not-presented`` flag.
+they count as nil, and a replaced line raises no ``line-not-presented`` flag; ``balance.minority``
+replaces the sheet's minority interest (``route_steps.minority``).
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the equity a share: the result's value is the route's value a share plus the figure, which

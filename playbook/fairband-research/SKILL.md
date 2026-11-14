@@ -728,6 +728,7 @@ not you, computes the value it gives.
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest balance sheet's debt or cash, a quarter's or a fiscal year's, whose period the `debt` and `cash` inputs' notes name | 0 dollars or more; period-tied only |
+| `balance.minority` | High Growth, Young Growth, Decline, Start-up | the minority interest, a total in the reporting currency, which the route takes off the owners' claim beside debt; the engine reads the newest balance sheet's line at book (the `minority_interest` input). Set it for a market value, or for a redeemable stake that the line leaves out; the evidence is the filing's note on non-controlling or redeemable interests | 0 dollars or more; period-tied only |
 | `shares.diluted` | every route | the diluted share count, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible) or a share class or units that convert to shares that the count leaves out (`share-count-gap`); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first | above 0 shares; period-tied only |
 | `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Nothing counts twice: on Mature Stable strip the asset's gains through `earnings.nri_gap`; on Mature Growth add it only when the consensus excludes its gains (see below) | −1,000 to 1,000 dollars a share; lasting or period-tied |
 
@@ -840,17 +841,17 @@ The server checks an override by these rules, in this order, and answers the fir
    g_T (the terminal growth ceiling), the runway years, the fade years, the margin of safety, the
    fair band, the trim multiple, the terminal return, the deciles, the growth word, and every
    reported figure (the price, the shares, the market cap, the revenue, the operating income, the
-   EPS). Debt and cash change only through the two balance tags, and the diluted share count only
-   through `shares.diluted`. The consensus of the next twelve months changes only through the two
-   NTM anchors.
+   EPS). Debt, cash and the minority interest change only through the three balance tags, and the
+   diluted share count only through `shares.diluted`. The consensus of the next twelve months
+   changes only through the two NTM anchors.
 2. `refused-not-input`: a tag that is not in the table.
 3. `refused-route`: a route that does not read the tag. The route follows an applied `phase`
    override, so override the phase first. The Mature Stable route reads no consensus step, so
    `path.step_2` and `path.step_3` are refused there. A company with no phase reads no input but its
    phase: set its phase first.
 4. `refused-unit`: a value outside the range, a word outside the words, a word where a number is
-   due, an NTM anchor or a share count at 0 or below, or a lasting override of a balance tag, of
-   the stock pay or of the share count.
+   due, an NTM anchor or a share count at 0 or below, or a lasting override of a balance tag (debt,
+   cash or the minority interest), of the stock pay or of the share count.
 5. `refused-evidence`: no evidence, "an override needs evidence". An NTM anchor with no item of
    kind `guidance`: "an NTM anchor override needs a guidance record among its evidence". A
    `growth.belief` or a `path.hold` above the sales class's 90th percentile (`sales_p90_5y` in the
@@ -866,13 +867,13 @@ An applied override answers `{override, review, bridge}`. The bridge starts at t
 (the engine's value with no override), adds one line for each override, and ends at the reviewed
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
 consensus step 3, held rate, belief, non-recurring gap, stock pay, stock-pay basis, mid-cycle
-earnings, target margin, sales to capital, runway return, decline rate, moat, debt, cash, diluted
-shares, outside the business. A line whose step refuses shows the refusal in place of a change. A
-review whose last line refuses has no value. On a refused row, where the mechanical value refuses
-too, the secondary valuation stands in for it. Where an override values a refused row, the
-reviewed value stands, and the server refuses a secondary valuation there. On a valued snapshot a
-refused review gets no stand-in: the server refuses one there, and the overrides are inconsistent
-with the route. Fix or drop the override whose bridge line refused (step 11).
+earnings, target margin, sales to capital, runway return, decline rate, moat, debt, cash, minority
+interest, diluted shares, outside the business. A line whose step refuses shows the refusal in
+place of a change. A review whose last line refuses has no value. On a refused row, where the
+mechanical value refuses too, the secondary valuation stands in for it. Where an override values a
+refused row, the reviewed value stands, and the server refuses a secondary valuation there. On a
+valued snapshot a refused review gets no stand-in: the server refuses one there, and the overrides
+are inconsistent with the route. Fix or drop the override whose bridge line refused (step 11).
 
 One input holds one applied override. A new override on the same tag replaces the old one. An
 override applies to the latest snapshot and to every later one. A period-tied override (a correction
@@ -970,9 +971,11 @@ capped at g_T.
 - `reason` and `evidence`: as on an override. At least one evidence item backs the drivers or the
   path itself and names no `figure`: "the path needs its own evidence item".
 - `debt` and `cash`: leave them out, and the server reads the newest balance sheet, a quarter's or
-  a fiscal year's, as the routes do, or an applied balance override. Pass one only where the
-  balance sheet is wrong or missing. Each figure passed needs its own evidence item, with `figure`
-  set to `debt` or `cash`.
+  a fiscal year's, as the routes do, or an applied `balance.debt` or `balance.cash`. Pass one only
+  where the balance sheet is wrong or missing. Each figure passed needs its own evidence item, with
+  `figure` set to `debt` or `cash`. The secondary valuation subtracts no minority interest, the
+  sheet's or an applied `balance.minority`: where one matters, add it to the debt you pass, with
+  the filing's note as that item.
 - The levels take the moat class of the current review, else the snapshot's. A value a share at or
   below zero is kept as computed, with no levels.
 - A company in another currency is valued in its reporting currency, at r and g_T restated into

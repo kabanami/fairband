@@ -555,15 +555,18 @@ def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
     assert twelve.index(sentence) < twelve.index("Submit with `report_submit`")
 
 
-def test_the_overrides_table_names_the_twenty_inputs() -> None:
-    """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1) and spec 2026-11-13 7.2: the skill's
-    overrides table names the twenty inputs the engine takes, each once, with the routes that read
-    it; the share count is period-tied only and moves the next twelve months' net income with it,
-    so the agent reads the consensus EPS's share basis first; the value outside the business is
-    after tax, and its gains come out of the earnings through the non-recurring gap, so nothing
-    counts twice; the stock pay is a total from the filing's cash flow statement, period-tied
-    only, and the stock-pay basis rests on the release's definition of its adjusted EPS; the
-    bridge's lines run in the engine's order; the tool list counts the twenty."""
+def test_the_overrides_table_names_the_twenty_one_inputs() -> None:
+    """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1) and spec 2026-11-13 7.2 and 13: the
+    skill's overrides table names the twenty-one inputs the engine takes, each once, with the
+    routes that read it; the share count is period-tied only and moves the next twelve months' net
+    income with it, so the agent reads the consensus EPS's share basis first; the value outside
+    the business is after tax, and its gains come out of the earnings through the non-recurring
+    gap, so nothing counts twice; the stock pay is a total from the filing's cash flow statement,
+    period-tied only, and the stock-pay basis rests on the release's definition of its adjusted
+    EPS; the minority interest is a total, period-tied only, for a market value or a redeemable
+    stake the line leaves out, from the filing's note on non-controlling or redeemable interests;
+    the bridge's lines run in the engine's order, the minority interest's after cash; the tool
+    list counts the twenty-one."""
     skill = _read(SKILL)
     table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
     tags: list[str] = []
@@ -573,7 +576,7 @@ def test_the_overrides_table_names_the_twenty_inputs() -> None:
         phases = set(PHASES) if routes == "every route" else {p for p in PHASES if p in routes}
         for tag in named:
             assert phases == {p for r in TAGS[tag].routes for p in ROUTE_PHASES[r]}, tag
-    assert len(tags) == len(set(tags)) == 20 and set(tags) == set(TAGS)
+    assert len(tags) == len(set(tags)) == 21 and set(tags) == set(TAGS)
     shares = _flat(" ".join(table["`shares.diluted`"]))
     for words in (
         "period-tied only",
@@ -596,6 +599,15 @@ def test_the_overrides_table_names_the_twenty_inputs() -> None:
     basis = _flat(" ".join(table["`earnings.sbc_basis`"]))
     for words in ("`includes` or `excludes`", "definition of its adjusted EPS", "the release"):
         assert words in basis, words
+    minority = _flat(" ".join(table["`balance.minority`"]))
+    for words in (
+        "a total",
+        "a market value",
+        "a redeemable stake that the line leaves out",
+        "the filing's note on non-controlling or redeemable interests",
+        "0 dollars or more; period-tied only",
+    ):
+        assert words in minority, words
     # the charge divides by the runway return, so the range excludes 0 (the final review's fix);
     # policy v13 takes it to 5.00, so the engine's own measure fits (spec 2026-11-13 10)
     assert table["`return.runway`"][2] == "above 0 to 5.00"
@@ -605,8 +617,11 @@ def test_the_overrides_table_names_the_twenty_inputs() -> None:
     )
     order = ", ".join(LABELS[tag] for tag in BRIDGE_ORDER)
     assert f"The lines run in the method's order: {order}." in _flat(skill)
+    assert order.endswith(
+        "moat, debt, cash, minority interest, diluted shares, outside the business"
+    )
     entry = _tool_entry("override_add")
-    for words in ("twenty", "`shares.diluted`", "`value.outside`"):
+    for words in ("twenty-one", "`shares.diluted`", "`value.outside`", "`balance.minority`"):
         assert words in entry, words
 
 

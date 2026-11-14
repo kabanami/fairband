@@ -78,23 +78,24 @@ revenue is read at the call as ``fact:<symbol>/revenue/ttm`` resolves it, the st
 trailing figures as the engine reads them; the terminal return is ``terminal_roic`` on the moat the
 levels take and the aggregate ROIC of the snapshot's intermediates (``roic/aggregate``, which the
 mature routes write; none on the other routes, so r). The debt and the cash are the agent's when
-passed, else an applied ``balance.*`` override's (both sourced ``agent``), else the newest annual
-balance sheet's as assembly reads them (``statements``), else nil with the source ``none`` when no
-line is on file. The levels take the current review's moat, else the snapshot's, else None; the
-designation the snapshot's price. A company in another currency (spec 2026-11-10 7.6) is valued in
-its reporting currency on the policy restated by its snapshot's inflation differential
-(``policy.in_currency``): r, the terminal growth's bound g_T and the Wide moat's terminal return
-cap at r plus the spread are the currency's; the trailing revenue, the agent's path, debt and
-cash, an override's and the balance sheet's are in the currency; and the snapshot's USD price
-comes into it at the snapshot's rate (``types.money_of``). On the way out the totals stay in the
-currency; the value a share and the grid's cells are ÷ the rate, US dollars a share, the levels
-the policy's on that value and the designation the USD price against it, as a snapshot's
-(``_in_usd``); the record stores the rate. A USD row's rate is 1 and its differential 0, so its
-valuation is as before. A rule ``secondary_value`` refuses is a 400 with its sentence. The answer's
-drivers, projection and parts carry camelCase keys, and its grid ``rowsAre``, ``growths`` or
-``shifts`` (``GRID_ROWS``). Anyone may make one, a tool's output rather than an override; the write
-is a ``secondary`` ledger row resting on the snapshot, its summary "<value> a share from drivers
-over three years: <reason>" or "... from 2 parts: ...". ``GET`` on the same path lists the
+passed, else an applied ``balance.debt`` or ``balance.cash`` override's (both sourced ``agent``),
+else the newest balance sheet's as assembly reads them (``statements``), else nil with the source
+``none`` when no line is on file; no minority interest is subtracted, an applied
+``balance.minority`` included (spec 2026-11-13 3). The levels take the current review's moat, else
+the snapshot's, else None; the designation the snapshot's price. A company in another currency (spec
+2026-11-10 7.6) is valued in its reporting currency on the policy restated by its snapshot's
+inflation differential (``policy.in_currency``): r, the terminal growth's bound g_T and the Wide
+moat's terminal return cap at r plus the spread are the currency's; the trailing revenue, the
+agent's path, debt and cash, an override's and the balance sheet's are in the currency; and the
+snapshot's USD price comes into it at the snapshot's rate (``types.money_of``). On the way out the
+totals stay in the currency; the value a share and the grid's cells are ÷ the rate, US dollars a
+share, the levels the policy's on that value and the designation the USD price against it, as a
+snapshot's (``_in_usd``); the record stores the rate. A USD row's rate is 1 and its differential 0,
+so its valuation is as before. A rule ``secondary_value`` refuses is a 400 with its sentence. The
+answer's drivers, projection and parts carry camelCase keys, and its grid ``rowsAre``, ``growths``
+or ``shifts`` (``GRID_ROWS``). Anyone may make one, a tool's output rather than an override; the
+write is a ``secondary`` ledger row resting on the snapshot, its summary "<value> a share from
+drivers over three years: <reason>" or "... from 2 parts: ...". ``GET`` on the same path lists the
 company's, newest first.
 
 ``POST /api/companies/{symbol}/derivations`` takes ``{derivations: [{operation, a, b, years?}]}``
@@ -910,8 +911,8 @@ def _balance(
     conn: sqlite3.Connection, symbol: str, debt: float | None, cash: float | None
 ) -> tuple[tuple[float, BalanceSource], tuple[float, BalanceSource]]:
     """The debt and the cash with their sources: the agent's figure when passed, else an applied
-    ``balance.*`` override's (both ``agent``), else the newest balance sheet's (``statements``),
-    else nil with the source ``none`` when no line is on file."""
+    ``balance.debt`` or ``balance.cash`` override's (both ``agent``), else the newest balance
+    sheet's (``statements``), else nil with the source ``none`` when no line is on file."""
     corrected = {o.tag: o.new for o in applied_overrides(conn, symbol)}
     lines = newest_debt_and_cash(conn, symbol)
     figures: list[tuple[float, BalanceSource]] = []

@@ -15,6 +15,7 @@ from support.engine_companies import (
     mature_growth_inputs,
     mature_stable_inputs,
     start_up_inputs,
+    with_minority,
 )
 
 from fairband.engine.classifier import Deciles
@@ -139,6 +140,29 @@ def test_check_refuses_a_lasting_balance_correction(policy: Policy) -> None:
     assert tied == ("applied", "")
 
 
+def test_the_minority_interest_tag_s_rules(policy: Policy) -> None:
+    """Spec 2026-11-13 13: a total of $0 or more on the three firm-value routes, period-tied
+    only, bridged right after cash under the label "minority interest"."""
+    tied = ("balance.minority", 120e6, "revenue-growth", policy, ["filing"], "period-tied", None)
+    assert check_override(*tied) == ("applied", "")
+    assert check_override(*tied[:1], 0.0, *tied[2:]) == ("applied", "")
+    assert check_override(*tied[:1], -1.0, *tied[2:]) == (
+        "refused-unit",
+        "balance.minority takes $0 or more",
+    )
+    assert check_override(*tied[:5], "lasting", None) == (
+        "refused-unit",
+        "balance.minority is period-tied only",
+    )
+    for route in ("decline", "start-up"):
+        assert check_input("balance.minority", 120e6, route, policy) == ("applied", "")
+    for route in ("mature-growth", "mature-stable"):
+        assert check_input("balance.minority", 120e6, route, policy)[0] == "refused-route"
+    assert BRIDGE_ORDER.index("balance.minority") == BRIDGE_ORDER.index("balance.cash") + 1
+    assert LABELS["balance.minority"] == "minority interest"
+    assert INPUT_OF["balance.minority"] == "minority_interest"
+
+
 def test_check_needs_evidence(policy: Policy) -> None:
     assert checked(policy, "growth.belief", 0.08, "mature-growth", evidence=[]) == (
         "refused-evidence",
@@ -224,6 +248,7 @@ def test_the_cycle_gap_is_a_mature_tag() -> None:
         "decline.rate": "decline rate",
         "balance.debt": "debt",
         "balance.cash": "cash",
+        "balance.minority": "minority interest",
         "shares.diluted": "diluted shares",
         "value.outside": "outside the business",
     }
@@ -506,6 +531,15 @@ def test_a_money_range_is_read_in_the_row_s_currency(policy: Policy, deciles: De
         "balance.debt takes 0 SEK or more",  # the end of no bound stays one
     )
     assert check_override(*debt) == ("refused-unit", "balance.debt takes $0 or more")
+    # the minority interest, a total as debt is: its range in SEK, and its unit the code
+    minority = ("balance.minority", -1.0, "revenue-growth", policy, ["filing"], "period-tied", None)
+    assert check_override(*minority, fx_rate=rate, currency=currency) == (
+        "refused-unit",
+        "balance.minority takes 0 SEK or more",
+    )
+    held = (*minority[:1], 960e6, *minority[2:])
+    assert check_override(*held, fx_rate=rate, currency=currency) == ("applied", "")
+    assert unit_in(TAGS["balance.minority"].unit, currency) == "SEK"
     gap = ("earnings.nri_gap", 500.0, "mature-growth", policy, ["filing"], "lasting", None)
     assert check_override(*gap, fx_rate=rate, currency=currency) == ("applied", "")
     assert check_override(*gap) == ("refused-unit", "earnings.nri_gap takes −$100 to $100 a share")
@@ -687,6 +721,37 @@ def test_a_row_refused_before_it_cites_its_lines_reads_none(
     cash = override("balance.cash", 500e6)
     judged = value_company(inputs, deciles, policy, TODAY, {"balance.cash": cash})
     assert current_reading(judged, "balance.cash") == 500e6
+
+
+def test_the_minority_interest_reads_the_sheet_s_line(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-13 13 on HGCO: the engine's reading of the minority interest is the line the
+    result cites, the DATA entry ``minority_interest`` as the newest sheet presents it: $120 m with
+    the line, none where the sheet does not present it, and a figure below zero as it stands,
+    though the route counts that as nil. Under a ``balance.minority`` of $500 m the JUDGMENT entry
+    stands in its place, so the reading is the agent's figure, the one the route subtracts; the
+    Start-up route takes an agent's figure the same way. The two mature routes cite no such line
+    and read none."""
+    plain = value_company(high_growth_inputs(), deciles, policy, TODAY)
+    assert current_reading(plain, "balance.minority") is None
+    held = with_minority(high_growth_inputs(), 120e6)
+    line = value_company(held, deciles, policy, TODAY)
+    assert current_reading(line, "balance.minority") == 120e6
+    assert line.intermediates["minority_interest"] == 120e6
+    below = value_company(with_minority(high_growth_inputs(), -10e6), deciles, policy, TODAY)
+    assert current_reading(below, "balance.minority") == -10e6
+    assert below.intermediates["minority_interest"] == 0.0
+    minority = {"balance.minority": override("balance.minority", 500e6)}
+    judged = value_company(held, deciles, policy, TODAY, minority)
+    assert current_reading(judged, "balance.minority") == 500e6
+    assert judged.intermediates["minority_interest"] == 500e6
+    entries = [(x.name, x.tag, x.unit) for x in judged.inputs if "minority" in x.name]
+    assert entries == [("balance.minority", "JUDGMENT", "USD")]
+    start_up = value_company(start_up_inputs(), deciles, policy, TODAY, minority)
+    assert start_up.intermediates["minority_interest"] == 500e6
+    assert current_reading(start_up, "balance.minority") == 500e6
+    for build in (mature_growth_inputs, mature_stable_inputs):
+        r = value_company(build(), deciles, policy, TODAY)
+        assert current_reading(r, "balance.minority") is None, r.symbol
 
 
 # The read points: each route reads its inputs through the accessor, and what the route computes

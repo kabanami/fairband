@@ -26,6 +26,9 @@ def test_section_14_names_every_override_tag() -> None:
         assert f"`{tag}`" in section, tag
     assert "`override_ranges`" in section
     assert "`override_primary_evidence_above_p90`" in section
+    # rule 2 counts the tags in words
+    assert len(get_args(OverrideTag)) == 21
+    assert "A tag that is not one of the twenty-one:" in section
 
 
 def test_section_15_names_the_bounds_and_the_two_versions() -> None:
@@ -37,6 +40,8 @@ def test_section_15_names_the_bounds_and_the_two_versions() -> None:
     assert "`fairband-secondary/1`" in section  # a plan 1 record reads as it was
     for name in load_policy().secondary_driver_ranges:
         assert f'"{name} is ' in section, name  # each driver's refusal sentence
+    # spec 2026-11-13 3: no minority interest in the secondary valuation; the debt carries one
+    assert "The secondary valuation subtracts no minority interest" in section
 
 
 def test_section_16_names_the_six_failures() -> None:

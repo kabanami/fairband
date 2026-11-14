@@ -24,6 +24,7 @@ from support.engine_companies import (
     on_quarter_sheet,
     quarter,
     universe_deciles,
+    with_minority,
 )
 from vendor_double import FIXTURES
 
@@ -304,14 +305,27 @@ def _hgco_with_a_cash_correction(
     strip: str | None = None,
     keep_inputs: tuple[str, ...] | None = None,
 ) -> tuple[int, Follow, CompanyInputs]:
-    """HGCO valued, its snapshot stored (without the intermediate ``strip``, and with its inputs
-    cut to ``keep_inputs``, when given, as a snapshot from before 1.3 is stored) and a
-    period-tied override of its cash line made on it: the override's id, ``follow``, which values
-    the inputs it is given, stores the snapshot and follows it, and the inputs."""
-    deciles = universe_deciles()
+    """``_hgco_with_a_correction`` of the cash line, on HGCO as assembly dates it."""
     inputs = _as_live(high_growth_inputs())
+    return _hgco_with_a_correction(conn, policy, "balance.cash", inputs, strip, keep_inputs)
+
+
+def _hgco_with_a_correction(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    tag: OverrideTag,
+    inputs: CompanyInputs,
+    strip: str | None = None,
+    keep_inputs: tuple[str, ...] | None = None,
+) -> tuple[int, Follow, CompanyInputs]:
+    """HGCO valued on ``inputs``, its snapshot stored (without the intermediate ``strip``, and with
+    its inputs cut to ``keep_inputs``, when given, as a snapshot from before 1.3 is stored) and a
+    period-tied override of its balance line ``tag`` made on it, $1,000 m above the figure it
+    corrected: the override's id, ``follow``, which values the inputs it is given, stores the
+    snapshot and follows it, and the inputs."""
+    deciles = universe_deciles()
     first = value_company(inputs, deciles, policy, HGCO_TODAY)
-    figure = current_reading(first, "balance.cash")
+    figure = current_reading(first, tag)
     assert isinstance(figure, float)
     stored = first
     if strip is not None:
@@ -324,10 +338,10 @@ def _hgco_with_a_cash_correction(
         conn, "revalue", None, policy.version, METHOD_VERSION, HGCO_AT, EMPTY_SETTINGS_HASH
     )
     made_on = insert_snapshot(conn, stored, refresh_id, clock=lambda: HGCO_AT)
-    cash = insert_override(
+    correction = insert_override(
         conn,
         "HGCO",
-        "balance.cash",
+        tag,
         figure,
         figure + 1e9,
         "USD",
@@ -358,7 +372,7 @@ def _hgco_with_a_cash_correction(
             lambda: HGCO_AT,
         )
 
-    return cash, follow, inputs
+    return correction, follow, inputs
 
 
 def _made_on(conn: sqlite3.Connection, override_id: int) -> ValuationResult:
@@ -506,6 +520,48 @@ def test_a_period_tied_cash_correction_follows_the_newest_sheet(
     assert follow(replace(later, cash=3_200e6)) is None
     dropped = override_row(conn, cash)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
+
+
+def test_a_period_tied_minority_interest_follows_the_sheet_s_line(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-13 13 and 11a: HGCO's newest sheet presents a minority interest of $120 m,
+    which an agent corrects to $1,120 m, period-tied. The next snapshot on the same sheet keeps it
+    applied, the review subtracting the agent's figure; one whose line moved to $150 m drops it,
+    the reading changed."""
+    held = with_minority(_as_live(high_growth_inputs()), 120e6)
+    minority, follow, inputs = _hgco_with_a_correction(conn, policy, "balance.minority", held)
+    corrected = override_row(conn, minority)
+    assert corrected is not None and corrected.corrected_value == 120e6
+    assert follow(inputs) is not None
+    kept = override_row(conn, minority)
+    assert kept is not None and kept.state == "applied"
+    review = latest_review(conn, "HGCO")
+    assert review is not None and review.override_ids == (minority,)
+    assert review.result.intermediates["minority_interest"] == 1_120e6
+    assert follow(with_minority(inputs, 150e6)) is None
+    dropped = override_row(conn, minority)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
+    [entry] = entries(conn, "HGCO")
+    assert entry.summary == f"balance.minority dropped: {CHANGED}"
+
+
+def test_a_period_tied_minority_interest_drops_when_a_newer_period_is_on_file(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-13 11a: HGCO reports a new quarter, its trailing period end moving from 30 Sep
+    to 31 Dec, and the correction of the old period's minority interest drops, though the line
+    reads the same $120 m."""
+    held = with_minority(_as_live(high_growth_inputs()), 120e6)
+    minority, follow, inputs = _hgco_with_a_correction(conn, policy, "balance.minority", held)
+    later = _a_quarter_on(inputs)
+    result = value_company(later, universe_deciles(), policy, HGCO_TODAY)
+    assert current_reading(result, "balance.minority") == 120e6
+    assert follow(later) is None
+    dropped = override_row(conn, minority)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
+    [entry] = entries(conn, "HGCO")
+    assert entry.summary == f"balance.minority dropped: {NEWER}"
 
 
 def test_an_override_on_a_snapshot_from_before_1_3_is_judged_by_its_share_count_s_date(

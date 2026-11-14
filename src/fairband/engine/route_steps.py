@@ -510,11 +510,13 @@ def debt_and_cash(i: CompanyInputs) -> tuple[TaggedInput, TaggedInput]:
 
 def minority(c: Context | StartUpContext) -> float:
     """The minority interest in force (spec 2026-11-13 13), a total in the reporting currency:
-    the newest balance sheet's line at book (``CompanyInputs.sheet``); nil without a sheet, where
-    the sheet does not present the line, or where it holds it at or below zero. The three
-    firm-value routes take it off the owners' claim, beside debt."""
+    an agent's ``balance.minority`` where one applies, else the newest balance sheet's line at
+    book (``CompanyInputs.sheet``); nil without a sheet, where the sheet does not present the
+    line, or where it holds it at or below zero. The three firm-value routes take it off the
+    owners' claim, beside debt."""
     sheet = c.inputs.sheet
-    return max(0.0, nil(None if sheet is None else sheet.minority_interest))
+    line = None if sheet is None else sheet.minority_interest
+    return max(0.0, nil(chosen(c, "balance.minority", line)))
 
 
 def minority_input(i: CompanyInputs) -> TaggedInput:

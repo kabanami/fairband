@@ -92,8 +92,10 @@ consensus steps as the revenue-growth route reads them (``revenue_path_for``), n
 without a usable consensus, whose years 1 to 3 shrink at d; ``capital.sales_to_capital`` the
 measure (``used`` "override", so the peers raise no flag and cite no rule); ``balance.debt`` and
 ``balance.cash`` the balance sheet's figures before they count as nil, the rating read on a
-replaced debt figure. A row a ``phase`` override puts in Decline without a revenue trend or a
-positive last revenue, and no ``decline.rate`` override, is refused "no revenue trend".
+replaced debt figure; ``balance.minority`` the sheet's minority interest
+(``route_steps.minority``), which the rating does not read. A row a ``phase`` override puts in
+Decline without a revenue trend or a positive last revenue, and no ``decline.rate`` override, is
+refused "no revenue trend".
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the weighting: the result's value is the route's value a share plus the figure, which the

@@ -21,6 +21,7 @@ from support.engine_companies import (
     mature_growth_inputs,
     start_up_inputs,
     universe_deciles,
+    with_minority,
     young_growth_inputs,
 )
 from support.web import CREATED, HEADER, NOW, TODAY
@@ -452,6 +453,50 @@ def test_the_two_stock_pay_inputs_through_the_api(
         ("earnings.sbc", "stock pay", "USD", 400e6, 500e6),
         ("earnings.sbc_basis", "stock-pay basis", "basis", "includes", "excludes"),
     ]
+
+
+def test_the_minority_interest_through_the_api(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    stored_inputs: dict[str, CompanyInputs],
+) -> None:
+    """Spec 2026-11-13 13 on HGCO, its newest sheet now presenting a minority interest of $120 m:
+    a lasting ``balance.minority`` is refused; a period-tied one at $500 m applies and keeps the
+    $120 m it corrected; the detail's bridge names the line "minority interest" in USD, its delta
+    the $380 m more over 100 m shares, −$3.80 a share."""
+    held = with_minority(high_growth_inputs(), 120e6)
+    valued = value_company(held, universe_deciles(), policy, TODAY)
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, valued, 1, clock=lambda: CREATED)
+    stored_inputs["HGCO"] = held
+    note = {
+        "kind": "filing",
+        "ref": "10-K, note 14: redeemable noncontrolling interests",
+        "note": "",
+    }
+    minority = {
+        "tag": "balance.minority",
+        "new": 500e6,
+        "reason": "the partners' stake at its redemption value",
+        "evidence": [note],
+        "lifetime": "lasting",
+    }
+    r = client.post("/api/companies/HGCO/overrides", json=minority, headers=AGENT)
+    assert (r.status_code, r.json()["detail"]) == (400, "balance.minority is period-tied only")
+    tied = minority | {"lifetime": "period-tied", "period": "FY2025"}
+    body = _post(client, tied, "HGCO")["override"]
+    assert (body["state"], body["unit"], body["old"], body["correctedValue"]) == (
+        "applied",
+        "USD",
+        120e6,
+        120e6,
+    )
+    bridge = client.get("/api/companies/HGCO").json()["review"]["bridge"]
+    assert [(x["tag"], x["label"], x["unit"], x["old"], x["new"]) for x in bridge] == [
+        ("balance.minority", "minority interest", "USD", 120e6, 500e6)
+    ]
+    assert bridge[0]["delta"] == pytest.approx(-3.80)
 
 
 def test_a_start_up_put_in_young_growth_meets_the_evidence_rule(

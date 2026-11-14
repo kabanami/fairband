@@ -1,7 +1,7 @@
 """Overrides: the inputs an agent may change, the rules an override must pass, and the engine's
 own reading of each input (spec 2026-11-06 Tier 2, 10.1 to 10.3; ``method.md`` 14).
 
-An override changes one tagged input. ``TAGS`` names the twenty inputs, the routes that read
+An override changes one tagged input. ``TAGS`` names the twenty-one inputs, the routes that read
 each, its unit and, for the three word inputs, its words; the numeric ranges are the policy's
 ``override_ranges``, the ends included but the lower end, 0, of the two NTM anchors, the runway
 return and the diluted share count, which each must be above (``TagSpec.low_open``).
@@ -33,18 +33,21 @@ applied ones as a mapping by tag. ``current_reading`` is the engine's reading of
 result's intermediates, ``None`` where the result holds none: the bridge's old value and the
 value a period-tied override corrected. A balance line reads the reported figure the result
 cites, ``None`` when no line is on file (the bridge then counts it as nil) or the result cites
-none; the runway return reads ``None`` with the charge off. The engine finds no cycle gap: a
-mature route writes ``cycle_gap`` into its intermediates only under an override, so a Mature
-Growth or Mature Stable result without one reads 0.0 (a refusal, the route its phase takes). The
-stock pay reads the trailing figure the Mature Growth anchor read (``sbc_ttm``), and the
-stock-pay basis the anchor's basis in the input's words, ``None`` on an unknown basis (spec
-2026-11-13 7.2). The NTM earnings read the anchor the Mature Growth route stored, before the
-cycle gap came off it; the NTM revenue reads the year one the revenue-growth or Decline route
-stored, none on a Decline row with no usable consensus. The engine finds no value outside the
-business either: a valued route writes ``outside_value_per_share`` only under an override, so a
-result without one reads 0.0 on every route but Start-up, which reads none. The diluted share
-count reads the count the result cites: its intermediates' ``shares``, else the reported count's
-DATA entry or the JUDGMENT entry in its place. An override at the engine's reading moves nothing.
+none; the minority interest reads its line as the newest sheet presents it, its DATA entry
+``minority_interest``, so a figure at or below zero reads as it stands, though the route counts
+it as nil (spec 2026-11-13 13). The runway return reads ``None`` with the charge off. The engine
+finds no cycle gap: a mature route writes ``cycle_gap`` into its intermediates only under an
+override, so a Mature Growth or Mature Stable result without one reads 0.0 (a refusal, the route
+its phase takes). The stock pay reads the trailing figure the Mature Growth anchor read
+(``sbc_ttm``), and the stock-pay basis the anchor's basis in the input's words, ``None`` on an
+unknown basis (spec 2026-11-13 7.2). The NTM earnings read the anchor the Mature Growth route
+stored, before the cycle gap came off it; the NTM revenue reads the year one the revenue-growth
+or Decline route stored, none on a Decline row with no usable consensus. The engine finds no
+value outside the business either: a valued route writes ``outside_value_per_share`` only under
+an override, so a result without one reads 0.0 on every route but Start-up, which reads none.
+The diluted share count reads the count the result cites: its intermediates' ``shares``, else
+the reported count's DATA entry or the JUDGMENT entry in its place. An override at the engine's
+reading moves nothing.
 
 ``INPUT_OF`` names the route's own entry each tag stands for in a result's inputs: a result
 valued under an override cites the JUDGMENT entry in its place, so no DATA or RULE entry carries
@@ -80,12 +83,14 @@ OverrideTag = Literal[
     "decline.rate",
     "balance.debt",
     "balance.cash",
+    "balance.minority",
     "shares.diluted",
     "value.outside",
 ]
 # The bridge's order, the method's step order (spec 10.4); the two stock-pay inputs right after
-# the non-recurring gap, the figure first (spec 2026-11-13 7.2); the count and the value outside
-# the business last, after the balance sheet (spec 2026-11-09 8).
+# the non-recurring gap, the figure first (spec 2026-11-13 7.2); the minority interest right after
+# cash (spec 2026-11-13 13); the count and the value outside the business last, after the balance
+# sheet (spec 2026-11-09 8).
 BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "phase",
     "earnings.ntm",
@@ -105,6 +110,7 @@ BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "moat.class",
     "balance.debt",
     "balance.cash",
+    "balance.minority",
     "shares.diluted",
     "value.outside",
 )
@@ -198,6 +204,7 @@ TAGS: dict[OverrideTag, TagSpec] = {
         _spec("decline.rate", frozenset({"decline"}), "ratio"),
         _spec("balance.debt", _BALANCE, "USD", period_tied_only=True),
         _spec("balance.cash", _BALANCE, "USD", period_tied_only=True),
+        _spec("balance.minority", _BALANCE, "USD", period_tied_only=True),
         _spec("shares.diluted", _ALL, "shares", period_tied_only=True, low_open=True),
         _spec("value.outside", _ALL - {"start-up"}, "USD a share"),
     )
@@ -224,6 +231,7 @@ LABELS: dict[OverrideTag, str] = {
     "decline.rate": "decline rate",
     "balance.debt": "debt",
     "balance.cash": "cash",
+    "balance.minority": "minority interest",
     "shares.diluted": "diluted shares",
     "value.outside": "outside the business",
 }
@@ -248,6 +256,7 @@ INPUT_OF: dict[OverrideTag, str] = {
     "earnings.sbc": "sbc_ttm",
     "balance.debt": "debt",
     "balance.cash": "cash",
+    "balance.minority": "minority_interest",
     "shares.diluted": "shares_diluted",
 }
 
@@ -537,6 +546,9 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
             return _at(im, "runoff_path", "d")
         case "balance.debt" | "balance.cash":
             return _balance(result, tag.removeprefix("balance."))
+        case "balance.minority":
+            # the line as the sheet presents it, read as debt and cash are (``_balance``)
+            return _cited(result, "minority_interest", tag)
         case "shares.diluted":
             return im["shares"] if "shares" in im else _cited(result, "shares_diluted", tag)
         case "value.outside":

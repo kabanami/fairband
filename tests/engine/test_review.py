@@ -62,6 +62,7 @@ def OVERRIDE(tag: OverrideTag, value: float | str, id: int = 1) -> Override:
         ("HGCO", "capital.sales_to_capital", 1.5),
         ("HGCO", "path.hold", 0.30),
         ("YGCO", "balance.cash", 500.0),
+        ("DCCO", "balance.minority", 50e6),  # the sheet presents none
         ("DCCO", "decline.rate", -0.02),
         ("DCCO", "capital.sales_to_capital", 1.8),
     ],
@@ -194,6 +195,35 @@ def test_the_two_new_lines_close_the_bridge(policy: Policy, deciles: Deciles) ->
         ("value.outside", "USD a share"),
     ]
     assert result_from_json(result_to_json(review.result)) == review.result
+
+
+def test_the_minority_interest_line_follows_the_cash_line(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-13 13 on HGCO, 100 m shares, whose newest sheet presents no minority interest.
+    Given before the cash, a ``balance.minority`` of $500 m applies after it: the cash at $2,000 m
+    in place of $3,000 m takes $1,000 m ÷ 100 m, $10.00 a share, off first; then the minority
+    interest, its old value none, the line the sheet does not present, takes $500 m ÷ 100 m, $5.00
+    a share, off. The deltas sum to the reviewed value less the mechanical one, and the JUDGMENT
+    entry stands in place of the DATA entry ``minority_interest``."""
+    inputs = high_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert current_reading(mechanical, "balance.minority") is None
+    overrides = [OVERRIDE("balance.minority", 500e6, 2), OVERRIDE("balance.cash", 2_000e6, 1)]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    assert [line.tag for line in review.bridge] == ["balance.cash", "balance.minority"]
+    cash, minority = review.bridge
+    assert (cash.old, cash.new, cash.override_id) == (3_000e6, 2_000e6, 1)
+    assert cash.delta == pytest.approx(-10.0)
+    assert (minority.old, minority.new, minority.override_id) == (None, 500e6, 2)
+    assert minority.delta == pytest.approx(-5.0) and minority.refusal is None
+    assert review.result.value is not None and mechanical.value is not None
+    assert cash.delta + minority.delta == pytest.approx(
+        review.result.value - mechanical.value, abs=1e-9
+    )
+    assert review.result.intermediates["minority_interest"] == 500e6
+    assert "minority_interest" in [i.name for i in mechanical.inputs]
+    assert "minority_interest" not in [i.name for i in review.result.inputs]
+    judged = [(i.name, i.unit) for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert judged == [("balance.cash", "USD"), ("balance.minority", "USD")]
 
 
 def _codes(result: ValuationResult) -> list[str]:
