@@ -171,8 +171,9 @@ def test_a_one_time_item_and_the_asset_bridge_together(policy: Policy, deciles: 
     cut to mid-cycle by $1.00. Given out of order, the three lines run in the bridge's order: the
     one-time item takes year 1 to $5.31 and the value to V × 5.31 ÷ 5.90; the cycle gap to $4.31
     and V × 4.31 ÷ 5.90; the stake adds $12. Each old value is the engine's nil, the deltas sum
-    to the reviewed value less V, and the NTM earnings read on the review's result add the item
-    and the gap back, $5.90."""
+    to the reviewed value less V, and the NTM earnings read on the review's result add the gap
+    back and not the item, $4.31 + $1.00: a guided EPS stands in for the consensus with its
+    items, so the EPS that gives the result already has the item off."""
     inputs = mature_growth_inputs()
     mechanical = value_company(inputs, deciles, policy, TODAY)
     assert mechanical.value is not None
@@ -198,7 +199,7 @@ def test_a_one_time_item_and_the_asset_bridge_together(policy: Policy, deciles: 
     assert sum(d for d in deltas if d is not None) == pytest.approx(
         review.result.value - v, abs=1e-9
     )
-    assert current_reading(review.result, "earnings.ntm") == pytest.approx(5.90)
+    assert current_reading(review.result, "earnings.ntm") == pytest.approx(4.31 + 1.00)
     judged = [(i.name, i.unit) for i in review.result.inputs if i.tag == "JUDGMENT"]
     assert judged == [
         ("earnings.ntm_nri", "USD a share"),
@@ -211,9 +212,8 @@ def test_a_one_time_item_and_the_asset_bridge_together(policy: Policy, deciles: 
 def test_a_one_time_item_is_moot_under_a_guided_eps(policy: Policy, deciles: Deciles) -> None:
     """Spec 2026-11-14 5 and method 14.4: a guided EPS of $6.45 stands in for the consensus with
     its items, so a one-time item of $0.59 applies with a bridge line of zero, the value staying
-    at V × 6.45 ÷ 5.90. Nothing came off year 1: the intermediates' ``ntm_nri`` is nil, so the
-    NTM earnings read on the review's result, the anchor with the amount added back, are the
-    guided $6.45."""
+    at V × 6.45 ÷ 5.90. Nothing came off year 1: the intermediates' ``ntm_nri`` is nil, and the
+    NTM earnings read on the review's result are the guided $6.45."""
     inputs = mature_growth_inputs()
     mechanical = value_company(inputs, deciles, policy, TODAY)
     assert mechanical.value is not None

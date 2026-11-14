@@ -826,8 +826,10 @@ def test_the_one_time_item_reads_nil_until_an_override_sets_it(
     """Spec 2026-11-14 5: the engine finds no one-time item. A Mature Growth result reads nil, a
     row refused before its route too (its route is the one its phase takes); every other route
     reads none. The route writes ``ntm_nri`` into its intermediates under the override alone: on
-    MGCO, an NTM EPS of $5.90, a one-time item of $0.59 leaves the anchor at $5.31, and the NTM
-    earnings read $5.90, the anchor with the amount added back, with a cycle gap of $1.00 too."""
+    MGCO, an NTM EPS of $5.90, a one-time item of $0.59 leaves the anchor at $5.31. The NTM
+    earnings read $5.31, the EPS a guided override would stand in for to give the result, since
+    the item is moot under it; with a cycle gap of $1.00 too, the anchor is $4.31 and the NTM
+    earnings read $5.31, the gap alone added back."""
     plain = value_company(mature_growth_inputs(), deciles, policy, TODAY)
     assert "ntm_nri" not in plain.intermediates
     assert current_reading(plain, "earnings.ntm_nri") == 0.0
@@ -842,11 +844,11 @@ def test_the_one_time_item_reads_nil_until_an_override_sets_it(
     assert r.intermediates["ntm_nri"] == 0.59
     assert r.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.31)
     assert current_reading(r, "earnings.ntm_nri") == 0.59
-    assert current_reading(r, "earnings.ntm") == pytest.approx(5.90)
+    assert current_reading(r, "earnings.ntm") == pytest.approx(5.31)
     both = one_time | {"earnings.cycle_gap": override("earnings.cycle_gap", 1.0)}
     r = value_company(mature_growth_inputs(), deciles, policy, TODAY, both)
     assert r.intermediates["anchor"]["ntm_eps"] == pytest.approx(4.31)
-    assert current_reading(r, "earnings.ntm") == pytest.approx(5.90)
+    assert current_reading(r, "earnings.ntm") == pytest.approx(4.31 + 1.00)
 
 
 def test_a_balance_line_not_on_file_reads_none(policy: Policy, deciles: Deciles) -> None:

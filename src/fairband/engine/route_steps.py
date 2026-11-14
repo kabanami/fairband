@@ -321,7 +321,7 @@ def ntm_nri_entry(c: Context, taken: float) -> dict[str, float]:
     override, so a mechanical result's intermediates do not carry it: ``taken``, the one-time
     amount a share the anchor took off year 1 (``Anchor.one_time``), nil under an applied
     ``earnings.ntm``, whose guided EPS stands in for the consensus with its items (spec 2026-11-14
-    5). The reading of the NTM earnings adds it back (``overrides.current_reading``)."""
+    5). The reading of the NTM earnings does not add it back (``overrides.current_reading``)."""
     return {"ntm_nri": taken} if "earnings.ntm_nri" in c.overrides else {}
 
 

@@ -122,7 +122,8 @@ the one-time amount applies with a bridge line of zero (*my call*, as method 14.
 stock-pay inputs).
 
 The engine's reading of the input is nil, so it drops when a newer period is on file. The
-reading of `earnings.ntm` adds it back, as it adds a cycle gap back.
+reading of `earnings.ntm` does not add it back: a guided EPS stands in for the consensus with its
+items, so the EPS that gives the same result already has the amount off.
 
 **The playbook.** "Nothing counts twice" on Mature Growth becomes: read the filing's
 other-income line against the analysts' basis; where the consensus carries the asset's gains,
@@ -281,8 +282,8 @@ Each test fails before its change, and its expected figures are worked by hand.
   count without it.
 - `earnings.ntm_nri`: year 1 falls by the amount, and rises for a negative one; under an
   applied `earnings.ntm` the bridge line is zero; with a cycle gap both come off; the reading
-  of `earnings.ntm` adds it back; it drops when a newer period is on file; a cross-check does
-  not read it.
+  of `earnings.ntm` does not add it back, and a sensitivity grid on `earnings.ntm` marks the
+  cell in force; it drops when a newer period is on file; a cross-check does not read it.
 - `revenue.step_2` and `revenue.step_3`: the charge pays for the agent's step; the reading is
   the consensus's step as found; it drops when that step moves; `charge` records the three
   entries; a price refresh rebuilds the same value.
@@ -334,3 +335,4 @@ drawer and the whole-branch review; the scratch revalues, the founder's reading,
 |---|---|
 | 2026-11-14 | The founder ruled on the six items of theme 4, each on Claude's recommendation ("all as recommended"): a higher share count dilutes a Mature Growth value; an input takes a one-time amount a share off the next twelve months' earnings; two inputs for the revenue growth of years 2 and 3, and a rule that a revenue forecast from fewer than 5 analysts gives way to the earnings growth, measured on a copy before it is kept; a correction in dollars a share is scaled at a split and the row says so; a correction the row's route no longer reads is dropped with its reason; a guidance record may hold net income. |
 | 2026-11-14 | Settled by Claude while writing, on a map of the code, each marked *my call* above or stated here. Dilution is a new input, `shares.committed`, and `shares.diluted` keeps its arithmetic, because the count also corrects a share class or units, where the founder's rule would cut a right value (an Up-C on Mature Growth: HESM). The committed shares are period-tied only, as the diluted count is. The one-time item is Mature Growth's alone, period-tied only, moot under an applied `earnings.ntm`. The two revenue inputs are Mature Growth's alone and period-tied only. A missing revenue analyst count is thin. A thin revenue step raises no flag. The split's scaling reads the two snapshots' data dates and covers counts as well as dollars a share; a period-tied override whose reading the split rescales still drops. An unclassified row keeps its overrides. The agent derives an EPS from guided net income; the server does not divide. The method stays 1.4 but for the thin rule. |
+| 2026-11-14 | Changed at the build, on the review of Task 3: the reading of `earnings.ntm` does not add the one-time amount back. Under a guided EPS the amount is moot, so the add-back made a sensitivity grid mark the mechanical value as the pair in force. |

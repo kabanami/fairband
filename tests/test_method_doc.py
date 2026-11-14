@@ -48,6 +48,15 @@ def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:
         assert words in bullet, words
     row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
     assert "(5.2, 5.12, 14.2 to 14.5)" in row
+    # the reading of the NTM earnings adds the cycle gap back and not the item (the review of
+    # Task 3): the item is moot under a guided EPS, so a grid on `earnings.ntm` marks the cell
+    # in force
+    assert (
+        "the NTM EPS, the Mature Growth anchor as stored with any cycle gap added back and not the"
+        " one-time item (`ntm_nri`), the figure an `earnings.ntm` override stands in for to give"
+        " the same result, since a guided EPS stands in for the consensus with its items;"
+    ) in fourteen
+    assert "the one-time item it took off (`ntm_nri`" not in fourteen
 
 
 def test_the_share_count_gap_reads_the_count_without_the_committed_shares() -> None:

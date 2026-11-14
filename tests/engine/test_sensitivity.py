@@ -111,6 +111,35 @@ def test_the_grid_runs_under_the_applied_overrides(
     assert grid.cells[0][1] == _engine(mg_inputs, deciles, policy, applied)
 
 
+def test_a_one_time_item_marks_the_ntm_cell_in_force(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-14 5, as changed on the review of Task 3: on MGCO, an NTM EPS of $5.90, under
+    an applied one-time item of $0.59 the reviewed value rests on year 1 at $5.31. A guided EPS
+    stands in for the consensus with its items, so the item is moot under it: the EPS that gives
+    the reviewed value is $5.31, and the grid marks that cell, whose value is the reviewed one;
+    the cell at $5.90 is the mechanical value."""
+    applied = _applied({"earnings.ntm_nri": 0.59})
+    reviewed = value_company(mg_inputs, deciles, policy, TODAY, applied)
+    mechanical = value_company(mg_inputs, deciles, policy, TODAY)
+    belief = current_reading(reviewed, "growth.belief")
+    assert isinstance(belief, float) and reviewed.value is not None
+    grid = sensitivity_grid(
+        mg_inputs,
+        deciles,
+        policy,
+        TODAY,
+        applied,
+        "earnings.ntm",
+        (5.31, 5.90),
+        "growth.belief",
+        (belief,),
+    )
+    assert grid.current == (1, 1)
+    assert grid.cells[0][0] == pytest.approx(reviewed.value)
+    assert grid.cells[1][0] == pytest.approx(mechanical.value)
+
+
 def test_a_word_input_marks_its_pair(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

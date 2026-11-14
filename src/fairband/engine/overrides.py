@@ -47,8 +47,10 @@ result without one reads 0.0 (a refusal, the route its phase takes) and every ot
 (spec 2026-11-14 5). The stock pay reads the trailing figure the Mature Growth anchor read
 (``sbc_ttm``), and the stock-pay basis the anchor's basis in the input's words, ``None`` on an
 unknown basis (spec 2026-11-13 7.2). The NTM earnings read the anchor the Mature Growth route
-stored, before the one-time item and the cycle gap came off it; the NTM revenue reads the year
-one the revenue-growth or Decline route stored, none on a Decline row with no usable consensus.
+stored, before the cycle gap came off it and after the one-time item: the EPS an override would
+stand in for to give the result, since a guided EPS stands in for the consensus with its items
+and leaves the item unread; the NTM revenue reads the year one the revenue-growth or Decline
+route stored, none on a Decline row with no usable consensus.
 The engine finds no value outside the business either: a valued route writes
 ``outside_value_per_share`` only under an override, so a result without one reads 0.0 on every
 route but Start-up, which reads none.
@@ -539,12 +541,11 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
         case "phase":
             return result.phase.phase
         case "earnings.ntm":
-            # the anchor before the one-time item and the cycle gap came off it: the figure an
-            # override stands for; ``ntm_nri`` is the amount taken off, nil under a guided EPS
+            # the anchor before the cycle gap came off it: the figure an override stands in for to
+            # give this result; not before the one-time item, which a guided EPS leaves unread
+            # (spec 2026-11-14 5), so the EPS that gives the result already has it off
             ntm_eps = _at(im, "anchor", "ntm_eps")
-            if ntm_eps is None:
-                return None
-            return ntm_eps + im.get("ntm_nri", 0.0) + im.get("cycle_gap", 0.0)
+            return None if ntm_eps is None else ntm_eps + im.get("cycle_gap", 0.0)
         case "revenue.ntm":
             # year one as the route stored it, none on a Decline row with no usable consensus
             return _first(
