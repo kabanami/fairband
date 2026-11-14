@@ -1126,7 +1126,8 @@ def test_an_ntm_override_needs_a_record_that_fits_its_anchor(
 def test_an_ntm_eps_override_may_rest_on_a_net_income_record(client: TestClient) -> None:
     """Spec 2026-11-14 9: a company that guides net income alone backs the NTM EPS with that
     record, a gaap one for a fiscal year. The agent's EPS is its cited `derive` step, the
-    midpoint over the count the consensus is on; the server checks the record, not the figure."""
+    midpoint over the count the company's EPS is per; the server checks the record, not the
+    figure."""
     _post(client, BELIEF_8 | {"tag": "phase", "new": "Mature Growth"})
     net_income = _guidance(client, "AAPL", "net_income", 95e9, 100e9)
     body = _post(client, _citing(net_income))

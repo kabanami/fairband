@@ -666,7 +666,8 @@ Record one with `guidance_add(symbol, metric, period, low, high, basis, as_of, t
 - `metric`: `revenue`, `eps`, `net_income`, `operating_margin`, `free_cash_flow`, `capex`,
   `revenue_growth` or `eps_growth`. `net_income` is the net income that belongs to the company's
   shareholders, as its EPS is. Where a company guides a total that includes a minority's share,
-  say so in the record's `text`, after the sentence, and do not back `earnings.ntm` with it.
+  record it with the sentence verbatim and nothing added: that record does not back
+  `earnings.ntm`, and the report says so where it cites the record.
 - `period`: a fiscal year, `2027`, or a quarter, `2027Q1`, written with no dash.
 - `low` and `high`: the range, equal for a point. Money in full, in the reporting currency as the
   company states it (dollars for a company that reports in them); a percent as a fraction.
@@ -726,9 +727,15 @@ tool:
 - `earnings.ntm` (Mature Growth): a full-year EPS guidance for the base year. `new` is the
   record's midpoint. A company that guides net income alone backs `earnings.ntm` with that record,
   a `gaap` one for the base year. `new` is then the `derive` `ratio` of the record's midpoint over
-  the count the consensus is on: `snapshot:<id>/inputs/shares_diluted`, or the figure of an
-  applied `shares.diluted`, its bridge line `review:<id>/bridge/<n>/new`. Never divide by a count
-  that holds committed shares (`shares.committed`). The server checks the record, not the figure.
+  the count the company's EPS is per, the count its shareholders' net income is shared among. On
+  most rows that is the reported count, `snapshot:<id>/inputs/shares_diluted`. Where an applied
+  `shares.diluted` corrects the count of the same shares (the vendor's figure was wrong or stale,
+  or it left out a class of common stock that shares the earnings), divide by that figure, cited
+  through its bridge line, `review:<id>/bridge/<n>/new`. Where it adds an Up-C's units, whose
+  share of the earnings is a minority's, divide by the reported count: the EPS is a Class A
+  share's. With 100M Class A shares and 300M units, a guided Class A net income of $100M gives
+  $100M ÷ 100M = $1.00 a share, not $100M ÷ 400M = $0.25. Never divide by a count that holds
+  committed shares (`shares.committed`). The server checks the record, not the figure.
 - `revenue.ntm` (High Growth, Young Growth, Decline): a full-year revenue guidance for the base
   year. `new` is the record's midpoint.
 - `path.step_2`: a full-year guidance for the base year plus one; `path.step_3`: for the base year
@@ -769,7 +776,7 @@ not you, computes the value it gives.
 | Tag | Routes that read it | The input | Takes, the ends included |
 |---|---|---|---|
 | `phase` | every route | the life-cycle phase; the route follows it | `Start-up`, `Young Growth`, `High Growth`, `Mature Growth`, `Mature Stable` or `Decline` |
-| `earnings.ntm` | Mature Growth | the anchor's EPS for the next twelve months (NTM), from a clear full-year EPS guidance, or a net income one over the count the consensus is on (see "Guidance") | above 0 to 1,000 dollars a share; evidence of kind `guidance` required |
+| `earnings.ntm` | Mature Growth | the anchor's EPS for the next twelve months (NTM), from a clear full-year EPS guidance, or a net income one over the count the company's EPS is per (see "Guidance") | above 0 to 1,000 dollars a share; evidence of kind `guidance` required |
 | `revenue.ntm` | High Growth, Young Growth, Decline | the NTM revenue, year one of the revenue path or of the run-off, from a clear full-year revenue guidance | above 0 dollars; evidence of kind `guidance` required |
 | `growth.belief` | Mature Growth | the belief: the growth rate after the analysts' years, before the fade to the long-run rate | −0.20 to 0.60 a year |
 | `path.hold` | High Growth, Young Growth | the held rate of years four to the end of high growth | −0.20 to 3.00 a year |

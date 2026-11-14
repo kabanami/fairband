@@ -1410,15 +1410,17 @@ def test_nothing_counts_twice_route_by_route() -> None:
     assert "Add the asset only when the consensus excludes its gains." not in skill
 
 
-def test_a_net_income_guidance_backs_the_ntm_eps_over_the_consensus_count() -> None:
-    """Spec 2026-11-14 9 and the controller's ruling: a guidance record may hold `net_income`, the
-    net income that belongs to the shareholders, as the EPS does, a total with a minority's share
-    said so in the record's text and backing no anchor; a company that guides net income alone
-    backs `earnings.ntm` with that record, and `new` is the `derive` ratio of its midpoint over the
-    count the consensus is on, the diluted count or an applied `shares.diluted`, never a count
-    that holds committed shares; the server checks the record, not the figure. The tools
-    reference lists the metric, the citations reference reads its figures as totals, and the
-    template's section 8 cites the division."""
+def test_a_net_income_guidance_backs_the_ntm_eps_over_the_count_the_eps_is_per() -> None:
+    """Spec 2026-11-14 9, as changed on the review of Task 7: a guidance record may hold
+    `net_income`, the net income that belongs to the shareholders, as the EPS does; a total with a
+    minority's share is recorded verbatim with nothing added, backs no anchor, and the report says
+    so; a company that guides net income alone backs `earnings.ntm` with that record, and `new` is
+    the `derive` ratio of its midpoint over the count the company's EPS is per: the reported count
+    on most rows, an applied `shares.diluted` that corrects the count of the same shares, the
+    reported count where it adds an Up-C's units ($100M over 100M Class A shares is $1.00, not
+    $0.25 over 400M), never a count that holds committed shares; the server checks the record,
+    not the figure. The tools reference lists the metric, the citations reference reads its
+    figures as totals, and the template's section 8 cites the division."""
     skill = _flat(_read(SKILL))
     guidance = skill[skill.index("## Guidance ") : skill.index("## Overrides ")]
     for words in (
@@ -1428,25 +1430,38 @@ def test_a_net_income_guidance_backs_the_ntm_eps_over_the_consensus_count() -> N
         ),
         "`net_income` is the net income that belongs to the company's shareholders, as its EPS is.",
         (
-            "Where a company guides a total that includes a minority's share, say so in the"
-            " record's `text`, after the sentence, and do not back `earnings.ntm` with it."
+            "Where a company guides a total that includes a minority's share, record it with the"
+            " sentence verbatim and nothing added: that record does not back `earnings.ntm`, and"
+            " the report says so where it cites the record."
         ),
         "For a fiscal-year revenue, EPS or net income record on the `gaap` basis",
         (
             "A company that guides net income alone backs `earnings.ntm` with that record, a"
             " `gaap` one for the base year. `new` is then the `derive` `ratio` of the record's"
-            " midpoint over the count the consensus is on: `snapshot:<id>/inputs/shares_diluted`,"
-            " or the figure of an applied `shares.diluted`, its bridge line"
-            " `review:<id>/bridge/<n>/new`. Never divide by a count that holds committed shares"
+            " midpoint over the count the company's EPS is per, the count its shareholders' net"
+            " income is shared among. On most rows that is the reported count,"
+            " `snapshot:<id>/inputs/shares_diluted`. Where an applied `shares.diluted` corrects"
+            " the count of the same shares (the vendor's figure was wrong or stale, or it left out"
+            " a class of common stock that shares the earnings), divide by that figure, cited"
+            " through its bridge line, `review:<id>/bridge/<n>/new`. Where it adds an Up-C's"
+            " units, whose share of the earnings is a minority's, divide by the reported count:"
+            " the EPS is a Class A share's. With 100M Class A shares and 300M units, a guided"
+            " Class A net income of $100M gives $100M ÷ 100M = $1.00 a share, not"
+            " $100M ÷ 400M = $0.25. Never divide by a count that holds committed shares"
             " (`shares.committed`). The server checks the record, not the figure."
         ),
     ):
         assert words in guidance, words
+    # the earlier rule, which had the agent add a note to the verbatim sentence
+    assert "say so in the record's `text`" not in guidance
     table = _table(
         _read(SKILL), ("Tag", "Routes that read it", "The input", "Takes, the ends included")
     )
     ntm = _flat(" ".join(table["`earnings.ntm`"]))
-    assert "from a clear full-year EPS guidance, or a net income one over the count" in ntm
+    assert (
+        "from a clear full-year EPS guidance, or a net income one over the count the company's EPS"
+        ' is per (see "Guidance")'
+    ) in ntm
     assert "(`eps` or `net_income` for `earnings.ntm`, `revenue` for `revenue.ntm`)" in skill
     entry = _tool_entry("guidance_add")
     assert "for a fiscal-year revenue, EPS or net income figure on the `gaap` basis" in entry

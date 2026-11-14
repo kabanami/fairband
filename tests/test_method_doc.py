@@ -243,15 +243,24 @@ def test_an_override_the_route_no_longer_reads_drops() -> None:
 
 
 def test_a_guidance_record_holds_net_income_and_backs_the_ntm_eps() -> None:
-    """Spec 2026-11-14 9: 14.9 lists every metric the store takes, `net_income` a total stepped
-    from the year before's net income line, and says the agent derives the NTM EPS from it over
-    the count the consensus is on; 14.3 quotes the anchor's refusal as the engine words it and
-    says the check reads the record, not the figure; 14.6's drop reads either record; 16.2 reads
-    its figures as totals; and 11's row cites every section that states the rule."""
+    """Spec 2026-11-14 9, as changed on the review of Task 7: 14.2's row names a net income
+    guidance over the count the company's EPS is per; 14.9 lists every metric the store takes,
+    `net_income` a total stepped from the year before's net income line, and says the agent
+    derives the NTM EPS from it over that count: the reported count on most rows, an applied
+    `shares.diluted` that corrects the count of the same shares, the reported count where it adds
+    an Up-C's units, never a count that holds committed shares; 14.3 quotes the anchor's refusal
+    as the engine words it and says the check reads the record, not the figure; 14.6's drop reads
+    either record; 16.2 reads its figures as totals; and 11's row cites every section that states
+    the rule."""
     fourteen = _section(14)
+    inputs = fourteen[fourteen.index("### 14.2") : fourteen.index("### 14.3")]
     rules = fourteen[fourteen.index("### 14.3") : fourteen.index("### 14.4")]
     follows = fourteen[fourteen.index("### 14.6") : fourteen.index("### 14.7")]
     guidance = fourteen[fourteen.index("### 14.9") :]
+    assert (
+        "from a clear full-year EPS guidance, or a net income one over the count the company's EPS"
+        " is per (14.9)"
+    ) in inputs
     assert f"the metric, one of {', '.join(f'`{m}`' for m in METRICS[:-1])} and" in guidance
     assert f'"metric is one of {", ".join(METRICS[:-1])} or {METRICS[-1]}"' in guidance
     for words in (
@@ -259,17 +268,34 @@ def test_a_guidance_record_holds_net_income_and_backs_the_ntm_eps() -> None:
         "for a fiscal-year `revenue`, `eps` or `net_income` record on the `gaap` basis the step",
         "`fact:<symbol>/net_income/<year>`",
         "A company that guides net income alone backs it with that record",
-        "the record's midpoint over the count the consensus is on",
-        "never a count that holds committed shares",
+        (
+            "the record's midpoint over the count the company's EPS is per, the count the"
+            " shareholders' net income is shared among. On most rows that is the reported diluted"
+            " count, `snapshot:<id>/inputs/shares_diluted`."
+        ),
+        (
+            "Where an applied `shares.diluted` corrects the count of the same shares (the vendor's"
+            " figure was wrong or stale, or it left out a class of common stock that shares the"
+            " earnings), it is that figure, cited through its bridge line."
+        ),
+        (
+            "Where an applied `shares.diluted` adds the units of an Up-C, whose share of the"
+            " earnings is a minority's (14.4), it is the reported count, since the EPS is a"
+            " Class A share's. It never holds committed shares."
+        ),
     ):
         assert words in guidance, words
+    assert "the count the consensus is on" not in guidance
     assert f'"{anchor_misfit("earnings.ntm")}"' in rules
     assert "`eps` or `net_income` for `earnings.ntm` and `revenue` for `revenue.ntm`" in rules
     assert "The check reads the record, not the override's figure against it" in rules
     assert "an `eps` or a `net_income` record for `earnings.ntm`" in follows
     assert "currency for revenue, net income, free cash flow and capex" in _section(16)
     row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
-    assert "the guided-year drop reading either (14.3, 14.6, 14.9, 16.2)" in row
+    assert (
+        "the agent dividing a net income's midpoint by the count the company's EPS is per, the"
+        " guided-year drop reading either (14.2, 14.3, 14.6, 14.9, 16.2)"
+    ) in row
 
 
 def test_section_15_names_the_bounds_and_the_two_versions() -> None:

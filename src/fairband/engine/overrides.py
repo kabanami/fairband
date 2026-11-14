@@ -354,8 +354,8 @@ _NTM_ANCHORS = frozenset({"earnings.ntm", "revenue.ntm"})
 NO_GUIDANCE = "an NTM anchor override needs a guidance record among its evidence"
 # The metrics of the guidance record an NTM anchor reads, a gaap record for a fiscal year: the
 # reported basis, and a full year, the only figures that may stand in for the consensus. The NTM
-# EPS may rest on a net income record, which the agent divides by the count the consensus is on
-# (spec 2026-11-14 9).
+# EPS may rest on a net income record, which the agent divides by the count the company's EPS is
+# per (spec 2026-11-14 9).
 ANCHOR_METRICS: dict[str, frozenset[str]] = {
     "earnings.ntm": frozenset({"eps", "net_income"}),
     "revenue.ntm": frozenset({"revenue"}),

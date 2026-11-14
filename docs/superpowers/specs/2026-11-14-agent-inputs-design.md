@@ -243,9 +243,12 @@ against the prior year's net income as revenue and EPS have. An `earnings.ntm` m
 `gaap` fiscal-year record of `eps` or of `net_income`. The guided-year drop reads either.
 
 `earnings.ntm` stays an EPS. The agent derives it: the record's midpoint over the count the
-consensus is on (section 4), cited with the `derive` tool, so the report's number check sees the
-division (*my call*: the founder's ruling was that such guidance can back the anchor; the
-division is the agent's cited step, as every figure of a report is).
+company's EPS is per, cited with the `derive` tool, so the report's number check sees the
+division. That count is the reported diluted count; an applied `shares.diluted` stands in its
+place where it corrects the count of the same shares, and not where it adds an Up-C's units, whose
+share of the earnings is a minority's; it never holds committed shares (*my call*: the founder's
+ruling was that such guidance can back the anchor; the division is the agent's cited step, as
+every figure of a report is).
 
 ## 10. Policy v16 and the versions
 
@@ -342,3 +345,4 @@ drawer and the whole-branch review; the scratch revalues, the founder's reading,
 | 2026-11-14 | Changed at the build, on the review of Task 3: the reading of `earnings.ntm` does not add the one-time amount back. Under a guided EPS the amount is moot, so the add-back made a sensitivity grid mark the mechanical value as the pair in force. |
 | 2026-11-14 | Changed at the build, on Task 5's report: the scaling reads a basis date, the earlier of the price date and the data date of the snapshot that assembled the figures, in place of the data date alone. A refresh on a split's day before the US close has the split's day as its data date and the day before as its price date, so its figures did not see the split, and under the data date alone an override made on it was never scaled. Two residuals stay: a failed fetch of the splits beside a good fetch of the statements, and a refusal snapshot from a failed fetch. |
 | 2026-11-14 | Changed at the build, on Task 6's report: the test example of the route drop is a move from Mature Growth to Decline, since the Start-up route reads `moat.class`; and a first `phase` override is named beside a replaced or dropped one. |
+| 2026-11-14 | Changed at the build, on the review of Task 7: guided net income is divided by the count the company's EPS is per. An applied `shares.diluted` that adds an Up-C's units is not that count: 100M Class A shares and 300M units with guided Class A net income of $100M give an EPS of $1.00, not $0.25. |
