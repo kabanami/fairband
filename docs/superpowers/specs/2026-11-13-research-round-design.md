@@ -56,8 +56,9 @@ applied by one full refresh, which fetches one more dataset per company.
 9. **The minority interest** (B-174). The routes that value the firm subtract the minority
    interest at book before the value a share. An agent may correct the figure.
 10. **The NTM anchor on a thin window** (B-175, section 9a). Where a period of the NTM window
-    has fewer than 5 EPS analysts, year 1 reads the annual estimates, weighted by the window's
-    periods, when those have 5 analysts or more. `thin-ntm` then fires only where neither does.
+    in the last fiscal year it reaches has fewer than 5 EPS analysts, year 1 adds the window's
+    share of the gap between that year's annual estimate and its periods' estimates. `thin-ntm`
+    then fires only where a thin period is left as it is.
 11. **A lasting nil stock pay** (B-181, section 7.3). `earnings.sbc` may be lasting at 0, for a
     company that pays no stock. `stock-pay-missing` stays as built.
 12. **A reviewed row's flags** (B-180, section 8a). Where a review fills a row, the screen and
@@ -307,56 +308,71 @@ The founder's ruling of 2026-11-14, on plan 1's readout: the note of section 9 f
 the 748 valued Mature Growth rows, so no threshold makes it a signal, and the anchor changes
 instead. Built in plan 2, under method 1.4. It amends method 5.2 and 5.11.
 
+The rule below is the second form. The first, built as plan 2's Task 8 (`7d80ba9`), read the
+annual estimates of both fiscal years the window reaches, each by its share of the window's
+periods. The scratch readout showed its fault: the estimate of the fiscal year that is partly
+reported holds the quarters already reported, with their one-time items, and earnings inside a
+year are not even (CPNG −94%, GOOG +16.7%, ALNY +61%, ASML −6.9%). The founder ruled on
+2026-11-14, on that readout: repair it. The decision log holds both readouts.
+
 **The rule.** The NTM window is found as now, and each of its periods still needs an EPS mean.
-The window is thin when one of its periods has fewer than `analyst_min` (5) EPS analysts or no
-count, as section 9 reads it. On a thin window, where the annual figure exists:
+A period is thin when it has fewer than `analyst_min` (5) EPS analysts or no count, as section 9
+reads it. Let F be the last fiscal year the window reaches. No period of F is reported: F starts
+inside the window, or the window is F whole. Where a period of the window in F is thin and the
+annual figure of F exists:
 
-    NTM EPS raw = Σ over the fiscal years y of the window's periods of
-                  annual EPS mean of y × (the window's periods in y ÷ the periods in a year)
+    NTM EPS raw = the sum of the window's EPS means
+                + (annual EPS mean of F − the sum of the EPS means of F's periods)
+                  × (the window's periods in F ÷ the periods in a year)
 
-with four periods in a year on the quarterly cadence and two on the half-yearly one. A calendar
-company whose last reported quarter is the third reads a quarter of this year's annual estimate
-and three quarters of the next year's. A window that is one fiscal year reads that year's annual
-estimate.
+with four periods in a year on the quarterly cadence and two on the half-yearly one. The annual
+consensus sets the level of F; the periods' consensus sets the split inside F. A window that is
+F whole reads F's annual estimate. A calendar company whose last reported quarter is the third
+keeps its fourth quarter's estimate as it is, and adds three quarters of the gap between next
+year's annual estimate and next year's four quarters.
 
-**The annual figure exists** when every fiscal year the window's periods carry has an annual
-consensus row with an EPS estimate (a mean of zero with no analyst count, or a count of zero, is
-no estimate, as method 5.3 has it) on `analyst_min` EPS analysts or more. A period's fiscal year
-and an annual row's are the labels the path already matches by (method 5.3). Where the annual
-figure does not exist, the sum of the periods stands, as today.
+**The annual figure of F exists** when F has an annual consensus row with an EPS estimate (a
+mean of zero with no analyst count, or a count of zero, is no estimate, as method 5.3 has it) on
+`analyst_min` EPS analysts or more, and the periods' consensus holds every period of F, four or
+two, each with an estimate by the same test. A period's fiscal year and an annual row's are the
+labels the path already matches by (method 5.3). Where it does not exist, the sum of the periods
+stands, as today.
 
-**What stays.** A window that is not thin keeps the sum of its periods (AAPL: 6 to 15 analysts a
-quarter). The stock-pay test and its adjustment, the scale by the window's revenue, the refusals,
-`earnings.ntm` and `earnings.cycle_gap` read the raw figure so found, as now. The base year and
-the path are untouched. The NTM revenue of the revenue-growth and Decline routes stays the sum of
-the window's revenue means (*my call*: B-175 and the count on file are the EPS's).
+**The fiscal year that is partly reported is never corrected.** The window's periods before F
+keep their own estimates, thin or not, and that year's annual estimate is not read.
+
+**What stays.** A window with no thin period in F keeps the sum of its periods. The stock-pay
+adjustment and its scale by the window's revenue, the refusals, `earnings.ntm` and
+`earnings.cycle_gap` read the raw figure so found, as now. The base year and the path are
+untouched. The NTM revenue of the revenue-growth and Decline routes stays the sum of the
+window's revenue means (*my call*: B-175 and the count on file are the EPS's).
 
 **Where it reaches.** Every reading of the anchor of method 5.2: the Mature Growth value, the
 growth-route cross-check of a Mature Stable or a revenue-growth row, and the forward EPS of the
 revenue-growth route's multiples (*my call*: one rule wherever the anchor is read). Only the
 first moves a value.
 
-**The error it accepts.** The weights by periods assume each year's earnings spread evenly. For
-a company with seasons the error is the season's share of the year above or below an even share,
-times the growth from one year to the next. A window that takes one quarter of this year, where
-that quarter earns 40% of the year and earnings grow 10%, reads 1.075 of this year's earnings
-where the periods give 1.06: about 1.4% high. A thin quarter's own error is of that size or more
-(AZN's reading of 3%), and has no bound.
+**The error it accepts.** The gap of F is spread evenly over F's periods. Where the annual
+consensus and the periods' consensus of F agree, the rule changes nothing, whatever the seasons
+or the growth inside the year. An offline test of this form on the scratch store of 2026-11-14
+left 91% of the 450 rows within 5% of the periods' sum and 97% within 10%.
 
-**The note.** `thin-ntm` now fires only where year 1 still rests on thin evidence: the window is
-thin and the annual figure does not exist. Its sentence keeps section 9's words and names why
-the annual consensus does not stand in: the first such fiscal year, in order, with its EPS
-analyst count, "no analyst count" or "no annual EPS estimate".
+**The note.** `thin-ntm` fires where a thin period of the window is left as it is: a thin
+period before F, or a thin period in F where the annual figure of F does not exist. Its sentence
+keeps section 9's words, counts those periods, names the thinnest, and says why the annual
+consensus does not correct it: its fiscal year is partly reported; or F has no annual EPS
+estimate; or F's annual consensus has too few EPS analysts or no count; or not every period of
+F has an estimate.
 
 **What the result records.** The route's `anchor` intermediate gains `source` (`periods` or
-`annual`), `periods_sum` (the sum of the window's EPS means, on either source) and, on `annual`,
-`annual`: each fiscal year with its weight, its EPS mean and its analyst count. The DATA entries
-`ntm_eps` and `ntm_net_income` cite the annual estimates and carry the weights as their note
-when the source is `annual`.
+`annual`), `periods_sum` (the sum of the window's EPS means, on either source) and `annual`:
+on the annual source the fiscal year F, its annual EPS mean and analyst count, the sum of its
+periods, the window's share of them and the correction a share; else nothing. The DATA entries
+`ntm_eps` and `ntm_net_income` keep citing the periods' consensus and carry the correction as
+their note when the source is `annual`.
 
 **The founder decides on the readout.** The scratch run of section 17 lists what the rule moves
-before the live step. The rule is one task and its own commits, so it can be left out of the
-merge.
+before the live step. The rule is commits of its own, so it can be left out of the merge.
 
 ## 10. The runway return's range (B-178)
 
@@ -538,7 +554,7 @@ check constraint on them.
 - `docs/backlog.md`: each row closed moves to Done with its commits; B-106 closes as built;
   what a review parks goes in as new rows.
 - For sections 7.3, 8a and 9a, in plan 2: `docs/method.md` 5.2 and 5.11 (the anchor's source and
-  the note's new condition and sentence), 5.12, 5a.14 and 6.5 (the `anchor` entry and the cited
+  the note's new condition and sentence), 5.12, 5a.14 and 6.4 (the `anchor` entry and the cited
   estimates), 8 (whose flags a reviewed row shows), 14.2 to 14.6 (the lasting 0 and its drop)
   and 14.5 (the row and the drawer under a review); the Methodology page where it states the
   NTM anchor, the life of an override and what a reviewed row shows; the playbook's entries for
@@ -581,13 +597,15 @@ Plan 2:
 - A period-tied `balance.cash` drops when a newer sheet changes the reading.
 - A Mature Stable golden keeps its value, levels and refusal under 1.4, and so does a Mature
   Growth golden whose window is not thin or whose annual figure does not exist.
-- The anchor (9a): a thin window with annual rows on 5 analysts or more reads the weighted
-  annual figure, hand-worked for a window in two fiscal years and in one, on quarters and on
-  half-years; a window with no thin period keeps its sum; an annual year with fewer than 5 EPS
-  analysts, with no count or with no estimate keeps the sum and raises `thin-ntm` naming that
-  year; the stock-pay adjustment and the refusals read the figure so found; `earnings.ntm`
-  still stands in for it; a Mature Stable row's cross-check and a revenue-growth row's forward
-  EPS follow, and neither row's value moves.
+- The anchor (9a): a thin period in the last fiscal year the window reaches, with that year's
+  annual estimate on 5 analysts or more and all its periods estimated, adds the window's share
+  of the year's gap, hand-worked for a window in two fiscal years and in one, on quarters and on
+  half-years; the annual estimate of the year partly reported is never read; a window with no
+  thin period in that last year keeps its sum; a thin period before it, an annual estimate with
+  fewer than 5 EPS analysts, with no count or absent, and a year whose periods are not all
+  estimated each keep the sum and raise `thin-ntm` with its reason; the stock-pay adjustment and
+  the refusals read the figure so found; `earnings.ntm` still stands in for it; a Mature Stable
+  row's cross-check and a revenue-growth row's forward EPS follow, and neither row's value moves.
 - The lasting nil (7.3): a lasting `earnings.sbc` of 0 applies; a lasting figure above 0 is
   refused; a lasting 0 is refused at the write on a snapshot whose trailing stock pay reads
   above zero; it stays applied when a newer period is on file; it drops with its sentence when
@@ -628,7 +646,8 @@ log.
   rule merges: the Mature Growth rows by the anchor's source; the rows where `thin-ntm` still
   fires, by reason; the moves of the value (the median, the share within 2% and within 5%, the
   ten largest each way named with the anchor before and after); AZN and RELX named; the rows
-  that newly refuse or newly value; each review whose value moved.
+  that newly refuse or newly value; each review whose value moved. The first form was read out on
+  2026-11-14 and repaired on the founder's word; the second form is read out the same way.
 - A reviewed row (8a): SYM's row no longer counts `share-count-gap`; the count of rows whose
   flags now differ from their snapshot's.
 - The revenue-growth, Decline and Start-up rows: how many read a quarter's sheet, the sheet's
@@ -704,6 +723,9 @@ runs, the founder's reading of the anchor's readout, and the live step.
 | 2026-11-14 | B-181: `stock-pay-missing` stays as built, and `earnings.sbc` gains a lasting form at 0 for a company that pays no stock (section 7.3). The founder, on Claude's recommendation, which set aside a limit by the fiscal year's age because it would hide AZN. |
 | 2026-11-14 | Settled by Claude while writing sections 7.3, 8a and 9a, each open to the founder. The annual figure stands in only where every year it reads has `analyst_min` EPS analysts or more, so the rule never trades a thin quarter for a thin year. The weights are the window's periods in each fiscal year over the periods in a year, by the fiscal-year labels the path matches by. The rule reaches every reading of the anchor (the Mature Growth value, the growth-route cross-check, the revenue-growth route's forward EPS) and not the NTM revenue of the revenue-growth and Decline routes. The stock-pay scale keeps the window's revenue. A lasting 0 is refused at the write where the snapshot's stock pay reads above zero, and drops when the store's trailing figure is above zero. The Clean filter keeps its condition of a value from the engine. A row that a secondary valuation fills keeps the snapshot's flags. |
 | 2026-11-14 | Plan 2 written (`docs/superpowers/plans/2026-11-14-research-round-plan-2.md`, twelve tasks) on a map of the code as it stands. Settled by Claude where sections 12 and 13 met the code, each open to the founder. The quarterly sheet stays out of the data date and of the `statements` input's stamps (method 4.10), so no mature row's stored result moves with it; the newest sheet is cited under a key of its own, `balance_sheet`, whose `as_of` is the sheet's period end. The period goes on the entries' notes and never into the notes that raise `line-not-presented`. Each quarterly sheet in another currency is skipped and the newest of the rest stands against the annual one. The vendor's zero for goodwill and intangibles reads as not presented on a quarterly sheet, as on an annual one. The floor's two entries are `floor_current_assets` and `floor_total_liabilities`, and `line-not-presented:totalLiabilities` follows the floor's sheet. The Decline `equity` entry subtracts the minority interest, `distress_proceeds` stays the fraction of the firm value plus cash, and `ncav_per_share` is the floor a share, less the minority interest. The DATA entry `minority_interest` holds the line as presented and the intermediate the figure in force. The four glossary rows of method 13 and of the report change with section 13. The secondary valuation's default debt and cash follow the newest sheet, and it gains no minority term (section 3). The drawer shows the minority interest's row only above zero. The vendor check of 12.3 adds DXC, for the minority interest's line: ten calls. A balance correction drops at the first refresh under 1.4 as "a newer period is on file" where the company's trailing period moved, since that test comes first (section 11a); a correction whose own period is newer than the sheet the engine now reads drops for a changed reading too, and the readout lists each for its agent to make again. The scratch run widens the reuse window on the scratch store only, so it fetches the one new dataset, and compares two revalues on the same stored answers, one under 1.3 and one under 1.4, so the exchange rate of B-182 is the same in both. |
+| 2026-11-14 | Plan 2's Tasks 1 to 11 built on the founder's "go", subagent-driven, on the branch `research-round-plan-2`: `7ea6990` policy v14 and method 1.4; `33cce4b` the quarterly balance sheet and `minorityInterest` in the store; `07b5361`, `9d1f63c` the newest sheet in assembly; `4b0fe37` the routes cite it and the Decline floor reads it; `83a9277` the minority interest in the three routes; `a5a4449` `balance.minority`; `7d80ba9` the anchor rule's first form; `a4775e7` the lasting nil; `4f2ec37` a reviewed row's flags; `5281b91` the drawer; `eeab62f` the whole-branch review's one fix (the floor's words named no minority interest). Each task passed a task review; the whole-branch review was clean after that fix. The vendor check of 12.3 (twelve calls): FMP's quarterly sheet exists for FRVO, RKLB, RELX, ABVX and DXC and ends after the annual one; a half-year reporter's answer holds half-years labelled Q2 and Q4; a line with no figure reads 0, not null; ABVX's newest half-year reads its two debt lines as nil. Claude. |
+| 2026-11-14 | The scratch readout of the anchor rule's first form (a backup copy of the live store; a full refresh on it that fetched 1,598 `balance-quarter` answers and reused the rest; then a revalue under 1.4 against a control revalue under 1.3 on a second copy). 450 of 796 Mature Growth rows read the annual figure, and HIMS was refused through it. Of 448 valued on both sides the median move was +0.7%, 80% within 5%, 35 rows beyond 10% and 12 beyond 25%. The fault: the estimate of the fiscal year partly reported holds the reported quarters with their one-time items, and earnings inside a year are not even. CPNG −94% (its 2026 estimate is −0.73 on a reported loss; its next quarter alone is +0.03), ALNY +61% (2026 at 18.42, 2027 at 8.96), GOOG +16.7% (2026 at 19.69, 2027 at 15.03, the four quarters ahead 13.88), ASML −6.9% and CLS +7.6% (fast growth inside the year). It also corrected real errors (CCEP's one-analyst half-years, BA's sum of 0.001). Every Mature Stable row and every Mature Growth row on its periods was identical. Claude. |
+| 2026-11-14 | B-175, the anchor rule repaired (section 9a, the second form): the periods' sum plus the window's share of the gap between the annual estimate and the periods' estimates of the last fiscal year the window reaches; the fiscal year partly reported is never corrected and its annual estimate never read. The founder ("fix it"), on the first form's readout and on Claude's offline test of three other forms on the scratch store: this year's estimate less the street's reported EPS was worse (61% of rows within 5% of the periods' sum, since the vendor's annual estimate and the reported EPS are often on two bases); next year's estimate by an even split left 67% within 5%; this form left 91% within 5% and 97% within 10%, with GOOG at +0.9%, ASML at −2.1%, CLS at +1.3% and CPNG at −31%. Settled by Claude with it, each open to the founder: the rule needs every period of that fiscal year estimated, so a year with a period of 0 on 0 analysts (EDU) keeps its sum and its note; `thin-ntm` fires on a thin period of the year partly reported, which nothing corrects; the two DATA entries keep citing the periods' consensus and carry the correction as their note. |
 
 Builder check: done 2026-11-13, one round (Opus 5.5, xhigh). It found two statements about the
 method that were wrong (the drop rule of 12.4; a refusal for an override that moves nothing,
