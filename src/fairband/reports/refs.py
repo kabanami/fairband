@@ -416,6 +416,13 @@ _SNAPSHOT_PATH_WORDS = {
     "intermediates/inflation_differential": _DIFFERENTIAL_WORDS,
     "inputs/inflation_differential": _DIFFERENTIAL_WORDS,
     "inputs/adr_ratio": "the ADR ratio, ordinary shares per ADS",
+    # the newest balance sheet the firm-value routes read debt and cash from, a quarter's or a
+    # fiscal year's (spec 2026-11-13 12.2), and the two lines of it the Decline floor reads
+    "intermediates/balance_sheet/label": "the period of the newest balance sheet",
+    "intermediates/balance_sheet/period_end": "the period end of the newest balance sheet",
+    "intermediates/balance_sheet/quarterly": "whether the newest balance sheet is a quarter's",
+    "inputs/floor_current_assets": "the total current assets the liquidation floor reads",
+    "inputs/floor_total_liabilities": "the total liabilities the liquidation floor reads",
     "phase/phase": "the phase",
     "phase/growth_3y": "the three-year revenue growth",
     "phase/dickinson": "the Dickinson stage",

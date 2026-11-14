@@ -10,7 +10,13 @@ from typing import Any
 
 import pytest
 from refresh.synthetic import NOW, bodies
-from support.engine_companies import fx_inputs, mature_growth_inputs, universe_deciles
+from support.engine_companies import (
+    decline_inputs,
+    fx_inputs,
+    mature_growth_inputs,
+    on_quarter_sheet,
+    universe_deciles,
+)
 from support.payloads import store_payloads
 from support.web import TODAY
 
@@ -292,6 +298,55 @@ def test_the_ten_year_median_margins_resolve_and_read_in_words(
     assert resolver.resolve(f"{bare}/net/median") is None
     assert resolver.resolve(f"{bare}/net/years") is None
     assert resolver.resolve(bare) is None  # a record, not a figure
+
+
+def test_the_newest_sheet_and_the_floor_s_lines_resolve_and_read_in_words(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-13 12.2: the Decline row reads its floor from the newest balance sheet, here
+    the quarter of 30 Sep 2026 with current assets of $900 m and liabilities of $500 m, and
+    records the sheet's period beside debt and cash. The references list names each in words."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    dc = on_quarter_sheet(replace(decline_inputs(), symbol="AAPL"), 900e6, 500e6)
+    mechanical = value_company(dc, universe_deciles(), policy, TODAY)
+    assert mechanical.route == "decline"
+    sid = insert_snapshot(conn, mechanical, aapl.refresh_id, clock=lambda: NOW)
+    resolver = Resolver(conn, "AAPL", policy)
+    priced = "priced 30 Oct 2026"
+    for path, value, words in (
+        (
+            "inputs/floor_current_assets",
+            900e6,
+            "the total current assets the liquidation floor reads",
+        ),
+        (
+            "inputs/floor_total_liabilities",
+            500e6,
+            "the total liabilities the liquidation floor reads",
+        ),
+        (
+            "intermediates/balance_sheet/label",
+            "fiscal 2026 Q3",
+            "the period of the newest balance sheet",
+        ),
+        (
+            "intermediates/balance_sheet/period_end",
+            "2026-09-30",
+            "the period end of the newest balance sheet",
+        ),
+    ):
+        ref = f"snapshot:{sid}/{path}"
+        found = resolver.resolve(ref)
+        assert found is not None and (found.value, found.snapshot_id) == (value, sid), path
+        assert resolver.describe(ref) == f"snapshot {sid}, {words}, {priced}", path
+    assert resolver.describe(f"snapshot:{sid}/intermediates/balance_sheet/quarterly") == (
+        f"snapshot {sid}, whether the newest balance sheet is a quarter's, {priced}"
+    )
+    # the fiscal year's lines Z″ and F read keep their own words
+    assert resolver.describe(f"snapshot:{sid}/inputs/total_liabilities") == (
+        f"snapshot {sid}, the total liabilities, {priced}"
+    )
 
 
 def _secondary_id(conn: sqlite3.Connection, policy: Policy, snapshot_id: int) -> int:

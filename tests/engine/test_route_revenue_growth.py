@@ -8,10 +8,12 @@ from typing import Any
 
 import pytest
 from support.engine_companies import (
+    QUARTER_SHEET_SOURCE,
     annual,
     capital_years,
     fiscal_years,
     half_yearly,
+    on_quarter_sheet,
     with_ntm_revenue,
 )
 
@@ -31,6 +33,7 @@ from fairband.engine.revenue_growth import (
 from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.route_revenue_growth import consensus_beyond, implied_margin_at_price
+from fairband.engine.route_steps import sheet_entry, sheet_note
 from fairband.engine.types import TaggedInput, ValuationResult, result_from_json, result_to_json
 from fairband.policy import Policy
 
@@ -62,6 +65,7 @@ REVENUE_GROWTH_KEYS = {
     "firm_value",
     "debt",
     "cash",
+    "balance_sheet",
     "equity",
     "shares",
     "value_per_share",
@@ -87,7 +91,8 @@ REVENUE_GROWTH_KEYS = {
 # margins every refusal of a row with trailing figures and a series carries.
 PLAIN_REFUSAL_KEYS = {"price_facts", "trailing_end", "margin_history"}
 # What a row refused for its target margin keeps: the keys that rebuild the margin the price
-# needs, that margin, and the keys every refusal carries.
+# needs, the balance sheet debt and cash were read from, that margin, and the keys every refusal
+# carries.
 TARGET_REFUSAL_KEYS = {
     "revenue_path",
     "margin_start",
@@ -95,6 +100,7 @@ TARGET_REFUSAL_KEYS = {
     "moat",
     "debt",
     "cash",
+    "balance_sheet",
     "shares",
     "sales_to_capital",
     "implied_margin",
@@ -779,7 +785,73 @@ def test_tax_loss_flag_and_the_bridge(
     assert noted.intermediates["debt"] == 1_000e6
     assert note in sentence(noted, "line-not-presented:debt")
     [debt] = [i for i in noted.inputs if i.name == "debt"]
-    assert (debt.value, debt.note) == (1_000e6, note)
+    # the period of the fixture's newest sheet, its newest fiscal year's, then assembly's note
+    assert (debt.value, debt.note) == (1_000e6, f"the balance sheet of fiscal 2025; {note}")
+
+
+Q3_SHEET = {"period_end": "2026-09-30", "label": "fiscal 2026 Q3", "quarterly": True}
+
+
+def test_debt_and_cash_cite_the_newest_sheet_and_its_period(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 12.2: HGCO's newest balance sheet is its quarter of 30 Sep 2026. Debt and
+    cash cite it, as of its period end, their notes naming the period; the intermediates carry
+    the sheet beside them, and a row refused for its target margin keeps it. The period alone
+    raises no ``line-not-presented`` flag, and the figures are the bridge's as before."""
+    hg = on_quarter_sheet(high_growth_inputs)
+    r = value_company(hg, deciles, policy, TODAY)
+    assert r.route == "revenue-growth"
+    for name, figure in (("debt", 1_000e6), ("cash", 3_000e6)):
+        cited = input_named(r, name)
+        assert (cited.value, cited.note) == (figure, "the balance sheet of fiscal 2026 Q3")
+        assert cited.provenance == hg.provenance["balance_sheet"]
+        assert (cited.provenance.source, cited.provenance.as_of) == (
+            QUARTER_SHEET_SOURCE,
+            date(2026, 9, 30),
+        )
+    assert r.intermediates["balance_sheet"] == Q3_SHEET == sheet_entry(hg)["balance_sheet"]
+    assert not [c for c in codes(r) if c.startswith("line-not-presented")]
+    assert r.value == value_company(high_growth_inputs, deciles, policy, TODAY).value
+    refused = value_company(replace(hg, peers=hg.peers[:2]), deciles, policy, TODAY)
+    assert_refused(refused, "no target margin: 2 mature peers")
+    assert refused.intermediates["balance_sheet"] == Q3_SHEET
+    # without a sheet on file the entry is empty and the citation has no period to name
+    bare = replace(high_growth_inputs, sheet=None)
+    assert sheet_entry(bare) == {"balance_sheet": None}
+    r = value_company(bare, deciles, policy, TODAY)
+    assert r.intermediates["balance_sheet"] is None
+    assert (input_named(r, "debt").note, input_named(r, "cash").note) == (None, None)
+
+
+def test_a_line_the_newest_sheet_does_not_present_names_the_period(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Both debt lines missing from the quarter's sheet: the debt is unknown and counts as nil,
+    the flag's sentence names the sheet's period, and the entry's note holds the period and
+    assembly's note on the missing lines; cash, presented in full, raises no flag."""
+    note = "shortTermDebt and longTermDebt not presented"
+    hg = on_quarter_sheet(replace(high_growth_inputs, debt=None, notes={"debt": note}))
+    r = value_company(hg, deciles, policy, TODAY)
+    assert r.intermediates["debt"] == 0.0
+    assert sentence(r, "line-not-presented:debt") == (
+        "The newest balance sheet (fiscal 2026 Q3) does not present all of the short- and "
+        "long-term debt (shortTermDebt and longTermDebt not presented); what is missing counts "
+        "as nil in the bridge from firm value to equity."
+    )
+    assert "line-not-presented:cash" not in codes(r)
+    debt, cash = input_named(r, "debt"), input_named(r, "cash")
+    assert (debt.value, debt.note) == (None, f"the balance sheet of fiscal 2026 Q3; {note}")
+    assert cash.note == sheet_note(hg) == "the balance sheet of fiscal 2026 Q3"
+    assert sheet_note(hg, "debt") == debt.note and sheet_note(hg, "cash") == cash.note
+    # without a sheet: the sentence names no period and the note is assembly's alone
+    bare = replace(hg, sheet=None)
+    r = value_company(bare, deciles, policy, TODAY)
+    assert sentence(r, "line-not-presented:debt").startswith(
+        "The newest balance sheet does not present all of the short- and long-term debt ("
+    )
+    assert input_named(r, "debt").note == sheet_note(bare, "debt") == note
+    assert sheet_note(bare) is None and sheet_note(bare, "cash") is None
 
 
 def test_a_trailing_margin_below_the_bound_takes_the_dollar_ramp(

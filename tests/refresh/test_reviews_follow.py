@@ -21,6 +21,7 @@ from refresh_env import Env
 from support.engine_companies import (
     high_growth_inputs,
     mature_growth_inputs,
+    on_quarter_sheet,
     quarter,
     universe_deciles,
 )
@@ -482,6 +483,29 @@ def test_a_period_tied_override_drops_when_a_newer_period_is_on_file(
         "override-drop",
         f"balance.cash dropped: {NEWER}",
     )
+
+
+def test_a_period_tied_cash_correction_follows_the_newest_sheet(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-13 12.4 and 16: HGCO's cash correction of $3,000 m was made on its fiscal 2025
+    sheet. The next snapshot reads a later sheet, the quarter of 30 Sep 2026, on the same trailing
+    period: with the same cash the correction stays applied; with a cash of $3,200 m the reading
+    changed, and it drops."""
+    cash, follow, inputs = _hgco_with_a_cash_correction(conn, policy)
+    made_on = _made_on(conn, cash)
+    assert made_on.intermediates["balance_sheet"]["label"] == "fiscal 2025"
+    later = on_quarter_sheet(inputs)
+    assert later.trailing == inputs.trailing
+    assert follow(later) is not None
+    kept = override_row(conn, cash)
+    assert kept is not None and kept.state == "applied"
+    review = latest_review(conn, "HGCO")
+    assert review is not None and review.override_ids == (cash,)
+    assert review.result.intermediates["balance_sheet"]["label"] == "fiscal 2026 Q3"
+    assert follow(replace(later, cash=3_200e6)) is None
+    dropped = override_row(conn, cash)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
 
 
 def test_an_override_on_a_snapshot_from_before_1_3_is_judged_by_its_share_count_s_date(

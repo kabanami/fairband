@@ -239,6 +239,10 @@ def test_a_decline_row_s_levels_are_in_usd(policy: Policy, deciles: Deciles) -> 
     assert r.intermediates["value_per_share"] == pytest.approx(r.value * 8.0)
     assert r.levels.buy == pytest.approx(r.value * (1 - policy.margin_of_safety["None"]))
     assert inputs_of(r)["depreciation"].unit == "SEK"
+    # the floor reads the newest balance sheet, restated with the statements: NCAV −200 m × 8.0
+    assert r.intermediates["ncav"] == pytest.approx(-200e6 * 8.0)
+    floor = inputs_of(r)["floor_current_assets"]
+    assert (floor.value, floor.unit) == (pytest.approx(300e6 * 8.0), "SEK")
 
 
 def test_the_sales_class_reads_revenue_in_usd(policy: Policy, deciles: Deciles) -> None:

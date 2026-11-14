@@ -16,7 +16,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
-from fairband.engine.balance import BalanceYear
+from fairband.engine.balance import BalanceYear, NewestSheet
 from fairband.engine.classifier import Deciles, FiscalYear, Series
 from fairband.engine.revenue_growth import PeerFigures
 from fairband.engine.roic import CapitalYear
@@ -32,6 +32,7 @@ SOURCES = {
     "market_cap": "FMP quote",
     "shares_diluted": "FMP income-statement",
     "statements": "FMP income-statement",
+    "balance_sheet": "FMP balance-sheet-statement",
     "estimates_quarter": "FMP analyst-estimates",
     "estimates_annual": "FMP analyst-estimates",
     "street_ttm_eps": "FMP earnings",
@@ -117,6 +118,35 @@ def annual(
     return AnnualEstimate(
         year, date(year, 12, 31), eps, revenue, net_income, analysts, analysts, analysts_revenue
     )
+
+
+QUARTER_SHEET_SOURCE = SOURCES["balance_sheet"]
+
+
+def fiscal_sheet(
+    series: Series, current_assets: float | None = None, liabilities: float | None = None
+) -> NewestSheet:
+    """The newest balance sheet as the builders state it: the newest fiscal year's of ``series``,
+    labelled "fiscal <year>" and not a quarter's, with the floor's two lines ``current_assets``
+    and ``liabilities`` and no minority interest."""
+    fy = series[-1]
+    return NewestSheet(fy.period_end, f"fiscal {fy.year}", False, current_assets, liabilities, None)
+
+
+def on_quarter_sheet(
+    i: CompanyInputs,
+    current_assets: float | None = None,
+    liabilities: float | None = None,
+) -> CompanyInputs:
+    """``i`` with its newest balance sheet the quarter's of 30 Sep 2026, "fiscal 2026 Q3" (spec
+    2026-11-13 12.2), cited as assembly cites it, as of its period end; its floor's two lines
+    ``current_assets`` and ``liabilities``, no minority interest, and its debt and cash as they
+    were."""
+    sheet = NewestSheet(
+        date(2026, 9, 30), "fiscal 2026 Q3", True, current_assets, liabilities, None
+    )
+    cited = Provenance(QUARTER_SHEET_SOURCE, sheet.period_end, OBSERVED, None)
+    return replace(i, sheet=sheet, provenance=i.provenance | {"balance_sheet": cited})
 
 
 def with_ntm_revenue(i: CompanyInputs, revenue: float) -> CompanyInputs:
@@ -275,7 +305,8 @@ def high_growth_inputs() -> CompanyInputs:
     100 m shares at $150. Trailing revenue is $10 bn at a -9% margin. The NTM consensus is $12.4 bn
     of revenue (24% above trailing) at a loss a share; the annual revenue consensus from fiscal
     2027 grows 23.1% then 20%, on 20, 15 and 12 revenue analysts and 3 EPS analysts. Three mature
-    peers at margins of 10%, 20% and 30%; debt $1 bn and cash $3 bn."""
+    peers at margins of 10%, 20% and 30%; debt $1 bn and cash $3 bn, from the newest balance
+    sheet, fiscal 2025's."""
     series = fiscal_years(_growth_revenue(), [-0.30 + 0.03 * k for k in range(8)])
     return replace(
         mature_growth_inputs(),
@@ -322,6 +353,7 @@ def high_growth_inputs() -> CompanyInputs:
         ),
         debt=1_000e6,
         cash=3_000e6,
+        sheet=fiscal_sheet(series),
     )
 
 
@@ -348,7 +380,8 @@ def decline_inputs() -> CompanyInputs:
     an average invested capital of 500; the NTM consensus revenue 970 and the annual consensus
     falling 3% a year from fiscal 2027; interest 20 over the four quarters, debt 200, cash 100;
     two balance sheets, the newest with current assets 300 and total liabilities 500 (Altman Z″
-    3.07, safe; Piotroski F 6 of 9); price $3.00. The value is $4.9533 a share, rating A−."""
+    3.07, safe; Piotroski F 6 of 9), which is the newest balance sheet the floor reads (NCAV
+    −200, no floor); price $3.00. The value is $4.9533 a share, rating A−."""
     series = fiscal_years(
         [1_125e6, 1_200e6, 1_120e6, 1_050e6, 1_000e6], [0.07, 0.08, 0.08, 0.09, 0.08]
     )
@@ -413,6 +446,7 @@ def decline_inputs() -> CompanyInputs:
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 4.0, 3.0),
         debt=200e6,
         cash=100e6,
+        sheet=fiscal_sheet(series, 300e6, 500e6),
         balance_years=(
             BalanceYear(
                 year=2024,
@@ -458,8 +492,9 @@ def start_up_inputs() -> CompanyInputs:
     −50; trailing operating cash flow −60 and capital spending −15, a burn of 75 a year; three
     mature peers at margins of 20%, 25% and 30% (target 25%) and sales-to-capital of 1.0, 1.5 and
     2.0 (median 1.5); tax 25%; no moat score; no kept ROIC year; a market cap of 2,000 on 100
-    diluted shares at $20; debt 0 and cash 300. EV_price is 1,700, the year-10 revenue the price
-    needs 1,725.73, the cash floor $3.00 a share and the burn cover 4.0 years."""
+    diluted shares at $20; debt 0 and cash 300, from the newest balance sheet, fiscal 2025's.
+    EV_price is 1,700, the year-10 revenue the price needs 1,725.73, the cash floor $3.00 a share
+    and the burn cover 4.0 years."""
     series = tuple(
         replace(fy, operating_income=-50.0, cfo=-60.0, cfi=-15.0, cff=0.0, capex=-15.0)
         for fy in fiscal_years([0.0] * 5, [0.0] * 5)
@@ -502,6 +537,7 @@ def start_up_inputs() -> CompanyInputs:
         ),
         debt=0.0,
         cash=300.0,
+        sheet=fiscal_sheet(series),
     )
 
 
@@ -543,6 +579,7 @@ def _restated(i: CompanyInputs, total: float, per_share: float) -> CompanyInputs
         gf_eps_without_nri=_times(i.gf_eps_without_nri, per_share),
         debt=_times(i.debt, total),
         cash=_times(i.cash, total),
+        sheet=None if i.sheet is None else _scaled(i.sheet, total, per_share),
         balance_years=tuple(_scaled(b, total, per_share) for b in i.balance_years),
     )
 

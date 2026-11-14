@@ -129,19 +129,21 @@ business's own values, before any value outside the business is added.
   ``moat``, ``sales_to_capital`` (used, own, own_usable, own_below_bound, peers, value),
   ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``,
   ``reinvestment_by_year``, ``fcff_by_year``, ``terminal_roic``, ``terminal_nopat`` (year 10's
-  operating income at the full tax rate), ``terminal_value``,
-  ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``, ``value_per_share``,
-  ``value_by_margin`` ("low", "median", "high": the peers' lowest, median and highest margins),
+  operating income at the full tax rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``,
+  ``balance_sheet`` (period_end, label, quarterly: the newest balance sheet the two were read
+  from; ``None`` without one), ``equity``, ``shares``, ``value_per_share``, ``value_by_margin``
+  ("low", "median", "high": the peers' lowest, median and highest margins),
   ``return_on_new_capital``, ``peer_roic_median``, ``failure_probability`` (Young Growth only),
   ``eps``, ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``,
   ``growth_route`` (the cross-check, as on a Mature Stable row); at the price, ``implied_growth``,
   ``implied_margin``, ``multiples``, ``growth_share``, ``expected_return`` and the cross-check's
   ``implied_growth``. A row refused for its target margin holds only the rebuild keys
   (``revenue_path``, ``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares``,
-  ``sales_to_capital``), ``implied_margin`` and ``price_facts``.
+  ``sales_to_capital``), ``balance_sheet``, ``implied_margin`` and ``price_facts``.
 - Decline: the rebuild keys (``runoff_path``, ``margin``, ``tax_rate``, ``sales_to_capital``,
   ``runoff_recovery``, ``debt``, ``cash``, ``shares``, ``ncav``, ``pi``,
-  ``distress_sale_fraction``), ``moat``, ``growth_rates`` (years 1 to 10), the run-off tables
+  ``distress_sale_fraction``), ``balance_sheet`` (as on revenue growth: the sheet debt, cash and
+  ``ncav`` were read from), ``moat``, ``growth_rates`` (years 1 to 10), the run-off tables
   (``revenue_by_year`` to ``fcff_by_year``, with ``release_by_year``), ``terminal_value``,
   ``firm_value``, ``equity``, ``going_concern_per_share``, ``ncav_per_share``,
   ``floored_per_share``, ``rating``, ``distress_proceeds``, ``distress_per_share``,
@@ -151,9 +153,9 @@ business's own values, before any value outside the business is added.
   rebuild keys. A row refused for its value keeps all but the three at the price.
 - Start-up (always a refusal): ``requirement`` (reason, revenue_y10, ev_price, revenue_0,
   operating_income_0, target_margin, sales_to_capital, tax_rate, terminal_roic, path,
-  terminal_value), ``cash_floor``, ``burn_cover_years``, ``burn``, ``debt``, ``cash``, ``shares``,
-  ``market_cap``, ``price_facts``; at the price, ``market_cap`` and ``requirement``, rebuilt from
-  the requirement's rebuild keys.
+  terminal_value), ``cash_floor``, ``burn_cover_years``, ``burn``, ``debt``, ``cash``,
+  ``balance_sheet`` (as on revenue growth), ``shares``, ``market_cap``, ``price_facts``; at the
+  price, ``market_cap`` and ``requirement``, rebuilt from the requirement's rebuild keys.
 """
 
 import math

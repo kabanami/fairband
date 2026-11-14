@@ -2,17 +2,17 @@
 synthetic rating and its ten-year probability of default π, Altman's Z″, Piotroski's F and
 Graham's net current asset value.
 
-Pure functions on plain figures and ``BalanceYear`` records; the route decides what each one
-changes. π weights the distress-sale value (10.7) and the net current asset value floors the
-run-off (10.6); Z″ and F are shown, never deciding the value (10.8). The Z″ coefficients and the
-nine Piotroski signals are the models' own, in code (method 4.1a); the rating table, the default
-probabilities and the Z″ zones are policy.
+Pure functions on plain figures, ``BalanceYear`` records and, for the net current asset value,
+the ``NewestSheet``; the route decides what each one changes. π weights the distress-sale value
+(10.7) and the net current asset value floors the run-off (10.6); Z″ and F are shown, never
+deciding the value (10.8). The Z″ coefficients and the nine Piotroski signals are the models' own,
+in code (method 4.1a); the rating table, the default probabilities and the Z″ zones are policy.
 """
 
 from dataclasses import dataclass
 from typing import Literal
 
-from fairband.engine.balance import BalanceYear
+from fairband.engine.balance import BalanceYear, NewestSheet
 from fairband.policy import Policy
 
 ZZone = Literal["distress", "grey", "safe"]
@@ -163,9 +163,10 @@ def piotroski_f(this: BalanceYear, last: BalanceYear) -> FScore:
     return FScore(signals, score, read)
 
 
-def ncav(y: BalanceYear) -> float | None:
-    """Graham's net current asset value (10.6): total current assets − total liabilities;
-    ``None`` when either line is missing."""
+def ncav(y: BalanceYear | NewestSheet) -> float | None:
+    """Graham's net current asset value (10.6): total current assets − total liabilities, on a
+    fiscal year's balance sheet or the newest one on file, which the route's floor reads (spec
+    2026-11-13 12.2); ``None`` when either line is missing."""
     if y.total_current_assets is None or y.total_liabilities is None:
         return None
     return y.total_current_assets - y.total_liabilities

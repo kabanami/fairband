@@ -22,8 +22,8 @@ the mature peers' median. Tax is the newest fiscal year's statutory rate, charge
 forecast's own losses; the terminal reads year 10's operating income at the full rate
 (``revenue_growth.terminal_nopat``). The terminal return is the moat's rule
 (``roic.terminal_roic``) on the return on new capital at the target margin. Equity is the firm
-value less debt plus cash from the newest annual balance sheet, each nil when unknown. The value is
-discounted at r in every year.
+value less debt plus cash from the newest balance sheet (``CompanyInputs.sheet``, a quarter's or a
+fiscal year's), each nil when unknown. The value is discounted at r in every year.
 
 Refusals, in this order: no trailing revenue (missing or not positive); no trailing operating
 income, without which there is no trailing margin to start from; no statutory tax rate; an
@@ -47,7 +47,8 @@ source, "fmp" or "industry", and industry, the industry's name on the fallback);
 alone rejected an own measure; peers; value); the tables
 ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``,
 ``fcff_by_year``; ``terminal_roic``, ``terminal_nopat`` (year 10's operating income at the full tax
-rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``equity``, ``shares``,
+rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``balance_sheet`` (the period of the
+newest balance sheet the two were read from, ``route_steps.sheet_entry``), ``equity``, ``shares``,
 ``value_per_share``; ``value_by_margin`` at the peers' lowest, median and highest margins (``low``,
 ``median``, ``high``), each with its own terminal return; ``return_on_new_capital`` and
 ``peer_roic_median``; ``failure_probability`` on a Young Growth row only; ``eps`` (the forward EPS
@@ -60,7 +61,8 @@ policy's repricing horizon, g_T past the path).
 The rebuild keys: ``revenue_path`` (revenue0, ntm_revenue, the consensus steps as found with
 ``None`` for a missing one, hold ``None``, or the cap when it binds, high_growth_years, fade_years),
 ``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares`` and ``sales_to_capital``; a
-valued row adds ``margin_path``'s target and ``terminal_roic``. With the policy's r, g_T,
+valued row adds ``margin_path``'s target and ``terminal_roic``. ``balance_sheet`` sits beside them,
+so a row refused for its target margin keeps it too; it rebuilds nothing. With the policy's r, g_T,
 convergence year and loss ramp bound they rebuild the path, the margin path or the dollar ramp, and
 the charge, so ``revenue_at_price`` moves a stored row to a new price from its intermediates alone,
 and ``implied_margin_at_price`` moves the margin the price needs on any row that carries
@@ -72,15 +74,15 @@ Flags, in order: ``sbc-basis-unknown`` when the cross-check has a value on an an
 unknown; the path's, ``path-held``, ``consensus-above-base-rate`` when the year-3 consensus is above
 the cap, then ``few-analysts``; the capital build's, the ten-year ROIC flags and their line flags,
 then ``line-not-presented:debt`` and ``line-not-presented:cash`` when a figure is unknown or
-assembly's note names a line it lacks; ``peers-from-industry`` when the peers are the industry
-fallback's (``CompanyInputs.peer_source``), on a row refused for the target margin or the
-sales-to-capital too; ``tax-loss-history-unknown`` when the forecast has a loss
-year or the trailing margin is below zero; ``margin-ramp-in-dollars`` on the dollar ramp, naming the
-trailing margin and the ramp's two ends; ``return-above-peers`` when the return on new capital at
-the target is above the peers' median ROIC; ``failure-not-charged`` on a Young Growth row; the
-trailing flags; ``value-spread`` over the three margins, unbounded when the value at the lowest
-margin is at or below zero and the median's is positive. The runway-return flags of the mature
-routes are not raised: this route's charge does not read the runway return.
+assembly's note names a line the sheet lacks, the sentence naming the sheet's period;
+``peers-from-industry`` when the peers are the industry fallback's (``CompanyInputs.peer_source``),
+on a row refused for the target margin or the sales-to-capital too; ``tax-loss-history-unknown``
+when the forecast has a loss year or the trailing margin is below zero; ``margin-ramp-in-dollars``
+on the dollar ramp, naming the trailing margin and the ramp's two ends; ``return-above-peers`` when
+the return on new capital at the target is above the peers' median ROIC; ``failure-not-charged`` on
+a Young Growth row; the trailing flags; ``value-spread`` over the three margins, unbounded when the
+value at the lowest margin is at or below zero and the median's is positive. The runway-return
+flags of the mature routes are not raised: this route's charge does not read the runway return.
 
 ``consensus_beyond`` reads the annual consensus revenue past base + 2 for the Decline route's
 run-off (spec 2026-11-06 6.1); this route's path ends its consensus at year 3.
@@ -166,6 +168,7 @@ from fairband.engine.route_steps import (
     common_inputs,
     common_rules,
     data,
+    debt_and_cash,
     eps,
     expected,
     from_capital,
@@ -179,6 +182,7 @@ from fairband.engine.route_steps import (
     present,
     price_facts_for,
     rule,
+    sheet_entry,
     signed,
     trailing_flags,
 )
@@ -269,6 +273,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "moat": moat,
         "debt": nil(chosen(c, "balance.debt", i.debt)),
         "cash": nil(chosen(c, "balance.cash", i.cash)),
+        **sheet_entry(i),
         "shares": c.shares,
         "sales_to_capital": asdict(s2c),
         **outside_entry(c),
@@ -374,8 +379,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
             f"the median ten-year operating margin of {target.count} mature peers{of_industry}",
         ),
         *_sales_to_capital_input(c, s2c),
-        data(i, "debt", i.debt, money(i), "statements"),
-        data(i, "cash", i.cash, money(i), "statements"),
+        *debt_and_cash(i),
         *common_rules(policy, moat, terminal),
         rule(policy, "high_growth_years", policy.high_growth_years, "years"),
         _cap_input(policy, sales, capped, judged_hold),
@@ -664,18 +668,20 @@ def _rule_if(cited: bool, policy: Policy, name: str, value: float) -> tuple[Tagg
 def bridge_flags(c: Context | StartUpContext) -> tuple[Flag, ...]:
     """``line-not-presented:debt`` and ``:cash`` for a figure the bridge counts as nil in part or
     in full: unknown, or with a line assembly's note names as not presented; none for a line an
-    agent's balance correction replaces."""
+    agent's balance correction replaces. The sentence names the newest balance sheet's period
+    (``CompanyInputs.sheet``), which never raises the flag itself."""
     i = c.inputs
     lines = (
         ("debt", i.debt, "short- and long-term debt"),
         ("cash", i.cash, "cash and short-term investments"),
     )
+    sheet = "The newest balance sheet" + ("" if i.sheet is None else f" ({i.sheet.label})")
     replaced = {name for name, _, _ in lines if _BALANCE_TAGS[name] in c.overrides}
     return tuple(
         Flag(
             f"line-not-presented:{name}",
             f"Line not presented: {name}",
-            f"The newest annual balance sheet does not present all of the {words} "
+            f"{sheet} does not present all of the {words} "
             f"({i.notes.get(name) or 'no line on file'}); what is missing counts as nil in the "
             "bridge from firm value to equity.",
         )

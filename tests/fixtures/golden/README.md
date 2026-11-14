@@ -107,6 +107,18 @@ over 8, DCCO 8% over 5, and SUCO, with no revenue above zero, an empty record. T
 `thin-ntm` (spec 2026-11-13 9) fires on none: every fixture's NTM quarters have 20 analysts. No
 other key or figure of any golden moves.
 
+HGCO, YGCO, DCCO and SUCO re-captured under 1.4 on 2026-11-14 for one cause, the newest balance
+sheet (spec 2026-11-13 12.2; method 4.2): the three firm-value routes read debt, cash and the
+liquidation floor from the newest balance sheet on file, a quarter's or a fiscal year's, and cite
+it with its period. Each fixture's newest sheet is its newest fiscal year's, fiscal 2025, so no
+figure moves. The `debt` and `cash` inputs cite the source `balance_sheet` ("FMP
+balance-sheet-statement") in place of the statements, with the note "the balance sheet of fiscal
+2025"; the intermediates gain `balance_sheet` beside `debt` and `cash` (period end 2025-12-31,
+label "fiscal 2025", not quarterly); and DCCO's inputs gain the floor's two lines under their own
+names after `cash`, `floor_current_assets` (300 m) and `floor_total_liabilities` (500 m), cited to
+the sheet with the same note, while `total_current_assets` and `total_liabilities` stay fiscal
+2025's for Z″ and F. MGCO, MSCO and FXCO read no balance sheet and are untouched.
+
 Run from the repository root:
 
 ```

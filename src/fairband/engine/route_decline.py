@@ -23,13 +23,14 @@ statutory rate after the forecast's own losses. Sales-to-capital is the company'
 ROIC year's revenue over its average invested capital, else the mature peers' median.
 
 The value. ``runoff.runoff_valuation`` gives the firm value and ``runoff.runoff_equity`` the value
-a share: the going-concern value from debt and cash of the newest annual balance sheet (each nil
-when unknown), floored by the net current asset value of the newest annual balance sheet (none
-when it lacks total liabilities), weighted against the distress-sale value at π, the ten-year
-probability of default of the synthetic rating (``distress.rate``) on EBIT_n, trailing revenue
-times the normalized margin, over the trailing interest expense: 0 with no net debt; unavailable
-with no debt line on file (both debt lines missing: unknown debt is not "no net debt"), or with
-net debt and no interest expense on file, when the floored value stands.
+a share: the going-concern value from debt and cash of the newest balance sheet
+(``CompanyInputs.sheet``, a quarter's or a fiscal year's; each nil when unknown), floored by the
+net current asset value of the same sheet (none when it lacks total liabilities or no sheet is on
+file), weighted against the distress-sale value at π, the ten-year probability of default of the
+synthetic rating (``distress.rate``) on EBIT_n, trailing revenue times the normalized margin, over
+the trailing interest expense: 0 with no net debt; unavailable with no debt line on file (both
+debt lines missing: unknown debt is not "no net debt"), or with net debt and no interest expense
+on file, when the floored value stands.
 
 Refusals, in this order, after the shared guards: no trailing revenue (missing or not positive);
 no trailing operating income; no statutory tax rate; consensus revenue that falls to zero or below
@@ -59,9 +60,11 @@ trailing, the fiscal years and margins read); ``tax_rate``; ``sales_to_capital``
 "own-latest" or "peers", value); ``runoff_recovery``; ``debt``; ``cash``; ``shares``; ``ncav``;
 ``pi`` (value, rating, coverage); ``distress_sale_fraction``. With
 the policy's r they rebuild the value at any decline rate, so ``decline_at_price`` moves a stored
-row to a new price from its intermediates alone. The implied decline rate is the first root the
-scan from −50% to 0 finds (``runoff.implied_decline_rate``), the consensus years as found and the
-fade from each trial d; the value need not rise with d.
+row to a new price from its intermediates alone. Beside them ``balance_sheet``, the period of the
+newest balance sheet that debt, cash and NCAV were read from (``route_steps.sheet_entry``), which
+rebuilds nothing. The implied decline rate is the first root the scan from −50% to 0 finds
+(``runoff.implied_decline_rate``), the consensus years as found and the fade from each trial d;
+the value need not rise with d.
 
 Flags, in order: ``path-held``, ``decline-rate-floored``, ``path-on-trend``,
 ``consensus-recovery`` naming each consensus year 1 to K that grows, ``few-analysts`` on years 2
@@ -104,7 +107,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 from fairband.engine.anchor import TrailingFigures, base_fiscal_year, moat_class, ntm_window
-from fairband.engine.balance import BalanceYear
+from fairband.engine.balance import BalanceYear, NewestSheet
 from fairband.engine.classifier import Series, operating_margin
 from fairband.engine.distress import FScore, Rating, ZScore, altman_z, ncav, piotroski_f, rate
 from fairband.engine.flags import millions
@@ -136,6 +139,7 @@ from fairband.engine.route_steps import (
     chosen,
     common_inputs,
     data,
+    debt_and_cash,
     eps,
     expected,
     from_capital,
@@ -149,6 +153,8 @@ from fairband.engine.route_steps import (
     present,
     price_facts_for,
     rule,
+    sheet_entry,
+    sheet_note,
     signed,
     trailing_flags,
 )
@@ -175,8 +181,9 @@ _NO_CONSENSUS = "no usable consensus: years 1 to 3 shrink at the decline rate"
 # net debt and no interest expense on file.
 _NO_DEBT = "no debt line on file"
 _NO_INTEREST = "no interest expense on file"
-# The newest balance sheet's lines Z″, F and NCAV read, by the input names that cite them (a flow
-# line of the fiscal year ends in _fy), and the year before's that F reads.
+# The newest annual balance sheet's lines Z″ and F read, by the input names that cite them (a flow
+# line of the fiscal year ends in _fy), and the year before's that F reads. The floor reads the
+# newest balance sheet, a quarter's or a fiscal year's, under names of its own (``_floor_inputs``).
 _BALANCE_INPUTS = {
     "total_current_assets": "total_current_assets",
     "total_current_liabilities": "total_current_liabilities",
@@ -243,8 +250,8 @@ def value_decline(c: Context) -> Valued | Refused:
     if path.falls:
         return Refused("consensus revenue falls to zero or below within the path", path.flags)
     years = i.balance_years
-    newest = years[-1] if years else None
-    lines = path.flags + bridge_flags(c) + present(_liabilities_flag(newest))
+    newest = years[-1] if years else None  # the newest fiscal year's, which Z″ reads
+    lines = path.flags + bridge_flags(c) + present(_liabilities_flag(i.sheet))
     moat = moat_class(i.moat_score, policy)
     roic = RoicTerms.of(i.capital_years, moat, policy)
     s2c = _sales_to_capital(c, roic)
@@ -274,8 +281,9 @@ def value_decline(c: Context) -> Valued | Refused:
         "runoff_recovery": policy.runoff_recovery,
         "debt": debt,
         "cash": cash,
+        **sheet_entry(i),
         "shares": c.shares,
-        "ncav": None if newest is None else ncav(newest),
+        "ncav": None if i.sheet is None else ncav(i.sheet),
         "pi": {
             "value": None if found is None else found.pi,
             "rating": None if found is None else found.rating,
@@ -343,8 +351,8 @@ def value_decline(c: Context) -> Valued | Refused:
             "trailing twelve months, each period's expense by its size",
         ),
         *_sales_to_capital_input(c, used, sales_to_capital),
-        data(i, "debt", i.debt, money(i), "statements"),
-        data(i, "cash", i.cash, money(i), "statements"),
+        *debt_and_cash(i),
+        *_floor_inputs(c),
         *_balance_inputs(c),
         data(i, "depreciation", t.depreciation, money(i), "statements", "trailing twelve months"),
         rule(policy, "required_return", policy.required_return, "ratio"),
@@ -608,16 +616,16 @@ def _recovery(rates: tuple[float | None, ...], d: float) -> Flag | None:
     )
 
 
-def _liabilities_flag(newest: BalanceYear | None) -> Flag | None:
-    """``line-not-presented:totalLiabilities`` when the newest annual balance sheet lacks the line,
-    or none is on file: no net-current-asset floor is applied."""
-    if newest is not None and newest.total_liabilities is not None:
+def _liabilities_flag(sheet: NewestSheet | None) -> Flag | None:
+    """``line-not-presented:totalLiabilities`` when the newest balance sheet, which the floor
+    reads, lacks the line, naming its period, or none is on file: no net-current-asset floor is
+    applied."""
+    if sheet is not None and sheet.total_liabilities is not None:
         return None
     where = (
-        "No annual balance sheet is on file"
-        if newest is None
-        else f"The newest annual balance sheet (fiscal {newest.year}) does not present total "
-        "liabilities"
+        "No balance sheet is on file"
+        if sheet is None
+        else f"The newest balance sheet ({sheet.label}) does not present total liabilities"
     )
     return Flag(
         "line-not-presented:totalLiabilities",
@@ -730,9 +738,25 @@ def _sales_to_capital_input(c: Context, used: _Used, value: float) -> tuple[Tagg
     )
 
 
+def _floor_inputs(c: Context) -> tuple[TaggedInput, ...]:
+    """The two lines of the newest balance sheet the liquidation floor reads, under their own
+    names, since the sheet can be a quarter's: cited to it (``balance_sheet``) and noted with its
+    period. None without a sheet, which gives no floor."""
+    i, sheet = c.inputs, c.inputs.sheet
+    if sheet is None:
+        return ()
+    lines = (
+        ("floor_current_assets", sheet.total_current_assets),
+        ("floor_total_liabilities", sheet.total_liabilities),
+    )
+    return tuple(
+        data(i, name, figure, money(i), "balance_sheet", sheet_note(i)) for name, figure in lines
+    )
+
+
 def _balance_inputs(c: Context) -> tuple[TaggedInput, ...]:
-    """The lines of the newest annual balance sheet and its fiscal year that Z″, F and NCAV read,
-    and the year before's that F reads, each noted with its fiscal year."""
+    """The lines of the newest annual balance sheet and its fiscal year that Z″ and F read, and the
+    year before's that F reads, each noted with its fiscal year."""
     years, i = c.inputs.balance_years, c.inputs
     if not years:
         return ()

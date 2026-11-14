@@ -727,7 +727,7 @@ not you, computes the value it gives.
 | `earnings.sbc_basis` | Mature Growth | whether the analysts' EPS includes stock pay or excludes it, in place of the engine's test; the evidence is the company's own definition of its adjusted EPS in the release | `includes` or `excludes`; lasting or period-tied |
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
-| `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest annual balance sheet's debt or cash | 0 dollars or more; period-tied only |
+| `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest balance sheet's debt or cash, a quarter's or a fiscal year's, whose period the `debt` and `cash` inputs' notes name | 0 dollars or more; period-tied only |
 | `shares.diluted` | every route | the diluted share count, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible) or a share class or units that convert to shares that the count leaves out (`share-count-gap`); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first | above 0 shares; period-tied only |
 | `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Nothing counts twice: on Mature Stable strip the asset's gains through `earnings.nri_gap`; on Mature Growth add it only when the consensus excludes its gains (see below) | −1,000 to 1,000 dollars a share; lasting or period-tied |
 
@@ -969,9 +969,10 @@ capped at g_T.
 
 - `reason` and `evidence`: as on an override. At least one evidence item backs the drivers or the
   path itself and names no `figure`: "the path needs its own evidence item".
-- `debt` and `cash`: leave them out, and the server reads the newest annual balance sheet, or an
-  applied balance override. Pass one only where the balance sheet is wrong or missing. Each figure
-  passed needs its own evidence item, with `figure` set to `debt` or `cash`.
+- `debt` and `cash`: leave them out, and the server reads the newest balance sheet, a quarter's or
+  a fiscal year's, as the routes do, or an applied balance override. Pass one only where the
+  balance sheet is wrong or missing. Each figure passed needs its own evidence item, with `figure`
+  set to `debt` or `cash`.
 - The levels take the moat class of the current review, else the snapshot's. A value a share at or
   below zero is kept as computed, with no levels.
 - A company in another currency is valued in its reporting currency, at r and g_T restated into

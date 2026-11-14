@@ -484,6 +484,45 @@ def from_capital(
     return replace(found, kind="estimate", estimate_method=method, note=why)
 
 
+def sheet_note(i: CompanyInputs, name: str | None = None) -> str | None:
+    """The note of an input read from the newest balance sheet (``CompanyInputs.sheet``): its
+    period, "the balance sheet of fiscal 2026 Q3", then "; " and the note ``notes`` holds for
+    ``name``, assembly's on the lines the sheet does not present. Without a sheet that note alone;
+    ``None`` with neither. The period stays out of ``notes``, whose entries raise
+    ``line-not-presented``."""
+    missing = None if name is None else i.notes.get(name)
+    if i.sheet is None:
+        return missing
+    period = f"the balance sheet of {i.sheet.label}"
+    return period if missing is None else f"{period}; {missing}"
+
+
+def debt_and_cash(i: CompanyInputs) -> tuple[TaggedInput, TaggedInput]:
+    """The DATA entries ``debt`` and ``cash`` of the three firm-value routes: the newest balance
+    sheet's figures as assembly summed them, cited to that sheet (``balance_sheet``, as of its
+    period end), each noted with the sheet's period and the lines it does not present
+    (``sheet_note``)."""
+    return (
+        data(i, "debt", i.debt, money(i), "balance_sheet", sheet_note(i, "debt")),
+        data(i, "cash", i.cash, money(i), "balance_sheet", sheet_note(i, "cash")),
+    )
+
+
+def sheet_entry(i: CompanyInputs) -> dict[str, Any]:
+    """The intermediates' ``balance_sheet``: the period of the newest balance sheet, its end (ISO),
+    label and whether it is a quarter's; ``None`` without a sheet. The three firm-value routes
+    carry it beside the debt and the cash they read from it."""
+    sheet = i.sheet
+    if sheet is None:
+        return {"balance_sheet": None}
+    found = {
+        "period_end": sheet.period_end.isoformat(),
+        "label": sheet.label,
+        "quarterly": sheet.quarterly,
+    }
+    return {"balance_sheet": found}
+
+
 def common_rules(policy: Policy, moat: Moat, terminal: float) -> tuple[TaggedInput, ...]:
     """The RULE inputs every route uses, with the route's terminal return."""
     return (

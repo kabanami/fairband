@@ -224,12 +224,12 @@
    "estimate_method": null,
    "kind": "observed",
    "name": "debt",
-   "note": null,
+   "note": "the balance sheet of fiscal 2025",
    "provenance": {
     "as_of": "2026-10-30",
     "entered_at": null,
     "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "FMP income-statement"
+    "source": "FMP balance-sheet-statement"
    },
    "tag": "DATA",
    "unit": "USD",
@@ -239,12 +239,12 @@
    "estimate_method": null,
    "kind": "observed",
    "name": "cash",
-   "note": null,
+   "note": "the balance sheet of fiscal 2025",
    "provenance": {
     "as_of": "2026-10-30",
     "entered_at": null,
     "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "FMP income-statement"
+    "source": "FMP balance-sheet-statement"
    },
    "tag": "DATA",
    "unit": "USD",
@@ -357,6 +357,11 @@
   }
  ],
  "intermediates": {
+  "balance_sheet": {
+   "label": "fiscal 2025",
+   "period_end": "2025-12-31",
+   "quarterly": false
+  },
   "burn": 75.0,
   "burn_cover_years": 4.0,
   "cash": 300.0,

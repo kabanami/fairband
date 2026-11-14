@@ -323,12 +323,12 @@
    "estimate_method": null,
    "kind": "observed",
    "name": "debt",
-   "note": null,
+   "note": "the balance sheet of fiscal 2025",
    "provenance": {
     "as_of": "2026-10-30",
     "entered_at": null,
     "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "FMP income-statement"
+    "source": "FMP balance-sheet-statement"
    },
    "tag": "DATA",
    "unit": "USD",
@@ -338,16 +338,46 @@
    "estimate_method": null,
    "kind": "observed",
    "name": "cash",
-   "note": null,
+   "note": "the balance sheet of fiscal 2025",
    "provenance": {
     "as_of": "2026-10-30",
     "entered_at": null,
     "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "FMP income-statement"
+    "source": "FMP balance-sheet-statement"
    },
    "tag": "DATA",
    "unit": "USD",
    "value": 100000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "floor_current_assets",
+   "note": "the balance sheet of fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP balance-sheet-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 300000000.0
+  },
+  {
+   "estimate_method": null,
+   "kind": "observed",
+   "name": "floor_total_liabilities",
+   "note": "the balance sheet of fiscal 2025",
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP balance-sheet-statement"
+   },
+   "tag": "DATA",
+   "unit": "USD",
+   "value": 500000000.0
   },
   {
    "estimate_method": null,
@@ -839,6 +869,11 @@
    "x4": 0.8,
    "year": 2025,
    "zone": "safe"
+  },
+  "balance_sheet": {
+   "label": "fiscal 2025",
+   "period_end": "2025-12-31",
+   "quarterly": false
   },
   "capex_vs_depreciation": {
    "capex": -30000000.0,

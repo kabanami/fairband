@@ -10,12 +10,14 @@ from datetime import date
 from typing import Any
 
 import pytest
+from support.engine_companies import QUARTER_SHEET_SOURCE, on_quarter_sheet
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import Deciles
 from fairband.engine.revenue_growth import PeerSource
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.route_start_up import start_up_at_price
+from fairband.engine.route_steps import sheet_entry
 from fairband.engine.types import TaggedInput, ValuationResult, result_from_json, result_to_json
 from fairband.policy import Policy
 
@@ -33,6 +35,7 @@ START_UP_KEYS = {
     "margin_history",
     "debt",
     "cash",
+    "balance_sheet",
     "cash_known",
     "shares",
     "market_cap",
@@ -443,6 +446,47 @@ def test_the_flag_order_and_inputs(
     r = value_company(replace(start_up_inputs, peers=()), deciles, policy, TODAY)
     names = [i.name for i in r.inputs]
     assert "target_margin" not in names and "sales_to_capital" not in names
+
+
+def test_debt_and_cash_cite_the_newest_sheet_and_its_period(
+    start_up_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 12.2: SUCO's newest balance sheet is its quarter of 30 Sep 2026. Debt and
+    cash cite it, as of its period end, with the period in their notes, a missing line's note
+    after it; the intermediates carry the sheet beside them; the figures are as before."""
+    plain = value_company(start_up_inputs, deciles, policy, TODAY)
+    su = on_quarter_sheet(start_up_inputs)
+    r = value_company(su, deciles, policy, TODAY)
+    assert_start_up(r)
+    for name, figure in (("debt", 0.0), ("cash", 300.0)):
+        cited = input_named(r, name)
+        assert (cited.value, cited.note) == (figure, "the balance sheet of fiscal 2026 Q3")
+        assert cited.provenance == su.provenance["balance_sheet"]
+        assert (cited.provenance.source, cited.provenance.as_of) == (
+            QUARTER_SHEET_SOURCE,
+            date(2026, 9, 30),
+        )
+    q3 = {"period_end": "2026-09-30", "label": "fiscal 2026 Q3", "quarterly": True}
+    assert r.intermediates["balance_sheet"] == q3 == sheet_entry(su)["balance_sheet"]
+    others = {k: v for k, v in r.intermediates.items() if k != "balance_sheet"}
+    assert others == {k: v for k, v in plain.intermediates.items() if k != "balance_sheet"}
+    assert plain.intermediates["balance_sheet"] == {
+        "period_end": "2025-12-31",
+        "label": "fiscal 2025",
+        "quarterly": False,
+    }
+    assert not [c for c in codes(r) if c.startswith("line-not-presented")]
+    # a cash line the sheet does not present: the flag and the note name the period
+    note = "shortTermInvestments not presented"
+    noted = value_company(replace(su, notes={"cash": note}), deciles, policy, TODAY)
+    assert sentence(noted, "line-not-presented:cash").startswith(
+        "The newest balance sheet (fiscal 2026 Q3) does not present all of the cash and "
+        "short-term investments (shortTermInvestments not presented)"
+    )
+    assert input_named(noted, "cash").note == f"the balance sheet of fiscal 2026 Q3; {note}"
+    # the price refresh keeps the sheet
+    moved = reprice(result_from_json(result_to_json(r)), 40.0, REPRICED, policy)
+    assert moved.intermediates["balance_sheet"] == q3
 
 
 def test_the_price_refresh_rebuilds_the_requirement(

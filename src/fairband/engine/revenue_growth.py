@@ -204,7 +204,7 @@ class RevenueCharge:
 
 @dataclass(frozen=True)
 class Bridge:
-    """Debt and cash from the newest annual balance sheet, and the diluted share count."""
+    """Debt and cash from the newest balance sheet, and the diluted share count."""
 
     debt: float
     cash: float

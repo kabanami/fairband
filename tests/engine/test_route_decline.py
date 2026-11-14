@@ -10,14 +10,23 @@ from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pytest
-from support.engine_companies import annual, fiscal_years, half_yearly, with_ntm_revenue
+from support.engine_companies import (
+    QUARTER_SHEET_SOURCE,
+    annual,
+    fiscal_years,
+    half_yearly,
+    on_quarter_sheet,
+    with_ntm_revenue,
+)
 
 from fairband.engine.anchor import TrailingFigures
+from fairband.engine.balance import NewestSheet
 from fairband.engine.classifier import Deciles, Series
 from fairband.engine.overrides import Override
 from fairband.engine.revenue_growth import PeerFigures, PeerSource
 from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, reprice, value_company
+from fairband.engine.route_steps import sheet_entry
 from fairband.engine.types import (
     Flag,
     TaggedInput,
@@ -53,6 +62,7 @@ DECLINE_KEYS = {
     "runoff_recovery",
     "debt",
     "cash",
+    "balance_sheet",
     "shares",
     "ncav",
     "pi",
@@ -150,6 +160,17 @@ def trailing(inputs: CompanyInputs) -> TrailingFigures:
     return inputs.trailing
 
 
+def sheet(inputs: CompanyInputs) -> NewestSheet:
+    assert inputs.sheet is not None
+    return inputs.sheet
+
+
+def with_floor(inputs: CompanyInputs, current_assets: float) -> CompanyInputs:
+    """The company with the current assets of its newest balance sheet, which the floor reads, at
+    ``current_assets``; its fiscal years' balance sheets, which Z″ and F read, as they were."""
+    return replace(inputs, sheet=replace(sheet(inputs), total_current_assets=current_assets))
+
+
 def with_consensus(inputs: CompanyInputs, *years: tuple[int, float, int | None]) -> CompanyInputs:
     """The fixture with the consensus revenue of these fiscal years past base + 2 (fiscal 2029),
     each (fiscal year, revenue mean, revenue analysts)."""
@@ -218,6 +239,12 @@ def test_the_worked_decline_row_values_at_4_953(
         0.6,
     )
     assert (im["debt"], im["cash"], im["shares"], im["moat"]) == (200 * M, 100 * M, 100 * M, "None")
+    # the fixture's newest balance sheet is its newest fiscal year's
+    assert im["balance_sheet"] == {
+        "period_end": "2025-12-31",
+        "label": "fiscal 2025",
+        "quarterly": False,
+    }
     z = 6.56 * 100 / 900 + 3.26 * 250 / 900 + 6.72 * 80 / 900 + 1.05 * 400 / 500
     assert im["altman_z"] == {
         "year": 2025,
@@ -401,8 +428,7 @@ def test_the_distress_variants(
         assert (rating.value, rating.note) == (None, "no rating: no debt line on file")
         assert (pi.value, pi.note) == (None, "no rating: π unavailable")
     # the floor: current assets 1,100 give NCAV 600, 6.00 a share, above the run-off's 5.0748
-    newest = replace(dc.balance_years[-1], total_current_assets=1_100 * M)
-    floored = replace(dc, balance_years=(dc.balance_years[0], newest))
+    floored = with_floor(dc, 1_100 * M)
     r = valued(floored)
     assert r.value == pytest.approx(5.832244268746113, abs=1e-9)  # 6.00 × 0.95 + 2.6449 × 0.05
     assert r.intermediates["floored_per_share"] == pytest.approx(6.0)
@@ -428,9 +454,7 @@ def test_the_floor_has_no_weight_at_a_pi_of_one(
     """A company rated D defaults: π = 100% and the value is the distress-sale value alone, so an
     NCAV above zero and above the going concern floors a value that has no weight, and
     ``ncav-floor`` is not raised (spec 10.6, 10.11)."""
-    dc = decline_inputs
-    newest = replace(dc.balance_years[-1], total_current_assets=1_100 * M)  # NCAV 6.00 a share
-    rich = replace(dc, balance_years=(dc.balance_years[0], newest))
+    rich = with_floor(decline_inputs, 1_100 * M)  # NCAV 6.00 a share
     # a normalized margin of zero: EBIT_n 0, rated D; the release alone gives a firm value above
     # zero, 41.61, and with cash 199 against debt 200 the distress-sale value is above zero too
     thin = with_margins(replace(rich, cash=199 * M), [-0.02, 0.0, 0.0, 0.0, 0.0])
@@ -707,34 +731,104 @@ def test_a_fiscal_year_fallback_still_rates_the_company(
     assert codes(r)[0] == "trailing-on-fiscal-year"
 
 
+def test_the_floor_reads_the_newest_sheet(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 12.2: the newest fiscal year holds current assets 300 and liabilities 500
+    (NCAV −200), the quarter of 30 Sep 2026 900 and 500. The floor reads the quarter's: NCAV 400,
+    4.00 a share, below the run-off's 5.0748, so the value stays 4.9533. Z″ and F stay on the
+    fiscal years; the floor's two lines are cited under their own names, to the sheet with its
+    period, beside fiscal 2025's lines under theirs."""
+    plain = value_company(decline_inputs, deciles, policy, TODAY)
+    dc = on_quarter_sheet(decline_inputs, 900 * M, 500 * M)
+    r = value_company(dc, deciles, policy, TODAY)
+    im = r.intermediates
+    assert (im["ncav"], im["ncav_per_share"]) == (400 * M, 4.0)
+    assert im["floored_per_share"] == im["going_concern_per_share"]
+    assert r.value == pytest.approx(VALUE, abs=1e-9) and "ncav-floor" not in codes(r)
+    assert (im["altman_z"], im["piotroski_f"]) == (
+        plain.intermediates["altman_z"],
+        plain.intermediates["piotroski_f"],
+    )
+    assert im["altman_z"]["year"] == 2025
+    period = "the balance sheet of fiscal 2026 Q3"
+    for name, figure in (
+        ("floor_current_assets", 900 * M),
+        ("floor_total_liabilities", 500 * M),
+        ("debt", 200 * M),
+        ("cash", 100 * M),
+    ):
+        cited = input_named(r, name)
+        assert (cited.value, cited.unit, cited.note, cited.tag) == (figure, "USD", period, "DATA")
+        assert cited.provenance == dc.provenance["balance_sheet"]
+        assert (cited.provenance.source, cited.provenance.as_of) == (
+            QUARTER_SHEET_SOURCE,
+            date(2026, 9, 30),
+        )
+    tca, tl = input_named(r, "total_current_assets"), input_named(r, "total_liabilities")
+    assert (tca.value, tca.note, tl.value, tl.note) == (
+        300 * M,
+        "fiscal 2025",
+        500 * M,
+        "fiscal 2025",
+    )
+    assert tca.provenance.source == tl.provenance.source == "FMP income-statement"
+    q3 = {"period_end": "2026-09-30", "label": "fiscal 2026 Q3", "quarterly": True}
+    assert im["balance_sheet"] == q3 == sheet_entry(dc)["balance_sheet"]
+    # the floor binds on the sheet's figures alone: current assets 1,100 give 6.00 a share
+    floored = value_company(with_floor(dc, 1_100 * M), deciles, policy, TODAY)
+    assert floored.value == pytest.approx(5.832244268746113, abs=1e-9)
+    assert floored.intermediates["altman_z"] == plain.intermediates["altman_z"]
+    # a row refused for its value keeps the sheet and cites the floor's lines
+    chronic = value_company(
+        with_margins(dc, [-0.02, -0.03, -0.03, -0.03, -0.03]), deciles, policy, TODAY
+    )
+    assert_refused(chronic, NOT_POSITIVE)
+    assert chronic.intermediates["balance_sheet"] == q3
+    assert input_named(chronic, "floor_current_assets").value == 900 * M
+
+
 def test_a_missing_total_liabilities_line_applies_no_floor(
     decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """Current assets of 1,100 would floor the value at 11.00 a share on a nil liability; with the
-    line missing no floor is applied."""
-    dc = decline_inputs
-    newest = replace(dc.balance_years[-1], total_current_assets=1_100 * M, total_liabilities=None)
-    r = value_company(
-        replace(dc, balance_years=(dc.balance_years[0], newest)), deciles, policy, TODAY
-    )
+    newest sheet's line missing no floor is applied, and the flag names the sheet's period. Z″
+    reads the fiscal year's line, so a fiscal year without it loses Z″ and not the floor."""
+    dc = on_quarter_sheet(decline_inputs, 1_100 * M, None)
+    r = value_company(dc, deciles, policy, TODAY)
     im = r.intermediates
     assert (im["ncav"], im["ncav_per_share"]) == (None, None)
     assert im["floored_per_share"] == im["going_concern_per_share"]
     assert r.value == pytest.approx(VALUE, abs=1e-9)
     assert "ncav-floor" not in codes(r)
     assert sentence(r, "line-not-presented:totalLiabilities") == (
-        "The newest annual balance sheet (fiscal 2025) does not present total liabilities, so no "
+        "The newest balance sheet (fiscal 2026 Q3) does not present total liabilities, so no "
         "net-current-asset floor is applied."
     )
-    assert im["altman_z"] is None  # Z″ reads the line too; F does not
-    assert im["piotroski_f"]["read"] == 9
-    # no balance sheet on file: no floor, no Z″, no F
-    r = value_company(replace(dc, balance_years=()), deciles, policy, TODAY)
+    assert input_named(r, "floor_total_liabilities").value is None
+    assert im["altman_z"] is not None and im["piotroski_f"]["read"] == 9
+    # the fiscal year without the line: no Z″ (F does not read it), the sheet's floor stands
+    newest = replace(dc.balance_years[-1], total_liabilities=None)
+    lacking = replace(dc, sheet=sheet(decline_inputs), balance_years=(dc.balance_years[0], newest))
+    r = value_company(lacking, deciles, policy, TODAY)
+    assert r.intermediates["altman_z"] is None and r.intermediates["piotroski_f"]["read"] == 9
+    assert r.intermediates["ncav"] == -200 * M
+    assert "line-not-presented:totalLiabilities" not in codes(r)
+    # no balance sheet on file: no floor, and Z″ and F as before
+    r = value_company(replace(dc, sheet=None), deciles, policy, TODAY)
     assert sentence(r, "line-not-presented:totalLiabilities") == (
-        "No annual balance sheet is on file, so no net-current-asset floor is applied."
+        "No balance sheet is on file, so no net-current-asset floor is applied."
     )
-    assert (r.intermediates["altman_z"], r.intermediates["piotroski_f"]) == (None, None)
+    assert (r.intermediates["ncav"], r.intermediates["balance_sheet"]) == (None, None)
+    names = [i.name for i in r.inputs]
+    assert "floor_current_assets" not in names and "floor_total_liabilities" not in names
+    assert r.intermediates["altman_z"] is not None and r.intermediates["piotroski_f"] is not None
     assert r.value == pytest.approx(VALUE, abs=1e-9)
+    # no fiscal year's balance sheet: no Z″, no F, and the sheet's floor stands
+    r = value_company(replace(decline_inputs, balance_years=()), deciles, policy, TODAY)
+    assert (r.intermediates["altman_z"], r.intermediates["piotroski_f"]) == (None, None)
+    assert r.intermediates["ncav"] == -200 * M
+    assert "line-not-presented:totalLiabilities" not in codes(r)
     # one balance sheet: Z″ and no F
     r = value_company(replace(dc, balance_years=dc.balance_years[1:]), deciles, policy, TODAY)
     assert r.intermediates["altman_z"] is not None and r.intermediates["piotroski_f"] is None
@@ -743,11 +837,11 @@ def test_a_missing_total_liabilities_line_applies_no_floor(
 def _flagged(dc: CompanyInputs) -> CompanyInputs:
     """A row that raises path-held, line-not-presented:cash, ncav-floor, z-distress, f-score-low,
     reinvesting-in-decline and margin-flag: fiscal 2029 missing from the consensus; no cash
-    figure; current assets of 1,100 against liabilities of 500 and a deficit of 3,000 (Z″ −0.60);
-    a loss on falling cash flow that issued stock and levered up, its current ratio alone up (F 1
-    of 9); capital spending of 60 against depreciation of 40, under half the operating cash flow
-    of 150; a sixth fiscal year, so the margin flag has its six, and a trailing margin of 13%
-    against their median of 8%."""
+    figure; current assets of 1,100 against liabilities of 500 on the newest sheet and on the
+    newest fiscal year's, with a deficit of 3,000 (Z″ −0.60); a loss on falling cash flow that
+    issued stock and levered up, its current ratio alone up (F 1 of 9); capital spending of 60
+    against depreciation of 40, under half the operating cash flow of 150; a sixth fiscal year, so
+    the margin flag has its six, and a trailing margin of 13% against their median of 8%."""
     last = dc.balance_years[0]
     newest = replace(
         dc.balance_years[1],
@@ -765,7 +859,7 @@ def _flagged(dc: CompanyInputs) -> CompanyInputs:
         [1_100 * M, *FISCAL_REVENUE], [0.08, 0.07, 0.08, 0.08, 0.09, 0.08]
     )
     return replace(
-        dc,
+        with_floor(dc, 1_100 * M),
         series=series,
         annual_estimates=dc.annual_estimates[:2],
         cash=None,
@@ -844,10 +938,31 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
         "sales_to_capital",
         "debt",
         "cash",
+        "floor_current_assets",
+        "floor_total_liabilities",
         "total_current_assets",
         "total_liabilities",
         "depreciation",
     }
+    # debt and cash, then the floor's two lines, all from the newest balance sheet, its newest
+    # fiscal year's on the fixture, then the lines of the fiscal years Z″ and F read
+    at = names.index("debt")
+    assert names[at : at + 5] == [
+        "debt",
+        "cash",
+        "floor_current_assets",
+        "floor_total_liabilities",
+        "total_current_assets",
+    ]
+    for name, figure in (
+        ("debt", 200 * M),
+        ("cash", 100 * M),
+        ("floor_current_assets", 300 * M),
+        ("floor_total_liabilities", 500 * M),
+    ):
+        cited = input_named(r, name)
+        assert (cited.value, cited.note) == (figure, "the balance sheet of fiscal 2025"), name
+        assert cited.provenance == decline_inputs.provenance["balance_sheet"], name
     assert rules == [
         "required_return",
         "runoff_years",
@@ -876,7 +991,7 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
     assert s2c.note == "the company's own newest year: revenue over average invested capital"
     assert input_named(r, "ntm_revenue").provenance.source == "FMP analyst-estimates"
     assert input_named(r, "path_step_2").value == pytest.approx(-0.03)
-    # the balance sheet lines Z″, F and NCAV read, each year's cited to the annual statements
+    # the balance sheet lines Z″ and F read, each year's cited to the annual statements
     tca, tl = input_named(r, "total_current_assets"), input_named(r, "total_liabilities")
     assert (tca.value, tca.note, tl.value, tl.note) == (
         300 * M,

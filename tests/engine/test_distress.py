@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from fairband.engine.balance import BalanceYear
+from fairband.engine.balance import BalanceYear, NewestSheet
 from fairband.engine.distress import (
     FScore,
     Rating,
@@ -179,3 +179,12 @@ def test_ncav() -> None:
     assert ncav(replace(YEAR, total_current_assets=1100.0)) == 600.0
     assert ncav(replace(YEAR, total_current_assets=None)) is None
     assert ncav(replace(YEAR, total_liabilities=None)) is None
+
+
+def test_ncav_on_the_newest_sheet() -> None:
+    """The floor reads the newest balance sheet, a quarter's here (spec 2026-11-13 12.2): current
+    assets 900 less total liabilities 500."""
+    sheet = NewestSheet(date(2026, 9, 30), "fiscal 2026 Q3", True, 900.0, 500.0, None)
+    assert ncav(sheet) == 400.0
+    assert ncav(replace(sheet, total_current_assets=None)) is None
+    assert ncav(replace(sheet, total_liabilities=None)) is None

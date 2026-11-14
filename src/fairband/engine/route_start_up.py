@@ -11,8 +11,9 @@ so the requirement, the cash floor and the burn are in the currency. ``value_sta
 returns the refusal "Start-up: no value by design" with its figures; what it cannot compute
 carries its own reason inside the intermediates.
 
-The requirement. EV_price = market cap + debt − cash, debt and cash from the newest annual balance
-sheet, each nil when unknown. At or below zero the price needs no revenue: the requirement is 0.
+The requirement. EV_price = market cap + debt − cash, debt and cash from the newest balance sheet
+(``CompanyInputs.sheet``, a quarter's or a fiscal year's), each nil when unknown. At or below zero
+the price needs no revenue: the requirement is 0.
 Otherwise it is the year-10 revenue at which the ramp of ``requirement.ramp_ev`` is worth
 EV_price (``requirement.required_revenue``): from R0, trailing revenue (0 without one), and E0,
 trailing operating income (else the last fiscal year's, else 0), to the target margin, the mature
@@ -37,9 +38,10 @@ revenue_0; operating_income_0; target_margin, the revenue-growth route's record 
 sales_to_capital, used "peers", own ``None``, own_usable false, peers, value; tax_rate;
 terminal_roic; path, the ten years' revenue, ebit, tax, nopat, reinvestment and fcff;
 terminal_value; ``None`` where the reason leaves a figure uncomputed), ``cash_floor``,
-``burn_cover_years``, ``burn`` (``None`` when not burning), ``debt``, ``cash``, ``cash_known``
-(false when no cash figure is on file: ``cash`` is then the nil the floor and the requirement
-count), ``shares``, ``market_cap``; ``route`` adds ``price_facts``.
+``burn_cover_years``, ``burn`` (``None`` when not burning), ``debt``, ``cash``, ``balance_sheet``
+(the period of the newest balance sheet the two were read from, ``route_steps.sheet_entry``),
+``cash_known`` (false when no cash figure is on file: ``cash`` is then the nil the floor and the
+requirement count), ``shares``, ``market_cap``; ``route`` adds ``price_facts``.
 
 The rebuild keys: the requirement's revenue_0, operating_income_0, target_margin's value,
 sales_to_capital's value, tax_rate and terminal_roic, with the policy's r and g_T.
@@ -87,10 +89,12 @@ from fairband.engine.route_steps import (
     StartUpContext,
     chosen,
     data,
+    debt_and_cash,
     money,
     nil,
     present,
     rule,
+    sheet_entry,
 )
 from fairband.engine.types import Flag, TaggedInput
 from fairband.policy import Moat, Policy
@@ -141,6 +145,7 @@ def value_start_up(c: StartUpContext) -> Refused:
         "burn": burn,
         "debt": debt,
         "cash": cash,
+        **sheet_entry(i),
         "cash_known": cash_line is not None,
         "shares": c.shares,
         "market_cap": i.market_cap,
@@ -359,8 +364,7 @@ def _inputs(
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),
         data(i, "moat_score", i.moat_score, "score"),
         *peers,
-        data(i, "debt", i.debt, money(i), "statements"),
-        data(i, "cash", i.cash, money(i), "statements"),
+        *debt_and_cash(i),
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "terminal_growth", policy.terminal_growth, "ratio"),
         rule(policy, "moat_class", None, "class", moat),
