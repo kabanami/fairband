@@ -68,6 +68,8 @@ def test_the_catalogue_rows_read_as_the_spec_tables() -> None:
     analysts = setting("analyst_min")
     assert (analysts.effect, analysts.hashed) == ("revalue", True)
     assert "past year 3 it ends a Decline row's consensus" in analysts.description
+    # spec 2026-11-14 6.2: a revenue step landing on a thin year is not read on Mature Growth
+    assert "Mature Growth skips its revenue step" in analysts.description
     with pytest.raises(KeyError):
         setting("designation_edges")
 

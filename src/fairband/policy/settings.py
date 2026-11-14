@@ -280,8 +280,8 @@ SETTINGS: tuple[Setting, ...] = (
         "analyst_min",
         "flags",
         "Fewest analysts behind a path year",
-        "A consensus year with fewer analysts than this is flagged as thin; past year 3 it ends a "
-        "Decline row's consensus.",
+        "A year with fewer analysts than this is flagged thin; Mature Growth skips its revenue "
+        "step; past year 3 it ends a Decline row's consensus.",
         "count",
         "revalue",
         "1 to 20",

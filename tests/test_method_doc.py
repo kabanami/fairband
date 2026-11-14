@@ -101,6 +101,8 @@ def test_a_thin_revenue_step_is_not_read() -> None:
     fourteen = _section(14)
     assert "A thin consensus revenue step (5.3) does not stand" in fourteen
     assert "On a thin year the reading is still the step found" in fourteen
+    # a sensitivity grid marks the growth the charge read (14.8)
+    assert "On a thin year (5.3) the pair marked is the earnings step's, not the step" in fourteen
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
     assert rows[-2].startswith("| 1.4, policy v16 |")
     assert rows[-1].startswith("| 1.5, policy v16 | 2026-11-15 | A thin revenue step is not read")
