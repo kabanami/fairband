@@ -200,6 +200,31 @@ def _codes(result: ValuationResult) -> list[str]:
     return [f.code for f in result.flags]
 
 
+def test_a_count_that_reconciles_the_market_cap_clears_the_share_count_gap(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-13 8: in a review the warning reads the count in force. MGCO's market cap at
+    4.6 times the price times its count warns; an agent's ``shares.diluted`` of 4.6 times the
+    count reconciles the two, and the reviewed result carries no ``share-count-gap``. A count
+    that does not reconcile them keeps it, its sentence on the agent's count."""
+    base = mature_growth_inputs()
+    assert base.market_cap is not None and base.shares_diluted is not None
+    inputs = replace(base, market_cap=base.market_cap * 4.6)
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert "share-count-gap" in _codes(mechanical)
+    count = [OVERRIDE("shares.diluted", base.shares_diluted * 4.6)]
+    review = review_company(inputs, deciles, policy, TODAY, count, mechanical)
+    assert review.result.value is not None and [line.tag for line in review.bridge] == [
+        "shares.diluted"
+    ]
+    assert "share-count-gap" not in _codes(review.result)
+    short = [OVERRIDE("shares.diluted", base.shares_diluted * 2.0)]
+    halfway = review_company(inputs, deciles, policy, TODAY, short, mechanical)
+    [gap] = [f for f in halfway.result.flags if f.code == "share-count-gap"]
+    assert "the diluted count of 2,000.0 million shares" in gap.sentence
+    assert "a ratio of 2.30," in gap.sentence
+
+
 def _excluding(street: float = 8.50) -> CompanyInputs:
     """MGCO with a street trailing EPS of ``street``. Its after-tax stock pay a share is 400 m ×
     0.75 ÷ 1,000 m = 0.30, so the test reads excludes-sbc at a gap over GAAP 5.30 of 0.15 or

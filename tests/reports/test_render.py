@@ -20,6 +20,7 @@ from support.engine_companies import (
 )
 from support.web import TODAY
 
+from fairband.engine.flags import QUALITY_WARNINGS
 from fairband.engine.overrides import Override
 from fairband.engine.review import review_company
 from fairband.engine.route import value_company
@@ -558,6 +559,13 @@ def test_the_glossary_matches_the_method_document() -> None:
     for term, meaning in table.items():
         assert GLOSSARY[term].startswith(meaning), term
     assert "an agent writes" in GLOSSARY["Note"]  # the brand book's note beside the flag
+
+
+def test_the_glossary_counts_the_engine_s_quality_warnings() -> None:
+    """Spec 2026-11-13 8: ``share-count-gap`` is the twelfth quality warning, and the glossary's
+    count is the engine's."""
+    assert len(QUALITY_WARNINGS) == 12 and "share-count-gap" in QUALITY_WARNINGS
+    assert GLOSSARY["Quality warning"].startswith("One of the twelve flags that say the value")
 
 
 def test_the_markdown(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:

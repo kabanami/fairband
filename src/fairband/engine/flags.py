@@ -31,12 +31,20 @@ test reads it, by ``sbc_basis_gap_multiple`` times the after-tax stock pay a sha
 adjusted figure leaves out far more than stock pay. The stock pay is the one the anchor read, an
 agent's ``earnings.sbc`` in place of the stored figure (spec 2026-11-13 7.2).
 
-``QUALITY_WARNINGS`` are the eleven flags that say the value may be wrong because the business or
-its figures are unusual (spec 2026-11-04 9.5); ``flag_count`` counts them on a row. Every other
-flag is a note: the classifier checks, the thin-consensus flags, the unknown inputs, the engine's
-mechanics and the bookkeeping flags. A note is shown and never counted.
+The share-count warning (spec 2026-11-13 8): ``share-count-gap`` when the quote's market cap over
+the price times the diluted count is outside ``share_count_gap_band``, an edge being inside. The
+market cap and the price are the quote's, in US dollars on every row, so the ratio has one
+currency; the count is the one the row reads. Either figure may be the wrong one: the count may
+leave out a share class or units that convert to shares, so that the value a share of the row can
+be wrong by the ratio, or the market cap may leave a class out.
+
+``QUALITY_WARNINGS`` are the twelve flags that say the value may be wrong because the business or
+its figures are unusual (spec 2026-11-04 9.5, spec 2026-11-13 8); ``flag_count`` counts them on a
+row. Every other flag is a note: the classifier checks, the thin-consensus flags, the unknown
+inputs, the engine's mechanics and the bookkeeping flags. A note is shown and never counted.
 """
 
+import math
 import statistics
 from collections.abc import Sequence
 
@@ -60,6 +68,7 @@ QUALITY_WARNINGS: frozenset[str] = frozenset(
         "heavy-capex",
         "burn-cover-short",
         "consensus-recovery",
+        "share-count-gap",
     }
 )
 
@@ -259,6 +268,34 @@ def sbc_basis_uncertain_flag(
     if not reasons:
         return None
     return Flag("sbc-basis-uncertain", "Stock-pay basis uncertain", " ".join(reasons))
+
+
+def share_count_flag(
+    market_cap: float | None, price: float | None, shares: float | None, policy: Policy
+) -> Flag | None:
+    """``share-count-gap`` when ``market_cap`` ÷ (``price`` × ``shares``) is below the low of
+    ``share_count_gap_band`` or above its high: the sentence gives both figures, the ratio to two
+    decimals, the band and the two readings. ``market_cap`` and ``price`` are the quote's, in US
+    dollars; ``shares`` is the diluted count in force. ``None`` inside the band, its edges
+    included, or without the three figures, a figure at or below zero or not finite being
+    none."""
+    if market_cap is None or price is None or shares is None:
+        return None
+    if not all(math.isfinite(x) and x > 0 for x in (market_cap, price, shares)):
+        return None
+    low, high = policy.share_count_gap_band
+    implied = price * shares
+    ratio = market_cap / implied
+    if low <= ratio <= high:
+        return None
+    return Flag(
+        "share-count-gap",
+        "Share count and market cap disagree",
+        f"The market cap is {millions(market_cap)} and the price of ${price:,.2f} times the "
+        f"diluted count of {shares / 1e6:,.1f} million shares is {millions(implied)}: a ratio of "
+        f"{ratio:.2f}, outside {low:.2f} to {high:.2f}. The count may leave out a share class or "
+        "units that convert to shares, or the market cap may leave a class out.",
+    )
 
 
 def _money(x: float, currency: str) -> str:

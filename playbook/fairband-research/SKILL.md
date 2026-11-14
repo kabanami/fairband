@@ -302,7 +302,7 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
-Ten flags ask for a decision of yours. Read each sentence whole: it names its figures.
+Eleven flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
 - `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
   of the operating cash flow, then names the return the charge starts at, its measure, and the
@@ -349,15 +349,16 @@ Ten flags ask for a decision of yours. Read each sentence whole: it names its fi
   non-recurring items is unknown. Read the filing's non-recurring items. On Mature Stable, decide
   the trailing earnings through `earnings.nri_gap`. On Mature Growth the value rests on the
   consensus, and `earnings.nri_gap` reaches only the test of the anchor's stock-compensation
-  basis: the door is `earnings.ntm`, with a clear EPS guidance record (see "Guidance"). Without
-  one, section 8 states the exposure: the items a share the consensus may carry. Amortization of
-  acquired intangibles that an adjusted EPS leaves out is not such an item, and no input corrects
-  for it: the invested capital keeps the goodwill and the acquired intangibles, so the cost of
-  the acquisitions is in the return the growth is charged at. On a row whose charge starts at the
-  return without goodwill, the return leaves that cost out too: that is right for a purchase
-  made once, whose cost is spent, and wrong for a company that keeps buying, which is the
-  decision of `return-without-goodwill` above. Section 8 says that the anchor is before this
-  amortization, with its size a share from the filing; do not report it as a gap.
+  basis, and only while no `earnings.sbc_basis` is applied: the door is `earnings.ntm`, with a
+  clear EPS guidance record (see "Guidance"). Without one, section 8 states the exposure: the
+  items a share the consensus may carry. Amortization of acquired intangibles that an adjusted
+  EPS leaves out is not such an item, and no input corrects for it: the invested capital keeps
+  the goodwill and the acquired intangibles, so the cost of the acquisitions is in the return the
+  growth is charged at. On a row whose charge starts at the return without goodwill, the return
+  leaves that cost out too: that is right for a purchase made once, whose cost is spent, and
+  wrong for a company that keeps buying, which is the decision of `return-without-goodwill`
+  above. Section 8 says that the anchor is before this amortization, with its size a share from
+  the filing; do not report it as a gap.
 - `stock-pay-missing`: on Mature Growth, the trailing stock pay is nil, or one of its periods'
   is, while a fiscal year on file shows stock pay above zero. The stored figure may be missing or
   short, and the charge on the analysts' EPS with it. The sentence names that fiscal year and its
@@ -374,6 +375,16 @@ Ten flags ask for a decision of yours. Read each sentence whole: it names its fi
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
   the step it names.
+- `share-count-gap`: the quote's market cap and the price times the diluted count disagree by more
+  than the band (`policy()`, `share_count_gap_band`). The sentence gives both figures and the
+  ratio of the market cap to the price times the count. Two readings. The count may leave out a
+  share class or units that convert to shares, as an Up-C's units do, and the value a share can
+  then be wrong by the ratio. Or the market cap may leave a class out, as on a company whose
+  vendor market cap counts one class. Read the filing's cover page, which gives the shares of each
+  class outstanding, and its note on the share classes and on any units that convert. Where the
+  count leaves shares out, decide through `shares.diluted`, period-tied, with every class and
+  every unit that converts; the warning does not show once the count reconciles the two. Where
+  the market cap leaves a class out, the count stands, the warning stays, and section 8 says why.
 - `split-pending`: a split falls after the oldest period of the trailing figures and on or before
   the quote's date. The sentence names each figure read on the post-split basis (the diluted
   count, the trailing EPS, the street actuals, the consensus EPS by fiscal year and by quarter,
@@ -706,7 +717,7 @@ not you, computes the value it gives.
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest annual balance sheet's debt or cash | 0 dollars or more; period-tied only |
-| `shares.diluted` | every route | the diluted share count, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first | above 0 shares; period-tied only |
+| `shares.diluted` | every route | the diluted share count, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible) or a share class or units that convert to shares that the count leaves out (`share-count-gap`); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first | above 0 shares; period-tied only |
 | `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Nothing counts twice: on Mature Stable strip the asset's gains through `earnings.nri_gap`; on Mature Growth add it only when the consensus excludes its gains (see below) | −1,000 to 1,000 dollars a share; lasting or period-tied |
 
 The ranges are the policy's `override_ranges`; `policy()` gives the values in force. On a company
@@ -772,12 +783,13 @@ How much of the gap to take:
 The share count and the value outside the business:
 
 - `shares.diluted` stands in for the reported count, for shares the company has committed to
-  issue that the count does not yet hold: a forward sale, a mandatory convertible. Every figure a
-  share reads it. The NTM net income is the analysts' EPS × the count, so a raised count raises it
-  too, and on Mature Growth, whose value rests on that EPS, the value a share moves only through
-  the stock compensation a share. So read the consensus EPS's own share basis first: where the EPS
-  does not yet count the new shares, a raised count does not dilute the value. Period-tied only:
-  each new statement asks the question again.
+  issue that the count does not yet hold: a forward sale, a mandatory convertible. It also stands
+  in for a count that leaves out a share class or units that convert to shares
+  (`share-count-gap`). Every figure a share reads it. The NTM net income is the analysts' EPS ×
+  the count, so a raised count raises it too, and on Mature Growth, whose value rests on that EPS,
+  the value a share moves only through the stock compensation a share. So read the consensus
+  EPS's own share basis first: where the EPS does not yet count the new shares, a raised count
+  does not dilute the value. Period-tied only: each new statement asks the question again.
 - `value.outside` is a figure a share, after tax: a stake in another company, an asset held for
   sale, or a liability such as a settlement still owed, negative. The figure is a share on the
   count in force: with `shares.diluted` also set, divide the asset's worth by the new count. The
@@ -798,10 +810,11 @@ the route sets what you do:
   is not added.
 - Mature Growth: the value rests on the analysts' consensus, and no input strips an asset's gains
   from it. `earnings.nri_gap` reaches only the test of the anchor's stock-compensation basis, and
-  `earnings.ntm` needs a guidance record. Read the filing's other-income line against the
-  analysts' basis; `consensus-basis-unknown` says when that basis is unknown. Add the asset only
-  when the consensus excludes its gains. Otherwise leave it out of `value.outside`: section 8
-  names the asset and its size a share, and says why it is not added.
+  only while no `earnings.sbc_basis` is applied, and `earnings.ntm` needs a guidance record. Read
+  the filing's other-income line against the analysts' basis; `consensus-basis-unknown` says when
+  that basis is unknown. Add the asset only when the consensus excludes its gains. Otherwise leave
+  it out of `value.outside`: section 8 names the asset and its size a share, and says why it is
+  not added.
 
 The server checks an override by these rules, in this order, and answers the first one it breaks:
 
@@ -837,11 +850,11 @@ value. The lines run in the method's order: phase, NTM earnings, NTM revenue, co
 consensus step 3, held rate, belief, non-recurring gap, stock pay, stock-pay basis, mid-cycle
 earnings, target margin, sales to capital, runway return, decline rate, moat, debt, cash, diluted
 shares, outside the business. A line whose step refuses shows the refusal in place of a change. A
-review whose last line refuses has no value. On a refused row, where the mechanical value refuses too, the secondary valuation
-stands in for it. Where an override values a refused row, the reviewed value stands, and the server
-refuses a secondary valuation there. On a valued snapshot a refused review gets no stand-in: the
-server refuses one there, and the overrides are inconsistent with the route. Fix or drop the
-override whose bridge line refused (step 11).
+review whose last line refuses has no value. On a refused row, where the mechanical value refuses
+too, the secondary valuation stands in for it. Where an override values a refused row, the
+reviewed value stands, and the server refuses a secondary valuation there. On a valued snapshot a
+refused review gets no stand-in: the server refuses one there, and the overrides are inconsistent
+with the route. Fix or drop the override whose bridge line refused (step 11).
 
 One input holds one applied override. A new override on the same tag replaces the old one. An
 override applies to the latest snapshot and to every later one. A period-tied override (a correction

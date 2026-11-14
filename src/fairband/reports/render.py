@@ -148,7 +148,7 @@ GLOSSARY: dict[str, str] = {
         "H: the years over which the expected return assumes the price meets the value (5.10)"
     ),
     "Quality warning": (
-        "One of the eleven flags that say the value may be wrong because the business or its "
+        "One of the twelve flags that say the value may be wrong because the business or its "
         "figures are unusual; a row's flag count counts them (section 8)"
     ),
     "Note": (

@@ -11,6 +11,7 @@ from html import unescape
 from fastapi.testclient import TestClient
 from support.web import _static_file
 
+from fairband.engine.flags import QUALITY_WARNINGS as ENGINE_WARNINGS
 from fairband.refresh.rates import NO_RATE
 from fairband.web.methodology_text import section_index, section_text
 
@@ -45,7 +46,7 @@ IDIOMS = [
 ]
 PHASES = ["Start-up", "Young Growth", "High Growth", "Mature Growth", "Mature Stable", "Decline"]
 EXAMPLES = ("MSFT", "KO", "CRWD", "ROKU", "MMM", "RVMD")
-# The eleven quality warnings that count in the Flags column (spec 9.5).
+# The twelve quality warnings that count in the Flags column (spec 9.5; spec 2026-11-13 8).
 QUALITY_WARNINGS = [
     "large-nri",
     "value-spread",
@@ -58,6 +59,7 @@ QUALITY_WARNINGS = [
     "heavy-capex",
     "burn-cover-short",
     "consensus-recovery",
+    "share-count-gap",
 ]
 MOAT_OR_INDEX = re.compile(r"\.(None|Narrow|Wide|\d+)$")
 MOST_WORDS = 25
@@ -431,8 +433,9 @@ def test_sources_have_links() -> None:
 
 
 def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
-    """Spec 7.2 item 10: the eleven warnings that count, then the notes; each code once, in a
-    code chip, and nowhere else in the page's prose."""
+    """Spec 7.2 item 10: the twelve warnings that count, then the notes; each code once, in a
+    code chip, and nowhere else in the page's prose. The count in words is the engine's, and the
+    share-count warning names its band by the policy's two ends (spec 2026-11-13 8)."""
     html = _static_file("methodology.html")
     flags = _section(html, "flags")
     warnings, notes = flags.split('id="flags-notes"')
@@ -459,6 +462,14 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
         c for c in chips if c in ("sbc-basis-unknown", "stock-pay-missing", "sbc-basis-uncertain")
     ]
     assert order == ["sbc-basis-unknown", "stock-pay-missing", "sbc-basis-uncertain"]
+    text = re.sub(r"\s+", " ", flags)
+    assert "Twelve flags are quality warnings" in text and len(QUALITY_WARNINGS) == 12
+    assert set(QUALITY_WARNINGS) == ENGINE_WARNINGS
+    gap = text[text.index(">share-count-gap</code>") :]
+    gap = gap[: gap.index("</li>")]
+    for span in ("share_count_gap_band.0", "share_count_gap_band.1"):
+        assert f'<span data-policy="{span}">—</span>' in gap, span
+    assert "a share class or units that convert to shares" in gap
     outside = html.replace(flags, "")
     assert "<code" not in outside
     assert "currency-unknown" not in chips  # method 1.1 refuses an unknown currency instead

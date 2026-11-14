@@ -40,11 +40,11 @@ stock pay reads the trailing figure the Mature Growth anchor read (``sbc_ttm``),
 stock-pay basis the anchor's basis in the input's words, ``None`` on an unknown basis (spec
 2026-11-13 7.2). The NTM earnings read the anchor the Mature Growth route stored, before the
 cycle gap came off it; the NTM revenue reads the year one the revenue-growth or Decline route
-stored, none on a Decline row with no usable consensus. The engine finds no value outside the business either: a valued
-route writes ``outside_value_per_share`` only under an override, so a result without one reads
-0.0 on every route but Start-up, which reads none. The diluted share count reads the count the
-result cites: its intermediates' ``shares``, else the reported count's DATA entry or the
-JUDGMENT entry in its place. An override at the engine's reading moves nothing.
+stored, none on a Decline row with no usable consensus. The engine finds no value outside the
+business either: a valued route writes ``outside_value_per_share`` only under an override, so a
+result without one reads 0.0 on every route but Start-up, which reads none. The diluted share
+count reads the count the result cites: its intermediates' ``shares``, else the reported count's
+DATA entry or the JUDGMENT entry in its place. An override at the engine's reading moves nothing.
 
 ``INPUT_OF`` names the route's own entry each tag stands for in a result's inputs: a result
 valued under an override cites the JUDGMENT entry in its place, so no DATA or RULE entry carries

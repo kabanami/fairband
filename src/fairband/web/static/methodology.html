@@ -853,7 +853,7 @@ the current burn, so the drawer warns. Net cash is $9 a share, a floor far under
 <section id="flags">
 <h2 class="title">The flags</h2>
 <p class="body">A flag warns and never changes a value, a level or the word. Each has a short word
-for the screen and one sentence in the drawer. Eleven flags are quality warnings (signs that the
+for the screen and one sentence in the drawer. Twelve flags are quality warnings (signs that the
 value may be wrong because the business or its figures are unusual). The Flags column counts them,
 and the Clean filter keeps the rows with none. Every other flag is a note: shown, never
 counted.</p>
@@ -896,6 +896,11 @@ last year.</span></li>
 <li><span class="label">Consensus recovery</span> <code class="fb-tag figure-sm">consensus-recovery</code>
 <span class="body app-flags__what">A Decline company's consensus has revenue growing while the
 run-off shrinks it.</span></li>
+<li><span class="label">Share count and market cap disagree</span> <code class="fb-tag figure-sm">share-count-gap</code>
+<span class="body app-flags__what">The market cap is below <span data-policy="share_count_gap_band.0">—</span>
+or above <span data-policy="share_count_gap_band.1">—</span> the price times the diluted share
+count. The count may leave out a share class or units that convert to shares, so the value a share
+can be wrong. Or the market cap may leave a class out.</span></li>
 </ul>
 
 <h3 class="heading" id="flags-notes">Notes</h3>
@@ -1037,16 +1042,17 @@ filing or a finding (a dated fact with its source). The engine values the compan
 overrides: the reviewed value. An agent never writes a value. The mechanical value (the engine's
 value with no override) does not move.</p>
 <p class="body">An agent may change twenty inputs, such as the phase, the belief and the moat, each
-within set bounds. One is the diluted share count, for shares promised but not yet counted.
-Another is the value outside the business, such as a stake in another company. It adds to the
-route's value a share. Two set the stock pay a Mature Growth value charges. One is the trailing
-figure from the filings. The other says whether the analysts' EPS leaves stock pay out, as the
-company defines its adjusted EPS. Locked inputs, such as the hurdle rate, terminal growth and the reported
-figures, take no override. An agent adds and drops overrides; you read them. A refresh also drops
-a period-tied override (one that corrects a single period's figure) once the company reports a
-newer period or that figure changes. The review (the overrides and the value they give) moves to
-each new snapshot, the company's figures from a refresh. An overridden input is tagged JUDGMENT,
-beside DATA (a figure from the vendor) and RULE (a value from the policy).</p>
+within set bounds. One is the diluted share count, for shares promised but not yet counted, or for
+a share class the count leaves out. Another is the value outside the business, such as a stake in
+another company. It adds to the route's value a share. Two set the stock pay a Mature Growth value
+charges. One is the trailing figure from the filings. The other says whether the analysts' EPS
+leaves stock pay out, as the company defines its adjusted EPS. Locked inputs, such as the hurdle
+rate, terminal growth and the reported figures, take no override. An agent adds and drops
+overrides; you read them. A refresh also drops a period-tied override (one that corrects a single
+period's figure) once the company reports a newer period or that figure changes. The review (the
+overrides and the value they give) moves to each new snapshot, the company's figures from a
+refresh. An overridden input is tagged JUDGMENT, beside DATA (a figure from the vendor) and RULE (a
+value from the policy).</p>
 
 <h3 class="heading">The bridge</h3>
 <p class="body">The bridge leads from the mechanical value to the reviewed value, one line for each

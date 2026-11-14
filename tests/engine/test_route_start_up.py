@@ -57,8 +57,10 @@ def codes(r: ValuationResult) -> list[str]:
 
 
 def route_codes(r: ValuationResult) -> list[str]:
-    """The route's flags: every flag but the classifier's checks and assembly's."""
-    others = {f.code for f in r.phase.checks}
+    """The route's flags: every flag but the classifier's checks, assembly's and the share-count
+    warning, which ``value_company`` puts after assembly's (a market cap set apart from the price
+    times the count raises it)."""
+    others = {f.code for f in r.phase.checks} | {"share-count-gap"}
     return [c for c in codes(r) if c not in others]
 
 

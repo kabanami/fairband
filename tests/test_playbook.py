@@ -644,7 +644,14 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         ("growth-above-return", ("the owner funds the growth",)),
         (
             "consensus-basis-unknown",
-            ("`large-nri`", "`earnings.nri_gap`", "`earnings.ntm`", "guidance record", "exposure"),
+            (
+                "`large-nri`",
+                "`earnings.nri_gap`",
+                "only while no `earnings.sbc_basis` is applied",
+                "`earnings.ntm`",
+                "guidance record",
+                "exposure",
+            ),
         ),
         ("step-series-disagree", ("both series", "`path.step_2`", "`path.step_3`")),
         (
@@ -658,6 +665,19 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "the release",
                 "`earnings.sbc_basis`",
                 "once `earnings.sbc_basis`",
+            ),
+        ),
+        (
+            "share-count-gap",
+            (
+                "both figures",
+                "`share_count_gap_band`",
+                "a share class or units that convert to shares",
+                "the market cap may leave a class out",
+                "cover page",
+                "note on the share classes",
+                "`shares.diluted`",
+                "reconciles the two",
             ),
         ),
         (
@@ -888,7 +908,7 @@ def test_the_skill_reads_a_foreign_filer() -> None:
             r"^- `([\w-]+)`: (.*?)(?=^- |^$|\Z)", eight, re.MULTILINE | re.DOTALL
         )
     }
-    assert "Ten flags ask for a decision of yours." in steps[8]
+    assert "Eleven flags ask for a decision of yours." in steps[8]
     for code, words in (
         ("basis-scaled", ("the ADR ratio", "read as stored", "section 8")),
         ("fx-stale", ("the rate", "price date", '`refresh_start("price")`')),
@@ -938,7 +958,8 @@ def test_nothing_counts_twice_route_by_route() -> None:
         ),
         (
             "`earnings.nri_gap` reaches only the test of the anchor's stock-compensation basis,"
-            " and `earnings.ntm` needs a guidance record"
+            " and only while no `earnings.sbc_basis` is applied, and `earnings.ntm` needs a"
+            " guidance record"
         ),
         (
             "Add the asset only when the consensus excludes its gains. Otherwise leave it out of"

@@ -1,3 +1,4 @@
+import math
 from dataclasses import replace
 from datetime import date
 
@@ -15,6 +16,7 @@ from fairband.engine.flags import (
     median_margin,
     nri_flag,
     sbc_basis_uncertain_flag,
+    share_count_flag,
     stock_pay_missing_flag,
     value_spread_flag,
 )
@@ -541,7 +543,54 @@ def test_value_spread_flag_needs_two_positive_values(policy: Policy) -> None:
     assert value_spread_flag([-10.0, 131.0], policy) is None
 
 
-def test_flag_count_counts_the_eleven_quality_warnings_only() -> None:
+@pytest.mark.parametrize(
+    ("market_cap", "fires"),
+    [(70.0, False), (69.9, True), (130.0, False), (130.1, True), (100.0, False)],
+)
+def test_the_share_count_gap_fires_outside_the_band(market_cap: float, fires: bool) -> None:
+    """A price of 1 on 100 shares: the ratio is the market cap over 100. The band's edges, 0.7
+    and 1.3, are inside it."""
+    flag = share_count_flag(market_cap, 1.0, 100.0, load_policy())
+    assert (flag is not None) is fires
+    if flag is not None:
+        assert flag.code == "share-count-gap" and f"{market_cap / 100:.2f}" in flag.sentence
+
+
+def test_the_share_count_gap_needs_its_three_figures() -> None:
+    policy = load_policy()
+    assert share_count_flag(None, 1.0, 100.0, policy) is None
+    assert share_count_flag(460.0, None, 100.0, policy) is None
+    assert share_count_flag(460.0, 1.0, None, policy) is None
+    assert share_count_flag(460.0, 0.0, 100.0, policy) is None
+    # a figure at or below zero, or not finite, is no figure
+    for market_cap, price, shares in (
+        (0.0, 1.0, 100.0),
+        (460.0, 1.0, 0.0),
+        (460.0, -1.0, 100.0),
+        (math.nan, 1.0, 100.0),
+        (460.0, math.inf, 100.0),
+    ):
+        assert share_count_flag(market_cap, price, shares, policy) is None
+
+
+def test_the_share_count_gap_names_both_figures_and_both_readings(policy: Policy) -> None:
+    """Spec 2026-11-13 8: the ratio to two decimals, the market cap, the price times the count, the
+    band, and the two readings. The figures are the quote's, in US dollars on every row."""
+    flag = share_count_flag(6_900e6, 15.0, 100e6, policy)
+    assert flag == Flag(
+        "share-count-gap",
+        "Share count and market cap disagree",
+        "The market cap is $6,900.0 million and the price of $15.00 times the diluted count of "
+        "100.0 million shares is $1,500.0 million: a ratio of 4.60, outside 0.70 to 1.30. The "
+        "count may leave out a share class or units that convert to shares, or the market cap "
+        "may leave a class out.",
+    )
+    low = share_count_flag(380e6, 10.0, 100e6, policy)  # 0.38, as TKO read on refresh 34
+    assert low is not None and "is $1,000.0 million: a ratio of 0.38," in low.sentence
+    assert flag_count((flag,)) == 1
+
+
+def test_flag_count_counts_the_twelve_quality_warnings_only() -> None:
     flags = (
         Flag("leases-not-on-balance-sheet", "", ""),
         Flag("few-analysts", "", ""),
@@ -563,5 +612,6 @@ def test_flag_count_counts_the_eleven_quality_warnings_only() -> None:
             "heavy-capex",
             "burn-cover-short",
             "consensus-recovery",
+            "share-count-gap",
         }
     )

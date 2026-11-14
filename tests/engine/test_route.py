@@ -13,6 +13,7 @@ from fairband.engine import METHOD_VERSION, route_mature_growth
 from fairband.engine.anchor import StockPayHistory
 from fairband.engine.classifier import Deciles
 from fairband.engine.designation import designation_for
+from fairband.engine.flags import flag_count
 from fairband.engine.levels import levels_for
 from fairband.engine.mature_growth import (
     Charge,
@@ -536,6 +537,7 @@ def test_flags_in_order_without_duplicates(
     assert codes(r) == [
         "trailing-on-fiscal-year",  # assembly
         "equity-raise",
+        "share-count-gap",  # the market cap of $150 bn against $700 × 1 bn shares
         "fcf-sign",  # the classifier
         "sbc-basis-unknown",  # the anchor
         "few-analysts",  # the path
@@ -1479,6 +1481,103 @@ def test_a_result_carries_its_trailing_period_end(
     assert bare.refusal == "no trailing figures" and "trailing_end" not in bare.intermediates
 
 
+# --- The share count against the market cap (spec 2026-11-13 8) --------------------------------
+
+
+def _gap(i: CompanyInputs, k: float = 4.6) -> CompanyInputs:
+    """``i`` with its quote's market cap × ``k``, so the market cap is ``k`` times the price times
+    the diluted count: SYM read 4.6 on refresh 34."""
+    assert i.market_cap is not None
+    return replace(i, market_cap=i.market_cap * k)
+
+
+def test_a_market_cap_far_from_the_price_times_the_count_warns(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """MGCO at 4.6 times: the valued row carries ``share-count-gap`` right after the assembly's
+    flags and counts it as a quality warning; the value does not move. At 1.3 times, the band's
+    edge, it carries none."""
+    tagged = replace(mg_inputs, input_flags=(flag("trailing-on-fiscal-year"),))
+    plain = value_company(tagged, deciles, policy, TODAY)
+    r = value_company(_gap(tagged), deciles, policy, TODAY)
+    assert r.value is not None and r.value == plain.value and r.levels == plain.levels
+    assert codes(r) == ["trailing-on-fiscal-year", "share-count-gap", *codes(plain)[1:]]
+    assert flag_count(r.flags) == flag_count(plain.flags) + 1
+    [gap] = [f for f in r.flags if f.code == "share-count-gap"]
+    assert gap.word == "Share count and market cap disagree"
+    assert gap.sentence.startswith(
+        "The market cap is $690,000.0 million and the price of $150.00 times the diluted count "
+        "of 1,000.0 million shares is $150,000.0 million: a ratio of 4.60, outside 0.70 to 1.30."
+    )
+    edge = value_company(_gap(tagged, 1.3), deciles, policy, TODAY)
+    assert "share-count-gap" not in codes(edge)
+    assert result_from_json(result_to_json(r)) == r
+
+
+def test_a_row_refused_in_its_route_carries_the_share_count_gap(
+    young_growth_inputs: CompanyInputs,
+    start_up_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+) -> None:
+    """The warning is on every result with a market cap, a price and a diluted count, valued or
+    refused: the Young Growth company with no peers, refused in its route, and the Start-up
+    company, whose route always refuses."""
+    for inputs in (replace(young_growth_inputs, peers=()), start_up_inputs):
+        plain = value_company(inputs, deciles, policy, TODAY)
+        r = value_company(_gap(inputs), deciles, policy, TODAY)
+        assert plain.value is None and r.value is None and r.refusal == plain.refusal
+        assert r.refusal is not None and r.phase.phase in ("Young Growth", "Start-up")
+        assert "share-count-gap" not in codes(plain) and "share-count-gap" in codes(r)
+        assert flag_count(r.flags) == flag_count(plain.flags) + 1
+    refused = value_company(_gap(replace(young_growth_inputs, peers=())), deciles, policy, TODAY)
+    assert refused.refusal == "no target margin: 0 mature peers"
+
+
+def test_the_share_count_gap_reads_the_quote_in_us_dollars(
+    deciles: Deciles, policy: Policy
+) -> None:
+    """FXCO quotes USD 50.00 for a market cap of USD 5,000 m on 100 m shares, and its route reads
+    both in SEK at 8.0: the ratio is 1, so no warning. With the market cap doubled the sentence
+    names the quote's figures in US dollars."""
+    fx = engine_companies.fx_inputs()
+    assert "share-count-gap" not in codes(value_company(fx, deciles, policy, TODAY))
+    r = value_company(_gap(fx, 2.0), deciles, policy, TODAY)
+    [gap] = [f for f in r.flags if f.code == "share-count-gap"]
+    assert gap.sentence.startswith(
+        "The market cap is $10,000.0 million and the price of $50.00 times the diluted count of "
+        "100.0 million shares is $5,000.0 million: a ratio of 2.00,"
+    )
+    assert r.flags[-1].code != "share-count-gap"  # the assembly's place, not the end
+
+
+def test_a_reprice_keeps_the_share_count_gap_and_what_the_valuation_wrote(
+    mg_inputs: CompanyInputs,
+    young_growth_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+) -> None:
+    """The market cap and the price are one quote's, so the ratio does not move with the price: a
+    reprice keeps the warning. The trailing period end, the stock pay the anchor read and the
+    row's whole tuple of flags, the two stock-pay notes among them, stay as the valuation wrote
+    them. MGCO with one trailing quarter of stock pay at nil and a non-recurring gain of 0.50 a
+    share carries both notes (``test_the_stock_pay_notes_follow_the_anchor_s_flag``)."""
+    notes = replace(
+        _gap(mg_inputs), stock_pay=StockPayHistory(1, 2025, 500e6), gf_eps_without_nri=4.80
+    )
+    valued = value_company(notes, deciles, policy, TODAY)
+    refused = value_company(_gap(replace(young_growth_inputs, peers=())), deciles, policy, TODAY)
+    assert {"share-count-gap", "stock-pay-missing", "sbc-basis-uncertain"} <= set(codes(valued))
+    assert valued.value is not None and refused.refusal is not None
+    for r in (valued, refused):
+        stored = result_from_json(result_to_json(r))
+        p = reprice(stored, 120.0, date(2026, 11, 2), policy)
+        assert p.price == 120.0 and p.flags == r.flags
+        assert p.intermediates["trailing_end"] == r.intermediates["trailing_end"] == "2026-09-30"
+    p = reprice(valued, 120.0, date(2026, 11, 2), policy)
+    assert p.intermediates["sbc_ttm"] == valued.intermediates["sbc_ttm"] == 400e6
+
+
 def test_a_start_up_row_takes_its_route_and_an_unclassified_row_is_refused(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
@@ -1928,9 +2027,8 @@ def test_reprice_updates_the_long_runway_flag(
     r = value_company(mg_inputs, deciles, policy, TODAY)
     assert "long-runway-high-growth" not in codes(r)
     high = reprice(r, 400.0, date(2026, 11, 2), policy)
-    assert (
-        high.flags == value_company(replace(mg_inputs, price=400.0), deciles, policy, TODAY).flags
-    )
+    quote = replace(mg_inputs, price=400.0, market_cap=400e9)  # the quote's market cap moves too
+    assert high.flags == value_company(quote, deciles, policy, TODAY).flags
     assert "long-runway-high-growth" in codes(high)
     assert reprice(high, 150.0, date(2026, 11, 3), policy).flags == r.flags
 
