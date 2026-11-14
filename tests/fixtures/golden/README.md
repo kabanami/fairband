@@ -97,6 +97,16 @@ figure such an override corrects. With no override it is the stored figure: 400 
 SEK on FXCO. No other key or figure of either golden moves; the five goldens on other routes carry
 no such key and are untouched.
 
+All seven re-captured under 1.3 on 2026-11-14 for one new key (spec 2026-11-13 11; method,
+section 8): the intermediates gain `margin_history`, the ten-year median operating margin on
+`margin-flag`'s window and the ten-year median net margin on the same rule, each with its count
+of years, on every result whose series is not empty, a refusal too. The fixtures' series carry no
+net income, so no golden has a net margin: MGCO and FXCO 23.25% over 10 years (the last ten of
+eleven, a ratio, so FXCO's rate does not enter), MSCO 20% over 10, HGCO −19.5% and YGCO −15.5%
+over 8, DCCO 8% over 5, and SUCO, with no revenue above zero, an empty record. The note
+`thin-ntm` (spec 2026-11-13 9) fires on none: every fixture's NTM quarters have 20 analysts. No
+other key or figure of any golden moves.
+
 Run from the repository root:
 
 ```

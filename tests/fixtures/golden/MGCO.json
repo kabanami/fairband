@@ -588,6 +588,12 @@
    "5": 0.47207706451416015
   },
   "income_basis": "flows over market cap",
+  "margin_history": {
+   "operating": {
+    "median": 0.23249999999999998,
+    "years": 10
+   }
+  },
   "moat": "Wide",
   "multiples": {
    "pe_clean": 28.571428571428573,

@@ -11,9 +11,9 @@ from support.stable_value import stable_dcf
 
 from fairband.engine import METHOD_VERSION, route_mature_growth
 from fairband.engine.anchor import StockPayHistory
-from fairband.engine.classifier import Deciles
+from fairband.engine.classifier import Deciles, FiscalYear
 from fairband.engine.designation import designation_for
-from fairband.engine.flags import flag_count
+from fairband.engine.flags import flag_count, margin_history
 from fairband.engine.levels import levels_for
 from fairband.engine.mature_growth import (
     Charge,
@@ -85,6 +85,7 @@ MATURE_GROWTH_KEYS = {
     "income_basis",
     "price_facts",
     "trailing_end",
+    "margin_history",
     "implied_growth",
     "implied_growth_by_runway",
     "implied_by_roic",
@@ -118,6 +119,7 @@ MATURE_STABLE_KEYS = {
     "income_basis",
     "price_facts",
     "trailing_end",
+    "margin_history",
     "growth_route",
     "multiples",
     "expected_return",
@@ -514,10 +516,12 @@ def test_flags_in_order_without_duplicates(
     assert mg_inputs.trailing is not None
     series = mg_inputs.series
     base, second, third = (replace(a, analysts_net_income=3) for a in mg_inputs.annual_estimates)
+    q = mg_inputs.quarter_estimates
     inputs = replace(
         mg_inputs,
         input_flags=(flag("trailing-on-fiscal-year"), flag("equity-raise")),
         series=(*series[:-1], replace(series[-1], cfo=1e9, capex=-2e9)),  # a negative FCF
+        quarter_estimates=(*q[:3], replace(q[3], analysts=4)),  # a thin NTM quarter
         street_ttm_eps=None,  # the SBC basis is unknown
         annual_estimates=(  # 50% a year, above the 43.1% marginal return
             base,
@@ -541,6 +545,7 @@ def test_flags_in_order_without_duplicates(
         "fcf-sign",  # the classifier
         "sbc-basis-unknown",  # the anchor
         "few-analysts",  # the path
+        "thin-ntm",  # the anchor's window, after the path's thin evidence
         "step-series-disagree",  # net income 50% a year against EPS 12% and 10%
         "roic-on-n-years",  # the ROIC
         "growth-above-return",  # a year that pays out less than nothing
@@ -1216,6 +1221,7 @@ REFUSED_STABLE_KEYS = {
     "growth_route",
     "price_facts",
     "trailing_end",
+    "margin_history",
 }
 
 
@@ -1452,7 +1458,8 @@ def test_refusals_carry_the_price_facts(
 ) -> None:
     facts = asdict(price_facts(mg_inputs.closes, TODAY))
     refused = replace(mg_inputs, refusal="no statutory tax rate for unknown 2015")
-    trailing = {"trailing_end": "2026-09-30"}  # every refusal of a row with trailing figures
+    # every refusal of a row with trailing figures and with a series (spec 2026-11-13 11)
+    trailing = {"trailing_end": "2026-09-30", "margin_history": margin_history(mg_inputs.series)}
     for r in (
         value_company(refused, deciles, policy, TODAY),
         value_company(mg_inputs, None, policy, TODAY),
@@ -1558,24 +1565,177 @@ def test_a_reprice_keeps_the_share_count_gap_and_what_the_valuation_wrote(
     policy: Policy,
 ) -> None:
     """The market cap and the price are one quote's, so the ratio does not move with the price: a
-    reprice keeps the warning. The trailing period end, the stock pay the anchor read and the
-    row's whole tuple of flags, the two stock-pay notes among them, stay as the valuation wrote
-    them. MGCO with one trailing quarter of stock pay at nil and a non-recurring gain of 0.50 a
-    share carries both notes (``test_the_stock_pay_notes_follow_the_anchor_s_flag``)."""
+    reprice keeps the warning. The trailing period end, the ten-year median margins, the stock
+    pay the anchor read and the row's whole tuple of flags, the two stock-pay notes and
+    ``thin-ntm`` among them, stay as the valuation wrote them, through the stored round trip a
+    price refresh takes. MGCO with one trailing quarter of stock pay at nil, a non-recurring gain
+    of 0.50 a share (``test_the_stock_pay_notes_follow_the_anchor_s_flag``) and an NTM quarter on
+    4 analysts carries the three notes."""
+    q = mg_inputs.quarter_estimates
     notes = replace(
-        _gap(mg_inputs), stock_pay=StockPayHistory(1, 2025, 500e6), gf_eps_without_nri=4.80
+        _gap(mg_inputs),
+        stock_pay=StockPayHistory(1, 2025, 500e6),
+        gf_eps_without_nri=4.80,
+        quarter_estimates=(*q[:3], replace(q[3], analysts=4)),
     )
     valued = value_company(notes, deciles, policy, TODAY)
     refused = value_company(_gap(replace(young_growth_inputs, peers=())), deciles, policy, TODAY)
-    assert {"share-count-gap", "stock-pay-missing", "sbc-basis-uncertain"} <= set(codes(valued))
+    written = {"share-count-gap", "stock-pay-missing", "sbc-basis-uncertain", "thin-ntm"}
+    assert written <= set(codes(valued))
     assert valued.value is not None and refused.refusal is not None
-    for r in (valued, refused):
+    for r, years in ((valued, 10), (refused, 8)):  # MGCO's eleven fiscal years, YGCO's eight
         stored = result_from_json(result_to_json(r))
         p = reprice(stored, 120.0, date(2026, 11, 2), policy)
         assert p.price == 120.0 and p.flags == r.flags
         assert p.intermediates["trailing_end"] == r.intermediates["trailing_end"] == "2026-09-30"
-    p = reprice(valued, 120.0, date(2026, 11, 2), policy)
-    assert p.intermediates["sbc_ttm"] == valued.intermediates["sbc_ttm"] == 400e6
+        assert p.intermediates["margin_history"] == r.intermediates["margin_history"]
+        assert r.intermediates["margin_history"]["operating"]["years"] == years
+        if r is valued:
+            assert p.intermediates["sbc_ttm"] == valued.intermediates["sbc_ttm"] == 400e6
+
+
+# --- The thin NTM consensus (spec 2026-11-13 9) --------------------------------------------------
+
+
+def _thin_quarter(i: CompanyInputs, analysts: int | None) -> CompanyInputs:
+    """``i`` with the last of its four NTM quarters, ending 30 Sep 2027, on ``analysts``."""
+    q = i.quarter_estimates
+    return replace(i, quarter_estimates=(*q[:3], replace(q[3], analysts=analysts)))
+
+
+def test_a_thin_ntm_quarter_notes_the_anchor(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """MGCO's NTM EPS sums four quarters of 20 analysts each. With the last on 4 the row carries
+    ``thin-ntm`` in the place right after ``few-analysts``', before ``value-spread``; a note, it
+    moves no figure and is not counted. On 5 analysts, ``analyst_min``, it is silent; with no
+    count it reads "no count". Under an applied ``earnings.ntm`` it does not show: the anchor is
+    the guidance."""
+    plain = value_company(mg_inputs, deciles, policy, TODAY)
+    r = value_company(_thin_quarter(mg_inputs, 4), deciles, policy, TODAY)
+    assert codes(plain) == ["value-spread"] and codes(r) == ["thin-ntm", "value-spread"]
+    assert r.value == plain.value and r.levels == plain.levels
+    assert r.intermediates == plain.intermediates
+    assert flag_count(r.flags) == flag_count(plain.flags)
+    assert r.flags[0] == Flag(
+        "thin-ntm",
+        "Thin NTM consensus",
+        "1 of the 4 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
+        "thinnest, ending 30 Sep 2027, has 4 analysts, so year 1 rests on thin evidence.",
+    )
+    at_five = value_company(_thin_quarter(mg_inputs, 5), deciles, policy, TODAY)
+    assert codes(at_five) == ["value-spread"]
+    none = value_company(_thin_quarter(mg_inputs, None), deciles, policy, TODAY)
+    assert "ending 30 Sep 2027, has no count," in none.flags[0].sentence
+    guided = value_company(
+        _thin_quarter(mg_inputs, 4), deciles, policy, TODAY, judged(("earnings.ntm", 6.10))
+    )
+    assert guided.value is not None and "thin-ntm" not in codes(guided)
+    stepped = value_company(
+        _thin_quarter(mg_inputs, 4), deciles, policy, TODAY, judged(("path.step_2", 0.15))
+    )
+    assert "thin-ntm" in codes(stepped)  # only the input that sets the anchor silences it
+
+
+def test_a_half_yearly_reporter_s_thin_note_reads_its_two_half_years(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-10 8: a half-yearly reporter's NTM window is two half-years, so the note
+    counts the window's own periods, not four: MGCO's quarters as two half-years ending 31 Mar
+    and 30 Sep 2027, the first on 3 analysts."""
+    halves = engine_companies.half_yearly(mg_inputs)
+    first, second = halves.quarter_estimates
+    thin = replace(halves, quarter_estimates=(replace(first, analysts=3), second))
+    r = value_company(thin, deciles, policy, TODAY)
+    assert r.value is not None and r.value == value_company(halves, deciles, policy, TODAY).value
+    [note] = [f for f in r.flags if f.code == "thin-ntm"]
+    assert note.sentence.startswith(
+        "1 of the 2 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
+        "thinnest, ending 31 Mar 2027, has 3 analysts,"
+    )
+
+
+# --- The ten-year median margins (spec 2026-11-13 11) --------------------------------------------
+
+
+def test_every_routed_result_carries_its_ten_year_median_margins(
+    mg_inputs: CompanyInputs,
+    ms_inputs: CompanyInputs,
+    high_growth_inputs: CompanyInputs,
+    young_growth_inputs: CompanyInputs,
+    decline_inputs: CompanyInputs,
+    start_up_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+) -> None:
+    """Each route's company, valued or refused in its route, carries ``margin_history``, the
+    median margins of its own series. Worked by hand: MGCO's margins rise 1.5 points a year from
+    15% over eleven years, so the last ten run from 16.5% to 30% and the median of an even count
+    is the mean of the middle two, 22.5% and 24%: 23.25%; HGCO's eight years, a history shorter
+    than ten, run from −30% to −9%, median −19.5%; DCCO's five years, an odd count, 7%, 8%, 8%,
+    9% and 8%, median 8%; SUCO has no revenue above zero, so no margin. None of the fixtures
+    carries net income, so none has a net margin."""
+    yg_refused = replace(young_growth_inputs, peers=())
+    ms_refused = _loss_making(ms_inputs)
+    expected: dict[str, tuple[CompanyInputs, str | None]] = {
+        "MGCO": (mg_inputs, "mature-growth"),
+        "MSCO": (ms_inputs, "mature-stable"),
+        "HGCO": (high_growth_inputs, "revenue-growth"),
+        "YGCO": (young_growth_inputs, "revenue-growth"),
+        "DCCO": (decline_inputs, "decline"),
+        "SUCO": (start_up_inputs, "start-up"),
+        "YGCO refused": (yg_refused, None),  # no target margin
+        "MSCO refused": (ms_refused, None),  # no positive trailing earnings
+    }
+    found = {}
+    for name, (inputs, route) in expected.items():
+        r = value_company(inputs, deciles, policy, TODAY)
+        assert r.route == route, name
+        assert r.intermediates["margin_history"] == margin_history(inputs.series), name
+        found[name] = r.intermediates["margin_history"]
+    assert found["MGCO"] == {"operating": {"median": pytest.approx(0.2325), "years": 10}}
+    assert found["HGCO"] == {"operating": {"median": pytest.approx(-0.195), "years": 8}}
+    assert found["DCCO"] == {"operating": {"median": pytest.approx(0.08), "years": 5}}
+    assert found["SUCO"] == {}
+
+
+def test_the_net_margin_reads_the_series_net_income(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """MGCO's series with net income at three quarters of each year's operating income: the net
+    margins run from 12.375% to 22.5% over the ten years the window holds, median 17.4375%; the
+    value does not move, nothing but the entry reading net income. A row whose inputs hold no
+    series carries no entry."""
+    series = tuple(replace(fy, net_income=_net(fy)) for fy in mg_inputs.series)
+    plain = value_company(mg_inputs, deciles, policy, TODAY)
+    r = value_company(replace(mg_inputs, series=series), deciles, policy, TODAY)
+    assert r.intermediates["margin_history"] == {
+        "operating": {"median": pytest.approx(0.2325), "years": 10},
+        "net": {"median": pytest.approx(0.174375), "years": 10},
+    }
+    assert r.value == plain.value and r.flags == plain.flags
+    assert {k: v for k, v in r.intermediates.items() if k != "margin_history"} == {
+        k: v for k, v in plain.intermediates.items() if k != "margin_history"
+    }
+    bare = replace(mg_inputs, series=(), refusal="no financial statements")
+    assert "margin_history" not in value_company(bare, deciles, policy, TODAY).intermediates
+
+
+def _net(fy: FiscalYear) -> float:
+    assert fy.operating_income is not None
+    return 0.75 * fy.operating_income
+
+
+def test_the_margins_of_a_company_in_another_currency_are_its_own_ratios(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """FXCO's statements are MGCO's at a tenth, in SEK at 8.0 a dollar: a margin is a ratio of two
+    lines of one statement, so no rate enters and the medians are MGCO's."""
+    fx = value_company(engine_companies.fx_inputs(), deciles, policy, TODAY)
+    usd = value_company(mg_inputs, deciles, policy, TODAY)
+    history, own = fx.intermediates["margin_history"], usd.intermediates["margin_history"]
+    assert history["operating"]["years"] == own["operating"]["years"] == 10
+    assert history["operating"]["median"] == pytest.approx(own["operating"]["median"])
 
 
 def test_a_start_up_row_takes_its_route_and_an_unclassified_row_is_refused(

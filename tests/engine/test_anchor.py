@@ -21,6 +21,7 @@ from fairband.engine.anchor import (
     sales_class,
     sbc_basis,
     step_series_flag,
+    thin_ntm_flag,
 )
 from fairband.engine.types import Flag
 from fairband.policy import Policy, load_policy
@@ -628,6 +629,46 @@ def test_path_few_analysts_flag(policy: Policy) -> None:
 
     enough = [a(2027, 2.0, 200.0), a(2028, 2.4, 236.0, n_ni=5), a(2029, 3.0, 295.0, n_ni=5)]
     assert path_steps(enough, 2027, policy).flags == ()
+
+
+def _window(*analysts: int | None) -> list[QuarterEstimate]:
+    """The first NTM periods after 2026-06-30, each with its EPS analyst count."""
+    ends = ("2026-09-30", "2026-12-31", "2027-03-31", "2027-06-30")
+    return [
+        q(end, 2027, f"Q{k}", 2.5, n=n)
+        for k, (end, n) in enumerate(zip(ends, analysts, strict=False), 1)
+    ]
+
+
+def test_thin_ntm_names_the_thin_periods(policy: Policy) -> None:
+    assert thin_ntm_flag(_window(5, 5, 5, 5), policy) is None
+    flag = thin_ntm_flag(_window(15, 15, 6, 4), policy)
+    assert flag is not None and flag.code == "thin-ntm"
+    assert "1 of the 4 periods" in flag.sentence and "4 analysts" in flag.sentence
+    assert "30 Jun 2027" in flag.sentence
+    assert thin_ntm_flag(_window(5, None, 5, 5), policy) is not None  # no count is thin
+    two = thin_ntm_flag(_window(3, 2), policy)  # a half-yearly reporter's window
+    assert two is not None and "2 of the 2 periods" in two.sentence
+
+
+def test_thin_ntm_sentence(policy: Policy) -> None:
+    """Spec 2026-11-13 9: the note names how many of the window's periods are thin, the smallest
+    count and its period; a missing count is the thinnest and reads "no count", and of two equal
+    counts the earlier period is named."""
+    assert thin_ntm_flag(_window(15, 15, 6, 4), policy) == Flag(
+        "thin-ntm",
+        "Thin NTM consensus",
+        "1 of the 4 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
+        "thinnest, ending 30 Jun 2027, has 4 analysts, so year 1 rests on thin evidence.",
+    )
+    missing = thin_ntm_flag(_window(1, None, 3, 5), policy)
+    assert missing is not None and missing.sentence.startswith(
+        "3 of the 4 periods the NTM EPS sums have fewer than 5 EPS analysts or no count: the "
+        "thinnest, ending 31 Dec 2026, has no count,"
+    )
+    one = thin_ntm_flag(_window(5, 1, 1, 5), policy)
+    assert one is not None and "the thinnest, ending 31 Dec 2026, has 1 analyst," in one.sentence
+    assert thin_ntm_flag([], policy) is None
 
 
 def test_path_step_none_where_the_consensus_stops(policy: Policy) -> None:

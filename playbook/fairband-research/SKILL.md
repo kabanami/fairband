@@ -284,15 +284,13 @@ The signs:
 
 For a cyclical, place the company in its cycle. Set the operating margin against its median, and
 revenue against its trend, from the cells of `financial_tables` and the years of `financials`. On
-Mature Stable the snapshot's intermediates hold the ten-year median (`median_margin`); on Decline
-they hold the five-year median (`margin/median`), when three years or more have a margin. Cite
-either as a `snapshot:` ref, named for its years. On the other routes no tool gives a median. Cite
-instead the margin of the median year: of the five years in the growth table, the year whose
-operating margin is the middle one, a `table:` cite named as that year's margin ("the margin of
-fiscal 2023, the middle of the past five years"), never a median you computed. Record the rest of
-the evidence as findings with `finding_add`: the peak and the trough you found, the industry's
-capacity or prices. The thesis names the position. The summary says "cyclical". Step 10 sets the
-inputs at mid-cycle.
+every route the snapshot's intermediates hold the ten-year median operating margin,
+`margin_history/operating/median`, and the count of fiscal years behind it,
+`margin_history/operating/years`. Cite the median as a `snapshot:` ref, never a median you
+computed. Where fewer than ten years stand behind it, name the count ("the median over seven
+fiscal years"). Record the rest of the evidence as findings with `finding_add`: the peak and the
+trough you found, the industry's capacity or prices. The thesis names the position. The summary
+says "cyclical". Step 10 sets the inputs at mid-cycle.
 
 ### 8. The valuation
 
@@ -302,7 +300,7 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
-Eleven flags ask for a decision of yours. Read each sentence whole: it names its figures.
+Twelve flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
 - `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
   of the operating cash flow, then names the return the charge starts at, its measure, and the
@@ -371,6 +369,14 @@ Eleven flags ask for a decision of yours. Read each sentence whole: it names its
   that the adjusted figure leaves out far more than stock pay. Read the company's own definition
   of its adjusted EPS in the release, and decide through `earnings.sbc_basis` (the first of the
   two steps below). The note does not show once `earnings.sbc_basis` applies.
+- `thin-ntm`: on Mature Growth, a period the analysts' NTM EPS sums has fewer than `analyst_min`
+  EPS analysts (`policy()`), or no count, so the earnings the value starts from rest on thin
+  evidence. The sentence gives how many of the window's periods are thin, the smallest count and
+  its period. Read the annual estimates of the fiscal years the window spans and their analyst
+  counts (`estimates`), and the company's guidance (see "Guidance"). Where a clear EPS guidance
+  record covers the window, decide through `earnings.ntm`; the note does not show once it
+  applies. Without one, the figure stands, and section 8 states the exposure: the thin periods
+  and their share of the NTM EPS.
 - `step-series-disagree`: a consensus step read on net income and the same step read on EPS differ
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
@@ -739,16 +745,18 @@ The two NTM anchors and the cycle gap:
   lifts a trough's earnings to mid-cycle. Set the figure by the formula below.
 
 The cycle gap's figure. One formula sets it, on the margin inside the anchor's own earnings (the
-founder's ruling of 2026-11-11):
+founder's ruling of 2026-11-11, its mid-cycle margin the ten-year median since spec 2026-11-13
+11):
 
     full gap = NTM EPS − NTM EPS ÷ (NTM net margin ÷ mid-cycle net margin)
 
 - The NTM EPS is `snapshot:<id>/inputs/ntm_eps`. The NTM net margin is
   `snapshot:<id>/inputs/ntm_net_income` over the analysts' revenue for the same periods: the sum
   of the NTM window's `estimate:<symbol>/<period>/revenue`, by chained `derive` `sum` calls.
-- The mid-cycle net margin is the middle one of the five net margins in the growth table, a cite
-  `table:<symbol>/growth/net_margin/<year>` named as that year's margin. The year may differ from
-  step 7's, which reads the operating margin.
+- The mid-cycle net margin is the ten-year median net margin,
+  `snapshot:<id>/intermediates/margin_history/net/median`, on the statements as reported. A
+  history of fewer than ten years is named with its count,
+  `snapshot:<id>/intermediates/margin_history/net/years` ("the median over seven fiscal years").
 - Three more `derive` calls give the figure: the `ratio` of the NTM net margin to the mid-cycle
   one, the `ratio` of the NTM EPS to that (the mid-cycle EPS), and the `difference` of the NTM EPS
   and the mid-cycle EPS.
@@ -769,6 +777,9 @@ How much of the gap to take:
   says "half" and why. Half is the `derive` `ratio` of the full gap to two. `derive` takes no
   constant, so build the two: the `sum` of a figure with itself, then the `ratio` of that sum to
   the figure.
+- Where the analysts' EPS is on a basis that leaves out the amortization of bought intangibles
+  while the history is as reported, the full gap cuts for accounting as well as for the cycle.
+  Say so in section 8: that is evidence for half.
 - Never take less than half.
 - A trough mirrors it. The formula gives a negative figure: take it in full, or in half where the
   evidence shows that part of the fall lasts.
@@ -779,6 +790,8 @@ How much of the gap to take:
   company reports such orders, section 8 says the value leans low by those years' excess. Do not
   keep the peak years through a `path.step_3` drop on a business that still grows: on Mature
   Growth a step 3 at or below the belief makes every later year grow at the belief.
+- An `earnings.cycle_gap` on file keeps its figure until its review is made again; that review
+  measures the gap by this formula.
 
 The share count and the value outside the business:
 

@@ -423,6 +423,33 @@ def few_analysts(
     )
 
 
+def thin_ntm_flag(periods: Sequence[QuarterEstimate], policy: Policy) -> Flag | None:
+    """``thin-ntm`` (spec 2026-11-13 9) when a period of the NTM window ``periods``, the ones the
+    anchor sums, has fewer than ``analyst_min`` EPS analysts or no count: the sentence gives how
+    many of the window's periods are thin, and the thinnest with its period end, a missing count
+    being the thinnest and of two equal counts the earlier period named. A note: it moves no
+    value."""
+    thin = [p for p in periods if p.analysts is None or p.analysts < policy.analyst_min]
+    if not thin:
+        return None
+    least = min(thin, key=lambda p: (-1 if p.analysts is None else p.analysts, p.period_end))
+    n = least.analysts
+    count = "no count" if n is None else f"{n} analyst{'' if n == 1 else 's'}"
+    has = "has" if len(thin) == 1 else "have"
+    return Flag(
+        "thin-ntm",
+        "Thin NTM consensus",
+        f"{len(thin)} of the {len(periods)} periods the NTM EPS sums {has} fewer than "
+        f"{policy.analyst_min} EPS analysts or no count: the thinnest, ending "
+        f"{_day(least.period_end)}, has {count}, so year 1 rests on thin evidence.",
+    )
+
+
+def _day(day: date) -> str:
+    """A period end as the flags write it, ``30 Jun 2027``."""
+    return f"{day.day} {day:%b %Y}"
+
+
 def sales_class(revenue_ttm_musd: float, policy: Policy) -> BaseRateClass:
     """The sales class of trailing revenue in USD millions: the first whose upper bound is at or
     above it. The revenue is in current dollars and the bounds in 2015 dollars (D6)."""

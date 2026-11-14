@@ -924,6 +924,12 @@
     2025
    ]
   },
+  "margin_history": {
+   "operating": {
+    "median": 0.08,
+    "years": 5
+   }
+  },
   "moat": "None",
   "multiples": {
    "pe_clean": 6.666666666666666,

@@ -256,6 +256,44 @@ def test_a_company_in_another_currency_resolves_its_rate_and_names_it(
     )
 
 
+def test_the_ten_year_median_margins_resolve_and_read_in_words(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-13 11: the playbook's cycle formula cites the ten-year median net margin as
+    `snapshot:<id>/intermediates/margin_history/net/median`. AAPL's series with net income at
+    three quarters of each year's operating income: the operating median is 23.25% and the net
+    median 17.4375%, each over 10 years. The references list names each in words. On the fixture's
+    own snapshot, whose series has no net income, the net margin is absent and its ref resolves
+    to nothing, raising nothing."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    base = replace(mature_growth_inputs(), symbol="AAPL")
+    assert all(fy.operating_income is not None for fy in base.series)
+    series = tuple(
+        replace(fy, net_income=0.75 * (fy.operating_income or 0.0)) for fy in base.series
+    )
+    mechanical = value_company(replace(base, series=series), universe_deciles(), policy, TODAY)
+    sid = insert_snapshot(conn, mechanical, aapl.refresh_id, clock=lambda: NOW)
+    resolver = Resolver(conn, "AAPL", policy)
+    s = f"snapshot:{sid}/intermediates/margin_history"
+    priced = "priced 30 Oct 2026"
+    for path, value, words in (
+        ("net/median", 0.174375, "the ten-year median net margin"),
+        ("operating/median", 0.2325, "the ten-year median operating margin"),
+        ("net/years", 10.0, "the fiscal years behind the ten-year median net margin"),
+        ("operating/years", 10.0, "the fiscal years behind the ten-year median operating margin"),
+    ):
+        found = resolver.resolve(f"{s}/{path}")
+        assert found is not None, path
+        assert (found.value, found.snapshot_id) == (pytest.approx(value), sid), path
+        assert resolver.describe(f"{s}/{path}") == f"snapshot {sid}, {words}, {priced}", path
+    bare = f"snapshot:{snapshots['AAPL']}/intermediates/margin_history"
+    assert resolver.resolve(f"{bare}/operating/median") is not None
+    assert resolver.resolve(f"{bare}/net/median") is None
+    assert resolver.resolve(f"{bare}/net/years") is None
+    assert resolver.resolve(bare) is None  # a record, not a figure
+
+
 def _secondary_id(conn: sqlite3.Connection, policy: Policy, snapshot_id: int) -> int:
     """Spec 20.1's one-part path, debt 200, cash 100, 100 shares."""
     part = Part("the business", (100.0, 105.0, 110.25, 115.7625, 121.550625), 0.03, None)

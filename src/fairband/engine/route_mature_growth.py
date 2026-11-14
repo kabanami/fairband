@@ -13,9 +13,11 @@ the first such year raises "growth above return", which counts the rest, after t
 before the trailing ones, where the ``heavy-capex`` sentence names the return the charge starts at
 and ``consensus-basis-unknown`` follows ``large-nri``. The two stock-pay notes,
 ``stock-pay-missing`` and ``sbc-basis-uncertain``, follow the anchor's flags (spec 2026-11-13
-7.1), each silent under the input that decides it. ``charge`` in the intermediates records the
-growth paid for, the return by year, the hold and the revenue steps as found; ``sbc_ttm`` the
-trailing stock pay the anchor read.
+7.1), each silent under the input that decides it. ``thin-ntm`` (spec 2026-11-13 9), a note on
+an NTM window with a period of fewer than ``analyst_min`` EPS analysts or no count, takes the
+place right after ``few-analysts``, silent under an applied ``earnings.ntm``, whose anchor is the
+guidance. ``charge`` in the intermediates records the growth paid for, the return by year, the
+hold and the revenue steps as found; ``sbc_ttm`` the trailing stock pay the anchor read.
 
 The value is also computed at each policy runway and at each return of the sensitivity, and so is
 the implied growth at the price. The sensitivity is keyed ``"runway"``, the row's own charge;
@@ -74,6 +76,7 @@ entry stays on the reported count, ``None`` without one, so no entry cited to th
 the agent's count.
 """
 
+from collections.abc import Sequence
 from dataclasses import asdict, replace
 from typing import Any, Literal
 
@@ -81,6 +84,7 @@ from fairband.engine.anchor import (
     Anchor,
     Belief,
     Path,
+    QuarterEstimate,
     base_fiscal_year,
     belief_from_sales,
     few_analysts,
@@ -89,6 +93,7 @@ from fairband.engine.anchor import (
     ntm_window,
     path_steps,
     step_series_flag,
+    thin_ntm_flag,
 )
 from fairband.engine.flags import (
     long_runway_flag,
@@ -331,7 +336,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     path = path_steps(i.annual_estimates, base_year, policy)
     belief = belief_from_sales(t.revenue / i.fx_rate / 1e6, policy)  # the bounds are USD
     if own:
-        path, belief = _judged(c, path, belief, base_year)
+        path, belief = _judged(c, path, belief, base_year, periods)
     if any(g is not None and g <= -1 for g in path.steps):
         return Refused(
             "consensus earnings turn negative within the path", anchor.flags + path.flags
@@ -339,15 +344,23 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     return anchor, path, base_year, belief
 
 
-def _judged(c: Context, path: Path, belief: Belief, base_year: int) -> tuple[Path, Belief]:
+def _judged(
+    c: Context, path: Path, belief: Belief, base_year: int, periods: Sequence[QuarterEstimate]
+) -> tuple[Path, Belief]:
     """The route's own path and belief: under the step and belief overrides, an overriding step
     replaces the consensus's; ``few-analysts`` and ``step-series-disagree`` name only the steps the
-    consensus still gives, the latter against the diluted count (spec 2026-11-09 9)."""
+    consensus still gives, the latter against the diluted count (spec 2026-11-09 9). ``thin-ntm``
+    (spec 2026-11-13 9) reads the NTM window's ``periods``, the ones the anchor sums, and takes
+    the place right after ``few-analysts``; it is silent under an applied ``earnings.ntm``, whose
+    anchor is the guidance."""
     read = (_STEP_TAGS[0] not in c.overrides, _STEP_TAGS[1] not in c.overrides)
     consensus = tuple(step if r else None for r, step in zip(read, path.steps, strict=True))
     thin = few_analysts(base_year, (consensus[0], consensus[1]), path.analysts, c.policy)
+    thin_ntm = None if "earnings.ntm" in c.overrides else thin_ntm_flag(periods, c.policy)
     disagree = step_series_flag(path, c.shares, c.policy, read)
-    flags = tuple(f for f in path.flags if f.code != "few-analysts") + present(thin)
+    flags = (
+        tuple(f for f in path.flags if f.code != "few-analysts") + present(thin) + present(thin_ntm)
+    )
     steps = (chosen(c, "path.step_2", path.steps[0]), chosen(c, "path.step_3", path.steps[1]))
     rate = chosen(c, "growth.belief", belief.rate)
     judged = replace(path, steps=steps, flags=flags + present(disagree))

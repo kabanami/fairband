@@ -468,6 +468,12 @@
    "refusal": "incomplete NTM consensus"
   },
   "income_basis": "flows over market cap",
+  "margin_history": {
+   "operating": {
+    "median": 0.2,
+    "years": 10
+   }
+  },
   "margin_scaled": false,
   "median_margin": 0.2,
   "moat": "Wide",

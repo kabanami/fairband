@@ -30,6 +30,7 @@ START_UP_KEYS = {
     "burn",
     "price_facts",
     "trailing_end",
+    "margin_history",
     "debt",
     "cash",
     "cash_known",

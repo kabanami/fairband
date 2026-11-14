@@ -455,13 +455,17 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
         "fx-stale",
         "stock-pay-missing",
         "sbc-basis-uncertain",
+        "thin-ntm",
     ):
         assert f'<code class="fb-tag figure-sm">{code}</code>' in notes, code
-    # the two stock-pay notes follow the basis note, in the route's order (method 5.11)
+    # the two stock-pay notes follow the basis note, and the thin NTM note follows the few
+    # analysts note, in the route's order (method 5.11)
     order = [
         c for c in chips if c in ("sbc-basis-unknown", "stock-pay-missing", "sbc-basis-uncertain")
     ]
     assert order == ["sbc-basis-unknown", "stock-pay-missing", "sbc-basis-uncertain"]
+    path = [c for c in chips if c in ("few-analysts", "thin-ntm", "step-series-disagree")]
+    assert path == ["few-analysts", "thin-ntm", "step-series-disagree"]
     text = re.sub(r"\s+", " ", flags)
     assert "Twelve flags are quality warnings" in text and len(QUALITY_WARNINGS) == 12
     assert set(QUALITY_WARNINGS) == ENGINE_WARNINGS
@@ -470,6 +474,9 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
     for span in ("share_count_gap_band.0", "share_count_gap_band.1"):
         assert f'<span data-policy="{span}">—</span>' in gap, span
     assert "a share class or units that convert to shares" in gap
+    thin = text[text.index(">thin-ntm</code>") :]
+    thin = thin[: thin.index("</li>")]
+    assert '<span data-policy="analyst_min">—</span>' in thin and "guidance" in thin
     outside = html.replace(flags, "")
     assert "<code" not in outside
     assert "currency-unknown" not in chips  # method 1.1 refuses an unknown currency instead

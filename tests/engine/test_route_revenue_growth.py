@@ -17,6 +17,7 @@ from support.engine_companies import (
 
 from fairband.engine.anchor import AnnualEstimate
 from fairband.engine.classifier import Deciles
+from fairband.engine.flags import margin_history
 from fairband.engine.overrides import Override, current_reading
 from fairband.engine.revenue_growth import (
     Bridge,
@@ -74,6 +75,7 @@ REVENUE_GROWTH_KEYS = {
     "income_basis",
     "price_facts",
     "trailing_end",
+    "margin_history",
     "growth_route",
     "implied_growth",
     "implied_margin",
@@ -81,8 +83,9 @@ REVENUE_GROWTH_KEYS = {
     "growth_share",
     "expected_return",
 }
-# What a plain refusal keeps: the price facts and the trailing period end every refusal carries.
-PLAIN_REFUSAL_KEYS = {"price_facts", "trailing_end"}
+# What a plain refusal keeps: the price facts, the trailing period end and the ten-year median
+# margins every refusal of a row with trailing figures and a series carries.
+PLAIN_REFUSAL_KEYS = {"price_facts", "trailing_end", "margin_history"}
 # What a row refused for its target margin keeps: the keys that rebuild the margin the price
 # needs, that margin, and the keys every refusal carries.
 TARGET_REFUSAL_KEYS = {
@@ -97,6 +100,7 @@ TARGET_REFUSAL_KEYS = {
     "implied_margin",
     "price_facts",
     "trailing_end",
+    "margin_history",
 }
 # The fixture's sales class from its $10 bn of trailing revenue, and that class's cap on the held
 # rate; the year-3 consensus of 20% is above it.
@@ -146,6 +150,11 @@ def with_own_measure(inputs: CompanyInputs, own: float) -> CompanyInputs:
     margins = [oi / rev for rev, oi in figures if rev is not None and oi is not None]
     assert len(revenue) == len(margins) == len(figures)
     return replace(inputs, capital_years=capital_years(fiscal_years(revenue, margins)))
+
+
+def _without_margins(r: ValuationResult) -> dict[str, Any]:
+    """``r``'s intermediates but ``margin_history``, which reads the row's own series."""
+    return {k: v for k, v in r.intermediates.items() if k != "margin_history"}
 
 
 def codes(r: ValuationResult) -> list[str]:
@@ -274,7 +283,9 @@ def test_young_growth_values_like_high_growth_and_is_flagged(
         "value": None,
         "reason": "no survival table fits a listed company above $2 billion",
     }
-    assert young == high.intermediates
+    # the ten-year median margins read each row's own series, which is what sets the phases apart
+    assert young.pop("margin_history") == margin_history(young_growth_inputs.series)
+    assert young == _without_margins(high)
     assert [f.code for f in r.flags if f.code == "failure-not-charged"] == ["failure-not-charged"]
     assert "failure-not-charged" not in codes(high)
     # after the implied-return check, before the trailing flags
@@ -903,7 +914,8 @@ def test_young_growth_equals_high_growth_on_the_ramp(
     assert r.value is not None and r.value == high.value and r.levels == high.levels
     figures = dict(r.intermediates)
     figures.pop("failure_probability")
-    assert figures == high.intermediates
+    assert figures.pop("margin_history") == margin_history(young_growth_inputs.series)
+    assert figures == _without_margins(high)
     assert sentence(r, "margin-ramp-in-dollars") == sentence(high, "margin-ramp-in-dollars")
     for row in (r, high):
         assert "loss_ramp_margin_bound" in [i.name for i in row.inputs]

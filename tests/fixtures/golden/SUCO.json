@@ -363,6 +363,7 @@
   "cash_floor": 3.0,
   "cash_known": true,
   "debt": 0.0,
+  "margin_history": {},
   "market_cap": 2000.0,
   "price_facts": {
    "change_1y": -0.11092150170648463,

@@ -641,6 +641,12 @@
   "implied_growth": -0.024629936218261747,
   "implied_margin": 0.15363437652587894,
   "income_basis": "flows over market cap",
+  "margin_history": {
+   "operating": {
+    "median": -0.155,
+    "years": 8
+   }
+  },
   "margin_path": {
    "by_year": [
     -0.06099999999999999,

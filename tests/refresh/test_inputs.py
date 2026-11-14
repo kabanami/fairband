@@ -151,6 +151,7 @@ def test_builds_series_and_capital_years(conn_with_company: sqlite3.Connection) 
         cfi=-110 * M,
         cff=-132 * M,
         capex=-66 * M,
+        net_income=165 * M,
     )
     assert inputs.series[-1].revenue == 2100 * M
     assert series_for(conn_with_company, "ACME") == inputs.series
@@ -180,6 +181,17 @@ def test_builds_series_and_capital_years(conn_with_company: sqlite3.Connection) 
     assert "2015, 2016, 2017, 2018" in inputs.input_flags[0].sentence
     assert inputs.tax_rate_latest == 0.25569714
     assert inputs.refusal is None
+
+
+def test_the_series_carries_each_year_s_net_income(conn_with_company: sqlite3.Connection) -> None:
+    """Spec 2026-11-13 11: each fiscal year carries the annual income statement's net income, 15%
+    of the synthetic company's revenue every year ($150 m on $1,000 m in 2014, up $15 m a year),
+    which the ten-year median net margin reads; the classifier reads it in no rule."""
+    series = series_for(conn_with_company, "ACME")
+    assert [fy.net_income for fy in series] == [(150 + 15 * k) * M for k in range(1, 12)]
+    for fy in series:
+        assert fy.revenue is not None and fy.net_income is not None
+        assert fy.net_income / fy.revenue == pytest.approx(0.15)
 
 
 def test_a_missing_fiscal_year_keeps_its_place(store: Store) -> None:

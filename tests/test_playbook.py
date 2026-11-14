@@ -623,6 +623,57 @@ def test_the_agent_reads_the_stock_pay_on_mature_growth() -> None:
         assert words in eight, words
 
 
+def test_the_cycle_formula_reads_the_ten_year_median_net_margin() -> None:
+    """Spec 2026-11-13 11: the cycle formula changes one term, the mid-cycle net margin, now the
+    snapshot's ten-year median net margin in place of the middle of the growth table's five
+    years; a shorter history is named with its count; a consensus that leaves out the amortization
+    of bought intangibles against a history as reported is evidence for half; the ruling of
+    2026-11-11 stands otherwise, and a gap on file keeps its figure until its review is made
+    again. Step 7 reads the ten-year median operating margin on every route; the template and the
+    citations name the new paths."""
+    flat = _flat(_read(SKILL))
+    start = flat.index("The cycle gap's figure.")
+    formula = flat[start : flat.index("The share count and the value outside the business:")]
+    for words in (
+        "full gap = NTM EPS − NTM EPS ÷ (NTM net margin ÷ mid-cycle net margin)",
+        (
+            "The mid-cycle net margin is the ten-year median net margin,"
+            " `snapshot:<id>/intermediates/margin_history/net/median`"
+        ),
+        "A history of fewer than ten years is named with its count",
+        "`snapshot:<id>/intermediates/margin_history/net/years`",
+        (
+            "leaves out the amortization of bought intangibles while the history is as reported,"
+            " the full gap cuts for accounting as well as for the cycle"
+        ),
+        "that is evidence for half",
+        "Take the full gap.",
+        "Take half of it only where a filing or a transcript shows a lasting cause",
+        "Never take less than half.",
+        "An `earnings.cycle_gap` on file keeps its figure until its review is made again",
+        "Never set the gap from a trailing margin or from an operating margin.",
+    ):
+        assert words in formula, words
+    for old in ("growth/net_margin", "middle one of the five", "no tool gives a median"):
+        assert old not in flat, old
+    seven = _flat(_steps(_frontmatter(_read(SKILL))[1])[7])
+    for words in (
+        "On every route the snapshot's intermediates hold the ten-year median operating margin",
+        "`margin_history/operating/median`",
+        "`margin_history/operating/years`",
+        "never a median you computed",
+        "Where fewer than ten years stand behind it, name the count",
+    ):
+        assert words in seven, words
+    template = _flat(_read(TEMPLATE))
+    assert "`snapshot:<id>/intermediates/margin_history/net/median`" in template
+    assert "the net margin of the middle year" not in template
+    row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
+    cell = row["`snapshot:<id>/intermediates/<path>`"][0]
+    for path in ("operating/median", "net/median", "operating/years", "net/years"):
+        assert f"`margin_history/{path}`" in cell, path
+
+
 def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
     """Spec 2026-11-09 6.3, 7, 9 and 12 (the engine round 2, plan 1): the return judgment reads
     the newest year's marginal return and the capital-spending guidance when `heavy-capex` fires;
@@ -654,6 +705,20 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
             ),
         ),
         ("step-series-disagree", ("both series", "`path.step_2`", "`path.step_3`")),
+        (
+            "thin-ntm",
+            (
+                "`analyst_min`",
+                "how many of the window's periods are thin, the smallest count and its period",
+                "the annual estimates of the fiscal years the window spans",
+                "their analyst counts",
+                "guidance",
+                "clear EPS guidance record",
+                "`earnings.ntm`",
+                "once it applies",
+                "states the exposure",
+            ),
+        ),
         (
             "stock-pay-missing",
             ("cash flow statements", "`earnings.sbc`", "period-tied", "once `earnings.sbc`"),
@@ -908,7 +973,7 @@ def test_the_skill_reads_a_foreign_filer() -> None:
             r"^- `([\w-]+)`: (.*?)(?=^- |^$|\Z)", eight, re.MULTILINE | re.DOTALL
         )
     }
-    assert "Eleven flags ask for a decision of yours." in steps[8]
+    assert "Twelve flags ask for a decision of yours." in steps[8]
     for code, words in (
         ("basis-scaled", ("the ADR ratio", "read as stored", "section 8")),
         ("fx-stale", ("the rate", "price date", '`refresh_start("price")`')),

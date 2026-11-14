@@ -369,6 +369,30 @@ def test_a_stock_pay_input_under_an_ntm_anchor_moves_nothing(
     assert im["anchor"]["ntm_eps"] == 6.10
 
 
+def test_the_thin_ntm_note_does_not_show_under_a_guided_anchor(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-13 9: MGCO with an NTM quarter on 4 EPS analysts carries ``thin-ntm``; a review
+    under an applied ``earnings.ntm`` does not, its anchor being the guidance. A review under
+    another input keeps the note, and the two reviews keep the mechanical row's margins."""
+    base = mature_growth_inputs()
+    q = base.quarter_estimates
+    inputs = replace(base, quarter_estimates=(*q[:3], replace(q[3], analysts=4)))
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert "thin-ntm" in _codes(mechanical)
+    guided = review_company(
+        inputs, deciles, policy, TODAY, [OVERRIDE("earnings.ntm", 6.10)], mechanical
+    )
+    assert guided.result.value is not None and "thin-ntm" not in _codes(guided.result)
+    belief = review_company(
+        inputs, deciles, policy, TODAY, [OVERRIDE("growth.belief", 0.08)], mechanical
+    )
+    assert "thin-ntm" in _codes(belief.result)
+    margins = mechanical.intermediates["margin_history"]
+    for review in (guided, belief):
+        assert review.result.intermediates["margin_history"] == margins
+
+
 def test_a_step_override_moves_the_charge_only_where_the_revenue_step_is_missing(
     policy: Policy, deciles: Deciles
 ) -> None:

@@ -535,6 +535,7 @@ def _series(years: _Years, cash: dict[date, _Period]) -> Series:
                 cfi=flows.value("netCashProvidedByInvestingActivities"),
                 cff=flows.value("netCashProvidedByFinancingActivities"),
                 capex=flows.value("capitalExpenditure"),
+                net_income=income.value("netIncome"),
             )
         )
     return tuple(rows)

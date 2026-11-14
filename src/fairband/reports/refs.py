@@ -389,6 +389,16 @@ _SNAPSHOT_PATH_WORDS = {
         "the return on capital without goodwill and intangibles"
     ),
     "intermediates/outside_value_per_share": "the value outside the business",
+    # the ten-year median margins and the years behind each (spec 2026-11-13 11): the cycle
+    # formula's mid-cycle margin is the net one
+    "intermediates/margin_history/net/median": "the ten-year median net margin",
+    "intermediates/margin_history/operating/median": "the ten-year median operating margin",
+    "intermediates/margin_history/net/years": (
+        "the fiscal years behind the ten-year median net margin"
+    ),
+    "intermediates/margin_history/operating/years": (
+        "the fiscal years behind the ten-year median operating margin"
+    ),
     "intermediates/price_facts/high_52w": "the 52-week high",
     "intermediates/price_facts/low_52w": "the 52-week low",
     "intermediates/price_facts/change_1y": "the price change over one year",

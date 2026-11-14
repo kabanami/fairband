@@ -622,6 +622,12 @@
   },
   "income_basis": "flows over market cap",
   "inflation_differential": 0.02,
+  "margin_history": {
+   "operating": {
+    "median": 0.23249999999999998,
+    "years": 10
+   }
+  },
   "moat": "Wide",
   "multiples": {
    "pe_clean": 9.523809523809524,

@@ -70,7 +70,9 @@ _FCF_EXPECTED: dict[Phase, str] = {
 
 @dataclass(frozen=True)
 class FiscalYear:
-    """One fiscal year as the cash-flow statement signs it: ``capex`` is negative for spending."""
+    """One fiscal year as the cash-flow statement signs it: ``capex`` is negative for spending.
+    ``net_income`` is the income statement's, which no rule of the classifier reads; the ten-year
+    median net margin does (``flags.margin_history``, spec 2026-11-13 11)."""
 
     year: int
     period_end: date
@@ -81,6 +83,7 @@ class FiscalYear:
     cfi: float | None
     cff: float | None
     capex: float | None
+    net_income: float | None = None
 
 
 Series = tuple[FiscalYear, ...]

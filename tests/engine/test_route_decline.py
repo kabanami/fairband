@@ -86,13 +86,15 @@ DECLINE_KEYS = {
     "income_basis",
     "price_facts",
     "trailing_end",
+    "margin_history",
     "implied_decline_rate",
     "multiples",
     "expected_return",
 }
 PRICE_KEYS = ("implied_decline_rate", "multiples", "expected_return")
-# What a plain refusal keeps: the price facts and the trailing period end every refusal carries.
-PLAIN_REFUSAL_KEYS = {"price_facts", "trailing_end"}
+# What a plain refusal keeps: the price facts, the trailing period end and the ten-year median
+# margins every refusal of a row with trailing figures and a series carries.
+PLAIN_REFUSAL_KEYS = {"price_facts", "trailing_end", "margin_history"}
 NOT_POSITIVE = "value not positive in the run-off"
 FMP_SOURCE = "FMP stock-peers and the peers' statements"
 PEERS = (

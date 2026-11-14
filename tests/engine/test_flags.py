@@ -13,6 +13,7 @@ from fairband.engine.flags import (
     gate_flags,
     long_runway_flag,
     margin_flag,
+    margin_history,
     median_margin,
     nri_flag,
     sbc_basis_uncertain_flag,
@@ -149,6 +150,41 @@ def test_median_margin_is_the_margin_flags_median(policy: Policy) -> None:
     assert flag is not None and "median of 55.0%" in flag.sentence
     assert median_margin(margins([None, None])) is None
     assert median_margin(()) is None
+
+
+def test_margin_history_is_the_median_of_the_last_ten_years() -> None:
+    nets = [1.0, 2.0, 3.0, None]
+    four = tuple(
+        replace(fy, net_income=n) for fy, n in zip(margins([10, 20, 30, 40]), nets, strict=True)
+    )
+    assert margin_history(four) == {
+        "operating": {"median": pytest.approx(0.25), "years": 4},
+        "net": {"median": pytest.approx(0.02), "years": 3},
+    }
+    # twelve years: the oldest two, 90% and 80%, are outside the window; no net income on file
+    twelve = margins([90, 80, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    assert margin_history(twelve) == {"operating": {"median": pytest.approx(0.055), "years": 10}}
+    # a year with no revenue above zero is skipped
+    dead = replace(four[0], year=2026, period_end=date(2026, 12, 31), revenue=0.0)
+    assert margin_history((*four, dead)) == margin_history(four)
+    assert margin_history(()) == {}
+
+
+def test_the_net_margin_takes_the_operating_margin_s_window() -> None:
+    """Spec 2026-11-13 11: the net margin's window is the last ten fiscal years with net income and
+    a revenue above zero, as the operating margin's is with operating income; a loss year counts,
+    and each median's count is its own. Eleven years of net income at 1% to 11% of a revenue of
+    100, the newest without operating income: the net median runs over 2% to 11%, 6.5%; the
+    operating median over the ten years before the newest."""
+    years = margins([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, None])
+    series = tuple(replace(fy, net_income=float(k + 1)) for k, fy in enumerate(years))
+    history = margin_history(series)
+    assert history["net"] == {"median": pytest.approx(0.065), "years": 10}
+    assert history["operating"] == {"median": pytest.approx(0.275), "years": 10}
+    assert history["operating"]["median"] == median_margin(series)
+    nets = [-5.0, 1.0, 2.0]  # a loss year counts
+    losses = tuple(replace(fy, net_income=n) for fy, n in zip(margins([10] * 3), nets, strict=True))
+    assert margin_history(losses)["net"] == {"median": pytest.approx(0.01), "years": 3}
 
 
 def trailing(

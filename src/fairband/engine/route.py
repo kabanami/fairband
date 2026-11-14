@@ -45,7 +45,9 @@ share-count warning, one quote's market cap and price keeping their ratio. Its i
 ``price_facts``, the price columns of spec 6.3, on a refusal too (``None`` for a row without a
 price), and ``trailing_end``, the trailing period end as an ISO date, on every result whose
 inputs have trailing figures, a refusal too: the period a period-tied override corrects (spec
-2026-11-13 11a). ``reprice`` moves a result to a new price from its
+2026-11-13 11a); and ``margin_history``, the ten-year median operating and net margins with their
+counts of years (``flags.margin_history``, spec 2026-11-13 11), on every result whose series is
+not empty, a refusal too. ``reprice`` moves a result to a new price from its
 intermediates alone, its price input with it; a refusal takes only the new price, except a
 revenue-growth row whose intermediates hold ``revenue_path`` (refused for its target margin or
 its value), whose margin the price needs moves too, a Start-up row, whose market cap moves
@@ -170,7 +172,7 @@ from fairband.engine.anchor import (
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Deciles, Series, classify
 from fairband.engine.designation import designation_for
-from fairband.engine.flags import share_count_flag
+from fairband.engine.flags import margin_history, share_count_flag
 from fairband.engine.levels import levels_for
 from fairband.engine.overrides import Overrides
 from fairband.engine.revenue_growth import PeerFigures, PeerSource
@@ -432,11 +434,12 @@ def reprice(
     it and re-reads its ``below-net-cash`` flag; and a Mature Stable row refused for its trailing
     earnings or for a value not positive under the reinvestment charge, whose intermediates hold
     ``growth_route`` and ``e_trailing``, moves the cross-check's implied growth
-    (``cross_check_at_price``; a refused cross-check stays as it is). ``price_facts`` and
-    ``trailing_end`` stay as they were. Every solve on the price targets the business's share of
-    it, the price less the intermediates' ``outside_value_per_share`` (nil without one;
-    ``route_steps.business_price``), the rebuilds reading the figure from the intermediates; the
-    designation, the multiples and the expected return read the price against the value, the sum.
+    (``cross_check_at_price``; a refused cross-check stays as it is). ``price_facts``,
+    ``trailing_end`` and ``margin_history`` stay as they were. Every solve on the price targets the
+    business's share of it, the price less the intermediates' ``outside_value_per_share`` (nil
+    without one; ``route_steps.business_price``), the rebuilds reading the figure from the
+    intermediates; the designation, the multiples and the expected return read the price against
+    the value, the sum.
     Either way the ``price`` input becomes the new quote, so the drawer's arithmetic reproduces:
     its value is ``price`` and its ``as_of`` is ``price_date``; its source stays, and its
     ``observed_at`` and ``entered_at`` become the quote's when given. Every other input stays.
@@ -609,7 +612,10 @@ def _valued(
         valid_until=_valid_until(i, policy),
         phase=phase,
         inputs=judged_inputs(_base_inputs(i, policy) + v.inputs, overrides, i.currency),
-        intermediates=v.intermediates | _currency_entry(i, v.value) | _trailing_entry(i),
+        intermediates=v.intermediates
+        | _currency_entry(i, v.value)
+        | _trailing_entry(i)
+        | _margin_entry(i),
         flags=_unique(
             i.input_flags
             + _share_count(i, overrides, policy)
@@ -661,6 +667,7 @@ def _refuse(
             "price_facts": price_facts_for(i.closes, price, today),
             **_currency_entry(i, None),
             **_trailing_entry(i),
+            **_margin_entry(i),
         },
     )
     return replace(result, valid_until=_valid_until(i, policy))
@@ -731,6 +738,13 @@ def _trailing_entry(i: CompanyInputs) -> dict[str, Any]:
     """``trailing_end``, the trailing period end as an ISO date, the period a period-tied
     override corrects (spec 2026-11-13 11a); none for a row with no trailing figures."""
     return {} if i.trailing is None else {"trailing_end": i.trailing.period_end.isoformat()}
+
+
+def _margin_entry(i: CompanyInputs) -> dict[str, Any]:
+    """``margin_history``, the ten-year median operating and net margins with their counts of
+    years (``flags.margin_history``, spec 2026-11-13 11), which the research agent reads for a
+    cyclical company; none for a row whose series is empty."""
+    return {"margin_history": margin_history(i.series)} if i.series else {}
 
 
 def _share_count(i: CompanyInputs, overrides: Overrides, policy: Policy) -> tuple[Flag, ...]:

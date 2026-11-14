@@ -7,6 +7,9 @@ is ``margin_flag_ratio`` times the median or more (a positive median), or when i
 high by ``margin_flag_above_high`` of the high's size or more, so a loss-making history that turns
 profitable fires too. Its word reads the history: "Newly profitable" for a median at or below
 zero, "Possible cycle peak" for a loss year in the window, else "Margin above history".
+``margin_history`` is no flag: the ten-year median operating margin on the flag's window and the
+ten-year median net margin on the same rule, each with its count of years, which every routed
+result carries for the research agent's judgment of a cyclical company (spec 2026-11-13 11).
 
 The gate flags are the three ``mech/1.2`` gate tests on the trailing figures, kept as flags. The
 cash-flow statement signs capital spending as an outflow, so ``capex`` is negative for spending:
@@ -46,10 +49,10 @@ inputs, the engine's mechanics and the bookkeeping flags. A note is shown and ne
 
 import math
 import statistics
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from fairband.engine.anchor import SbcBasis, StockPayHistory, TrailingFigures
-from fairband.engine.classifier import Series, operating_margin
+from fairband.engine.classifier import FiscalYear, Series, operating_margin
 from fairband.engine.types import Flag
 from fairband.policy import Policy
 
@@ -367,6 +370,31 @@ def value_spread_flag(
     )
 
 
-def _margin_history(series: Series, window: int) -> list[float]:
-    """The operating margins of the last ``window`` fiscal years that have one, oldest first."""
-    return [m for fy in series if (m := operating_margin(fy)) is not None][-window:]
+def margin_history(series: Series) -> dict[str, dict[str, float | int]]:
+    """The ten-year median margins (spec 2026-11-13 11): ``operating``, the median the margin flag
+    uses, and ``net``, net income over revenue on the same rule, each with ``years``, the count of
+    fiscal years behind it; a margin no year has is absent. Both are the statements' own lines, as
+    reported, so no rate enters on a company in another currency."""
+    found: dict[str, dict[str, float | int]] = {}
+    for key, margin in (("operating", operating_margin), ("net", _net_margin)):
+        history = _margin_history(series, _MARGIN_WINDOW, margin)
+        if history:
+            found[key] = {"median": statistics.median(history), "years": len(history)}
+    return found
+
+
+def _net_margin(fy: FiscalYear) -> float | None:
+    """Net income ÷ revenue; ``None`` when either is missing or the revenue is not positive."""
+    if fy.revenue is None or fy.net_income is None or fy.revenue <= 0:
+        return None
+    return fy.net_income / fy.revenue
+
+
+def _margin_history(
+    series: Series,
+    window: int,
+    margin: Callable[[FiscalYear], float | None] = operating_margin,
+) -> list[float]:
+    """The margins ``margin`` reads, the operating margin unless another is given, of the last
+    ``window`` fiscal years that have one, oldest first."""
+    return [m for fy in series if (m := margin(fy)) is not None][-window:]
