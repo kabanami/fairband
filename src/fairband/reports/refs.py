@@ -423,6 +423,10 @@ _SNAPSHOT_PATH_WORDS = {
     "intermediates/balance_sheet/quarterly": "whether the newest balance sheet is a quarter's",
     "inputs/floor_current_assets": "the total current assets the liquidation floor reads",
     "inputs/floor_total_liabilities": "the total liabilities the liquidation floor reads",
+    # the minority interest (spec 2026-11-13 13): the sheet's line as presented, and the figure in
+    # force, nil at or below zero, which the three firm-value routes subtract
+    "inputs/minority_interest": "the minority interest on the newest balance sheet",
+    "intermediates/minority_interest": "the minority interest the route subtracts",
     "phase/phase": "the phase",
     "phase/growth_3y": "the three-year revenue growth",
     "phase/dickinson": "the Dickinson stage",

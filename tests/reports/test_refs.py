@@ -16,6 +16,7 @@ from support.engine_companies import (
     mature_growth_inputs,
     on_quarter_sheet,
     universe_deciles,
+    with_minority,
 )
 from support.payloads import store_payloads
 from support.web import TODAY
@@ -347,6 +348,29 @@ def test_the_newest_sheet_and_the_floor_s_lines_resolve_and_read_in_words(
     assert resolver.describe(f"snapshot:{sid}/inputs/total_liabilities") == (
         f"snapshot {sid}, the total liabilities, {priced}"
     )
+
+
+def test_the_minority_interest_resolves_and_reads_in_words(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-13 13: a Decline row whose newest balance sheet holds a minority interest of
+    $50 m cites the line as an input and carries the figure the route subtracts; the references
+    list names each in words."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    dc = with_minority(replace(decline_inputs(), symbol="AAPL"), 50e6)
+    mechanical = value_company(dc, universe_deciles(), policy, TODAY)
+    assert mechanical.route == "decline"
+    sid = insert_snapshot(conn, mechanical, aapl.refresh_id, clock=lambda: NOW)
+    resolver = Resolver(conn, "AAPL", policy)
+    for path, words in (
+        ("inputs/minority_interest", "the minority interest on the newest balance sheet"),
+        ("intermediates/minority_interest", "the minority interest the route subtracts"),
+    ):
+        ref = f"snapshot:{sid}/{path}"
+        found = resolver.resolve(ref)
+        assert found is not None and (found.value, found.snapshot_id) == (50e6, sid), path
+        assert resolver.describe(ref) == f"snapshot {sid}, {words}, priced 30 Oct 2026", path
 
 
 def _secondary_id(conn: sqlite3.Connection, policy: Policy, snapshot_id: int) -> int:

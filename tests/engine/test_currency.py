@@ -17,6 +17,7 @@ from support.engine_companies import (
     mature_growth_inputs,
     mature_stable_inputs,
     start_up_inputs,
+    with_minority,
     young_growth_inputs,
 )
 
@@ -243,6 +244,48 @@ def test_a_decline_row_s_levels_are_in_usd(policy: Policy, deciles: Deciles) -> 
     assert r.intermediates["ncav"] == pytest.approx(-200e6 * 8.0)
     floor = inputs_of(r)["floor_current_assets"]
     assert (floor.value, floor.unit) == (pytest.approx(300e6 * 8.0), "SEK")
+
+
+@pytest.mark.parametrize(
+    ("phase", "line"), [("high-growth", 500e6), ("young-growth", 500e6), ("decline", 50e6)]
+)
+def test_the_minority_interest_is_in_the_currency(
+    policy: Policy, deciles: Deciles, phase: str, line: float
+) -> None:
+    """Spec 2026-11-13 13 on a company in SEK at 8.0: the newest balance sheet's minority interest
+    is restated with its debt and cash, so the route subtracts it in SEK and cites it in SEK; with
+    no differential the value a share in USD is the USD company's, which the figure lowered."""
+    usd = with_minority(VALUED[phase](), line)
+    dollars = value_company(usd, deciles, policy, TODAY)
+    r = value_company(in_sek(usd, differential=0.0), deciles, policy, TODAY)
+    im = r.intermediates
+    assert (im["minority_interest"], im["debt"], im["cash"]) == (
+        pytest.approx(line * 8.0),
+        pytest.approx(dollars.intermediates["debt"] * 8.0),
+        pytest.approx(dollars.intermediates["cash"] * 8.0),
+    )
+    cited = inputs_of(r)["minority_interest"]
+    assert (cited.value, cited.unit) == (pytest.approx(line * 8.0), "SEK")
+    assert r.value is not None and dollars.value is not None
+    assert r.value == pytest.approx(dollars.value)
+    plain = value_company(VALUED[phase](), deciles, policy, TODAY)
+    assert plain.value is not None and r.value < plain.value
+
+
+def test_a_start_up_row_s_minority_interest_is_in_the_currency(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """SUCO with a minority interest of 100 in SEK at 8.0: EV_price and the cash floor read 800 of
+    it in SEK, eight times the USD row's under the restated policy."""
+    usd = with_minority(start_up_inputs(), 100.0)
+    restated = value_company(usd, deciles, in_currency(policy, 0.02), TODAY)
+    r = value_company(in_sek(usd), deciles, policy, TODAY)
+    im, base = r.intermediates, restated.intermediates
+    assert im["minority_interest"] == pytest.approx(800.0)
+    assert inputs_of(r)["minority_interest"].unit == "SEK"
+    assert im["requirement"]["ev_price"] == pytest.approx(base["requirement"]["ev_price"] * 8.0)
+    assert base["requirement"]["ev_price"] == pytest.approx(2_000.0 + 100.0 - 300.0)
+    assert im["cash_floor"] == pytest.approx(base["cash_floor"] * 8.0) == pytest.approx(16.0)
 
 
 def test_the_sales_class_reads_revenue_in_usd(policy: Policy, deciles: Deciles) -> None:

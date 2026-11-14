@@ -16,6 +16,7 @@ from support.engine_companies import (
     fiscal_years,
     half_yearly,
     on_quarter_sheet,
+    with_minority,
     with_ntm_revenue,
 )
 
@@ -62,6 +63,7 @@ DECLINE_KEYS = {
     "runoff_recovery",
     "debt",
     "cash",
+    "minority_interest",
     "balance_sheet",
     "shares",
     "ncav",
@@ -938,18 +940,21 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
         "sales_to_capital",
         "debt",
         "cash",
+        "minority_interest",
         "floor_current_assets",
         "floor_total_liabilities",
         "total_current_assets",
         "total_liabilities",
         "depreciation",
     }
-    # debt and cash, then the floor's two lines, all from the newest balance sheet, its newest
-    # fiscal year's on the fixture, then the lines of the fiscal years Z″ and F read
+    # debt, cash, the minority interest, then the floor's two lines, all from the newest balance
+    # sheet, its newest fiscal year's on the fixture, then the lines of the fiscal years Z″ and F
+    # read
     at = names.index("debt")
-    assert names[at : at + 5] == [
+    assert names[at : at + 6] == [
         "debt",
         "cash",
+        "minority_interest",
         "floor_current_assets",
         "floor_total_liabilities",
         "total_current_assets",
@@ -957,6 +962,7 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
     for name, figure in (
         ("debt", 200 * M),
         ("cash", 100 * M),
+        ("minority_interest", None),  # the fixture's sheet presents none
         ("floor_current_assets", 300 * M),
         ("floor_total_liabilities", 500 * M),
     ):
@@ -1066,6 +1072,69 @@ def test_the_json_round_trip_and_the_price_refresh(
     # (3.1251): no decline rate gives either
     assert reprice(stored, 6.0, REPRICED, policy).intermediates["implied_decline_rate"] is None
     assert r.intermediates["implied_decline_rate"] is None
+    # the value at each trial d is rebuilt with the minority interest (spec 2026-11-13 13): at the
+    # value of a row with $50 m of it, 4.4533, the price implies the route's own d, and at $4.00
+    # the rate is a valuation's at that price
+    held = with_minority(decline_inputs, 50 * M)
+    r = value_company(held, deciles, policy, TODAY)
+    stored = result_from_json(result_to_json(r))
+    at_value = reprice(stored, VALUE - 0.5, REPRICED, policy).intermediates
+    assert at_value["implied_decline_rate"] == pytest.approx(-0.04, abs=1e-6)
+    assert at_value["minority_interest"] == 50 * M
+    moved = reprice(stored, 4.0, REPRICED, policy)
+    fresh = value_company(replace(held, price=4.0), deciles, policy, TODAY)
+    for key in PRICE_KEYS:
+        assert moved.intermediates[key] == fresh.intermediates[key], key
+    assert moved.intermediates["implied_decline_rate"] > below
+
+
+def test_the_minority_interest_comes_off_each_claim(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 13 on spec 13.1's row: $50 m of minority interest on 100 m shares takes
+    $0.50 off the going concern (5.0748 to 4.5748), off the distress sale (2.6449 to 2.1449) and
+    so off the value (4.9533 to 4.4533), and $50 m off the going-concern equity. The distress
+    proceeds, NCAV and the rating read the firm value, the sheet, debt and cash alone; the floor a
+    share is NCAV less the minority interest, (−200 − 50) ÷ 100. With current assets of 1,100 the
+    floor is (600 − 50) ÷ 100 = 5.50, above the run-off's 4.5748, and the value 5.8322 − 0.50."""
+    plain = value_company(decline_inputs, deciles, policy, TODAY)
+    held = with_minority(decline_inputs, 50 * M)
+    r = value_company(held, deciles, policy, TODAY)
+    assert r.value == pytest.approx(VALUE - 0.5, abs=1e-9)
+    im, was = r.intermediates, plain.intermediates
+    assert (im["minority_interest"], was["minority_interest"]) == (50 * M, 0.0)
+    assert im["going_concern_per_share"] == pytest.approx(GOING_CONCERN - 0.5, abs=1e-9)
+    assert im["distress_per_share"] == pytest.approx(DISTRESS - 0.5, abs=1e-9)
+    assert im["value_per_share"] == r.value
+    assert im["equity"] == pytest.approx(was["equity"] - 50 * M, abs=1e-3)
+    for same in ("firm_value", "distress_proceeds", "ncav", "rating", "pi", "debt", "cash"):
+        assert im[same] == was[same], same
+    assert (im["ncav"], im["ncav_per_share"]) == (-200 * M, -2.5)
+    cited = input_named(r, "minority_interest")
+    assert (cited.value, cited.unit, cited.note) == (
+        50 * M,
+        "USD",
+        "the balance sheet of fiscal 2025",
+    )
+    assert cited.provenance == held.provenance["balance_sheet"]
+    # the floor binds less the minority interest
+    floored = value_company(with_floor(held, 1_100 * M), deciles, policy, TODAY)
+    fim = floored.intermediates
+    assert (fim["ncav"], fim["ncav_per_share"]) == (600 * M, pytest.approx(5.5))
+    assert fim["floored_per_share"] == pytest.approx(5.5)
+    assert floored.value == pytest.approx(5.832244268746113 - 0.5, abs=1e-9)
+    assert sentence(floored, "ncav-floor") == (
+        "The floored value is the net current asset value 5.50 a share; the run-off gives 4.57."
+    )
+    # nil: as the plain row, but for the entry
+    for line in (None, 0.0, -10 * M):
+        nil = value_company(with_minority(decline_inputs, line), deciles, policy, TODAY)
+        assert (nil.value, nil.flags, nil.intermediates) == (
+            plain.value,
+            plain.flags,
+            plain.intermediates,
+        )
+        assert input_named(nil, "minority_interest").value == line
 
 
 def test_the_consensus_is_read_past_year_three_on_enough_analysts(

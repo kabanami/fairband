@@ -65,6 +65,32 @@ def test_the_worked_decline_row() -> None:
     assert e.floored_per_share == e.gc_per_share
 
 
+def test_the_minority_interest_comes_off_each_claim() -> None:
+    """Spec 2026-11-13 13: 50 of minority interest on 100 shares takes 0.50 off the going
+    concern (5.0748 to 4.5748) and off the distress sale (2.6449 to 2.1449), so off the value
+    (4.9533 to 4.4533); the floor is the NCAV less it, 600 − 50 on 100 shares."""
+    v = _valuation()
+    e = runoff_equity(
+        v.firm_value, 200.0, 100.0, 100.0, ncav=-200.0, pi=0.05, fraction=0.6, minority=50.0
+    )
+    assert e.gc_per_share == pytest.approx(4.574808958203771, abs=1e-9)
+    assert e.distress_per_share == pytest.approx(2.1448853749222626, abs=1e-9)
+    assert e.value_per_share == pytest.approx(4.453312779039696, abs=1e-9)
+    assert e.ncav_per_share == pytest.approx(-2.5)
+    floored = runoff_equity(
+        v.firm_value, 200.0, 100.0, 100.0, ncav=600.0, pi=None, fraction=0.6, minority=50.0
+    )
+    assert floored.floor_bound and floored.value_per_share == pytest.approx(5.5)
+    drowned = runoff_equity(
+        100.0, 200.0, 100.0, 100.0, ncav=None, pi=1.0, fraction=0.6, minority=50.0
+    )
+    assert drowned.distress_per_share == 0.0  # 60 + 100 − 200 − 50 is below zero
+    # a nil minority interest is the worked row's, to the last digit
+    assert runoff_equity(
+        v.firm_value, 200.0, 100.0, 100.0, ncav=-200.0, pi=0.05, fraction=0.6, minority=0.0
+    ) == runoff_equity(v.firm_value, 200.0, 100.0, 100.0, ncav=-200.0, pi=0.05, fraction=0.6)
+
+
 def test_the_worked_table() -> None:
     v = _valuation()
     revenue = (970.00, 940.90, 912.67, 881.38, 856.20, 836.63, 822.29, 812.89, 808.24, 808.24)

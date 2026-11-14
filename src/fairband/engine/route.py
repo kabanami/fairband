@@ -130,32 +130,36 @@ business's own values, before any value outside the business is added.
   ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``,
   ``reinvestment_by_year``, ``fcff_by_year``, ``terminal_roic``, ``terminal_nopat`` (year 10's
   operating income at the full tax rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``,
-  ``balance_sheet`` (period_end, label, quarterly: the newest balance sheet the two were read
-  from; ``None`` without one), ``equity``, ``shares``, ``value_per_share``, ``value_by_margin``
-  ("low", "median", "high": the peers' lowest, median and highest margins),
+  ``minority_interest`` (the minority interest in force, nil when the sheet holds none above
+  zero), ``balance_sheet`` (period_end, label, quarterly: the newest balance sheet the three were
+  read from; ``None`` without one), ``equity``, ``shares``, ``value_per_share``,
+  ``value_by_margin`` ("low", "median", "high": the peers' lowest, median and highest margins),
   ``return_on_new_capital``, ``peer_roic_median``, ``failure_probability`` (Young Growth only),
   ``eps``, ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``,
   ``growth_route`` (the cross-check, as on a Mature Stable row); at the price, ``implied_growth``,
   ``implied_margin``, ``multiples``, ``growth_share``, ``expected_return`` and the cross-check's
   ``implied_growth``. A row refused for its target margin holds only the rebuild keys
-  (``revenue_path``, ``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares``,
-  ``sales_to_capital``), ``balance_sheet``, ``implied_margin`` and ``price_facts``.
+  (``revenue_path``, ``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``,
+  ``minority_interest``, ``shares``, ``sales_to_capital``), ``balance_sheet``, ``implied_margin``
+  and ``price_facts``.
 - Decline: the rebuild keys (``runoff_path``, ``margin``, ``tax_rate``, ``sales_to_capital``,
-  ``runoff_recovery``, ``debt``, ``cash``, ``shares``, ``ncav``, ``pi``,
-  ``distress_sale_fraction``), ``balance_sheet`` (as on revenue growth: the sheet debt, cash and
-  ``ncav`` were read from), ``moat``, ``growth_rates`` (years 1 to 10), the run-off tables
-  (``revenue_by_year`` to ``fcff_by_year``, with ``release_by_year``), ``terminal_value``,
-  ``firm_value``, ``equity``, ``going_concern_per_share``, ``ncav_per_share``,
-  ``floored_per_share``, ``rating``, ``distress_proceeds``, ``distress_per_share``,
-  ``value_per_share``, ``altman_z``, ``piotroski_f``, ``capex_vs_depreciation``, ``eps``,
-  ``epv``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the
-  price, ``implied_decline_rate``, ``multiples`` and ``expected_return``, rebuilt from the
-  rebuild keys. A row refused for its value keeps all but the three at the price.
+  ``runoff_recovery``, ``debt``, ``cash``, ``minority_interest`` (as on revenue growth),
+  ``shares``, ``ncav``, ``pi``, ``distress_sale_fraction``), ``balance_sheet`` (as on revenue
+  growth: the sheet debt, cash, the minority interest and ``ncav`` were read from), ``moat``,
+  ``growth_rates`` (years 1 to 10), the run-off tables (``revenue_by_year`` to ``fcff_by_year``,
+  with ``release_by_year``), ``terminal_value``, ``firm_value``, ``equity``,
+  ``going_concern_per_share``, ``ncav_per_share``, ``floored_per_share``, ``rating``,
+  ``distress_proceeds``, ``distress_per_share``, ``value_per_share``, ``altman_z``,
+  ``piotroski_f``, ``capex_vs_depreciation``, ``eps``, ``epv``, ``dividend_yield``,
+  ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price,
+  ``implied_decline_rate``, ``multiples`` and ``expected_return``, rebuilt from the rebuild keys.
+  A row refused for its value keeps all but the three at the price.
 - Start-up (always a refusal): ``requirement`` (reason, revenue_y10, ev_price, revenue_0,
   operating_income_0, target_margin, sales_to_capital, tax_rate, terminal_roic, path,
   terminal_value), ``cash_floor``, ``burn_cover_years``, ``burn``, ``debt``, ``cash``,
-  ``balance_sheet`` (as on revenue growth), ``shares``, ``market_cap``, ``price_facts``; at the
-  price, ``market_cap`` and ``requirement``, rebuilt from the requirement's rebuild keys.
+  ``minority_interest`` and ``balance_sheet`` (as on revenue growth), ``shares``, ``market_cap``,
+  ``price_facts``; at the price, ``market_cap`` and ``requirement``, rebuilt from the
+  requirement's rebuild keys with ``debt``, ``cash`` and ``minority_interest``.
 """
 
 import math
@@ -508,7 +512,8 @@ def reprice(
         if "requirement" in im:
             was = _times(result.price, held)
             market_cap = market_cap_at(im["market_cap"], was, in_local)
-            net_cash = below_net_cash(market_cap, im["debt"], im["cash"])
+            held = im.get("minority_interest", 0.0)  # nil on a row stored before method 1.4
+            net_cash = below_net_cash(market_cap, im["debt"], im["cash"], held)
             return replace(
                 moved,
                 intermediates=im | start_up_at_price(im, market_cap, local),

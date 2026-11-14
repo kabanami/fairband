@@ -36,8 +36,8 @@ as the mature routes' year N does; it has no floor. The free cash flow is NOPAT 
 reinvestment, year N's on its NOPAT after the carried loss, and a negative one is the method, not
 a refusal. The terminal value is the terminal NOPAT times the mature routes' terminal multiple,
 (1 + g_T) × (1 − g_T ÷ terminal return) ÷ (r − g_T). The firm value is the free cash flows and
-the terminal value discounted at r, the terminal N years; equity is the firm value less debt plus
-cash, and the value a share is equity over the diluted share count.
+the terminal value discounted at r, the terminal N years; equity is the firm value less debt and
+the minority interest plus cash, and the value a share is equity over the diluted share count.
 
 The return on new capital at the target margin is target × (1 − tax rate) × sales-to-capital;
 the terminal return is ``roic.terminal_roic`` on it. Two figures move with the price, each the
@@ -204,11 +204,13 @@ class RevenueCharge:
 
 @dataclass(frozen=True)
 class Bridge:
-    """Debt and cash from the newest balance sheet, and the diluted share count."""
+    """Debt and cash from the newest balance sheet, the diluted share count, and the minority
+    interest from the same sheet, nil unless given (spec 2026-11-13 13)."""
 
     debt: float
     cash: float
     shares: float
+    minority: float = 0.0
 
 
 def reinvestment_by_year(
@@ -260,7 +262,7 @@ def revenue_valuation(
     terminal = taxed * terminal_multiple(charge.terminal_return, r, charge.g_t)
     discounted = sum(f / (1 + r) ** t for t, f in enumerate(fcff, start=1))
     firm = discounted + terminal / (1 + r) ** len(fcff)
-    equity = firm - bridge.debt + bridge.cash
+    equity = firm - bridge.debt - bridge.minority + bridge.cash
     return RevenueValuation(
         revenue,
         margins,

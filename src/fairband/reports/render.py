@@ -204,18 +204,22 @@ GLOSSARY: dict[str, str] = {
         "expense, reads off Damodaran's table; its ten-year default probability is π (6a.7)"
     ),
     "Distress-sale value": (
-        "What equity gets in a distress sale: 60% of the firm value plus cash, less debt, not "
-        "below zero, a share (6a.7)"
+        "What equity gets in a distress sale: 60% of the firm value plus cash, less debt and the "
+        "minority interest, not below zero, a share (6a.7)"
     ),
     "NCAV": (
-        "Graham's net current asset value: total current assets less total liabilities; the run-"
-        "off's floor when above zero (6a.6)"
+        "Graham's net current asset value: total current assets less total liabilities; less the "
+        "minority interest and over the diluted shares, the run-off's floor when above zero (6a.6)"
     ),
     "Requirement": (
         "A Start-up row's price-implied requirement: the revenue in year 10 at which a ten-year "
-        "ramp to the mature peers' margin is worth the market cap plus debt less cash (6b.2)"
+        "ramp to the mature peers' margin is worth the market cap plus debt and the minority "
+        "interest, less cash (6b.2)"
     ),
-    "Cash floor": "A Start-up row's net cash a share, (cash − debt) ÷ diluted shares (6b.4)",
+    "Cash floor": (
+        "A Start-up row's net cash a share, (cash − debt − minority interest) ÷ diluted shares "
+        "(6b.4)"
+    ),
     "Burn cover": (
         "The years a Start-up row's cash covers its trailing burn, the trailing operating cash "
         'flow plus capital spending when below zero; "not burning" otherwise (6b.4)'

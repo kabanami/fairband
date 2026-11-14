@@ -11,9 +11,11 @@ so the requirement, the cash floor and the burn are in the currency. ``value_sta
 returns the refusal "Start-up: no value by design" with its figures; what it cannot compute
 carries its own reason inside the intermediates.
 
-The requirement. EV_price = market cap + debt − cash, debt and cash from the newest balance sheet
-(``CompanyInputs.sheet``, a quarter's or a fiscal year's), each nil when unknown. At or below zero
-the price needs no revenue: the requirement is 0.
+The requirement. EV_price = market cap + debt + minority interest − cash, debt, cash and the
+minority interest from the newest balance sheet (``CompanyInputs.sheet``, a quarter's or a fiscal
+year's), debt and cash each nil when unknown, the minority interest at book and nil when not
+presented or at or below zero (``route_steps.minority``; spec 2026-11-13 13). At or below zero the
+price needs no revenue: the requirement is 0.
 Otherwise it is the year-10 revenue at which the ramp of ``requirement.ramp_ev`` is worth
 EV_price (``requirement.required_revenue``): from R0, trailing revenue (0 without one), and E0,
 trailing operating income (else the last fiscal year's, else 0), to the target margin, the mature
@@ -27,26 +29,29 @@ on capital to read (r without all three inputs, when there is no requirement any
 The requirement's reasons, the first that applies: "no target margin: <n> mature peers", "no
 sales-to-capital", "no statutory tax rate", "no market cap", "no revenue reaches the price".
 
-The cash floor and the burn cover. ``cash_floor`` = (cash − debt) ÷ diluted shares. The burn is
-−(trailing operating cash flow + trailing capital spending) when that sum is below zero;
-``burn_cover_years`` is cash over the burn, "not burning" when the sum is zero or above, ``None``
-without both trailing figures or without a cash figure, and then never ``burn-cover-short``: an
-unknown cash is not a cash of nil.
+The cash floor and the burn cover. ``cash_floor`` = (cash − debt − minority interest) ÷ diluted
+shares, so ``below-net-cash`` stays the floor's test in total. The burn is −(trailing operating
+cash flow + trailing capital spending) when that sum is below zero; ``burn_cover_years`` is cash
+over the burn, "not burning" when the sum is zero or above, ``None`` without both trailing figures
+or without a cash figure, and then never ``burn-cover-short``: an unknown cash is not a cash of
+nil.
 
 Intermediates: ``requirement`` (reason, ``None`` when it is computed; revenue_y10; ev_price;
 revenue_0; operating_income_0; target_margin, the revenue-growth route's record of the peers;
 sales_to_capital, used "peers", own ``None``, own_usable false, peers, value; tax_rate;
 terminal_roic; path, the ten years' revenue, ebit, tax, nopat, reinvestment and fcff;
 terminal_value; ``None`` where the reason leaves a figure uncomputed), ``cash_floor``,
-``burn_cover_years``, ``burn`` (``None`` when not burning), ``debt``, ``cash``, ``balance_sheet``
-(the period of the newest balance sheet the two were read from, ``route_steps.sheet_entry``),
-``cash_known`` (false when no cash figure is on file: ``cash`` is then the nil the floor and the
-requirement count), ``shares``, ``market_cap``; ``route`` adds ``price_facts``.
+``burn_cover_years``, ``burn`` (``None`` when not burning), ``debt``, ``cash``,
+``minority_interest`` (the figure in force), ``balance_sheet`` (the period of the newest balance
+sheet the three were read from, ``route_steps.sheet_entry``), ``cash_known`` (false when no cash
+figure is on file: ``cash`` is then the nil the floor and the requirement count), ``shares``,
+``market_cap``; ``route`` adds ``price_facts``.
 
 The rebuild keys: the requirement's revenue_0, operating_income_0, target_margin's value,
 sales_to_capital's value, tax_rate and terminal_roic, with the policy's r and g_T.
 ``start_up_at_price`` rebuilds the requirement from them at the market cap of a new price
-(``market_cap_at``), and ``below_net_cash`` re-reads its flag; nothing else moves.
+(``market_cap_at``), with ``debt``, ``cash`` and ``minority_interest``, and ``below_net_cash``
+re-reads its flag; nothing else moves.
 
 Flags, in order: ``line-not-presented:debt`` and ``:cash``; ``peers-from-industry`` when the peers
 are the industry's; ``tax-loss-history-unknown`` when the requirement's ramp starts from a loss or
@@ -90,6 +95,8 @@ from fairband.engine.route_steps import (
     chosen,
     data,
     debt_and_cash,
+    minority,
+    minority_input,
     money,
     nil,
     present,
@@ -115,6 +122,7 @@ def value_start_up(c: StartUpContext) -> Refused:
     i, t, policy = c.inputs, c.trailing, c.policy
     cash_line = chosen(c, "balance.cash", i.cash)
     debt, cash = nil(chosen(c, "balance.debt", i.debt)), nil(cash_line)
+    minority_interest = minority(c)
     moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
     target = judged_target(c, target_margin(i.peers, policy))
     s2c = peer_sales_to_capital(i.peers, policy)
@@ -136,15 +144,16 @@ def value_start_up(c: StartUpContext) -> Refused:
         "tax_rate": tax,
         "terminal_roic": terminal,
     }
-    requirement = _requirement(found, i.market_cap, debt, cash, policy)
+    requirement = _requirement(found, i.market_cap, debt, cash, policy, minority_interest)
     burn, cover = _burn(t, cash_line)
     im: dict[str, Any] = {
         "requirement": requirement,
-        "cash_floor": (cash - debt) / c.shares,
+        "cash_floor": (cash - debt - minority_interest) / c.shares,
         "burn_cover_years": cover,
         "burn": burn,
         "debt": debt,
         "cash": cash,
+        "minority_interest": minority_interest,
         **sheet_entry(i),
         "cash_known": cash_line is not None,
         "shares": c.shares,
@@ -154,7 +163,7 @@ def value_start_up(c: StartUpContext) -> Refused:
         bridge_flags(c)
         + present(from_industry(c))
         + ((TAX_LOSS,) if _loss(requirement) else ())
-        + present(below_net_cash(i.market_cap, debt, cash))
+        + present(below_net_cash(i.market_cap, debt, cash, minority_interest))
         + present(_cover_short(burn, cover, policy))
     )
     inputs = _inputs(c, moat, terminal, target, s2c, fiscal)
@@ -165,9 +174,11 @@ def start_up_at_price(
     im: dict[str, Any], market_cap: float | None, policy: Policy
 ) -> dict[str, Any]:
     """The intermediates that move with the price, from the rebuild keys in ``im``: the market cap
-    at the new price and the requirement rebuilt at it; a requirement whose reason is one of its
-    inputs stays as it is."""
-    requirement = _requirement(im["requirement"], market_cap, im["debt"], im["cash"], policy)
+    at the new price and the requirement rebuilt at it, with the debt, the cash and the minority
+    interest the row read (nil on a row stored before method 1.4 carried it); a requirement whose
+    reason is one of its inputs stays as it is."""
+    held = im.get("minority_interest", 0.0)
+    requirement = _requirement(im["requirement"], market_cap, im["debt"], im["cash"], policy, held)
     return {"market_cap": market_cap, "requirement": requirement}
 
 
@@ -179,16 +190,18 @@ def market_cap_at(market_cap: float | None, price: float | None, new_price: floa
     return market_cap * (new_price / price)
 
 
-def below_net_cash(market_cap: float | None, debt: float, cash: float) -> Flag | None:
-    """``below-net-cash`` when the market cap is at or below the net cash, so EV_price is at or
-    below zero."""
-    if market_cap is None or market_cap + debt - cash > 0:
+def below_net_cash(
+    market_cap: float | None, debt: float, cash: float, minority: float = 0.0
+) -> Flag | None:
+    """``below-net-cash`` when the market cap is at or below the net cash, cash less debt and the
+    ``minority`` interest, so EV_price is at or below zero (spec 2026-11-13 13)."""
+    if market_cap is None or market_cap + debt + minority - cash > 0:
         return None
     return Flag(
         "below-net-cash",
         "Below net cash",
         f"The price is covered by net cash: market cap {market_cap:,.0f} against net cash "
-        f"{cash - debt:,.0f}.",
+        f"{cash - debt - minority:,.0f}.",
     )
 
 
@@ -206,16 +219,22 @@ def _input_reason(
 
 
 def _requirement(
-    found: dict[str, Any], market_cap: float | None, debt: float, cash: float, policy: Policy
+    found: dict[str, Any],
+    market_cap: float | None,
+    debt: float,
+    cash: float,
+    policy: Policy,
+    minority: float = 0.0,
 ) -> dict[str, Any]:
     """The requirement at ``market_cap`` from the rebuild keys in ``found``: the year-10 revenue,
-    EV_price, the ramp and its terminal value; 0 when EV_price is at or below zero; or the reason.
-    ``found`` is returned as it is when one of its inputs is missing."""
+    EV_price (the market cap plus debt and the ``minority`` interest, less cash), the ramp and its
+    terminal value; 0 when EV_price is at or below zero; or the reason. ``found`` is returned as
+    it is when one of its inputs is missing."""
     if any(found[key] is None for key in ("target_margin", "sales_to_capital", "tax_rate")):
         return found
     if market_cap is None:
         return found | _UNSOLVED | {"reason": "no market cap"}
-    ev_price = market_cap + debt - cash
+    ev_price = market_cap + debt + minority - cash
     ramp = {
         "revenue0": found["revenue_0"],
         "ebit0": found["operating_income_0"],
@@ -365,6 +384,7 @@ def _inputs(
         data(i, "moat_score", i.moat_score, "score"),
         *peers,
         *debt_and_cash(i),
+        minority_input(i),
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "terminal_growth", policy.terminal_growth, "ratio"),
         rule(policy, "moat_class", None, "class", moat),

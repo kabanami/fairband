@@ -227,6 +227,36 @@ def test_the_page_says_what_method_1_0_changed() -> None:
     assert "pays out less than nothing" in above[: above.index("</li>")]
 
 
+def test_the_equity_steps_take_the_minority_interest_off() -> None:
+    """Spec 2026-11-13 13: the growth, Decline and Start-up entries take the minority interest off
+    the owners' claim beside debt, and the page says it is taken at book, where a market value
+    would be the better figure."""
+    html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
+    growth = _section(html, "growth")
+    cash = growth[growth.index(">Reinvestment, tax and cash</h3>") :]
+    cash = cash[: cash.index("<h3")]
+    for text in (
+        "Cash is added, and debt and the minority interest are taken off.",
+        "the share of the company's subsidiaries that outside owners hold",
+        "at its book value on the balance sheet, though a market value would be the better figure",
+    ):
+        assert text in cash, text
+    assert "Cash is added, debt is taken off" not in growth
+    decline = _section(html, "decline")
+    runoff = decline[decline.index(">The run-off</h3>") : decline.index("</ol>")]
+    assert "plus cash on hand, less debt and the minority interest, is the going-concern" in runoff
+    floor = decline[decline.index(">The floor and distress</h3>") :]
+    floor = floor[: floor.index("<h3")]
+    assert "(current assets less all liabilities), less the minority interest, a share" in floor
+    assert "The owners get that plus cash, less debt and the minority interest." in floor
+    start = _section(html, "start-up")
+    for text in (
+        "The price here is the market value plus debt and the minority interest, less cash.",
+        "The cash floor (cash less debt and the minority interest, a share)",
+    ):
+        assert text in start, text
+
+
 def test_the_foreign_filers_section_reads(client: TestClient) -> None:
     """Spec 2026-11-10 10: a section on foreign filers after the value's, in the contents, in the
     page's register: the reporting currency, the rate, the inflation differential with one worked

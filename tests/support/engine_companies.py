@@ -133,6 +133,13 @@ def fiscal_sheet(
     return NewestSheet(fy.period_end, f"fiscal {fy.year}", False, current_assets, liabilities, None)
 
 
+def on_sheet(i: CompanyInputs, sheet: NewestSheet) -> CompanyInputs:
+    """``i`` with ``sheet`` as its newest balance sheet, cited as assembly cites it: under
+    ``balance_sheet``, as of the sheet's period end (method 4.2)."""
+    cited = Provenance(SOURCES["balance_sheet"], sheet.period_end, OBSERVED, None)
+    return replace(i, sheet=sheet, provenance=i.provenance | {"balance_sheet": cited})
+
+
 def on_quarter_sheet(
     i: CompanyInputs,
     current_assets: float | None = None,
@@ -145,8 +152,15 @@ def on_quarter_sheet(
     sheet = NewestSheet(
         date(2026, 9, 30), "fiscal 2026 Q3", True, current_assets, liabilities, None
     )
-    cited = Provenance(QUARTER_SHEET_SOURCE, sheet.period_end, OBSERVED, None)
-    return replace(i, sheet=sheet, provenance=i.provenance | {"balance_sheet": cited})
+    return on_sheet(i, sheet)
+
+
+def with_minority(i: CompanyInputs, line: float | None) -> CompanyInputs:
+    """``i`` with its newest balance sheet's minority interest at ``line``, as the sheet would
+    present it: ``None`` for a line not presented, a figure at or below zero as it stands (spec
+    2026-11-13 13)."""
+    assert i.sheet is not None
+    return replace(i, sheet=replace(i.sheet, minority_interest=line))
 
 
 def with_ntm_revenue(i: CompanyInputs, revenue: float) -> CompanyInputs:
@@ -306,9 +320,9 @@ def high_growth_inputs() -> CompanyInputs:
     of revenue (24% above trailing) at a loss a share; the annual revenue consensus from fiscal
     2027 grows 23.1% then 20%, on 20, 15 and 12 revenue analysts and 3 EPS analysts. Three mature
     peers at margins of 10%, 20% and 30%; debt $1 bn and cash $3 bn, from the newest balance
-    sheet, fiscal 2025's."""
+    sheet, fiscal 2025's, cited as of its period end, which presents no minority interest."""
     series = fiscal_years(_growth_revenue(), [-0.30 + 0.03 * k for k in range(8)])
-    return replace(
+    grown = replace(
         mature_growth_inputs(),
         symbol="HGCO",
         name="High Growth Co",
@@ -353,8 +367,8 @@ def high_growth_inputs() -> CompanyInputs:
         ),
         debt=1_000e6,
         cash=3_000e6,
-        sheet=fiscal_sheet(series),
     )
+    return on_sheet(grown, fiscal_sheet(series))
 
 
 def young_growth_inputs() -> CompanyInputs:
@@ -381,7 +395,8 @@ def decline_inputs() -> CompanyInputs:
     falling 3% a year from fiscal 2027; interest 20 over the four quarters, debt 200, cash 100;
     two balance sheets, the newest with current assets 300 and total liabilities 500 (Altman Z″
     3.07, safe; Piotroski F 6 of 9), which is the newest balance sheet the floor reads (NCAV
-    −200, no floor); price $3.00. The value is $4.9533 a share, rating A−."""
+    −200, no floor), cited as of its period end and presenting no minority interest; price $3.00.
+    The value is $4.9533 a share, rating A−."""
     series = fiscal_years(
         [1_125e6, 1_200e6, 1_120e6, 1_050e6, 1_000e6], [0.07, 0.08, 0.08, 0.09, 0.08]
     )
@@ -402,7 +417,7 @@ def decline_inputs() -> CompanyInputs:
         )
         for year, income in ((2024, 94.5e6), (2025, 80e6))
     )
-    return replace(
+    declining = replace(
         mature_growth_inputs(),
         symbol="DCCO",
         name="Decline Co",
@@ -446,7 +461,6 @@ def decline_inputs() -> CompanyInputs:
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 4.0, 3.0),
         debt=200e6,
         cash=100e6,
-        sheet=fiscal_sheet(series, 300e6, 500e6),
         balance_years=(
             BalanceYear(
                 year=2024,
@@ -484,6 +498,7 @@ def decline_inputs() -> CompanyInputs:
             ),
         ),
     )
+    return on_sheet(declining, fiscal_sheet(series, 300e6, 500e6))
 
 
 def start_up_inputs() -> CompanyInputs:
@@ -492,14 +507,15 @@ def start_up_inputs() -> CompanyInputs:
     −50; trailing operating cash flow −60 and capital spending −15, a burn of 75 a year; three
     mature peers at margins of 20%, 25% and 30% (target 25%) and sales-to-capital of 1.0, 1.5 and
     2.0 (median 1.5); tax 25%; no moat score; no kept ROIC year; a market cap of 2,000 on 100
-    diluted shares at $20; debt 0 and cash 300, from the newest balance sheet, fiscal 2025's.
-    EV_price is 1,700, the year-10 revenue the price needs 1,725.73, the cash floor $3.00 a share
-    and the burn cover 4.0 years."""
+    diluted shares at $20; debt 0 and cash 300, from the newest balance sheet, fiscal 2025's,
+    cited as of its period end, which presents no minority interest. EV_price is 1,700, the
+    year-10 revenue the price needs 1,725.73, the cash floor $3.00 a share and the burn cover 4.0
+    years."""
     series = tuple(
         replace(fy, operating_income=-50.0, cfo=-60.0, cfi=-15.0, cff=0.0, capex=-15.0)
         for fy in fiscal_years([0.0] * 5, [0.0] * 5)
     )
-    return replace(
+    starting = replace(
         mature_growth_inputs(),
         symbol="SUCO",
         name="Start-up Co",
@@ -537,8 +553,8 @@ def start_up_inputs() -> CompanyInputs:
         ),
         debt=0.0,
         cash=300.0,
-        sheet=fiscal_sheet(series),
     )
+    return on_sheet(starting, fiscal_sheet(series))
 
 
 SEK_RATE = 8.0  # SEK per USD on the price date

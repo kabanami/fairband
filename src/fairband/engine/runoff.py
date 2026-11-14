@@ -23,11 +23,12 @@ the test on the margin), FCFF_{N+1} that NOPAT, nothing released or reinvested, 
 value FCFF_{N+1} ÷ r. The firm value is the flows and the terminal value discounted at r, the
 terminal N years.
 
-The going-concern value a share is (firm value − debt + cash) ÷ shares; the net current asset
-value a share floors it when it is above zero and above it (10.6). The distress-sale value a
-share is max(0, fraction × firm value + cash − debt) ÷ shares, and the value a share is the
-floored value × (1 − π) + the distress-sale value × π, the floored value when π is unavailable
-(10.7). It may be at or below zero; the route refuses then.
+The going-concern value a share is (firm value − debt − minority interest + cash) ÷ shares; the
+net current asset value less the minority interest, a share, floors it when it is above zero and
+above it (10.6). The distress-sale value a share is max(0, fraction × firm value + cash − debt −
+minority interest) ÷ shares, and the value a share is the floored value × (1 − π) + the
+distress-sale value × π, the floored value when π is unavailable (10.7). The minority interest is
+nil unless given (spec 2026-11-13 13). The value may be at or below zero; the route refuses then.
 
 The implied decline rate is the first root of the value a share less the price in [−50%, 0],
 scanned in steps of 0.1% and bisected to 1e-7 (method 4.1a), ``None`` when the scan finds no sign
@@ -146,9 +147,9 @@ def runoff_valuation(
 
 @dataclass(frozen=True)
 class Equity:
-    """The value a share and its steps: the going-concern value, the net current asset value a
-    share (``None`` without one), the floored value and whether the floor bound, the distress-sale
-    value and the value weighted by π."""
+    """The value a share and its steps: the going-concern value, the net current asset value less
+    the minority interest, a share (``None`` without one), the floored value and whether the floor
+    bound, the distress-sale value and the value weighted by π."""
 
     gc_per_share: float
     ncav_per_share: float | None
@@ -166,15 +167,17 @@ def runoff_equity(
     ncav: float | None,
     pi: float | None,
     fraction: float,
+    minority: float = 0.0,
 ) -> Equity:
-    """The going-concern value a share, floored by the net current asset value when that is above
-    zero and above it, weighted against the distress-sale value at π; the floored value when π is
-    ``None``. Not clamped: the value may be at or below zero."""
-    gc = (firm_value - debt + cash) / shares
-    ncav_per_share = None if ncav is None else ncav / shares
+    """The going-concern value a share, floored by the net current asset value a share when that
+    is above zero and above it, weighted against the distress-sale value at π; the floored value
+    when π is ``None``. The ``minority`` interest comes off each of the three, the common owners'
+    claims (spec 2026-11-13 13). Not clamped: the value may be at or below zero."""
+    gc = (firm_value - debt - minority + cash) / shares
+    ncav_per_share = None if ncav is None else (ncav - minority) / shares
     floor = ncav_per_share if ncav_per_share is not None and ncav_per_share > 0 else -math.inf
     floored = max(gc, floor)
-    distress = max(0.0, fraction * firm_value + cash - debt) / shares
+    distress = max(0.0, fraction * firm_value + cash - debt - minority) / shares
     value = floored if pi is None else floored * (1 - pi) + distress * pi
     return Equity(gc, ncav_per_share, floored, floor > gc, distress, value)
 

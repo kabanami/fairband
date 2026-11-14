@@ -10,13 +10,13 @@ from datetime import date
 from typing import Any
 
 import pytest
-from support.engine_companies import QUARTER_SHEET_SOURCE, on_quarter_sheet
+from support.engine_companies import QUARTER_SHEET_SOURCE, on_quarter_sheet, with_minority
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import Deciles
 from fairband.engine.revenue_growth import PeerSource
 from fairband.engine.route import CompanyInputs, reprice, value_company
-from fairband.engine.route_start_up import start_up_at_price
+from fairband.engine.route_start_up import below_net_cash, start_up_at_price
 from fairband.engine.route_steps import sheet_entry
 from fairband.engine.types import TaggedInput, ValuationResult, result_from_json, result_to_json
 from fairband.policy import Policy
@@ -35,6 +35,7 @@ START_UP_KEYS = {
     "margin_history",
     "debt",
     "cash",
+    "minority_interest",
     "balance_sheet",
     "cash_known",
     "shares",
@@ -255,6 +256,45 @@ def test_net_cash_above_the_market_cap(
     assert "below-net-cash" not in codes(indebted)
 
 
+def test_the_minority_interest_counts_against_the_cash() -> None:
+    """Spec 2026-11-13 13: a market cap of 250 against cash of 300 and a minority interest of
+    40 is still covered, by net cash of 260; at 100 the enterprise value is 50 and it is not."""
+    covered = below_net_cash(250.0, 0.0, 300.0, 40.0)
+    assert covered is not None and covered.sentence == (
+        "The price is covered by net cash: market cap 250 against net cash 260."
+    )
+    assert below_net_cash(250.0, 0.0, 300.0, 100.0) is None
+
+
+def test_the_minority_interest_on_the_start_up_fixture(
+    start_up_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 13 on SUCO (cash 300, no debt, 100 shares) at a market cap of 250: a
+    minority interest of 100 on its newest balance sheet makes EV_price 250 + 100 − 300 = 50, so
+    the price needs revenue and is not below the net cash, and the cash floor is (300 − 100) ÷ 100
+    = 2.00. It is cited as the sheet presents it; the burn cover reads the cash alone."""
+    su = replace(start_up_inputs, market_cap=250.0)
+    plain = value_company(su, deciles, policy, TODAY)
+    held = with_minority(su, 100.0)
+    r = value_company(held, deciles, policy, TODAY)
+    assert_start_up(r)
+    im = r.intermediates
+    assert requirement(r)["ev_price"] == 50.0 and requirement(r)["revenue_y10"] > 0
+    assert "below-net-cash" not in codes(r) and "below-net-cash" in codes(plain)
+    assert im["cash_floor"] == pytest.approx(2.0) and plain.intermediates["cash_floor"] == 3.0
+    assert (im["minority_interest"], plain.intermediates["minority_interest"]) == (100.0, 0.0)
+    assert (im["burn"], im["burn_cover_years"]) == (75.0, 4.0)
+    cited = input_named(r, "minority_interest")
+    assert (cited.value, cited.unit, cited.tag) == (100.0, "USD", "DATA")
+    assert cited.note == "the balance sheet of fiscal 2025"
+    assert cited.provenance == held.provenance["balance_sheet"]
+    # at a figure at or below zero, or none presented, nothing moves but the entry
+    for line in (None, 0.0, -10.0):
+        nil = value_company(with_minority(su, line), deciles, policy, TODAY)
+        assert nil.intermediates == plain.intermediates and nil.flags == plain.flags
+        assert input_named(nil, "minority_interest").value == line
+
+
 def test_the_burn_cover(start_up_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
     """Spec 13.2: operating cash flow −60 and capital spending −15 burn 75 a year; cash 300 covers
     4.0 years and cash 120 covers 1.6, below the 2-year threshold."""
@@ -397,6 +437,7 @@ def test_the_flag_order_and_inputs(
         "sales_to_capital",
         "debt",
         "cash",
+        "minority_interest",
     ]
     assert [i.name for i in r.inputs if i.tag == "RULE"] == [
         "required_return",
@@ -511,7 +552,16 @@ def test_the_price_refresh_rebuilds_the_requirement(
         "market_cap": 4_000.0,
         "requirement": req,
     }
-    for key in ("cash_floor", "burn_cover_years", "burn", "price_facts", "debt", "cash", "shares"):
+    for key in (
+        "cash_floor",
+        "burn_cover_years",
+        "burn",
+        "price_facts",
+        "debt",
+        "cash",
+        "minority_interest",
+        "shares",
+    ):
         assert doubled.intermediates[key] == r.intermediates[key], key
     assert (doubled.price, doubled.price_date, doubled.refusal) == (40.0, REPRICED, REASON)
     assert input_named(doubled, "price").value == 40.0
@@ -534,3 +584,20 @@ def test_the_price_refresh_rebuilds_the_requirement(
     p = reprice(no_peers, 40.0, REPRICED, policy)
     assert requirement(p) == requirement(no_peers)
     assert p.intermediates["market_cap"] == 4_000.0
+    # the minority interest is rebuilt with the requirement and the flag (spec 2026-11-13 13): a
+    # market cap of 250 with 100 of it is not below the net cash of 200; at $12.00 the market cap
+    # of 150 is, 150 + 100 − 300 = −50
+    su = replace(start_up_inputs, market_cap=250.0)
+    held = with_minority(su, 100.0)
+    r = value_company(held, deciles, policy, TODAY)
+    assert "below-net-cash" not in codes(r)
+    low = reprice(result_from_json(result_to_json(r)), 12.0, REPRICED, policy)
+    assert low.intermediates["market_cap"] == pytest.approx(150.0)
+    assert low.intermediates["minority_interest"] == 100.0
+    assert requirement(low)["ev_price"] == pytest.approx(-50.0)
+    assert route_codes(low) == ["tax-loss-history-unknown", "below-net-cash"]
+    assert sentence(low, "below-net-cash") == (
+        "The price is covered by net cash: market cap 150 against net cash 200."
+    )
+    fresh = value_company(replace(held, market_cap=150.0, price=12.0), deciles, policy, TODAY)
+    assert requirement(low) == requirement(fresh)

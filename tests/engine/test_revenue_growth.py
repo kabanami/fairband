@@ -117,6 +117,16 @@ def test_value_of_the_worked_example() -> None:
     assert v.value_per_share == pytest.approx(34.91, abs=0.01)
 
 
+def test_the_bridge_subtracts_the_minority_interest() -> None:
+    """Spec 2026-11-13 13: a minority interest of 50 on 100 shares takes 0.50 off the value a
+    share, and a nil one changes nothing."""
+    base = revenue_valuation(PATH, MARGIN, 0.21, CHARGE, BRIDGE)
+    less = revenue_valuation(PATH, MARGIN, 0.21, CHARGE, replace(BRIDGE, minority=50.0))
+    assert less.value_per_share == pytest.approx(base.value_per_share - 0.5)
+    assert less.equity == pytest.approx(base.equity - 50.0) and less.firm_value == base.firm_value
+    assert revenue_valuation(PATH, MARGIN, 0.21, CHARGE, replace(BRIDGE, minority=0.0)) == base
+
+
 def test_the_worked_examples_carry_ends_before_year_10() -> None:
     """The carried loss of 175.50 is used up in year 5, so year 10's NOPAT after the carry is
     already the one at the full rate that the terminal reads."""

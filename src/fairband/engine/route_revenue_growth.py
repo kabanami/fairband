@@ -23,7 +23,9 @@ forecast's own losses; the terminal reads year 10's operating income at the full
 (``revenue_growth.terminal_nopat``). The terminal return is the moat's rule
 (``roic.terminal_roic``) on the return on new capital at the target margin. Equity is the firm
 value less debt plus cash from the newest balance sheet (``CompanyInputs.sheet``, a quarter's or a
-fiscal year's), each nil when unknown. The value is discounted at r in every year.
+fiscal year's), each nil when unknown, less that sheet's minority interest at book
+(``route_steps.minority``: nil when not presented or at or below zero; spec 2026-11-13 13). The
+value is discounted at r in every year.
 
 Refusals, in this order: no trailing revenue (missing or not positive); no trailing operating
 income, without which there is no trailing margin to start from; no statutory tax rate; an
@@ -47,10 +49,11 @@ source, "fmp" or "industry", and industry, the industry's name on the fallback);
 alone rejected an own measure; peers; value); the tables
 ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``,
 ``fcff_by_year``; ``terminal_roic``, ``terminal_nopat`` (year 10's operating income at the full tax
-rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``balance_sheet`` (the period of the
-newest balance sheet the two were read from, ``route_steps.sheet_entry``), ``equity``, ``shares``,
-``value_per_share``; ``value_by_margin`` at the peers' lowest, median and highest margins (``low``,
-``median``, ``high``), each with its own terminal return; ``return_on_new_capital`` and
+rate), ``terminal_value``, ``firm_value``, ``debt``, ``cash``, ``minority_interest`` (the figure
+in force), ``balance_sheet`` (the period of the newest balance sheet the three were read from,
+``route_steps.sheet_entry``), ``equity``, ``shares``, ``value_per_share``; ``value_by_margin`` at
+the peers' lowest, median and highest margins (``low``, ``median``, ``high``), each with its own
+terminal return; ``return_on_new_capital`` and
 ``peer_roic_median``; ``failure_probability`` on a Young Growth row only; ``eps`` (the forward EPS
 is the earnings anchor's when it stands), ``epv``, ``dividend_yield``, ``net_buyback_yield``,
 ``income_basis``, ``price_facts``; ``growth_route``, the Mature Growth route's cross-check as a
@@ -60,15 +63,17 @@ policy's repricing horizon, g_T past the path).
 
 The rebuild keys: ``revenue_path`` (revenue0, ntm_revenue, the consensus steps as found with
 ``None`` for a missing one, hold ``None``, or the cap when it binds, high_growth_years, fade_years),
-``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``shares`` and ``sales_to_capital``; a
-valued row adds ``margin_path``'s target and ``terminal_roic``. ``balance_sheet`` sits beside them,
-so a row refused for its target margin keeps it too; it rebuilds nothing. With the policy's r, g_T,
-convergence year and loss ramp bound they rebuild the path, the margin path or the dollar ramp, and
-the charge, so ``revenue_at_price`` moves a stored row to a new price from its intermediates alone,
-and ``implied_margin_at_price`` moves the margin the price needs on any row that carries
-``revenue_path``. The implied growth is the rate held in years 4 to the last high-growth year, the
-fade recomputed from it, the cap not applied; the implied margin is the target margin, the
-terminal return re-read at each trial; on the dollar ramp each trial rebuilds the ramp.
+``margin_start``, ``tax_rate``, ``moat``, ``debt``, ``cash``, ``minority_interest``, ``shares`` and
+``sales_to_capital``; a valued row adds ``margin_path``'s target and ``terminal_roic``. A row stored
+before method 1.4 holds no ``minority_interest`` and rebuilds at nil. ``balance_sheet`` sits beside
+them, so a row refused for its target margin keeps it too; it rebuilds nothing. With the policy's
+r, g_T, convergence year and loss ramp bound they rebuild the path, the margin path or the dollar
+ramp, and the charge, so ``revenue_at_price`` moves a stored row to a new price from its
+intermediates alone, and ``implied_margin_at_price`` moves the margin the price needs on any row
+that carries ``revenue_path``. The implied growth is the rate held in years 4 to the last
+high-growth year, the fade recomputed from it, the cap not applied; the implied margin is the
+target margin, the terminal return re-read at each trial; on the dollar ramp each trial rebuilds
+the ramp.
 
 Flags, in order: ``sbc-basis-unknown`` when the cross-check has a value on an anchor whose basis is
 unknown; the path's, ``path-held``, ``consensus-above-base-rate`` when the year-3 consensus is above
@@ -173,6 +178,8 @@ from fairband.engine.route_steps import (
     expected,
     from_capital,
     income,
+    minority,
+    minority_input,
     money,
     multiples_at,
     nil,
@@ -273,6 +280,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "moat": moat,
         "debt": nil(chosen(c, "balance.debt", i.debt)),
         "cash": nil(chosen(c, "balance.cash", i.cash)),
+        "minority_interest": minority(c),
         **sheet_entry(i),
         "shares": c.shares,
         "sales_to_capital": asdict(s2c),
@@ -287,7 +295,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     if s2c.value is None:
         return Refused("no sales-to-capital", path_and_capital)
 
-    start, bridge = rebuild["margin_start"], Bridge(rebuild["debt"], rebuild["cash"], c.shares)
+    start, bridge = rebuild["margin_start"], _rebuilt_bridge(rebuild)
     margin = _margin_path(start, target.value, policy)
     v, terminal = _at_margin(path, start, target.value, tax, s2c.value, moat, bridge, policy)
     value = v.value_per_share
@@ -380,6 +388,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         ),
         *_sales_to_capital_input(c, s2c),
         *debt_and_cash(i),
+        minority_input(i),
         *common_rules(policy, moat, terminal),
         rule(policy, "high_growth_years", policy.high_growth_years, "years"),
         _cap_input(policy, sales, capped, judged_hold),
@@ -864,4 +873,6 @@ def _rebuilt_path(im: dict[str, Any], policy: Policy) -> RevenuePath:
 
 
 def _rebuilt_bridge(im: dict[str, Any]) -> Bridge:
-    return Bridge(im["debt"], im["cash"], im["shares"])
+    """The bridge from the rebuild keys: debt, cash, the shares and the minority interest, nil on
+    a row stored before method 1.4 carried it."""
+    return Bridge(im["debt"], im["cash"], im["shares"], im.get("minority_interest", 0.0))

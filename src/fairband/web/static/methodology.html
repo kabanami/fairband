@@ -636,8 +636,11 @@ less the reinvestment.</p>
 <p class="body">After the last forecast year, a terminal value grows at terminal growth, charged at
 the terminal return. The terminal return is the hurdle rate. A company with a Wide moat may earn
 more on new capital, up to <span data-policy="wide_terminal_roic_cap">—</span>. The cash and the
-terminal value, discounted at the hurdle rate, give the firm value. Cash is added, debt is taken
-off, and the result is divided by the shares.</p>
+terminal value, discounted at the hurdle rate, give the firm value. Cash is added, and debt and the
+minority interest are taken off. The result is divided by the shares.</p>
+<p class="body">The minority interest is the share of the company's subsidiaries that outside owners
+hold. Fairband takes it at its book value on the balance sheet, though a market value would be the
+better figure.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The margin the price needs is the target margin at which the value equals today's
@@ -737,21 +740,22 @@ revenue in a year.</li>
 <span data-policy="runoff_recovery">—</span> of it.</li>
 <li>After <span data-policy="runoff_years">—</span>, a terminal value holds revenue flat: the
 business neither grows nor shrinks.</li>
-<li>The cash, discounted at the hurdle rate, plus cash on hand less debt, is the going-concern
-value.</li>
+<li>The cash, discounted at the hurdle rate, plus cash on hand, less debt and the minority interest,
+is the going-concern value.</li>
 </ol>
 
 <h3 class="heading">The floor and distress</h3>
 <p class="body">The liquidation floor is the net current asset value (current assets less all
-liabilities) a share <a class="app-cite" href="#methodology/src-graham">[Graham]</a>. When it is
-above zero and above the going-concern value, it replaces that value. Interest cover is operating
-profit divided by interest expense. It gives a synthetic rating (the bond rating such cover usually
-earns) <a class="app-cite" href="#methodology/src-ratings">[Damodaran ratings]</a>. Each rating
-carries a ten-year chance of default <a class="app-cite" href="#methodology/src-distress">[Damodaran
+liabilities), less the minority interest, a share
+<a class="app-cite" href="#methodology/src-graham">[Graham]</a>. When it is above zero and above
+the going-concern value, it replaces that value. Interest cover is operating profit divided by
+interest expense. It gives a synthetic rating (the bond rating such cover usually earns)
+<a class="app-cite" href="#methodology/src-ratings">[Damodaran ratings]</a>. Each rating carries a
+ten-year chance of default <a class="app-cite" href="#methodology/src-distress">[Damodaran
 2009a]</a>. In distress, a forced sale recovers <span data-policy="distress_sale_fraction">—</span>
-of the firm value. The floored value is the going-concern value or the net current asset value,
-whichever the floor gives. The value weights the floored value and the forced-sale value by that
-chance.</p>
+of the firm value. The owners get that plus cash, less debt and the minority interest. The floored
+value is the going-concern value or the net current asset value, whichever the floor gives. The
+value weights the floored value and the forced-sale value by that chance.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The implied decline rate is the decline rate at which the value equals today's price.
@@ -823,12 +827,14 @@ figures.</p>
 price today <a class="app-cite" href="#methodology/src-young">[Damodaran 2009b]</a>. Revenue rises
 in a straight line from today's to that figure. Operating profit rises in a straight line to the
 mature peers' median margin on it. The peers, tax, reinvestment and the terminal value work as on
-the growth route. The price here is the market value plus debt, less cash.</p>
+the growth route. The price here is the market value plus debt and the minority interest, less
+cash.</p>
 
 <h3 class="heading">Cash</h3>
-<p class="body">The cash floor (net cash a share) is what the balance sheet alone gives an owner. The
-burn cover (the years cash lasts at the trailing cash burn) says how long the company can last
-without raising money. A cover under <span data-policy="burn_cover_flag_years">—</span> gets a warning.</p>
+<p class="body">The cash floor (cash less debt and the minority interest, a share) is what the
+balance sheet alone gives an owner. The burn cover (the years cash lasts at the trailing cash
+burn) says how long the company can last without raising money. A cover under
+<span data-policy="burn_cover_flag_years">—</span> gets a warning.</p>
 
 <h3 class="heading">Worked example: Revolution Medicines</h3>
 <div class="app-prose__wide">

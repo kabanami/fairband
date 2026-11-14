@@ -30,7 +30,11 @@ file), weighted against the distress-sale value at π, the ten-year probability 
 synthetic rating (``distress.rate``) on EBIT_n, trailing revenue times the normalized margin, over
 the trailing interest expense: 0 with no net debt; unavailable with no debt line on file (both
 debt lines missing: unknown debt is not "no net debt"), or with net debt and no interest expense
-on file, when the floored value stands.
+on file, when the floored value stands. The same sheet's minority interest at book
+(``route_steps.minority``: nil when not presented or at or below zero; spec 2026-11-13 13) comes
+off the going-concern value, the floor and the distress-sale value, the common owners' claims;
+the rating reads debt and cash alone, and ``ncav`` and ``distress_proceeds`` are recorded before
+it comes off.
 
 Refusals, in this order, after the shared guards: no trailing revenue (missing or not positive);
 no trailing operating income; no statutory tax rate; consensus revenue that falls to zero or below
@@ -42,7 +46,8 @@ value-side intermediate, every flag and the route's inputs.
 Intermediates: the rebuild keys below; ``moat``; ``growth_rates`` for years 1 to N; the tables
 ``revenue_by_year``, ``ebit_by_year``, ``tax_by_year``, ``nopat_by_year``, ``reinvestment_by_year``,
 ``release_by_year``, ``fcff_by_year``; ``terminal_value``, ``firm_value``, ``equity`` (the
-going-concern equity), ``going_concern_per_share``, ``ncav_per_share``, ``floored_per_share``;
+going-concern equity, less the minority interest), ``going_concern_per_share``, ``ncav_per_share``
+(NCAV less the minority interest, a share), ``floored_per_share``;
 ``rating`` (rating, ebit, interest, coverage, pi, row, the coverage range of the table's row as
 coverage_from and coverage_below, ``None`` at an open end; note, "no net debt", "no debt line on
 file" or "no interest expense on file"); ``distress_proceeds``, ``distress_per_share``,
@@ -57,11 +62,12 @@ The rebuild keys: ``runoff_path`` (revenue0, ntm_revenue, ``None`` without a usa
 consensus steps for years 2 to K as found with ``None`` for a held one in years 2 and 3,
 consensus_years K, d, runoff_years); ``margin`` (value, used, "median" or "trailing", median,
 trailing, the fiscal years and margins read); ``tax_rate``; ``sales_to_capital`` (used,
-"own-latest" or "peers", value); ``runoff_recovery``; ``debt``; ``cash``; ``shares``; ``ncav``;
-``pi`` (value, rating, coverage); ``distress_sale_fraction``. With
-the policy's r they rebuild the value at any decline rate, so ``decline_at_price`` moves a stored
-row to a new price from its intermediates alone. Beside them ``balance_sheet``, the period of the
-newest balance sheet that debt, cash and NCAV were read from (``route_steps.sheet_entry``), which
+"own-latest" or "peers", value); ``runoff_recovery``; ``debt``; ``cash``; ``minority_interest``
+(the figure in force; nil on a row stored before method 1.4 carried it); ``shares``; ``ncav``;
+``pi`` (value, rating, coverage); ``distress_sale_fraction``. With the policy's r they rebuild the
+value at any decline rate, so ``decline_at_price`` moves a stored row to a new price from its
+intermediates alone. Beside them ``balance_sheet``, the period of the newest balance sheet that
+debt, cash, the minority interest and NCAV were read from (``route_steps.sheet_entry``), which
 rebuilds nothing. The implied decline rate is the first root the scan from −50% to 0 finds
 (``runoff.implied_decline_rate``), the consensus years as found and the fade from each trial d;
 the value need not rise with d.
@@ -144,6 +150,8 @@ from fairband.engine.route_steps import (
     expected,
     from_capital,
     income,
+    minority,
+    minority_input,
     money,
     multiples_at,
     nil,
@@ -263,7 +271,9 @@ def value_decline(c: Context) -> Valued | Refused:
     ebit_n = revenue0 * margin["value"]
     debt_line = chosen(c, "balance.debt", i.debt)
     debt, cash = nil(debt_line), nil(chosen(c, "balance.cash", i.cash))
-    # Unknown debt is not "no net debt": without a debt line there is no rating.
+    minority_interest = minority(c)
+    # Unknown debt is not "no net debt": without a debt line there is no rating. The rating reads
+    # debt and cash alone, never the minority interest.
     found = None if debt_line is None else rate(ebit_n, t.interest_expense, debt, cash, policy)
     unrated = _NO_DEBT if debt_line is None else _NO_INTEREST
     rebuild: dict[str, Any] = {
@@ -281,6 +291,7 @@ def value_decline(c: Context) -> Valued | Refused:
         "runoff_recovery": policy.runoff_recovery,
         "debt": debt,
         "cash": cash,
+        "minority_interest": minority_interest,
         **sheet_entry(i),
         "shares": c.shares,
         "ncav": None if i.sheet is None else ncav(i.sheet),
@@ -311,7 +322,7 @@ def value_decline(c: Context) -> Valued | Refused:
         "fcff_by_year": list(v.fcff),
         "terminal_value": v.terminal_value,
         "firm_value": v.firm_value,
-        "equity": v.firm_value - debt + cash,
+        "equity": v.firm_value - debt - minority_interest + cash,
         "going_concern_per_share": e.gc_per_share,
         "ncav_per_share": e.ncav_per_share,
         "floored_per_share": e.floored_per_share,
@@ -352,6 +363,7 @@ def value_decline(c: Context) -> Valued | Refused:
         ),
         *_sales_to_capital_input(c, used, sales_to_capital),
         *debt_and_cash(i),
+        minority_input(i),
         *_floor_inputs(c),
         *_balance_inputs(c),
         data(i, "depreciation", t.depreciation, money(i), "statements", "trailing twelve months"),
@@ -485,7 +497,8 @@ def _valuation(im: dict[str, Any], rates: tuple[float, ...], policy: Policy) -> 
 
 
 def _equity(im: dict[str, Any], firm_value: float) -> Equity:
-    """The value a share from the firm value and the rebuild keys: floored, then weighted."""
+    """The value a share from the firm value and the rebuild keys: floored, then weighted, the
+    minority interest off each claim, nil on a row stored before method 1.4 carried it."""
     return runoff_equity(
         firm_value,
         im["debt"],
@@ -494,6 +507,7 @@ def _equity(im: dict[str, Any], firm_value: float) -> Equity:
         im["ncav"],
         im["pi"]["value"],
         im["distress_sale_fraction"],
+        im.get("minority_interest", 0.0),
     )
 
 

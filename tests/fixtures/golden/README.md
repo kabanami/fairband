@@ -119,6 +119,21 @@ names after `cash`, `floor_current_assets` (300 m) and `floor_total_liabilities`
 the sheet with the same note, while `total_current_assets` and `total_liabilities` stay fiscal
 2025's for Z″ and F. MGCO, MSCO and FXCO read no balance sheet and are untouched.
 
+HGCO, YGCO, DCCO and SUCO re-captured under 1.4 on 2026-11-14 for two causes. The first is the
+minority interest (spec 2026-11-13 13; method 5a.9, 6a.5 to 6a.7, 6b.2, 6b.4): the three
+firm-value routes subtract the newest balance sheet's minority interest at book, nil where the
+sheet does not present it or holds it at or below zero. No fixture's sheet presents one, so no
+value, level, designation, flag or refusal moves. The inputs gain `minority_interest` right after
+`cash`, empty (the line as the sheet presents it), cited to the sheet (`balance_sheet`, "FMP
+balance-sheet-statement") with the note "the balance sheet of fiscal 2025"; the intermediates gain
+`minority_interest`, 0.0, the figure in force. The second is the date of the sheet's citation,
+which the builders now set as assembly sets it, as of the sheet's period end (method 4.2): the
+paragraph above left `balance_sheet` as of the fixtures' data date, 2026-10-30, a citation
+assembly never gives, and the four builders now cite it as of 2025-12-31, the end of fiscal 2025.
+So `debt`, `cash`, the new entry and DCCO's `floor_current_assets` and `floor_total_liabilities`
+are as of 2025-12-31; no figure depends on the date. MGCO, MSCO and FXCO read no balance sheet and
+are untouched.
+
 Run from the repository root:
 
 ```

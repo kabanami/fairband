@@ -508,6 +508,24 @@ def debt_and_cash(i: CompanyInputs) -> tuple[TaggedInput, TaggedInput]:
     )
 
 
+def minority(c: Context | StartUpContext) -> float:
+    """The minority interest in force (spec 2026-11-13 13), a total in the reporting currency:
+    the newest balance sheet's line at book (``CompanyInputs.sheet``); nil without a sheet, where
+    the sheet does not present the line, or where it holds it at or below zero. The three
+    firm-value routes take it off the owners' claim, beside debt."""
+    sheet = c.inputs.sheet
+    return max(0.0, nil(None if sheet is None else sheet.minority_interest))
+
+
+def minority_input(i: CompanyInputs) -> TaggedInput:
+    """The DATA entry ``minority_interest`` of the three firm-value routes: the newest balance
+    sheet's line as the sheet presents it, ``None`` where it does not and a figure at or below
+    zero as it stands, though ``minority`` counts either as nil; cited to that sheet
+    (``balance_sheet``, as of its period end) and noted with its period (``sheet_note``)."""
+    line = None if i.sheet is None else i.sheet.minority_interest
+    return data(i, "minority_interest", line, money(i), "balance_sheet", sheet_note(i))
+
+
 def sheet_entry(i: CompanyInputs) -> dict[str, Any]:
     """The intermediates' ``balance_sheet``: the period of the newest balance sheet, its end (ISO),
     label and whether it is a quarter's; ``None`` without a sheet. The three firm-value routes

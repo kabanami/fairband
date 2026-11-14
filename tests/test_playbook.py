@@ -633,6 +633,26 @@ def test_the_agent_reads_the_stock_pay_on_mature_growth() -> None:
         assert words in eight, words
 
 
+def test_the_citations_name_the_newest_sheet_and_the_minority_interest() -> None:
+    """Spec 2026-11-13 12.2 and 13: on the three firm-value routes the citations name the input
+    `minority_interest`, the line as the newest balance sheet presents it, the intermediate of
+    the same name, the figure the route subtracts, and the sheet's period beside debt and cash."""
+    row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
+    inputs = _flat(row["`snapshot:<id>/inputs/<name>`"][0])
+    for words in (
+        "On High Growth, Young Growth, Decline and Start-up, `debt` and `cash`",
+        "are the newest balance sheet's, a quarter's or a fiscal year's",
+        "`minority_interest` is that sheet's minority interest as it presents it",
+    ):
+        assert words in inputs, words
+    intermediates = _flat(row["`snapshot:<id>/intermediates/<path>`"][0])
+    for words in (
+        "`minority_interest`, the minority interest the route subtracted",
+        "`balance_sheet/label` and `balance_sheet/period_end`",
+    ):
+        assert words in intermediates, words
+
+
 def test_the_cycle_formula_reads_the_ten_year_median_net_margin() -> None:
     """Spec 2026-11-13 11: the cycle formula changes one term, the mid-cycle net margin, now the
     snapshot's ten-year median net margin in place of the middle of the growth table's five

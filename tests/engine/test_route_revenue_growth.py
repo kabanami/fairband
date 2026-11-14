@@ -14,6 +14,7 @@ from support.engine_companies import (
     fiscal_years,
     half_yearly,
     on_quarter_sheet,
+    with_minority,
     with_ntm_revenue,
 )
 
@@ -65,6 +66,7 @@ REVENUE_GROWTH_KEYS = {
     "firm_value",
     "debt",
     "cash",
+    "minority_interest",
     "balance_sheet",
     "equity",
     "shares",
@@ -91,8 +93,8 @@ REVENUE_GROWTH_KEYS = {
 # margins every refusal of a row with trailing figures and a series carries.
 PLAIN_REFUSAL_KEYS = {"price_facts", "trailing_end", "margin_history"}
 # What a row refused for its target margin keeps: the keys that rebuild the margin the price
-# needs, the balance sheet debt and cash were read from, that margin, and the keys every refusal
-# carries.
+# needs (the minority interest among them), the balance sheet debt and cash were read from, that
+# margin, and the keys every refusal carries.
 TARGET_REFUSAL_KEYS = {
     "revenue_path",
     "margin_start",
@@ -100,6 +102,7 @@ TARGET_REFUSAL_KEYS = {
     "moat",
     "debt",
     "cash",
+    "minority_interest",
     "balance_sheet",
     "shares",
     "sales_to_capital",
@@ -854,6 +857,57 @@ def test_a_line_the_newest_sheet_does_not_present_names_the_period(
     assert sheet_note(bare) is None and sheet_note(bare, "cash") is None
 
 
+def test_the_minority_interest_comes_off_the_equity(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 13: a minority interest of $500 m on HGCO's newest balance sheet takes
+    $500 m off its equity, $5.00 off each value a share on its 100 m shares, at every margin. It is
+    cited as the sheet presents it, to the sheet with its period. A line not presented, at zero or
+    below zero counts as nil and moves nothing but the entry; a row refused for its target margin
+    keeps the figure, which the margin the price needs reads."""
+    plain = value_company(high_growth_inputs, deciles, policy, TODAY)
+    held = with_minority(high_growth_inputs, 500e6)
+    r = value_company(held, deciles, policy, TODAY)
+    assert r.value is not None and plain.value is not None
+    assert r.value == pytest.approx(plain.value - 5.0)
+    im, was = r.intermediates, plain.intermediates
+    assert (im["minority_interest"], was["minority_interest"]) == (500e6, 0.0)
+    assert im["equity"] == pytest.approx(was["equity"] - 500e6)
+    assert im["firm_value"] == was["firm_value"] and (im["debt"], im["cash"]) == (1_000e6, 3_000e6)
+    assert im["equity"] == pytest.approx(im["firm_value"] - 1_000e6 - 500e6 + 3_000e6)
+    for key in ("low", "median", "high"):
+        assert im["value_by_margin"][key] == pytest.approx(was["value_by_margin"][key] - 5.0), key
+    assert im["implied_margin"] > was["implied_margin"]  # the price needs more of a smaller share
+    cited = input_named(r, "minority_interest")
+    assert (cited.value, cited.unit, cited.tag, cited.kind) == (500e6, "USD", "DATA", "observed")
+    assert cited.note == "the balance sheet of fiscal 2025"
+    assert cited.provenance == held.provenance["balance_sheet"]
+    names = [i.name for i in r.inputs]
+    assert names[names.index("debt") : names.index("debt") + 3] == [
+        "debt",
+        "cash",
+        "minority_interest",
+    ]
+    # nil: the value, the levels and every intermediate are the plain row's; the entry as found
+    for line in (None, 0.0, -10e6):
+        nil = value_company(with_minority(high_growth_inputs, line), deciles, policy, TODAY)
+        assert (nil.value, nil.levels, nil.flags) == (plain.value, plain.levels, plain.flags)
+        assert nil.intermediates == plain.intermediates
+        assert input_named(nil, "minority_interest").value == line
+    # without a sheet on file: nil, and an entry with no figure
+    bare = value_company(replace(high_growth_inputs, sheet=None), deciles, policy, TODAY)
+    assert bare.value == plain.value and bare.intermediates["minority_interest"] == 0.0
+    assert input_named(bare, "minority_interest").value is None
+    # a row refused for its target margin keeps the figure, and its margin reads it
+    refused = value_company(replace(held, peers=held.peers[:2]), deciles, policy, TODAY)
+    assert_refused(refused, "no target margin: 2 mature peers")
+    assert refused.intermediates["minority_interest"] == 500e6
+    without = value_company(
+        replace(high_growth_inputs, peers=held.peers[:2]), deciles, policy, TODAY
+    )
+    assert refused.intermediates["implied_margin"] > without.intermediates["implied_margin"]
+
+
 def test_a_trailing_margin_below_the_bound_takes_the_dollar_ramp(
     high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
@@ -1110,6 +1164,18 @@ def test_reprice_moves_every_price_side_figure(
     for key in PRICE_KEYS:
         assert r2.intermediates[key] == fresh.intermediates[key], key
     assert (r2.price_to_value, r2.designation) == (fresh.price_to_value, fresh.designation)
+    # the bridge is rebuilt with the minority interest (spec 2026-11-13 13): the implied figures
+    # at half the price are what a valuation of the same row at that price gives, and the figure
+    # stays
+    held = with_minority(high_growth_inputs, 500e6)
+    r = value_company(held, deciles, policy, TODAY)
+    assert r.price is not None
+    moved = reprice(result_from_json(result_to_json(r)), r.price * 0.5, REPRICED, policy)
+    assert moved.intermediates["minority_interest"] == 500e6
+    fresh = value_company(replace(held, price=r.price * 0.5), deciles, policy, TODAY)
+    for key in PRICE_KEYS:
+        assert moved.intermediates[key] == fresh.intermediates[key], key
+    assert moved.intermediates["implied_growth"] != r2.intermediates["implied_growth"]
 
 
 def test_reprice_moves_the_implied_margin_on_a_refused_row(
@@ -1128,6 +1194,14 @@ def test_reprice_moves_the_implied_margin_on_a_refused_row(
     assert (r2.price, r2.price_date) == (r.price * 0.5, REPRICED)
     plain = value_company(replace(high_growth_inputs, trailing=None), deciles, policy, TODAY)
     assert reprice(plain, 10.0, REPRICED, policy).intermediates == plain.intermediates
+    # with a minority interest of $500 m the margin is rebuilt with it (spec 2026-11-13 13)
+    held = with_minority(replace(high_growth_inputs, peers=()), 500e6)
+    r = value_company(held, deciles, policy, TODAY)
+    assert r.price is not None
+    moved = reprice(result_from_json(result_to_json(r)), r.price * 0.5, REPRICED, policy)
+    fresh = value_company(replace(held, price=r.price * 0.5), deciles, policy, TODAY)
+    assert moved.intermediates == fresh.intermediates
+    assert moved.intermediates["implied_margin"] > r2.intermediates["implied_margin"]
 
 
 def test_implied_margin_needs_a_sales_to_capital(

@@ -561,6 +561,23 @@ def test_the_glossary_matches_the_method_document() -> None:
     assert "an agent writes" in GLOSSARY["Note"]  # the brand book's note beside the flag
 
 
+def test_the_glossary_takes_the_minority_interest_off() -> None:
+    """Spec 2026-11-13 13: the four terms whose formulas take the minority interest name it, as
+    method 13 does; the test above holds them to the method's words."""
+    assert GLOSSARY["Distress-sale value"].startswith(
+        "What equity gets in a distress sale: 60% of the firm value plus cash, less debt and the "
+        "minority interest, not below zero, a share"
+    )
+    assert GLOSSARY["NCAV"].startswith(
+        "Graham's net current asset value: total current assets less total liabilities; less the "
+        "minority interest and over the diluted shares, the run-off's floor when above zero"
+    )
+    assert "market cap plus debt and the minority interest, less cash" in GLOSSARY["Requirement"]
+    assert GLOSSARY["Cash floor"].startswith(
+        "A Start-up row's net cash a share, (cash − debt − minority interest) ÷ diluted shares"
+    )
+
+
 def test_the_glossary_counts_the_engine_s_quality_warnings() -> None:
     """Spec 2026-11-13 8: ``share-count-gap`` is the twelfth quality warning, and the glossary's
     count is the engine's."""

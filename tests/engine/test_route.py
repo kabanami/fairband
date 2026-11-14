@@ -11,6 +11,7 @@ from support.stable_value import stable_dcf
 
 from fairband.engine import METHOD_VERSION, route_mature_growth
 from fairband.engine.anchor import StockPayHistory
+from fairband.engine.balance import NewestSheet
 from fairband.engine.classifier import Deciles, FiscalYear
 from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count, margin_history
@@ -1505,6 +1506,20 @@ def test_a_decline_row_takes_its_route(
         value_company(replace(decline_inputs, trailing=None), deciles, policy, TODAY),
         "no trailing figures",
     )
+
+
+def test_the_mature_routes_read_no_minority_interest(
+    mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 13: the two mature routes value earnings after the minority's share, so a
+    newest balance sheet that holds a minority interest moves nothing on either, the inputs
+    cited included."""
+    sheet = NewestSheet(date(2026, 9, 30), "fiscal 2026 Q3", True, None, None, 500e6)
+    for inputs, route in ((mg_inputs, "mature-growth"), (ms_inputs, "mature-stable")):
+        plain = value_company(inputs, deciles, policy, TODAY)
+        held = value_company(replace(inputs, sheet=sheet), deciles, policy, TODAY)
+        assert plain.route == route and plain.value is not None
+        assert held == plain, route
 
 
 def test_refusals_carry_the_price_facts(
