@@ -342,6 +342,40 @@ def test_the_basis_note_reads_the_gaap_figure_the_test_read(
     assert uncertain.sentence == _REASON_3.format(gap="3.10", times="10.3")
 
 
+def test_the_two_stock_pay_lines_each_move_the_value_in_the_bridge_s_order(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Design 16, the two stock-pay inputs together with no guided anchor. MGCO at a street EPS of
+    8.50 reads excludes-sbc and takes 400 × 0.75 ÷ 1,000 = 0.30 off its 5.90: an NTM EPS of 5.60.
+    Given the basis first, the bridge reads the figure first (``BRIDGE_ORDER``). The agent's
+    $600 m charges 600 × 0.75 ÷ 1,000 = 0.45, so the NTM EPS falls to 5.45 (the test still reads
+    excludes: 3.20 is at or above half of 0.45); the agent's ``includes`` then takes nothing off,
+    and the NTM EPS is the consensus's 5.90, MGCO's own figure. The value is linear in the NTM
+    EPS, MGCO's value V at 5.90, so the two deltas are V × (5.45 − 5.60) ÷ 5.90 and
+    V × (5.90 − 5.45) ÷ 5.90, and they sum to the reviewed value, V, less the mechanical one."""
+    inputs = _excluding()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    v = value_company(mature_growth_inputs(), deciles, policy, TODAY).value
+    assert v is not None and mechanical.value is not None
+    assert mechanical.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.60)
+    overrides = [OVERRIDE("earnings.sbc_basis", "includes", 2), OVERRIDE("earnings.sbc", 600e6, 1)]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    tags = [line.tag for line in review.bridge]
+    assert tags == ["earnings.sbc", "earnings.sbc_basis"]
+    assert tags == sorted(tags, key=BRIDGE_ORDER.index)
+    pay, basis = review.bridge
+    assert (pay.old, pay.new, pay.override_id) == (400e6, 600e6, 1)
+    assert (basis.old, basis.new, basis.override_id) == ("excludes", "includes", 2)
+    assert pay.delta == pytest.approx(v * (5.45 - 5.60) / 5.90, abs=1e-9)
+    assert basis.delta == pytest.approx(v * (5.90 - 5.45) / 5.90, abs=1e-9)
+    assert review.result.value == pytest.approx(v, abs=1e-9)
+    assert pay.delta + basis.delta == pytest.approx(
+        review.result.value - mechanical.value, abs=1e-9
+    )
+    judged = [i.name for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert judged == ["earnings.sbc", "earnings.sbc_basis"]
+
+
 def test_a_stock_pay_input_under_an_ntm_anchor_moves_nothing(
     policy: Policy, deciles: Deciles
 ) -> None:

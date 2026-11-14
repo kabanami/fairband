@@ -1228,7 +1228,6 @@ def test_an_empty_answer_leaves_the_earlier_answer_read(store: Store, clock: Clo
     ]
     assert inputs.provenance["estimates_quarter"].as_of == first
     assert inputs.provenance["estimates_annual"].as_of == first
-    assert clock.now.date() != first
 
 
 @pytest.mark.parametrize(

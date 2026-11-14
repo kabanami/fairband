@@ -267,18 +267,21 @@ def test_a_period_tied_override_stays_when_the_same_statements_are_fetched_again
     env_valued: Env,
 ) -> None:
     """A full refresh past the reuse window fetches AXLE's statements again and moves its data
-    date; the statements hold the same periods, so the correction stays applied."""
+    date; the statements hold the same periods, so the correction stays applied, and the review
+    sits on the refetched snapshot."""
     env = env_valued
     cash = _override(env, "AXLE", "balance.cash", 120.0, "period-tied", None)
     made_on = env.snapshot("AXLE")
     env.clock.now += timedelta(days=2)
     env.refresh().run("full")
-    assert env.snapshot("AXLE").data_date > made_on.data_date
+    refetched = env.snapshot("AXLE")
+    assert refetched.data_date > made_on.data_date and refetched.id != made_on.id
     with closing(env.connect()) as conn:
         kept = override_row(conn, cash)
         review = latest_review(conn, "AXLE")
     assert kept is not None and kept.state == "applied"
     assert review is not None and review.override_ids == (cash,)
+    assert review.snapshot_id == refetched.id
 
 
 def _as_live(inputs: CompanyInputs) -> CompanyInputs:

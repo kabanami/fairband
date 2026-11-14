@@ -1661,7 +1661,7 @@ def test_a_thin_ntm_quarter_notes_the_anchor(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """MGCO's NTM EPS sums four quarters of 20 analysts each. With the last on 4 the row carries
-    ``thin-ntm`` in the place right after ``few-analysts``', before ``value-spread``; a note, it
+    ``thin-ntm`` in the place right after ``few-analysts``, before ``value-spread``; a note, it
     moves no figure and is not counted. On 5 analysts, ``analyst_min``, it is silent; with no
     count it reads "no count". Under an applied ``earnings.ntm`` it does not show: the anchor is
     the guidance."""
