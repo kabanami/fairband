@@ -86,15 +86,23 @@ def test_a_thin_revenue_step_is_not_read() -> None:
     says what an earnings step override moves and that the reading stays the step found; 11 has the
     1.5 row after the 1.4 one."""
     five = _section(5)
-    bullet = next(x for x in five.splitlines() if x.startswith("- a consensus revenue step whose"))
+    bullet = next(x for x in five.splitlines() if x.startswith("- a consensus revenue step above"))
     for words in (
+        # the size test (spec 2026-11-14 6.2, as narrowed on 2026-11-15)
+        "a consensus revenue step above `thin_revenue_step_max` (50%) whose landing year has",
         "fewer than `analyst_min` (5) revenue analysts, or no count, is thin and not read",
+        "A step at or below 50% is read on any count",
         "The count is FMP's revenue analyst count of the landing year alone",
         "so an earnings step override moves the charge of that year",
         "an agent's `revenue.step_2` or `revenue.step_3` still stands over the rule",
         "The Decline route leaves out a consensus year on too few revenue analysts",
     ):
         assert words in bullet, words
+    assert "So does a thin one, a consensus revenue step above `thin_revenue_step_max`" in (
+        _section(4)
+    )
+    value = next(x for x in _section(4).splitlines() if "`thin_revenue_step_max` | no |" in x)
+    assert "spec 2026-11-14 6.2" in value
     assert "`consensus`, `agent`, `thin` (5.3) or `none`" in five
     assert "`consensus`, `agent`, `thin` (the consensus's step left out as thin" in _section(4)
     assert "leaves a thin step out as the route does (5.3)" in _section(6)
@@ -106,6 +114,8 @@ def test_a_thin_revenue_step_is_not_read() -> None:
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
     assert rows[-2].startswith("| 1.4, policy v16 |")
     assert rows[-1].startswith("| 1.5, policy v16 | 2026-11-15 | A thin revenue step is not read")
+    assert "above `thin_revenue_step_max` (50%)" in rows[-1]
+    assert "Policy v16 gains one value for the rule, `thin_revenue_step_max` (50%)" in rows[-1]
 
 
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:

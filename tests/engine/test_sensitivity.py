@@ -316,14 +316,17 @@ def test_the_messages_are_the_server_s() -> None:
 def test_a_thin_revenue_step_marks_the_earnings_step_in_force(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    """Spec 2026-11-14 6.2: with fiscal 2029 on 4 revenue analysts the charge leaves step 3's 8%
-    out and pays for the earnings step of year 3, 10%; the engine's reading stays the step found,
-    8%. The grid marks the earnings step's cell, whose value is the value in force, $127.93, and
-    not the 8% cell, which an agent's step would give, $128.70."""
-    inputs = _with_revenue(mg_inputs, (10, 10, 4))
+    """Spec 2026-11-14 6.2, as narrowed: with fiscal 2029 at $44,000 m, a step of 60%, on 4
+    revenue analysts the charge leaves step 3 out and pays for the earnings step of year 3, 10%;
+    the engine's reading stays the step found, 60%. The grid marks the earnings step's cell, whose
+    value is the value in force, $127.93, and not the 60% cell, which an agent's step would give,
+    $108.49."""
+    base, second, third = _with_revenue(mg_inputs, (10, 10, 4)).annual_estimates
+    rows = (base, second, replace(third, revenue=44_000e6))
+    inputs = replace(mg_inputs, annual_estimates=rows)
     mechanical = value_company(inputs, deciles, policy, TODAY)
     assert mechanical.value == pytest.approx(127.93, abs=0.005)
-    assert current_reading(mechanical, "revenue.step_3") == pytest.approx(0.08)
+    assert current_reading(mechanical, "revenue.step_3") == pytest.approx(0.60)
     assert mechanical.intermediates["charge"]["growth_by_year"][1] == pytest.approx(0.10)
     grid = sensitivity_grid(
         inputs,
@@ -332,10 +335,10 @@ def test_a_thin_revenue_step_marks_the_earnings_step_in_force(
         TODAY,
         {},
         "revenue.step_3",
-        (0.08, 0.10),
+        (0.60, 0.10),
         "growth.belief",
         (0.063,),
     )
     assert grid.current == (2, 1)
     assert grid.cells[1][0] == pytest.approx(mechanical.value)
-    assert grid.cells[0][0] == pytest.approx(128.70, abs=0.005)
+    assert grid.cells[0][0] == pytest.approx(108.49, abs=0.005)

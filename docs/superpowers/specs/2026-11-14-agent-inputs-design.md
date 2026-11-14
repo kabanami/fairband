@@ -160,17 +160,20 @@ cross-check reads the consensus as found and takes no agent's step.
 
 ### 6.2 A thin revenue step is not read
 
-A consensus revenue step whose landing year has fewer than `analyst_min` (5) revenue analysts,
-or no count, is not read. The charge then takes the earnings step of that year, as resolved, as
-it does today for a missing revenue step (method 4.8). The Decline route already leaves out a
-consensus year on too few revenue analysts (method 6a.2).
+A consensus revenue step is not read where both hold: its landing year has fewer than
+`analyst_min` (5) revenue analysts, or no count, and the step is above `thin_revenue_step_max`
+(50%, a value of policy v16). The charge then takes the earnings step of that year, as resolved,
+as it does today for a missing revenue step (method 4.8). A thin step at or below 50% is read as
+before. The size test came from the readout (decision log, 2026-11-15): without it the rule moved
+298 rows and lowered 221, because the earnings step carries the change of margins and is a poor
+stand-in for revenue growth.
 
 The rule reaches the Mature Growth value and every growth-route cross-check. It is method 1.5,
 commits of its own, and the founder reads its scratch readout before the live step and decides
 whether it merges.
 
-No flag (*my call*): on about 300 rows it would be noise. The drawer says, for each of years 2
-and 3, which growth the charge paid for and why.
+No flag (*my call*). The drawer says, for each of years 2 and 3, which growth the charge paid for
+and why.
 
 ### 6.3 What the result records
 
@@ -254,7 +257,8 @@ every figure of a report is).
 
 Policy v16 adds four pairs to `override_ranges`: `shares.committed` (above 0 to 10^12 shares,
 the lower end excluded as `shares.diluted`'s is), `earnings.ntm_nri` (−100 to 100),
-`revenue.step_2` and `revenue.step_3` (−0.80 to 3.00). No other value.
+`revenue.step_2` and `revenue.step_3` (−0.80 to 3.00). It also adds one value,
+`thin_revenue_step_max` (0.50), which section 6.2 reads. No other value.
 
 The method version stays 1.4 for sections 4, 5, 6.1, 7, 8 and 9: no mechanical figure moves
 (method 11 has such rows, "0.9, policy v9"). Section 6.2 is method 1.5. If the founder leaves it
@@ -293,9 +297,10 @@ Each test fails before its change, and its expected figures are worked by hand.
 - `revenue.step_2` and `revenue.step_3`: the charge pays for the agent's step; the reading is
   the consensus's step as found; it drops when that step moves; `charge` records the three
   entries; a price refresh rebuilds the same value.
-- The thin rule: a revenue step on 4 revenue analysts, or with no count, is not read and the
-  charge takes the earnings step, an overridden earnings step too; on 5 it is read; an agent's
-  revenue step wins over the rule; a Mature Stable row's cross-check follows.
+- The thin rule: a revenue step above 50% on 4 revenue analysts, or with no count, is not read
+  and the charge takes the earnings step, an overridden earnings step too; on 5 it is read; at
+  50% or below it is read on any count; an agent's revenue step wins over the rule; a Mature
+  Stable row's cross-check follows.
 - Overrides at a split: a lasting `value.outside` made before a 2-for-1 is applied at half and
   a `shares.committed` at double; an override made after the split is not scaled; two splits
   multiply; an override made on a snapshot of the split's day whose price date is the day before
@@ -346,3 +351,4 @@ drawer and the whole-branch review; the scratch revalues, the founder's reading,
 | 2026-11-14 | Changed at the build, on Task 5's report: the scaling reads a basis date, the earlier of the price date and the data date of the snapshot that assembled the figures, in place of the data date alone. A refresh on a split's day before the US close has the split's day as its data date and the day before as its price date, so its figures did not see the split, and under the data date alone an override made on it was never scaled. Two residuals stay: a failed fetch of the splits beside a good fetch of the statements, and a refusal snapshot from a failed fetch. |
 | 2026-11-14 | Changed at the build, on Task 6's report: the test example of the route drop is a move from Mature Growth to Decline, since the Start-up route reads `moat.class`; and a first `phase` override is named beside a replaced or dropped one. |
 | 2026-11-14 | Changed at the build, on the review of Task 7: guided net income is divided by the count the company's EPS is per. An applied `shares.diluted` that adds an Up-C's units is not that count: 100M Class A shares and 300M units with guided Class A net income of $100M give an EPS of $1.00, not $0.25. |
+| 2026-11-15 | The thin rule was measured on a copy of refresh 61 and narrowed, as a commit of its own, until the founder rules between the narrow form, the form first built and no rule. As first built it left 404 steps unread on 309 rows and moved 298 values, 77 up and 221 down, 31 of them down by more than 25% (TAK $20.18 to $6.90: four analysts' revenue growth of 3% and 6% gave way to earnings growth of 21% and 46%). Narrowed to a thin step above 50%, it leaves four steps unread, on the four rows B-148 named (ACM $14.20 to $113.47, HESM $9.93 to $35.80, FRO $35.18 to $99.86, BIPC from a refusal to $35.05), and moves no other row. Three other forms were valued offline and left out: fewer than 3 analysts (152 rows moved, 103 down), a thin step above the earnings step (89 rows moved, all up, half of the large rises from a falling earnings step) and a thin step above 30% (11 rows moved, 4 down). |

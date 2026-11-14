@@ -6,7 +6,7 @@ the runway N grow at the belief. The value is the reverse DCF with the reinvestm
 2026-11-09 6 (``RoicTerms``): each year pays for the next year's revenue growth, the consensus
 revenue steps for years 2 and 3 (a missing one taking the earnings step, and so a thin one, whose
 landing year has fewer than ``analyst_min`` revenue analysts or no count, spec 2026-11-14 6.2,
-``anchor.path_steps``) fading to the belief as
+``anchor.path_steps``, and which is above ``thin_revenue_step_max``) fading to the belief as
 the earnings path fades, at a return that holds at the runway return through the hold K, the last
 year whose next earnings growth is above the belief, then fades in equal steps to the terminal
 return in year N. K is read once, from the row's own path at the belief in force, and every
@@ -202,7 +202,7 @@ class RevenueSteps:
     step read comes from: ``"consensus"``, the step as found; ``"agent"``, an agent's
     ``revenue.step_2`` or ``revenue.step_3`` in its place; ``"thin"``, the step found left out,
     its landing year on fewer than ``analyst_min`` revenue analysts or no count (spec 2026-11-14
-    6.2); ``"none"``, no step at all."""
+    6.2) and the step above ``thin_revenue_step_max``; ``"none"``, no step at all."""
 
     read: Steps
     found: Steps

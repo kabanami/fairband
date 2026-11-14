@@ -160,9 +160,9 @@ consensus revenue step (MSCO's own charge reads none), so each gains `[null, nul
 entry and are untouched.
 
 All seven re-captured under 1.5 on 2026-11-15 for the thin revenue step (spec 2026-11-14 6.2;
-method 4.8 and 5.3): a consensus revenue step whose landing year has fewer than 5 revenue
-analysts, or no count, is not read, the charge taking the earnings step of that year, and its
-source reads `thin`. No fixture's consensus gives a revenue step: MGCO, MSCO and FXCO keep
+method 4.8 and 5.3): a consensus revenue step above 50% whose landing year has fewer than 5
+revenue analysts, or no count, is not read, the charge taking the earnings step of that year,
+and its source reads `thin`. No fixture's consensus gives a revenue step: MGCO, MSCO and FXCO keep
 `[null, null]` and `["none", "none"]`, and the growth-route cross-checks of MSCO, HGCO and YGCO
 are refusals that carry no charge. So no golden holds a thin step, and all seven files are
 unchanged byte for byte.

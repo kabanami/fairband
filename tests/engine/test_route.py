@@ -2804,41 +2804,51 @@ def test_growth_above_return_says_revenue_growth_for_an_agent_s_revenue_step(
 
 # --- A thin revenue step is not read (spec 2026-11-14 6.2, method 1.5) --------------------------
 
+# Fiscal 2029 revenue of $44,000 m beside MGCO's revenue consensus above: step 3 is 44,000 ÷ 27,500
+# − 1 = 60%, above the 50% the thin rule tests (spec 2026-11-14 6.2, as narrowed on 2026-11-15)
+STEEP_2029 = 44_000e6
+
+
+def _steep(analysts: int) -> CompanyInputs:
+    """MGCO's revenue consensus of the tests above with fiscal 2029, the year step 3 lands on, at
+    $44,000 m on ``analysts`` revenue analysts: a step of 60%."""
+    base, second, third = _on_revenue().annual_estimates
+    rows = (base, second, replace(third, revenue=STEEP_2029, analysts_revenue=analysts))
+    return replace(_on_revenue(), annual_estimates=rows)
+
 
 def _thin_step_3() -> CompanyInputs:
-    """MGCO's revenue consensus of the tests above with fiscal 2029, the year step 3 lands on, on 4
-    revenue analysts: its step of 8% is thin."""
-    base, second, third = _on_revenue().annual_estimates
-    rows = (base, second, replace(third, analysts_revenue=4))
-    return replace(_on_revenue(), annual_estimates=rows)
+    """The steep step 3 on 4 revenue analysts: it is thin."""
+    return _steep(4)
 
 
 def test_a_thin_revenue_step_gives_way_to_the_earnings_step(
     policy: Policy, deciles: Deciles
 ) -> None:
-    """Spec 2026-11-14 6.2 on MGCO with fiscal 2029 on 4 revenue analysts: the charge reads step 2,
-    10% on 10 analysts, and not step 3, 8% on 4; year 2's reinvestment pays for the earnings step
-    of year 3, 7,392 ÷ 6,720 − 1 = 10%, and the fade runs from 10% to the 6.3% belief, 9.26% to
-    7.04%, where the row on 10 analysts pays for 8% and its fade, 7.66% to 6.64%. So the charge
-    pays for more growth, the value is below the row's on 10 analysts and equal to the value under
-    an agent's revenue step 3 of 10%. The steps found, the hold and the earnings path stand, no
-    flag says the step is thin, and a price refresh rebuilds the same figures from the steps
-    read."""
-    plain = value_company(_on_revenue(), deciles, policy, TODAY)
+    """Spec 2026-11-14 6.2 on MGCO with fiscal 2029 at a step of 60% on 4 revenue analysts: the
+    charge reads step 2, 10% on 10 analysts, and not step 3; year 2's reinvestment pays for the
+    earnings step of year 3, 7,392 ÷ 6,720 − 1 = 10%, and the fade runs from 10% to the 6.3%
+    belief, 9.26% to 7.04%, where the row on 10 analysts pays for 60%, above its 43.1% return, and
+    its fade. So the charge pays for less growth, the value is above the row's on 10 analysts and
+    equal to the value under an agent's revenue step 3 of 10%. The steps found, the hold and the
+    earnings path stand, no flag says the step is thin, and a price refresh rebuilds the same
+    figures from the steps read."""
+    plain = value_company(_steep(10), deciles, policy, TODAY)
     r = value_company(_thin_step_3(), deciles, policy, TODAY)
     ch = r.intermediates["charge"]
     assert ch["revenue_steps"] == [pytest.approx(0.10), None]
-    assert ch["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert ch["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.60)]
     assert ch["revenue_step_source"] == ["consensus", "thin"]
     assert ch["growth_by_year"][:7] == pytest.approx(
         [0.10, 0.10, 0.0926, 0.0852, 0.0778, 0.0704, 0.063]
     )
+    assert plain.intermediates["charge"]["growth_by_year"][1] == pytest.approx(0.60)
     assert ch["hold_years"] == plain.intermediates["charge"]["hold_years"] == 6
     assert r.intermediates["path_steps"] == plain.intermediates["path_steps"]
-    assert codes(r) == codes(plain)
-    at_ten = value_company(_on_revenue(), deciles, policy, TODAY, judged(("revenue.step_3", 0.10)))
+    assert "growth-above-return" in codes(plain) and "growth-above-return" not in codes(r)
+    at_ten = value_company(_steep(10), deciles, policy, TODAY, judged(("revenue.step_3", 0.10)))
     assert plain.value is not None and r.value is not None and at_ten.value is not None
-    assert r.value < plain.value
+    assert r.value > plain.value
     assert r.value == pytest.approx(at_ten.value)
     day = date(2026, 11, 2)
     moved = reprice(result_from_json(result_to_json(r)), 120.0, day, policy)
@@ -2850,13 +2860,28 @@ def test_a_thin_revenue_step_gives_way_to_the_earnings_step(
         assert moved.intermediates[key] == fresh.intermediates[key], key
 
 
+def test_a_thin_revenue_step_at_or_below_50_percent_is_read(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.2, as narrowed: on MGCO's revenue consensus with fiscal 2028 and 2029 on 4
+    revenue analysts each, the steps of 10% and 8% are not above 50%, so the charge reads both,
+    each year's source the consensus, and the value is the row's on 10 analysts."""
+    base, second, third = _on_revenue().annual_estimates
+    rows = (base, replace(second, analysts_revenue=4), replace(third, analysts_revenue=4))
+    r = value_company(replace(_on_revenue(), annual_estimates=rows), deciles, policy, TODAY)
+    ch = r.intermediates["charge"]
+    assert ch["revenue_steps"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert ch["revenue_step_source"] == ["consensus", "consensus"]
+    assert r.value == value_company(_on_revenue(), deciles, policy, TODAY).value
+
+
 def test_an_earnings_step_override_moves_the_charge_of_a_thin_year(
     policy: Policy, deciles: Deciles
 ) -> None:
     """Spec 2026-11-14 6.2: the charge takes the earnings step of the thin year as resolved, so a
     ``path.step_3`` of 15% makes year 2's reinvestment pay for 15%, the fade running from it; on
     the row whose step 3 rests on 10 analysts the same override leaves the charge at the consensus
-    revenue step, 8%."""
+    revenue step, 60%."""
     step = judged(("path.step_3", 0.15))
     r = value_company(_thin_step_3(), deciles, policy, TODAY, step)
     ch = r.intermediates["charge"]
@@ -2864,8 +2889,8 @@ def test_an_earnings_step_override_moves_the_charge_of_a_thin_year(
     assert ch["growth_by_year"][:3] == [pytest.approx(0.10), 0.15, pytest.approx(0.1326)]
     assert ch["revenue_steps"] == [pytest.approx(0.10), None]
     assert ch["revenue_step_source"] == ["consensus", "thin"]
-    read = value_company(_on_revenue(), deciles, policy, TODAY, step).intermediates["charge"]
-    assert read["growth_by_year"][1] == pytest.approx(0.08)
+    read = value_company(_steep(10), deciles, policy, TODAY, step).intermediates["charge"]
+    assert read["growth_by_year"][1] == pytest.approx(0.60)
 
 
 def test_an_agent_s_revenue_step_wins_over_the_thin_rule(policy: Policy, deciles: Deciles) -> None:
@@ -2876,10 +2901,10 @@ def test_an_agent_s_revenue_step_wins_over_the_thin_rule(policy: Policy, deciles
     r = value_company(_thin_step_3(), deciles, policy, TODAY, step)
     ch = r.intermediates["charge"]
     assert ch["revenue_steps"] == [pytest.approx(0.10), 0.05]
-    assert ch["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert ch["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.60)]
     assert ch["revenue_step_source"] == ["consensus", "agent"]
     assert ch["growth_by_year"][1] == 0.05
-    read = value_company(_on_revenue(), deciles, policy, TODAY, step)
+    read = value_company(_steep(10), deciles, policy, TODAY, step)
     assert r.value is not None and r.value == read.value
 
 
@@ -2893,7 +2918,7 @@ def test_a_mature_stable_row_s_cross_check_leaves_a_thin_revenue_step_out(
     gr = value_company(inputs, deciles, policy, TODAY).intermediates["growth_route"]
     assert gr["refusal"] is None
     assert gr["charge"]["revenue_steps"] == [pytest.approx(0.10), None]
-    assert gr["charge"]["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert gr["charge"]["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.60)]
     assert gr["charge"]["revenue_step_source"] == ["consensus", "thin"]
     assert gr["charge"]["growth_by_year"][1] == pytest.approx(0.10)
 

@@ -536,21 +536,39 @@ def test_a_missing_or_non_positive_revenue_leaves_the_step_none(policy: Policy) 
 
 
 def test_a_thin_revenue_step_is_not_read(policy: Policy) -> None:
-    """Spec 2026-11-14 6.2: a revenue step whose landing year has fewer than 5 revenue analysts,
-    or no count, is not read; the steps as found are kept beside it."""
-    years = _annual(2027, eps=(2.0, 2.2, 2.4), revenue=(100.0, 110.0, 121.0))
+    """Spec 2026-11-14 6.2, as narrowed on 2026-11-15: a revenue step above 50% whose landing year
+    has fewer than 5 revenue analysts, or no count, is not read; the steps as found are kept beside
+    it. A step at or below 50% is read on any count."""
+    years = _annual(2027, eps=(2.0, 2.2, 2.4), revenue=(100.0, 110.0, 176.0))  # 10%, then 60%
     thin = [years[0], years[1], replace(years[2], analysts_revenue=4)]
     path = path_steps(thin, 2027, policy)
     assert path.revenue_steps == (pytest.approx(0.10), None)
-    assert path.revenue_found == (pytest.approx(0.10), pytest.approx(0.10))
+    assert path.revenue_found == (pytest.approx(0.10), pytest.approx(0.60))
     assert path.revenue_thin == (False, True)
     at_five = [years[0], years[1], replace(years[2], analysts_revenue=5)]
-    assert path_steps(at_five, 2027, policy).revenue_steps[1] == pytest.approx(0.10)
-    no_count = [years[0], replace(years[1], analysts_revenue=None), years[2]]
-    assert path_steps(no_count, 2027, policy).revenue_steps == (None, pytest.approx(0.10))
-    # the landing year's count alone: a thin earlier year leaves the step read
-    thin_base = [replace(years[0], analysts_revenue=1), years[1], years[2]]
-    assert path_steps(thin_base, 2027, policy).revenue_steps == pytest.approx((0.10, 0.10))
+    assert path_steps(at_five, 2027, policy).revenue_steps[1] == pytest.approx(0.60)
+    no_count = [years[0], years[1], replace(years[2], analysts_revenue=None)]
+    got = path_steps(no_count, 2027, policy)
+    assert got.revenue_steps == (pytest.approx(0.10), None) and got.revenue_thin == (False, True)
+    # a step of exactly 50% on 4 analysts is read: the test is above 50%
+    half = _annual(2027, eps=(2.0, 2.2, 2.4), revenue=(100.0, 110.0, 165.0))
+    half = [half[0], half[1], replace(half[2], analysts_revenue=4)]
+    got = path_steps(half, 2027, policy)
+    assert got.revenue_steps == (pytest.approx(0.10), 0.50) and got.revenue_thin == (False, False)
+    # steps of 10% are read on 4 analysts, or on 1, and with no count
+    small = _annual(2027, eps=(2.0, 2.2, 2.4), revenue=(100.0, 110.0, 121.0))
+    for n in (4, 1, None):
+        few = [
+            small[0],
+            replace(small[1], analysts_revenue=n),
+            replace(small[2], analysts_revenue=n),
+        ]
+        got = path_steps(few, 2027, policy)
+        assert got.revenue_steps == pytest.approx((0.10, 0.10)), n
+        assert got.revenue_thin == (False, False), n
+    # the landing year's count alone: a thin earlier year leaves the 60% step read
+    thin_base = [years[0], replace(years[1], analysts_revenue=1), years[2]]
+    assert path_steps(thin_base, 2027, policy).revenue_steps == pytest.approx((0.10, 0.60))
     # a missing step is not thin: none found, none read
     missing = [years[0], replace(years[1], revenue=None, analysts_revenue=4), years[2]]
     got = path_steps(missing, 2027, policy)

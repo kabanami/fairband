@@ -69,7 +69,7 @@ def test_the_catalogue_rows_read_as_the_spec_tables() -> None:
     assert (analysts.effect, analysts.hashed) == ("revalue", True)
     assert "past year 3 it ends a Decline row's consensus" in analysts.description
     # spec 2026-11-14 6.2: a revenue step landing on a thin year is not read on Mature Growth
-    assert "Mature Growth skips its revenue step" in analysts.description
+    assert "Mature Growth skips its revenue step above 50%" in analysts.description
     with pytest.raises(KeyError):
         setting("designation_edges")
 
@@ -493,6 +493,20 @@ def test_a_sheet_shift_multiple_at_or_below_one_is_refused(multiple: float) -> N
 
 def test_a_sheet_shift_multiple_above_one_is_accepted() -> None:
     check(replace(load_policy(), sheet_shift_multiple=1.5))
+
+
+@pytest.mark.parametrize("size", [-0.01, math.nan, math.inf])
+def test_a_thin_revenue_step_max_below_zero_is_refused(size: float) -> None:
+    """Spec 2026-11-14 6.2, as narrowed: the size is no setting, so only the file sets it; below 0%
+    a thin falling step would go unread, and a NaN or an infinity would turn the rule off, so the
+    check refuses each."""
+    with pytest.raises(ValueError, match="^thin_revenue_step_max: must be 0% or more$"):
+        check(replace(load_policy(), thin_revenue_step_max=size))
+
+
+def test_a_thin_revenue_step_max_of_0_percent_or_more_is_accepted() -> None:
+    check(replace(load_policy(), thin_revenue_step_max=0.0))
+    check(replace(load_policy(), thin_revenue_step_max=3.0))
 
 
 @pytest.mark.parametrize(

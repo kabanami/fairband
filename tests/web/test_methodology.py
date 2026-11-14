@@ -257,14 +257,17 @@ def test_the_page_says_what_method_1_0_changed() -> None:
 
 
 def test_a_thin_revenue_year_takes_the_earnings_growth() -> None:
-    """Spec 2026-11-14 6.2, method 1.5: the Mature Growth steps say that a year whose revenue
-    forecast rests on fewer than the policy's analysts, or no count, takes the earnings growth."""
+    """Spec 2026-11-14 6.2, method 1.5, as narrowed on 2026-11-15: the Mature Growth steps say that
+    a year whose consensus revenue growth is above the policy's size and rests on fewer than the
+    policy's analysts, or no count, takes the earnings growth."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
     growth = _section(html, "mature-growth")
     steps = growth[growth.index(">The steps</h3>") : growth.index("</ol>")]
     assert (
-        'When fewer than <span data-policy="analyst_min">—</span> analysts forecast a year\'s '
-        "revenue, or the count is missing, that year takes the consensus earnings growth instead."
+        "A year's consensus revenue growth above "
+        '<span data-policy="thin_revenue_step_max">—</span> is left out when fewer than '
+        '<span data-policy="analyst_min">—</span> analysts forecast it, or the count is missing. '
+        "That year then takes the consensus earnings growth."
     ) in steps
 
 

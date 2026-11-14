@@ -35,7 +35,7 @@ kept, and ``step_series_flag`` notes a step whose rate on net income and rate on
 ``step_series_gap_max`` apart, with the diluted count the route holds (spec 2026-11-09 section 9).
 The revenue steps on the same years are kept as found, for the charge, beside the steps read: a
 step whose landing year has fewer than ``analyst_min`` revenue analysts, or no count, is thin and
-not read (spec 2026-11-14 6.2). The belief for
+not read (spec 2026-11-14 6.2), when it is above ``thin_revenue_step_max``. The belief for
 years 4 to N is the Base Rate Book median for the sales class plus the inflation addition; the moat
 class reads the GuruFocus Moat Score.
 """
@@ -227,7 +227,8 @@ class Path:
     years for the charge: ``revenue_steps``, the steps read, ``None`` where missing or thin;
     ``revenue_found``, the steps as found, ``None`` where missing; ``revenue_thin``, for each year,
     whether a step found was left out as thin, its landing year on fewer than ``analyst_min``
-    revenue analysts or no count (spec 2026-11-14 6.2); and the base year's and the next two
+    revenue analysts or no count and the step above ``thin_revenue_step_max`` (spec 2026-11-14
+    6.2); and the base year's and the next two
     years' consensus means on net income and on EPS, ``None`` where missing, for
     ``step_series_flag``."""
 
@@ -509,7 +510,8 @@ def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy)
     the path's series, with the revenue steps on the same years and both earnings series' means,
     which ``step_series_flag`` reads. A revenue step is read only where its landing year has
     ``analyst_min`` revenue analysts or more; one on fewer, or on no count, is thin, left out of
-    the steps read and kept among the steps found (spec 2026-11-14 6.2)."""
+    the steps read and kept among the steps found (spec 2026-11-14 6.2). Only a step above
+    ``thin_revenue_step_max`` is thin: one at or below it is read on any count."""
     by_year = {x.fiscal_year: x for x in annual}
     rows = [by_year.get(base_year + i) for i in range(3)]
     on_eps = not all(r is not None and r.net_income is not None and r.net_income > 0 for r in rows)
@@ -546,8 +548,12 @@ def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy)
 
 def _thin_revenue(step: float | None, landing: AnnualEstimate | None, policy: Policy) -> bool:
     """Whether a revenue step found is thin: its landing year ``landing`` has fewer than
-    ``analyst_min`` revenue analysts or no count (spec 2026-11-14 6.2). A missing step is not."""
+    ``analyst_min`` revenue analysts or no count (spec 2026-11-14 6.2). A missing step is not.
+    Nor is a step at or below ``thin_revenue_step_max`` (50%), which is read on any count (spec
+    2026-11-14 6.2, as narrowed on 2026-11-15)."""
     if step is None or landing is None:
+        return False
+    if step <= policy.thin_revenue_step_max:
         return False
     n = landing.analysts_revenue
     return n is None or n < policy.analyst_min

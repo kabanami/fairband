@@ -954,9 +954,11 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "`return.runway` is not the lever for a wrong revenue step",
                 # a thin revenue step is not read (spec 2026-11-14 6.2)
                 (
-                    "The engine does not read a revenue step whose year has fewer than "
-                    "`analyst_min` revenue analysts (`policy()`), or no count"
+                    "The engine does not read a revenue step above `thin_revenue_step_max` "
+                    "(50%) whose year has fewer than `analyst_min` revenue analysts "
+                    "(`policy()`), or no count"
                 ),
+                "A step at or below 50% is read on any count",
                 (
                     "that year's charge pays for its earnings step, so a `path.step_2` or "
                     "`path.step_3` moves it"

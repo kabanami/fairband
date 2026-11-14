@@ -60,14 +60,16 @@ V14_SHA256 = "fc70b926134b6c8d8f2583128e4c2394701358d5f50330786e9c433a39a4bbc1"
 V15_VALUES = {"sheet_shift_multiple"}
 V15_SHA256 = "c86d987799e4d15575812ffe452472bc2d716cff744f78aa00575d8239f3f34b"
 # The four pairs policy v16 adds to ``override_ranges``, as the file writes them: the committed
-# shares', the one-time item's and the two revenue steps'; it adds no value (spec 2026-11-14,
-# section 10).
+# shares', the one-time item's and the two revenue steps' (spec 2026-11-14, section 10).
 V16_RANGES = {
     "shares.committed": [0.0, 1e12],
     "earnings.ntm_nri": [-100.0, 100.0],
     "revenue.step_2": [-0.80, 3.00],
     "revenue.step_3": [-0.80, 3.00],
 }
+# The value policy v16 adds, the size above which a thin revenue step is not read (spec 2026-11-14,
+# sections 6.2 and 10, as narrowed on 2026-11-15).
+V16_VALUES = {"thin_revenue_step_max"}
 BAND_RULE = "the low must be below 1 and the high above 1"
 
 
@@ -468,13 +470,18 @@ def test_v15_is_v14_with_the_one_value_added() -> None:
     assert not {s.name for s in SETTINGS} & V15_VALUES
 
 
-def test_v16_is_v15_with_the_four_ranges() -> None:
-    """v16 adds no value: every v15 value loads unchanged from v16 but the override ranges, which
-    gain the pairs of ``shares.committed``, ``earnings.ntm_nri``, ``revenue.step_2`` and
-    ``revenue.step_3``; their note gains one sentence naming each new tag and the spec."""
+def test_v16_is_v15_with_the_four_ranges_and_the_one_value() -> None:
+    """Every v15 value loads unchanged from v16 but the override ranges, which gain the pairs of
+    ``shares.committed``, ``earnings.ntm_nri``, ``revenue.step_2`` and ``revenue.step_3``, their
+    note gaining one sentence naming each new tag and the spec; and the one new key is
+    ``thin_revenue_step_max``, 50%, its source naming spec 2026-11-14 6.2, no setting."""
     v15 = _file_values("fairband-policy-v15.toml")
     v16 = load_policy().raw["values"]
-    assert v16.keys() == v15.keys()
+    assert v16.keys() - v15.keys() == V16_VALUES and v15.keys() <= v16.keys()
+    assert v16["thin_revenue_step_max"]["value"] == 0.5
+    assert "spec 2026-11-14, section 6.2" in v16["thin_revenue_step_max"]["source"]
+    assert load_policy().thin_revenue_step_max == 0.5
+    assert not {s.name for s in SETTINGS} & V16_VALUES
     kept = v15.keys() - {"override_ranges"}
     assert {k: v16[k] for k in kept} == {k: v15[k] for k in kept}
     old, new = v15["override_ranges"], v16["override_ranges"]

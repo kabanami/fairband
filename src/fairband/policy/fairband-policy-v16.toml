@@ -153,6 +153,11 @@ source = "no source: policy value"
 value = 5
 source = "stocks method v1.7 section 3: a path year with fewer than 5 analysts is not data"
 
+[values.thin_revenue_step_max]
+value = 0.5
+source = "spec 2026-11-14, section 6.2, as narrowed on 2026-11-15: on a copy of refresh 61, of 404 consensus revenue steps whose landing year had fewer than 5 revenue analysts or no count, four were above 40% (310%, 90.7%, 69.6%, 61.0%) and the next was 39.6%; leaving every such step unread moved 298 values, 221 down, since the earnings step that stands in carries the change of margins; no source gives the number; policy value"
+note = "A fraction: 0.5 is 50%. A thin step is not read only above it; a step of exactly 50% is read."
+
 [values.step_series_gap_max]
 value = 0.05
 source = "the AMZN and META sessions; no source gives the number; spec 2026-11-09 sections 9 and 11: a consensus step read on net income and the same step on EPS more than 5 points apart is the note step-series-disagree; policy value"

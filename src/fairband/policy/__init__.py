@@ -34,9 +34,12 @@ pay's override range v13 adds, nor the runway return's, which v13 widens to 500%
 value, only the minority interest's override range (spec 2026-11-13, sections 13 and 14). Nor is
 the value v15 adds (spec 2026-11-13, section 12.5), the multiple by which a quarter's minority
 interest differs from the newest annual sheet's before the note ``sheet-shift`` names it: it
-fails at load at or below 1. v16 adds no value, only four override ranges (spec 2026-11-14,
+fails at load at or below 1. v16 adds four override ranges (spec 2026-11-14,
 section 10): the committed shares', the one-time item's in the NTM consensus and the two revenue
 steps'.
+Nor is the value v16 gains with the thin rule (spec 2026-11-14, section 6.2, as narrowed on
+2026-11-15), the size above which a revenue step on too few revenue analysts is not read: it
+fails at load below 0, or at a NaN or an infinity.
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
 five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap
@@ -140,6 +143,7 @@ class Policy:
     loss_ramp_margin_bound: float
     roic_sensitivity: tuple[float, float]
     analyst_min: int
+    thin_revenue_step_max: float
     step_series_gap_max: float
     split_implied_count_tolerance: float
     inflation_max: float
@@ -275,6 +279,7 @@ def load_policy(path: Path | None = None) -> Policy:
         loss_ramp_margin_bound=read("loss_ramp_margin_bound", _num),
         roic_sensitivity=read("roic_sensitivity", _pair),
         analyst_min=read("analyst_min", _whole),
+        thin_revenue_step_max=read("thin_revenue_step_max", _num),
         step_series_gap_max=read("step_series_gap_max", _num),
         split_implied_count_tolerance=read("split_implied_count_tolerance", _num),
         inflation_max=read("inflation_max", _num),

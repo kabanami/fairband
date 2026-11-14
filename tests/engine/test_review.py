@@ -804,14 +804,14 @@ def test_a_revenue_step_on_a_thin_year_bridges_from_the_earnings_step_s_value(
     policy: Policy, deciles: Deciles
 ) -> None:
     """Spec 2026-11-14 6.1 and 6.2 on MGCO with fiscal 2027 to 2029 revenue of $25,000 m, $27,500 m
-    and $29,700 m, fiscal 2029 on 4 revenue analysts: the mechanical charge leaves step 3's 8% out
-    and pays for the earnings step of year 3, 10%. A ``revenue.step_3`` of 5% bridges from that
-    value: its old figure is the engine's reading, the step found, 8%, and its delta is the
-    reviewed value less the mechanical value on the earnings step. An agent's step is never thin,
-    so one at the step found, 8%, moves the value too, to the value of the row whose step 3 rests
-    on 10 analysts."""
+    and $44,000 m, fiscal 2029 on 4 revenue analysts: the mechanical charge leaves step 3's 60%
+    out, above 50% on a thin year, and pays for the earnings step of year 3, 10%. A
+    ``revenue.step_3`` of 5% bridges from that value: its old figure is the engine's reading, the
+    step found, 60%, and its delta is the reviewed value less the mechanical value on the earnings
+    step. An agent's step is never thin, so one at the step found, 60%, moves the value too, to the
+    value of the row whose step 3 rests on 10 analysts."""
     plain = mature_growth_inputs()
-    revenue, counts = (25_000e6, 27_500e6, 29_700e6), (10, 10, 4)
+    revenue, counts = (25_000e6, 27_500e6, 44_000e6), (10, 10, 4)
     rows = tuple(
         replace(a, revenue=x, analysts_revenue=n)
         for a, x, n in zip(plain.annual_estimates, revenue, counts, strict=True)
@@ -824,12 +824,12 @@ def test_a_revenue_step_on_a_thin_year_bridges_from_the_earnings_step_s_value(
         inputs, deciles, policy, TODAY, [OVERRIDE("revenue.step_3", 0.05)], mechanical
     )
     [line] = review.bridge
-    assert (line.old, line.new) == (pytest.approx(0.08), 0.05)
+    assert (line.old, line.new) == (pytest.approx(0.60), 0.05)
     assert review.result.value is not None and line.delta is not None
     assert line.delta == pytest.approx(review.result.value - mechanical.value, abs=1e-9)
     assert line.delta > 0  # 5% of growth costs less than the 10% the charge paid for
     at_found = value_company(
-        inputs, deciles, policy, TODAY, {"revenue.step_3": OVERRIDE("revenue.step_3", 0.08)}
+        inputs, deciles, policy, TODAY, {"revenue.step_3": OVERRIDE("revenue.step_3", 0.60)}
     )
     read = replace(inputs, annual_estimates=tuple(replace(a, analysts_revenue=10) for a in rows))
     assert at_found.value is not None and at_found.value != mechanical.value

@@ -280,8 +280,8 @@ SETTINGS: tuple[Setting, ...] = (
         "analyst_min",
         "flags",
         "Fewest analysts behind a path year",
-        "A year with fewer analysts than this is flagged thin; Mature Growth skips its revenue "
-        "step; past year 3 it ends a Decline row's consensus.",
+        "Fewer analysts than this flag a year thin; Mature Growth skips its revenue step above "
+        "50%; past year 3 it ends a Decline row's consensus.",
         "count",
         "revalue",
         "1 to 20",
@@ -604,7 +604,8 @@ def check(policy: Policy) -> None:
     values policy v10 adds, the three v11 adds, the one v12 adds, the four v13 adds and the one
     v15 adds, which are not settings and so are only ever the file's (spec 2026-11-09, section
     11; spec 2026-11-10, section 9; ``method.md`` 4.6 rule 5; spec 2026-11-13, sections 7.1, 8 and
-    12.5)."""
+    12.5). Last the range of the value v16 gains with the thin rule, ``thin_revenue_step_max``
+    (spec 2026-11-14, section 6.2), no setting either."""
     p, u, f = policy, policy.universe, policy.refresh
     # A. Valuation
     if not 0.04 <= p.required_return <= 0.20:
@@ -755,3 +756,5 @@ def check(policy: Policy) -> None:
         raise ValueError("share_count_gap_band: the low must be below 1 and the high above 1")
     if not (isfinite(p.sheet_shift_multiple) and p.sheet_shift_multiple > 1):
         raise ValueError("sheet_shift_multiple: must be above 1")
+    if not (isfinite(p.thin_revenue_step_max) and p.thin_revenue_step_max >= 0):
+        raise ValueError("thin_revenue_step_max: must be 0% or more")

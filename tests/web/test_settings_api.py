@@ -305,6 +305,7 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "sbc_basis_gap_multiple": 10.0,
         "share_count_gap_band": [0.7, 1.3],
         "sheet_shift_multiple": 3.0,  # the note sheet-shift (spec 2026-11-13 12.5)
+        "thin_revenue_step_max": 0.5,  # the thin revenue step (spec 2026-11-14 6.2)
     }
     for name, value in read_only.items():
         entry = body["values"][name]
@@ -320,9 +321,10 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
             "sbc_basis_gap_multiple",
             "share_count_gap_band",
             "sheet_shift_multiple",
+            "thin_revenue_step_max",
         )
     )
-    assert units == ("fraction", "fraction", "times", "times", "times")
+    assert units == ("fraction", "fraction", "times", "times", "times", "fraction")
     assert set(body["values"]) == {s.name for s in SETTINGS} | set(read_only) | {
         "designation_edges",
         "wide_terminal_roic_cap",
