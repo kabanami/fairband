@@ -450,6 +450,14 @@ _SNAPSHOT_PATH_WORDS = {
     "phase/growth_3y": "the three-year revenue growth",
     "phase/dickinson": "the Dickinson stage",
 }
+# The keys of the charge's revenue steps, by year: the steps the charge read, the consensus's as
+# found and where each read step came from (spec 2026-11-14 6.3); a list counts from 0, the
+# revenue step of year 2 first, as the bridge's labels count it.
+_REVENUE_STEP_WORDS = {
+    "revenue_steps": "the revenue step {k} the charge reads",
+    "revenue_steps_found": "the consensus revenue step {k} as found",
+    "revenue_step_source": "the source of the revenue step {k} the charge reads",
+}
 # Each input's bridge label by its tag as a stored bridge line names it.
 _LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -1099,12 +1107,15 @@ def _figure_words(rest: Sequence[str]) -> str | None:
 
 
 def _snapshot_words(rest: Sequence[str]) -> str | None:
-    """A snapshot's path in words: a path a report cites most by its words, else an input, an
-    intermediate or a classifier field by its name in words."""
+    """A snapshot's path in words: a path a report cites most by its words, a year of the charge's
+    revenue steps by its step, else an input, an intermediate or a classifier field by its name in
+    words."""
     known = _SNAPSHOT_PATH_WORDS.get("/".join(rest))
     if known is not None:
         return known
     match rest:
+        case ["intermediates", "charge", key, ("0" | "1") as n] if key in _REVENUE_STEP_WORDS:
+            return _REVENUE_STEP_WORDS[key].format(k=int(n) + 2)
         case ["inputs", name]:
             return f"the {field_words(name)}"
         case ["intermediates", *path] if path:

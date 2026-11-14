@@ -16,10 +16,11 @@ the terminal return is worth more, and more for a longer runway; a charge-off ro
 still, its runway years uncharged. EPV is shown as the no-growth value. ``epv`` and
 ``stable_growth`` are a share; ``epv_total`` and ``stable_growth_total`` are the totals;
 ``charge`` records the growth paid for (g_T in every year), the return by year, the hold and no
-revenue steps, and ``charge_off`` beside it whether the runway years went uncharged, as on the
-growth route: false under a ``return.runway`` override, which charges them. The ROIC flags are
-the growth route's, and so are the trailing flags' readings of the runway return: the
-``heavy-capex`` sentence and ``consensus-basis-unknown`` after ``large-nri``.
+revenue steps, none read or found and each year's source ``none``, and ``charge_off`` beside it
+whether the runway years went uncharged, as on the growth route: false under a
+``return.runway`` override, which charges them. The ROIC flags are the growth route's, and so are
+the trailing flags' readings of the runway return: the ``heavy-capex`` sentence and
+``consensus-basis-unknown`` after ``large-nri``.
 
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
 5.7), or that route's refusal; the value, the levels and the designation stay on the stable-growth

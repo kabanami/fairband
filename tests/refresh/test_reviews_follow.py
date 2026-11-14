@@ -774,6 +774,116 @@ def test_a_period_tied_one_time_item_holds_until_a_newer_period_is_on_file(
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
 
 
+def _mgco_with_a_revenue_step(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    inputs: CompanyInputs,
+    tag: OverrideTag,
+    new: float,
+) -> tuple[int, Follow, ValuationResult]:
+    """MGCO valued on ``inputs``, its snapshot stored and a period-tied override of the revenue
+    step ``tag`` at ``new`` made on it, correcting the engine's reading, the consensus's step as
+    found or none: the override's id, ``follow``, which values the inputs it is given, stores the
+    snapshot and follows it, and the first result."""
+    deciles = universe_deciles()
+    first = value_company(inputs, deciles, policy, HGCO_TODAY)
+    found = current_reading(first, tag)
+    refresh_id = create_refresh(
+        conn, "revalue", None, policy.version, METHOD_VERSION, HGCO_AT, EMPTY_SETTINGS_HASH
+    )
+    made_on = insert_snapshot(conn, first, refresh_id, clock=lambda: HGCO_AT)
+    step = insert_override(
+        conn,
+        "MGCO",
+        tag,
+        found,
+        new,
+        "ratio",
+        "the company guided revenue growth below the consensus",
+        EVIDENCE,
+        "period-tied",
+        "Q3 2026",
+        found,
+        made_on,
+        AGENT,
+        HGCO_AT,
+        "applied",
+        "",
+    )
+
+    def follow(inputs: CompanyInputs) -> int | None:
+        result = value_company(inputs, deciles, policy, HGCO_TODAY)
+        snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: HGCO_AT)
+        return follow_snapshot(
+            conn,
+            inputs,
+            result,
+            snapshot_id,
+            deciles,
+            policy,
+            HGCO_TODAY,
+            refresh_id,
+            lambda: HGCO_AT,
+        )
+
+    return step, follow, first
+
+
+def test_a_period_tied_revenue_step_holds_while_the_consensus_step_stands(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-14 6.1: the engine's reading of a revenue step is the consensus's step as
+    found. On MGCO with fiscal 2027 to 2029 revenue of $25,000 m, $27,500 m and $29,700 m, a
+    period-tied ``revenue.step_3`` of 5% corrects the 8% found: a snapshot of the same figures
+    keeps it applied, its review's charge reading 5%, and one whose fiscal 2029 revenue moved to
+    $30,250 m, a step of 10%, drops it, the reading changed."""
+    base = mature_growth_inputs()
+    revenue = (25_000e6, 27_500e6, 29_700e6)
+    rows = tuple(
+        replace(a, revenue=x, analysts_revenue=10)
+        for a, x in zip(base.annual_estimates, revenue, strict=True)
+    )
+    inputs = _as_live(replace(base, annual_estimates=rows))
+    step, follow, first = _mgco_with_a_revenue_step(conn, policy, inputs, "revenue.step_3", 0.05)
+    assert current_reading(first, "revenue.step_3") == pytest.approx(0.08)
+    held = override_row(conn, step)
+    assert held is not None and held.corrected_value == pytest.approx(0.08)
+    assert follow(inputs) is not None
+    review = latest_review(conn, "MGCO")
+    assert review is not None and review.override_ids == (step,)
+    charge = review.result.intermediates["charge"]
+    assert charge["revenue_steps"] == [pytest.approx(0.10), 0.05]
+    assert charge["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    held = override_row(conn, step)
+    assert held is not None and held.state == "applied"
+    moved = (*rows[:2], replace(rows[2], revenue=30_250e6))
+    assert follow(replace(inputs, annual_estimates=moved)) is None
+    dropped = override_row(conn, step)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
+
+
+def test_a_period_tied_revenue_step_with_no_consensus_step_drops_at_a_newer_period(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-14 6.1 on MGCO as it is, with no revenue consensus: the reading of
+    ``revenue.step_2`` is none, so a period-tied override of 4% corrects none and stays applied on
+    a snapshot of the same figures, the review's charge paying for 4% in year 2; it drops when a
+    newer period is on file, a quarter later."""
+    inputs = _as_live(mature_growth_inputs())
+    step, follow, first = _mgco_with_a_revenue_step(conn, policy, inputs, "revenue.step_2", 0.04)
+    assert current_reading(first, "revenue.step_2") is None
+    assert follow(inputs) is not None
+    review = latest_review(conn, "MGCO")
+    assert review is not None and review.override_ids == (step,)
+    assert review.result.intermediates["charge"]["growth_by_year"][0] == 0.04
+    assert review.result.intermediates["charge"]["revenue_step_source"] == ["agent", "none"]
+    held = override_row(conn, step)
+    assert held is not None and (held.state, held.corrected_value) == ("applied", None)
+    assert follow(_a_quarter_on(inputs)) is None
+    dropped = override_row(conn, step)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
+
+
 def test_an_override_on_a_snapshot_from_before_1_3_is_judged_by_its_share_count_s_date(
     conn: sqlite3.Connection, policy: Policy
 ) -> None:

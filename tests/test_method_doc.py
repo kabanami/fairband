@@ -27,8 +27,55 @@ def test_section_14_names_every_override_tag() -> None:
     assert "`override_ranges`" in section
     assert "`override_primary_evidence_above_p90`" in section
     # rule 2 counts the tags in words
-    assert len(get_args(OverrideTag)) == 23
-    assert "A tag that is not one of the twenty-three:" in section
+    assert len(get_args(OverrideTag)) == 25
+    assert "A tag that is not one of the twenty-five:" in section
+
+
+def test_an_agent_s_revenue_step_is_the_one_the_charge_pays_for() -> None:
+    """Spec 2026-11-14 6.1 and 6.3: 4.8 and 5.3 say the charge reads an agent's revenue step in
+    place of the consensus's, while an earnings step override still moves only the fallback; 4.8
+    and 5.12 name the `charge` entry's three keys; 5.11's flag says "revenue growth" for an agent's
+    step too; 6.4's cross-check takes none; 14.4 gives the two inputs their bullet, with the
+    reading, the steps found; and 11's row cites every section that states the rule."""
+    four = _section(4)
+    for words in (
+        "an agent's revenue step (`revenue.step_2`, `revenue.step_3`, 14.4) in its place",
+        "`revenue_steps_found`",
+        "`revenue_step_source`",
+    ):
+        assert words in four, words
+    five = _section(5)
+    for words in (
+        (
+            "an earnings step override (`path.step_2`, `path.step_3`) moves that fallback and never"
+            " a revenue step the consensus gives"
+        ),
+        (
+            "an agent's `revenue.step_2` or `revenue.step_3` (14.4) replaces the consensus revenue"
+            " step"
+        ),
+        (
+            "the owner funds the growth.\" where the year's h is a revenue step, the consensus's or"
+            " an agent's"
+        ),
+        "`revenue_steps_found`",
+        "`revenue_step_source`",
+    ):
+        assert words in five, words
+    six = _section(6)
+    assert "reads the consensus revenue steps as found and no agent's" in six
+    fourteen = _section(14)
+    bullet = next(x for x in fourteen.splitlines() if x.startswith("- `revenue.step_2`"))
+    for words in (
+        "the consensus revenue step as found",
+        "`path.step_2` and `path.step_3` still move the earnings steps",
+        "a cross-check does not read them",
+        "Period-tied only",
+    ):
+        assert words in bullet, words
+    assert "the revenue steps, the consensus's as found (`charge.revenue_steps_found`" in fourteen
+    row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
+    assert "(4.8, 5.3, 5.11, 5.12, 6.4, 14.2 to 14.5, 14.9)" in row
 
 
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:

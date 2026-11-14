@@ -222,6 +222,51 @@ def test_the_one_time_item_tag_s_rules(policy: Policy) -> None:
     assert "earnings.ntm_nri" not in INPUT_OF
 
 
+def test_the_two_revenue_step_tags_rules(policy: Policy) -> None:
+    """Spec 2026-11-14 6.1: a growth rate on Mature Growth alone, −80% to 300% with both ends,
+    period-tied only, bridged right after the two consensus steps under the labels "revenue step
+    2" and "revenue step 3"; each stands for no entry of the route's."""
+    for tag in ("revenue.step_2", "revenue.step_3"):
+        tied = (tag, 0.05, "mature-growth", policy, ["filing"], "period-tied", None)
+        assert check_override(*tied) == ("applied", ""), tag
+        for end in (-0.80, 3.00):
+            assert check_override(*tied[:1], end, *tied[2:]) == ("applied", ""), (tag, end)
+        assert check_override(*tied[:1], 3.01, *tied[2:]) == (
+            "refused-unit",
+            f"{tag} takes −80% to 300%",
+        )
+        assert check_override(*tied[:5], "lasting", None) == (
+            "refused-unit",
+            f"{tag} is period-tied only",
+        )
+        for route, name in (
+            ("mature-stable", "Mature Stable"),
+            ("revenue-growth", "revenue-growth"),
+            ("decline", "Decline"),
+            ("start-up", "Start-up"),
+        ):
+            assert check_input(tag, 0.05, route, policy) == (
+                "refused-route",
+                f"the {name} route does not read {tag}",
+            )
+        spec = TAGS[tag]
+        assert spec.routes == {"mature-growth"}
+        assert spec.unit == "ratio" and spec.words is None
+        assert spec.period_tied_only and not spec.low_open and spec.lasting_value is None
+        assert tag not in INPUT_OF
+    steps = BRIDGE_ORDER.index("path.step_2")
+    assert BRIDGE_ORDER[steps : steps + 4] == (
+        "path.step_2",
+        "path.step_3",
+        "revenue.step_2",
+        "revenue.step_3",
+    )
+    assert (LABELS["revenue.step_2"], LABELS["revenue.step_3"]) == (
+        "revenue step 2",
+        "revenue step 3",
+    )
+
+
 def test_check_needs_evidence(policy: Policy) -> None:
     assert checked(policy, "growth.belief", 0.08, "mature-growth", evidence=[]) == (
         "refused-evidence",
@@ -295,6 +340,8 @@ def test_the_cycle_gap_is_a_mature_tag() -> None:
         "path.hold": "held rate",
         "path.step_2": "consensus step 2",
         "path.step_3": "consensus step 3",
+        "revenue.step_2": "revenue step 2",
+        "revenue.step_3": "revenue step 3",
         "moat.class": "moat",
         "margin.target": "target margin",
         "capital.sales_to_capital": "sales to capital",
@@ -849,6 +896,62 @@ def test_the_one_time_item_reads_nil_until_an_override_sets_it(
     r = value_company(mature_growth_inputs(), deciles, policy, TODAY, both)
     assert r.intermediates["anchor"]["ntm_eps"] == pytest.approx(4.31)
     assert current_reading(r, "earnings.ntm") == pytest.approx(4.31 + 1.00)
+
+
+def test_the_revenue_step_readings_are_the_consensus_s_as_found(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.1 and 6.3: the engine's reading of a revenue step is the consensus's step
+    as found, ``charge.revenue_steps_found``, and never an agent's. On MGCO with fiscal 2027 to
+    2029 revenue of $25,000 m, $27,500 m and $29,700 m the readings are 10% and 8%, and the
+    reading of step 3 stays 8% under a ``revenue.step_3`` of 5%. Without a consensus revenue step,
+    on MGCO as it is, the reading is none; off Mature Growth it is none, on a Mature Stable row
+    whose cross-check reads the same consensus too; and on a Mature Growth row refused before its
+    charge, none. A result stored before the steps found were kept reads its charge's
+    ``revenue_steps``, which then held the steps as found."""
+    rows = tuple(
+        replace(a, revenue=x, analysts_revenue=10)
+        for a, x in zip(
+            mature_growth_inputs().annual_estimates, (25_000e6, 27_500e6, 29_700e6), strict=True
+        )
+    )
+    inputs = replace(mature_growth_inputs(), annual_estimates=rows)
+    plain = value_company(inputs, deciles, policy, TODAY)
+    assert current_reading(plain, "revenue.step_2") == pytest.approx(0.10)
+    assert current_reading(plain, "revenue.step_3") == pytest.approx(0.08)
+    step = {"revenue.step_3": override("revenue.step_3", 0.05)}
+    agent = value_company(inputs, deciles, policy, TODAY, step)
+    assert agent.intermediates["charge"]["revenue_steps"][1] == 0.05
+    assert current_reading(agent, "revenue.step_3") == current_reading(plain, "revenue.step_3")
+    bare = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    for tag in ("revenue.step_2", "revenue.step_3"):
+        assert current_reading(bare, tag) is None, tag
+    stable_inputs = replace(
+        mature_stable_inputs(),
+        quarter_estimates=inputs.quarter_estimates,
+        annual_estimates=inputs.annual_estimates,
+    )
+    stable = value_company(stable_inputs, deciles, policy, TODAY)
+    assert stable.intermediates["growth_route"]["charge"]["revenue_steps_found"] == [
+        pytest.approx(0.10),
+        pytest.approx(0.08),
+    ]
+    others = [
+        value_company(build(), deciles, policy, TODAY)
+        for build in (high_growth_inputs, decline_inputs, start_up_inputs)
+    ]
+    for r in (stable, *others):
+        assert current_reading(r, "revenue.step_2") is None, r.route
+    refused = value_company(replace(inputs, trailing=None), deciles, policy, TODAY)
+    assert refused.route is None and current_reading(refused, "revenue.step_2") is None
+    charge = {
+        k: v
+        for k, v in plain.intermediates["charge"].items()
+        if k not in ("revenue_steps_found", "revenue_step_source")
+    }
+    before = replace(plain, intermediates=plain.intermediates | {"charge": charge})
+    assert current_reading(before, "revenue.step_2") == pytest.approx(0.10)
+    assert current_reading(before, "revenue.step_3") == pytest.approx(0.08)
 
 
 def test_a_balance_line_not_on_file_reads_none(policy: Policy, deciles: Deciles) -> None:

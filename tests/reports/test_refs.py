@@ -1230,6 +1230,27 @@ def described(
             "snapshot:{snapshot}/intermediates/charge/hold_years",
             "snapshot {snapshot}, the years the runway return holds, priced 30 Oct 2026",
         ),
+        # the revenue steps the charge read, the consensus's as found and where each came from
+        # (spec 2026-11-14 6.3), by the year's step, counted as the bridge labels count them
+        (
+            "snapshot:{snapshot}/intermediates/charge/revenue_steps/0",
+            "snapshot {snapshot}, the revenue step 2 the charge reads, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/intermediates/charge/revenue_steps_found/1",
+            "snapshot {snapshot}, the consensus revenue step 3 as found, priced 30 Oct 2026",
+        ),
+        (
+            "snapshot:{snapshot}/intermediates/charge/revenue_step_source/1",
+            (
+                "snapshot {snapshot}, the source of the revenue step 3 the charge reads, priced 30 "
+                "Oct 2026"
+            ),
+        ),
+        (
+            "review:{review}/intermediates/charge/revenue_steps/1",
+            "review {review}, the revenue step 3 the charge reads",
+        ),
         (
             "snapshot:{snapshot}/intermediates/runway_return/one_year",
             "snapshot {snapshot}, the newest year's marginal return, priced 30 Oct 2026",

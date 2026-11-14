@@ -292,11 +292,12 @@ and store nothing:
   record with the midpoint and, for a fiscal-year revenue or EPS figure on the `gaap` basis, the
   step the server computed. An override cites it in its evidence as `guidance:<id>`; a report cites its figures.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input of
-  the twenty-three in `SKILL.md`'s table, the diluted share count (`shares.diluted`), the
+  the twenty-five in `SKILL.md`'s table, the diluted share count (`shares.diluted`), the
   committed shares (`shares.committed`), the value outside the business (`value.outside`), the
-  one-time item in the NTM consensus (`earnings.ntm_nri`), the trailing stock pay
-  (`earnings.sbc`), the stock-pay basis (`earnings.sbc_basis`) and the minority interest
-  (`balance.minority`) among them; applied, it answers `{override, review, bridge}`; refused, the
+  one-time item in the NTM consensus (`earnings.ntm_nri`), the two revenue steps of the Mature
+  Growth charge (`revenue.step_2`, `revenue.step_3`), the trailing stock pay (`earnings.sbc`),
+  the stock-pay basis (`earnings.sbc_basis`) and the minority interest (`balance.minority`)
+  among them; applied, it answers `{override, review, bridge}`; refused, the
   sentence and the `override`. A lasting `earnings.sbc` of 0 on a row whose trailing stock pay is
   above zero is refused with the sentence alone, and nothing is stored.
 - `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over

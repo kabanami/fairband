@@ -106,7 +106,9 @@ business's own values, before any value outside the business is added.
   runway), ``roic`` (aggregate, years, by_year, each kept year with its
   average_goodwill_and_intangibles), ``runway_return`` (used, marginal, marginal_usable,
   three_year, ten_year, one_year, without_goodwill, value), ``terminal_roic``, ``charge_off``,
-  ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps), ``shares`` (the count in
+  ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps, the steps the charge
+  read, an agent's included, revenue_steps_found, the consensus's as found, and
+  revenue_step_source, each year's ``consensus``, ``agent`` or ``none``), ``shares`` (the count in
   force, and ``shares_committed`` beside it only under that override, as on every route),
   ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
   ``ntm_nri`` (the one-time amount a share taken off year 1, only under an override of it, nil
@@ -118,7 +120,8 @@ business's own values, before any value outside the business is added.
 - Mature Stable: ``e_trailing``, ``nri_gap``, ``cycle_gap`` (as on Mature Growth), ``ttm_margin``,
   ``median_margin``, ``margin_scaled``, ``e_normalized`` (the E the value rests on: scaled when
   flagged, then less any cycle gap), ``moat``, ``roic``, ``runway_return``, ``terminal_roic``,
-  ``charge_off``, ``charge`` (as on Mature Growth, with no revenue steps), ``runway``, ``epv``
+  ``charge_off``, ``charge`` (as on Mature Growth, with no revenue steps, each year's source
+  ``none``), ``runway``, ``epv``
   and ``stable_growth`` (a share), ``epv_total`` and ``stable_growth_total``, ``shares``,
   ``value_per_share``, ``eps``, ``dividend_yield``, ``net_buyback_yield``, ``income_basis``,
   ``price_facts``, ``growth_route`` (the growth route's cross-check: value_per_share,

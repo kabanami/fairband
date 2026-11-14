@@ -60,6 +60,7 @@ def OVERRIDE(tag: OverrideTag, value: float | str, id: int = 1) -> Override:
         ("MGCO", "earnings.ntm_nri", 0.59),
         ("MGCO", "return.runway", 0.20),
         ("MGCO", "path.step_2", 0.15),  # the consensus step is 12%
+        ("MGCO", "revenue.step_2", 0.04),  # no revenue consensus: the charge paid for 12%
         ("MSCO", "moat.class", "Narrow"),
         ("MSCO", "earnings.cycle_gap", 1.0),
         ("HGCO", "margin.target", 0.25),
@@ -712,6 +713,45 @@ def test_a_step_override_moves_the_charge_only_where_the_revenue_step_is_missing
         charge = im.intermediates["charge"]
         assert charge["growth_by_year"][0] == pytest.approx(paid_for)
         assert charge["revenue_steps"] == mechanical.intermediates["charge"]["revenue_steps"]
+
+
+def test_an_earnings_step_and_a_revenue_step_bridge_in_order(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.1 on MGCO, which has no revenue consensus, so the charge pays for the
+    earnings steps. Given out of order, ``path.step_3`` at 20% bridges first, then
+    ``revenue.step_3`` at 5%, right after it. Alone, the earnings step moves the charge of year 3
+    to 20%, the fallback; with the revenue step on file the charge of that year is the agent's 5%
+    whatever the earnings step, as under the revenue step alone, so the earnings-step override no
+    longer moves it. The revenue step's old value is none, the consensus giving no step, and the
+    deltas sum to the reviewed value less the mechanical value."""
+    inputs = mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.value is not None
+    overrides = [OVERRIDE("revenue.step_3", 0.05, 2), OVERRIDE("path.step_3", 0.20, 1)]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    tags = [line.tag for line in review.bridge]
+    assert tags == ["path.step_3", "revenue.step_3"]
+    assert tags == sorted(tags, key=BRIDGE_ORDER.index)
+    earnings, revenue = review.bridge
+    assert (earnings.old, earnings.new, earnings.override_id) == (pytest.approx(0.10), 0.20, 1)
+    assert (revenue.old, revenue.new, revenue.override_id) == (None, 0.05, 2)
+    step_alone = value_company(inputs, deciles, policy, TODAY, {"path.step_3": overrides[1]})
+    assert step_alone.value is not None
+    assert step_alone.intermediates["charge"]["growth_by_year"][1] == pytest.approx(0.20)
+    assert earnings.delta == pytest.approx(step_alone.value - mechanical.value, abs=1e-9)
+    assert review.result.value is not None and revenue.delta is not None
+    assert earnings.delta + revenue.delta == pytest.approx(
+        review.result.value - mechanical.value, abs=1e-9
+    )
+    revenue_alone = value_company(inputs, deciles, policy, TODAY, {"revenue.step_3": overrides[0]})
+    charge = review.result.intermediates["charge"]
+    assert review.result.intermediates["path_steps"][1] == 0.20
+    assert charge["growth_by_year"][1] == 0.05
+    assert charge["growth_by_year"] == revenue_alone.intermediates["charge"]["growth_by_year"]
+    assert charge["revenue_step_source"] == ["none", "agent"]
+    judged = [i.name for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert judged == ["path.step_3", "revenue.step_3"]
 
 
 def test_the_hold_is_read_on_the_overriding_belief(policy: Policy, deciles: Deciles) -> None:

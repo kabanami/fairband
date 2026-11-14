@@ -443,6 +443,85 @@ def test_the_committed_shares_through_the_api(
     assert bridge[0]["delta"] == pytest.approx(mechanical * (1_000 / 1_060 - 1))
 
 
+def test_a_revenue_step_through_the_api_where_the_consensus_gives_none(
+    client: TestClient, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-14 6.1 on AAPL, the Mature Growth golden, whose consensus gives no revenue
+    step, so its charge pays for the earnings steps of 12% and 10%: the engine's reading of
+    ``revenue.step_2`` is none. A lasting override is refused; a period-tied one of 4% applies,
+    its old value and the value it corrected none, and its review's charge pays for 4% in year 2,
+    so the reviewed value is above the mechanical one; the detail's bridge names the line "revenue
+    step 2", a ratio."""
+    step = {
+        "tag": "revenue.step_2",
+        "new": 0.04,
+        "reason": "the company guided revenue growth of 4% for fiscal 2028",
+        "evidence": [TRANSCRIPT],
+        "lifetime": "lasting",
+    }
+    r = client.post("/api/companies/AAPL/overrides", json=step, headers=AGENT)
+    assert (r.status_code, r.json()["detail"]) == (400, "revenue.step_2 is period-tied only")
+    body = _post(client, step | {"lifetime": "period-tied", "period": "Q3 2026"})
+    tied = body["override"]
+    assert (tied["state"], tied["unit"], tied["old"], tied["correctedValue"]) == (
+        "applied",
+        "ratio",
+        None,
+        None,
+    )
+    charge = body["review"]["result"]["intermediates"]["charge"]
+    assert charge["growth_by_year"][0] == 0.04
+    assert charge["revenue_step_source"] == ["agent", "none"]
+    mechanical = results["AAPL"].value
+    assert mechanical is not None and body["review"]["value"] > mechanical
+    bridge = client.get("/api/companies/AAPL").json()["review"]["bridge"]
+    assert [(x["tag"], x["label"], x["unit"], x["old"], x["new"]) for x in bridge] == [
+        ("revenue.step_2", "revenue step 2", "ratio", None, 0.04)
+    ]
+    assert bridge[0]["delta"] == pytest.approx(body["review"]["value"] - mechanical)
+
+
+def test_a_revenue_step_through_the_api_where_the_consensus_gives_one(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    stored_inputs: dict[str, CompanyInputs],
+) -> None:
+    """Spec 2026-11-14 6.1 on MGRV, a Mature Growth row with fiscal 2027 to 2029 revenue of
+    $25,000 m, $27,500 m and $29,700 m: the engine's reading of ``revenue.step_3`` is the 8% the
+    consensus gives, so a period-tied override of 5% stores 8% as its old value and as the value it
+    corrected, and its review's charge reads 5% while the steps found stay 10% and 8%."""
+    base = replace(mature_growth_inputs(), symbol="MGRV")
+    revenue = (25_000e6, 27_500e6, 29_700e6)
+    rows = tuple(
+        replace(a, revenue=x, analysts_revenue=10)
+        for a, x in zip(base.annual_estimates, revenue, strict=True)
+    )
+    inputs = replace(base, annual_estimates=rows)
+    result = value_company(inputs, universe_deciles(), policy, TODAY)
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, result, 1, clock=lambda: CREATED)
+    stored_inputs["MGRV"] = inputs
+    step = {
+        "tag": "revenue.step_3",
+        "new": 0.05,
+        "reason": "the company guided revenue growth of 5% for fiscal 2029",
+        "evidence": [TRANSCRIPT],
+        "lifetime": "period-tied",
+        "period": "Q3 2026",
+    }
+    body = _post(client, step, "MGRV")
+    tied = body["override"]
+    assert (tied["state"], tied["unit"]) == ("applied", "ratio")
+    assert tied["old"] == tied["correctedValue"] == pytest.approx(0.08)
+    assert tied["old"] == current_reading(result, "revenue.step_3")
+    charge = body["review"]["result"]["intermediates"]["charge"]
+    assert charge["revenue_steps"] == [pytest.approx(0.10), 0.05]
+    assert charge["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert charge["revenue_step_source"] == ["consensus", "agent"]
+    assert result.value is not None and body["review"]["value"] > result.value
+
+
 def test_the_two_stock_pay_inputs_through_the_api(
     client: TestClient, results: dict[str, ValuationResult]
 ) -> None:

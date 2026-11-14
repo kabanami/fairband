@@ -150,6 +150,15 @@ the annual consensus of the last fiscal year the window reaches (`fiscal_year`, 
 weights. Neither fixture's window is thin, so `annual` stays null and both files are unchanged
 byte for byte.
 
+MGCO, MSCO and FXCO re-captured under 1.4 on 2026-11-14 for two new keys of the `charge` entry,
+the revenue steps an agent may set (spec 2026-11-14 6.1 and 6.3; method 4.8 and 5.12):
+`revenue_steps_found`, the consensus revenue steps as found, and `revenue_step_source`, where
+each step the charge read came from, `consensus`, `agent` or `none`; `revenue_steps` stays the
+steps the charge read, the key a price refresh rebuilds from. None of the three fixtures has a
+consensus revenue step (MSCO's own charge reads none), so each gains `[null, null]` and
+`["none", "none"]`. No other key or figure moves; HGCO, YGCO, DCCO and SUCO carry no `charge`
+entry and are untouched.
+
 Run from the repository root:
 
 ```

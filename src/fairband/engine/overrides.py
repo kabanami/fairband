@@ -1,7 +1,7 @@
 """Overrides: the inputs an agent may change, the rules an override must pass, and the engine's
 own reading of each input (spec 2026-11-06 Tier 2, 10.1 to 10.3; ``method.md`` 14).
 
-An override changes one tagged input. ``TAGS`` names the twenty-three inputs, the routes that read
+An override changes one tagged input. ``TAGS`` names the twenty-five inputs, the routes that read
 each, its unit and, for the three word inputs, its words; the numeric ranges are the policy's
 ``override_ranges``, the ends included but the lower end, 0, of the two NTM anchors, the runway
 return, the diluted share count and the committed shares, which each must be above
@@ -50,7 +50,11 @@ unknown basis (spec 2026-11-13 7.2). The NTM earnings read the anchor the Mature
 stored, before the cycle gap came off it and after the one-time item: the EPS an override would
 stand in for to give the result, since a guided EPS stands in for the consensus with its items
 and leaves the item unread; the NTM revenue reads the year one the revenue-growth or Decline
-route stored, none on a Decline row with no usable consensus.
+route stored, none on a Decline row with no usable consensus. The two revenue steps read the
+consensus's steps as found, the Mature Growth charge's ``revenue_steps_found``, never an agent's
+step, which the charge's ``revenue_steps`` holds: none where the consensus gives no step, and on
+every other route; a result stored before the charge kept the steps found reads its
+``revenue_steps``, which then held them as found (spec 2026-11-14 6.1).
 The engine finds no value outside the business either: a valued route writes
 ``outside_value_per_share`` only under an override, so a result without one reads 0.0 on every
 route but Start-up, which reads none.
@@ -83,6 +87,8 @@ OverrideTag = Literal[
     "path.hold",
     "path.step_2",
     "path.step_3",
+    "revenue.step_2",
+    "revenue.step_3",
     "moat.class",
     "margin.target",
     "capital.sales_to_capital",
@@ -100,7 +106,8 @@ OverrideTag = Literal[
     "shares.committed",
     "value.outside",
 ]
-# The bridge's order, the method's step order (spec 10.4); the two stock-pay inputs right after
+# The bridge's order, the method's step order (spec 10.4); the two revenue steps right after the
+# two consensus steps (spec 2026-11-14 6.1); the two stock-pay inputs right after
 # the non-recurring gap, the figure first (spec 2026-11-13 7.2); the one-time item right before
 # the cycle gap, the order in which the two come off year 1 (spec 2026-11-14 5); the minority
 # interest right after cash (spec 2026-11-13 13); the count and the value outside the business
@@ -112,6 +119,8 @@ BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "revenue.ntm",
     "path.step_2",
     "path.step_3",
+    "revenue.step_2",
+    "revenue.step_3",
     "path.hold",
     "growth.belief",
     "earnings.nri_gap",
@@ -214,6 +223,10 @@ TAGS: dict[OverrideTag, TagSpec] = {
         _spec("path.hold", _GROWTH, "ratio"),
         _spec("path.step_2", _STEPS, "ratio"),
         _spec("path.step_3", _STEPS, "ratio"),
+        # the revenue growth the Mature Growth charge pays for (spec 2026-11-14 6.1); on the
+        # revenue-growth and Decline routes the consensus steps are the revenue steps already
+        _spec("revenue.step_2", frozenset({"mature-growth"}), "ratio", period_tied_only=True),
+        _spec("revenue.step_3", frozenset({"mature-growth"}), "ratio", period_tied_only=True),
         _spec("moat.class", _MATURE | _GROWTH | {"start-up"}, "class", _MOATS),
         _spec("margin.target", _GROWTH | {"start-up"}, "ratio"),
         _spec("capital.sales_to_capital", _GROWTH | {"decline"}, "multiple"),
@@ -254,6 +267,8 @@ LABELS: dict[OverrideTag, str] = {
     "path.hold": "held rate",
     "path.step_2": "consensus step 2",
     "path.step_3": "consensus step 3",
+    "revenue.step_2": "revenue step 2",
+    "revenue.step_3": "revenue step 3",
     "moat.class": "moat",
     "margin.target": "target margin",
     "capital.sales_to_capital": "sales to capital",
@@ -272,13 +287,14 @@ LABELS: dict[OverrideTag, str] = {
     "value.outside": "outside the business",
 }
 
-# The route's own entry in a result's inputs that each tag stands for. The two gaps and the
-# one-time item stand for none: a route cites the gap found and the NTM consensus as found as
-# data. An NTM anchor stands for its consensus figure's entry; Mature Growth's NTM net income
-# entry keeps the consensus, on the reported count under a ``shares.diluted`` too. The stock pay
-# stands for the stored trailing figure's entry; the stock-pay basis for none, since a route
-# cites the basis as no input. The count stands for the reported count every result cites; the
-# committed shares and the outside value for none, since the engine reads no such figure.
+# The route's own entry in a result's inputs that each tag stands for. The two gaps, the
+# one-time item and the two revenue steps stand for none: a route cites the gap found and the NTM
+# consensus as found as data, and no revenue step. An NTM anchor stands for its consensus
+# figure's entry; Mature Growth's NTM net income entry keeps the consensus, on the reported count
+# under a ``shares.diluted`` too. The stock pay stands for the stored trailing figure's entry; the
+# stock-pay basis for none, since a route cites the basis as no input. The count stands for the
+# reported count every result cites; the committed shares and the outside value for none, since
+# the engine reads no such figure.
 INPUT_OF: dict[OverrideTag, str] = {
     "earnings.ntm": "ntm_eps",
     "revenue.ntm": "ntm_revenue",
@@ -566,6 +582,15 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
                 if _at(im, *steps) is not None:
                     return _at(im, *steps, k)
             return None
+        case "revenue.step_2" | "revenue.step_3":
+            # the consensus's step as found, never an agent's (spec 2026-11-14 6.1); a result
+            # stored before the charge kept the steps found has its charge's steps, then as found
+            if _route(result) not in TAGS[tag].routes:
+                return None
+            found = _first(
+                _at(im, "charge", "revenue_steps_found"), _at(im, "charge", "revenue_steps")
+            )
+            return _at(found, 0 if tag == "revenue.step_2" else 1)
         case "moat.class":
             return im.get("moat", _rule_note(result, "moat_class"))
         case "margin.target":

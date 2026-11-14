@@ -585,26 +585,30 @@ def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
     assert twelve.index(sentence) < twelve.index("Submit with `report_submit`")
 
 
-def test_the_overrides_table_names_the_twenty_three_inputs() -> None:
+def test_the_overrides_table_names_the_twenty_five_inputs() -> None:
     """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1), spec 2026-11-13 7.2 and 13 and spec
-    2026-11-14 4 and 5: the skill's overrides table names the twenty-three inputs the engine takes,
-    each once, with the routes that read it; the share count is period-tied only and moves the
-    next twelve months' net income with it, so the agent reads the consensus EPS's share basis
-    first; the committed shares, shares neither the count nor the analysts' EPS holds yet, are
-    period-tied only, from the filing that commits them, dilute the value a share by x ÷ (n + x)
-    and bring their cash through another input; the one-time item in the NTM consensus is a figure
-    a share after tax, period-tied only, off the NTM EPS, on the evidence of the filing's
-    other-income line and the analysts' basis, and moot under `earnings.ntm`; the value outside the
-    business is after tax, and its gains come out of the earnings through the non-recurring gap on
-    Mature Stable and the one-time item on Mature Growth, so nothing counts twice; the stock pay is
-    a total from the filing's cash flow statement, period-tied, or lasting at 0 alone (spec
-    2026-11-13 7.3), and the stock-pay basis rests on the release's definition of its adjusted
-    EPS; the minority interest is a total, period-tied only, for a market value or a redeemable
-    stake the line leaves out, from the filing's note on non-controlling or redeemable interests;
-    the bridge's lines run in the engine's order, the minority interest's after cash, the
-    committed shares' after the count's and the one-time item's before the cycle gap's; the
-    passage no longer says that a raised count barely moves a Mature Growth value; the tool list
-    counts the twenty-three, and says that the write's refusal of a lasting nil stores nothing."""
+    2026-11-14 4, 5 and 6.1: the skill's overrides table names the twenty-five inputs the engine
+    takes, each once, with the routes that read it; the two revenue steps are Mature Growth's,
+    the revenue growth the charge pays for in place of the consensus's, period-tied only, and a
+    guidance record gives one as the growth of its midpoint over the revenue consensus; the share
+    count is period-tied only and moves the next twelve months' net income with it, so the agent
+    reads the consensus EPS's share basis first; the committed shares, shares neither the count
+    nor the analysts' EPS holds yet, are period-tied only, from the filing that commits them,
+    dilute the value a share by x ÷ (n + x) and bring their cash through another input; the
+    one-time item in the NTM consensus is a figure a share after tax, period-tied only, off the
+    NTM EPS, on the evidence of the filing's other-income line and the analysts' basis, and moot
+    under `earnings.ntm`; the value outside the business is after tax, and its gains come out of
+    the earnings through the non-recurring gap on Mature Stable and the one-time item on Mature
+    Growth, so nothing counts twice; the stock pay is a total from the filing's cash flow
+    statement, period-tied, or lasting at 0 alone (spec 2026-11-13 7.3), and the stock-pay basis
+    rests on the release's definition of its adjusted EPS; the minority interest is a total,
+    period-tied only, for a market value or a redeemable stake the line leaves out, from the
+    filing's note on non-controlling or redeemable interests; the bridge's lines run in the
+    engine's order, the revenue steps' after the consensus steps', the minority interest's after
+    cash, the committed shares' after the count's and the one-time item's before the cycle gap's;
+    the passage no longer says that a raised count barely moves a Mature Growth value; the tool
+    list counts the twenty-five, names the two revenue steps, and says that the write's refusal of
+    a lasting nil stores nothing."""
     skill = _read(SKILL)
     table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
     tags: list[str] = []
@@ -614,7 +618,21 @@ def test_the_overrides_table_names_the_twenty_three_inputs() -> None:
         phases = set(PHASES) if routes == "every route" else {p for p in PHASES if p in routes}
         for tag in named:
             assert phases == {p for r in TAGS[tag].routes for p in ROUTE_PHASES[r]}, tag
-    assert len(tags) == len(set(tags)) == 23 and set(tags) == set(TAGS)
+    assert len(tags) == len(set(tags)) == 25 and set(tags) == set(TAGS)
+    revenue = _flat(" ".join(table["`revenue.step_2`, `revenue.step_3`"]))
+    for words in (
+        "the revenue growth of year two or year three that the charge pays for",
+        "in place of the analysts' revenue step",
+        "the analysts' step as found",
+        "−0.80 to 3.00; period-tied only",
+    ):
+        assert words in revenue, words
+    # a revenue step from a guidance record: the growth of its midpoint over the revenue consensus
+    assert (
+        "`revenue.step_2`, `revenue.step_3` (Mature Growth): a full-year revenue guidance for the"
+        " base year plus one, or plus two. `new` is the `derive` `growth` of the record's midpoint"
+        " over the consensus for the year before, its `estimate:` revenue."
+    ) in _flat(skill)
     shares = _flat(" ".join(table["`shares.diluted`"]))
     for words in (
         "period-tied only",
@@ -690,10 +708,12 @@ def test_the_overrides_table_names_the_twenty_three_inputs() -> None:
     )
     entry = _tool_entry("override_add")
     for words in (
-        "twenty-three",
+        "twenty-five",
         "`shares.diluted`",
         "`shares.committed`",
         "`earnings.ntm_nri`",
+        "`revenue.step_2`",
+        "`revenue.step_3`",
         "`value.outside`",
         "`balance.minority`",
         # the write's own refusal of a lasting nil answers the sentence alone (spec 2026-11-13 7.3)
@@ -891,7 +911,17 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
     }
     for code, words in (
         ("heavy-capex", ("`roic`", "`return.runway`", "stops after the spending share")),
-        ("growth-above-return", ("the owner funds the growth",)),
+        (
+            "growth-above-return",
+            (
+                "the owner funds the growth",
+                # a wrong revenue step has its own inputs (spec 2026-11-14 6.1)
+                "On Mature Growth years two and three pay for the analysts' revenue growth",
+                "rests on few analysts or outruns the business's record",
+                "set `revenue.step_2` or `revenue.step_3` from a guidance record or a filing",
+                "`return.runway` is not the lever for a wrong revenue step",
+            ),
+        ),
         (
             "consensus-basis-unknown",
             (

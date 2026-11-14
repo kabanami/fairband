@@ -18,8 +18,9 @@ itself cause, each silent under the input that decides it and both under an appl
 ``earnings.ntm``, whose anchor is the guidance. ``thin-ntm`` (spec 2026-11-13 9), a note on an
 NTM window with a period of fewer than ``analyst_min`` EPS analysts or no count, takes the place
 right after ``few-analysts``, silent under an applied ``earnings.ntm`` for the same reason.
-``charge`` in the intermediates records the growth paid for, the return by year, the hold and the
-revenue steps as found; ``sbc_ttm`` the trailing stock pay the anchor read.
+``charge`` in the intermediates records the growth paid for, the return by year, the hold, the
+revenue steps the charge read, the consensus's as found and where each read step came from
+(``RevenueSteps``, spec 2026-11-14 6.3); ``sbc_ttm`` the trailing stock pay the anchor read.
 
 Where a period of the NTM window in its last fiscal year has fewer than ``analyst_min`` EPS
 analysts or no count, the anchor corrects the periods' sum by that year's annual consensus
@@ -38,11 +39,11 @@ or not positive; each on the row's hold. The value-spread flag reads the first t
 separately the runways, each the business's own value, before any figure outside it is added.
 
 ``growth_at_price`` rebuilds the growth path and the charges from the intermediates alone, the
-``charge`` entry's revenue steps and hold among them, so a stored result moves to a new price
-without its inputs. The implied growth is the belief at which the value equals the price, both
-paths' fades moving with it and the hold fixed; it is solved between −50% and 200% a year, and
-``None`` means no growth in that range reaches the price. The expected return's growth reads the
-earnings path's rates from year 2.
+``charge`` entry's revenue steps, the ones the charge read, and hold among them, so a stored
+result moves to a new price without its inputs. The implied growth is the belief at which the
+value equals the price, both paths' fades moving with it and the hold fixed; it is solved between
+−50% and 200% a year, and ``None`` means no growth in that range reaches the price. The expected
+return's growth reads the earnings path's rates from year 2.
 
 ``growth_cross_check`` runs the same anchor, path and charge for a Mature Stable row, on that
 row's moat and returns, so its value is the one this route would reach (calibration spec 5.7).
@@ -57,10 +58,13 @@ EPS (``anchor.ntm_anchor``), so an override at the gap found moves nothing, whil
 is applied; ``earnings.sbc`` the trailing stock pay, in the basis test and the adjustment, and
 ``earnings.sbc_basis`` the basis, in place of the test (spec 2026-11-13 7.2); ``path.step_2`` and
 ``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
-step not counted thin nor named in ``step-series-disagree``, the revenue steps the charge pays for
-left as found; ``growth.belief`` the belief's rate, and the hold read on it; ``earnings.ntm``, the
-NTM EPS from a clear guidance, which stands in for the consensus less the SBC adjustment, the NTM
-window's periods still required (``anchor.ntm_window``: four quarters, or two half-years);
+step not counted thin nor named in ``step-series-disagree``, moving the growth the charge pays for
+only in a year with no revenue step, where the earnings step stands in; ``revenue.step_2`` and
+``revenue.step_3`` the revenue steps the charge pays for, in place of the consensus's, the steps
+found kept beside them (spec 2026-11-14 6.1); ``growth.belief`` the belief's rate, and the hold
+read on it; ``earnings.ntm``, the NTM EPS from a clear guidance, which stands in for the
+consensus less the SBC adjustment, the NTM window's periods still required
+(``anchor.ntm_window``: four quarters, or two half-years);
 ``earnings.ntm_nri`` a one-time amount a share that the consensus carries and that does not recur
 (spec 2026-11-14 5), which the consensus less the SBC adjustment is taken less, a share on the
 count the consensus is on, and which a guided EPS, standing in for the consensus with its items,
@@ -73,7 +77,7 @@ and ``ntm_net_income`` data entries are the consensus less the stock-pay adjustm
 to the JUDGMENT entry under the guided EPS. ``ntm_nri``, the one-time amount the anchor took off,
 nil under the guided EPS, and ``cycle_gap`` are in the intermediates only under their overrides.
 The cross-check reads the row's moat, returns and two gaps, and the consensus and belief as
-found: no guided EPS and no one-time amount.
+found: no guided EPS, no one-time amount and no agent's revenue step.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the route's value: the result's value is the route's value a share plus the figure, which
@@ -104,7 +108,7 @@ reported count. The cross-check reads the same two counts.
 """
 
 from collections.abc import Sequence
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
 from typing import Any, Literal
 
@@ -182,6 +186,32 @@ from fairband.policy import Moat, Policy
 _IMPLIED_HI = 2.0  # the highest growth the implied-growth solve tries: 200% a year
 _NOT_POSITIVE = "value not positive under the reinvestment charge"
 _STEP_TAGS: tuple[OverrideTag, OverrideTag] = ("path.step_2", "path.step_3")
+# Where the revenue step of a year the charge reads comes from (spec 2026-11-14 6.3).
+RevenueSource = Literal["consensus", "agent", "none"]
+Steps = tuple[float | None, float | None]
+
+
+@dataclass(frozen=True)
+class RevenueSteps:
+    """The revenue steps of years 2 and 3 for the charge (spec 2026-11-14 6.3): ``read``, the steps
+    the charge pays for, ``None`` where the earnings step of the year stands in; ``found``, the
+    consensus's steps as found, ``None`` where missing; and ``source``, for each year, where the
+    step read comes from: ``"consensus"``, the step as found; ``"agent"``, an agent's
+    ``revenue.step_2`` or ``revenue.step_3`` in its place; ``"none"``, no step at all."""
+
+    read: Steps
+    found: Steps
+    source: tuple[RevenueSource, RevenueSource]
+
+
+def _as_found(found: Steps) -> RevenueSteps:
+    """The consensus revenue steps ``found`` as the charge reads them without an agent's: each as
+    found, its source the consensus, or none where the consensus gives no step."""
+    return RevenueSteps(found, found, (_found_source(found[0]), _found_source(found[1])))
+
+
+def _found_source(step: float | None) -> RevenueSource:
+    return "none" if step is None else "consensus"
 
 
 def value_mature_growth(c: Context) -> Valued | Refused:
@@ -189,11 +219,11 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     found = _anchor_and_path(c, own=True)
     if isinstance(found, Refused):
         return found
-    anchor, path, base_year, belief = found
+    anchor, path, base_year, belief, revenue = found
     moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
     runway_return: float | None = chosen(c, "return.runway", None)
     roic = RoicTerms.of(i.capital_years, moat, policy, runway_override=runway_return)
-    growth, charge = _growth_and_charge(anchor, path, belief, moat, roic, policy)
+    growth, charge = _growth_and_charge(anchor, path, revenue, belief, moat, roic, policy)
     value_total = value_at_belief(growth, charge)
     value = value_total / c.shares
     outside = outside_value(c)
@@ -233,7 +263,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "growth_rates": list(growth_rates(growth)),
         **roic.intermediates(),
         "charge_off": roic.charge_off,
-        "charge": charge_entry(growth, charge),
+        "charge": charge_entry(growth, charge, revenue),
         "shares": c.shares,
         **committed_entry(c),
         "value_total": value_total,
@@ -314,8 +344,8 @@ def growth_cross_check(c: Context, moat: Moat, roic: RoicTerms) -> dict[str, Any
     found = _anchor_and_path(c)
     if isinstance(found, Refused):
         return {"refusal": found.reason}
-    anchor, path, _, belief = found
-    growth, charge = _growth_and_charge(anchor, path, belief, moat, roic, c.policy)
+    anchor, path, _, belief, revenue = found
+    growth, charge = _growth_and_charge(anchor, path, revenue, belief, moat, roic, c.policy)
     value = value_at_belief(growth, charge) / c.shares
     if value <= 0:
         return {"refusal": _NOT_POSITIVE}
@@ -329,7 +359,7 @@ def growth_cross_check(c: Context, moat: Moat, roic: RoicTerms) -> dict[str, Any
         "runway_return": roic.intermediates()["runway_return"],
         "terminal_roic": charge.terminal_roic,
         "charge_off": charge.charge_off,
-        "charge": charge_entry(growth, charge),
+        "charge": charge_entry(growth, charge, revenue),
         "refusal": None,
     }
 
@@ -346,15 +376,17 @@ def cross_check_at_price(
     return gr | {"implied_growth": implied_growth(target, growth, charge, hi=_IMPLIED_HI)}
 
 
-def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, Belief] | Refused:
-    """Year 1's anchor, the consensus path with its base fiscal year, and the belief; or the
-    route's refusal, with the flags raised before it, and on the route's own refusal "no positive
-    forward anchor" the two stock-pay notes after the anchor's flags, since a stock-pay charge can
-    itself cause it (method 5.11), but not on the path's. The anchor's basis test reads an
-    overriding non-recurring gap as its correction to the gap found, and its NTM EPS is taken less
-    an overriding cycle gap; with ``own``, the route's own anchor, path and belief read the NTM
-    EPS, one-time item, stock pay, stock-pay basis, step and belief overrides, which a cross-check
-    leaves as found."""
+def _anchor_and_path(
+    c: Context, own: bool = False
+) -> tuple[Anchor, Path, int, Belief, RevenueSteps] | Refused:
+    """Year 1's anchor, the consensus path with its base fiscal year, the belief and the revenue
+    steps the charge reads; or the route's refusal, with the flags raised before it, and on the
+    route's own refusal "no positive forward anchor" the two stock-pay notes after the anchor's
+    flags, since a stock-pay charge can itself cause it (method 5.11), but not on the path's. The
+    anchor's basis test reads an overriding non-recurring gap as its correction to the gap found,
+    and its NTM EPS is taken less an overriding cycle gap; with ``own``, the route's own anchor,
+    path, belief and revenue steps read the NTM EPS, one-time item, stock pay, stock-pay basis,
+    step, belief and revenue step overrides, which a cross-check leaves as found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
         return Refused("no trailing revenue")
@@ -396,26 +428,34 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     base_year = base_fiscal_year(periods)
     path = path_steps(i.annual_estimates, base_year, policy)
     belief = belief_from_sales(t.revenue / i.fx_rate / 1e6, policy)  # the bounds are USD
+    revenue = _as_found(path.revenue_steps)
     if own:
-        path, belief = _judged(c, path, belief, base_year, periods)
+        path, belief, revenue = _judged(c, path, belief, revenue, base_year, periods)
     if any(g is not None and g <= -1 for g in path.steps):
         return Refused(
             "consensus earnings turn negative within the path", anchor.flags + path.flags
         )
-    return anchor, path, base_year, belief
+    return anchor, path, base_year, belief, revenue
 
 
 def _judged(
-    c: Context, path: Path, belief: Belief, base_year: int, periods: Sequence[QuarterEstimate]
-) -> tuple[Path, Belief]:
-    """The route's own path and belief: under the step and belief overrides, an overriding step
-    replaces the consensus's; ``few-analysts`` and ``step-series-disagree`` name only the steps the
-    consensus still gives, the latter against the diluted count, without any committed shares
-    (spec 2026-11-09 9, 2026-11-14 4). ``thin-ntm`` (spec 2026-11-13 9) reads the NTM window's
-    ``periods``, the ones the anchor sums, and the consensus periods and annual consensus that
-    correct them where they can (spec 2026-11-13 9a), and takes the place right after
-    ``few-analysts``; it is silent under an applied ``earnings.ntm``, whose anchor is the
-    guidance."""
+    c: Context,
+    path: Path,
+    belief: Belief,
+    revenue: RevenueSteps,
+    base_year: int,
+    periods: Sequence[QuarterEstimate],
+) -> tuple[Path, Belief, RevenueSteps]:
+    """The route's own path, belief and revenue steps: under the step and belief overrides, an
+    overriding step replaces the consensus's; under ``revenue.step_2`` and ``revenue.step_3`` an
+    agent's step replaces the revenue step of its year that the charge reads, its source
+    ``"agent"``, the steps found kept (spec 2026-11-14 6.1); ``few-analysts`` and
+    ``step-series-disagree`` name only the steps the consensus still gives, the latter against the
+    diluted count, without any committed shares (spec 2026-11-09 9, 2026-11-14 4). ``thin-ntm``
+    (spec 2026-11-13 9) reads the NTM window's ``periods``, the ones the anchor sums, and the
+    consensus periods and annual consensus that correct them where they can (spec 2026-11-13 9a),
+    and takes the place right after ``few-analysts``; it is silent under an applied
+    ``earnings.ntm``, whose anchor is the guidance."""
     read = (_STEP_TAGS[0] not in c.overrides, _STEP_TAGS[1] not in c.overrides)
     consensus = tuple(step if r else None for r, step in zip(read, path.steps, strict=True))
     thin = few_analysts(base_year, (consensus[0], consensus[1]), path.analysts, c.policy)
@@ -431,14 +471,30 @@ def _judged(
     steps = (chosen(c, "path.step_2", path.steps[0]), chosen(c, "path.step_3", path.steps[1]))
     rate = chosen(c, "growth.belief", belief.rate)
     judged = replace(path, steps=steps, flags=flags + present(disagree))
-    return judged, replace(belief, rate=rate)
+    paid = (
+        chosen(c, "revenue.step_2", revenue.read[0]),
+        chosen(c, "revenue.step_3", revenue.read[1]),
+    )
+    s2, s3 = revenue.source
+    source: tuple[RevenueSource, RevenueSource] = (
+        "agent" if "revenue.step_2" in c.overrides else s2,
+        "agent" if "revenue.step_3" in c.overrides else s3,
+    )
+    return judged, replace(belief, rate=rate), replace(revenue, read=paid, source=source)
 
 
 def _growth_and_charge(
-    anchor: Anchor, path: Path, belief: Belief, moat: Moat, roic: RoicTerms, policy: Policy
+    anchor: Anchor,
+    path: Path,
+    revenue: RevenueSteps,
+    belief: Belief,
+    moat: Moat,
+    roic: RoicTerms,
+    policy: Policy,
 ) -> tuple[GrowthPath, Charge]:
-    """The growth path to the moat's runway, with the revenue steps the charge pays for, and the
-    charge at the returns of ``roic``, holding the runway return through the path's hold."""
+    """The growth path to the moat's runway, with the revenue steps the charge pays for, the ones
+    ``revenue`` reads, and the charge at the returns of ``roic``, holding the runway return
+    through the path's hold."""
     runway = policy.runway_years[moat]
     growth = GrowthPath(
         anchor.ntm_net_income,
@@ -446,20 +502,28 @@ def _growth_and_charge(
         belief.rate,
         runway,
         policy.fade_years,
-        revenue_steps=path.revenue_steps,
+        revenue_steps=revenue.read,
     )
     return growth, roic.charge(policy, hold_years(growth))
 
 
-def charge_entry(growth: GrowthPath, charge: Charge) -> dict[str, Any]:
-    """The intermediates' ``charge`` (spec 2026-11-09 6.2 and 6.3): the growth each year's
-    reinvestment pays for, years 2 to N + 1 with g_T last; the return years 1 to N pay at; the
-    hold; and the revenue steps as found, ``None`` where missing (both on a path without them)."""
+def charge_entry(
+    growth: GrowthPath, charge: Charge, revenue: RevenueSteps | None = None
+) -> dict[str, Any]:
+    """The intermediates' ``charge`` (spec 2026-11-09 6.2 and 6.3, 2026-11-14 6.3): the growth
+    each year's reinvestment pays for, years 2 to N + 1 with g_T last; the return years 1 to N pay
+    at; the hold; ``revenue_steps``, the revenue steps the charge read, an agent's included,
+    ``None`` where the earnings step stands in, which the rebuild reads; ``revenue_steps_found``,
+    the consensus's as found; and ``revenue_step_source``, each year's source. Without
+    ``revenue``, the path's own steps as found (none on a path without them, Mature Stable's)."""
+    steps = _as_found(growth.revenue_steps or (None, None)) if revenue is None else revenue
     return {
         "growth_by_year": [*charge_growth(growth), charge.g_t],
         "return_by_year": list(return_by_year(charge, growth.runway)),
         "hold_years": charge.hold,
-        "revenue_steps": list(growth.revenue_steps or (None, None)),
+        "revenue_steps": list(steps.read),
+        "revenue_steps_found": list(steps.found),
+        "revenue_step_source": list(steps.source),
     }
 
 
@@ -503,7 +567,8 @@ def long_runway(im: dict[str, Any], policy: Policy) -> Flag | None:
 
 def _rebuilt(im: dict[str, Any], policy: Policy) -> tuple[GrowthPath, Charge]:
     """The growth path and the charge from intermediates: the route's own or a cross-check's,
-    which carry the same keys, the ``charge`` entry's revenue steps and hold among them."""
+    which carry the same keys, the ``charge`` entry's hold and its revenue steps among them, the
+    ones the charge read, an agent's included (spec 2026-11-14 6.3), not the ones found."""
     g2, g3 = im["path_steps"]
     r2, r3 = im["charge"]["revenue_steps"]
     belief = im["belief"]["rate"]
@@ -599,9 +664,9 @@ def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:
 
 
 def _on_revenue(growth: GrowthPath, year: int) -> bool:
-    """Whether year ``year``'s h is a consensus revenue step: year 2's or year 3's own, or the fade
-    from year 3's to the belief; not where an earnings step stands in for a missing one, nor in
-    the belief years or after the runway."""
+    """Whether year ``year``'s h is a revenue step, the consensus's or an agent's (spec 2026-11-14
+    6.3): year 2's or year 3's own, or the fade from year 3's to the belief; not where an earnings
+    step stands in for a missing one, nor in the belief years or after the runway."""
     r2, r3 = growth.revenue_steps or (None, None)
     if year == 2:
         return r2 is not None

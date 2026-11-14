@@ -156,10 +156,13 @@ def judged(*values: tuple[OverrideTag, float | str]) -> dict[OverrideTag, Overri
     }
 
 
-def with_revenue(i: CompanyInputs, revenue: tuple[float, float, float]) -> CompanyInputs:
-    """``i`` with consensus revenue means for its three annual years, 20 revenue analysts each."""
+def with_revenue(
+    i: CompanyInputs, revenue: tuple[float, float, float], analysts: int = 20
+) -> CompanyInputs:
+    """``i`` with consensus revenue means for its three annual years, ``analysts`` revenue
+    analysts each."""
     rows = tuple(
-        replace(a, revenue=x, analysts_revenue=20)
+        replace(a, revenue=x, analysts_revenue=analysts)
         for a, x in zip(i.annual_estimates, revenue, strict=True)
     )
     return replace(i, annual_estimates=rows)
@@ -2629,6 +2632,174 @@ def test_a_price_refresh_rebuilds_a_value_under_a_one_time_item(
         "expected_return",
     ):
         assert moved.intermediates[key] == fresh.intermediates[key], key
+
+
+# --- The revenue steps an agent may set (spec 2026-11-14 6.1 and 6.3) ---------------------------
+
+# MGCO's revenue consensus for the tests below, each year on 10 revenue analysts: fiscal 2027
+# $25,000 m, fiscal 2028 $27,500 m (+10%) and fiscal 2029 $29,700 m (+8%), beside its earnings
+# steps of 12% and 10%; the NTM window's base year is fiscal 2027
+REVENUE = (25_000e6, 27_500e6, 29_700e6)
+
+
+def _on_revenue() -> CompanyInputs:
+    return with_revenue(engine_companies.mature_growth_inputs(), REVENUE, analysts=10)
+
+
+def test_the_charge_records_the_consensus_revenue_steps_it_read(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.3: with no override the charge reads the consensus revenue steps, 27,500
+    ÷ 25,000 − 1 = 10% and 29,700 ÷ 27,500 − 1 = 8%; the steps it read and the steps found agree,
+    and each year's source is the consensus."""
+    r = value_company(_on_revenue(), deciles, policy, TODAY)
+    ch = r.intermediates["charge"]
+    assert ch["revenue_steps"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert ch["revenue_steps_found"] == ch["revenue_steps"]
+    assert ch["revenue_step_source"] == ["consensus", "consensus"]
+    assert ch["growth_by_year"][:2] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert result_from_json(result_to_json(r)) == r
+
+
+def test_an_agent_s_revenue_step_3_is_the_step_the_charge_pays_for(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.1: a ``revenue.step_3`` of 5% replaces the consensus's 8% in the charge.
+    Year 2's reinvestment pays for 5% where it paid for 8%, and from 5%, below the 6.3% belief, no
+    fade follows, so years 3 to 6 pay for the belief, 6.3%, where they paid for the fade from 8%,
+    7.66% to 6.64%: the charge pays for less growth in every one of those years, so the value is
+    above the mechanical one. The steps found, the earnings path and the hold stand; the input's
+    JUDGMENT entry, a ratio, stands in place of no entry of the route's."""
+    inputs = _on_revenue()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    r = value_company(inputs, deciles, policy, TODAY, judged(("revenue.step_3", 0.05)))
+    ch, before = r.intermediates["charge"], plain.intermediates["charge"]
+    assert ch["revenue_steps"] == [pytest.approx(0.10), 0.05]
+    assert ch["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert ch["revenue_step_source"] == ["consensus", "agent"]
+    assert ch["growth_by_year"][:7] == [pytest.approx(0.10), 0.05, *[pytest.approx(0.063)] * 5]
+    assert before["growth_by_year"][:7] == pytest.approx(
+        [0.10, 0.08, 0.0766, 0.0732, 0.0698, 0.0664, 0.063]
+    )
+    assert r.intermediates["path_steps"] == plain.intermediates["path_steps"]
+    assert ch["hold_years"] == before["hold_years"] == 6
+    assert plain.value is not None and r.value is not None and r.value > plain.value
+    entry = _cited(r, "revenue.step_3")
+    assert (entry.tag, entry.value, entry.unit) == ("JUDGMENT", 0.05, "ratio")
+
+
+def test_an_agent_s_revenue_step_2_stands_where_the_consensus_gives_no_revenue_step(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.1 and 6.3 on MGCO as it is, with no revenue consensus: the charge pays for
+    the earnings steps, 12% and 10%, each year's source ``none``. A ``revenue.step_2`` of 4% makes
+    year 1's reinvestment pay for 4% where it paid for the earnings step's 12%, year 2's still
+    paying for the earnings step of year 3, so the value rises."""
+    inputs = engine_companies.mature_growth_inputs()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    ch = plain.intermediates["charge"]
+    assert ch["revenue_steps"] == ch["revenue_steps_found"] == [None, None]
+    assert ch["revenue_step_source"] == ["none", "none"]
+    assert ch["growth_by_year"][:2] == [pytest.approx(0.12), pytest.approx(0.10)]
+    r = value_company(inputs, deciles, policy, TODAY, judged(("revenue.step_2", 0.04)))
+    ch = r.intermediates["charge"]
+    assert ch["revenue_steps"] == [0.04, None]
+    assert ch["revenue_steps_found"] == [None, None]
+    assert ch["revenue_step_source"] == ["agent", "none"]
+    assert ch["growth_by_year"][:2] == [0.04, pytest.approx(0.10)]
+    assert plain.value is not None and r.value is not None and r.value > plain.value
+
+
+def test_a_mature_stable_row_s_cross_check_reads_no_agent_s_revenue_step(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.1: the inputs are Mature Growth's alone, and a cross-check reads the
+    consensus as found. On MSCO with MGCO's consensus and its revenue, the cross-check's charge
+    reads the consensus's steps, 10% and 8%; a ``revenue.step_3`` left on file after the row moved
+    to Mature Stable moves neither the value nor the cross-check."""
+    inputs = _with_consensus(engine_companies.mature_stable_inputs(), _on_revenue())
+    plain = value_company(inputs, deciles, policy, TODAY)
+    kept = value_company(inputs, deciles, policy, TODAY, judged(("revenue.step_3", 0.05)))
+    assert plain.route == kept.route == "mature-stable"
+    gr = plain.intermediates["growth_route"]
+    assert gr["refusal"] is None
+    assert gr["charge"]["revenue_steps"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert gr["charge"]["revenue_steps_found"] == gr["charge"]["revenue_steps"]
+    assert gr["charge"]["revenue_step_source"] == ["consensus", "consensus"]
+    assert kept.value == plain.value
+    assert kept.intermediates["growth_route"] == gr
+
+
+def test_a_revenue_growth_row_s_cross_check_reads_no_agent_s_revenue_step(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.1, as on a Mature Stable row: MGCO with its revenue consensus, an NTM
+    revenue of $24,000 m and HGCO's peers, put in High Growth, values on the revenue-growth route,
+    whose Mature Growth cross-check reads the consensus revenue steps, 10% and 8%; a
+    ``revenue.step_3`` left on file moves neither the value nor the cross-check."""
+    on_revenue = engine_companies.with_ntm_revenue(_on_revenue(), 24_000e6)
+    inputs = replace(on_revenue, peers=engine_companies.high_growth_inputs().peers)
+    plain = value_company(inputs, deciles, policy, TODAY, judged(("phase", "High Growth")))
+    left = judged(("phase", "High Growth"), ("revenue.step_3", 0.05))
+    kept = value_company(inputs, deciles, policy, TODAY, left)
+    assert plain.route == kept.route == "revenue-growth" and plain.value is not None
+    gr = plain.intermediates["growth_route"]
+    assert gr["refusal"] is None
+    assert gr["charge"]["revenue_steps"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert gr["charge"]["revenue_step_source"] == ["consensus", "consensus"]
+    assert kept.value == plain.value
+    assert kept.intermediates["growth_route"] == gr
+
+
+def test_a_price_refresh_rebuilds_a_value_under_an_agent_s_revenue_step(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """A stored Mature Growth result under a ``revenue.step_3`` of 5%, repriced at $120, equals a
+    fresh valuation at $120 under it: the rebuild reads the steps the charge read, the agent's
+    among them, from ``charge.revenue_steps``, so the value, the levels, the designation and
+    every intermediate at the price agree."""
+    inputs = _on_revenue()
+    step = judged(("revenue.step_3", 0.05))
+    r = value_company(inputs, deciles, policy, TODAY, step)
+    stored = result_from_json(result_to_json(r))
+    assert stored.intermediates["charge"]["revenue_steps"] == [pytest.approx(0.10), 0.05]
+    day = date(2026, 11, 2)
+    moved = reprice(stored, 120.0, day, policy)
+    fresh = value_company(
+        replace(inputs, price=120.0, price_date=day), deciles, policy, TODAY, step
+    )
+    assert (moved.value, moved.levels, moved.designation) == (
+        fresh.value,
+        fresh.levels,
+        fresh.designation,
+    )
+    for key in (
+        "charge",
+        "implied_growth",
+        "implied_growth_by_runway",
+        "implied_by_roic",
+        "multiples",
+        "growth_share",
+        "expected_return",
+    ):
+        assert moved.intermediates[key] == fresh.intermediates[key], key
+
+
+def test_growth_above_return_says_revenue_growth_for_an_agent_s_revenue_step(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.3: on MGCO, with no revenue consensus, a ``revenue.step_2`` of 50%, above
+    the 43.1% runway return, makes year 1 pay out less than nothing, and the sentence names it
+    revenue growth, as it names a consensus revenue step; year 2 still pays for the earnings step
+    of 10%, which its return covers."""
+    inputs = engine_companies.mature_growth_inputs()
+    assert "growth-above-return" not in codes(value_company(inputs, deciles, policy, TODAY))
+    r = value_company(inputs, deciles, policy, TODAY, judged(("revenue.step_2", 0.50)))
+    above = next(f for f in r.flags if f.code == "growth-above-return")
+    assert above.sentence == (
+        "In year 1 the charge pays for 50.0% of revenue growth at a return of 43.1%, so the year "
+        "pays out less than nothing: the owner funds the growth."
+    )
 
 
 # --- Reprice ------------------------------------------------------------------------------------

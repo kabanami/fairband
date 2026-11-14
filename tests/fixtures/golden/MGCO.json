@@ -536,7 +536,15 @@
     0.15153319626197298,
     0.13
    ],
+   "revenue_step_source": [
+    "none",
+    "none"
+   ],
    "revenue_steps": [
+    null,
+    null
+   ],
+   "revenue_steps_found": [
     null,
     null
    ]

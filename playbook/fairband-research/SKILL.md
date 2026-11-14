@@ -342,7 +342,14 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
 - `growth-above-return`: the growth a year's reinvestment pays for outruns the return it earns, so
   the year pays out less than nothing: the owner funds the growth. The value already carries that
   cost. Read the growth the charge pays for and its return by year (`intermediates/charge`). A step
-  or a runway return the thesis rejects is a decision of step 10.
+  or a runway return the thesis rejects is a decision of step 10. On Mature Growth years two and
+  three pay for the analysts' revenue growth, `charge/revenue_steps_found`, with the analysts
+  behind each year in `estimates`. Where a revenue step rests on few analysts or outruns the
+  business's record, set `revenue.step_2` or `revenue.step_3` from a guidance record or a filing,
+  period-tied; `charge/revenue_steps` then holds your step and `charge/revenue_step_source` says
+  `agent`. `return.runway` is not the lever for a wrong revenue step: it moves the return on every
+  year's growth, not the growth itself. A `path.step_2` or `path.step_3` moves the earnings path,
+  and the charge only in a year with no revenue step.
 - `consensus-basis-unknown`: it fires with `large-nri`. Whether the analysts' EPS carries the
   non-recurring items is unknown. Read the filing's non-recurring items. On Mature Stable, decide
   the trailing earnings through `earnings.nri_gap`. On Mature Growth the value rests on the
@@ -523,8 +530,9 @@ higher case stood.
 
 The guidance, at your best effort and never required. A clear full-year guidance for the right
 fiscal year may replace the consensus: an NTM anchor, `earnings.ntm` on Mature Growth or
-`revenue.ntm` on High Growth, Young Growth and Decline, or a consensus step, `path.step_2` or
-`path.step_3`. "Guidance" below says which year feeds which input. The override's evidence holds
+`revenue.ntm` on High Growth, Young Growth and Decline, a consensus step, `path.step_2` or
+`path.step_3`, or a revenue step on Mature Growth, `revenue.step_2` or `revenue.step_3`.
+"Guidance" below says which year feeds which input. The override's evidence holds
 an item of kind `guidance` that cites the record as `guidance:<id>`; an NTM anchor's record is a
 `gaap` record of its metric (`eps` for `earnings.ntm`, `revenue` for `revenue.ntm`) for a fiscal
 year. Where the guidance is not clear, or is for any other year, the consensus stands.
@@ -710,6 +718,10 @@ tool:
   plus two. `new` is the `derive` `growth` of the record's midpoint over the consensus for the
   year before: its `estimate:` EPS on Mature Growth, its `estimate:` revenue on High Growth, Young
   Growth and Decline, never a net-income estimate.
+- `revenue.step_2`, `revenue.step_3` (Mature Growth): a full-year revenue guidance for the base
+  year plus one, or plus two. `new` is the `derive` `growth` of the record's midpoint over the
+  consensus for the year before, its `estimate:` revenue. The step is the revenue growth the
+  charge pays for; the earnings path stays on the analysts' EPS.
 
 A guidance for any other year feeds no input and stays in section 5.
 
@@ -744,6 +756,7 @@ not you, computes the value it gives.
 | `growth.belief` | Mature Growth | the belief: the growth rate after the analysts' years, before the fade to the long-run rate | −0.20 to 0.60 a year |
 | `path.hold` | High Growth, Young Growth | the held rate of years four to the end of high growth | −0.20 to 3.00 a year |
 | `path.step_2`, `path.step_3` | Mature Growth, High Growth, Young Growth, Decline | the consensus growth of year two or year three | −0.80 to 3.00 |
+| `revenue.step_2`, `revenue.step_3` | Mature Growth | the revenue growth of year two or year three that the charge pays for, in place of the analysts' revenue step, or of the earnings step where they give none: for a revenue step that rests on few analysts or outruns the business's record, from a guidance record or a filing. The earnings path does not move. Its old value is the analysts' step as found | −0.80 to 3.00; period-tied only |
 | `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | the moat class; it sets the margin of safety, the runway and the terminal return | `None`, `Narrow` or `Wide` |
 | `margin.target` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten | −0.50 to 0.60 |
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | the revenue a dollar of invested capital buys | 0.1 to 10 |
@@ -898,13 +911,15 @@ The server checks an override by these rules, in this order, and answers the fir
 2. `refused-not-input`: a tag that is not in the table.
 3. `refused-route`: a route that does not read the tag. The route follows an applied `phase`
    override, so override the phase first. The Mature Stable route reads no consensus step, so
-   `path.step_2` and `path.step_3` are refused there. A company with no phase reads no input but its
-   phase: set its phase first.
+   `path.step_2` and `path.step_3` are refused there. `revenue.step_2` and `revenue.step_3` are
+   Mature Growth's alone: on High Growth, Young Growth and Decline the consensus steps are the
+   revenue steps already. A company with no phase reads no input but its phase: set its phase
+   first.
 4. `refused-unit`: a value outside the range, a word outside the words, a word where a number is
    due, an NTM anchor, a share count or committed shares at 0 or below, lasting committed shares,
-   a lasting override of a balance tag (debt, cash or the minority interest) or of the share
-   count, or a lasting stock pay at any figure but 0: "a lasting earnings.sbc takes 0 only: a
-   figure is period-tied".
+   a lasting revenue step, a lasting override of a balance tag (debt, cash or the minority
+   interest) or of the share count, or a lasting stock pay at any figure but 0: "a lasting
+   earnings.sbc takes 0 only: a figure is period-tied".
 5. `refused-evidence`: no evidence, "an override needs evidence". An NTM anchor with no item of
    kind `guidance`: "an NTM anchor override needs a guidance record among its evidence". A
    `growth.belief` or a `path.hold` above the sales class's 90th percentile (`sales_p90_5y` in the
@@ -922,9 +937,10 @@ sentence with the `override` record beside it. Fix the one thing the sentence na
 An applied override answers `{override, review, bridge}`. The bridge starts at the mechanical value
 (the engine's value with no override), adds one line for each override, and ends at the reviewed
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
-consensus step 3, held rate, belief, non-recurring gap, stock pay, stock-pay basis, one-time item
-in the NTM consensus, mid-cycle earnings, target margin, sales to capital, runway return, decline rate, moat, debt, cash, minority
-interest, diluted shares, committed shares, outside the business. A line whose step refuses shows
+consensus step 3, revenue step 2, revenue step 3, held rate, belief, non-recurring gap, stock pay,
+stock-pay basis, one-time item in the NTM consensus, mid-cycle earnings, target margin, sales to
+capital, runway return, decline rate, moat, debt, cash, minority interest, diluted shares,
+committed shares, outside the business. A line whose step refuses shows
 the refusal in place of a change. A review whose last line refuses has no value. On a refused row,
 where the mechanical value refuses too, the secondary valuation stands in for it. Where an
 override values a refused row, the reviewed value stands, and the server refuses a secondary
