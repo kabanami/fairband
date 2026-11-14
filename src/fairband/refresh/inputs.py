@@ -51,10 +51,15 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   closes of the latest price-history payload (none when it is absent or does not parse).
   GuruFocus states its EPS in USD: for a company in another currency both come into it at the
   mean of the trailing periods' period-end rates, unknown when one has none;
-- the debt, short-term plus long-term debt, and the cash, cash and equivalents plus short-term
-  investments, from the newest annual balance sheet: a line it does not present counts as nil and
-  is named in the input's note (``"longTermDebt not presented"``), and with both lines missing the
-  figure is ``None``;
+- the newest balance sheet (``newest_sheet``, spec 2026-11-13 12.2), a fiscal year's or a
+  quarter's, the fiscal year's on a tie: ``sheet``, with its period, its label, whether it is a
+  quarter's, the liquidation floor's two lines and the minority interest as presented, cited as
+  ``balance_sheet`` (``FMP balance-sheet-statement``, as of its period end, its facts' newest
+  observation and entry); and from it the debt, short-term plus long-term debt, and the cash, cash
+  and equivalents plus short-term investments: a line it does not present counts as nil and is
+  named in the input's note (``"longTermDebt not presented"``), and with both lines missing the
+  figure is ``None``. The quarterly sheet moves neither the data date nor the ``statements``
+  input;
 - the peers and their source: ``peers.peer_figures`` on the given deciles; none without them;
 - the stock splits: a split dated after the oldest trailing period's end and at or before the price
   date puts every share count and per-share figure on the quote date's basis, each trailing period
@@ -80,6 +85,7 @@ from datetime import date
 from functools import cache
 
 from fairband.engine.anchor import SAME_PERIOD_DAYS, AnnualEstimate, QuarterEstimate
+from fairband.engine.balance import NewestSheet
 from fairband.engine.classifier import Deciles
 from fairband.engine.route import CompanyInputs
 from fairband.engine.types import Provenance
@@ -91,10 +97,11 @@ from fairband.refresh.inputs_statements import (
     PROFILE_SOURCE,
     SCREENER_SOURCE,
     FiscalCalendar,
+    SheetRead,
     Statements,
-    balance_lines,
     balance_sums,
     country_for,
+    newest_sheet,
     series_for,
     statements_for,
 )
@@ -128,6 +135,7 @@ _ESTIMATES, _EARNINGS = "FMP analyst-estimates", "FMP earnings"
 _CLOSES = "FMP historical-price-eod/full"
 _SUMMARY, _KEYRATIOS = "GuruFocus summary", "GuruFocus keyratios"
 _FX_HISTORY = "FMP historical-price-eod/light"
+_BALANCE_SHEET = "FMP balance-sheet-statement"
 _CURRENCY_UNKNOWN = "reporting currency unknown"
 
 type _Cited[T] = tuple[T, Provenance | None]
@@ -187,7 +195,9 @@ def build_inputs(
     ends = [period.end for period in stated.trailing_periods]
     eps_ttm = cite("gf_eps_ttm", money.mean(_value(ttm_row, _KEYRATIOS), ends, policy))
     eps_clean = cite("gf_eps_without_nri", money.mean(_value(clean_row, _KEYRATIOS), ends, policy))
-    sums = balance_sums(balance_lines(conn, symbol))
+    read_sheet = newest_sheet(conn, symbol)
+    sheet = cite("balance_sheet", _sheet(read_sheet))
+    sums = balance_sums({} if read_sheet is None else read_sheet.lines)
     notes = _tax_note(country, origin, stated) | money.notes
     notes.update({name: note for name, (_, note) in sums.items() if note is not None})
     peers = peer_figures(conn, symbol, deciles, policy, tax, today)
@@ -248,6 +258,7 @@ def build_inputs(
         peer_source=peers.source,
         debt=sums["debt"][0],
         cash=sums["cash"][0],
+        sheet=sheet,
         balance_years=stated.balance_years,
         adr_ratio=adr_ratio,
         fx_rate=1.0 if money.rate is None else money.rate.rate,
@@ -458,6 +469,23 @@ def _market_cap(
         return None, None
     stamp = company.observed_at
     return float(company.market_cap), Provenance(_SCREENER, stamp.date(), stamp, None)
+
+
+def _sheet(read: SheetRead | None) -> _Cited[NewestSheet | None]:
+    """The newest balance sheet as the engine reads it, its floor's two lines and its minority
+    interest as presented, cited as of its period end with its facts' newest observation and
+    entry; none without a sheet."""
+    if read is None:
+        return None, None
+    sheet = NewestSheet(
+        period_end=read.period_end,
+        label=read.label,
+        quarterly=read.quarterly,
+        total_current_assets=read.lines.get("totalCurrentAssets"),
+        total_liabilities=read.lines.get("totalLiabilities"),
+        minority_interest=read.lines.get("minorityInterest"),
+    )
+    return sheet, Provenance(_BALANCE_SHEET, read.period_end, read.observed_at, read.entered_at)
 
 
 def adr_flag(conn: sqlite3.Connection, symbol: str, company: CompanyRow | None) -> bool | None:

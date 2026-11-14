@@ -1,5 +1,5 @@
-"""The statement side of assembly: fiscal years, capital years, balance years, the tax rate and
-trailing figures.
+"""The statement side of assembly: fiscal years, capital years, balance years, the tax rate,
+trailing figures and the newest balance sheet.
 
 Fiscal years run from the newest annual income period back, at most eleven (spec 6.5), one per
 fiscal year with none skipped: a year the vendor data lacks keeps its place with no values, so the
@@ -51,11 +51,22 @@ own diluted EPS and weighted-average diluted count: the four quarters or the two
 the one fiscal year on the fallback; the split rule judges each on its own count
 (``inputs_splits``).
 
-``balance_lines`` reads the newest annual balance sheet's lines by FMP name, and
-``stored_payload`` a payload the store keeps whole (the profile's, the peers'). ``balance_sums``
-is the debt and the cash from those lines, short-term plus long-term debt and cash and equivalents
-plus short-term investments, a line not presented counting as nil and a figure with every line
-missing ``None``: assembly's reading, which ``newest_debt_and_cash`` gives the secondary
+The newest balance sheet (``newest_sheet``, spec 2026-11-13 12.2) is, of the newest annual sheet
+and the newest quarterly sheet (``balance-quarter``: a half-year reporter's are its half-years) in
+the reporting currency, the one with the later period end, the annual one on a tie. A quarterly
+sheet whose currency is neither the reporting one nor missing is skipped, as the trailing figures
+judge a period; with no reporting currency on file none is. The sheet is read whole, a line it does
+not present ``None`` and none taken from another sheet, and labelled by its facts' own fiscal year
+and period ("fiscal 2026 Q3", "fiscal 2025"; "the period ending 30 Sep 2026" without them). The
+quarterly sheet is read apart from the datasets of ``statements_for``, so it moves neither the
+data date nor the ``statements`` input's stamps, and the capital years and the balance years stay
+on fiscal years.
+
+``balance_lines`` reads the newest balance sheet's lines by FMP name, and ``stored_payload`` a
+payload the store keeps whole (the profile's, the peers'). ``balance_sums`` is the debt and the
+cash of a sheet's lines, short-term plus long-term debt and cash and equivalents plus short-term
+investments, a line not presented counting as nil and a figure with every line missing ``None``:
+assembly's reading of the newest sheet, which ``newest_debt_and_cash`` gives the secondary
 valuation.
 
 ``annual_lines`` reads each fiscal year's annual statements whole, by FMP name, joined as the
@@ -79,7 +90,7 @@ import sqlite3
 from calendar import monthrange
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fairband.engine.anchor import (
@@ -105,6 +116,8 @@ STATEMENTS_SOURCE = "FMP income-statement, balance-sheet-statement, cash-flow-st
 PROFILE_SOURCE = "FMP profile"
 SCREENER_SOURCE = "FMP company-screener"
 
+# The datasets ``statements_for`` reads, whose facts give the data date and the ``statements``
+# input's stamps. The quarterly balance sheet is not among them: ``newest_sheet`` reads it apart.
 _DATASETS = (
     "income-annual",
     "balance-annual",
@@ -113,6 +126,7 @@ _DATASETS = (
     "income-quarter",
     "cashflow-quarter",
 )
+_BALANCE_QUARTER = "balance-quarter"
 _CFO = "netCashProvidedByOperatingActivities"
 _SBC = "stockBasedCompensation"
 _SHARES = "weightedAverageShsOutDil"
@@ -128,7 +142,7 @@ PERIOD_NOUNS: dict[Cadence, tuple[str, str]] = {
     "quarterly": ("quarter", "quarters"),
     "half-yearly": ("half-year", "half-years"),
 }
-# The newest annual balance sheet's lines each figure sums, by input name.
+# A balance sheet's lines each figure sums, by input name.
 _BALANCE_SUMS = {
     "debt": ("shortTermDebt", "longTermDebt"),
     "cash": ("cashAndCashEquivalents", "shortTermInvestments"),
@@ -210,6 +224,21 @@ class StoredQuarters:
 
     periods: tuple[QuarterFigures, ...]
     other_currency: int
+
+
+@dataclass(frozen=True)
+class SheetRead:
+    """The newest balance sheet on file (``newest_sheet``): its lines by FMP name, ``None`` where
+    it presents no value; its period end and label ("fiscal 2026 Q3", "fiscal 2025"); whether it
+    is a quarterly sheet, a half-year's for a half-year reporter; and the newest observation and
+    entry among its facts."""
+
+    lines: dict[str, float | None]
+    period_end: date
+    label: str
+    quarterly: bool
+    observed_at: datetime
+    entered_at: datetime
 
 
 @dataclass(frozen=True)
@@ -418,11 +447,28 @@ def brief_for(conn: sqlite3.Connection, symbol: str) -> str | None:
     return profile_brief(stored_payload(conn, "profile", symbol))
 
 
+def newest_sheet(conn: sqlite3.Connection, symbol: str) -> SheetRead | None:
+    """The newest balance sheet of ``symbol`` (spec 2026-11-13 12.2): of the newest annual sheet
+    and the newest quarterly sheet in the reporting currency, the one with the later period end,
+    the annual one on a tie; ``None`` with neither on file (the module docstring)."""
+    incomes = _periods(conn, symbol, "income-annual")
+    reporting = incomes[-1].currency if incomes else None
+    annual = _periods(conn, symbol, "balance-annual")
+    quarters = [
+        q
+        for q in _periods(conn, symbol, _BALANCE_QUARTER)
+        if not reporting or q.currency in (None, reporting)
+    ]
+    if quarters and (not annual or quarters[-1].end > annual[-1].end):
+        return _sheet_read(quarters[-1], quarterly=True)
+    return _sheet_read(annual[-1], quarterly=False) if annual else None
+
+
 def balance_lines(conn: sqlite3.Connection, symbol: str) -> dict[str, float | None]:
-    """The newest annual balance sheet's lines by FMP name, ``None`` where it presents no value;
-    empty without a balance sheet."""
-    sheets = _periods(conn, symbol, "balance-annual")
-    return {} if not sheets else {name: sheets[-1].value(name) for name in sheets[-1].facts}
+    """The newest balance sheet's lines by FMP name (``newest_sheet``), ``None`` where it
+    presents no value; empty without a balance sheet."""
+    sheet = newest_sheet(conn, symbol)
+    return {} if sheet is None else sheet.lines
 
 
 def balance_sums(
@@ -436,8 +482,8 @@ def balance_sums(
 def newest_debt_and_cash(
     conn: sqlite3.Connection, symbol: str
 ) -> tuple[float | None, float | None]:
-    """The newest annual balance sheet's debt and cash as assembly reads them; ``None`` for a
-    figure with every line missing, and both without a balance sheet."""
+    """The newest balance sheet's debt and cash as assembly reads them (``newest_sheet``);
+    ``None`` for a figure with every line missing, and both without a balance sheet."""
     sums = balance_sums(balance_lines(conn, symbol))
     return sums["debt"][0], sums["cash"][0]
 
@@ -494,6 +540,26 @@ def stored_quarters(conn: sqlite3.Connection, symbol: str) -> StoredQuarters:
         by_label[quarter.period] = quarter  # oldest first: a later end replaces an earlier one
     kept = sorted(by_label.values(), key=lambda q: q.period_end)
     return StoredQuarters(tuple(kept), other_currency)
+
+
+def _sheet_read(sheet: _Period, quarterly: bool) -> SheetRead:
+    """``sheet`` read whole, labelled by its facts' own fiscal year and period: "fiscal 2026 Q3"
+    for a quarterly sheet, "fiscal 2025" for an annual one, and "the period ending 30 Sep 2026"
+    without a fiscal year, or without a fiscal period on a quarterly sheet."""
+    year, period, end = sheet.fiscal_year, sheet.fiscal_period, sheet.end
+    if year is None or (quarterly and period is None):
+        label = f"the period ending {end.day} {end:%b %Y}"
+    else:
+        label = f"fiscal {year} {period}" if quarterly else f"fiscal {year}"
+    facts = sheet.facts.values()
+    return SheetRead(
+        lines={name: sheet.value(name) for name in sheet.facts},
+        period_end=end,
+        label=label,
+        quarterly=quarterly,
+        observed_at=max(r.observed_at for r in facts),
+        entered_at=max(r.entered_at for r in facts),
+    )
 
 
 def _sum_lines(
@@ -795,7 +861,7 @@ def _in_another_currency(
 
 def _periods(conn: sqlite3.Connection, symbol: str, dataset: str) -> list[_Period]:
     """The dataset's periods, oldest first; an unknown dataset raises ``ValueError``."""
-    if dataset not in _DATASETS:
+    if dataset not in _DATASETS and dataset != _BALANCE_QUARTER:
         raise ValueError(f"not a statement dataset: {dataset}")
     by_end: dict[date, dict[str, FactRow]] = {}
     for row in facts_for(conn, symbol, dataset):

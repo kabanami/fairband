@@ -491,6 +491,47 @@ def test_a_secondary_valuation_reads_the_balance_sheet(
     assert _stored(client, "HGCO") == []
 
 
+@pytest.mark.usefixtures("refused_aapl")
+def test_a_secondary_valuation_reads_a_later_quarterly_sheet(
+    client: TestClient, db_path: Path
+) -> None:
+    """Spec 2026-11-13 12.2: a quarterly sheet ending after fiscal 2025's, fiscal 2026 Q1 to 27
+    December 2025, is the newest balance sheet, so the default debt and cash are the quarter's:
+    1.0 + 1.5 = $2.5 bn and 0.9 + 0.6 = $1.5 bn."""
+    q1 = date(2025, 12, 27)
+    lines = {
+        "shortTermDebt": 1.0e9,
+        "longTermDebt": 1.5e9,
+        "cashAndCashEquivalents": 0.9e9,
+        "shortTermInvestments": 0.6e9,
+    }
+    with closing(connect(db_path)) as conn:
+        response = record_response(
+            conn,
+            "fmp",
+            "balance-sheet-statement",
+            {"symbol": "AAPL", "period": "quarter"},
+            "AAPL",
+            200,
+            "[]",
+            None,
+            CREATED,
+        )
+        quarter = [
+            replace(
+                _fact("balance-quarter", q1, field, value, response),
+                fiscal_year=2026,
+                fiscal_period="Q1",
+            )
+            for field, value in lines.items()
+        ]
+        insert_facts(conn, quarter)
+    body = _secondary(client, ONE_PART, symbol="AAPL")
+    assert (body["debt"], body["cash"]) == (2.5e9, 1.5e9)
+    assert (body["debtSource"], body["cashSource"]) == ("statements", "statements")
+    assert body["valuePerShare"] == pytest.approx((FIRM - 2.5e9 + 1.5e9) / 1e9, abs=1e-4)
+
+
 def test_the_drivers_form_over_the_api(client: TestClient, db_path: Path, policy: Policy) -> None:
     """Spec 20.4 to 1e-4: r 9%, the terminal return 12%, debt 200, cash 100, 50 shares."""
     _drivers_company(db_path, policy)

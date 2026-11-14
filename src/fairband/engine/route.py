@@ -70,20 +70,20 @@ USD value with the rate of a row that carries one (``types.rated``).
 
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
-``estimates_quarter``, ``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``gf_eps_ttm``,
-``gf_eps_without_nri``, ``next_earnings``, ``tax_rate_latest``, ``closes``, and on a row in
-another currency ``fx_rate``; the RULE input ``inflation_differential`` cites its key too, the
-inflation table, with its note. A missing key cites the source "unknown". A DATA input named in
-``CompanyInputs.estimate_methods`` is an estimate under that method (a tax rate carried forward,
-say), and so are ``aggregate_roic`` and ``runway_return`` under the method ``estimate_methods``
-names ``intangibles`` (D17: invested capital took the issuer's as-reported intangibles total),
-the first with a note that says so, the second keeping its note on the measure the charge used;
-every other DATA input is observed. A DATA input named in ``CompanyInputs.notes`` carries that
-note unless the route writes its own (assembly's note on the tax rate names the country, the
-rate's year and its source). Every other RULE input cites the policy version. The price input
-is the USD quote (unit ``USD``); every other money input is in the reporting currency, its unit
-the code or ``<code> a share`` (``route_steps.money`` and ``per_share``), the market cap the one
-the route read.
+``balance_sheet`` (the newest balance sheet, as of its period end), ``estimates_quarter``,
+``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``gf_eps_ttm``, ``gf_eps_without_nri``,
+``next_earnings``, ``tax_rate_latest``, ``closes``, and on a row in another currency ``fx_rate``;
+the RULE input ``inflation_differential`` cites its key too, the inflation table, with its note.
+A missing key cites the source "unknown". A DATA input named in ``CompanyInputs.estimate_methods``
+is an estimate under that method (a tax rate carried forward, say), and so are ``aggregate_roic``
+and ``runway_return`` under the method ``estimate_methods`` names ``intangibles`` (D17: invested
+capital took the issuer's as-reported intangibles total), the first with a note that says so, the
+second keeping its note on the measure the charge used; every other DATA input is observed. A
+DATA input named in ``CompanyInputs.notes`` carries that note unless the route writes its own
+(assembly's note on the tax rate names the country, the rate's year and its source). Every other
+RULE input cites the policy version. The price input is the USD quote (unit ``USD``); every other
+money input is in the reporting currency, its unit the code or ``<code> a share``
+(``route_steps.money`` and ``per_share``), the market cap the one the route read.
 
 Intermediates hold JSON values only. Totals and per-share figures are in the reporting currency
 (USD for a USD row), rates as fractions. Under a ``value.outside`` override a valued route's
@@ -168,7 +168,7 @@ from fairband.engine.anchor import (
     StockPayHistory,
     TrailingFigures,
 )
-from fairband.engine.balance import BalanceYear
+from fairband.engine.balance import BalanceYear, NewestSheet
 from fairband.engine.classifier import Deciles, Series, classify
 from fairband.engine.designation import designation_for
 from fairband.engine.flags import margin_history, share_count_flag
@@ -233,9 +233,11 @@ class CompanyInputs:
     ``estimate_methods`` maps an input name to the method assembly estimated it by, and
     ``notes`` an input name to the note assembly wrote for it. ``peers`` are the company's mature
     peers with their figures and ``peer_source`` where they came from, ``debt`` and ``cash`` the
-    newest annual balance sheet's (``None`` unknown); the revenue-growth and Decline routes read
-    them, and none is stored with a result. ``balance_years`` holds one ``BalanceYear`` per fiscal
-    year of ``series`` with an annual balance sheet, oldest first; the Decline route reads them.
+    newest balance sheet's (``None`` unknown); the revenue-growth and Decline routes read them,
+    and none is stored with a result. ``sheet`` is that newest balance sheet on file, a fiscal
+    year's or a quarter's (``NewestSheet``, spec 2026-11-13 12.2), ``None`` without one.
+    ``balance_years`` holds one ``BalanceYear`` per fiscal year of ``series`` with an annual
+    balance sheet, oldest first; the Decline route reads them.
     ``adr_ratio`` is GuruFocus's depositary receipt ratio, ordinary shares per ADS, ``None`` for a
     direct listing or without one on file; assembly has read the counts on the quote's basis by it.
     ``stock_pay`` is the stock pay on file beside the trailing figure, the trailing periods at zero
@@ -286,6 +288,7 @@ class CompanyInputs:
     peer_source: PeerSource | None = None
     debt: float | None = None
     cash: float | None = None
+    sheet: NewestSheet | None = None
     balance_years: tuple[BalanceYear, ...] = ()
     adr_ratio: float | None = None
     fx_rate: float = 1.0

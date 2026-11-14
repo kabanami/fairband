@@ -21,6 +21,7 @@ from synthetic import (
     M,
     add_company,
     balance_annual,
+    balance_quarter,
     bodies,
     cashflow_annual,
     cashflow_quarter,
@@ -40,7 +41,7 @@ from fairband.engine.anchor import (
     ntm_quarters,
     ntm_window,
 )
-from fairband.engine.balance import BalanceYear
+from fairband.engine.balance import BalanceYear, NewestSheet
 from fairband.engine.classifier import Deciles, FiscalYear
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route import CompanyInputs, value_company
@@ -72,6 +73,7 @@ ROUTE_KEYS = {
     "market_cap",
     "shares_diluted",
     "statements",
+    "balance_sheet",  # the newest balance sheet, the synthetic quarter of 2026-09-30
     "estimates_quarter",
     "estimates_annual",
     "street_ttm_eps",
@@ -83,6 +85,10 @@ ROUTE_KEYS = {
     "closes",
     "adr_ratio",  # the ACME fixture's GuruFocus summary gives a ratio of 1
 }
+
+SHEET_SOURCE = "FMP balance-sheet-statement"
+# The synthetic company's annual sheet of fiscal 2025 as the engine reads it (``balance_annual``).
+FY2025 = NewestSheet(date(2025, 12, 31), "fiscal 2025", False, 710 * M, 800 * M, None)
 
 type Store = Callable[..., sqlite3.Connection]
 
@@ -1010,6 +1016,7 @@ def test_provenance_dates(conn_with_company: sqlite3.Connection) -> None:
     assert p["shares_diluted"] == Provenance("FMP income-statement", date(2026, 9, 30), NOW, NOW)
     assert p["statements"].as_of == date(2025, 12, 31)
     assert (p["statements"].observed_at, p["statements"].entered_at) == (NOW, NOW)
+    assert p["balance_sheet"] == Provenance(SHEET_SOURCE, date(2026, 9, 30), NOW, NOW)
     assert p["street_ttm_eps"] == Provenance("FMP earnings", date(2026, 10, 30), NOW, NOW)
     assert p["next_earnings"] == Provenance("FMP earnings", TODAY, NOW, NOW)
     assert p["moat_score"] == Provenance("GuruFocus summary", TODAY, NOW, NOW)
@@ -1436,14 +1443,14 @@ def test_no_financial_statements_is_a_refusal(store: Store, router: Router) -> N
 def test_inputs_carry_peers_debt_cash_and_the_revenue_analysts(
     store: Store, clients: Clients, clock: Clock, policy: Policy
 ) -> None:
-    """Debt and cash from ACME's newest balance sheet. BOLT, fetched and listed, is ACME's mature
-    peer once there are deciles."""
+    """Debt and cash from ACME's newest balance sheet, the quarter's of 2026-09-30. BOLT, fetched
+    and listed, is ACME's mature peer once there are deciles."""
     conn = store(company=False, **bodies())
     fetch_company(conn, clients.fmp, clients.gf, "BOLT", policy, clock(), clients.secrets)
     add_company(conn, symbols=("ACME", "BOLT"))  # one universe
     tax = load_tax_table()
     i = build_inputs(conn, "ACME", policy, tax, TODAY, DECILES)
-    newest = balance_annual(YEARS)[-1]
+    [newest] = balance_quarter([date(2026, 9, 30)])
     assert i.debt == pytest.approx(newest["shortTermDebt"] + newest["longTermDebt"])
     assert i.cash == pytest.approx(
         newest["cashAndCashEquivalents"] + newest["shortTermInvestments"]
@@ -1461,21 +1468,170 @@ def test_inputs_carry_peers_debt_cash_and_the_revenue_analysts(
 
 def test_debt_and_cash_read_the_newest_balance_sheet(store: Store) -> None:
     """Each sum counts a missing line as nil; with both lines missing it is unknown. The note
-    names the missing lines. The secondary valuation reads the two figures the same way."""
-    sheets = balance_annual(YEARS)
-    sheets[-1] = {
-        **sheets[-1],
+    names the missing lines. The newest sheet is the quarter's of 2026-09-30, whose short-term
+    debt is $35 m. The secondary valuation reads the two figures the same way."""
+    payloads = bodies()
+    payloads["balance-quarter"][-1] |= {
         "longTermDebt": None,
         "cashAndCashEquivalents": None,
         "shortTermInvestments": None,
     }
-    conn = store(**{**bodies(), "balance-annual": sheets})
+    conn = store(**payloads)
     inputs = build(conn)
-    assert (inputs.debt, inputs.cash) == (20 * M, None)  # the older years' lines are not read
-    assert newest_debt_and_cash(conn, "ACME") == (20 * M, None)
+    # neither the older quarters' lines nor the annual sheet's are read
+    assert (inputs.debt, inputs.cash) == (35 * M, None)
+    assert newest_debt_and_cash(conn, "ACME") == (35 * M, None)
     assert newest_debt_and_cash(conn, "BOLT") == (None, None)  # no balance sheet on file
     assert inputs.notes["debt"] == "longTermDebt not presented"
     assert inputs.notes["cash"] == "cashAndCashEquivalents and shortTermInvestments not presented"
+
+
+def test_the_newest_sheet_is_the_quarter_s_when_it_ends_later(store: Store) -> None:
+    """Spec 2026-11-13 12.2: the annual sheet ends with fiscal 2025 and the newest quarterly sheet
+    two quarters later, on 2026-06-30 (fiscal 2026 Q2: cash $220 m and short-term investments
+    $40 m, short-term debt $30 m and long-term debt $280 m). The quarter's sheet is read, cited
+    as of its own period end."""
+    sheets = balance_quarter(q for q in QUARTERS if q <= date(2026, 6, 30))
+    inputs = build(store(**{**bodies(), "balance-quarter": sheets}))
+    assert inputs.sheet == NewestSheet(
+        date(2026, 6, 30), "fiscal 2026 Q2", True, 716 * M, 820 * M, None
+    )
+    assert (inputs.debt, inputs.cash) == (310 * M, 260 * M)
+    assert inputs.provenance["balance_sheet"] == Provenance(
+        SHEET_SOURCE, date(2026, 6, 30), NOW, NOW
+    )
+    assert "debt" not in inputs.notes and "cash" not in inputs.notes
+
+
+def test_a_tie_reads_the_annual_sheet(store: Store) -> None:
+    """Spec 2026-11-13 12.2: the newest quarterly sheet ends on the annual sheet's day,
+    2025-12-31, with other figures: the annual sheet is read, debt $320 m and cash $250 m."""
+    [q3, q4] = balance_quarter([date(2025, 9, 30), date(2025, 12, 31)])
+    other = q4 | {"shortTermDebt": 90 * M, "cashAndCashEquivalents": 90 * M}
+    inputs = build(store(**{**bodies(), "balance-quarter": [q3, other]}))
+    assert inputs.sheet == FY2025
+    assert (inputs.debt, inputs.cash) == (320 * M, 250 * M)
+    assert inputs.provenance["balance_sheet"].as_of == date(2025, 12, 31)
+
+
+def test_no_quarterly_sheet_reads_the_annual_one(store: Store) -> None:
+    """The quarterly call answered nothing: the annual sheet of fiscal 2025 is read, as before
+    method 1.4."""
+    inputs = build(store(**{**bodies(), "balance-quarter": []}))
+    assert inputs.sheet == FY2025
+    assert (inputs.debt, inputs.cash) == (320 * M, 250 * M)
+    assert inputs.provenance["balance_sheet"] == Provenance(
+        SHEET_SOURCE, date(2025, 12, 31), NOW, NOW
+    )
+
+
+@pytest.mark.parametrize(
+    ("currencies", "end", "label", "debt", "cash"),
+    [
+        ({date(2026, 9, 30): "EUR"}, date(2026, 6, 30), "fiscal 2026 Q2", 310 * M, 260 * M),
+        ({q: "EUR" for q in QUARTERS[1:]}, date(2025, 12, 31), "fiscal 2025", 320 * M, 250 * M),
+        ({date(2026, 9, 30): None}, date(2026, 9, 30), "fiscal 2026 Q3", 305 * M, 265 * M),
+    ],
+    ids=["the-next-quarter", "the-annual-sheet", "no-currency"],
+)
+def test_a_quarterly_sheet_in_another_currency_is_skipped(
+    store: Store,
+    currencies: dict[date, str | None],
+    end: date,
+    label: str,
+    debt: float,
+    cash: float,
+) -> None:
+    """Spec 2026-11-13 12.2: beside statements in USD, a quarterly sheet in EUR is skipped. With
+    the newest in EUR, the quarter before it is read, ending after the annual sheet; with every
+    quarter from 2025-12-31 in EUR, the one left, 2025-09-30, ends before the annual sheet, which
+    is read. A sheet with no currency counts as the reporting currency's."""
+    sheets = balance_quarter(QUARTERS)
+    for row in sheets:
+        day = date.fromisoformat(row["date"])
+        if day in currencies:
+            row["reportedCurrency"] = currencies[day]
+    inputs = build(store(**{**bodies(), "balance-quarter": sheets}))
+    sheet = inputs.sheet
+    assert sheet is not None and (sheet.period_end, sheet.label) == (end, label)
+    assert sheet.quarterly == (end > date(2025, 12, 31))  # a quarter's when after the annual's
+    assert (inputs.debt, inputs.cash) == (debt, cash)
+    assert inputs.provenance["balance_sheet"].as_of == end
+
+
+def test_the_newest_sheet_is_read_whole(store: Store) -> None:
+    """Review Focus (spec 2026-11-13 12.2): the newest quarter lacks ``shortTermInvestments`` and
+    holds no ``longTermDebt``, both of which the annual sheet presents. No line falls back to the
+    annual sheet: cash is the quarter's cash and equivalents alone, $230 m, debt its short-term
+    debt alone, $35 m, and the notes name the missing lines."""
+    payloads = bodies()
+    newest = payloads["balance-quarter"][-1]
+    del newest["shortTermInvestments"]
+    newest["longTermDebt"] = None
+    annual = payloads["balance-annual"][-1]
+    assert annual["shortTermInvestments"] and annual["longTermDebt"]  # the annual presents both
+    inputs = build(store(**payloads))
+    assert inputs.sheet is not None and inputs.sheet.period_end == date(2026, 9, 30)
+    assert (inputs.debt, inputs.cash) == (35 * M, 230 * M)
+    assert inputs.notes["debt"] == "longTermDebt not presented"
+    assert inputs.notes["cash"] == "shortTermInvestments not presented"
+
+
+def test_a_half_year_sheet_is_read_as_a_quarter_s(store: Store) -> None:
+    """Review Focus (spec 2026-11-13 12.2): a half-yearly reporter's sheets by quarter are its
+    half-years, which FMP labels Q2 and Q4. The newest, 2026-06-30, is read under its row's own
+    label, "fiscal 2026 Q2": debt $30 m + $280 m, cash $220 m + $40 m."""
+    inputs = build(store(**bodies(cadence="half-yearly")))
+    assert inputs.sheet == NewestSheet(
+        date(2026, 6, 30), "fiscal 2026 Q2", True, 716 * M, 820 * M, None
+    )
+    assert (inputs.debt, inputs.cash) == (310 * M, 260 * M)
+
+
+@pytest.mark.parametrize(
+    ("labels", "label"),
+    [
+        ({"fiscalYear": "2027", "period": "Q2"}, "fiscal 2027 Q2"),
+        ({"fiscalYear": None}, "the period ending 30 Sep 2026"),
+        ({"period": None}, "the period ending 30 Sep 2026"),
+    ],
+    ids=["the-row-s-labels", "no-fiscal-year", "no-fiscal-period"],
+)
+def test_the_sheet_s_label_is_its_row_s_own(
+    store: Store, labels: dict[str, str | None], label: str
+) -> None:
+    """The label reads the row's own fiscal year and period, as FMP labels the quarter to 30
+    September after a March year end with the next fiscal year's Q2; a row with no fiscal year, or
+    no fiscal period, names its period end."""
+    payloads = bodies()
+    payloads["balance-quarter"][-1] |= labels
+    sheet = build(store(**payloads)).sheet
+    assert sheet is not None and (sheet.period_end, sheet.label) == (date(2026, 9, 30), label)
+
+
+def test_the_quarterly_sheet_moves_no_fiscal_year_figure(
+    store: Store, router: Router, clock: Clock
+) -> None:
+    """Spec 2026-11-13 12.2 and its decision of 2026-11-14: the quarterly call fails on the first
+    fetch and answers on a second 20 hours later, on the next day, so only the quarterly sheet is
+    observed then. It is read, cited at its own observation, and the capital years, the balance
+    years, the data date and the ``statements`` input are what they were without it."""
+    router.fail.add("balance-quarter")
+    router.fail_status = 404  # not retried
+    without = build(store(**bodies()))
+    router.fail.clear()
+    clock.now += timedelta(hours=20)  # 2026-11-02, inside the reuse window of the other calls
+    later = clock()
+    with_sheet = build(store(company=False))
+    assert without.sheet == FY2025
+    assert with_sheet.sheet is not None and with_sheet.sheet.quarterly
+    assert with_sheet.provenance["balance_sheet"] == Provenance(
+        SHEET_SOURCE, date(2026, 9, 30), later, later
+    )
+    assert with_sheet.capital_years == without.capital_years
+    assert with_sheet.balance_years == without.balance_years
+    assert with_sheet.data_date == without.data_date == NOW.date()
+    assert with_sheet.provenance["statements"] == without.provenance["statements"]
 
 
 def _summary(ratio: str | None) -> dict[str, Any]:
