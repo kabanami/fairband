@@ -19,7 +19,14 @@ from fairband.vendors.normalize_fmp import (
 )
 
 _STATEMENTS = frozenset(
-    {"income-annual", "income-quarter", "balance-annual", "cashflow-annual", "cashflow-quarter"}
+    {
+        "income-annual",
+        "income-quarter",
+        "balance-annual",
+        "balance-quarter",
+        "cashflow-annual",
+        "cashflow-quarter",
+    }
 )
 _WHOLE = frozenset({"price-history", "peers", "profile"})  # stored whole, giving no rows
 

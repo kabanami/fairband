@@ -6,12 +6,14 @@ source-evidence "R1 statement field binding" and match the documented examples, 
 ``fiscal_year`` and ``fiscal_period`` from ``fiscalYear`` and ``period``, ``currency`` from
 ``reportedCurrency``, ``unit`` ``currency``, ``shares`` or ``per-share``. A missing or null field
 has no value and the reason ``null``; a value that is not a number, ``unparseable``. A normalized
-balance-sheet zero for ``goodwill`` or ``intangibleAssets`` has no value and the reason
-``vendor-zero`` (D17 rule Z: the issuer's as-reported balance sheet decides); every other zero is a
-real zero. ``statement_fields`` names a statement's fields. Six joined on 2026-11-03 (spec
-2026-11-03 section 11): ``grossProfit`` and ``interestExpense``, kept as FMP signs them, on the
-income statements, ``totalAssets``, ``totalLiabilities`` and ``retainedEarnings`` on the balance
-sheet, and ``depreciationAndAmortization`` on the cash flows.
+balance-sheet zero for ``goodwill`` or ``intangibleAssets``, on an annual sheet or a quarterly one,
+has no value and the reason ``vendor-zero`` (D17 rule Z: the issuer's as-reported balance sheet
+decides); every other zero is a real zero. ``statement_fields`` names a statement's fields. Six
+joined on 2026-11-03 (spec 2026-11-03 section 11): ``grossProfit`` and ``interestExpense``, kept as
+FMP signs them, on the income statements, ``totalAssets``, ``totalLiabilities`` and
+``retainedEarnings`` on the balance sheet, and ``depreciationAndAmortization`` on the cash flows.
+On 2026-11-14 (spec 2026-11-13 12.1 and 13) the quarterly balance sheet, ``balance-quarter``, joined
+with the annual sheet's lines, and ``minorityInterest`` joined the lines of both.
 
 ``as_reported_balance_facts`` (dataset ``balance-asreported-annual``) reads the issuer's XBRL tags
 in lower case. The documented response nests them under ``data`` (as source-evidence T055 also
@@ -66,6 +68,7 @@ _BALANCE: _Fields = tuple(
         "totalAssets",
         "totalLiabilities",
         "retainedEarnings",
+        "minorityInterest",
     )
 )
 _CASHFLOW: _Fields = tuple(
@@ -86,9 +89,11 @@ _STATEMENTS: dict[str, _Fields] = {
     "income-annual": _INCOME,
     "income-quarter": _INCOME,
     "balance-annual": _BALANCE,
+    "balance-quarter": _BALANCE,
     "cashflow-annual": _CASHFLOW,
     "cashflow-quarter": _CASHFLOW,
 }
+_BALANCE_SHEETS = frozenset({"balance-annual", "balance-quarter"})
 _VENDOR_ZERO = frozenset({"goodwill", "intangibleAssets"})
 
 _AS_REPORTED = "balance-asreported-annual"
@@ -113,8 +118,8 @@ def statement_facts(
     entered_at: datetime,
 ) -> list[FactRow]:
     """One fact per statement field per period. ``dataset`` names the statement and period:
-    ``income-annual``, ``income-quarter``, ``balance-annual``, ``cashflow-annual`` or
-    ``cashflow-quarter``; any other raises ``ValueError``."""
+    ``income-annual``, ``income-quarter``, ``balance-annual``, ``balance-quarter``,
+    ``cashflow-annual`` or ``cashflow-quarter``; any other raises ``ValueError``."""
     if dataset not in _STATEMENTS:
         raise ValueError(f"not an FMP statement dataset: {dataset}")
     source = Source(symbol, response_id, observed_at, entered_at)
@@ -122,7 +127,7 @@ def statement_facts(
     for row, period_end in dated(payload):
         for name, unit in _STATEMENTS[dataset]:
             value, reason = _parse(row.get(name))
-            if dataset == "balance-annual" and name in _VENDOR_ZERO and value == 0:
+            if dataset in _BALANCE_SHEETS and name in _VENDOR_ZERO and value == 0:
                 value, reason = None, "vendor-zero"
             out.append(source.fact(row, dataset, period_end, name, value, unit, reason))
     return out
@@ -130,7 +135,7 @@ def statement_facts(
 
 def statement_fields(dataset: str) -> frozenset[str]:
     """The fields ``statement_facts`` stores for every period of ``dataset``; any dataset but the
-    five statements raises ``ValueError``."""
+    six statements raises ``ValueError``."""
     if dataset not in _STATEMENTS:
         raise ValueError(f"not an FMP statement dataset: {dataset}")
     return frozenset(name for name, _ in _STATEMENTS[dataset])

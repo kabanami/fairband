@@ -28,6 +28,7 @@ from fairband.vendors.normalize_fmp import (
     screener_rows,
     split_observations,
     statement_facts,
+    statement_fields,
     value_as_date,
 )
 
@@ -83,6 +84,7 @@ BALANCE = {
     "totalAssets",
     "totalLiabilities",
     "retainedEarnings",
+    "minorityInterest",
 }
 CASHFLOW = {
     "netCashProvidedByOperatingActivities",
@@ -147,7 +149,7 @@ def test_income_quarter_facts_carry_the_fiscal_labels() -> None:
 
 def test_balance_annual_facts() -> None:
     rows = facts("balance-sheet-statement.annual.ACME", "ACME", "balance-annual")
-    assert len(rows) == 3 * 13
+    assert len(rows) == 3 * 14
     assert {r.field for r in rows} == BALANCE
     goodwill = fact(rows, "2024-12-31", "goodwill")
     assert (goodwill.value, goodwill.missing_reason) == (Decimal(250000000), None)
@@ -156,7 +158,7 @@ def test_balance_annual_facts() -> None:
 
 def test_vendor_zero_goodwill_becomes_not_presented() -> None:
     rows = facts("balance-sheet-statement.annual.BOLT", "BOLT", "balance-annual")
-    assert len(rows) == 2 * 13
+    assert len(rows) == 2 * 14
     for period_end in ("2026-06-30", "2025-06-30"):
         for field in ("goodwill", "intangibleAssets"):
             row = fact(rows, period_end, field)
@@ -166,6 +168,38 @@ def test_vendor_zero_goodwill_becomes_not_presented() -> None:
     assert (sti.value, sti.missing_reason) == (Decimal(0), None)
     debt = fact(rows, "2026-06-30", "shortTermDebt")
     assert (debt.value, debt.missing_reason) == (Decimal(0), None)
+
+
+def _quarterly_sheet() -> list[dict[str, Any]]:
+    """Two quarters of the ACME fixture's shape, fiscal 2026 Q1 and Q2, the second with a goodwill
+    of 0 and a minority interest of $30 m."""
+    [year] = load("balance-sheet-statement.annual.ACME")[:1]
+    first = {**year, "date": "2026-03-31", "fiscalYear": "2026", "period": "Q1"}
+    second = {**first, "date": "2026-06-30", "period": "Q2", "goodwill": 0}
+    return [{**first, "minorityInterest": 0}, {**second, "minorityInterest": 30000000}]
+
+
+def test_balance_quarter_facts_carry_the_annual_sheet_s_lines() -> None:
+    """Spec 2026-11-13 12.1: the quarterly sheet is stored with the annual sheet's lines, the
+    minority interest among them, each quarter under its own period end and label; a goodwill of
+    0 is not presented there either."""
+    rows = statement_facts(_quarterly_sheet(), "ACME", "balance-quarter", RID, OBSERVED, ENTERED)
+    assert {r.field for r in rows} == BALANCE
+    assert {r.dataset for r in rows} == {"balance-quarter"}
+    assert statement_fields("balance-quarter") == statement_fields("balance-annual")
+    assert "minorityInterest" in statement_fields("balance-annual")
+    zero = next(r for r in rows if r.field == "goodwill" and r.fiscal_period == "Q2")
+    assert (zero.value, zero.missing_reason) == (None, "vendor-zero")
+    assert len(rows) == 2 * 14
+    minority = fact(rows, "2026-06-30", "minorityInterest")
+    assert (minority.value, minority.fiscal_year, minority.fiscal_period, minority.as_of) == (
+        Decimal(30000000),
+        2026,
+        "Q2",
+        date(2026, 6, 30),
+    )
+    nil = fact(rows, "2026-03-31", "minorityInterest")  # a real zero, as on every line but two
+    assert (nil.value, nil.missing_reason, nil.fiscal_period) == (Decimal(0), None, "Q1")
 
 
 def test_cashflow_facts_keep_the_vendor_sign_and_real_zeros() -> None:

@@ -191,6 +191,46 @@ def cashflow_quarter(ends: Iterable[date], periods: Sequence[date] = QUARTERS) -
     ]
 
 
+def balance_quarter(quarters: Iterable[date]) -> Payload:
+    """A balance sheet for each of ``quarters`` (spec 2026-11-13 12.1), labelled as the quarterly
+    income statement's periods are. A quarter that ends a fiscal year, 31 December, carries that
+    year's annual figures (``balance_annual``), as FMP's does. The n-th quarter of a year, n 1 to
+    3, carries figures of its own: cash $200 m + $10 m × n, short-term investments $50 m − $5 m ×
+    n, short-term debt $20 m + $5 m × n and long-term debt $300 m − $10 m × n; on the year before's
+    annual figures, the current assets up $3 m × n, the current liabilities and PP&E up $5 m × n,
+    the intangibles down $5 m × n, the total liabilities up $10 m × n, and the total assets up
+    $12 m × n, so the retained earnings and the equity rise $2 m × n."""
+    rows = []
+    for end in quarters:
+        label = f"Q{(end.month + 2) // 3}"
+        if end.month == 12:
+            [year] = balance_annual([end.year])
+            rows.append({**year, "period": label})
+            continue
+        n, k = end.month // 3, end.year - 1 - 2014
+        rows.append(
+            statement(
+                end,
+                end.year,
+                label,
+                cashAndCashEquivalents=(200 + 10 * n) * M,
+                shortTermInvestments=(50 - 5 * n) * M,
+                totalCurrentAssets=(600 + 10 * k + 3 * n) * M,
+                totalCurrentLiabilities=(300 + 5 * n) * M,
+                shortTermDebt=(20 + 5 * n) * M,
+                longTermDebt=(300 - 10 * n) * M,
+                propertyPlantEquipmentNet=(400 + 5 * n) * M,
+                goodwill=250 * M,
+                intangibleAssets=(260 - 5 * n) * M,
+                totalAssets=(1500 + 10 * k + 12 * n) * M,
+                totalLiabilities=(800 + 10 * n) * M,
+                retainedEarnings=(400 + 10 * k + 2 * n) * M,
+                totalStockholdersEquity=(700 + 10 * k + 2 * n) * M,
+            )
+        )
+    return rows
+
+
 def earnings(periods: Sequence[date] = QUARTERS) -> Payload:
     """A street actual of 0.50 + 0.01 × i for period i of ``periods``, reported 30 days after its
     end; the next report on 2027-02-04."""
@@ -232,10 +272,12 @@ def bodies(
     currency: str = "USD",
     cadence: Cadence = "quarterly",
 ) -> dict[str, Any]:
-    """The payloads by endpoint; the five statements name ``currency`` as their
+    """The payloads by endpoint; the six statements name ``currency`` as their
     ``reportedCurrency``, their figures unchanged. The quarterly statements and the street
-    actuals are at ``QUARTERS``, or at ``HALF_YEARS`` for a ``half-yearly`` company, with the
-    same figures period by period; ``quarters`` keeps only those statement periods."""
+    actuals are at ``QUARTERS``, or at ``HALF_YEARS`` for a ``half-yearly`` company, the income
+    statements and cash flows with the same figures period by period, the balance sheets with the
+    year's figures at a fiscal year's end and their own between (``balance_quarter``);
+    ``quarters`` keeps only those statement periods."""
     periods = HALF_YEARS if cadence == "half-yearly" else QUARTERS
     years, kept = tuple(years), periods if quarters is None else tuple(quarters)
     statements = {
@@ -244,6 +286,7 @@ def bodies(
         "cashflow-annual": cashflow_annual(years),
         "income-quarter": income_quarter(kept, periods),
         "cashflow-quarter": cashflow_quarter(kept, periods),
+        "balance-quarter": balance_quarter(p for p in periods if p in kept),
     }
     return {
         **{

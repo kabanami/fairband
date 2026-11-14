@@ -2,7 +2,7 @@
 payloads were stored (spec 2026-11-03 section 11).
 
 ``backfill_statement_facts`` reads every usable stored response (HTTP 200, no error, a payload) of
-the five statement endpoints, of every symbol. A response whose facts already hold every field the
+the six statement endpoints, of every symbol. A response whose facts already hold every field the
 normalizer keeps for its statement (``statement_fields``) is passed over unread. Any other one's
 payload is normalized again (``statement_facts``), and the facts of the fields its rows lack are
 written, citing the response and its observation time and entered at ``now``, in one transaction

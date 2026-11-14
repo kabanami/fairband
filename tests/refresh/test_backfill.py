@@ -1,12 +1,15 @@
-"""The statement facts backfill over responses stored before the normalizer kept the six lines.
+"""The statement facts backfill over responses stored before the normalizer kept the six lines,
+and before it kept the minority interest.
 
 Each test stores a synthetic response of each statement kind through ``record_response`` with the
-facts the normalizer kept before (every field but the six), as a refresh before the change did.
+facts the normalizer kept before (every field but the six, or but the minority interest), as a
+refresh before the change did.
 """
 
 import json
 import logging
 import sqlite3
+from collections.abc import Collection
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -39,11 +42,11 @@ def income(day: date, period: str) -> dict[str, Any]:
     )
 
 
-def balance(day: date) -> dict[str, Any]:
+def balance(day: date, period: str = "FY") -> dict[str, Any]:
     return statement(
         day,
         day.year,
-        "FY",
+        period,
         totalCurrentAssets=600 * M,
         totalAssets=1500 * M,
         totalLiabilities=800 * M,
@@ -67,14 +70,19 @@ PAYLOADS = {
 
 
 def store_before_the_change(
-    conn: sqlite3.Connection, endpoint: str, payload: Any, symbol: str = "ACME"
+    conn: sqlite3.Connection,
+    endpoint: str,
+    payload: Any,
+    symbol: str = "ACME",
+    lines: Collection[str] = SIX,
 ) -> int:
-    """A usable response and the facts the normalizer kept before the six lines; its id."""
+    """A usable response and the facts the normalizer kept before ``lines``, the six by default;
+    its id."""
     text = json.dumps(payload)
     params = {"symbol": symbol, "period": "annual", "limit": "11"}
     response_id = record_response(conn, "fmp", endpoint, params, symbol, 200, text, None, OBSERVED)
     facts = statement_facts(payload, symbol, endpoint, response_id, OBSERVED, OBSERVED)
-    insert_facts(conn, [f for f in facts if f.field not in SIX])
+    insert_facts(conn, [f for f in facts if f.field not in lines])
     return response_id
 
 
@@ -123,6 +131,41 @@ def test_backfill_writes_the_six_lines_once(conn: sqlite3.Connection) -> None:
         f for f in facts_for(conn, "ACME", "balance-annual") if f.field == "retainedEarnings"
     ]
     assert {(f.value, f.missing_reason) for f in retained} == {(None, "null")}
+
+    total = count_facts(conn)
+    assert backfill_statement_facts(conn, NOW + timedelta(hours=1)) == 0
+    assert count_facts(conn) == total
+
+
+def test_backfill_writes_the_minority_interest_once(conn: sqlite3.Connection) -> None:
+    """Spec 2026-11-13 13: the minority interest joined the balance lines after sheets that hold it
+    were stored. The backfill reads it from their payloads, an annual sheet's and a quarterly
+    one's (12.1), once."""
+    sheets = {
+        "balance-annual": [{**balance(d), "minorityInterest": 30 * M} for d in YEARS],
+        "balance-quarter": [{**balance(Q3, "Q3"), "minorityInterest": 0}],
+    }
+    ids = {
+        endpoint: store_before_the_change(conn, endpoint, payload, lines={"minorityInterest"})
+        for endpoint, payload in sheets.items()
+    }
+    before = {endpoint: fields_of(conn, rid) for endpoint, rid in ids.items()}
+
+    assert backfill_statement_facts(conn, NOW) == 2 + 1
+    for endpoint, rid in ids.items():
+        after = fields_of(conn, rid)
+        assert after[: len(before[endpoint])] == before[endpoint]  # nothing else touched
+        ends = [row["date"] for row in sheets[endpoint]]
+        assert after[len(before[endpoint]) :] == [(end, "minorityInterest") for end in ends]
+    annual = [f for f in facts_for(conn, "ACME", "balance-annual") if f.field == "minorityInterest"]
+    assert [(f.period_end, f.value, f.response_id) for f in annual] == [
+        (end, Decimal(30 * M), ids["balance-annual"]) for end in YEARS
+    ]
+    assert {(f.observed_at, f.entered_at) for f in annual} == {(OBSERVED, NOW)}
+    [quarter] = [
+        f for f in facts_for(conn, "ACME", "balance-quarter") if f.field == "minorityInterest"
+    ]
+    assert (quarter.period_end, quarter.fiscal_period, quarter.value) == (Q3, "Q3", Decimal(0))
 
     total = count_facts(conn)
     assert backfill_statement_facts(conn, NOW + timedelta(hours=1)) == 0

@@ -1,5 +1,6 @@
-"""Fetch one company: fourteen FMP calls and two GuruFocus calls (spec 6.5, the peers of growth
-routes spec 5.5 and the splits of spec 2026-11-09 10.1), each reused while fresh and stored whole.
+"""Fetch one company: fifteen FMP calls and two GuruFocus calls (spec 6.5, the peers of growth
+routes spec 5.5, the splits of spec 2026-11-09 10.1 and the quarterly balance sheet of spec
+2026-11-13 12.1), each reused while fresh and stored whole.
 
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
@@ -97,9 +98,17 @@ EARNINGS_ROWS = 12
 # coverage (a foreign filer that reports twice a year, say), and the routes that read it, Mature
 # Growth and the revenue-growth route, refuse an incomplete NTM consensus themselves.
 REQUIRED = frozenset({"income-annual", "balance-annual", "cashflow-annual", "quote"})
-# The five statements; each endpoint is named as the dataset its facts are stored under.
+# The six statements; each endpoint is named as the dataset its facts are stored under. The
+# quarterly balance sheet is not required: a company without one reads its annual sheet.
 STATEMENT_ENDPOINTS = frozenset(
-    {"income-annual", "balance-annual", "cashflow-annual", "income-quarter", "cashflow-quarter"}
+    {
+        "income-annual",
+        "balance-annual",
+        "cashflow-annual",
+        "income-quarter",
+        "cashflow-quarter",
+        "balance-quarter",
+    }
 )
 NO_GF_KEY = "no GuruFocus key"
 _GF_ENDPOINTS = frozenset({"summary", "keyratios"})
@@ -208,7 +217,7 @@ def provider_of(endpoint: str) -> Provider:
 
 
 def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
-    """The calls for ``symbol``, fourteen FMP and two GuruFocus, in fetch order."""
+    """The calls for ``symbol``, fifteen FMP and two GuruFocus, in fetch order."""
     start = _years_before(today, PRICE_YEARS)
 
     def on_fmp(
@@ -238,6 +247,7 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
         statement("cashflow", "annual", STATEMENT_YEARS),
         statement("income", "quarter", STATEMENT_QUARTERS),
         statement("cashflow", "quarter", STATEMENT_QUARTERS),
+        statement("balance", "quarter", STATEMENT_QUARTERS),
         on_fmp(
             "balance-asreported-annual",
             as_reported,
