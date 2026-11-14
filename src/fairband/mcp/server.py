@@ -553,7 +553,8 @@ def build_server(client: FairbandClient) -> MCPServer:
 
     @server.tool(
         description="Override one input with a reason and evidence [{kind, ref, note}]; answers"
-        " its state and, when applied, the review with its bridge."
+        " its state and, when applied, the review with its bridge and `dropped`, the overrides"
+        " the system dropped because the row's route no longer reads them."
     )
     def override_add(
         symbol: str,
@@ -576,7 +577,8 @@ def build_server(client: FairbandClient) -> MCPServer:
 
     @server.tool(
         description="Drop an applied override, with the reason; the review is recomputed over the"
-        " rest."
+        " rest, and `dropped` names the overrides the system dropped with it because the row's"
+        " route no longer reads them."
     )
     def override_drop(override_id: int, reason: str) -> dict[str, Any]:
         return write(lambda: client.delete(f"/api/overrides/{override_id}", {"reason": reason}))

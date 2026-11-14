@@ -30,7 +30,7 @@ from support.web import CREATED, HEADER, NOW, TODAY
 from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import sales_class
 from fairband.engine.classifier import Deciles
-from fairband.engine.overrides import Override, current_reading
+from fairband.engine.overrides import TAGS, Override, current_reading
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.types import ValuationResult, result_from_json
 from fairband.policy import Policy
@@ -235,6 +235,86 @@ def test_the_check_reads_the_route_after_a_phase_override(client: TestClient) ->
     assert young["override"]["state"] == "applied" and young["review"]["value"] is not None
     assert young["review"]["mechanicalValue"] is None  # refused for its target margin
     assert young["bridge"][0]["delta"] == young["review"]["value"]
+
+
+# An override the route no longer reads (spec 2026-11-14 8): HGCO's mechanical phase is High
+# Growth, whose revenue-growth route reads no cycle gap (``TAGS``).
+PHASE_MATURE_GROWTH = BELIEF_8 | {"tag": "phase", "new": "Mature Growth", "reason": "it matured"}
+CYCLE_GAP = BELIEF_8 | {"tag": "earnings.cycle_gap", "new": 1.0, "reason": "a peak year"}
+OUTSIDE_2 = BELIEF_8 | {"tag": "value.outside", "new": 2.0, "reason": "a listed stake"}
+OFF_GROWTH = "the revenue-growth route does not read the input"
+
+
+def _hgco_in_mature_growth(client: TestClient) -> tuple[int, int, int]:
+    """HGCO put in Mature Growth, with a cycle gap of $1.00, which the Mature Growth route reads,
+    and a value outside the business of $2.00, which both routes read; no write moves the route
+    the others were judged on, so none drops another: the ids of the phase override, the gap and
+    the outside value."""
+    assert "revenue-growth" not in TAGS["earnings.cycle_gap"].routes
+    assert "revenue-growth" in TAGS["value.outside"].routes
+    written = [_post(client, body, "HGCO") for body in (PHASE_MATURE_GROWTH, CYCLE_GAP, OUTSIDE_2)]
+    assert [w["dropped"] for w in written] == [[], [], []]
+    phase, gap, outside = (w["override"]["id"] for w in written)
+    return phase, gap, outside
+
+
+def test_dropping_the_phase_override_drops_what_only_its_route_read(
+    client: TestClient, results: dict[str, ValuationResult]
+) -> None:
+    """The drop of HGCO's phase override leaves the row on its mechanical route, revenue-growth,
+    which reads no cycle gap: the system drops the gap in the same transaction, with the route's
+    reason and its ledger row after the agent's, and the answer names it under ``dropped``; the
+    review it carries holds the outside value alone, HGCO's value plus $2.00."""
+    phase, gap, outside = _hgco_in_mature_growth(client)
+    r = _drop(client, phase)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["dropped"] == [{"id": gap, "tag": "earnings.cycle_gap", "reason": OFF_GROWTH}]
+    assert body["review"]["overrideIds"] == [outside]
+    assert [line["tag"] for line in body["bridge"]] == ["value.outside"]
+    mechanical = results["HGCO"].value
+    assert mechanical is not None and body["review"]["value"] == pytest.approx(mechanical + 2.0)
+    states = {o["id"]: (o["state"], o["dropReason"]) for o in _overrides(client, "HGCO")}
+    assert (states[gap], states[outside]) == (("dropped", OFF_GROWTH), ("applied", None))
+    snapshot_id = client.get("/api/companies/HGCO").json()["snapshot"]["id"]
+    entries = client.get("/api/companies/HGCO/ledger").json()["entries"]
+    assert [(e["principal"], e["refId"], e["snapshotId"], e["summary"]) for e in entries[:2]] == [
+        ("system", gap, snapshot_id, f"earnings.cycle_gap dropped: {OFF_GROWTH}"),
+        ("agent", phase, snapshot_id, "phase dropped: guidance withdrawn"),
+    ]
+
+
+def test_replacing_the_phase_override_drops_what_only_the_old_route_read(
+    client: TestClient,
+) -> None:
+    """A phase override of High Growth replaces HGCO's of Mature Growth: the row's route is
+    revenue-growth again, so the system drops the cycle gap with the route's reason and the answer
+    names it; the review holds the new phase override and the outside value."""
+    phase, gap, outside = _hgco_in_mature_growth(client)
+    body = _post(client, PHASE_MATURE_GROWTH | {"new": "High Growth"}, "HGCO")
+    new = body["override"]["id"]
+    assert body["dropped"] == [{"id": gap, "tag": "earnings.cycle_gap", "reason": OFF_GROWTH}]
+    assert body["review"]["overrideIds"] == [new, outside]
+    assert [line["tag"] for line in body["bridge"]] == ["phase", "value.outside"]
+    states = {o["id"]: (o["state"], o["dropReason"]) for o in _overrides(client, "HGCO")}
+    assert (states[phase], states[gap]) == (
+        ("dropped", f"replaced by override {new}"),
+        ("dropped", OFF_GROWTH),
+    )
+
+
+def test_a_write_that_keeps_the_route_drops_nothing(client: TestClient) -> None:
+    """On AAPL's Mature Growth route a post, a replacement, a phase override of the phase it has
+    and the drop of it each leave the route as it was: every answer's ``dropped`` is empty."""
+    assert _post(client, BELIEF_8)["dropped"] == []
+    assert _post(client, MOAT_NARROW)["dropped"] == []
+    assert _post(client, BELIEF_8 | {"new": 0.09})["dropped"] == []
+    same = _post(client, PHASE_MATURE_GROWTH)
+    assert same["dropped"] == []
+    r = _drop(client, same["override"]["id"])
+    assert r.status_code == 200, r.text
+    assert r.json()["dropped"] == []
+    assert [o["state"] for o in _overrides(client)].count("applied") == 2
 
 
 def test_a_second_override_on_a_tag_replaces_the_first(client: TestClient) -> None:

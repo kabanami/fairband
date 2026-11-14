@@ -23,6 +23,7 @@ from fairband.mcp.server import TOOL_NAMES, build_server
 from fairband.policy import load_policy
 from fairband.refresh.passthrough import BUSY, NO_GF_KEY
 from fairband.refresh.rates import NO_RATE
+from fairband.refresh.reviews import OFF_ROUTE
 from fairband.reports.check import (
     ALWAYS_JUDGED,
     FAILURES,
@@ -788,6 +789,31 @@ def test_the_agent_sets_a_lasting_nil_for_a_company_that_pays_no_stock() -> None
         ),
     ):
         assert words in skill, words
+
+
+def test_the_agent_reads_the_overrides_the_route_no_longer_reads() -> None:
+    """Spec 2026-11-14 8: the system drops an override the row's route no longer reads, at a
+    refresh that moves the phase and when a `phase` override is dropped or replaced, with the
+    reason as the server words it; a company with no phase keeps its overrides. The answers of
+    `override_add` and `override_drop` name such drops under `dropped`, which the agent reads."""
+    skill = _flat(_read(SKILL))
+    reason = OFF_ROUTE.format(route="<route>")
+    assert reason == "the <route> route does not read the input"
+    for words in (
+        "An override the row's route does not read drops too.",
+        (
+            "When a refresh moves the phase, or you drop or replace a `phase` override, the system"
+            f' drops each override only the old route read: "{reason}"'
+        ),
+        "A company the refresh leaves with no phase keeps its overrides.",
+        "After you drop or replace a `phase` override, read `dropped` in the answer",
+        "An applied override answers `{override, review, bridge, dropped}`",
+    ):
+        assert words in skill, words
+    for name in ("override_add", "override_drop"):
+        entry = _tool_entry(name)
+        assert "`{override, review, bridge, dropped}`" in entry, name
+        assert "`{id, tag, reason}`" in entry or "as `override_add`'s" in entry, name
 
 
 def test_the_citations_name_the_newest_sheet_and_the_minority_interest() -> None:

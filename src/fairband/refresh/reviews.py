@@ -3,8 +3,22 @@
 
 ``follow_snapshot`` runs in the value stage of a full, scoped or revalue refresh, in the
 transaction that writes the company's snapshot. A company with no applied override gets nothing.
-Otherwise each period-tied override is checked first, and drops, by the system, with a ledger row
-resting on the new snapshot, on the first of these that holds (spec 2026-11-13 11a):
+Otherwise the applied ``phase`` override's own tests (below) run first, then the route's, then the
+other overrides' own tests on those left.
+
+The route's test (spec 2026-11-14 8): the row's route is the route of the ``phase`` override still
+applied, else of the new result's phase, the mechanical one, and each other override whose tag
+that route does not read (``off_route``, by ``TAGS``) drops, by the system, with a ledger row
+resting on the new snapshot, "the <route> route does not read the input" (``OFF_ROUTE``), the
+route named as the write's route rule names it (``overrides.ROUTE_NAMES``), "the Decline route does
+not read the input". Since it runs before the other overrides' tests, a period-tied override on a
+route that no longer reads it drops with that reason, not as a changed reading. An unclassified
+row, with no ``phase`` override left and no mechanical phase, has no route and keeps every
+override: a row unclassified for one refresh does not lose its review's inputs. The web's
+recompute drops the same overrides the same way (``drop_off_route``), on its snapshot's phase.
+
+The own tests: a period-tied override drops, by the system, with a ledger row resting on the new
+snapshot, on the first of these that holds (spec 2026-11-13 11a):
 
 - "a newer period is on file than the one the override corrected": the new inputs' trailing
   period end is after the trailing period end of the snapshot the override was made on
@@ -100,20 +114,22 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import date, datetime
-from typing import cast
+from typing import cast, get_args
 
 from fairband.engine.anchor import base_year
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import (
     ANCHOR_METRICS,
+    ROUTE_NAMES,
     TAGS,
     Override,
     OverrideTag,
     current_reading,
+    route_of,
 )
 from fairband.engine.review import BridgeLine, Review, review_company
 from fairband.engine.route import CompanyInputs, refusal_result, reprice
-from fairband.engine.types import ValuationResult, money_of, rated
+from fairband.engine.types import Phase, Route, ValuationResult, money_of, rated
 from fairband.policy import Policy
 from fairband.refresh.inputs_splits import SplitRow, named_splits, splits_for
 from fairband.reports.refs import guidance_cited
@@ -136,6 +152,9 @@ NEWER = "a newer period is on file than the one the override corrected"
 CHANGED = "the input the override corrected changed"
 PASSED = "the guided year has passed"
 ON_FILE = "the store holds a trailing stock pay above zero"
+# The route drop's reason, the route named by ``overrides.ROUTE_NAMES`` (spec 2026-11-14 8).
+OFF_ROUTE = "the {route} route does not read the input"
+_PHASES: tuple[str, ...] = get_args(Phase)
 # The units a split scales (``TAGS``): a figure a share is divided by the ratio, a count multiplied.
 _A_SHARE, _SHARES = "USD a share", "shares"
 _SCALED = frozenset({_A_SHARE, _SHARES})
@@ -153,8 +172,8 @@ def follow_snapshot(
     clock: Callable[[], datetime],
 ) -> int | None:
     """The review written on snapshot ``snapshot_id``, the company's mechanical ``result`` on
-    ``inputs``, after the period-tied check (module docstring); ``None`` with no applied override
-    left."""
+    ``inputs``, after the drop tests, the route's among them (module docstring); ``None`` with no
+    applied override left."""
     with transaction(conn):
         try:
             with _savepoint(conn):
@@ -185,30 +204,82 @@ def _follow(
     )
     trailing_end = None if trailing is None else trailing.period_end
     stored_sbc = None if trailing is None else trailing.sbc
-    kept = []
-    for override in applied_overrides(conn, symbol):
+
+    def holds(override: OverrideRow) -> bool:
+        """Whether ``override`` holds on ``result``; one that does not is dropped."""
         reason = _drop_reason(conn, override, result, base, trailing_end, stored_sbc)
-        if reason is None:
-            kept.append(override)
-            continue
-        at = clock()
-        drop_override(conn, override.id, reason, at)
-        summary = f"{override.tag} dropped: {reason}"
-        record(
-            conn,
-            SYSTEM,
-            at,
-            "override-drop",
-            symbol,
-            "overrides",
-            override.id,
-            snapshot_id=snapshot_id,
-            summary=summary,
-        )
+        if reason is not None:
+            _system_drop(conn, override, reason, snapshot_id, clock())
+        return reason is None
+
+    applied = applied_overrides(conn, symbol)
+    # the phase override's own tests first: the route is the one the row then takes
+    phases = [o for o in applied if o.tag == "phase" and holds(o)]
+    others = [o for o in applied if o.tag != "phase"]
+    stale = drop_off_route(conn, [*phases, *others], result.phase.phase, snapshot_id, clock)
+    gone = {o.id for o, _ in stale}
+    kept = [*phases, *(o for o in others if o.id not in gone and holds(o))]
     if not kept:
         return None
     return write_review(
         conn, inputs, result, snapshot_id, kept, deciles, policy, today, refresh_id, clock
+    )
+
+
+def off_route(route: Route | None, rows: Sequence[OverrideRow]) -> list[OverrideRow]:
+    """The ``rows`` the row's ``route`` does not read: each whose tag is not ``phase``, which
+    every route reads, and whose ``TAGS`` entry does not hold ``route``; none when ``route`` is
+    ``None``, an unclassified row's (module docstring)."""
+    if route is None:
+        return []
+    others = (o for o in rows if o.tag != "phase")
+    return [o for o in others if route not in TAGS[cast(OverrideTag, o.tag)].routes]
+
+
+def row_route(rows: Sequence[OverrideRow], phase: Phase | None) -> Route | None:
+    """The route the row takes: the route of its applied ``phase`` override among ``rows``, else
+    of ``phase``, its mechanical phase; ``None`` for neither, an unclassified row."""
+    phases = [*(o.new for o in rows if o.tag == "phase"), phase]
+    return next((route_of(cast(Phase, p)) for p in phases if p in _PHASES), None)
+
+
+def drop_off_route(
+    conn: sqlite3.Connection,
+    rows: Sequence[OverrideRow],
+    phase: Phase | None,
+    snapshot_id: int,
+    clock: Callable[[], datetime],
+) -> list[tuple[OverrideRow, str]]:
+    """Drop, by the system, each of the applied ``rows`` that the row's route (``row_route``, on
+    the mechanical ``phase``) does not read (``off_route``), each with its ledger row resting on
+    snapshot ``snapshot_id``: the rows dropped, each with the reason, ``OFF_ROUTE`` naming the
+    route as the write's route rule names it. The follow and the web's recompute share it."""
+    route = row_route(rows, phase)
+    if route is None:
+        return []
+    reason = OFF_ROUTE.format(route=ROUTE_NAMES[route])
+    stale = off_route(route, rows)
+    for override in stale:
+        _system_drop(conn, override, reason, snapshot_id, clock())
+    return [(o, reason) for o in stale]
+
+
+def _system_drop(
+    conn: sqlite3.Connection, override: OverrideRow, reason: str, snapshot_id: int, at: datetime
+) -> None:
+    """Drop ``override`` by the system for ``reason`` at ``at``, with its ledger row resting on
+    snapshot ``snapshot_id``."""
+    drop_override(conn, override.id, reason, at)
+    record(
+        conn,
+        SYSTEM,
+        at,
+        "override-drop",
+        override.symbol,
+        "overrides",
+        override.id,
+        snapshot_id=snapshot_id,
+        summary=f"{override.tag} dropped: {reason}",
     )
 
 

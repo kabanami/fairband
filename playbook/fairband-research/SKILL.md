@@ -943,7 +943,8 @@ zero", and stores nothing: set the filings' figure period-tied there.
 A refused override is stored with its state and applies nothing. Its answer is the refusal's
 sentence with the `override` record beside it. Fix the one thing the sentence names, and try again.
 
-An applied override answers `{override, review, bridge}`. The bridge starts at the mechanical value
+An applied override answers `{override, review, bridge, dropped}`; `dropped` names the overrides the
+system dropped with it, empty when none (see below). The bridge starts at the mechanical value
 (the engine's value with no override), adds one line for each override, and ends at the reviewed
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
 consensus step 3, revenue step 2, revenue step 3, held rate, belief, non-recurring gap, stock pay,
@@ -963,6 +964,13 @@ of one period's vendor error) holds until the company reports a new period or th
 corrected changes; then the system drops it by itself. A refresh that fetches the same statements
 again keeps it. A lasting `earnings.sbc` of 0 holds across periods, and the system drops it once
 the stored trailing stock pay is above zero: "the store holds a trailing stock pay above zero".
+An override the row's route does not read drops too. The route is the one an applied `phase`
+override sets, else the classifier's phase. When a refresh moves the phase, or you drop or replace
+a `phase` override, the system drops each override only the old route read: "the <route> route
+does not read the input", the route named as the refusal names it ("the Decline route does not
+read the input"). A company the refresh leaves with no phase keeps its overrides. After you drop or
+replace a `phase` override, read `dropped` in the answer: each override the system dropped with
+it, `{id, tag, reason}`. Decide each again on the route the row now takes.
 Add a note with `note_add(symbol, text, override_id)` when the reason needs more words.
 
 An override, a drop, a secondary valuation and a sensitivity reading are refused with "settings

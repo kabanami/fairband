@@ -495,6 +495,8 @@ def test_the_agents_section_reads(client: TestClient) -> None:
             "After a stock split, an earlier override in dollars a share or in shares is scaled"
             " to the new shares, and the review says so."
         ),
+        # spec 2026-11-14 8: an override the row's route no longer reads drops
+        "When the company's phase moves, an override that only the old route read drops too.",
     ):
         assert words in text, words
     assert "values a peak as if it lasted" not in text

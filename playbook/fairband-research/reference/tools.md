@@ -297,11 +297,15 @@ and store nothing:
   one-time item in the NTM consensus (`earnings.ntm_nri`), the two revenue steps of the Mature
   Growth charge (`revenue.step_2`, `revenue.step_3`), the trailing stock pay (`earnings.sbc`),
   the stock-pay basis (`earnings.sbc_basis`) and the minority interest (`balance.minority`)
-  among them; applied, it answers `{override, review, bridge}`; refused, the
-  sentence and the `override`. A lasting `earnings.sbc` of 0 on a row whose trailing stock pay is
-  above zero is refused with the sentence alone, and nothing is stored.
+  among them; applied, it answers `{override, review, bridge, dropped}`, `dropped` the overrides
+  the system dropped with it because the row's route no longer reads them, each
+  `{id, tag, reason}`, empty when none (a `phase` override that replaces another can move the
+  route); refused, the sentence and the `override`. A lasting `earnings.sbc` of 0 on a row whose
+  trailing stock pay is above zero is refused with the sentence alone, and nothing is stored.
 - `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over
-  the rest, or cleared when none is left.
+  the rest, or cleared when none is left. It answers `{override, review, bridge, dropped}`,
+  `dropped` as `override_add`'s: dropping a `phase` override drops the overrides only its route
+  read.
 - `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: the fallback
   where neither the route nor your review values the company: value the company by the standard
   discounted cash flow from your `drivers`, or from your own free-cash-flow path in `parts`,

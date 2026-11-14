@@ -34,23 +34,31 @@ is above zero" (``lasting_nil_refusal``), nothing stored; a reading of 0, or non
 Otherwise the override is stored, applied or refused, with the engine's reading of the input on
 the snapshot as its old value and, for a period-tied one, as the value it corrected. A refused one
 answers 400 with the rule's sentence and ``{override}``. An applied one drops the applied override
-on its tag ("replaced by override n") and the company's review is recomputed: ``build_inputs`` on
-the latest deciles and today's date, a row in another currency at the snapshot's own rate and its
-date, which are snapshot data as the price is (``built_inputs``); the engine with no override on
-them must give the snapshot's route and value a share, else the write is refused 409, "the store
-moved since snapshot <id>: run a revalue", and nothing is stored, since a store change after the
-snapshot (a full refresh's new deciles before its value stage, a peer's figures from a scoped
-refresh) would land on the bridge's first line as the agent's; then ``review_company`` over every
-applied override from the snapshot's result, the review written on the snapshot with its validity
-window and its log row; it answers 201 with ``{override, review, bridge}``.
+on its tag ("replaced by override n") and the company's review is recomputed. The recompute first
+drops, by the system, each applied override the row's route does not read (spec 2026-11-14 8,
+``reviews.drop_off_route``): the route of the applied ``phase`` override, else of the snapshot's
+phase, so replacing or dropping a ``phase`` override takes with it the overrides only the old route
+read, each with the reason "the <route> route does not read the input"; an unclassified row with no
+``phase`` override keeps them all. The new override itself was judged on the route the row now
+takes, so it stays. Then ``build_inputs`` on the latest deciles and today's date, a row in another
+currency at the snapshot's own rate and its date, which are snapshot data as the price is
+(``built_inputs``); the engine with no override on them must give the snapshot's route and value a
+share, else the write is refused 409, "the store moved since snapshot <id>: run a revalue", and
+nothing is stored, since a store change after the snapshot (a full refresh's new deciles before
+its value stage, a peer's figures from a scoped refresh) would land on the bridge's first line as
+the agent's; then ``review_company`` over every override still applied from the snapshot's result,
+the review written on the snapshot with its validity window and its log row; it answers 201 with
+``{override, review, bridge, dropped}``, ``dropped`` the overrides the system dropped, each
+``{id, tag, reason}``, empty when none.
 
 ``DELETE /api/overrides/{id}`` drops an applied override with ``{reason}`` (the same 409s; 404
 for no such override, 409 for one not applied) and recomputes the review over the rest, the
-store-moved 409 included, or clears it when none is left; it answers ``{override, review,
-bridge}``, the review ``null`` when cleared.
+route's drops and the store-moved 409 included, or clears it when none is left; it answers
+``{override, review, bridge, dropped}``, the review ``null`` when cleared.
 Both writes are an agent's: the owner's answer 403 (spec 10.3, the founder's ruling of
 2026-11-06). Each write is a ledger row in its transaction, the agent's (``override``, and
-``override-drop`` for a drop or a replacement), resting on the company's latest snapshot.
+``override-drop`` for a drop or a replacement), resting on the company's latest snapshot; a drop
+the recompute makes is the system's ``override-drop``, after them in the same transaction.
 
 The reads: ``GET /api/companies/{symbol}/overrides`` newest first;
 ``/api/companies/{symbol}/reviews`` newest first, each with its bridge but without its result;
@@ -168,7 +176,7 @@ from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import newest_debt_and_cash
-from fairband.refresh.reviews import write_review
+from fairband.refresh.reviews import drop_off_route, write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
 from fairband.reports.refs import MAX_ID, Resolver, fact_ref, guidance_cited, same_snapshot
 from fairband.store.db import transaction
@@ -211,6 +219,8 @@ NIL_ON_FILE = (
 _PHASES: tuple[str, ...] = get_args(Phase)
 _MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
+# The overrides the system dropped at a recompute, each with its reason (``drop_off_route``).
+type _Dropped = Sequence[tuple[OverrideRow, str]]
 # The small counts a sentence writes in words (the register: "three years").
 _SMALL_COUNTS = (
     "zero",
@@ -356,28 +366,35 @@ def add_review_routes(
 
     def recompute(
         conn: sqlite3.Connection, symbol: str, snapshot: SnapshotRow, current: Policy
-    ) -> int | None:
-        """The company's review over its applied overrides on ``snapshot``, written; ``None``
-        with none applied."""
+    ) -> tuple[int | None, _Dropped]:
+        """The company's review over its applied overrides on ``snapshot``, written, once the
+        system has dropped those the row's route does not read (``reviews.drop_off_route``);
+        ``None`` with none left; and the overrides so dropped, each with its reason."""
         applied = applied_overrides(conn, symbol)
-        if not applied:
-            return None
+        dropped = drop_off_route(conn, applied, snapshot.result.phase.phase, snapshot.id, clock)
+        gone = {o.id for o, _ in dropped}
+        kept = [o for o in applied if o.id not in gone]
+        if not kept:
+            return None, dropped
         today = clock().date()
         inputs, deciles = built_inputs(conn, snapshot, current, tax, today)
-        return write_review(
+        review_id = write_review(
             conn,
             inputs,
             snapshot.result,
             snapshot.id,
-            applied,
+            kept,
             deciles,
             current,
             today,
             None,
             clock,
         )
+        return review_id, dropped
 
-    def answer(conn: sqlite3.Connection, override_id: int, reviewed: bool) -> dict[str, Any]:
+    def answer(
+        conn: sqlite3.Connection, override_id: int, reviewed: bool, dropped: _Dropped = ()
+    ) -> dict[str, Any]:
         override = override_row(conn, override_id)
         assert override is not None  # written in this transaction
         review = latest_review(conn, override.symbol) if reviewed else None
@@ -385,6 +402,7 @@ def add_review_routes(
             "override": record_json(override),
             "review": None if review is None else review_json(review),
             "bridge": [] if review is None else bridge_json(review),
+            "dropped": [{"id": o.id, "tag": o.tag, "reason": why} for o, why in dropped],
         }
 
     @app.post("/api/companies/{symbol}/overrides", status_code=201, response_model=None)
@@ -441,10 +459,11 @@ def add_review_routes(
                 drop_override(conn, replaced.id, why, at)
                 summary = f"{body.tag} {why}"
                 _record(conn, writer, at, "override-drop", symbol, replaced.id, snapshot, summary)
-            review_id = recompute(conn, symbol, snapshot, current)
-            assert review_id is not None  # the new override is applied
+            review_id, dropped = recompute(conn, symbol, snapshot, current)
+            # the new override is applied, and stays: it was judged on the route the row takes
+            assert review_id is not None
             set_review(conn, override_id, review_id)
-            return answer(conn, override_id, reviewed=True)
+            return answer(conn, override_id, reviewed=True, dropped=dropped)
 
     @app.delete("/api/overrides/{override_id}")
     def delete_override(override_id: int, body: OverrideDrop, writer: WriterOf) -> dict[str, Any]:
@@ -465,8 +484,8 @@ def add_review_routes(
             drop_override(conn, override_id, body.reason, at)
             summary = f"{found.tag} dropped: {gist(body.reason)}"
             _record(conn, writer, at, "override-drop", found.symbol, override_id, snapshot, summary)
-            review_id = recompute(conn, found.symbol, snapshot, current)
-            return answer(conn, override_id, reviewed=review_id is not None)
+            review_id, dropped = recompute(conn, found.symbol, snapshot, current)
+            return answer(conn, override_id, reviewed=review_id is not None, dropped=dropped)
 
     @app.get("/api/companies/{symbol}/overrides")
     def overrides(symbol: str) -> dict[str, Any]:

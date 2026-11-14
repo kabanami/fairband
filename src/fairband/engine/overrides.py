@@ -333,7 +333,9 @@ LOCKED: dict[str, str] = {
     **{name: f"{name} is reported data" for name in _REPORTED},
 }
 
-_ROUTE_NAMES: dict[Route, str] = {
+# Each route's name in a sentence: the route rule's refusal and the system's drop of an override the
+# row's route does not read (``refresh.reviews.OFF_ROUTE``).
+ROUTE_NAMES: dict[Route, str] = {
     "mature-growth": "Mature Growth",
     "mature-stable": "Mature Stable",
     "revenue-growth": "revenue-growth",
@@ -452,7 +454,7 @@ def check_input(
         return "refused-not-input", f"{tag} is not an input"
     spec = TAGS[tag]
     if route not in spec.routes:
-        return "refused-route", f"the {_ROUTE_NAMES[route]} route does not read {tag}"
+        return "refused-route", f"the {ROUTE_NAMES[route]} route does not read {tag}"
     unit = _unit_refusal(spec, value, policy, fx_rate, currency)
     if unit is not None:
         return "refused-unit", unit

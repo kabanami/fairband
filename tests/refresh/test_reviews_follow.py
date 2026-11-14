@@ -1,9 +1,9 @@
 """A review follows its company's snapshots (spec 2026-11-06 Tier 2, 10.5 and 10.6): every refresh
 that writes a snapshot for a company with an applied override writes a review on it, and a log row
-for it. A revalue, a scoped or a full refresh recomputes it on the new inputs, after dropping a
-period-tied override when a newer period is on file or its input moved (spec 2026-11-13 11a), with
-each override in dollars a share or in shares made before a split on the new basis (spec
-2026-11-14 7); a price refresh reprices it.
+for it. A revalue, a scoped or a full refresh recomputes it on the new inputs, after dropping an
+override the row's route does not read (spec 2026-11-14 8) and a period-tied override when a newer
+period is on file or its input moved (spec 2026-11-13 11a), with each override in dollars a share
+or in shares made before a split on the new basis (spec 2026-11-14 7); a price refresh reprices it.
 
 The refresh tests run on the five companies a full refresh of ``fixture_universe`` valued: ACME,
 AXLE and KRON (in SEK) Mature Growth, MILD Mature Stable, NEWT refused for its target margin.
@@ -20,8 +20,10 @@ import pytest
 from fixture_universe import serve_universe
 from refresh_env import Env
 from support.engine_companies import (
+    decline_inputs,
     high_growth_inputs,
     mature_growth_inputs,
+    mature_stable_inputs,
     on_quarter_sheet,
     quarter,
     universe_deciles,
@@ -31,7 +33,7 @@ from support.payloads import split_rows, store_payloads
 from vendor_double import FIXTURES
 
 from fairband.engine import METHOD_VERSION
-from fairband.engine.overrides import Lifetime, OverrideTag, current_reading
+from fairband.engine.overrides import TAGS, Lifetime, OverrideTag, current_reading
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.types import TaggedInput, ValuationResult
 from fairband.policy import Policy
@@ -51,6 +53,10 @@ CHANGED = "the input the override corrected changed"
 NEWER = "a newer period is on file than the one the override corrected"
 PASSED = "the guided year has passed"
 ON_FILE = "the store holds a trailing stock pay above zero"
+# The route drop's reason, the route named as the write's route rule names it (spec 2026-11-14 8).
+OFF_MATURE_GROWTH = "the Mature Growth route does not read the input"
+OFF_MATURE_STABLE = "the Mature Stable route does not read the input"
+OFF_DECLINE = "the Decline route does not read the input"
 FAILED = "review failed"
 HGCO_TODAY = date(2026, 10, 31)  # the day HGCO is valued
 HGCO_AT = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)  # the time its snapshots and override are made
@@ -237,14 +243,16 @@ def test_a_failed_review_at_a_new_rate_shows_the_repriced_snapshot_s_value(
     assert after.mechanical_value == snapshot.value != before.mechanical_value
 
 
-def test_a_period_tied_override_drops_when_its_line_vanishes(env_valued: Env) -> None:
-    """AXLE's override corrected a cash figure of $100; the revalue's result reads no cash line (a
-    Mature Growth row cites none, as a sheet served without the line does on a route that reads
-    one), so the engine's reading, none, is not the value the override corrected."""
+def test_a_revalue_drops_an_override_the_row_s_route_does_not_read(env_valued: Env) -> None:
+    """Spec 2026-11-14 8: AXLE's override corrected a cash figure of $100 on its Mature Growth row,
+    whose route reads no cash line. The revalue drops it by the system with the route's reason,
+    which runs before the reading test: the engine's reading there, none, is not the value it
+    corrected either."""
     env = env_valued
     cash = _override(env, "AXLE", "balance.cash", 120.0, "period-tied", 100.0)
     refresh_id = env.refresh().run("revalue")
     snapshot = env.snapshot("AXLE")
+    assert current_reading(snapshot.result, "balance.cash") is None
     with closing(env.connect()) as conn:
         dropped = override_row(conn, cash)
         reviews = reviews_for(conn, "AXLE")
@@ -254,7 +262,7 @@ def test_a_period_tied_override_drops_when_its_line_vanishes(env_valued: Env) ->
     assert dropped is not None
     assert (dropped.state, dropped.drop_reason, dropped.dropped_at) == (
         "dropped",
-        CHANGED,
+        OFF_MATURE_GROWTH,
         env.clock(),
     )
     assert (reviews, log) == ([], [])  # no applied override is left
@@ -265,27 +273,29 @@ def test_a_period_tied_override_drops_when_its_line_vanishes(env_valued: Env) ->
         "AXLE",
     )
     assert (entry.ref_table, entry.ref_id, entry.snapshot_id) == ("overrides", cash, snapshot.id)
-    assert entry.summary == f"balance.cash dropped: {CHANGED}"
+    assert entry.summary == f"balance.cash dropped: {OFF_MATURE_GROWTH}"
 
 
 def test_a_period_tied_override_stays_when_the_same_statements_are_fetched_again(
     env_valued: Env,
 ) -> None:
     """A full refresh past the reuse window fetches AXLE's statements again and moves its data
-    date; the statements hold the same periods, so the correction stays applied, and the review
-    sits on the refetched snapshot."""
+    date; the statements hold the same periods and the same diluted count, so the correction of
+    the count stays applied, and the review sits on the refetched snapshot."""
     env = env_valued
-    cash = _override(env, "AXLE", "balance.cash", 120.0, "period-tied", None)
     made_on = env.snapshot("AXLE")
+    count = current_reading(made_on.result, "shares.diluted")
+    assert isinstance(count, float)
+    shares = _override(env, "AXLE", "shares.diluted", count * 1.1, "period-tied", count)
     env.clock.now += timedelta(days=2)
     env.refresh().run("full")
     refetched = env.snapshot("AXLE")
     assert refetched.data_date > made_on.data_date and refetched.id != made_on.id
     with closing(env.connect()) as conn:
-        kept = override_row(conn, cash)
+        kept = override_row(conn, shares)
         review = latest_review(conn, "AXLE")
     assert kept is not None and kept.state == "applied"
-    assert review is not None and review.override_ids == (cash,)
+    assert review is not None and review.override_ids == (shares,)
     assert review.snapshot_id == refetched.id
 
 
@@ -949,7 +959,7 @@ def _made_on_mgco(
     conn: sqlite3.Connection,
     snapshot_id: int,
     tag: OverrideTag,
-    new: float,
+    new: float | str,
     unit: str,
     lifetime: Lifetime = "lasting",
 ) -> int:
@@ -1356,6 +1366,163 @@ def test_a_lasting_ntm_override_drops_when_its_guided_year_passes(
         anchor,
     )
     assert entry.summary == f"earnings.ntm dropped: {PASSED}"
+
+
+# An override the route no longer reads (spec 2026-11-14 8): MGCO's overrides are made on its
+# Mature Growth snapshot, and its next snapshot is valued on another company's figures where its
+# phase moves. The routes each tag is read by are ``TAGS``'.
+
+
+def _as_mgco(inputs: CompanyInputs) -> CompanyInputs:
+    """``inputs`` as MGCO's, dated as assembly dates them."""
+    return _as_live(replace(inputs, symbol="MGCO"))
+
+
+def _route_snapshot(conn: sqlite3.Connection, policy: Policy, inputs: CompanyInputs) -> int:
+    """MGCO's snapshot valued on ``inputs``, written by a revalue: its id."""
+    result = value_company(inputs, universe_deciles(), policy, HGCO_TODAY)
+    return insert_snapshot(conn, result, _under(conn, policy, "revalue"), clock=lambda: HGCO_AT)
+
+
+def _follow_inputs(conn: sqlite3.Connection, policy: Policy, inputs: CompanyInputs) -> int | None:
+    """MGCO's next snapshot, valued on ``inputs``, written by a revalue and followed: the review's
+    id, ``None`` with no override left."""
+    deciles = universe_deciles()
+    result = value_company(inputs, deciles, policy, HGCO_TODAY)
+    refresh_id = _under(conn, policy, "revalue")
+    snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: HGCO_AT)
+    return follow_snapshot(
+        conn, inputs, result, snapshot_id, deciles, policy, HGCO_TODAY, refresh_id, lambda: HGCO_AT
+    )
+
+
+def test_an_override_the_new_route_does_not_read_drops_with_the_route_s_reason(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """MGCO, on the Mature Growth route, carries a lasting runway return, a lasting belief and a
+    lasting moat class, none of which the Decline route reads, and a lasting value outside the
+    business of $1.00, which it reads. Its next snapshot classifies as Decline: the three drop by
+    the system, "the Decline route does not read the input", each with its ledger row on the new
+    snapshot, and the review there holds the outside value alone, the Decline value of $4.9533 a
+    share (spec 13.1's row) plus $1.00."""
+    made_on = _route_snapshot(conn, policy, _as_mgco(mature_growth_inputs()))
+    stale = {
+        tag: _made_on_mgco(conn, made_on, tag, new, unit)
+        for tag, new, unit in (
+            ("return.runway", 0.15, "ratio"),
+            ("growth.belief", 0.08, "ratio"),
+            ("moat.class", "Narrow", "class"),
+        )
+    }
+    outside = _made_on_mgco(conn, made_on, "value.outside", 1.0, "USD a share")
+    read = [tag for tag in (*stale, "value.outside") if "decline" in TAGS[tag].routes]
+    assert read == ["value.outside"]
+    review_id = _follow_inputs(conn, policy, _as_mgco(decline_inputs()))
+    review = latest_review(conn, "MGCO")
+    assert review is not None and (review.id, review.override_ids) == (review_id, (outside,))
+    assert review.result.phase.phase == "Decline"
+    assert review.mechanical_value == pytest.approx(4.9533, abs=5e-5)
+    assert review.value == pytest.approx(review.mechanical_value + 1.0)
+    for override_id in stale.values():
+        dropped = override_row(conn, override_id)
+        assert dropped is not None
+        assert (dropped.state, dropped.drop_reason) == ("dropped", OFF_DECLINE)
+    found = [
+        (e.principal, e.kind, e.ref_id, e.snapshot_id, e.summary) for e in entries(conn, "MGCO")
+    ]
+    assert found == [
+        (SYSTEM.principal, "override-drop", i, review.snapshot_id, f"{tag} dropped: {OFF_DECLINE}")
+        for tag, i in reversed(stale.items())
+    ]  # newest first
+
+
+def test_a_period_tied_override_on_another_route_drops_with_the_route_s_reason(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """A period-tied ``earnings.sbc`` corrects MGCO's stored $400 m. Its next snapshot, of the same
+    trailing period, classifies as Mature Stable, whose route reads no stock pay: the engine's
+    reading there is none, so the reading test would drop it as "the input the override corrected
+    changed", but the route's test runs first and gives the true reason."""
+    inputs = _as_mgco(mature_growth_inputs())
+    made_on = _route_snapshot(conn, policy, inputs)
+    pay = _made_on_mgco(conn, made_on, "earnings.sbc", 500e6, "USD", "period-tied")
+    held = override_row(conn, pay)
+    assert held is not None and held.corrected_value == 400e6
+    stable = _as_mgco(mature_stable_inputs())
+    assert stable.trailing is not None and inputs.trailing is not None
+    assert stable.trailing.period_end == inputs.trailing.period_end  # no newer period
+    result = value_company(stable, universe_deciles(), policy, HGCO_TODAY)
+    assert result.phase.phase == "Mature Stable"
+    assert current_reading(result, "earnings.sbc") is None
+    assert _follow_inputs(conn, policy, stable) is None
+    dropped = override_row(conn, pay)
+    assert dropped is not None
+    assert (dropped.state, dropped.drop_reason) == ("dropped", OFF_MATURE_STABLE)
+    [entry] = entries(conn, "MGCO")
+    assert entry.summary == f"earnings.sbc dropped: {OFF_MATURE_STABLE}"
+
+
+def test_a_phase_override_dropped_at_a_follow_takes_what_only_its_route_read(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """The Review Focus case. MGCO, Mature Growth, carries a period-tied phase override of High
+    Growth, a lasting target margin of 25%, which the revenue-growth route reads and the Mature
+    Growth route does not, and a lasting value outside the business of $1.00, which both read. On
+    a snapshot of the same period the phase override stands, and the other two on its route. A
+    quarter on, the phase override drops, "a newer period is on file", the row's route is its
+    mechanical phase's again, and the target margin drops at the same follow with that route's
+    reason; the review holds the outside value, the Mature Growth value plus $1.00."""
+    inputs = _as_mgco(mature_growth_inputs())
+    made_on = _route_snapshot(conn, policy, inputs)
+    phase = _made_on_mgco(conn, made_on, "phase", "High Growth", "phase", "period-tied")
+    target = _made_on_mgco(conn, made_on, "margin.target", 0.25, "ratio")
+    outside = _made_on_mgco(conn, made_on, "value.outside", 1.0, "USD a share")
+    held = override_row(conn, phase)
+    assert held is not None and held.corrected_value == "Mature Growth"
+    assert _follow_inputs(conn, policy, inputs) is not None
+    review = latest_review(conn, "MGCO")
+    assert review is not None and review.override_ids == (phase, target, outside)
+    assert review.result.phase.phase == "High Growth"
+    assert _follow_inputs(conn, policy, _a_quarter_on(inputs)) is not None
+    review = latest_review(conn, "MGCO")
+    assert review is not None and review.override_ids == (outside,)
+    assert review.result.phase.phase == "Mature Growth"
+    assert review.mechanical_value is not None
+    assert review.value == pytest.approx(review.mechanical_value + 1.0)
+    rows = [override_row(conn, i) for i in (phase, target)]
+    assert [(r.state, r.drop_reason) for r in rows if r is not None] == [
+        ("dropped", NEWER),
+        ("dropped", OFF_MATURE_GROWTH),
+    ]
+    assert [(e.ref_id, e.summary) for e in entries(conn, "MGCO")] == [
+        (target, f"margin.target dropped: {OFF_MATURE_GROWTH}"),
+        (phase, f"phase dropped: {NEWER}"),
+    ]  # newest first
+
+
+def test_an_unclassified_row_has_no_route_and_keeps_every_override(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """A row unclassified for one refresh must not lose its review's inputs. MGCO carries a lasting
+    belief, which its Mature Growth route reads, a lasting target margin, which it does not, and a
+    lasting moat class; its next snapshot holds one fiscal year, too few to classify. No route
+    reads anything there, and every override stays applied, with no ledger row: the review is
+    the snapshot's refusal over all three."""
+    inputs = _as_mgco(mature_growth_inputs())
+    made_on = _route_snapshot(conn, policy, inputs)
+    belief = _made_on_mgco(conn, made_on, "growth.belief", 0.08, "ratio")
+    target = _made_on_mgco(conn, made_on, "margin.target", 0.25, "ratio")
+    moat = _made_on_mgco(conn, made_on, "moat.class", "Narrow", "class")
+    unclassified = replace(inputs, series=inputs.series[-1:])
+    result = value_company(unclassified, universe_deciles(), policy, HGCO_TODAY)
+    assert (result.phase.phase, result.refusal) == (None, "fewer than two fiscal years")
+    assert _follow_inputs(conn, policy, unclassified) is not None
+    review = latest_review(conn, "MGCO")
+    assert review is not None and review.override_ids == (belief, target, moat)
+    assert (review.value, review.refusal) == (None, "fewer than two fiscal years")
+    rows = [override_row(conn, i) for i in (belief, target, moat)]
+    assert [r.state for r in rows if r is not None] == ["applied"] * 3
+    assert entries(conn, "MGCO") == []
 
 
 def test_a_failed_company_s_review_is_its_refusal_and_reprices_as_one(env_valued: Env) -> None:
