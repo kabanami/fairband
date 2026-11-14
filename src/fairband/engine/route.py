@@ -96,7 +96,7 @@ each as the runway return; then "ten-year", the ten-year aggregate ROIC as the r
 business's own values, before any value outside the business is added.
 
 - Mature Growth: ``anchor`` (ntm_eps_raw, sbc_adjustment_per_share, ntm_eps, source, periods_sum,
-  annual: each fiscal year with its weight, eps and analysts, or ``None``), ``sbc_basis``,
+  annual: fiscal_year, eps, analysts, year_sum, share and correction, or ``None``), ``sbc_basis``,
   ``ntm_net_income``, ``path`` (base_year, on_eps, analysts), ``path_steps``, ``belief`` (rate,
   sales_class, median), ``moat``, ``runway``, ``fade_years``, ``growth_rates`` (years 2 to the
   runway), ``roic`` (aggregate, years, by_year, each kept year with its

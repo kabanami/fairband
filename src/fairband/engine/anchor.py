@@ -17,12 +17,15 @@ unknown; the consensus then stands as it is and is flagged. An agent's trailing 
 for the stored one, in the test and the adjustment, and an agent's basis for the test (spec
 2026-11-13 7.2).
 
-On a thin window, where a period has fewer than ``analyst_min`` EPS analysts or no count, year 1
-reads the annual consensus in place of the periods' sum when every fiscal year the periods carry
-has an annual EPS estimate on ``analyst_min`` EPS analysts or more: each year's annual EPS mean
-weighted by its count of the window's periods over the periods in a year (``annual_ntm``, spec
-2026-11-13 9a). The basis test, the adjustment and every refusal read the figure so found.
-``thin-ntm`` notes a thin window whose year 1 is still the periods' sum.
+On a thin window (spec 2026-11-13 9a, as amended), where a period of F, the last fiscal year the
+window reaches, has fewer than ``analyst_min`` EPS analysts or no count, year 1 is the periods'
+sum plus the window's share of F's periods times the gap between F's annual EPS mean and the
+sum of the EPS means of F's periods (``annual_gap``): the annual consensus sets F's level, the
+periods' consensus the split inside it. That needs F's annual estimate on ``analyst_min`` EPS
+analysts or more and every period of F estimated in the periods' consensus. The fiscal year
+partly reported, before F, is never corrected and its annual estimate never read. The
+adjustment and every refusal read the figure so found. ``thin-ntm`` notes a thin period left as
+it is.
 
 Years 2 and 3 are the next two steps of the annual consensus from the base year, the fiscal year
 that holds most of the window's periods (a tie takes the later). The steps read net income when
@@ -161,14 +164,21 @@ class StockPayHistory:
 
 
 @dataclass(frozen=True)
-class AnnualShare:
-    """One fiscal year of year 1's annual figure (spec 2026-11-13 9a): its share of the NTM
-    window's periods, its annual EPS mean and its EPS analyst count."""
+class AnnualGap:
+    """The correction of year 1 by the annual consensus of F, the last fiscal year the NTM window
+    reaches (spec 2026-11-13 9a): F's annual EPS mean and analyst count, the sum of the EPS means
+    of F's periods, and the window's periods in F over the periods in a year."""
 
     fiscal_year: int
-    weight: float
     eps: float
     analysts: int
+    year_sum: float
+    share: float
+
+    @property
+    def correction(self) -> float:
+        """What the rule adds to the sum of the window's EPS means."""
+        return (self.eps - self.year_sum) * self.share
 
 
 @dataclass(frozen=True)
@@ -180,8 +190,9 @@ class Anchor:
     EPS the basis test reads, less an agent's correction to the non-recurring gap; both ``None``
     where the trailing figures hold none. ``source`` says what the consensus figure
     ``ntm_eps_raw`` read (spec 2026-11-13 9a): ``periods``, the sum of the window's EPS means, or
-    ``annual``, the annual consensus weighted by the window's periods, each year in ``annual``;
-    ``periods_sum`` is the sum of the window's EPS means on either source, 0 under the refusal."""
+    ``annual``, that sum corrected by the annual consensus of the last fiscal year the window
+    reaches, the correction in ``annual``; ``periods_sum`` is the sum of the window's EPS means on
+    either source, 0 under the refusal."""
 
     ntm_eps_raw: float
     sbc_adjustment_per_share: float
@@ -194,7 +205,7 @@ class Anchor:
     gaap_ttm_eps: float | None
     source: Literal["periods", "annual"] = "periods"
     periods_sum: float = 0.0
-    annual: tuple[AnnualShare, ...] = ()
+    annual: AnnualGap | None = None
 
     @property
     def ntm_eps_found(self) -> float:
@@ -334,6 +345,7 @@ def ntm_anchor(
     sbc_override: float | None = None,
     basis_override: Literal["includes", "excludes"] | None = None,
     annual: Sequence[AnnualEstimate] = (),
+    estimates: Sequence[QuarterEstimate] = (),
 ) -> Anchor:
     """The NTM EPS with stock compensation as a cost and the NTM net income on ``shares``, on the
     window's ``periods``: ``PERIODS_PER_YEAR[cadence]`` of them, the window's cadence, each with
@@ -351,10 +363,11 @@ def ntm_anchor(
     the consensus as found, a check on the vendor's units (on a positive figure: a trough lifted
     by a negative gap has no forward P/E to check), the raw sum and the adjustment are the
     consensus's, and the basis test reads neither of those two overrides. The raw figure is the
-    sum of the periods' EPS means, or, where a period is thin and the ``annual`` consensus stands
-    in (``annual_ntm``, spec 2026-11-13 9a), each fiscal year's annual EPS mean times its weight,
-    summed; the adjustment, the overrides and the refusals read the figure so found, and the
-    revenue scale the window's revenue as before."""
+    sum of the periods' EPS means, or, where a period in F, the last fiscal year the window
+    reaches, is thin, that sum corrected by F's ``annual`` consensus against F's periods among
+    ``estimates``, every period of the periods' consensus on file (``annual_gap``, spec
+    2026-11-13 9a); the adjustment, the overrides and the refusals read the figure so found, and
+    the revenue scale the window's revenue as before."""
     sbc = trailing.sbc if sbc_override is None else sbc_override
     sbc_per_share = None if sbc is None else sbc * (1 - tax_rate) / shares
     gaap = trailing.eps_diluted
@@ -371,8 +384,8 @@ def ntm_anchor(
     if len(periods) != count or len(eps) != count:
         return Anchor(0.0, 0.0, 0.0, 0.0, basis, flags, "incomplete NTM consensus", sbc, gaap)
     periods_sum = sum(eps)
-    years = annual_ntm(periods, annual, cadence, policy)
-    raw = periods_sum if years is None else sum(x.weight * x.eps for x in years)
+    gap = annual_gap(periods, estimates, annual, policy)
+    raw = periods_sum if gap is None else periods_sum + gap.correction
     adjustment = 0.0
     if basis == "excludes-sbc" and sbc_per_share is not None:
         adjustment = sbc_per_share * _revenue_scale(periods, trailing.revenue)
@@ -395,31 +408,32 @@ def ntm_anchor(
         refusal,
         sbc,
         gaap,
-        source="periods" if years is None else "annual",
+        source="periods" if gap is None else "annual",
         periods_sum=periods_sum,
-        annual=years or (),
+        annual=gap,
     )
 
 
-def annual_ntm(
+def annual_gap(
     periods: Sequence[QuarterEstimate],
+    estimates: Sequence[QuarterEstimate],
     annual: Sequence[AnnualEstimate],
-    cadence: Cadence,
     policy: Policy,
-) -> tuple[AnnualShare, ...] | None:
-    """Year 1's annual figure (spec 2026-11-13 9a): where a period of the NTM window ``periods``
-    is thin (``_thin_periods``) and the annual figure exists (``_annual_years``), each fiscal year
-    the periods carry, in order, weighted by its count of the periods over
-    ``PERIODS_PER_YEAR[cadence]``; ``None`` otherwise, where year 1 is the sum of the periods.
-    A period's fiscal year and an annual row's are the labels the path matches by."""
-    if not _thin_periods(periods, policy):
+) -> AnnualGap | None:
+    """Year 1's correction by the annual consensus (spec 2026-11-13 9a): ``periods`` is the NTM
+    window, as many as a year holds, and ``estimates`` every period of the periods' consensus on
+    file. F is the last fiscal year among ``periods``. Where a period of the window in F is thin
+    (``_thin_periods``) and the annual figure of F exists (``_gap_of``), F's gap; ``None``
+    otherwise, where year 1 is the sum of the periods. The fiscal year before F, partly reported,
+    is never corrected. A period's fiscal year and an annual row's are the labels the path
+    matches by."""
+    if not periods:
         return None
-    years = _annual_years(periods, annual, policy)
-    if isinstance(years, str):
+    last = max(p.fiscal_year for p in periods)
+    if not any(p.fiscal_year == last for p in _thin_periods(periods, policy)):
         return None
-    counts = Counter(p.fiscal_year for p in periods)
-    per_year = PERIODS_PER_YEAR[cadence]
-    return tuple(AnnualShare(year, counts[year] / per_year, eps, n) for year, eps, n in years)
+    gap = _gap_of(last, periods, estimates, annual, policy)
+    return gap if isinstance(gap, AnnualGap) else None
 
 
 def _thin_periods(periods: Sequence[QuarterEstimate], policy: Policy) -> list[QuarterEstimate]:
@@ -427,31 +441,35 @@ def _thin_periods(periods: Sequence[QuarterEstimate], policy: Policy) -> list[Qu
     return [p for p in periods if p.analysts is None or p.analysts < policy.analyst_min]
 
 
-def _annual_years(
-    periods: Sequence[QuarterEstimate], annual: Sequence[AnnualEstimate], policy: Policy
-) -> list[tuple[int, float, int]] | str:
-    """Each fiscal year the window's ``periods`` carry, in order, with its annual EPS mean and its
-    EPS analyst count, where every one has an annual EPS estimate (``consensus_value``: a mean
-    of zero whose count is missing or zero is none) on ``analyst_min`` EPS analysts or more: the
-    annual figure exists. Otherwise why it does not, for the first year in order that fails:
-    "fiscal 2026 has no annual EPS estimate", "the annual consensus of fiscal 2026 has no analyst
-    count" or "... has 4 EPS analysts"."""
-    by_year = {x.fiscal_year: x for x in annual}
-    years: list[tuple[int, float, int]] = []
-    for year in sorted({p.fiscal_year for p in periods}):
-        row = by_year.get(year)
-        eps = None if row is None else consensus_value(row.eps, row.analysts_eps)
-        if row is None or eps is None:
-            return f"fiscal {year} has no annual EPS estimate"
-        n = row.analysts_eps
-        if n is None:
-            return f"the annual consensus of fiscal {year} has no analyst count"
-        if n < policy.analyst_min:
-            return (
-                f"the annual consensus of fiscal {year} has {n} EPS analyst{'' if n == 1 else 's'}"
-            )
-        years.append((year, eps, n))
-    return years
+def _gap_of(
+    year: int,
+    periods: Sequence[QuarterEstimate],
+    estimates: Sequence[QuarterEstimate],
+    annual: Sequence[AnnualEstimate],
+    policy: Policy,
+) -> AnnualGap | str:
+    """F's gap, ``year`` being F, where the annual figure of F exists: F's annual row has an EPS
+    estimate (``consensus_value``: a mean of zero whose count is missing or zero is none) on
+    ``analyst_min`` EPS analysts or more, and ``estimates`` hold as many periods of F as the
+    window ``periods`` holds, each with an estimate by the same test. Otherwise why it does not,
+    the first that holds: "fiscal 2027 has no annual EPS estimate", "the annual consensus of
+    fiscal 2027 has no analyst count", "... has 4 EPS analysts", "not every period of fiscal 2027
+    has an estimate"."""
+    row = {x.fiscal_year: x for x in annual}.get(year)
+    eps = None if row is None else consensus_value(row.eps, row.analysts_eps)
+    if row is None or eps is None:
+        return f"fiscal {year} has no annual EPS estimate"
+    n = row.analysts_eps
+    if n is None:
+        return f"the annual consensus of fiscal {year} has no analyst count"
+    if n < policy.analyst_min:
+        return f"the annual consensus of fiscal {year} has {n} EPS analyst{'' if n == 1 else 's'}"
+    own = [x for x in estimates if x.fiscal_year == year]
+    means = [m for x in own if (m := consensus_value(x.eps, x.analysts)) is not None]
+    if len(own) != len(periods) or len(means) != len(own):
+        return f"not every period of fiscal {year} has an estimate"
+    in_window = sum(1 for p in periods if p.fiscal_year == year)
+    return AnnualGap(year, eps, n, sum(means), in_window / len(periods))
 
 
 def base_fiscal_year(periods: Sequence[QuarterEstimate]) -> int:
@@ -523,25 +541,34 @@ def few_analysts(
 
 
 def thin_ntm_flag(
-    periods: Sequence[QuarterEstimate], annual: Sequence[AnnualEstimate], policy: Policy
+    periods: Sequence[QuarterEstimate],
+    estimates: Sequence[QuarterEstimate],
+    annual: Sequence[AnnualEstimate],
+    policy: Policy,
 ) -> Flag | None:
     """``thin-ntm`` (spec 2026-11-13 9 and 9a) when a period of the NTM window ``periods``, the
-    ones the anchor sums, has fewer than ``analyst_min`` EPS analysts or no count, and the
-    ``annual`` consensus cannot stand in for them (``annual_ntm``), so year 1 is still their sum:
-    the sentence gives how many of the window's periods are thin, and the thinnest with its
-    period end, a missing count being the thinnest and of two equal counts the earlier period
-    named, then the first fiscal year, in order, that keeps the annual figure out. A note: it
-    moves no value."""
+    ones the anchor sums, has fewer than ``analyst_min`` EPS analysts or no count and is left as
+    it is: one before F, the last fiscal year the window reaches, which nothing corrects, or one
+    in F where the ``annual`` consensus does not correct year 1 (``annual_gap``). The sentence
+    gives how many of the window's periods are left thin, and the thinnest of them with its period
+    end, a missing count being the thinnest and of two equal counts the earlier period named,
+    then why its fiscal year takes no correction. A note: it moves no value."""
     thin = _thin_periods(periods, policy)
     if not thin:
         return None
-    why = _annual_years(periods, annual, policy)
-    if not isinstance(why, str):
+    last = max(p.fiscal_year for p in periods)
+    gap = _gap_of(last, periods, estimates, annual, policy)
+    thin = [p for p in thin if p.fiscal_year < last or not isinstance(gap, AnnualGap)]
+    if not thin:
         return None
     least = min(thin, key=lambda p: (-1 if p.analysts is None else p.analysts, p.period_end))
     n = least.analysts
     count = "no count" if n is None else f"{n} analyst{'' if n == 1 else 's'}"
     has = "has" if len(thin) == 1 else "have"
+    if least.fiscal_year == last and isinstance(gap, str):
+        why = gap
+    else:
+        why = f"fiscal {least.fiscal_year} is partly reported and takes no annual correction"
     return Flag(
         "thin-ntm",
         "Thin NTM consensus",

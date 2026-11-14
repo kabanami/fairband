@@ -143,6 +143,13 @@ MGCO, 47.20 SEK on FXCO) and the DATA entries still cite the quarterly consensus
 figure of either golden moves; the five goldens on other routes carry no `anchor` entry and are
 untouched.
 
+MGCO and FXCO re-captured under 1.4 on 2026-11-14 for the anchor rule's second form (spec
+2026-11-13 9a, as amended): on the annual source `annual` is now one record, the correction by
+the annual consensus of the last fiscal year the window reaches (`fiscal_year`, `eps`,
+`analysts`, `year_sum`, `share`, `correction`), in place of a list of fiscal years with their
+weights. Neither fixture's window is thin, so `annual` stays null and both files are unchanged
+byte for byte.
+
 Run from the repository root:
 
 ```

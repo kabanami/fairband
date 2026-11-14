@@ -347,29 +347,35 @@ def test_the_page_names_the_half_year_window() -> None:
 
 
 def test_the_page_states_the_anchor_on_a_thin_window() -> None:
-    """Spec 2026-11-13 9a: the Mature Growth steps say a quarter or half-year with too few
-    analysts sends year 1 to the consensus for its fiscal years, each by its share, where each
-    of those years has enough analysts; the route's flags and the ``thin-ntm`` entry say the note
-    shows only where that consensus cannot take its place."""
+    """Spec 2026-11-13 9a, as amended: the Mature Growth steps say a quarter or half-year with too
+    few analysts in the last fiscal year year 1 reaches takes that year's level from its yearly
+    consensus, year 1 keeping its quarters' estimates plus its share of the gap, where the year's
+    consensus has enough analysts and each of its quarters an estimate; a year under way is never
+    corrected. The route's flags and the ``thin-ntm`` entry say the note shows where nothing
+    corrects a thin period, and why."""
     flat = re.sub(r"\s+", " ", _static_file("methodology.html"))
     mature = _section(flat, "mature-growth")
     steps = mature[mature.index(">The steps</h3>") :]
     steps = steps[: steps.index("</ol>")]
     analysts = '<span data-policy="analyst_min">—</span>'
     for words in (
-        f"Where one of those quarters or half-years has fewer than {analysts} analysts",
-        "year 1 reads the consensus for their fiscal years instead",
-        "Each year counts by its share of the quarters or half-years",
-        f"This holds only where each of those years has {analysts} analysts or more",
+        f"A quarter or half-year may have fewer than {analysts} analysts",
+        "When it falls in the last fiscal year that year 1 reaches",
+        "the consensus for that whole year sets the year's level",
+        "plus its share of the gap between that year's consensus and the sum of the year's",
+        f"This needs {analysts} analysts or more on the year's consensus",
+        "A fiscal year already under way is never corrected",
     ):
         assert words in steps, words
     route_flags = mature[mature.index(">Flags on this route</h3>") :]
-    assert "where the consensus for its fiscal years cannot take its place" in route_flags
+    assert "that the consensus for its fiscal year does not correct" in route_flags
     flags = _section(flat, "flags")
     thin = flags[flags.index(">thin-ntm</code>") :]
     thin = thin[: thin.index("</li>")]
-    assert "The consensus for their fiscal years cannot take their place" in thin
-    assert f"has fewer than {analysts} analysts, no count or no estimate" in thin
+    assert "The consensus for its fiscal year does not correct it" in thin
+    assert "That year is already under way" in thin
+    assert f"has fewer than {analysts} analysts, or one of its quarters has no estimate" in thin
+    assert "cannot take their place" not in thin  # the first form's words
 
 
 def test_the_agents_section_reads(client: TestClient) -> None:

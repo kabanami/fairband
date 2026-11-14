@@ -4,14 +4,14 @@
 ``trailing_end`` as its ISO date, as ``fx_date`` reads; ``sbc_ttm`` as a total in the row's
 currency at any size, nil included, as ``ntm_net_income`` reads; and from plan 2 (12, 13 and 9a)
 ``minority_interest`` as a total, ``balance_sheet``'s period, and the anchor's sum of the
-window's periods and each annual year's EPS a share, its fiscal years whole. Each label is the
-intermediate's key, as every other label of the section is. In the route sections (15): the
-minority interest beside debt and cash on the revenue-growth bridge, the Decline floor and
+window's periods and its annual correction's figures a share, its fiscal year whole. Each label
+is the intermediate's key, as every other label of the section is. In the route sections (15):
+the minority interest beside debt and cash on the revenue-growth bridge, the Decline floor and
 distress and the Start-up requirement and cash floor, only above zero, the words beside it
 naming it; the balance sheet's period under those rows; and on Mature Growth the line that says
-year 1 is read from the annual consensus. No route section prints a raw key or tag. The page's
-own script runs in node after the bundle (``page.mjs``), and the tests read what
-``intermediates`` and the route sections return."""
+year 1 is corrected by the annual consensus, and by how much. No route section prints a raw key
+or tag. The page's own script runs in node after the bundle (``page.mjs``), and the tests read
+what ``intermediates`` and the route sections return."""
 
 import json
 import re
@@ -130,12 +130,17 @@ NO_MINORITY: list[tuple[tuple[str, ...], dict[str, Any]]] = [
     (("minority_interest",), {}),  # a result stored before method 1.4
 ]
 
-# Year 1 from the annual consensus (spec 9a): a calendar company whose last reported quarter is the
-# third reads a quarter of fiscal 2026 and three quarters of fiscal 2027.
-ANNUAL = [
-    {"analysts": 12, "eps": 1.40, "fiscal_year": 2026, "weight": 0.25},
-    {"analysts": 14, "eps": 6.20, "fiscal_year": 2027, "weight": 0.75},
-]
+# Year 1 corrected by the annual consensus of fiscal 2027 (spec 9a, as amended): its annual EPS
+# of 6.00 against its four quarters' 6.16, three of them in the window, −0.12 a share.
+GAP = {
+    "analysts": 12,
+    "correction": -0.12,
+    "eps": 6.0,
+    "fiscal_year": 2027,
+    "share": 0.75,
+    "year_sum": 6.16,
+}
+CORRECTED = "Year 1 from the periods, corrected by the annual consensus of fiscal 2027: "
 
 
 def _result(symbol: str, drop: tuple[str, ...] = (), **entries: Any) -> dict[str, Any]:
@@ -146,18 +151,18 @@ def _result(symbol: str, drop: tuple[str, ...] = (), **entries: Any) -> dict[str
     return result
 
 
-def _annual_anchor(shares: list[dict[str, Any]] | None, raw: float) -> dict[str, Any]:
-    """MGCO's anchor read from the annual consensus, ``shares`` its fiscal years and ``raw`` the
-    figure they weigh to; with no ``shares``, read from the window's periods. Either way the
-    window's periods sum to MGCO's 5.90. Built by hand, so the drawer's tests stand with or
-    without the engine's annual source (spec 9a)."""
+def _annual_anchor(gap: dict[str, Any] | None, raw: float) -> dict[str, Any]:
+    """MGCO's anchor, the window's periods summing to its 5.90, corrected by ``gap``, the annual
+    consensus of the last fiscal year the window reaches, to ``raw``; with no ``gap``, the
+    periods' sum. Built by hand, so the drawer's tests stand with or without the engine's annual
+    source (spec 9a)."""
     return {
-        "annual": shares,
+        "annual": gap,
         "ntm_eps": raw,
         "ntm_eps_raw": raw,
         "periods_sum": 5.9,
         "sbc_adjustment_per_share": 0.0,
-        "source": "periods" if shares is None else "annual",
+        "source": "periods" if gap is None else "annual",
     }
 
 
@@ -351,50 +356,48 @@ def test_a_start_up_without_a_balance_sheet_has_no_caption(
     assert not [t for t in texts if t.startswith("Balance sheet")]
 
 
-def test_the_annual_anchor_prints_its_years_whole_and_its_eps_a_share() -> None:
-    """The anchor's sum of the window's periods and each annual year's EPS are figures a share, as
-    ``ntm_eps`` beside them; each fiscal year a whole year, not "2,026.00"; each year's analysts a
-    count. Year 1 reads 1.40 × 1/4 + 6.20 × 3/4 = 0.35 + 4.65 = 5.00; the window's periods sum to
-    5.90."""
-    texts = _shown(_result("MGCO", anchor=_annual_anchor(ANNUAL, 5.0))["intermediates"])
-    assert _after(texts, "ntm_eps") == "$5.00"
+def test_the_annual_correction_prints_its_year_whole_and_its_figures_a_share() -> None:
+    """The anchor's sum of the window's periods and the correction's EPS figures are figures a
+    share, as ``ntm_eps`` beside them: fiscal 2027's annual EPS, its quarters' sum and the
+    correction, 5.90 − 0.12 = 5.78; the fiscal year a whole year, not "2,027"; the analysts a
+    count; the window's share of the year a plain number."""
+    texts = _shown(_result("MGCO", anchor=_annual_anchor(GAP, 5.78))["intermediates"])
+    assert _after(texts, "ntm_eps") == "$5.78"
     assert _after(texts, "periods_sum") == "$5.90"
-    years = [t for t in texts if "fiscal_year" in t]
-    assert len(years) == 2, years
-    assert "fiscal_year 2026" in years[0] and "eps $1.40" in years[0], years[0]
-    assert "analysts 12" in years[0] and "weight 0.25" in years[0], years[0]
-    assert "fiscal_year 2027" in years[1] and "eps $6.20" in years[1], years[1]
-    assert not [t for t in texts if "2,026" in t or "2,027" in t]
-    # on the window's periods: the sum a share, no annual years
+    assert _after(texts, "annual.fiscal_year") == "2027"
+    assert _after(texts, "annual.analysts") == "12"
+    assert _after(texts, "annual.eps") == "$6.00"
+    assert _after(texts, "annual.year_sum") == "$6.16"
+    assert _after(texts, "annual.correction") == "−$0.12"
+    assert _after(texts, "annual.share") == "0.75"
+    assert not [t for t in texts if "2,027" in t]
+    whole = _result("MGCO", anchor=_annual_anchor(GAP | {"share": 1.0}, 5.78))
+    assert _after(_shown(whole["intermediates"]), "annual.share") == "1"
+    # on the window's periods: the sum a share, no correction
     periods = _shown(_result("MGCO", anchor=_annual_anchor(None, 5.9))["intermediates"])
     assert _after(periods, "periods_sum") == "$5.90"
     assert _after(periods, "annual") == "—"
+    # a row in another currency: each figure a share in it
+    sek = _shown(_result("FXCO", anchor=_annual_anchor(GAP, 5.78))["intermediates"])
+    assert _after(sek, "annual.correction") == "−SEK 0.12"
 
 
 @pytest.mark.parametrize(
-    ("shares", "line"),
+    ("symbol", "correction", "line"),
     [
-        (ANNUAL, "Year 1 from the annual consensus: fiscal 2026 × 1/4 + fiscal 2027 × 3/4."),
-        (
-            [
-                {"analysts": 9, "eps": 2.0, "fiscal_year": 2026, "weight": 0.5},
-                {"analysts": 8, "eps": 3.0, "fiscal_year": 2027, "weight": 0.5},
-            ],
-            "Year 1 from the annual consensus: fiscal 2026 × 1/2 + fiscal 2027 × 1/2.",
-        ),
-        (
-            [{"analysts": 9, "eps": 6.0, "fiscal_year": 2027, "weight": 1.0}],
-            "Year 1 from the annual consensus: fiscal 2027.",
-        ),
+        ("MGCO", -0.10, f"{CORRECTED}−$0.10 a share."),
+        ("MGCO", 0.12, f"{CORRECTED}+$0.12 a share."),
+        ("FXCO", 0.12, f"{CORRECTED}+SEK 0.12 a share."),  # in the row's currency
     ],
 )
-def test_a_mature_growth_row_on_the_annual_consensus_says_so(
-    shares: list[dict[str, Any]], line: str
+def test_a_mature_growth_row_corrected_by_the_annual_consensus_says_so(
+    symbol: str, correction: float, line: str
 ) -> None:
-    """Spec 9a: on a thin window year 1 is the annual consensus weighted by the window's periods,
-    and the Mature Growth section says which years and their weights, as reduced fractions, a
-    whole year alone; above the Charge group."""
-    texts = _section("matureRoute", _result("MGCO", anchor=_annual_anchor(shares, 5.0)))
+    """Spec 9a, as amended: on a thin window year 1 is the periods' sum corrected by the annual
+    consensus of the last fiscal year the window reaches, and the Mature Growth section says by
+    how much a share, the sign shown, in the row's currency; above the Charge group."""
+    gap = GAP | {"correction": correction}
+    texts = _section("matureRoute", _result(symbol, anchor=_annual_anchor(gap, 5.9 + correction)))
     _in_order(texts, "Mature growth route", line, "Charge")
 
 
@@ -402,13 +405,16 @@ def test_a_mature_growth_row_on_the_annual_consensus_says_so(
     "result",
     [
         _result("MGCO", anchor=_annual_anchor(None, 5.9)),  # the window's periods
-        _result(  # an anchor stored before the annual source
+        _result("MGCO", anchor=_annual_anchor(None, 5.9) | {"source": "annual"}),  # no correction
+        _result(  # an anchor stored before method 1.4
             "MGCO", anchor={"ntm_eps": 5.9, "ntm_eps_raw": 5.9, "sbc_adjustment_per_share": 0.0}
         ),
         _result("MSCO"),  # Mature Stable, no anchor
     ],
 )
-def test_a_mature_row_off_the_annual_consensus_has_no_anchor_line(result: dict[str, Any]) -> None:
+def test_a_mature_row_off_the_annual_correction_has_no_anchor_line(
+    result: dict[str, Any],
+) -> None:
     texts = _section("matureRoute", result)
     assert not [t for t in texts if t.startswith("Year 1")]
     assert "Charge" in texts
@@ -429,8 +435,8 @@ FILLED = {"minority_interest": 50e6, "balance_sheet": SHEET}
         (
             "MGCO",
             "matureRoute",
-            {"anchor": _annual_anchor(ANNUAL, 5.0)},
-            ["Year 1 from the annual consensus: fiscal 2026 × 1/4 + fiscal 2027 × 3/4."],
+            {"anchor": _annual_anchor(GAP, 5.78)},
+            [f"{CORRECTED}−$0.12 a share."],
         ),
         ("DCCO", "declineRoute", FILLED, ["Less minority interest", CAPTION]),
         ("SUCO", "startUpRoute", FILLED, ["Less minority interest", CAPTION]),
@@ -447,7 +453,7 @@ def test_no_route_section_prints_a_raw_key_or_tag(
     texts = _section(helper, result)
     for text in drawn:
         assert text in texts, text
-    for key in ("minority_interest", "balance_sheet", "periods_sum", "fiscal_year"):
+    for key in ("minority_interest", "balance_sheet", "periods_sum", "fiscal_year", "year_sum"):
         assert not [t for t in texts if key in t], key
     assert not [t for t in texts if RAW_KEY.search(t)]
     assert not set(texts) & set(result["intermediates"])

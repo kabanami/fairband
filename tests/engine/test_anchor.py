@@ -6,11 +6,11 @@ import pytest
 from fairband.engine.anchor import (
     Anchor,
     AnnualEstimate,
-    AnnualShare,
+    AnnualGap,
     Belief,
     QuarterEstimate,
     TrailingFigures,
-    annual_ntm,
+    annual_gap,
     base_fiscal_year,
     base_year,
     belief_from_sales,
@@ -644,91 +644,159 @@ def _window(*analysts: int | None) -> list[QuarterEstimate]:
 
 
 def test_thin_ntm_names_the_thin_periods(policy: Policy) -> None:
-    assert thin_ntm_flag(_window(5, 5, 5, 5), [], policy) is None
-    flag = thin_ntm_flag(_window(15, 15, 6, 4), [], policy)
-    assert flag is not None and flag.code == "thin-ntm"
-    assert "1 of the 4 periods" in flag.sentence and "4 analysts" in flag.sentence
-    assert "30 Jun 2027" in flag.sentence
-    assert thin_ntm_flag(_window(5, None, 5, 5), [], policy) is not None  # no count is thin
-    two = thin_ntm_flag(_window(3, 2), [], policy)  # a half-yearly reporter's window
+    def flag(*analysts: int | None) -> Flag | None:
+        window = _window(*analysts)
+        return thin_ntm_flag(window, window, [], policy)
+
+    assert flag(5, 5, 5, 5) is None
+    found = flag(15, 15, 6, 4)
+    assert found is not None and found.code == "thin-ntm"
+    assert "1 of the 4 periods" in found.sentence and "4 analysts" in found.sentence
+    assert "30 Jun 2027" in found.sentence
+    assert flag(5, None, 5, 5) is not None  # no count is thin
+    two = flag(3, 2)  # a half-yearly reporter's window
     assert two is not None and "2 of the 2 periods" in two.sentence
 
 
 def test_thin_ntm_sentence(policy: Policy) -> None:
     """Spec 2026-11-13 9: the note names how many of the window's periods are thin, the smallest
     count and its period; a missing count is the thinnest and reads "no count", and of two equal
-    counts the earlier period is named. With no annual consensus (spec 2026-11-13 9a) it names the
-    window's fiscal year as having none."""
-    assert thin_ntm_flag(_window(15, 15, 6, 4), [], policy) == Flag(
+    counts the earlier period is named. The window is fiscal 2027 whole and no annual consensus
+    is on file (spec 2026-11-13 9a), so the note says fiscal 2027 has none."""
+
+    def flag(*analysts: int | None) -> Flag | None:
+        window = _window(*analysts)
+        return thin_ntm_flag(window, window, [], policy)
+
+    assert flag(15, 15, 6, 4) == Flag(
         "thin-ntm",
         "Thin NTM consensus",
         "1 of the 4 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
         "thinnest, ending 30 Jun 2027, has 4 analysts, and fiscal 2027 has no annual EPS "
         "estimate, so year 1 rests on thin evidence.",
     )
-    missing = thin_ntm_flag(_window(1, None, 3, 5), [], policy)
+    missing = flag(1, None, 3, 5)
     assert missing is not None and missing.sentence.startswith(
         "3 of the 4 periods the NTM EPS sums have fewer than 5 EPS analysts or no count: the "
         "thinnest, ending 31 Dec 2026, has no count,"
     )
-    one = thin_ntm_flag(_window(5, 1, 1, 5), [], policy)
+    one = flag(5, 1, 1, 5)
     assert one is not None and "the thinnest, ending 31 Dec 2026, has 1 analyst," in one.sentence
-    assert thin_ntm_flag([], [], policy) is None
+    assert thin_ntm_flag([], [], [], policy) is None
 
 
-def _thin_window() -> list[QuarterEstimate]:
-    """Four NTM quarters after 2026-06-30, the first in fiscal 2026 on 4 analysts and three in
-    fiscal 2027, each at an EPS of 2.5 and a revenue of 30."""
+def _estimates(*analysts: int | None) -> list[QuarterEstimate]:
+    """Fiscal 2026's last quarter and fiscal 2027's four, after a trailing period ending
+    2026-06-30: the NTM window is the first four, and the fifth completes fiscal 2027. Each has
+    an EPS of 2.5 but the last, 3.5, so fiscal 2027's periods sum to 11.0. ``analysts`` are the
+    five counts."""
+    ends = ("2026-09-30", "2026-12-31", "2027-03-31", "2027-06-30", "2027-09-30")
+    years = (2026, 2027, 2027, 2027, 2027)
+    labels = ("Q4", "Q1", "Q2", "Q3", "Q4")
+    eps = (2.5, 2.5, 2.5, 2.5, 3.5)
     return [
-        q("2026-09-30", 2026, "Q4", 2.5, 30.0, n=4),
-        q("2026-12-31", 2027, "Q1", 2.5, 30.0),
-        q("2027-03-31", 2027, "Q2", 2.5, 30.0),
-        q("2027-06-30", 2027, "Q3", 2.5, 30.0),
+        q(end, fy, fp, e, 30.0, n=n)
+        for end, fy, fp, e, n in zip(ends, years, labels, eps, analysts, strict=True)
     ]
 
 
-def test_a_thin_window_reads_the_annual_consensus_by_its_periods(policy: Policy) -> None:
-    """Spec 2026-11-13 9a: one period in fiscal 2026 and three in fiscal 2027 read
-    0.25 × 8.00 + 0.75 × 10.00 = 9.50, where the four periods sum to 10.00."""
-    years = [a(2026, 8.0), a(2027, 10.0), a(2028, 11.0)]
-    got = ntm_anchor(_thin_window(), trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years)
-    assert got.ntm_eps_raw == pytest.approx(9.5) and got.ntm_eps == pytest.approx(9.5)
-    assert got.ntm_net_income == pytest.approx(95.0)
+THIN_IN_F = (10, 4, 10, 10, 10)
+
+
+def test_a_thin_period_takes_its_year_s_level_from_the_annual_consensus(policy: Policy) -> None:
+    """Spec 2026-11-13 9a: fiscal 2027's annual consensus is 12.00 and its four periods sum to
+    11.00, so the three of them in the window take 3/4 of the gap of 1.00: 10.00 + 0.75. The
+    annual estimate of fiscal 2026, the year partly reported, is never read."""
+    estimates = _estimates(*THIN_IN_F)
+    years = [a(2026, 99.0), a(2027, 12.0), a(2028, 13.0)]
+    got = ntm_anchor(
+        estimates[:4], trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years, estimates=estimates
+    )
+    assert got.ntm_eps_raw == pytest.approx(10.75) and got.ntm_eps == pytest.approx(10.75)
+    assert got.ntm_net_income == pytest.approx(107.5)
     assert (got.source, got.periods_sum) == ("annual", pytest.approx(10.0))
-    assert got.annual == (AnnualShare(2026, 0.25, 8.0, 10), AnnualShare(2027, 0.75, 10.0, 10))
-    assert thin_ntm_flag(_thin_window(), years, policy) is None
+    assert got.annual == AnnualGap(2027, 12.0, 10, pytest.approx(11.0), 0.75)
+    assert got.annual.correction == pytest.approx(0.75)
+    assert thin_ntm_flag(estimates[:4], estimates, years, policy) is None
 
 
-def test_the_stock_pay_charge_reads_the_annual_figure(policy: Policy) -> None:
+def test_the_stock_pay_charge_reads_the_corrected_figure(policy: Policy) -> None:
     """Street 5.0 against GAAP 4.0: the consensus excludes stock pay, and the 0.948 a share,
-    scaled by the window's revenue as before, comes off 9.50."""
-    years = [a(2026, 8.0), a(2027, 10.0)]
-    got = ntm_anchor(_thin_window(), trailing(), 5.0, 10.0, 0.21, 100.0, policy, annual=years)
+    scaled by the window's revenue as before, comes off 10.75."""
+    estimates = _estimates(*THIN_IN_F)
+    got = ntm_anchor(
+        estimates[:4],
+        trailing(),
+        5.0,
+        10.0,
+        0.21,
+        100.0,
+        policy,
+        annual=[a(2027, 12.0)],
+        estimates=estimates,
+    )
     assert got.sbc_adjustment_per_share == pytest.approx(0.948)
-    assert got.ntm_eps == pytest.approx(8.552)
+    assert got.ntm_eps == pytest.approx(9.802)
 
 
-def test_a_window_with_no_thin_period_keeps_its_sum(policy: Policy) -> None:
-    years = [a(2027, 9.0)]
-    got = ntm_anchor(ntm(), trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years)
-    assert (got.source, got.ntm_eps_raw, got.annual) == ("periods", pytest.approx(10.0), ())
+def test_a_window_with_no_thin_period_in_its_last_year_keeps_its_sum(policy: Policy) -> None:
+    """No thin period: the sum, and no note. A thin period in fiscal 2026 alone, the year
+    partly reported: the sum too, and the note says why nothing corrects it."""
+    years = [a(2026, 99.0), a(2027, 12.0)]
+    whole = _estimates(10, 10, 10, 10, 10)
+    got = ntm_anchor(
+        whole[:4], trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years, estimates=whole
+    )
+    assert (got.source, got.ntm_eps_raw, got.annual) == ("periods", pytest.approx(10.0), None)
     assert got.periods_sum == pytest.approx(10.0)
+    assert thin_ntm_flag(whole[:4], whole, years, policy) is None
+    near = _estimates(4, 10, 10, 10, 10)
+    got = ntm_anchor(
+        near[:4], trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years, estimates=near
+    )
+    assert (got.source, got.ntm_eps_raw) == ("periods", pytest.approx(10.0))
+    assert thin_ntm_flag(near[:4], near, years, policy) == Flag(
+        "thin-ntm",
+        "Thin NTM consensus",
+        "1 of the 4 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
+        "thinnest, ending 30 Sep 2026, has 4 analysts, and fiscal 2026 is partly reported and "
+        "takes no annual correction, so year 1 rests on thin evidence.",
+    )
 
 
-def test_a_window_in_one_fiscal_year_reads_that_year(policy: Policy) -> None:
-    window = [replace(ntm()[0], analysts=1), *ntm()[1:]]  # all four in fiscal 2027
-    got = ntm_anchor(window, trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=[a(2027, 9.0)])
+def test_a_thin_period_in_each_year_corrects_the_last_and_notes_the_first(policy: Policy) -> None:
+    both = _estimates(3, 4, 10, 10, 10)
+    years = [a(2027, 12.0)]
+    got = ntm_anchor(
+        both[:4], trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years, estimates=both
+    )
+    assert (got.source, got.ntm_eps_raw) == ("annual", pytest.approx(10.75))
+    flag = thin_ntm_flag(both[:4], both, years, policy)
+    assert flag is not None and flag.sentence.startswith(
+        "1 of the 4 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
+        "thinnest, ending 30 Sep 2026, has 3 analysts, and fiscal 2026 is partly reported"
+    )
+
+
+def test_a_window_that_is_one_fiscal_year_reads_its_annual_consensus(policy: Policy) -> None:
+    window = [replace(ntm()[0], analysts=1), *ntm()[1:]]  # all four in fiscal 2027, summing to 10
+    got = ntm_anchor(
+        window, trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=[a(2027, 9.0)], estimates=window
+    )
     assert got.ntm_eps_raw == pytest.approx(9.0)
-    assert got.annual == (AnnualShare(2027, 1.0, 9.0, 10),)
+    assert got.annual == AnnualGap(2027, 9.0, 10, pytest.approx(10.0), 1.0)
 
 
-def test_two_half_years_read_half_of_each_year(policy: Policy) -> None:
+def test_a_thin_half_year_takes_half_of_its_year_s_gap(policy: Policy) -> None:
+    """Two half-years, the second the first half of fiscal 2027 on 2 analysts; fiscal 2027's
+    halves sum to 1.2 + 1.6 = 2.8 and its annual consensus is 3.0: 2.2 + 0.2 × 1/2 = 2.3."""
     halves = [
-        replace(half(date(2026, 12, 31), 2026, 1.0), analysts=2),
-        half(date(2027, 6, 30), 2027, 1.2),
+        half(date(2026, 12, 31), 2026, 1.0),
+        replace(half(date(2027, 6, 30), 2027, 1.2), analysts=2),
+        half(date(2027, 12, 31), 2027, 1.6),
     ]
     got = ntm_anchor(
-        halves,
+        halves[:2],
         trailing(),
         4.2,
         10.0,
@@ -736,60 +804,78 @@ def test_two_half_years_read_half_of_each_year(policy: Policy) -> None:
         100.0,
         policy,
         cadence="half-yearly",
-        annual=[a(2026, 2.0), a(2027, 3.0)],
+        annual=[a(2026, 99.0), a(2027, 3.0)],
+        estimates=halves,
     )
-    assert got.ntm_eps_raw == pytest.approx(2.5) and got.periods_sum == pytest.approx(2.2)
+    assert got.ntm_eps_raw == pytest.approx(2.3) and got.periods_sum == pytest.approx(2.2)
+    assert got.annual == AnnualGap(2027, 3.0, 10, pytest.approx(2.8), 0.5)
 
 
-def test_a_thin_or_missing_year_keeps_the_sum_and_is_named(policy: Policy) -> None:
-    """The annual figure stands in only on `analyst_min` analysts or more in every year it
-    reads; else year 1 is the periods' sum and the note names the first year that fails."""
+def test_a_year_the_annual_consensus_cannot_correct_keeps_the_sum_and_is_named(
+    policy: Policy,
+) -> None:
+    """The gap needs fiscal 2027's annual estimate on `analyst_min` analysts or more and every
+    period of fiscal 2027 estimated; else year 1 is the periods' sum and the note says why."""
     start = (
         "1 of the 4 periods the NTM EPS sums has fewer than 5 EPS analysts or no count: the "
-        "thinnest, ending 30 Sep 2026, has 4 analysts, and "
+        "thinnest, ending 31 Dec 2026, has 4 analysts, and "
     )
     end = ", so year 1 rests on thin evidence."
+    estimates = _estimates(*THIN_IN_F)
+    short = estimates[:4]  # fiscal 2027's fourth period is not on file
+    blank = [*estimates[:4], replace(estimates[4], eps=0.0, analysts=0)]  # a zero on no analysts
     cases = {
-        "the annual consensus of fiscal 2027 has 4 EPS analysts": [
-            a(2026, 8.0),
-            a(2027, 10.0, n_eps=4),
-        ],
-        "the annual consensus of fiscal 2026 has no analyst count": [
-            a(2026, 8.0, n_eps=None),
-            a(2027, 10.0),
-        ],
-        "fiscal 2026 has no annual EPS estimate": [a(2027, 10.0), a(2028, 11.0)],  # Review Focus
+        "the annual consensus of fiscal 2027 has 4 EPS analysts": (
+            [a(2027, 12.0, n_eps=4)],
+            estimates,
+        ),
+        "the annual consensus of fiscal 2027 has no analyst count": (
+            [a(2027, 12.0, n_eps=None)],
+            estimates,
+        ),
+        "fiscal 2027 has no annual EPS estimate": ([a(2026, 99.0), a(2028, 13.0)], estimates),
+        "not every period of fiscal 2027 has an estimate": ([a(2027, 12.0)], short),
     }
-    for clause, years in cases.items():
-        got = ntm_anchor(_thin_window(), trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years)
-        assert (got.source, got.ntm_eps_raw) == ("periods", pytest.approx(10.0)), clause
-        flag = thin_ntm_flag(_thin_window(), years, policy)
-        assert flag is not None and flag.sentence == start + clause + end, clause
-    none = [a(2026, 0.0, n_eps=None), a(2027, 10.0)]  # a zero with no count is no estimate
-    flag = thin_ntm_flag(_thin_window(), none, policy)
-    assert flag is not None and "fiscal 2026 has no annual EPS estimate" in flag.sentence
-    one = thin_ntm_flag(_thin_window(), [a(2026, 8.0), a(2027, 10.0, n_eps=1)], policy)
-    assert one is not None and "fiscal 2027 has 1 EPS analyst, so" in one.sentence
+    for reason, (years, on_file) in cases.items():
+        got = ntm_anchor(
+            on_file[:4], trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years, estimates=on_file
+        )
+        assert (got.source, got.ntm_eps_raw, got.annual) == (
+            "periods",
+            pytest.approx(10.0),
+            None,
+        ), reason
+        flag = thin_ntm_flag(on_file[:4], on_file, years, policy)
+        assert flag is not None and flag.sentence == start + reason + end, reason
+    for years, on_file in (([a(2027, 0.0, n_eps=None)], estimates), ([a(2027, 12.0)], blank)):
+        got = ntm_anchor(
+            on_file[:4], trailing(), 4.2, 10.0, 0.21, 100.0, policy, annual=years, estimates=on_file
+        )
+        assert got.source == "periods"
+    one = thin_ntm_flag(estimates[:4], estimates, [a(2027, 12.0, n_eps=1)], policy)
+    assert one is not None and "has 1 EPS analyst," in one.sentence
 
 
-def test_annual_ntm_weights_each_year_by_its_periods(policy: Policy) -> None:
-    """Spec 2026-11-13 9a: a year's weight is its periods of the window over the periods in a
-    year; a window with no thin period, or a year that fails, gives no annual figure."""
-    years = [a(2026, 8.0), a(2027, 10.0)]
-    assert annual_ntm(_thin_window(), years, "quarterly", policy) == (
-        AnnualShare(2026, 0.25, 8.0, 10),
-        AnnualShare(2027, 0.75, 10.0, 10),
-    )
-    assert annual_ntm(ntm(), [a(2027, 9.0)], "quarterly", policy) is None
-    assert annual_ntm(_thin_window(), years[1:], "quarterly", policy) is None
-    assert annual_ntm([], years, "quarterly", policy) is None
+def test_annual_gap_needs_a_thin_period_in_the_last_year(policy: Policy) -> None:
+    """Spec 2026-11-13 9a: the gap is F's alone, F the last fiscal year the window reaches, and
+    only where a period of the window in F is thin; a window with none, or no window, has no
+    gap. More periods of F on file than a year holds is not every period of F once each."""
+    estimates = _estimates(*THIN_IN_F)
+    years = [a(2027, 12.0)]
+    gap = annual_gap(estimates[:4], estimates, years, policy)
+    assert gap == AnnualGap(2027, 12.0, 10, pytest.approx(11.0), 0.75)
+    near = _estimates(4, 10, 10, 10, 10)
+    assert annual_gap(near[:4], near, years, policy) is None
+    assert annual_gap([], estimates, years, policy) is None
+    extra = [*estimates, q("2027-12-31", 2027, "Q4", 1.0, 30.0)]
+    assert annual_gap(estimates[:4], extra, years, policy) is None
 
 
-def test_the_refusals_and_an_agent_s_figures_read_the_annual_figure(policy: Policy) -> None:
+def test_the_refusals_and_an_agent_s_figures_read_the_corrected_figure(policy: Policy) -> None:
     """The incomplete window still refuses; the unit-error check and "no positive forward anchor"
-    read the figure found, 9.50; a guided EPS stands in for it and a cycle gap comes off. At $19.50
-    the forward P/E is 2.05 on 9.50, where the periods' 10.00 would read 1.95."""
-    years = [a(2026, 8.0), a(2027, 10.0)]
+    read the figure found, 10.75; a guided EPS stands in for it and a cycle gap comes off. At
+    $21.00 the forward P/E is 1.95 on 10.75, where the periods' 10.00 read 2.10."""
+    estimates = _estimates(*THIN_IN_F)
 
     def anchor(
         window: list[QuarterEstimate],
@@ -805,19 +891,21 @@ def test_the_refusals_and_an_agent_s_figures_read_the_annual_figure(policy: Poli
             0.21,
             price,
             policy,
-            annual=years,
+            annual=[a(2027, 12.0)],
+            estimates=estimates,
             guided_eps=guided_eps,
             cycle_gap=cycle_gap,
         )
 
-    incomplete = [*_thin_window()[:3], q("2027-06-30", 2027, "Q3", None, 30.0)]
+    incomplete = [*estimates[:3], q("2027-06-30", 2027, "Q3", None, 30.0, n=10)]
     assert anchor(incomplete).refusal == "incomplete NTM consensus"
-    assert anchor(_thin_window()[:3]).refusal == "incomplete NTM consensus"
-    assert anchor(_thin_window(), 19.5).refusal is None
-    assert anchor(ntm(), 19.5).refusal == "forward P/E below 2: unit error"  # not thin: 10.00
-    assert anchor(_thin_window(), cycle_gap=9.5).refusal == "no positive forward anchor"
-    guided = anchor(_thin_window(), guided_eps=7.0, cycle_gap=1.0)
-    assert (guided.ntm_eps, guided.ntm_eps_found) == (6.0, pytest.approx(9.5))
+    assert anchor(estimates[:3]).refusal == "incomplete NTM consensus"
+    assert anchor(estimates[:4], 21.0).refusal == "forward P/E below 2: unit error"
+    whole = [replace(x, analysts=10) for x in estimates[:4]]  # no thin period: 10.00
+    assert anchor(whole, 21.0).refusal is None
+    assert anchor(estimates[:4], cycle_gap=10.75).refusal == "no positive forward anchor"
+    guided = anchor(estimates[:4], guided_eps=7.0, cycle_gap=1.0)
+    assert (guided.ntm_eps, guided.ntm_eps_found) == (6.0, pytest.approx(10.75))
     assert guided.source == "annual"
 
 

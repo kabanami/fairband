@@ -319,6 +319,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         policy,
         cadence=cadence,
         annual=i.annual_estimates,
+        estimates=i.quarter_estimates,
     )
     gap = nri_gap(i)
     e = eps(t, gap, anchor.ntm_eps if anchor.refusal is None else None)

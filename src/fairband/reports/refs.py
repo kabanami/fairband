@@ -373,14 +373,9 @@ _NAME_WORDS = {
     "capex": "capital spending",
     "sbc": "stock compensation",
 }
-# A year of the annual consensus the Mature Growth anchor reads on a thin window (spec
-# 2026-11-13 9a), `intermediates/anchor/annual/<n>/<key>`, each key in words.
-_ANNUAL_SHARE_WORDS = {
-    "fiscal_year": "fiscal year",
-    "weight": "weight",
-    "eps": "annual EPS mean",
-    "analysts": "EPS analysts",
-}
+# The last fiscal year the NTM window reaches, whose annual consensus corrects the Mature Growth
+# anchor on a thin window (spec 2026-11-13 9a).
+_LAST_YEAR = "the last fiscal year the NTM window reaches"
 _RATE_WORDS = "the exchange rate, units of the reporting currency per US dollar"
 _DIFFERENTIAL_WORDS = "the inflation differential against the US dollar"
 # A snapshot's paths a report cites most, in words; any other reads through ``field_words``.
@@ -435,10 +430,22 @@ _SNAPSHOT_PATH_WORDS = {
     # force, nil at or below zero, which the three firm-value routes subtract
     "inputs/minority_interest": "the minority interest on the newest balance sheet",
     "intermediates/minority_interest": "the minority interest the route subtracts",
-    # what year 1 read on Mature Growth (spec 2026-11-13 9a): the NTM window's periods or the
-    # annual consensus, whose years read through ``_ANNUAL_SHARE_WORDS``
-    "intermediates/anchor/source": "the source of the NTM EPS, the periods or the annual consensus",
+    # what year 1 read on Mature Growth (spec 2026-11-13 9a): the NTM window's periods, or their
+    # sum corrected by the annual consensus of the last fiscal year the window reaches
+    "intermediates/anchor/source": (
+        "whether the NTM EPS is the periods' sum or corrected by the annual consensus"
+    ),
     "intermediates/anchor/periods_sum": "the sum of the NTM window's EPS means",
+    "intermediates/anchor/annual/fiscal_year": _LAST_YEAR,
+    "intermediates/anchor/annual/eps": f"the annual EPS mean of {_LAST_YEAR}",
+    "intermediates/anchor/annual/analysts": (
+        "the EPS analysts of the annual consensus that corrects the NTM EPS"
+    ),
+    "intermediates/anchor/annual/year_sum": f"the sum of the EPS means of the periods of {_LAST_YEAR}",
+    "intermediates/anchor/annual/share": (
+        "the NTM window's share of the periods of the last fiscal year it reaches"
+    ),
+    "intermediates/anchor/annual/correction": "the correction of the NTM EPS by the annual consensus",
     "phase/phase": "the phase",
     "phase/growth_3y": "the three-year revenue growth",
     "phase/dickinson": "the Dickinson stage",
@@ -1100,8 +1107,6 @@ def _snapshot_words(rest: Sequence[str]) -> str | None:
     match rest:
         case ["inputs", name]:
             return f"the {field_words(name)}"
-        case ["intermediates", "anchor", "annual", n, key] if key in _ANNUAL_SHARE_WORDS:
-            return f"the {_ANNUAL_SHARE_WORDS[key]} of the NTM EPS's annual year {n}"
         case ["intermediates", *path] if path:
             return f"the {' '.join(field_words(key) for key in path)}"
         case ["phase", name]:

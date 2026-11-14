@@ -1645,33 +1645,21 @@
      its phase. The figures behind it are among the intermediates. */
   function matureRoute(r) {
     return section('mature', ROUTES[r.route || MATURE[r.phase.phase]],
-      annualAnchor(r.intermediates.anchor),
+      annualAnchor(r.intermediates.anchor, r.intermediates.currency),
       group('charge', 'Charge', pairs(chargeRows(r.intermediates))));
   }
 
-  /* Year 1 read from the annual consensus on a thin NTM window (spec 2026-11-13 9a): each fiscal
-     year with its share of the window's periods, a whole year alone, "Year 1 from the annual
-     consensus: fiscal 2026 × 1/4 + fiscal 2027 × 3/4."; nothing on the window's periods, on a
-     Mature Stable row, or on an anchor stored before the source was recorded. */
-  function annualAnchor(anchor) {
-    var years = anchor && anchor.source === 'annual' ? anchor.annual : null;
-    if (!Array.isArray(years) || !years.length) return null;
-    return h('p', { className: 'caption' }, 'Year 1 from the annual consensus: ' +
-      years.map(function (y) {
-        var share = fraction(y.weight);
-        return 'fiscal ' + y.fiscal_year + (share === '1' ? '' : ' × ' + share);
-      }).join(' + ') + '.');
-  }
-
-  /* A share of a year as a reduced fraction: 1/4, 1/2, 3/4, and 1 for a whole year. The weights
-     are periods over four or two, so a denominator up to four finds each; any other to two
-     decimals. */
-  function fraction(w) {
-    for (var d = 1; d <= 4; d++) {
-      var n = Math.round(w * d);
-      if (Math.abs(w * d - n) < 1e-9) return d === 1 ? String(n) : n + '/' + d;
-    }
-    return decimals(w, 2);
+  /* Year 1 on a thin NTM window, the periods' sum corrected by the annual consensus of the last
+     fiscal year the window reaches (spec 2026-11-13 9a): "Year 1 from the periods, corrected by
+     the annual consensus of fiscal 2027: +$0.12 a share.", the correction signed, in `code`, the
+     row's currency; nothing on the window's periods, on a Mature Stable row, or on an anchor
+     stored before method 1.4. */
+  function annualAnchor(anchor, code) {
+    var gap = anchor && anchor.source === 'annual' ? anchor.annual : null;
+    if (!isTable(gap) || typeof gap.correction !== 'number') return null;
+    return h('p', { className: 'caption' }, 'Year 1 from the periods, corrected by the annual ' +
+      'consensus of fiscal ' + gap.fiscal_year + ': ' + (gap.correction > 0 ? '+' : '') +
+      money(gap.correction, code) + ' a share.');
   }
 
   /* The charge's rows (spec 2026-11-09 6.2 and 6.3): the return each year's reinvestment pays
@@ -2379,10 +2367,11 @@
     /^(epv|value_per_share|value_in_currency|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
   var PER_SHARE_GROUP = /^(eps$|value_by_)/;
   var TOTAL = /(_total|nopat|average_capital|net_income|sbc_ttm|minority_interest)$|^e_/;
-  /* The NTM anchor's annual source (spec 2026-11-13 9a): each fiscal year whole; the sum of the
-     window's periods and each fiscal year's EPS a share. */
-  var ANCHOR_YEAR = /^fiscal_year$/;
-  var ANCHOR_PER_SHARE = /^(periods_sum|eps)$/;
+  /* The NTM anchor's correction by the annual consensus (spec 2026-11-13 9a): the fiscal year
+     whole and the window's share of its periods plain; the sum of the window's periods, the
+     year's annual EPS, the sum of its periods and the correction a share. */
+  var ANCHOR_PLAIN = /^(fiscal_year|share)$/;
+  var ANCHOR_PER_SHARE = /^(periods_sum|eps|year_sum|correction)$/;
   /* On a row in another currency every money figure is in it (spec 2026-11-10 7.2) but the price
      facts, read from the USD closes, and the peers' market caps, which rank the peers. */
   var USD_GROUPS = /^(price_facts|peers)$/;
@@ -2393,7 +2382,7 @@
     if (key === 'fx_rate') return rate(v);
     if (isPercent(key, group)) return F.formatPercent(v);
     if (PER_SHARE_GROUP.test(group || '')) return money(v, own);  /* value_by_roic's runway */
-    if (ANCHOR_YEAR.test(key)) return plain(v);
+    if (ANCHOR_PLAIN.test(key)) return plain(v);
     if (ANCHOR_PER_SHARE.test(key)) return money(v, own);
     if (COUNT.test(key)) return plain(v);
     if (MULTIPLE.test(key)) return decimals(v, 1) + 'x';

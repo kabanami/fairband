@@ -756,22 +756,25 @@ def test_the_citations_name_the_newest_sheet_and_the_minority_interest() -> None
 
 
 def test_the_citations_name_the_anchor_s_source() -> None:
-    """Spec 2026-11-13 9a: on Mature Growth the citations name what the analysts' NTM EPS read,
-    the window's periods or the annual consensus, the periods' sum, and each year the annual
-    figure weighs."""
+    """Spec 2026-11-13 9a, as amended: on Mature Growth the citations name what the analysts' NTM
+    EPS read, the window's periods or their sum corrected by the annual consensus of the last
+    fiscal year the window reaches, the periods' sum, and each figure of the correction."""
     row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
     intermediates = _flat(row["`snapshot:<id>/intermediates/<path>`"][0])
     for words in (
         "On Mature Growth, `anchor/source`, what the analysts' NTM EPS read",
         "`periods`, the sum of the NTM window's EPS means",
-        "`annual`, the annual consensus weighted by the window's periods",
+        "`annual`, that sum corrected by the annual consensus of the last fiscal year the window",
         "`anchor/periods_sum`",
-        "`anchor/annual/<n>/fiscal_year`",
-        "`anchor/annual/<n>/weight`",
-        "`anchor/annual/<n>/eps`",
-        "`anchor/annual/<n>/analysts`",
+        "`anchor/annual/fiscal_year`",
+        "`anchor/annual/eps`",
+        "`anchor/annual/analysts`",
+        "`anchor/annual/year_sum`",
+        "`anchor/annual/share`",
+        "`anchor/annual/correction`",
     ):
         assert words in intermediates, words
+    assert "`anchor/annual/<n>/" not in intermediates  # the first form's list of years
 
 
 def test_the_register_s_floor_takes_the_minority_interest_off() -> None:
@@ -870,12 +873,14 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
             "thin-ntm",
             (
                 "`analyst_min`",
-                # the anchor on a thin window (spec 2026-11-13 9a): the note means neither stands
-                "and the annual consensus cannot stand in",
-                "So neither the quarters nor the annual consensus has `analyst_min` analysts",
+                # the anchor on a thin window (spec 2026-11-13 9a, as amended): the note means a
+                # thin period is left as it is, and names why
+                "and is left as it is",
+                "the engine corrects year 1 by that year's annual consensus",
                 "read the anchor's source at `snapshot:<id>/intermediates/anchor/source`",
-                "the first fiscal year that keeps the annual consensus out",
-                "how many of the window's periods are thin, the smallest count and its period",
+                "the period's fiscal year is partly reported, which is never corrected",
+                "not every period of that year has an estimate",
+                "how many of the window's periods are left thin, the smallest count and its period",
                 "the annual estimates of the fiscal years the window spans",
                 "their analyst counts",
                 "guidance",

@@ -7,11 +7,11 @@ from datetime import UTC, date, datetime
 
 import pytest
 from support.engine_companies import (
-    annual,
     decline_inputs,
     high_growth_inputs,
     mature_growth_inputs,
     mature_stable_inputs,
+    quarter,
     start_up_inputs,
     young_growth_inputs,
 )
@@ -512,29 +512,36 @@ def test_the_thin_ntm_note_does_not_show_under_a_guided_anchor(
         assert review.result.intermediates["margin_history"] == margins
 
 
-def test_a_guided_anchor_stands_in_for_the_annual_figure(policy: Policy, deciles: Deciles) -> None:
-    """Spec 2026-11-13 9a: MGCO's NTM window with its first quarter, fiscal 2026's Q4, on 3
-    analysts and an annual consensus of $5.70 for fiscal 2026 on 12 reads 0.25 × 5.70 + 0.75 ×
-    6.00 = 5.925, so ``thin-ntm`` does not show. Under an applied ``earnings.ntm`` of 6.10 the
-    guided EPS stands in for that figure, the bridge line reads it as the old value and sums to
-    the reviewed value, and the note stays silent."""
+def test_a_guided_anchor_stands_in_for_the_corrected_figure(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-13 9a: MGCO's NTM window with fiscal 2027's Q2 on 3 analysts and the quarter
+    that completes fiscal 2027 on file at 1.60: fiscal 2027's quarters sum to 6.10 against its
+    annual 6.00, so year 1 reads 5.90 + (6.00 − 6.10) × 3/4 = 5.825 and ``thin-ntm`` does not
+    show. Under an applied ``earnings.ntm`` of 6.10 the guided EPS stands in for that figure, the
+    bridge line reads it as the old value and sums to the reviewed value, and the note stays
+    silent."""
     base = mature_growth_inputs()
     q = base.quarter_estimates
     inputs = replace(
         base,
-        quarter_estimates=(replace(q[0], analysts=3), *q[1:]),
-        annual_estimates=(annual(2026, 5_700e6, 5.70, 12), *base.annual_estimates),
+        quarter_estimates=(
+            *q[:2],
+            replace(q[2], analysts=3),
+            *q[3:],
+            quarter(date(2027, 12, 31), 2027, "Q4", 1.60),
+        ),
     )
     mechanical = value_company(inputs, deciles, policy, TODAY)
     found = mechanical.intermediates["anchor"]
-    assert (found["source"], found["ntm_eps"]) == ("annual", pytest.approx(5.925))
+    assert (found["source"], found["ntm_eps"]) == ("annual", pytest.approx(5.825))
     review = review_company(
         inputs, deciles, policy, TODAY, [OVERRIDE("earnings.ntm", 6.10)], mechanical
     )
     anchor = review.result.intermediates["anchor"]
-    assert anchor["ntm_eps"] == 6.10 and anchor["ntm_eps_raw"] == pytest.approx(5.925)
+    assert anchor["ntm_eps"] == 6.10 and anchor["ntm_eps_raw"] == pytest.approx(5.825)
     [line] = review.bridge
-    assert (line.old, line.new) == (pytest.approx(5.925), 6.10)
+    assert (line.old, line.new) == (pytest.approx(5.825), 6.10)
     assert review.result.value is not None and mechanical.value is not None
     assert line.delta == pytest.approx(review.result.value - mechanical.value, abs=1e-9)
     assert "thin-ntm" not in _codes(mechanical) and "thin-ntm" not in _codes(review.result)
