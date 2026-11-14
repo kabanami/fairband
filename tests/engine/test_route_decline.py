@@ -1124,7 +1124,8 @@ def test_the_minority_interest_comes_off_each_claim(
     assert fim["floored_per_share"] == pytest.approx(5.5)
     assert floored.value == pytest.approx(5.832244268746113 - 0.5, abs=1e-9)
     assert sentence(floored, "ncav-floor") == (
-        "The floored value is the net current asset value 5.50 a share; the run-off gives 4.57."
+        "The floored value is the net current asset value less the minority interest, 5.50 a "
+        "share; the run-off gives 4.57."
     )
     # nil: as the plain row, but for the entry
     for line in (None, 0.0, -10 * M):
@@ -1135,6 +1136,42 @@ def test_the_minority_interest_comes_off_each_claim(
             plain.intermediates,
         )
         assert input_named(nil, "minority_interest").value == line
+
+
+def test_the_ncav_floor_names_the_minority_interest(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The ``ncav-floor`` sentence names the floor a share as what it is: with $50 m of minority
+    interest in force, from the sheet or an agent's ``balance.minority``, "the net current asset
+    value less the minority interest", (600 − 50) ÷ 100 = 5.50 against the run-off's 4.57; with
+    none in force (a line not presented, at zero or below zero), word for word as before 1.4,
+    6.00 against 5.07. A price refresh keeps the sentence a fresh valuation at the new price
+    gives."""
+    floor = with_floor(decline_inputs, 1_100 * M)
+    less = (
+        "The floored value is the net current asset value less the minority interest, 5.50 a "
+        "share; the run-off gives 4.57."
+    )
+    held = value_company(with_minority(floor, 50 * M), deciles, policy, TODAY)
+    assert sentence(held, "ncav-floor") == less
+    judged = value_company(
+        floor,
+        deciles,
+        policy,
+        TODAY,
+        {"balance.minority": Override(7, "balance.minority", 50 * M, "agent", None, NOW, "a 10-Q")},
+    )
+    assert sentence(judged, "ncav-floor") == less
+    for line in (None, 0.0, -10 * M):
+        nil = value_company(with_minority(floor, line), deciles, policy, TODAY)
+        assert sentence(nil, "ncav-floor") == (
+            "The floored value is the net current asset value 6.00 a share; the run-off gives 5.07."
+        )
+    # the price refresh keeps the sentence: the floor does not move with the price
+    stored = result_from_json(result_to_json(held))
+    moved = reprice(stored, 4.0, REPRICED, policy)
+    fresh = value_company(replace(with_minority(floor, 50 * M), price=4.0), deciles, policy, TODAY)
+    assert sentence(moved, "ncav-floor") == sentence(fresh, "ncav-floor") == less
 
 
 def test_the_consensus_is_read_past_year_three_on_enough_analysts(

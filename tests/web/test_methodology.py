@@ -249,6 +249,20 @@ def test_the_equity_steps_take_the_minority_interest_off() -> None:
     floor = floor[: floor.index("<h3")]
     assert "(current assets less all liabilities), less the minority interest, a share" in floor
     assert "The owners get that plus cash, less debt and the minority interest." in floor
+    # the floored value names the floor, never the bare net current asset value
+    assert "or the liquidation floor where it replaces that value" in floor
+    assert "or the net current asset value, whichever the floor gives" not in floor
+    flags = _section(html, "flags")
+    ncav = flags[flags.index(">ncav-floor</code>") :]
+    assert (
+        "The net current asset value, less the minority interest, is above the run-off's value "
+        "and sets the floor." in ncav[: ncav.index("</li>")]
+    )
+    net_cash = flags[flags.index(">below-net-cash</code>") :]
+    assert (
+        "A Start-up's market value is at or below its cash less debt and the minority interest."
+        in net_cash[: net_cash.index("</li>")]
+    )
     start = _section(html, "start-up")
     for text in (
         "The price here is the market value plus debt and the minority interest, less cash.",

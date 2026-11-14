@@ -345,7 +345,7 @@ def value_decline(c: Context) -> Valued | Refused:
         lines
         + (present(from_industry(c)) if used == "peers" else ())
         + ((TAX_LOSS,) if margin["trailing"] < 0 or any(x < 0 for x in v.ebit) else ())
-        + present(_ncav_floor(e, rebuild["pi"]["value"]))
+        + present(_ncav_floor(e, rebuild["pi"]["value"], minority_interest))
         + present(_not_charged(found, unrated))
         + present(_z_distress(z, policy))
         + present(_f_score_low(f, policy))
@@ -650,17 +650,24 @@ def _liabilities_flag(sheet: NewestSheet | None) -> Flag | None:
     )
 
 
-def _ncav_floor(e: Equity, pi: float | None) -> Flag | None:
-    """``ncav-floor`` when the net current asset value floors the going-concern value and π is not
-    1 (an unavailable π included): at π = 1 the value is the distress-sale value alone and the
-    floor has no weight."""
+def _ncav_floor(e: Equity, pi: float | None, minority_interest: float) -> Flag | None:
+    """``ncav-floor`` when the net current asset value, less the minority interest, floors the
+    going-concern value and π is not 1 (an unavailable π included): at π = 1 the value is the
+    distress-sale value alone and the floor has no weight. With a minority interest in force the
+    sentence names the floor "the net current asset value less the minority interest"; with none,
+    it reads as before method 1.4."""
     if not e.floor_bound or e.ncav_per_share is None or pi == 1:
         return None
+    floor = f"{e.ncav_per_share:,.2f} a share"
+    named = (
+        f"the net current asset value less the minority interest, {floor}"
+        if minority_interest > 0
+        else f"the net current asset value {floor}"
+    )
     return Flag(
         "ncav-floor",
         "NCAV floor",
-        f"The floored value is the net current asset value {e.ncav_per_share:,.2f} a share; the "
-        f"run-off gives {e.gc_per_share:,.2f}.",
+        f"The floored value is {named}; the run-off gives {e.gc_per_share:,.2f}.",
     )
 
 

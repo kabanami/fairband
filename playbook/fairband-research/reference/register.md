@@ -106,7 +106,7 @@ Mature Growth stage", "the data on file as of 4 Nov 2026".
 | sales-to-capital | the revenue each dollar put into the business brings in; it sets how much the company must reinvest to grow |
 | value outside the business | assets outside the business, worth about $X a share after tax, such as a stake in another company; or a liability outside the business, such as a settlement still owed |
 | decline rate | the yearly rate at which a shrinking company's revenue is assumed to fall after the analysts' forecast years, read from its past five years of revenue and easing in a straight line to nothing by the tenth year |
-| liquidation floor | the company's current assets less all its liabilities, a share; when it is above zero, the value of the business as a going concern is not taken below it |
+| liquidation floor | the company's current assets less all its liabilities and less the share of its subsidiaries that outside owners hold, a share; when it is above zero, the value of the business as a going concern is not taken below it |
 | distress-weighted value | the value a share of the business as a going concern and the value a share in a forced sale, weighted by the chance the company fails within ten years; that chance is read from how many times its operating profit covers its interest, and is nil when its cash covers its debt |
 | price-implied requirement | the revenue the company must reach in its tenth year, at the typical operating margin of mature companies like it, for the business to be worth its price today |
 | hurdle rate | the yearly return investors require to own the shares; future cash is discounted to today at this rate |

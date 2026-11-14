@@ -774,6 +774,16 @@ def test_the_citations_name_the_anchor_s_source() -> None:
         assert words in intermediates, words
 
 
+def test_the_register_s_floor_takes_the_minority_interest_off() -> None:
+    """Spec 2026-11-13 13: the liquidation floor is the common owners' claim, so the plain words a
+    report writes for it take off the share of the subsidiaries that outside owners hold."""
+    rows = _table_rows(_read(REGISTER), ("Term", "Write instead"))
+    assert rows["liquidation floor"].startswith(
+        "the company's current assets less all its liabilities and less the share of its "
+        "subsidiaries that outside owners hold, a share;"
+    )
+
+
 def test_the_cycle_formula_reads_the_ten_year_median_net_margin() -> None:
     """Spec 2026-11-13 11: the cycle formula changes one term, the mid-cycle net margin, now the
     snapshot's ten-year median net margin in place of the middle of the growth table's five

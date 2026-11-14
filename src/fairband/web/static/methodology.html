@@ -759,8 +759,8 @@ interest expense. It gives a synthetic rating (the bond rating such cover usuall
 ten-year chance of default <a class="app-cite" href="#methodology/src-distress">[Damodaran
 2009a]</a>. In distress, a forced sale recovers <span data-policy="distress_sale_fraction">—</span>
 of the firm value. The owners get that plus cash, less debt and the minority interest. The floored
-value is the going-concern value or the net current asset value, whichever the floor gives. The
-value weights the floored value and the forced-sale value by that chance.</p>
+value is the going-concern value, or the liquidation floor where it replaces that value. The value
+weights the floored value and the forced-sale value by that chance.</p>
 
 <h3 class="heading">What the price needs</h3>
 <p class="body">The implied decline rate is the decline rate at which the value equals today's price.
@@ -1033,13 +1033,14 @@ peers' median return.</span></li>
 <li><span class="label">Failure not charged</span> <code class="fb-tag figure-sm">failure-not-charged</code>
 <span class="body app-flags__what">A Young Growth value assumes the company survives.</span></li>
 <li><span class="label">NCAV floor</span> <code class="fb-tag figure-sm">ncav-floor</code>
-<span class="body app-flags__what">The net current asset value is above the run-off's value, and
-sets the floor.</span></li>
+<span class="body app-flags__what">The net current asset value, less the minority interest, is
+above the run-off's value and sets the floor.</span></li>
 <li><span class="label">Distress not charged</span> <code class="fb-tag figure-sm">distress-not-charged</code>
 <span class="body app-flags__what">No interest expense or no debt line is on file, so no chance of
 default applies.</span></li>
 <li><span class="label">Below net cash</span> <code class="fb-tag figure-sm">below-net-cash</code>
-<span class="body app-flags__what">A Start-up's market value is at or below its net cash.</span></li>
+<span class="body app-flags__what">A Start-up's market value is at or below its cash less debt and
+the minority interest.</span></li>
 <li><span class="label">Consensus basis unknown</span> <code class="fb-tag figure-sm">consensus-basis-unknown</code>
 <span class="body app-flags__what">A mature company has a large non-recurring item, and the
 consensus does not say whether its forecasts count such items.</span></li>
