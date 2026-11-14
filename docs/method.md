@@ -1272,7 +1272,7 @@ A change to one tagged input of 14.2, with its reason, its evidence and its life
 | `earnings.sbc_basis` | Mature Growth | the anchor's stock-compensation basis (5.2), in place of the basis test, from the company's own definition of its adjusted EPS; lasting or period-tied (spec 2026-11-13 7.2) | `includes` or `excludes` |
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle for a cyclical business: E on Mature Stable (6.1), the NTM EPS on Mature Growth (5.2); a positive figure lowers them, a negative one lifts a trough (policy v9) | −$100 to $100 a share |
 | `decline.rate` | Decline | the decline rate d (6a.2) | −50% to 0% a year |
-| `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest annual balance sheet's debt and cash (5a.9, 6a.5, 6b.2); period-tied only, a correction of a vendor error | $0 or more ($10^15 at most, the policy's stand-in for no bound) |
+| `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest balance sheet's (4.2) debt and cash (5a.9, 6a.5, 6b.2); period-tied only, a correction of a vendor error | $0 or more ($10^15 at most, the policy's stand-in for no bound) |
 | `shares.diluted` | every route | the diluted share count of 4.2, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible); period-tied only | above 0 to 10^12 shares |
 | `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the route's value a share: a stake, an asset held for sale, a settlement still owed (negative) | −$1,000 to $1,000 a share |
 
