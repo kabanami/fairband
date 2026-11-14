@@ -58,11 +58,21 @@ V13_SHA256 = "f2ec6e5841f35a7068a4c733ca52fc9a9daa6dacea3d6d9131a21616803a83d0"
 V14_SHA256 = "fc70b926134b6c8d8f2583128e4c2394701358d5f50330786e9c433a39a4bbc1"
 # The value policy v15 adds, the multiple of the note sheet-shift (spec 2026-11-13, section 12.5).
 V15_VALUES = {"sheet_shift_multiple"}
+V15_SHA256 = "c86d987799e4d15575812ffe452472bc2d716cff744f78aa00575d8239f3f34b"
+# The four pairs policy v16 adds to ``override_ranges``, as the file writes them: the committed
+# shares', the one-time item's and the two revenue steps'; it adds no value (spec 2026-11-14,
+# section 10).
+V16_RANGES = {
+    "shares.committed": [0.0, 1e12],
+    "earnings.ntm_nri": [-100.0, 100.0],
+    "revenue.step_2": [-0.80, 3.00],
+    "revenue.step_3": [-0.80, 3.00],
+}
 BAND_RULE = "the low must be below 1 and the high above 1"
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v15.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v16.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -86,7 +96,7 @@ def _packaged_with(tmp_path: Path, name: str, value: str) -> Path:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v15" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v16" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -121,20 +131,29 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v15_is_the_packaged_policy() -> None:
+def test_v16_is_the_packaged_policy() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v15"
-    assert p.sheet_shift_multiple == 3.0
+    assert p.version == "fairband-policy-v16"
+    assert p.override_ranges["shares.committed"] == (0.0, 1e12)
+    assert p.override_ranges["earnings.ntm_nri"] == (-100.0, 100.0)
+    assert p.override_ranges["revenue.step_2"] == (-0.80, 3.00)
+    assert p.override_ranges["revenue.step_3"] == (-0.80, 3.00)
+
+
+def test_v15_holds_the_sheet_shift_multiple() -> None:
+    """The v15 file's own value, read without the loader, which loads v16."""
+    v15 = _file_values("fairband-policy-v15.toml")
+    assert v15["sheet_shift_multiple"]["value"] == 3.0
 
 
 def test_v14_holds_the_minority_range() -> None:
-    """The v14 file's own range, read without the loader, which loads v15."""
+    """The v14 file's own range, read without the loader, which loads v16."""
     v14 = _file_values("fairband-policy-v14.toml")
     assert v14["override_ranges"]["value"]["balance.minority"] == [0.0, 1e15]
 
 
 def test_v13_holds_its_four_values_and_two_ranges() -> None:
-    """The v13 file's own values, read without the loader, which loads v14."""
+    """The v13 file's own values, read without the loader, which loads v16."""
     v13 = _file_values("fairband-policy-v13.toml")
     assert (
         v13["sbc_material_share"]["value"],
@@ -147,8 +166,8 @@ def test_v13_holds_its_four_values_and_two_ranges() -> None:
 
 
 def test_the_packaged_policy_keeps_the_earlier_versions_values() -> None:
-    """The values v8 to v13 added, as v15 carries them; the override ranges as v15 has them,
-    the minority interest's that v14 adds among them."""
+    """The values v8 to v13 added, as v16 carries them; the override ranges as v16 has them,
+    the minority interest's that v14 adds and the four that v16 adds among them."""
     policy = load_policy()
     assert (
         policy.sbc_material_share,
@@ -183,6 +202,10 @@ def test_the_packaged_policy_keeps_the_earlier_versions_values() -> None:
         "shares.diluted": (0.0, 1e12),
         "earnings.sbc": (0.0, 1e15),
         "balance.minority": (0.0, 1e15),
+        "shares.committed": (0.0, 1e12),
+        "earnings.ntm_nri": (-100.0, 100.0),
+        "revenue.step_2": (-0.80, 3.00),
+        "revenue.step_3": (-0.80, 3.00),
     }
     assert policy.override_primary_evidence_above_p90 is True
     assert (
@@ -437,12 +460,31 @@ def test_v15_is_v14_with_the_one_value_added() -> None:
     """Every v14 value loads unchanged from v15; the one new key is the multiple of the note
     sheet-shift, its source naming the spec, and it is no setting."""
     v14 = _file_values("fairband-policy-v14.toml")
-    v15 = load_policy().raw["values"]
+    v15 = _file_values("fairband-policy-v15.toml")
     assert v15.keys() - v14.keys() == V15_VALUES and v14.keys() <= v15.keys()
     assert {k: v15[k] for k in v14} == v14
     assert v15["sheet_shift_multiple"]["value"] == 3.0
     assert "spec 2026-11-13" in v15["sheet_shift_multiple"]["source"]
     assert not {s.name for s in SETTINGS} & V15_VALUES
+
+
+def test_v16_is_v15_with_the_four_ranges() -> None:
+    """v16 adds no value: every v15 value loads unchanged from v16 but the override ranges, which
+    gain the pairs of ``shares.committed``, ``earnings.ntm_nri``, ``revenue.step_2`` and
+    ``revenue.step_3``; their note gains one sentence naming each new tag and the spec."""
+    v15 = _file_values("fairband-policy-v15.toml")
+    v16 = load_policy().raw["values"]
+    assert v16.keys() == v15.keys()
+    kept = v15.keys() - {"override_ranges"}
+    assert {k: v16[k] for k in kept} == {k: v15[k] for k in kept}
+    old, new = v15["override_ranges"], v16["override_ranges"]
+    assert new["value"] == old["value"] | V16_RANGES
+    assert new["source"] == old["source"]
+    assert new["note"].startswith(old["note"] + " ")
+    added = new["note"].removeprefix(old["note"] + " ")
+    for tag in V16_RANGES:
+        assert tag in added, tag
+    assert "spec 2026-11-14" in added
 
 
 @pytest.mark.parametrize(
@@ -691,6 +733,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v15_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v15`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v15.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V15_SHA256
 
 
 def test_v14_is_byte_identical_under_its_hash() -> None:

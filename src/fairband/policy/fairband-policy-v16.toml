@@ -1,0 +1,459 @@
+# Fairband policy v16: every valuation constant the engine reads, each with its source line.
+#
+# v5 is v4 with the FMP pace and the 429 hold (refresh), six financial industries excluded and
+# the manual admission list (universe), the designation edges, and the values of the Decline and
+# Start-up routes: the run-off horizon and recovery, the distress-sale fraction, the synthetic
+# rating table, the ten-year default probabilities, the Altman Z'' zones, the Piotroski low group
+# and the burn cover flag (spec 2026-11-03 section 12, founder decisions 2026-11-03); v1 to v4
+# stay in the package unchanged, because the snapshots valued under them cite their hashes.
+# v6: the edges and the Wide cap are derived (spec 2026-11-04 8.3); the user's settings overlay these defaults.
+# v7: v6 with the growth routes' own sales-to-capital bound and the loss ramp bound (spec 2026-11-06 section 11)
+# v8: v7 with the override ranges, the evidence rule, the secondary valuation's bounds and the stance words (spec 2026-11-06 Tier 2, section 19)
+# v9: v8 with the override ranges of the cycle gap and the two NTM anchors, and the secondary valuation's driver ranges (spec 2026-11-06 Tier 2 as amended 2026-11-07, section 19)
+# v10: v9 with the step-series gap, the split implied-count tolerance, and the override ranges of the outside value and the diluted count (spec 2026-11-09 section 11)
+# v11: v10 with the inflation bound, the stale-rate bound and the rate history depth (spec 2026-11-10 section 9)
+# v12: v11 with the cap on the return read on capital without goodwill and intangibles (method 4.6 rule 5; founder 2026-11-12)
+# v13: v12 with the three stock-pay thresholds, the share-count band, the override range of the trailing stock pay, and the runway return's range widened to 500% (spec 2026-11-13 sections 7.1, 8, 10 and 14)
+# v14: v13 with the override range of the minority interest (spec 2026-11-13 sections 13 and 14)
+# v15: v14 with the multiple of the note sheet-shift (spec 2026-11-13 section 12.5)
+# v16: v15 with the override ranges of the committed shares, the one-time item in the NTM consensus and the two revenue steps (spec 2026-11-14 section 10)
+#
+# Each [values.<name>] table holds `value` and `source`. The source is the design.md section, the
+# stocks mech/1.2 rule, the founder decision (research.md D<n>), the calibration, growth routes or
+# 2026-11-03 spec section, the literature the number is taken from, or, where no literature gives
+# the number, the words "no source". One table, [values.return_measure], is a recorded decision
+# with a source and a note and no value.
+# Policy.hash is the sha256 of this file's bytes, so any edit changes the hash every snapshot
+# cites; a change of meaning needs a new version and file.
+
+[meta]
+version = "fairband-policy-v16"
+
+[values.required_return]
+value = 0.09
+source = "design.md 6.2 (stocks method v1.7 section 3): required return r = 9%"
+
+[values.terminal_growth]
+value = 0.03
+source = "design.md 6.2 (stocks method v1.7 section 3): terminal growth gT = 3%"
+
+[values.runway_years]
+value = { None = 5, Narrow = 10, Wide = 20 }
+source = "design.md 6.2 (stocks method v1.7 section 3): runway N in years by moat class"
+
+[values.margin_of_safety]
+value = { None = 0.45, Narrow = 0.35, Wide = 0.25 }
+source = "design.md 6.2 (stocks method v1.7 Step 10): margin of safety by moat class"
+
+[values.fair_band]
+value = [0.85, 1.15]
+source = "design.md 6.2 (stocks method v1.7 Step 10): fair band, times the value at belief"
+
+[values.trim_multiple]
+value = 1.5
+source = "design.md 6.2 (stocks method v1.7 Step 10): trim level, times the value at belief"
+
+[values.wide_terminal_roic_spread]
+source = "design.md 6.6: the Wide moat's terminal return is at most r + 4 points; spec 2026-11-04 8.3 derives the cap from r so a changed r carries it"
+value = 0.04
+
+[values.moat_wide_min]
+value = 8
+source = "stocks mech/1.2 (design.md 6.13): GuruFocus Moat Score 8 to 10 is Wide"
+
+[values.moat_narrow_min]
+value = 4
+source = "stocks mech/1.2 (design.md 6.13): GuruFocus Moat Score 4 to 7 is Narrow, 0 to 3 None"
+
+[values.base_rates]
+source = "research.md D6; stocks mech/1.2 (design.md 6.13): the growth belief for years 4 to N is the median for the company's sales class; growth routes spec 5.4 (founder decision 2026-11-03): sales_p90_5y caps the held rate of the revenue-growth route"
+attribution = "Michael J. Mauboussin, Dan Callahan and Darius Majd, The Base Rate Book: Integrating the Past to Better Anticipate the Future, Credit Suisse Global Financial Strategies, 2016-09-26, Earnings Growth Exhibit 4, printed pp. 72-73; Sales Growth Exhibit 4, printed pp. 24-26"
+note = "Median ten-year CAGR of net income before extraordinary items by starting annual sales. The class bounds are in 2015 dollars; Fairband reads current-dollar trailing revenue, and no inflation index is attributed to the source (D6). The source's top decile (above $25,000 Mn) and its largest-company class (above $50,000 Mn) overlap; as in mech/1.2, the first reads up to $50,000 Mn here and the second takes everything above. upper_musd is the class's upper bound in USD millions; median is a fraction. sales_p90_5y is the top of the five-year sales CAGR bucket (five-point buckets) in which the class's cumulative share of companies reaches 90% in the Sales Growth exhibit; a fraction. The book's figures stand as printed, the smallest class's 40% below the next class's 45% included."
+value = [
+  { upper_musd = 325, median = 0.085, label = "$0-325 Mn", sales_p90_5y = 0.40 },
+  { upper_musd = 700, median = 0.060, label = "$325-700 Mn", sales_p90_5y = 0.45 },
+  { upper_musd = 1250, median = 0.053, label = "$700-1,250 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 2000, median = 0.050, label = "$1,250-2,000 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 3000, median = 0.042, label = "$2,000-3,000 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 4500, median = 0.043, label = "$3,000-4,500 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 7000, median = 0.043, label = "$4,500-7,000 Mn", sales_p90_5y = 0.20 },
+  { upper_musd = 12000, median = 0.044, label = "$7,000-12,000 Mn", sales_p90_5y = 0.15 },
+  { upper_musd = 25000, median = 0.043, label = "$12,000-25,000 Mn", sales_p90_5y = 0.15 },
+  { upper_musd = 50000, median = 0.041, label = ">$25,000 Mn", sales_p90_5y = 0.15 },
+  { upper_musd = inf, median = 0.033, label = ">$50,000 Mn", sales_p90_5y = 0.15 },
+]
+
+[values.inflation_addition]
+value = 0.02
+source = "stocks mech/1.2 (design.md 6.13): the belief adds 2% for inflation to the real base-rate median; a policy choice, not a source statistic (research.md D6)"
+
+[values.marginal_return_span_years]
+value = 5
+source = "calibration spec 5.1; Damodaran, Investment Valuation ch. 11 (openalice H21) gives the measure, not the window; policy value"
+
+[values.marginal_capital_growth_min]
+value = 0.20
+source = "calibration spec 5.1: capital must have grown by a fifth of its opening level for the marginal return to be usable; policy value"
+
+[values.fallback_return_years]
+value = 3
+source = "calibration spec 5.1; Damodaran H29, keep the company's return on capital; the window is a policy value"
+
+[values.return_without_goodwill_cap]
+value = 0.25
+source = "founder 2026-11-12, on the low-values investigation of 2026-11-11: a runway return below r is read again on capital without goodwill and intangibles, and that return is capped, since it leaves out capital the company paid for; no source gives the number; method 4.6 rule 5; policy value"
+note = "A fraction: 0.25 is 25%. It stays above 20%, the highest required return a setting allows, so the capped return is always above r."
+
+[values.fade_years]
+value = 5
+source = "calibration spec 5.4; Damodaran's template fades growth in five equal steps (openalice H2)"
+
+[values.high_growth_years]
+value = 5
+source = "growth routes spec 5.4; Damodaran's template holds one rate through year 5 (openalice H2) and splits the period half and half (H3); policy value"
+
+[values.margin_convergence_year]
+value = 10
+source = "growth routes spec 5.5; Damodaran's template default and his Zomato case (openalice H2); policy value"
+
+[values.peer_min]
+value = 3
+source = "design.md 6.2 and 6.7: minimum mature peers for the target-margin default; no source gives the number"
+
+[values.industry_peer_max]
+value = 10
+source = "growth routes spec 5.5 (founder decision 2026-11-03): the industry fallback takes the largest mature companies of the company's FMP industry; a bound on the peer-figure cost, no source gives the number"
+
+[values.peer_margin_min_years]
+value = 5
+source = "growth routes spec 5.5; Damodaran H64, mature margins at averages over the last five or ten years; policy value"
+
+[values.implied_margin_bounds]
+value = [-0.5, 1.0]
+source = "no source: the bounds of the solve for the margin the price needs (growth routes spec 5.11)"
+
+[values.own_sales_to_capital_min_share]
+value = 0.5
+source = "Damodaran H13, H14 (the industry sales-to-capital serves where the company's own history cannot); no source gives the number; founder decision 2026-11-06"
+
+[values.loss_ramp_margin_bound]
+value = -1.0
+source = "spec 2026-11-03 9.2 (the Start-up ramp moves operating income in dollars); no source gives the number; founder decision 2026-11-06"
+
+[values.return_measure]
+source = "calibration spec 6; founder decision 2026-11-01"
+note = "Return on invested capital, not return on equity. Damodaran prescribes return on equity for an equity model (H11) and adds back recent buybacks to book equity when buybacks distort it (IV 2e ch. 13). Fairband uses invested capital because it is the base that growth draws on and it holds where book equity is shrunk, zero or negative. Founder decision 2026-11-01."
+
+[values.roic_sensitivity]
+value = [0.15, 0.09]
+note = "The first ROIC of the sensitivity is the runway return of spec 5.1; a fourth value shows the old ten-year basis."
+source = "no source: policy value"
+
+[values.analyst_min]
+value = 5
+source = "stocks method v1.7 section 3: a path year with fewer than 5 analysts is not data"
+
+[values.step_series_gap_max]
+value = 0.05
+source = "the AMZN and META sessions; no source gives the number; spec 2026-11-09 sections 9 and 11: a consensus step read on net income and the same step on EPS more than 5 points apart is the note step-series-disagree; policy value"
+note = "The size of the gap between the two steps' growth rates, a fraction: 0.05 is 5 points."
+
+[values.split_implied_count_tolerance]
+value = 0.15
+source = "the META session (its 2026 to 2028 counts run 3% to 7% high); no source gives the number; spec 2026-11-09 sections 10.2 and 11: the consensus EPS is scaled for a split only when its implied share count is within 15% of the pre-split count and not of the post-split one; policy value"
+note = "A fraction: the implied count, the net-income mean over the EPS mean, is within the tolerance of a count when it differs from that count by at most 0.15 of it."
+
+[values.inflation_max]
+value = 0.10
+source = "founder 2026-11-10: IAS 29 restates statements in constant currency above roughly that; ARS and TRY refused, KZT at 6% valued; no source gives the number; spec 2026-11-10 sections 7.3 and 9: a reporting currency whose expected inflation, the mean of the IMF's projections in the inflation table, is above the bound is refused; policy value"
+note = "A fraction: 0.10 is 10%. The bound itself is valued; a mean above it is refused."
+
+[values.fx_stale_days]
+value = 7
+source = "spec 2026-11-10 sections 7.1 and 9: an exchange rate whose last close is more than 7 days before the date it is read at puts the note fx-stale on the row; no source gives the number; policy value"
+
+[values.nri_flag_share]
+value = 0.05
+source = "spec 6.7: the non-recurring gap is 5% or more of trailing EPS, in either direction"
+
+[values.value_spread_flag]
+value = 0.30
+source = "no source: policy value"
+
+[values.long_runway_growth_flag]
+value = 0.10
+source = "design.md 6.5 change 3: a 20-year runway with double-digit growth; spec 6.7: a belief or an implied growth of 10% or more"
+
+[values.margin_flag_ratio]
+value = 1.5
+source = "stocks mech/1.2 margin flag: TTM operating margin 1.5 times or more of its 10-year median"
+
+[values.margin_flag_above_high]
+value = 0.10
+source = "stocks mech/1.2 margin flag: TTM operating margin 10% or more above its 10-year high"
+
+[values.margin_flag_min_years]
+value = 6
+source = "stocks mech/1.2 margin flag: needs at least 6 fiscal years"
+
+[values.capex_ocf_flag]
+value = 0.5
+source = "stocks method v1.7 Step 0: capex above 50% of operating cash flow"
+
+[values.equity_raise_share]
+value = 0.01
+source = "stocks method v1.7 Step 0: TTM equity issuance at or above 1% of market cap is a raise"
+
+[values.sbc_detect]
+value = 0.5
+source = "stocks mech/1.2: street TTM EPS above GAAP TTM EPS by 50% or more of after-tax SBC per share means the consensus excludes SBC"
+
+[values.sbc_material_share]
+value = 0.02
+source = "spec 2026-11-13, section 7.1: stock pay is material when its after-tax figure a share is 2% of the street trailing EPS or more, on a street EPS above zero; the first two reasons of the note sbc-basis-uncertain read it, and on the screen of 2026-11-13 they hold on 50 and 44 rows; no source gives the number; policy value"
+note = "A fraction of the street trailing EPS: 0.02 is 2%."
+
+[values.sbc_basis_tax_share]
+value = 0.5
+source = "spec 2026-11-13, section 7.1: on an includes-sbc reading with material stock pay, a trailing effective tax rate at or below half the statutory rate may close the gap the basis test reads, the second reason of the note sbc-basis-uncertain; on the screen of 2026-11-13 it holds on 44 rows; no source gives the number; policy value"
+note = "A fraction of the statutory rate: 0.5 is half of it."
+
+[values.sbc_basis_gap_multiple]
+value = 10.0
+source = "spec 2026-11-13, section 7.1: on an excludes-sbc reading, a gap between street and GAAP trailing EPS of 10 times the after-tax stock pay a share or more leaves out far more than stock pay, the third reason of the note sbc-basis-uncertain; on the screen of 2026-11-13 it holds on 60 rows (174 at 3 times, 124 at 5 times); no source gives the number; policy value"
+note = "A multiple of the after-tax stock pay a share."
+
+[values.share_count_gap_band]
+value = [0.7, 1.3]
+source = "spec 2026-11-13, section 8: the warning share-count-gap fires when the market cap over the price times the diluted count is outside 0.7 to 1.3; on refresh 34 (2026-11-11), 32 of 1,598 eligible rows were outside it, 18 of them valued (SYM 4.6, TKO 0.38); no source gives the numbers; policy value"
+note = "The low and the high of the ratio, the market cap over the price times the diluted count. An edge is inside the band."
+
+[values.sheet_shift_multiple]
+value = 3.0
+source = "spec 2026-11-13, section 12.5: the note sheet-shift names a quarter's minority interest that differs from the newest annual sheet's by more than 3 times, either way; 3M's quarter of 30 Sep 2026 read $1,013 million where every sheet since 2015 read $39 million to $71 million; expected from plan 2's scratch run on about 13 rows; no source gives the number; policy value"
+note = "A multiple of the smaller of the two figures, either way; a nil against a figure above zero differs by more. Exactly 3 times is silent."
+
+[values.forward_pe_unit_error]
+value = 2.0
+source = "stocks mech/1.2 (I290): a forward P/E below 2 is a unit error"
+
+[values.validity_fallback_days]
+value = 91
+source = "design.md 8: when no report date is known, the window is 3 months"
+
+[values.aging_fraction]
+value = 0.6667
+source = "design system, values-and-provenance: a value is current until two thirds of its window, then aging"
+
+[values.repricing_horizon_years]
+source = "stocks method v1.7 Step 9; design.md 1 (the 3-year repricing horizon); spec 2026-11-04 8.3"
+value = 3
+
+[values.runoff_years]
+value = 10
+source = "Damodaran's ten-year template (openalice H2); spec 2026-11-03 section 10.2"
+
+[values.runoff_recovery]
+value = 0.6
+source = "Damodaran 2009 Sears: 54% to 67% of the capital released; the midpoint; policy value (spec 2026-11-03 section 10.4)"
+
+[values.distress_sale_fraction]
+value = 0.6
+source = "Damodaran 2009, \"Estimating Distress Sale Proceeds\", choice (a), the illustration's $3 billion of $5 billion; policy value (spec 2026-11-03 section 10.7)"
+
+[values.synthetic_rating]
+source = "Damodaran, ratings.html, \"For large non-financial service firms\", January 2026; spec 2026-11-03 section 10.7"
+attribution = "Aswath Damodaran, ratings.html, the synthetic rating table for large non-financial service firms, January 2026"
+note = "The interest coverage (EBIT over interest expense) maps to a rating. Each row stores the lower bound of its coverage range and the rating: a coverage at or above the bound and below the next row's takes the row. The first row's bound is the string \"-inf\", read as minus infinity. The table's default spreads are not stored; no route reads them."
+value = [
+  { coverage_min = "-inf", rating = "D" },
+  { coverage_min = 0.2, rating = "C" },
+  { coverage_min = 0.65, rating = "CC" },
+  { coverage_min = 0.8, rating = "CCC" },
+  { coverage_min = 1.25, rating = "B-" },
+  { coverage_min = 1.5, rating = "B" },
+  { coverage_min = 1.75, rating = "B+" },
+  { coverage_min = 2, rating = "BB" },
+  { coverage_min = 2.25, rating = "BB+" },
+  { coverage_min = 2.5, rating = "BBB" },
+  { coverage_min = 3, rating = "A-" },
+  { coverage_min = 4.25, rating = "A" },
+  { coverage_min = 5.5, rating = "A+" },
+  { coverage_min = 6.5, rating = "AA" },
+  { coverage_min = 8.5, rating = "AAA" },
+]
+
+[values.default_probability_10y]
+source = "Damodaran 2009, Table 5 (Altman, 1971 to 2007); D 100%; BB+ as BB, policy value (spec 2026-11-03 section 10.7)"
+attribution = "Aswath Damodaran, \"Valuing Distressed and Declining Companies\", 2009, Table 5, bond rating and probability of default, Altman's data for 1971 to 2007, the ten-year column"
+note = "The cumulative ten-year probability of default by rating, a fraction (the table's percent over 100). D is 1. BB+ is not in the table and takes BB's figure, the nearest lower rating, so a BB+ company is charged a little more, never less. The table's C+ (75.16%) and C- (87.16%) rows have no synthetic-rating row and are not stored."
+value = { AAA = 0.0007, AA = 0.0051, "A+" = 0.0057, A = 0.0066, "A-" = 0.05, BBB = 0.0754, "BB+" = 0.1963, BB = 0.1963, "B+" = 0.2825, B = 0.368, "B-" = 0.4212, CCC = 0.5902, CC = 0.666, C = 0.8103, D = 1.0 }
+
+[values.z_distress]
+value = 1.1
+source = "Altman 2000: Z'' below 1.1 is the distress zone; spec 2026-11-03 section 10.8"
+
+[values.z_safe]
+value = 2.6
+source = "Altman 2000: Z'' above 2.6 is the safe zone; spec 2026-11-03 section 10.8"
+
+[values.f_score_low]
+value = 1
+source = "Piotroski 2000, the 0 to 1 group; spec 2026-11-03 section 10.8"
+
+[values.burn_cover_flag_years]
+value = 2
+source = "no source: policy value (spec 2026-11-03 section 9.4)"
+
+[values.universe]
+source = "design.md 2; spec 6.1; the name patterns: growth routes spec 5.17, design.md 2 (listings that are not operating companies), policy value; the six financial industries: design.md 6.1, decision 2026-10-26, spec 2026-11-03 section 6.4; the manual admissions: founder 2026-11-03, payment companies that do not lend, spec 2026-11-03 section 6.4"
+
+[values.universe.value]
+exchanges = ["NYSE", "NASDAQ", "AMEX"]
+cap_floor_usd = 2e9
+# Lower bounds in USD, largest first.
+cap_bands = [[200e9, "Mega"], [10e9, "Large"], [2e9, "Mid"]]
+# Every FMP industry string for banks, insurance and REITs, from FMP's available-industries
+# vocabulary (checked 2026-10-31 against three published copies of that list), and Shell
+# Companies, FMP's industry for SPACs, which design.md 2 excludes as listings that are not
+# operating companies. The universe build compares them ignoring case and dash style, and also
+# excludes an industry that starts with an entry and a space, so the bare Banks, Insurance and
+# REIT entries cover a string the list does not name (Banks—Regional, Insurance Brokers).
+excluded_industries = [
+  "Banks",
+  "Banks - Diversified",
+  "Banks - Regional",
+  "Insurance",
+  "Insurance - Brokers",
+  "Insurance - Diversified",
+  "Insurance - Life",
+  "Insurance - Property & Casualty",
+  "Insurance - Reinsurance",
+  "Insurance - Specialty",
+  "REIT",
+  "REIT - Diversified",
+  "REIT - Healthcare Facilities",
+  "REIT - Hotel & Motel",
+  "REIT - Industrial",
+  "REIT - Mortgage",
+  "REIT - Office",
+  "REIT - Residential",
+  "REIT - Retail",
+  "REIT - Specialty",
+  "Shell Companies",
+  # The industries FMP files lenders, insurers and investment banks under besides the names
+  # above; the asset managers and brokers filed there go with them (design.md 6.1; decision
+  # 2026-10-26; spec 2026-11-03 section 6.4). Financial - Data & Stock Exchanges stays admitted:
+  # its companies are fee businesses with ordinary statements.
+  "Asset Management",
+  "Financial - Capital Markets",
+  "Financial - Credit Services",
+  "Financial - Mortgages",
+  "Financial - Conglomerates",
+  "Investment - Banking & Investment Services",
+]
+# Regular expressions for preferred shares, warrants, units and rights, in FMP's dash form
+# (ACME-PA) and the exchange's dot form the screener rows come back in (XYZ-U becomes XYZ.U). A
+# share class (BRK.B, BF.A) has another letter after its dot and passes.
+symbol_exclude_patterns = ['[-.]P[A-Z]?$', '[-.]W[ST]?$', '[-.]U$', '[-.]R$']
+# Regular expressions on the listing's name, matched ignoring case, for notes, debentures and
+# preferred shares whose symbols carry no suffix (growth routes spec 5.17). ABXL, "... 8.875%
+# Fixed Rate Senior Notes due 2028", is the known case; a rate may have a space before its percent
+# sign ("5.25 % Debentures") or end the name ("... 5.625%"). Warrants, units and rights are caught
+# by the symbol patterns; "units" is not listed because a partnership's name can carry "Common
+# Units" or "Limited Partnership Units", nor "depositary", because an ADR's name can carry it.
+name_exclude_patterns = [
+  '\bnotes?\b',
+  '\bdebentures?\b',
+  '\bdue 20\d\d\b',
+  '\d(\.\d+)? ?%(\s|$)',
+  '\bpreferred\b',
+  '\bpreference\b',
+]
+manual_exclusions = []
+# Symbols admitted whatever their industry, in the exchange form: payment companies that do not
+# lend; founder 2026-11-03 (spec 2026-11-03 section 6.4).
+manual_admissions = ["V", "MA", "GPN"]
+
+[values.refresh]
+source = "research.md D13; spec 6.2; fmp_calls_per_minute: the founder's Ultimate plan, 3,000 a minute, less 5%, policy value (spec 2026-11-03 section 5.2); rate_limit_hold_s: one plan window, policy value (spec 2026-11-03 section 5.2); fx_history_years: spec 2026-11-10 sections 7.1 and 9, the trailing periods' ends and GuruFocus's observation dates lie within 15 months and three years leaves room; no source gives the number; policy value"
+
+[values.refresh.value]
+reuse_hours = 24
+gf_reuse_days = 7
+# 16 companies in flight, 13 FMP and 2 GuruFocus calls each. The worker count sets the
+# concurrency only: the FMP limiter (fmp_calls_per_minute) paces the calls. A 429 after the
+# retries ends the run, and the next run reuses what was fetched. Decided with the founder
+# 2026-11-01; was 4 (stocks mech/1.2).
+workers = 16
+connect_timeout_s = 5
+read_timeout_s = 15
+deadline_s = 30
+attempts = 3
+backoff_s = [2, 4]
+# Every FMP call waits for its slot in one pace the workers share; a 429 holds them all for the
+# vendor's numeric Retry-After capped at rate_limit_hold_s seconds, else for rate_limit_hold_s
+# (spec 2026-11-03 section 5.2). A GuruFocus 429 sleeps the same hold and holds no other worker.
+fmp_calls_per_minute = 2850
+rate_limit_hold_s = 60
+# The years of daily closes a full or scoped refresh fetches for each currency's pair, USD<code>,
+# back from today (spec 2026-11-10 section 7.1). Not a setting.
+fx_history_years = 3
+
+[values.override_ranges]
+source = "spec 2026-11-06 Tier 2, section 10.2: the range of each numeric input an agent may override; no source gives the numbers; policy value"
+note = "One pair [low, high] for each override tag, the ends included, in the unit the engine reads the input in: a fraction for a growth rate, a consensus step, a margin, a return or a decline rate (-0.20 is -20%), a multiple for sales-to-capital, dollars a share for the non-recurring gap, the cycle gap and the NTM EPS, dollars for the NTM revenue, debt and cash. A value outside its pair is refused-unit; so is a value at the lower end, 0, of the two NTM anchors' pairs, which an anchor must be above. The word tags, phase, moat.class and earnings.sbc_basis, take a word and have no pair. The upper end of 10^15 dollars stands for no bound: spec 10.2 gives the balance corrections 0 or more and the NTM revenue above 0. v9 adds the cycle gap's pair, the same range as the non-recurring gap's, and the two NTM anchors' pairs, earnings.ntm above 0 to 1,000 dollars a share and revenue.ntm above 0 (spec 10.2 as amended 2026-11-07). v10 adds the outside value's pair, value.outside -1,000 to 1,000 dollars a share, and the diluted count's, shares.diluted above 0 to 10^12 shares, its lower end 0 excluded as the NTM anchors' are (spec 2026-11-09 section 8). v13 adds the pair of the trailing stock pay, earnings.sbc 0 or more dollars, a total and not a figure a share, and widens the runway return's to above 0 to 5, 500%, so the input can take the engine's own measure; 5 still catches a percent typed as a whole number (spec 2026-11-13 sections 7.2, 10 and 14). v14 adds the pair of the minority interest, balance.minority 0 or more dollars, a total as debt and cash are (spec 2026-11-13, section 13). v16 adds the pair of the committed shares, shares.committed above 0 to 10^12 shares, its lower end 0 excluded as the diluted count's is, the pair of the one-time item in the NTM consensus, earnings.ntm_nri -100 to 100 dollars a share, and the pairs of the two revenue steps, revenue.step_2 and revenue.step_3 -0.80 to 3.00, as the consensus steps' (spec 2026-11-14, section 10)."
+
+[values.override_ranges.value]
+"growth.belief" = [-0.20, 0.60]
+"path.hold" = [-0.20, 3.00]
+"path.step_2" = [-0.80, 3.00]
+"path.step_3" = [-0.80, 3.00]
+"margin.target" = [-0.50, 0.60]
+"capital.sales_to_capital" = [0.1, 10.0]
+"return.runway" = [0.0, 5.0]
+"earnings.nri_gap" = [-100.0, 100.0]
+"earnings.cycle_gap" = [-100.0, 100.0]
+"earnings.ntm" = [0.0, 1000.0]
+"revenue.ntm" = [0.0, 1e15]
+"decline.rate" = [-0.50, 0.0]
+"balance.debt" = [0.0, 1e15]
+"balance.cash" = [0.0, 1e15]
+"value.outside" = [-1000.0, 1000.0]
+"shares.diluted" = [0.0, 1e12]
+"earnings.sbc" = [0.0, 1e15]
+"balance.minority" = [0.0, 1e15]
+"shares.committed" = [0.0, 1e12]
+"earnings.ntm_nri" = [-100.0, 100.0]
+"revenue.step_2" = [-0.80, 3.00]
+"revenue.step_3" = [-0.80, 3.00]
+
+[values.override_primary_evidence_above_p90]
+value = true
+source = "spec 2026-11-06 Tier 2, section 10.3: a growth.belief or path.hold override above the sales class's sales_p90_5y (base_rates) needs a filing or a transcript among its evidence; policy value"
+
+[values.secondary_parts_max]
+value = 10
+source = "spec 2026-11-06 Tier 2, section 11: a secondary valuation is one to ten parts, one part a DCF and several a sum of parts; no source gives the number; policy value"
+
+[values.secondary_years_min]
+value = 3
+source = "spec 2026-11-06 Tier 2, section 11: a part's explicit cash-flow path runs 3 years at least; no source gives the number; policy value"
+
+[values.secondary_years_max]
+value = 15
+source = "spec 2026-11-06 Tier 2, section 11: a part's explicit cash-flow path runs 15 years at most; no source gives the number; policy value"
+
+[values.secondary_driver_ranges]
+source = "spec 2026-11-06 Tier 2 (amended 2026-11-07), section 11: the range of each driver of the secondary valuation's standard form; no source gives the numbers; policy value"
+note = "One pair [low, high] for each driver, the ends included: a fraction for the revenue growth, the operating margin and the tax rate (-0.80 is -80%), a multiple for sales-to-capital."
+
+[values.secondary_driver_ranges.value]
+revenue_growth = [-0.80, 3.00]
+operating_margin = [-0.50, 0.60]
+tax_rate = [0.0, 0.50]
+sales_to_capital = [0.1, 10.0]
+
+[values.stance_words]
+value = ["buy", "hold", "trim", "avoid"]
+source = "spec 2026-11-06 Tier 2, section 13.1: a report's stance, the brand book's three zone words and avoid, for a company the agent would not hold at any price shown; policy value"

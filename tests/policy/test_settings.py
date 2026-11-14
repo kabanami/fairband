@@ -104,7 +104,7 @@ def test_apply_overlay_changes_the_value_and_the_derived_edges() -> None:
     )
     assert p.required_return == 0.1 and p.wide_terminal_roic_cap == pytest.approx(0.14)
     assert p.designation_edges == (0.65, 0.8, 1.2, 1.5) and p.universe.cap_floor_usd == 5e9
-    assert p.version == "fairband-policy-v15" and p.settings_hash == settings_hash(
+    assert p.version == "fairband-policy-v16" and p.settings_hash == settings_hash(
         {"required_return": 0.1, "fair_band": [0.8, 1.2]}
     )
 
@@ -471,7 +471,7 @@ def test_symbols_are_upper_cased_on_apply() -> None:
 
 
 def test_load_policy_checks_the_file_too(tmp_path: Path) -> None:
-    text = resources.files("fairband.policy").joinpath("fairband-policy-v15.toml").read_text()
+    text = resources.files("fairband.policy").joinpath("fairband-policy-v16.toml").read_text()
     old = "[values.required_return]\nvalue = 0.09\n"
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
