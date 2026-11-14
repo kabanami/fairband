@@ -424,9 +424,9 @@ def test_a_reading_applies_an_override_on_the_new_basis_after_a_split(
     policy: Policy,
 ) -> None:
     """Spec 2026-11-14 7 on AAPL: a value outside the business of $12.00 a share made on its
-    snapshot of 30 Oct 2026, then a 2-for-1 split on 15 Nov 2026 and a snapshot fetched on 1 Dec
-    2026, reads $6.00 as the review does: each cell adds $6.00, and on that input's axis the pair
-    in force is the $6.00 row."""
+    snapshot of 30 Oct 2026, then a 2-for-1 split on 15 Nov 2026 and a snapshot quoted and fetched
+    on 1 Dec 2026, reads $6.00 as the review does: each cell adds $6.00, and on that input's axis
+    the pair in force is the $6.00 row."""
     outside = {
         "tag": "value.outside",
         "new": 12.0,
@@ -436,11 +436,12 @@ def test_a_reading_applies_an_override_on_the_new_basis_after_a_split(
     }
     r = client.post("/api/companies/AAPL/overrides", json=outside, headers=AGENT)
     assert r.status_code == 201, r.text
-    assert results["AAPL"].data_date == date(2026, 10, 30)
+    made_on = results["AAPL"]
+    assert (made_on.price_date, made_on.data_date) == (date(2026, 10, 30), date(2026, 10, 30))
     with closing(connect(db_path)) as conn:
         rows = split_rows("AAPL", (date(2026, 11, 15), 2, 1))
         store_payloads(conn, "AAPL", {"splits": rows}, CREATED)
-        later = replace(results["AAPL"], data_date=date(2026, 12, 1))
+        later = replace(made_on, price_date=date(2026, 12, 1), data_date=date(2026, 12, 1))
         insert_snapshot(conn, later, 1, clock=lambda: CREATED)
     found = _post(client, GRID)
     assert found["cells"] == [

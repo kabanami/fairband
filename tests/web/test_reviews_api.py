@@ -31,14 +31,14 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import sales_class
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import Override, current_reading
-from fairband.engine.route import CompanyInputs, value_company
+from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.types import ValuationResult, result_from_json
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
 from fairband.store.db import connect
-from fairband.store.refreshes import create_refresh, latest_deciles, save_deciles
-from fairband.store.snapshots import insert_snapshot
+from fairband.store.refreshes import create_refresh, finish_refresh, latest_deciles, save_deciles
+from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.web import reviews_api
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 from fairband.web.reviews_api import lasting_nil_refusal
@@ -451,19 +451,21 @@ OUTSIDE_12 = {
     "evidence": [{"kind": "filing", "ref": "10-Q, note 7: equity investments", "note": ""}],
     "lifetime": "lasting",
 }
+SPLIT_DAY = date(2026, 11, 15)
 SPLIT_WORDS = "entered as $12.00 a share before the 2-for-1 split of 15 Nov 2026"
 
 
-def _split_after(db_path: Path, result: ValuationResult) -> None:
-    """A 2-for-1 split of AAPL on 15 Nov 2026, after its snapshot's data date of 30 Oct 2026,
-    and a snapshot of ``result``'s figures fetched on 1 Dec 2026: the store's figures stand, so
-    the snapshot reproduces (spec 2026-11-14 7)."""
-    assert result.data_date == date(2026, 10, 30)
-    rows = split_rows("AAPL", (date(2026, 11, 15), 2, 1))
+def _split_after(db_path: Path, result: ValuationResult, price_date: date, data_date: date) -> int:
+    """A 2-for-1 split of AAPL on 15 Nov 2026, after its snapshot's price date and data date of
+    30 Oct 2026, and a snapshot of ``result``'s figures quoted on ``price_date`` and fetched on
+    ``data_date``, which the full refresh 1 wrote: the store's figures stand, so the snapshot
+    reproduces (spec 2026-11-14 7); its id."""
+    assert (result.price_date, result.data_date) == (date(2026, 10, 30), date(2026, 10, 30))
+    rows = split_rows("AAPL", (SPLIT_DAY, 2, 1))
     with closing(connect(db_path)) as conn:
         store_payloads(conn, "AAPL", {"splits": rows}, CREATED)
-        later = replace(result, data_date=date(2026, 12, 1))
-        insert_snapshot(conn, later, 1, clock=lambda: CREATED)
+        later = replace(result, price_date=price_date, data_date=data_date)
+        return insert_snapshot(conn, later, 1, clock=lambda: CREATED)
 
 
 def test_the_recompute_applies_an_override_on_the_new_basis_after_a_split(
@@ -474,7 +476,7 @@ def test_the_recompute_applies_an_override_on_the_new_basis_after_a_split(
     bridge line and JUDGMENT entry giving $6.00 and the review naming it; the stored override keeps
     $12.00."""
     outside = _post(client, OUTSIDE_12)["override"]
-    _split_after(db_path, results["AAPL"])
+    _split_after(db_path, results["AAPL"], date(2026, 12, 1), date(2026, 12, 1))
     mechanical = results["AAPL"].value
     assert mechanical is not None
     body = _post(client, BELIEF_8)
@@ -495,6 +497,35 @@ def test_the_recompute_applies_an_override_on_the_new_basis_after_a_split(
     assert review["value"] == pytest.approx(mechanical + 6.0)
     [stored] = [o for o in _overrides(client) if o["id"] == outside["id"]]
     assert (stored["state"], stored["new"]) == ("applied", 12.0)
+
+
+def test_the_recompute_on_a_repriced_snapshot_reads_the_figures_it_repriced(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-14 7, as amended at the build: AAPL's latest snapshot is one a price refresh
+    made on 16 Nov 2026 from a full refresh's snapshot quoted on 14 Nov and fetched on 15 Nov, the
+    split's day before the close, whose figures did not see the split. The recompute reads that
+    snapshot's basis date, 14 Nov, and applies the $12.00 made before the split as entered, though
+    the repriced snapshot's own two dates (16 and 15 Nov) are both on or after the split's day."""
+    _post(client, OUTSIDE_12)
+    early = _split_after(db_path, results["AAPL"], date(2026, 11, 14), SPLIT_DAY)
+    with closing(connect(db_path)) as conn:
+        found = snapshot_row(conn, early)
+        assert found is not None
+        refresh_id = create_refresh(
+            conn, "price", None, policy.version, METHOD_VERSION, CREATED, EMPTY_SETTINGS_HASH
+        )
+        repriced = reprice(found.result, 150.0, date(2026, 11, 16), policy)
+        insert_snapshot(conn, repriced, refresh_id, clock=lambda: CREATED)
+        finish_refresh(conn, refresh_id, "done", CREATED)
+    body = _post(client, BELIEF_8)
+    assert body["review"]["snapshotId"] == early + 1  # the repriced snapshot, the latest
+    assert [(x["tag"], x["new"]) for x in body["bridge"]] == [
+        ("growth.belief", 0.08),
+        ("value.outside", 12.0),
+    ]
+    flags = [f["code"] for f in body["review"]["result"]["flags"]]
+    assert "override-split-scaled" not in flags
 
 
 def test_a_revenue_step_through_the_api_where_the_consensus_gives_none(

@@ -35,17 +35,21 @@ trailing stock pay (``inputs.trailing.sbc``) is above zero (spec 2026-11-13 7.3)
 (no trailing figures, or a period that lacks the line), keeps it. The test reads the assembled
 figure, not the result's ``sbc_ttm``, which a row refused before its route does not carry.
 
-The overrides at a split (spec 2026-11-14 7): ``engine_overrides`` makes each applied row the
-engine's override, for the follow, the web's recompute (both through ``write_review``) and a
-sensitivity reading, with the data date of the snapshot they value. A row whose input is in
-dollars a share (``TAGS``' unit ``USD a share``: the NTM EPS, the two gaps, the one-time item, the
-value outside the business) is divided by ρ, and one in shares (the diluted count, the committed
-shares) multiplied by it, where ρ is the product of the ratios of the company's splits on file
-(``inputs_splits.splits_for``) dated after the data date of the snapshot the override was made on
-and at or before that data date: the day a snapshot's statements were fetched says which splits
-its figures had seen, since every refresh that fetches statements fetches the splits with them,
-and a price refresh fetches neither, so a repriced snapshot keeps the data date of its figures. A ρ
-of 1, a row whose made-on snapshot is not on file, and a ratio or a total keep the figure entered.
+The overrides at a split (spec 2026-11-14 7, as amended at the build): ``engine_overrides`` makes
+each applied row the engine's override, for the follow, the web's recompute (both through
+``write_review``) and a sensitivity reading, on the share basis of the snapshot they value. A row
+whose input is in dollars a share (``TAGS``' unit ``USD a share``: the NTM EPS, the two gaps, the
+one-time item, the value outside the business) is divided by ρ, and one in shares (the diluted
+count, the committed shares) multiplied by it, where ρ is the product of the ratios of the
+company's splits on file (``inputs_splits.splits_for``) that the reviewed snapshot's figures saw
+and the figures of the snapshot the override was made on did not. A snapshot's figures saw a split
+dated at or before its basis date: the earlier of the price date and the data date of the snapshot
+that assembled them, itself, or for a snapshot a price refresh made, which re-assembles nothing
+and fetches no split, the company's latest earlier snapshot a full or scoped refresh or a revalue
+made (``snapshots.assembling_snapshot``), else its own two dates. The split rule applies a split
+only from the price date on, and the data date is the day the figures were fetched, so a refresh
+on a split's day before the US close, its quote of the day before, has not seen the split. A ρ of
+1, a row whose made-on snapshot is not on file, and a ratio or a total keep the figure entered.
 A scaled override carries the words of its scaling (``Override.rescaled``): the figure as entered,
 in the reporting currency its unit names as the flags print an amount a share ("$30.00 a share",
 "SEK 30.00 a share") or in millions of shares ("60.0M shares"), and the splits in order, "entered
@@ -124,7 +128,7 @@ from fairband.store.reviews import (
     latest_stance,
     log_review,
 )
-from fairband.store.snapshots import snapshot_row, snapshot_rows
+from fairband.store.snapshots import assembling_snapshot, snapshot_row
 
 logger = logging.getLogger("fairband.refresh")
 
@@ -224,7 +228,7 @@ def write_review(
     ``overrides`` on its share basis (``engine_overrides``); write the review on the snapshot,
     valid as long as it and with its price facts (module docstring), and its log row; the
     review's id."""
-    engine = engine_overrides(conn, mechanical.symbol, overrides, mechanical.data_date)
+    engine = engine_overrides(conn, mechanical.symbol, overrides, snapshot_id)
     review = review_company(inputs, deciles, policy, today, engine, mechanical)
     result = replace(review.result, valid_until=mechanical.valid_until)
     if "price_facts" in mechanical.intermediates and "price_facts" in result.intermediates:
@@ -237,23 +241,37 @@ def write_review(
 
 
 def engine_overrides(
-    conn: sqlite3.Connection, symbol: str, rows: Sequence[OverrideRow], data_date: date
+    conn: sqlite3.Connection, symbol: str, rows: Sequence[OverrideRow], snapshot_id: int
 ) -> list[Override]:
     """Each of ``rows``, applied overrides of ``symbol``, as the engine reads it on the share basis
-    of a snapshot of ``data_date``: a figure a share ÷ ρ and a count × ρ, with the words of the
-    scaling, where ρ is the product of the ratios of the splits after the data date of the
-    snapshot the row was made on and at or before ``data_date`` (module docstring)."""
+    of snapshot ``snapshot_id``, the snapshot reviewed: a figure a share ÷ ρ and a count × ρ, with
+    the words of the scaling, where ρ is the product of the ratios of the splits that snapshot's
+    figures saw and those of the snapshot the row was made on did not, each dated after the made-on
+    snapshot's basis date and at or before the reviewed one's (``_basis_date``, module
+    docstring)."""
     splits = splits_for(conn, symbol)
     if not splits:
         return [as_override(o) for o in rows]
-    made_on = snapshot_rows(conn, {o.snapshot_id for o in rows})
+    reviewed = _basis_date(conn, snapshot_id)
+    made_on = {i: _basis_date(conn, i) for i in {o.snapshot_id for o in rows}}
     out = []
     for row in rows:
-        found = made_on.get(row.snapshot_id)
-        after = () if found is None else (s for s in splits if found.data_date < s.date)
-        between = tuple(s for s in after if s.date <= data_date)
-        out.append(_on_basis(row, between))
+        made = made_on[row.snapshot_id]
+        seen: tuple[SplitRow, ...] = ()
+        if made is not None and reviewed is not None:
+            seen = tuple(s for s in splits if made < s.date <= reviewed)
+        out.append(_on_basis(row, seen))
     return out
+
+
+def _basis_date(conn: sqlite3.Connection, snapshot_id: int) -> date | None:
+    """The day up to which snapshot ``snapshot_id``'s figures saw the splits: the earlier of the
+    price date and the data date of the snapshot that assembled them
+    (``snapshots.assembling_snapshot``), else of its own; ``None`` without the snapshot."""
+    found = assembling_snapshot(conn, snapshot_id) or snapshot_row(conn, snapshot_id)
+    if found is None:
+        return None
+    return found.data_date if found.price_date is None else min(found.price_date, found.data_date)
 
 
 def _on_basis(row: OverrideRow, splits: Sequence[SplitRow]) -> Override:

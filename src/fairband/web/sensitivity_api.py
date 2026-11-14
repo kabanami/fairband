@@ -113,7 +113,7 @@ def add_sensitivity_routes(
                 deciles,
                 current,
                 at.date(),
-                {o.tag: o for o in engine_overrides(conn, symbol, applied, snapshot.data_date)},
+                {o.tag: o for o in engine_overrides(conn, symbol, applied, snapshot.id)},
                 cast(OverrideTag, body.row_tag),
                 body.row_values,
                 cast(OverrideTag, body.col_tag),

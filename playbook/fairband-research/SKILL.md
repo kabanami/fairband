@@ -434,10 +434,13 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   figure read as stored may be on the old basis. Check the consensus steps and any guided figure
   against the new basis before you read them. A review's overrides in dollars a share
   (`earnings.ntm`, `earnings.nri_gap`, `earnings.ntm_nri`, `earnings.cycle_gap`, `value.outside`)
-  and in shares (`shares.diluted`, `shares.committed`) made on a snapshot fetched before the split
-  apply on the new basis: the system divides a figure a share by the split's ratio and multiplies
-  a count by it, keeps the figure you entered, and names each in the note `override-split-scaled`
-  on the review. The JUDGMENT entry gives the figure in force, and its note the figure as entered
+  and in shares (`shares.diluted`, `shares.committed`) made on a snapshot whose figures had not
+  seen the split apply on the new basis once a snapshot's figures have: the system divides a
+  figure a share by the split's ratio and multiplies a count by it, keeps the figure you entered,
+  and names each in the note `override-split-scaled` on the review. A snapshot's figures have seen
+  a split when both its quote's date and the day its statements were fetched are on or after the
+  split's day; a snapshot a price refresh made carries the figures of the one it repriced, so a
+  refresh on the split's day before the US close has not seen it. The JUDGMENT entry gives the figure in force, and its note the figure as entered
   and the split. Check the figure in force against the new basis before you publish. A
   period-tied override whose input the split rescaled drops as "the input the override corrected
   changed": make it again on the new basis.

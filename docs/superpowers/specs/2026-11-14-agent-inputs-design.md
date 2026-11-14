@@ -189,11 +189,14 @@ on a 2-for-1, with nothing naming it. META splits in late January 2027.
 
 **The rule.** When the overrides of a row become the engine's, an override whose unit is dollars
 a share is divided by ρ, and one whose unit is shares is multiplied by ρ. ρ is the product of
-the ratios of the splits that took effect after the data date of the snapshot the override was
-made on, and at or before the data date of the snapshot being reviewed. The data date is the
-day the row's figures were fetched (method 4.10), so it says which splits those figures had
-seen; the price date does not, since a price refresh fetches no splits. The stored override
-keeps the figure the agent entered.
+the ratios of the splits that the figures of the snapshot being reviewed saw and the figures of
+the snapshot the override was made on did not. A snapshot's figures saw a split dated at or
+before its basis date. The basis date is the earlier of the price date and the data date of the
+snapshot that assembled the figures: the snapshot itself, or, for a snapshot a price refresh
+made, the latest earlier snapshot of the company that a full or scoped refresh or a revalue
+made. The split rule applies a split only from the price date on (method 4.2), and the data date
+is the day the figures were fetched (method 4.10); a price refresh fetches no splits and
+re-assembles nothing. The stored override keeps the figure the agent entered.
 
 It is done where the store's overrides become the engine's, once, for the refresh's follow, the
 web's recompute and a sensitivity reading. The engine knows no split.
@@ -292,8 +295,9 @@ Each test fails before its change, and its expected figures are worked by hand.
   revenue step wins over the rule; a Mature Stable row's cross-check follows.
 - Overrides at a split: a lasting `value.outside` made before a 2-for-1 is applied at half and
   a `shares.committed` at double; an override made after the split is not scaled; two splits
-  multiply; the JUDGMENT note, the bridge's new value and the note on the review; the same
-  figures through the web's recompute and a sensitivity reading.
+  multiply; an override made on a snapshot of the split's day whose price date is the day before
+  is scaled on the next; the JUDGMENT note, the bridge's new value and the note on the review;
+  the same figures through the web's recompute and a sensitivity reading.
 - The route drop: a lasting `moat.class` on a row whose phase moves to Start-up drops with the
   route's reason; after a `phase` override is dropped in the web, the overrides only its route
   read drop in the same answer; an unclassified row keeps its overrides; a period-tied override
@@ -336,3 +340,4 @@ drawer and the whole-branch review; the scratch revalues, the founder's reading,
 | 2026-11-14 | The founder ruled on the six items of theme 4, each on Claude's recommendation ("all as recommended"): a higher share count dilutes a Mature Growth value; an input takes a one-time amount a share off the next twelve months' earnings; two inputs for the revenue growth of years 2 and 3, and a rule that a revenue forecast from fewer than 5 analysts gives way to the earnings growth, measured on a copy before it is kept; a correction in dollars a share is scaled at a split and the row says so; a correction the row's route no longer reads is dropped with its reason; a guidance record may hold net income. |
 | 2026-11-14 | Settled by Claude while writing, on a map of the code, each marked *my call* above or stated here. Dilution is a new input, `shares.committed`, and `shares.diluted` keeps its arithmetic, because the count also corrects a share class or units, where the founder's rule would cut a right value (an Up-C on Mature Growth: HESM). The committed shares are period-tied only, as the diluted count is. The one-time item is Mature Growth's alone, period-tied only, moot under an applied `earnings.ntm`. The two revenue inputs are Mature Growth's alone and period-tied only. A missing revenue analyst count is thin. A thin revenue step raises no flag. The split's scaling reads the two snapshots' data dates and covers counts as well as dollars a share; a period-tied override whose reading the split rescales still drops. An unclassified row keeps its overrides. The agent derives an EPS from guided net income; the server does not divide. The method stays 1.4 but for the thin rule. |
 | 2026-11-14 | Changed at the build, on the review of Task 3: the reading of `earnings.ntm` does not add the one-time amount back. Under a guided EPS the amount is moot, so the add-back made a sensitivity grid mark the mechanical value as the pair in force. |
+| 2026-11-14 | Changed at the build, on Task 5's report: the scaling reads a basis date, the earlier of the price date and the data date of the snapshot that assembled the figures, in place of the data date alone. A refresh on a split's day before the US close has the split's day as its data date and the day before as its price date, so its figures did not see the split, and under the data date alone an override made on it was never scaled. Two residuals stay: a failed fetch of the splits beside a good fetch of the statements, and a refusal snapshot from a failed fetch. |

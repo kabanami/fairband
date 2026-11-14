@@ -1020,6 +1020,11 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "`override-split-scaled`",
                 "the figure in force",
                 "the input the override corrected changed",
+                # as amended at the build: the basis date, the earlier of the two dates
+                "whose figures had not seen the split",
+                "both its quote's date and the day its statements were fetched are on or after",
+                "carries the figures of the one it repriced",
+                "a refresh on the split's day before the US close has not seen it",
             ),
         ),
     ):
@@ -1036,6 +1041,7 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         " quote's date."
     ), split
     assert "drop and re-make them on the new basis" not in split
+    assert "made on a snapshot fetched before the split" not in split
     # a mature row with the charge off or the return unavailable still takes the judgment; only
     # the other routes have no runway return to decide (the Task 8 fix round 2, method 14.4)
     for words in (

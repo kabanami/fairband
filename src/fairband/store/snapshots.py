@@ -7,7 +7,9 @@ the designation's word, ``flags`` as a JSON list of the flag codes, and the poli
 method version and settings hash the result cites. The ``stance5`` and ``stance3`` columns of
 method 0.5 are no longer written: a new row leaves them NULL. The screen reads the snapshot with
 the greatest id per symbol, the snapshots its agents' records rest on in one read
-(``snapshot_rows``), and the Settings page the versions most of the screen's cite. The report
+(``snapshot_rows``), and the Settings page the versions most of the screen's cite. A review reads
+the snapshot that assembled a snapshot's figures (``assembling_snapshot``) to know which splits
+they had seen (spec 2026-11-14 7). The report
 page's price chart and its table twin read a company's band over time from the copied columns
 alone (``band_points``), never parsing a result.
 """
@@ -146,6 +148,20 @@ def latest_snapshot(conn: sqlite3.Connection, symbol: str) -> SnapshotRow | None
 def snapshot_row(conn: sqlite3.Connection, snapshot_id: int) -> SnapshotRow | None:
     """The snapshot ``snapshot_id``, if there is one."""
     row = conn.execute("SELECT * FROM snapshots WHERE id = ?", (snapshot_id,)).fetchone()
+    return None if row is None else _snapshot(row)
+
+
+def assembling_snapshot(conn: sqlite3.Connection, snapshot_id: int) -> SnapshotRow | None:
+    """The snapshot that assembled the figures snapshot ``snapshot_id`` carries: itself when a full
+    or scoped refresh or a revalue wrote it, else, for a price refresh's, the company's latest
+    earlier snapshot one of those wrote (a price refresh reprices a snapshot's figures and
+    assembles none); ``None`` when there is no such snapshot, or no snapshot ``snapshot_id``."""
+    row = conn.execute(
+        "SELECT s.* FROM snapshots s JOIN refreshes r ON r.id = s.refresh_id"
+        " WHERE s.symbol = (SELECT symbol FROM snapshots WHERE id = ?) AND s.id <= ?"
+        " AND r.kind IN ('full', 'scoped', 'revalue') ORDER BY s.id DESC LIMIT 1",
+        (snapshot_id, snapshot_id),
+    ).fetchone()
     return None if row is None else _snapshot(row)
 
 
