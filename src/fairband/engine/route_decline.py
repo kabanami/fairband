@@ -74,7 +74,9 @@ the value need not rise with d.
 
 Flags, in order: ``path-held``, ``decline-rate-floored``, ``path-on-trend``,
 ``consensus-recovery`` naming each consensus year 1 to K that grows, ``few-analysts`` on years 2
-and 3 only; ``line-not-presented:debt``, ``:cash`` and ``:totalLiabilities``;
+and 3 only; ``line-not-presented:debt`` and ``:cash``, then ``sheet-shift`` when the newest sheet
+is a quarter's whose debt, cash or minority interest shifted against the newest annual sheet's
+(``route_revenue_growth.bridge_flags``), then ``line-not-presented:totalLiabilities``;
 ``peers-from-industry`` when the industry's peers gave the sales-to-capital;
 ``tax-loss-history-unknown``; ``ncav-floor`` when the floor binds and π is not 1 (at π = 1 the
 floor has no weight); ``distress-not-charged``; ``z-distress``; ``f-score-low``;

@@ -601,9 +601,10 @@ def check(policy: Policy) -> None:
     outside every one. A rule between two settings names both, in the order of 8.2 and joined by
     a comma, so r against g_T reads ``"required_return, terminal_growth: …"``; the Settings page
     then stands the sentence beside the one the user changed (B-75). Then the ranges of the two
-    values policy v10 adds, the three v11 adds, the one v12 adds and the four v13 adds, which are
-    not settings and so are only ever the file's (spec 2026-11-09, section 11; spec 2026-11-10,
-    section 9; ``method.md`` 4.6 rule 5; spec 2026-11-13, sections 7.1 and 8)."""
+    values policy v10 adds, the three v11 adds, the one v12 adds, the four v13 adds and the one
+    v15 adds, which are not settings and so are only ever the file's (spec 2026-11-09, section
+    11; spec 2026-11-10, section 9; ``method.md`` 4.6 rule 5; spec 2026-11-13, sections 7.1, 8 and
+    12.5)."""
     p, u, f = policy, policy.universe, policy.refresh
     # A. Valuation
     if not 0.04 <= p.required_return <= 0.20:
@@ -752,3 +753,5 @@ def check(policy: Policy) -> None:
     band_low, band_high = p.share_count_gap_band
     if not (isfinite(band_low) and isfinite(band_high) and band_low < 1 < band_high):
         raise ValueError("share_count_gap_band: the low must be below 1 and the high above 1")
+    if not (isfinite(p.sheet_shift_multiple) and p.sheet_shift_multiple > 1):
+        raise ValueError("sheet_shift_multiple: must be above 1")

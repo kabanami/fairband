@@ -494,6 +494,46 @@ FRVO's corrections brought in a later quarter that the engine now reads itself. 
 stays. The readout lists each drop with the reviewed value before and the mechanical value after,
 and each period-tied override that stays.
 
+### 12.5 The sheet-shift note (B-184)
+
+The founder's choice of 2026-11-14, on plan 2's readouts. The engine reads the newest sheet
+whole, and the vendor's quarter is sometimes wrong, or on another basis than its annual sheet:
+3M's minority interest reads $1,013 million on the quarter of 30 Sep 2026, where every sheet
+since 2015 showed $39 million to $71 million. A note says so. It moves no value. It is built
+after plan 2 went live, under method 1.4 and policy v15, and one revalue applies it.
+
+**`sheet-shift`**, "Balance sheet shift", a note: shown, never counted. On a result of the
+revenue-growth, Decline or Start-up route whose newest sheet is a quarter's, where the company
+has an annual sheet on file. One sentence for each reason that holds, the quarter's figure
+against the newest annual sheet's:
+
+1. **Debt.** The quarter shows no debt, its short-term and long-term debt summing to nil or
+   not presented, and the annual sheet's debt is above zero.
+2. **Cash.** The quarter shows no cash and cash equivalents, or no short-term investments,
+   where the annual sheet's line is above zero. The sentence names the line.
+3. **Minority interest.** The two figures differ by more than `sheet_shift_multiple` (3) times,
+   either way; a nil or a line not presented against a figure above zero differs so. A figure
+   at or below zero counts as nil, as section 13 has it. At exactly 3 times the note is silent.
+
+Each sentence gives both figures with their sheets' periods and what may follow: the debt may
+be short, or the annual line held more than borrowings; the cash may be short; the vendor's
+line may be wrong. A debt or a cash that only rose or fell between the two sheets raises
+nothing: balances move.
+
+In a review, a sentence does not show under the input that decides its figure: `balance.debt`
+for the debt, `balance.cash` for the two cash lines, `balance.minority` for the minority
+interest.
+
+**Policy v15** adds `sheet_shift_multiple` 3, not a setting. The method version stays 1.4: no
+value moves (method 11 has such rows, "0.9, policy v9").
+
+No test of size (*my call*): the sentence gives the figures and the reader judges. The readout
+counts the rows, and a floor follows if the note proves noisy. Expected from plan 2's scratch
+run: about 30 rows for the debt, 13 for a cash line and 13 for the minority interest.
+
+The playbook gains an entry for the note: the agent reads the balance sheet in the filing of
+that quarter and sets the input that decides the figure.
+
 ## 13. The minority interest (B-174)
 
 **The figure.** `minorityInterest` joins the stored balance lines, annual and quarterly; the
@@ -731,6 +771,7 @@ runs, the founder's reading of the anchor's readout, and the live step.
 | 2026-11-14 | The repaired rule built and read out. `782c6f9` replaced the first form (the Task 8 implementer, resumed; a task review, clean), and `8bb0e1c` re-read the Methodology page's six examples under 1.4 from the scratch run (a task review compared about 120 figures with the rows). The second scratch readout, a revalue under 1.4 against the same control under 1.3: all 483 Mature Stable rows and all 293 Mature Growth rows on their periods identical; 455 rows corrected, all valued on both sides, the median move +0.08%, 90% within 5% and 96% within 10%, 17 rows beyond 10% and 2 beyond 25% (ALKS, from a sum of −0.07 to 0.24; CPNG −31%, whose 2027 annual estimate is below its 2027 quarters); BA newly refused (a sum of 0.001 turned below zero); GOOG +0.9%, ASML −2.1%, CLS +1.3%, AZN +1.5%, ALNY +12.1%, CCEP +22.0%, HIMS −24.3%, TSLA −11.2%; `thin-ntm` on 279 rows where 1.3 had 645 (159 for a thin period of the year partly reported, 118 for an annual year below 5 analysts, 2 for a year not wholly estimated). The balance sheet's part of both scratch readouts: 284 of 294 firm-value rows read a quarter's sheet, the sheet's median age at the price date fell from 317 days to 44, 176 of 179 rows valued on both sides moved (median +0.7%; IEP −90%, XPEV −85%, GME −82%; EROC +454%, TDS +391%, AD +288%), CIFR, MNDY, QXO, MRVI and WS newly refused and CLDX, ECHO, FROG, LQDA, NVTS and RKLB newly valued (RKLB at $4.76, where its review read $4.57); the minority interest above zero on 80 rows. Claude. |
 | 2026-11-14 | Readout of plan 2 (section 17): the live step, on the founder's word ("option 1 as you suggested, proceed"). In order: the backup `fairband-before-method-1.4-2026-11-14.db`; the server stopped; main fast-forwarded to `8bb0e1c` and pushed; one full refresh by the command line, refresh 60, 13 minutes, fifteen FMP calls a company; the server started from main on 8470. Refresh 60 under 1.4 and v14: 1,581 companies (22 left the universe, ROKU among them, and 5 joined), 1,378 valued; every price the close of 13 Nov. Mature Growth: 454 rows corrected by the annual consensus, 290 on their periods, 48 refused before the anchor; `thin-ntm` on 273 rows (153, 119 and 1 by the three reasons). The firm-value routes: 294 rows, 286 with a sheet, 273 a quarter's; the minority interest above zero on 80. The live run fetched every dataset anew, so it is compared with the scratch run by cause: of 1,576 rows on both, 739 are identical in value and refusal and 837 differ, and each of eight large differences traced (IHS, KEP, RDNT, DGII, TTD, DOCN, TKO, TAK) rests on a newer vendor answer: a trailing quarter that moved from 30 Jun to 30 Sep, or estimates of 14 Nov. The overrides: all 43 lasting still applied; 5 of the 10 period-tied dropped, each for a changed reading: SYM's `balance.cash` and RKLB's `balance.cash` and `balance.debt`, which the engine now reads itself at the same figures, and CLS's two steps, whose consensus moved; FRVO's two stay (the row refuses before its route). The reviews: 27 written; SYM's row no longer counts `share-count-gap`, and 12 reviews' flags differ from their snapshot's. Claude. |
 | 2026-11-14 | Found on plan 2's readouts, and what is owed. The vendor's quarterly sheet shifts sharply against the annual one on some rows: of 78 quarterly minority interests above zero, 12 were more than 3 times or under a third of the annual sheet's, or new (3M's $1,013 m against $39 m to $71 m on every earlier sheet, a 14% lower value; QNT, WS, STUB, EROC); short-term investments read nil where the year held them on 12 rows, long-term debt on 33, cash on 1. The founder chose to go live as built and to add a note on such a row next (B-184). An Up-C whose share-count override holds the units now also has its minority interest subtracted (SYM, B-186). A window period of 0 on 0 analysts counts as an estimate (EDU, B-185). Roku, the page's Young Growth example, left the universe (B-187). The reviews' deferred minors are B-188. Nobody looked at the drawer in a browser during the build; the founder checks it. Every research session restarts its MCP process (or reconnects `fairband`) to read the new input, the new entries and the `company` tool's review flags. Claude. |
+| 2026-11-14 | B-184: the note `sheet-shift` (section 12.5), built after plan 2 on the founder's word ("ok do B-184 then theme 4"). Settled by Claude, each open to the founder: a note, not a quality warning, as the founder chose; the debt and the two cash lines raise it only when the quarter reads nil where the annual sheet holds a figure, never for a change of size; the minority interest raises it on more than 3 times either way, the one threshold, a policy value of v15; no test of size; the method version stays 1.4. |
 
 Builder check: done 2026-11-13, one round (Opus 5.5, xhigh). It found two statements about the
 method that were wrong (the drop rule of 12.4; a refusal for an override that moves nothing,

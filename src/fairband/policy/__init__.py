@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v14.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v15.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v13 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v14 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -31,7 +31,10 @@ at which stock pay is material and the share of the statutory tax rate, each fai
 outside 0 to 1; the multiple of the stock pay a share, failing at or below 0; and the
 share-count band, whose low must be below 1 and whose high above 1. Nor is the trailing stock
 pay's override range v13 adds, nor the runway return's, which v13 widens to 500%. v14 adds no
-value, only the minority interest's override range (spec 2026-11-13, sections 13 and 14).
+value, only the minority interest's override range (spec 2026-11-13, sections 13 and 14). Nor is
+the value v15 adds (spec 2026-11-13, section 12.5), the multiple by which a quarter's minority
+interest differs from the newest annual sheet's before the note ``sheet-shift`` names it: it
+fails at load at or below 1.
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
 five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap
@@ -53,7 +56,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v14.toml"
+_POLICY_FILE = "fairband-policy-v15.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -152,6 +155,7 @@ class Policy:
     sbc_basis_tax_share: float
     sbc_basis_gap_multiple: float
     share_count_gap_band: tuple[float, float]
+    sheet_shift_multiple: float
     forward_pe_unit_error: float
     validity_fallback_days: int
     aging_fraction: float
@@ -211,7 +215,7 @@ def in_currency(policy: Policy, differential: float) -> Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v14 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v15 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -286,6 +290,7 @@ def load_policy(path: Path | None = None) -> Policy:
         sbc_basis_tax_share=read("sbc_basis_tax_share", _num),
         sbc_basis_gap_multiple=read("sbc_basis_gap_multiple", _num),
         share_count_gap_band=read("share_count_gap_band", _pair),
+        sheet_shift_multiple=read("sheet_shift_multiple", _num),
         forward_pe_unit_error=read("forward_pe_unit_error", _num),
         validity_fallback_days=read("validity_fallback_days", _whole),
         aging_fraction=read("aging_fraction", _num),

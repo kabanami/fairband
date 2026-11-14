@@ -53,8 +53,10 @@ sales_to_capital's value, tax_rate and terminal_roic, with the policy's r and g_
 (``market_cap_at``), with ``debt``, ``cash`` and ``minority_interest``, and ``below_net_cash``
 re-reads its flag; nothing else moves.
 
-Flags, in order: ``line-not-presented:debt`` and ``:cash``; ``peers-from-industry`` when the peers
-are the industry's; ``tax-loss-history-unknown`` when the requirement's ramp starts from a loss or
+Flags, in order: ``line-not-presented:debt`` and ``:cash``; ``sheet-shift`` when the newest
+sheet is a quarter's whose debt, cash or minority interest shifted against the newest annual
+sheet's (``route_revenue_growth.bridge_flags``); ``peers-from-industry`` when the peers are the
+industry's; ``tax-loss-history-unknown`` when the requirement's ramp starts from a loss or
 has a loss year; ``below-net-cash`` when EV_price is at or below zero; ``burn-cover-short`` below
 ``burn_cover_flag_years``. Never the ROIC flags, ``return-above-peers``, ``few-analysts`` or the
 trailing flags: no path reads the consensus or the company's return.

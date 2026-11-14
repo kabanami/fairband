@@ -80,6 +80,9 @@ unknown; the path's, ``path-held``, ``consensus-above-base-rate`` when the year-
 the cap, then ``few-analysts``; the capital build's, the ten-year ROIC flags and their line flags,
 then ``line-not-presented:debt`` and ``line-not-presented:cash`` when a figure is unknown or
 assembly's note names a line the sheet lacks, the sentence naming the sheet's period;
+``sheet-shift`` when the newest sheet is a quarter's whose debt, cash or minority interest
+shifted against the newest annual sheet's (spec 2026-11-13 12.5), on a row refused for the
+target margin or the sales-to-capital too;
 ``peers-from-industry`` when the peers are the industry fallback's (``CompanyInputs.peer_source``),
 on a row refused for the target margin or the sales-to-capital too; ``tax-loss-history-unknown``
 when the forecast has a loss year or the trailing margin is below zero; ``margin-ramp-in-dollars``
@@ -105,7 +108,8 @@ and highest margins kept (both the override's on a row with no counted peers, wh
 refused for its target). ``capital.sales_to_capital`` replaces the measure (``used``
 "override"). ``balance.debt`` and ``balance.cash`` replace the balance sheet's figures before
 they count as nil, and a replaced line raises no ``line-not-presented`` flag; ``balance.minority``
-replaces the sheet's minority interest (``route_steps.minority``).
+replaces the sheet's minority interest (``route_steps.minority``). Each of the three silences the
+sentence of ``sheet-shift`` on the figure it decides.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the equity a share: the result's value is the route's value a share plus the figure, which
@@ -137,7 +141,7 @@ from fairband.engine.anchor import (
     ntm_window,
     sales_class,
 )
-from fairband.engine.flags import millions, value_spread_flag
+from fairband.engine.flags import millions, sheet_shift_flag, value_spread_flag
 from fairband.engine.multiples import epv, growth_share
 from fairband.engine.overrides import OverrideTag
 from fairband.engine.revenue_growth import (
@@ -199,6 +203,8 @@ from fairband.policy import BaseRateClass, Moat, Policy
 
 _NOT_POSITIVE = "value not positive under the reinvestment charge"
 _BALANCE_TAGS: dict[str, OverrideTag] = {"debt": "balance.debt", "cash": "balance.cash"}
+# The balance corrections each of which decides a figure the note sheet-shift names.
+_SHEET_TAGS: tuple[OverrideTag, ...] = ("balance.debt", "balance.cash", "balance.minority")
 _PEERS = Provenance("FMP stock-peers and the peers' statements", None, None, None)
 _MARGINS_TESTED = "the peers' lowest, median and highest target margins"
 TAX_LOSS = Flag(
@@ -688,7 +694,10 @@ def bridge_flags(c: Context | StartUpContext) -> tuple[Flag, ...]:
     """``line-not-presented:debt`` and ``:cash`` for a figure the bridge counts as nil in part or
     in full: unknown, or with a line assembly's note names as not presented; none for a line an
     agent's balance correction replaces. The sentence names the newest balance sheet's period
-    (``CompanyInputs.sheet``), which never raises the flag itself."""
+    (``CompanyInputs.sheet``), which never raises the flag itself. Then the note ``sheet-shift``
+    (``flags.sheet_shift_flag``, spec 2026-11-13 12.5) when that sheet is a quarter's with the
+    newest annual sheet's lines beside it, each of its sentences silent under the balance
+    correction that decides its figure, in the row's currency."""
     i = c.inputs
     lines = (
         ("debt", i.debt, "short- and long-term debt"),
@@ -696,7 +705,7 @@ def bridge_flags(c: Context | StartUpContext) -> tuple[Flag, ...]:
     )
     sheet = "The newest balance sheet" + ("" if i.sheet is None else f" ({i.sheet.label})")
     replaced = {name for name, _, _ in lines if _BALANCE_TAGS[name] in c.overrides}
-    return tuple(
+    flags = tuple(
         Flag(
             f"line-not-presented:{name}",
             f"Line not presented: {name}",
@@ -707,6 +716,11 @@ def bridge_flags(c: Context | StartUpContext) -> tuple[Flag, ...]:
         for name, figure, words in lines
         if name not in replaced and (figure is None or name in i.notes)
     )
+    if i.sheet is None or i.sheet.figures is None or i.sheet.annual is None:
+        return flags
+    decided = [tag for tag in _SHEET_TAGS if tag in c.overrides]
+    shift = sheet_shift_flag(i.sheet.figures, i.sheet.annual, c.policy, money(i), decided)
+    return flags + present(shift)
 
 
 def judged_target(c: Context | StartUpContext, found: TargetMargin | None) -> TargetMargin | None:

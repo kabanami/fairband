@@ -16,7 +16,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
-from fairband.engine.balance import BalanceYear, NewestSheet
+from fairband.engine.balance import BalanceYear, NewestSheet, SheetFigures
 from fairband.engine.classifier import Deciles, FiscalYear, Series
 from fairband.engine.revenue_growth import PeerFigures
 from fairband.engine.roic import CapitalYear
@@ -153,6 +153,47 @@ def on_quarter_sheet(
         date(2026, 9, 30), "fiscal 2026 Q3", True, current_assets, liabilities, None
     )
     return on_sheet(i, sheet)
+
+
+# The note sheet-shift on ``shifted_sheet`` (spec 2026-11-13 12.5): the quarter's sheet presents
+# no minority interest where fiscal 2025's sheet showed $45 m.
+SHIFT_SENTENCE = (
+    "The balance sheet of fiscal 2026 Q3 shows no minority interest where fiscal 2025 showed "
+    "$45.0 million, so the vendor's line may be wrong."
+)
+
+
+def shifted_sheet(i: CompanyInputs) -> NewestSheet:
+    """The newest balance sheet of ``i`` as a quarter's, of 30 Sep 2026, "fiscal 2026 Q3", its
+    floor's two lines and its minority interest as they were, carrying the five lines the note
+    ``sheet-shift`` compares (spec 2026-11-13 12.5): on the quarter and on fiscal 2025's sheet
+    the debt of ``i`` as long-term debt and its cash as cash and equivalents, the short-term debt
+    and investments at nil; the quarter's minority interest the sheet's, none on every fixture,
+    against $45 m on fiscal 2025's sheet. So the note names the minority interest alone
+    (``SHIFT_SENTENCE``), and the figures in force are as they were: no value moves. Without a
+    sheet on file, a quarter's that presents neither floor line nor a minority interest."""
+    sheet = i.sheet or NewestSheet(date(2026, 9, 30), "fiscal 2026 Q3", True, None, None, None)
+    quarter = SheetFigures("fiscal 2026 Q3", 0.0, i.debt, i.cash, 0.0, sheet.minority_interest)
+    return replace(
+        sheet,
+        period_end=date(2026, 9, 30),
+        label="fiscal 2026 Q3",
+        quarterly=True,
+        figures=quarter,
+        annual=replace(quarter, label="fiscal 2025", minority_interest=45e6),
+    )
+
+
+def on_shifted_sheet(i: CompanyInputs) -> CompanyInputs:
+    """``i`` on its ``shifted_sheet``, cited as assembly cites it (``on_sheet``)."""
+    return on_sheet(i, shifted_sheet(i))
+
+
+def unshifted(i: CompanyInputs) -> CompanyInputs:
+    """``i`` with its newest balance sheet as it is but for the two sheets' five lines, which only
+    the note ``sheet-shift`` reads."""
+    assert i.sheet is not None
+    return replace(i, sheet=replace(i.sheet, figures=None, annual=None))
 
 
 def with_minority(i: CompanyInputs, line: float | None) -> CompanyInputs:

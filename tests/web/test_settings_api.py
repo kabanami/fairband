@@ -63,11 +63,11 @@ def test_get_settings_shape(client: TestClient) -> None:
     }
     assert r["description"].startswith("The yearly return you require")
     assert body["current"] == {
-        "policyVersion": "fairband-policy-v14",
+        "policyVersion": "fairband-policy-v15",
         "settingsHash": EMPTY_SETTINGS_HASH,
     }
     assert body["valuedUnder"] == {
-        "policyVersion": "fairband-policy-v14",
+        "policyVersion": "fairband-policy-v15",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "fullRefreshAt": STARTED.isoformat(),
         "universeChanged": False,
@@ -274,7 +274,7 @@ def test_a_stored_row_the_policy_refuses_is_a_409_until_reset(
 def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> None:
     body = client.get("/api/policy").json()
     assert (body["version"], body["settingsHash"], body["changed"]) == (
-        "fairband-policy-v14",
+        "fairband-policy-v15",
         EMPTY_SETTINGS_HASH,
         0,
     )
@@ -304,6 +304,7 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "sbc_basis_tax_share": 0.5,
         "sbc_basis_gap_multiple": 10.0,
         "share_count_gap_band": [0.7, 1.3],
+        "sheet_shift_multiple": 3.0,  # the note sheet-shift (spec 2026-11-13 12.5)
     }
     for name, value in read_only.items():
         entry = body["values"][name]
@@ -318,9 +319,10 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
             "sbc_basis_tax_share",
             "sbc_basis_gap_multiple",
             "share_count_gap_band",
+            "sheet_shift_multiple",
         )
     )
-    assert units == ("fraction", "fraction", "times", "times")
+    assert units == ("fraction", "fraction", "times", "times", "times")
     assert set(body["values"]) == {s.name for s in SETTINGS} | set(read_only) | {
         "designation_edges",
         "wide_terminal_roic_cap",

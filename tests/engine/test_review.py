@@ -7,10 +7,12 @@ from datetime import UTC, date, datetime
 
 import pytest
 from support.engine_companies import (
+    SHIFT_SENTENCE,
     decline_inputs,
     high_growth_inputs,
     mature_growth_inputs,
     mature_stable_inputs,
+    on_shifted_sheet,
     quarter,
     start_up_inputs,
     young_growth_inputs,
@@ -229,6 +231,26 @@ def test_the_minority_interest_line_follows_the_cash_line(policy: Policy, decile
 
 def _codes(result: ValuationResult) -> list[str]:
     return [f.code for f in result.flags]
+
+
+def test_the_sheet_shift_note_is_silent_under_the_input_that_decides(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-13 12.5 on HGCO, whose quarter's sheet presents no minority interest where
+    fiscal 2025's sheet showed $45 m. Under ``balance.minority`` the minority sentence does not
+    show, and the note, which had no other, goes; under ``balance.cash``, which decides the cash
+    lines alone, the note stays as it was."""
+    inputs = on_shifted_sheet(high_growth_inputs())
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert SHIFT_SENTENCE in [f.sentence for f in mechanical.flags if f.code == "sheet-shift"]
+    minority = [OVERRIDE("balance.minority", 45e6)]
+    decided = review_company(inputs, deciles, policy, TODAY, minority, mechanical)
+    assert decided.result.value is not None and "sheet-shift" not in _codes(decided.result)
+    cash = [OVERRIDE("balance.cash", 2_000e6)]
+    kept = review_company(inputs, deciles, policy, TODAY, cash, mechanical)
+    assert kept.result.value is not None and kept.result.value != mechanical.value
+    [note] = [f for f in kept.result.flags if f.code == "sheet-shift"]
+    assert note.sentence == SHIFT_SENTENCE
 
 
 def test_a_count_that_reconciles_the_market_cap_clears_the_share_count_gap(

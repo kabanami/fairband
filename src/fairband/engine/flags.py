@@ -42,6 +42,17 @@ every row, so the ratio has one currency; the count is the one the row reads. Ei
 the wrong one: the count may leave out a share class or units that convert to shares, so that the
 value a share of the row can be wrong by the ratio, or the market cap may leave a class out.
 
+The sheet-shift note (spec 2026-11-13 12.5): ``sheet-shift`` when the newest balance sheet is a
+quarter's and a line of it differs sharply from the newest annual sheet's, one sentence for each
+reason that holds. A figure is nil when the sheet does not present it or holds it at or below
+zero. Reason 1: the quarter's short-term and long-term debt are both nil and the annual sheet's
+sum above zero, so the debt may be short, or the annual line held more than borrowings. Reasons 2
+and 3: the quarter's cash and equivalents, or its short-term investments, are nil and the annual
+sheet's line is above zero, so the cash may be short. Reason 4: the two minority interests, each
+nil counting as zero, differ by more than ``sheet_shift_multiple`` times either way, a figure
+above zero against none included, so the vendor's line may be wrong; exactly that multiple is
+silent. A balance that only rose or fell raises nothing.
+
 ``QUALITY_WARNINGS`` are the twelve flags that say the value may be wrong because the business or
 its figures are unusual (spec 2026-11-04 9.5, spec 2026-11-13 8); ``flag_count`` counts them on a
 row. Every other flag is a note: the classifier checks, the thin-consensus flags, the unknown
@@ -50,9 +61,10 @@ inputs, the engine's mechanics and the bookkeeping flags. A note is shown and ne
 
 import math
 import statistics
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 
 from fairband.engine.anchor import SbcBasis, StockPayHistory, TrailingFigures
+from fairband.engine.balance import SheetFigures
 from fairband.engine.classifier import FiscalYear, Series, operating_margin
 from fairband.engine.types import Flag
 from fairband.policy import Policy
@@ -300,6 +312,78 @@ def share_count_flag(
         f"{ratio:.2f}, outside {low:.2f} to {high:.2f}. The count may leave out a share class or "
         "units that convert to shares, or the market cap may leave a class out.",
     )
+
+
+def sheet_shift_flag(
+    quarter: SheetFigures,
+    annual: SheetFigures,
+    policy: Policy,
+    currency: str = "USD",
+    decided: Collection[str] = (),
+) -> Flag | None:
+    """``sheet-shift`` when a line of ``quarter``, the quarter's sheet in use, differs sharply
+    from ``annual``'s, the newest annual sheet (the module docstring): one sentence for each
+    reason that holds, the debt, the cash and equivalents, the short-term investments, the
+    minority interest, joined by a space, the first naming the quarter's sheet and each later one
+    starting "It shows". Money is in millions after ``$`` or the reporting ``currency``'s code.
+    ``decided`` holds the override tags applied in a review: ``balance.debt`` silences the debt's
+    sentence, ``balance.cash`` the two cash lines', ``balance.minority`` the minority interest's.
+    ``None`` with no sentence left."""
+    shown: list[str] = []
+    since = f"where {annual.label} showed"
+    if "balance.debt" not in decided:
+        debt = (annual.short_term_debt or 0.0) + (annual.long_term_debt or 0.0)
+        if _nil(quarter.short_term_debt) and _nil(quarter.long_term_debt) and debt > 0:
+            shown.append(
+                f"no debt {since} {millions(debt, currency)}, so the debt may be short, or the "
+                "annual line held more than borrowings."
+            )
+    if "balance.cash" not in decided:
+        for words, held, before in (
+            (
+                "cash and cash equivalents",
+                quarter.cash_and_equivalents,
+                annual.cash_and_equivalents,
+            ),
+            (
+                "short-term investments",
+                quarter.short_term_investments,
+                annual.short_term_investments,
+            ),
+        ):
+            if _nil(held) and before is not None and before > 0:
+                shown.append(
+                    f"no {words} {since} {millions(before, currency)}, so the cash may be short."
+                )
+    if "balance.minority" not in decided:
+        q, a = _at_book(quarter.minority_interest), _at_book(annual.minority_interest)
+        m = policy.sheet_shift_multiple
+        wrong = "so the vendor's line may be wrong."
+        if q > 0 and a == 0:
+            shown.append(f"a minority interest of {millions(q, currency)} {since} none, {wrong}")
+        elif q == 0 and a > 0:
+            shown.append(f"no minority interest {since} {millions(a, currency)}, {wrong}")
+        elif q > 0 and a > 0 and (q > m * a or a > m * q):
+            shown.append(
+                f"a minority interest of {millions(q, currency)} {since} "
+                f"{millions(a, currency)}, more than {m:g} times apart, {wrong}"
+            )
+    if not shown:
+        return None
+    first = f"The balance sheet of {quarter.label} shows {shown[0]}"
+    sentence = " ".join([first, *(f"It shows {words}" for words in shown[1:])])
+    return Flag("sheet-shift", "Balance sheet shift", sentence)
+
+
+def _nil(figure: float | None) -> bool:
+    """A line the sheet does not present, or holds at or below zero."""
+    return figure is None or figure <= 0
+
+
+def _at_book(figure: float | None) -> float:
+    """A minority interest as the note reads it: nil where the sheet does not present it or
+    holds it at or below zero, as the routes count it (spec 2026-11-13 13)."""
+    return 0.0 if figure is None else max(0.0, figure)
 
 
 def _money(x: float, currency: str) -> str:

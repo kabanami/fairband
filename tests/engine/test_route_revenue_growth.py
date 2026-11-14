@@ -9,12 +9,15 @@ from typing import Any
 import pytest
 from support.engine_companies import (
     QUARTER_SHEET_SOURCE,
+    SHIFT_SENTENCE,
     annual,
     capital_years,
     fiscal_years,
     half_yearly,
     on_quarter_sheet,
+    on_shifted_sheet,
     quarter,
+    unshifted,
     with_minority,
     with_ntm_revenue,
 )
@@ -907,6 +910,41 @@ def test_the_minority_interest_comes_off_the_equity(
         replace(high_growth_inputs, peers=held.peers[:2]), deciles, policy, TODAY
     )
     assert refused.intermediates["implied_margin"] > without.intermediates["implied_margin"]
+
+
+def test_a_quarter_sheet_that_shifted_is_noted_and_moves_nothing(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 12.5: HGCO's newest sheet is its quarter of 30 Sep 2026, which presents no
+    minority interest where fiscal 2025's sheet showed $45 m. The note ``sheet-shift`` follows the
+    bridge's ``line-not-presented`` flags; the value, the levels, every intermediate, the inputs
+    and the other flags are the row's without the two sheets' lines. A row refused for its target
+    margin shows it too, and a stored row repriced keeps it as it was."""
+    hg = on_shifted_sheet(high_growth_inputs)
+    r = value_company(hg, deciles, policy, TODAY)
+    plain = value_company(unshifted(hg), deciles, policy, TODAY)
+    assert r.route == "revenue-growth" and r.value is not None
+    [note] = [f for f in r.flags if f.code == "sheet-shift"]
+    assert (note.word, note.sentence) == ("Balance sheet shift", SHIFT_SENTENCE)
+    assert (r.value, r.levels, r.designation) == (plain.value, plain.levels, plain.designation)
+    assert (r.intermediates, r.inputs) == (plain.intermediates, plain.inputs)
+    assert tuple(f for f in r.flags if f.code != "sheet-shift") == plain.flags
+    assert "sheet-shift" not in codes(plain)
+    # its place: right after the bridge's line flags, before the industry peers
+    thin = on_shifted_sheet(replace(high_growth_inputs, cash=None, peer_source=FROM_INDUSTRY))
+    route_codes = codes(value_company(thin, deciles, policy, TODAY))
+    at = route_codes.index("sheet-shift")
+    assert route_codes[at - 1 : at + 2] == [
+        "line-not-presented:cash",
+        "sheet-shift",
+        "peers-from-industry",
+    ]
+    refused = value_company(replace(hg, peers=hg.peers[:2]), deciles, policy, TODAY)
+    assert_refused(refused, "no target margin: 2 mature peers")
+    assert sentence(refused, "sheet-shift") == SHIFT_SENTENCE
+    assert r.price is not None
+    moved = reprice(result_from_json(result_to_json(r)), r.price * 0.5, REPRICED, policy)
+    assert sentence(moved, "sheet-shift") == SHIFT_SENTENCE
 
 
 def test_a_trailing_margin_below_the_bound_takes_the_dollar_ramp(

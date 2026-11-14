@@ -12,10 +12,13 @@ from datetime import UTC, date, datetime
 import pytest
 from support.engine_companies import (
     QUARTER_SHEET_SOURCE,
+    SHIFT_SENTENCE,
     annual,
     fiscal_years,
     half_yearly,
     on_quarter_sheet,
+    on_shifted_sheet,
+    unshifted,
     with_minority,
     with_ntm_revenue,
 )
@@ -1172,6 +1175,37 @@ def test_the_ncav_floor_names_the_minority_interest(
     moved = reprice(stored, 4.0, REPRICED, policy)
     fresh = value_company(replace(with_minority(floor, 50 * M), price=4.0), deciles, policy, TODAY)
     assert sentence(moved, "ncav-floor") == sentence(fresh, "ncav-floor") == less
+
+
+def test_a_quarter_sheet_that_shifted_is_noted_and_moves_nothing(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 12.5: DCCO's newest sheet is its quarter of 30 Sep 2026, which presents no
+    minority interest where fiscal 2025's sheet showed $45 m. The note ``sheet-shift`` shows, the
+    bridge's ``line-not-presented`` flags before it and the floor's after; the value, the levels,
+    every intermediate, the inputs and the other flags are the row's without the two sheets'
+    lines."""
+    dc = on_shifted_sheet(decline_inputs)
+    r = value_company(dc, deciles, policy, TODAY)
+    plain = value_company(unshifted(dc), deciles, policy, TODAY)
+    assert r.route == "decline" and r.value is not None
+    assert sentence(r, "sheet-shift") == SHIFT_SENTENCE
+    assert (r.value, r.levels, r.intermediates, r.inputs) == (
+        plain.value,
+        plain.levels,
+        plain.intermediates,
+        plain.inputs,
+    )
+    assert tuple(f for f in r.flags if f.code != "sheet-shift") == plain.flags
+    # its place among the line flags: no cash and no total liabilities on the quarter's sheet
+    lines = replace(sheet(decline_inputs), total_liabilities=None)
+    bare = on_shifted_sheet(replace(decline_inputs, cash=None, sheet=lines))
+    found = route_codes(value_company(bare, deciles, policy, TODAY))
+    assert [c for c in found if c.startswith("line-not-presented") or c == "sheet-shift"] == [
+        "line-not-presented:cash",
+        "sheet-shift",
+        "line-not-presented:totalLiabilities",
+    ]
 
 
 def test_the_consensus_is_read_past_year_three_on_enough_analysts(

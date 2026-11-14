@@ -925,6 +925,22 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
             ),
         ),
         (
+            # the sheet-shift note (spec 2026-11-13 12.5): the quarter's filing decides the figure
+            "sheet-shift",
+            (
+                "a quarter's",
+                "the newest annual sheet's",
+                "the balance sheet in the filing of that quarter",
+                "`balance.debt`",
+                "`balance.cash`",
+                "`balance.minority`",
+                "the sentence it decides does not show",
+                "lease liabilities",
+                "needs no input",
+                "the report says so",
+            ),
+        ),
+        (
             "split-pending",
             (
                 "no net-income mean",
@@ -1168,7 +1184,7 @@ def test_the_skill_reads_a_foreign_filer() -> None:
             r"^- `([\w-]+)`: (.*?)(?=^- |^$|\Z)", eight, re.MULTILINE | re.DOTALL
         )
     }
-    assert "Twelve flags ask for a decision of yours." in steps[8]
+    assert "Thirteen flags ask for a decision of yours." in steps[8]
     for code, words in (
         ("basis-scaled", ("the ADR ratio", "read as stored", "section 8")),
         ("fx-stale", ("the rate", "price date", '`refresh_start("price")`')),

@@ -1,7 +1,9 @@
 """The settings catalogue, the overlay and the range checks (spec 2026-11-04 8.2 to 8.4, 8.9)."""
 
 import hashlib
+import math
 import re
+from dataclasses import replace
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,7 @@ from fairband.policy.settings import (
     EMPTY_SETTINGS_HASH,
     SETTINGS,
     apply_overlay,
+    check,
     default_of,
     exchange_symbol,
     setting,
@@ -101,7 +104,7 @@ def test_apply_overlay_changes_the_value_and_the_derived_edges() -> None:
     )
     assert p.required_return == 0.1 and p.wide_terminal_roic_cap == pytest.approx(0.14)
     assert p.designation_edges == (0.65, 0.8, 1.2, 1.5) and p.universe.cap_floor_usd == 5e9
-    assert p.version == "fairband-policy-v14" and p.settings_hash == settings_hash(
+    assert p.version == "fairband-policy-v15" and p.settings_hash == settings_hash(
         {"required_return": 0.1, "fair_band": [0.8, 1.2]}
     )
 
@@ -468,13 +471,26 @@ def test_symbols_are_upper_cased_on_apply() -> None:
 
 
 def test_load_policy_checks_the_file_too(tmp_path: Path) -> None:
-    text = resources.files("fairband.policy").joinpath("fairband-policy-v14.toml").read_text()
+    text = resources.files("fairband.policy").joinpath("fairband-policy-v15.toml").read_text()
     old = "[values.required_return]\nvalue = 0.09\n"
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
     copy.write_text(text.replace(old, "[values.required_return]\nvalue = 0.02\n"))
     with pytest.raises(ValueError, match=re.escape("required_return: must be from 4% to 20%")):
         load_policy(copy)
+
+
+@pytest.mark.parametrize("multiple", [1.0, 0.5, math.nan, math.inf])
+def test_a_sheet_shift_multiple_at_or_below_one_is_refused(multiple: float) -> None:
+    """Spec 2026-11-13 12.5: the multiple is no setting, so only the file sets it; at 1 or below
+    every minority interest that moved at all would show, so the check refuses it, and a NaN or
+    an infinity with it."""
+    with pytest.raises(ValueError, match="^sheet_shift_multiple: must be above 1$"):
+        check(replace(load_policy(), sheet_shift_multiple=multiple))
+
+
+def test_a_sheet_shift_multiple_above_one_is_accepted() -> None:
+    check(replace(load_policy(), sheet_shift_multiple=1.5))
 
 
 @pytest.mark.parametrize(

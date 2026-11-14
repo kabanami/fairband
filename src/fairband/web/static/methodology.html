@@ -1029,6 +1029,12 @@ ten.</span></li>
 <span class="body app-flags__what">The ten years' capital sums to zero or less.</span></li>
 <li><span class="label">Line not presented</span> <code class="fb-tag figure-sm">line-not-presented:…</code>
 <span class="body app-flags__what">A balance-sheet line is missing and counts as nil.</span></li>
+<li><span class="label">Balance sheet shift</span> <code class="fb-tag figure-sm">sheet-shift</code>
+<span class="body app-flags__what">The newest balance sheet is a quarter's, and it differs sharply
+from the newest annual one. Its debt or a cash line is nil where the annual sheet shows a figure. Or
+one sheet's minority interest is more than <span data-policy="sheet_shift_multiple">—</span> the
+other's. The quarter's figure may be wrong. It does not show where an agent sets that
+figure.</span></li>
 <li><span class="label">Charge zeroed</span> <code class="fb-tag figure-sm">charge-zeroed</code>
 <span class="body app-flags__what">Measured capital is zero or less, so the runway years carry no
 charge.</span></li>

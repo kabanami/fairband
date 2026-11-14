@@ -59,7 +59,10 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   and equivalents plus short-term investments: a line it does not present counts as nil and is
   named in the input's note (``"longTermDebt not presented"``), and with both lines missing the
   figure is ``None``. The quarterly sheet moves neither the data date nor the ``statements``
-  input;
+  input. The sheet carries the five lines the note ``sheet-shift`` compares (short-term and
+  long-term debt, cash and equivalents, short-term investments, the minority interest) as it
+  presents them, and, when it is a quarter's, the newest annual sheet's beside them (spec
+  2026-11-13 12.5);
 - the peers and their source: ``peers.peer_figures`` on the given deciles; none without them;
 - the stock splits: a split dated after the oldest trailing period's end and at or before the price
   date puts every share count and per-share figure on the quote date's basis, each trailing period
@@ -85,7 +88,7 @@ from datetime import date
 from functools import cache
 
 from fairband.engine.anchor import SAME_PERIOD_DAYS, AnnualEstimate, QuarterEstimate
-from fairband.engine.balance import NewestSheet
+from fairband.engine.balance import NewestSheet, SheetFigures
 from fairband.engine.classifier import Deciles
 from fairband.engine.route import CompanyInputs
 from fairband.engine.types import Provenance
@@ -474,7 +477,8 @@ def _market_cap(
 def _sheet(read: SheetRead | None) -> _Cited[NewestSheet | None]:
     """The newest balance sheet as the engine reads it, its floor's two lines and its minority
     interest as presented, cited as of its period end with its facts' newest observation and
-    entry; none without a sheet."""
+    entry; with the five lines the note ``sheet-shift`` compares, its own and, beside a quarter's,
+    the newest annual sheet's (spec 2026-11-13 12.5); none without a sheet."""
     if read is None:
         return None, None
     sheet = NewestSheet(
@@ -484,8 +488,23 @@ def _sheet(read: SheetRead | None) -> _Cited[NewestSheet | None]:
         total_current_assets=read.lines.get("totalCurrentAssets"),
         total_liabilities=read.lines.get("totalLiabilities"),
         minority_interest=read.lines.get("minorityInterest"),
+        figures=_figures(read),
+        annual=None if read.annual is None else _figures(read.annual),
     )
     return sheet, Provenance(_BALANCE_SHEET, read.period_end, read.observed_at, read.entered_at)
+
+
+def _figures(read: SheetRead) -> SheetFigures:
+    """The five lines of a balance sheet the note ``sheet-shift`` compares, under its label, each
+    as the sheet presents it."""
+    return SheetFigures(
+        label=read.label,
+        short_term_debt=read.lines.get("shortTermDebt"),
+        long_term_debt=read.lines.get("longTermDebt"),
+        cash_and_equivalents=read.lines.get("cashAndCashEquivalents"),
+        short_term_investments=read.lines.get("shortTermInvestments"),
+        minority_interest=read.lines.get("minorityInterest"),
+    )
 
 
 def adr_flag(conn: sqlite3.Connection, symbol: str, company: CompanyRow | None) -> bool | None:

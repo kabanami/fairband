@@ -1529,6 +1529,21 @@ def test_the_mature_routes_read_no_minority_interest(
         assert held == plain, route
 
 
+def test_the_mature_routes_show_no_sheet_shift(
+    mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 12.5: the note ``sheet-shift`` shows on the three routes that read the
+    newest balance sheet. On a quarter's sheet whose minority interest shifted against fiscal
+    2025's, neither mature route shows it, and each result is the one without the sheet."""
+    for inputs, route in ((mg_inputs, "mature-growth"), (ms_inputs, "mature-stable")):
+        plain = value_company(inputs, deciles, policy, TODAY)
+        sheet = engine_companies.shifted_sheet(inputs)
+        assert sheet.figures is not None and sheet.annual is not None
+        held = value_company(replace(inputs, sheet=sheet), deciles, policy, TODAY)
+        assert plain.route == route and "sheet-shift" not in codes(held)
+        assert held == plain, route
+
+
 def test_refusals_carry_the_price_facts(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

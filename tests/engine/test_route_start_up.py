@@ -10,7 +10,14 @@ from datetime import date
 from typing import Any
 
 import pytest
-from support.engine_companies import QUARTER_SHEET_SOURCE, on_quarter_sheet, with_minority
+from support.engine_companies import (
+    QUARTER_SHEET_SOURCE,
+    SHIFT_SENTENCE,
+    on_quarter_sheet,
+    on_shifted_sheet,
+    unshifted,
+    with_minority,
+)
 
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import Deciles
@@ -293,6 +300,23 @@ def test_the_minority_interest_on_the_start_up_fixture(
         nil = value_company(with_minority(su, line), deciles, policy, TODAY)
         assert nil.intermediates == plain.intermediates and nil.flags == plain.flags
         assert input_named(nil, "minority_interest").value == line
+
+
+def test_a_quarter_sheet_that_shifted_is_noted_and_moves_nothing(
+    start_up_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 12.5: SUCO's newest sheet is its quarter of 30 Sep 2026, which presents no
+    minority interest where fiscal 2025's sheet showed $45 m. The note ``sheet-shift`` is the
+    route's first flag, where the bridge's line flags stand; every intermediate, the inputs and
+    the other flags are the row's without the two sheets' lines."""
+    su = on_shifted_sheet(start_up_inputs)
+    r = value_company(su, deciles, policy, TODAY)
+    plain = value_company(unshifted(su), deciles, policy, TODAY)
+    assert_start_up(r)
+    assert route_codes(r)[0] == "sheet-shift"
+    assert sentence(r, "sheet-shift") == SHIFT_SENTENCE
+    assert (r.intermediates, r.inputs) == (plain.intermediates, plain.inputs)
+    assert tuple(f for f in r.flags if f.code != "sheet-shift") == plain.flags
 
 
 def test_the_burn_cover(start_up_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:

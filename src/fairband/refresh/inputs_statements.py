@@ -60,7 +60,8 @@ not present ``None`` and none taken from another sheet, and labelled by its fact
 and period ("fiscal 2026 Q3", "fiscal 2025"; "the period ending 30 Sep 2026" without them). The
 quarterly sheet is read apart from the datasets of ``statements_for``, so it moves neither the
 data date nor the ``statements`` input's stamps, and the capital years and the balance years stay
-on fiscal years.
+on fiscal years. A quarterly sheet in use carries the newest annual sheet beside it, read and
+labelled the same way, whose lines only the note ``sheet-shift`` compares (spec 2026-11-13 12.5).
 
 ``balance_lines`` reads the newest balance sheet's lines by FMP name, and ``stored_payload`` a
 payload the store keeps whole (the profile's, the peers'). ``balance_sums`` is the debt and the
@@ -89,7 +90,7 @@ import json
 import sqlite3
 from calendar import monthrange
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -231,7 +232,8 @@ class SheetRead:
     """The newest balance sheet on file (``newest_sheet``): its lines by FMP name, ``None`` where
     it presents no value; its period end and label ("fiscal 2026 Q3", "fiscal 2025"); whether it
     is a quarterly sheet, a half-year's for a half-year reporter; and the newest observation and
-    entry among its facts."""
+    entry among its facts. ``annual`` is the newest annual sheet read the same way, beside a
+    quarterly sheet only and ``None`` without one on file (spec 2026-11-13 12.5)."""
 
     lines: dict[str, float | None]
     period_end: date
@@ -239,6 +241,7 @@ class SheetRead:
     quarterly: bool
     observed_at: datetime
     entered_at: datetime
+    annual: "SheetRead | None" = None
 
 
 @dataclass(frozen=True)
@@ -450,18 +453,20 @@ def brief_for(conn: sqlite3.Connection, symbol: str) -> str | None:
 def newest_sheet(conn: sqlite3.Connection, symbol: str) -> SheetRead | None:
     """The newest balance sheet of ``symbol`` (spec 2026-11-13 12.2): of the newest annual sheet
     and the newest quarterly sheet in the reporting currency, the one with the later period end,
-    the annual one on a tie; ``None`` with neither on file (the module docstring)."""
+    the annual one on a tie; ``None`` with neither on file (the module docstring). A quarterly
+    sheet carries the newest annual sheet beside it (spec 2026-11-13 12.5)."""
     incomes = _periods(conn, symbol, "income-annual")
     reporting = incomes[-1].currency if incomes else None
     annual = _periods(conn, symbol, "balance-annual")
+    newest = _sheet_read(annual[-1], quarterly=False) if annual else None
     quarters = [
         q
         for q in _periods(conn, symbol, _BALANCE_QUARTER)
         if not reporting or q.currency in (None, reporting)
     ]
     if quarters and (not annual or quarters[-1].end > annual[-1].end):
-        return _sheet_read(quarters[-1], quarterly=True)
-    return _sheet_read(annual[-1], quarterly=False) if annual else None
+        return replace(_sheet_read(quarters[-1], quarterly=True), annual=newest)
+    return newest
 
 
 def balance_lines(conn: sqlite3.Connection, symbol: str) -> dict[str, float | None]:

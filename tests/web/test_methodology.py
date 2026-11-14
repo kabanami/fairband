@@ -573,6 +573,7 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
         "stock-pay-missing",
         "sbc-basis-uncertain",
         "thin-ntm",
+        "sheet-shift",
     ):
         assert f'<code class="fb-tag figure-sm">{code}</code>' in notes, code
     # the two stock-pay notes follow the basis note, and the thin NTM note follows the few
@@ -583,6 +584,9 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
     assert order == ["sbc-basis-unknown", "stock-pay-missing", "sbc-basis-uncertain"]
     path = [c for c in chips if c in ("few-analysts", "thin-ntm", "step-series-disagree")]
     assert path == ["few-analysts", "thin-ntm", "step-series-disagree"]
+    # the sheet-shift note follows the line flags, as the routes give it (method 5a.13)
+    bridge = [c for c in chips if c in ("line-not-presented:…", "sheet-shift", "charge-zeroed")]
+    assert bridge == ["line-not-presented:…", "sheet-shift", "charge-zeroed"]
     text = re.sub(r"\s+", " ", flags)
     assert "Twelve flags are quality warnings" in text and len(QUALITY_WARNINGS) == 12
     assert set(QUALITY_WARNINGS) == ENGINE_WARNINGS
@@ -594,6 +598,11 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
     thin = text[text.index(">thin-ntm</code>") :]
     thin = thin[: thin.index("</li>")]
     assert '<span data-policy="analyst_min">—</span>' in thin and "guidance" in thin
+    # the sheet-shift note names its multiple and is silent where an agent sets the figure
+    shift = text[text.index(">sheet-shift</code>") :]
+    shift = shift[: shift.index("</li>")]
+    assert '<span data-policy="sheet_shift_multiple">—</span>' in shift
+    assert "an agent sets that figure" in shift
     # each stock-pay note is silent under the agent's input that decides it and under a guided
     # NTM EPS (method 5.11)
     for code, setting in (

@@ -300,7 +300,7 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
-Twelve flags ask for a decision of yours. Read each sentence whole: it names its figures.
+Thirteen flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
 - `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
   of the operating cash flow, then names the return the charge starts at, its measure, and the
@@ -402,6 +402,17 @@ Twelve flags ask for a decision of yours. Read each sentence whole: it names its
   count leaves shares out, decide through `shares.diluted`, period-tied, with every class and
   every unit that converts; the warning does not show once the count reconciles the two. Where
   the market cap leaves a class out, the count stands, the warning stays, and section 8 says why.
+- `sheet-shift`: on High Growth, Young Growth, Decline and Start-up, the newest balance sheet is a
+  quarter's, and a figure of it differs sharply from the newest annual sheet's: its debt or a cash
+  line is nil where the annual sheet holds a figure, or its minority interest is more than
+  `sheet_shift_multiple` (`policy()`) times apart from the annual sheet's, either way. The
+  sentence gives both figures with their sheets' periods. The engine reads the quarter as it
+  stands, so the debt, the cash or the minority interest the value subtracts may be wrong. Read
+  the balance sheet in the filing of that quarter (`filing_report`). Where it shows another
+  figure, decide through `balance.debt`, `balance.cash` or `balance.minority`, period-tied, with
+  the filing as evidence; the sentence it decides does not show once the input applies. Where the
+  annual line held lease liabilities and the quarter's borrowings are nil, the quarter's debt
+  stands and needs no input: the note stays, and the report says so in section 8.
 - `split-pending`: a split falls after the oldest period of the trailing figures and on or before
   the quote's date. The sentence names each figure read on the post-split basis (the diluted
   count, the trailing EPS, the street actuals, the consensus EPS by fiscal year and by quarter,

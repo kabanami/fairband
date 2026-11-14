@@ -5,6 +5,7 @@ from datetime import date
 import pytest
 
 from fairband.engine.anchor import SbcBasis, StockPayHistory, TrailingFigures
+from fairband.engine.balance import SheetFigures
 from fairband.engine.classifier import FiscalYear, Series
 from fairband.engine.flags import (
     QUALITY_WARNINGS,
@@ -15,9 +16,11 @@ from fairband.engine.flags import (
     margin_flag,
     margin_history,
     median_margin,
+    millions,
     nri_flag,
     sbc_basis_uncertain_flag,
     share_count_flag,
+    sheet_shift_flag,
     stock_pay_missing_flag,
     value_spread_flag,
 )
@@ -624,6 +627,80 @@ def test_the_share_count_gap_names_both_figures_and_both_readings(policy: Policy
     low = share_count_flag(380e6, 10.0, 100e6, policy)  # 0.38, as TKO read on refresh 34
     assert low is not None and "is $1,000.0 million: a ratio of 0.38," in low.sentence
     assert flag_count((flag,)) == 1
+
+
+Q3 = SheetFigures("fiscal 2026 Q3", 0.0, 0.0, 2_518.8e6, 0.0, 1_013e6)
+FY = SheetFigures("fiscal 2025", 0.0, 435.9e6, 1_587.1e6, 730.2e6, 45e6)
+
+
+def test_sheet_shift_names_each_figure_that_shifted(policy: Policy) -> None:
+    """Spec 2026-11-13 12.5: no debt and no short-term investments where the annual sheet held
+    them, and a minority interest 22.5 times the annual sheet's."""
+    assert sheet_shift_flag(Q3, FY, policy) == Flag(
+        "sheet-shift",
+        "Balance sheet shift",
+        "The balance sheet of fiscal 2026 Q3 shows no debt where fiscal 2025 showed $435.9 "
+        "million, so the debt may be short, or the annual line held more than borrowings. It "
+        "shows no short-term investments where fiscal 2025 showed $730.2 million, so the cash "
+        "may be short. It shows a minority interest of $1,013.0 million where fiscal 2025 "
+        "showed $45.0 million, more than 3 times apart, so the vendor's line may be wrong.",
+    )
+
+
+def test_sheet_shift_is_silent_on_balances_that_only_moved(policy: Policy) -> None:
+    """A debt that fell but is not nil, a debt that is new, a cash that fell, and a minority
+    interest within 3 times raise nothing; exactly 3 times is silent on either side."""
+    quiet = SheetFigures("fiscal 2026 Q3", 30e6, 0.0, 900e6, 10e6, 135e6)
+    assert sheet_shift_flag(quiet, FY, policy) is None
+    new_debt = replace(quiet, long_term_debt=5_000e6)
+    no_debt_before = replace(FY, long_term_debt=0.0)
+    assert sheet_shift_flag(new_debt, no_debt_before, policy) is None
+    third = replace(quiet, minority_interest=15e6)  # 45 is exactly 3 times 15
+    assert sheet_shift_flag(third, FY, policy) is None
+
+
+def test_sheet_shift_reads_the_minority_interest_either_way(policy: Policy) -> None:
+    quiet = SheetFigures("fiscal 2026 Q3", 30e6, 0.0, 900e6, 10e6, None)
+    cases = {
+        135.1e6: "shows a minority interest of $135.1 million where fiscal 2025 showed $45.0 "
+        "million, more than 3 times apart, so the vendor's line may be wrong.",
+        14.9e6: "shows a minority interest of $14.9 million where fiscal 2025 showed $45.0 "
+        "million, more than 3 times apart, so the vendor's line may be wrong.",
+        None: "shows no minority interest where fiscal 2025 showed $45.0 million, so the "
+        "vendor's line may be wrong.",
+        -5e6: "shows no minority interest where fiscal 2025 showed $45.0 million, so the "
+        "vendor's line may be wrong.",
+    }
+    for figure, words in cases.items():
+        flag = sheet_shift_flag(replace(quiet, minority_interest=figure), FY, policy)
+        assert flag is not None and flag.sentence == (
+            "The balance sheet of fiscal 2026 Q3 " + words
+        ), figure
+    none_before = replace(FY, minority_interest=None)
+    new = sheet_shift_flag(replace(quiet, minority_interest=454.4e6), none_before, policy)
+    assert new is not None and new.sentence.endswith(
+        "shows a minority interest of $454.4 million where fiscal 2025 showed none, so the "
+        "vendor's line may be wrong."
+    )
+    assert sheet_shift_flag(replace(quiet, minority_interest=-5e6), none_before, policy) is None
+
+
+def test_sheet_shift_names_a_cash_line_and_is_silent_under_the_input_that_decides(
+    policy: Policy,
+) -> None:
+    no_cash = replace(Q3, cash_and_equivalents=None)
+    flag = sheet_shift_flag(no_cash, FY, policy, decided=("balance.debt", "balance.minority"))
+    assert flag is not None and flag.sentence == (
+        "The balance sheet of fiscal 2026 Q3 shows no cash and cash equivalents where fiscal "
+        "2025 showed $1,587.1 million, so the cash may be short. It shows no short-term "
+        "investments where fiscal 2025 showed $730.2 million, so the cash may be short."
+    )
+    every = ("balance.debt", "balance.cash", "balance.minority")
+    assert sheet_shift_flag(no_cash, FY, policy, decided=every) is None
+    sek = sheet_shift_flag(
+        Q3, FY, policy, currency="SEK", decided=("balance.cash", "balance.minority")
+    )
+    assert sek is not None and millions(435.9e6, "SEK") in sek.sentence
 
 
 def test_flag_count_counts_the_twelve_quality_warnings_only() -> None:

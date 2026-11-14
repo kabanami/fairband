@@ -41,7 +41,7 @@ from fairband.engine.anchor import (
     ntm_quarters,
     ntm_window,
 )
-from fairband.engine.balance import BalanceYear, NewestSheet
+from fairband.engine.balance import BalanceYear, NewestSheet, SheetFigures
 from fairband.engine.classifier import Deciles, FiscalYear
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route import CompanyInputs, value_company
@@ -87,8 +87,15 @@ ROUTE_KEYS = {
 }
 
 SHEET_SOURCE = "FMP balance-sheet-statement"
-# The synthetic company's annual sheet of fiscal 2025 as the engine reads it (``balance_annual``).
-FY2025 = NewestSheet(date(2025, 12, 31), "fiscal 2025", False, 710 * M, 800 * M, None)
+# The five lines of the synthetic company's annual sheet of fiscal 2025 the note sheet-shift
+# compares, and the sheet as the engine reads it (``balance_annual``): its own lines are its
+# figures, and no annual sheet stands beside them.
+FY2025_FIGURES = SheetFigures("fiscal 2025", 20 * M, 300 * M, 200 * M, 50 * M, None)
+FY2025 = NewestSheet(
+    date(2025, 12, 31), "fiscal 2025", False, 710 * M, 800 * M, None, figures=FY2025_FIGURES
+)
+# The same lines of its quarter of 2026-06-30, the second of fiscal 2026 (``balance_quarter``).
+Q2_FIGURES = SheetFigures("fiscal 2026 Q2", 30 * M, 280 * M, 220 * M, 40 * M, None)
 
 type Store = Callable[..., sqlite3.Connection]
 
@@ -1494,7 +1501,14 @@ def test_the_newest_sheet_is_the_quarter_s_when_it_ends_later(store: Store) -> N
     sheets = balance_quarter(q for q in QUARTERS if q <= date(2026, 6, 30))
     inputs = build(store(**{**bodies(), "balance-quarter": sheets}))
     assert inputs.sheet == NewestSheet(
-        date(2026, 6, 30), "fiscal 2026 Q2", True, 716 * M, 820 * M, None
+        date(2026, 6, 30),
+        "fiscal 2026 Q2",
+        True,
+        716 * M,
+        820 * M,
+        None,
+        figures=Q2_FIGURES,
+        annual=FY2025_FIGURES,
     )
     assert (inputs.debt, inputs.cash) == (310 * M, 260 * M)
     assert inputs.provenance["balance_sheet"] == Provenance(
@@ -1583,9 +1597,47 @@ def test_a_half_year_sheet_is_read_as_a_quarter_s(store: Store) -> None:
     label, "fiscal 2026 Q2": debt $30 m + $280 m, cash $220 m + $40 m."""
     inputs = build(store(**bodies(cadence="half-yearly")))
     assert inputs.sheet == NewestSheet(
-        date(2026, 6, 30), "fiscal 2026 Q2", True, 716 * M, 820 * M, None
+        date(2026, 6, 30),
+        "fiscal 2026 Q2",
+        True,
+        716 * M,
+        820 * M,
+        None,
+        figures=Q2_FIGURES,
+        annual=FY2025_FIGURES,
     )
     assert (inputs.debt, inputs.cash) == (310 * M, 260 * M)
+
+
+def test_the_sheets_hand_the_engine_their_five_lines(store: Store) -> None:
+    """Spec 2026-11-13 12.5: the newest quarter, fiscal 2026 Q3, ends after the annual sheet of
+    fiscal 2025, so the sheet in use holds the quarter's five lines (short-term debt $35 m,
+    long-term debt $270 m, cash $230 m, short-term investments $35 m, a minority interest of
+    $90 m) and the annual sheet's stand beside them ($20 m, $300 m, $200 m, $50 m and $4 m), each
+    as its sheet presents it."""
+    payloads = bodies()
+    payloads["balance-quarter"][-1]["minorityInterest"] = 90 * M
+    payloads["balance-annual"][-1]["minorityInterest"] = 4 * M
+    sheet = build(store(**payloads)).sheet
+    assert sheet is not None and (sheet.label, sheet.minority_interest) == (
+        "fiscal 2026 Q3",
+        90 * M,
+    )
+    assert sheet.figures == SheetFigures("fiscal 2026 Q3", 35 * M, 270 * M, 230 * M, 35 * M, 90 * M)
+    assert sheet.annual == replace(FY2025_FIGURES, minority_interest=4 * M)
+
+
+@pytest.mark.parametrize("tie", [False, True], ids=["no-quarterly-sheet", "a-tie"])
+def test_the_annual_sheet_in_use_stands_alone(store: Store, tie: bool) -> None:
+    """Spec 2026-11-13 12.5: with no quarterly sheet, or a quarterly sheet that ends on the annual
+    sheet's day with other figures, the annual sheet is in use: its five lines are the figures,
+    under its label, and no annual sheet stands beside them, so the note sheet-shift has nothing
+    to compare."""
+    [q3, q4] = balance_quarter([date(2025, 9, 30), date(2025, 12, 31)])
+    quarters = [q3, q4 | {"shortTermDebt": 90 * M}] if tie else []
+    sheet = build(store(**{**bodies(), "balance-quarter": quarters})).sheet
+    assert sheet is not None and not sheet.quarterly
+    assert (sheet.figures, sheet.annual) == (FY2025_FIGURES, None)
 
 
 @pytest.mark.parametrize(
