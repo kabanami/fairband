@@ -965,12 +965,12 @@ corrected changes; then the system drops it by itself. A refresh that fetches th
 again keeps it. A lasting `earnings.sbc` of 0 holds across periods, and the system drops it once
 the stored trailing stock pay is above zero: "the store holds a trailing stock pay above zero".
 An override the row's route does not read drops too. The route is the one an applied `phase`
-override sets, else the classifier's phase. When a refresh moves the phase, or you drop or replace
-a `phase` override, the system drops each override only the old route read: "the <route> route
-does not read the input", the route named as the refusal names it ("the Decline route does not
-read the input"). A company the refresh leaves with no phase keeps its overrides. After you drop or
-replace a `phase` override, read `dropped` in the answer: each override the system dropped with
-it, `{id, tag, reason}`. Decide each again on the route the row now takes.
+override sets, else the classifier's phase. When a refresh moves the phase, or you add, replace or
+drop a `phase` override, the system drops each override only the old route read: "the <route>
+route does not read the input", the route named as the refusal names it ("the Decline route does
+not read the input"). A company the refresh leaves with no phase keeps its overrides. After you
+add, replace or drop a `phase` override, read `dropped` in the answer: each override the system
+dropped with it, `{id, tag, reason}`. Decide each again on the route the row now takes.
 Add a note with `note_add(symbol, text, override_id)` when the reason needs more words.
 
 An override, a drop, a secondary valuation and a sensitivity reading are refused with "settings

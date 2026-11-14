@@ -114,12 +114,13 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import date, datetime
-from typing import cast, get_args
+from typing import cast
 
 from fairband.engine.anchor import base_year
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import (
     ANCHOR_METRICS,
+    PHASES,
     ROUTE_NAMES,
     TAGS,
     Override,
@@ -154,7 +155,6 @@ PASSED = "the guided year has passed"
 ON_FILE = "the store holds a trailing stock pay above zero"
 # The route drop's reason, the route named by ``overrides.ROUTE_NAMES`` (spec 2026-11-14 8).
 OFF_ROUTE = "the {route} route does not read the input"
-_PHASES: tuple[str, ...] = get_args(Phase)
 # The units a split scales (``TAGS``): a figure a share is divided by the ratio, a count multiplied.
 _A_SHARE, _SHARES = "USD a share", "shares"
 _SCALED = frozenset({_A_SHARE, _SHARES})
@@ -240,7 +240,7 @@ def row_route(rows: Sequence[OverrideRow], phase: Phase | None) -> Route | None:
     """The route the row takes: the route of its applied ``phase`` override among ``rows``, else
     of ``phase``, its mechanical phase; ``None`` for neither, an unclassified row."""
     phases = [*(o.new for o in rows if o.tag == "phase"), phase]
-    return next((route_of(cast(Phase, p)) for p in phases if p in _PHASES), None)
+    return next((route_of(cast(Phase, p)) for p in phases if p in PHASES), None)
 
 
 def drop_off_route(

@@ -206,6 +206,41 @@ def test_every_value_a_share_divides_by_the_count_in_force() -> None:
         assert old not in text, old
 
 
+def test_an_override_the_route_no_longer_reads_drops() -> None:
+    """Spec 2026-11-14 8 (Task 6's review, fix round 1): 14.3's rule 3 says the route is checked
+    again at every recompute, the route moving when a `phase` override is added, replaced or
+    dropped, a first one included, or the classifier moves the phase; 14.6 states the drop, its
+    reason, its place among the tests and the unclassified row; and 11's row cites both."""
+    fourteen = _section(14)
+    rules = fourteen[fourteen.index("### 14.3") : fourteen.index("### 14.4")]
+    follows = fourteen[fourteen.index("### 14.6") : fourteen.index("### 14.7")]
+    assert (
+        "an applied override whose tag the row's route no longer reads, once a `phase` override is"
+        " added, replaced or dropped or the classifier moves the phase, is dropped by the system,"
+        ' "the <route> route does not read the input" (14.6)'
+    ) in rules
+    for words in (
+        'the reason "the <route> route does not read the input"',
+        (
+            "The row's route is the route of its applied `phase` override, else of its mechanical"
+            " phase."
+        ),
+        "the route's test runs before the other overrides' tests",
+        (
+            "So a phase that moves, at a refresh or when an agent adds, replaces or drops a"
+            " `phase` override, takes with it each override only the old route read"
+        ),
+        (
+            "An unclassified row, with no `phase` override and no mechanical phase, has no route"
+            " and keeps every override"
+        ),
+    ):
+        assert words in follows, words
+    assert "when an agent drops or replaces a `phase` override" not in follows
+    row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
+    assert "while an unclassified row keeps its overrides (14.3, 14.6)" in row
+
+
 def test_section_15_names_the_bounds_and_the_two_versions() -> None:
     section = _section(15)
     bounds = ("secondary_parts_max", "secondary_years_min", "secondary_years_max")

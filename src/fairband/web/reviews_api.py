@@ -37,19 +37,20 @@ answers 400 with the rule's sentence and ``{override}``. An applied one drops th
 on its tag ("replaced by override n") and the company's review is recomputed. The recompute first
 drops, by the system, each applied override the row's route does not read (spec 2026-11-14 8,
 ``reviews.drop_off_route``): the route of the applied ``phase`` override, else of the snapshot's
-phase, so replacing or dropping a ``phase`` override takes with it the overrides only the old route
-read, each with the reason "the <route> route does not read the input"; an unclassified row with no
-``phase`` override keeps them all. The new override itself was judged on the route the row now
-takes, so it stays. Then ``build_inputs`` on the latest deciles and today's date, a row in another
-currency at the snapshot's own rate and its date, which are snapshot data as the price is
-(``built_inputs``); the engine with no override on them must give the snapshot's route and value a
-share, else the write is refused 409, "the store moved since snapshot <id>: run a revalue", and
-nothing is stored, since a store change after the snapshot (a full refresh's new deciles before
-its value stage, a peer's figures from a scoped refresh) would land on the bridge's first line as
-the agent's; then ``review_company`` over every override still applied from the snapshot's result,
-the review written on the snapshot with its validity window and its log row; it answers 201 with
-``{override, review, bridge, dropped}``, ``dropped`` the overrides the system dropped, each
-``{id, tag, reason}``, empty when none.
+phase (``reviews.row_route``), so adding, replacing or dropping a ``phase`` override takes with it
+the overrides only the old route read, each with the reason "the <route> route does not read the
+input"; an unclassified row with no ``phase`` override keeps them all. The new override itself
+was judged on the route the row now takes, by the same rule (``judged_route`` reads
+``row_route``), so it stays. Then ``build_inputs`` on the latest deciles and today's date, a row
+in another currency at the snapshot's own rate and its date, which are snapshot data as the price
+is (``built_inputs``); the engine with no override on them must give the snapshot's route and
+value a share, else the write is refused 409, "the store moved since snapshot <id>: run a
+revalue", and nothing is stored, since a store change after the snapshot (a full refresh's new
+deciles before its value stage, a peer's figures from a scoped refresh) would land on the
+bridge's first line as the agent's; then ``review_company`` over every override still applied
+from the snapshot's result, the review written on the snapshot with its validity window and its
+log row; it answers 201 with ``{override, review, bridge, dropped}``, ``dropped`` the overrides
+the system dropped, each ``{id, tag, reason}``, empty when none.
 
 ``DELETE /api/overrides/{id}`` drops an applied override with ``{reason}`` (the same 409s; 404
 for no such override, 409 for one not applied) and recomputes the review over the rest, the
@@ -151,6 +152,7 @@ from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
 from fairband.engine.overrides import (
     ANCHOR_METRICS,
+    PHASES,
     TAGS,
     Lifetime,
     State,
@@ -176,7 +178,7 @@ from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import newest_debt_and_cash
-from fairband.refresh.reviews import drop_off_route, write_review
+from fairband.refresh.reviews import drop_off_route, row_route, write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
 from fairband.reports.refs import MAX_ID, Resolver, fact_ref, guidance_cited, same_snapshot
 from fairband.store.db import transaction
@@ -216,7 +218,6 @@ GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
 NIL_ON_FILE = (
     "a lasting earnings.sbc of 0 is refused: the snapshot's trailing stock pay is above zero"
 )
-_PHASES: tuple[str, ...] = get_args(Phase)
 _MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
 # The overrides the system dropped at a recompute, each with its reason (``drop_off_route``).
@@ -819,11 +820,14 @@ def judged_route(
     tag: str, applied: Sequence[OverrideRow], snapshot: SnapshotRow, phase: object = None
 ) -> Route | tuple[State, str]:
     """The route the rules judge ``tag`` on: the route of ``phase`` when it is one (the new phase
-    of an override or of a reading), else of an applied ``phase`` override, else the snapshot's.
-    An unclassified row with no phase override reads no input but its phase: another input's tag
-    answers ``refused-route`` with "set its phase first"."""
-    phases = [phase, *(o.new for o in applied if o.tag == "phase"), snapshot.phase]
-    route = next((route_of(cast(Phase, p)) for p in phases if p in _PHASES), None)
+    of an override or of a reading), else the route the row takes (``reviews.row_route``: of an
+    applied ``phase`` override, else of the snapshot's phase), the rule the recompute's drop reads,
+    so the override a write judges is never the one its recompute drops. An unclassified row with
+    no phase override reads no input but its phase: another input's tag answers ``refused-route``
+    with "set its phase first"."""
+    if phase in PHASES:
+        return route_of(cast(Phase, phase))
+    route = row_route(applied, snapshot.result.phase.phase)
     if route is not None:
         return route
     if tag in TAGS and tag != "phase":

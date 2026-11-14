@@ -303,6 +303,32 @@ def test_replacing_the_phase_override_drops_what_only_the_old_route_read(
     )
 
 
+def test_a_first_phase_override_drops_what_only_the_old_route_read(client: TestClient) -> None:
+    """Task 6's review, fix round 1: AAPL, on its mechanical Mature Growth route, carries a belief,
+    which the revenue-growth route does not read. A first phase override, of High Growth, moves
+    the route as a replacing one does: the system drops the belief with the route's reason and
+    the answer names it; the review holds the phase override alone; the ledger has the system's
+    drop after the agent's write, both on the snapshot."""
+    assert "revenue-growth" not in TAGS["growth.belief"].routes
+    belief = _post(client, BELIEF_8)["override"]["id"]
+    first = BELIEF_8 | {"tag": "phase", "new": "High Growth", "reason": "it grows again"}
+    body = _post(client, first)
+    phase = body["override"]["id"]
+    assert body["dropped"] == [{"id": belief, "tag": "growth.belief", "reason": OFF_GROWTH}]
+    assert body["review"]["overrideIds"] == [phase]
+    assert [line["tag"] for line in body["bridge"]] == ["phase"]
+    states = {o["id"]: (o["state"], o["dropReason"]) for o in _overrides(client)}
+    assert (states[phase], states[belief]) == (("applied", None), ("dropped", OFF_GROWTH))
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    entries = client.get("/api/companies/AAPL/ledger").json()["entries"]
+    assert [
+        (e["principal"], e["kind"], e["refId"], e["snapshotId"], e["summary"]) for e in entries[:2]
+    ] == [
+        ("system", "override-drop", belief, snapshot_id, f"growth.belief dropped: {OFF_GROWTH}"),
+        ("agent", "override", phase, snapshot_id, "phase applied: it grows again"),
+    ]
+
+
 def test_a_write_that_keeps_the_route_drops_nothing(client: TestClient) -> None:
     """On AAPL's Mature Growth route a post, a replacement, a phase override of the phase it has
     and the drop of it each leave the route as it was: every answer's ``dropped`` is empty."""

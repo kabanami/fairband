@@ -201,7 +201,9 @@ _GROWTH: frozenset[Route] = frozenset({"revenue-growth"})
 _BALANCE: frozenset[Route] = frozenset({"revenue-growth", "decline", "start-up"})
 # The routes whose value reads a consensus step; the Mature Stable value reads none.
 _STEPS: frozenset[Route] = frozenset({"mature-growth", "revenue-growth", "decline"})
-_PHASES: tuple[str, ...] = get_args(Phase)
+# The six phases, the words a ``phase`` override takes; the route rule reads a value as a phase
+# only when it is one of them (``refresh.reviews.row_route``, ``web.reviews_api.judged_route``).
+PHASES: tuple[str, ...] = get_args(Phase)
 _MOATS = ("None", "Narrow", "Wide")
 _BASES = ("includes", "excludes")  # whether the consensus EPS includes stock pay or excludes it
 
@@ -221,7 +223,7 @@ def _spec(
 TAGS: dict[OverrideTag, TagSpec] = {
     s.tag: s
     for s in (
-        _spec("phase", _ALL, "phase", _PHASES),
+        _spec("phase", _ALL, "phase", PHASES),
         _spec("earnings.ntm", frozenset({"mature-growth"}), "USD a share", low_open=True),
         _spec("revenue.ntm", _GROWTH | {"decline"}, "USD", low_open=True),
         _spec("growth.belief", frozenset({"mature-growth"}), "ratio"),

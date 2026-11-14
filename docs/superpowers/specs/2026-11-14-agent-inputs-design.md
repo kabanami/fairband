@@ -226,7 +226,7 @@ route of its applied `phase` override, else of its mechanical phase. It runs:
 
 - at a full or scoped refresh and a revalue, after the `phase` override's own drop tests and
   before the other overrides' tests, so the reason given is the true one;
-- in the web's recompute, after an override is posted, replaced or dropped. The answer names
+- in the web's recompute, after an override is posted, replaced or dropped; a first `phase` override moves the route as a replacing one does. The answer names
   the overrides the system dropped with it.
 
 An unclassified row has no route. Its overrides stay (*my call*): a row unclassified for one
@@ -298,7 +298,7 @@ Each test fails before its change, and its expected figures are worked by hand.
   multiply; an override made on a snapshot of the split's day whose price date is the day before
   is scaled on the next; the JUDGMENT note, the bridge's new value and the note on the review;
   the same figures through the web's recompute and a sensitivity reading.
-- The route drop: a lasting `moat.class` on a row whose phase moves to Start-up drops with the
+- The route drop: a lasting `return.runway` on a row whose phase moves from Mature Growth to Decline drops with the
   route's reason; after a `phase` override is dropped in the web, the overrides only its route
   read drop in the same answer; an unclassified row keeps its overrides; a period-tied override
   on another route drops with the route's reason, not "the input changed".
@@ -341,3 +341,4 @@ drawer and the whole-branch review; the scratch revalues, the founder's reading,
 | 2026-11-14 | Settled by Claude while writing, on a map of the code, each marked *my call* above or stated here. Dilution is a new input, `shares.committed`, and `shares.diluted` keeps its arithmetic, because the count also corrects a share class or units, where the founder's rule would cut a right value (an Up-C on Mature Growth: HESM). The committed shares are period-tied only, as the diluted count is. The one-time item is Mature Growth's alone, period-tied only, moot under an applied `earnings.ntm`. The two revenue inputs are Mature Growth's alone and period-tied only. A missing revenue analyst count is thin. A thin revenue step raises no flag. The split's scaling reads the two snapshots' data dates and covers counts as well as dollars a share; a period-tied override whose reading the split rescales still drops. An unclassified row keeps its overrides. The agent derives an EPS from guided net income; the server does not divide. The method stays 1.4 but for the thin rule. |
 | 2026-11-14 | Changed at the build, on the review of Task 3: the reading of `earnings.ntm` does not add the one-time amount back. Under a guided EPS the amount is moot, so the add-back made a sensitivity grid mark the mechanical value as the pair in force. |
 | 2026-11-14 | Changed at the build, on Task 5's report: the scaling reads a basis date, the earlier of the price date and the data date of the snapshot that assembled the figures, in place of the data date alone. A refresh on a split's day before the US close has the split's day as its data date and the day before as its price date, so its figures did not see the split, and under the data date alone an override made on it was never scaled. Two residuals stay: a failed fetch of the splits beside a good fetch of the statements, and a refusal snapshot from a failed fetch. |
+| 2026-11-14 | Changed at the build, on Task 6's report: the test example of the route drop is a move from Mature Growth to Decline, since the Start-up route reads `moat.class`; and a first `phase` override is named beside a replaced or dropped one. |

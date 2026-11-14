@@ -793,27 +793,33 @@ def test_the_agent_sets_a_lasting_nil_for_a_company_that_pays_no_stock() -> None
 
 def test_the_agent_reads_the_overrides_the_route_no_longer_reads() -> None:
     """Spec 2026-11-14 8: the system drops an override the row's route no longer reads, at a
-    refresh that moves the phase and when a `phase` override is dropped or replaced, with the
-    reason as the server words it; a company with no phase keeps its overrides. The answers of
-    `override_add` and `override_drop` name such drops under `dropped`, which the agent reads."""
+    refresh that moves the phase and when a `phase` override is added, replaced or dropped, with
+    the reason as the server words it; a company with no phase keeps its overrides. The answers of
+    `override_add` and `override_drop` name such drops under `dropped`, which the agent reads
+    after each of the three writes of a `phase` override, a first one included (Task 6's review,
+    fix round 1)."""
     skill = _flat(_read(SKILL))
     reason = OFF_ROUTE.format(route="<route>")
     assert reason == "the <route> route does not read the input"
     for words in (
         "An override the row's route does not read drops too.",
         (
-            "When a refresh moves the phase, or you drop or replace a `phase` override, the system"
-            f' drops each override only the old route read: "{reason}"'
+            "When a refresh moves the phase, or you add, replace or drop a `phase` override, the"
+            f' system drops each override only the old route read: "{reason}"'
         ),
         "A company the refresh leaves with no phase keeps its overrides.",
-        "After you drop or replace a `phase` override, read `dropped` in the answer",
+        "After you add, replace or drop a `phase` override, read `dropped` in the answer",
         "An applied override answers `{override, review, bridge, dropped}`",
     ):
         assert words in skill, words
+    assert "you drop or replace a `phase` override" not in skill
     for name in ("override_add", "override_drop"):
         entry = _tool_entry(name)
         assert "`{override, review, bridge, dropped}`" in entry, name
         assert "`{id, tag, reason}`" in entry or "as `override_add`'s" in entry, name
+    assert "(a `phase` override, new or replacing another, can move the route)" in _tool_entry(
+        "override_add"
+    )
 
 
 def test_the_citations_name_the_newest_sheet_and_the_minority_interest() -> None:
