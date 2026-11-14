@@ -592,6 +592,60 @@ def test_the_stock_pay_notes_follow_the_anchor_s_flag(
     assert "stock-pay-missing" not in codes(without) and without.value == r.value
 
 
+def test_the_stock_pay_notes_show_on_the_anchor_s_refusal(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """The controller's ruling on the whole-branch review's Minor 1: a stock-pay charge can itself
+    take the anchor to zero or below, so the two notes show on the refusal "no positive forward
+    anchor", right after the place ``sbc-basis-unknown`` takes. MGCO with an NTM consensus of 0.05
+    a quarter, 0.20 in all, and a street EPS of 8.50: the test reads excludes-sbc (3.20 above GAAP
+    5.30, at or above half of 400 × 0.75 ÷ 1,000 = 0.30), the anchor is 0.20 − 0.30 = −0.10, and
+    reason 3 holds (3.20 is 10.7 times 0.30, at or above 10). With one trailing quarter at nil
+    while fiscal 2025 shows $500 m, ``stock-pay-missing`` holds too. Each is silent under the
+    input that decides it, as on a valued row; the refusal "incomplete NTM consensus" and the
+    path's refusal carry neither."""
+    q = mg_inputs.quarter_estimates
+    thin = replace(mg_inputs, quarter_estimates=tuple(replace(x, eps=0.05) for x in q))
+    charged = replace(thin, street_ttm_eps=8.50)
+    r = value_company(charged, deciles, policy, TODAY)
+    assert_refused(r, "no positive forward anchor")
+    assert codes(r) == ["sbc-basis-uncertain"]
+    assert r.flags[0].sentence == (
+        "The street trailing EPS is $3.20 above the GAAP one, 10.7 times the stock pay of $0.30 a "
+        "share after tax: the adjusted figure leaves out far more than stock pay, and the figures "
+        "cannot say whether it leaves out stock pay too."
+    )
+    short = replace(charged, stock_pay=StockPayHistory(1, 2025, 500e6))
+    r = value_company(short, deciles, policy, TODAY)
+    assert_refused(r, "no positive forward anchor")
+    assert codes(r) == ["stock-pay-missing", "sbc-basis-uncertain"]
+    # under the input that decides each, that note is silent and the refusal stands
+    pay = value_company(short, deciles, policy, TODAY, judged(("earnings.sbc", 400e6)))
+    assert pay.refusal == "no positive forward anchor" and codes(pay) == ["sbc-basis-uncertain"]
+    basis = value_company(short, deciles, policy, TODAY, judged(("earnings.sbc_basis", "excludes")))
+    assert basis.refusal == "no positive forward anchor" and codes(basis) == ["stock-pay-missing"]
+    # a consensus below zero, 0.05 + 0.05 − 0.10 − 0.10, on an unknown basis (no street EPS)
+    below = (*(replace(x, eps=0.05) for x in q[:2]), *(replace(x, eps=-0.10) for x in q[2:]))
+    unknown = replace(short, quarter_estimates=below, street_ttm_eps=None)
+    r = value_company(unknown, deciles, policy, TODAY)
+    assert_refused(r, "no positive forward anchor")
+    assert codes(r) == ["sbc-basis-unknown", "stock-pay-missing"]
+    # an NTM quarter with no EPS mean: the anchor's other refusal, which no charge causes
+    gap = replace(short, quarter_estimates=(*q[:3], replace(q[3], eps=None)))
+    r = value_company(gap, deciles, policy, TODAY)
+    assert_refused(r, "incomplete NTM consensus")
+    assert codes(r) == []
+    # a path that turns negative: EPS 6.00 to −1.00 in fiscal 2028, a step below −100%
+    base, second, third = mg_inputs.annual_estimates
+    falling = (base, replace(second, net_income=-1_000e6, eps=-1.00), third)
+    path = replace(mg_inputs, annual_estimates=falling, stock_pay=StockPayHistory(1, 2025, 500e6))
+    r = value_company(path, deciles, policy, TODAY)
+    assert_refused(r, "consensus earnings turn negative within the path")
+    assert "stock-pay-missing" not in codes(r)
+    valued = replace(path, annual_estimates=mg_inputs.annual_estimates)
+    assert "stock-pay-missing" in codes(value_company(valued, deciles, policy, TODAY))
+
+
 def test_income_needs_a_market_cap(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

@@ -64,6 +64,8 @@ PERIODS_PER_YEAR: dict[Cadence, int] = {"quarterly": 4, "half-yearly": 2}
 # this close as a guard for two rows of one period inside one vendor answer; no stored answer held
 # such a pair on 2026-11-13 (spec 2026-11-13 6).
 SAME_PERIOD_DAYS = 7
+# The anchor's refusal of an NTM EPS at or below zero, the one a stock-pay charge can itself cause.
+NO_POSITIVE_ANCHOR = "no positive forward anchor"
 # A step's two rates that lie exactly ``step_series_gap_max`` apart are within the gap, whatever
 # binary floating point does to the rates: without it, five points fire on one step and not another.
 _GAP_TOLERANCE = 1e-12
@@ -349,7 +351,7 @@ def ntm_anchor(
 
     refusal = None
     if ntm_eps <= 0:
-        refusal = "no positive forward anchor"
+        refusal = NO_POSITIVE_ANCHOR
     elif found > 0 and price / found < policy.forward_pe_unit_error:
         refusal = f"forward P/E below {policy.forward_pe_unit_error:g}: unit error"
     return Anchor(raw, adjustment, ntm_eps, ntm_eps * shares, basis, flags, refusal, sbc, gaap)

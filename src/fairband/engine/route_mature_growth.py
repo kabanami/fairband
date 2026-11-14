@@ -13,11 +13,12 @@ the first such year raises "growth above return", which counts the rest, after t
 before the trailing ones, where the ``heavy-capex`` sentence names the return the charge starts at
 and ``consensus-basis-unknown`` follows ``large-nri``. The two stock-pay notes,
 ``stock-pay-missing`` and ``sbc-basis-uncertain``, follow the anchor's flags (spec 2026-11-13
-7.1), each silent under the input that decides it. ``thin-ntm`` (spec 2026-11-13 9), a note on
-an NTM window with a period of fewer than ``analyst_min`` EPS analysts or no count, takes the
-place right after ``few-analysts``, silent under an applied ``earnings.ntm``, whose anchor is the
-guidance. ``charge`` in the intermediates records the growth paid for, the return by year, the
-hold and the revenue steps as found; ``sbc_ttm`` the trailing stock pay the anchor read.
+7.1), on the anchor's refusal "no positive forward anchor" too, which a stock-pay charge can
+itself cause, each silent under the input that decides it. ``thin-ntm`` (spec 2026-11-13 9), a
+note on an NTM window with a period of fewer than ``analyst_min`` EPS analysts or no count, takes
+the place right after ``few-analysts``, silent under an applied ``earnings.ntm``, whose anchor is
+the guidance. ``charge`` in the intermediates records the growth paid for, the return by year,
+the hold and the revenue steps as found; ``sbc_ttm`` the trailing stock pay the anchor read.
 
 The value is also computed at each policy runway and at each return of the sensitivity, and so is
 the implied growth at the price. The sensitivity is keyed ``"runway"``, the row's own charge;
@@ -81,6 +82,7 @@ from dataclasses import asdict, replace
 from typing import Any, Literal
 
 from fairband.engine.anchor import (
+    NO_POSITIVE_ANCHOR,
     Anchor,
     Belief,
     Path,
@@ -297,10 +299,13 @@ def cross_check_at_price(
 
 def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, Belief] | Refused:
     """Year 1's anchor, the consensus path with its base fiscal year, and the belief; or the
-    route's refusal, with the flags raised before it. The anchor's basis test reads an overriding
-    non-recurring gap as its correction to the gap found, and its NTM EPS is taken less an
-    overriding cycle gap; with ``own``, the route's own anchor, path and belief read the NTM EPS,
-    stock pay, stock-pay basis, step and belief overrides, which a cross-check leaves as found."""
+    route's refusal, with the flags raised before it, and on the route's own refusal "no positive
+    forward anchor" the two stock-pay notes after the anchor's flags, since a stock-pay charge can
+    itself cause it (method 5.11), but not on the path's. The anchor's basis test reads an
+    overriding non-recurring gap as its correction to the gap found, and its NTM EPS is taken less
+    an overriding cycle gap; with ``own``, the route's own anchor, path and belief read the NTM
+    EPS, stock pay, stock-pay basis, step and belief overrides, which a cross-check leaves as
+    found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
         return Refused("no trailing revenue")
@@ -331,7 +336,10 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         basis_override=basis,
     )
     if anchor.refusal is not None:
-        return Refused(anchor.refusal, anchor.flags)
+        notes: tuple[Flag, ...] = ()
+        if own and anchor.refusal == NO_POSITIVE_ANCHOR:
+            notes = _stock_pay_notes(c, anchor, chosen(c, "earnings.nri_gap", nri_gap(i)))
+        return Refused(anchor.refusal, anchor.flags + notes)
     base_year = base_fiscal_year(periods)
     path = path_steps(i.annual_estimates, base_year, policy)
     belief = belief_from_sales(t.revenue / i.fx_rate / 1e6, policy)  # the bounds are USD
