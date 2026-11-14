@@ -12,7 +12,9 @@ import pytest
 from fairband.store.guidance import (
     BASES,
     METRICS,
+    UNITS,
     GuidanceRow,
+    anchor_year,
     guidance_for,
     guidance_row,
     insert_guidance,
@@ -104,6 +106,27 @@ def test_a_step_needs_a_fiscal_year_revenue_or_eps_and_a_positive_base(
     assert year_before("eps", "2026Q3") is None and year_before("capex", "2026") is None
 
 
+def test_a_net_income_record_is_a_total_stepped_from_the_year_before(
+    conn: sqlite3.Connection,
+) -> None:
+    """Spec 2026-11-14 9: a company that guides net income alone (ROAD) records it as a total in
+    the reporting currency, stepped against the prior fiscal year's net income as revenue and EPS
+    are: $1.1 bn to $1.3 bn over a 2025 actual of $1.0 bn, a midpoint of $1.2 bn and a step of
+    1.2 ÷ 1.0 − 1 = 20%. A quarter and an adjusted record take no step."""
+    found = _add(conn, "net_income", "2026", 1.1e9, 1.3e9, 1.0e9)
+    row = guidance_row(conn, found)
+    assert row is not None and (row.metric, row.period) == ("net_income", "2026")
+    assert row.midpoint == pytest.approx(1.2e9) and row.step == pytest.approx(0.2)
+    assert [g.id for g in guidance_for(conn, "AAPL")] == [found]
+    assert UNITS["net_income"] == "currency"
+    assert year_before("net_income", "2026") == 2025
+    quarter = _add(conn, "net_income", "2026Q3", 3e8, 3.2e8, 2.8e8)
+    adjusted = _add(conn, "net_income", "2027", 1.4e9, 1.4e9, 1.2e9, basis="adjusted")
+    for record_id in (quarter, adjusted):
+        unstepped = guidance_row(conn, record_id)
+        assert unstepped is not None and unstepped.step is None, record_id
+
+
 def test_a_step_stored_on_another_basis_is_not_read(conn: sqlite3.Connection) -> None:
     """A record written before the store kept the step to the ``gaap`` basis holds a rate across
     two bases (an adjusted EPS of $11.50 over a GAAP $6.00: 91.7%): the read leaves it out, as a
@@ -181,8 +204,8 @@ def test_an_earlier_call_recorded_later_is_stored_superseded(conn: sqlite3.Conne
         (
             {"metric": "ebitda"},
             (
-                "metric is one of revenue, eps, operating_margin, free_cash_flow, capex,"
-                " revenue_growth or eps_growth"
+                "metric is one of revenue, eps, net_income, operating_margin, free_cash_flow,"
+                " capex, revenue_growth or eps_growth"
             ),
         ),
         ({"period": "FY2026"}, "period is a fiscal year or a quarter (2026, 2026Q3)"),
@@ -230,10 +253,34 @@ def test_the_metrics_and_bases() -> None:
     assert METRICS == (
         "revenue",
         "eps",
+        "net_income",
         "operating_margin",
         "free_cash_flow",
         "capex",
         "revenue_growth",
         "eps_growth",
     )
+    assert set(UNITS) == set(METRICS)
     assert BASES == ("gaap", "adjusted", "constant-currency")
+
+
+@pytest.mark.parametrize(
+    ("tag", "metric", "period", "basis", "year"),
+    [
+        ("earnings.ntm", "eps", "2027", "gaap", 2027),
+        ("earnings.ntm", "net_income", "2027", "gaap", 2027),
+        ("earnings.ntm", "net_income", "2027", "adjusted", None),
+        ("earnings.ntm", "net_income", "2027Q1", "gaap", None),
+        ("earnings.ntm", "revenue", "2027", "gaap", None),
+        ("revenue.ntm", "revenue", "2027", "gaap", 2027),
+        ("revenue.ntm", "net_income", "2027", "gaap", None),
+        ("growth.belief", "eps", "2027", "gaap", None),
+    ],
+)
+def test_the_anchor_year_reads_a_gaap_fiscal_year_record_of_the_anchor_s_metrics(
+    conn: sqlite3.Connection, tag: str, metric: str, period: str, basis: str, year: int | None
+) -> None:
+    """Spec 2026-11-14 9: the NTM EPS may rest on a gaap fiscal-year record of EPS or of net
+    income, the NTM revenue on one of revenue; any other record, or another tag, guides no year."""
+    row = guidance_row(conn, _add(conn, metric, period, 1.0, 1.2, None, basis=basis))
+    assert row is not None and anchor_year(tag, row) == year

@@ -909,6 +909,34 @@ def test_guidance_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
     assert (finding.where, finding.what) == ("section 1, part 1: $0.05", WRONG_UNIT)
 
 
+def test_a_net_income_guidance_ref_reads_a_total(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-14 9: a net income record's figures are totals in the reporting currency, its
+    step a percent: $1.1 bn to $1.3 bn over a 2026 actual of $1.0 bn, a midpoint of $1.2 bn and a
+    step of 20%; the references list names it in words, and a report cites it as any total."""
+    said, source = "We guide net income.", "response:12/0/content"
+    low, high, base = 1.1e9, 1.3e9, 1e9
+    record = insert_guidance(
+        conn, "AAPL", "net_income", "2027", low, high, "gaap", TODAY, said, source, AGENT, NOW, base
+    )
+    g = f"guidance:{record}"
+    assert _resolve(conn, f"{g}/low", policy) == Resolved(1.1e9, "currency", "2027", None)
+    midpoint = _resolve(conn, f"{g}/midpoint", policy)
+    assert midpoint is not None and midpoint.value == pytest.approx(1.2e9)
+    assert (midpoint.unit, midpoint.period) == ("currency", "2027")
+    step = _resolve(conn, f"{g}/step", policy)
+    assert step is not None and step.value == pytest.approx(0.2) and step.unit == "percent"
+    words = Resolver(conn, "AAPL", policy).describe(f"{g}/midpoint")
+    assert words == f"guidance record {record}: net income for fiscal 2027, the midpoint"
+    cites = [
+        {"cite": "$1,200,000,000", "ref": f"{g}/midpoint"},
+        {"cite": "20.0%", "ref": f"{g}/step"},
+    ]
+    sections = [{"heading": "Valuation", "parts": cites}]
+    assert check_sections(conn, "AAPL", snapshots["AAPL"], sections, policy) == []
+
+
 def test_response_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:
     payload = [{"symbol": "AAPL", "revenue": 391.0, "segment/name": "Services", "list": [1, 2]}]
     at = datetime(2026, 11, 1, tzinfo=UTC)

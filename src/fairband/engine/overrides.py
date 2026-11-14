@@ -15,7 +15,8 @@ holds from period to period, for a company that pays no stock (``TagSpec.lasting
 guidance record among its evidence, or a belief or held rate above the sales class's 90th
 percentile without a filing or a transcript (when the policy's
 ``override_primary_evidence_above_p90`` holds). The rule reads the evidence's kinds
-alone: the records an NTM anchor cites must hold a gaap record of its metric for a fiscal year
+alone: the records an NTM anchor cites must hold a gaap record of one of its metrics for a fiscal
+year, an EPS or a net income record for the NTM EPS and a revenue record for the NTM revenue
 (``ANCHOR_METRICS``, ``anchor_misfit``), which the override route checks on the records before
 the rules, since it reads them. A passing override is ``("applied", "")``; a refused one names
 its state and a sentence the agent can act on.
@@ -351,9 +352,14 @@ _ABOVE_P90: dict[str, str] = {"growth.belief": "a belief", "path.hold": "a held 
 # The anchors a clear guidance may replace: an override of one cites a guidance record.
 _NTM_ANCHORS = frozenset({"earnings.ntm", "revenue.ntm"})
 NO_GUIDANCE = "an NTM anchor override needs a guidance record among its evidence"
-# The metric of the guidance record an NTM anchor reads, a gaap record for a fiscal year: the
-# reported basis, and a full year, the only figures that may stand in for the consensus.
-ANCHOR_METRICS: dict[str, str] = {"earnings.ntm": "eps", "revenue.ntm": "revenue"}
+# The metrics of the guidance record an NTM anchor reads, a gaap record for a fiscal year: the
+# reported basis, and a full year, the only figures that may stand in for the consensus. The NTM
+# EPS may rest on a net income record, which the agent divides by the count the consensus is on
+# (spec 2026-11-14 9).
+ANCHOR_METRICS: dict[str, frozenset[str]] = {
+    "earnings.ntm": frozenset({"eps", "net_income"}),
+    "revenue.ntm": frozenset({"revenue"}),
+}
 # The policy's stand-in for a range with no upper bound (10^15 dollars: the balance corrections
 # and the NTM revenue); a refusal names such a range by its lower end alone.
 NO_BOUND = 1e15
@@ -380,9 +386,10 @@ def route_of(phase: Phase) -> Route:
 
 def anchor_misfit(tag: str) -> str:
     """The refusal of an override of the NTM anchor ``tag`` whose guidance records hold no gaap
-    record of the anchor's metric for a fiscal year (``ANCHOR_METRICS``)."""
-    metric = ANCHOR_METRICS[tag]
-    return f"an NTM anchor override needs a gaap guidance record of {metric} for a fiscal year"
+    record of one of the anchor's metrics for a fiscal year (``ANCHOR_METRICS``), the metrics
+    named in alphabetical order: "of eps or net_income"."""
+    metrics = " or ".join(sorted(ANCHOR_METRICS[tag]))
+    return f"an NTM anchor override needs a gaap guidance record of {metrics} for a fiscal year"
 
 
 def check_override(

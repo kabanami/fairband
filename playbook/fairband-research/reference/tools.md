@@ -289,8 +289,9 @@ and store nothing:
   Fairband with its source, so a report can cite it as `finding:<id>`.
 - `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source)`: record a figure
   the company guided on a call for a future period, low and high equal for a point; it answers the
-  record with the midpoint and, for a fiscal-year revenue or EPS figure on the `gaap` basis, the
-  step the server computed. An override cites it in its evidence as `guidance:<id>`; a report cites its figures.
+  record with the midpoint and, for a fiscal-year revenue, EPS or net income figure on the `gaap`
+  basis, the step the server computed. An override cites it in its evidence as `guidance:<id>`; a
+  report cites its figures.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input of
   the twenty-five in `SKILL.md`'s table, the diluted share count (`shares.diluted`), the
   committed shares (`shares.committed`), the value outside the business (`value.outside`), the
@@ -354,19 +355,21 @@ and store nothing:
   that is not the company's, "no guidance record <id> for <symbol>" (404); a record a later call
   replaced, "guidance record <id> is superseded by record <id>" (409). An NTM anchor override
   needs one: "an NTM anchor override needs a guidance record among its evidence". Its records hold a
-  `gaap` record of its metric for a fiscal year, else 400, nothing stored: "an NTM anchor override
-  needs a gaap guidance record of eps for a fiscal year" (or of revenue, on `revenue.ntm`). On
+  `gaap` record of one of its metrics for a fiscal year, else 400, nothing stored: "an NTM anchor
+  override needs a gaap guidance record of eps or net_income for a fiscal year" (or of revenue, on
+  `revenue.ntm`). The server checks the record, not the override's figure against it. On
   `secondary_valuation`, the item that backs a debt or a cash you pass adds `figure`, `debt` or
   `cash`, and one item at least names no `figure`: "the path needs its own evidence item".
-- A guidance record (`guidance_add`): the `metric` is `revenue`, `eps`, `operating_margin`,
-  `free_cash_flow`, `capex`, `revenue_growth` or `eps_growth`; the `period` a fiscal year (`2027`)
+- A guidance record (`guidance_add`): the `metric` is `revenue`, `eps`, `net_income`,
+  `operating_margin`, `free_cash_flow`, `capex`, `revenue_growth` or `eps_growth` (`net_income` a
+  total, the net income that belongs to the shareholders); the `period` a fiscal year (`2027`)
   or a quarter (`2027Q1`, no dash); `low` and `high` in the metric's unit, money in full in the
   reporting currency as the company states it, a percent as a fraction; the `basis` `gaap`,
   `adjusted` or `constant-currency`; `as_of` the call's date; `text` the sentence verbatim;
   `source` a string, the transcript's `response:<id>` or a filing. A newer record of the same
   metric, period and basis supersedes the older, in the order of the calls' dates. A value the
   record cannot take is refused (400), nothing stored, with the first of these sentences that
-  applies: "metric is one of revenue, eps, operating_margin,
+  applies: "metric is one of revenue, eps, net_income, operating_margin,
   free_cash_flow, capex, revenue_growth or eps_growth"; "period is a fiscal year or a quarter
   (2026, 2026Q3)"; "low is above high"; "basis is one of gaap, adjusted or constant-currency"; "a
   guidance record needs its text"; "a guidance record needs its source". A low or a high that is

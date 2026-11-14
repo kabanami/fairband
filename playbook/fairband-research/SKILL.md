@@ -357,8 +357,8 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   basis, and only while no `earnings.sbc_basis` is applied. The doors are two. Where the
   filing's other-income line shows an item the analysts' NTM EPS carries and that does not
   recur, set `earnings.ntm_nri` to it, a share and after tax. Or `earnings.ntm`, with a clear EPS
-  guidance record (see "Guidance"). Without either, section 8 states the exposure: the items a
-  share the consensus may carry. Amortization of acquired intangibles that an adjusted
+  or net income guidance record (see "Guidance"). Without either, section 8 states the exposure:
+  the items a share the consensus may carry. Amortization of acquired intangibles that an adjusted
   EPS leaves out is not such an item, and no input corrects for it: the invested capital keeps
   the goodwill and the acquired intangibles, so the cost of the acquisitions is in the return the
   growth is charged at. On a row whose charge starts at the return without goodwill, the return
@@ -394,9 +394,10 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   few EPS analysts on it; or not every period of that year has an estimate. It also gives how
   many of the window's periods are left thin, the smallest count and its period. Read the annual
   estimates of the fiscal years the window spans and their analyst counts (`estimates`), and the
-  company's guidance (see "Guidance"). Where a clear EPS guidance record covers the window,
-  decide through `earnings.ntm`; the note does not show once it applies. Without one, the figure
-  stands, and section 8 states the exposure: the thin periods and their share of the NTM EPS.
+  company's guidance (see "Guidance"). Where a clear EPS or net income guidance record covers the
+  window, decide through `earnings.ntm`; the note does not show once it applies. Without one, the
+  figure stands, and section 8 states the exposure: the thin periods and their share of the NTM
+  EPS.
 - `step-series-disagree`: a consensus step read on net income and the same step read on EPS differ
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
@@ -543,8 +544,9 @@ fiscal year may replace the consensus: an NTM anchor, `earnings.ntm` on Mature G
 `path.step_3`, or a revenue step on Mature Growth, `revenue.step_2` or `revenue.step_3`.
 "Guidance" below says which year feeds which input. The override's evidence holds
 an item of kind `guidance` that cites the record as `guidance:<id>`; an NTM anchor's record is a
-`gaap` record of its metric (`eps` for `earnings.ntm`, `revenue` for `revenue.ntm`) for a fiscal
-year. Where the guidance is not clear, or is for any other year, the consensus stands.
+`gaap` record of one of its metrics (`eps` or `net_income` for `earnings.ntm`, `revenue` for
+`revenue.ntm`) for a fiscal year. Where the guidance is not clear, or is for any other year, the
+consensus stands.
 
 A cyclical, valued at mid-cycle:
 
@@ -661,8 +663,10 @@ instead.
 A guidance record is a figure the company itself gave on an earnings call for a future period.
 Record one with `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source)`:
 
-- `metric`: `revenue`, `eps`, `operating_margin`, `free_cash_flow`, `capex`, `revenue_growth` or
-  `eps_growth`.
+- `metric`: `revenue`, `eps`, `net_income`, `operating_margin`, `free_cash_flow`, `capex`,
+  `revenue_growth` or `eps_growth`. `net_income` is the net income that belongs to the company's
+  shareholders, as its EPS is. Where a company guides a total that includes a minority's share,
+  say so in the record's `text`, after the sentence, and do not back `earnings.ntm` with it.
 - `period`: a fiscal year, `2027`, or a quarter, `2027Q1`, written with no dash.
 - `low` and `high`: the range, equal for a point. Money in full, in the reporting currency as the
   company states it (dollars for a company that reports in them); a percent as a fraction.
@@ -670,10 +674,10 @@ Record one with `guidance_add(symbol, metric, period, low, high, basis, as_of, t
 - `as_of`: the call's date, from `transcript_dates`.
 - `text`: the sentence, verbatim. `source`: the transcript's `response:<responseId>`, or a filing.
 
-The server computes the midpoint. For a fiscal-year revenue or EPS record on the `gaap` basis it
-also computes the step: the growth from the year before's actual on file, so you never compute
-that rate. The step is the track-record figure: the guided growth set against what the company
-last delivered, for section 5. It is never an override's `new`. An `adjusted` or a
+The server computes the midpoint. For a fiscal-year revenue, EPS or net income record on the
+`gaap` basis it also computes the step: the growth from the year before's actual on file, so you
+never compute that rate. The step is the track-record figure: the guided growth set against what
+the company last delivered, for section 5. It is never an override's `new`. An `adjusted` or a
 `constant-currency` record takes no step, since the actual on file is the GAAP one. For the growth
 of an adjusted figure, record the year before's adjusted actual from the release as a finding and
 `derive` the `growth` of the record's midpoint over it. For a constant-currency figure, `derive`
@@ -720,7 +724,11 @@ record the guidance and read it in section 5 only. The figure you pass as `new` 
 tool:
 
 - `earnings.ntm` (Mature Growth): a full-year EPS guidance for the base year. `new` is the
-  record's midpoint.
+  record's midpoint. A company that guides net income alone backs `earnings.ntm` with that record,
+  a `gaap` one for the base year. `new` is then the `derive` `ratio` of the record's midpoint over
+  the count the consensus is on: `snapshot:<id>/inputs/shares_diluted`, or the figure of an
+  applied `shares.diluted`, its bridge line `review:<id>/bridge/<n>/new`. Never divide by a count
+  that holds committed shares (`shares.committed`). The server checks the record, not the figure.
 - `revenue.ntm` (High Growth, Young Growth, Decline): a full-year revenue guidance for the base
   year. `new` is the record's midpoint.
 - `path.step_2`: a full-year guidance for the base year plus one; `path.step_3`: for the base year
@@ -739,9 +747,10 @@ The server refuses the override, and stores nothing, when that item is not right
 cites its record as guidance:<id>" (400) for a ref of any other form; "no guidance record <id> for
 <symbol>" (404); "guidance record <id> is superseded by record <id>" (409) when a later call's
 record replaced it. Cite the newer record instead. An NTM anchor's override is refused, and
-stores nothing, when none of its records is a `gaap` record of its metric for a fiscal year: "an
-NTM anchor override needs a gaap guidance record of eps for a fiscal year" on `earnings.ntm`, "an
-NTM anchor override needs a gaap guidance record of revenue for a fiscal year" on `revenue.ntm`.
+stores nothing, when none of its records is a `gaap` record of one of its metrics for a fiscal
+year: "an NTM anchor override needs a gaap guidance record of eps or net_income for a fiscal year"
+on `earnings.ntm`, "an NTM anchor override needs a gaap guidance record of revenue for a fiscal
+year" on `revenue.ntm`.
 
 ## Overrides
 
@@ -760,7 +769,7 @@ not you, computes the value it gives.
 | Tag | Routes that read it | The input | Takes, the ends included |
 |---|---|---|---|
 | `phase` | every route | the life-cycle phase; the route follows it | `Start-up`, `Young Growth`, `High Growth`, `Mature Growth`, `Mature Stable` or `Decline` |
-| `earnings.ntm` | Mature Growth | the anchor's EPS for the next twelve months (NTM), from a clear full-year EPS guidance | above 0 to 1,000 dollars a share; evidence of kind `guidance` required |
+| `earnings.ntm` | Mature Growth | the anchor's EPS for the next twelve months (NTM), from a clear full-year EPS guidance, or a net income one over the count the consensus is on (see "Guidance") | above 0 to 1,000 dollars a share; evidence of kind `guidance` required |
 | `revenue.ntm` | High Growth, Young Growth, Decline | the NTM revenue, year one of the revenue path or of the run-off, from a clear full-year revenue guidance | above 0 dollars; evidence of kind `guidance` required |
 | `growth.belief` | Mature Growth | the belief: the growth rate after the analysts' years, before the fade to the long-run rate | −0.20 to 0.60 a year |
 | `path.hold` | High Growth, Young Growth | the held rate of years four to the end of high growth | −0.20 to 3.00 a year |

@@ -126,6 +126,22 @@ def test_the_step_reads_the_eps_line_and_needs_a_base_on_file(
     assert found["step"] is None and found["midpoint"] == pytest.approx(0.31)
 
 
+def test_a_net_income_record_steps_from_the_net_income_line(
+    client: TestClient, db_path: Path
+) -> None:
+    """Spec 2026-11-14 9: a fiscal-year net income record steps from the year before's net income
+    as `fact:AAPL/net_income/2025` reads it: $1.1 bn to $1.3 bn over $1.0 bn, a midpoint of
+    $1.2 bn and a step of 20%; with no actual of the year before on file, no step."""
+    _store_line(db_path, "netIncome", 2025, 1.0e9)
+    net_income = REVENUE_2026 | {"metric": "net_income", "low": 1.1e9, "high": 1.3e9}
+    found = _post(client, net_income)
+    assert (found["metric"], found["midpoint"]) == ("net_income", pytest.approx(1.2e9))
+    assert found["step"] == pytest.approx(0.2)
+    assert _post(client, net_income | {"period": "2027"})["step"] is None
+    entries = client.get("/api/companies/AAPL/ledger").json()["entries"]
+    assert entries[-1]["summary"] == f"net_income 2026: {SAID}"
+
+
 def test_only_a_gaap_record_takes_a_step(client: TestClient, db_path: Path) -> None:
     """The actual of the year before is the statement's, a GAAP figure: an adjusted or a
     constant-currency record takes no step from it, since a rate across two bases is no growth
@@ -146,8 +162,8 @@ def test_only_a_gaap_record_takes_a_step(client: TestClient, db_path: Path) -> N
         (
             {"metric": "ebitda"},
             (
-                "metric is one of revenue, eps, operating_margin, free_cash_flow, capex,"
-                " revenue_growth or eps_growth"
+                "metric is one of revenue, eps, net_income, operating_margin, free_cash_flow,"
+                " capex, revenue_growth or eps_growth"
             ),
         ),
         ({"basis": "non-gaap"}, "basis is one of gaap, adjusted or constant-currency"),

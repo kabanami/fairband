@@ -4,15 +4,16 @@
 A record: the company, the metric (one of ``METRICS``), the period (a fiscal year, ``2026``, or a
 quarter, ``2026Q3``), its low and its high (equal for a point; a percent as a fraction), the
 basis (one of ``BASES``), ``as_of`` the call's date, the sentence verbatim, the source (the
-transcript's ``response:`` ref, or a filing), and the writer and the time. The store computes the
-midpoint, ``(low + high) / 2``, and, for a fiscal-year ``revenue`` or ``eps`` record on the
-``gaap`` basis given the actual of the year before the guided one (``year_before``), the step, the
-midpoint over that actual less one, so the agent never computes a rate; no step otherwise, nor on
-a base at or below zero, from which growth has no meaning. The actual is the statement's line, a
-GAAP figure, so a record on another basis takes no step: an adjusted figure over a GAAP actual
-is a rate across two bases, no growth, and a constant-currency figure over it is growth at
-constant currency, a rate the agent derives and names as such. A step such a record holds from
-before this rule is not read.
+transcript's ``response:`` ref, or a filing), and the writer and the time. ``net_income`` is a
+total in the reporting currency, the net income that belongs to the company's shareholders, as
+its EPS does (spec 2026-11-14 9). The store computes the midpoint, ``(low + high) / 2``, and, for
+a fiscal-year ``revenue``, ``eps`` or ``net_income`` record on the ``gaap`` basis given the actual
+of the year before the guided one (``year_before``), the step, the midpoint over that actual less
+one, so the agent never computes a rate; no step otherwise, nor on a base at or below zero, from
+which growth has no meaning. The actual is the statement's line, a GAAP figure, so a record on
+another basis takes no step: an adjusted figure over a GAAP actual is a rate across two bases, no
+growth, and a constant-currency figure over it is growth at constant currency, a rate the agent
+derives and names as such. A step such a record holds from before this rule is not read.
 
 The call's date orders a company's records of one metric, period and basis, of which one at most
 is current (``superseded_by`` empty): a GAAP and an adjusted figure of one call both stay current.
@@ -22,7 +23,8 @@ previous call's figure written late, is stored already superseded by the current
 record stays, so a later report can read the track record. ``guidance_for`` lists a
 company's newest first; ``guidance_row`` reads one by its id. ``UNITS`` is each metric's unit as
 the refs read it. ``anchor_year`` is the fiscal year a record guides when it may back an NTM
-anchor override: a gaap record of the anchor's metric for a fiscal year (``method.md`` 14.3).
+anchor override: a gaap record of one of the anchor's metrics for a fiscal year, ``eps`` or
+``net_income`` for the NTM EPS and ``revenue`` for the NTM revenue (``method.md`` 14.3).
 
 A refused value raises ``ValueError`` with the sentence the writer can act on. Each write is one
 transaction; it joins the caller's when there is one, so the caller's ledger row commits with it.
@@ -51,6 +53,7 @@ from fairband.store.ledger import Principal, Writer
 METRICS = (
     "revenue",
     "eps",
+    "net_income",
     "operating_margin",
     "free_cash_flow",
     "capex",
@@ -61,6 +64,7 @@ BASES = ("gaap", "adjusted", "constant-currency")
 # Each metric's unit as a ``guidance:`` ref reads it; a step is a percent.
 UNITS = {
     "revenue": "currency",
+    "net_income": "currency",
     "free_cash_flow": "currency",
     "capex": "currency",
     "eps": "per-share",
@@ -69,7 +73,7 @@ UNITS = {
     "eps_growth": "percent",
 }
 # The metrics a fiscal-year record steps from the actual of the year before the guided one.
-STEPPED = frozenset({"revenue", "eps"})
+STEPPED = frozenset({"revenue", "eps", "net_income"})
 _PERIOD = re.compile(r"(\d{4})(Q[1-4])?")
 
 
@@ -96,7 +100,8 @@ class GuidanceRow:
 
 def year_before(metric: str, period: str) -> int | None:
     """The fiscal year a record of ``metric`` for ``period`` steps from, the year before the
-    guided one: for a fiscal-year revenue or EPS record only, ``None`` for any other."""
+    guided one: for a fiscal-year revenue, EPS or net income record only, ``None`` for any
+    other."""
     found = _PERIOD.fullmatch(period)
     if metric not in STEPPED or found is None or found[2] is not None:
         return None
@@ -111,9 +116,9 @@ def fiscal_year(period: str) -> int | None:
 
 def anchor_year(tag: str, row: GuidanceRow) -> int | None:
     """The fiscal year ``row`` guides when it may back an override of the NTM anchor ``tag``: a
-    gaap record of the anchor's metric (``overrides.ANCHOR_METRICS``) for a fiscal year; ``None``
-    for any other record or tag."""
-    if ANCHOR_METRICS.get(tag) != row.metric or row.basis != "gaap":
+    gaap record of one of the anchor's metrics (``overrides.ANCHOR_METRICS``) for a fiscal year;
+    ``None`` for any other record or tag."""
+    if row.metric not in ANCHOR_METRICS.get(tag, frozenset()) or row.basis != "gaap":
         return None
     return fiscal_year(row.period)
 

@@ -984,7 +984,8 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "the annual estimates of the fiscal years the window spans",
                 "their analyst counts",
                 "guidance",
-                "clear EPS guidance record",
+                # an EPS from a net income record backs the anchor too (spec 2026-11-14 9)
+                "clear EPS or net income guidance record",
                 "`earnings.ntm`",
                 "once it applies",
                 "states the exposure",
@@ -1407,6 +1408,65 @@ def test_nothing_counts_twice_route_by_route() -> None:
     # the rule before the one-time item, which left a Mature Growth asset out (spec 2026-11-14 5)
     assert "no input strips an asset's gains from it" not in skill
     assert "Add the asset only when the consensus excludes its gains." not in skill
+
+
+def test_a_net_income_guidance_backs_the_ntm_eps_over_the_consensus_count() -> None:
+    """Spec 2026-11-14 9 and the controller's ruling: a guidance record may hold `net_income`, the
+    net income that belongs to the shareholders, as the EPS does, a total with a minority's share
+    said so in the record's text and backing no anchor; a company that guides net income alone
+    backs `earnings.ntm` with that record, and `new` is the `derive` ratio of its midpoint over the
+    count the consensus is on, the diluted count or an applied `shares.diluted`, never a count
+    that holds committed shares; the server checks the record, not the figure. The tools
+    reference lists the metric, the citations reference reads its figures as totals, and the
+    template's section 8 cites the division."""
+    skill = _flat(_read(SKILL))
+    guidance = skill[skill.index("## Guidance ") : skill.index("## Overrides ")]
+    for words in (
+        (
+            "`metric`: `revenue`, `eps`, `net_income`, `operating_margin`, `free_cash_flow`,"
+            " `capex`, `revenue_growth` or `eps_growth`."
+        ),
+        "`net_income` is the net income that belongs to the company's shareholders, as its EPS is.",
+        (
+            "Where a company guides a total that includes a minority's share, say so in the"
+            " record's `text`, after the sentence, and do not back `earnings.ntm` with it."
+        ),
+        "For a fiscal-year revenue, EPS or net income record on the `gaap` basis",
+        (
+            "A company that guides net income alone backs `earnings.ntm` with that record, a"
+            " `gaap` one for the base year. `new` is then the `derive` `ratio` of the record's"
+            " midpoint over the count the consensus is on: `snapshot:<id>/inputs/shares_diluted`,"
+            " or the figure of an applied `shares.diluted`, its bridge line"
+            " `review:<id>/bridge/<n>/new`. Never divide by a count that holds committed shares"
+            " (`shares.committed`). The server checks the record, not the figure."
+        ),
+    ):
+        assert words in guidance, words
+    table = _table(
+        _read(SKILL), ("Tag", "Routes that read it", "The input", "Takes, the ends included")
+    )
+    ntm = _flat(" ".join(table["`earnings.ntm`"]))
+    assert "from a clear full-year EPS guidance, or a net income one over the count" in ntm
+    assert "(`eps` or `net_income` for `earnings.ntm`, `revenue` for `revenue.ntm`)" in skill
+    entry = _tool_entry("guidance_add")
+    assert "for a fiscal-year revenue, EPS or net income figure on the `gaap` basis" in entry
+    tools = _flat(_read(TOOLS))
+    assert (
+        "the `metric` is `revenue`, `eps`, `net_income`, `operating_margin`, `free_cash_flow`,"
+        " `capex`, `revenue_growth` or `eps_growth`"
+    ) in tools
+    citations = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
+    guided = _flat(" ".join(citations["`guidance:<id>/low`, `/high`, `/midpoint`, `/step`"]))
+    for words in (
+        "a `gaap` fiscal-year revenue, EPS or net income record",
+        "currency for revenue, net income, free cash flow and capex",
+    ):
+        assert words in guided, words
+    # section 8 shows the division, so the reader sees how the guided total became the EPS
+    assert (
+        "Where the NTM EPS came from a net income record, the sentence cites the division too,"
+        " `derived:<id>`."
+    ) in _flat(_read(TEMPLATE))
 
 
 def test_the_agent_reads_fairband_before_it_goes_outside() -> None:

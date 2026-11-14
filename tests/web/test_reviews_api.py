@@ -1090,19 +1090,27 @@ def test_an_ntm_override_cites_a_guidance_record(
 
 
 NTM_EPS = BELIEF_8 | {"tag": "earnings.ntm", "new": 6.45, "reason": "guided 6.30 to 6.60"}
-MISFIT_EPS = "an NTM anchor override needs a gaap guidance record of eps for a fiscal year"
+MISFIT_EPS = (
+    "an NTM anchor override needs a gaap guidance record of eps or net_income for a fiscal year"
+)
 
 
 @pytest.mark.parametrize(
     ("metric", "period", "basis"),
-    [("eps", "2027", "adjusted"), ("revenue", "2027", "gaap"), ("eps", "2027Q1", "gaap")],
+    [
+        ("eps", "2027", "adjusted"),
+        ("revenue", "2027", "gaap"),
+        ("eps", "2027Q1", "gaap"),
+        ("net_income", "2027", "adjusted"),
+        ("net_income", "2027Q1", "gaap"),
+    ],
 )
 def test_an_ntm_override_needs_a_record_that_fits_its_anchor(
     client: TestClient, metric: str, period: str, basis: str
 ) -> None:
-    """The NTM EPS takes a gaap EPS record for a fiscal year: an adjusted record, a revenue record
-    and a quarter's are each refused 400 with nothing stored; the gaap fiscal-year EPS record
-    beside one of them applies."""
+    """The NTM EPS takes a gaap EPS or net income record for a fiscal year (spec 2026-11-14 9): an
+    adjusted record, a revenue record and a quarter's are each refused 400 with nothing stored;
+    the gaap fiscal-year EPS record beside one of them applies."""
     _post(client, BELIEF_8 | {"tag": "phase", "new": "Mature Growth"})
     misfit = _guidance(client, "AAPL", metric, 6.30, 6.60, period=period, basis=basis)
     before = _overrides(client)
@@ -1113,6 +1121,18 @@ def test_an_ntm_override_needs_a_record_that_fits_its_anchor(
     both = _citing(fits)
     both["evidence"].insert(0, _citing(misfit)["evidence"][0])
     assert _post(client, both)["override"]["state"] == "applied"
+
+
+def test_an_ntm_eps_override_may_rest_on_a_net_income_record(client: TestClient) -> None:
+    """Spec 2026-11-14 9: a company that guides net income alone backs the NTM EPS with that
+    record, a gaap one for a fiscal year. The agent's EPS is its cited `derive` step, the
+    midpoint over the count the consensus is on; the server checks the record, not the figure."""
+    _post(client, BELIEF_8 | {"tag": "phase", "new": "Mature Growth"})
+    net_income = _guidance(client, "AAPL", "net_income", 95e9, 100e9)
+    body = _post(client, _citing(net_income))
+    assert body["override"]["state"] == "applied"
+    assert (body["override"]["tag"], body["override"]["new"]) == ("earnings.ntm", 6.45)
+    assert [line["tag"] for line in body["bridge"]] == ["phase", "earnings.ntm"]
 
 
 def test_an_ntm_revenue_override_needs_a_gaap_fiscal_year_revenue_record(

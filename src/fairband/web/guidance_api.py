@@ -7,11 +7,12 @@ agent's write". A value the record cannot take is a 400 with the store's sentenc
 the fields: "metric is one of revenue, eps, ...", "period is a fiscal year or a quarter (2026,
 2026Q3)", "low is above high", "basis is one of gaap, adjusted or constant-currency", "a guidance
 record needs its text", "a guidance record needs its source"; a low or a high that is not a
-finite number is refused by the body's types, a 400 too. For a fiscal-year revenue or EPS record
-the server reads the actual of the fiscal year before the guided one from the
-statements as ``fact:<symbol>/revenue/<year>`` or ``fact:<symbol>/eps_diluted/<year>`` resolves
-it; with no actual on file the record takes no step, and neither does a record on a basis other
-than ``gaap``, whatever the actual (``store.guidance``). The company needs no snapshot. The call's
+finite number is refused by the body's types, a 400 too. For a fiscal-year revenue, EPS or net
+income record the server reads the actual of the fiscal year before the guided one from the
+statements as ``fact:<symbol>/revenue/<year>``, ``fact:<symbol>/eps_diluted/<year>`` or
+``fact:<symbol>/net_income/<year>`` resolves it (spec 2026-11-14 9); with no actual on file the
+record takes no step, and neither does a record on a basis other than ``gaap``, whatever the
+actual (``store.guidance``). The company needs no snapshot. The call's
 date orders the records of one metric, period and basis (``store.guidance``): a record of a call
 on or after the current one's supersedes it, whose ``supersededBy`` then names it, and a record of
 an earlier call is stored already superseded.
@@ -46,7 +47,7 @@ from fairband.web.settings_api import effective
 
 GUIDANCE_WRITE = "a guidance record is an agent's write"
 # The statement line a stepped metric's year before reads, by the engine's name (``fact:``).
-_BASE_LINES = {"revenue": "revenue", "eps": "eps_diluted"}
+_BASE_LINES = {"revenue": "revenue", "eps": "eps_diluted", "net_income": "net_income"}
 
 
 class GuidancePost(BaseModel):
@@ -127,9 +128,9 @@ def add_guidance_routes(
 
 
 def _base_actual(resolver: Resolver, metric: str, period: str) -> float | None:
-    """The actual a fiscal-year revenue or EPS record steps from, the statement line of the year
-    before as a ``fact:`` ref resolves it; ``None`` for any other record or with no figure on
-    file."""
+    """The actual a fiscal-year revenue, EPS or net income record steps from, the statement line
+    of the year before as a ``fact:`` ref resolves it; ``None`` for any other record or with no
+    figure on file."""
     year = year_before(metric, period)
     if year is None:
         return None

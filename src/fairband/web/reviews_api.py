@@ -12,9 +12,11 @@ guidance:<id>", one naming no record of the company a 404, "no guidance record <
 <symbol>", and one naming a record a later call superseded a 409, "guidance record <id> is
 superseded by record <id>", so an NTM anchor never rests on a record a later call replaced; none
 stores anything. An override of an NTM anchor whose evidence cites guidance must cite, among its
-records, a gaap record of the anchor's metric (``eps`` for ``earnings.ntm``, ``revenue`` for
-``revenue.ntm``) for a fiscal year, else 400 "an NTM anchor override needs a gaap guidance record
-of <eps|revenue> for a fiscal year" (``overrides.anchor_misfit``), nothing stored; one with no
+records, a gaap record of one of the anchor's metrics (``eps`` or ``net_income`` for
+``earnings.ntm``, ``revenue`` for ``revenue.ntm``) for a fiscal year, else 400 "an NTM anchor
+override needs a gaap guidance record of <eps or net_income|revenue> for a fiscal year"
+(``overrides.anchor_misfit``), nothing stored; the override's figure is not checked against the
+record, since an EPS from a net income record is the agent's cited division; one with no
 guidance item at all is left to the evidence rule, which stores it refused. An override applied
 before a later record superseded the one it cites stays applied. ``check_override`` then judges
 it on the route the row takes: its phase's, or the phase an applied ``phase`` override sets (the
@@ -892,8 +894,9 @@ def _require_anchor_record(
     conn: sqlite3.Connection, tag: str, evidence: Sequence[Evidence]
 ) -> None:
     """An override of an NTM anchor whose evidence cites guidance cites, among its records, a gaap
-    record of the anchor's metric for a fiscal year: 400 ``anchor_misfit`` otherwise (module
-    docstring). Run after ``_require_guidance``, so each ref names a record of the company."""
+    record of one of the anchor's metrics for a fiscal year: 400 ``anchor_misfit`` otherwise
+    (module docstring). Run after ``_require_guidance``, so each ref names a record of the
+    company."""
     if tag not in ANCHOR_METRICS:
         return
     cited = [guidance_cited(e.ref) for e in evidence if e.kind == "guidance"]

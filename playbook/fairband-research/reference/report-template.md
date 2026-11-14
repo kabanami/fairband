@@ -234,7 +234,8 @@ The kill criteria of section 11 test it.
   share of the NTM EPS, each period's EPS cited, `estimate:<symbol>/<period>/eps`. Under a
   guidance override of the anchor the note does not show, and the guidance below covers it.
 - **The guidance.** Where a guidance override moved an anchor or a step, one sentence names it
-  and cites the record's figure, `guidance:<id>/midpoint`.
+  and cites the record's figure, `guidance:<id>/midpoint`. Where the NTM EPS came from a net
+  income record, the sentence cites the division too, `derived:<id>`.
 - **The secondary valuation**, on a refused row with no reviewed value only: where neither the
   route nor your review values the company, it stands in for the route's value and leads the
   section. Where an override gave the current review a value, the reviewed value leads and there is

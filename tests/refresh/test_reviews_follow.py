@@ -1286,12 +1286,14 @@ def test_an_override_on_a_snapshot_from_before_1_3_with_no_period_follows_its_re
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
 
 
+@pytest.mark.parametrize("metric", ["eps", "net_income"])
 def test_a_lasting_ntm_override_drops_when_its_guided_year_passes(
-    conn: sqlite3.Connection, policy: Policy
+    conn: sqlite3.Connection, policy: Policy, metric: str
 ) -> None:
-    """MGCO's NTM EPS override cites a gaap EPS record for fiscal 2027, its base year. A full
-    refresh on the same consensus keeps it; one whose consensus has moved a year on, so the base
-    year is 2028, drops it, by the system, "the guided year has passed", with its ledger row."""
+    """MGCO's NTM EPS override cites a gaap record for fiscal 2027, its base year, of EPS or of
+    net income (spec 2026-11-14 9), the net income the EPS times the count. A full refresh on the
+    same consensus keeps it; one whose consensus has moved a year on, so the base year is 2028,
+    drops it, by the system, "the guided year has passed", with its ledger row."""
     today, deciles = date(2026, 10, 31), universe_deciles()
     at = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)
     inputs = mature_growth_inputs()
@@ -1299,6 +1301,9 @@ def test_a_lasting_ntm_override_drops_when_its_guided_year_passes(
     assert first.intermediates["path"]["base_year"] == 2027
     ntm = current_reading(first, "earnings.ntm")
     assert isinstance(ntm, float)
+    shares = current_reading(first, "shares.diluted")
+    assert isinstance(shares, float)
+    guided_figure = ntm if metric == "eps" else ntm * shares
     refresh_id = create_refresh(
         conn, "full", None, policy.version, METHOD_VERSION, at, EMPTY_SETTINGS_HASH
     )
@@ -1306,10 +1311,10 @@ def test_a_lasting_ntm_override_drops_when_its_guided_year_passes(
     guided = insert_guidance(
         conn,
         "MGCO",
-        "eps",
+        metric,
         "2027",
-        ntm,
-        ntm * 1.1,
+        guided_figure,
+        guided_figure * 1.1,
         "gaap",
         today,
         "We guide 2027.",

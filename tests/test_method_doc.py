@@ -4,10 +4,11 @@ them."""
 from pathlib import Path
 from typing import get_args
 
-from fairband.engine.overrides import OverrideTag
+from fairband.engine.overrides import OverrideTag, anchor_misfit
 from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
 from fairband.reports.check import FAILURES
+from fairband.store.guidance import METRICS
 
 METHOD = Path(__file__).parent.parent / "docs" / "method.md"
 
@@ -239,6 +240,36 @@ def test_an_override_the_route_no_longer_reads_drops() -> None:
     assert "when an agent drops or replaces a `phase` override" not in follows
     row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
     assert "while an unclassified row keeps its overrides (14.3, 14.6)" in row
+
+
+def test_a_guidance_record_holds_net_income_and_backs_the_ntm_eps() -> None:
+    """Spec 2026-11-14 9: 14.9 lists every metric the store takes, `net_income` a total stepped
+    from the year before's net income line, and says the agent derives the NTM EPS from it over
+    the count the consensus is on; 14.3 quotes the anchor's refusal as the engine words it and
+    says the check reads the record, not the figure; 14.6's drop reads either record; 16.2 reads
+    its figures as totals; and 11's row cites every section that states the rule."""
+    fourteen = _section(14)
+    rules = fourteen[fourteen.index("### 14.3") : fourteen.index("### 14.4")]
+    follows = fourteen[fourteen.index("### 14.6") : fourteen.index("### 14.7")]
+    guidance = fourteen[fourteen.index("### 14.9") :]
+    assert f"the metric, one of {', '.join(f'`{m}`' for m in METRICS[:-1])} and" in guidance
+    assert f'"metric is one of {", ".join(METRICS[:-1])} or {METRICS[-1]}"' in guidance
+    for words in (
+        "`net_income` a total in the reporting currency",
+        "for a fiscal-year `revenue`, `eps` or `net_income` record on the `gaap` basis the step",
+        "`fact:<symbol>/net_income/<year>`",
+        "A company that guides net income alone backs it with that record",
+        "the record's midpoint over the count the consensus is on",
+        "never a count that holds committed shares",
+    ):
+        assert words in guidance, words
+    assert f'"{anchor_misfit("earnings.ntm")}"' in rules
+    assert "`eps` or `net_income` for `earnings.ntm` and `revenue` for `revenue.ntm`" in rules
+    assert "The check reads the record, not the override's figure against it" in rules
+    assert "an `eps` or a `net_income` record for `earnings.ntm`" in follows
+    assert "currency for revenue, net income, free cash flow and capex" in _section(16)
+    row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
+    assert "the guided-year drop reading either (14.3, 14.6, 14.9, 16.2)" in row
 
 
 def test_section_15_names_the_bounds_and_the_two_versions() -> None:
