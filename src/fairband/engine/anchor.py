@@ -183,12 +183,14 @@ class AnnualGap:
 
 @dataclass(frozen=True)
 class Anchor:
-    """Year 1 per share and in total: the consensus less the SBC adjustment, or an agent's guided
-    NTM EPS in its place, less an agent's cycle gap when one applies; under the refusal
-    "incomplete NTM consensus" the numbers are 0. ``sbc_ttm`` is the trailing stock pay the
-    anchor read, an agent's in place of the stored figure, and ``gaap_ttm_eps`` the GAAP trailing
-    EPS the basis test reads, less an agent's correction to the non-recurring gap; both ``None``
-    where the trailing figures hold none. ``source`` says what the consensus figure
+    """Year 1 per share and in total: the consensus less the SBC adjustment and less an agent's
+    one-time amount, or an agent's guided NTM EPS in place of both, then less an agent's cycle gap
+    when one applies; under the refusal "incomplete NTM consensus" the numbers are 0. ``one_time``
+    is the one-time amount a share taken off, nil without one and under a guided EPS, which
+    stands in for the consensus with its items (spec 2026-11-14 5). ``sbc_ttm`` is the trailing
+    stock pay the anchor read, an agent's in place of the stored figure, and ``gaap_ttm_eps`` the
+    GAAP trailing EPS the basis test reads, less an agent's correction to the non-recurring gap;
+    both ``None`` where the trailing figures hold none. ``source`` says what the consensus figure
     ``ntm_eps_raw`` read (spec 2026-11-13 9a): ``periods``, the sum of the window's EPS means, or
     ``annual``, that sum corrected by the annual consensus of the last fiscal year the window
     reaches, the correction in ``annual``; ``periods_sum`` is the sum of the window's EPS means on
@@ -206,12 +208,13 @@ class Anchor:
     source: Literal["periods", "annual"] = "periods"
     periods_sum: float = 0.0
     annual: AnnualGap | None = None
+    one_time: float = 0.0
 
     @property
     def ntm_eps_found(self) -> float:
-        """The NTM EPS before an agent's guided EPS and cycle gap: the consensus less the SBC
-        adjustment in force, which an agent's stock pay or basis moves (``method.md`` 14.4), the
-        figure ``ntm_eps`` is without those two."""
+        """The NTM EPS before an agent's guided EPS, one-time amount and cycle gap: the consensus
+        less the SBC adjustment in force, which an agent's stock pay or basis moves (``method.md``
+        14.4), the figure ``ntm_eps`` is without those three."""
         return self.ntm_eps_raw - self.sbc_adjustment_per_share
 
 
@@ -340,6 +343,7 @@ def ntm_anchor(
     *,
     cadence: Cadence = "quarterly",
     nri_correction: float | None = None,
+    one_time: float | None = None,
     cycle_gap: float | None = None,
     guided_eps: float | None = None,
     sbc_override: float | None = None,
@@ -356,18 +360,21 @@ def ntm_anchor(
     the test and in the adjustment; with ``basis_override``, an agent's basis, the basis is
     ``includes-sbc`` or ``excludes-sbc`` as it says and the test is not run, so no figure it
     would read is needed and ``sbc-basis-unknown`` is not raised (spec 2026-11-13 7.2). With
-    ``guided_eps``, an agent's NTM EPS from a clear guidance, that figure stands in for the
-    consensus less the SBC adjustment, the window's periods still required; with ``cycle_gap``,
-    an agent's correction to mid-cycle earnings a share, the NTM EPS is then taken less it, and
-    "no positive forward anchor" reads the figure so set and lowered. The unit-error check reads
-    the consensus as found, a check on the vendor's units (on a positive figure: a trough lifted
-    by a negative gap has no forward P/E to check), the raw sum and the adjustment are the
-    consensus's, and the basis test reads neither of those two overrides. The raw figure is the
-    sum of the periods' EPS means, or, where a period in F, the last fiscal year the window
-    reaches, is thin, that sum corrected by F's ``annual`` consensus against F's periods among
-    ``estimates``, every period of the periods' consensus on file (``annual_gap``, spec
-    2026-11-13 9a); the adjustment, the overrides and the refusals read the figure so found, and
-    the revenue scale the window's revenue as before."""
+    ``one_time``, an agent's one-time amount a share that the consensus carries and that does
+    not recur (spec 2026-11-14 5), the consensus less the SBC adjustment is taken less it, a
+    negative amount raising it, a share on ``shares`` as the consensus is. With ``guided_eps``, an
+    agent's NTM EPS from a clear guidance, that figure stands in for the consensus less the SBC
+    adjustment, with its items, so the one-time amount is not read, the window's periods still
+    required; with ``cycle_gap``, an agent's correction to mid-cycle earnings a share, the NTM EPS
+    is then taken less it, and "no positive forward anchor" reads the figure so set and lowered.
+    The unit-error check reads the consensus as found, a check on the vendor's units (on a
+    positive figure: a trough lifted by a negative gap has no forward P/E to check), the raw sum
+    and the adjustment are the consensus's, and the basis test reads none of those three
+    overrides. The raw figure is the sum of the periods' EPS means, or, where a period in F, the
+    last fiscal year the window reaches, is thin, that sum corrected by F's ``annual`` consensus
+    against F's periods among ``estimates``, every period of the periods' consensus on file
+    (``annual_gap``, spec 2026-11-13 9a); the adjustment, the overrides and the refusals read the
+    figure so found, and the revenue scale the window's revenue as before."""
     sbc = trailing.sbc if sbc_override is None else sbc_override
     sbc_per_share = None if sbc is None else sbc * (1 - tax_rate) / shares
     gaap = trailing.eps_diluted
@@ -390,7 +397,8 @@ def ntm_anchor(
     if basis == "excludes-sbc" and sbc_per_share is not None:
         adjustment = sbc_per_share * _revenue_scale(periods, trailing.revenue)
     found = raw - adjustment
-    anchor = found if guided_eps is None else guided_eps
+    taken = 0.0 if guided_eps is not None or one_time is None else one_time
+    anchor = found - taken if guided_eps is None else guided_eps
     ntm_eps = anchor if cycle_gap is None else anchor - cycle_gap
 
     refusal = None
@@ -411,6 +419,7 @@ def ntm_anchor(
         source="periods" if gap is None else "annual",
         periods_sum=periods_sum,
         annual=gap,
+        one_time=taken,
     )
 
 

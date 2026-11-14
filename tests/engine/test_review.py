@@ -57,6 +57,7 @@ def OVERRIDE(tag: OverrideTag, value: float | str, id: int = 1) -> Override:
         ("MGCO", "moat.class", "Narrow"),  # MGCO is Wide
         ("MGCO", "earnings.nri_gap", 0.5),
         ("MGCO", "earnings.cycle_gap", 1.0),
+        ("MGCO", "earnings.ntm_nri", 0.59),
         ("MGCO", "return.runway", 0.20),
         ("MGCO", "path.step_2", 0.15),  # the consensus step is 12%
         ("MSCO", "moat.class", "Narrow"),
@@ -162,6 +163,71 @@ def test_the_cycle_gap_line_follows_the_non_recurring_gap(policy: Policy, decile
     )
     judged = [i.name for i in review.result.inputs if i.tag == "JUDGMENT"]
     assert judged == ["earnings.nri_gap", "earnings.cycle_gap"]
+
+
+def test_a_one_time_item_and_the_asset_bridge_together(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-14 5, the AMZN case on MGCO, an NTM EPS of $5.90 and a mechanical value V:
+    the consensus carries $0.59 a share of gains on a stake worth $12 a share, and the business is
+    cut to mid-cycle by $1.00. Given out of order, the three lines run in the bridge's order: the
+    one-time item takes year 1 to $5.31 and the value to V × 5.31 ÷ 5.90; the cycle gap to $4.31
+    and V × 4.31 ÷ 5.90; the stake adds $12. Each old value is the engine's nil, the deltas sum
+    to the reviewed value less V, and the NTM earnings read on the review's result add the item
+    and the gap back, $5.90."""
+    inputs = mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.value is not None
+    v = mechanical.value
+    overrides = [
+        OVERRIDE("value.outside", 12.0, 3),
+        OVERRIDE("earnings.cycle_gap", 1.0, 2),
+        OVERRIDE("earnings.ntm_nri", 0.59, 1),
+    ]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    tags = [line.tag for line in review.bridge]
+    assert tags == ["earnings.ntm_nri", "earnings.cycle_gap", "value.outside"]
+    assert tags == sorted(tags, key=BRIDGE_ORDER.index)
+    one_time, cycle, outside = review.bridge
+    assert (one_time.old, one_time.new, one_time.override_id) == (0.0, 0.59, 1)
+    assert (cycle.old, outside.old) == (0.0, 0.0)
+    assert one_time.delta == pytest.approx(v * (5.31 / 5.90 - 1))
+    assert cycle.delta == pytest.approx(v * (4.31 - 5.31) / 5.90)
+    assert outside.delta == pytest.approx(12.0)
+    assert review.result.value is not None
+    assert review.result.value == pytest.approx(v * 4.31 / 5.90 + 12.0)
+    deltas = [line.delta for line in review.bridge]
+    assert sum(d for d in deltas if d is not None) == pytest.approx(
+        review.result.value - v, abs=1e-9
+    )
+    assert current_reading(review.result, "earnings.ntm") == pytest.approx(5.90)
+    judged = [(i.name, i.unit) for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert judged == [
+        ("earnings.ntm_nri", "USD a share"),
+        ("earnings.cycle_gap", "USD a share"),
+        ("value.outside", "USD a share"),
+    ]
+    assert result_from_json(result_to_json(review.result)) == review.result
+
+
+def test_a_one_time_item_is_moot_under_a_guided_eps(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-14 5 and method 14.4: a guided EPS of $6.45 stands in for the consensus with
+    its items, so a one-time item of $0.59 applies with a bridge line of zero, the value staying
+    at V × 6.45 ÷ 5.90. Nothing came off year 1: the intermediates' ``ntm_nri`` is nil, so the
+    NTM earnings read on the review's result, the anchor with the amount added back, are the
+    guided $6.45."""
+    inputs = mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.value is not None
+    overrides = [OVERRIDE("earnings.ntm_nri", 0.59, 2), OVERRIDE("earnings.ntm", 6.45, 1)]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    guided, one_time = review.bridge
+    assert (guided.tag, one_time.tag) == ("earnings.ntm", "earnings.ntm_nri")
+    assert guided.delta == pytest.approx(mechanical.value * (6.45 / 5.90 - 1))
+    assert (one_time.old, one_time.new) == (0.0, 0.59)
+    assert one_time.delta == pytest.approx(0.0, abs=1e-9)
+    assert review.result.value == pytest.approx(mechanical.value * 6.45 / 5.90)
+    im = review.result.intermediates
+    assert im["ntm_nri"] == 0.0 and im["anchor"]["ntm_eps"] == pytest.approx(6.45)
+    assert current_reading(review.result, "earnings.ntm") == pytest.approx(6.45)
 
 
 def test_the_two_new_lines_close_the_bridge(policy: Policy, deciles: Deciles) -> None:

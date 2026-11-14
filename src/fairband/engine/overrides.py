@@ -1,7 +1,7 @@
 """Overrides: the inputs an agent may change, the rules an override must pass, and the engine's
 own reading of each input (spec 2026-11-06 Tier 2, 10.1 to 10.3; ``method.md`` 14).
 
-An override changes one tagged input. ``TAGS`` names the twenty-two inputs, the routes that read
+An override changes one tagged input. ``TAGS`` names the twenty-three inputs, the routes that read
 each, its unit and, for the three word inputs, its words; the numeric ranges are the policy's
 ``override_ranges``, the ends included but the lower end, 0, of the two NTM anchors, the runway
 return, the diluted share count and the committed shares, which each must be above
@@ -41,13 +41,17 @@ none; the minority interest reads its line as the newest sheet presents it, its 
 it as nil (spec 2026-11-13 13). The runway return reads ``None`` with the charge off. The engine
 finds no cycle gap: a mature route writes ``cycle_gap`` into its intermediates only under an
 override, so a Mature Growth or Mature Stable result without one reads 0.0 (a refusal, the route
-its phase takes). The stock pay reads the trailing figure the Mature Growth anchor read
+its phase takes). Nor does it find a one-time item in the NTM consensus: the Mature Growth route
+writes ``ntm_nri``, the amount it took off year 1, only under an override, so a Mature Growth
+result without one reads 0.0 (a refusal, the route its phase takes) and every other route none
+(spec 2026-11-14 5). The stock pay reads the trailing figure the Mature Growth anchor read
 (``sbc_ttm``), and the stock-pay basis the anchor's basis in the input's words, ``None`` on an
 unknown basis (spec 2026-11-13 7.2). The NTM earnings read the anchor the Mature Growth route
-stored, before the cycle gap came off it; the NTM revenue reads the year one the revenue-growth
-or Decline route stored, none on a Decline row with no usable consensus. The engine finds no
-value outside the business either: a valued route writes ``outside_value_per_share`` only under
-an override, so a result without one reads 0.0 on every route but Start-up, which reads none.
+stored, before the one-time item and the cycle gap came off it; the NTM revenue reads the year
+one the revenue-growth or Decline route stored, none on a Decline row with no usable consensus.
+The engine finds no value outside the business either: a valued route writes
+``outside_value_per_share`` only under an override, so a result without one reads 0.0 on every
+route but Start-up, which reads none.
 The diluted share count reads the count the result cites: its intermediates' ``shares`` less
 the ``shares_committed`` a route writes beside it under ``shares.committed``, else the reported
 count's DATA entry or the JUDGMENT entry in its place; so the committed shares never pass for a
@@ -84,6 +88,7 @@ OverrideTag = Literal[
     "earnings.nri_gap",
     "earnings.sbc",
     "earnings.sbc_basis",
+    "earnings.ntm_nri",
     "earnings.cycle_gap",
     "decline.rate",
     "balance.debt",
@@ -94,9 +99,11 @@ OverrideTag = Literal[
     "value.outside",
 ]
 # The bridge's order, the method's step order (spec 10.4); the two stock-pay inputs right after
-# the non-recurring gap, the figure first (spec 2026-11-13 7.2); the minority interest right after
-# cash (spec 2026-11-13 13); the count and the value outside the business last, after the balance
-# sheet (spec 2026-11-09 8), the committed shares right after the count (spec 2026-11-14 4).
+# the non-recurring gap, the figure first (spec 2026-11-13 7.2); the one-time item right before
+# the cycle gap, the order in which the two come off year 1 (spec 2026-11-14 5); the minority
+# interest right after cash (spec 2026-11-13 13); the count and the value outside the business
+# last, after the balance sheet (spec 2026-11-09 8), the committed shares right after the count
+# (spec 2026-11-14 4).
 BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "phase",
     "earnings.ntm",
@@ -108,6 +115,7 @@ BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "earnings.nri_gap",
     "earnings.sbc",
     "earnings.sbc_basis",
+    "earnings.ntm_nri",
     "earnings.cycle_gap",
     "margin.target",
     "capital.sales_to_capital",
@@ -217,6 +225,12 @@ TAGS: dict[OverrideTag, TagSpec] = {
             lasting_value=0.0,
         ),
         _spec("earnings.sbc_basis", frozenset({"mature-growth"}), "basis", _BASES),
+        _spec(
+            "earnings.ntm_nri",
+            frozenset({"mature-growth"}),
+            "USD a share",
+            period_tied_only=True,
+        ),
         _spec("earnings.cycle_gap", _MATURE, "USD a share"),
         _spec("decline.rate", frozenset({"decline"}), "ratio"),
         _spec("balance.debt", _BALANCE, "USD", period_tied_only=True),
@@ -229,7 +243,7 @@ TAGS: dict[OverrideTag, TagSpec] = {
 }
 
 # Each input's line on the bridge, in a reader's words: the cycle gap reads as a cycle judgment,
-# not as a one-time item.
+# not as a one-time item, which has its own line.
 LABELS: dict[OverrideTag, str] = {
     "phase": "phase",
     "earnings.ntm": "NTM earnings",
@@ -245,6 +259,7 @@ LABELS: dict[OverrideTag, str] = {
     "earnings.nri_gap": "non-recurring gap",
     "earnings.sbc": "stock pay",
     "earnings.sbc_basis": "stock-pay basis",
+    "earnings.ntm_nri": "one-time item in the NTM consensus",
     "earnings.cycle_gap": "mid-cycle earnings",
     "decline.rate": "decline rate",
     "balance.debt": "debt",
@@ -255,13 +270,13 @@ LABELS: dict[OverrideTag, str] = {
     "value.outside": "outside the business",
 }
 
-# The route's own entry in a result's inputs that each tag stands for. The two gaps stand for
-# none: a route cites the gap found and the NTM consensus as found as data. An NTM anchor stands
-# for its consensus figure's entry; Mature Growth's NTM net income entry keeps the consensus, on
-# the reported count under a ``shares.diluted`` too. The stock pay stands for the stored trailing
-# figure's entry; the stock-pay basis for none, since a route cites the basis as no input. The
-# count stands for the reported count every result cites; the committed shares and the outside
-# value for none, since the engine reads no such figure.
+# The route's own entry in a result's inputs that each tag stands for. The two gaps and the
+# one-time item stand for none: a route cites the gap found and the NTM consensus as found as
+# data. An NTM anchor stands for its consensus figure's entry; Mature Growth's NTM net income
+# entry keeps the consensus, on the reported count under a ``shares.diluted`` too. The stock pay
+# stands for the stored trailing figure's entry; the stock-pay basis for none, since a route
+# cites the basis as no input. The count stands for the reported count every result cites; the
+# committed shares and the outside value for none, since the engine reads no such figure.
 INPUT_OF: dict[OverrideTag, str] = {
     "earnings.ntm": "ntm_eps",
     "revenue.ntm": "ntm_revenue",
@@ -524,9 +539,12 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
         case "phase":
             return result.phase.phase
         case "earnings.ntm":
-            # the anchor before the cycle gap came off it: the figure an override stands for
+            # the anchor before the one-time item and the cycle gap came off it: the figure an
+            # override stands for; ``ntm_nri`` is the amount taken off, nil under a guided EPS
             ntm_eps = _at(im, "anchor", "ntm_eps")
-            return None if ntm_eps is None else ntm_eps + im.get("cycle_gap", 0.0)
+            if ntm_eps is None:
+                return None
+            return ntm_eps + im.get("ntm_nri", 0.0) + im.get("cycle_gap", 0.0)
         case "revenue.ntm":
             # year one as the route stored it, none on a Decline row with no usable consensus
             return _first(
@@ -570,6 +588,9 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
             return im.get("sbc_ttm")
         case "earnings.sbc_basis":
             return _BASIS_WORDS.get(im.get("sbc_basis", "unknown"))
+        case "earnings.ntm_nri":
+            # written only under an override; the engine's own reading is nil (spec 2026-11-14 5)
+            return im.get("ntm_nri", 0.0) if _route(result) in TAGS[tag].routes else None
         case "earnings.cycle_gap":
             # written only under an override; the engine's own reading is nil
             return im.get("cycle_gap", 0.0) if _route(result) in TAGS[tag].routes else None

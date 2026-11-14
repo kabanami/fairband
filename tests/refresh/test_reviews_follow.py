@@ -711,6 +711,69 @@ def test_period_tied_committed_shares_hold_until_a_newer_period_is_on_file(
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
 
 
+def test_a_period_tied_one_time_item_holds_until_a_newer_period_is_on_file(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-14 5 and 2026-11-13 11a: the engine's reading of the one-time item is nil, so
+    a period-tied ``earnings.ntm_nri`` of $0.59 made on MGCO, an NTM EPS of $5.90, keeps the nil
+    it corrected on a snapshot of the same figures, the review valuing year 1 at $5.31 and the
+    company at the mechanical value × 5.31 ÷ 5.90; it drops when a newer period is on file, a
+    quarter later."""
+    deciles = universe_deciles()
+    inputs = _as_live(mature_growth_inputs())
+    first = value_company(inputs, deciles, policy, HGCO_TODAY)
+    assert first.value is not None and current_reading(first, "earnings.ntm_nri") == 0.0
+    refresh_id = create_refresh(
+        conn, "revalue", None, policy.version, METHOD_VERSION, HGCO_AT, EMPTY_SETTINGS_HASH
+    )
+    made_on = insert_snapshot(conn, first, refresh_id, clock=lambda: HGCO_AT)
+    one_time = insert_override(
+        conn,
+        "MGCO",
+        "earnings.ntm_nri",
+        0.0,
+        0.59,
+        "USD a share",
+        "the consensus carries gains on a stake",
+        EVIDENCE,
+        "period-tied",
+        "Q3 2026",
+        0.0,
+        made_on,
+        AGENT,
+        HGCO_AT,
+        "applied",
+        "",
+    )
+
+    def follow(inputs: CompanyInputs) -> int | None:
+        result = value_company(inputs, deciles, policy, HGCO_TODAY)
+        snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: HGCO_AT)
+        return follow_snapshot(
+            conn,
+            inputs,
+            result,
+            snapshot_id,
+            deciles,
+            policy,
+            HGCO_TODAY,
+            refresh_id,
+            lambda: HGCO_AT,
+        )
+
+    assert follow(inputs) is not None
+    review = latest_review(conn, "MGCO")
+    assert review is not None and review.override_ids == (one_time,)
+    assert review.result.intermediates["ntm_nri"] == 0.59
+    assert review.result.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.31)
+    assert review.value == pytest.approx(first.value * 5.31 / 5.90)
+    held = override_row(conn, one_time)
+    assert held is not None and held.state == "applied"
+    assert follow(_a_quarter_on(inputs)) is None
+    dropped = override_row(conn, one_time)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
+
+
 def test_an_override_on_a_snapshot_from_before_1_3_is_judged_by_its_share_count_s_date(
     conn: sqlite3.Connection, policy: Policy
 ) -> None:

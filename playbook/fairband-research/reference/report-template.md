@@ -204,13 +204,15 @@ The kill criteria of section 11 test it.
   `review:<id>/bridge/<n>/new`, and how nothing counts twice. On Mature Stable its gains came out
   of the trailing earnings through the non-recurring gap's line (`earnings.nri_gap`); on High
   Growth, Young Growth and Decline the value reads operating income, which its gains never enter;
-  on Mature Growth the analysts' consensus excludes them. On High Growth, Young Growth and
+  on Mature Growth the analysts' consensus excludes them, or `earnings.ntm_nri` took them out of
+  the NTM EPS, cited as its bridge line, `review:<id>/bridge/<n>/new`, with the other-income line
+  and the analysts' basis that show the consensus carries them. On High Growth, Young Growth and
   Decline, an asset already in cash and short-term investments, or, on a Decline row whose value
   the floor sets (`ncav-floor`), in the current assets the floor reads, is counted by the route
-  already: it is not outside the business and is not added. On Mature Growth where the consensus
-  may carry the asset's gains, no override adds it: name the asset and its size a share, cited as a
-  finding, and say why it is not added. Where the figure comes from secondary coverage, not a
-  filing, say so.
+  already: it is not outside the business and is not added. On Mature Growth where you could not
+  tell whether the consensus carries the asset's gains, no override adds it: name the asset and
+  its size a share, cited as a finding, and say why it is not added. Where the figure comes from
+  secondary coverage, not a filing, say so.
 - **The share count**, where an override set one or `share-count-gap` stays: the shares the
   company has committed to issue that neither the count nor the analysts' EPS holds yet (warrants,
   a forward sale, a mandatory convertible), set through `shares.committed`, with the filing that

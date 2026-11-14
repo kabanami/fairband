@@ -27,8 +27,27 @@ def test_section_14_names_every_override_tag() -> None:
     assert "`override_ranges`" in section
     assert "`override_primary_evidence_above_p90`" in section
     # rule 2 counts the tags in words
-    assert len(get_args(OverrideTag)) == 22
-    assert "A tag that is not one of the twenty-two:" in section
+    assert len(get_args(OverrideTag)) == 23
+    assert "A tag that is not one of the twenty-three:" in section
+
+
+def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:
+    """Spec 2026-11-14 5: 5.2 states the order of the three subtractions and the form under a
+    guided EPS, which does not read the one-time amount; 14.4 gives the input its bullet, and 11's
+    row cites every section that states the rule."""
+    five = _section(5)
+    assert "    NTM EPS = raw − adjustment − one-time amount − cycle gap\n" in five
+    assert "    NTM EPS = guided EPS − cycle gap\n" in five
+    fourteen = _section(14)
+    bullet = next(x for x in fourteen.splitlines() if x.startswith("- `earnings.ntm_nri`"))
+    for words in (
+        "the `ntm_eps` and `ntm_net_income` DATA entries stay on the consensus as found",
+        "a bridge line of zero",
+        "a cross-check does not read it",
+    ):
+        assert words in bullet, words
+    row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
+    assert "(5.2, 5.12, 14.2 to 14.5)" in row
 
 
 def test_the_share_count_gap_reads_the_count_without_the_committed_shares() -> None:

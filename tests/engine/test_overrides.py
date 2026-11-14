@@ -187,6 +187,41 @@ def test_the_committed_shares_tag_s_rules(policy: Policy) -> None:
     assert "shares.committed" not in INPUT_OF
 
 
+def test_the_one_time_item_tag_s_rules(policy: Policy) -> None:
+    """Spec 2026-11-14 5: an amount a share on Mature Growth alone, −$100 to $100 with both ends,
+    period-tied only, bridged right before the cycle gap under the label "one-time item in the
+    NTM consensus"; it stands for no entry of the route's, which cites the consensus as found."""
+    tied = ("earnings.ntm_nri", 0.59, "mature-growth", policy, ["filing"], "period-tied", None)
+    assert check_override(*tied) == ("applied", "")
+    for end in (-100.0, 100.0):
+        assert check_override(*tied[:1], end, *tied[2:]) == ("applied", ""), end
+    assert check_override(*tied[:1], -100.01, *tied[2:]) == (
+        "refused-unit",
+        "earnings.ntm_nri takes −$100 to $100 a share",
+    )
+    assert check_override(*tied[:5], "lasting", None) == (
+        "refused-unit",
+        "earnings.ntm_nri is period-tied only",
+    )
+    for route, name in (
+        ("mature-stable", "Mature Stable"),
+        ("revenue-growth", "revenue-growth"),
+        ("decline", "Decline"),
+        ("start-up", "Start-up"),
+    ):
+        assert check_input("earnings.ntm_nri", 0.59, route, policy) == (
+            "refused-route",
+            f"the {name} route does not read earnings.ntm_nri",
+        )
+    spec = TAGS["earnings.ntm_nri"]
+    assert spec.routes == {"mature-growth"}
+    assert spec.unit == "USD a share" and spec.words is None
+    assert spec.period_tied_only and not spec.low_open and spec.lasting_value is None
+    assert BRIDGE_ORDER.index("earnings.ntm_nri") == BRIDGE_ORDER.index("earnings.cycle_gap") - 1
+    assert LABELS["earnings.ntm_nri"] == "one-time item in the NTM consensus"
+    assert "earnings.ntm_nri" not in INPUT_OF
+
+
 def test_check_needs_evidence(policy: Policy) -> None:
     assert checked(policy, "growth.belief", 0.08, "mature-growth", evidence=[]) == (
         "refused-evidence",
@@ -241,16 +276,17 @@ def test_every_tag_has_a_place_in_the_bridge_and_a_range_or_words(policy: Policy
 
 def test_the_cycle_gap_is_a_mature_tag() -> None:
     """The mid-cycle correction reads where the non-recurring gap reads, in the same unit, and its
-    bridge line follows the gap's and the two stock-pay lines (spec 2026-11-13 7.2) under its own
-    label."""
+    bridge line follows the gap's, the two stock-pay lines (spec 2026-11-13 7.2) and the one-time
+    item's (spec 2026-11-14 5) under its own label."""
     cycle, nri = TAGS["earnings.cycle_gap"], TAGS["earnings.nri_gap"]
     assert cycle.routes == nri.routes == {"mature-growth", "mature-stable"}
     assert cycle.unit == "USD a share" and cycle.words is None
     gap = BRIDGE_ORDER.index("earnings.nri_gap")
-    assert BRIDGE_ORDER[gap : gap + 4] == (
+    assert BRIDGE_ORDER[gap : gap + 5] == (
         "earnings.nri_gap",
         "earnings.sbc",
         "earnings.sbc_basis",
+        "earnings.ntm_nri",
         "earnings.cycle_gap",
     )
     assert LABELS == {
@@ -266,6 +302,7 @@ def test_the_cycle_gap_is_a_mature_tag() -> None:
         "earnings.nri_gap": "non-recurring gap",
         "earnings.sbc": "stock pay",
         "earnings.sbc_basis": "stock-pay basis",
+        "earnings.ntm_nri": "one-time item in the NTM consensus",
         "earnings.cycle_gap": "mid-cycle earnings",
         "earnings.ntm": "NTM earnings",
         "revenue.ntm": "NTM revenue",
@@ -781,6 +818,35 @@ def test_the_cycle_gap_reads_nil_until_an_override_sets_it(
     r = value_company(trough, deciles, policy, TODAY, lifted)
     assert r.refusal is None and r.intermediates["cycle_gap"] == -1.0
     assert current_reading(r, "earnings.cycle_gap") == -1.0
+
+
+def test_the_one_time_item_reads_nil_until_an_override_sets_it(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 5: the engine finds no one-time item. A Mature Growth result reads nil, a
+    row refused before its route too (its route is the one its phase takes); every other route
+    reads none. The route writes ``ntm_nri`` into its intermediates under the override alone: on
+    MGCO, an NTM EPS of $5.90, a one-time item of $0.59 leaves the anchor at $5.31, and the NTM
+    earnings read $5.90, the anchor with the amount added back, with a cycle gap of $1.00 too."""
+    plain = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    assert "ntm_nri" not in plain.intermediates
+    assert current_reading(plain, "earnings.ntm_nri") == 0.0
+    for build in (mature_stable_inputs, high_growth_inputs, decline_inputs, start_up_inputs):
+        r = value_company(build(), deciles, policy, TODAY)
+        assert current_reading(r, "earnings.ntm_nri") is None, build.__name__
+    no_trailing = replace(mature_growth_inputs(), trailing=None)
+    refused = value_company(no_trailing, deciles, policy, TODAY)
+    assert refused.route is None and current_reading(refused, "earnings.ntm_nri") == 0.0
+    one_time = {"earnings.ntm_nri": override("earnings.ntm_nri", 0.59)}
+    r = value_company(mature_growth_inputs(), deciles, policy, TODAY, one_time)
+    assert r.intermediates["ntm_nri"] == 0.59
+    assert r.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.31)
+    assert current_reading(r, "earnings.ntm_nri") == 0.59
+    assert current_reading(r, "earnings.ntm") == pytest.approx(5.90)
+    both = one_time | {"earnings.cycle_gap": override("earnings.cycle_gap", 1.0)}
+    r = value_company(mature_growth_inputs(), deciles, policy, TODAY, both)
+    assert r.intermediates["anchor"]["ntm_eps"] == pytest.approx(4.31)
+    assert current_reading(r, "earnings.ntm") == pytest.approx(5.90)
 
 
 def test_a_balance_line_not_on_file_reads_none(policy: Policy, deciles: Deciles) -> None:

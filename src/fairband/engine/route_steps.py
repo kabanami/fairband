@@ -316,6 +316,15 @@ def cycle_entry(cycle: float | None) -> dict[str, float]:
     return {} if cycle is None else {"cycle_gap": cycle}
 
 
+def ntm_nri_entry(c: Context, taken: float) -> dict[str, float]:
+    """The Mature Growth intermediates' ``ntm_nri``, written only under an ``earnings.ntm_nri``
+    override, so a mechanical result's intermediates do not carry it: ``taken``, the one-time
+    amount a share the anchor took off year 1 (``Anchor.one_time``), nil under an applied
+    ``earnings.ntm``, whose guided EPS stands in for the consensus with its items (spec 2026-11-14
+    5). The reading of the NTM earnings adds it back (``overrides.current_reading``)."""
+    return {"ntm_nri": taken} if "earnings.ntm_nri" in c.overrides else {}
+
+
 def outside_value(c: Context) -> float:
     """An agent's value outside the business a share, after tax, which the valued routes add to
     their value a share (spec 2026-11-09 8); nil without one: the engine finds none

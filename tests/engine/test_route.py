@@ -2551,6 +2551,86 @@ def test_a_price_refresh_rebuilds_a_value_under_committed_shares(
     assert at_value.intermediates["implied_growth"] == pytest.approx(belief, abs=1e-6)
 
 
+def test_a_one_time_item_comes_off_a_mature_growth_year_1(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-14 5 on MGCO, an NTM EPS of $5.90 on 1,000 m shares: a one-time item of $0.59
+    a share takes year 1 to $5.31, NTM net income to 5,310 m, and the value a share, which is
+    proportional to year 1, to the fixture's × 5.31 ÷ 5.90. The intermediates carry ``ntm_nri``;
+    the ``ntm_eps`` and ``ntm_net_income`` DATA entries stay on the consensus as found, the
+    fixture's, and the forward EPS of the P/E with them; the item's JUDGMENT entry stands beside
+    them, in USD a share."""
+    inputs = engine_companies.mature_growth_inputs()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    lowered = value_company(inputs, deciles, policy, TODAY, judged(("earnings.ntm_nri", 0.59)))
+    assert plain.value is not None and lowered.value is not None
+    assert lowered.value == pytest.approx(plain.value * 5.31 / 5.90)
+    im = lowered.intermediates
+    assert im["ntm_nri"] == 0.59
+    assert im["anchor"]["ntm_eps"] == pytest.approx(5.31)
+    assert im["ntm_net_income"] == pytest.approx(5_310e6)
+    assert im["eps"] == plain.intermediates["eps"]
+    for name in ("ntm_eps", "ntm_net_income"):
+        assert _cited(lowered, name) == _cited(plain, name), name
+    assert _cited(plain, "ntm_eps").value == pytest.approx(5.90)
+    entry = _cited(lowered, "earnings.ntm_nri")
+    assert (entry.tag, entry.value, entry.unit) == ("JUDGMENT", 0.59, "USD a share")
+    assert "ntm_nri" not in plain.intermediates
+
+
+def test_a_mature_stable_row_s_cross_check_reads_no_one_time_item(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 5: the input is Mature Growth's alone, and a cross-check reads the consensus
+    as found. On MSCO with the growth company's consensus, an ``earnings.ntm_nri`` left on file
+    after the row moved to Mature Stable moves neither the value nor the cross-check, and the
+    intermediates carry no ``ntm_nri``; a cycle gap, which the cross-check reads, still moves it."""
+    inputs = _with_consensus(
+        engine_companies.mature_stable_inputs(), engine_companies.mature_growth_inputs()
+    )
+    plain = value_company(inputs, deciles, policy, TODAY)
+    kept = value_company(inputs, deciles, policy, TODAY, judged(("earnings.ntm_nri", 0.59)))
+    assert plain.route == kept.route == "mature-stable"
+    assert plain.intermediates["growth_route"]["refusal"] is None
+    assert kept.value == plain.value
+    assert kept.intermediates["growth_route"] == plain.intermediates["growth_route"]
+    assert "ntm_nri" not in kept.intermediates
+    cycle = value_company(inputs, deciles, policy, TODAY, judged(("earnings.cycle_gap", 0.59)))
+    moved = cycle.intermediates["growth_route"]["ntm_net_income"]
+    assert moved == pytest.approx(plain.intermediates["growth_route"]["ntm_net_income"] - 590e6)
+
+
+def test_a_price_refresh_rebuilds_a_value_under_a_one_time_item(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """A stored Mature Growth result under a one-time item of $0.59, repriced at $120, equals a
+    fresh valuation at $120 under it: the rebuild reads year 1, lowered by the item, from
+    ``ntm_net_income``, so the value, the levels, the designation and every intermediate at the
+    price agree."""
+    inputs = engine_companies.mature_growth_inputs()
+    one_time = judged(("earnings.ntm_nri", 0.59))
+    r = value_company(inputs, deciles, policy, TODAY, one_time)
+    stored = result_from_json(result_to_json(r))
+    assert stored.intermediates["ntm_nri"] == 0.59
+    day = date(2026, 11, 2)
+    moved = reprice(stored, 120.0, day, policy)
+    fresh = value_company(
+        replace(inputs, price=120.0, price_date=day), deciles, policy, TODAY, one_time
+    )
+    assert (moved.value, moved.levels, moved.designation) == (
+        fresh.value,
+        fresh.levels,
+        fresh.designation,
+    )
+    for key in (
+        "implied_growth",
+        "implied_growth_by_runway",
+        "implied_by_roic",
+        "multiples",
+        "growth_share",
+        "expected_return",
+    ):
+        assert moved.intermediates[key] == fresh.intermediates[key], key
+
+
 # --- Reprice ------------------------------------------------------------------------------------
 
 

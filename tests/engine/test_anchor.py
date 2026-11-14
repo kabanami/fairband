@@ -429,6 +429,28 @@ def test_the_unit_error_check_reads_the_consensus_as_found(policy: Policy) -> No
     assert unit.refusal == "forward P/E below 2: unit error"
 
 
+def test_a_one_time_amount_comes_off_year_1(policy: Policy) -> None:
+    """Spec 2026-11-14 5: 10.00 less 0.50 is 9.50; a one-time loss of 0.50 a share raises year
+    1 to 10.50; a cycle gap of 1.00 comes off too; under a guided EPS the amount is not read.
+    The unit-error check reads the consensus as found: a one-time loss of 50.00 takes year 1 to
+    60.00, a forward P/E of 1.7 at $100 that is no unit error. The anchor records the amount it
+    took off: none under the guided EPS."""
+    args = (ntm(), trailing(), 4.2, 10.0, 0.21, 100.0, policy)
+    assert ntm_anchor(*args, one_time=0.5).ntm_eps == pytest.approx(9.5)
+    assert ntm_anchor(*args, one_time=-0.5).ntm_eps == pytest.approx(10.5)
+    both = ntm_anchor(*args, one_time=0.5, cycle_gap=1.0)
+    assert both.ntm_eps == pytest.approx(8.5) and both.ntm_net_income == pytest.approx(85.0)
+    assert both.ntm_eps_found == pytest.approx(10.0)
+    assert both.one_time == 0.5
+    guided = ntm_anchor(*args, one_time=0.5, guided_eps=9.0)
+    assert guided.ntm_eps == pytest.approx(9.0) and guided.one_time == 0.0
+    wiped = ntm_anchor(*args, one_time=10.0)
+    assert wiped.refusal == "no positive forward anchor"
+    raised = ntm_anchor(*args, one_time=-50.0)
+    assert raised.ntm_eps == pytest.approx(60.0) and raised.refusal is None
+    assert ntm_anchor(*args).one_time == 0.0
+
+
 def test_base_fiscal_year_tie_takes_later() -> None:
     qs = [
         q("2026-09-30", 2026, "Q4", 1),

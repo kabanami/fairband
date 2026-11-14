@@ -109,11 +109,12 @@ business's own values, before any value outside the business is added.
   ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps), ``shares`` (the count in
   force, and ``shares_committed`` beside it only under that override, as on every route),
   ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
-  ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported, clean, forward: the
-  NTM EPS before any cycle gap), ``epv`` (a share), ``dividend_yield``,
-  ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price, ``implied_growth``,
-  ``implied_growth_by_runway``, ``implied_by_roic``, ``multiples``, ``growth_share``,
-  ``expected_return``.
+  ``ntm_nri`` (the one-time amount a share taken off year 1, only under an override of it, nil
+  under a guided EPS), ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported,
+  clean, forward: the NTM EPS before any one-time amount or cycle gap), ``epv`` (a share),
+  ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price,
+  ``implied_growth``, ``implied_growth_by_runway``, ``implied_by_roic``, ``multiples``,
+  ``growth_share``, ``expected_return``.
 - Mature Stable: ``e_trailing``, ``nri_gap``, ``cycle_gap`` (as on Mature Growth), ``ttm_margin``,
   ``median_margin``, ``margin_scaled``, ``e_normalized`` (the E the value rests on: scaled when
   flagged, then less any cycle gap), ``moat``, ``roic``, ``runway_return``, ``terminal_roic``,

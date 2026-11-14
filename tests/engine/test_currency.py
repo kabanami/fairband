@@ -674,6 +674,32 @@ def test_the_committed_shares_are_a_count_in_any_currency(policy: Policy, decile
     assert inputs_of(more)["shares.committed"].unit == "shares"
 
 
+def test_the_one_time_item_is_read_in_the_currency(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-14 5 on FXCO, an NTM EPS of SEK 47.20 (MGCO's × 8.0) in SEK at 8.0: the one-time
+    item's range, −$100 to $100 a share, reads −800 to 800 SEK a share; an item of SEK 4.72 takes
+    year 1 to SEK 42.48, so the USD value a share falls to the mechanical one × 42.48 ÷ 47.20,
+    0.9; the JUDGMENT entry is in SEK a share."""
+    sek = {"fx_rate": 8.0, "currency": "SEK"}
+    assert check_input("earnings.ntm_nri", 800.0, "mature-growth", policy, **sek)[0] == "applied"
+    assert check_input("earnings.ntm_nri", -800.5, "mature-growth", policy, **sek) == (
+        "refused-unit",
+        "earnings.ntm_nri takes −800 to 800 SEK a share",
+    )
+    assert check_input("earnings.ntm_nri", 101.0, "mature-growth", policy) == (
+        "refused-unit",
+        "earnings.ntm_nri takes −$100 to $100 a share",
+    )
+    plain = value_company(fx_inputs(), deciles, policy, TODAY)
+    override = Override(1, "earnings.ntm_nri", 4.72, "agent", "claude-opus-5-5", NOW, "gains")
+    lowered = value_company(fx_inputs(), deciles, policy, TODAY, {"earnings.ntm_nri": override})
+    assert plain.value is not None and lowered.value is not None
+    assert plain.intermediates["anchor"]["ntm_eps"] == pytest.approx(47.20)
+    assert lowered.intermediates["anchor"]["ntm_eps"] == pytest.approx(42.48)
+    assert lowered.value == pytest.approx(plain.value * 0.9)
+    assert lowered.intermediates["value_in_currency"] == pytest.approx(lowered.value * 8.0)
+    assert inputs_of(lowered)["earnings.ntm_nri"].unit == "SEK a share"
+
+
 def test_a_scaled_money_end_is_checked_as_it_is_printed(policy: Policy) -> None:
     """A money end × the rate rounds half up to two decimals before the check and prints the
     decimals it has: earnings.nri_gap's ±100 at 32.956 is ±3,295.6, so 3,295.6 passes and

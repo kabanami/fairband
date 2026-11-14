@@ -61,14 +61,19 @@ step not counted thin nor named in ``step-series-disagree``, the revenue steps t
 left as found; ``growth.belief`` the belief's rate, and the hold read on it; ``earnings.ntm``, the
 NTM EPS from a clear guidance, which stands in for the consensus less the SBC adjustment, the NTM
 window's periods still required (``anchor.ntm_window``: four quarters, or two half-years);
-``earnings.cycle_gap`` the correction to mid-cycle earnings, which the NTM EPS, the consensus's or
-the guided one, is taken less, before the positive-anchor refusal (``anchor.ntm_anchor``). Nothing
-else reads the two: the basis test, the clean EPS, EPV and ``large-nri`` read the non-recurring gap
-alone, and the forward EPS of the P/E and the ``ntm_eps`` and ``ntm_net_income`` data entries are
-the consensus less the stock-pay adjustment in force (``Anchor.ntm_eps_found``), which the two
-stock-pay inputs move, the ``ntm_eps`` entry giving way to the JUDGMENT entry under the guided EPS.
-``cycle_gap`` is in the intermediates only under that override. The cross-check reads the row's
-moat, returns and two gaps, and the consensus and belief as found.
+``earnings.ntm_nri`` a one-time amount a share that the consensus carries and that does not recur
+(spec 2026-11-14 5), which the consensus less the SBC adjustment is taken less, a share on the
+count the consensus is on, and which a guided EPS, standing in for the consensus with its items,
+leaves unread; ``earnings.cycle_gap`` the correction to mid-cycle earnings, which the NTM EPS, the
+consensus's or the guided one, is then taken less, before the positive-anchor refusal
+(``anchor.ntm_anchor``). Nothing else reads the three: the basis test, the clean EPS, EPV and
+``large-nri`` read the non-recurring gap alone, and the forward EPS of the P/E and the ``ntm_eps``
+and ``ntm_net_income`` data entries are the consensus less the stock-pay adjustment in force
+(``Anchor.ntm_eps_found``), which the two stock-pay inputs move, the ``ntm_eps`` entry giving way
+to the JUDGMENT entry under the guided EPS. ``ntm_nri``, the one-time amount the anchor took off,
+nil under the guided EPS, and ``cycle_gap`` are in the intermediates only under their overrides.
+The cross-check reads the row's moat, returns and two gaps, and the consensus and belief as
+found: no guided EPS and no one-time amount.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the route's value: the result's value is the route's value a share plus the figure, which
@@ -162,6 +167,7 @@ from fairband.engine.route_steps import (
     multiples_at,
     nil,
     nri_gap,
+    ntm_nri_entry,
     outside_entry,
     outside_value,
     per_share,
@@ -236,6 +242,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "value_by_roic": by_roic,
         **outside_entry(c),
         "nri_gap": gap,
+        **ntm_nri_entry(c, anchor.one_time),
         **cycle_entry(cycle_gap(c)),
         "eps": e,
         "epv": None if e["clean"] is None else epv(e["clean"], policy.required_return),
@@ -346,8 +353,8 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     itself cause it (method 5.11), but not on the path's. The anchor's basis test reads an
     overriding non-recurring gap as its correction to the gap found, and its NTM EPS is taken less
     an overriding cycle gap; with ``own``, the route's own anchor, path and belief read the NTM
-    EPS, stock pay, stock-pay basis, step and belief overrides, which a cross-check leaves as
-    found."""
+    EPS, one-time item, stock pay, stock-pay basis, step and belief overrides, which a cross-check
+    leaves as found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
         return Refused("no trailing revenue")
@@ -357,6 +364,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     periods, cadence = ((), t.cadence) if window is None else window
     gap: float | None = chosen(c, "earnings.nri_gap", None)
     correction = None if gap is None else gap - nil(nri_gap(i))
+    one_time: float | None = chosen(c, "earnings.ntm_nri", None) if own else None
     guided: float | None = chosen(c, "earnings.ntm", None) if own else None
     sbc: float | None = chosen(c, "earnings.sbc", None) if own else None
     basis: Literal["includes", "excludes"] | None = (
@@ -372,6 +380,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         policy,
         cadence=cadence,
         nri_correction=correction,
+        one_time=one_time,
         cycle_gap=cycle_gap(c),
         guided_eps=guided,
         sbc_override=sbc,

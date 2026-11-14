@@ -585,23 +585,26 @@ def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
     assert twelve.index(sentence) < twelve.index("Submit with `report_submit`")
 
 
-def test_the_overrides_table_names_the_twenty_two_inputs() -> None:
+def test_the_overrides_table_names_the_twenty_three_inputs() -> None:
     """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1), spec 2026-11-13 7.2 and 13 and spec
-    2026-11-14 4: the skill's overrides table names the twenty-two inputs the engine takes, each
-    once, with the routes that read it; the share count is period-tied only and moves the next
-    twelve months' net income with it, so the agent reads the consensus EPS's share basis first;
-    the committed shares, shares neither the count nor the analysts' EPS holds yet, are
+    2026-11-14 4 and 5: the skill's overrides table names the twenty-three inputs the engine takes,
+    each once, with the routes that read it; the share count is period-tied only and moves the
+    next twelve months' net income with it, so the agent reads the consensus EPS's share basis
+    first; the committed shares, shares neither the count nor the analysts' EPS holds yet, are
     period-tied only, from the filing that commits them, dilute the value a share by x ÷ (n + x)
-    and bring their cash through another input; the value outside the business is after tax, and
-    its gains come out of the earnings through the non-recurring gap, so nothing counts twice; the
-    stock pay is a total from the filing's cash flow statement, period-tied, or lasting at 0 alone
-    (spec 2026-11-13 7.3), and the stock-pay basis rests on the release's definition of its
-    adjusted EPS; the minority interest is a total, period-tied only, for a market value or a
-    redeemable stake the line leaves out, from the filing's note on non-controlling or redeemable
-    interests; the bridge's lines run in the engine's order, the minority interest's after cash
-    and the committed shares' after the count's; the passage no longer says that a raised count
-    barely moves a Mature Growth value; the tool list counts the twenty-two, and says that the
-    write's refusal of a lasting nil stores nothing."""
+    and bring their cash through another input; the one-time item in the NTM consensus is a figure
+    a share after tax, period-tied only, off the NTM EPS, on the evidence of the filing's
+    other-income line and the analysts' basis, and moot under `earnings.ntm`; the value outside the
+    business is after tax, and its gains come out of the earnings through the non-recurring gap on
+    Mature Stable and the one-time item on Mature Growth, so nothing counts twice; the stock pay is
+    a total from the filing's cash flow statement, period-tied, or lasting at 0 alone (spec
+    2026-11-13 7.3), and the stock-pay basis rests on the release's definition of its adjusted
+    EPS; the minority interest is a total, period-tied only, for a market value or a redeemable
+    stake the line leaves out, from the filing's note on non-controlling or redeemable interests;
+    the bridge's lines run in the engine's order, the minority interest's after cash, the
+    committed shares' after the count's and the one-time item's before the cycle gap's; the
+    passage no longer says that a raised count barely moves a Mature Growth value; the tool list
+    counts the twenty-three, and says that the write's refusal of a lasting nil stores nothing."""
     skill = _read(SKILL)
     table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
     tags: list[str] = []
@@ -611,7 +614,7 @@ def test_the_overrides_table_names_the_twenty_two_inputs() -> None:
         phases = set(PHASES) if routes == "every route" else {p for p in PHASES if p in routes}
         for tag in named:
             assert phases == {p for r in TAGS[tag].routes for p in ROUTE_PHASES[r]}, tag
-    assert len(tags) == len(set(tags)) == 22 and set(tags) == set(TAGS)
+    assert len(tags) == len(set(tags)) == 23 and set(tags) == set(TAGS)
     shares = _flat(" ".join(table["`shares.diluted`"]))
     for words in (
         "period-tied only",
@@ -628,6 +631,17 @@ def test_the_overrides_table_names_the_twenty_two_inputs() -> None:
         "above 0 shares; period-tied only",
     ):
         assert words in committed, words
+    one_time = _flat(" ".join(table["`earnings.ntm_nri`"]))
+    for words in (
+        "a one-time item a share that the analysts' NTM EPS carries and that does not recur",
+        "after tax",
+        "comes off the NTM EPS",
+        "a negative figure, a one-time loss, raises it",
+        "the filing's other-income line and the analysts' basis",
+        "Under `earnings.ntm` it moves nothing",
+        "−100 to 100 dollars a share; period-tied only",
+    ):
+        assert words in one_time, words
     # a raised count no longer reads as barely moving a Mature Growth value (spec 2026-11-14 4)
     for words in (
         "the value a share moves only through the stock compensation a share",
@@ -640,7 +654,7 @@ def test_the_overrides_table_names_the_twenty_two_inputs() -> None:
         "−1,000 to 1,000 dollars a share",
         "`earnings.nri_gap`",
         "twice",
-        "excludes its gains",
+        "`earnings.ntm_nri`",
     ):
         assert words in outside, words
     pay = _flat(" ".join(table["`earnings.sbc`"]))
@@ -676,9 +690,10 @@ def test_the_overrides_table_names_the_twenty_two_inputs() -> None:
     )
     entry = _tool_entry("override_add")
     for words in (
-        "twenty-two",
+        "twenty-three",
         "`shares.diluted`",
         "`shares.committed`",
+        "`earnings.ntm_nri`",
         "`value.outside`",
         "`balance.minority`",
         # the write's own refusal of a lasting nil answers the sentence alone (spec 2026-11-13 7.3)
@@ -883,6 +898,9 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "`large-nri`",
                 "`earnings.nri_gap`",
                 "only while no `earnings.sbc_basis` is applied",
+                # a one-time item the consensus carries (spec 2026-11-14 5)
+                "`earnings.ntm_nri`",
+                "the filing's other-income line",
                 "`earnings.ntm`",
                 "guidance record",
                 "exposure",
@@ -1245,9 +1263,12 @@ def test_nothing_counts_twice_route_by_route() -> None:
     skill says route by route how an asset outside the business whose gains run through the
     earnings is added once. On Mature Stable `earnings.nri_gap` strips the gains from the trailing
     earnings; High Growth, Young Growth and Decline read operating income, which the gains never
-    enter; on Mature Growth no input strips them from the consensus (`earnings.nri_gap` reaches the
-    basis test alone, `earnings.ntm` needs a guidance record), so the asset is added only where the
-    consensus excludes its gains, and is otherwise left out and named in section 8."""
+    enter. On Mature Growth (spec 2026-11-14 5) the agent reads the filing's other-income line
+    against the analysts' basis, and where the consensus carries the gains sets
+    `earnings.ntm_nri` to them, a share and after tax, then adds the asset; where it excludes
+    them the asset is added alone; `earnings.nri_gap` reaches the basis test alone; under
+    `earnings.ntm` the item moves nothing; where the agent cannot tell, the asset is left out and
+    named in section 8. Mature Stable's rule stands. The template's section 8 says the same."""
     skill = _flat(_read(SKILL))
     for words in (
         "Mature Stable: strip the gains from the trailing earnings through `earnings.nri_gap`",
@@ -1256,13 +1277,27 @@ def test_nothing_counts_twice_route_by_route() -> None:
             " gains never enter"
         ),
         (
-            "`earnings.nri_gap` reaches only the test of the anchor's stock-compensation basis,"
-            " and only while no `earnings.sbc_basis` is applied, and `earnings.ntm` needs a"
-            " guidance record"
+            "Mature Growth: the value rests on the analysts' consensus for the next twelve months."
+            " Read the filing's other-income line against the analysts' basis"
         ),
         (
-            "Add the asset only when the consensus excludes its gains. Otherwise leave it out of"
+            "Where the consensus carries the asset's gains, set `earnings.ntm_nri` to them, a share"
+            " and after tax, then add the asset through `value.outside`. Where it excludes them,"
+            " add the asset alone."
+        ),
+        (
+            "`earnings.nri_gap` does not take them out: it reaches only the test of the anchor's"
+            " stock-compensation basis, and only while no `earnings.sbc_basis` is applied"
+        ),
+        "Under an applied `earnings.ntm` the guidance stands in for the consensus with its items",
+        (
+            "Where you cannot tell whether the consensus carries the gains, leave the asset out of"
             " `value.outside`"
+        ),
+        # the cycle formula reads the NTM EPS without the item, so the item is not cut twice
+        (
+            "Where `earnings.ntm_nri` takes a one-time item out of the NTM EPS, measure the gap on"
+            " the figure less the item in the same way"
         ),
         # an asset a growth or Decline route counts already (5a.9; 6a.6 only where the floor
         # sets the value; the fix rounds 2 and 3)
@@ -1281,8 +1316,22 @@ def test_nothing_counts_twice_route_by_route() -> None:
         " current assets the floor reads, is counted by the route already: it is not outside the"
         " business and is not added."
     ) in valuation
+    for words in (
+        (
+            "on Mature Growth the analysts' consensus excludes them, or `earnings.ntm_nri` took"
+            " them out of the NTM EPS, cited as its bridge line"
+        ),
+        (
+            "On Mature Growth where you could not tell whether the consensus carries the asset's"
+            " gains, no override adds it"
+        ),
+    ):
+        assert words in valuation, words
     # the rule before the review, which told the agent to strip the gains on every route
     assert "strip them through `earnings.nri_gap` in the same review" not in skill
+    # the rule before the one-time item, which left a Mature Growth asset out (spec 2026-11-14 5)
+    assert "no input strips an asset's gains from it" not in skill
+    assert "Add the asset only when the consensus excludes its gains." not in skill
 
 
 def test_the_agent_reads_fairband_before_it_goes_outside() -> None:

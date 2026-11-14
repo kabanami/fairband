@@ -347,9 +347,11 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   non-recurring items is unknown. Read the filing's non-recurring items. On Mature Stable, decide
   the trailing earnings through `earnings.nri_gap`. On Mature Growth the value rests on the
   consensus, and `earnings.nri_gap` reaches only the test of the anchor's stock-compensation
-  basis, and only while no `earnings.sbc_basis` is applied: the door is `earnings.ntm`, with a
-  clear EPS guidance record (see "Guidance"). Without one, section 8 states the exposure: the
-  items a share the consensus may carry. Amortization of acquired intangibles that an adjusted
+  basis, and only while no `earnings.sbc_basis` is applied. The doors are two. Where the
+  filing's other-income line shows an item the analysts' NTM EPS carries and that does not
+  recur, set `earnings.ntm_nri` to it, a share and after tax. Or `earnings.ntm`, with a clear EPS
+  guidance record (see "Guidance"). Without either, section 8 states the exposure: the items a
+  share the consensus may carry. Amortization of acquired intangibles that an adjusted
   EPS leaves out is not such an item, and no input corrects for it: the invested capital keeps
   the goodwill and the acquired intangibles, so the cost of the acquisitions is in the return the
   growth is charged at. On a row whose charge starts at the return without goodwill, the return
@@ -749,26 +751,33 @@ not you, computes the value it gives.
 | `earnings.nri_gap` | Mature Growth, Mature Stable | the non-recurring gap in the earnings a share | −100 to 100 dollars a share |
 | `earnings.sbc` | Mature Growth | the trailing stock pay, a total for the trailing periods in the reporting currency, from the cash flow statements of their filings; it stands in for the stored figure in the test of the analysts' basis and in the charge for stock pay | 0 dollars or more, period-tied; lasting at 0 only, for a company that pays no stock |
 | `earnings.sbc_basis` | Mature Growth | whether the analysts' EPS includes stock pay or excludes it, in place of the engine's test; the evidence is the company's own definition of its adjusted EPS in the release | `includes` or `excludes`; lasting or period-tied |
+| `earnings.ntm_nri` | Mature Growth | a one-time item a share that the analysts' NTM EPS carries and that does not recur, after tax and on the analysts' count: gains on an asset outside the business, say, which `value.outside` then adds. It comes off the NTM EPS before the cycle gap; a negative figure, a one-time loss, raises it. The evidence is the filing's other-income line and the analysts' basis. Under `earnings.ntm` it moves nothing: the guidance stands in for the consensus with its items | −100 to 100 dollars a share; period-tied only |
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest balance sheet's debt or cash, a quarter's or a fiscal year's, whose period the `debt` and `cash` inputs' notes name | 0 dollars or more; period-tied only |
 | `balance.minority` | High Growth, Young Growth, Decline, Start-up | the minority interest, a total in the reporting currency, which the route takes off the owners' claim beside debt; the engine reads the newest balance sheet's line at book (the `minority_interest` input). Set it for a market value, or for a redeemable stake that the line leaves out; the evidence is the filing's note on non-controlling or redeemable interests | 0 dollars or more; period-tied only |
 | `shares.diluted` | every route | the diluted share count, for a share class or units that convert to shares that the count leaves out (`share-count-gap`); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first. Shares not yet issued go through `shares.committed` | above 0 shares; period-tied only |
 | `shares.committed` | every route | shares the company has committed to issue that neither the diluted count nor the analysts' EPS holds yet: warrants, a forward sale, a mandatory convertible, shares owed for a purchase. They join the count that divides the value among the owners, while the next twelve months' net income stays on the analysts' count, so x committed shares on a count of n lower the value a share by x ÷ (n + x). The evidence is the filing that commits them. Cash the issue brings goes through `balance.cash` or `value.outside` | above 0 shares; period-tied only |
-| `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Nothing counts twice: on Mature Stable strip the asset's gains through `earnings.nri_gap`; on Mature Growth add it only when the consensus excludes its gains (see below) | −1,000 to 1,000 dollars a share; lasting or period-tied |
+| `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Nothing counts twice: on Mature Stable strip the asset's gains through `earnings.nri_gap`; on Mature Growth take the gains the consensus carries out through `earnings.ntm_nri` (see below) | −1,000 to 1,000 dollars a share; lasting or period-tied |
 
 The ranges are the policy's `override_ranges`; `policy()` gives the values in force. On a company
 in another currency every range in dollars is in the reporting currency, each end × the
 snapshot's rate: at 32.96 TWD a dollar `earnings.ntm` takes above 0 to 32,960 TWD a share, and the
 refusal names the currency. Pass `new` in the currency too.
 
-The two NTM anchors and the cycle gap:
+The two NTM anchors, the one-time item and the cycle gap:
 
 - `earnings.ntm` and `revenue.ntm` stand in for the consensus of the next twelve months, from a
   guidance record (see "Guidance"). Each is lasting. The consensus moves at every refresh and the
   guidance at every call, so at each later call drop it with `override_drop`, or replace it with
   an override citing the new record. A refresh drops it by itself once its guided year is before
   the base year: "the guided year has passed".
+- `earnings.ntm_nri` is a dollar figure a share, after tax, on the analysts' count: an item the
+  analysts' NTM EPS carries that does not recur. It comes off the NTM EPS, before the cycle gap,
+  and nothing else: the forward P/E and the `ntm_eps` input stay on the consensus as found.
+  Period-tied only: a refresh drops it once a newer period is on file, and the next review asks
+  again. Under an applied `earnings.ntm` it moves nothing, its bridge line zero: the guidance
+  stands in for the consensus with its items.
 - `earnings.cycle_gap` is a dollar figure a share. It comes off the anchor's earnings and nothing
   else: the NTM EPS on Mature Growth, the normalized earnings on Mature Stable. On Mature Stable,
   when the `margin-flag` fires, the engine has already scaled the earnings to the ten-year median
@@ -795,6 +804,8 @@ founder's ruling of 2026-11-11, its mid-cycle margin the ten-year median since s
   a cyclical rises at a peak as at a trough, so the margin inside the NTM EPS sits above the
   trailing one, and a gap read on the trailing margin leaves that rise in the value.
 - Where `earnings.ntm` sets the anchor, measure the gap on that figure in the same way.
+- Where `earnings.ntm_nri` takes a one-time item out of the NTM EPS, measure the gap on the figure
+  less the item in the same way, so the item is not cut twice.
 - On Mature Stable the anchor is the trailing earnings. Where the `margin-flag` fired, the gap is
   only what the median misses, as above. Where it did not, use the same form on the trailing
   figures: the trailing earnings a share, and the trailing net income over the trailing revenue.
@@ -863,13 +874,16 @@ the route sets what you do:
   investments, or, on a Decline row whose value the floor sets (`ncav-floor`), in the current
   assets the floor reads, which the route counts already; then it is not outside the business and
   is not added.
-- Mature Growth: the value rests on the analysts' consensus, and no input strips an asset's gains
-  from it. `earnings.nri_gap` reaches only the test of the anchor's stock-compensation basis, and
-  only while no `earnings.sbc_basis` is applied, and `earnings.ntm` needs a guidance record. Read
-  the filing's other-income line against the analysts' basis; `consensus-basis-unknown` says when
-  that basis is unknown. Add the asset only when the consensus excludes its gains. Otherwise leave
-  it out of `value.outside`: section 8 names the asset and its size a share, and says why it is
-  not added.
+- Mature Growth: the value rests on the analysts' consensus for the next twelve months. Read the
+  filing's other-income line against the analysts' basis; `consensus-basis-unknown` says when
+  that basis is unknown. Where the consensus carries the asset's gains, set `earnings.ntm_nri` to
+  them, a share and after tax, then add the asset through `value.outside`. Where it excludes them,
+  add the asset alone. `earnings.nri_gap` does not take them out: it reaches only the test of the
+  anchor's stock-compensation basis, and only while no `earnings.sbc_basis` is applied. Under an
+  applied `earnings.ntm` the guidance stands in for the consensus with its items, and
+  `earnings.ntm_nri` moves nothing: add the asset only where the guidance leaves its gains out.
+  Where you cannot tell whether the consensus carries the gains, leave the asset out of
+  `value.outside`: section 8 names the asset and its size a share, and says why it is not added.
 
 The server checks an override by these rules, in this order, and answers the first one it breaks:
 
@@ -908,8 +922,8 @@ sentence with the `override` record beside it. Fix the one thing the sentence na
 An applied override answers `{override, review, bridge}`. The bridge starts at the mechanical value
 (the engine's value with no override), adds one line for each override, and ends at the reviewed
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
-consensus step 3, held rate, belief, non-recurring gap, stock pay, stock-pay basis, mid-cycle
-earnings, target margin, sales to capital, runway return, decline rate, moat, debt, cash, minority
+consensus step 3, held rate, belief, non-recurring gap, stock pay, stock-pay basis, one-time item
+in the NTM consensus, mid-cycle earnings, target margin, sales to capital, runway return, decline rate, moat, debt, cash, minority
 interest, diluted shares, committed shares, outside the business. A line whose step refuses shows
 the refusal in place of a change. A review whose last line refuses has no value. On a refused row,
 where the mechanical value refuses too, the secondary valuation stands in for it. Where an
