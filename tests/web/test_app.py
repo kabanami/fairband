@@ -1946,8 +1946,9 @@ def test_app_js_drawer_says_the_fade_the_ramp_and_the_stable_cross_check() -> No
 
 def test_app_js_drawer_draws_the_charge_of_a_mature_row() -> None:
     """Spec 2026-11-09 12: a Mature Growth or Mature Stable row's Details draw the route's section,
-    named as the meter's caption names the route, with one group, Charge, of ``chargeRows``'s rows
-    (``tests/web/test_drawer_charge.py`` reads their words). Only the two mature routes write
+    named as the meter's caption names the route, with a group, Charge, of ``chargeRows``'s rows
+    (``tests/web/test_drawer_charge.py`` reads their words), and under ``shares.committed`` a
+    second, Share count (spec 2026-11-14 4). Only the two mature routes write
     ``charge`` at the top of the intermediates, and a row they refuse for a value at or below zero
     keeps it without a route, so the section draws on the key and a refused row's takes the name
     of its phase's route."""
@@ -1957,7 +1958,15 @@ def test_app_js_drawer_draws_the_charge_of_a_mature_row() -> None:
     assert mature in script
     route = _function(script, "matureRoute")
     assert "return section('mature', ROUTES[r.route || MATURE[r.phase.phase]]," in route
-    assert "group('charge', 'Charge', pairs(chargeRows(r.intermediates))));" in route
+    # the charge, then the share count under shares.committed only (spec 2026-11-14 4 and 11;
+    # tests/web/test_drawer_intermediates.py reads its rows)
+    _in_order(
+        route,
+        "group('charge', 'Charge', pairs(chargeRows(r.intermediates))),",
+        "shareCount(r.intermediates));",
+    )
+    count = _function(script, "shareCount")
+    assert "if (!('shares_committed' in im)) return null;" in count
 
 
 def test_app_js_drawer_draws_the_requirement() -> None:

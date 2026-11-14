@@ -9,9 +9,12 @@ is the intermediate's key, as every other label of the section is. In the route 
 the minority interest beside debt and cash on the revenue-growth bridge, the Decline floor and
 distress and the Start-up requirement and cash floor, only above zero, the words beside it
 naming it; the balance sheet's period under those rows; and on Mature Growth the line that says
-year 1 is corrected by the annual consensus, and by how much. No route section prints a raw key
-or tag. The page's own script runs in node after the bundle (``page.mjs``), and the tests read
-what ``intermediates`` and the route sections return."""
+year 1 is corrected by the annual consensus, and by how much. From spec 2026-11-14 (4, 5, 6.3
+and 11): the committed shares beside the count on each route's section, and in "Intermediate
+results" ``shares_committed`` a count, ``ntm_nri`` a figure a share and the charge's revenue
+steps percentages. No route section prints a raw key or tag. The page's own script runs in node
+after the bundle (``page.mjs``), and the tests read what ``intermediates`` and the route sections
+return."""
 
 import json
 import re
@@ -420,26 +423,134 @@ def test_a_mature_row_off_the_annual_correction_has_no_anchor_line(
     assert "Charge" in texts
 
 
+def _committed(symbol: str, committed: float) -> dict[str, Any]:
+    """A golden's result under ``shares.committed`` (spec 2026-11-14 4): ``shares`` the count in
+    force, the golden's count plus ``committed``, and ``shares_committed`` beside it."""
+    result = _result(symbol)
+    im = result["intermediates"]
+    im["shares"] = im["shares"] + committed
+    im["shares_committed"] = committed
+    return result
+
+
+ROUTES = [
+    ("HGCO", "revenueRoute"),
+    ("YGCO", "revenueRoute"),
+    ("DCCO", "declineRoute"),
+    ("SUCO", "startUpRoute"),
+    ("MGCO", "matureRoute"),
+    ("MSCO", "matureRoute"),
+]
+
+
+@pytest.mark.parametrize(
+    ("symbol", "helper", "committed", "count", "shown"),
+    [
+        # the goldens' 100,000,000 shares and a fifth more committed
+        ("HGCO", "revenueRoute", 20e6, "120,000,000", "20,000,000"),
+        ("YGCO", "revenueRoute", 20e6, "120,000,000", "20,000,000"),
+        ("DCCO", "declineRoute", 20e6, "120,000,000", "20,000,000"),
+        ("SUCO", "startUpRoute", 20.0, "120", "20"),  # SUCO's 100 shares
+        ("MGCO", "matureRoute", 320e6, "1,320,000,000", "320,000,000"),  # 1,000,000,000
+        ("MSCO", "matureRoute", 320e6, "1,320,000,000", "320,000,000"),
+    ],
+)
+def test_the_committed_shares_stand_beside_the_count_on_each_route(
+    symbol: str, helper: str, committed: float, count: str, shown: str
+) -> None:
+    """Spec 2026-11-14 4 and 11: ``shares.committed`` is on all five routes, and the count in force
+    holds the committed shares. Each route's section draws the count, then "Committed shares"
+    right after it, a count, which the words beside it say the count above holds. A mature
+    route's section has no count of its own, so under the override it gains a Share count group,
+    after the charge."""
+    texts = _section(helper, _committed(symbol, committed))
+    at = texts.index("Committed shares")
+    assert texts[at - 2 : at + 3] == [
+        "Shares",
+        count,
+        "Committed shares",
+        shown,
+        " (in the shares above)",
+    ]
+    if helper == "matureRoute":
+        _in_order(texts, "Charge", "Share count", "Shares")
+
+
+@pytest.mark.parametrize(("symbol", "helper"), ROUTES)
+def test_a_route_without_committed_shares_has_no_such_row(symbol: str, helper: str) -> None:
+    """Without the override the sections read as before: no "Committed shares" row, and no
+    Share count group on a mature route."""
+    texts = _section(helper, _result(symbol))
+    assert "Committed shares" not in texts
+    if helper == "matureRoute":
+        assert "Share count" not in texts and "Shares" not in texts
+
+
+def test_the_inputs_of_spec_2026_11_14_read_by_what_they_are() -> None:
+    """In "Intermediate results": ``shares_committed`` is a count, whole, as ``shares`` is, at any
+    size, where a figure of a million or more would read as dollars; ``ntm_nri`` a figure a share
+    in the row's currency, signed, nil included; the charge's revenue steps, as read and as found,
+    percentages, as the path steps are; its sources as words."""
+    mgco = _result("MGCO")["intermediates"]
+    assert _after(_shown(mgco | {"shares_committed": 320e6}), "shares_committed") == "320,000,000"
+    assert _after(_shown(mgco | {"shares_committed": 500.0}), "shares_committed") == "500"
+    assert _after(_shown(mgco | {"ntm_nri": 1.25}), "ntm_nri") == "$1.25"
+    assert _after(_shown(mgco | {"ntm_nri": -0.4}), "ntm_nri") == "−$0.40"
+    assert _after(_shown(mgco | {"ntm_nri": 0.0}), "ntm_nri") == "$0.00"
+    fxco = _result("FXCO")["intermediates"]
+    assert _after(_shown(fxco | {"ntm_nri": 1.25}), "ntm_nri") == "SEK 1.25"
+    charge = mgco["charge"] | {
+        "revenue_steps": [0.18, None],
+        "revenue_steps_found": [0.09, None],
+        "revenue_step_source": ["agent", "none"],
+    }
+    texts = _shown(mgco | {"charge": charge})
+    assert _after(texts, "revenue_steps") == "18.0%, —"
+    assert _after(texts, "revenue_steps_found") == "9.0%, —"
+    assert _after(texts, "revenue_step_source") == "agent, none"
+    assert _after(_shown(mgco), "revenue_steps_found") == "—, —"  # MGCO's own, no consensus
+
+
 # A word joined by underscores, as a key is: no text of a route section holds one.
 RAW_KEY = re.compile(r"\b[a-z0-9]+(?:_[a-z0-9]+)+\b")
 
 
-FILLED = {"minority_interest": 50e6, "balance_sheet": SHEET}
+FILLED = {"minority_interest": 50e6, "balance_sheet": SHEET, "shares_committed": 20e6}
+# MGCO's charge with an agent's year-2 step of 18.0% in place of the consensus's 9.0%
+AGENT_CHARGE = _result("MGCO")["intermediates"]["charge"] | {
+    "growth_by_year": [0.18, *_result("MGCO")["intermediates"]["charge"]["growth_by_year"][1:]],
+    "revenue_steps": [0.18, None],
+    "revenue_steps_found": [0.09, None],
+    "revenue_step_source": ["agent", "none"],
+}
 
 
 @pytest.mark.parametrize(
     ("symbol", "helper", "entries", "drawn"),
     [
-        ("HGCO", "revenueRoute", FILLED, ["Less minority interest", CAPTION]),
-        ("YGCO", "revenueRoute", FILLED, ["Less minority interest", CAPTION]),
+        ("HGCO", "revenueRoute", FILLED, ["Less minority interest", CAPTION, "Committed shares"]),
+        ("YGCO", "revenueRoute", FILLED, ["Less minority interest", CAPTION, "Committed shares"]),
         (
             "MGCO",
             "matureRoute",
-            {"anchor": _annual_anchor(GAP, 5.78)},
-            [f"{CORRECTED}−$0.12 a share."],
+            {
+                "anchor": _annual_anchor(GAP, 5.78),
+                "shares_committed": 20e6,
+                "ntm_nri": 1.25,
+                "charge": AGENT_CHARGE,
+            },
+            [
+                f"{CORRECTED}−$0.12 a share.",
+                "Committed shares",
+                (
+                    "18.0% then 10.0%, against earnings of 12.0% then 10.0%: year 2 is on revenue"
+                    " from an override, year 3 has no revenue consensus and takes its earnings"
+                    " growth"
+                ),
+            ],
         ),
-        ("DCCO", "declineRoute", FILLED, ["Less minority interest", CAPTION]),
-        ("SUCO", "startUpRoute", FILLED, ["Less minority interest", CAPTION]),
+        ("DCCO", "declineRoute", FILLED, ["Less minority interest", CAPTION, "Committed shares"]),
+        ("SUCO", "startUpRoute", FILLED, ["Less minority interest", CAPTION, "Committed shares"]),
     ],
 )
 def test_no_route_section_prints_a_raw_key_or_tag(
@@ -447,13 +558,24 @@ def test_no_route_section_prints_a_raw_key_or_tag(
 ) -> None:
     """In place of a look by eye: each route's section, drawn for its golden with the new entries
     filled (a minority interest above zero and a quarter's sheet on the three firm-value routes,
-    the annual source on Mature Growth), draws them, and holds no key of the intermediates, no
-    word joined by underscores and none of the row's flag codes."""
+    the annual source on Mature Growth, committed shares on every route, and on Mature Growth an
+    agent's revenue step and a one-time item), draws them, and holds no key of the
+    intermediates, no word joined by underscores and none of the row's flag codes."""
     result = _result(symbol, **entries)
     texts = _section(helper, result)
     for text in drawn:
         assert text in texts, text
-    for key in ("minority_interest", "balance_sheet", "periods_sum", "fiscal_year", "year_sum"):
+    for key in (
+        "minority_interest",
+        "balance_sheet",
+        "periods_sum",
+        "fiscal_year",
+        "year_sum",
+        "shares_committed",
+        "ntm_nri",
+        "revenue_step",
+        "agent",
+    ):
         assert not [t for t in texts if key in t], key
     assert not [t for t in texts if RAW_KEY.search(t)]
     assert not set(texts) & set(result["intermediates"])

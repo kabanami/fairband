@@ -71,20 +71,35 @@ def _returns(r: float, t: float, n: int, k: int) -> list[float]:
     return [r] * k + [r + (t - r) * (y - k) / (n - k) for y in range(k + 1, n)] + [t]
 
 
+Pair = tuple[float | None, float | None]
+
+
 def _growth_row(
-    revenue: tuple[float | None, float | None],
+    revenue: Pair,
     earnings: tuple[float, float] = (0.25, 0.20),
     runway: int = 10,
     hold: int = 6,
     one_year: float | None = 0.21,
     used: str = "marginal",
     charge_off: bool = False,
+    found: Pair | None = None,
+    source: tuple[str, str] | None = None,
 ) -> dict[str, Any]:
     """A Mature Growth row's intermediates: earnings growth ``earnings`` in years 2 and 3 and 6%
-    after, the revenue steps ``revenue`` (``None`` takes that year's earnings growth), a 20% runway
-    return held through ``hold`` and faded to 13% in year ``runway``, the terminal growth 3%."""
+    after, the revenue steps ``revenue`` the charge read (``None`` takes that year's earnings
+    growth), a 20% runway return held through ``hold`` and faded to 13% in year ``runway``, the
+    terminal growth 3%. With ``source``, the charge records the consensus's steps as ``found`` and
+    each year's source (spec 2026-11-14 6.3); without, it is a result stored before them."""
     paid = [e if g is None else g for g, e in zip(revenue, earnings, strict=True)]
     later = [0.06] * (runway - 3)
+    recorded = (
+        {}
+        if source is None
+        else {
+            "revenue_steps_found": list(found or (None, None)),
+            "revenue_step_source": list(source),
+        }
+    )
     return {
         "path_steps": list(earnings),
         "growth_rates": [*earnings, *later],
@@ -95,6 +110,7 @@ def _growth_row(
             "return_by_year": _returns(0.20, 0.13, runway, hold),
             "hold_years": hold,
             "revenue_steps": list(revenue),
+            **recorded,
         },
     }
 
@@ -161,6 +177,123 @@ def test_a_missing_revenue_step_takes_its_years_earnings_growth() -> None:
     )
     assert _rows(_growth_row((None, 0.10)))[1] == [GROWTH, year_2, False]
     assert _rows(_growth_row((0.15, None)))[1] == [GROWTH, year_3, False]
+
+
+AGAINST = ", against earnings of 25.0% then 20.0%"
+NO_CONSENSUS = " has no revenue consensus and takes its earnings growth"
+
+
+@pytest.mark.parametrize(
+    ("revenue", "found", "source", "line"),
+    [
+        # the consensus's steps, read: as a result stored before the source reads
+        (
+            (0.15, 0.10),
+            (0.15, 0.10),
+            ("consensus", "consensus"),
+            f"15.0% then 10.0% on revenue{AGAINST}",
+        ),
+        # an agent's step in place of the consensus's 9.0%
+        (
+            (0.18, 0.10),
+            (0.09, 0.10),
+            ("agent", "consensus"),
+            f"18.0% then 10.0%{AGAINST}: year 2 is on revenue from an override, year 3 is on revenue",
+        ),
+        # an agent's step where the consensus gives none
+        (
+            (0.15, 0.12),
+            (0.15, None),
+            ("consensus", "agent"),
+            f"15.0% then 12.0%{AGAINST}: year 2 is on revenue, year 3 is on revenue from an override",
+        ),
+        (
+            (None, 0.12),
+            (None, None),
+            ("none", "agent"),
+            f"25.0% then 12.0%{AGAINST}: year 2{NO_CONSENSUS}, year 3 is on revenue from an override",
+        ),
+        (
+            (0.18, 0.12),
+            (0.09, 0.10),
+            ("agent", "agent"),
+            f"18.0% then 12.0% on revenue from overrides{AGAINST}",
+        ),
+        # no revenue consensus: the earnings growth, as a result stored before the source reads
+        (
+            (None, 0.10),
+            (None, 0.10),
+            ("none", "consensus"),
+            f"25.0% then 10.0%{AGAINST}: year 2{NO_CONSENSUS}, year 3 is on revenue",
+        ),
+        (
+            (None, None),
+            (None, None),
+            ("none", "none"),
+            "25.0% then 20.0%, the earnings growth: years 2 and 3 have no revenue consensus",
+        ),
+    ],
+)
+def test_each_year_says_where_the_growth_the_charge_pays_for_comes_from(
+    revenue: Pair, found: Pair, source: tuple[str, str], line: str
+) -> None:
+    """Spec 2026-11-14 6.3: the charge records each year's source, and its line says which growth
+    the charge paid for: the consensus revenue step, an agent's revenue step, an override, or the
+    earnings growth where the consensus gives no revenue step. The steps the charge read alone
+    cannot tell an agent's step from the consensus's."""
+    rows = _rows(_growth_row(revenue, found=found, source=source))
+    assert rows[1] == [GROWTH, line, False]
+
+
+@pytest.mark.parametrize("revenue", [(0.15, 0.10), (None, 0.10), (0.15, None), (None, None)])
+def test_a_result_stored_before_the_source_reads_as_the_steps_the_charge_read(
+    revenue: Pair,
+) -> None:
+    """A result stored before spec 2026-11-14 has the steps the charge read alone: a step there is
+    the consensus's, none the earnings growth, as a result with those sources reads."""
+    source = tuple("none" if step is None else "consensus" for step in revenue)
+    recorded = _growth_row(revenue, found=revenue, source=(source[0], source[1]))
+    assert _rows(_growth_row(revenue)) == _rows(recorded)
+
+
+THIN = " has too few analysts on file for a revenue consensus as high as "
+
+
+@pytest.mark.parametrize(
+    ("revenue", "found", "source", "line"),
+    [
+        (
+            (0.15, None),
+            (0.15, 0.61),
+            ("consensus", "thin"),
+            (
+                f"15.0% then 20.0%{AGAINST}: year 2 is on revenue, year 3{THIN}61.0% and takes"
+                " its earnings growth"
+            ),
+        ),
+        (
+            (None, None),
+            (3.105, None),
+            ("thin", "none"),
+            (
+                f"25.0% then 20.0%{AGAINST}: year 2{THIN}310.5% and takes its earnings growth,"
+                f" year 3{NO_CONSENSUS}"
+            ),
+        ),
+    ],
+)
+def test_a_thin_revenue_step_takes_its_years_earnings_growth(
+    revenue: Pair, found: Pair, source: tuple[str, str], line: str
+) -> None:
+    """Spec 2026-11-14 6.2, as narrowed: a consensus revenue step above 50% on fewer revenue
+    analysts than the analyst minimum, or no count, is not read, and the charge pays for the
+    year's earnings growth. The line says the year has a revenue consensus, unlike a year with
+    none, gives its step as found, and names the two limits in words, as the drawer holds
+    neither figure: too few analysts, for a step that high. The figures are spec 6's: BIPC's step
+    of 310.5% on one analyst, FRO's of 61.0% on two."""
+    rows = _rows(_growth_row(revenue, found=found, source=source))
+    assert rows[1] == [GROWTH, line, False]
+    assert "thin" not in line and "_" not in line
 
 
 def test_a_hold_to_the_year_before_the_last_is_the_shape_as_built() -> None:

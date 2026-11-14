@@ -1641,12 +1641,23 @@
   }
 
   /* A row on its earnings path (method 4.8, 5 and 6), valued or refused for a value at or below
-     zero: the charge, in words (spec 2026-11-09 12), under the route's name, a refused row's by
-     its phase. The figures behind it are among the intermediates. */
+     zero: the charge, in words (spec 2026-11-09 12), then the count under shares.committed, under
+     the route's name, a refused row's by its phase. The figures behind it are among the
+     intermediates. */
   function matureRoute(r) {
     return section('mature', ROUTES[r.route || MATURE[r.phase.phase]],
       annualAnchor(r.intermediates.anchor, r.intermediates.currency),
-      group('charge', 'Charge', pairs(chargeRows(r.intermediates))));
+      group('charge', 'Charge', pairs(chargeRows(r.intermediates))),
+      shareCount(r.intermediates));
+  }
+
+  /* A mature route's count in force under shares.committed (spec 2026-11-14 4), with the
+     committed shares it holds: the route's section has no count of its own, so the group shows
+     only under the override. */
+  function shareCount(im) {
+    if (!('shares_committed' in im)) return null;
+    return group('shares', 'Share count',
+      pairs([['Shares', plain(im.shares), true]].concat(committedShares(im))));
   }
 
   /* Year 1 on a thin NTM window, the periods' sum corrected by the annual consensus of the last
@@ -1712,21 +1723,48 @@
     return first + ' through year ' + hold + ', then to ' + last;
   }
 
-  /* Years 2 and 3's growth the charge pays for, the consensus revenue steps, beside the earnings
-     growth as the path resolved it; a year without a revenue step pays for its earnings growth,
-     and the row says so (method 4.8). */
+  /* Years 2 and 3's growth the charge pays for beside the earnings growth as the path resolved
+     it, and where each year's comes from (method 4.8, spec 2026-11-14 6.3): the consensus revenue
+     step, an agent's override of it, or the year's earnings growth, where the consensus gives no
+     revenue step or a thin one; one phrase for both years where they come from one place. */
   function paidFor(c, earnings) {
-    var h = c.growth_by_year, steps = c.revenue_steps;
+    var h = c.growth_by_year, source = stepSources(c);
     var paid = F.formatPercent(h[0]) + ' then ' + F.formatPercent(h[1]);
     var against = ', against earnings of ' + F.formatPercent(earnings[0]) + ' then ' +
       F.formatPercent(earnings[1]);
-    var missing = ' has no revenue consensus and takes its earnings growth';
-    if (steps[0] != null && steps[1] != null) return paid + ' on revenue' + against;
-    if (steps[0] == null && steps[1] == null) {
+    var both = source[0] === source[1] ? source[0] : null;
+    if (both === 'consensus') return paid + ' on revenue' + against;
+    if (both === 'agent') return paid + ' on revenue from overrides' + against;
+    if (both === 'none') {
       return paid + ', the earnings growth: years 2 and 3 have no revenue consensus';
     }
-    return paid + against + (steps[0] == null ? ': year 2' + missing + ', year 3 is on revenue'
-      : ': year 2 is on revenue, year 3' + missing);
+    return paid + against + ': ' + [0, 1].map(function (k) {
+      if (source[k] === 'thin') return 'year ' + (k + 2) + thinStep(c.revenue_steps_found[k]);
+      return 'year ' + (k + 2) + STEP_FROM[source[k]];
+    }).join(', ');
+  }
+
+  /* Each year's source, as the charge records it; on a result stored before it was recorded,
+     from the steps the charge read: a step the consensus's, none the earnings growth. */
+  function stepSources(c) {
+    return c.revenue_step_source || c.revenue_steps.map(function (step) {
+      return step == null ? 'none' : 'consensus';
+    });
+  }
+
+  /* What a year's growth is, by its source, after "year 2". */
+  var STEP_FROM = {
+    consensus: ' is on revenue',
+    agent: ' is on revenue from an override',
+    none: ' has no revenue consensus and takes its earnings growth'
+  };
+
+  /* A thin year (spec 2026-11-14 6.2): its consensus revenue step as found, above the most read
+     on fewer revenue analysts than the analyst minimum, or no count, is not read. The drawer
+     holds neither limit, so the words name them without figures. */
+  function thinStep(step) {
+    return ' has too few analysts on file for a revenue consensus as high as ' +
+      F.formatPercent(step) + ' and takes its earnings growth';
   }
 
   /* ---------------------------------------------------- the revenue growth route */
@@ -1752,7 +1790,8 @@
       ].concat(lessMinority(im), [
         ['Plus cash', whole(im.cash, code), true],
         ['Equity', whole(im.equity, code), true],
-        ['Shares', plain(im.shares), true],
+        ['Shares', plain(im.shares), true]
+      ], committedShares(im), [
         ['Value a share', money(im.value_per_share, code), true]
       ])), sheetPeriod(im)),
       group('solves', 'At the price', pairs([
@@ -1777,6 +1816,13 @@
   function lessMinority(im) {
     return hasMinority(im)
       ? [['Less minority interest', whole(im.minority_interest, im.currency), true]] : [];
+  }
+
+  /* The committed shares' row, right after the count, which holds them (spec 2026-11-14 4): an
+     agent's shares.committed, on any of the five routes; none without the override. */
+  function committedShares(im) {
+    return 'shares_committed' in im ? [['Committed shares',
+      noted(plain(im.shares_committed), 'in the shares above'), true]] : [];
   }
 
   /* The newest balance sheet the debt, the cash and the minority interest were read from (spec
@@ -1985,7 +2031,7 @@
      floors it when above zero and above it (spec 10.6): no floor without one or at or below zero,
      and above zero a floor that binds or does not; the distress-sale value a share. A minority
      interest comes off all three (spec 2026-11-13 13): its row follows the debt, and the floor's
-     row and the distress-sale value's words name it. */
+     row and the distress-sale value's words name it. Committed shares follow the count. */
   function floorAndDistress(im) {
     var ncav = im.ncav_per_share, code = im.currency, minority = hasMinority(im);
     var floor = ncav == null || ncav <= 0 ? 'no floor'
@@ -1993,7 +2039,8 @@
         : 'the floor does not bind';
     return [['Less debt', whole(im.debt, code), true]].concat(lessMinority(im), [
       ['Plus cash', whole(im.cash, code), true],
-      ['Shares', plain(im.shares), true],
+      ['Shares', plain(im.shares), true]
+    ], committedShares(im), [
       ['Going concern a share', money(im.going_concern_per_share, code), true],
       [minority ? 'NCAV less minority interest, a share' : 'NCAV a share',
         noted(money(ncav, code), floor), true],
@@ -2142,7 +2189,8 @@
   }
 
   /* The net cash a share (spec 9.4; method 6b.4): (cash − debt − minority interest) ÷ diluted
-     shares, the minority interest's row only where there is one. */
+     shares, with any committed shares, the minority interest's row only where there is one and
+     the committed shares' only under the override. */
   function cashFloor(im) {
     var code = im.currency;
     return [
@@ -2151,7 +2199,7 @@
       ['Less debt', whole(im.debt, code), true]
     ].concat(lessMinority(im), [
       ['Shares', plain(im.shares), true]
-    ]);
+    ], committedShares(im));
   }
 
   /* The caption reads the row's `below-net-cash` flag, the one test (method 6b.4): the market
@@ -2347,24 +2395,28 @@
 
   /* A number's key says what it is. A key ending in one of these names a fraction, which reads
      as a percentage; so do the fractions those endings miss (the implied-growth maps, the price
-     changes, the drawdown, the path steps, the growth rates, the growth share). A dollar amount
-     or a count whose key happens to end the same way (value_by_roic, stable_growth, roic's years)
-     does not. A map keyed by runway years or by ROIC values takes its own key's reading, and so
-     does a bare value (runway_return's). The inflation differential is a fraction too. */
+     changes, the drawdown, the path steps, the growth rates, the growth share, the charge's
+     revenue steps as read and as found). A dollar amount or a count whose key happens to end the
+     same way (value_by_roic, stable_growth, roic's years) does not. A map keyed by runway years
+     or by ROIC values takes its own key's reading, and so does a bare value (runway_return's).
+     The inflation differential is a fraction too. */
   var PERCENT = /(_growth|_yield|_return|margin|roic|belief)$/;
   var ALSO_PERCENT =
     /^(implied_|change_|drawdown|path_steps$|growth_rates$|growth_share$|inflation_differential$)/;
+  var REVENUE_STEPS = /^revenue_steps(_found)?$/;  /* spec 2026-11-14 6.3 */
   var NOT_PERCENT = /^(value_|stable_growth|years?$)/;
-  /* Counts and years read whole. P/E multiples to one decimal with x. A figure a share (EPV, the
-     value, the value in the reporting currency, EPS, the non-recurring gap, the 52-week prices,
-     the value maps by runway and by ROIC, whatever the entry's key) reads to cents; a total
-     (NOPAT, invested capital, net income, earnings, the trailing stock pay and the minority
-     interest, nil or not, anything at a million or more) to whole units. The rate reads as a
-     rate. Any other number to two decimals. */
-  var COUNT = /^(years?|base_year|runway|fade_years|analysts|shares)$/;
+  /* Counts and years read whole, the committed shares too. P/E multiples to one decimal with x. A
+     figure a share (EPV, the value, the value in the reporting currency, EPS, the non-recurring
+     gap, the one-time item in the NTM consensus, the 52-week prices, the value maps by runway and
+     by ROIC, whatever the entry's key) reads to cents; a total (NOPAT, invested capital, net
+     income, earnings, the trailing stock pay and the minority interest, nil or not, anything at a
+     million or more) to whole units. The rate reads as a rate. Any other number to two
+     decimals. */
+  var COUNT = /^(years?|base_year|runway|fade_years|analysts|shares|shares_committed)$/;
   var MULTIPLE = /^pe_/;
   var PER_SHARE =
     /^(epv|value_per_share|value_in_currency|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
+  var ONE_TIME = /^ntm_nri$/;  /* spec 2026-11-14 5 */
   var PER_SHARE_GROUP = /^(eps$|value_by_)/;
   var TOTAL = /(_total|nopat|average_capital|net_income|sbc_ttm|minority_interest)$|^e_/;
   /* The NTM anchor's correction by the annual consensus (spec 2026-11-13 9a): the fiscal year
@@ -2386,14 +2438,14 @@
     if (ANCHOR_PER_SHARE.test(key)) return money(v, own);
     if (COUNT.test(key)) return plain(v);
     if (MULTIPLE.test(key)) return decimals(v, 1) + 'x';
-    if (PER_SHARE.test(key)) return money(v, own);
+    if (PER_SHARE.test(key) || ONE_TIME.test(key)) return money(v, own);
     if (TOTAL.test(key) || Math.abs(v) >= 1e6) return dollars(v, own);
     return decimals(v, 2);
   }
 
   function isPercent(key, group) {
     if (NOT_PERCENT.test(key)) return false;
-    if (PERCENT.test(key) || ALSO_PERCENT.test(key)) return true;
+    if (PERCENT.test(key) || ALSO_PERCENT.test(key) || REVENUE_STEPS.test(key)) return true;
     return !!group && !NOT_PERCENT.test(group) && (PERCENT.test(group) || ALSO_PERCENT.test(group));
   }
 
