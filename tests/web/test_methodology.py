@@ -433,6 +433,12 @@ def test_the_agents_section_reads(client: TestClient) -> None:
             "The band, the buy and trim levels and the designation follow the reviewed value; the"
             " Mechanical column keeps the engine's value."
         ),
+        # spec 2026-11-13 8a: the flags follow a review that fills the row, not a secondary
+        (
+            "Where a review fills the row, the Flags and Warnings columns, the Clean filter and"
+            " the drawer's list of flags read the review's flags. A secondary valuation has none,"
+            " so its row keeps the engine's."
+        ),
         # the meter draws the band; the drawer, not the meter, adds the stance and the summary
         "The drawer's meter draws that band; the drawer adds the stance and the report's summary.",
     ):

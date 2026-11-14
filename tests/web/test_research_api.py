@@ -237,7 +237,12 @@ def test_the_detail_carries_the_review_with_its_bridge(
         ],
         "overrideCount": 1,
         "mechanical": mechanical,
+        # the review's own flags, as the screen's row reads them (spec 2026-11-13 8a)
+        "flags": [
+            {"code": f.code, "word": f.word, "sentence": f.sentence} for f in review.result.flags
+        ],
     }
+    assert found["flags"]  # a review with flags, so the record's list is not empty by default
     assert line.delta is not None and abs(mechanical + line.delta - value) < 1e-6
     # no record of the others
     for symbol in ("AAL", "HGCO"):
@@ -311,6 +316,8 @@ def test_a_refused_review_carries_its_refusal(
     )
     assert (found["priceToValue"], found["designation"]) == (None, None)
     assert (found["bridge"], found["overrideCount"]) == ([], 1)
+    # a review with no value fills no row: its flags are not the drawer's (spec 2026-11-13 8a)
+    assert found["flags"] is None and refused.flags
 
 
 def test_a_refused_row_carries_its_valued_review(
@@ -342,6 +349,10 @@ def test_a_refused_row_carries_its_valued_review(
         "trim": levels.trim,
     }
     assert (found["refusal"], found["mechanical"], found["overrideCount"]) == (None, None, 1)
+    # the review's flags, not the refused snapshot's (spec 2026-11-13 8a)
+    assert [f["code"] for f in found["flags"]] == [f.code for f in review.result.flags]
+    assert [f["code"] for f in body["result"]["flags"]] == [f.code for f in refused.flags]
+    assert len(found["flags"]) > len(body["result"]["flags"])
     (line,) = found["bridge"]
     assert (line["overrideId"], line["label"], line["delta"]) == (
         override_id,

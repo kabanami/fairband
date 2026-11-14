@@ -216,7 +216,8 @@ The kill criteria of section 11 test it.
   that convert to shares that the count leaves out, cited as its bridge line,
   `review:<id>/bridge/<n>/new`. The count is period-tied. A raised count raises the NTM net income
   with it, so say on what share basis the analysts' EPS stands. Where `share-count-gap` stays
-  because the market cap leaves a class out, say why the count stands.
+  because the market cap leaves a class out, say why the count stands; the screen's row shows the
+  review's flags, so the warning stays there too.
 - **The stock pay**, on Mature Growth: whether the company's adjusted EPS leaves out stock pay,
   as its own definition in the release says, the passage cited as a finding, and the basis
   override where the row read otherwise. Under an applied `earnings.ntm` still state the basis,

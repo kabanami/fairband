@@ -431,6 +431,36 @@ def test_the_references_say_what_the_server_and_the_reader_do() -> None:
         assert words in template, words
 
 
+def test_a_reviewed_rows_flags_follow_the_review() -> None:
+    """Spec 2026-11-13 8a: where a review fills the screen's row, the row's flags and count are the
+    review's, a secondary valuation's row keeping the snapshot's; the company's ``review`` record
+    carries the review's own flags; and the template's share-count sentence says the screen shows
+    the review's flags, so a warning the count does not settle stays there."""
+    assert (
+        "Where `reviewed` is a review's value, the row's `flags` and `flagCount` are the review's"
+        " flags too; where it is a secondary valuation's, they stay the snapshot's, since a"
+        " secondary valuation has none."
+    ) in _tool_entry("screen")
+    company = _tool_entry("company")
+    for words in (
+        (
+            "`review`: the current review on the latest snapshot, or on one a price refresh"
+            " repriced, `null` without one;"
+        ),
+        (
+            "its `flags` are the review's own, each with its `code`, `word` and `sentence`, as the"
+            " screen's row shows them"
+        ),
+        "on a refused review `flags` is `null`. The `result`'s flags stay the snapshot's.",
+    ):
+        assert words in company, words
+    template = _flat(_read(TEMPLATE))
+    assert (
+        "Where `share-count-gap` stays because the market cap leaves a class out, say why the count"
+        " stands; the screen's row shows the review's flags, so the warning stays there too."
+    ) in template
+
+
 def test_the_note_has_one_form() -> None:
     """Spec 2026-11-06 Tier 2, 8 (plan 4): the note is the request in the user's own words, on one
     line; the skill gives the counter-example, a note with process commentary."""

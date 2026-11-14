@@ -34,13 +34,19 @@ be left out.
 
 - `screen(sort?, direction?)`: the screen's rows, one a company, sorted by a column key;
   `direction` is `asc` or `desc`. A row's `fairValue`, band, levels, price ÷ value and designation
-  follow the reviewed value where `reviewed` is filled; `mechanical` is the engine's value. Every
-  money column is in US dollars, on a company in another currency too: its EPV, cross-check value
-  and required revenue are the route's figures in the currency ÷ the rate.
+  follow the reviewed value where `reviewed` is filled; `mechanical` is the engine's value. Where
+  `reviewed` is a review's value, the row's `flags` and `flagCount` are the review's flags too;
+  where it is a secondary valuation's, they stay the snapshot's, since a secondary valuation has
+  none. Every money column is in US dollars, on a company in another currency too: its EPV,
+  cross-check value and required revenue are the route's figures in the currency ÷ the rate.
 - `company(symbol)`: the latest snapshot in full: `snapshot.id`, `snapshot.refreshId` (the refresh
   that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
   intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
-  universe. `priceNeeds`: where the price is well above the value, one or two sentences on what
+  universe. `review`: the current review on the latest snapshot, or on one a price refresh
+  repriced, `null` without one; where it has a value, its `flags` are the review's own, each with
+  its `code`, `word` and `sentence`, as the screen's row shows them, so you read what your inputs
+  settled; on a refused review `flags` is `null`. The `result`'s flags stay the snapshot's.
+  `priceNeeds`: where the price is well above the value, one or two sentences on what
   the price needs of the business beside what the route holds, read under your review when it
   has a value; `null` otherwise. An input scaled for a split is an estimate under the method `split-scaled` with a
   note naming the split, and the row's `split-pending` note names the rest. What the figures are

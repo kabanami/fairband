@@ -6,10 +6,12 @@ the drawer's main view leads with, read on the company's latest snapshot by the 
 it), each ``None`` without one:
 
 - ``review``: the current review when it counts, ``{id, value, levels, priceToValue,
-  designation, refusal, bridge, overrideCount, mechanical}``; ``levels`` ``{buy, fairLow,
+  designation, refusal, bridge, overrideCount, mechanical, flags}``; ``levels`` ``{buy, fairLow,
   fairHigh, trim}`` (``None`` on a refusal); price ÷ value and its word read as the secondary's
   are (below), so a refused row's drawer can draw a valued review's band against today's price;
-  ``mechanical`` the value the bridge starts from. Each bridge line is the stored step,
+  ``mechanical`` the value the bridge starts from; ``flags`` the review's own flags, ``{code,
+  word, sentence}`` each, as the screen's row reads them where the review fills it (spec
+  2026-11-13 8a), ``None`` on a refusal, which fills no row. Each bridge line is the stored step,
   ``{overrideId, tag, old, new, delta, refusal}``, with the input's label in a reader's words
   (``overrides.LABELS``), its unit (``overrides.TAGS``) in the review's reporting currency
   (``overrides.unit_in``: ``SEK a share`` for a money input of a row in SEK, spec 2026-11-10 7.3)
@@ -44,6 +46,7 @@ and ``ledger``, the company's twenty newest rows, newest first. A company with n
 import sqlite3
 from collections.abc import Callable, Mapping
 from contextlib import closing
+from dataclasses import asdict
 from datetime import date
 from typing import Any
 
@@ -203,10 +206,12 @@ def _review(
     price: float | None,
     edges: tuple[float, float, float, float],
 ) -> dict[str, Any]:
-    """The review, its designation at ``price``, the latest snapshot's."""
+    """The review, its designation at ``price``, the latest snapshot's, and its flags when it has
+    a value."""
     levels = _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level)
     ratio, word = _standing(review.value, levels, price, edges)
     currency = money_of(review.result)[1]
+    flags = None if review.value is None else [asdict(f) for f in review.result.flags]
     return {
         "id": review.id,
         "value": review.value,
@@ -219,6 +224,7 @@ def _review(
         ],
         "overrideCount": len(review.override_ids),
         "mechanical": review.mechanical_value,
+        "flags": flags,
     }
 
 

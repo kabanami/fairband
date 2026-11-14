@@ -184,8 +184,8 @@
      evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the
      line that says what the figures are in (currencyLine), a report's footnote numbers, and
      Request research with a request of its own (asking). The drawer's charge section and its
-     rows, an input's value and the intermediates are here for the tests, which read them in node
-     (tests/web/page.mjs). */
+     rows, an input's value, the intermediates and the flags it lists are here for the tests,
+     which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
@@ -204,7 +204,8 @@
     rate: rate, plain: plain,
     footnotes: footnotes, asking: asking, requestResearch: requestResearch,
     chargeRows: chargeRows, matureRoute: matureRoute, intermediates: intermediates,
-    briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine
+    briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
+    drawerFlags: drawerFlags
   };
 
   function load() {
@@ -312,8 +313,10 @@
      lower-cased (Mega is mega); small never matches, the universe's floor being $2 bn. A row on
      any chosen watchlist matches; Clean keeps the valued rows whose quality warnings count 0: a
      refusal or a placeholder has no value to be cheap on, so it is never clean (spec 2026-11-04
-     9.4, 9.5). Valued is the engine's word, the Mechanical column: a refused row's fair value may
-     be its secondary valuation's (plan 3). */
+     9.4, 9.5). The count is the server's: the review's flags where a review fills the row, else
+     the snapshot's (spec 2026-11-13 8a). Valued is the engine's word, the Mechanical column: a
+     refused row's fair value may be its review's or its secondary valuation's (plan 3), and a row
+     the engine refused is not clean, whatever a review made of it. */
   function narrow(rows, query, filters) {
     var needle = (query || '').trim().toLowerCase();
     return rows.filter(function (r) {
@@ -866,6 +869,16 @@
       r.price != null;
   }
 
+  /* The flags the drawer lists, { flags, reviewed } (spec 2026-11-13 8a): the review's, which the
+     detail carries only while the review counts on the latest snapshot, where it has a value and
+     its flags, as the screen row's Flags and Warnings read them; else the snapshot's. reviewed
+     says they are the review's. */
+  function drawerFlags(body) {
+    var v = body.review;
+    if (v && v.value != null && v.flags) return { flags: v.flags, reviewed: true };
+    return { flags: body.result.flags, reviewed: false };
+  }
+
   /* A report's references, [{ n, ref, source }], as ReportReader's footnotes, ref → n (spec 13.1):
      the drawer's Summary and the report page number a cite alike, by the full report's list. */
   function footnotes(references) {
@@ -880,11 +893,12 @@
      overrides, each a record, read-only; the guidance on file; the latest report's judgments;
      the kill criteria; the news items; the notes, with Add a note; the findings; the company's
      ledger rows; then what the drawer showed before Details, in its order, the inputs led by the
-     line that says what the figures are in (currencyLine). The review and the secondary come with
-     the detail; the rest is its own read (readResearch). A list with nothing in it is left out,
-     but for the notes, which carry the owner's field. The money figures of the records are in the
-     company's reporting currency (spec 2026-11-10 7.3 and 7.6), the head's value and levels and
-     the secondary valuation's value a share in USD. */
+     line that says what the figures are in (currencyLine), and the flags, the review's under a
+     line that says so where the review has a value (drawerFlags, spec 2026-11-13 8a). The review
+     and the secondary come with the detail; the rest is its own read (readResearch). A list with
+     nothing in it is left out, but for the notes, which carry the owner's field. The money
+     figures of the records are in the company's reporting currency (spec 2026-11-10 7.3 and
+     7.6), the head's value and levels and the secondary valuation's value a share in USD. */
   function details(body) {
     var r = body.result;
     var im = r.intermediates;
@@ -894,6 +908,7 @@
     var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
     var review = body.review;
     var secondary = body.secondary;
+    var flagged = drawerFlags(body);
     var found = state.research && state.research.symbol === r.symbol ? state.research : null;
     var rs = found && found.body;
     var draft = drafted(r.symbol);
@@ -1048,12 +1063,15 @@
         currencyLine(body) ? h('p', { className: 'caption app-muted' }, currencyLine(body)) : null,
         inputsTable(r.inputs)),
       section('intermediates', 'Intermediate results', intermediates(r.intermediates)),
-      section('flags', 'Flags', r.flags.length ? h('ul', { className: 'app-list' },
-        r.flags.map(function (f) {
-          return h('li', { key: f.code },
-            h('span', { className: 'label' }, f.word),
-            h('p', { className: 'body' }, f.sentence));
-        })) : h('p', { className: 'caption app-muted' }, 'none')),
+      section('flags', 'Flags',
+        flagged.reviewed
+          ? h('p', { className: 'caption app-muted' }, 'The review\'s flags.') : null,
+        flagged.flags.length ? h('ul', { className: 'app-list' },
+          flagged.flags.map(function (f) {
+            return h('li', { key: f.code },
+              h('span', { className: 'label' }, f.word),
+              h('p', { className: 'body' }, f.sentence));
+          })) : h('p', { className: 'caption app-muted' }, 'none')),
       estimates.length ? section('estimates', 'Estimates', h('ul', { className: 'app-list' },
         estimates.map(function (i) {
           return h('li', { key: i.name },
