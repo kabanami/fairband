@@ -79,14 +79,23 @@ reproduces, and ``outside_value_per_share`` carries the figure under the overrid
 or below zero refuses the row as a route value would. ``growth_at_price`` reads the price and
 the sum: the multiples, the growth share and the expected return read them as they are, and the
 implied growth, by runway and by return too, solves to the price less the figure, the business's
-share of the price, which it reads from the intermediates. The diluted share count is
-``Context.shares``, an agent's ``shares.diluted`` in place of the reported count: NTM net income
-is the NTM EPS times it, and after-tax SBC a share divides by it, so the agent's count can change
-the basis test's reading where no basis override is applied, and on a basis that reads
-``excludes-sbc`` on a stock pay above zero it moves the adjustment, and with it the ``ntm_eps``
-and ``ntm_net_income`` DATA entries. The ``ntm_net_income`` DATA entry stays on the reported
+share of the price, which it reads from the intermediates.
+
+The share count is two counts (spec 2026-11-14 4). ``Context.consensus_shares`` is the diluted
+count, an agent's ``shares.diluted`` in place of the reported count, the count the consensus EPS
+is on: NTM net income is the NTM EPS times it, and after-tax SBC a share, in the basis test, the
+adjustment and ``sbc-basis-uncertain``, divides by it, so the agent's count can change the basis
+test's reading where no basis override is applied, and on a basis that reads ``excludes-sbc`` on
+a stock pay above zero it moves the adjustment, and with it the ``ntm_eps`` and
+``ntm_net_income`` DATA entries; ``step-series-disagree`` names it. ``Context.shares``, the count
+in force, adds an agent's ``shares.committed``, shares committed but not yet in that count nor in
+the consensus: the value a share and the values by runway and by return divide by it, so x
+committed shares on a count of n lower the value a share by x ÷ (n + x), and the implied growth
+solves to the price times it. The intermediates keep ``shares``, the count in force, with
+``shares_committed`` beside it under that override, and ``ntm_net_income`` on the diluted count,
+so ``growth_at_price`` rebuilds both. The ``ntm_net_income`` DATA entry stays on the reported
 count, ``None`` without one: the consensus less the stock-pay adjustment in force times the
-reported count.
+reported count. The cross-check reads the same two counts.
 """
 
 from collections.abc import Sequence
@@ -140,6 +149,7 @@ from fairband.engine.route_steps import (
     business_price,
     charge_for,
     chosen,
+    committed_entry,
     common_inputs,
     common_rules,
     cycle_entry,
@@ -219,6 +229,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         "charge_off": roic.charge_off,
         "charge": charge_entry(growth, charge),
         "shares": c.shares,
+        **committed_entry(c),
         "value_total": value_total,
         "value_per_share": value,
         "value_by_runway": by_runway,
@@ -288,9 +299,11 @@ def value_mature_growth(c: Context) -> Valued | Refused:
 
 def growth_cross_check(c: Context, moat: Moat, roic: RoicTerms) -> dict[str, Any]:
     """The growth route's value a share for a Mature Stable row (calibration spec 5.7), from the
-    row's moat and returns, with what the value rests on: the anchor's net income, the path, the
-    belief, the runway and fade, and the returns of the charge; or only the refusal the route
-    would give. ``cross_check_at_price`` adds the implied growth at a price."""
+    row's moat and returns, with what the value rests on: the anchor's net income, on the diluted
+    count, the path, the belief, the runway and fade, and the returns of the charge; or only the
+    refusal the route would give. The value a share divides by the count in force, so committed
+    shares lower it as they lower the route's (spec 2026-11-14 4). ``cross_check_at_price`` adds
+    the implied growth at a price, on the count in force."""
     found = _anchor_and_path(c)
     if isinstance(found, Refused):
         return {"refusal": found.reason}
@@ -353,7 +366,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         periods,
         t,
         i.street_ttm_eps,
-        c.shares,
+        c.consensus_shares,  # the count the consensus EPS is on (spec 2026-11-14 4)
         i.tax_rate_latest,
         c.price,
         policy,
@@ -388,11 +401,12 @@ def _judged(
 ) -> tuple[Path, Belief]:
     """The route's own path and belief: under the step and belief overrides, an overriding step
     replaces the consensus's; ``few-analysts`` and ``step-series-disagree`` name only the steps the
-    consensus still gives, the latter against the diluted count (spec 2026-11-09 9). ``thin-ntm``
-    (spec 2026-11-13 9) reads the NTM window's ``periods``, the ones the anchor sums, and the
-    consensus periods and annual consensus that correct them where they can (spec 2026-11-13 9a),
-    and takes the place right after ``few-analysts``; it is silent under an applied
-    ``earnings.ntm``, whose anchor is the guidance."""
+    consensus still gives, the latter against the diluted count, without any committed shares
+    (spec 2026-11-09 9, 2026-11-14 4). ``thin-ntm`` (spec 2026-11-13 9) reads the NTM window's
+    ``periods``, the ones the anchor sums, and the consensus periods and annual consensus that
+    correct them where they can (spec 2026-11-13 9a), and takes the place right after
+    ``few-analysts``; it is silent under an applied ``earnings.ntm``, whose anchor is the
+    guidance."""
     read = (_STEP_TAGS[0] not in c.overrides, _STEP_TAGS[1] not in c.overrides)
     consensus = tuple(step if r else None for r, step in zip(read, path.steps, strict=True))
     thin = few_analysts(base_year, (consensus[0], consensus[1]), path.analysts, c.policy)
@@ -401,7 +415,7 @@ def _judged(
         if "earnings.ntm" in c.overrides
         else thin_ntm_flag(periods, c.inputs.quarter_estimates, c.inputs.annual_estimates, c.policy)
     )
-    disagree = step_series_flag(path, c.shares, c.policy, read)
+    disagree = step_series_flag(path, c.consensus_shares, c.policy, read)
     flags = (
         tuple(f for f in path.flags if f.code != "few-analysts") + present(thin) + present(thin_ntm)
     )
@@ -525,7 +539,8 @@ def _stock_pay_notes(c: Context, anchor: Anchor, gap: float | None) -> tuple[Fla
     those that fire: the stored trailing stock pay against the stock pay on file, and the anchor's
     basis against the figures the test read, the stock pay in force (an agent's ``earnings.sbc``,
     else the stored figure) and GAAP EPS less an agent's correction to the non-recurring gap,
-    ``large-nri`` read from the row's own non-recurring gap ``gap``. A note is silent under the
+    ``large-nri`` read from the row's own non-recurring gap ``gap``, the stock pay a share on the
+    diluted count, as the anchor reads it (spec 2026-11-14 4). A note is silent under the
     input that decides it, the agent having decided (spec 7.1): ``stock-pay-missing`` under an
     applied ``earnings.sbc``, ``sbc-basis-uncertain`` under an applied ``earnings.sbc_basis``.
     Both are silent under an applied ``earnings.ntm``, as ``thin-ntm`` is: the guided EPS stands
@@ -546,7 +561,7 @@ def _stock_pay_notes(c: Context, anchor: Anchor, gap: float | None) -> tuple[Fla
             anchor.basis,
             read,
             i.street_ttm_eps,
-            c.shares,
+            c.consensus_shares,
             i.tax_rate_latest,
             large_nri,
             policy,
@@ -623,7 +638,8 @@ def _on_reported(anchor: Anchor, reported: float | None) -> float | None:
     """The ``ntm_net_income`` DATA entry: the consensus NTM EPS less the stock-pay adjustment in
     force (``Anchor.ntm_eps_found``) on the reported count, ``None`` without one; an agent's
     ``shares.diluted`` reaches it only through that adjustment, the stock pay a share being on the
-    count in force. The intermediates' ``ntm_net_income`` is on the count the route used."""
+    diluted count, and ``shares.committed`` does not reach it. The intermediates'
+    ``ntm_net_income`` is on the diluted count the route used."""
     return None if reported is None else anchor.ntm_eps_found * reported
 
 

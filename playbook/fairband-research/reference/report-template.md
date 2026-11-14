@@ -211,13 +211,16 @@ The kill criteria of section 11 test it.
   may carry the asset's gains, no override adds it: name the asset and its size a share, cited as a
   finding, and say why it is not added. Where the figure comes from secondary coverage, not a
   filing, say so.
-- **The share count**, where an override set one or `share-count-gap` stays: the shares committed
-  but not yet in the count (a forward sale, a mandatory convertible), or a share class or units
-  that convert to shares that the count leaves out, cited as its bridge line,
-  `review:<id>/bridge/<n>/new`. The count is period-tied. A raised count raises the NTM net income
-  with it, so say on what share basis the analysts' EPS stands. Where `share-count-gap` stays
-  because the market cap leaves a class out, say why the count stands; the screen's row shows the
-  review's flags, so the warning stays there too.
+- **The share count**, where an override set one or `share-count-gap` stays: the shares the
+  company has committed to issue that neither the count nor the analysts' EPS holds yet (warrants,
+  a forward sale, a mandatory convertible), set through `shares.committed`, with the filing that
+  commits them, which lower the value a share by x ÷ (n + x) for x of them on a count of n, and
+  where the cash the issue brings was added; or a share class or units that convert to shares
+  that the count leaves out, set through `shares.diluted`; each cited as its bridge line,
+  `review:<id>/bridge/<n>/new`. Both are period-tied. A raised diluted count raises the NTM net
+  income with it, so say on what share basis the analysts' EPS stands. Where `share-count-gap`
+  stays because the market cap leaves a class out, say why the count stands; the screen's row
+  shows the review's flags, so the warning stays there too.
 - **The stock pay**, on Mature Growth: whether the company's adjusted EPS leaves out stock pay,
   as its own definition in the release says, the passage cited as a finding, and the basis
   override where the row read otherwise. Under an applied `earnings.ntm` still state the basis,

@@ -1,10 +1,11 @@
 """Overrides: the inputs an agent may change, the rules an override must pass, and the engine's
 own reading of each input (spec 2026-11-06 Tier 2, 10.1 to 10.3; ``method.md`` 14).
 
-An override changes one tagged input. ``TAGS`` names the twenty-one inputs, the routes that read
+An override changes one tagged input. ``TAGS`` names the twenty-two inputs, the routes that read
 each, its unit and, for the three word inputs, its words; the numeric ranges are the policy's
 ``override_ranges``, the ends included but the lower end, 0, of the two NTM anchors, the runway
-return and the diluted share count, which each must be above (``TagSpec.low_open``).
+return, the diluted share count and the committed shares, which each must be above
+(``TagSpec.low_open``).
 ``LABELS`` names each input's bridge line in a reader's words. ``check_override`` applies the
 rules in this order and answers with the first one broken: a locked input (``LOCKED``); a tag
 that is not an input; a route that does not read the tag; a value outside its words or its
@@ -47,9 +48,11 @@ stored, before the cycle gap came off it; the NTM revenue reads the year one the
 or Decline route stored, none on a Decline row with no usable consensus. The engine finds no
 value outside the business either: a valued route writes ``outside_value_per_share`` only under
 an override, so a result without one reads 0.0 on every route but Start-up, which reads none.
-The diluted share count reads the count the result cites: its intermediates' ``shares``, else
-the reported count's DATA entry or the JUDGMENT entry in its place. An override at the engine's
-reading moves nothing.
+The diluted share count reads the count the result cites: its intermediates' ``shares`` less
+the ``shares_committed`` a route writes beside it under ``shares.committed``, else the reported
+count's DATA entry or the JUDGMENT entry in its place; so the committed shares never pass for a
+corrected count. The engine finds no committed shares: their reading is nil on every result
+(spec 2026-11-14 4). An override at the engine's reading moves nothing.
 
 ``INPUT_OF`` names the route's own entry each tag stands for in a result's inputs: a result
 valued under an override cites the JUDGMENT entry in its place, so no DATA or RULE entry carries
@@ -87,12 +90,13 @@ OverrideTag = Literal[
     "balance.cash",
     "balance.minority",
     "shares.diluted",
+    "shares.committed",
     "value.outside",
 ]
 # The bridge's order, the method's step order (spec 10.4); the two stock-pay inputs right after
 # the non-recurring gap, the figure first (spec 2026-11-13 7.2); the minority interest right after
 # cash (spec 2026-11-13 13); the count and the value outside the business last, after the balance
-# sheet (spec 2026-11-09 8).
+# sheet (spec 2026-11-09 8), the committed shares right after the count (spec 2026-11-14 4).
 BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "phase",
     "earnings.ntm",
@@ -114,6 +118,7 @@ BRIDGE_ORDER: tuple[OverrideTag, ...] = (
     "balance.cash",
     "balance.minority",
     "shares.diluted",
+    "shares.committed",
     "value.outside",
 )
 Lifetime = Literal["lasting", "period-tied"]
@@ -136,10 +141,10 @@ class TagSpec:
     its words (``None`` for a number, whose range is the policy's), whether only a period-tied
     override may change it, and whether its range's lower end is excluded: an NTM anchor must be
     above 0, as the route's own positive-anchor rule asks of the consensus, and so must a share
-    count, as the guard asks of the reported one, and the runway return, which the charge divides
-    by. ``lasting_value`` is the one value a lasting override of such a period-tied input may
-    take, ``None`` for none: the stock pay may last at 0, for a company that pays no stock (spec
-    2026-11-13 7.3)."""
+    count, as the guard asks of the reported one, and the committed shares, and the runway
+    return, which the charge divides by. ``lasting_value`` is the one value a lasting override of
+    such a period-tied input may take, ``None`` for none: the stock pay may last at 0, for a
+    company that pays no stock (spec 2026-11-13 7.3)."""
 
     tag: OverrideTag
     routes: frozenset[Route]
@@ -218,6 +223,7 @@ TAGS: dict[OverrideTag, TagSpec] = {
         _spec("balance.cash", _BALANCE, "USD", period_tied_only=True),
         _spec("balance.minority", _BALANCE, "USD", period_tied_only=True),
         _spec("shares.diluted", _ALL, "shares", period_tied_only=True, low_open=True),
+        _spec("shares.committed", _ALL, "shares", period_tied_only=True, low_open=True),
         _spec("value.outside", _ALL - {"start-up"}, "USD a share"),
     )
 }
@@ -245,6 +251,7 @@ LABELS: dict[OverrideTag, str] = {
     "balance.cash": "cash",
     "balance.minority": "minority interest",
     "shares.diluted": "diluted shares",
+    "shares.committed": "committed shares",
     "value.outside": "outside the business",
 }
 
@@ -253,8 +260,8 @@ LABELS: dict[OverrideTag, str] = {
 # for its consensus figure's entry; Mature Growth's NTM net income entry keeps the consensus, on
 # the reported count under a ``shares.diluted`` too. The stock pay stands for the stored trailing
 # figure's entry; the stock-pay basis for none, since a route cites the basis as no input. The
-# count stands for the reported count every result cites; the outside value for none, since the
-# engine reads no such figure.
+# count stands for the reported count every result cites; the committed shares and the outside
+# value for none, since the engine reads no such figure.
 INPUT_OF: dict[OverrideTag, str] = {
     "earnings.ntm": "ntm_eps",
     "revenue.ntm": "ntm_revenue",
@@ -574,7 +581,13 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
             # the line as the sheet presents it, read as debt and cash are (``_balance``)
             return _cited(result, "minority_interest", tag)
         case "shares.diluted":
-            return im["shares"] if "shares" in im else _cited(result, "shares_diluted", tag)
+            # the count in force less the committed shares: the count the override replaces
+            if "shares" in im:
+                return im["shares"] - im.get("shares_committed", 0.0)
+            return _cited(result, "shares_diluted", tag)
+        case "shares.committed":
+            # the engine finds none; nil on every result (spec 2026-11-14 4)
+            return 0.0
         case "value.outside":
             # written only under an override; the engine's own reading is nil
             if _route(result) not in TAGS[tag].routes:

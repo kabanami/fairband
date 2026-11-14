@@ -408,6 +408,41 @@ def test_the_two_new_inputs_through_the_api(
     assert _post(client, su_shares, "SUCO")["override"]["state"] == "applied"
 
 
+def test_the_committed_shares_through_the_api(
+    client: TestClient, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-14 4 on AAPL, the Mature Growth golden, 1,000 m shares: the committed shares
+    refuse a lasting override; a period-tied one at 60 m applies, its old value and the value it
+    corrected the engine's nil, and lowers the reviewed value to the mechanical one × 1,000 ÷
+    1,060; the detail's bridge names the line "committed shares", in shares."""
+    filing = {"kind": "filing", "ref": "8-K: warrants for 60 m shares at $0.01", "note": ""}
+    committed = {
+        "tag": "shares.committed",
+        "new": 60e6,
+        "reason": "warrants granted to a customer, not in the count or the consensus",
+        "evidence": [filing],
+        "lifetime": "lasting",
+    }
+    r = client.post("/api/companies/AAPL/overrides", json=committed, headers=AGENT)
+    assert (r.status_code, r.json()["detail"]) == (400, "shares.committed is period-tied only")
+    body = _post(client, committed | {"lifetime": "period-tied", "period": "Q3 2026"})
+    tied = body["override"]
+    assert (tied["state"], tied["unit"], tied["old"], tied["correctedValue"]) == (
+        "applied",
+        "shares",
+        0.0,
+        0.0,
+    )
+    mechanical = results["AAPL"].value
+    assert mechanical is not None
+    assert body["review"]["value"] == pytest.approx(mechanical * 1_000 / 1_060)
+    bridge = client.get("/api/companies/AAPL").json()["review"]["bridge"]
+    assert [(x["tag"], x["label"], x["unit"], x["old"], x["new"]) for x in bridge] == [
+        ("shares.committed", "committed shares", "shares", 0.0, 60e6)
+    ]
+    assert bridge[0]["delta"] == pytest.approx(mechanical * (1_000 / 1_060 - 1))
+
+
 def test_the_two_stock_pay_inputs_through_the_api(
     client: TestClient, results: dict[str, ValuationResult]
 ) -> None:

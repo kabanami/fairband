@@ -64,7 +64,7 @@ def start_up_inputs() -> CompanyInputs:
 def _context(i: CompanyInputs, policy: Policy) -> Context:
     """``i`` past the guards, as ``route.value_company`` builds the context its route reads."""
     assert i.trailing is not None and i.price is not None and i.shares_diluted is not None
-    return Context(i, i.trailing, i.price, i.shares_diluted, policy, TODAY)
+    return Context(i, i.trailing, i.price, i.shares_diluted, i.shares_diluted, policy, TODAY)
 
 
 @pytest.fixture

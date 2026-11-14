@@ -402,6 +402,8 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   count leaves shares out, decide through `shares.diluted`, period-tied, with every class and
   every unit that converts; the warning does not show once the count reconciles the two. Where
   the market cap leaves a class out, the count stands, the warning stays, and section 8 says why.
+  The warning reads the count without `shares.committed`: the market cap holds no share not yet
+  issued, so committed shares neither raise it nor clear it.
 - `sheet-shift`: on High Growth, Young Growth, Decline and Start-up, the newest balance sheet is a
   quarter's, and a figure of it differs sharply from the newest annual sheet's: its debt or a cash
   line is nil where the annual sheet holds a figure, or its minority interest is more than
@@ -751,7 +753,8 @@ not you, computes the value it gives.
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest balance sheet's debt or cash, a quarter's or a fiscal year's, whose period the `debt` and `cash` inputs' notes name | 0 dollars or more; period-tied only |
 | `balance.minority` | High Growth, Young Growth, Decline, Start-up | the minority interest, a total in the reporting currency, which the route takes off the owners' claim beside debt; the engine reads the newest balance sheet's line at book (the `minority_interest` input). Set it for a market value, or for a redeemable stake that the line leaves out; the evidence is the filing's note on non-controlling or redeemable interests | 0 dollars or more; period-tied only |
-| `shares.diluted` | every route | the diluted share count, for shares committed but not yet in the reported count (a forward sale, a mandatory convertible) or a share class or units that convert to shares that the count leaves out (`share-count-gap`); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first | above 0 shares; period-tied only |
+| `shares.diluted` | every route | the diluted share count, for a share class or units that convert to shares that the count leaves out (`share-count-gap`); every figure a share reads it, the NTM net income too (the NTM EPS × the count), so a raised count raises NTM net income with it: read the consensus EPS's own share basis first. Shares not yet issued go through `shares.committed` | above 0 shares; period-tied only |
+| `shares.committed` | every route | shares the company has committed to issue that neither the diluted count nor the analysts' EPS holds yet: warrants, a forward sale, a mandatory convertible, shares owed for a purchase. They join the count that divides the value among the owners, while the next twelve months' net income stays on the analysts' count, so x committed shares on a count of n lower the value a share by x ÷ (n + x). The evidence is the filing that commits them. Cash the issue brings goes through `balance.cash` or `value.outside` | above 0 shares; period-tied only |
 | `value.outside` | Mature Growth, Mature Stable, High Growth, Young Growth, Decline | a figure a share outside the business, after tax, added to the value a share: a stake, an asset held for sale, a settlement still owed (negative). Nothing counts twice: on Mature Stable strip the asset's gains through `earnings.nri_gap`; on Mature Growth add it only when the consensus excludes its gains (see below) | −1,000 to 1,000 dollars a share; lasting or period-tied |
 
 The ranges are the policy's `override_ranges`; `policy()` gives the values in force. On a company
@@ -823,20 +826,31 @@ How much of the gap to take:
 
 The share count and the value outside the business:
 
-- `shares.diluted` stands in for the reported count, for shares the company has committed to
-  issue that the count does not yet hold: a forward sale, a mandatory convertible. It also stands
-  in for a count that leaves out a share class or units that convert to shares
-  (`share-count-gap`). Every figure a share reads it. The NTM net income is the analysts' EPS ×
-  the count, so a raised count raises it too, and on Mature Growth, whose value rests on that EPS,
-  the value a share moves only through the stock compensation a share. So read the consensus
-  EPS's own share basis first: where the EPS does not yet count the new shares, a raised count
-  does not dilute the value. Period-tied only: each new statement asks the question again.
+- `shares.committed` takes the shares the company has committed to issue that neither its
+  diluted count nor the analysts' EPS holds yet: warrants given to a customer, a forward sale, a
+  mandatory convertible, shares owed for a purchase. Shares not yet issued go through it on every
+  route, with the filing that commits them as evidence. They join the count that divides the
+  value among the owners, and on Mature Growth the next twelve months' net income stays on the
+  analysts' count, so x committed shares on a count of n lower the value a share by x ÷ (n + x).
+  Read the consensus EPS's own share basis first: where the analysts already count the shares,
+  they are not committed in this sense, and the input stays unset. The input is a count. Cash the
+  issue brings, a warrant's exercise price say, is yours to add, with its evidence: through
+  `balance.cash` on High Growth, Young Growth, Decline and Start-up, or through `value.outside`, a
+  figure a share on the count in force. Period-tied only: each new statement asks the question
+  again.
+- `shares.diluted` stands in for a reported count that leaves out a share class or units that
+  convert to shares (`share-count-gap`), as an Up-C's count leaves out its units. Every figure a
+  share reads it. The NTM net income is the analysts' EPS × the count, so a raised count raises it
+  too: read the consensus EPS's own share basis first. A class or units the count leaves out go
+  through it; shares not yet issued go through `shares.committed`. Period-tied only: each new
+  statement asks the question again.
 - `value.outside` is a figure a share, after tax: a stake in another company, an asset held for
   sale, or a liability such as a settlement still owed, negative. The figure is a share on the
-  count in force: with `shares.diluted` also set, divide the asset's worth by the new count. The
-  value a share is the route's plus the figure, and the levels read the sum; the growth the price
-  needs is solved against the price less the figure, the business's share of the price. Start-up
-  does not read it. A filing is the usual evidence; a figure from secondary coverage is evidence
+  count in force: with `shares.diluted` also set, divide the asset's worth by the new count, and
+  with `shares.committed` set, by the count with the committed shares. The value a share is the
+  route's plus the figure, and the levels read the sum; the growth the price needs is solved
+  against the price less the figure, the business's share of the price. Start-up does not read
+  it. A filing is the usual evidence; a figure from secondary coverage is evidence
   too, and the report says so.
 
 Nothing counts twice. Where GAAP earnings carry the asset's gains (mark-ups through other income),
@@ -863,18 +877,20 @@ The server checks an override by these rules, in this order, and answers the fir
    g_T (the terminal growth ceiling), the runway years, the fade years, the margin of safety, the
    fair band, the trim multiple, the terminal return, the deciles, the growth word, and every
    reported figure (the price, the shares, the market cap, the revenue, the operating income, the
-   EPS). Debt, cash and the minority interest change only through the three balance tags, and the
-   diluted share count only through `shares.diluted`. The consensus of the next twelve months
-   changes only through the two NTM anchors.
+   EPS). Debt, cash and the minority interest change only through the three balance tags, the
+   diluted share count only through `shares.diluted`, and the shares not yet issued join it only
+   through `shares.committed`. The consensus of the next twelve months changes only through the
+   two NTM anchors.
 2. `refused-not-input`: a tag that is not in the table.
 3. `refused-route`: a route that does not read the tag. The route follows an applied `phase`
    override, so override the phase first. The Mature Stable route reads no consensus step, so
    `path.step_2` and `path.step_3` are refused there. A company with no phase reads no input but its
    phase: set its phase first.
 4. `refused-unit`: a value outside the range, a word outside the words, a word where a number is
-   due, an NTM anchor or a share count at 0 or below, a lasting override of a balance tag (debt,
-   cash or the minority interest) or of the share count, or a lasting stock pay at any figure but
-   0: "a lasting earnings.sbc takes 0 only: a figure is period-tied".
+   due, an NTM anchor, a share count or committed shares at 0 or below, lasting committed shares,
+   a lasting override of a balance tag (debt, cash or the minority interest) or of the share
+   count, or a lasting stock pay at any figure but 0: "a lasting earnings.sbc takes 0 only: a
+   figure is period-tied".
 5. `refused-evidence`: no evidence, "an override needs evidence". An NTM anchor with no item of
    kind `guidance`: "an NTM anchor override needs a guidance record among its evidence". A
    `growth.belief` or a `path.hold` above the sales class's 90th percentile (`sales_p90_5y` in the
@@ -894,10 +910,11 @@ An applied override answers `{override, review, bridge}`. The bridge starts at t
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
 consensus step 3, held rate, belief, non-recurring gap, stock pay, stock-pay basis, mid-cycle
 earnings, target margin, sales to capital, runway return, decline rate, moat, debt, cash, minority
-interest, diluted shares, outside the business. A line whose step refuses shows the refusal in
-place of a change. A review whose last line refuses has no value. On a refused row, where the
-mechanical value refuses too, the secondary valuation stands in for it. Where an override values a
-refused row, the reviewed value stands, and the server refuses a secondary valuation there. On a
+interest, diluted shares, committed shares, outside the business. A line whose step refuses shows
+the refusal in place of a change. A review whose last line refuses has no value. On a refused row,
+where the mechanical value refuses too, the secondary valuation stands in for it. Where an
+override values a refused row, the reviewed value stands, and the server refuses a secondary
+valuation there. On a
 valued snapshot a refused review gets no stand-in: the server refuses one there, and the overrides
 are inconsistent with the route. Fix or drop the override whose bridge line refused (step 11).
 

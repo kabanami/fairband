@@ -163,6 +163,30 @@ def test_the_minority_interest_tag_s_rules(policy: Policy) -> None:
     assert INPUT_OF["balance.minority"] == "minority_interest"
 
 
+def test_the_committed_shares_tag_s_rules(policy: Policy) -> None:
+    """Spec 2026-11-14 4: a count of shares above 0, on all five routes, period-tied only, bridged
+    right after the diluted count under the label "committed shares"; it stands for no entry of
+    the route's, the reported count's entry staying beside it."""
+    tied = ("shares.committed", 60e6, "mature-growth", policy, ["filing"], "period-tied", None)
+    for route in get_args(Route):
+        assert check_override(*tied[:2], route, *tied[3:]) == ("applied", ""), route
+    for count in (0.0, -5.0):
+        assert check_override(*tied[:1], count, *tied[2:]) == (
+            "refused-unit",
+            "shares.committed takes above 0 to 1,000,000,000,000 shares",
+        )
+    assert check_override(*tied[:5], "lasting", None) == (
+        "refused-unit",
+        "shares.committed is period-tied only",
+    )
+    spec = TAGS["shares.committed"]
+    assert spec.unit == "shares" and spec.words is None
+    assert spec.period_tied_only and spec.low_open
+    assert BRIDGE_ORDER.index("shares.committed") == BRIDGE_ORDER.index("shares.diluted") + 1
+    assert LABELS["shares.committed"] == "committed shares"
+    assert "shares.committed" not in INPUT_OF
+
+
 def test_check_needs_evidence(policy: Policy) -> None:
     assert checked(policy, "growth.belief", 0.08, "mature-growth", evidence=[]) == (
         "refused-evidence",
@@ -250,6 +274,7 @@ def test_the_cycle_gap_is_a_mature_tag() -> None:
         "balance.cash": "cash",
         "balance.minority": "minority interest",
         "shares.diluted": "diluted shares",
+        "shares.committed": "committed shares",
         "value.outside": "outside the business",
     }
     assert sorted(LABELS) == sorted(TAGS)
@@ -282,7 +307,8 @@ def test_the_two_new_tags_rules(policy: Policy) -> None:
         )[0]
         == "refused-unit"
     )
-    assert BRIDGE_ORDER[-2:] == ("shares.diluted", "value.outside")
+    # the committed shares follow the count (spec 2026-11-14 4); the outside value stays last
+    assert BRIDGE_ORDER[-3:] == ("shares.diluted", "shares.committed", "value.outside")
     assert LABELS["shares.diluted"] == "diluted shares"
     assert LABELS["value.outside"] == "outside the business"
 
@@ -344,6 +370,44 @@ def test_the_two_new_readings(policy: Policy, deciles: Deciles) -> None:
     assert current_reading(refused, "shares.diluted") == 1_060e6
     names = [(x.name, x.tag, x.unit) for x in refused.inputs if "shares" in x.name]
     assert names == [("shares.diluted", "JUDGMENT", "shares")]
+
+
+def test_the_count_s_reading_leaves_the_committed_shares_out(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 4 on every route: the intermediates keep ``shares``, the count in force, and
+    gain ``shares_committed`` under the override alone; the engine's reading of the diluted count
+    is the one less the other, so the committed shares never pass for a corrected count; the
+    engine finds no committed shares, nil on every result, a refusal before the route too. The
+    reported count's DATA entry stays beside the JUDGMENT entry, in shares."""
+    for build in (
+        mature_growth_inputs,
+        mature_stable_inputs,
+        high_growth_inputs,
+        decline_inputs,
+        start_up_inputs,
+    ):
+        plain = value_company(build(), deciles, policy, TODAY)
+        count = plain.intermediates["shares"]
+        committed = {"shares.committed": override("shares.committed", 0.1 * count)}
+        judged = value_company(build(), deciles, policy, TODAY, committed)
+        assert "shares_committed" not in plain.intermediates, build.__name__
+        im = judged.intermediates
+        assert im["shares"] == pytest.approx(1.1 * count) and im["shares_committed"] == 0.1 * count
+        assert current_reading(judged, "shares.diluted") == pytest.approx(count)
+        assert current_reading(plain, "shares.committed") == 0.0
+        assert current_reading(judged, "shares.committed") == 0.0
+        names = [(x.name, x.tag, x.unit) for x in judged.inputs if "shares" in x.name]
+        assert names == [
+            ("shares_diluted", "DATA", "shares"),
+            ("shares.committed", "JUDGMENT", "shares"),
+        ]
+    no_trailing = replace(mature_growth_inputs(), trailing=None)
+    committed = {"shares.committed": override("shares.committed", 60e6)}
+    refused = value_company(no_trailing, deciles, policy, TODAY, committed)
+    assert refused.refusal == "no trailing figures" and "shares" not in refused.intermediates
+    assert current_reading(refused, "shares.diluted") == 1_000e6
+    assert current_reading(refused, "shares.committed") == 0.0
 
 
 def test_the_two_stock_pay_tags_rules(policy: Policy) -> None:
@@ -610,13 +674,14 @@ def test_the_route_follows_the_phase() -> None:
 def test_the_accessor_returns_the_engines_reading_without_an_override(policy: Policy) -> None:
     i = mature_growth_inputs()
     assert i.trailing is not None
-    mechanical = Context(i, i.trailing, 150.0, 1_000e6, policy, TODAY)
+    mechanical = Context(i, i.trailing, 150.0, 1_000e6, 1_000e6, policy, TODAY)
     assert chosen(mechanical, "moat.class", "Narrow") == "Narrow"
     assert chosen(mechanical, "growth.belief", 0.063) == 0.063
     judged = Context(
         i,
         i.trailing,
         150.0,
+        1_000e6,
         1_000e6,
         policy,
         TODAY,

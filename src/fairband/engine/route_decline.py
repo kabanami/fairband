@@ -106,9 +106,10 @@ levels and the designation read; ``value_per_share`` and its parts stay the busi
 refuses "value not positive in the run-off", which keeps the figure beside the value side.
 ``decline_at_price`` reads the price and the sum: the multiples and the expected return read them
 as they are, and the implied decline rate solves to the price less the figure, the business's
-share of the price. The diluted share count is ``Context.shares`` and the rebuild key
-``shares``, an agent's ``shares.diluted`` in place of the reported count, which every value a
-share divides by.
+share of the price. The share count is ``Context.shares`` and the rebuild key ``shares``, the
+count in force, which every value a share divides by: the diluted count, an agent's
+``shares.diluted`` in place of the reported count, plus an agent's ``shares.committed``, written
+beside it as ``shares_committed`` under that override (spec 2026-11-14 4).
 """
 
 import math
@@ -147,6 +148,7 @@ from fairband.engine.route_steps import (
     Valued,
     business_price,
     chosen,
+    committed_entry,
     common_inputs,
     data,
     debt_and_cash,
@@ -298,6 +300,7 @@ def value_decline(c: Context) -> Valued | Refused:
         "minority_interest": minority_interest,
         **sheet_entry(i),
         "shares": c.shares,
+        **committed_entry(c),
         "ncav": None if i.sheet is None else ncav(i.sheet),
         "pi": {
             "value": None if found is None else found.pi,

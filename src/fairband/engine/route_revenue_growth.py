@@ -120,8 +120,12 @@ figure. A sum at or below zero refuses "value not positive under the reinvestmen
 ``revenue_at_price`` reads the price and the sum: the multiples, the growth share and the expected
 return read them as they are, and the implied growth, the margin the price needs (a refusal's
 too) and the cross-check's implied growth solve to the price less the figure, the business's share
-of the price. The diluted share count is ``Context.shares`` and the rebuild key ``shares``, an
-agent's ``shares.diluted`` in place of the reported count, which the equity a share divides by.
+of the price. The share count that divides the equity is ``Context.shares`` and the rebuild key
+``shares``, the count in force: the diluted count, an agent's ``shares.diluted`` in place of the
+reported count, plus an agent's ``shares.committed``, written beside it as ``shares_committed``
+under that override (spec 2026-11-14 4). The forward EPS of the multiples is the anchor's on the
+diluted count, ``Context.consensus_shares``, the count the consensus EPS is on, and the
+cross-check reads the two counts as the Mature Growth route does.
 """
 
 from collections.abc import Sequence
@@ -175,6 +179,7 @@ from fairband.engine.route_steps import (
     Valued,
     business_price,
     chosen,
+    committed_entry,
     common_inputs,
     common_rules,
     data,
@@ -290,6 +295,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         "minority_interest": minority(c),
         **sheet_entry(i),
         "shares": c.shares,
+        **committed_entry(c),
         "sales_to_capital": asdict(s2c),
         **outside_entry(c),
     }
@@ -319,7 +325,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         periods,
         t,
         i.street_ttm_eps,
-        c.shares,
+        c.consensus_shares,  # the count the consensus EPS is on (spec 2026-11-14 4)
         tax,
         c.price,
         policy,

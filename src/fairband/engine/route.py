@@ -28,7 +28,9 @@ guard and the route read the overridden phase: a Start-up row overridden to anot
 that phase's route on a ``Context`` and is refused without trailing figures as any such row is,
 and a row overridden to Start-up takes the Start-up route. A ``shares.diluted`` override replaces
 the reported diluted count before the guard "no diluted share count", so every route reads the
-agent's count as ``Context.shares``. The routes read the other inputs through
+agent's count as ``Context.consensus_shares``; a ``shares.committed`` override, shares committed
+but not yet in that count, adds to it in ``Context.shares``, the count in force (spec 2026-11-14
+4). The routes read the other inputs through
 ``route_steps.chosen``; ``value.outside`` each valued route adds to its own value a share, the
 result's value the sum, which the levels, the designation and the expected return read, its
 intermediates' ``value_per_share`` the route's own, and every solve on the price targeting the
@@ -39,8 +41,10 @@ the route's own entries for the inputs they set.
 Every result of ``value_company`` cites the policy's version and its settings hash, and is valid
 until the next earnings date when that is after the data date, else for the policy's fallback days.
 Its flags are the assembly's, ``share-count-gap`` (``flags.share_count_flag``, on the market cap,
-the quote's or else the profile's or the screener's, and the quote's price, both USD, and the count
-in force: spec 2026-11-13 8), the classifier's checks and the route's, the first of each code kept;
+the quote's or else the profile's or the screener's, and the quote's price, both USD, and the
+diluted count, an agent's ``shares.diluted`` in its place, without the committed shares, which the
+market cap cannot hold yet: spec 2026-11-13 8 and 2026-11-14 4), the classifier's checks and the
+route's, the first of each code kept;
 ``reprice`` keeps the share-count warning as it was, its ratio not moving with the price. Its
 intermediates hold ``price_facts``, the price columns of spec 6.3, on a refusal too (``None`` for a
 row without a price), and ``trailing_end``, the trailing period end as an ISO date, on every result
@@ -102,7 +106,8 @@ business's own values, before any value outside the business is added.
   runway), ``roic`` (aggregate, years, by_year, each kept year with its
   average_goodwill_and_intangibles), ``runway_return`` (used, marginal, marginal_usable,
   three_year, ten_year, one_year, without_goodwill, value), ``terminal_roic``, ``charge_off``,
-  ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps), ``shares``,
+  ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps), ``shares`` (the count in
+  force, and ``shares_committed`` beside it only under that override, as on every route),
   ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
   ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported, clean, forward: the
   NTM EPS before any cycle gap), ``epv`` (a share), ``dividend_yield``,
@@ -332,32 +337,42 @@ def value_company(
         return refuse(inputs.refusal)
     if phase.phase is None:
         return refuse(phase.reason or "unclassified")
-    price, shares, trailing = inputs.price, _shares(inputs, judged), inputs.trailing
+    price, trailing = inputs.price, inputs.trailing
+    shares, consensus = _shares(inputs, judged)
     if price is None or not _positive(price):
         return refuse("no price")
-    if shares is None or not _positive(shares):
+    if consensus is None or shares is None or not _positive(consensus):
         return refuse("no diluted share count")
     # the route runs in the reporting currency, on the policy's rates restated into it
     local, rate = in_currency(policy, inputs.inflation_differential), inputs.fx_rate
     in_local = replace(inputs, price=price * rate, market_cap=_times(inputs.market_cap, rate))
     if phase.phase == "Start-up":
-        start_up = StartUpContext(in_local, trailing, price * rate, shares, local, today, judged)
+        start_up = StartUpContext(
+            in_local, trailing, price * rate, shares, consensus, local, today, judged
+        )
         return replace(refuse(value_start_up(start_up)), route="start-up")
     if trailing is None:
         return refuse("no trailing figures")
 
-    c = Context(in_local, trailing, price * rate, shares, local, today, phase, judged)
+    c = Context(in_local, trailing, price * rate, shares, consensus, local, today, phase, judged)
     outcome = _route(c, phase.phase)
     if isinstance(outcome, Refused):
         return refuse(outcome)
     return _valued(inputs, phase, price, policy, refresh_id, outcome, judged)
 
 
-def _shares(i: CompanyInputs, overrides: Overrides) -> float | None:
-    """The diluted share count: the override's when ``overrides`` holds one, else the reported
-    count (spec 2026-11-09 8)."""
+def _shares(i: CompanyInputs, overrides: Overrides) -> tuple[float | None, float | None]:
+    """The count in force and the diluted count (spec 2026-11-14 4). The diluted count is the
+    ``shares.diluted`` override's when ``overrides`` holds one, else the reported count (spec
+    2026-11-09 8); the count in force is it plus the ``shares.committed`` override's when
+    ``overrides`` holds one, which is above 0. Both are ``None`` without a diluted count, so the
+    guard refuses as before."""
     override = overrides.get("shares.diluted")
-    return i.shares_diluted if override is None else cast(float, override.value)
+    diluted = i.shares_diluted if override is None else cast(float, override.value)
+    if diluted is None:
+        return None, None
+    committed = overrides.get("shares.committed")
+    return diluted + (0.0 if committed is None else cast(float, committed.value)), diluted
 
 
 def _phase(found: PhaseEvidence, overrides: Overrides) -> PhaseEvidence:
@@ -759,10 +774,11 @@ def _margin_entry(i: CompanyInputs) -> dict[str, Any]:
 
 def _share_count(i: CompanyInputs, overrides: Overrides, policy: Policy) -> tuple[Flag, ...]:
     """``share-count-gap`` on the market cap, the quote's or else the profile's or the screener's,
-    and the quote's price, both in US dollars, and the count in force: an agent's
+    and the quote's price, both in US dollars, and the diluted count: an agent's
     ``shares.diluted``, else the count assembly read after the split rule and the ADR basis rule
-    (spec 2026-11-13 8)."""
-    found = share_count_flag(i.market_cap, i.price, _shares(i, overrides), policy)
+    (spec 2026-11-13 8). It leaves out an agent's committed shares, since the market cap holds no
+    share not yet issued (spec 2026-11-14 4)."""
+    found = share_count_flag(i.market_cap, i.price, _shares(i, overrides)[1], policy)
     return () if found is None else (found,)
 
 

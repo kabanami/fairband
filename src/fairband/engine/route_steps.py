@@ -23,8 +23,15 @@ save on a row the engine started at the return without goodwill, where the moat'
 override (14.4).
 ``outside_value`` is an agent's value outside the business a share, nil without one: each valued
 route adds it to its own value a share, and every solve on the price targets the price less it,
-``business_price``, the business's share of the price (``method.md`` 14.4). The diluted share
-count reaches a route as ``Context.shares``, an agent's count in place of the reported one.
+``business_price``, the business's share of the price (``method.md`` 14.4). The share count
+reaches a route as two counts (spec 2026-11-14 4): ``Context.consensus_shares``, the diluted
+count, an agent's ``shares.diluted`` in place of the reported one, the count the consensus EPS
+and the vendor's figures a share are on; and ``Context.shares``, the count in force, that count
+plus an agent's ``shares.committed``, which divides every value among the owners. Where a figure a
+share from the vendor or the consensus meets a total (Mature Growth's NTM net income and stock pay
+a share, Mature Stable's two gaps), the route reads the first; every value a share divides by the
+second. ``committed_entry`` writes the committed shares beside ``shares`` in a route's
+intermediates, under the override only.
 """
 
 from __future__ import annotations
@@ -97,12 +104,15 @@ _MEASURED = {
 class Context:
     """A company past the guards of ``route.value_company``, with the classifier's evidence that
     put it in its phase (the Decline route reads its revenue trend) and the applied overrides by
-    tag; ``shares`` is the diluted count, an agent's ``shares.diluted`` when one applies."""
+    tag. ``consensus_shares`` is the diluted count, an agent's ``shares.diluted`` when one
+    applies; ``shares`` is the count in force, that count plus an agent's ``shares.committed``
+    (spec 2026-11-14 4)."""
 
     inputs: CompanyInputs
     trailing: TrailingFigures
     price: float
     shares: float
+    consensus_shares: float
     policy: Policy
     today: date
     evidence: PhaseEvidence | None = None
@@ -112,14 +122,16 @@ class Context:
 @dataclass(frozen=True)
 class StartUpContext:
     """A Start-up company past the guards ``route.value_company`` runs before its route: a
-    positive price and diluted share count (an agent's ``shares.diluted`` when one applies), and
-    the trailing figures when there are any, since a pre-revenue company may lack them; and the
-    applied overrides by tag."""
+    positive price and diluted share count, ``consensus_shares`` (an agent's ``shares.diluted``
+    when one applies), and the trailing figures when there are any, since a pre-revenue company
+    may lack them; and the applied overrides by tag. ``shares`` is the count in force, as on a
+    ``Context``."""
 
     inputs: CompanyInputs
     trailing: TrailingFigures | None
     price: float
     shares: float
+    consensus_shares: float
     policy: Policy
     today: date
     overrides: Overrides = field(default_factory=dict)
@@ -315,6 +327,15 @@ def outside_entry(c: Context) -> dict[str, float]:
     """The intermediates' ``outside_value_per_share``, written only under an override, so a
     mechanical result's intermediates do not carry it."""
     return {"outside_value_per_share": outside_value(c)} if "value.outside" in c.overrides else {}
+
+
+def committed_entry(c: Context | StartUpContext) -> dict[str, Any]:
+    """The intermediates' ``shares_committed``, an agent's committed shares, written beside
+    ``shares``, the count in force, under ``shares.committed`` only, so a mechanical result's
+    intermediates do not carry it; the engine's reading of the diluted count is ``shares`` less it
+    (``overrides.current_reading``)."""
+    found = c.overrides.get("shares.committed")
+    return {} if found is None else {"shares_committed": found.value}
 
 
 def business_price(im: dict[str, Any], price: float) -> float:

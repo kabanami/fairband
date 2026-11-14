@@ -653,6 +653,27 @@ def test_override_ranges_read_in_the_currency(policy: Policy) -> None:
     assert sentence == "balance.debt takes 0 TWD or more"
 
 
+def test_the_committed_shares_are_a_count_in_any_currency(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-14 4 on FXCO, 100 m shares in SEK at 8.0: the committed shares are a count,
+    so their range is not scaled by the rate and the refusal names shares, not a currency; 10 m
+    committed shares lower the USD value a share to the mechanical one × 100 ÷ 110, and the
+    JUDGMENT entry is in shares."""
+    sek = {"fx_rate": 8.0, "currency": "SEK"}
+    assert check_input("shares.committed", 1e12, "mature-growth", policy, **sek)[0] == "applied"
+    for count in (2e12, 0.0):
+        assert check_input("shares.committed", count, "mature-growth", policy, **sek) == (
+            "refused-unit",
+            "shares.committed takes above 0 to 1,000,000,000,000 shares",
+        )
+    plain = value_company(fx_inputs(), deciles, policy, TODAY)
+    override = Override(1, "shares.committed", 10e6, "agent", "claude-opus-5-5", NOW, "warrants")
+    more = value_company(fx_inputs(), deciles, policy, TODAY, {"shares.committed": override})
+    assert plain.value is not None and more.value is not None
+    assert more.value == pytest.approx(plain.value * 100 / 110)
+    assert more.intermediates["value_in_currency"] == pytest.approx(more.value * 8.0)
+    assert inputs_of(more)["shares.committed"].unit == "shares"
+
+
 def test_a_scaled_money_end_is_checked_as_it_is_printed(policy: Policy) -> None:
     """A money end × the rate rounds half up to two decimals before the check and prints the
     decimals it has: earnings.nri_gap's ±100 at 32.956 is ±3,295.6, so 3,295.6 passes and

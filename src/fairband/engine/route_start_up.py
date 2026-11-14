@@ -29,12 +29,13 @@ on capital to read (r without all three inputs, when there is no requirement any
 The requirement's reasons, the first that applies: "no target margin: <n> mature peers", "no
 sales-to-capital", "no statutory tax rate", "no market cap", "no revenue reaches the price".
 
-The cash floor and the burn cover. ``cash_floor`` = (cash − debt − minority interest) ÷ diluted
-shares, so ``below-net-cash`` stays the floor's test in total. The burn is −(trailing operating
-cash flow + trailing capital spending) when that sum is below zero; ``burn_cover_years`` is cash
-over the burn, "not burning" when the sum is zero or above, ``None`` without both trailing figures
-or without a cash figure, and then never ``burn-cover-short``: an unknown cash is not a cash of
-nil.
+The cash floor and the burn cover. ``cash_floor`` = (cash − debt − minority interest) ÷ the count
+in force, the diluted shares (an agent's ``shares.diluted`` in their place) plus an agent's
+``shares.committed`` (spec 2026-11-14 4), so ``below-net-cash`` stays the floor's test in total.
+The burn is −(trailing operating cash flow + trailing capital spending) when that sum is below
+zero; ``burn_cover_years`` is cash over the burn, "not burning" when the sum is zero or above,
+``None`` without both trailing figures or without a cash figure, and then never
+``burn-cover-short``: an unknown cash is not a cash of nil.
 
 Intermediates: ``requirement`` (reason, ``None`` when it is computed; revenue_y10; ev_price;
 revenue_0; operating_income_0; target_margin, the revenue-growth route's record of the peers;
@@ -44,8 +45,9 @@ terminal_value; ``None`` where the reason leaves a figure uncomputed), ``cash_fl
 ``burn_cover_years``, ``burn`` (``None`` when not burning), ``debt``, ``cash``,
 ``minority_interest`` (the figure in force), ``balance_sheet`` (the period of the newest balance
 sheet the three were read from, ``route_steps.sheet_entry``), ``cash_known`` (false when no cash
-figure is on file: ``cash`` is then the nil the floor and the requirement count), ``shares``,
-``market_cap``; ``route`` adds ``price_facts``.
+figure is on file: ``cash`` is then the nil the floor and the requirement count), ``shares``
+(the count in force, with ``shares_committed`` beside it under that override), ``market_cap``;
+``route`` adds ``price_facts``.
 
 The rebuild keys: the requirement's revenue_0, operating_income_0, target_margin's value,
 sales_to_capital's value, tax_rate and terminal_roic, with the policy's r and g_T.
@@ -97,6 +99,7 @@ from fairband.engine.route_steps import (
     Refused,
     StartUpContext,
     chosen,
+    committed_entry,
     data,
     debt_and_cash,
     minority,
@@ -161,6 +164,7 @@ def value_start_up(c: StartUpContext) -> Refused:
         **sheet_entry(i),
         "cash_known": cash_line is not None,
         "shares": c.shares,
+        **committed_entry(c),
         "market_cap": i.market_cap,
     }
     flags = (

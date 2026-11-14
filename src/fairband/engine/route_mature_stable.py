@@ -48,9 +48,14 @@ charge", which keeps the value side and the cross-check at the price; the mechan
 positive E, its returns at r or above, is always positive. ``stable_at_price`` reads the price
 and the sum: the multiples and the expected return read them as they are, and the cross-check's
 implied growth, a refusal's too, solves to the price less the figure, the business's share of
-the price. The diluted share count is ``Context.shares``, an agent's ``shares.diluted`` in place
-of the reported count: the non-recurring and cycle gaps come off E on it, and every value a share
-divides by it.
+the price. The diluted share count is ``Context.consensus_shares``, an agent's ``shares.diluted``
+in place of the reported count: the non-recurring and cycle gaps, figures a share, come off E
+as totals on it. Every value a share divides by
+``Context.shares``, the count in force, which adds an agent's ``shares.committed``; E, a total,
+does not move with the committed shares, so x of them on a count of n lower the value a share by
+x ÷ (n + x), and the cross-check's by the same share (spec 2026-11-14 4). The intermediates keep
+``shares``, the count in force, a refusal's too, with ``shares_committed`` beside it under that
+override.
 """
 
 from typing import Any
@@ -71,6 +76,7 @@ from fairband.engine.route_steps import (
     Valued,
     business_price,
     chosen,
+    committed_entry,
     common_inputs,
     common_rules,
     cycle_entry,
@@ -99,7 +105,8 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     i, t, policy = c.inputs, c.trailing, c.policy
     gap = chosen(c, "earnings.nri_gap", nri_gap(i))
     cycle = cycle_gap(c)
-    e = None if t.net_income is None else t.net_income - nil(gap) * c.shares
+    # the two gaps a share are on the diluted count, without committed shares (spec 2026-11-14 4)
+    e = None if t.net_income is None else t.net_income - nil(gap) * c.consensus_shares
     moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
     runway_return: float | None = chosen(c, "return.runway", None)
     roic = RoicTerms.of(i.capital_years, moat, policy, runway_override=runway_return)
@@ -111,7 +118,9 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     if e is not None and flagged and margin is not None and median is not None:
         scaled = normalize_for_margin(e, margin, median, flagged)
     # the cycle gap comes off the E the engine normalized, so the scaling and the correction add
-    e_normalized = scaled if scaled is None or cycle is None else scaled - cycle * c.shares
+    e_normalized = (
+        scaled if scaled is None or cycle is None else scaled - cycle * c.consensus_shares
+    )
     outside = outside_value(c)
     business = c.price - outside  # the business's share of the price
     if e_normalized is None or e_normalized <= 0:
@@ -123,6 +132,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
             **outside_entry(c),
             "eps": eps(t, gap, None),
             "shares": c.shares,
+            **committed_entry(c),
             "moat": moat,
             "growth_route": cross_check_at_price(growth_route, business, c.shares, policy),
             "price_facts": price_facts_for(i.closes, c.price, c.today),
@@ -151,6 +161,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "stable_growth": value,
         "stable_growth_total": stable,
         "shares": c.shares,
+        **committed_entry(c),
         "value_per_share": value,
         **outside_entry(c),
         "eps": eps(t, gap, None),

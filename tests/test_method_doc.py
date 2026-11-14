@@ -27,8 +27,18 @@ def test_section_14_names_every_override_tag() -> None:
     assert "`override_ranges`" in section
     assert "`override_primary_evidence_above_p90`" in section
     # rule 2 counts the tags in words
-    assert len(get_args(OverrideTag)) == 21
-    assert "A tag that is not one of the twenty-one:" in section
+    assert len(get_args(OverrideTag)) == 22
+    assert "A tag that is not one of the twenty-two:" in section
+
+
+def test_the_share_count_gap_reads_the_count_without_the_committed_shares() -> None:
+    """Spec 2026-11-14 4 and the controller's ruling on Task 2: the note reads the diluted count
+    without an agent's committed shares, which the market cap cannot hold yet."""
+    row = next(line for line in _section(8).splitlines() if line.startswith("| `share-count-gap`"))
+    assert (
+        "it leaves out an agent's committed shares (`shares.committed`, 14.4), since the market "
+        "cap holds no share not yet issued"
+    ) in row
 
 
 def test_section_15_names_the_bounds_and_the_two_versions() -> None:

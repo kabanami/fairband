@@ -585,18 +585,22 @@ def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
     assert twelve.index(sentence) < twelve.index("Submit with `report_submit`")
 
 
-def test_the_overrides_table_names_the_twenty_one_inputs() -> None:
-    """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1) and spec 2026-11-13 7.2 and 13: the
-    skill's overrides table names the twenty-one inputs the engine takes, each once, with the
-    routes that read it; the share count is period-tied only and moves the next twelve months' net
-    income with it, so the agent reads the consensus EPS's share basis first; the value outside
-    the business is after tax, and its gains come out of the earnings through the non-recurring
-    gap, so nothing counts twice; the stock pay is a total from the filing's cash flow statement,
-    period-tied, or lasting at 0 alone (spec 2026-11-13 7.3), and the stock-pay basis rests on
-    the release's definition of its adjusted EPS; the minority interest is a total, period-tied
-    only, for a market value or a redeemable stake the line leaves out, from the filing's note on
-    non-controlling or redeemable interests; the bridge's lines run in the engine's order, the
-    minority interest's after cash; the tool list counts the twenty-one, and says that the
+def test_the_overrides_table_names_the_twenty_two_inputs() -> None:
+    """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1), spec 2026-11-13 7.2 and 13 and spec
+    2026-11-14 4: the skill's overrides table names the twenty-two inputs the engine takes, each
+    once, with the routes that read it; the share count is period-tied only and moves the next
+    twelve months' net income with it, so the agent reads the consensus EPS's share basis first;
+    the committed shares, shares neither the count nor the analysts' EPS holds yet, are
+    period-tied only, from the filing that commits them, dilute the value a share by x ÷ (n + x)
+    and bring their cash through another input; the value outside the business is after tax, and
+    its gains come out of the earnings through the non-recurring gap, so nothing counts twice; the
+    stock pay is a total from the filing's cash flow statement, period-tied, or lasting at 0 alone
+    (spec 2026-11-13 7.3), and the stock-pay basis rests on the release's definition of its
+    adjusted EPS; the minority interest is a total, period-tied only, for a market value or a
+    redeemable stake the line leaves out, from the filing's note on non-controlling or redeemable
+    interests; the bridge's lines run in the engine's order, the minority interest's after cash
+    and the committed shares' after the count's; the passage no longer says that a raised count
+    barely moves a Mature Growth value; the tool list counts the twenty-two, and says that the
     write's refusal of a lasting nil stores nothing."""
     skill = _read(SKILL)
     table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
@@ -607,7 +611,7 @@ def test_the_overrides_table_names_the_twenty_one_inputs() -> None:
         phases = set(PHASES) if routes == "every route" else {p for p in PHASES if p in routes}
         for tag in named:
             assert phases == {p for r in TAGS[tag].routes for p in ROUTE_PHASES[r]}, tag
-    assert len(tags) == len(set(tags)) == 21 and set(tags) == set(TAGS)
+    assert len(tags) == len(set(tags)) == 22 and set(tags) == set(TAGS)
     shares = _flat(" ".join(table["`shares.diluted`"]))
     for words in (
         "period-tied only",
@@ -615,6 +619,21 @@ def test_the_overrides_table_names_the_twenty_one_inputs() -> None:
         "read the consensus EPS's own share basis first",
     ):
         assert words in shares, words
+    committed = _flat(" ".join(table["`shares.committed`"]))
+    for words in (
+        "neither the diluted count nor the analysts' EPS holds yet",
+        "x ÷ (n + x)",
+        "the filing that commits them",
+        "`balance.cash` or `value.outside`",
+        "above 0 shares; period-tied only",
+    ):
+        assert words in committed, words
+    # a raised count no longer reads as barely moving a Mature Growth value (spec 2026-11-14 4)
+    for words in (
+        "the value a share moves only through the stock compensation a share",
+        "a raised count does not dilute the value",
+    ):
+        assert words not in _flat(skill), words
     outside = _flat(" ".join(table["`value.outside`"]))
     for words in (
         "after tax",
@@ -653,12 +672,13 @@ def test_the_overrides_table_names_the_twenty_one_inputs() -> None:
     order = ", ".join(LABELS[tag] for tag in BRIDGE_ORDER)
     assert f"The lines run in the method's order: {order}." in _flat(skill)
     assert order.endswith(
-        "moat, debt, cash, minority interest, diluted shares, outside the business"
+        "moat, debt, cash, minority interest, diluted shares, committed shares, outside the business"
     )
     entry = _tool_entry("override_add")
     for words in (
-        "twenty-one",
+        "twenty-two",
         "`shares.diluted`",
+        "`shares.committed`",
         "`value.outside`",
         "`balance.minority`",
         # the write's own refusal of a lasting nil answers the sentence alone (spec 2026-11-13 7.3)
@@ -1000,6 +1020,9 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         # plan 1, its Minor 4): a class the count leaves out, and why a share-count warning stays
         "a share class or units that convert to shares that the count leaves out",
         "Where `share-count-gap` stays because the market cap leaves a class out",
+        # shares not yet issued, through their own input (spec 2026-11-14 4)
+        "`shares.committed`, with the filing that commits them",
+        "x ÷ (n + x)",
         # the stock pay's basis with its passage, and a nil the filings confirm, set lasting
         "**The stock pay**, on Mature Growth",
         "whether the company's adjusted EPS leaves out stock pay",

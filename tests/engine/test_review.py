@@ -278,6 +278,63 @@ def test_a_count_that_reconciles_the_market_cap_clears_the_share_count_gap(
     assert "a ratio of 2.30," in gap.sentence
 
 
+def test_the_committed_shares_line_follows_the_count_s_line(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 4 on MGCO, 1,000 m shares. Given first, the committed shares apply after the
+    diluted count: the count at 1,100 m raises year 1 with it and leaves the value a share; then 60
+    m committed shares, their old value the engine's nil, lower it to the mechanical value ×
+    1,100 ÷ 1,160. The deltas sum to the reviewed value less the mechanical one, and the engine's
+    reading of the diluted count on the review's result is the count without the committed
+    shares."""
+    inputs = mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.value is not None
+    overrides = [OVERRIDE("shares.committed", 60e6, 2), OVERRIDE("shares.diluted", 1_100e6, 1)]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    assert [line.tag for line in review.bridge] == ["shares.diluted", "shares.committed"]
+    count, committed = review.bridge
+    assert (count.old, count.new, count.override_id) == (1_000e6, 1_100e6, 1)
+    assert count.delta == pytest.approx(0.0, abs=1e-9)
+    assert (committed.old, committed.new, committed.override_id) == (0.0, 60e6, 2)
+    assert committed.delta == pytest.approx(mechanical.value * (1_100 / 1_160 - 1))
+    assert review.result.value is not None
+    assert review.result.value == pytest.approx(mechanical.value * 1_100 / 1_160)
+    assert count.delta is not None and committed.delta is not None
+    assert count.delta + committed.delta == pytest.approx(
+        review.result.value - mechanical.value, abs=1e-9
+    )
+    assert review.result.intermediates["shares"] == 1_160e6
+    assert current_reading(review.result, "shares.diluted") == 1_100e6
+    judged = [(i.name, i.unit) for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert judged == [("shares.diluted", "shares"), ("shares.committed", "shares")]
+    assert result_from_json(result_to_json(review.result)) == review.result
+
+
+def test_the_share_count_gap_reads_the_count_without_the_committed_shares(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """The market's capitalization holds no share not yet issued, so ``share-count-gap`` reads the
+    diluted count without the committed shares. MGCO's market cap is the price times its count:
+    500 m committed shares, a count in force of 1,500 m against which the ratio would be 0.67, raise
+    no warning. On MGCO at 4.6 times the market cap, 3,600 m committed shares do not clear it, and
+    the sentence names the count of 1,000.0 million shares."""
+    base = mature_growth_inputs()
+    assert base.market_cap is not None
+    mechanical = value_company(base, deciles, policy, TODAY)
+    assert "share-count-gap" not in _codes(mechanical)
+    many = [OVERRIDE("shares.committed", 500e6)]
+    review = review_company(base, deciles, policy, TODAY, many, mechanical)
+    assert review.result.value is not None and "share-count-gap" not in _codes(review.result)
+    inputs = replace(base, market_cap=base.market_cap * 4.6)
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    reconciling = [OVERRIDE("shares.committed", 3_600e6)]
+    review = review_company(inputs, deciles, policy, TODAY, reconciling, mechanical)
+    [gap] = [f for f in review.result.flags if f.code == "share-count-gap"]
+    assert "the diluted count of 1,000.0 million shares" in gap.sentence
+    assert "a ratio of 4.60," in gap.sentence
+
+
 def _excluding(street: float = 8.50) -> CompanyInputs:
     """MGCO with a street trailing EPS of ``street``. Its after-tax stock pay a share is 400 m ×
     0.75 ÷ 1,000 m = 0.30, so the test reads excludes-sbc at a gap over GAAP 5.30 of 0.15 or

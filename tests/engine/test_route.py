@@ -1204,7 +1204,7 @@ def test_mature_stable_cross_check_present_with_a_path(
         priced = replace(inputs, price=price)
         r = value_company(priced, deciles, policy, TODAY)
         gr = r.intermediates["growth_route"]
-        c = Context(priced, inputs.trailing, price, 1_000e6, policy, TODAY)
+        c = Context(priced, inputs.trailing, price, 1_000e6, 1_000e6, policy, TODAY)
         own = route_mature_growth.value_mature_growth(c)
         assert isinstance(own, Valued) and own.value != r.value
         im = own.intermediates
@@ -2347,6 +2347,208 @@ def test_a_share_count_override_passes_the_share_guard(
     assert_refused(value_company(none, deciles, policy, TODAY), "no diluted share count")
     r = value_company(none, deciles, policy, TODAY, judged(("shares.diluted", 1_000e6)))
     assert r.value == value_company(mg_inputs, deciles, policy, TODAY).value
+
+
+def _cited(r: ValuationResult, name: str) -> Any:
+    """The input ``name`` the result cites."""
+    [found] = [x for x in r.inputs if x.name == name]
+    return found
+
+
+def test_committed_shares_dilute_a_mature_growth_value(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-14 4 on MGCO, 1,000 m shares at an NTM EPS of $5.90: 60 m committed shares
+    leave year 1 on the count the consensus is on, $5.90 × 1,000 m = 5,900 m, and the value a
+    share divides by the count in force, 1,060 m, so it is the fixture's × 1,000 ÷ 1,060, 60 ÷
+    1,060 lower. The stock-pay adjustment, the basis and the two consensus DATA entries stand.
+    With a ``shares.diluted`` of 1,100 m as well, year 1 is $5.90 × 1,100 m = 6,490 m, the count in
+    force 1,160 m and the value a share the fixture's × 1,100 ÷ 1,160."""
+    inputs = engine_companies.mature_growth_inputs()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    more = value_company(inputs, deciles, policy, TODAY, judged(("shares.committed", 60e6)))
+    assert plain.value is not None and more.value is not None
+    assert more.value == pytest.approx(plain.value * 1_000 / 1_060)
+    im = more.intermediates
+    assert im["ntm_net_income"] == pytest.approx(5_900e6)
+    assert im["ntm_net_income"] == plain.intermediates["ntm_net_income"]
+    assert (im["shares"], im["shares_committed"]) == (1_060e6, 60e6)
+    assert im["value_total"] == pytest.approx(plain.intermediates["value_total"])
+    for key in ("anchor", "sbc_basis", "sbc_ttm"):
+        assert im[key] == plain.intermediates[key], key
+    for name in ("ntm_eps", "ntm_net_income"):
+        assert _cited(more, name) == _cited(plain, name), name
+    both = value_company(
+        inputs,
+        deciles,
+        policy,
+        TODAY,
+        judged(("shares.diluted", 1_100e6), ("shares.committed", 60e6)),
+    )
+    assert both.intermediates["ntm_net_income"] == pytest.approx(6_490e6)
+    assert both.intermediates["shares"] == 1_160e6
+    assert both.value == pytest.approx(plain.value * 1_100 / 1_160)
+
+
+def test_committed_shares_leave_the_stock_pay_a_share_on_the_consensus_count(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """MGCO at a street EPS of $8.50 reads excludes-sbc: its after-tax stock pay a share is 400 m
+    × 0.75 ÷ 1,000 m = $0.30, which comes off the consensus, and the gap of $3.20 over GAAP $5.30
+    is more than 10 times it, so ``sbc-basis-uncertain`` gives reason 3. Under 60 m committed
+    shares the adjustment and the note stay on the consensus's count, $0.30, so the value a share
+    is the fixture's × 1,000 ÷ 1,060; a ``shares.diluted`` of 1,060 m would read $0.28."""
+    inputs = replace(engine_companies.mature_growth_inputs(), street_ttm_eps=8.50)
+    plain = value_company(inputs, deciles, policy, TODAY)
+    more = value_company(inputs, deciles, policy, TODAY, judged(("shares.committed", 60e6)))
+    assert plain.intermediates["sbc_basis"] == "excludes-sbc"
+    assert plain.intermediates["anchor"]["sbc_adjustment_per_share"] == pytest.approx(0.30)
+    assert more.intermediates["anchor"] == plain.intermediates["anchor"]
+    assert plain.value is not None and more.value is not None
+    assert more.value == pytest.approx(plain.value * 1_000 / 1_060)
+    [note] = [f.sentence for f in more.flags if f.code == "sbc-basis-uncertain"]
+    assert "the stock pay of $0.30 a share after tax" in note
+    for name in ("ntm_eps", "ntm_net_income"):
+        assert _cited(more, name) == _cited(plain, name), name
+
+
+def test_committed_shares_dilute_a_mature_stable_value_and_its_cross_check(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """MSCO, 1,000 m shares, a non-recurring gap of $0.10 a share and here a cycle gap of $0.20:
+    E is 3,400 m − ($0.10 + $0.20) × 1,000 m = 3,100 m, a total on the count the gaps are on, so
+    100 m committed shares leave it and lower the value a share by 100 ÷ 1,100, the fixture's ×
+    1,000 ÷ 1,100. With the growth company's consensus, the cross-check's value falls by the same
+    share, its NTM net income on the consensus's count."""
+    inputs = _with_consensus(
+        engine_companies.mature_stable_inputs(), engine_companies.mature_growth_inputs()
+    )
+    gap = ("earnings.cycle_gap", 0.20)
+    plain = value_company(inputs, deciles, policy, TODAY, judged(gap))
+    more = value_company(inputs, deciles, policy, TODAY, judged(gap, ("shares.committed", 100e6)))
+    assert plain.value is not None and more.value is not None
+    assert more.value == pytest.approx(plain.value * 1_000 / 1_100)
+    im = more.intermediates
+    assert im["e_normalized"] == pytest.approx(3_100e6)
+    for key in ("e_trailing", "e_normalized", "epv_total", "stable_growth_total"):
+        assert im[key] == plain.intermediates[key], key
+    assert (im["shares"], im["shares_committed"]) == (1_100e6, 100e6)
+    gr, found = im["growth_route"], plain.intermediates["growth_route"]
+    assert gr["ntm_net_income"] == found["ntm_net_income"]
+    assert gr["value_per_share"] == pytest.approx(found["value_per_share"] * 1_000 / 1_100)
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        engine_companies.high_growth_inputs,
+        engine_companies.decline_inputs,
+        engine_companies.start_up_inputs,
+    ],
+)
+def test_committed_shares_on_a_firm_value_route_add_to_the_count(
+    build: Callable[[], CompanyInputs], policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 4: on the revenue-growth, Decline and Start-up routes the committed shares
+    add to the count that divides the equity and the floors, and nothing else moves: 10% of the
+    count committed gives the result of a diluted count of 110% of it, in value, levels, flags and
+    every intermediate but ``shares_committed``; the inputs differ in the share entries alone, the
+    reported count's DATA entry standing beside the committed shares' JUDGMENT entry."""
+    inputs = build()
+    count = value_company(inputs, deciles, policy, TODAY).intermediates["shares"]
+    x = 0.1 * count
+    raised = value_company(inputs, deciles, policy, TODAY, judged(("shares.diluted", count + x)))
+    more = value_company(inputs, deciles, policy, TODAY, judged(("shares.committed", x)))
+    assert (more.intermediates["shares"], more.intermediates["shares_committed"]) == (count + x, x)
+    assert (more.value, more.levels, more.designation, more.refusal) == (
+        raised.value,
+        raised.levels,
+        raised.designation,
+        raised.refusal,
+    )
+    assert more.flags == raised.flags
+    kept = {k: v for k, v in more.intermediates.items() if k not in {"shares", "shares_committed"}}
+    assert kept == {k: v for k, v in raised.intermediates.items() if k != "shares"}
+
+    def unshared(r: ValuationResult) -> list[Any]:
+        return [x for x in r.inputs if "shares" not in x.name]
+
+    assert unshared(more) == unshared(raised)
+    shares = [(x.name, x.tag) for x in more.inputs if "shares" in x.name]
+    assert shares == [("shares_diluted", "DATA"), ("shares.committed", "JUDGMENT")]
+
+
+def test_committed_shares_lower_a_revenue_growth_row_s_cross_check(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 4 and method 6.4: the cross-check follows on every row that carries one.
+    HGCO, 100 m shares, with a positive consensus (an NTM EPS of $5.40, net income 500 m to 700 m)
+    values its cross-check. 10 m committed shares give the value a diluted count of 110 m gives,
+    but the cross-check's NTM net income stays on 100 m, 540 m, so its value a share falls by 10 ÷
+    110, where under the raised count its net income rises with the count and its value stands."""
+    q, a = engine_companies.quarter, engine_companies.annual
+    inputs = replace(
+        engine_companies.high_growth_inputs(),
+        quarter_estimates=(
+            q(date(2026, 12, 31), 2026, "Q4", 1.20, 2_800e6),
+            q(date(2027, 3, 31), 2027, "Q1", 1.30, 3_000e6),
+            q(date(2027, 6, 30), 2027, "Q2", 1.40, 3_200e6),
+            q(date(2027, 9, 30), 2027, "Q3", 1.50, 3_400e6),
+        ),
+        annual_estimates=(
+            a(2027, 500e6, 5.00, 8, 13_000e6, 20),
+            a(2028, 600e6, 6.00, 8, 16_000e6, 15),
+            a(2029, 700e6, 7.00, 8, 19_200e6, 12),
+        ),
+    )
+    plain = value_company(inputs, deciles, policy, TODAY)
+    raised = value_company(inputs, deciles, policy, TODAY, judged(("shares.diluted", 110e6)))
+    more = value_company(inputs, deciles, policy, TODAY, judged(("shares.committed", 10e6)))
+    assert plain.route == "revenue-growth" and more.value == raised.value
+    found, kept = plain.intermediates["growth_route"], raised.intermediates["growth_route"]
+    gr = more.intermediates["growth_route"]
+    assert found["refusal"] is None and found["ntm_net_income"] == pytest.approx(540e6)
+    assert gr["ntm_net_income"] == found["ntm_net_income"]
+    assert gr["value_per_share"] == pytest.approx(found["value_per_share"] * 100 / 110)
+    assert kept["value_per_share"] == pytest.approx(found["value_per_share"])
+    assert more.intermediates["eps"] == raised.intermediates["eps"]  # no stock pay to charge
+
+
+def test_a_price_refresh_rebuilds_a_value_under_committed_shares(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """A stored Mature Growth result under 60 m committed shares, repriced at $120, equals a fresh
+    valuation at $120: the rebuild reads year 1 on the consensus's count and the count in force
+    from the intermediates. The implied growth is solved on the count in force: at a price equal
+    to the value a share it is the belief."""
+    inputs = engine_companies.mature_growth_inputs()
+    plain = value_company(inputs, deciles, policy, TODAY)
+    committed = judged(("shares.committed", 60e6))
+    r = value_company(inputs, deciles, policy, TODAY, committed)
+    assert r.value is not None and plain.value is not None
+    assert r.value == pytest.approx(plain.value * 1_000 / 1_060)
+    stored = result_from_json(result_to_json(r))
+    assert stored.intermediates["shares_committed"] == 60e6
+    day = date(2026, 11, 2)
+    moved = reprice(stored, 120.0, day, policy)
+    fresh = value_company(
+        replace(inputs, price=120.0, price_date=day), deciles, policy, TODAY, committed
+    )
+    assert (moved.value, moved.levels, moved.designation) == (
+        fresh.value,
+        fresh.levels,
+        fresh.designation,
+    )
+    for key in (
+        "implied_growth",
+        "implied_growth_by_runway",
+        "implied_by_roic",
+        "multiples",
+        "growth_share",
+        "expected_return",
+    ):
+        assert moved.intermediates[key] == fresh.intermediates[key], key
+    at_value = reprice(stored, r.value, day, policy)
+    belief = r.intermediates["belief"]["rate"]
+    assert at_value.intermediates["implied_growth"] == pytest.approx(belief, abs=1e-6)
 
 
 # --- Reprice ------------------------------------------------------------------------------------
