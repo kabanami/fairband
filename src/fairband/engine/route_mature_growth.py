@@ -14,11 +14,12 @@ before the trailing ones, where the ``heavy-capex`` sentence names the return th
 and ``consensus-basis-unknown`` follows ``large-nri``. The two stock-pay notes,
 ``stock-pay-missing`` and ``sbc-basis-uncertain``, follow the anchor's flags (spec 2026-11-13
 7.1), on the anchor's refusal "no positive forward anchor" too, which a stock-pay charge can
-itself cause, each silent under the input that decides it. ``thin-ntm`` (spec 2026-11-13 9), a
-note on an NTM window with a period of fewer than ``analyst_min`` EPS analysts or no count, takes
-the place right after ``few-analysts``, silent under an applied ``earnings.ntm``, whose anchor is
-the guidance. ``charge`` in the intermediates records the growth paid for, the return by year,
-the hold and the revenue steps as found; ``sbc_ttm`` the trailing stock pay the anchor read.
+itself cause, each silent under the input that decides it and both under an applied
+``earnings.ntm``, whose anchor is the guidance. ``thin-ntm`` (spec 2026-11-13 9), a note on an
+NTM window with a period of fewer than ``analyst_min`` EPS analysts or no count, takes the place
+right after ``few-analysts``, silent under an applied ``earnings.ntm`` for the same reason.
+``charge`` in the intermediates records the growth paid for, the return by year, the hold and the
+revenue steps as found; ``sbc_ttm`` the trailing stock pay the anchor read.
 
 The value is also computed at each policy runway and at each return of the sensitivity, and so is
 the implied growth at the price. The sensitivity is keyed ``"runway"``, the row's own charge;
@@ -491,7 +492,12 @@ def _stock_pay_notes(c: Context, anchor: Anchor, gap: float | None) -> tuple[Fla
     else the stored figure) and GAAP EPS less an agent's correction to the non-recurring gap,
     ``large-nri`` read from the row's own non-recurring gap ``gap``. A note is silent under the
     input that decides it, the agent having decided (spec 7.1): ``stock-pay-missing`` under an
-    applied ``earnings.sbc``, ``sbc-basis-uncertain`` under an applied ``earnings.sbc_basis``."""
+    applied ``earnings.sbc``, ``sbc-basis-uncertain`` under an applied ``earnings.sbc_basis``.
+    Both are silent under an applied ``earnings.ntm``, as ``thin-ntm`` is: the guided EPS stands
+    in for the consensus less the stock-pay adjustment, so neither stock-pay input moves the value
+    (spec 7.2)."""
+    if "earnings.ntm" in c.overrides:
+        return ()
     i, t, policy = c.inputs, c.trailing, c.policy
     assert i.tax_rate_latest is not None  # the route refused without a statutory rate
     missing = None

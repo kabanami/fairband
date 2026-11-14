@@ -259,6 +259,11 @@ NEW_INTERMEDIATES = (
     "runway_return/one_year",
     "outside_value_per_share",
 )
+# Each stock-pay note's entry under a guided anchor (the controller's ruling on the whole-branch
+# review of the research round's plan 1, its Minor 2): the note is silent, the inputs moot.
+GUIDED_STOCK_PAY = (
+    "Under an applied `earnings.ntm` the note does not show, and neither stock-pay input is needed"
+)
 # Terms the example's Summary writes as their phrase, never by name.
 SUMMARY_FREE = (
     "belief",
@@ -721,7 +726,13 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         ),
         (
             "stock-pay-missing",
-            ("cash flow statements", "`earnings.sbc`", "period-tied", "once `earnings.sbc`"),
+            (
+                "cash flow statements",
+                "`earnings.sbc`",
+                "period-tied",
+                "once `earnings.sbc`",
+                GUIDED_STOCK_PAY,
+            ),
         ),
         (
             "sbc-basis-uncertain",
@@ -730,6 +741,7 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "the release",
                 "`earnings.sbc_basis`",
                 "once `earnings.sbc_basis`",
+                GUIDED_STOCK_PAY,
             ),
         ),
         (

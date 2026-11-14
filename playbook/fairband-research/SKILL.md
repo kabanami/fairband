@@ -362,13 +362,17 @@ Twelve flags ask for a decision of yours. Read each sentence whole: it names its
   short, and the charge on the analysts' EPS with it. The sentence names that fiscal year and its
   figure. Read the stock pay in the cash flow statements of the trailing periods' filings, and
   decide through `earnings.sbc`, period-tied (the second of the two steps below). The note does
-  not show once `earnings.sbc` applies.
+  not show once `earnings.sbc` applies. Under an applied `earnings.ntm` the note does not show,
+  and neither stock-pay input is needed: the guided EPS stands in for the analysts' EPS less the
+  charge.
 - `sbc-basis-uncertain`: on Mature Growth, the engine's test of whether the analysts' EPS leaves
   out stock pay may misread. The sentence gives each reason that holds: a large one-time item
   that may hide the gap, a low tax rate that may close it, or a street EPS so far above GAAP
   that the adjusted figure leaves out far more than stock pay. Read the company's own definition
   of its adjusted EPS in the release, and decide through `earnings.sbc_basis` (the first of the
-  two steps below). The note does not show once `earnings.sbc_basis` applies.
+  two steps below). The note does not show once `earnings.sbc_basis` applies. Under an applied
+  `earnings.ntm` the note does not show, and neither stock-pay input is needed: the guided EPS
+  stands in for the analysts' EPS less the charge.
 - `thin-ntm`: on Mature Growth, a period the analysts' NTM EPS sums has fewer than `analyst_min`
   EPS analysts (`policy()`), or no count, so the earnings the value starts from rest on thin
   evidence. The sentence gives how many of the window's periods are thin, the smallest count and

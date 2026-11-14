@@ -369,6 +369,34 @@ def test_a_stock_pay_input_under_an_ntm_anchor_moves_nothing(
     assert im["anchor"]["ntm_eps"] == 6.10
 
 
+def test_the_stock_pay_notes_do_not_show_under_a_guided_anchor(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """The controller's ruling on the whole-branch review's Minor 2: under an applied
+    ``earnings.ntm`` the guided EPS stands in for the consensus less the stock-pay adjustment, so
+    both stock-pay inputs are moot (spec 2026-11-13 7.2) and neither note shows, as ``thin-ntm``
+    does not. MGCO with one trailing quarter at nil while fiscal 2025 shows $500 m, and a
+    non-recurring gain of 0.50 a share (9.4% of the trailing EPS of 5.30, so ``large-nri``), on a
+    test that reads includes-sbc (5.35 less 5.30 is under half of 400 × 0.75 ÷ 1,000 = 0.30) on a
+    material stock pay (0.30 is 5.6% of 5.35): the mechanical row carries both notes. A review
+    under another input keeps them."""
+    inputs = replace(
+        mature_growth_inputs(), stock_pay=StockPayHistory(1, 2025, 500e6), gf_eps_without_nri=4.80
+    )
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    notes = {"stock-pay-missing", "sbc-basis-uncertain"}
+    assert notes <= set(_codes(mechanical))
+    guided = review_company(
+        inputs, deciles, policy, TODAY, [OVERRIDE("earnings.ntm", 6.10)], mechanical
+    )
+    assert guided.result.value is not None
+    assert not notes & set(_codes(guided.result))
+    belief = review_company(
+        inputs, deciles, policy, TODAY, [OVERRIDE("growth.belief", 0.08)], mechanical
+    )
+    assert notes <= set(_codes(belief.result))
+
+
 def test_the_thin_ntm_note_does_not_show_under_a_guided_anchor(
     policy: Policy, deciles: Deciles
 ) -> None:
