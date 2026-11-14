@@ -2285,14 +2285,15 @@
   /* Counts and years read whole. P/E multiples to one decimal with x. A figure a share (EPV, the
      value, the value in the reporting currency, EPS, the non-recurring gap, the 52-week prices,
      the value maps by runway and by ROIC, whatever the entry's key) reads to cents; a total
-     (NOPAT, invested capital, net income, earnings, anything at a million or more) to whole
-     units. The rate reads as a rate. Any other number to two decimals. */
+     (NOPAT, invested capital, net income, earnings, the trailing stock pay, nil or not, anything
+     at a million or more) to whole units. The rate reads as a rate. Any other number to two
+     decimals. */
   var COUNT = /^(years?|base_year|runway|fade_years|analysts|shares)$/;
   var MULTIPLE = /^pe_/;
   var PER_SHARE =
     /^(epv|value_per_share|value_in_currency|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
   var PER_SHARE_GROUP = /^(eps$|value_by_)/;
-  var TOTAL = /(_total|nopat|average_capital|net_income)$|^e_/;
+  var TOTAL = /(_total|nopat|average_capital|net_income|sbc_ttm)$|^e_/;
   /* On a row in another currency every money figure is in it (spec 2026-11-10 7.2) but the price
      facts, read from the USD closes, and the peers' market caps, which rank the peers. */
   var USD_GROUPS = /^(price_facts|peers)$/;
@@ -2338,15 +2339,18 @@
     return String(v);
   }
 
-  /* One group per top-level key: a table's entries, with a nested table flattened one level. EPV
-     below zero capitalises a trailing loss, which also puts the growth share above 100%; its line
-     says so, so the reader is not misled. The money figures are in the row's currency, its
-     `currency`, USD on a row that names none. */
+  /* One group per top-level key: a table's entries, with a nested table flattened one level, an
+     empty table left out (a margin record with no year). EPV below zero capitalises a trailing
+     loss, which also puts the growth share above 100%; its line says so, so the reader is not
+     misled. The money figures are in the row's currency, its `currency`, USD on a row that names
+     none. A nested table reads by its own key, except the margin record's (`margin_history`'s
+     `operating` and `net`), which reads as a margin: its medians percentages, its years whole. */
   function intermediates(im) {
     var code = im.currency;
     return Object.keys(im).map(function (key) {
       var v = im[key];
       var rows = [];
+      if (isTable(v) && !Object.keys(v).length) return null;
       if (key === 'epv' && v < 0) {
         rows.push([key, noted(shown(v, key, null, code), 'negative: trailing earnings are a loss'),
           true]);
@@ -2355,8 +2359,9 @@
       } else {
         Object.keys(v).forEach(function (k) {
           if (!isTable(v[k])) return rows.push([k, shown(v[k], k, key, code), true]);
+          var group = key === 'margin_history' ? 'margin' : k;
           Object.keys(v[k]).forEach(function (kk) {
-            rows.push([k + '.' + kk, shown(v[k][kk], kk, k, code), true]);
+            rows.push([k + '.' + kk, shown(v[k][kk], kk, group, code), true]);
           });
         });
       }
