@@ -8,7 +8,10 @@ taken on that word, but for one: the design check found that a full refresh drop
 period-tied correction, and the founder ruled on it (section 11a). Items marked *my call* were
 settled by Claude while writing and can be overturned as the others can. Builder check: see the
 status line at the end of the log. Plan 1 is built and live since 2026-11-14 (method 1.3, policy
-v13, main `6cba2e0`), with its readout in the decision log; plan 2 is not started.
+v13, main `6cba2e0`), with its readout in the decision log. On that readout the founder ruled on
+three open questions on 2026-11-14 (B-175, B-180, B-181), each on Claude's recommendation; they
+are sections 9a, 8a and 7.3 and join plan 2, whose plan is
+`docs/superpowers/plans/2026-11-14-research-round-plan-2.md`. Plan 2 is not built.
 
 This document amends `docs/method.md` (the method as built) in sections 2, 4.1, 4.2, 5.2, 5.11,
 5.12, 5a.2, 5a.9, 5a.13, 5a.14, 6.5, 6a.5, 6a.6, 6a.7, 6a.10, 6b.2, 6b.4, 6b.6, 8, 10, 11, 14.2
@@ -18,8 +21,11 @@ commits, and that document stays the statement of what runs.
 
 ## 1. What this is
 
-Nine changes in two plans. Each plan has its own method version, its own policy version and its
-own live step, so each readout shows one cause.
+Twelve changes in two plans: the nine of 2026-11-13, and three the founder ruled on plan 1's
+readout on 2026-11-14. Each plan has its own method version, its own policy version and its own
+live step, so each readout shows one cause. Plan 2 now holds two causes of a moved value, and its
+readout keeps them apart by route: the balance sheet moves the revenue-growth, Decline and
+Start-up rows, and the anchor rule moves Mature Growth rows.
 
 **Plan 1: what the store already holds, read better.** Method `fairband-mechanical/1.3`, policy
 `fairband-policy-v13`, applied by one revalue. No vendor call.
@@ -49,6 +55,13 @@ applied by one full refresh, which fetches one more dataset per company.
    cash and the liquidation floor read the newest sheet on file, a year's or a quarter's.
 9. **The minority interest** (B-174). The routes that value the firm subtract the minority
    interest at book before the value a share. An agent may correct the figure.
+10. **The NTM anchor on a thin window** (B-175, section 9a). Where a period of the NTM window
+    has fewer than 5 EPS analysts, year 1 reads the annual estimates, weighted by the window's
+    periods, when those have 5 analysts or more. `thin-ntm` then fires only where neither does.
+11. **A lasting nil stock pay** (B-181, section 7.3). `earnings.sbc` may be lasting at 0, for a
+    company that pays no stock. `stock-pay-missing` stays as built.
+12. **A reviewed row's flags** (B-180, section 8a). Where a review fills a row, the screen and
+    the drawer show the review's flags. No value changes in 11 and 12.
 
 ## 2. Goals
 
@@ -63,8 +76,9 @@ applied by one full refresh, which fetches one more dataset per company.
 
 ## 3. Non-goals
 
-- No change to how the NTM anchor is summed (B-175's other options). The note comes first; the
-  anchor is decided after plan 1's revalue shows the corrected rows.
+- In plan 1, no change to how the NTM anchor is summed (B-175's other options). The note came
+  first; the founder decided the anchor on plan 1's readout, and plan 2 builds it (section 9a).
+  No change to the NTM revenue of the revenue-growth and Decline routes.
 - No change to the share count the engine divides by (B-162's other options). ROAD shows that
   the market cap can be the wrong figure.
 - No refetch of a cash flow statement when a release is newer (B-116's second half). The new
@@ -83,8 +97,10 @@ applied by one full refresh, which fetches one more dataset per company.
 - A flag that changes a value. Sections 7.1, 8 and 9 add words to a row and nothing else.
 - A threshold fitted to the reported companies. Each new threshold is a policy value with its
   count on the whole screen beside it (section 5).
-- A mature row that moves in plan 2. Mature Growth and Mature Stable read no balance sheet line
-  for their value; a scratch revalue proves it (section 17).
+- A mature row that the balance sheet moves in plan 2. Mature Growth and Mature Stable read no
+  balance sheet line for their value; a scratch revalue proves it (section 17). A Mature Stable
+  value does not move at all. A Mature Growth value moves only by the anchor rule of section 9a,
+  on a thin window whose annual figure exists.
 - An override an agent made that silently stops meaning what it said. Section 12.4 says what
   happens to each balance correction on file.
 
@@ -193,7 +209,7 @@ and 60 rows. In a review, `sbc-basis-uncertain` does not show under an applied
 
 | Tag | Routes | Takes | Lifetime | Bridge label |
 |---|---|---|---|---|
-| `earnings.sbc` | Mature Growth | the trailing stock pay, a total in the reporting currency, 0 or more | period-tied only | stock pay |
+| `earnings.sbc` | Mature Growth | the trailing stock pay, a total in the reporting currency, 0 or more | period-tied only in plan 1; from plan 2 also lasting at 0 (7.3) | stock pay |
 | `earnings.sbc_basis` | Mature Growth | `includes` or `excludes` | lasting or period-tied | stock-pay basis |
 
 `earnings.sbc` replaces the stored trailing figure wherever the anchor reads it: the test and
@@ -208,6 +224,34 @@ The playbook asks the agent, in every Mature Growth report, to read the company'
 of its adjusted EPS in the release, to state whether it leaves out stock pay, and to set
 `earnings.sbc_basis` with that passage as evidence when the row's reading differs. It asks for
 `earnings.sbc` from the filing's cash flow statement when `stock-pay-missing` shows.
+
+### 7.3 A lasting nil (B-181)
+
+The founder's ruling of 2026-11-14, built in plan 2. `stock-pay-missing` stays as built: on plan
+1's readout it shows on 308 rows, and on the 242 with a nil trailing period the stored figure is
+short, so the note is right there. A limit by the fiscal year's age would hide AZN, whose newest
+year with stock pay on file is fiscal 2023 and whose filings show stock pay. What changes is the
+repeat work for a company that pays no stock: `earnings.sbc` is period-tied, so its agent would
+set a nil again each period.
+
+**The rule.** `earnings.sbc` may be lasting when its value is 0, and only then: the company pays
+no stock. A lasting figure other than 0 is refused, as now, with a sentence that names the
+lasting form. A lasting 0 is also refused at the write where the snapshot's own trailing stock
+pay reads above zero (*my call*): the store contradicts it, and the period-tied form is the one
+for a period the vendor has wrong. A snapshot with no reading (a row refused before its route
+wrote one) takes it.
+
+**Its life.** A lasting 0 holds across periods. Before a recompute at a full or scoped refresh
+or a revalue it drops, by the system, when the store's trailing stock pay is above zero: "the
+store holds a trailing stock pay above zero". A trailing figure that is nil, or missing because
+a period lacks the line, keeps it. The test reads the assembled trailing figure, not the
+result's `sbc_ttm`, which a row refused before its route does not carry.
+
+**What it does.** As any applied `earnings.sbc`: the anchor reads 0 for the stock pay, and
+`stock-pay-missing` does not show. It is a rule in code, not a policy value.
+
+The playbook's step for `stock-pay-missing` gains one sentence: where the filings show nil too,
+the agent sets a lasting `earnings.sbc` of 0 with the filing as evidence.
 
 ## 8. The share-count check (B-162)
 
@@ -226,6 +270,29 @@ reads the count in force, so a `shares.diluted` that reconciles the two clears i
 It is a quality warning, the twelfth (*my call*): the value a share of such a row can be wrong
 by the ratio, so the row leaves the Clean filter and counts in the Warnings column.
 
+## 8a. A reviewed row's flags (B-180)
+
+The founder's ruling of 2026-11-14, built in plan 2. Plan 1 left a reviewed row's flags the
+snapshot's, as every flag was before; its flags are the first that an input settles, so SYM
+still counted `share-count-gap` after its `shares.diluted` reconciled the count (ratio 1.005 in
+the review). It amends method 8 and 14.5.
+
+**The rule.** Where a review fills the screen's Reviewed column (it counts on the latest
+snapshot and has a value, method 14.5), the row's Flags column and its Warnings count read the
+flags of the review's result, and with the count the Clean filter and the sort by warnings. The
+drawer's flag list reads them too, under a line that says they are the review's. A review's
+result is stored whole, so the read computes nothing and the store gains no column.
+
+**What stays the snapshot's.** A row that a secondary valuation fills: it has no flags. A row
+whose review refuses. The Clean filter's other condition, a value from the engine (*my call*: a
+row the engine refused is not clean, whatever a review made of it). The inputs and intermediates
+the drawer shows behind Details, and the Start-up section's `below-net-cash` test, which reads
+the snapshot's own figures. The refresh's calibration counts.
+
+**To the agent.** The `screen` tool's rows are the page's, so they follow. The `company` tool's
+`review` record gains the review's flags, each with its code, word and sentence, so an agent
+reads what its inputs settled without writing an override.
+
 ## 9. The thin-consensus note (B-175)
 
 **`thin-ntm`**, "Thin NTM consensus", a note. On a Mature Growth row whose NTM window holds a
@@ -233,6 +300,63 @@ period with fewer than `analyst_min` (5) EPS analysts, or with no count. The sen
 number of such periods, the smallest count and its period. It does not show in a review under an
 applied `earnings.ntm`, whose anchor is the guidance. The window's quarters carry the count
 already (`QuarterEstimate.analysts`).
+
+## 9a. The NTM anchor on a thin window (B-175)
+
+The founder's ruling of 2026-11-14, on plan 1's readout: the note of section 9 fires on 636 of
+the 748 valued Mature Growth rows, so no threshold makes it a signal, and the anchor changes
+instead. Built in plan 2, under method 1.4. It amends method 5.2 and 5.11.
+
+**The rule.** The NTM window is found as now, and each of its periods still needs an EPS mean.
+The window is thin when one of its periods has fewer than `analyst_min` (5) EPS analysts or no
+count, as section 9 reads it. On a thin window, where the annual figure exists:
+
+    NTM EPS raw = Σ over the fiscal years y of the window's periods of
+                  annual EPS mean of y × (the window's periods in y ÷ the periods in a year)
+
+with four periods in a year on the quarterly cadence and two on the half-yearly one. A calendar
+company whose last reported quarter is the third reads a quarter of this year's annual estimate
+and three quarters of the next year's. A window that is one fiscal year reads that year's annual
+estimate.
+
+**The annual figure exists** when every fiscal year the window's periods carry has an annual
+consensus row with an EPS estimate (a mean of zero with no analyst count, or a count of zero, is
+no estimate, as method 5.3 has it) on `analyst_min` EPS analysts or more. A period's fiscal year
+and an annual row's are the labels the path already matches by (method 5.3). Where the annual
+figure does not exist, the sum of the periods stands, as today.
+
+**What stays.** A window that is not thin keeps the sum of its periods (AAPL: 6 to 15 analysts a
+quarter). The stock-pay test and its adjustment, the scale by the window's revenue, the refusals,
+`earnings.ntm` and `earnings.cycle_gap` read the raw figure so found, as now. The base year and
+the path are untouched. The NTM revenue of the revenue-growth and Decline routes stays the sum of
+the window's revenue means (*my call*: B-175 and the count on file are the EPS's).
+
+**Where it reaches.** Every reading of the anchor of method 5.2: the Mature Growth value, the
+growth-route cross-check of a Mature Stable or a revenue-growth row, and the forward EPS of the
+revenue-growth route's multiples (*my call*: one rule wherever the anchor is read). Only the
+first moves a value.
+
+**The error it accepts.** The weights by periods assume each year's earnings spread evenly. For
+a company with seasons the error is the season's share of the year above or below an even share,
+times the growth from one year to the next. A window that takes one quarter of this year, where
+that quarter earns 40% of the year and earnings grow 10%, reads 1.075 of this year's earnings
+where the periods give 1.06: about 1.4% high. A thin quarter's own error is of that size or more
+(AZN's reading of 3%), and has no bound.
+
+**The note.** `thin-ntm` now fires only where year 1 still rests on thin evidence: the window is
+thin and the annual figure does not exist. Its sentence keeps section 9's words and names why
+the annual consensus does not stand in: the first such fiscal year, in order, with its EPS
+analyst count, "no analyst count" or "no annual EPS estimate".
+
+**What the result records.** The route's `anchor` intermediate gains `source` (`periods` or
+`annual`), `periods_sum` (the sum of the window's EPS means, on either source) and, on `annual`,
+`annual`: each fiscal year with its weight, its EPS mean and its analyst count. The DATA entries
+`ntm_eps` and `ntm_net_income` cite the annual estimates and carry the weights as their note
+when the source is `annual`.
+
+**The founder decides on the readout.** The scratch run of section 17 lists what the rule moves
+before the live step. The rule is one task and its own commits, so it can be left out of the
+merge.
 
 ## 10. The runway return's range (B-178)
 
@@ -389,7 +513,9 @@ v13 adds four values, none a setting: `sbc_material_share` 0.02, `sbc_basis_tax_
 `sbc_basis_gap_multiple` 10, `share_count_gap_band` 0.7 to 1.3. Its `override_ranges` gain
 `earnings.sbc` (0 to 10^15, the stand-in for no upper bound) and change `return.runway` to 0.0
 to 5.0. `earnings.sbc_basis` takes words and has no range. v14 adds `balance.minority` (0 to
-10^15). Each source line names this spec and its section.
+10^15). Each source line names this spec and its section. Sections 7.3, 8a and 9a add no policy
+value: the anchor rule reads `analyst_min`, which v13 holds, and the lasting nil is a rule in
+code.
 
 No database migration is needed: a tag, a state and a dataset are text, and the schema has no
 check constraint on them.
@@ -411,6 +537,13 @@ check constraint on them.
   citations and tools references.
 - `docs/backlog.md`: each row closed moves to Done with its commits; B-106 closes as built;
   what a review parks goes in as new rows.
+- For sections 7.3, 8a and 9a, in plan 2: `docs/method.md` 5.2 and 5.11 (the anchor's source and
+  the note's new condition and sentence), 5.12, 5a.14 and 6.5 (the `anchor` entry and the cited
+  estimates), 8 (whose flags a reviewed row shows), 14.2 to 14.6 (the lasting 0 and its drop)
+  and 14.5 (the row and the drawer under a review); the Methodology page where it states the
+  NTM anchor, the life of an override and what a reviewed row shows; the playbook's entries for
+  `thin-ntm`, `stock-pay-missing` and `earnings.sbc`, its lifetimes, and its tools reference for
+  `screen` and `company`.
 
 ## 16. Tests the builder must write
 
@@ -446,7 +579,22 @@ Plan 2:
   when not presented; rebuilt at a price refresh.
 - `balance.minority` applies, bridges and drops as the other balance corrections do.
 - A period-tied `balance.cash` drops when a newer sheet changes the reading.
-- A Mature Growth and a Mature Stable golden are bit for bit under 1.3 and 1.4.
+- A Mature Stable golden keeps its value, levels and refusal under 1.4, and so does a Mature
+  Growth golden whose window is not thin or whose annual figure does not exist.
+- The anchor (9a): a thin window with annual rows on 5 analysts or more reads the weighted
+  annual figure, hand-worked for a window in two fiscal years and in one, on quarters and on
+  half-years; a window with no thin period keeps its sum; an annual year with fewer than 5 EPS
+  analysts, with no count or with no estimate keeps the sum and raises `thin-ntm` naming that
+  year; the stock-pay adjustment and the refusals read the figure so found; `earnings.ntm`
+  still stands in for it; a Mature Stable row's cross-check and a revenue-growth row's forward
+  EPS follow, and neither row's value moves.
+- The lasting nil (7.3): a lasting `earnings.sbc` of 0 applies; a lasting figure above 0 is
+  refused; a lasting 0 is refused at the write on a snapshot whose trailing stock pay reads
+  above zero; it stays applied when a newer period is on file; it drops with its sentence when
+  the store's trailing figure is above zero, and stays on a nil and on a missing one.
+- A reviewed row (8a): the row's flags and count are the review's; a row a secondary valuation
+  fills and a row whose review refuses keep the snapshot's; the drawer's `review` record carries
+  the flags; the Clean filter still needs a value from the engine.
 
 ## 17. Acceptance and the readouts
 
@@ -474,7 +622,15 @@ log.
 **Plan 2, one full refresh.**
 - The vendor check of 12.3.
 - A scratch store that holds the new dataset, revalued under 1.3 and under 1.4: every Mature
-  Growth and Mature Stable row bit for bit; every other row's move listed.
+  Stable row, and every Mature Growth row whose anchor stays on its periods, identical in value,
+  levels and refusal; every other row's move listed, by cause.
+- The anchor (9a), read by the founder before the live step, who decides with it whether the
+  rule merges: the Mature Growth rows by the anchor's source; the rows where `thin-ntm` still
+  fires, by reason; the moves of the value (the median, the share within 2% and within 5%, the
+  ten largest each way named with the anchor before and after); AZN and RELX named; the rows
+  that newly refuse or newly value; each review whose value moved.
+- A reviewed row (8a): SYM's row no longer counts `share-count-gap`; the count of rows whose
+  flags now differ from their snapshot's.
 - The revenue-growth, Decline and Start-up rows: how many read a quarter's sheet, the sheet's
   median age before and after, the ten largest moves named, the rows that newly refuse or newly
   value.
@@ -505,8 +661,9 @@ and the playbook; the scratch revalue and the live step.
 
 Plan 2: the vendor check; policy v14 and the 1.4 rows; the dataset, its normalizer and the
 backfill; the newest balance sheet in assembly and its readers; the minority interest in the
-three routes; `balance.minority`; the drawer, the Methodology page and the playbook; the scratch
-runs and the live step.
+three routes; `balance.minority`; the anchor on a thin window, as its own commits; the lasting
+nil; a reviewed row's flags; the drawer, the Methodology page and the playbook; the scratch
+runs, the founder's reading of the anchor's readout, and the live step.
 
 ## 20. Sources
 
@@ -541,6 +698,12 @@ runs and the live step.
 | 2026-11-14 | Readout of plan 1: the values. Against the 1.2 control, 1,574 rows are identical in phase, route, value, levels and refusal, and 24 moved. Each of the 24 has a changed consensus input (`ntm_eps` and `ntm_net_income` on 19, `ntm_revenue` on 4, a path step on 6) and no row moved without one. AAP −52.7% ($18.66 to $8.83, Decline: under 1.2 its consensus read "no usable consensus" and years 1 to 3 shrank at the decline rate; under 1.3 the window is whole, NTM revenue $8.61 billion, steps +2.1% to +3.4%), CNR −13.6%, MTSI +13.1% (its period ends moved from 3 Oct to 2 Oct between answers), LITE +11.3%, FN +7.2%, AAPL +4.9% ($187.28 to $196.51), AMD +4.2% ($329.34 to $343.34), LDOS −3.9%, FBIN −2.5%, TXRH −2.3%, KTOS −1.9%, CALX −1.4%, MSI +1.0%, QCOM +0.9%, ON +0.8%, VVX +0.8%, HNI −0.5%, ITT +0.3%, PFGC −0.3%, MDLN −0.2%, SWK +0.1%, WTS +0.1%, KTB −0.0%. CAVA is newly valued ($5.11; under 1.2 "incomplete NTM consensus"). Here the result differs from this design: no row newly refuses, where section 6 expected some (a row whose newest answer lacks a period that an old row supplied). AAPL's NTM EPS is $9.2807, the sum of its newest answer's four quarters ($9.3197 before), as section 17 asked. Against the live snapshots of refresh 57 (a price refresh), 135 rows moved: the 24, and 111 rows of companies that report in another currency, on which only the exchange rate and the market cap changed. The cause is not method 1.3, and the 1.2 control moves the same 111: a revalue read the rate of 11 Nov 2026 where the price refresh 57 had read the pair's quote of 13 Nov 2026. ABEV: BRL 5.6422 at refresh 57, BRL 5.5626 at refreshes 56 and 58, the value $2.1065 at 57 and $2.1367 at 56 and 58; ASML: 0.9041 against 0.9016, $2,801.69 against $2,809.46. The moves are up to 1.6%. Filed as B-182. Claude. |
 | 2026-11-14 | Readout of plan 1: the four flags against section 5. `share-count-gap`: 32 rows (18 valued, 14 refused); SYM 4.54, ANDG 8.48, EROK 4.10, EE 3.46, TKO 0.37; ROAD absent; as expected. `sbc-basis-uncertain`: 135 rows, all valued Mature Growth; the one-time-item reason on 50, the low-tax reason on 44, the gap reason on 60 (19 rows hold the first two together); as expected. `stock-pay-missing`: 308 rows (300 valued Mature Growth, 8 refused): 66 with a nil trailing figure (section 5 counted 64) and 242 with a nil trailing period; the trailing period's year less the newest fiscal year above zero is 0 on 26 rows, 1 on 164, 2 on 74, 3 or more on 44 (up to 11); how often it should fire is B-181. `thin-ntm`: 645 rows (636 of the 748 valued Mature Growth rows, 9 refused); the thinnest period has 1 analyst on 359 rows, 2 on 100, 3 on 140, 4 on 44, a count of 0 on 2; the window is thin in 1 of 4 periods on 45 rows, 2 of 4 on 239, 3 of 4 on 126, 4 of 4 on 227, 2 of 2 on 8. Here the result differs from this design: section 17 expected near 310. Section 5's counts, 310 with a quarter below 5 analysts and 164 below 3, were miscounted: an independent count from the stored quarterly estimates gives 636 and 452 of the 748 valued Mature Growth rows under the one-answer read, and 626 and 448 under the read before 1.3. The note is right by its rule; the anchor of five rows in six rests on a thin period. B-175 now holds the corrected counts. Claude. |
 | 2026-11-14 | Readout of plan 1: the intermediates, the scratch checks and the overrides. `margin_history` is on all 1,433 routed rows (a net median on 1,404; empty on 29 with no year of revenue above zero) and on 163 rows refused before a route; ASML's ten-year net margin reads 26.0% and TTMI's 3.1%, as B-164 worked them. `trailing_end` is on all but 2 rows (no statements). On the scratch copy only: NVS under `earnings.sbc_basis` = `includes`: NTM EPS $9.5405 to $9.7957, the $0.2552 a share given back, the reviewed value $170.24 to $174.80, and `sbc-basis-uncertain` gone from the review. CLS under `excludes`: applied, the charge on at $0.9371 a share, the value unchanged at $272.54 with a bridge line of zero, since its `earnings.nri_gap` already made the test read `excludes`. AAPL's sensitivity holds 332.6% with a value in each cell; 5.01 is refused ("return.runway takes above 0% to 500%"). The overrides: the ten period-tied (SYM 22 and 23, CLS 36 to 38, FRVO 42 and 43, RKLB 54 to 56) are all still applied, with no drop for a newer period; the 43 lasting are all still applied; the revalue dropped none. Of the 27 reviews it wrote, 21 are unchanged; AMD's reviewed value moved +6.8% ($205.05 to $219.04) and QCOM's +0.9% ($240.69 to $242.94) by the consensus; ASML's, NVO's, RELX's and TSM's moved by 0.1% to 0.3% by the exchange rate. The Methodology page's six examples (Microsoft, Coca-Cola, CrowdStrike, Roku, 3M, Revolution Medicines) are identical under 1.3. Owed after the live step: every research session restarts its MCP process (or reconnects `fairband`) to read the new flags and inputs; a price refresh brings the 111 rows back to the newest rate. Claude. |
+| 2026-11-14 | The price refresh the readout owed ran on the founder's word: refresh 59, the prices of 13 Nov 2026 and each pair's quote of 14 Nov 2026 on all 139 rows with a rate. 111 values moved against refresh 58, by −1.9% (SBSW) to +0.7% (PAC), and no row without a rate moved; four reviewed values moved with the rate (ASML, NVO, RELX, TSM, by 0.1% to 0.6%). B-182 stays open. Claude. |
+| 2026-11-14 | B-175: the anchor changes, not the note. On a window with a thin period, year 1 reads the annual estimates weighted by the window's periods, where each has 5 EPS analysts or more; `thin-ntm` then fires only where year 1 still rests on thin evidence (section 9a). The founder, on Claude's recommendation, after plan 1's readout showed the note on 636 of 748 valued Mature Growth rows and the thinnest period at one analyst on 359. It joins plan 2 under method 1.4, as its own commits, and the founder reads the scratch readout of its moves before the live step. |
+| 2026-11-14 | B-180: where a review fills a row, the screen's Flags, Warnings and Clean and the drawer's flags follow the review, as the levels do since 2026-11-08 (section 8a). The founder, on Claude's recommendation. This replaces the line of the build's rulings above that left them the snapshot's. |
+| 2026-11-14 | B-181: `stock-pay-missing` stays as built, and `earnings.sbc` gains a lasting form at 0 for a company that pays no stock (section 7.3). The founder, on Claude's recommendation, which set aside a limit by the fiscal year's age because it would hide AZN. |
+| 2026-11-14 | Settled by Claude while writing sections 7.3, 8a and 9a, each open to the founder. The annual figure stands in only where every year it reads has `analyst_min` EPS analysts or more, so the rule never trades a thin quarter for a thin year. The weights are the window's periods in each fiscal year over the periods in a year, by the fiscal-year labels the path matches by. The rule reaches every reading of the anchor (the Mature Growth value, the growth-route cross-check, the revenue-growth route's forward EPS) and not the NTM revenue of the revenue-growth and Decline routes. The stock-pay scale keeps the window's revenue. A lasting 0 is refused at the write where the snapshot's stock pay reads above zero, and drops when the store's trailing figure is above zero. The Clean filter keeps its condition of a value from the engine. A row that a secondary valuation fills keeps the snapshot's flags. |
+| 2026-11-14 | Plan 2 written (`docs/superpowers/plans/2026-11-14-research-round-plan-2.md`, twelve tasks) on a map of the code as it stands. Settled by Claude where sections 12 and 13 met the code, each open to the founder. The quarterly sheet stays out of the data date and of the `statements` input's stamps (method 4.10), so no mature row's stored result moves with it; the newest sheet is cited under a key of its own, `balance_sheet`, whose `as_of` is the sheet's period end. The period goes on the entries' notes and never into the notes that raise `line-not-presented`. Each quarterly sheet in another currency is skipped and the newest of the rest stands against the annual one. The vendor's zero for goodwill and intangibles reads as not presented on a quarterly sheet, as on an annual one. The floor's two entries are `floor_current_assets` and `floor_total_liabilities`, and `line-not-presented:totalLiabilities` follows the floor's sheet. The Decline `equity` entry subtracts the minority interest, `distress_proceeds` stays the fraction of the firm value plus cash, and `ncav_per_share` is the floor a share, less the minority interest. The DATA entry `minority_interest` holds the line as presented and the intermediate the figure in force. The four glossary rows of method 13 and of the report change with section 13. The secondary valuation's default debt and cash follow the newest sheet, and it gains no minority term (section 3). The drawer shows the minority interest's row only above zero. The vendor check of 12.3 adds DXC, for the minority interest's line: ten calls. A balance correction drops at the first refresh under 1.4 as "a newer period is on file" where the company's trailing period moved, since that test comes first (section 11a); a correction whose own period is newer than the sheet the engine now reads drops for a changed reading too, and the readout lists each for its agent to make again. The scratch run widens the reuse window on the scratch store only, so it fetches the one new dataset, and compares two revalues on the same stored answers, one under 1.3 and one under 1.4, so the exchange rate of B-182 is the same in both. |
 
 Builder check: done 2026-11-13, one round (Opus 5.5, xhigh). It found two statements about the
 method that were wrong (the drop rule of 12.4; a refusal for an override that moves nothing,
