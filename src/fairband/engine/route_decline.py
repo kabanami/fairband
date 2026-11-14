@@ -107,6 +107,7 @@ from fairband.engine.anchor import TrailingFigures, base_fiscal_year, moat_class
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Series, operating_margin
 from fairband.engine.distress import FScore, Rating, ZScore, altman_z, ncav, piotroski_f, rate
+from fairband.engine.flags import millions
 from fairband.engine.multiples import epv
 from fairband.engine.revenue_growth import (
     newest_sales_to_capital,
@@ -139,7 +140,6 @@ from fairband.engine.route_steps import (
     expected,
     from_capital,
     income,
-    millions,
     money,
     multiples_at,
     nil,

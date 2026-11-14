@@ -10,6 +10,7 @@ from support import engine_companies
 from support.stable_value import stable_dcf
 
 from fairband.engine import METHOD_VERSION, route_mature_growth
+from fairband.engine.anchor import StockPayHistory
 from fairband.engine.classifier import Deciles
 from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
@@ -546,6 +547,40 @@ def test_flags_in_order_without_duplicates(
         "value-spread",
     ]
     assert r.flags[1] == flag("equity-raise")
+
+
+def test_the_stock_pay_notes_follow_the_anchor_s_flag(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-13 7.1: ``stock-pay-missing`` takes the place right after the one
+    ``sbc-basis-unknown`` takes, and ``sbc-basis-uncertain`` follows it, both before the path's
+    flags. MGCO's trailing stock pay at zero with fiscal 2025 at $380 m, no street EPS: the basis
+    is unknown and the stock pay missing. Then one quarter at zero, a non-recurring gain of 0.50
+    a share (9.4% of the trailing EPS of 5.30, so ``large-nri``), and the test reading
+    includes-sbc (5.35 less 5.30 is under half of 400 × 0.75 ÷ 1,000 = 0.30) on a material stock
+    pay (0.30 is 5.6% of 5.35): reason 1 holds. Neither note moves the value."""
+    assert mg_inputs.trailing is not None
+    thin = replace(mg_inputs.annual_estimates[2], analysts_net_income=3)  # few-analysts, the path
+    base = replace(mg_inputs, annual_estimates=(*mg_inputs.annual_estimates[:2], thin))
+    zero = replace(
+        base,
+        trailing=replace(mg_inputs.trailing, sbc=0.0),
+        street_ttm_eps=None,
+        stock_pay=StockPayHistory(4, 2025, 380e6),
+    )
+    r = value_company(zero, deciles, policy, TODAY)
+    assert codes(r)[:3] == ["sbc-basis-unknown", "stock-pay-missing", "few-analysts"]
+    assert "fiscal 2025 shows $380.0 million" in r.flags[1].sentence
+    plain = value_company(replace(zero, stock_pay=None), deciles, policy, TODAY)
+    assert codes(plain)[:2] == ["sbc-basis-unknown", "few-analysts"] and plain.value == r.value
+
+    one_quarter = replace(base, stock_pay=StockPayHistory(1, 2025, 500e6), gf_eps_without_nri=4.80)
+    r = value_company(one_quarter, deciles, policy, TODAY)
+    assert r.intermediates["sbc_basis"] == "includes-sbc"
+    assert codes(r)[:3] == ["stock-pay-missing", "sbc-basis-uncertain", "few-analysts"]
+    assert {"large-nri", "consensus-basis-unknown"} <= set(codes(r))
+    without = value_company(replace(one_quarter, stock_pay=None), deciles, policy, TODAY)
+    assert "stock-pay-missing" not in codes(without) and without.value == r.value
 
 
 def test_income_needs_a_market_cap(

@@ -129,7 +129,7 @@ from fairband.engine.anchor import (
     ntm_window,
     sales_class,
 )
-from fairband.engine.flags import value_spread_flag
+from fairband.engine.flags import millions, value_spread_flag
 from fairband.engine.multiples import epv, growth_share
 from fairband.engine.overrides import OverrideTag
 from fairband.engine.revenue_growth import (
@@ -170,7 +170,6 @@ from fairband.engine.route_steps import (
     expected,
     from_capital,
     income,
-    millions,
     money,
     multiples_at,
     nil,

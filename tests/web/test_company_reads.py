@@ -272,7 +272,7 @@ def test_quarters_lists_the_newest_stored_quarters(client: TestClient) -> None:
     assert trailing["revenue"]["value"] == 1300 * M
     plain = {"period_end", "fiscal_year", "fiscal_period"}
     names = [f for f in QuarterFigures.__dataclass_fields__ if f not in plain]
-    assert len(names) == 12  # the trailing figures' lines
+    assert len(names) == 14  # the trailing figures' lines
     for quarter in quarters:
         assert set(quarter) == {"period", *map(_camel, plain), *map(_camel, names)}
         for name in names:

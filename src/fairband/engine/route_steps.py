@@ -535,10 +535,3 @@ def signed(x: float) -> str:
     """A rate as a percent to one decimal with the thousands grouped, a negative one with the
     minus sign."""
     return f"{x:,.1%}".replace("-", "−")
-
-
-def millions(x: float, currency: str = "USD") -> str:
-    """A money figure in millions to one decimal, a negative one with the minus sign: a dollar
-    figure after ``$``, one in another currency after its code (``SEK 1,234.5 million``)."""
-    sign = "$" if currency == "USD" else f"{currency} "
-    return f"{'−' if x < 0 else ''}{sign}{abs(x) / 1e6:,.1f} million"

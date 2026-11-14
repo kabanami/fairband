@@ -16,6 +16,20 @@ The consensus-basis note follows ``large-nri`` on the mature routes (spec 2026-1
 consensus names no basis, so whether the NTM anchor and the path carry the non-recurring items
 is unknown.
 
+The two stock-pay notes follow the anchor's flags on Mature Growth (spec 2026-11-13 7.1).
+``stock-pay-missing``: the trailing stock pay is zero, or a trailing period's is, while a fiscal
+year on file holds stock pay above zero, so the stored figure, and the stock-pay charge on the
+consensus with it, may be nil or short. ``sbc-basis-uncertain``: the basis test may misread, one
+sentence for each reason that holds. Stock pay is material when its after-tax figure a share is
+``sbc_material_share`` of a street trailing EPS above zero or more. Reason 1: the test reads
+``includes-sbc`` on a material stock pay with ``large-nri`` on the row, a one-time item that may
+sit in GAAP EPS and hide the gap. Reason 2: the same reading on a material stock pay with a
+trailing effective tax rate, income tax over a pre-tax income above zero, at or below
+``sbc_basis_tax_share`` of the statutory rate, a low tax that may close the gap. Reason 3: the
+test reads ``excludes-sbc`` on a stock pay above zero and the street EPS lies above GAAP by
+``sbc_basis_gap_multiple`` times the after-tax stock pay a share or more, so the adjusted figure
+leaves out far more than stock pay.
+
 ``QUALITY_WARNINGS`` are the eleven flags that say the value may be wrong because the business or
 its figures are unusual (spec 2026-11-04 9.5); ``flag_count`` counts them on a row. Every other
 flag is a note: the classifier checks, the thin-consensus flags, the unknown inputs, the engine's
@@ -25,7 +39,7 @@ mechanics and the bookkeeping flags. A note is shown and never counted.
 import statistics
 from collections.abc import Sequence
 
-from fairband.engine.anchor import TrailingFigures
+from fairband.engine.anchor import SbcBasis, StockPayHistory, TrailingFigures
 from fairband.engine.classifier import Series, operating_margin
 from fairband.engine.types import Flag
 from fairband.policy import Policy
@@ -162,6 +176,100 @@ def basis_unknown_flag(
         "carry such items is unknown; a report that reads the filing decides, through "
         "`earnings.nri_gap`, and on Mature Growth `earnings.ntm`.",
     )
+
+
+def stock_pay_missing_flag(
+    sbc_ttm: float | None, history: StockPayHistory | None, currency: str = "USD"
+) -> Flag | None:
+    """``stock-pay-missing`` when the trailing stock pay ``sbc_ttm`` is zero, or ``history``
+    counts a trailing period at zero, while a fiscal year holds stock pay above zero: the
+    sentence names the newest such year and its figure in the reporting ``currency``. ``None``
+    without the trailing figure, without a history, or with no fiscal year above zero."""
+    if sbc_ttm is None or history is None:
+        return None
+    year, figure = history.newest_year, history.newest_figure
+    if year is None or figure is None or (sbc_ttm != 0 and history.zero_periods == 0):
+        return None
+    shows = f"while fiscal {year} shows {millions(figure, currency)}"
+    if sbc_ttm == 0:
+        sentence = (
+            f"The trailing stock pay is nil {shows}, so the stored figure may be missing and the "
+            "stock-pay charge on the consensus nil."
+        )
+    else:
+        n = history.zero_periods
+        periods = "1 trailing period" if n == 1 else f"{n} trailing periods"
+        sentence = (
+            f"The stock pay is nil in {periods} {shows}, so the trailing figure may be short, and "
+            "the stock-pay charge on the consensus with it."
+        )
+    return Flag("stock-pay-missing", "Stock pay missing", sentence)
+
+
+def sbc_basis_uncertain_flag(
+    basis: SbcBasis,
+    t: TrailingFigures,
+    street_ttm_eps: float | None,
+    shares: float,
+    tax_rate: float,
+    large_nri: bool,
+    policy: Policy,
+) -> Flag | None:
+    """``sbc-basis-uncertain`` when the stock-pay basis test may misread (the module docstring),
+    one sentence for each reason that holds, joined by a space: the after-tax stock pay a share is
+    ``t.sbc`` × (1 − ``tax_rate``) ÷ ``shares``, as the anchor reads it, and ``large_nri`` says
+    whether ``large-nri`` is on the row. ``None`` when no reason holds, or without the stock pay,
+    the street EPS or a positive share count."""
+    if t.sbc is None or street_ttm_eps is None or shares <= 0:
+        return None
+    per_share = t.sbc * (1 - tax_rate) / shares
+    material = street_ttm_eps > 0 and per_share >= policy.sbc_material_share * street_ttm_eps
+    reasons: list[str] = []
+    if basis == "includes-sbc" and material:
+        reads = (
+            f"The basis test reads the consensus as counting stock pay, {per_share:,.2f} a share "
+            f"after tax and {per_share / street_ttm_eps:.1%} of street trailing EPS, while"
+        )
+        if large_nri:
+            reasons.append(
+                f"{reads} a large non-recurring item on the row may sit in GAAP EPS and hide the "
+                "gap."
+            )
+        effective = _effective_tax_rate(t)
+        if effective is not None and effective <= policy.sbc_basis_tax_share * tax_rate:
+            reasons.append(
+                f"{reads} a trailing tax rate of {effective:.1%}, at or below "
+                f"{policy.sbc_basis_tax_share:.1%} of the statutory {tax_rate:.1%}, may close the "
+                "gap."
+            )
+    gaap = t.eps_diluted
+    if basis == "excludes-sbc" and per_share > 0 and gaap is not None:
+        gap = street_ttm_eps - gaap
+        if gap >= policy.sbc_basis_gap_multiple * per_share:
+            reasons.append(
+                f"The street trailing EPS is {gap:,.2f} above the GAAP one, "
+                f"{gap / per_share:,.1f} times the stock pay of {per_share:,.2f} a share after "
+                "tax: the adjusted figure leaves out far more than stock pay, and the figures "
+                "cannot say whether it leaves out stock pay too."
+            )
+    if not reasons:
+        return None
+    return Flag("sbc-basis-uncertain", "Stock-pay basis uncertain", " ".join(reasons))
+
+
+def _effective_tax_rate(t: TrailingFigures) -> float | None:
+    """The trailing income tax over the trailing pre-tax income; ``None`` without both, or on a
+    pre-tax income at or below zero."""
+    if t.income_tax is None or t.pretax_income is None or t.pretax_income <= 0:
+        return None
+    return t.income_tax / t.pretax_income
+
+
+def millions(x: float, currency: str = "USD") -> str:
+    """A money figure in millions to one decimal, a negative one with the minus sign: a dollar
+    figure after ``$``, one in another currency after its code (``SEK 1,234.5 million``)."""
+    sign = "$" if currency == "USD" else f"{currency} "
+    return f"{'−' if x < 0 else ''}{sign}{abs(x) / 1e6:,.1f} million"
 
 
 def long_runway_flag(

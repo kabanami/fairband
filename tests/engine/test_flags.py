@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from fairband.engine.anchor import TrailingFigures
+from fairband.engine.anchor import SbcBasis, StockPayHistory, TrailingFigures
 from fairband.engine.classifier import FiscalYear, Series
 from fairband.engine.flags import (
     QUALITY_WARNINGS,
@@ -14,6 +14,8 @@ from fairband.engine.flags import (
     margin_flag,
     median_margin,
     nri_flag,
+    sbc_basis_uncertain_flag,
+    stock_pay_missing_flag,
     value_spread_flag,
 )
 from fairband.engine.roic import Used
@@ -257,6 +259,102 @@ def test_consensus_basis_unknown_follows_large_nri(policy: Policy) -> None:
     assert nri is not None and flag_count((nri, note)) == 1  # a note: only large-nri counts
     negative = basis_unknown_flag(nri_flag(-0.60, 5.00, policy), -0.60, 5.00)
     assert negative is not None and "is −$0.60 a share, 12.0% of trailing EPS" in negative.sentence
+
+
+# Spec 2026-11-13 7.1: 96 million shares, a statutory rate of 25% and a trailing stock pay of $32
+# million, so the after-tax stock pay a share is 32 × 0.75 ÷ 96 = 0.25.
+_T = replace(trailing(), sbc=32e6, eps_diluted=12.5, income_tax=100.0, pretax_income=800.0)
+
+
+def _uncertain(
+    basis: SbcBasis, t: TrailingFigures = _T, street: float = 12.5, nri: bool = False
+) -> Flag | None:
+    return sbc_basis_uncertain_flag(basis, t, street, 96e6, 0.25, nri, load_policy())
+
+
+def test_stock_pay_missing_names_the_newest_year_above_zero() -> None:
+    history = StockPayHistory(zero_periods=0, newest_year=2024, newest_figure=69.8e6)
+    flag = stock_pay_missing_flag(0.0, history)
+    assert flag is not None and flag.code == "stock-pay-missing"
+    assert "fiscal 2024" in flag.sentence and "$69.8 million" in flag.sentence
+    one_quarter = StockPayHistory(zero_periods=1, newest_year=2025, newest_figure=1.33e9)
+    assert stock_pay_missing_flag(1.0e9, one_quarter) is not None
+    # a history of zeros, a full trailing figure, an unknown figure: silent
+    assert stock_pay_missing_flag(0.0, StockPayHistory(4, None, None)) is None
+    assert stock_pay_missing_flag(84.1e6, StockPayHistory(0, 2025, 80e6)) is None
+    assert stock_pay_missing_flag(None, history) is None
+    assert stock_pay_missing_flag(0.0, None) is None
+
+
+def test_stock_pay_missing_words_and_currency() -> None:
+    """The two sentences, a trailing figure at zero and a trailing period at zero, and the
+    figure in the reporting currency on a row in another."""
+    assert stock_pay_missing_flag(0.0, StockPayHistory(4, 2024, 69.8e6)) == Flag(
+        "stock-pay-missing",
+        "Stock pay missing",
+        "The trailing stock pay is nil while fiscal 2024 shows $69.8 million, so the stored "
+        "figure may be missing and the stock-pay charge on the consensus nil.",
+    )
+    one = stock_pay_missing_flag(1.0e9, StockPayHistory(1, 2025, 1.33e9))
+    assert one is not None and one.sentence == (
+        "The stock pay is nil in 1 trailing period while fiscal 2025 shows $1,330.0 million, so "
+        "the trailing figure may be short, and the stock-pay charge on the consensus with it."
+    )
+    two = stock_pay_missing_flag(1.0e9, StockPayHistory(2, 2025, 1.33e9), "SEK")
+    assert two is not None
+    assert "nil in 2 trailing periods while fiscal 2025 shows SEK 1,330.0 million" in two.sentence
+
+
+def test_the_basis_is_uncertain_on_a_one_time_item() -> None:
+    """Reason 1: the test reads includes-sbc, the stock pay is material (0.25 is 2% of a street
+    EPS of 12.5, the edge) and large-nri is on the row."""
+    taxed = replace(_T, income_tax=200.0)  # a full tax, so reason 2 is out of the way
+    assert _uncertain("includes-sbc", t=taxed, nri=True) is not None
+    assert _uncertain("includes-sbc", t=taxed, nri=True, street=12.6) is None  # 0.25 is below 2%
+    assert _uncertain("includes-sbc", t=taxed) is None  # no reason holds
+
+
+def test_the_basis_is_uncertain_on_a_low_tax() -> None:
+    """Reason 2: a trailing tax of 100 on a pre-tax income of 800 is 12.5%, half of 25%, the
+    edge; 101 is above it; a pre-tax income at or below zero gives no reading."""
+    assert _uncertain("includes-sbc") is not None
+    assert _uncertain("includes-sbc", t=replace(_T, income_tax=101.0)) is None
+    assert _uncertain("includes-sbc", t=replace(_T, pretax_income=0.0)) is None
+    assert _uncertain("includes-sbc", t=replace(_T, income_tax=None)) is None
+
+
+def test_the_basis_is_uncertain_on_a_gap_far_above_stock_pay() -> None:
+    """Reason 3: the test reads excludes-sbc and the gap, 12.5 less 10.0, is 10 times 0.25, the
+    edge; a GAAP EPS of 10.01 is inside it."""
+    wide = replace(_T, eps_diluted=10.0, income_tax=200.0)
+    flag = _uncertain("excludes-sbc", t=wide)
+    assert flag is not None and flag.code == "sbc-basis-uncertain"
+    assert _uncertain("excludes-sbc", t=replace(wide, eps_diluted=10.01)) is None
+    assert _uncertain("unknown", t=wide) is None
+
+
+def test_the_basis_uncertain_sentences() -> None:
+    """One sentence for each reason that holds, joined by a space; a stock pay of zero gives
+    reason 3 no reading, and neither note is counted."""
+    both = _uncertain("includes-sbc", nri=True)
+    assert both == Flag(
+        "sbc-basis-uncertain",
+        "Stock-pay basis uncertain",
+        "The basis test reads the consensus as counting stock pay, 0.25 a share after tax and "
+        "2.0% of street trailing EPS, while a large non-recurring item on the row may sit in GAAP "
+        "EPS and hide the gap. The basis test reads the consensus as counting stock pay, 0.25 a "
+        "share after tax and 2.0% of street trailing EPS, while a trailing tax rate of 12.5%, at "
+        "or below 50.0% of the statutory 25.0%, may close the gap.",
+    )
+    wide = _uncertain("excludes-sbc", t=replace(_T, eps_diluted=10.0, income_tax=200.0))
+    assert wide is not None and wide.sentence == (
+        "The street trailing EPS is 2.50 above the GAAP one, 10.0 times the stock pay of 0.25 a "
+        "share after tax: the adjusted figure leaves out far more than stock pay, and the figures "
+        "cannot say whether it leaves out stock pay too."
+    )
+    assert _uncertain("excludes-sbc", t=replace(_T, sbc=0.0, eps_diluted=10.0)) is None
+    missing = stock_pay_missing_flag(0.0, StockPayHistory(4, 2024, 69.8e6))
+    assert missing is not None and flag_count((missing, both)) == 0
 
 
 def mature_terms(

@@ -147,7 +147,9 @@ def balance_as_reported(years: Iterable[int]) -> Payload:
 def income_quarter(ends: Iterable[date], periods: Sequence[date] = QUARTERS) -> Payload:
     """Period i of ``periods`` (``QUARTERS``, or ``HALF_YEARS``), for each of ``ends``: revenue
     $300 m + $10 m × i; diluted shares 100 m + 1 m × i; an interest expense of $4 m, signed
-    negative (FMP signs it either way)."""
+    negative (FMP signs it either way); a pre-tax income of $56 m + $2 m × i, the operating income
+    less the interest, and an income tax of $11 m + $1 m × i, the pre-tax income less the net
+    income."""
     return [
         statement(
             end,
@@ -157,6 +159,8 @@ def income_quarter(ends: Iterable[date], periods: Sequence[date] = QUARTERS) -> 
             grossProfit=(120 + 4 * i) * M,
             operatingIncome=(60 + 2 * i) * M,
             interestExpense=-4 * M,
+            incomeBeforeTax=(56 + 2 * i) * M,
+            incomeTaxExpense=(11 + i) * M,
             netIncome=(45 + i) * M,
             epsDiluted=0.45 + 0.01 * i,
             weightedAverageShsOutDil=(100 + i) * M,

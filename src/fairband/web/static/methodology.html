@@ -938,6 +938,12 @@ other, or one is in another currency. The fiscal year stands in.</span></li>
 <li><span class="label">SBC basis unknown</span> <code class="fb-tag figure-sm">sbc-basis-unknown</code>
 <span class="body app-flags__what">Fairband could not tell whether the consensus counts stock
 compensation as a cost.</span></li>
+<li><span class="label">Stock pay missing</span> <code class="fb-tag figure-sm">stock-pay-missing</code>
+<span class="body app-flags__what">The last year's stock pay is zero, in total or in one period,
+while a fiscal year on file shows some. The charge for stock pay may be nil or short.</span></li>
+<li><span class="label">Stock-pay basis uncertain</span> <code class="fb-tag figure-sm">sbc-basis-uncertain</code>
+<span class="body app-flags__what">The test of whether the consensus counts stock pay may misread.
+A one-time item, a low tax or a gap far above stock pay can mislead it.</span></li>
 <li><span class="label">Path on EPS</span> <code class="fb-tag figure-sm">path-on-eps</code>
 <span class="body app-flags__what">Years 2 and 3 grow at the consensus earnings a share, not net
 income.</span></li>

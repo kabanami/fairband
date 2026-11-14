@@ -11,8 +11,10 @@ return in year N. K is read once, from the row's own path at the belief in force
 sensitivity and solve holds it. A year whose growth outruns its return pays out less than nothing;
 the first such year raises "growth above return", which counts the rest, after the ROIC flags and
 before the trailing ones, where the ``heavy-capex`` sentence names the return the charge starts at
-and ``consensus-basis-unknown`` follows ``large-nri``. ``charge`` in the intermediates records the
-growth paid for, the return by year, the hold and the revenue steps as found.
+and ``consensus-basis-unknown`` follows ``large-nri``. The two stock-pay notes,
+``stock-pay-missing`` and ``sbc-basis-uncertain``, follow the anchor's flags (spec 2026-11-13
+7.1). ``charge`` in the intermediates records the growth paid for, the return by year, the hold
+and the revenue steps as found.
 
 The value is also computed at each policy runway and at each return of the sensitivity, and so is
 the implied growth at the price. The sensitivity is keyed ``"runway"``, the row's own charge;
@@ -85,7 +87,13 @@ from fairband.engine.anchor import (
     path_steps,
     step_series_flag,
 )
-from fairband.engine.flags import long_runway_flag, value_spread_flag
+from fairband.engine.flags import (
+    long_runway_flag,
+    nri_flag,
+    sbc_basis_uncertain_flag,
+    stock_pay_missing_flag,
+    value_spread_flag,
+)
 from fairband.engine.mature_growth import (
     Charge,
     GrowthPath,
@@ -196,6 +204,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     }
     flags = (
         anchor.flags
+        + _stock_pay_notes(c, anchor, gap)
         + path.flags
         + roic.flags
         + present(_growth_above_return(growth, charge))
@@ -442,6 +451,22 @@ def _roic_charges(
         **{f"{x:g}": at(x) for x in policy.roic_sensitivity},
         "ten-year": None if ten_year is None else at(ten_year),
     }
+
+
+def _stock_pay_notes(c: Context, anchor: Anchor, gap: float | None) -> tuple[Flag, ...]:
+    """``stock-pay-missing`` and ``sbc-basis-uncertain`` (spec 2026-11-13 7.1), in that order, for
+    those that fire: the stored trailing stock pay against the stock pay on file, and the anchor's
+    basis against the figures the test read, ``large-nri`` read from the row's own non-recurring
+    gap ``gap``. The route refuses without a statutory rate before it reaches them."""
+    i, t, policy = c.inputs, c.trailing, c.policy
+    missing = stock_pay_missing_flag(t.sbc, i.stock_pay, i.currency)
+    if i.tax_rate_latest is None:
+        return present(missing)
+    large_nri = nri_flag(gap, t.eps_diluted, policy) is not None
+    uncertain = sbc_basis_uncertain_flag(
+        anchor.basis, t, i.street_ttm_eps, c.shares, i.tax_rate_latest, large_nri, policy
+    )
+    return present(missing) + present(uncertain)
 
 
 def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:

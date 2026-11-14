@@ -450,8 +450,15 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
         "margin-ramp-in-dollars",
         "revenue-gap",
         "fx-stale",
+        "stock-pay-missing",
+        "sbc-basis-uncertain",
     ):
         assert f'<code class="fb-tag figure-sm">{code}</code>' in notes, code
+    # the two stock-pay notes follow the basis note, in the route's order (method 5.11)
+    order = [
+        c for c in chips if c in ("sbc-basis-unknown", "stock-pay-missing", "sbc-basis-uncertain")
+    ]
+    assert order == ["sbc-basis-unknown", "stock-pay-missing", "sbc-basis-uncertain"]
     outside = html.replace(flags, "")
     assert "<code" not in outside
     assert "currency-unknown" not in chips  # method 1.1 refuses an unknown currency instead

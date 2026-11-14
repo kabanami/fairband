@@ -21,11 +21,10 @@ from support.engine_companies import (
 )
 
 from fairband.engine.classifier import Deciles
-from fairband.engine.flags import basis_unknown_flag, nri_flag
+from fairband.engine.flags import basis_unknown_flag, millions, nri_flag
 from fairband.engine.overrides import Override, OverrideTag, check_input, range_text
 from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, reprice, value_company
-from fairband.engine.route_steps import millions
 from fairband.engine.sensitivity import sensitivity_grid
 from fairband.engine.types import ValuationResult, money_of, rated
 from fairband.policy import Policy, in_currency

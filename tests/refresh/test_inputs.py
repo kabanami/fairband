@@ -35,6 +35,7 @@ from fairband.engine.anchor import (
     AnnualEstimate,
     Cadence,
     QuarterEstimate,
+    StockPayHistory,
     TrailingFigures,
     ntm_quarters,
     ntm_window,
@@ -212,10 +213,39 @@ def test_trailing_from_four_consecutive_quarters(conn_with_company: sqlite3.Conn
         equity_issued=4 * M,
         interest_expense=16 * M,  # four quarters of -$4 m, summed by size
         depreciation=(16 + 17 + 18 + 19) * M,
+        income_tax=(12 + 13 + 14 + 15) * M,
+        pretax_income=(58 + 60 + 62 + 64) * M,
     )
     assert inputs.street_ttm_eps == pytest.approx(0.51 + 0.52 + 0.53 + 0.54)
     assert inputs.shares_diluted == 104 * M  # the newest quarter's
     assert "trailing-on-fiscal-year" not in codes(inputs)
+    # no trailing quarter at zero (the one without stock pay is missing, not zero); every fiscal
+    # year's cash flow holds $20 m
+    assert inputs.stock_pay == StockPayHistory(0, 2025, 20 * M)
+
+
+def test_the_stock_pay_history_counts_the_trailing_quarters_at_zero(store: Store) -> None:
+    """Spec 2026-11-13 7.1: the quarter to 2026-06-30 at zero and the one to 2026-03-31, which
+    has none in the fixture, at $5 m: one trailing quarter at zero, a trailing sum of $15 m, and
+    fiscal 2025 the newest year above zero."""
+    flows = cashflow_quarter(QUARTERS)
+    flows[2]["stockBasedCompensation"] = 5 * M
+    flows[3]["stockBasedCompensation"] = 0
+    inputs = build(store(**{**bodies(), "cashflow-quarter": flows}))
+    assert inputs.trailing is not None and inputs.trailing.sbc == 15 * M
+    assert inputs.stock_pay == StockPayHistory(1, 2025, 20 * M)
+
+
+def test_the_stock_pay_history_on_the_fiscal_year(store: Store) -> None:
+    """On the fiscal-year fallback the one trailing period is the year: fiscal 2025 at zero is one
+    period at zero, and fiscal 2024's $20 m the newest year above zero."""
+    years = cashflow_annual(YEARS)
+    years[-1]["stockBasedCompensation"] = 0
+    gap = [q for q in QUARTERS if q != date(2026, 3, 31)]
+    inputs = build(store(**{**bodies(quarters=gap), "cashflow-annual": years}))
+    assert inputs.trailing is not None and inputs.trailing.on_fiscal_year
+    assert inputs.trailing.sbc == 0
+    assert inputs.stock_pay == StockPayHistory(1, 2024, 20 * M)
 
 
 @pytest.mark.parametrize(
@@ -338,6 +368,8 @@ def test_half_year_rows_give_a_two_period_trailing_sum(store: Store) -> None:
         interest_expense=8 * M,  # two half-years of -$4 m, summed by size
         depreciation=(17 + 18) * M,
         cadence="half-yearly",
+        income_tax=(13 + 14) * M,  # the two half-years' lines, periods 2 and 3 of the fixture
+        pretax_income=(60 + 62) * M,
     )
     stated = statements_for(conn, "ACME", "US", load_tax_table(), TODAY)
     assert [p.end for p in stated.trailing_periods] == [date(2025, 12, 31), date(2026, 6, 30)]
@@ -562,6 +594,8 @@ TRAILING_LINES = (
     "equity_issued",
     "interest_expense",
     "depreciation",
+    "income_tax",
+    "pretax_income",
 )
 
 
@@ -591,12 +625,14 @@ def test_the_stored_quarters_read_as_the_trailing_figures_read_them(store: Store
         equity_issued=1 * M,
         interest_expense=4 * M,  # -$4 m as stored, by its size
         depreciation=19 * M,
+        income_tax=15 * M,
+        pretax_income=64 * M,
     )
     assert quarters[2].sbc is None  # the third period has no stock compensation
     trailing = build(conn).trailing
     assert trailing is not None and (trailing.quarters, trailing.on_fiscal_year) == (4, False)
     held = [line for line in TRAILING_LINES if getattr(trailing, line) is not None]
-    assert len(held) == 11  # all but the stock compensation
+    assert len(held) == 13  # all but the stock compensation
     for line in held:
         total = sum(getattr(q, line) for q in quarters[-4:])
         assert total == pytest.approx(getattr(trailing, line)), line
@@ -1381,7 +1417,7 @@ def test_no_financial_statements_is_a_refusal(store: Store, router: Router) -> N
     inputs = build(conn)
     assert inputs.refusal == "no financial statements"
     assert (inputs.series, inputs.capital_years, inputs.trailing) == ((), (), None)
-    assert inputs.balance_years == ()
+    assert inputs.balance_years == () and inputs.stock_pay is None
     assert inputs.data_date == TODAY
     assert inputs.price == 50.0  # the market side is still read
 

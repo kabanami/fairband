@@ -113,7 +113,9 @@ class TrailingFigures:
     last fiscal year when ``on_fiscal_year``, whose cadence is the one the statement rows gave,
     ``quarterly`` when they gave none. A figure is ``None`` when any of the periods lacks it.
     ``interest_expense`` sums each period's interest expense by its size (FMP signs it either
-    way) and ``depreciation`` the cash flow's depreciation and amortization as signed."""
+    way) and ``depreciation`` the cash flow's depreciation and amortization as signed;
+    ``income_tax`` and ``pretax_income`` sum the income statements' income tax and income before
+    tax, which the stock-pay basis note reads (spec 2026-11-13 7.1)."""
 
     period_end: date
     quarters: int
@@ -131,6 +133,19 @@ class TrailingFigures:
     interest_expense: float | None = None
     depreciation: float | None = None
     cadence: Cadence = "quarterly"
+    income_tax: float | None = None
+    pretax_income: float | None = None
+
+
+@dataclass(frozen=True)
+class StockPayHistory:
+    """The stock pay on file beside the trailing figure (spec 2026-11-13 7.1): how many of the
+    trailing periods hold a stock pay of exactly zero, and the newest fiscal year whose stock pay
+    is above zero with its figure, both ``None`` without one."""
+
+    zero_periods: int
+    newest_year: int | None
+    newest_figure: float | None
 
 
 @dataclass(frozen=True)

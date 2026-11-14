@@ -40,8 +40,11 @@ they gave none (so its NTM window is the one that cadence reads). The last fisca
 too when any of those periods' income statements names another currency than the newest annual
 one, the reporting currency (spec 2026-11-10 7): the note's sentence then names those periods
 and their currency. The interest expense and the depreciation and amortization (spec 2026-11-03 section 11)
-are summed the same way; the interest expense counts each period by its size, as FMP signs it
-either way.
+are summed the same way, and so are the income tax and the income before tax (spec 2026-11-13
+7.1); the interest expense counts each period by its size, as FMP signs it either way. Beside
+them the stock pay on file (``StockPayHistory``): the trailing periods whose cash flow holds a
+stock compensation of exactly zero, counted, and the newest fiscal year whose cash flow holds
+one above zero, with its figure.
 The diluted share count is the newest quarterly row's weighted average, else the newest fiscal
 year's. The trailing periods are the periods the trailing figures read, oldest first, each with its
 own diluted EPS and weighted-average diluted count: the four quarters or the two half-years, or
@@ -82,6 +85,7 @@ from typing import Any
 from fairband.engine.anchor import (
     PERIODS_PER_YEAR,
     Cadence,
+    StockPayHistory,
     TrailingFigures,
     consecutive_periods,
 )
@@ -110,6 +114,7 @@ _DATASETS = (
     "cashflow-quarter",
 )
 _CFO = "netCashProvidedByOperatingActivities"
+_SBC = "stockBasedCompensation"
 _SHARES = "weightedAverageShsOutDil"
 _AS_REPORTED_INTANGIBLES = "intangibles_ex_goodwill"
 # Lease accounting (ASC 842) applies to fiscal years beginning after 15 December 2018.
@@ -189,6 +194,8 @@ class QuarterFigures:
     equity_issued: float | None
     interest_expense: float | None
     depreciation: float | None
+    income_tax: float | None
+    pretax_income: float | None
 
     @property
     def period(self) -> str:
@@ -229,6 +236,7 @@ class Statements:
     tax_refusal: str | None = None
     estimate_methods: dict[str, str] = field(default_factory=dict)
     tax_year: int | None = None
+    stock_pay: StockPayHistory | None = None
 
 
 @dataclass(frozen=True)
@@ -322,10 +330,11 @@ def statements_for(
     capital, methods = _capital_years(years, balance, reported, rates)
     newest_rate = rates[years.span[-1]]
     quarters = periods["income-quarter"]
-    trailing, trailing_periods, fallback = _trailing(
-        years, cash, quarters, _by_end(periods["cashflow-quarter"])
-    )
+    quarter_cash = _by_end(periods["cashflow-quarter"])
+    trailing, trailing_periods, fallback = _trailing(years, cash, quarters, quarter_cash)
     quarter_ends = () if trailing.on_fiscal_year else tuple(p.end for p in trailing_periods)
+    trailing_cash = cash if trailing.on_fiscal_year else quarter_cash
+    stock_pay = _stock_pay(years, cash, [trailing_cash.get(p.end, _NONE) for p in trailing_periods])
     shares, shares_source = _shares(quarters, periods["income-annual"])
 
     facts = [row for found in periods.values() for p in found for row in p.facts.values()]
@@ -367,6 +376,7 @@ def statements_for(
         tax_refusal=_tax_refusal(country, capital),
         estimate_methods=methods,
         tax_year=None if newest_rate is None else newest_rate.year_used,
+        stock_pay=stock_pay,
     )
 
 
@@ -644,7 +654,7 @@ def _lines(incomes: Sequence[_Period], flows: Sequence[_Period]) -> dict[str, fl
         "operating_income": _total(incomes, "operatingIncome"),
         "net_income": _total(incomes, "netIncome"),
         "eps_diluted": _total(incomes, "epsDiluted"),
-        "sbc": _total(flows, "stockBasedCompensation"),
+        "sbc": _total(flows, _SBC),
         "cfo": _total(flows, _CFO),
         "capex": _total(flows, "capitalExpenditure"),
         "dividends": _total(flows, "netDividendsPaid"),
@@ -652,7 +662,25 @@ def _lines(incomes: Sequence[_Period], flows: Sequence[_Period]) -> dict[str, fl
         "equity_issued": _total(flows, "commonStockIssuance"),
         "interest_expense": _total(incomes, "interestExpense", size=True),
         "depreciation": _total(flows, "depreciationAndAmortization"),
+        "income_tax": _total(incomes, "incomeTaxExpense"),
+        "pretax_income": _total(incomes, "incomeBeforeTax"),
     }
+
+
+def _stock_pay(
+    years: _Years, cash: dict[date, _Period], flows: Sequence[_Period]
+) -> StockPayHistory:
+    """The stock pay on file beside the trailing figure (spec 2026-11-13 7.1): the trailing
+    periods' cash flows ``flows`` whose stock compensation is exactly zero, counted, and the
+    newest fiscal year whose cash flow, joined to its income statement by period end as the
+    series joins it, holds stock compensation above zero, with its figure."""
+    zero = sum(1 for f in flows if f.value(_SBC) == 0)
+    for year in reversed(years.span):
+        income = years.income.get(year)
+        figure = None if income is None else cash.get(income.end, _NONE).value(_SBC)
+        if figure is not None and figure > 0:
+            return StockPayHistory(zero, year, figure)
+    return StockPayHistory(zero, None, None)
 
 
 def _a_year_of(rows: Sequence[_Period], cadence: Cadence) -> list[_Period]:

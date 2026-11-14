@@ -255,6 +255,7 @@ def build_inputs(
         inflation_differential=money.differential,
         fx_stale=money.rate is not None and money.rate.stale,
         currency_refused=money.refused(stated),
+        stock_pay=stated.stock_pay,
     )
 
 

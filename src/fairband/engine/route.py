@@ -158,7 +158,12 @@ from datetime import date, datetime, timedelta
 from typing import Any, cast
 
 from fairband.engine import METHOD_VERSION
-from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
+from fairband.engine.anchor import (
+    AnnualEstimate,
+    QuarterEstimate,
+    StockPayHistory,
+    TrailingFigures,
+)
 from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import Deciles, Series, classify
 from fairband.engine.designation import designation_for
@@ -228,6 +233,9 @@ class CompanyInputs:
     year of ``series`` with an annual balance sheet, oldest first; the Decline route reads them.
     ``adr_ratio`` is GuruFocus's depositary receipt ratio, ordinary shares per ADS, ``None`` for a
     direct listing or without one on file; assembly has read the counts on the quote's basis by it.
+    ``stock_pay`` is the stock pay on file beside the trailing figure, the trailing periods at zero
+    and the newest fiscal year above zero (``StockPayHistory``), ``None`` without statements; the
+    Mature Growth route's ``stock-pay-missing`` note reads it.
 
     A company in another currency (spec 2026-11-10 section 7): ``currency`` is the reporting
     currency, every money figure but ``price`` and ``market_cap`` (the quote's, in USD) and the
@@ -280,6 +288,7 @@ class CompanyInputs:
     inflation_differential: float = 0.0
     fx_stale: bool = False
     currency_refused: bool = False
+    stock_pay: StockPayHistory | None = None
 
 
 def value_company(
