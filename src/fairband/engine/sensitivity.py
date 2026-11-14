@@ -16,7 +16,11 @@ checks each as an override of it would be (``overrides.check_input``).
 engine runs on, each the applied override's value when its input has one, else the engine's
 own reading of the input on the result under the applied overrides
 (``overrides.current_reading``; with none applied, the mechanical result), a number within
-1e-12 and a word equal; the first such pair, ``None`` when no pair is it. The row and the column
+1e-12 and a word equal; the first such pair, ``None`` when no pair is it. A revenue step with no
+applied override is marked at the growth the Mature Growth charge read for its year,
+``charge.growth_by_year``: the consensus revenue step where the charge read one, else the earnings
+step as resolved, so the pair marked gives the result in force; the engine's reading of the
+input, the step found, stays the bridge's and the drop test's. The row and the column
 are counted from 1, as the ref ``sensitivity:<id>/<i>/<j>`` counts them, so the stored pair, the
 API's ``current`` and the ref name a cell the same way.
 """
@@ -38,6 +42,9 @@ DISTINCT_TAGS = "the two tags differ"
 _IN_FORCE = 1e-12
 # The note on a pair's input in a cell's result, which is never stored.
 _READING = "a sensitivity reading"
+# The two revenue steps, each by the index of its year's growth in the charge's
+# ``growth_by_year``, which starts at year 2.
+_REVENUE_YEAR: dict[OverrideTag, int] = {"revenue.step_2": 0, "revenue.step_3": 1}
 
 type Value = float | str
 
@@ -102,9 +109,25 @@ def sensitivity_grid(
 
 def _reading(applied: Overrides, in_force: ValuationResult, tag: OverrideTag) -> Value | None:
     """The reading of ``tag``'s input the engine runs on: the applied override's value, else its
-    own reading on ``in_force``, the result under the applied overrides."""
+    own reading on ``in_force``, the result under the applied overrides; for a revenue step, the
+    growth the charge read for its year (``_charged``)."""
     found = applied.get(tag)
-    return current_reading(in_force, tag) if found is None else found.value
+    if found is not None:
+        return found.value
+    if tag in _REVENUE_YEAR:
+        return _charged(in_force, _REVENUE_YEAR[tag])
+    return current_reading(in_force, tag)
+
+
+def _charged(result: ValuationResult, k: int) -> float | None:
+    """The growth the Mature Growth charge of ``result`` read for year 2 + ``k``, its
+    ``charge.growth_by_year`` entry: the consensus revenue step where the charge read one, else
+    the earnings step as resolved. An override of the revenue step at it gives ``result``, which
+    the engine's reading, the step found and none without one, does not where the charge read no
+    revenue step. ``None`` without a Mature Growth charge."""
+    charge = result.intermediates.get("charge") if result.route == "mature-growth" else None
+    growth = None if charge is None else charge.get("growth_by_year")
+    return None if growth is None or len(growth) <= k + 1 else growth[k]
 
 
 def _matching(values: Sequence[Value], reading: Value | None) -> int | None:

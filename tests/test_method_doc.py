@@ -325,6 +325,25 @@ def test_a_guidance_record_holds_net_income_and_backs_the_ntm_eps() -> None:
     ) in row
 
 
+def test_a_sensitivity_marks_a_revenue_step_at_the_growth_the_charge_read() -> None:
+    """14.8: a revenue step with no applied override is marked at the growth the charge read for
+    its year, while the engine's reading of 14.4 stays the step found."""
+    fourteen = _section(14)
+    reading = fourteen[fourteen.index("### 14.8") : fourteen.index("### 14.9")]
+    for words in (
+        (
+            "with no applied override is marked at the growth the Mature Growth charge read for its"
+            " year, h_2 or h_3 of `charge.growth_by_year` (4.8)"
+        ),
+        (
+            "else the earnings step as resolved, since an override at that figure gives the result"
+            " in force"
+        ),
+        "the engine's reading of 14.4 stays the step found",
+    ):
+        assert words in reading, words
+
+
 def test_section_15_names_the_bounds_and_the_two_versions() -> None:
     section = _section(15)
     bounds = ("secondary_parts_max", "secondary_years_min", "secondary_years_max")

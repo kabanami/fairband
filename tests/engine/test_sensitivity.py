@@ -4,6 +4,7 @@ engine under the applied overrides with two inputs set to each pair of the value
 ``sensitivity:<id>/<i>/<j>`` counts it."""
 
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pytest
@@ -137,6 +138,72 @@ def test_a_one_time_item_marks_the_ntm_cell_in_force(
     )
     assert grid.current == (1, 1)
     assert grid.cells[0][0] == pytest.approx(reviewed.value)
+    assert grid.cells[1][0] == pytest.approx(mechanical.value)
+
+
+def _with_revenue(i: CompanyInputs, counts: tuple[int, int, int]) -> CompanyInputs:
+    """MGCO with fiscal 2027 to 2029 consensus revenue of $25,000 m, $27,500 m and $29,700 m, steps
+    of 10% and 8%, on ``counts`` revenue analysts year by year."""
+    revenue = (25_000e6, 27_500e6, 29_700e6)
+    rows = tuple(
+        replace(a, revenue=x, analysts_revenue=n)
+        for a, x, n in zip(i.annual_estimates, revenue, counts, strict=True)
+    )
+    return replace(i, annual_estimates=rows)
+
+
+def test_a_revenue_step_with_no_consensus_marks_the_earnings_step_in_force(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """MGCO has no revenue consensus, so its charge pays for the earnings step of year 2, 12%, and
+    the engine's reading of ``revenue.step_2`` is none. The growth in force is the one the charge
+    read, ``charge.growth_by_year`` for year 2: an override at it gives the value in force, so the
+    grid marks that cell, and not the 4% beside it."""
+    mechanical = value_company(mg_inputs, deciles, policy, TODAY)
+    charge = mechanical.intermediates["charge"]
+    assert charge["revenue_step_source"] == ["none", "none"]
+    assert current_reading(mechanical, "revenue.step_2") is None
+    paid = charge["growth_by_year"][0]
+    assert paid == pytest.approx(0.12)
+    grid = sensitivity_grid(
+        mg_inputs,
+        deciles,
+        policy,
+        TODAY,
+        {},
+        "revenue.step_2",
+        (0.04, paid),
+        "growth.belief",
+        (0.063,),
+    )
+    assert grid.current == (2, 1)
+    assert grid.cells[1][0] == mechanical.value
+    assert grid.cells[0][0] != mechanical.value
+
+
+def test_a_revenue_step_the_charge_read_marks_the_consensus_step_in_force(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """With a revenue consensus on 10 analysts the charge reads the consensus's step 3, 8%, which
+    is the engine's reading too: the grid marks it, as before, and its cell is the value in
+    force."""
+    inputs = _with_revenue(mg_inputs, (10, 10, 10))
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    found = current_reading(mechanical, "revenue.step_3")
+    assert found == pytest.approx(0.08)
+    assert mechanical.intermediates["charge"]["growth_by_year"][1] == found
+    grid = sensitivity_grid(
+        inputs,
+        deciles,
+        policy,
+        TODAY,
+        {},
+        "revenue.step_3",
+        (0.05, 0.08),
+        "growth.belief",
+        (0.063,),
+    )
+    assert grid.current == (2, 1)
     assert grid.cells[1][0] == pytest.approx(mechanical.value)
 
 
