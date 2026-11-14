@@ -13,14 +13,14 @@ resting on the new snapshot, on the first of these that holds (spec 2026-11-13 1
   (``overrides.current_reading``) is not the value the override corrected; a reading of none
   against a figure, or a figure against none, is a change.
 
-The day the statements were fetched, the data date, drops nothing: a refetch of the same
-statements leaves the correction applied. A snapshot's trailing period end is its result's
-``trailing_end``; a result stored before method 1.3 carries none, and its period end is the
-``as_of`` of its ``shares_diluted`` input, which assembly dates at the newest quarterly row's
-period end, the fiscal year's when that row holds no count (``method.md`` 4.2), so such a
-snapshot may read as an older period, and its correction then drops as "a newer period is on
-file". Its trailing inputs (``revenue_ttm``, ``eps_ttm``, ``operating_income_ttm``)
-cite the newest fiscal year's end and are not read.
+The day the statements were fetched, the data date, drops nothing: a refetch of the same statements
+leaves the correction applied. A snapshot's trailing period end is its result's ``trailing_end``; a
+result stored before method 1.3 carries none, and its period end is the ``as_of`` of its
+``shares_diluted`` input, which assembly dates at the newest quarterly row's period end, the fiscal
+year's when that row holds no count (``method.md`` 4.2), so such a snapshot may read as an older
+period, and its correction then drops as "a newer period is on file". Its trailing inputs
+(``revenue_ttm``, ``eps_ttm``, ``operating_income_ttm``) cite the newest fiscal year's end and are
+not read.
 
 A lasting override of an NTM anchor (``earnings.ntm``, ``revenue.ntm``) drops the same way, "the
 guided year has passed", when the fiscal year its guidance record guides (``guidance.anchor_year``,

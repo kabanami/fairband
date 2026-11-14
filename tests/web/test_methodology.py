@@ -163,9 +163,10 @@ def test_the_examples_state_method_1_0_s_rules() -> None:
     asof = asof[: asof.index("</p>")]
     assert "method 1.0" in asof and 'datetime="2026-11-09"' in asof
     assert "method 0.8" not in html and "method 0.9" not in asof
-    # method 1.1 values a company in US dollars bit for bit as 1.0 did, and method 1.2 moves only
-    # a row whose return is below the hurdle rate, which no example is, so the figures stand
-    assert "unchanged under methods 1.1 and 1.2" in asof
+    # method 1.1 values a company in US dollars bit for bit as 1.0 did, method 1.2 moves only a
+    # row whose return is below the hurdle rate, and method 1.3 only a row whose consensus rows
+    # were read from more than one answer, which no example is, so the figures stand
+    assert "unchanged under methods 1.1, 1.2 and 1.3" in asof
     classifier = _section(html, "classifier")
     msft = classifier[classifier.index("Worked example: Microsoft") :]
     assert '<td class="body">Checks</td><td class="body fb-num">none</td>' in msft
@@ -477,6 +478,15 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
     thin = text[text.index(">thin-ntm</code>") :]
     thin = thin[: thin.index("</li>")]
     assert '<span data-policy="analyst_min">—</span>' in thin and "guidance" in thin
+    # each stock-pay note is silent under the agent's input that decides it and under a guided
+    # NTM EPS (method 5.11)
+    for code, setting in (
+        ("stock-pay-missing", "an agent sets the stock pay"),
+        ("sbc-basis-uncertain", "an agent sets the stock-pay basis"),
+    ):
+        note = text[text.index(f">{code}</code>") :]
+        note = note[: note.index("</li>")]
+        assert setting in note and "the next twelve months' EPS from guidance" in note, code
     outside = html.replace(flags, "")
     assert "<code" not in outside
     assert "currency-unknown" not in chips  # method 1.1 refuses an unknown currency instead

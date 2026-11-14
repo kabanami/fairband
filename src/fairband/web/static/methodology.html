@@ -11,8 +11,13 @@
      1.2 (12 Nov 2026, the return without goodwill) moves only a row whose measured return is
      below the hurdle rate; no example is one (Microsoft 20.4%, Coca-Cola 30.5%, the others on
      routes that do not read it), and a revalue of a copy of the live data on 12 Nov 2026 kept
-     all six examples' values, so the figures were re-read and stand under 1.2. They change with
-     the next method version that moves one (CLAUDE.md, "Read first"). -->
+     all six examples' values, so the figures were re-read and stand under 1.2. Method 1.3 (13 Nov
+     2026, the consensus read from one vendor answer; the stock-pay notes and inputs, the
+     share-count warning, the thin-consensus note and the ten-year margins move no mechanical value)
+     moves only a row whose consensus rows were read from more than one answer; no example is one,
+     and a revalue of a copy of the live data on 14 Nov 2026 kept all six examples' values, so the
+     figures were re-read and stand under 1.3. They change with the next method version that moves
+     one (CLAUDE.md, "Read first"). -->
 <article class="app-prose">
 <p class="caption app-prose__note" data-live-note hidden></p>
 
@@ -91,7 +96,8 @@ its count of companies in the latest run.</desc>
 
 <p class="caption app-prose__asof">Each route section ends with a worked example on a real company.
 Figures as of the full refresh of <time datetime="2026-11-05">5 Nov 2026</time>, valued under
-method 1.0 on <time datetime="2026-11-09">9 Nov 2026</time> and unchanged under methods 1.1 and 1.2.
+method 1.0 on <time datetime="2026-11-09">9 Nov 2026</time>. They are unchanged under methods
+1.1, 1.2 and 1.3.
 Prices are the closes of
 <time datetime="2026-11-04">4 Nov 2026</time>. Each example links to today's row, whose figures
 may differ.</p>
@@ -946,10 +952,12 @@ other, or one is in another currency. The fiscal year stands in.</span></li>
 compensation as a cost.</span></li>
 <li><span class="label">Stock pay missing</span> <code class="fb-tag figure-sm">stock-pay-missing</code>
 <span class="body app-flags__what">The last year's stock pay is zero, in total or in one period,
-while a fiscal year on file shows some. The charge for stock pay may be nil or short.</span></li>
+while a fiscal year on file shows some. The charge for stock pay may be nil or short. It does not
+show where an agent sets the stock pay, or the next twelve months' EPS from guidance.</span></li>
 <li><span class="label">Stock-pay basis uncertain</span> <code class="fb-tag figure-sm">sbc-basis-uncertain</code>
 <span class="body app-flags__what">The test of whether the consensus counts stock pay may misread.
-A one-time item, a low tax or a gap far above stock pay can mislead it.</span></li>
+A one-time item, a low tax or a gap far above stock pay can mislead it. It does not show where an
+agent sets the stock-pay basis, or the next twelve months' EPS from guidance.</span></li>
 <li><span class="label">Path on EPS</span> <code class="fb-tag figure-sm">path-on-eps</code>
 <span class="body app-flags__what">Years 2 and 3 grow at the consensus earnings a share, not net
 income.</span></li>

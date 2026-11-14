@@ -1,22 +1,21 @@
 """The Mature Growth route's consensus inputs: the NTM anchor, the path and the belief (spec 6.6).
 
-Year 1 is the NTM anchor: the sum of the consensus periods of the NTM window after the last
-reported period, picked by period end and never by row order (``ntm_window``). The window is four
-consecutive quarters for a company that reports quarterly; for one that reports half-yearly
-(spec 2026-11-10 8) it is two consecutive half-years with no consensus row 80 to 100 days from
-either (a quarterly consensus with a gap is no half-year pair), else four consecutive quarters,
-the window its consensus cadence gives. The cadence is the trailing figures' (``TrailingFigures.cadence``),
-read from the spacing of the statement periods; a row ending within ``SAME_PERIOD_DAYS`` after
-the last reported period is that period, whose end in the consensus can lie a day or a few days
-from the statements' (a 52/53-week year), not the first of the window. The SBC basis test of
-``mech/1.2``:
-when the street's trailing EPS sits above the GAAP trailing EPS by at least ``sbc_detect`` times
-the after-tax SBC per share, the consensus excludes stock compensation, and the anchor subtracts
-the after-tax SBC per share held at its trailing share of revenue (scaled by the NTM consensus
-revenue over the trailing revenue, or unscaled when either is missing). A missing input leaves the
-basis unknown; the consensus then stands as it is and is flagged. An agent's trailing stock pay
-stands in for the stored one, in the test and the adjustment, and an agent's basis for the test
-(spec 2026-11-13 7.2).
+Year 1 is the NTM anchor: the sum of the consensus periods of the NTM window after the last reported
+period, picked by period end and never by row order (``ntm_window``). The window is four consecutive
+quarters for a company that reports quarterly; for one that reports half-yearly (spec 2026-11-10 8)
+it is two consecutive half-years with no consensus row 80 to 100 days from either (a quarterly
+consensus with a gap is no half-year pair), else four consecutive quarters, the window its consensus
+cadence gives. The cadence is the trailing figures' (``TrailingFigures.cadence``), read from the
+spacing of the statement periods; a row ending within ``SAME_PERIOD_DAYS`` after the last reported
+period is that period, whose end in the consensus can lie a day or a few days from the statements'
+(a 52/53-week year), not the first of the window. The SBC basis test of ``mech/1.2``: when the
+street's trailing EPS sits above the GAAP trailing EPS by at least ``sbc_detect`` times the
+after-tax SBC per share, the consensus excludes stock compensation, and the anchor subtracts the
+after-tax SBC per share held at its trailing share of revenue (scaled by the NTM consensus revenue
+over the trailing revenue, or unscaled when either is missing). A missing input leaves the basis
+unknown; the consensus then stands as it is and is flagged. An agent's trailing stock pay stands in
+for the stored one, in the test and the adjustment, and an agent's basis for the test (spec
+2026-11-13 7.2).
 
 Years 2 and 3 are the next two steps of the annual consensus from the base year, the fiscal year
 that holds most of the window's periods (a tie takes the later). The steps read net income when

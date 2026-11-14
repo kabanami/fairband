@@ -426,7 +426,8 @@ stock pay out (`intermediates/sbc_basis`: `includes-sbc`, `excludes-sbc` or `unk
    the 8-K, or of the 6-K for a foreign filer). Section 8 says whether it leaves out stock pay,
    citing the passage as a finding. Where the release reads otherwise than the row, or the row
    reads `unknown`, set `earnings.sbc_basis`, `includes` or `excludes`, with that passage as
-   evidence.
+   evidence. Under an applied `earnings.ntm` section 8 still states the basis, and the report sets
+   neither stock-pay input, which could not move the value.
 2. Where `stock-pay-missing` shows, read the trailing stock pay in the cash flow statements of the
    trailing periods' filings (`filing_report`), and set `earnings.sbc`, their total in the
    reporting currency, period-tied, with the filings as evidence. Where the filings show nil too,

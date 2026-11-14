@@ -41,26 +41,26 @@ row's moat and returns, so its value is the one this route would reach (calibrat
 It carries the keys the rebuild reads, so ``cross_check_at_price`` gives its implied growth at
 any price by the same solve, from the intermediates alone.
 
-Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the moat, so the
-runway, the terminal return and the margin of safety with it; ``return.runway`` the runway return
-of the charge, the start of its fade (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring
-gap, the anchor's basis test then taking the correction, the override less the gap found, off
-trailing GAAP EPS (``anchor.ntm_anchor``), so an override at the gap found moves nothing, while
-no basis override is applied; ``earnings.sbc`` the trailing stock pay, in the basis test and the
-adjustment, and ``earnings.sbc_basis`` the basis, in place of the test (spec 2026-11-13 7.2);
-``path.step_2`` and ``path.step_3`` the consensus steps, before the check that the path stays
-above −100%, a replaced step not counted thin nor named in ``step-series-disagree``, the revenue
-steps the charge pays for left as found; ``growth.belief`` the belief's rate, and the hold read on
-it; ``earnings.ntm``, the NTM EPS from a clear guidance, which stands in for the consensus less
-the SBC adjustment, the NTM window's periods still required (``anchor.ntm_window``: four quarters,
-or two half-years); ``earnings.cycle_gap`` the correction
-to mid-cycle earnings, which the NTM EPS, the consensus's or the guided one, is taken less, before
-the positive-anchor refusal (``anchor.ntm_anchor``). Nothing else reads the two: the basis test,
-the clean EPS, EPV and ``large-nri`` read the non-recurring gap alone, and the forward EPS of
-the P/E and the ``ntm_eps`` and ``ntm_net_income`` data entries are the consensus less the
-stock-pay adjustment in force (``Anchor.ntm_eps_found``), which the two stock-pay inputs move,
-the ``ntm_eps`` entry giving way to the JUDGMENT entry under the guided EPS. ``cycle_gap`` is in the intermediates only under that override. The cross-check reads
-the row's moat, returns and two gaps, and the consensus and belief as found.
+Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the moat, so the runway,
+the terminal return and the margin of safety with it; ``return.runway`` the runway return of the
+charge, the start of its fade (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring gap, the
+anchor's basis test then taking the correction, the override less the gap found, off trailing GAAP
+EPS (``anchor.ntm_anchor``), so an override at the gap found moves nothing, while no basis override
+is applied; ``earnings.sbc`` the trailing stock pay, in the basis test and the adjustment, and
+``earnings.sbc_basis`` the basis, in place of the test (spec 2026-11-13 7.2); ``path.step_2`` and
+``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
+step not counted thin nor named in ``step-series-disagree``, the revenue steps the charge pays for
+left as found; ``growth.belief`` the belief's rate, and the hold read on it; ``earnings.ntm``, the
+NTM EPS from a clear guidance, which stands in for the consensus less the SBC adjustment, the NTM
+window's periods still required (``anchor.ntm_window``: four quarters, or two half-years);
+``earnings.cycle_gap`` the correction to mid-cycle earnings, which the NTM EPS, the consensus's or
+the guided one, is taken less, before the positive-anchor refusal (``anchor.ntm_anchor``). Nothing
+else reads the two: the basis test, the clean EPS, EPV and ``large-nri`` read the non-recurring gap
+alone, and the forward EPS of the P/E and the ``ntm_eps`` and ``ntm_net_income`` data entries are
+the consensus less the stock-pay adjustment in force (``Anchor.ntm_eps_found``), which the two
+stock-pay inputs move, the ``ntm_eps`` entry giving way to the JUDGMENT entry under the guided EPS.
+``cycle_gap`` is in the intermediates only under that override. The cross-check reads the row's
+moat, returns and two gaps, and the consensus and belief as found.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the route's value: the result's value is the route's value a share plus the figure, which
@@ -73,9 +73,12 @@ the sum: the multiples, the growth share and the expected return read them as th
 implied growth, by runway and by return too, solves to the price less the figure, the business's
 share of the price, which it reads from the intermediates. The diluted share count is
 ``Context.shares``, an agent's ``shares.diluted`` in place of the reported count: NTM net income
-is the NTM EPS times it, and after-tax SBC a share divides by it. The ``ntm_net_income`` DATA
-entry stays on the reported count, ``None`` without one, so no entry cited to the vendor carries
-the agent's count.
+is the NTM EPS times it, and after-tax SBC a share divides by it, so the agent's count can change
+the basis test's reading where no basis override is applied, and on a basis that reads
+``excludes-sbc`` on a stock pay above zero it moves the adjustment, and with it the ``ntm_eps``
+and ``ntm_net_income`` DATA entries. The ``ntm_net_income`` DATA entry stays on the reported
+count, ``None`` without one: the consensus less the stock-pay adjustment in force times the
+reported count.
 """
 
 from collections.abc import Sequence
@@ -233,8 +236,8 @@ def value_mature_growth(c: Context) -> Valued | Refused:
         *common_inputs(i, t, roic),
         data(i, "sbc_ttm", t.sbc, money(i), "statements"),
         # the consensus less the stock-pay adjustment in force, which an agent's stock pay or basis,
-        # or a gap that changes the basis, moves (method 14.4); a guided EPS or a cycle gap is its
-        # own JUDGMENT entry
+        # a gap that changes the basis, or an agent's count moves (method 14.4); a guided EPS or a
+        # cycle gap is its own JUDGMENT entry
         data(i, "ntm_eps", anchor.ntm_eps_found, per_share(i), "estimates_quarter"),
         data(
             i,
@@ -554,9 +557,10 @@ def _on_revenue(growth: GrowthPath, year: int) -> bool:
 
 
 def _on_reported(anchor: Anchor, reported: float | None) -> float | None:
-    """The ``ntm_net_income`` DATA entry: the consensus NTM EPS as found on the reported count,
-    ``None`` without one, so an agent's ``shares.diluted`` never reaches an entry cited to the
-    vendor; the intermediates' ``ntm_net_income`` is on the count the route used."""
+    """The ``ntm_net_income`` DATA entry: the consensus NTM EPS less the stock-pay adjustment in
+    force (``Anchor.ntm_eps_found``) on the reported count, ``None`` without one; an agent's
+    ``shares.diluted`` reaches it only through that adjustment, the stock pay a share being on the
+    count in force. The intermediates' ``ntm_net_income`` is on the count the route used."""
     return None if reported is None else anchor.ntm_eps_found * reported
 
 

@@ -622,6 +622,11 @@ def test_the_agent_reads_the_stock_pay_on_mature_growth() -> None:
         "the company's own definition of its adjusted EPS in the earnings release",
         "Section 8 says whether it leaves out stock pay",
         "set `earnings.sbc_basis`, `includes` or `excludes`, with that passage as evidence",
+        # under a guided NTM EPS neither input moves the value, but the basis is still stated
+        (
+            "Under an applied `earnings.ntm` section 8 still states the basis, and the report sets"
+            " neither stock-pay input"
+        ),
         "Where `stock-pay-missing` shows, read the trailing stock pay in the cash flow statements",
         "set `earnings.sbc`, their total in the reporting currency, period-tied",
     ):
@@ -808,7 +813,7 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         "`snapshot:<id>/intermediates/charge/return_by_year/<n>`",
         "`/charge/growth_by_year/<n>`",
         "**The value outside the business**",
-        "**The share count**",
+        "**The share count**, where an override set one or `share-count-gap` stays",
         "`review:<id>/bridge/<n>/new`",
         "`earnings.nri_gap`",
         "NTM net income",
@@ -821,6 +826,7 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         "**The stock pay**, on Mature Growth",
         "whether the company's adjusted EPS leaves out stock pay",
         "the passage cited as a finding",
+        "Under an applied `earnings.ntm` still state the basis, and set neither stock-pay input",
         "where the filings show nil too, say so",
         # the exposure under a thin NTM consensus
         "**The thin NTM consensus**, where `thin-ntm` shows",

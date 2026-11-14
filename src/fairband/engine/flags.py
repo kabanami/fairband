@@ -35,12 +35,12 @@ test reads it, by ``sbc_basis_gap_multiple`` times the after-tax stock pay a sha
 adjusted figure leaves out far more than stock pay. The stock pay is the one the anchor read, an
 agent's ``earnings.sbc`` in place of the stored figure (spec 2026-11-13 7.2).
 
-The share-count warning (spec 2026-11-13 8): ``share-count-gap`` when the market cap over the
-price times the diluted count is outside ``share_count_gap_band``, an edge being inside. The
-market cap is the quote's, else the profile's or the screener's, and the price the quote's, both
-in US dollars on every row, so the ratio has one currency; the count is the one the row reads. Either figure may be the wrong one: the count may
-leave out a share class or units that convert to shares, so that the value a share of the row can
-be wrong by the ratio, or the market cap may leave a class out.
+The share-count warning (spec 2026-11-13 8): ``share-count-gap`` when the market cap over the price
+times the diluted count is outside ``share_count_gap_band``, an edge being inside. The market cap is
+the quote's, else the profile's or the screener's, and the price the quote's, both in US dollars on
+every row, so the ratio has one currency; the count is the one the row reads. Either figure may be
+the wrong one: the count may leave out a share class or units that convert to shares, so that the
+value a share of the row can be wrong by the ratio, or the market cap may leave a class out.
 
 ``QUALITY_WARNINGS`` are the twelve flags that say the value may be wrong because the business or
 its figures are unusual (spec 2026-11-04 9.5, spec 2026-11-13 8); ``flag_count`` counts them on a

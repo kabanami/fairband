@@ -37,25 +37,23 @@ too, cites the JUDGMENT entries of the overrides last (``route_steps.judged_inpu
 the route's own entries for the inputs they set.
 
 Every result of ``value_company`` cites the policy's version and its settings hash, and is valid
-until the next earnings date when that is after the data date, else for the policy's fallback
-days. Its flags are the assembly's, ``share-count-gap`` (``flags.share_count_flag``, on the
-market cap, the quote's or else the profile's or the screener's, and the quote's price, both USD,
-and the count in force: spec 2026-11-13 8), the classifier's checks and the route's, the first of
-each code kept; ``reprice`` keeps the share-count warning as it was, its ratio not moving with
-the price. Its intermediates hold
-``price_facts``, the price columns of spec 6.3, on a refusal too (``None`` for a row without a
-price), and ``trailing_end``, the trailing period end as an ISO date, on every result whose
-inputs have trailing figures, a refusal too: the period a period-tied override corrects (spec
+until the next earnings date when that is after the data date, else for the policy's fallback days.
+Its flags are the assembly's, ``share-count-gap`` (``flags.share_count_flag``, on the market cap,
+the quote's or else the profile's or the screener's, and the quote's price, both USD, and the count
+in force: spec 2026-11-13 8), the classifier's checks and the route's, the first of each code kept;
+``reprice`` keeps the share-count warning as it was, its ratio not moving with the price. Its
+intermediates hold ``price_facts``, the price columns of spec 6.3, on a refusal too (``None`` for a
+row without a price), and ``trailing_end``, the trailing period end as an ISO date, on every result
+whose inputs have trailing figures, a refusal too: the period a period-tied override corrects (spec
 2026-11-13 11a); and ``margin_history``, the ten-year median operating and net margins with their
-counts of years (``flags.margin_history``, spec 2026-11-13 11), on every result whose series is
-not empty, a refusal too. ``reprice`` moves a result to a new price from its
-intermediates alone, its price input with it; a refusal takes only the new price, except a
-revenue-growth row whose intermediates hold ``revenue_path`` (refused for its target margin or
-its value), whose margin the price needs moves too, a Start-up row, whose market cap moves
-with the price and whose requirement and ``below-net-cash`` flag are rebuilt at it, and a Mature
-Stable row refused for its trailing earnings or for a value not positive under the reinvestment
-charge, whose cross-check's implied growth moves. ``refusal_result`` is the shape of every
-refusal.
+counts of years (``flags.margin_history``, spec 2026-11-13 11), on every result whose series is not
+empty, a refusal too. ``reprice`` moves a result to a new price from its intermediates alone, its
+price input with it; a refusal takes only the new price, except a revenue-growth row whose
+intermediates hold ``revenue_path`` (refused for its target margin or its value), whose margin the
+price needs moves too, a Start-up row, whose market cap moves with the price and whose requirement
+and ``below-net-cash`` flag are rebuilt at it, and a Mature Stable row refused for its trailing
+earnings or for a value not positive under the reinvestment charge, whose cross-check's implied
+growth moves. ``refusal_result`` is the shape of every refusal.
 
 A company in another currency (spec 2026-11-10 7.2 and 7.3). The route runs in the reporting
 currency: its context holds the USD price and market cap × the rate (``CompanyInputs.fx_rate``)
