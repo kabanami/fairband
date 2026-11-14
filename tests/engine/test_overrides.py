@@ -347,10 +347,11 @@ def test_the_two_new_readings(policy: Policy, deciles: Deciles) -> None:
 
 
 def test_the_two_stock_pay_tags_rules(policy: Policy) -> None:
-    """Spec 2026-11-13 7.2: the basis takes its two words, lasting or period-tied; the stock pay
-    is a total of $0 or more, period-tied only; both on Mature Growth alone, their bridge lines
-    right after the non-recurring gap's, the figure first. The stock pay stands in for the
-    route's own ``sbc_ttm`` entry; the basis stands for no entry."""
+    """Spec 2026-11-13 7.2 and 7.3: the basis takes its two words, lasting or period-tied; the
+    stock pay is a total of $0 or more, period-tied, or lasting at 0 alone, for a company that
+    pays no stock; both on Mature Growth alone, their bridge lines right after the non-recurring
+    gap's, the figure first. The stock pay stands in for the route's own ``sbc_ttm`` entry; the
+    basis stands for no entry."""
     assert check_input("earnings.sbc_basis", "excludes", "mature-growth", policy) == ("applied", "")
     assert check_input("earnings.sbc_basis", "maybe", "mature-growth", policy) == (
         "refused-unit",
@@ -360,9 +361,24 @@ def test_the_two_stock_pay_tags_rules(policy: Policy) -> None:
         for route in ("mature-stable", "revenue-growth"):
             state, _ = check_input(tag, value, route, policy)
             assert state == "refused-route", (tag, route)
-    assert check_override(
-        "earnings.sbc", 40e6, "mature-growth", policy, ["filing"], "lasting", None
-    ) == ("refused-unit", "earnings.sbc is period-tied only")
+    lasting = ("earnings.sbc", 40e6, "mature-growth", policy, ["filing"], "lasting", None)
+    assert check_override(*lasting) == (
+        "refused-unit",
+        "a lasting earnings.sbc takes 0 only: a figure is period-tied",
+    )
+    assert check_override(*lasting[:1], 0.0, *lasting[2:]) == ("applied", "")
+    assert TAGS["earnings.sbc"].lasting_value == 0.0
+    assert TAGS["balance.cash"].lasting_value is None
+    # the other period-tied inputs take no lasting figure, nil included
+    assert check_override("balance.cash", 0.0, "decline", policy, ["filing"], "lasting", None) == (
+        "refused-unit",
+        "balance.cash is period-tied only",
+    )
+    # the input's own rules come first: a lasting figure below 0 is refused for its range
+    assert check_override(*lasting[:1], -1.0, *lasting[2:]) == (
+        "refused-unit",
+        "earnings.sbc takes $0 or more",
+    )
     tied = ("earnings.sbc", 40e6, "mature-growth", policy, ["filing"], "period-tied", None)
     assert check_override(*tied) == ("applied", "")
     assert check_override(*tied[:1], 0.0, *tied[2:]) == ("applied", "")  # nil is a figure
@@ -381,6 +397,7 @@ def test_the_two_stock_pay_tags_rules(policy: Policy) -> None:
     assert sbc.period_tied_only and not sbc.low_open
     assert (basis_spec.routes, basis_spec.unit) == ({"mature-growth"}, "basis")
     assert basis_spec.words == ("includes", "excludes") and not basis_spec.period_tied_only
+    assert basis_spec.lasting_value is None
     assert BRIDGE_ORDER.index("earnings.sbc") == BRIDGE_ORDER.index("earnings.nri_gap") + 1
     assert BRIDGE_ORDER.index("earnings.sbc_basis") == BRIDGE_ORDER.index("earnings.sbc") + 1
     assert (LABELS["earnings.sbc"], LABELS["earnings.sbc_basis"]) == (

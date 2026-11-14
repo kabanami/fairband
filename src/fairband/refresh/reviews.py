@@ -29,6 +29,12 @@ fiscal year that holds most of the NTM window after the last reported period (fo
 two half-years for a half-yearly reporter), as every route reads it (``anchor.base_year`` on the
 new inputs and their trailing cadence). Without a base year, or without such a record, it stays.
 
+A lasting ``earnings.sbc``, which takes 0 alone (``overrides.TagSpec.lasting_value``), drops the
+same way, "the store holds a trailing stock pay above zero", when the new inputs' assembled
+trailing stock pay (``inputs.trailing.sbc``) is above zero (spec 2026-11-13 7.3). A nil, or none
+(no trailing figures, or a period that lacks the line), keeps it. The test reads the assembled
+figure, not the result's ``sbc_ttm``, which a row refused before its route does not carry.
+
 With an override left, ``write_review`` reviews the new result under the rest on the new inputs,
 writes the review on the new snapshot, with the snapshot's validity window and its price facts
 (the 52-week range and the one-, three- and five-year changes anchor on the date the refresh
@@ -99,6 +105,7 @@ logger = logging.getLogger("fairband.refresh")
 NEWER = "a newer period is on file than the one the override corrected"
 CHANGED = "the input the override corrected changed"
 PASSED = "the guided year has passed"
+ON_FILE = "the store holds a trailing stock pay above zero"
 
 
 def follow_snapshot(
@@ -144,9 +151,10 @@ def _follow(
         else base_year(inputs.quarter_estimates, trailing.period_end, trailing.cadence)
     )
     trailing_end = None if trailing is None else trailing.period_end
+    stored_sbc = None if trailing is None else trailing.sbc
     kept = []
     for override in applied_overrides(conn, symbol):
-        reason = _drop_reason(conn, override, result, base, trailing_end)
+        reason = _drop_reason(conn, override, result, base, trailing_end, stored_sbc)
         if reason is None:
             kept.append(override)
             continue
@@ -372,10 +380,14 @@ def _drop_reason(
     result: ValuationResult,
     base: int | None,
     trailing_end: date | None,
+    stored_sbc: float | None,
 ) -> str | None:
-    """Why ``override`` no longer holds on ``result``, whose base year is ``base`` and whose
-    trailing period end is ``trailing_end``, or ``None`` (module docstring)."""
+    """Why ``override`` no longer holds on ``result``, whose base year is ``base``, whose
+    trailing period end is ``trailing_end`` and whose inputs' trailing stock pay is
+    ``stored_sbc``, or ``None`` (module docstring)."""
     if override.lifetime == "lasting":
+        if override.tag == "earnings.sbc" and stored_sbc is not None and stored_sbc > 0:
+            return ON_FILE
         return _guided_year_passed(conn, override, base)
     made_on = snapshot_row(conn, override.snapshot_id)
     corrected = None if made_on is None else _trailing_end(made_on.result)

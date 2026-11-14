@@ -361,10 +361,10 @@ Twelve flags ask for a decision of yours. Read each sentence whole: it names its
   is, while a fiscal year on file shows stock pay above zero. The stored figure may be missing or
   short, and the charge on the analysts' EPS with it. The sentence names that fiscal year and its
   figure. Read the stock pay in the cash flow statements of the trailing periods' filings, and
-  decide through `earnings.sbc`, period-tied (the second of the two steps below). The note does
-  not show once `earnings.sbc` applies. Under an applied `earnings.ntm` the note does not show,
-  and neither stock-pay input is needed: the guided EPS stands in for the analysts' EPS less the
-  charge.
+  decide through `earnings.sbc` (the second of the two steps below): period-tied for the figure
+  the filings show, or lasting at 0 where they show nil too. The note does not show once
+  `earnings.sbc` applies. Under an applied `earnings.ntm` the note does not show, and neither
+  stock-pay input is needed: the guided EPS stands in for the analysts' EPS less the charge.
 - `sbc-basis-uncertain`: on Mature Growth, the engine's test of whether the analysts' EPS leaves
   out stock pay may misread. The sentence gives each reason that holds: a large one-time item
   that may hide the gap, a low tax rate that may close it, or a street EPS so far above GAAP
@@ -437,7 +437,11 @@ stock pay out (`intermediates/sbc_basis`: `includes-sbc`, `excludes-sbc` or `unk
 2. Where `stock-pay-missing` shows, read the trailing stock pay in the cash flow statements of the
    trailing periods' filings (`filing_report`), and set `earnings.sbc`, their total in the
    reporting currency, period-tied, with the filings as evidence. Where the filings show nil too,
-   the figure stands, and section 8 says so.
+   the company pays no stock: set a lasting `earnings.sbc` of 0 with the filing as evidence, and
+   section 8 says so. It holds across periods, so a later report does not set it again, and the
+   system drops it once the stored trailing stock pay is above zero. The server refuses a lasting
+   0 where the row's trailing stock pay (`intermediates/sbc_ttm`) is above zero: there the
+   vendor's figure is wrong for these periods, so set the filings' nil period-tied.
 
 Where the price is well above the value, the answer of `company` carries `priceNeeds`: what the
 price needs of the business, beside what the route holds. A value far below the price says only
@@ -729,7 +733,7 @@ not you, computes the value it gives.
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | the revenue a dollar of invested capital buys | 0.1 to 10 |
 | `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end | above 0 to 5.00 |
 | `earnings.nri_gap` | Mature Growth, Mature Stable | the non-recurring gap in the earnings a share | −100 to 100 dollars a share |
-| `earnings.sbc` | Mature Growth | the trailing stock pay, a total for the trailing periods in the reporting currency, from the cash flow statements of their filings; it stands in for the stored figure in the test of the analysts' basis and in the charge for stock pay | 0 dollars or more; period-tied only |
+| `earnings.sbc` | Mature Growth | the trailing stock pay, a total for the trailing periods in the reporting currency, from the cash flow statements of their filings; it stands in for the stored figure in the test of the analysts' basis and in the charge for stock pay | 0 dollars or more, period-tied; lasting at 0 only, for a company that pays no stock |
 | `earnings.sbc_basis` | Mature Growth | whether the analysts' EPS includes stock pay or excludes it, in place of the engine's test; the evidence is the company's own definition of its adjusted EPS in the release | `includes` or `excludes`; lasting or period-tied |
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
@@ -856,8 +860,9 @@ The server checks an override by these rules, in this order, and answers the fir
    `path.step_2` and `path.step_3` are refused there. A company with no phase reads no input but its
    phase: set its phase first.
 4. `refused-unit`: a value outside the range, a word outside the words, a word where a number is
-   due, an NTM anchor or a share count at 0 or below, or a lasting override of a balance tag (debt,
-   cash or the minority interest), of the stock pay or of the share count.
+   due, an NTM anchor or a share count at 0 or below, a lasting override of a balance tag (debt,
+   cash or the minority interest) or of the share count, or a lasting stock pay at any figure but
+   0: "a lasting earnings.sbc takes 0 only: a figure is period-tied".
 5. `refused-evidence`: no evidence, "an override needs evidence". An NTM anchor with no item of
    kind `guidance`: "an NTM anchor override needs a guidance record among its evidence". A
    `growth.belief` or a `path.hold` above the sales class's 90th percentile (`sales_p90_5y` in the
@@ -865,6 +870,9 @@ The server checks an override by these rules, in this order, and answers the fir
    not count for this rule, even when the finding came from a filing.
 
 Before the rules, the server checks each `guidance` item (see "Guidance"); a bad one stores nothing.
+After them, it refuses a lasting `earnings.sbc` of 0 where the snapshot's trailing stock pay is
+above zero, "a lasting earnings.sbc of 0 is refused: the snapshot's trailing stock pay is above
+zero", and stores nothing: set the filings' figure period-tied there.
 
 A refused override is stored with its state and applies nothing. Its answer is the refusal's
 sentence with the `override` record beside it. Fix the one thing the sentence names, and try again.
@@ -885,8 +893,9 @@ One input holds one applied override. A new override on the same tag replaces th
 override applies to the latest snapshot and to every later one. A period-tied override (a correction
 of one period's vendor error) holds until the company reports a new period or the figure it
 corrected changes; then the system drops it by itself. A refresh that fetches the same statements
-again keeps it. Add a note with `note_add(symbol, text, override_id)` when the reason needs more
-words.
+again keeps it. A lasting `earnings.sbc` of 0 holds across periods, and the system drops it once
+the stored trailing stock pay is above zero: "the store holds a trailing stock pay above zero".
+Add a note with `note_add(symbol, text, override_id)` when the reason needs more words.
 
 An override, a drop, a secondary valuation and a sensitivity reading are refused with "settings
 changed: run a revalue" (or "policy changed", or "method changed") when the latest snapshot was

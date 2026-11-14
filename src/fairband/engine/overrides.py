@@ -8,10 +8,12 @@ return and the diluted share count, which each must be above (``TagSpec.low_open
 ``LABELS`` names each input's bridge line in a reader's words. ``check_override`` applies the
 rules in this order and answers with the first one broken: a locked input (``LOCKED``); a tag
 that is not an input; a route that does not read the tag; a value outside its words or its
-range, or a lasting override of a period-tied input; no evidence, an NTM anchor
-(``earnings.ntm``, ``revenue.ntm``) without a guidance record among its evidence, or a belief or
-held rate above the sales class's 90th percentile without a filing or a transcript (when the
-policy's ``override_primary_evidence_above_p90`` holds). The rule reads the evidence's kinds
+range, or a lasting override of a period-tied input, but the stock pay at 0, the one figure that
+holds from period to period, for a company that pays no stock (``TagSpec.lasting_value``, spec
+2026-11-13 7.3); no evidence, an NTM anchor (``earnings.ntm``, ``revenue.ntm``) without a
+guidance record among its evidence, or a belief or held rate above the sales class's 90th
+percentile without a filing or a transcript (when the policy's
+``override_primary_evidence_above_p90`` holds). The rule reads the evidence's kinds
 alone: the records an NTM anchor cites must hold a gaap record of its metric for a fiscal year
 (``ANCHOR_METRICS``, ``anchor_misfit``), which the override route checks on the records before
 the rules, since it reads them. A passing override is ``("applied", "")``; a refused one names
@@ -135,7 +137,9 @@ class TagSpec:
     override may change it, and whether its range's lower end is excluded: an NTM anchor must be
     above 0, as the route's own positive-anchor rule asks of the consensus, and so must a share
     count, as the guard asks of the reported one, and the runway return, which the charge divides
-    by."""
+    by. ``lasting_value`` is the one value a lasting override of such a period-tied input may
+    take, ``None`` for none: the stock pay may last at 0, for a company that pays no stock (spec
+    2026-11-13 7.3)."""
 
     tag: OverrideTag
     routes: frozenset[Route]
@@ -143,6 +147,7 @@ class TagSpec:
     words: tuple[str, ...] | None
     period_tied_only: bool
     low_open: bool
+    lasting_value: float | None = None
 
 
 @dataclass(frozen=True)
@@ -179,8 +184,9 @@ def _spec(
     words: tuple[str, ...] | None = None,
     period_tied_only: bool = False,
     low_open: bool = False,
+    lasting_value: float | None = None,
 ) -> TagSpec:
-    return TagSpec(tag, routes, unit, words, period_tied_only, low_open)
+    return TagSpec(tag, routes, unit, words, period_tied_only, low_open, lasting_value)
 
 
 TAGS: dict[OverrideTag, TagSpec] = {
@@ -198,7 +204,13 @@ TAGS: dict[OverrideTag, TagSpec] = {
         _spec("capital.sales_to_capital", _GROWTH | {"decline"}, "multiple"),
         _spec("return.runway", _MATURE, "ratio", low_open=True),
         _spec("earnings.nri_gap", _MATURE, "USD a share"),
-        _spec("earnings.sbc", frozenset({"mature-growth"}), "USD", period_tied_only=True),
+        _spec(
+            "earnings.sbc",
+            frozenset({"mature-growth"}),
+            "USD",
+            period_tied_only=True,
+            lasting_value=0.0,
+        ),
         _spec("earnings.sbc_basis", frozenset({"mature-growth"}), "basis", _BASES),
         _spec("earnings.cycle_gap", _MATURE, "USD a share"),
         _spec("decline.rate", frozenset({"decline"}), "ratio"),
@@ -343,8 +355,9 @@ def check_override(
     state, message = check_input(tag, value, route, policy, fx_rate=fx_rate, currency=currency)
     if state != "applied":
         return state, message
-    if TAGS[cast(OverrideTag, tag)].period_tied_only and lifetime == "lasting":
-        return "refused-unit", f"{tag} is period-tied only"
+    lasting = _lasting_refusal(TAGS[cast(OverrideTag, tag)], value, lifetime)
+    if lasting is not None:
+        return "refused-unit", lasting
     if not evidence_kinds:
         return "refused-evidence", "an override needs evidence"
     if tag in _NTM_ANCHORS and "guidance" not in evidence_kinds:
@@ -362,6 +375,17 @@ def check_override(
             "transcript"
         )
     return "applied", ""
+
+
+def _lasting_refusal(spec: TagSpec, value: float | str, lifetime: Lifetime) -> str | None:
+    """Why a lasting override of the period-tied input ``spec`` cannot take ``value``, or
+    ``None``: a period-tied override, an input any lifetime may change, or the one value a
+    lasting override of the input may take (``TagSpec.lasting_value``)."""
+    if lifetime != "lasting" or not spec.period_tied_only or value == spec.lasting_value:
+        return None
+    if spec.lasting_value is None:
+        return f"{spec.tag} is period-tied only"
+    return f"a lasting {spec.tag} takes {_signed(spec.lasting_value)} only: a figure is period-tied"
 
 
 def check_input(

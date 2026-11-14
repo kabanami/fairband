@@ -222,7 +222,8 @@ The kill criteria of section 11 test it.
   override where the row read otherwise. Under an applied `earnings.ntm` still state the basis,
   and set neither stock-pay input, which could not move the value. Where `stock-pay-missing`
   showed, the trailing stock pay from the filings' cash flow statements, cited as its bridge line,
-  `review:<id>/bridge/<n>/new`; where the filings show nil too, say so: the figure stands.
+  `review:<id>/bridge/<n>/new`; where the filings show nil too, say so, with the filing cited:
+  the company pays no stock, and a lasting `earnings.sbc` of 0 records it.
 - **The thin NTM consensus**, where `thin-ntm` shows: the exposure, the thin periods and their
   share of the NTM EPS, each period's EPS cited, `estimate:<symbol>/<period>/eps`. Under a
   guidance override of the anchor the note does not show, and the guidance below covers it.

@@ -1071,14 +1071,15 @@ value with no override) does not move.</p>
 each within set bounds. One is the diluted share count, for shares promised but not yet counted, or
 for a share class the count leaves out. Another is the value outside the business, such as a stake
 in another company. It adds to the route's value a share. Two set the stock pay a Mature Growth
-value charges. One is the trailing figure from the filings. The other says whether the analysts' EPS
-leaves stock pay out, as the company defines its adjusted EPS. Locked inputs, such as the hurdle
-rate, terminal growth and the reported figures, take no override. An agent adds and drops overrides;
-you read them. A refresh also drops a period-tied override (one that corrects a single period's
-figure) once the company reports a newer period or that figure changes. The review (the overrides
-and the value they give) moves to each new snapshot, the company's figures from a refresh. An
-overridden input is tagged JUDGMENT, beside DATA (a figure from the vendor) and RULE (a value from
-the policy).</p>
+value charges. One is the trailing figure from the filings. For a company that pays no stock, a
+nil figure may last until a refresh finds stock pay in the company's figures. The other says
+whether the analysts' EPS leaves stock pay out, as the company defines its adjusted EPS. Locked
+inputs, such as the hurdle rate, terminal growth and the reported figures, take no override. An
+agent adds and drops overrides; you read them. A refresh also drops a period-tied override (one
+that corrects a single period's figure) once the company reports a newer period or that figure
+changes. The review (the overrides and the value they give) moves to each new snapshot, the
+company's figures from a refresh. An overridden input is tagged JUDGMENT, beside DATA (a figure
+from the vendor) and RULE (a value from the policy).</p>
 
 <h3 class="heading">The bridge</h3>
 <p class="body">The bridge leads from the mechanical value to the reviewed value, one line for each

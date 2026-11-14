@@ -48,6 +48,7 @@ EVIDENCE = [{"kind": "transcript", "ref": "Q3 call", "note": ""}]
 CHANGED = "the input the override corrected changed"
 NEWER = "a newer period is on file than the one the override corrected"
 PASSED = "the guided year has passed"
+ON_FILE = "the store holds a trailing stock pay above zero"
 FAILED = "review failed"
 HGCO_TODAY = date(2026, 10, 31)  # the day HGCO is valued
 HGCO_AT = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)  # the time its snapshots and override are made
@@ -385,9 +386,9 @@ def _made_on(conn: sqlite3.Connection, override_id: int) -> ValuationResult:
 
 
 def _a_quarter_on(inputs: CompanyInputs) -> CompanyInputs:
-    """HGCO a quarter on: the trailing period end moves from 30 Sep to 31 Dec 2026, and the
-    consensus quarters with it (Q4 2026 reported, Q4 2027 added), so the route still values the
-    company on the same base year and reads the same cash line."""
+    """HGCO, or MGCO, a quarter on: the trailing period end moves from 30 Sep to 31 Dec 2026, and
+    the consensus quarters with it (Q4 2026 reported, Q4 2027 added at HGCO's figures), so the
+    route still values the company on the same base year, and on HGCO reads the same cash line."""
     assert inputs.trailing is not None
     later = inputs.trailing.period_end + timedelta(days=92)
     assert later == date(2026, 12, 31)
@@ -473,6 +474,93 @@ def test_a_period_tied_stock_pay_follows_the_figure_the_anchor_read(
     assert follow(replace(inputs, trailing=replace(inputs.trailing, sbc=450e6))) is None
     dropped = override_row(conn, pay)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
+
+
+def test_a_lasting_nil_stock_pay_holds_until_the_store_holds_one(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-13 7.3: MGCO with a stored trailing stock pay of nil and a lasting
+    ``earnings.sbc`` of 0. It stays applied on the same figures, when a newer period is on file
+    and when the trailing figure is missing; it drops when the store holds $50 m."""
+    assert reviews.ON_FILE == ON_FILE
+    deciles = universe_deciles()
+    live = _as_live(mature_growth_inputs())
+    assert live.trailing is not None
+    inputs = replace(live, trailing=replace(live.trailing, sbc=0.0))
+    first = value_company(inputs, deciles, policy, HGCO_TODAY)
+    assert current_reading(first, "earnings.sbc") == 0.0
+    refresh_id = create_refresh(
+        conn, "revalue", None, policy.version, METHOD_VERSION, HGCO_AT, EMPTY_SETTINGS_HASH
+    )
+    made_on = insert_snapshot(conn, first, refresh_id, clock=lambda: HGCO_AT)
+
+    def nil() -> int:
+        return insert_override(
+            conn,
+            "MGCO",
+            "earnings.sbc",
+            0.0,
+            0.0,
+            "USD",
+            "the 10-K shows no share-based pay",
+            EVIDENCE,
+            "lasting",
+            None,
+            None,
+            made_on,
+            AGENT,
+            HGCO_AT,
+            "applied",
+            "",
+        )
+
+    def follow(inputs: CompanyInputs) -> int | None:
+        result = value_company(inputs, deciles, policy, HGCO_TODAY)
+        snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: HGCO_AT)
+        return follow_snapshot(
+            conn,
+            inputs,
+            result,
+            snapshot_id,
+            deciles,
+            policy,
+            HGCO_TODAY,
+            refresh_id,
+            lambda: HGCO_AT,
+        )
+
+    def stock_pay(inputs: CompanyInputs, sbc: float | None) -> CompanyInputs:
+        assert inputs.trailing is not None
+        return replace(inputs, trailing=replace(inputs.trailing, sbc=sbc))
+
+    pay = nil()
+    assert follow(inputs) is not None
+    review = latest_review(conn, "MGCO")
+    assert review is not None and review.override_ids == (pay,)
+    later = _a_quarter_on(inputs)
+    assert later.trailing is not None and later.trailing.sbc == 0.0
+    assert later.trailing.period_end == date(2026, 12, 31)  # a period-tied one drops: NEWER
+    assert follow(later) is not None
+    assert follow(stock_pay(later, None)) is not None  # a period lacks the line
+    kept = override_row(conn, pay)
+    assert kept is not None and kept.state == "applied"
+    assert follow(stock_pay(later, 50e6)) is None
+    dropped = override_row(conn, pay)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", ON_FILE)
+
+    # a row refused before its route carries no ``sbc_ttm``: the test reads the assembled figure
+    again = nil()
+    refused = replace(stock_pay(later, 50e6), shares_diluted=None)
+    result = value_company(refused, deciles, policy, HGCO_TODAY)
+    assert result.refusal == "no diluted share count"
+    assert "sbc_ttm" not in result.intermediates
+    assert follow(refused) is None
+    dropped = override_row(conn, again)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", ON_FILE)
+    assert [(e.principal, e.kind, e.ref_id, e.summary) for e in entries(conn, "MGCO")] == [
+        (SYSTEM.principal, "override-drop", again, f"earnings.sbc dropped: {ON_FILE}"),
+        (SYSTEM.principal, "override-drop", pay, f"earnings.sbc dropped: {ON_FILE}"),
+    ]  # newest first
 
 
 def test_a_period_tied_override_drops_when_a_newer_period_is_on_file(

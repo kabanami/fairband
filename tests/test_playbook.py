@@ -562,11 +562,12 @@ def test_the_overrides_table_names_the_twenty_one_inputs() -> None:
     income with it, so the agent reads the consensus EPS's share basis first; the value outside
     the business is after tax, and its gains come out of the earnings through the non-recurring
     gap, so nothing counts twice; the stock pay is a total from the filing's cash flow statement,
-    period-tied only, and the stock-pay basis rests on the release's definition of its adjusted
-    EPS; the minority interest is a total, period-tied only, for a market value or a redeemable
-    stake the line leaves out, from the filing's note on non-controlling or redeemable interests;
-    the bridge's lines run in the engine's order, the minority interest's after cash; the tool
-    list counts the twenty-one."""
+    period-tied, or lasting at 0 alone (spec 2026-11-13 7.3), and the stock-pay basis rests on
+    the release's definition of its adjusted EPS; the minority interest is a total, period-tied
+    only, for a market value or a redeemable stake the line leaves out, from the filing's note on
+    non-controlling or redeemable interests; the bridge's lines run in the engine's order, the
+    minority interest's after cash; the tool list counts the twenty-one, and says that the
+    write's refusal of a lasting nil stores nothing."""
     skill = _read(SKILL)
     table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
     tags: list[str] = []
@@ -594,7 +595,11 @@ def test_the_overrides_table_names_the_twenty_one_inputs() -> None:
     ):
         assert words in outside, words
     pay = _flat(" ".join(table["`earnings.sbc`"]))
-    for words in ("a total", "cash flow statement", "0 dollars or more", "period-tied only"):
+    for words in (
+        "a total",
+        "cash flow statement",
+        "0 dollars or more, period-tied; lasting at 0 only, for a company that pays no stock",
+    ):
         assert words in pay, words
     basis = _flat(" ".join(table["`earnings.sbc_basis`"]))
     for words in ("`includes` or `excludes`", "definition of its adjusted EPS", "the release"):
@@ -621,7 +626,17 @@ def test_the_overrides_table_names_the_twenty_one_inputs() -> None:
         "moat, debt, cash, minority interest, diluted shares, outside the business"
     )
     entry = _tool_entry("override_add")
-    for words in ("twenty-one", "`shares.diluted`", "`value.outside`", "`balance.minority`"):
+    for words in (
+        "twenty-one",
+        "`shares.diluted`",
+        "`value.outside`",
+        "`balance.minority`",
+        # the write's own refusal of a lasting nil answers the sentence alone (spec 2026-11-13 7.3)
+        (
+            "A lasting `earnings.sbc` of 0 on a row whose trailing stock pay is above zero is"
+            " refused with the sentence alone, and nothing is stored."
+        ),
+    ):
         assert words in entry, words
 
 
@@ -646,6 +661,48 @@ def test_the_agent_reads_the_stock_pay_on_mature_growth() -> None:
         "set `earnings.sbc`, their total in the reporting currency, period-tied",
     ):
         assert words in eight, words
+
+
+def test_the_agent_sets_a_lasting_nil_for_a_company_that_pays_no_stock() -> None:
+    """Spec 2026-11-13 7.3: where the filings show nil too, the agent sets a lasting
+    `earnings.sbc` of 0 with the filing as evidence, once; the system drops it when the stored
+    trailing stock pay is above zero; the rules refuse a lasting figure but 0, and the server a
+    lasting 0 on a row whose trailing stock pay is above zero, where the period-tied nil is the
+    one to set; section 8 says so."""
+    skill = _flat(_read(SKILL))
+    eight = _flat(_steps(_frontmatter(_read(SKILL))[1])[8])
+    for words in (
+        (
+            "Where the filings show nil too, the company pays no stock: set a lasting"
+            " `earnings.sbc` of 0 with the filing as evidence, and section 8 says so."
+        ),
+        "It holds across periods, so a later report does not set it again",
+        "the system drops it once the stored trailing stock pay is above zero",
+        "where the row's trailing stock pay (`intermediates/sbc_ttm`) is above zero",
+        "set the filings' nil period-tied",
+    ):
+        assert words in eight, words
+    for words in (
+        # the rules' list: a lasting stock pay takes 0 alone
+        (
+            "a lasting override of a balance tag (debt, cash or the minority interest) or of the"
+            ' share count, or a lasting stock pay at any figure but 0: "a lasting earnings.sbc'
+            ' takes 0 only: a figure is period-tied".'
+        ),
+        # the write's check after the rules, which stores nothing
+        (
+            "After them, it refuses a lasting `earnings.sbc` of 0 where the snapshot's trailing"
+            " stock pay is above zero, \"a lasting earnings.sbc of 0 is refused: the snapshot's"
+            ' trailing stock pay is above zero", and stores nothing'
+        ),
+        # the lifetimes
+        (
+            "A lasting `earnings.sbc` of 0 holds across periods, and the system drops it once the"
+            ' stored trailing stock pay is above zero: "the store holds a trailing stock pay above'
+            ' zero".'
+        ),
+    ):
+        assert words in skill, words
 
 
 def test_the_citations_name_the_newest_sheet_and_the_minority_interest() -> None:
@@ -794,6 +851,7 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "cash flow statements",
                 "`earnings.sbc`",
                 "period-tied",
+                "lasting at 0 where they show nil too",
                 "once `earnings.sbc`",
                 GUIDED_STOCK_PAY,
             ),
@@ -881,12 +939,15 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         # plan 1, its Minor 4): a class the count leaves out, and why a share-count warning stays
         "a share class or units that convert to shares that the count leaves out",
         "Where `share-count-gap` stays because the market cap leaves a class out",
-        # the stock pay's basis with its passage, and a nil the filings confirm
+        # the stock pay's basis with its passage, and a nil the filings confirm, set lasting
         "**The stock pay**, on Mature Growth",
         "whether the company's adjusted EPS leaves out stock pay",
         "the passage cited as a finding",
         "Under an applied `earnings.ntm` still state the basis, and set neither stock-pay input",
-        "where the filings show nil too, say so",
+        (
+            "where the filings show nil too, say so, with the filing cited: the company pays no"
+            " stock, and a lasting `earnings.sbc` of 0 records it."
+        ),
         # the exposure under a thin NTM consensus
         "**The thin NTM consensus**, where `thin-ntm` shows",
         "the thin periods and their share of the NTM EPS",

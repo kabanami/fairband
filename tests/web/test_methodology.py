@@ -402,6 +402,11 @@ def test_the_agents_section_reads(client: TestClient) -> None:
         "A range takes the midpoint.",
         "best effort, never required",
         "drops a period-tied override",
+        # spec 2026-11-13 7.3: a nil stock pay may last, until the stored figures show stock pay
+        (
+            "For a company that pays no stock, a nil figure may last until a refresh finds stock"
+            " pay in the company's figures."
+        ),
         "once its guided year has passed",
         "a valuation review for each company on the list with no open item",
         # spec 11 and 13.3, plan 3: the secondary valuation is the fallback only, refused where

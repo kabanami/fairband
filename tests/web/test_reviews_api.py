@@ -40,6 +40,7 @@ from fairband.store.refreshes import create_refresh, latest_deciles, save_decile
 from fairband.store.snapshots import insert_snapshot
 from fairband.web import reviews_api
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
+from fairband.web.reviews_api import lasting_nil_refusal
 
 AGENT = HEADER | {
     PRINCIPAL_HEADER: "agent",
@@ -59,6 +60,9 @@ LOCKED_G = BELIEF_8 | {"tag": "terminal_growth", "new": 0.03}
 G_T_LOCKED = "g_T is a locked input: the terminal growth ceiling"
 OWNERS_REFUSAL = "an override is an agent's write"
 NO_PERIOD = "a period-tied override names its period"
+NIL_ON_FILE = (
+    "a lasting earnings.sbc of 0 is refused: the snapshot's trailing stock pay is above zero"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -407,11 +411,12 @@ def test_the_two_new_inputs_through_the_api(
 def test_the_two_stock_pay_inputs_through_the_api(
     client: TestClient, results: dict[str, ValuationResult]
 ) -> None:
-    """Spec 2026-11-13 7.2 on AAPL, the Mature Growth golden, whose test reads includes-sbc: the
-    basis applies lasting with a filing, and the consensus taken as excluding stock pay lowers the
-    value; the stock pay is refused lasting and without a period, and applies period-tied with
-    one, keeping the figure it corrected, the stored $400 m; the detail's bridge names both under
-    their labels and units, the figure first."""
+    """Spec 2026-11-13 7.2 and 7.3 on AAPL, the Mature Growth golden, whose test reads
+    includes-sbc: the basis applies lasting with a filing, and the consensus taken as excluding
+    stock pay lowers the value; the stock pay is refused without a period, lasting at $500 m by the
+    rules, and lasting at 0 at the write, nothing stored, since the snapshot's own stock pay is the
+    stored $400 m; it applies period-tied with a period, keeping the figure it corrected, the
+    $400 m; the detail's bridge names both under their labels and units, the figure first."""
     filing = {"kind": "filing", "ref": "Q3 2026 release: the adjusted EPS", "note": ""}
     basis = {
         "tag": "earnings.sbc_basis",
@@ -437,10 +442,17 @@ def test_the_two_stock_pay_inputs_through_the_api(
     }
     r = client.post("/api/companies/AAPL/overrides", json=pay, headers=AGENT)
     assert (r.status_code, r.json()) == (400, {"detail": NO_PERIOD})
-    r = client.post(
-        "/api/companies/AAPL/overrides", json=pay | {"lifetime": "lasting"}, headers=AGENT
+    lasting = pay | {"lifetime": "lasting"}
+    r = client.post("/api/companies/AAPL/overrides", json=lasting, headers=AGENT)
+    assert (r.status_code, r.json()["detail"], r.json()["override"]["state"]) == (
+        400,
+        "a lasting earnings.sbc takes 0 only: a figure is period-tied",
+        "refused-unit",
     )
-    assert (r.status_code, r.json()["detail"]) == (400, "earnings.sbc is period-tied only")
+    stored = len(_overrides(client))
+    r = client.post("/api/companies/AAPL/overrides", json=lasting | {"new": 0.0}, headers=AGENT)
+    assert (r.status_code, r.json()) == (400, {"detail": NIL_ON_FILE})
+    assert len(_overrides(client)) == stored  # nothing stored
     tied = _post(client, pay | {"period": "Q3 2026"})["override"]
     assert (tied["state"], tied["unit"], tied["old"], tied["correctedValue"]) == (
         "applied",
@@ -452,6 +464,55 @@ def test_the_two_stock_pay_inputs_through_the_api(
     assert [(x["tag"], x["label"], x["unit"], x["old"], x["new"]) for x in bridge] == [
         ("earnings.sbc", "stock pay", "USD", 400e6, 500e6),
         ("earnings.sbc_basis", "stock-pay basis", "basis", "includes", "excludes"),
+    ]
+
+
+def test_a_lasting_nil_needs_a_snapshot_without_stock_pay() -> None:
+    refused = (
+        "a lasting earnings.sbc of 0 is refused: the snapshot's trailing stock pay is above zero"
+    )
+    assert lasting_nil_refusal("earnings.sbc", "lasting", 400e6) == refused
+    for reading in (0.0, None):  # nil on file, or a row refused before its route read it
+        assert lasting_nil_refusal("earnings.sbc", "lasting", reading) is None
+    assert lasting_nil_refusal("earnings.sbc", "period-tied", 400e6) is None
+    assert lasting_nil_refusal("growth.belief", "lasting", 0.08) is None
+
+
+def test_a_lasting_nil_stock_pay_through_the_api(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    stored_inputs: dict[str, CompanyInputs],
+) -> None:
+    """Spec 2026-11-13 7.3 on AAPL, its stored trailing stock pay now nil: a lasting
+    ``earnings.sbc`` of 0 applies, its old value the snapshot's nil and no corrected value, as a
+    lasting override keeps none; the bridge's line moves nothing."""
+    aapl = stored_inputs["AAPL"]
+    assert aapl.trailing is not None
+    nil = replace(aapl, trailing=replace(aapl.trailing, sbc=0.0))
+    valued = value_company(nil, universe_deciles(), policy, TODAY)
+    assert current_reading(valued, "earnings.sbc") == 0.0
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, valued, 1, clock=lambda: CREATED)
+    stored_inputs["AAPL"] = nil
+    filing = {"kind": "filing", "ref": "10-K 2025: the cash flow statement", "note": ""}
+    pay = {
+        "tag": "earnings.sbc",
+        "new": 0.0,
+        "reason": "the company pays no stock",
+        "evidence": [filing],
+        "lifetime": "lasting",
+    }
+    body = _post(client, pay)["override"]
+    assert (body["state"], body["lifetime"], body["old"], body["correctedValue"]) == (
+        "applied",
+        "lasting",
+        0.0,
+        None,
+    )
+    bridge = client.get("/api/companies/AAPL").json()["review"]["bridge"]
+    assert [(x["tag"], x["old"], x["new"], x["delta"]) for x in bridge] == [
+        ("earnings.sbc", 0.0, 0.0, 0.0)
     ]
 
 

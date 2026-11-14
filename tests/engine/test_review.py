@@ -352,6 +352,32 @@ def test_an_agent_s_stock_pay_charges_the_anchor_and_settles_the_notes(
     assert entries == [("earnings.sbc", "JUDGMENT", "USD")]
 
 
+def test_an_agent_s_nil_stock_pay_keeps_the_value_and_settles_the_note(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-13 7.3: the engine does not read an override's lifetime, so a lasting
+    ``earnings.sbc`` of 0 is any applied nil. On the same MGCO, its stored stock pay nil while
+    fiscal 2025 shows $380 m, the agent's nil is the figure the anchor read: the anchor takes
+    nothing off, the value stays and the line's delta is 0; ``stock-pay-missing`` goes, the agent
+    decided."""
+    base = _excluding()
+    assert base.trailing is not None
+    inputs = replace(
+        base,
+        trailing=replace(base.trailing, sbc=0.0),
+        stock_pay=StockPayHistory(4, 2025, 380e6),
+    )
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.value is not None and "stock-pay-missing" in _codes(mechanical)
+    nil = [OVERRIDE("earnings.sbc", 0.0)]
+    review = review_company(inputs, deciles, policy, TODAY, nil, mechanical)
+    assert review.result.value == mechanical.value
+    assert review.result.intermediates["anchor"] == mechanical.intermediates["anchor"]
+    [line] = review.bridge
+    assert (line.tag, line.old, line.new, line.delta) == ("earnings.sbc", 0.0, 0.0, 0.0)
+    assert "stock-pay-missing" not in _codes(review.result)
+
+
 def test_the_basis_note_reads_the_gaap_figure_the_test_read(
     policy: Policy, deciles: Deciles
 ) -> None:

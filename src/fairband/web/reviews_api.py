@@ -26,19 +26,23 @@ snapshot cites no trailing revenue. On a row in another currency (spec 2026-11-1
 reads that revenue ÷ the snapshot's rate, in USD as the class bounds are, and the cap is restated
 by the row's inflation differential, as the routes read it; the money ranges are read in the
 currency at the snapshot's rate (``types.money_of``). An NTM anchor's override needs a
-``guidance`` item among its evidence.
-The override is stored either way, with the engine's reading of the input on the snapshot as its
-old value and, for a period-tied one, as the value it corrected. A refused one answers 400 with
-the rule's sentence and ``{override}``. An applied one drops the applied override on its tag
-("replaced by override n") and the company's review is recomputed: ``build_inputs`` on the latest
-deciles and today's date, a row in another currency at the snapshot's own rate and its date, which
-are snapshot data as the price is (``built_inputs``); the engine with no override on them must
-give the snapshot's route and value a share, else the write is refused 409, "the store moved since
-snapshot <id>: run a revalue", and nothing is stored, since a store change after the snapshot (a
-full refresh's new deciles before its value stage, a peer's figures from a scoped refresh) would
-land on the bridge's first line as the agent's; then ``review_company`` over every applied
-override from the snapshot's result, the review written on the snapshot with its validity window
-and its log row; it answers 201 with ``{override, review, bridge}``.
+``guidance`` item among its evidence. A lasting ``earnings.sbc`` of 0 that the rules apply is
+then refused where the snapshot's own trailing stock pay, the engine's reading of the input on
+it, is above zero: 400 "a lasting earnings.sbc of 0 is refused: the snapshot's trailing stock pay
+is above zero" (``lasting_nil_refusal``), nothing stored; a reading of 0, or none, takes it (spec
+2026-11-13 7.3).
+Otherwise the override is stored, applied or refused, with the engine's reading of the input on
+the snapshot as its old value and, for a period-tied one, as the value it corrected. A refused one
+answers 400 with the rule's sentence and ``{override}``. An applied one drops the applied override
+on its tag ("replaced by override n") and the company's review is recomputed: ``build_inputs`` on
+the latest deciles and today's date, a row in another currency at the snapshot's own rate and its
+date, which are snapshot data as the price is (``built_inputs``); the engine with no override on
+them must give the snapshot's route and value a share, else the write is refused 409, "the store
+moved since snapshot <id>: run a revalue", and nothing is stored, since a store change after the
+snapshot (a full refresh's new deciles before its value stage, a peer's figures from a scoped
+refresh) would land on the bridge's first line as the agent's; then ``review_company`` over every
+applied override from the snapshot's result, the review written on the snapshot with its validity
+window and its log row; it answers 201 with ``{override, review, bridge}``.
 
 ``DELETE /api/overrides/{id}`` drops an applied override with ``{reason}`` (the same 409s; 404
 for no such override, 409 for one not applied) and recomputes the review over the rest, the
@@ -201,6 +205,9 @@ from fairband.web.settings_api import effective
 AGENTS_WRITE = "an override is an agent's write"
 EvidenceKind = Literal["filing", "transcript", "url", "vendor", "base-rate", "finding", "guidance"]
 GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
+NIL_ON_FILE = (
+    "a lasting earnings.sbc of 0 is refused: the snapshot's trailing stock pay is above zero"
+)
 _PHASES: tuple[str, ...] = get_args(Phase)
 _MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
@@ -403,6 +410,9 @@ def add_review_routes(
             state, message = _check(body, applied, snapshot, current)
             spec = next((s for s in TAGS.values() if s.tag == body.tag), None)
             old = None if spec is None else current_reading(snapshot.result, spec.tag)
+            nil = lasting_nil_refusal(body.tag, body.lifetime, old)
+            if state == "applied" and nil is not None:
+                raise HTTPException(400, nil)
             override_id = insert_override(
                 conn,
                 symbol,
@@ -823,6 +833,17 @@ def _check(
         fx_rate=rate,
         currency=currency,
     )
+
+
+def lasting_nil_refusal(tag: str, lifetime: Lifetime, reading: float | str | None) -> str | None:
+    """The refusal of a lasting ``earnings.sbc`` of 0, the one figure the rules let it last at,
+    on a snapshot whose own trailing stock pay, ``reading``, is a number above zero: the store
+    contradicts the nil, and the period-tied form is the one for a period the vendor has wrong
+    (spec 2026-11-13 7.3); ``None`` for another tag, a period-tied override, a reading of 0, or
+    none, a row refused before its route read one."""
+    if tag != "earnings.sbc" or lifetime != "lasting" or isinstance(reading, str | None):
+        return None
+    return NIL_ON_FILE if reading > 0 else None
 
 
 def _require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[Evidence]) -> None:
