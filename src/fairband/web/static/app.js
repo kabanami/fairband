@@ -183,9 +183,9 @@
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
      evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the
      line that says what the figures are in (currencyLine), a report's footnote numbers, and
-     Request research with a request of its own (asking). The drawer's charge section and its
-     rows, an input's value, the intermediates and the flags it lists are here for the tests,
-     which read them in node (tests/web/page.mjs). */
+     Request research with a request of its own (asking). The drawer's route sections, the
+     charge's rows, an input's value, the intermediates and the flags it lists are here for the
+     tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
@@ -203,7 +203,8 @@
     phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, money: money,
     rate: rate, plain: plain,
     footnotes: footnotes, asking: asking, requestResearch: requestResearch,
-    chargeRows: chargeRows, matureRoute: matureRoute, intermediates: intermediates,
+    chargeRows: chargeRows, matureRoute: matureRoute, revenueRoute: revenueRoute,
+    declineRoute: declineRoute, startUpRoute: startUpRoute, intermediates: intermediates,
     briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
     drawerFlags: drawerFlags
   };
@@ -1644,7 +1645,33 @@
      its phase. The figures behind it are among the intermediates. */
   function matureRoute(r) {
     return section('mature', ROUTES[r.route || MATURE[r.phase.phase]],
+      annualAnchor(r.intermediates.anchor),
       group('charge', 'Charge', pairs(chargeRows(r.intermediates))));
+  }
+
+  /* Year 1 read from the annual consensus on a thin NTM window (spec 2026-11-13 9a): each fiscal
+     year with its share of the window's periods, a whole year alone, "Year 1 from the annual
+     consensus: fiscal 2026 × 1/4 + fiscal 2027 × 3/4."; nothing on the window's periods, on a
+     Mature Stable row, or on an anchor stored before the source was recorded. */
+  function annualAnchor(anchor) {
+    var years = anchor && anchor.source === 'annual' ? anchor.annual : null;
+    if (!Array.isArray(years) || !years.length) return null;
+    return h('p', { className: 'caption' }, 'Year 1 from the annual consensus: ' +
+      years.map(function (y) {
+        var share = fraction(y.weight);
+        return 'fiscal ' + y.fiscal_year + (share === '1' ? '' : ' × ' + share);
+      }).join(' + ') + '.');
+  }
+
+  /* A share of a year as a reduced fraction: 1/4, 1/2, 3/4, and 1 for a whole year. The weights
+     are periods over four or two, so a denominator up to four finds each; any other to two
+     decimals. */
+  function fraction(w) {
+    for (var d = 1; d <= 4; d++) {
+      var n = Math.round(w * d);
+      if (Math.abs(w * d - n) < 1e-9) return d === 1 ? String(n) : n + '/' + d;
+    }
+    return decimals(w, 2);
   }
 
   /* The charge's rows (spec 2026-11-09 6.2 and 6.3): the return each year's reinvestment pays
@@ -1733,12 +1760,13 @@
         ['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat, code), true],
         ['Terminal value', whole(im.terminal_value, code), true],
         ['Firm value', whole(im.firm_value, code), true],
-        ['Less debt', whole(im.debt, code), true],
+        ['Less debt', whole(im.debt, code), true]
+      ].concat(lessMinority(im), [
         ['Plus cash', whole(im.cash, code), true],
         ['Equity', whole(im.equity, code), true],
         ['Shares', plain(im.shares), true],
         ['Value a share', money(im.value_per_share, code), true]
-      ])),
+      ])), sheetPeriod(im)),
       group('solves', 'At the price', pairs([
         [held ? 'Implied growth held in ' + held : 'Implied growth held after year 3',
           F.formatPercent(im.implied_growth), true],
@@ -1750,6 +1778,26 @@
     return h.apply(null, ['div', { key: key, className: 'app-group' },
       h('h4', { className: 'label app-group__head' }, title)]
       .concat(Array.prototype.slice.call(arguments, 2)));
+  }
+
+  /* Whether the revenue-growth, Decline or Start-up row takes a minority interest off the owners'
+     claim (spec 2026-11-13 13): above zero only, so a company with none, and a result stored
+     before method 1.4, reads as before. */
+  function hasMinority(im) { return im.minority_interest > 0; }
+
+  /* The minority interest's row, after the debt, where there is one; none where there is not. */
+  function lessMinority(im) {
+    return hasMinority(im)
+      ? [['Less minority interest', whole(im.minority_interest, im.currency), true]] : [];
+  }
+
+  /* The newest balance sheet the debt, the cash and the minority interest were read from (spec
+     2026-11-13 12.2), under their rows: "Balance sheet of fiscal 2026 Q3."; nothing without a
+     sheet, or on a result stored before method 1.4. */
+  function sheetPeriod(im) {
+    var sheet = im.balance_sheet;
+    if (!sheet || !sheet.label) return null;
+    return h('p', { className: 'caption' }, 'Balance sheet of ' + sheet.label + '.');
   }
 
   /* The implied growth is held from year 4 to the last high-growth year, the row's RULE input;
@@ -1858,7 +1906,8 @@
       group('runoff', 'Run-off', runoffTable(im), pairs(runoffSummary(im))),
       group('margin', 'Normalized margin', pairs(normalizedMargin(im.margin))),
       group('rating', 'Rating', pairs(rating(im.rating, im.currency))),
-      group('floor', 'Floor and distress', pairs(floorAndDistress(im)), weighting(im)),
+      group('floor', 'Floor and distress', pairs(floorAndDistress(im)), sheetPeriod(im),
+        weighting(im)),
       group('altman', 'Altman Z″', altmanZ(im.altman_z)),
       group('piotroski', 'Piotroski F', piotroskiF(im.piotroski_f)));
   }
@@ -1946,21 +1995,24 @@
 
   /* The firm value to the going-concern value a share; the net current asset value a share, which
      floors it when above zero and above it (spec 10.6): no floor without one or at or below zero,
-     and above zero a floor that binds or does not; the distress-sale value a share. */
+     and above zero a floor that binds or does not; the distress-sale value a share. A minority
+     interest comes off all three (spec 2026-11-13 13): its row follows the debt, and the floor's
+     row and the distress-sale value's words name it. */
   function floorAndDistress(im) {
-    var ncav = im.ncav_per_share, code = im.currency;
+    var ncav = im.ncav_per_share, code = im.currency, minority = hasMinority(im);
     var floor = ncav == null || ncav <= 0 ? 'no floor'
       : im.floored_per_share > im.going_concern_per_share ? 'the floor binds'
         : 'the floor does not bind';
-    return [
-      ['Less debt', whole(im.debt, code), true],
+    return [['Less debt', whole(im.debt, code), true]].concat(lessMinority(im), [
       ['Plus cash', whole(im.cash, code), true],
       ['Shares', plain(im.shares), true],
       ['Going concern a share', money(im.going_concern_per_share, code), true],
-      ['NCAV a share', noted(money(ncav, code), floor), true],
+      [minority ? 'NCAV less minority interest, a share' : 'NCAV a share',
+        noted(money(ncav, code), floor), true],
       ['Distress-sale value a share', noted(money(im.distress_per_share, code),
-        F.formatPercent(im.distress_sale_fraction) + ' of firm value + cash − debt'), true]
-    ];
+        F.formatPercent(im.distress_sale_fraction) + ' of firm value + cash − debt' +
+        (minority ? ' − minority interest' : '')), true]
+    ]);
   }
 
   /* The value a share (spec 10.7): the floored value weighted against the distress-sale value at
@@ -2034,16 +2086,18 @@
   function startUpRoute(r) {
     var im = r.intermediates;
     return section('start-up', ROUTES['start-up'],
-      group('requirement', 'Revenue the price needs', requirement(im.requirement, im.currency),
-        movedCap(im, r.inputs)),
-      group('floor', 'Cash floor', pairs(cashFloor(im)), belowFloor(r)),
+      group('requirement', 'Revenue the price needs',
+        requirement(im.requirement, im.currency, hasMinority(im)), movedCap(im, r.inputs)),
+      group('floor', 'Cash floor', pairs(cashFloor(im)), sheetPeriod(im), belowFloor(r)),
       group('burn', 'Burn cover', pairs(burnCover(im))));
   }
 
   /* The year-10 revenue at which the straight ramp from today's revenue and operating income to
      the target margin is worth the enterprise value the price implies (spec 9.2), and the ramp,
-     totals in `code`, the row's currency; or the reason the requirement is not computed. */
-  function requirement(req, code) {
+     totals in `code`, the row's currency; or the reason the requirement is not computed. Where
+     the row has a `minority` interest, the enterprise value adds it (spec 2026-11-13 13), and its
+     words say so. */
+  function requirement(req, code, minority) {
     var target = req.target_margin, s = req.sales_to_capital;
     var total = wholeIn(code);
     var rows = req.reason ? [['Not computed', req.reason, false]]
@@ -2055,8 +2109,7 @@
     }
     rows = rows.concat([
       ['Trailing revenue', total(req.revenue_0), true],
-      ['Enterprise value at the price', req.ev_price != null && req.ev_price <= 0
-        ? noted(total(req.ev_price), 'net cash covers the price') : total(req.ev_price), true],
+      ['Enterprise value at the price', enterpriseValue(req.ev_price, total, minority), true],
       ['Target margin', target == null ? '—'
         : noted(F.formatPercent(target.value), peersBehind(target)), true],
       ['Sales-to-capital', s == null ? '—' : noted(times(s.value), 'mature peers\' median'), true]
@@ -2071,6 +2124,17 @@
       ['Terminal value', total(req.terminal_value), true],
       ['Terminal return', F.formatPercent(req.terminal_roic), true]
     ]) : null);
+  }
+
+  /* The enterprise value the price implies, `total` its format: at or below zero, net cash
+     covers the price; with a `minority` interest, the words name the sum, which adds it. */
+  function enterpriseValue(ev, total, minority) {
+    var covered = ev != null && ev <= 0 ? 'net cash covers the price' : null;
+    if (minority && ev != null) {
+      var sum = 'market cap + debt + minority interest − cash';
+      return noted(total(ev), covered ? sum + '; ' + covered : sum);
+    }
+    return covered ? noted(total(ev), covered) : total(ev);
   }
 
   /* The peers' count and where they came from: FMP's list, or the industry's on the fallback. */
@@ -2089,25 +2153,28 @@
       ' as read');
   }
 
-  /* The net cash a share (spec 9.4): (cash − debt) ÷ diluted shares. */
+  /* The net cash a share (spec 9.4; method 6b.4): (cash − debt − minority interest) ÷ diluted
+     shares, the minority interest's row only where there is one. */
   function cashFloor(im) {
     var code = im.currency;
     return [
       ['Net cash a share', money(im.cash_floor, code), true],
       ['Cash', whole(im.cash, code), true],
-      ['Less debt', whole(im.debt, code), true],
+      ['Less debt', whole(im.debt, code), true]
+    ].concat(lessMinority(im), [
       ['Shares', plain(im.shares), true]
-    ];
+    ]);
   }
 
   /* The caption reads the row's `below-net-cash` flag, the one test (method 6b.4): the market
-     cap at or below the net cash, which is the price at or below the cash floor only when the
-     market cap is the price times the diluted shares. */
+     cap at or below the net cash, cash less debt and any minority interest, which is the price
+     at or below the cash floor only when the market cap is the price times the diluted shares. */
   function belowFloor(r) {
     var below = r.flags.some(function (f) { return f.code === 'below-net-cash'; });
     if (!below) return null;
     return h('p', { className: 'caption' },
-      'The price is covered by net cash: the market cap is at or below the cash less the debt');
+      'The price is covered by net cash: the market cap is at or below the cash less the debt' +
+      (hasMinority(r.intermediates) ? ' and the minority interest' : ''));
   }
 
   /* The years the cash covers the trailing burn (spec 9.4); "not burning" when the trailing free
@@ -2303,15 +2370,19 @@
   /* Counts and years read whole. P/E multiples to one decimal with x. A figure a share (EPV, the
      value, the value in the reporting currency, EPS, the non-recurring gap, the 52-week prices,
      the value maps by runway and by ROIC, whatever the entry's key) reads to cents; a total
-     (NOPAT, invested capital, net income, earnings, the trailing stock pay, nil or not, anything
-     at a million or more) to whole units. The rate reads as a rate. Any other number to two
-     decimals. */
+     (NOPAT, invested capital, net income, earnings, the trailing stock pay and the minority
+     interest, nil or not, anything at a million or more) to whole units. The rate reads as a
+     rate. Any other number to two decimals. */
   var COUNT = /^(years?|base_year|runway|fade_years|analysts|shares)$/;
   var MULTIPLE = /^pe_/;
   var PER_SHARE =
     /^(epv|value_per_share|value_in_currency|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
   var PER_SHARE_GROUP = /^(eps$|value_by_)/;
-  var TOTAL = /(_total|nopat|average_capital|net_income|sbc_ttm)$|^e_/;
+  var TOTAL = /(_total|nopat|average_capital|net_income|sbc_ttm|minority_interest)$|^e_/;
+  /* The NTM anchor's annual source (spec 2026-11-13 9a): each fiscal year whole; the sum of the
+     window's periods and each fiscal year's EPS a share. */
+  var ANCHOR_YEAR = /^fiscal_year$/;
+  var ANCHOR_PER_SHARE = /^(periods_sum|eps)$/;
   /* On a row in another currency every money figure is in it (spec 2026-11-10 7.2) but the price
      facts, read from the USD closes, and the peers' market caps, which rank the peers. */
   var USD_GROUPS = /^(price_facts|peers)$/;
@@ -2322,6 +2393,8 @@
     if (key === 'fx_rate') return rate(v);
     if (isPercent(key, group)) return F.formatPercent(v);
     if (PER_SHARE_GROUP.test(group || '')) return money(v, own);  /* value_by_roic's runway */
+    if (ANCHOR_YEAR.test(key)) return plain(v);
+    if (ANCHOR_PER_SHARE.test(key)) return money(v, own);
     if (COUNT.test(key)) return plain(v);
     if (MULTIPLE.test(key)) return decimals(v, 1) + 'x';
     if (PER_SHARE.test(key)) return money(v, own);
