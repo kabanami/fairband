@@ -152,28 +152,57 @@ def test_the_page_says_what_method_0_9_changed() -> None:
     assert "years 1 to 3" in trend[: trend.index("</li>")]
 
 
-def test_the_examples_state_method_1_0_s_rules() -> None:
-    """The examples, dated to method 1.0 (CLAUDE.md: a change of method version re-reads its
-    examples' figures), keep the rules 0.9 brought: Microsoft's Stable margin raises no note,
-    since Stable points to no phase; 3M's run-off names the years the consensus gives and the fade
-    to zero with a flat terminal; the implied decline rate is named where the page sets it beside
-    the trend's; the growth section's notes name the dollar ramp's."""
+def test_the_examples_are_dated_to_method_1_4() -> None:
+    """The examples, re-read under method 1.4 (CLAUDE.md: a change of method version re-reads its
+    examples' figures), are dated to that run: the data of 11 Nov 2026, the quarterly balance
+    sheets of 14 Nov, the closes of 13 Nov and Roku's of 6 Nov. The four that read the balance
+    sheet name its period, and the two with a minority interest show it (spec 2026-11-13 12.2,
+    13). They keep the rules 0.9 brought: Microsoft's Stable margin raises no note, since Stable
+    points to no phase; 3M's run-off names the years the consensus gives and the fade to zero with
+    a flat terminal; the implied decline rate is named where the page sets it beside the trend's;
+    the growth section's notes name the dollar ramp's."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
     asof = html[html.index("Figures as of") :]
     asof = asof[: asof.index("</p>")]
-    assert "method 1.0" in asof and 'datetime="2026-11-09"' in asof
-    assert "method 0.8" not in html and "method 0.9" not in asof
-    # method 1.1 values a company in US dollars bit for bit as 1.0 did, method 1.2 moves only a
-    # row whose return is below the hurdle rate, and method 1.3 only a row whose consensus rows
-    # were read from more than one answer, which no example is, so the figures stand
-    assert "unchanged under methods 1.1, 1.2 and 1.3" in asof
+    assert "method 1.4" in asof
+    for day in ("2026-11-11", "2026-11-14", "2026-11-13", "2026-11-06"):
+        assert f'datetime="{day}"' in asof, day
+    assert "Roku's is the close of" in asof
+    assert "method 0.8" not in html and "method 0.9" not in asof and "method 1.0" not in asof
+    assert "unchanged under" not in asof
+    # the balance sheet's period under each table that reads it, the minority interest where it is
+    # above zero (CrowdStrike, 3M) and none where it is nil (Roku, Revolution Medicines)
+    growth = _section(html, "growth")
+    roku = growth[growth.index("Worked example: Roku") :]
+    crwd = growth[growth.index("Worked example: CrowdStrike") :].replace(roku, "")
+    decline = _section(html, "decline")
+    mmm = decline[decline.index("Worked example: 3M") :]
+    rvmd = _section(html, "start-up")
+    rvmd = rvmd[rvmd.index("Worked example: Revolution Medicines") :]
+    for example, period in (
+        (crwd, "fiscal 2027 Q2"),
+        (roku, "fiscal 2026 Q3"),
+        (mmm, "fiscal 2026 Q3"),
+        (rvmd, "fiscal 2026 Q3"),
+    ):
+        assert f'<p class="caption">Balance sheet of {period}.</p>' in example, period
+    assert '<td class="body">Less minority interest</td>' in crwd and "$38 million" in crwd
+    assert '<td class="body">Minority interest</td>' in mmm and "$1.0 billion" in mmm
+    assert "minority interest" not in roku.lower() and "minority interest" not in rvmd.lower()
+    floor = '<td class="body">Net current asset value less minority interest, a share</td>'
+    assert floor in mmm and '<td class="body">Net current asset value a share</td>' not in mmm
+    for text in (
+        "where 3M's earlier sheets showed about $50 million",
+        "The engine takes the vendor's line as it stands.",
+        "corrects it with the override balance.minority",
+    ):
+        assert text in mmm, text
     classifier = _section(html, "classifier")
     msft = classifier[classifier.index("Worked example: Microsoft") :]
     assert '<td class="body">Checks</td><td class="body fb-num">none</td>' in msft
     assert "A stable margin points to no phase, so the drawer adds no note." in msft
     assert "Margin direction disagrees" not in msft and "Stable points to Mature" not in msft
-    decline = _section(html, "decline")
-    mmm = decline[decline.index("Worked example: 3M") :]
+    assert "1.3 points a year · decile 7 · Stable" in msft
     assert "Consensus growth, years 2 to 4" in mmm
     assert "Decline rate, fading to zero by year 10" in mmm and "from year 4" not in mmm
     reading = mmm[mmm.index("</table>") :]
@@ -195,8 +224,8 @@ def test_the_examples_state_method_1_0_s_rules() -> None:
 def test_the_page_says_what_method_1_0_changed() -> None:
     """Spec 2026-11-09 12: the charge pays for revenue growth, a year can pay out less than nothing
     when growth outruns the return, and the return holds through the growth above the belief, then
-    fades to the terminal return; the two mature routes' lists say the same, and their examples'
-    figures are re-read at method 1.0 from the same stored inputs."""
+    fades to the terminal return; the two mature routes' lists say the same, and their examples
+    show it in the figures of the run the page is dated to, under method 1.4."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
     value = _section(html, "value")
     charge = value[value.index(">The reinvestment charge</h3>") : value.index(">The moat and")]
@@ -213,15 +242,15 @@ def test_the_page_says_what_method_1_0_changed() -> None:
     assert "next year's revenue growth" in steps and "then fades to the terminal return" in steps
     assert "pays out less than nothing" in growth and "pays out nothing" not in growth
     msft = growth[growth.index("Worked example: Microsoft") :]
-    for figure in ("20.5%, 22.2%", "$498", "1.12 · Near", "7.1%", "through year 6"):
+    for figure in ("20.6%, 22.5%", "$497", "1.05 · Near", "6.2%", "through year 6"):
         assert figure in msft, figure
-    assert "$516" not in msft and "6.4%" not in msft
+    assert "$516" not in msft and "6.4%" not in msft and "$498" not in msft
     stable = _section(html, "mature-stable")
     assert "fades in equal steps from year 1" in stable
     ko = stable[stable.index("Worked example: Coca-Cola") :]
-    for figure in ("$61", "$49", "1.96 · Well above", "11.3%", "fading in equal steps to 13.0%"):
+    for figure in ("$61", "$49", "2.03 · Well above", "11.7%", "fading in equal steps to 13.0%"):
         assert figure in ko, figure
-    assert "$63" not in ko and "10.4%" not in ko
+    assert "$63" not in ko and "10.4%" not in ko and "11.3%" not in ko
     flags = _section(html, "flags")
     above = flags[flags.index(">growth-above-return</code>") :]
     assert "pays out less than nothing" in above[: above.index("</li>")]
