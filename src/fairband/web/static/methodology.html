@@ -1075,6 +1075,9 @@ consensus does not say whether its forecasts count such items.</span></li>
 <li><span class="label">Split pending</span> <code class="fb-tag figure-sm">split-pending</code>
 <span class="body app-flags__what">A stock split took effect during or after the trailing year,
 so the share count and per-share figures read on the new basis.</span></li>
+<li><span class="label">Override scaled at a split</span> <code class="fb-tag figure-sm">override-split-scaled</code>
+<span class="body app-flags__what">An override in dollars a share or in shares, entered before a
+stock split, is scaled to the new shares.</span></li>
 <li><span class="label">Share basis scaled</span> <code class="fb-tag figure-sm">basis-scaled</code>
 <span class="body app-flags__what">A depositary receipt's share count was off by its ratio on some
 periods, so those read on the quote's basis.</span></li>
@@ -1112,7 +1115,9 @@ whether the analysts' EPS leaves stock pay out, as the company defines its adjus
 inputs, such as the hurdle rate, terminal growth and the reported figures, take no override. An
 agent adds and drops overrides; you read them. A refresh also drops a period-tied override (one
 that corrects a single period's figure) once the company reports a newer period or that figure
-changes. The review (the overrides and the value they give) moves to each new snapshot, the
+changes. After a stock split, an earlier override in dollars a share or in shares is scaled to
+the new shares, and the review says so. The review (the overrides and the value they give) moves
+to each new snapshot, the
 company's figures from a refresh. An overridden input is tagged JUDGMENT, beside DATA (a figure
 from the vendor) and RULE (a value from the policy).</p>
 

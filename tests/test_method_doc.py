@@ -106,6 +106,36 @@ def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:
     assert "the one-time item it took off (`ntm_nri`" not in fourteen
 
 
+def test_an_override_made_before_a_split_applies_on_the_new_basis() -> None:
+    """Spec 2026-11-14 7: 14.6 states the rule on the two data dates, what the row says and what
+    stays; 14.4's JUDGMENT entry and 14.8's reading point to it; section 8 names the note, not
+    counted; and 11's row cites every section that states the rule."""
+    fourteen = _section(14)
+    follows = fourteen[fourteen.index("### 14.6") : fourteen.index("### 14.7")]
+    for words in (
+        "divided by ρ, and one in shares (`shares.diluted`, `shares.committed`) multiplied by it",
+        (
+            "the product of the ratios of the splits dated after the data date of the snapshot the"
+            " override was made on, and at or before the data date of the snapshot reviewed"
+        ),
+        "the price date does not, since a price refresh fetches no split",
+        "The stored override keeps the figure entered.",
+        '"entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027"',
+        "`override-split-scaled`",
+        "The drop tests read the figure the override corrected, never scaled",
+    ):
+        assert words in follows, words
+    assert "the reason as the note, and after a split the figure as entered (14.6)" in fourteen
+    assert "each on that snapshot's share basis after a split as the review reads it (14.6)" in (
+        fourteen
+    )
+    row = next(x for x in _section(8).splitlines() if x.startswith("| `override-split-scaled`"))
+    assert row.startswith("| `override-split-scaled` | no |")
+    assert '"Override scaled at a split"' in row
+    row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
+    assert "carrying the note `override-split-scaled` (section 8, 14.4, 14.6, 14.8)" in row
+
+
 def test_the_share_count_gap_reads_the_count_without_the_committed_shares() -> None:
     """Spec 2026-11-14 4 and the controller's ruling on Task 2: the note reads the diluted count
     without an agent's committed shares, which the market cap cannot hold yet."""

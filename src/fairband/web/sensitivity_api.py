@@ -14,7 +14,9 @@ route the row takes (``reviews_api.judged_route``: an applied ``phase`` override
 the phase on one axis the other input is judged on the route of each of its phases); last, the
 store moved since the snapshot, 409 (``reviews_api.built_inputs``). The evidence rules and the
 lifetime do not apply: a reading changes no input. Nothing is overridden and no review is
-recomputed.
+recomputed. The applied overrides reach the engine as a review's do, on the snapshot's share basis
+after a split (``refresh.reviews.engine_overrides``, spec 2026-11-14 7), so a reading and the
+review read the same figure.
 
 The reading is stored with the snapshot, the current review's id (``null`` without an applied
 override), the writer, the policy version and the settings hash, with a ``sensitivity`` ledger
@@ -45,10 +47,11 @@ from fairband.engine.types import money_of
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
+from fairband.refresh.reviews import engine_overrides
 from fairband.reports.charts import reading_axes
 from fairband.store.db import transaction
 from fairband.store.ledger import record
-from fairband.store.overrides import OverrideRow, applied_overrides, as_override
+from fairband.store.overrides import OverrideRow, applied_overrides
 from fairband.store.reviews import latest_review
 from fairband.store.sensitivities import insert_sensitivity, sensitivity_row
 from fairband.store.snapshots import SnapshotRow, snapshot_row
@@ -110,7 +113,7 @@ def add_sensitivity_routes(
                 deciles,
                 current,
                 at.date(),
-                {o.tag: o for o in map(as_override, applied)},
+                {o.tag: o for o in engine_overrides(conn, symbol, applied, snapshot.data_date)},
                 cast(OverrideTag, body.row_tag),
                 body.row_values,
                 cast(OverrideTag, body.col_tag),

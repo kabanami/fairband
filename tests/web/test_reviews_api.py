@@ -24,6 +24,7 @@ from support.engine_companies import (
     with_minority,
     young_growth_inputs,
 )
+from support.payloads import split_rows, store_payloads
 from support.web import CREATED, HEADER, NOW, TODAY
 
 from fairband.engine import METHOD_VERSION
@@ -441,6 +442,59 @@ def test_the_committed_shares_through_the_api(
         ("shares.committed", "committed shares", "shares", 0.0, 60e6)
     ]
     assert bridge[0]["delta"] == pytest.approx(mechanical * (1_000 / 1_060 - 1))
+
+
+OUTSIDE_12 = {
+    "tag": "value.outside",
+    "new": 12.0,
+    "reason": "a listed stake, after tax",
+    "evidence": [{"kind": "filing", "ref": "10-Q, note 7: equity investments", "note": ""}],
+    "lifetime": "lasting",
+}
+SPLIT_WORDS = "entered as $12.00 a share before the 2-for-1 split of 15 Nov 2026"
+
+
+def _split_after(db_path: Path, result: ValuationResult) -> None:
+    """A 2-for-1 split of AAPL on 15 Nov 2026, after its snapshot's data date of 30 Oct 2026,
+    and a snapshot of ``result``'s figures fetched on 1 Dec 2026: the store's figures stand, so
+    the snapshot reproduces (spec 2026-11-14 7)."""
+    assert result.data_date == date(2026, 10, 30)
+    rows = split_rows("AAPL", (date(2026, 11, 15), 2, 1))
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, "AAPL", {"splits": rows}, CREATED)
+        later = replace(result, data_date=date(2026, 12, 1))
+        insert_snapshot(conn, later, 1, clock=lambda: CREATED)
+
+
+def test_the_recompute_applies_an_override_on_the_new_basis_after_a_split(
+    client: TestClient, db_path: Path, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-14 7 on AAPL: a value outside the business of $12.00 a share made before a
+    2-for-1 split applies at $6.00 in the recompute after the next post and after a drop, its
+    bridge line and JUDGMENT entry giving $6.00 and the review naming it; the stored override keeps
+    $12.00."""
+    outside = _post(client, OUTSIDE_12)["override"]
+    _split_after(db_path, results["AAPL"])
+    mechanical = results["AAPL"].value
+    assert mechanical is not None
+    body = _post(client, BELIEF_8)
+    assert [(x["tag"], x["new"]) for x in body["bridge"]] == [
+        ("growth.belief", 0.08),
+        ("value.outside", 6.0),
+    ]
+    assert body["bridge"][1]["delta"] == pytest.approx(6.0)
+    result = body["review"]["result"]
+    [entry] = [i for i in result["inputs"] if i["name"] == "value.outside"]
+    assert (entry["value"], entry["note"]) == (6.0, f"a listed stake, after tax; {SPLIT_WORDS}")
+    [note] = [f for f in result["flags"] if f["code"] == "override-split-scaled"]
+    assert note["sentence"].endswith("each applies on the new basis: value.outside.")
+    r = _drop(client, body["override"]["id"])
+    assert r.status_code == 200, r.text
+    review = r.json()["review"]
+    assert [(x["tag"], x["new"]) for x in review["bridge"]] == [("value.outside", 6.0)]
+    assert review["value"] == pytest.approx(mechanical + 6.0)
+    [stored] = [o for o in _overrides(client) if o["id"] == outside["id"]]
+    assert (stored["state"], stored["new"]) == ("applied", 12.0)
 
 
 def test_a_revenue_step_through_the_api_where_the_consensus_gives_none(

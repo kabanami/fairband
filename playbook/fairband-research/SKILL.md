@@ -432,9 +432,15 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   without a share count or with one that fits both bases or neither, or, for a consensus year or
   quarter, no net-income mean, an EPS of zero, or a count that fits both bases or neither. A
   figure read as stored may be on the old basis. Check the consensus steps and any guided figure
-  against the new basis before you read them. A review's per-share overrides (`earnings.ntm`,
-  `earnings.cycle_gap`, `earnings.nri_gap`, `value.outside`) stay on the basis they were made on:
-  after a split, drop and re-make them on the new basis before you publish.
+  against the new basis before you read them. A review's overrides in dollars a share
+  (`earnings.ntm`, `earnings.nri_gap`, `earnings.ntm_nri`, `earnings.cycle_gap`, `value.outside`)
+  and in shares (`shares.diluted`, `shares.committed`) made on a snapshot fetched before the split
+  apply on the new basis: the system divides a figure a share by the split's ratio and multiplies
+  a count by it, keeps the figure you entered, and names each in the note `override-split-scaled`
+  on the review. The JUDGMENT entry gives the figure in force, and its note the figure as entered
+  and the split. Check the figure in force against the new basis before you publish. A
+  period-tied override whose input the split rescaled drops as "the input the override corrected
+  changed": make it again on the new basis.
 - `basis-scaled`: an ADR's share count or trailing EPS was read on the quote's share basis by the
   ADR ratio or its inverse, because FMP held a period's count off by it, or a trailing period was
   read as stored for the basis. The sentence names the factor, the periods scaled, the stored

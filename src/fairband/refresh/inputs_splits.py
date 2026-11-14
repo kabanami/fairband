@@ -397,7 +397,7 @@ def _statement_side(
     groups = _groups(scaled)
     notes: dict[str, str] = {}
     if scale_count:
-        notes["shares_diluted"] = f"{_times(ratio)} for {_named(newest)}"
+        notes["shares_diluted"] = f"{_times(ratio)} for {named_splits(newest)}"
     words = _Words.of(figures)
     notes |= {name: _per_share_note(groups, len(figures.periods), words) for name in moved}
     sentences: list[str] = []
@@ -478,7 +478,7 @@ def _per_share_note(
 ) -> str:
     """``÷2 for the 2-for-1 split of 15 Oct 2026`` when every period scaled by one ratio, else
     ``÷2 on 3 of 4 quarters for ...`` (``on 1 of 2 half-years``), a part for each ratio."""
-    named = _named(groups[0][0])
+    named = named_splits(groups[0][0])
     if len(groups) == 1 and len(groups[0][1]) == n:
         return f"{_divided(_ratio(groups[0][0]))} for {named}"
     parts = [f"{_divided(_ratio(after))} on {len(ks)} of {n} {words.many}" for after, ks in groups]
@@ -586,7 +586,7 @@ def _consensus_side(
     notes: dict[str, str] = {}
     if ntm_scaled:
         span = _quarters_span(ntm_scaled, nouns)
-        notes["ntm_eps"] = f"the consensus {span} {r} for {_named(pending)}"
+        notes["ntm_eps"] = f"the consensus {span} {r} for {named_splits(pending)}"
     sentences = [f"The consensus EPS for {' and for '.join(spans)} is read {r}."] if spans else []
     left = [
         *(f"{_years_list(rows)} ({reason})" for reason, rows in _by_reason(annual_left)),
@@ -669,7 +669,7 @@ def _observed(
         return value, None, None
     ratio = _ratio(after)
     r = _divided(ratio)
-    note = f"{r} for {_named(after)}"
+    note = f"{r} for {named_splits(after)}"
     return value / ratio, note, f"GuruFocus's EPS observed {_day(as_of)} is read {r}."
 
 
@@ -972,7 +972,7 @@ def _quarters_list(rows: Sequence[QuarterEstimate], nouns: tuple[str, str]) -> s
     return f"the {named} ending {_and([_day(q.period_end) for q in rows])}"
 
 
-def _named(splits: Sequence[SplitRow]) -> str:
+def named_splits(splits: Sequence[SplitRow]) -> str:
     """``the 2-for-1 split of 15 Oct 2026``, each further split after ``and``."""
     return _and([f"the {s.word} of {_day(s.date)}" for s in splits])
 

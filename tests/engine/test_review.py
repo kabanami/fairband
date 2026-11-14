@@ -9,6 +9,7 @@ import pytest
 from support.engine_companies import (
     SHIFT_SENTENCE,
     decline_inputs,
+    fx_inputs,
     high_growth_inputs,
     mature_growth_inputs,
     mature_stable_inputs,
@@ -31,7 +32,7 @@ from fairband.engine.overrides import (
 )
 from fairband.engine.review import REVIEW_METHOD, review_company
 from fairband.engine.route import CompanyInputs, value_company
-from fairband.engine.types import ValuationResult, result_from_json, result_to_json
+from fairband.engine.types import Flag, ValuationResult, result_from_json, result_to_json
 from fairband.policy import Policy
 
 TODAY = date(2026, 10, 31)
@@ -318,6 +319,51 @@ def test_the_sheet_shift_note_is_silent_under_the_input_that_decides(
     assert kept.result.value is not None and kept.result.value != mechanical.value
     [note] = [f for f in kept.result.flags if f.code == "sheet-shift"]
     assert note.sentence == SHIFT_SENTENCE
+
+
+SPLIT_WORDS = "entered as $10.00 a share before the 2-for-1 split of 27 Jan 2027"
+
+
+def test_an_override_scaled_at_a_split_says_so(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-14 7: the store hands the engine an override in dollars a share or in shares
+    made before a split on the new basis, with the words of its scaling. Its JUDGMENT entry's note
+    ends with them, and the review's result carries the note ``override-split-scaled`` naming each
+    such input in the bridge's order, last among its flags; an override without words, and the
+    mechanical result, carry none."""
+    inputs = mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    gap = replace(OVERRIDE("earnings.cycle_gap", 0.25, 3), rescaled="entered as $0.50 a share")
+    outside = replace(OVERRIDE("value.outside", 5.0, 2), rescaled=SPLIT_WORDS)
+    belief = OVERRIDE("growth.belief", 0.08, 1)
+    review = review_company(inputs, deciles, policy, TODAY, [outside, belief, gap], mechanical)
+    notes = {i.name: i.note for i in review.result.inputs if i.tag == "JUDGMENT"}
+    assert notes == {
+        "growth.belief": "because",
+        "earnings.cycle_gap": "because; entered as $0.50 a share",
+        "value.outside": f"because; {SPLIT_WORDS}",
+    }
+    assert [line.new for line in review.bridge] == [0.08, 0.25, 5.0]
+    assert review.result.flags[-1] == Flag(
+        "override-split-scaled",
+        "Override scaled at a split",
+        "A split took effect after these inputs were entered, so each applies on the new basis: "
+        "earnings.cycle_gap, value.outside.",
+    )
+    assert "override-split-scaled" not in _codes(mechanical)
+    plain = review_company(inputs, deciles, policy, TODAY, [belief], mechanical)
+    assert "override-split-scaled" not in _codes(plain.result)
+
+
+def test_the_split_note_comes_before_a_stale_rate(policy: Policy, deciles: Deciles) -> None:
+    """``fx-stale`` stays last among a row's flags (method 8): on FXCO, whose rate is stale, the
+    split note comes right before it."""
+    inputs = replace(fx_inputs(), fx_stale=True)
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert _codes(mechanical)[-1] == "fx-stale"
+    words = "entered as SEK 80.00 a share before the 2-for-1 split of 27 Jan 2027"
+    outside = replace(OVERRIDE("value.outside", 40.0), rescaled=words)
+    review = review_company(inputs, deciles, policy, TODAY, [outside], mechanical)
+    assert _codes(review.result)[-2:] == ["override-split-scaled", "fx-stale"]
 
 
 def test_a_count_that_reconciles_the_market_cap_clears_the_share_count_gap(

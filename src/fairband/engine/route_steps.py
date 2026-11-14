@@ -264,13 +264,16 @@ def judgment_inputs(overrides: Overrides, currency: str = "USD") -> tuple[Tagged
     number as the value (``None`` for a word, which leads the note), the input's unit in the
     row's ``currency`` (``overrides.unit_in``), and the override's provenance: the source
     "override <id>, <principal> <actor>", entered at the override's time, the reason as the
-    note."""
+    note, and after it, on a figure scaled at a split, the words of the scaling
+    (``Override.rescaled``)."""
     return tuple(_judgment(overrides[tag], currency) for tag in BRIDGE_ORDER if tag in overrides)
 
 
 def _judgment(o: Override, currency: str) -> TaggedInput:
     """The override's entry; its source names the override, the principal and the actor, "override
-    1, agent claude-opus-5-5", or the principal alone without an actor, "override 1, owner"."""
+    1, agent claude-opus-5-5", or the principal alone without an actor, "override 1, owner"; its
+    note ends "; entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027" on a figure
+    scaled at a split."""
     record = "override" if o.id is None else f"override {o.id}"
     writer = o.principal if o.actor is None else f"{o.principal} {o.actor}"
     provenance = Provenance(f"{record}, {writer}", None, None, o.at)
@@ -280,6 +283,8 @@ def _judgment(o: Override, currency: str) -> TaggedInput:
         note = f"{o.value}: {o.reason}"
     else:
         value = o.value
+    if o.rescaled is not None:
+        note = f"{note}; {o.rescaled}"
     unit = unit_in(TAGS[o.tag].unit, currency)
     return TaggedInput(o.tag, value, unit, "JUDGMENT", "judgment", provenance, note=note)
 

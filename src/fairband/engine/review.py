@@ -11,19 +11,27 @@ mechanical refusal, a Start-up row say), the first valuing line's delta is its w
 bridge starts at no mechanical value. The review's result is the last line's, so a review whose
 last step refuses is that refusal; its levels read the reviewed moat. ``old`` is the engine's
 reading of the input on the mechanical result (``overrides.current_reading``).
+
+An override the store scaled at a split (``Override.rescaled``, spec 2026-11-14 7) gives the
+review's result the note ``override-split-scaled``, "Override scaled at a split", naming each such
+input in the bridge's order: "A split took effect after these inputs were entered, so each applies
+on the new basis: earnings.ntm, value.outside." It comes last among the result's flags but
+``fx-stale``, which stays last (``method.md`` 8). The mechanical result never carries it.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import BRIDGE_ORDER, Override, OverrideTag, current_reading
 from fairband.engine.route import CompanyInputs, value_company
-from fairband.engine.types import ValuationResult
+from fairband.engine.types import Flag, ValuationResult
 from fairband.policy import Policy
 
 REVIEW_METHOD = "fairband-review/1"
+SPLIT_SCALED = "override-split-scaled"
+_FX_STALE = "fx-stale"  # last among a row's flags (method 8)
 
 
 @dataclass(frozen=True)
@@ -78,4 +86,22 @@ def review_company(
         lines.append(BridgeLine(o.tag, o.id, old, o.value, delta, None))
         last = result.value
     ids = tuple(o.id for o in ordered if o.id is not None)
-    return Review(result, mechanical.value, tuple(lines), ids)
+    return Review(_split_scaled(result, ordered), mechanical.value, tuple(lines), ids)
+
+
+def _split_scaled(result: ValuationResult, ordered: Sequence[Override]) -> ValuationResult:
+    """``result`` with the note ``override-split-scaled`` naming each of the ``ordered``
+    overrides that a split scaled, before a trailing ``fx-stale`` (module docstring); as it is
+    with none."""
+    scaled = [o.tag for o in ordered if o.rescaled is not None]
+    if not scaled:
+        return result
+    note = Flag(
+        SPLIT_SCALED,
+        "Override scaled at a split",
+        "A split took effect after these inputs were entered, so each applies on the new basis: "
+        f"{', '.join(scaled)}.",
+    )
+    kept = tuple(f for f in result.flags if f.code != _FX_STALE)
+    stale = tuple(f for f in result.flags if f.code == _FX_STALE)
+    return replace(result, flags=(*kept, note, *stale))

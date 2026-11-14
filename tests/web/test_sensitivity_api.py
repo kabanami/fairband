@@ -14,12 +14,13 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from support.engine_companies import high_growth_inputs, mature_growth_inputs, universe_deciles
+from support.payloads import split_rows, store_payloads
 from support.web import CREATED, HEADER, NOW
 
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import Override, OverrideTag
 from fairband.engine.route import CompanyInputs, value_company
-from fairband.engine.types import Route
+from fairband.engine.types import Route, ValuationResult
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
@@ -413,3 +414,51 @@ def test_a_reading_goes_stale_when_the_review_moves(client: TestClient) -> None:
     )
     third = _post(client, GRID)
     assert submitted(third).status_code == 201
+
+
+def test_a_reading_applies_an_override_on_the_new_basis_after_a_split(
+    client: TestClient,
+    db_path: Path,
+    results: dict[str, ValuationResult],
+    stored_inputs: dict[str, CompanyInputs],
+    policy: Policy,
+) -> None:
+    """Spec 2026-11-14 7 on AAPL: a value outside the business of $12.00 a share made on its
+    snapshot of 30 Oct 2026, then a 2-for-1 split on 15 Nov 2026 and a snapshot fetched on 1 Dec
+    2026, reads $6.00 as the review does: each cell adds $6.00, and on that input's axis the pair
+    in force is the $6.00 row."""
+    outside = {
+        "tag": "value.outside",
+        "new": 12.0,
+        "reason": "a listed stake, after tax",
+        "evidence": [{"kind": "filing", "ref": "10-Q, note 7: equity investments", "note": ""}],
+        "lifetime": "lasting",
+    }
+    r = client.post("/api/companies/AAPL/overrides", json=outside, headers=AGENT)
+    assert r.status_code == 201, r.text
+    assert results["AAPL"].data_date == date(2026, 10, 30)
+    with closing(connect(db_path)) as conn:
+        rows = split_rows("AAPL", (date(2026, 11, 15), 2, 1))
+        store_payloads(conn, "AAPL", {"splits": rows}, CREATED)
+        later = replace(results["AAPL"], data_date=date(2026, 12, 1))
+        insert_snapshot(conn, later, 1, clock=lambda: CREATED)
+    found = _post(client, GRID)
+    assert found["cells"] == [
+        [
+            _engine(
+                stored_inputs["AAPL"],
+                policy,
+                {"growth.belief": b, "return.runway": c, "value.outside": 6.0},
+            )
+            for c in GRID["colValues"]
+        ]
+        for b in GRID["rowValues"]
+    ]
+    belief = results["AAPL"].intermediates["belief"]["rate"]
+    axis = {
+        "rowTag": "value.outside",
+        "rowValues": [12.0, 6.0],
+        "colTag": "growth.belief",
+        "colValues": [belief, 0.08],
+    }
+    assert _post(client, axis)["current"] == [2, 1]

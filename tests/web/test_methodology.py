@@ -490,6 +490,11 @@ def test_the_agents_section_reads(client: TestClient) -> None:
         ),
         # the meter draws the band; the drawer, not the meter, adds the stance and the summary
         "The drawer's meter draws that band; the drawer adds the stance and the report's summary.",
+        # spec 2026-11-14 7: a refresh scales an earlier override at a split, and says so
+        (
+            "After a stock split, an earlier override in dollars a share or in shares is scaled"
+            " to the new shares, and the review says so."
+        ),
     ):
         assert words in text, words
     assert "values a peak as if it lasted" not in text
@@ -574,8 +579,12 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
         "sbc-basis-uncertain",
         "thin-ntm",
         "sheet-shift",
+        "override-split-scaled",
     ):
         assert f'<code class="fb-tag figure-sm">{code}</code>' in notes, code
+    # the review's split note follows the split's own (spec 2026-11-14 7)
+    split = [c for c in chips if c in ("split-pending", "override-split-scaled", "basis-scaled")]
+    assert split == ["split-pending", "override-split-scaled", "basis-scaled"]
     # the two stock-pay notes follow the basis note, and the thin NTM note follows the few
     # analysts note, in the route's order (method 5.11)
     order = [

@@ -1012,8 +1012,14 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
             "split-pending",
             (
                 "no net-income mean",
+                # spec 2026-11-14 7: the system scales an override made before the split
                 "`earnings.cycle_gap`",
-                "drop and re-make them on the new basis",
+                "`shares.committed`",
+                "apply on the new basis",
+                "keeps the figure you entered",
+                "`override-split-scaled`",
+                "the figure in force",
+                "the input the override corrected changed",
             ),
         ),
     ):
@@ -1029,6 +1035,7 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         "a split falls after the oldest period of the trailing figures and on or before the"
         " quote's date."
     ), split
+    assert "drop and re-make them on the new basis" not in split
     # a mature row with the charge off or the return unavailable still takes the judgment; only
     # the other routes have no runway return to decide (the Task 8 fix round 2, method 14.4)
     for words in (

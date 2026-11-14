@@ -177,7 +177,11 @@ class TagSpec:
 @dataclass(frozen=True)
 class Override:
     """An applied override as the engine reads it: the stored id (``None`` before it is stored),
-    the input, the new value, who made it and when, and why."""
+    the input, the new value, who made it and when, and why. ``rescaled`` is the words of a
+    scaling at a split, "entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027", when
+    the store hands the engine a figure made before one on the new basis (spec 2026-11-14 7;
+    ``refresh.reviews.engine_overrides``); ``None`` for a figure as entered. The engine knows no
+    split: it reads the value, and the words go on the JUDGMENT entry and the review's note."""
 
     id: int | None
     tag: OverrideTag
@@ -186,6 +190,7 @@ class Override:
     actor: str | None
     at: datetime
     reason: str
+    rescaled: str | None = None
 
 
 Overrides = Mapping[OverrideTag, Override]

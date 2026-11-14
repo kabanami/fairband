@@ -35,6 +35,24 @@ trailing stock pay (``inputs.trailing.sbc``) is above zero (spec 2026-11-13 7.3)
 (no trailing figures, or a period that lacks the line), keeps it. The test reads the assembled
 figure, not the result's ``sbc_ttm``, which a row refused before its route does not carry.
 
+The overrides at a split (spec 2026-11-14 7): ``engine_overrides`` makes each applied row the
+engine's override, for the follow, the web's recompute (both through ``write_review``) and a
+sensitivity reading, with the data date of the snapshot they value. A row whose input is in
+dollars a share (``TAGS``' unit ``USD a share``: the NTM EPS, the two gaps, the one-time item, the
+value outside the business) is divided by ρ, and one in shares (the diluted count, the committed
+shares) multiplied by it, where ρ is the product of the ratios of the company's splits on file
+(``inputs_splits.splits_for``) dated after the data date of the snapshot the override was made on
+and at or before that data date: the day a snapshot's statements were fetched says which splits
+its figures had seen, since every refresh that fetches statements fetches the splits with them,
+and a price refresh fetches neither, so a repriced snapshot keeps the data date of its figures. A ρ
+of 1, a row whose made-on snapshot is not on file, and a ratio or a total keep the figure entered.
+A scaled override carries the words of its scaling (``Override.rescaled``): the figure as entered,
+in the reporting currency its unit names as the flags print an amount a share ("$30.00 a share",
+"SEK 30.00 a share") or in millions of shares ("60.0M shares"), and the splits in order, "entered
+as $30.00 a share before the 2-for-1 split of 27 Jan 2027". The stored row keeps the figure
+entered, and the drop tests read it as stored: the value a period-tied override corrected is
+never scaled.
+
 With an override left, ``write_review`` reviews the new result under the rest on the new inputs,
 writes the review on the new snapshot, with the snapshot's validity window and its price facts
 (the 52-week range and the one-, three- and five-year changes anchor on the date the refresh
@@ -72,6 +90,7 @@ secondary value and report stance the store holds.
 """
 
 import logging
+import math
 import sqlite3
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -81,11 +100,18 @@ from typing import cast
 
 from fairband.engine.anchor import base_year
 from fairband.engine.classifier import Deciles
-from fairband.engine.overrides import ANCHOR_METRICS, OverrideTag, current_reading
+from fairband.engine.overrides import (
+    ANCHOR_METRICS,
+    TAGS,
+    Override,
+    OverrideTag,
+    current_reading,
+)
 from fairband.engine.review import BridgeLine, Review, review_company
 from fairband.engine.route import CompanyInputs, refusal_result, reprice
 from fairband.engine.types import ValuationResult, money_of, rated
 from fairband.policy import Policy
+from fairband.refresh.inputs_splits import SplitRow, named_splits, splits_for
 from fairband.reports.refs import guidance_cited
 from fairband.store.db import transaction
 from fairband.store.guidance import anchor_year, guidance_row
@@ -98,7 +124,7 @@ from fairband.store.reviews import (
     latest_stance,
     log_review,
 )
-from fairband.store.snapshots import snapshot_row
+from fairband.store.snapshots import snapshot_row, snapshot_rows
 
 logger = logging.getLogger("fairband.refresh")
 
@@ -106,6 +132,9 @@ NEWER = "a newer period is on file than the one the override corrected"
 CHANGED = "the input the override corrected changed"
 PASSED = "the guided year has passed"
 ON_FILE = "the store holds a trailing stock pay above zero"
+# The units a split scales (``TAGS``): a figure a share is divided by the ratio, a count multiplied.
+_A_SHARE, _SHARES = "USD a share", "shares"
+_SCALED = frozenset({_A_SHARE, _SHARES})
 
 
 def follow_snapshot(
@@ -192,9 +221,10 @@ def write_review(
     clock: Callable[[], datetime],
 ) -> int:
     """Review ``mechanical``, snapshot ``snapshot_id``'s result on ``inputs``, under the applied
-    ``overrides``; write the review on the snapshot, valid as long as it and with its price facts
-    (module docstring), and its log row; the review's id."""
-    engine = [as_override(o) for o in overrides]
+    ``overrides`` on its share basis (``engine_overrides``); write the review on the snapshot,
+    valid as long as it and with its price facts (module docstring), and its log row; the
+    review's id."""
+    engine = engine_overrides(conn, mechanical.symbol, overrides, mechanical.data_date)
     review = review_company(inputs, deciles, policy, today, engine, mechanical)
     result = replace(review.result, valid_until=mechanical.valid_until)
     if "price_facts" in mechanical.intermediates and "price_facts" in result.intermediates:
@@ -204,6 +234,52 @@ def write_review(
     review_id = insert_review(conn, review, mechanical.symbol, snapshot_id, refresh_id, clock=clock)
     _log(conn, clock(), refresh_id, snapshot_id, review_id, mechanical, review.result)
     return review_id
+
+
+def engine_overrides(
+    conn: sqlite3.Connection, symbol: str, rows: Sequence[OverrideRow], data_date: date
+) -> list[Override]:
+    """Each of ``rows``, applied overrides of ``symbol``, as the engine reads it on the share basis
+    of a snapshot of ``data_date``: a figure a share ÷ ρ and a count × ρ, with the words of the
+    scaling, where ρ is the product of the ratios of the splits after the data date of the
+    snapshot the row was made on and at or before ``data_date`` (module docstring)."""
+    splits = splits_for(conn, symbol)
+    if not splits:
+        return [as_override(o) for o in rows]
+    made_on = snapshot_rows(conn, {o.snapshot_id for o in rows})
+    out = []
+    for row in rows:
+        found = made_on.get(row.snapshot_id)
+        after = () if found is None else (s for s in splits if found.data_date < s.date)
+        between = tuple(s for s in after if s.date <= data_date)
+        out.append(_on_basis(row, between))
+    return out
+
+
+def _on_basis(row: OverrideRow, splits: Sequence[SplitRow]) -> Override:
+    """``row`` as the engine's override after ``splits``, the splits since it was made, oldest
+    first: in dollars a share ÷ their ratio's product ρ, in shares × ρ, with the words of the
+    scaling; as entered for a ρ of 1 and for an input in any other unit."""
+    engine = as_override(row)
+    unit = TAGS[engine.tag].unit
+    rho = math.prod(s.ratio for s in splits)
+    if rho == 1 or unit not in _SCALED or not isinstance(row.new, int | float):
+        return engine
+    value = row.new / rho if unit == _A_SHARE else row.new * rho
+    words = f"entered as {_entered(row.new, row.unit)} before {named_splits(splits)}"
+    return replace(engine, value=value, rescaled=words)
+
+
+def _entered(figure: float, unit: str) -> str:
+    """The figure as the agent entered it in the row's ``unit``: an amount a share to two
+    decimals after ``$``, or after the reporting currency's code its unit names ("SEK a share"),
+    a negative one with the minus sign first, as the flags print one; a count in millions to one
+    decimal, "60.0M shares"."""
+    if unit == _SHARES:
+        return f"{figure / 1e6:,.1f}M shares"
+    code = unit.removesuffix(" a share") if unit.endswith(" a share") else "USD"
+    sign = "$" if code == "USD" else f"{code} "
+    return f"{'−' if figure < 0 else ''}{sign}{abs(figure):,.2f} a share"
 
 
 def reprice_review(
