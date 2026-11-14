@@ -79,6 +79,33 @@ def test_an_agent_s_revenue_step_is_the_one_the_charge_pays_for() -> None:
     assert "(4.8, 5.3, 5.11, 5.12, 6.4, 14.2 to 14.5, 14.9)" in row
 
 
+def test_a_thin_revenue_step_is_not_read() -> None:
+    """Spec 2026-11-14 6.2, method 1.5: 5.3 states the rule, the count it reads and a missing
+    count, what an earnings step override then moves, the agent's step over the rule and the
+    Decline route's like rule; 4.8 and 5.12 name the source `thin`; 6.4's cross-check follows; 14.4
+    says what an earnings step override moves and that the reading stays the step found; 11 has the
+    1.5 row after the 1.4 one."""
+    five = _section(5)
+    bullet = next(x for x in five.splitlines() if x.startswith("- a consensus revenue step whose"))
+    for words in (
+        "fewer than `analyst_min` (5) revenue analysts, or no count, is thin and not read",
+        "The count is FMP's revenue analyst count of the landing year alone",
+        "so an earnings step override moves the charge of that year",
+        "an agent's `revenue.step_2` or `revenue.step_3` still stands over the rule",
+        "The Decline route leaves out a consensus year on too few revenue analysts",
+    ):
+        assert words in bullet, words
+    assert "`consensus`, `agent`, `thin` (5.3) or `none`" in five
+    assert "`consensus`, `agent`, `thin` (the consensus's step left out as thin" in _section(4)
+    assert "leaves a thin step out as the route does (5.3)" in _section(6)
+    fourteen = _section(14)
+    assert "A thin consensus revenue step (5.3) does not stand" in fourteen
+    assert "On a thin year the reading is still the step found" in fourteen
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    assert rows[-2].startswith("| 1.4, policy v16 |")
+    assert rows[-1].startswith("| 1.5, policy v16 | 2026-11-15 | A thin revenue step is not read")
+
+
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:
     """Spec 2026-11-14 5: 5.2 states the order of the three subtractions and the form under a
     guided EPS, which does not read the one-time amount; 14.4 gives the input its bullet, and 11's

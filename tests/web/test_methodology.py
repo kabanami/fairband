@@ -256,6 +256,18 @@ def test_the_page_says_what_method_1_0_changed() -> None:
     assert "pays out less than nothing" in above[: above.index("</li>")]
 
 
+def test_a_thin_revenue_year_takes_the_earnings_growth() -> None:
+    """Spec 2026-11-14 6.2, method 1.5: the Mature Growth steps say that a year whose revenue
+    forecast rests on fewer than the policy's analysts, or no count, takes the earnings growth."""
+    html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
+    growth = _section(html, "mature-growth")
+    steps = growth[growth.index(">The steps</h3>") : growth.index("</ol>")]
+    assert (
+        'When fewer than <span data-policy="analyst_min">—</span> analysts forecast a year\'s '
+        "revenue, or the count is missing, that year takes the consensus earnings growth instead."
+    ) in steps
+
+
 def test_the_equity_steps_take_the_minority_interest_off() -> None:
     """Spec 2026-11-13 13: the growth, Decline and Start-up entries take the minority interest off
     the owners' claim beside debt, and the page says it is taken at book, where a market value

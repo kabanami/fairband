@@ -108,8 +108,8 @@ business's own values, before any value outside the business is added.
   three_year, ten_year, one_year, without_goodwill, value), ``terminal_roic``, ``charge_off``,
   ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps, the steps the charge
   read, an agent's included, revenue_steps_found, the consensus's as found, and
-  revenue_step_source, each year's ``consensus``, ``agent`` or ``none``), ``shares`` (the count in
-  force, and ``shares_committed`` beside it only under that override, as on every route),
+  revenue_step_source, each year's ``consensus``, ``agent``, ``thin`` or ``none``), ``shares`` (the
+  count in force, and ``shares_committed`` beside it only under that override, as on every route),
   ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
   ``ntm_nri`` (the one-time amount a share taken off year 1, only under an override of it, nil
   under a guided EPS), ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported,

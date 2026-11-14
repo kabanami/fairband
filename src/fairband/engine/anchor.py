@@ -33,7 +33,9 @@ the base year and the next two all have a positive consensus, else EPS, flagged.
 consensus does not reach is ``None`` and takes the belief. Both earnings series are read and
 kept, and ``step_series_flag`` notes a step whose rate on net income and rate on EPS lie more than
 ``step_series_gap_max`` apart, with the diluted count the route holds (spec 2026-11-09 section 9).
-The revenue steps on the same years are kept as found, for the charge. The belief for
+The revenue steps on the same years are kept as found, for the charge, beside the steps read: a
+step whose landing year has fewer than ``analyst_min`` revenue analysts, or no count, is thin and
+not read (spec 2026-11-14 6.2). The belief for
 years 4 to N is the Base Rate Book median for the sales class plus the inflation addition; the moat
 class reads the GuruFocus Moat Score.
 """
@@ -222,7 +224,10 @@ class Anchor:
 class Path:
     """The growth for years 2 and 3 (``None`` takes the belief) and the analysts of the year each
     step lands on, read from the series the steps use; the consensus revenue steps on the same
-    years as found, ``None`` where missing, for the charge; and the base year's and the next two
+    years for the charge: ``revenue_steps``, the steps read, ``None`` where missing or thin;
+    ``revenue_found``, the steps as found, ``None`` where missing; ``revenue_thin``, for each year,
+    whether a step found was left out as thin, its landing year on fewer than ``analyst_min``
+    revenue analysts or no count (spec 2026-11-14 6.2); and the base year's and the next two
     years' consensus means on net income and on EPS, ``None`` where missing, for
     ``step_series_flag``."""
 
@@ -231,6 +236,8 @@ class Path:
     analysts: tuple[int | None, int | None]
     flags: tuple[Flag, ...]
     revenue_steps: tuple[float | None, float | None]
+    revenue_found: tuple[float | None, float | None]
+    revenue_thin: tuple[bool, bool]
     net_income_means: tuple[float | None, float | None, float | None]
     eps_means: tuple[float | None, float | None, float | None]
 
@@ -500,7 +507,9 @@ def base_year(
 def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy) -> Path:
     """The consensus steps from ``base_year`` to the next year and from that to the one after, on
     the path's series, with the revenue steps on the same years and both earnings series' means,
-    which ``step_series_flag`` reads."""
+    which ``step_series_flag`` reads. A revenue step is read only where its landing year has
+    ``analyst_min`` revenue analysts or more; one on fewer, or on no count, is thin, left out of
+    the steps read and kept among the steps found (spec 2026-11-14 6.2)."""
     by_year = {x.fiscal_year: x for x in annual}
     rows = [by_year.get(base_year + i) for i in range(3)]
     on_eps = not all(r is not None and r.net_income is not None and r.net_income > 0 for r in rows)
@@ -509,6 +518,11 @@ def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy)
     revenue = [None if r is None else consensus_value(r.revenue, r.analysts_revenue) for r in rows]
     steps = _steps(per_share if on_eps else net_income)
     analysts = (_point(rows[1], on_eps)[1], _point(rows[2], on_eps)[1])
+    found = _steps(revenue)
+    revenue_thin = (
+        _thin_revenue(found[0], rows[1], policy),
+        _thin_revenue(found[1], rows[2], policy),
+    )
 
     flags = [_PATH_ON_EPS] if on_eps else []
     thin = few_analysts(base_year, steps, analysts, policy)
@@ -519,10 +533,24 @@ def path_steps(annual: Sequence[AnnualEstimate], base_year: int, policy: Policy)
         on_eps=on_eps,
         analysts=analysts,
         flags=tuple(flags),
-        revenue_steps=_steps(revenue),
+        revenue_steps=(
+            None if revenue_thin[0] else found[0],
+            None if revenue_thin[1] else found[1],
+        ),
+        revenue_found=found,
+        revenue_thin=revenue_thin,
         net_income_means=net_income,
         eps_means=per_share,
     )
+
+
+def _thin_revenue(step: float | None, landing: AnnualEstimate | None, policy: Policy) -> bool:
+    """Whether a revenue step found is thin: its landing year ``landing`` has fewer than
+    ``analyst_min`` revenue analysts or no count (spec 2026-11-14 6.2). A missing step is not."""
+    if step is None or landing is None:
+        return False
+    n = landing.analysts_revenue
+    return n is None or n < policy.analyst_min
 
 
 def few_analysts(

@@ -4,7 +4,9 @@ Year 1 is the NTM anchor and years 2 and 3 the consensus path. When year 3's gro
 belief, years 4 to 3 + the policy's ``fade_years`` fade from it to the belief; the other years to
 the runway N grow at the belief. The value is the reverse DCF with the reinvestment charge of spec
 2026-11-09 6 (``RoicTerms``): each year pays for the next year's revenue growth, the consensus
-revenue steps for years 2 and 3 (a missing one taking the earnings step) fading to the belief as
+revenue steps for years 2 and 3 (a missing one taking the earnings step, and so a thin one, whose
+landing year has fewer than ``analyst_min`` revenue analysts or no count, spec 2026-11-14 6.2,
+``anchor.path_steps``) fading to the belief as
 the earnings path fades, at a return that holds at the runway return through the hold K, the last
 year whose next earnings growth is above the belief, then fades in equal steps to the terminal
 return in year N. K is read once, from the row's own path at the belief in force, and every
@@ -59,9 +61,10 @@ is applied; ``earnings.sbc`` the trailing stock pay, in the basis test and the a
 ``earnings.sbc_basis`` the basis, in place of the test (spec 2026-11-13 7.2); ``path.step_2`` and
 ``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
 step not counted thin nor named in ``step-series-disagree``, moving the growth the charge pays for
-only in a year with no revenue step, where the earnings step stands in; ``revenue.step_2`` and
-``revenue.step_3`` the revenue steps the charge pays for, in place of the consensus's, the steps
-found kept beside them (spec 2026-11-14 6.1); ``growth.belief`` the belief's rate, and the hold
+only in a year with no revenue step read, missing or thin, where the earnings step stands in;
+``revenue.step_2`` and ``revenue.step_3`` the revenue steps the charge pays for, in place of the
+consensus's, a thin one's too, since an agent's step is never thin, the steps found kept beside
+them (spec 2026-11-14 6.1); ``growth.belief`` the belief's rate, and the hold
 read on it; ``earnings.ntm``, the NTM EPS from a clear guidance, which stands in for the
 consensus less the SBC adjustment, the NTM window's periods still required
 (``anchor.ntm_window``: four quarters, or two half-years);
@@ -187,7 +190,7 @@ _IMPLIED_HI = 2.0  # the highest growth the implied-growth solve tries: 200% a y
 _NOT_POSITIVE = "value not positive under the reinvestment charge"
 _STEP_TAGS: tuple[OverrideTag, OverrideTag] = ("path.step_2", "path.step_3")
 # Where the revenue step of a year the charge reads comes from (spec 2026-11-14 6.3).
-RevenueSource = Literal["consensus", "agent", "none"]
+RevenueSource = Literal["consensus", "agent", "thin", "none"]
 Steps = tuple[float | None, float | None]
 
 
@@ -197,20 +200,28 @@ class RevenueSteps:
     the charge pays for, ``None`` where the earnings step of the year stands in; ``found``, the
     consensus's steps as found, ``None`` where missing; and ``source``, for each year, where the
     step read comes from: ``"consensus"``, the step as found; ``"agent"``, an agent's
-    ``revenue.step_2`` or ``revenue.step_3`` in its place; ``"none"``, no step at all."""
+    ``revenue.step_2`` or ``revenue.step_3`` in its place; ``"thin"``, the step found left out,
+    its landing year on fewer than ``analyst_min`` revenue analysts or no count (spec 2026-11-14
+    6.2); ``"none"``, no step at all."""
 
     read: Steps
     found: Steps
     source: tuple[RevenueSource, RevenueSource]
 
 
-def _as_found(found: Steps) -> RevenueSteps:
-    """The consensus revenue steps ``found`` as the charge reads them without an agent's: each as
-    found, its source the consensus, or none where the consensus gives no step."""
-    return RevenueSteps(found, found, (_found_source(found[0]), _found_source(found[1])))
+def _as_found(path: Path) -> RevenueSteps:
+    """The consensus revenue steps of ``path`` as the charge reads them without an agent's: the
+    steps the thin rule reads, ``Path.revenue_steps``, the steps found, ``Path.revenue_found``,
+    and each year's source, ``thin`` where the rule left the step found out
+    (``Path.revenue_thin``), else the consensus, or none where the consensus gives no step."""
+    found, thin = path.revenue_found, path.revenue_thin
+    source = (_found_source(found[0], thin[0]), _found_source(found[1], thin[1]))
+    return RevenueSteps(path.revenue_steps, found, source)
 
 
-def _found_source(step: float | None) -> RevenueSource:
+def _found_source(step: float | None, thin: bool = False) -> RevenueSource:
+    if thin:
+        return "thin"
     return "none" if step is None else "consensus"
 
 
@@ -428,7 +439,7 @@ def _anchor_and_path(
     base_year = base_fiscal_year(periods)
     path = path_steps(i.annual_estimates, base_year, policy)
     belief = belief_from_sales(t.revenue / i.fx_rate / 1e6, policy)  # the bounds are USD
-    revenue = _as_found(path.revenue_steps)
+    revenue = _as_found(path)
     if own:
         path, belief, revenue = _judged(c, path, belief, revenue, base_year, periods)
     if any(g is not None and g <= -1 for g in path.steps):
@@ -516,7 +527,10 @@ def charge_entry(
     ``None`` where the earnings step stands in, which the rebuild reads; ``revenue_steps_found``,
     the consensus's as found; and ``revenue_step_source``, each year's source. Without
     ``revenue``, the path's own steps as found (none on a path without them, Mature Stable's)."""
-    steps = _as_found(growth.revenue_steps or (None, None)) if revenue is None else revenue
+    steps = revenue
+    if steps is None:
+        own = growth.revenue_steps or (None, None)
+        steps = RevenueSteps(own, own, (_found_source(own[0]), _found_source(own[1])))
     return {
         "growth_by_year": [*charge_growth(growth), charge.g_t],
         "return_by_year": list(return_by_year(charge, growth.runway)),
@@ -666,7 +680,7 @@ def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:
 def _on_revenue(growth: GrowthPath, year: int) -> bool:
     """Whether year ``year``'s h is a revenue step, the consensus's or an agent's (spec 2026-11-14
     6.3): year 2's or year 3's own, or the fade from year 3's to the belief; not where an earnings
-    step stands in for a missing one, nor in the belief years or after the runway."""
+    step stands in for a missing or thin one, nor in the belief years or after the runway."""
     r2, r3 = growth.revenue_steps or (None, None)
     if year == 2:
         return r2 is not None

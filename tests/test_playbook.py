@@ -952,6 +952,17 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "rests on few analysts or outruns the business's record",
                 "set `revenue.step_2` or `revenue.step_3` from a guidance record or a filing",
                 "`return.runway` is not the lever for a wrong revenue step",
+                # a thin revenue step is not read (spec 2026-11-14 6.2)
+                (
+                    "The engine does not read a revenue step whose year has fewer than "
+                    "`analyst_min` revenue analysts (`policy()`), or no count"
+                ),
+                (
+                    "that year's charge pays for its earnings step, so a `path.step_2` or "
+                    "`path.step_3` moves it"
+                ),
+                "`charge/revenue_step_source` says `thin`",
+                "your `revenue.step_2` or `revenue.step_3` still stands over the rule",
             ),
         ),
         (

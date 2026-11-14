@@ -203,7 +203,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/1.4"
+    assert METHOD_VERSION == "fairband-mechanical/1.5"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -2802,6 +2802,102 @@ def test_growth_above_return_says_revenue_growth_for_an_agent_s_revenue_step(
     )
 
 
+# --- A thin revenue step is not read (spec 2026-11-14 6.2, method 1.5) --------------------------
+
+
+def _thin_step_3() -> CompanyInputs:
+    """MGCO's revenue consensus of the tests above with fiscal 2029, the year step 3 lands on, on 4
+    revenue analysts: its step of 8% is thin."""
+    base, second, third = _on_revenue().annual_estimates
+    rows = (base, second, replace(third, analysts_revenue=4))
+    return replace(_on_revenue(), annual_estimates=rows)
+
+
+def test_a_thin_revenue_step_gives_way_to_the_earnings_step(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.2 on MGCO with fiscal 2029 on 4 revenue analysts: the charge reads step 2,
+    10% on 10 analysts, and not step 3, 8% on 4; year 2's reinvestment pays for the earnings step
+    of year 3, 7,392 ÷ 6,720 − 1 = 10%, and the fade runs from 10% to the 6.3% belief, 9.26% to
+    7.04%, where the row on 10 analysts pays for 8% and its fade, 7.66% to 6.64%. So the charge
+    pays for more growth, the value is below the row's on 10 analysts and equal to the value under
+    an agent's revenue step 3 of 10%. The steps found, the hold and the earnings path stand, no
+    flag says the step is thin, and a price refresh rebuilds the same figures from the steps
+    read."""
+    plain = value_company(_on_revenue(), deciles, policy, TODAY)
+    r = value_company(_thin_step_3(), deciles, policy, TODAY)
+    ch = r.intermediates["charge"]
+    assert ch["revenue_steps"] == [pytest.approx(0.10), None]
+    assert ch["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert ch["revenue_step_source"] == ["consensus", "thin"]
+    assert ch["growth_by_year"][:7] == pytest.approx(
+        [0.10, 0.10, 0.0926, 0.0852, 0.0778, 0.0704, 0.063]
+    )
+    assert ch["hold_years"] == plain.intermediates["charge"]["hold_years"] == 6
+    assert r.intermediates["path_steps"] == plain.intermediates["path_steps"]
+    assert codes(r) == codes(plain)
+    at_ten = value_company(_on_revenue(), deciles, policy, TODAY, judged(("revenue.step_3", 0.10)))
+    assert plain.value is not None and r.value is not None and at_ten.value is not None
+    assert r.value < plain.value
+    assert r.value == pytest.approx(at_ten.value)
+    day = date(2026, 11, 2)
+    moved = reprice(result_from_json(result_to_json(r)), 120.0, day, policy)
+    fresh = value_company(
+        replace(_thin_step_3(), price=120.0, price_date=day), deciles, policy, TODAY
+    )
+    assert moved.value == fresh.value
+    for key in ("charge", "implied_growth", "implied_by_roic", "expected_return"):
+        assert moved.intermediates[key] == fresh.intermediates[key], key
+
+
+def test_an_earnings_step_override_moves_the_charge_of_a_thin_year(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.2: the charge takes the earnings step of the thin year as resolved, so a
+    ``path.step_3`` of 15% makes year 2's reinvestment pay for 15%, the fade running from it; on
+    the row whose step 3 rests on 10 analysts the same override leaves the charge at the consensus
+    revenue step, 8%."""
+    step = judged(("path.step_3", 0.15))
+    r = value_company(_thin_step_3(), deciles, policy, TODAY, step)
+    ch = r.intermediates["charge"]
+    assert r.intermediates["path_steps"][1] == 0.15
+    assert ch["growth_by_year"][:3] == [pytest.approx(0.10), 0.15, pytest.approx(0.1326)]
+    assert ch["revenue_steps"] == [pytest.approx(0.10), None]
+    assert ch["revenue_step_source"] == ["consensus", "thin"]
+    read = value_company(_on_revenue(), deciles, policy, TODAY, step).intermediates["charge"]
+    assert read["growth_by_year"][1] == pytest.approx(0.08)
+
+
+def test_an_agent_s_revenue_step_wins_over_the_thin_rule(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-14 6.1: an agent's step is never thin. A ``revenue.step_3`` of 5% on the thin
+    year is the step the charge pays for, its source ``agent``, the steps found kept; the value is
+    the one the same override gives on the row whose step 3 rests on 10 analysts."""
+    step = judged(("revenue.step_3", 0.05))
+    r = value_company(_thin_step_3(), deciles, policy, TODAY, step)
+    ch = r.intermediates["charge"]
+    assert ch["revenue_steps"] == [pytest.approx(0.10), 0.05]
+    assert ch["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert ch["revenue_step_source"] == ["consensus", "agent"]
+    assert ch["growth_by_year"][1] == 0.05
+    read = value_company(_on_revenue(), deciles, policy, TODAY, step)
+    assert r.value is not None and r.value == read.value
+
+
+def test_a_mature_stable_row_s_cross_check_leaves_a_thin_revenue_step_out(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-14 6.2: the rule reaches every growth-route cross-check. On MSCO with the thin
+    consensus, the cross-check's charge reads step 2 and not step 3, whose year takes the earnings
+    step, 10%; the steps found are both kept."""
+    inputs = _with_consensus(engine_companies.mature_stable_inputs(), _thin_step_3())
+    gr = value_company(inputs, deciles, policy, TODAY).intermediates["growth_route"]
+    assert gr["refusal"] is None
+    assert gr["charge"]["revenue_steps"] == [pytest.approx(0.10), None]
+    assert gr["charge"]["revenue_steps_found"] == [pytest.approx(0.10), pytest.approx(0.08)]
+    assert gr["charge"]["revenue_step_source"] == ["consensus", "thin"]
+    assert gr["charge"]["growth_by_year"][1] == pytest.approx(0.10)
+
+
 # --- Reprice ------------------------------------------------------------------------------------
 
 
@@ -2967,7 +3063,7 @@ def test_result_cites_the_settings_hash(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
-    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.4"
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.5"
     custom = apply_overlay(policy, {"required_return": 0.1})
     valued = value_company(mg_inputs, deciles, custom, TODAY)
     assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH

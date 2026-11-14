@@ -350,6 +350,11 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   `agent`. `return.runway` is not the lever for a wrong revenue step: it moves the return on every
   year's growth, not the growth itself. A `path.step_2` or `path.step_3` moves the earnings path,
   and the charge only in a year with no revenue step.
+  The engine does not read a revenue step whose year has fewer than `analyst_min` revenue analysts
+  (`policy()`), or no count: that year's charge pays for its earnings step, so a `path.step_2` or
+  `path.step_3` moves it, and `charge/revenue_step_source` says `thin`, while
+  `charge/revenue_steps_found` keeps the analysts' step; your `revenue.step_2` or `revenue.step_3`
+  still stands over the rule.
 - `consensus-basis-unknown`: it fires with `large-nri`. Whether the analysts' EPS carries the
   non-recurring items is unknown. Read the filing's non-recurring items. On Mature Stable, decide
   the trailing earnings through `earnings.nri_gap`. On Mature Growth the value rests on the

@@ -490,7 +490,9 @@ belief (the long-run growth the engine assumes).</li>
 <span data-policy="inflation_addition">—</span> for inflation.</li>
 <li>The belief holds to the end of the runway.</li>
 <li>Each year pays the reinvestment charge for next year's revenue growth. Years 2 and 3 take the
-consensus revenue growth; later years fade to the belief.</li>
+consensus revenue growth; later years fade to the belief.
+When fewer than <span data-policy="analyst_min">—</span> analysts forecast a year's revenue, or
+the count is missing, that year takes the consensus earnings growth instead.</li>
 <li>The charge starts at the runway return (the company's own return on new capital, at least the
 hurdle rate). It holds while growth is above the belief, then fades to the terminal return.</li>
 <li>After the runway, earnings grow at terminal growth, charged at the terminal return (the hurdle
