@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v13.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v14.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v12 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v13 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -30,7 +30,8 @@ are the four values v13 adds (spec 2026-11-13, sections 7.1 and 8): the share of
 at which stock pay is material and the share of the statutory tax rate, each failing at load
 outside 0 to 1; the multiple of the stock pay a share, failing at or below 0; and the
 share-count band, whose low must be below 1 and whose high above 1. Nor is the trailing stock
-pay's override range v13 adds, nor the runway return's, which v13 widens to 500%.
+pay's override range v13 adds, nor the runway return's, which v13 widens to 500%. v14 adds no
+value, only the minority interest's override range (spec 2026-11-13, sections 13 and 14).
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
 five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap
@@ -52,7 +53,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v13.toml"
+_POLICY_FILE = "fairband-policy-v14.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -210,7 +211,7 @@ def in_currency(policy: Policy, differential: float) -> Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v13 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v14 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 

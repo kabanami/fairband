@@ -535,7 +535,7 @@ def test_a_methodology_section_reads_the_user_s_settings(client: TestClient) -> 
     value = _get(client, "/api/methodology/value")["text"]
     assert "Every route discounts at the hurdle rate, 10.0%." in value
     settings = _get(client, "/api/methodology/your-settings")["text"]
-    assert "The policy file is fairband-policy-v13." in settings
+    assert "The policy file is fairband-policy-v14." in settings
     assert settings.endswith("1 setting differs from the defaults.")
 
 
