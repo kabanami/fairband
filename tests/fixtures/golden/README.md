@@ -90,6 +90,13 @@ period-tied override corrects, so the drop of such an override follows the perio
 day the statements were fetched. Every fixture's trailing figures end on 2026-09-30, SUCO's
 refusal included. No other key or figure of any golden moves.
 
+MGCO and FXCO re-captured under 1.3 on 2026-11-14 for one new key (spec 2026-11-13 7.2; method
+14.4): the Mature Growth intermediates gain `sbc_ttm`, the trailing stock pay the anchor read,
+which an agent's `earnings.sbc` replaces and which `overrides.current_reading` reads as the
+figure such an override corrects. With no override it is the stored figure: 400 m on MGCO, 320 m
+SEK on FXCO. No other key or figure of either golden moves; the five goldens on other routes carry
+no such key and are untouched.
+
 Run from the repository root:
 
 ```

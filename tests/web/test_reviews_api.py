@@ -403,6 +403,57 @@ def test_the_two_new_inputs_through_the_api(
     assert _post(client, su_shares, "SUCO")["override"]["state"] == "applied"
 
 
+def test_the_two_stock_pay_inputs_through_the_api(
+    client: TestClient, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-13 7.2 on AAPL, the Mature Growth golden, whose test reads includes-sbc: the
+    basis applies lasting with a filing, and the consensus taken as excluding stock pay lowers the
+    value; the stock pay is refused lasting and without a period, and applies period-tied with
+    one, keeping the figure it corrected, the stored $400 m; the detail's bridge names both under
+    their labels and units, the figure first."""
+    filing = {"kind": "filing", "ref": "Q3 2026 release: the adjusted EPS", "note": ""}
+    basis = {
+        "tag": "earnings.sbc_basis",
+        "new": "excludes",
+        "reason": "the release's adjusted EPS leaves out stock pay",
+        "evidence": [filing],
+        "lifetime": "lasting",
+    }
+    body = _post(client, basis)
+    mechanical = results["AAPL"].value
+    assert mechanical is not None
+    assert (body["override"]["state"], body["override"]["old"], body["override"]["unit"]) == (
+        "applied",
+        "includes",
+        "basis",
+    )
+    assert body["review"]["value"] < mechanical
+    pay = basis | {
+        "tag": "earnings.sbc",
+        "new": 500e6,
+        "reason": "the cash flow statement's stock pay",
+        "lifetime": "period-tied",
+    }
+    r = client.post("/api/companies/AAPL/overrides", json=pay, headers=AGENT)
+    assert (r.status_code, r.json()) == (400, {"detail": NO_PERIOD})
+    r = client.post(
+        "/api/companies/AAPL/overrides", json=pay | {"lifetime": "lasting"}, headers=AGENT
+    )
+    assert (r.status_code, r.json()["detail"]) == (400, "earnings.sbc is period-tied only")
+    tied = _post(client, pay | {"period": "Q3 2026"})["override"]
+    assert (tied["state"], tied["unit"], tied["old"], tied["correctedValue"]) == (
+        "applied",
+        "USD",
+        400e6,
+        400e6,
+    )
+    bridge = client.get("/api/companies/AAPL").json()["review"]["bridge"]
+    assert [(x["tag"], x["label"], x["unit"], x["old"], x["new"]) for x in bridge] == [
+        ("earnings.sbc", "stock pay", "USD", 400e6, 500e6),
+        ("earnings.sbc_basis", "stock-pay basis", "basis", "includes", "excludes"),
+    ]
+
+
 def test_a_start_up_put_in_young_growth_meets_the_evidence_rule(
     client: TestClient,
     db_path: Path,

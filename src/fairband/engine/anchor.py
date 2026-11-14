@@ -14,7 +14,9 @@ when the street's trailing EPS sits above the GAAP trailing EPS by at least ``sb
 the after-tax SBC per share, the consensus excludes stock compensation, and the anchor subtracts
 the after-tax SBC per share held at its trailing share of revenue (scaled by the NTM consensus
 revenue over the trailing revenue, or unscaled when either is missing). A missing input leaves the
-basis unknown; the consensus then stands as it is and is flagged.
+basis unknown; the consensus then stands as it is and is flagged. An agent's trailing stock pay
+stands in for the stored one, in the test and the adjustment, and an agent's basis for the test
+(spec 2026-11-13 7.2).
 
 Years 2 and 3 are the next two steps of the annual consensus from the base year, the fiscal year
 that holds most of the window's periods (a tie takes the later). The steps read net income when
@@ -38,6 +40,8 @@ from fairband.engine.types import Flag
 from fairband.policy import BaseRateClass, Moat, Policy
 
 SbcBasis = Literal["excludes-sbc", "includes-sbc", "unknown"]
+# An agent's ``earnings.sbc_basis`` as the anchor reads it (spec 2026-11-13 7.2).
+_AGENT_BASIS: dict[str, SbcBasis] = {"includes": "includes-sbc", "excludes": "excludes-sbc"}
 # How often a company reports, read from the spacing of its statement periods
 # (``inputs_statements.cadence_of``): the trailing figures and the NTM window sum a year of them.
 Cadence = Literal["quarterly", "half-yearly"]
@@ -152,7 +156,10 @@ class StockPayHistory:
 class Anchor:
     """Year 1 per share and in total: the consensus less the SBC adjustment, or an agent's guided
     NTM EPS in its place, less an agent's cycle gap when one applies; under the refusal
-    "incomplete NTM consensus" the numbers are 0."""
+    "incomplete NTM consensus" the numbers are 0. ``sbc_ttm`` is the trailing stock pay the
+    anchor read, an agent's in place of the stored figure, and ``gaap_ttm_eps`` the GAAP trailing
+    EPS the basis test reads, less an agent's correction to the non-recurring gap; both ``None``
+    where the trailing figures hold none."""
 
     ntm_eps_raw: float
     sbc_adjustment_per_share: float
@@ -161,6 +168,8 @@ class Anchor:
     basis: SbcBasis
     flags: tuple[Flag, ...]
     refusal: str | None
+    sbc_ttm: float | None
+    gaap_ttm_eps: float | None
 
     @property
     def ntm_eps_found(self) -> float:
@@ -296,30 +305,40 @@ def ntm_anchor(
     nri_correction: float | None = None,
     cycle_gap: float | None = None,
     guided_eps: float | None = None,
+    sbc_override: float | None = None,
+    basis_override: Literal["includes", "excludes"] | None = None,
 ) -> Anchor:
     """The NTM EPS with stock compensation as a cost and the NTM net income on ``shares``, on the
     window's ``periods``: ``PERIODS_PER_YEAR[cadence]`` of them, the window's cadence, each with
     an EPS mean. The basis test reads trailing GAAP EPS as reported; with ``nri_correction``, an
     agent's non-recurring gap less the gap found (``method.md`` 14), GAAP EPS less that
     correction, so a gap overridden at the figure found leaves the test as it was. With
+    ``sbc_override``, an agent's trailing stock pay, that figure stands in for the stored one in
+    the test and in the adjustment; with ``basis_override``, an agent's basis, the basis is
+    ``includes-sbc`` or ``excludes-sbc`` as it says and the test is not run, so no figure it
+    would read is needed and ``sbc-basis-unknown`` is not raised (spec 2026-11-13 7.2). With
     ``guided_eps``, an agent's NTM EPS from a clear guidance, that figure stands in for the
     consensus less the SBC adjustment, the window's periods still required; with ``cycle_gap``,
     an agent's correction to mid-cycle earnings a share, the NTM EPS is then taken less it, and
     "no positive forward anchor" reads the figure so set and lowered. The unit-error check reads
     the consensus as found, a check on the vendor's units (on a positive figure: a trough lifted
     by a negative gap has no forward P/E to check), the raw sum and the adjustment are the
-    consensus's, and the basis test reads neither override."""
-    sbc_per_share = None if trailing.sbc is None else trailing.sbc * (1 - tax_rate) / shares
+    consensus's, and the basis test reads neither of those two overrides."""
+    sbc = trailing.sbc if sbc_override is None else sbc_override
+    sbc_per_share = None if sbc is None else sbc * (1 - tax_rate) / shares
     gaap = trailing.eps_diluted
     if gaap is not None and nri_correction is not None:
         gaap -= nri_correction
-    basis = sbc_basis(street_ttm_eps, gaap, sbc_per_share, policy.sbc_detect)
+    if basis_override is None:
+        basis = sbc_basis(street_ttm_eps, gaap, sbc_per_share, policy.sbc_detect)
+    else:
+        basis = _AGENT_BASIS[basis_override]
     flags = (_SBC_UNKNOWN,) if basis == "unknown" else ()
 
     count = PERIODS_PER_YEAR[cadence]
     eps = [x.eps for x in periods if x.eps is not None]
     if len(periods) != count or len(eps) != count:
-        return Anchor(0.0, 0.0, 0.0, 0.0, basis, flags, "incomplete NTM consensus")
+        return Anchor(0.0, 0.0, 0.0, 0.0, basis, flags, "incomplete NTM consensus", sbc, gaap)
     raw = sum(eps)
     adjustment = 0.0
     if basis == "excludes-sbc" and sbc_per_share is not None:
@@ -333,7 +352,7 @@ def ntm_anchor(
         refusal = "no positive forward anchor"
     elif found > 0 and price / found < policy.forward_pe_unit_error:
         refusal = f"forward P/E below {policy.forward_pe_unit_error:g}: unit error"
-    return Anchor(raw, adjustment, ntm_eps, ntm_eps * shares, basis, flags, refusal)
+    return Anchor(raw, adjustment, ntm_eps, ntm_eps * shares, basis, flags, refusal, sbc, gaap)
 
 
 def base_fiscal_year(periods: Sequence[QuarterEstimate]) -> int:

@@ -20,6 +20,7 @@ from support.engine_companies import (
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import (
     BRIDGE_ORDER,
+    INPUT_OF,
     LABELS,
     TAGS,
     Lifetime,
@@ -192,11 +193,18 @@ def test_every_tag_has_a_place_in_the_bridge_and_a_range_or_words(policy: Policy
 
 def test_the_cycle_gap_is_a_mature_tag() -> None:
     """The mid-cycle correction reads where the non-recurring gap reads, in the same unit, and its
-    bridge line follows the gap's under its own label."""
+    bridge line follows the gap's and the two stock-pay lines (spec 2026-11-13 7.2) under its own
+    label."""
     cycle, nri = TAGS["earnings.cycle_gap"], TAGS["earnings.nri_gap"]
     assert cycle.routes == nri.routes == {"mature-growth", "mature-stable"}
     assert cycle.unit == "USD a share" and cycle.words is None
-    assert BRIDGE_ORDER.index("earnings.cycle_gap") == BRIDGE_ORDER.index("earnings.nri_gap") + 1
+    gap = BRIDGE_ORDER.index("earnings.nri_gap")
+    assert BRIDGE_ORDER[gap : gap + 4] == (
+        "earnings.nri_gap",
+        "earnings.sbc",
+        "earnings.sbc_basis",
+        "earnings.cycle_gap",
+    )
     assert LABELS == {
         "phase": "phase",
         "growth.belief": "belief",
@@ -208,6 +216,8 @@ def test_the_cycle_gap_is_a_mature_tag() -> None:
         "capital.sales_to_capital": "sales to capital",
         "return.runway": "runway return",
         "earnings.nri_gap": "non-recurring gap",
+        "earnings.sbc": "stock pay",
+        "earnings.sbc_basis": "stock-pay basis",
         "earnings.cycle_gap": "mid-cycle earnings",
         "earnings.ntm": "NTM earnings",
         "revenue.ntm": "NTM revenue",
@@ -309,6 +319,104 @@ def test_the_two_new_readings(policy: Policy, deciles: Deciles) -> None:
     assert current_reading(refused, "shares.diluted") == 1_060e6
     names = [(x.name, x.tag, x.unit) for x in refused.inputs if "shares" in x.name]
     assert names == [("shares.diluted", "JUDGMENT", "shares")]
+
+
+def test_the_two_stock_pay_tags_rules(policy: Policy) -> None:
+    """Spec 2026-11-13 7.2: the basis takes its two words, lasting or period-tied; the stock pay
+    is a total of $0 or more, period-tied only; both on Mature Growth alone, their bridge lines
+    right after the non-recurring gap's, the figure first. The stock pay stands in for the
+    route's own ``sbc_ttm`` entry; the basis stands for no entry."""
+    assert check_input("earnings.sbc_basis", "excludes", "mature-growth", policy) == ("applied", "")
+    assert check_input("earnings.sbc_basis", "maybe", "mature-growth", policy) == (
+        "refused-unit",
+        "earnings.sbc_basis takes includes or excludes",
+    )
+    for tag, value in (("earnings.sbc", 40e6), ("earnings.sbc_basis", "includes")):
+        for route in ("mature-stable", "revenue-growth"):
+            state, _ = check_input(tag, value, route, policy)
+            assert state == "refused-route", (tag, route)
+    assert check_override(
+        "earnings.sbc", 40e6, "mature-growth", policy, ["filing"], "lasting", None
+    ) == ("refused-unit", "earnings.sbc is period-tied only")
+    tied = ("earnings.sbc", 40e6, "mature-growth", policy, ["filing"], "period-tied", None)
+    assert check_override(*tied) == ("applied", "")
+    assert check_override(*tied[:1], 0.0, *tied[2:]) == ("applied", "")  # nil is a figure
+    for refused in (-1.0, "lots"):
+        assert check_override(*tied[:1], refused, *tied[2:]) == (
+            "refused-unit",
+            "earnings.sbc takes $0 or more",
+        )
+    for lifetime in ("lasting", "period-tied"):
+        basis = check_override(
+            "earnings.sbc_basis", "includes", "mature-growth", policy, ["filing"], lifetime, None
+        )
+        assert basis == ("applied", ""), lifetime
+    sbc, basis_spec = TAGS["earnings.sbc"], TAGS["earnings.sbc_basis"]
+    assert (sbc.routes, sbc.unit, sbc.words) == ({"mature-growth"}, "USD", None)
+    assert sbc.period_tied_only and not sbc.low_open
+    assert (basis_spec.routes, basis_spec.unit) == ({"mature-growth"}, "basis")
+    assert basis_spec.words == ("includes", "excludes") and not basis_spec.period_tied_only
+    assert BRIDGE_ORDER.index("earnings.sbc") == BRIDGE_ORDER.index("earnings.nri_gap") + 1
+    assert BRIDGE_ORDER.index("earnings.sbc_basis") == BRIDGE_ORDER.index("earnings.sbc") + 1
+    assert (LABELS["earnings.sbc"], LABELS["earnings.sbc_basis"]) == (
+        "stock pay",
+        "stock-pay basis",
+    )
+    assert INPUT_OF["earnings.sbc"] == "sbc_ttm" and "earnings.sbc_basis" not in INPUT_OF
+
+
+def test_the_stock_pay_range_is_read_in_the_row_s_currency(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """``earnings.sbc`` is a total in the reporting currency, its range read as ``balance.cash``'s
+    is: on FXCO, in SEK at 8.0, the lower end 0 × 8.0 is 0 SEK, and the upper end, the policy's
+    stand-in for no bound, stays one and is not written, so the refusal of −1 reads "0 SEK or
+    more"; the stand-in end itself, 10^15 SEK, applies; the override's unit is the code."""
+    rate, currency = money_of(value_company(fx_inputs(), deciles, policy, TODAY))
+    assert (rate, currency) == (8.0, "SEK")
+    pay = ("earnings.sbc", 1e15, "mature-growth", policy, ["filing"], "period-tied", None)
+    assert check_override(*pay, fx_rate=rate, currency=currency) == ("applied", "")
+    assert check_override(*pay[:1], 320e6, *pay[2:], fx_rate=rate, currency=currency) == (
+        "applied",
+        "",
+    )
+    assert check_override(*pay[:1], -1.0, *pay[2:], fx_rate=rate, currency=currency) == (
+        "refused-unit",
+        "earnings.sbc takes 0 SEK or more",
+    )
+    assert unit_in(TAGS["earnings.sbc"].unit, currency) == "SEK"
+    assert unit_in(TAGS["earnings.sbc_basis"].unit, currency) == "basis"
+
+
+def test_the_two_stock_pay_readings(policy: Policy, deciles: Deciles) -> None:
+    """The stock pay the anchor read, the stored $400 m on MGCO until an agent's figure replaces
+    it; the basis as the test read it, in the input's words, ``None`` on an unknown basis and on
+    every other route. MGCO's street EPS of 5.80 lies 0.50 above GAAP 5.30, at or above half the
+    0.30 of after-tax stock pay a share: excludes."""
+    mg = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    assert current_reading(mg, "earnings.sbc") == mg.intermediates["sbc_ttm"] == 400e6
+    assert current_reading(mg, "earnings.sbc_basis") == "includes"
+    excludes = value_company(
+        replace(mature_growth_inputs(), street_ttm_eps=5.80), deciles, policy, TODAY
+    )
+    assert current_reading(excludes, "earnings.sbc_basis") == "excludes"
+    unknown = value_company(
+        replace(mature_growth_inputs(), street_ttm_eps=None), deciles, policy, TODAY
+    )
+    assert unknown.intermediates["sbc_basis"] == "unknown"
+    assert current_reading(unknown, "earnings.sbc_basis") is None
+    pay = {"earnings.sbc": override("earnings.sbc", 600e6)}
+    judged = value_company(mature_growth_inputs(), deciles, policy, TODAY, pay)
+    assert current_reading(judged, "earnings.sbc") == judged.intermediates["sbc_ttm"] == 600e6
+    entries = [(x.name, x.tag, x.unit) for x in judged.inputs if "sbc" in x.name]
+    assert entries == [("earnings.sbc", "JUDGMENT", "USD")]
+    basis = {"earnings.sbc_basis": override("earnings.sbc_basis", "excludes")}
+    charged = value_company(mature_growth_inputs(), deciles, policy, TODAY, basis)
+    assert current_reading(charged, "earnings.sbc_basis") == "excludes"
+    for build in (mature_stable_inputs, high_growth_inputs, decline_inputs, start_up_inputs):
+        r = value_company(build(), deciles, policy, TODAY)
+        assert current_reading(r, "earnings.sbc") is None, r.symbol
+        assert current_reading(r, "earnings.sbc_basis") is None, r.symbol
 
 
 def test_the_two_ntm_anchors_are_tags(policy: Policy) -> None:

@@ -550,13 +550,15 @@ def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
     assert twelve.index(sentence) < twelve.index("Submit with `report_submit`")
 
 
-def test_the_overrides_table_names_the_eighteen_inputs() -> None:
-    """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1): the skill's overrides table names
-    every input the engine takes, each once, with the routes that read it; the share count is
-    period-tied only and moves the next twelve months' net income with it, so the agent reads the
-    consensus EPS's share basis first; the value outside the business is after tax, and its gains
-    come out of the earnings through the non-recurring gap, so nothing counts twice; the bridge's
-    lines run in the engine's order; the tool list names the two new tags."""
+def test_the_overrides_table_names_the_twenty_inputs() -> None:
+    """Spec 2026-11-09 8 and 12 (the engine round 2, plan 1) and spec 2026-11-13 7.2: the skill's
+    overrides table names the twenty inputs the engine takes, each once, with the routes that read
+    it; the share count is period-tied only and moves the next twelve months' net income with it,
+    so the agent reads the consensus EPS's share basis first; the value outside the business is
+    after tax, and its gains come out of the earnings through the non-recurring gap, so nothing
+    counts twice; the stock pay is a total from the filing's cash flow statement, period-tied
+    only, and the stock-pay basis rests on the release's definition of its adjusted EPS; the
+    bridge's lines run in the engine's order; the tool list counts the twenty."""
     skill = _read(SKILL)
     table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
     tags: list[str] = []
@@ -566,7 +568,7 @@ def test_the_overrides_table_names_the_eighteen_inputs() -> None:
         phases = set(PHASES) if routes == "every route" else {p for p in PHASES if p in routes}
         for tag in named:
             assert phases == {p for r in TAGS[tag].routes for p in ROUTE_PHASES[r]}, tag
-    assert len(tags) == len(set(tags)) == 18 and set(tags) == set(TAGS)
+    assert len(tags) == len(set(tags)) == 20 and set(tags) == set(TAGS)
     shares = _flat(" ".join(table["`shares.diluted`"]))
     for words in (
         "period-tied only",
@@ -583,6 +585,12 @@ def test_the_overrides_table_names_the_eighteen_inputs() -> None:
         "excludes its gains",
     ):
         assert words in outside, words
+    pay = _flat(" ".join(table["`earnings.sbc`"]))
+    for words in ("a total", "cash flow statement", "0 dollars or more", "period-tied only"):
+        assert words in pay, words
+    basis = _flat(" ".join(table["`earnings.sbc_basis`"]))
+    for words in ("`includes` or `excludes`", "definition of its adjusted EPS", "the release"):
+        assert words in basis, words
     # the charge divides by the runway return, so the range excludes 0 (the final review's fix);
     # policy v13 takes it to 5.00, so the engine's own measure fits (spec 2026-11-13 10)
     assert table["`return.runway`"][2] == "above 0 to 5.00"
@@ -593,8 +601,26 @@ def test_the_overrides_table_names_the_eighteen_inputs() -> None:
     order = ", ".join(LABELS[tag] for tag in BRIDGE_ORDER)
     assert f"The lines run in the method's order: {order}." in _flat(skill)
     entry = _tool_entry("override_add")
-    for words in ("eighteen", "`shares.diluted`", "`value.outside`"):
+    for words in ("twenty", "`shares.diluted`", "`value.outside`"):
         assert words in entry, words
+
+
+def test_the_agent_reads_the_stock_pay_on_mature_growth() -> None:
+    """Spec 2026-11-13 7.2: in every Mature Growth report the agent reads the company's own
+    definition of its adjusted EPS in the release, says in section 8 whether it leaves out stock
+    pay, and sets `earnings.sbc_basis` with that passage as evidence where the row reads
+    otherwise; where `stock-pay-missing` shows, it reads the trailing stock pay from the filings'
+    cash flow statements and sets `earnings.sbc`, period-tied."""
+    eight = _flat(_steps(_frontmatter(_read(SKILL))[1])[8])
+    for words in (
+        "On Mature Growth, two steps on the stock pay, in every report",
+        "the company's own definition of its adjusted EPS in the earnings release",
+        "Section 8 says whether it leaves out stock pay",
+        "set `earnings.sbc_basis`, `includes` or `excludes`, with that passage as evidence",
+        "Where `stock-pay-missing` shows, read the trailing stock pay in the cash flow statements",
+        "set `earnings.sbc`, their total in the reporting currency, period-tied",
+    ):
+        assert words in eight, words
 
 
 def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
@@ -621,6 +647,19 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
             ("`large-nri`", "`earnings.nri_gap`", "`earnings.ntm`", "guidance record", "exposure"),
         ),
         ("step-series-disagree", ("both series", "`path.step_2`", "`path.step_3`")),
+        (
+            "stock-pay-missing",
+            ("cash flow statements", "`earnings.sbc`", "period-tied", "once `earnings.sbc`"),
+        ),
+        (
+            "sbc-basis-uncertain",
+            (
+                "definition of its adjusted EPS",
+                "the release",
+                "`earnings.sbc_basis`",
+                "once `earnings.sbc_basis`",
+            ),
+        ),
         (
             "split-pending",
             (
@@ -849,7 +888,7 @@ def test_the_skill_reads_a_foreign_filer() -> None:
             r"^- `([\w-]+)`: (.*?)(?=^- |^$|\Z)", eight, re.MULTILINE | re.DOTALL
         )
     }
-    assert "Eight flags ask for a decision of yours." in steps[8]
+    assert "Ten flags ask for a decision of yours." in steps[8]
     for code, words in (
         ("basis-scaled", ("the ADR ratio", "read as stored", "section 8")),
         ("fx-stale", ("the rate", "price date", '`refresh_start("price")`')),

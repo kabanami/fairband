@@ -286,9 +286,10 @@ and store nothing:
   record with the midpoint and, for a fiscal-year revenue or EPS figure on the `gaap` basis, the
   step the server computed. An override cites it in its evidence as `guidance:<id>`; a report cites its figures.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input of
-  the eighteen in `SKILL.md`'s table, the diluted share count (`shares.diluted`) and the value
-  outside the business (`value.outside`) among them; applied, it answers `{override, review,
-  bridge}`; refused, the sentence and the `override`.
+  the twenty in `SKILL.md`'s table, the diluted share count (`shares.diluted`), the value outside
+  the business (`value.outside`), the trailing stock pay (`earnings.sbc`) and the stock-pay basis
+  (`earnings.sbc_basis`) among them; applied, it answers `{override, review, bridge}`; refused,
+  the sentence and the `override`.
 - `override_drop(override_id, reason)`: drop an applied override; the review is recomputed over
   the rest, or cleared when none is left.
 - `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: the fallback

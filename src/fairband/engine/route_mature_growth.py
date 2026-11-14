@@ -13,8 +13,9 @@ the first such year raises "growth above return", which counts the rest, after t
 before the trailing ones, where the ``heavy-capex`` sentence names the return the charge starts at
 and ``consensus-basis-unknown`` follows ``large-nri``. The two stock-pay notes,
 ``stock-pay-missing`` and ``sbc-basis-uncertain``, follow the anchor's flags (spec 2026-11-13
-7.1). ``charge`` in the intermediates records the growth paid for, the return by year, the hold
-and the revenue steps as found.
+7.1), each silent under the input that decides it. ``charge`` in the intermediates records the
+growth paid for, the return by year, the hold and the revenue steps as found; ``sbc_ttm`` the
+trailing stock pay the anchor read.
 
 The value is also computed at each policy runway and at each return of the sensitivity, and so is
 the implied growth at the price. The sensitivity is keyed ``"runway"``, the row's own charge;
@@ -40,7 +41,9 @@ Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the 
 runway, the terminal return and the margin of safety with it; ``return.runway`` the runway return
 of the charge, the start of its fade (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring
 gap, the anchor's basis test then taking the correction, the override less the gap found, off
-trailing GAAP EPS (``anchor.ntm_anchor``), so an override at the gap found moves nothing;
+trailing GAAP EPS (``anchor.ntm_anchor``), so an override at the gap found moves nothing, while
+no basis override is applied; ``earnings.sbc`` the trailing stock pay, in the basis test and the
+adjustment, and ``earnings.sbc_basis`` the basis, in place of the test (spec 2026-11-13 7.2);
 ``path.step_2`` and ``path.step_3`` the consensus steps, before the check that the path stays
 above −100%, a replaced step not counted thin nor named in ``step-series-disagree``, the revenue
 steps the charge pays for left as found; ``growth.belief`` the belief's rate, and the hold read on
@@ -72,7 +75,7 @@ the agent's count.
 """
 
 from dataclasses import asdict, replace
-from typing import Any
+from typing import Any, Literal
 
 from fairband.engine.anchor import (
     Anchor,
@@ -178,6 +181,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
             "ntm_eps": anchor.ntm_eps,
         },
         "sbc_basis": anchor.basis,
+        "sbc_ttm": anchor.sbc_ttm,
         "ntm_net_income": anchor.ntm_net_income,
         "path": {"base_year": base_year, "on_eps": path.on_eps, "analysts": list(path.analysts)},
         "path_steps": list(path.steps),
@@ -291,7 +295,7 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     route's refusal, with the flags raised before it. The anchor's basis test reads an overriding
     non-recurring gap as its correction to the gap found, and its NTM EPS is taken less an
     overriding cycle gap; with ``own``, the route's own anchor, path and belief read the NTM EPS,
-    step and belief overrides, which a cross-check leaves as found."""
+    stock pay, stock-pay basis, step and belief overrides, which a cross-check leaves as found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
         return Refused("no trailing revenue")
@@ -302,6 +306,10 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
     gap: float | None = chosen(c, "earnings.nri_gap", None)
     correction = None if gap is None else gap - nil(nri_gap(i))
     guided: float | None = chosen(c, "earnings.ntm", None) if own else None
+    sbc: float | None = chosen(c, "earnings.sbc", None) if own else None
+    basis: Literal["includes", "excludes"] | None = (
+        chosen(c, "earnings.sbc_basis", None) if own else None
+    )
     anchor = ntm_anchor(
         periods,
         t,
@@ -314,6 +322,8 @@ def _anchor_and_path(c: Context, own: bool = False) -> tuple[Anchor, Path, int, 
         nri_correction=correction,
         cycle_gap=cycle_gap(c),
         guided_eps=guided,
+        sbc_override=sbc,
+        basis_override=basis,
     )
     if anchor.refusal is not None:
         return Refused(anchor.refusal, anchor.flags)
@@ -456,16 +466,30 @@ def _roic_charges(
 def _stock_pay_notes(c: Context, anchor: Anchor, gap: float | None) -> tuple[Flag, ...]:
     """``stock-pay-missing`` and ``sbc-basis-uncertain`` (spec 2026-11-13 7.1), in that order, for
     those that fire: the stored trailing stock pay against the stock pay on file, and the anchor's
-    basis against the figures the test read, ``large-nri`` read from the row's own non-recurring
-    gap ``gap``. The route refuses without a statutory rate before it reaches them."""
+    basis against the figures the test read, the stock pay in force (an agent's ``earnings.sbc``,
+    else the stored figure) and GAAP EPS less an agent's correction to the non-recurring gap,
+    ``large-nri`` read from the row's own non-recurring gap ``gap``. A note is silent under the
+    input that decides it, the agent having decided (spec 7.1): ``stock-pay-missing`` under an
+    applied ``earnings.sbc``, ``sbc-basis-uncertain`` under an applied ``earnings.sbc_basis``."""
     i, t, policy = c.inputs, c.trailing, c.policy
-    missing = stock_pay_missing_flag(t.sbc, i.stock_pay, i.currency)
-    if i.tax_rate_latest is None:
-        return present(missing)
-    large_nri = nri_flag(gap, t.eps_diluted, policy) is not None
-    uncertain = sbc_basis_uncertain_flag(
-        anchor.basis, t, i.street_ttm_eps, c.shares, i.tax_rate_latest, large_nri, policy
-    )
+    assert i.tax_rate_latest is not None  # the route refused without a statutory rate
+    missing = None
+    if "earnings.sbc" not in c.overrides:
+        missing = stock_pay_missing_flag(t.sbc, i.stock_pay, i.currency)
+    uncertain = None
+    if "earnings.sbc_basis" not in c.overrides:
+        read = replace(t, sbc=anchor.sbc_ttm, eps_diluted=anchor.gaap_ttm_eps)
+        large_nri = nri_flag(gap, t.eps_diluted, policy) is not None
+        uncertain = sbc_basis_uncertain_flag(
+            anchor.basis,
+            read,
+            i.street_ttm_eps,
+            c.shares,
+            i.tax_rate_latest,
+            large_nri,
+            policy,
+            currency=i.currency,
+        )
     return present(missing) + present(uncertain)
 
 

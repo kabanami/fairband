@@ -551,6 +551,19 @@ def test_the_dollar_ramp_names_the_currency(policy: Policy, deciles: Deciles) ->
     assert "income moves in dollars from −$15,000.0 million" in ramp
 
 
+def test_the_stock_pay_note_names_the_currency(policy: Policy, deciles: Deciles) -> None:
+    """FXCO in SEK: its after-tax stock pay a share is 320 m × 0.75 ÷ 100 m = SEK 2.40, and a
+    street EPS of SEK 68.00 lies 25.60 above its GAAP 42.40, 10.7 times it: reason 3 of
+    ``sbc-basis-uncertain``, each figure a share after the code."""
+    r = value_company(replace(fx_inputs(), street_ttm_eps=68.0), deciles, policy, TODAY)
+    assert r.intermediates["sbc_ttm"] == pytest.approx(320e6)
+    [note] = [f.sentence for f in r.flags if f.code == "sbc-basis-uncertain"]
+    assert note.startswith(
+        "The street trailing EPS is SEK 25.60 above the GAAP one, 10.7 times the stock pay of "
+        "SEK 2.40 a share after tax:"
+    )
+
+
 def test_the_sentences_name_the_currency(policy: Policy) -> None:
     """A money figure a sentence prints is after ``$`` on a USD row and after the code on any
     other."""

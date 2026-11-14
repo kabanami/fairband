@@ -334,23 +334,32 @@ def test_the_basis_is_uncertain_on_a_gap_far_above_stock_pay() -> None:
 
 
 def test_the_basis_uncertain_sentences() -> None:
-    """One sentence for each reason that holds, joined by a space; a stock pay of zero gives
+    """One sentence for each reason that holds, joined by a space, each figure a share after
+    ``$``, or after the reporting currency's code on a row in another; a stock pay of zero gives
     reason 3 no reading, and neither note is counted."""
     both = _uncertain("includes-sbc", nri=True)
     assert both == Flag(
         "sbc-basis-uncertain",
         "Stock-pay basis uncertain",
-        "The basis test reads the consensus as counting stock pay, 0.25 a share after tax and "
+        "The basis test reads the consensus as counting stock pay, $0.25 a share after tax and "
         "2.0% of street trailing EPS, while a large non-recurring item on the row may sit in GAAP "
-        "EPS and hide the gap. The basis test reads the consensus as counting stock pay, 0.25 a "
+        "EPS and hide the gap. The basis test reads the consensus as counting stock pay, $0.25 a "
         "share after tax and 2.0% of street trailing EPS, while a trailing tax rate of 12.5%, at "
         "or below 50.0% of the statutory 25.0%, may close the gap.",
     )
-    wide = _uncertain("excludes-sbc", t=replace(_T, eps_diluted=10.0, income_tax=200.0))
+    wide_t = replace(_T, eps_diluted=10.0, income_tax=200.0)
+    wide = _uncertain("excludes-sbc", t=wide_t)
     assert wide is not None and wide.sentence == (
-        "The street trailing EPS is 2.50 above the GAAP one, 10.0 times the stock pay of 0.25 a "
+        "The street trailing EPS is $2.50 above the GAAP one, 10.0 times the stock pay of $0.25 a "
         "share after tax: the adjusted figure leaves out far more than stock pay, and the figures "
         "cannot say whether it leaves out stock pay too."
+    )
+    sek = sbc_basis_uncertain_flag(
+        "excludes-sbc", wide_t, 12.5, 96e6, 0.25, False, load_policy(), currency="SEK"
+    )
+    assert sek is not None and sek.sentence.startswith(
+        "The street trailing EPS is SEK 2.50 above the GAAP one, 10.0 times the stock pay of "
+        "SEK 0.25 a share after tax:"
     )
     assert _uncertain("excludes-sbc", t=replace(_T, sbc=0.0, eps_diluted=10.0)) is None
     missing = stock_pay_missing_flag(0.0, StockPayHistory(4, 2024, 69.8e6))

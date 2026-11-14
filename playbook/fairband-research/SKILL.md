@@ -302,7 +302,7 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
-Eight flags ask for a decision of yours. Read each sentence whole: it names its figures.
+Ten flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
 - `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
   of the operating cash flow, then names the return the charge starts at, its measure, and the
@@ -358,6 +358,18 @@ Eight flags ask for a decision of yours. Read each sentence whole: it names its 
   made once, whose cost is spent, and wrong for a company that keeps buying, which is the
   decision of `return-without-goodwill` above. Section 8 says that the anchor is before this
   amortization, with its size a share from the filing; do not report it as a gap.
+- `stock-pay-missing`: on Mature Growth, the trailing stock pay is nil, or one of its periods'
+  is, while a fiscal year on file shows stock pay above zero. The stored figure may be missing or
+  short, and the charge on the analysts' EPS with it. The sentence names that fiscal year and its
+  figure. Read the stock pay in the cash flow statements of the trailing periods' filings, and
+  decide through `earnings.sbc`, period-tied (the second of the two steps below). The note does
+  not show once `earnings.sbc` applies.
+- `sbc-basis-uncertain`: on Mature Growth, the engine's test of whether the analysts' EPS leaves
+  out stock pay may misread. The sentence gives each reason that holds: a large one-time item
+  that may hide the gap, a low tax rate that may close it, or a street EPS so far above GAAP
+  that the adjusted figure leaves out far more than stock pay. Read the company's own definition
+  of its adjusted EPS in the release, and decide through `earnings.sbc_basis` (the first of the
+  two steps below). The note does not show once `earnings.sbc_basis` applies.
 - `step-series-disagree`: a consensus step read on net income and the same step read on EPS differ
   by more than five points. The sentence names both rates and the share counts each series implies
   against the diluted count. Read both series, then decide with `path.step_2` or `path.step_3`,
@@ -384,6 +396,20 @@ Eight flags ask for a decision of yours. Read each sentence whole: it names its 
   rate. The sentence names the pair and both dates. Call `refresh_start("price")`, which quotes
   the pairs, wait until `refresh_status()` shows no refresh running, and read `company` again;
   when the note stays, section 8 says the rate is old.
+
+On Mature Growth, two steps on the stock pay, in every report. The value rests on the analysts'
+EPS, and the engine charges stock pay against it only where its test reads that EPS as leaving
+stock pay out (`intermediates/sbc_basis`: `includes-sbc`, `excludes-sbc` or `unknown`).
+
+1. Read the company's own definition of its adjusted EPS in the earnings release (an exhibit of
+   the 8-K, or of the 6-K for a foreign filer). Section 8 says whether it leaves out stock pay,
+   citing the passage as a finding. Where the release reads otherwise than the row, or the row
+   reads `unknown`, set `earnings.sbc_basis`, `includes` or `excludes`, with that passage as
+   evidence.
+2. Where `stock-pay-missing` shows, read the trailing stock pay in the cash flow statements of the
+   trailing periods' filings (`filing_report`), and set `earnings.sbc`, their total in the
+   reporting currency, period-tied, with the filings as evidence. Where the filings show nil too,
+   the figure stands, and section 8 says so.
 
 Where the price is well above the value, the answer of `company` carries `priceNeeds`: what the
 price needs of the business, beside what the route holds. A value far below the price says only
@@ -675,6 +701,8 @@ not you, computes the value it gives.
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | the revenue a dollar of invested capital buys | 0.1 to 10 |
 | `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end | above 0 to 5.00 |
 | `earnings.nri_gap` | Mature Growth, Mature Stable | the non-recurring gap in the earnings a share | −100 to 100 dollars a share |
+| `earnings.sbc` | Mature Growth | the trailing stock pay, a total for the trailing periods in the reporting currency, from the cash flow statements of their filings; it stands in for the stored figure in the test of the analysts' basis and in the charge for stock pay | 0 dollars or more; period-tied only |
+| `earnings.sbc_basis` | Mature Growth | whether the analysts' EPS includes stock pay or excludes it, in place of the engine's test; the evidence is the company's own definition of its adjusted EPS in the release | `includes` or `excludes`; lasting or period-tied |
 | `earnings.cycle_gap` | Mature Growth, Mature Stable | the correction that takes the anchor's earnings to mid-cycle; a positive figure lowers them | −100 to 100 dollars a share |
 | `decline.rate` | Decline | the rate at which revenue shrinks | −0.50 to 0 a year |
 | `balance.debt`, `balance.cash` | High Growth, Young Growth, Decline, Start-up | the newest annual balance sheet's debt or cash | 0 dollars or more; period-tied only |
@@ -790,8 +818,8 @@ The server checks an override by these rules, in this order, and answers the fir
    `path.step_2` and `path.step_3` are refused there. A company with no phase reads no input but its
    phase: set its phase first.
 4. `refused-unit`: a value outside the range, a word outside the words, a word where a number is
-   due, an NTM anchor or a share count at 0 or below, or a lasting override of a balance tag or of
-   the share count.
+   due, an NTM anchor or a share count at 0 or below, or a lasting override of a balance tag, of
+   the stock pay or of the share count.
 5. `refused-evidence`: no evidence, "an override needs evidence". An NTM anchor with no item of
    kind `guidance`: "an NTM anchor override needs a guidance record among its evidence". A
    `growth.belief` or a `path.hold` above the sales class's 90th percentile (`sales_p90_5y` in the
@@ -806,10 +834,10 @@ sentence with the `override` record beside it. Fix the one thing the sentence na
 An applied override answers `{override, review, bridge}`. The bridge starts at the mechanical value
 (the engine's value with no override), adds one line for each override, and ends at the reviewed
 value. The lines run in the method's order: phase, NTM earnings, NTM revenue, consensus step 2,
-consensus step 3, held rate, belief, non-recurring gap, mid-cycle earnings, target margin, sales to
-capital, runway return, decline rate, moat, debt, cash, diluted shares, outside the business. A
-line whose step refuses shows the refusal in place of a change. A review whose last line refuses
-has no value. On a refused row, where the mechanical value refuses too, the secondary valuation
+consensus step 3, held rate, belief, non-recurring gap, stock pay, stock-pay basis, mid-cycle
+earnings, target margin, sales to capital, runway return, decline rate, moat, debt, cash, diluted
+shares, outside the business. A line whose step refuses shows the refusal in place of a change. A
+review whose last line refuses has no value. On a refused row, where the mechanical value refuses too, the secondary valuation
 stands in for it. Where an override values a refused row, the reviewed value stands, and the server
 refuses a secondary valuation there. On a valued snapshot a refused review gets no stand-in: the
 server refuses one there, and the overrides are inconsistent with the route. Fix or drop the

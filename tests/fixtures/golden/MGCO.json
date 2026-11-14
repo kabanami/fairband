@@ -712,6 +712,7 @@
    }
   },
   "sbc_basis": "includes-sbc",
+  "sbc_ttm": 400000000.0,
   "shares": 1000000000.0,
   "terminal_roic": 0.13,
   "trailing_end": "2026-09-30",

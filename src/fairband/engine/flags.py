@@ -26,9 +26,10 @@ sentence for each reason that holds. Stock pay is material when its after-tax fi
 sit in GAAP EPS and hide the gap. Reason 2: the same reading on a material stock pay with a
 trailing effective tax rate, income tax over a pre-tax income above zero, at or below
 ``sbc_basis_tax_share`` of the statutory rate, a low tax that may close the gap. Reason 3: the
-test reads ``excludes-sbc`` on a stock pay above zero and the street EPS lies above GAAP by
-``sbc_basis_gap_multiple`` times the after-tax stock pay a share or more, so the adjusted figure
-leaves out far more than stock pay.
+test reads ``excludes-sbc`` on a stock pay above zero and the street EPS lies above GAAP, as the
+test reads it, by ``sbc_basis_gap_multiple`` times the after-tax stock pay a share or more, so the
+adjusted figure leaves out far more than stock pay. The stock pay is the one the anchor read, an
+agent's ``earnings.sbc`` in place of the stored figure (spec 2026-11-13 7.2).
 
 ``QUALITY_WARNINGS`` are the eleven flags that say the value may be wrong because the business or
 its figures are unusual (spec 2026-11-04 9.5); ``flag_count`` counts them on a row. Every other
@@ -167,14 +168,13 @@ def basis_unknown_flag(
     trailing EPS in size; ``None`` without ``nri``, or without the gap or a non-zero EPS."""
     if nri is None or gap is None or eps_ttm is None or eps_ttm == 0:
         return None
-    sign = ("−" if gap < 0 else "") + ("$" if currency == "USD" else f"{currency} ")
     return Flag(
         "consensus-basis-unknown",
         "Consensus basis unknown",
-        f"The non-recurring gap is {sign}{abs(gap):,.2f} a share, {abs(gap) / abs(eps_ttm):.1%} "
-        "of trailing EPS. FMP's consensus names no basis, so whether the NTM anchor and the path "
-        "carry such items is unknown; a report that reads the filing decides, through "
-        "`earnings.nri_gap`, and on Mature Growth `earnings.ntm`.",
+        f"The non-recurring gap is {_money(gap, currency)} a share, "
+        f"{abs(gap) / abs(eps_ttm):.1%} of trailing EPS. FMP's consensus names no basis, so "
+        "whether the NTM anchor and the path carry such items is unknown; a report that reads "
+        "the filing decides, through `earnings.nri_gap`, and on Mature Growth `earnings.ntm`.",
     )
 
 
@@ -214,20 +214,24 @@ def sbc_basis_uncertain_flag(
     tax_rate: float,
     large_nri: bool,
     policy: Policy,
+    currency: str = "USD",
 ) -> Flag | None:
     """``sbc-basis-uncertain`` when the stock-pay basis test may misread (the module docstring),
-    one sentence for each reason that holds, joined by a space: the after-tax stock pay a share is
-    ``t.sbc`` × (1 − ``tax_rate``) ÷ ``shares``, as the anchor reads it, and ``large_nri`` says
-    whether ``large-nri`` is on the row. ``None`` when no reason holds, or without the stock pay,
-    the street EPS or a positive share count."""
+    one sentence for each reason that holds, joined by a space: ``t`` holds the trailing figures
+    as the test reads them, so the after-tax stock pay a share is ``t.sbc`` × (1 − ``tax_rate``)
+    ÷ ``shares``, as the anchor reads it, and the gap of reason 3 is the street EPS less
+    ``t.eps_diluted``; ``large_nri`` says whether ``large-nri`` is on the row. Each figure a share
+    is printed after ``$`` or the reporting ``currency``'s code. ``None`` when no reason holds, or
+    without the stock pay, the street EPS or a positive share count."""
     if t.sbc is None or street_ttm_eps is None or shares <= 0:
         return None
     per_share = t.sbc * (1 - tax_rate) / shares
     material = street_ttm_eps > 0 and per_share >= policy.sbc_material_share * street_ttm_eps
+    stock_pay = _money(per_share, currency)
     reasons: list[str] = []
     if basis == "includes-sbc" and material:
         reads = (
-            f"The basis test reads the consensus as counting stock pay, {per_share:,.2f} a share "
+            f"The basis test reads the consensus as counting stock pay, {stock_pay} a share "
             f"after tax and {per_share / street_ttm_eps:.1%} of street trailing EPS, while"
         )
         if large_nri:
@@ -247,14 +251,21 @@ def sbc_basis_uncertain_flag(
         gap = street_ttm_eps - gaap
         if gap >= policy.sbc_basis_gap_multiple * per_share:
             reasons.append(
-                f"The street trailing EPS is {gap:,.2f} above the GAAP one, "
-                f"{gap / per_share:,.1f} times the stock pay of {per_share:,.2f} a share after "
+                f"The street trailing EPS is {_money(gap, currency)} above the GAAP one, "
+                f"{gap / per_share:,.1f} times the stock pay of {stock_pay} a share after "
                 "tax: the adjusted figure leaves out far more than stock pay, and the figures "
                 "cannot say whether it leaves out stock pay too."
             )
     if not reasons:
         return None
     return Flag("sbc-basis-uncertain", "Stock-pay basis uncertain", " ".join(reasons))
+
+
+def _money(x: float, currency: str) -> str:
+    """A figure a share to two decimals after ``$``, or after ``currency``'s code on a row in
+    another currency, a negative one with the minus sign first: "−$0.60", "SEK 0.40"."""
+    sign = "$" if currency == "USD" else f"{currency} "
+    return f"{'−' if x < 0 else ''}{sign}{abs(x):,.2f}"
 
 
 def _effective_tax_rate(t: TrailingFigures) -> float | None:

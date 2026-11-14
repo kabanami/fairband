@@ -15,6 +15,7 @@ from support.engine_companies import (
     young_growth_inputs,
 )
 
+from fairband.engine.anchor import StockPayHistory
 from fairband.engine.classifier import Deciles
 from fairband.engine.overrides import (
     BRIDGE_ORDER,
@@ -27,7 +28,7 @@ from fairband.engine.overrides import (
 )
 from fairband.engine.review import REVIEW_METHOD, review_company
 from fairband.engine.route import CompanyInputs, value_company
-from fairband.engine.types import result_from_json, result_to_json
+from fairband.engine.types import ValuationResult, result_from_json, result_to_json
 from fairband.policy import Policy
 
 TODAY = date(2026, 10, 31)
@@ -193,6 +194,154 @@ def test_the_two_new_lines_close_the_bridge(policy: Policy, deciles: Deciles) ->
         ("value.outside", "USD a share"),
     ]
     assert result_from_json(result_to_json(review.result)) == review.result
+
+
+def _codes(result: ValuationResult) -> list[str]:
+    return [f.code for f in result.flags]
+
+
+def _excluding(street: float = 8.50) -> CompanyInputs:
+    """MGCO with a street trailing EPS of ``street``. Its after-tax stock pay a share is 400 m ×
+    0.75 ÷ 1,000 m = 0.30, so the test reads excludes-sbc at a gap over GAAP 5.30 of 0.15 or
+    more, and reason 3 of ``sbc-basis-uncertain`` holds at 10 × 0.30 = 3.0 or more: 8.50 lies
+    3.20 above."""
+    return replace(mature_growth_inputs(), street_ttm_eps=street)
+
+
+_REASON_3 = (
+    "The street trailing EPS is ${gap} above the GAAP one, {times} times the stock pay of $0.30 a "
+    "share after tax: the adjusted figure leaves out far more than stock pay, and the figures "
+    "cannot say whether it leaves out stock pay too."
+)
+
+
+def test_an_agent_s_basis_moves_the_anchor_by_the_adjustment(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-13 7.2: on MGCO at a street EPS of 8.50 the test reads excludes-sbc and the
+    anchor takes the 0.30 off; an agent's ``includes`` gives it back, exactly the mechanical
+    adjustment, on one bridge line under the basis's tag, and ``sbc-basis-uncertain`` goes, the
+    agent decided. The other way, MGCO as it is reads includes-sbc, and an agent's ``excludes``
+    takes 0.30 off its 5.90."""
+    inputs = _excluding()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    found = mechanical.intermediates["anchor"]
+    assert mechanical.intermediates["sbc_basis"] == "excludes-sbc"
+    assert found["sbc_adjustment_per_share"] == pytest.approx(0.30)
+    assert "sbc-basis-uncertain" in _codes(mechanical)
+    basis = [OVERRIDE("earnings.sbc_basis", "includes")]
+    review = review_company(inputs, deciles, policy, TODAY, basis, mechanical)
+    anchor = review.result.intermediates["anchor"]
+    assert review.result.intermediates["sbc_basis"] == "includes-sbc"
+    assert anchor["sbc_adjustment_per_share"] == 0.0 and anchor["ntm_eps"] == anchor["ntm_eps_raw"]
+    assert anchor["ntm_eps"] - found["ntm_eps"] == pytest.approx(
+        found["sbc_adjustment_per_share"], abs=1e-12
+    )
+    [line] = review.bridge
+    assert (line.tag, line.old, line.new, line.refusal) == (
+        "earnings.sbc_basis",
+        "excludes",
+        "includes",
+        None,
+    )
+    assert review.result.value is not None and mechanical.value is not None
+    assert line.delta == pytest.approx(review.result.value - mechanical.value, abs=1e-9)
+    assert line.delta is not None and line.delta > 0
+    assert "sbc-basis-uncertain" not in _codes(review.result)
+    [judged] = [i for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert (judged.name, judged.value, judged.unit) == ("earnings.sbc_basis", None, "basis")
+    assert judged.note == "includes: because"
+
+    plain = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    excludes = [OVERRIDE("earnings.sbc_basis", "excludes")]
+    charged = review_company(mature_growth_inputs(), deciles, policy, TODAY, excludes, plain)
+    assert charged.result.intermediates["anchor"]["ntm_eps"] == pytest.approx(5.90 - 0.30)
+    assert charged.bridge[0].old == "includes"
+    assert charged.bridge[0].delta is not None and charged.bridge[0].delta < 0
+
+
+def test_an_agent_s_stock_pay_charges_the_anchor_and_settles_the_notes(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """MGCO at a street EPS of 8.50 with its stored stock pay at nil while fiscal 2025 shows
+    $380 m: the test reads excludes-sbc on a stock pay of nil (3.20 is at or above half of 0),
+    the anchor takes nothing off, ``stock-pay-missing`` shows, and ``sbc-basis-uncertain`` has no
+    stock pay a share to read. An agent's $400 m charges 400 × 0.75 ÷ 1,000 = 0.30 a share, so the
+    NTM EPS falls from 5.90 to 5.60; ``stock-pay-missing`` goes, the agent decided; and
+    ``sbc-basis-uncertain`` reads the stock pay in force, the agent's: 3.20 is 10.7 times 0.30,
+    at or above 10, so reason 3 holds. The JUDGMENT entry stands in place of ``sbc_ttm``."""
+    base = _excluding()
+    assert base.trailing is not None
+    inputs = replace(
+        base,
+        trailing=replace(base.trailing, sbc=0.0),
+        stock_pay=StockPayHistory(4, 2025, 380e6),
+    )
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.intermediates["sbc_basis"] == "excludes-sbc"
+    assert mechanical.intermediates["anchor"]["sbc_adjustment_per_share"] == 0.0
+    assert "stock-pay-missing" in _codes(mechanical)
+    assert "sbc-basis-uncertain" not in _codes(mechanical)
+    pay = [OVERRIDE("earnings.sbc", 400e6)]
+    review = review_company(inputs, deciles, policy, TODAY, pay, mechanical)
+    im = review.result.intermediates
+    assert im["sbc_ttm"] == 400e6 and im["anchor"]["ntm_eps"] == pytest.approx(5.60)
+    [line] = review.bridge
+    assert (line.tag, line.old, line.new) == ("earnings.sbc", 0.0, 400e6)
+    assert line.delta is not None and line.delta < 0
+    assert "stock-pay-missing" not in _codes(review.result)
+    [uncertain] = [f for f in review.result.flags if f.code == "sbc-basis-uncertain"]
+    assert uncertain.sentence == _REASON_3.format(gap="3.20", times="10.7")
+    entries = [(i.name, i.tag, i.unit) for i in review.result.inputs if "sbc" in i.name]
+    assert entries == [("earnings.sbc", "JUDGMENT", "USD")]
+
+
+def test_the_basis_note_reads_the_gaap_figure_the_test_read(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Under an applied ``earnings.nri_gap`` the basis test reads GAAP EPS less the agent's
+    correction, and so does reason 3 of ``sbc-basis-uncertain``. MGCO at a street EPS of 8.20:
+    2.90 above the reported 5.30 is under 10 × 0.30 = 3.0, so no note. An agent's gap of 0.25
+    against the 0.05 found corrects GAAP EPS by 0.20 to 5.10, and 8.20 lies 3.10 above it, 10.3
+    times 0.30: reason 3 holds, on the gap the test judged."""
+    inputs = _excluding(8.20)
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    assert mechanical.intermediates["sbc_basis"] == "excludes-sbc"
+    assert mechanical.intermediates["nri_gap"] == pytest.approx(0.05)
+    assert "sbc-basis-uncertain" not in _codes(mechanical)
+    gap = [OVERRIDE("earnings.nri_gap", 0.25)]
+    review = review_company(inputs, deciles, policy, TODAY, gap, mechanical)
+    assert review.result.intermediates["sbc_basis"] == "excludes-sbc"
+    assert "large-nri" not in _codes(review.result)  # 0.25 is 4.7% of 5.30, under 5%
+    [uncertain] = [f for f in review.result.flags if f.code == "sbc-basis-uncertain"]
+    assert uncertain.sentence == _REASON_3.format(gap="3.10", times="10.3")
+
+
+def test_a_stock_pay_input_under_an_ntm_anchor_moves_nothing(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Spec 2026-11-13 7.2 and method 14.4: under an applied ``earnings.ntm`` the guided EPS stands
+    in for the consensus less the adjustment, so a basis and a stock pay applied after it each
+    apply with a bridge line of zero, though the anchor's basis and stock pay follow them."""
+    inputs = _excluding()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    overrides = [
+        OVERRIDE("earnings.sbc_basis", "includes", 3),
+        OVERRIDE("earnings.sbc", 600e6, 2),
+        OVERRIDE("earnings.ntm", 6.10, 1),
+    ]
+    review = review_company(inputs, deciles, policy, TODAY, overrides, mechanical)
+    assert [line.tag for line in review.bridge] == [
+        "earnings.ntm",
+        "earnings.sbc",
+        "earnings.sbc_basis",
+    ]
+    _, pay, basis = review.bridge
+    assert (pay.refusal, pay.delta) == (None, 0.0)
+    assert (basis.refusal, basis.delta) == (None, 0.0)
+    im = review.result.intermediates
+    assert (im["sbc_basis"], im["sbc_ttm"]) == ("includes-sbc", 600e6)
+    assert im["anchor"]["ntm_eps"] == 6.10
 
 
 def test_a_step_override_moves_the_charge_only_where_the_revenue_step_is_missing(

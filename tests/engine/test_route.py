@@ -57,6 +57,7 @@ BASE_INPUTS = ["statements", "price", "shares_diluted", "next_earnings", "closes
 MATURE_GROWTH_KEYS = {
     "anchor",
     "sbc_basis",
+    "sbc_ttm",
     "ntm_net_income",
     "path",
     "path_steps",
@@ -216,6 +217,7 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     assert set(im) == MATURE_GROWTH_KEYS
     assert im["anchor"] == {"ntm_eps_raw": 5.90, "sbc_adjustment_per_share": 0.0, "ntm_eps": 5.90}
     assert im["sbc_basis"] == "includes-sbc"
+    assert im["sbc_ttm"] == 400e6  # the stored trailing stock pay, the figure the anchor read
     assert im["ntm_net_income"] == pytest.approx(5_900e6)
     assert im["path"] == {"base_year": 2027, "on_eps": False, "analysts": [10, 6]}
     assert im["path_steps"] == [pytest.approx(0.12), pytest.approx(0.10)]

@@ -398,6 +398,65 @@ def test_a_period_tied_override_follows_its_line(conn: sqlite3.Connection, polic
     ]
 
 
+def test_a_period_tied_stock_pay_follows_the_figure_the_anchor_read(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-13 7.2 and 11a: a period-tied ``earnings.sbc`` corrects the trailing stock pay
+    the anchor read, MGCO's stored $400 m, its ``sbc_ttm``. The next snapshot on the same figures
+    keeps it applied; one whose stored stock pay moved to $450 m drops it, the reading changed."""
+    deciles = universe_deciles()
+    inputs = _as_live(mature_growth_inputs())
+    first = value_company(inputs, deciles, policy, HGCO_TODAY)
+    figure = current_reading(first, "earnings.sbc")
+    assert figure == first.intermediates["sbc_ttm"] == 400e6
+    refresh_id = create_refresh(
+        conn, "revalue", None, policy.version, METHOD_VERSION, HGCO_AT, EMPTY_SETTINGS_HASH
+    )
+    made_on = insert_snapshot(conn, first, refresh_id, clock=lambda: HGCO_AT)
+    pay = insert_override(
+        conn,
+        "MGCO",
+        "earnings.sbc",
+        figure,
+        500e6,
+        "USD",
+        "the cash flow statements",
+        EVIDENCE,
+        "period-tied",
+        "Q3 2026",
+        figure,
+        made_on,
+        AGENT,
+        HGCO_AT,
+        "applied",
+        "",
+    )
+
+    def follow(inputs: CompanyInputs) -> int | None:
+        result = value_company(inputs, deciles, policy, HGCO_TODAY)
+        snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: HGCO_AT)
+        return follow_snapshot(
+            conn,
+            inputs,
+            result,
+            snapshot_id,
+            deciles,
+            policy,
+            HGCO_TODAY,
+            refresh_id,
+            lambda: HGCO_AT,
+        )
+
+    assert follow(inputs) is not None
+    review = latest_review(conn, "MGCO")
+    assert review is not None and review.override_ids == (pay,)
+    assert review.result.intermediates["sbc_ttm"] == 500e6
+    assert inputs.trailing is not None
+    assert follow(replace(inputs, trailing=replace(inputs.trailing, sbc=450e6))) is None
+    dropped = override_row(conn, pay)
+    assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
+
+
 def test_a_period_tied_override_drops_when_a_newer_period_is_on_file(
     conn: sqlite3.Connection, policy: Policy
 ) -> None:

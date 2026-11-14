@@ -273,6 +273,51 @@ def test_anchor_subtracts_sbc_scaled_by_revenue(policy: Policy) -> None:
     assert got.flags == () and got.refusal is None
 
 
+def test_an_agent_s_basis_replaces_the_test(policy: Policy) -> None:
+    """Street 5.0 against GAAP 4.0: the test reads excludes-sbc, and an agent's ``includes``
+    leaves the consensus as it is. Street 4.2: the test reads includes-sbc, and an agent's
+    ``excludes`` takes the 0.948 off. An agent's basis needs no street figure."""
+    kept = ntm_anchor(ntm(), trailing(), 5.0, 10.0, 0.21, 100.0, policy, basis_override="includes")
+    assert (kept.basis, kept.sbc_adjustment_per_share) == ("includes-sbc", 0.0)
+    assert kept.ntm_eps == pytest.approx(10.0)
+    charged = ntm_anchor(
+        ntm(), trailing(), 4.2, 10.0, 0.21, 100.0, policy, basis_override="excludes"
+    )
+    assert (charged.basis, charged.ntm_eps) == ("excludes-sbc", pytest.approx(9.052))
+    blind = ntm_anchor(
+        ntm(), trailing(), None, 10.0, 0.21, 100.0, policy, basis_override="excludes"
+    )
+    assert blind.ntm_eps == pytest.approx(9.052) and blind.flags == ()
+
+
+def test_an_agent_s_stock_pay_replaces_the_stored_figure(policy: Policy) -> None:
+    """A stock pay of 5 in place of 10 halves the adjustment to 0.474; a figure of zero charges
+    nothing; the test reads the agent's figure, not the stored one."""
+    half = ntm_anchor(ntm(), trailing(), 5.0, 10.0, 0.21, 100.0, policy, sbc_override=5.0)
+    assert half.sbc_adjustment_per_share == pytest.approx(0.474)
+    assert half.ntm_eps == pytest.approx(9.526)
+    none = ntm_anchor(ntm(), trailing(), 5.0, 10.0, 0.21, 100.0, policy, sbc_override=0.0)
+    assert none.ntm_eps == pytest.approx(10.0)
+    # stored 0, an agent's 10: a gap of 0.2 is below half of 0.79, so the basis reads includes
+    stored_zero = ntm_anchor(
+        ntm(), trailing(sbc=0.0), 4.2, 10.0, 0.21, 100.0, policy, sbc_override=10.0
+    )
+    assert stored_zero.basis == "includes-sbc"
+
+
+def test_the_anchor_records_the_figures_its_test_read(policy: Policy) -> None:
+    """The stock pay the anchor read, an agent's in place of the stored 10, and the GAAP EPS its
+    test read, 4.0 less an agent's correction of 0.3: 3.7."""
+    stored = ntm_anchor(ntm(), trailing(), 5.0, 10.0, 0.21, 100.0, policy)
+    assert (stored.sbc_ttm, stored.gaap_ttm_eps) == (10.0, 4.0)
+    judged = ntm_anchor(
+        ntm(), trailing(), 5.0, 10.0, 0.21, 100.0, policy, nri_correction=0.3, sbc_override=6.0
+    )
+    assert judged.sbc_ttm == 6.0 and judged.gaap_ttm_eps == pytest.approx(3.7)
+    incomplete = ntm_anchor(ntm()[:3], trailing(), 5.0, 10.0, 0.21, 100.0, policy)
+    assert incomplete.refusal == "incomplete NTM consensus" and incomplete.sbc_ttm == 10.0
+
+
 def test_anchor_unscaled_without_ntm_revenue(policy: Policy) -> None:
     quarters = [*ntm()[:3], q("2027-06-30", 2027, "Q4", 2.5, None)]
     got = ntm_anchor(quarters, trailing(), 5.0, 10.0, 0.21, 100.0, policy)
