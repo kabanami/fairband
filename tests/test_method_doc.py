@@ -602,6 +602,44 @@ def test_the_quarters_table_stands_beside_the_six() -> None:
         assert words in references, words
 
 
+def test_the_export_lists_its_references_last_and_carries_the_columns() -> None:
+    """Spec 2026-11-15 6.5 and 9: 16.6 states the export's order, the references after Appendix
+    B; the chart tables' columns under their labels and the "Period" corner; section 5's quarters
+    table; and the statistics rows named as the year-end table's columns."""
+    sixteen = _section(16)
+    export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
+    for words in (
+        (
+            "so no ref appears in the text; then Appendix A as tables and Appendix B as a list;"
+            ' and last, under "References", a line `[^n]: <ref> — <source>` for each ref'
+        ),
+        "GitHub-flavoured Markdown renders footnote definitions at the end of the document",
+        "The page keeps its order, the references after the last section.",
+        (
+            "A financial table's twin has a column for each of the table's columns (16.5), under"
+            ' its label ("2025", "12 months to 30 Sep 2026", "2026 estimate", "Q3 2026"), and its'
+            ' header\'s first cell reads "Fiscal year" where every column is a fiscal year and'
+            ' "Period" where one is not'
+        ),
+        (
+            "over the last five fiscal years, then on growth, cash flow and capital allocation the"
+            " trailing twelve months and on growth the estimate years"
+        ),
+        (
+            'in The last earnings call one table, "By quarter", before its text: the quarters'
+            " table of 16.5, its rows the revenue, the operating margin and the EPS, under"
+            ' "Period", with no rows where no period is stored, a valuation review\'s as a full'
+            " report's"
+        ),
+        (
+            "each row named as the year-end table's column and the page's chart, \"Trailing P/E\""
+            ' and "Forward P/E"'
+        ),
+    ):
+        assert words in export, words
+    assert 'after the last section, under "References"' not in export
+
+
 def test_section_16_names_the_six_failures() -> None:
     section = _section(16)
     for failure in FAILURES:

@@ -13,11 +13,20 @@ section each leads:
 
 - "Financial performance and health": the six tables of ``tables.financial_tables``, one each,
   titled by the table (``TITLES``), each row by its name in words (``row_name``, "Altman's Z″",
-  "Ten-year aggregate ROIC"), over the last five fiscal years; a table without statements has no
-  rows. The page draws a part's charts under its table's title, each titled by its row's name.
-  A ROIC year on average invested capital at or below zero has a figure with the wrong sign and
-  no meaning (``tables.NO_CAPITAL``): its cell reads the note in place of the figure, and the
-  page's chart leaves the year out and names it under the chart (B-8).
+  "Ten-year aggregate ROIC"), a column under each of the table's columns, in its label (spec
+  2026-11-15 6.5): the last five fiscal years ("2025"), then on growth, cash flow and capital
+  allocation the trailing twelve months ("12 months to 30 Sep 2026") and on growth the estimate
+  years ("2026 estimate"); the header's first cell reads "Fiscal year" where every column is a
+  fiscal year and "Period" where one is not; a table without statements has no rows. The page
+  draws a part's charts under its table's title, each titled by its row's name. A ROIC year on
+  average invested capital at or below zero has a figure with the wrong sign and no meaning
+  (``tables.NO_CAPITAL``): its cell reads the note in place of the figure, and the page's chart
+  leaves the year out and names it under the chart (B-8).
+- "The last earnings call": one table, "By quarter" (``QUARTERS_TITLE``), the quarters table of
+  ``tables.quarters_table`` (6.4), its rows the revenue, the operating margin and the EPS under
+  the periods' labels ("Q3 2026"), "Period" first; no rows where no period is stored. A full
+  report's section 5 and a valuation review's carry it alike. The stored periods are read once,
+  for the six tables and the quarters.
 - "Valuation": each sensitivity reading the sections cite (a ``sensitivity:`` ref), once, in the
   order first cited, titled and its axes worded by ``reading_axes``, which the reading's read
   sends the page: the rows the first input's values and the columns the second's; then the grid
@@ -31,8 +40,9 @@ section each leads:
   at the quarter's end, the newest snapshot priced on or before it (``snapshots.band_points``, as
   the band-history read serves them), empty before the first snapshot and on a refusal's; then the
   four statistics of the trailing and the forward P/E over their ten years with the day each
-  series began (``reports.multiples``), and each series' last point in each calendar year of the
-  ten years, a column a series titled as the page's chart of it (``SERIES_TITLES``).
+  series began (``reports.multiples``), a row a series, and each series' last point in each
+  calendar year of the ten years, a column a series; a series' row and its column are named as
+  the page's chart of it (``SERIES_TITLES``: "Trailing P/E", "Forward P/E").
 """
 
 import sqlite3
@@ -46,10 +56,11 @@ from fairband.engine.types import Levels, money_of
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
 from fairband.refresh.inputs import stored_closes
+from fairband.refresh.inputs_statements import stored_quarters
 from fairband.reports.check import parts, shown
 from fairband.reports.multiples import SERIES, STATS, Series, stored_series, years_before
 from fairband.reports.refs import day_words, field_words, unit_of
-from fairband.reports.tables import NO_CAPITAL, Cell, Table, financial_tables
+from fairband.reports.tables import NO_CAPITAL, Cell, Table, financial_tables, quarters_table
 from fairband.store.reports import ReportRow
 from fairband.store.secondary import GRID_ROWS, secondary_row
 from fairband.store.sensitivities import SensitivityRow, sensitivity_row
@@ -63,13 +74,15 @@ TITLES = {
     "capital_allocation": "Capital allocation",
     "quality": "Quality scores",
 }
-# The page's two multiples charts, titled as the year-end table's columns.
+# The page's two multiples charts, titled as the year-end table's columns and the statistics' rows.
 SERIES_TITLES = {"pe": "Trailing P/E", "pe_forward": "Forward P/E"}
+QUARTERS_TITLE = "By quarter"
 GRID_TITLE = "The grid of secondary valuation {}"
 BAND_TITLE = "The price against the band by quarter"
 BAND_YEARS = 5
 _QUARTER_ENDS = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
-_SERIES_NAMES = {"pe": "trailing P/E", "pe_forward": "forward P/E"}
+# A financial table's header's first cell: over fiscal years alone, or over other periods too.
+_FISCAL_YEAR, _PERIOD = "Fiscal year", "Period"
 # Each input's label and unit by its tag as a stored reading names it.
 _LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
 _UNITS: dict[str, str | None] = {tag: unit_of(spec.unit) for tag, spec in TAGS.items()}
@@ -104,10 +117,12 @@ def chart_tables(
     symbol = report.symbol
     snapshot = snapshot_row(conn, report.snapshot_id)
     currency = "USD" if snapshot is None else money_of(snapshot.result)[1]
+    stored = stored_quarters(conn, symbol).periods  # once, for the six and the quarters
+    financial = financial_tables(conn, symbol, policy, tax, stored=stored)
+    quarters = quarters_table(conn, symbol, stored=stored)
     return {
-        "Financial performance and health": tuple(
-            _financial(table, currency) for table in financial_tables(conn, symbol, policy, tax)
-        ),
+        "Financial performance and health": tuple(_financial(t, currency) for t in financial),
+        "The last earnings call": (_twin(QUARTERS_TITLE, _PERIOD, quarters, currency),),
         "Valuation": (*_sensitivities(conn, report, currency), *_secondary_grid(conn, report)),
         "Price and multiples": (_band(conn, symbol), *_multiples(conn, symbol)),
     }
@@ -148,15 +163,22 @@ def shift_words(x: float, *, top: bool = False) -> str:
 
 
 def _financial(table: Table, currency: str) -> ChartTable:
-    """A financial table titled by its name, a row a line in words, a column a fiscal year, a
-    total or a figure a share in the statements' ``currency``; no rows without statements."""
-    periods = tuple(cell.period for cell in table.rows[0].cells) if table.rows else ()
-    if not periods:
-        return ChartTable(TITLES[table.name], ("Fiscal year",), ())
+    """One of the six financial tables titled by its name, its header's first cell "Fiscal year"
+    where every column is a fiscal year and "Period" where one is not (``_twin``)."""
+    fiscal = all(column.kind == "fiscal" for column in table.columns)
+    return _twin(TITLES[table.name], _FISCAL_YEAR if fiscal else _PERIOD, table, currency)
+
+
+def _twin(title: str, corner: str, table: Table, currency: str) -> ChartTable:
+    """A table of ``reports.tables`` as its chart's table writes it, titled ``title``: the header
+    ``corner`` then each column's label, a row a line in words, a total or a figure a share in the
+    statements' ``currency``; no rows where the table has no column."""
+    if not table.columns:
+        return ChartTable(title, (corner,), ())
     rows = tuple(
         (row_name(row.name), *(_cell(cell, currency) for cell in row.cells)) for row in table.rows
     )
-    return ChartTable(TITLES[table.name], ("Fiscal year", *periods), rows)
+    return ChartTable(title, (corner, *(column.label for column in table.columns)), rows)
 
 
 def _cell(cell: Cell, currency: str) -> str:
@@ -249,7 +271,7 @@ def _multiples(conn: sqlite3.Connection, symbol: str) -> tuple[ChartTable, Chart
     series: dict[str, Series | None] = {name: stored_series(conn, symbol, name) for name in SERIES}
     stats = tuple(
         (
-            _SERIES_NAMES[name],
+            SERIES_TITLES[name],
             *(_shown(None if s is None else s.stats[stat], "multiple") for stat in STATS),
             "" if s is None or s.since is None else day_words(s.since),
         )

@@ -82,8 +82,8 @@ report it reuses, which the report page's revisions line and cites line read (sp
 ``GET /api/reports/{id}`` answers one whole, with its judgments, its appendixes and its
 references, ``[{n, ref, source}]``, generated at read time (``render.appendix_a``, ``appendix_b``,
 ``references``), as the publish answers it; ``GET /api/reports/{id}/markdown`` its Markdown
-(``render.markdown``), ``text/markdown``, each cite with its footnote mark, the references after
-the last section and the chart tables (``charts.chart_tables``) under their sections, which the
+(``render.markdown``), ``text/markdown``, each cite with its footnote mark, the references last,
+after Appendix B, and the chart tables (``charts.chart_tables``) under their sections, which the
 JSON does not carry. A missing report is a 404, "no report <id>".
 """
 

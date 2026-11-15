@@ -18,6 +18,7 @@ from support.engine_companies import (
     mature_growth_inputs,
     universe_deciles,
 )
+from support.payloads import store_payloads
 from support.web import TODAY
 
 from fairband.engine.flags import QUALITY_WARNINGS
@@ -597,12 +598,16 @@ def test_the_markdown(conn: sqlite3.Connection, policy: Policy, snapshots: dict[
     lines = text.splitlines()
     assert lines[0] == "AAPL · full report · 2026-11-01 · claude-opus-5-5 · revision 1"
     assert lines[2] == f"Stance: buy. On snapshot {sid}, priced 2026-10-30, valid until 2027-01-28."
+    # the references last, where GitHub-flavoured Markdown renders footnote definitions (B-108)
     assert [line[3:] for line in lines if line.startswith("## ")] == [
         *HEADINGS,
-        "References",
         "Appendix A",
         "Appendix B",
+        "References",
     ]
+    listed = lines.index("## References")
+    footnotes = [n for n, line in enumerate(lines) if line.startswith("[^")]
+    assert footnotes and all(n > listed for n in footnotes)
     # the cite as its text and its footnote mark
     assert "The price of $150.00[^1] is above the value at belief;" in text
     assert "| Input | Value | Unit | Tag | Kind | Source | As of | Note |" in text
@@ -621,10 +626,24 @@ def test_a_review_mode_names_the_full_report_it_reuses_or_that_there_is_none(
     text = markdown(report, appendix_a(conn, report, policy), [], [], {})
     assert text.splitlines()[0].startswith("AAPL · valuation review · ")
     assert "No full report to reuse." in text and "## The business" not in text
-    assert text.rstrip().endswith("No terms used.")
+    assert "## Appendix B\n\nNo terms used.\n\n## References\n\nNo references.\n" in text
     reusing = replace(report, reuses_full_report_of=3)
     text = markdown(reusing, appendix_a(conn, reusing, policy), [], [], {})
     assert "Reuses full report 3." in text
+
+
+def test_a_review_mode_leads_its_earnings_call_with_the_quarters(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 6.5: a valuation review has the last earnings call too, its third section,
+    and it gains the quarters' table before its text, as a full report's section 5 does."""
+    report = _stored(conn, snapshots["AAPL"], mode="valuation review")
+    tables = chart_tables(conn, report, policy)
+    text = markdown(report, appendix_a(conn, report, policy), [], [], tables)
+    call = _part(text, HEADINGS[4])
+    assert call.startswith("\n### By quarter\n\n| Period | Q3 2025 | Q4 2025 | Q1 2026 | Q2 2026 |")
+    assert "| Revenue | $300,000,000 | " in call and "| Operating margin | " in call
+    assert call.rstrip().endswith("|\n\nPlain words.")
 
 
 def _cited(sid: int) -> list[dict[str, Any]]:
@@ -736,12 +755,13 @@ def test_the_markdown_has_footnote_marks_and_no_ref_in_the_text(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """A cite reads as its text and its footnote mark; the refs and their sources are listed once,
-    after the last section and before Appendix A."""
+    last, after Appendix B (spec 2026-11-15 9, B-108): GitHub-flavoured Markdown renders the
+    footnote definitions at the end of the document, so the heading stands over its list."""
     sid = snapshots["AAPL"]
     report = _stored(conn, sid, sections=_cited(sid))
     refs = references(conn, report, policy)
     text = markdown(report, appendix_a(conn, report, policy), [], refs, {})
-    body, _, after = text.partition("\n## References\n")
+    body, _, appendixes = text.partition("\n## Appendix A\n")
     assert "The price of $150.00[^1] against revenue of $2,100,000,000[^2]." in body
     second = (
         "Revenue of $2.1 billion[^2] clears the hurdle of 9.0%[^3] at the price of $150.00[^1]."
@@ -750,16 +770,18 @@ def test_the_markdown_has_footnote_marks_and_no_ref_in_the_text(
     for form in ("snapshot:", "fact:", "policy:"):
         assert form not in body, form
     assert body.rstrip().endswith(f"## {HEADINGS[-1]}\n\nPlain words.")  # after the last section
-    listed, _, appendixes = after.partition("\n## Appendix A\n")
+    audit, _, rest = appendixes.partition("\n## Appendix B\n")
+    terms, _, listed = rest.partition("\n## References\n")
+    assert "[^" not in audit and "[^" not in terms
     assert listed.strip().splitlines() == [
         f"[^1]: snapshot:{sid}/price — snapshot {sid}, the price, priced 30 Oct 2026",
         "[^2]: fact:AAPL/revenue/2025 — the revenue line of fiscal 2025 on file",
         f"[^3]: policy:required_return — policy required_return, {policy.version}",
     ]
-    assert "\n## Appendix B\n" in appendixes
+    assert text.endswith(f"policy required_return, {policy.version}\n")  # nothing after them
     plain = _stored(conn, sid, sections=[{"heading": HEADINGS[0], "parts": ["Plain words."]}])
     text = markdown(plain, appendix_a(conn, plain, policy), [], [], {})
-    assert "## References\n\nNo references.\n\n## Appendix A" in text
+    assert text.endswith("\n## References\n\nNo references.\n")
 
 
 def _part(text: str, heading: str) -> str:
@@ -772,8 +794,9 @@ def test_the_markdown_carries_the_chart_tables(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """Each chart's table twin under its section's heading, before the prose: section 4's six
-    tables, section 8's grid of the secondary valuation, section 9's statistics and year-end
-    points; no section else carries one."""
+    tables, their columns under their labels; section 5's quarters; section 8's grid of the
+    secondary valuation; section 9's statistics and year-end points; no section else carries
+    one."""
     sid = snapshots["AAPL"]
     rows = [["2025-12-31", 22.0, 22.0, 22.0, 22.0], ["2026-10-30", 24.0, 24.0, 24.0, 24.0]]
     record_response(
@@ -793,21 +816,82 @@ def test_the_markdown_carries_the_chart_tables(
         "Capital allocation",
         "Quality scores",
     ]
-    assert "| Fiscal year | 2021 | 2022 | 2023 | 2024 | 2025 |" in financial
+    growth = (
+        "| Period | 2021 | 2022 | 2023 | 2024 | 2025 | 12 months to 30 Sep 2026 | 2026 estimate"
+        " | 2027 estimate |"
+    )
+    assert f"### Growth and profitability\n\n{growth}\n" in financial
+    assert "| Revenue | " in financial and " | $1,300,000,000 | $2,200,000,000 | " in financial
+    returns = "### Returns on capital\n\n| Fiscal year | 2021 | 2022 | 2023 | 2024 | 2025 |\n"
+    assert returns in financial
     assert "| $2,000,000,000 | $2,100,000,000 |" in financial  # at the cite's rounding
     assert financial.rstrip().endswith("|\n\nPlain words.")  # the prose after the tables
+    call = _part(text, HEADINGS[4])
+    assert re.findall(r"^### (.+)$", call, re.MULTILINE) == ["By quarter"]
+    assert "| Period | Q3 2025 | Q4 2025 | Q1 2026 | Q2 2026 | Q3 2026 |" in call
+    assert "| Operating margin | 20.0% | " in call and call.rstrip().endswith("|\n\nPlain words.")
     valuation = _part(text, "Valuation")
     assert f"### The grid of secondary valuation {secondary_id}" in valuation
     assert "| Terminal growth | r 8.0% | r 9.0% | r 10.0% |" in valuation
     assert valuation.rstrip().endswith("|\n\nPlain words.")
     price = _part(text, "Price and multiples")
     assert "| Series | Ten-year average | Median | High | Low | Since |" in price
-    assert "| trailing P/E | 23.00x | 23.00x | 24.00x | 22.00x | 31 Dec 2025 |" in price
+    assert "| Trailing P/E | 23.00x | 23.00x | 24.00x | 22.00x | 31 Dec 2025 |" in price
     assert "| Year | Trailing P/E | Forward P/E |" in price and "| 2026 | 24.00x |  |" in price
     assert price.rstrip().endswith("|\n\nPlain words.")
-    charted = {HEADINGS[3], "Valuation", "Price and multiples"}
+    charted = {HEADINGS[3], HEADINGS[4], "Valuation", "Price and multiples"}
     for heading in set(HEADINGS) - charted:
         assert "### " not in _part(text, heading), heading
+
+
+def test_a_report_on_file_renders_with_the_columns_and_the_quarters(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Review Focus 4: a report stored as reports were before the change, its record its sections
+    alone, renders through ``markdown`` with no error and no migration, since the chart tables and
+    the references are read from the store when it is exported: section 4 carries its six tables
+    with the columns past the last fiscal year, section 5 the quarters, and the references come
+    last. A cite of an estimate cell outlives the cell: once the consensus no longer holds fiscal
+    2026, its column is gone and the cite still reads its words."""
+    sid = snapshots["AAPL"]
+    estimate = "table:AAPL/growth/revenue_growth/2026E"
+    sections = _cited(sid)
+    sections[4] = {
+        "heading": HEADINGS[4],
+        "parts": ["Revenue growth of ", {"cite": "4.8%", "ref": estimate}, " is expected."],
+    }
+    report = _stored(conn, sid, sections=sections)
+
+    def exported() -> str:
+        return markdown(
+            report,
+            appendix_a(conn, report, policy),
+            appendix_b(report.sections),
+            references(conn, report, policy),
+            chart_tables(conn, report, policy),
+        )
+
+    text = exported()
+    financial = _part(text, HEADINGS[3])
+    assert re.findall(r"^### (.+)$", financial, re.MULTILINE) == [
+        "Growth and profitability",
+        "Cash flow",
+        "Balance sheet and solvency",
+        "Returns on capital",
+        "Capital allocation",
+        "Quality scores",
+    ]
+    assert "| 12 months to 30 Sep 2026 | 2026 estimate | 2027 estimate |" in financial
+    assert "### By quarter\n\n| Period | Q3 2025 |" in _part(text, HEADINGS[4])
+    words = "the growth table, revenue growth, fiscal 2026, the analysts' estimate"
+    assert text.endswith(f"[^4]: {estimate} — {words}\n")
+    moved = [{"symbol": "AAPL", "date": "2027-12-31", "revenueAvg": 2_420_000_000, "epsAvg": 3.63}]
+    store_payloads(conn, "AAPL", {"estimates-annual": moved}, NOW)
+    text = exported()
+    growth = _part(text, HEADINGS[3]).split("\n### ", 2)[1]
+    assert "| 12 months to 30 Sep 2026 | 2027 estimate |" in growth
+    assert "2026 estimate" not in growth
+    assert text.endswith(f"[^4]: {estimate} — {words}\n")
 
 
 def test_the_bridge_table_has_labels(

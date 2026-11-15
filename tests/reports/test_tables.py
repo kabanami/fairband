@@ -1,10 +1,11 @@
-"""The six financial tables of a report's section 4 (spec 2026-11-06 Tier 2, 13.5; design.md 9.3)
-on the synthetic company of ``conftest.py``: ACME, a Mature Growth company with revenue of
-$1,000 m in 2014 up $100 m a year, a 40% gross margin, a 20% operating margin, a 15% net margin,
-and balance lines every year (``refresh/synthetic.py`` states the lines), and five quarters to
-2026-09-30, so three tables carry the trailing twelve months after the fiscal years (spec
-2026-11-15 6.2); AAPL on the ``snapshots`` fixture, the same statements with the consensus for
-2026 and 2027, whose growth table carries them as estimate columns (6.3)."""
+"""The six financial tables of a report's section 4 (spec 2026-11-06 Tier 2, 13.5; design.md 9.3),
+and the quarters table of its section 5 beside them (spec 2026-11-15 6.4), on the synthetic
+company of ``conftest.py``: ACME, a Mature Growth company with revenue of $1,000 m in 2014 up
+$100 m a year, a 40% gross margin, a 20% operating margin, a 15% net margin, and balance lines
+every year (``refresh/synthetic.py`` states the lines), and five quarters to 2026-09-30, so three
+tables carry the trailing twelve months after the fiscal years (6.2) and the quarters table holds
+the five; AAPL on the ``snapshots`` fixture, the same statements with the consensus for 2026 and
+2027, whose growth table carries them as estimate columns (6.3)."""
 
 import sqlite3
 from collections.abc import Sequence
@@ -668,12 +669,13 @@ def test_a_company_without_stored_periods_has_the_table_without_columns(
 
 
 def test_a_half_year_filer_s_quarters_table_holds_its_half_years(
-    conn: sqlite3.Connection,
+    conn: sqlite3.Connection, policy: Policy
 ) -> None:
     """Review Focus 3: the columns are the stored half-years under the store's own period names.
     The fixture's half-years end in December and June and are stored as FMP names a period by its
-    end's quarter, ``Q4`` and ``Q2``; the newest is stored here as ``H1``, and keeps that name.
-    Half i has revenue $300 m + $10 m × i and operating income $60 m + $2 m × i."""
+    end's quarter, ``Q4`` and ``Q2``; the newest is stored here as ``H1``, and keeps that name, and
+    a ``table:`` ref of its cell resolves by it. Half i has revenue $300 m + $10 m × i and
+    operating income $60 m + $2 m × i."""
     payloads = {e: p for e, p in bodies(cadence="half-yearly").items() if e != "earnings"}
     newest = max(payloads["income-quarter"], key=lambda row: row["date"])
     newest["period"] = "H1"
@@ -694,6 +696,10 @@ def test_a_half_year_filer_s_quarters_table_holds_its_half_years(
     margin = cells["operating_margin"]["2025-Q2"]
     assert margin.value == pytest.approx(62 / 310)
     assert margin.ref == "table:HALF/quarters/operating_margin/2025-Q2"
+    half = cells["operating_margin"]["2026-H1"]
+    found = Resolver(conn, "HALF", policy).resolve("table:HALF/quarters/operating_margin/2026-H1")
+    assert half.value == pytest.approx(66 / 330)
+    assert found is not None and found.value == half.value
 
 
 def test_a_quarter_without_revenue_has_no_margin(conn: sqlite3.Connection) -> None:

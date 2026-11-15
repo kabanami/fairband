@@ -328,13 +328,15 @@ def test_markdown_download(client: TestClient) -> None:
     assert lines[0] == "AAPL · full report · 2026-11-01 · claude-opus-5-5 · revision 1"
     assert [line[3:] for line in lines if line.startswith("## ")] == [
         *HEADINGS,
-        "References",
         "Appendix A",
         "Appendix B",
+        "References",
     ]
     assert "The price of $150.00[^1] is above the value at belief of $128[^2]" in r.text
-    assert f"[^1]: snapshot:{report['snapshotId']}/price — snapshot " in r.text
+    references = r.text.split("\n## References\n", 1)[1]
+    assert f"[^1]: snapshot:{report['snapshotId']}/price — snapshot " in references
     assert "### Growth and profitability" in r.text  # section 4's chart tables
+    assert "### By quarter" in r.text  # section 5's
     r = client.get("/api/reports/99/markdown")
     assert (r.status_code, r.json()) == (404, {"detail": "no report 99"})
     assert client.get("/api/reports/99").status_code == 404

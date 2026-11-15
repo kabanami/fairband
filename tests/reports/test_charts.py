@@ -1,7 +1,8 @@
 """The chart tables (spec 2026-11-06 Tier 2, 13.6): the table twin of each chart the report page
 draws, as the Markdown export carries it, every figure as a cite of it reads. On the ``snapshots``
 fixture of ``conftest.py``: AAPL with ACME's synthetic statements (revenue $2,100 m in fiscal 2025,
-$2,000 m in 2024) and its closes, valued and priced 30 Oct 2026."""
+$2,000 m in 2024, and five quarters to 30 Sep 2026), the consensus for 2026 and 2027 and its
+closes, valued and priced 30 Oct 2026."""
 
 import json
 import sqlite3
@@ -9,6 +10,7 @@ from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Any
 
+import pytest
 from refresh.synthetic import NOW, bodies
 from support.engine_companies import fx_inputs, universe_deciles
 from support.payloads import store_payloads
@@ -19,8 +21,12 @@ from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.sensitivity import SensitivityGrid
 from fairband.engine.types import Levels
 from fairband.policy import Policy
+from fairband.refresh.inputs_statements import StoredQuarters, stored_quarters
+from fairband.reports import charts as charts_module
+from fairband.reports import tables as tables_module
 from fairband.reports.charts import (
     BAND_TITLE,
+    QUARTERS_TITLE,
     ChartTable,
     chart_tables,
     reading_axes,
@@ -116,19 +122,20 @@ def _secondary(conn: sqlite3.Connection, policy: Policy, sid: int, form: str) ->
     )
 
 
-def test_the_charts_lead_three_sections(
+def test_the_charts_lead_four_sections(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     tables = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)
-    assert list(tables) == [HEADINGS[3], "Valuation", "Price and multiples"]
+    assert list(tables) == [HEADINGS[3], HEADINGS[4], "Valuation", "Price and multiples"]
 
 
 def test_section_4_holds_the_six_tables_at_the_cite_rounding(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
-    """One table for each of the six financial tables, titled by it, over the last five fiscal
-    years, each row by its name as the spec writes it; each cell written as a cite of it reads,
-    an empty cell for a figure not on file."""
+    """One table for each of the six financial tables, titled by it, over its columns under their
+    labels, the last five fiscal years first, each row by its name as the spec writes it; each
+    cell written as a cite of it reads, an empty cell for a figure not on file. The header's first
+    cell reads "Fiscal year" where every column is a fiscal year, "Period" where one is not."""
     financial = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)[HEADINGS[3]]
     assert [t.title for t in financial] == [
         "Growth and profitability",
@@ -141,7 +148,9 @@ def test_section_4_holds_the_six_tables_at_the_cite_rounding(
     years = ("2021", "2022", "2023", "2024", "2025")
     found = financial_tables(conn, "AAPL", policy)
     for table, chart in zip(found, financial, strict=True):
-        assert chart.header == ("Fiscal year", *(c.period for c in table.columns)), table.name
+        fiscal = table.name in ("solvency", "returns", "quality")
+        corner = "Fiscal year" if fiscal else "Period"
+        assert chart.header == (corner, *(c.label for c in table.columns)), table.name
         assert chart.header[1:6] == years, table.name
     growth = {row[0]: row[1:] for row in financial[0].rows}
     assert list(growth) == [
@@ -167,6 +176,77 @@ def test_section_4_holds_the_six_tables_at_the_cite_rounding(
         for row, cells in zip(table.rows, chart.rows, strict=True):
             written = tuple("" if c.value is None else shown(c.value, c.unit) for c in row.cells)
             assert cells[1:] == written, (table.name, row.name)
+
+
+def test_section_4_carries_the_trailing_and_estimate_columns_under_their_labels(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    financial = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)[HEADINGS[3]]
+    growth, returns = financial[0], financial[3]
+    assert growth.header == (
+        "Period",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025",
+        "12 months to 30 Sep 2026",
+        "2026 estimate",
+        "2027 estimate",
+    )
+    revenue = dict(zip(growth.header[1:], next(r for r in growth.rows if r[0] == "Revenue")[1:]))
+    assert revenue["12 months to 30 Sep 2026"] == "$1,300,000,000"
+    assert revenue["2026 estimate"] == "$2,200,000,000"
+    assert returns.header == ("Fiscal year", "2021", "2022", "2023", "2024", "2025")
+
+
+def test_section_5_leads_with_the_quarters(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    tables = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)
+    assert list(tables) == [HEADINGS[3], HEADINGS[4], "Valuation", "Price and multiples"]
+    [quarters] = tables[HEADINGS[4]]
+    assert quarters.title == "By quarter"
+    assert quarters.header == ("Period", "Q3 2025", "Q4 2025", "Q1 2026", "Q2 2026", "Q3 2026")
+    assert [row[0] for row in quarters.rows] == ["Revenue", "Operating margin", "EPS"]
+    assert quarters.rows[0][-1] == "$340,000,000" and quarters.rows[1][-1] == "20.0%"
+
+
+def test_section_5_without_a_stored_period_has_the_quarters_without_rows(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """AAPL with its quarterly statements gone: section 5's one table, titled as ever, its header
+    the corner alone and no rows, which the export writes as "None."; section 4's six tables have
+    no trailing column, and the growth table keeps its estimate years."""
+    with transaction(conn):
+        conn.execute(
+            "DELETE FROM facts WHERE symbol = 'AAPL'"
+            " AND dataset IN ('income-quarter', 'cashflow-quarter', 'balance-quarter')"
+        )
+    tables = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)
+    assert tables[HEADINGS[4]] == (ChartTable(QUARTERS_TITLE, ("Period",), ()),)
+    growth = tables[HEADINGS[3]][0]
+    assert growth.header[0] == "Period" and "12 months to 30 Sep 2026" not in growth.header
+    assert growth.header[-2:] == ("2026 estimate", "2027 estimate")
+
+
+def test_the_export_reads_the_stored_periods_once(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    snapshots: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The six tables and the quarters read the stored periods from one read, handed to both."""
+    calls: list[str] = []
+
+    def counted(conn: sqlite3.Connection, symbol: str) -> StoredQuarters:
+        calls.append(symbol)
+        return stored_quarters(conn, symbol)
+
+    monkeypatch.setattr(tables_module, "stored_quarters", counted)
+    monkeypatch.setattr(charts_module, "stored_quarters", counted)
+    chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)
+    assert calls == ["AAPL"]
 
 
 def test_a_roic_year_on_capital_at_or_below_zero_reads_as_its_note(
@@ -268,16 +348,26 @@ def test_a_company_in_another_currency_names_its_code_on_its_figures(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """Spec 2026-11-10 7.4 on FXCO, the company in SEK: the financial tables' totals and figures a
-    share are in the statements' currency, written with its code; a sensitivity reading's money
-    axis is in it too (an override's unit, 7.3), while its cells are US dollars a share, as the
-    value is; a percentage axis and a USD reading read as before."""
+    share are in the statements' currency, written with its code, the trailing and the estimate
+    cells as the fiscal ones (spec 2026-11-15, Review Focus 1), and the quarters' too; a
+    sensitivity reading's money axis is in it too (an override's unit, 7.3), while its cells are
+    US dollars a share, as the value is; a percentage axis and a USD reading read as before."""
     aapl = snapshot_row(conn, snapshots["AAPL"])
     assert aapl is not None
     sid = insert_snapshot(
         conn, value_company(fx_inputs(), universe_deciles(), policy, TODAY), aapl.refresh_id
     )
     statements = {e: p for e, p in bodies(currency="SEK").items() if e != "earnings"}
-    store_payloads(conn, "FXCO", statements, NOW)
+    consensus = [  # one consensus year after fiscal 2025, in SEK as the statements are
+        {
+            "symbol": "FXCO",
+            "date": "2026-12-31",
+            "revenueAvg": 2_200_000_000,
+            "epsAvg": 3.3,
+            "numAnalystsEps": 9,
+        }
+    ]
+    store_payloads(conn, "FXCO", {**statements, "estimates-annual": consensus}, NOW)
     grid = SensitivityGrid((40.0, 80.0), (0.08,), ((110.0,), (115.25,)), None)
     reading = insert_sensitivity(
         conn, "FXCO", sid, None, "value.outside", "growth.belief", grid, "v", "h", AGENT, NOW
@@ -293,10 +383,19 @@ def test_a_company_in_another_currency_names_its_code_on_its_figures(
     report = report_row(conn, report_id)
     assert report is not None
     tables = chart_tables(conn, report, policy)
-    growth = {row[0]: row[1:] for row in tables[HEADINGS[3]][0].rows}
+    table = tables[HEADINGS[3]][0]
+    assert table.header[6:] == ("12 months to 30 Sep 2026", "2026 estimate")
+    growth = {row[0]: row[1:] for row in table.rows}
     assert growth["Revenue"][3:5] == ("SEK 2,000,000,000", "SEK 2,100,000,000")
     assert growth["Revenue growth"][4] == "5.0%"
     assert growth["EPS"][4].startswith("SEK ") and "$" not in growth["EPS"][4]
+    # the trailing twelve months, 310 + 320 + 330 + 340, and the consensus year
+    assert growth["Revenue"][5:] == ("SEK 1,300,000,000", "SEK 2,200,000,000")
+    assert growth["EPS"][5:] == ("SEK 1.90", "SEK 3.30")
+    [quarters] = tables[HEADINGS[4]]
+    by_quarter = {row[0]: row[1:] for row in quarters.rows}
+    assert (by_quarter["Revenue"][-1], by_quarter["EPS"][-1]) == ("SEK 340,000,000", "SEK 0.49")
+    assert by_quarter["Operating margin"][-1] == "20.0%"
     (valuation,) = tables["Valuation"]
     assert valuation.header == ("outside the business", "belief 8.0%")
     assert valuation.rows == (("SEK 40.00", "$110.00"), ("SEK 80.00", "$115.25"))
@@ -325,8 +424,9 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """The four statistics of each P/E series over its ten years, with the day it began written as
-    the references write a day; and each series' last point in each calendar year of the ten
-    years (2016-10-29 falls before them), read from the store."""
+    the references write a day, each row named as the year-end table's column (B-108); and each
+    series' last point in each calendar year of the ten years (2016-10-29 falls before them), read
+    from the store."""
     sid = snapshots["AAPL"]
     band, stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
     assert (band.title, stats.title, year_end.title) == (
@@ -334,7 +434,8 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
         "The P/E over ten years",
         "The P/E at the last point of each year of the ten years",
     )
-    assert stats.rows == (("trailing P/E", "", "", "", "", ""), ("forward P/E", "", "", "", "", ""))
+    assert stats.rows == (("Trailing P/E", "", "", "", "", ""), ("Forward P/E", "", "", "", "", ""))
+    assert [row[0] for row in stats.rows] == list(year_end.header[1:])
     assert year_end.rows == ()
     rows = [
         ["2016-10-29", 30.0, 30.0, 30.0, 30.0],  # a day before the ten years
@@ -355,8 +456,8 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
     _, stats, year_end = chart_tables(conn, _report(conn, sid), policy)["Price and multiples"]
     assert stats.header == ("Series", "Ten-year average", "Median", "High", "Low", "Since")
     assert stats.rows == (
-        ("trailing P/E", "21.40x", "22.00x", "24.00x", "18.00x", "29 Oct 2016"),
-        ("forward P/E", "21.67x", "21.50x", "22.50x", "21.00x", "30 Dec 2025"),
+        ("Trailing P/E", "21.40x", "22.00x", "24.00x", "18.00x", "29 Oct 2016"),
+        ("Forward P/E", "21.67x", "21.50x", "22.50x", "21.00x", "30 Dec 2025"),
     )
     assert year_end.header == ("Year", "Trailing P/E", "Forward P/E")
     assert year_end.rows == (

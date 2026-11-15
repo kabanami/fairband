@@ -39,9 +39,11 @@ the actor (the principal for the owner) and the revision; a line naming the stan
 snapshot with its price date, and for a valuation review the full report it reuses or that there
 is none; the sections under their headings as ``##``, each led by its chart tables
 (``charts.chart_tables``) as ``###`` tables, then each part's text in order, a cite as its text
-and its footnote mark, ``$150.00[^1]``, so no ref is in the text; after the last section the
-references under ``## References``, ``[^n]: <ref> — <source>``; then Appendix A as tables and
-Appendix B as a list.
+and its footnote mark, ``$150.00[^1]``, so no ref is in the text; then Appendix A as tables and
+Appendix B as a list; and last the references under ``## References``, ``[^n]: <ref> —
+<source>``: GitHub-flavoured Markdown renders footnote definitions at the end of the document, so
+the heading stands over its list there (spec 2026-11-15 9). The report page keeps its order, the
+references after the last section.
 """
 
 import re
@@ -419,11 +421,12 @@ def markdown(
         for chart in tables.get(heading.strip(), ()):
             lines += ["", f"### {chart.title}", "", *_table(chart.header, chart.rows)]
         lines += ["", "".join(_marked(p, marks) for p in section["parts"])]
+    lines += ["", "## Appendix A", "", *_appendix_a_tables(a), "", "## Appendix B", ""]
+    lines += [f"- **{entry['term']}**: {entry['meaning']}" for entry in b] or ["No terms used."]
+    # last, where GitHub-flavoured Markdown renders the footnote definitions (spec 2026-11-15 9)
     lines += ["", "## References", ""]
     listed = [f"[^{entry['n']}]: {entry['ref']} — {entry['source']}" for entry in refs]
     lines += listed or ["No references."]
-    lines += ["", "## Appendix A", "", *_appendix_a_tables(a), "", "## Appendix B", ""]
-    lines += [f"- **{entry['term']}**: {entry['meaning']}" for entry in b] or ["No terms used."]
     return "\n".join(lines) + "\n"
 
 
