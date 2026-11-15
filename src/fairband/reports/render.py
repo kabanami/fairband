@@ -514,7 +514,7 @@ def _in_force(review: ReviewRow, row: OverrideRow) -> tuple[dict[str, Any] | Non
     applied at the figure in force and met its refusal there, so it has both too. Both are read
     from the stored review, never from the splits on file. ``(None, None)`` where the review
     applied it as entered, a review written before the scaling included, and where the override
-    has no bridge line (the empty bridge of a failed fetch or a failed review)."""
+    has no bridge line (the empty bridge of a failed fetch, valuation or review)."""
     line = next((x for x in review.bridge if x["override_id"] == row.id), None)
     judged = (i for i in review.result.inputs if i.tag == "JUDGMENT" and i.name == row.tag)
     note = next((i.note for i in judged), None) or ""

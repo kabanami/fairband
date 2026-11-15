@@ -3193,10 +3193,14 @@ def test_the_print_stylesheet() -> None:
 
 def test_a_wide_table_prints_whole() -> None:
     """Spec 2026-11-15 9 (B-119): printed, a report's table is not clipped at the screen's scroll
-    box. Its scroller clips nothing and sets no width; the table takes the paper's width, its body
-    at 12px on a 16px line, a cite in it at 11px and the cite's number at 9px; nothing in print
-    stops its cells wrapping, and a cite stays whole with its number by the bundle's rule, which
-    holds in print. The table still stays on one page, and the screen keeps its scroller."""
+    box, nor at the reader's card, an ``article.fb-rec.fb-report`` whose ``.fb-rec`` hides its
+    overflow: ``.fb-report``, as specific and later (the page's style follows the bundle's
+    stylesheet), lets it show. The scroller sets no width and the table none, so an auto-width
+    table takes the smaller of its content and the paper. Its body cells drop from the reader's
+    16px to the ``body`` token they carry, 14px on a 20px line; a cite and its number keep their
+    screen sizes. Nothing in print stops the cells wrapping, and a cite stays whole with its
+    number by the bundle's rule, which holds in print. The table still stays on one page, and
+    the screen keeps its scroller and its card."""
     page = _static_file("index.html")
     block = page[page.index("@media print {") :]
     block = block[: block.index("\n  }\n")]
@@ -3204,10 +3208,8 @@ def test_a_wide_table_prints_whole() -> None:
     assert "(spec 2026-11-15 9)" in comment[: comment.index("*/")]
     for text in (
         ".fb-report__scroll { overflow: visible; }",
-        ".fb-report__table { width: 100%; }",
-        ".fb-report .fb-report__table td { font-size: 12px; line-height: 16px; }",
-        ".fb-report .fb-report__table td .fb-cite { font-size: 11px; }",
-        ".fb-report__table .fb-cite__n { font-size: 9px; }",
+        ".fb-report { overflow: visible; }",
+        ".fb-report .fb-report__table td { font-size: 14px; line-height: 20px; }",
         ".fb-report__table, .fb-report__list li { break-inside: avoid; }",
     ):
         assert text in block, text
@@ -3215,10 +3217,20 @@ def test_a_wide_table_prints_whole() -> None:
     assert [line.strip() for line in code.splitlines() if "fb-report__scroll" in line] == [
         ".fb-report__scroll { overflow: visible; }"
     ]
+    # no width for the table, and no print size for the cite or its number
+    assert [line.strip() for line in code.splitlines() if "fb-report__table" in line] == [
+        ".fb-report__table, .fb-report__list li { break-inside: avoid; }",
+        ".fb-report .fb-report__table td { font-size: 14px; line-height: 20px; }",
+    ]
+    assert "fb-cite" not in code
     assert "white-space" not in code
+    assert page.index("/static/design-system/components/bundle.css") < page.index("<style>")
     css = _component_file("bundle.css")
     assert "overflow-x: auto;" in _rule(css, ".fb-report__scroll {")
+    assert "overflow: hidden;" in _rule(css, ".fb-rec {")
     assert "@media print" not in css
+    tokens = _static_file("design-system/tokens/tokens.css")
+    assert ".body { font-family: var(--font-sans); font-size: 14px; line-height: 20px;" in tokens
 
 
 def _call(script: str, start: str) -> str:

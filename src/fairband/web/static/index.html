@@ -498,14 +498,13 @@
     .app-chart { break-inside: avoid; }
     /* the agent's table and a list item stay on one page (spec 2026-11-06 Tier 2, 18.4) */
     .fb-report__table, .fb-report__list li { break-inside: avoid; }
-    /* the agent's table prints whole (spec 2026-11-15 9): its scroller clips nothing and the
-       table takes the paper's width, its body at 12px on a 16px line, a cite in it at 11px and
-       the cite's number at 9px; its cells wrap as on screen, a cite still with its number */
+    /* the agent's table prints whole (spec 2026-11-15 9): neither its scroller nor the reader's
+       card clips it; its body at the body token's 14px on a 20px line, the size the cell's class
+       names, a cite and its number at their screen sizes; its cells wrap as on screen, a cite
+       still with its number */
     .fb-report__scroll { overflow: visible; }
-    .fb-report__table { width: 100%; }
-    .fb-report .fb-report__table td { font-size: 12px; line-height: 16px; }
-    .fb-report .fb-report__table td .fb-cite { font-size: 11px; }
-    .fb-report__table .fb-cite__n { font-size: 9px; }
+    .fb-report { overflow: visible; }
+    .fb-report .fb-report__table td { font-size: 14px; line-height: 20px; }
   }
 </style>
 </head>
