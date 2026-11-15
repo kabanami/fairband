@@ -1460,6 +1460,11 @@ def test_the_skill_reads_a_foreign_filer() -> None:
     citations = _flat(_read(CITATIONS))
     for words in (
         "`$` for a figure in US dollars only",
+        # the whole-branch review's deferred minor 19: a euro record of a US company takes no `$`
+        (
+            "and every figure of a company that reports in US dollars but a record it states in"
+            " another currency."
+        ),
         "put the code before the number in the plain part",
         "or its sign for €, £ and ¥",
     ):
@@ -1756,6 +1761,12 @@ def test_a_filing_cell_is_cited_by_the_ref_the_answer_gives() -> None:
                 " `$ in Millions`"
             ),
             "never record it as a finding in full units to compute with it",
+            # the whole-branch review's deferred minor 20: a row the title scales apart
+            (
+                'A row the title scales apart takes its own scale: in a sheet "in Millions, except'
+                ' Per Share data" a figure a share is in full units, and a count of shares may be in'
+                " thousands, as the title says."
+            ),
         ):
             assert words in text, words
         assert "do not `derive` a cell with a figure in full units" not in text
@@ -2252,8 +2263,13 @@ def test_a_fixed_number_is_arithmetic_never_a_figure_you_chose() -> None:
     )
     ten = _flat(_steps(_frontmatter(_read(SKILL))[1])[10])
     arithmetic = _flat(_read(CITATIONS).split("## Your own arithmetic", 1)[1].split("\n## ")[0])
+    scaled_apart = (  # the whole-branch review's deferred minor 20
+        "as the cell has none; a row the title scales apart takes its own scale (a figure a share in"
+        ' a sheet "in Millions, except Per Share data" is in full units, and a count of shares may'
+        " be in thousands);"
+    )
     for text in (ten, arithmetic):
-        for words in (rule, *recipes):
+        for words in (rule, *recipes, scaled_apart):
             assert words in text, words
     assert (
         "A derivation with a number anywhere in it, its own operands or those of a `derived:`"
@@ -2322,10 +2338,10 @@ def test_a_threshold_you_choose_goes_on_its_kill_criterion() -> None:
         assert words in passage, words
     assert KILL_SECTION == "Risks and kill criteria"
     failures = _table(_read(CITATIONS), ("`what`", "It means", "What to do"))
-    assert (
-        "Never record a threshold you chose as a finding: put it on its kill criterion and cite"
-        " `kill:<id>` in Risks and kill criteria, tie the event to a cited figure, or state it in"
-        " words"
+    assert (  # the whole-branch review's deferred minor 21: the stored figure first (spec 8.3)
+        "Never record a threshold you chose as a finding: tie the event to a cited figure where one"
+        " serves, else put it on its kill criterion and cite `kill:<id>` in Risks and kill"
+        " criteria, or state it in words"
     ) in failures["`a number with no reference`"][1]
     unresolved = failures["`unresolved reference`"]
     for words in (
@@ -2346,9 +2362,9 @@ def test_a_threshold_you_choose_goes_on_its_kill_criterion() -> None:
         assert words in steps[9], words
     rules = _flat(_read(SKILL).split("## The rules", 1)[1].split("## Guidance", 1)[0])
     assert (
-        "- A threshold you choose is never a finding: put it on its kill criterion and cite it as"
-        " `kill:<id>` in section 11 alone (step 9), tie the event to a stored figure, cited, or"
-        " state it in words (`reference/citations.md`)."
+        "- A threshold you choose is never a finding: tie the event to a stored figure, cited,"
+        " where one serves, else put it on its kill criterion and cite it as `kill:<id>` in section"
+        " 11 alone (step 9), or state it in words (`reference/citations.md`)."
     ) in rules
     template = _read(TEMPLATE)
     row = _flat(_table(template, ("#", "Heading", "Mode", "What it holds"))["11"][2])
@@ -2461,12 +2477,22 @@ def test_a_money_figure_is_recorded_in_the_currency_the_company_states() -> None
             "Money in full, in the currency the company states it in, with `currency` when that is"
             " not the reporting currency (step 3)"
         ),
+        # the whole-branch review's Minor 3 and deferred minor 18: the record names the currency,
+        # and the growth is over the year before's line, the actual's
         (
-            "Nor does a record whose `currency` is not that of the year before's statement: convert"
-            " its midpoint (step 3) and `derive` the `growth` of that over the year's `fact:` line."
+            "Nor does a record that names a currency other than that of the year before's"
+            " statement: convert its midpoint (step 3) and `derive` the `growth` of that over the"
+            " year before's `fact:` line."
         ),
     ):
         assert words in guidance, words
+    assert (
+        "A record that names a currency other than that of the year before's statement has no step."
+    ) in _tool_entry("guidance")
+    for path in sorted(PLAYBOOK.rglob("*.md")):
+        text = _flat(_read(path))
+        for old in ("whose `currency` is not that of", "over the year's `fact:` line"):
+            assert old not in text, (path.name, old)
     code = _refused(lambda: check_currency("usd", "currency")).split(", not ", 1)[0]
     money = _refused(lambda: check_currency("USD", "percent"))
     for words in (f'"{code}, not <what was written>"', f'"{money}"'):
@@ -2488,17 +2514,28 @@ def test_a_money_figure_is_recorded_in_the_currency_the_company_states() -> None
 
 def test_the_playbook_reads_a_split_s_newest_year_a_late_close_and_a_kept_filing() -> None:
     """Spec 2026-11-15 10 and 11: the `segments` entry names `newestYear`, and step 4 sends the
-    agent to the 10-K's segment note where a split ends before the newest fiscal year; step 5 and
-    the template's section 5 state no move where the next trading day's close is not on file yet;
-    the filing report is reused whatever its age, not for thirty days; and the reads that answer a
-    company with no snapshot 404 say so (B-103 clause 6)."""
+    agent to the 10-K's segment note where a split's newest year is null or before the newest
+    fiscal year (the whole-branch review's deferred minor 25), as the tool entry and the
+    template's section 2 row do; step 5 and the template's section 5 state no move where the next
+    trading day's close is not on file yet; the filing report is reused whatever its age, not for
+    thirty days; and the reads that answer a company with no snapshot 404 say so (B-103 clause
+    6)."""
     assert "`newestYear`, the newest fiscal year among its rows" in _tool_entry("segments")
     steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
     assert (
-        "Where a split's `newestYear` is before the company's newest fiscal year (`financials`),"
-        " the split ends early: read the 10-K's segment note instead, found with `filing_search`"
-        " in the newest `FY` report and read with `filing_report`, and cite its cells."
+        "Where a split's `newestYear` is null or is before the company's newest fiscal year"
+        " (`financials`), the split is missing or ends early: read the 10-K's segment note instead,"
+        " found with `filing_search` in the newest `FY` report and read with `filing_report`, and"
+        " cite its cells."
     ) in steps[4]
+    assert (
+        "where a split's `newestYear` is null or is before the company's newest fiscal year, read"
+        " the 10-K's segment note"
+    ) in _tool_entry("segments")
+    assert (
+        "the 10-K's segment note where a split's `newestYear` is null or is before the newest"
+        " fiscal year"
+    ) in _flat(_read(TEMPLATE))
     late = (
         "Where no close is on file for the trading day after the call, state no move and say that"
         " the close is not on file yet."

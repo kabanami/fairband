@@ -171,8 +171,9 @@ def _base_actual(resolver: Resolver, metric: str, period: str) -> float | None:
 def _base_currency(conn: sqlite3.Connection, symbol: str, metric: str, period: str) -> str | None:
     """The currency of the statement the actual is read from (spec 2026-11-15 9.2): the income
     statement of the fiscal year before the guided one, as the fiscal-year series carries it (a
-    year whose statement names none takes the year before's), not the newest statement's; ``None``
-    for any other record or with no such year on file."""
+    year whose statement names none takes the year before's, and the oldest years with none the
+    first currency named after them), not the newest statement's; ``None`` for any other record or
+    with no such year on file."""
     year = year_before(metric, period)
     if year is None:
         return None

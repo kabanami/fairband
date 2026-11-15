@@ -111,8 +111,8 @@ be left out.
   currency of its money figure (see "A money figure" below); cite one as `finding:<id>`.
 - `guidance(symbol)`: the company's guidance records, newest first, each with its midpoint, its
   step, `currency` as a finding's, and `supersededBy`, the newer record that superseded it, if
-  any; cite one's figures as `guidance:<id>/midpoint` and its siblings. A record whose `currency`
-  is not that of the year before's statement has no step.
+  any; cite one's figures as `guidance:<id>/midpoint` and its siblings. A record that names a
+  currency other than that of the year before's statement has no step.
 - `overrides(symbol)`: the company's overrides, newest first, each with its state.
 - `reviews(symbol)`: the company's reviews, newest first, each with its bridge and without its
   result. The review's intermediates, cited as `review:<id>/intermediates/<path>`, are in the
@@ -156,7 +156,8 @@ such as `response:731/0/revenue`.
 - `segments(symbol)`: the revenue by product and by region, two responses under `product` and
   `geographic`, each with `newestYear`, the newest fiscal year among its rows, `null` with none.
   FMP's split by region can end years before its split by product: where a split's `newestYear` is
-  before the company's newest fiscal year, read the 10-K's segment note (`SKILL.md`, step 4).
+  null or is before the company's newest fiscal year, read the 10-K's segment note (`SKILL.md`,
+  step 4).
 - `insider_trades(symbol, limit?)`: the insiders' newest trades: 25, or `limit` up to 100.
   `tradeCount` says how many are on file; a trade keeps its place in the stored page, so its
   `response:` ref is the same at any limit.

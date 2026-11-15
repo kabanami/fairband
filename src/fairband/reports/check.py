@@ -112,7 +112,6 @@ from fairband.reports.refs import (
     Resolved,
     Resolver,
     record_id_of,
-    rests_on,
     same_snapshot,
     snapshots_of,
 )
@@ -396,16 +395,15 @@ def _headed_parts(sections: Sequence[Mapping[str, object]]) -> Iterator[tuple[st
 def cited_records(
     conn: sqlite3.Connection, sections: Sequence[Mapping[str, object]]
 ) -> tuple[int | None, int | None, int | None]:
-    """The snapshot the cites rest on (the earliest of those they name), and the newest review and
-    secondary valuation they cite; ``None`` for each they do not."""
+    """The snapshot the cites rest on (the earliest of those they name, a derivation's every
+    operand's among them, ``refs.snapshots_of``), and the newest review and secondary valuation
+    they cite; ``None`` for each they do not."""
     snapshots: list[int] = []
     reviews: list[int] = []
     secondaries: list[int] = []
     for _, part in parts(sections):
         ref = str(part.get("ref", "")).strip() if isinstance(part, Mapping) else ""
-        rested = rests_on(conn, ref)
-        if rested is not None:
-            snapshots.append(rested)
+        snapshots += snapshots_of(conn, ref)
         form, _, path = ref.partition(":")
         cited = record_id_of(path.partition("/")[0])
         if cited is not None and form in ("review", "secondary"):

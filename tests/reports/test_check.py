@@ -1010,6 +1010,27 @@ def test_cited_records(conn: sqlite3.Connection, policy: Policy, snapshots: dict
     assert cited_records(conn, _report(["no cites"])) == (None, None, None)
 
 
+def test_a_report_rests_on_the_earliest_snapshot_of_a_derivation_s_operands(
+    conn: sqlite3.Connection, snapshots: dict[str, int]
+) -> None:
+    """Method 16.1 with 16.2 (the whole-branch review's deferred minor 2): a report is stored on
+    the earliest snapshot its cites rest on, a derivation's every operand counted through nested
+    derivations, so a derivation whose second operand rests on the snapshot the latest reprices
+    stores the report on that one, not on its first operand's."""
+    sid = snapshots["AAPL"]
+    cited = snapshot_row(conn, sid)
+    assert cited is not None
+    latest = insert_snapshot(conn, cited.result, cited.refresh_id, clock=lambda: NOW)  # a reprice
+    new, old = f"snapshot:{latest}/price", f"snapshot:{sid}/price"
+    second = insert_derivation(conn, "AAPL", "ratio", new, old, None, 1.0, "multiple", AGENT, NOW)
+    nested = insert_derivation(
+        conn, "AAPL", "product", new, f"derived:{second}", None, 150.0, "per-share", AGENT, NOW
+    )
+    for ref in (f"derived:{second}", f"derived:{nested}"):
+        sections = _report([_cite("$150.00", new), _cite("1.00x", ref)])
+        assert cited_records(conn, sections) == (sid, None, None), ref
+
+
 @pytest.mark.parametrize(
     "ref",
     [

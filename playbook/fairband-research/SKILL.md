@@ -187,7 +187,9 @@ sheet's `columns`, or the hit's `column`) before you cite a number, and name tha
 sentence. A filing cell holds the number at its sheet's scale, so scale the cell first: before it
 meets a figure in full units (a `fact:` or a `table:` figure), or a cell of a sheet with another
 scale, take the `derive` `product` of the cell and its sheet's scale, `number:1000000` for
-`$ in Millions` (`number:1000` for thousands). A figure the filing states is still cited from its
+`$ in Millions` (`number:1000` for thousands). A row the title scales apart takes its own scale:
+in a sheet "in Millions, except Per Share data" a figure a share is in full units, and a count of
+shares may be in thousands, as the title says. A figure the filing states is still cited from its
 cell: never record it as a finding in full units to compute with it. A sentence of a note is a
 finding whose source is `{kind: "filing", ref:
 "response:<responseId>", note}`: the `responseId` the filing report answered, and the note naming
@@ -210,10 +212,10 @@ on the company's investor site.
 
 From Fairband, read `segments(symbol)` for the revenue by product and by region, and
 `transcript(symbol, year, quarter)` for the earlier earnings calls; the last call is step 5's.
-Each split of `segments` names its `newestYear`. Where a split's `newestYear` is before the
-company's newest fiscal year (`financials`), the split ends early: read the 10-K's segment note
-instead, found with `filing_search` in the newest `FY` report and read with `filing_report`, and
-cite its cells.
+Each split of `segments` names its `newestYear`. Where a split's `newestYear` is null or is before
+the company's newest fiscal year (`financials`), the split is missing or ends early: read the
+10-K's segment note instead, found with `filing_search` in the newest `FY` report and read with
+`filing_report`, and cite its cells.
 `insider_trades(symbol)` shows what the insiders bought and sold, the newest 25 trades unless you
 ask for more with `limit`.
 
@@ -672,7 +674,9 @@ arithmetic. The recipes:
   of that `derived:` id and their count, `number:2` for two;
 - a change of sign: the `difference` of `number:0` and the figure;
 - a filing cell before it meets a figure in full units: the `product` of the cell and its sheet's
-  scale, `number:1000000` for `$ in Millions`, a figure with no unit, as the cell has none;
+  scale, `number:1000000` for `$ in Millions`, a figure with no unit, as the cell has none; a row
+  the title scales apart takes its own scale (a figure a share in a sheet "in Millions, except Per
+  Share data" is in full units, and a count of shares may be in thousands);
 - a PEG: the `ratio` of the P/E and the growth rate, a figure with no unit that is a hundred times
   the PEG, since the rate is a fraction; then the `ratio` of that `derived:` id and `number:100`.
 
@@ -727,9 +731,9 @@ instead.
 - A number from outside Fairband becomes a finding first, then a cite `finding:<id>`.
 - Your own arithmetic goes through `derive`, then a cite `derived:<id>`. A fixed number in it is
   arithmetic, never a figure you chose (step 10).
-- A threshold you choose is never a finding: put it on its kill criterion and cite it as
-  `kill:<id>` in section 11 alone (step 9), tie the event to a stored figure, cited, or state it
-  in words (`reference/citations.md`).
+- A threshold you choose is never a finding: tie the event to a stored figure, cited, where one
+  serves, else put it on its kill criterion and cite it as `kill:<id>` in section 11 alone (step
+  9), or state it in words (`reference/citations.md`).
 - The decision of a judgment holds no figure at all.
 - The valuation and its detail are in section 8 only. The rest of the report argues the business
   and its outlook.
@@ -771,11 +775,12 @@ The server computes the midpoint. For a fiscal-year revenue, EPS or net income r
 never compute that rate. The step is the track-record figure: the guided growth set against what
 the company last delivered, for section 5. It is never an override's `new`. An `adjusted` or a
 `constant-currency` record takes no step, since the actual on file is the GAAP one. Nor does a
-record whose `currency` is not that of the year before's statement: convert its midpoint (step 3)
-and `derive` the `growth` of that over the year's `fact:` line. For the growth of an adjusted
-figure, record the year before's adjusted actual from the release as a finding and `derive` the
-`growth` of the record's midpoint over it. For a constant-currency figure, `derive` the `growth`
-of the midpoint over the year before's `fact:` line, and call it growth at constant currency.
+record that names a currency other than that of the year before's statement: convert its midpoint
+(step 3) and `derive` the `growth` of that over the year before's `fact:` line. For the growth of
+an adjusted figure, record the year before's adjusted actual from the release as a finding and
+`derive` the `growth` of the record's midpoint over it. For a constant-currency figure, `derive`
+the `growth` of the midpoint over the year before's `fact:` line, and call it growth at constant
+currency.
 
 A newer record of the same metric, period and basis supersedes the older one, in the order of the
 calls' dates. Record the previous call's figure too, so the section can say raised, held or cut:

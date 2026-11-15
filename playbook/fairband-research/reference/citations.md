@@ -96,7 +96,9 @@ in the sentence. The references list names the column by its index and its words
 title names the scale (`$ in Millions`). A filing cell holds the number at its sheet's scale, so
 scale the cell first: before it meets a figure in full units (a `fact:` or a `table:` figure), or
 a cell of a sheet with another scale, take the `derive` `product` of the cell and its sheet's
-scale, `number:1000000` for `$ in Millions` (`number:1000` for thousands). A figure the filing
+scale, `number:1000000` for `$ in Millions` (`number:1000` for thousands). A row the title scales
+apart takes its own scale: in a sheet "in Millions, except Per Share data" a figure a share is in
+full units, and a count of shares may be in thousands, as the title says. A figure the filing
 states is still cited from its cell: never record it as a finding in full units to compute with
 it. Cite the number as the cell holds it, with no period (a `filing:` ref has none, so a cite that
 names one fails), and write the scale word in the plain part after the cite:
@@ -130,19 +132,20 @@ be written in points, `2.0 pp` or `2.0 percentage points`, compared as `2.0%` is
 
 The currency. `$` for a figure in US dollars only: the price, the value a share, the levels, a
 close, a grid's or a reading's cells, a record's figure in US dollars, and every figure of a
-company that reports in US dollars. A company in another currency (`company`'s `currency`) has its
-statements, consensus, inputs, overrides and secondary valuation's totals in that currency. A
-money figure you record, a finding's, a guidance record's or a kill criterion's threshold, is in
-the currency the company states it in: pass `currency` when that is not the reporting currency,
-and every read answers the record's `currency`. Cite a figure in any currency but the US dollar
-with no `$`: put the code before the number in the plain part, `"TWD "` then
-`{"cite": "331.25", "ref": ...}`, or its sign for €, £ and ¥, `"€"` then the cite. So a record's
-figure takes `$` where it is in US dollars, and its code in the plain text before a bare cite
-otherwise. The cite is the number alone, read in the ref's unit; a sign or a code alone in a plain
-part is no quantity. On a `finding:`, a `guidance:` or a `kill:` cite the check knows the record's
-currency: a `$` there passes only where the record is in US dollars, and is `wrong unit`
-otherwise, "finding:812 reads TWD 1,000,000,000: write the number without $ and name TWD before
-it". On any other ref it does not know the currency, so the rule is yours to keep.
+company that reports in US dollars but a record it states in another currency. A company in
+another currency (`company`'s `currency`) has its statements, consensus, inputs, overrides and
+secondary valuation's totals in that currency. A money figure you record, a finding's, a guidance
+record's or a kill criterion's threshold, is in the currency the company states it in: pass
+`currency` when that is not the reporting currency, and every read answers the record's
+`currency`. Cite a figure in any currency but the US dollar with no `$`: put the code before the
+number in the plain part, `"TWD "` then `{"cite": "331.25", "ref": ...}`, or its sign for €, £
+and ¥, `"€"` then the cite. So a record's figure takes `$` where it is in US dollars, and its code
+in the plain text before a bare cite otherwise. The cite is the number alone, read in the ref's
+unit; a sign or a code alone in a plain part is no quantity. On a `finding:`, a `guidance:` or a
+`kill:` cite the check knows the record's currency: a `$` there passes only where the record is in
+US dollars, and is `wrong unit` otherwise, "finding:812 reads TWD 1,000,000,000: write the number
+without $ and name TWD before it". On any other ref it does not know the currency, so the rule is
+yours to keep.
 
 A record in another currency than the reporting one is kept out of money arithmetic until you
 convert it ("Your own arithmetic"): to set an input from it, or to compare it with a statement,
@@ -329,7 +332,9 @@ criterion ("A threshold you choose"). The recipes:
   of that `derived:` id and their count, `number:2` for two;
 - a change of sign: the `difference` of `number:0` and the figure;
 - a filing cell before it meets a figure in full units: the `product` of the cell and its sheet's
-  scale, `number:1000000` for `$ in Millions`, a figure with no unit, as the cell has none;
+  scale, `number:1000000` for `$ in Millions`, a figure with no unit, as the cell has none; a row
+  the title scales apart takes its own scale (a figure a share in a sheet "in Millions, except Per
+  Share data" is in full units, and a count of shares may be in thousands);
 - a PEG: the `ratio` of the P/E and the growth rate, a figure with no unit that is a hundred times
   the PEG, since the rate is a fraction; then the `ratio` of that `derived:` id and `number:100`.
 
@@ -353,9 +358,10 @@ currency, or a derivation of one, it gives a growth, a ratio, or a sum or a diff
 unit. The `product` of a US-dollar record, or of a derivation of one, and
 `snapshot:<id>/inputs/fx_rate` is the figure in the reporting currency, with no unit, which then
 combines with anything: convert so first, before you set an input from the record or set it
-against a statement, or keep to figures in its own currency. On a company in another currency a US-dollar record has no value with the price, the
-value a share, the levels, a close or a grid's cells, whose currency the server does not know. A
-derivation with no unit is cited at the decimals you write: name its currency in the text.
+against a statement, or keep to figures in its own currency. On a company in another currency a
+US-dollar record has no value with the price, the value a share, the levels, a close or a grid's
+cells, whose currency the server does not know. A derivation with no unit is cited at the
+decimals you write: name its currency in the text.
 
 A price over earnings is `ratio` of `snapshot:<id>/price` and an EPS ref, cited `12.34x`. A
 multiple written in plain text, `2.4x`, is rejected: derive it and cite it.
@@ -371,7 +377,7 @@ gets one for each quantity.
 
 | `what` | It means | What to do |
 |---|---|---|
-| `a number with no reference` | a quantity in plain text, or in a judgment's text | Cite it. Write a small count in words. Reword a name with a free number. Record a fact Fairband does not hold as a finding first. Never record a threshold you chose as a finding: put it on its kill criterion and cite `kill:<id>` in Risks and kill criteria, tie the event to a cited figure, or state it in words ("A threshold you choose"). Take every figure out of the judgment's text. |
+| `a number with no reference` | a quantity in plain text, or in a judgment's text | Cite it. Write a small count in words. Reword a name with a free number. Record a fact Fairband does not hold as a finding first. Never record a threshold you chose as a finding: tie the event to a cited figure where one serves, else put it on its kill criterion and cite `kill:<id>` in Risks and kill criteria, or state it in words ("A threshold you choose"). Take every figure out of the judgment's text. |
 | `unresolved reference` | the ref names nothing, or the record holds no figure there; or it is a `number:` ref, an operand of `derive` alone; or a `kill:` ref outside Risks and kill criteria | Copy the ref from the tool's answer again: check the form, the id, the symbol and the year. A table cell with no value cannot be cited: say in words that the figure is not on file. A `number:` cite, "number:100 is an operand of derive: cite the derivation": cite the derivation that used it. A `kill:` cite in another section, "kill:12 is the author's own threshold: cite it in Risks and kill criteria": move it there, or tie the sentence to a stored figure. |
 | `wrong unit` | the suffix does not fit the ref's unit, or the number is not the stored value at the report's rounding; or a `$` on a record's figure in another currency than the US dollar | The detail gives the value as the cite should read. Write it so. A price takes cents; a percent one decimal; a multiple two. A record's figure in another currency: write the number without `$`, and its code before it in the plain part. |
 | `wrong period` | the cite's period is not the ref's (a quarter reads the same with its dash or without, `2027-Q1` as `2027Q1`) | Correct the period or the ref, or leave the period out. |

@@ -216,8 +216,9 @@ __all__ = [
 
 # A fixed number of ``derive`` (spec 2026-11-15 7.1), ``number:<n>``: the whole numbers 0 to 12,
 # 52, 100, 365 and each power of ten from 1,000 to 1,000,000,000,000. They serve a complement
-# (1), a change of sign (0), an average or an annual rate (2 to 12, 52, 365), a percent as points
-# (100) and a unit scale (a power of ten).
+# (1), a change of sign (0), an average or an annual rate (2 to 12, 52, 365), the PEG (100: the
+# ratio of a P/E to a growth rate has no unit and is a hundred times the PEG; a percent times 100
+# stays a percent) and a unit scale (a power of ten).
 NUMBER_FORM = "number"
 NUMBERS: frozenset[int] = frozenset([*range(13), 52, 100, 365, *(10**k for k in range(3, 13))])
 _NUMBER_TEXTS = {str(n): n for n in NUMBERS}  # each written in digits alone, as the list reads

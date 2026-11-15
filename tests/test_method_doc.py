@@ -1109,6 +1109,19 @@ def test_a_derivation_with_a_number_depends_on_a_stored_figure() -> None:
     assert "Two refusals, each a 400" not in derivations
 
 
+def test_a_report_is_stored_on_the_earliest_snapshot_its_cites_rest_on() -> None:
+    """The whole-branch review's deferred minor 2: 16.1 stores a report on the earliest snapshot
+    its cites rest on, a derivation's every operand's counted, as 16.2 says a `derived:` ref
+    rests on every snapshot its operands rest on."""
+    sixteen = _section(16)
+    report = sixteen[sixteen.index("### 16.1") : sixteen.index("### 16.2")]
+    assert (
+        "A published one is stored as the company's next revision (from 1) on the earliest"
+        " snapshot its cites rest on, every operand's of a derivation among them (16.2), the"
+        " latest where they rest on none, with the review"
+    ) in report
+
+
 def test_a_kill_criterion_holds_a_threshold_cited_in_its_section_alone() -> None:
     """Spec 2026-11-15 8.1, 8.2: 16.2 names the form `kill:`, the threshold's record with its
     refusals and its words in the references; 16.3 the section rule, an unresolved reference
