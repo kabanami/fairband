@@ -7,7 +7,10 @@ its props and the tests read the tree it draws (``support.page``).
 
 And Appendix A's record of an override the review applied at a split (spec 2026-11-15 8): the
 page's script, report.js, builds it with the pair in force and the words of the scaling under it,
-and the test reads the tree it builds."""
+and the test reads the tree it builds.
+
+And a cite's number in a report's table (spec 2026-11-15 9): ``ReportReader`` holds a cite and
+its number in one span there, and nowhere else."""
 
 from typing import Any
 
@@ -92,6 +95,52 @@ def test_the_drawer_s_summary_draws_no_line() -> None:
     assert classed(tree, "fb-report__cites") == []
     [section] = classed(tree, "fb-report__section")
     assert text(section) == "SummaryPlain words."
+
+
+def _holder(tree: Any, child: dict[str, Any]) -> dict[str, Any]:
+    """The element of ``tree`` whose children hold ``child``."""
+    [held] = [e for e in elements(tree) if child in (e["props"].get("children") or [])]
+    return held
+
+
+def test_a_cite_in_a_table_keeps_its_number_and_one_outside_is_drawn_as_before() -> None:
+    """Spec 2026-11-15 9: in a report's table a cite and its number ``[n]`` sit in one span,
+    ``fb-cite__pair``, which the bundle's stylesheet does not let wrap, so the number never
+    starts a line of its own. A cite with no number in a table, and a cite in a paragraph, are
+    drawn as before: the cite and its number side by side in a Fragment, which has no type."""
+    revenue = {"cite": "$10.44 billion", "ref": "fact:QCOM/revenue/2026Q4"}
+    parts = [
+        "Revenue was ",
+        revenue,
+        ".\n\n| | The quarter | A year before |\n|---|---|---|\n| Revenue | ",
+        revenue,
+        " | ",
+        {"cite": "$11.27 billion", "ref": "fact:QCOM/revenue/2025Q4"},
+        " |\n",
+    ]
+    tree = _draw(
+        sections=[{"heading": "Summary", "parts": parts}],
+        footnotes={"fact:QCOM/revenue/2026Q4": 3},
+        appendixes=False,
+    )
+    [prose] = classed(tree, "fb-report__prose")
+    [table] = classed(tree, "fb-report__table")
+    # in the table: the cite with a number and its number in one span; the one without, alone
+    quarter, year_before = classed(table, "fb-cite")
+    [number] = classed(table, "fb-cite__n")
+    [pair] = classed(table, "fb-cite__pair")
+    assert pair["type"] == "span"
+    assert pair["props"]["children"] == [quarter, number]
+    assert text(pair) == "$10.44 billion[3]"
+    alone = _holder(table, year_before)
+    assert "type" not in alone and alone["props"]["children"] == [year_before, None]
+    # in the paragraph: no span holds the two
+    assert classed(prose, "fb-cite__pair") == []
+    [cite] = classed(prose, "fb-cite")
+    held = _holder(prose, cite)
+    assert "type" not in held
+    assert [text(child) for child in held["props"]["children"]] == ["$10.44 billion", "[3]"]
+    assert text(prose) == "Revenue was $10.44 billion[3]."
 
 
 def _override(override_id: int, tag: str, unit: str, old: float, new: float) -> dict[str, Any]:

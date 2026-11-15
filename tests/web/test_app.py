@@ -3097,6 +3097,48 @@ def test_the_reader_is_set_at_sixteen_pixels() -> None:
     assert "(spec 2026-11-06 Tier 2, 18.4, plan 4" in comment[: comment.index("*/")]
 
 
+def test_a_cite_s_number_stays_with_its_figure_in_a_table() -> None:
+    """Spec 2026-11-15 9 (B-119), a `// fairband:` patch: in a report's table a cited figure and
+    its number ``[n]`` do not part at a line break. ``cited`` holds the two in one span,
+    ``fb-cite__pair``, where ``inlineNodes`` draws a table's cell, header or body, and the cite
+    has a number; the span does not wrap. A cite outside a table, or one with no number, is drawn
+    as before, the cite and its number side by side, so outside a table a cite wraps as text
+    does. ``tests/web/test_report_reader.py`` draws both."""
+    bundle = _component_file("bundle.js")
+    cited = _function(bundle, "cited")
+    patch = cited[cited.index("// fairband: in a table's cell") :]
+    assert "(spec 2026-11-15 9)" in patch[: patch.index("var pair")]
+    _in_order(
+        cited,
+        "function cited(part, footnotes, key, inCell) {",
+        "var n = own(footnotes, String(part.ref).trim());",
+        "var pair = inCell && n != null;",
+        "return h(pair ? 'span' : React.Fragment,",
+        "pair ? { className: 'fb-cite__pair', key: key } : { key: key },",
+        "h(Cite, { source: part.ref }, part.cite),",
+        "n == null ? null : h('sup', { className: 'fb-cite__n' }, '[' + n + ']'));",
+    )
+    inline = _function(bundle, "inlineNodes")
+    assert "function inlineNodes(pieces, footnotes, inCell) {" in inline
+    assert "put(cited(piece, footnotes, 'c' + key++, inCell));" in inline
+    blocks = _function(bundle, "blocks")
+    # a table's row, its header's and its body's, draws its cells as cells; a paragraph and a
+    # list item do not
+    assert "inlineNodes(pieces, footnotes, true));" in blocks
+    assert (
+        "h('p', { className: 'fb-report__prose body', key: k },\n"
+        "          inlineNodes(pieces, footnotes));"
+    ) in blocks
+    assert "inlineNodes(trimPieces(item), footnotes));" in blocks
+    css = _component_file("bundle.css")
+    comment = css[css.index("/* fairband: a cite's number stays with its figure") :]
+    assert "(spec 2026-11-15 9)" in comment[: comment.index("*/")]
+    assert "white-space: nowrap;" in _rule(css, ".fb-report__table .fb-cite__pair {")
+    assert "white-space: nowrap;" in _rule(css, ".fb-report__table .fb-cite {")
+    # no rule holds the pair outside a table
+    assert _code(css).count("fb-cite__pair") == 1
+
+
 def test_a_tier_label_keeps_its_near_edge_off_the_price_marker() -> None:
     """Spec 18.2 item 2 (plan 4): a label on the meter's tier is centred on its tick, unless that
     brings its near edge within 8px of the price marker's centre line, where it stops, at any
@@ -3147,6 +3189,36 @@ def test_the_print_stylesheet() -> None:
         "#report { overflow: visible; padding: 0; }",
     ):
         assert text in block, text
+
+
+def test_a_wide_table_prints_whole() -> None:
+    """Spec 2026-11-15 9 (B-119): printed, a report's table is not clipped at the screen's scroll
+    box. Its scroller clips nothing and sets no width; the table takes the paper's width, its body
+    at 12px on a 16px line, a cite in it at 11px and the cite's number at 9px; nothing in print
+    stops its cells wrapping, and a cite stays whole with its number by the bundle's rule, which
+    holds in print. The table still stays on one page, and the screen keeps its scroller."""
+    page = _static_file("index.html")
+    block = page[page.index("@media print {") :]
+    block = block[: block.index("\n  }\n")]
+    comment = block[block.index("/* the agent's table prints whole") :]
+    assert "(spec 2026-11-15 9)" in comment[: comment.index("*/")]
+    for text in (
+        ".fb-report__scroll { overflow: visible; }",
+        ".fb-report__table { width: 100%; }",
+        ".fb-report .fb-report__table td { font-size: 12px; line-height: 16px; }",
+        ".fb-report .fb-report__table td .fb-cite { font-size: 11px; }",
+        ".fb-report__table .fb-cite__n { font-size: 9px; }",
+        ".fb-report__table, .fb-report__list li { break-inside: avoid; }",
+    ):
+        assert text in block, text
+    code = _code(block)
+    assert [line.strip() for line in code.splitlines() if "fb-report__scroll" in line] == [
+        ".fb-report__scroll { overflow: visible; }"
+    ]
+    assert "white-space" not in code
+    css = _component_file("bundle.css")
+    assert "overflow-x: auto;" in _rule(css, ".fb-report__scroll {")
+    assert "@media print" not in css
 
 
 def _call(script: str, start: str) -> str:

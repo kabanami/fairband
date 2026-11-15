@@ -765,9 +765,9 @@ def test_appendix_a_shows_an_override_scaled_at_a_split_with_both_figures() -> N
             "both read from the stored review, never from the splits on file when the report is"
             " read; a step that refused was applied at the figure in force and met its refusal"
             " there, so its override shows the pair in force and the words too, while an override"
-            " with no bridge line, in the empty bridge of a failed fetch or a failed review, or one"
-            " in a review written before the scaling existed, shows its figures as stored (spec"
-            " 2026-11-15 8)"
+            " with no bridge line, in the empty bridge of a failed fetch, valuation or review, or"
+            " one in a review written before the scaling existed, shows its figures as stored"
+            " (spec 2026-11-15 8)"
         ),
     ):
         assert words in export, words

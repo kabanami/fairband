@@ -115,7 +115,8 @@ def test_the_text_renders_as_blocks() -> None:
 
 def test_bullets_bold_leads_and_cites_in_cells() -> None:
     """Review focus 4: a list item with a bold lead, a cite with its footnote number in a table
-    cell, a bold run across a cite, an unpaired ``**``, a numbered list's own start, a paragraph's
+    cell, held with it in one span (spec 2026-11-15 9), and the same cite in a paragraph without
+    one, a bold run across a cite, an unpaired ``**``, a numbered list's own start, a paragraph's
     lines joined with a space, a table under a paragraph line with no blank line, and a line that
     opens with ``|`` and holds no second one, which stays prose."""
     parts = [
@@ -149,5 +150,9 @@ def test_bullets_bold_leads_and_cites_in_cells() -> None:
     assert paragraphs[2] == "By quarter:"
     assert paragraphs[3] == "| alone"
     assert re.findall(r'<th class="label">(.*?)</th>', html) == ["", "Revenue"]
-    assert re.findall(r'<td class="body">(.*?)</td>', html) == ["The quarter", cite]
+    # in a cell the cite and its number sit in one span that does not wrap (spec 2026-11-15 9)
+    assert re.findall(r'<td class="body">(.*?)</td>', html) == [
+        "The quarter",
+        f'<span class="fb-cite__pair">{cite}</span>',
+    ]
     assert ":---" not in html

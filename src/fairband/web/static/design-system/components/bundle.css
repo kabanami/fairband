@@ -701,6 +701,11 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   line-height: 24px;
 }
 .fb-report__table .fb-cite { white-space: nowrap; }
+/* fairband: a cite's number stays with its figure (spec 2026-11-15 9): the white space of the two's
+   nearest common ancestor decides whether a line breaks between them, and in a table's cell the
+   reader holds the two in one span that does not wrap, so the [n] never starts a line of its own.
+   Outside a table no span holds them and a cite wraps as text does. */
+.fb-report__table .fb-cite__pair { white-space: nowrap; }
 .fb-report strong { color: var(--ink); font-weight: 600; }
 .fb-report__appx { color: var(--ink-faint); margin: 0; }
 /* A cited number is the only kind a published report may contain, so the mark

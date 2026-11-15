@@ -749,9 +749,14 @@
   // fairband: a cite as the reader shows it: its dotted underline and its ref in the title, then
   // its footnote number as a superscript, [n], from the caller's footnotes (ref → n); a ref the
   // map lacks has none (spec 2026-11-06 Tier 2, 13.1 and 18.4).
-  function cited(part, footnotes, key) {
+  function cited(part, footnotes, key, inCell) {
     var n = own(footnotes, String(part.ref).trim());
-    return h(React.Fragment, { key: key },
+    // fairband: in a table's cell, `inCell`, a cite and its number sit in one span, which the
+    // stylesheet does not let wrap, so the number never starts a line of its own; elsewhere, or
+    // without a number, they are drawn as before and wrap as text does (spec 2026-11-15 9).
+    var pair = inCell && n != null;
+    return h(pair ? 'span' : React.Fragment,
+      pair ? { className: 'fb-cite__pair', key: key } : { key: key },
       h(Cite, { source: part.ref }, part.cite),
       n == null ? null : h('sup', { className: 'fb-cite__n' }, '[' + n + ']'));
   }
@@ -779,8 +784,9 @@
 
   // fairband: a block's pieces as nodes, the cites inline: a `**` opens or closes bold across the
   // pieces, so a bold run may hold a cite; an unpaired `**`, the last of an odd count, and a lone
-  // `*` stay text (spec 2026-11-06 Tier 2, 13.1).
-  function inlineNodes(pieces, footnotes) {
+  // `*` stay text (spec 2026-11-06 Tier 2, 13.1). `inCell` says the pieces are a table's cell,
+  // where a cite keeps its number (spec 2026-11-15 9).
+  function inlineNodes(pieces, footnotes, inCell) {
     var marks = 0;
     pieces.forEach(function (piece) {
       if (typeof piece === 'string') marks += piece.split('**').length - 1;
@@ -791,7 +797,7 @@
     var key = 0;
     function put(node) { (bold || out).push(node); }
     pieces.forEach(function (piece) {
-      if (typeof piece !== 'string') { put(cited(piece, footnotes, 'c' + key++)); return; }
+      if (typeof piece !== 'string') { put(cited(piece, footnotes, 'c' + key++, inCell)); return; }
       piece.split('**').forEach(function (text, i) {
         if (i && paired) {
           paired -= 1;
@@ -884,7 +890,7 @@
     function row(cells, cell, i) {
       return h('tr', { key: i }, cells.map(function (pieces, j) {
         return h(cell, { key: j, className: cell === 'th' ? 'label' : 'body' },
-          inlineNodes(pieces, footnotes));
+          inlineNodes(pieces, footnotes, true));
       }));
     }
     return found.map(function (b, k) {
