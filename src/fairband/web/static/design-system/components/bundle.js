@@ -2107,6 +2107,10 @@
     var X = function (i) { return L + slot * i + (slot - bw) / 2; };
     var zero = Y(0);
     var cur = at == null ? null : series[at];
+    // fairband: the value stands on the last bar that is not an estimate, so the figure a reader
+    // sees first is a reported one; a chart of estimates alone prints none (spec 2026-11-15 6.6).
+    var capped = -1;
+    series.forEach(function (d, i) { if (d.kind !== 'estimate') capped = i; });
 
     return h('figure', { className: 'fb-c' },
       h('figcaption', { className: 'fb-c__head' },
@@ -2118,7 +2122,9 @@
         h('svg', {
           className: 'fb-c__svg', width: W, height: H,
           viewBox: '0 0 ' + W + ' ' + H, role: 'img',
-          'aria-label': p.title + ' by fiscal year'
+          // fairband: `by`, what the bars run by, "period" where a bar is not a fiscal year and
+          // "quarter" on a chart of quarters; "fiscal year" when absent (spec 2026-11-15 6.6).
+          'aria-label': p.title + ' by ' + (p.by || 'fiscal year')
         },
           h(Grid, { ticks: ticks, scale: Y, left: L, right: R, format: fmt }),
           signed ? h('line', { className: 'fb-c__zero', x1: L, x2: R, y1: zero, y2: zero }) : null,
@@ -2130,20 +2136,26 @@
             var cls = !signed ? 'fb-c__bar'
               : (good ? 'fb-c__bar fb-c__bar--pos' : 'fb-c__bar fb-c__bar--neg');
             return h('path', {
-              key: d.period, className: cx(cls, at === i && 'is-hovered'),
+              key: d.period,
+              // fairband: a bar that is not a fiscal year takes its kind's class beside the
+              // sign's: `trailing`, the trailing twelve months, `estimate`, an analysts' estimate
+              // (spec 2026-11-15 6.6).
+              className: cx(cls, d.kind && 'fb-c__bar--' + d.kind, at === i && 'is-hovered'),
               d: columnPath(X(i), bw, Y(d.value), zero, 4),
               onMouseEnter: function () { setAt(i); },
               onMouseLeave: function () { setAt(null); }
             });
           })),
-          series.length ? h('text', {
-            className: 'fb-c__capvalue', x: X(n - 1) + bw / 2,
-            y: Y(series[n - 1].value) + (series[n - 1].value < 0 ? 14 : -7)
-          }, fmt(series[n - 1].value)) : null,
+          capped < 0 ? null : h('text', {
+            className: 'fb-c__capvalue', x: X(capped) + bw / 2,
+            y: Y(series[capped].value) + (series[capped].value < 0 ? 14 : -7)
+          }, fmt(series[capped].value)),
           h(XAxis, { series: series, x: function (i) { return X(i) + bw / 2; }, y: B, left: L, right: R })
         ),
         h(Tip, { at: cur ? X(at) + bw / 2 : null },
-          h('span', { className: 'label' }, cur ? cur.period : ''),
+          // fairband: the tooltip names a point by its `label`, the period in words, and by the
+          // period when it has none (spec 2026-11-15 6.6).
+          h('span', { className: 'label' }, cur ? cur.label || cur.period : ''),
           cur ? h('span', { className: 'figure-sm' }, fmt(cur.value) + (p.unit ? ' ' + p.unit : '')) : null,
           cur && cur.freshness && cur.freshness !== 'current'
             ? h('span', { className: 'caption' }, FRESHNESS[cur.freshness].word) : null
@@ -2152,7 +2164,11 @@
       h(DataTable, {
         show: p.tableView,
         head: ['Period', p.title || 'Value'],
-        rows: series.map(function (d) { return [d.period + markFor(d.freshness), fmt(d.value)]; })
+        rows: series.map(function (d) {
+          // fairband: the table twin names a point by its `label`, the period in words, and by
+          // the period when it has none (spec 2026-11-15 6.6).
+          return [(d.label || d.period) + markFor(d.freshness), fmt(d.value)];
+        })
       })
     );
   }

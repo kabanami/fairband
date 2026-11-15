@@ -3391,6 +3391,69 @@ def test_the_bundle_draws_what_the_report_charts_need() -> None:
     assert inverse == ["net_debt_to_ebitda", "share_count_change"]
 
 
+def test_the_bundle_draws_a_bar_that_is_not_a_fiscal_year() -> None:
+    """Spec 2026-11-15 6.6, a patch as `inverse` is one: a HistoryBars point's `kind` gives its
+    bar a class, the trailing twelve months filled in chart-context whatever their sign, an
+    estimate an outline in the colour its fill would have had; the value stands on the last bar
+    that is not an estimate; the accessible name reads `by`; the tooltip and the table twin read a
+    point's `label`. Each change is marked, and index.d.ts says each field. What the bars draw is
+    read in node (tests/web/test_report_charts.py)."""
+    bars = _function(_component_file("bundle.js"), "HistoryBars")
+    _in_order(
+        bars,
+        "// fairband: the value stands on the last bar that is not an estimate",
+        "series.forEach(function (d, i) { if (d.kind !== 'estimate') capped = i; });",
+        "// fairband: `by`, what the bars run by",
+        "'aria-label': p.title + ' by ' + (p.by || 'fiscal year')",
+        "// fairband: a bar that is not a fiscal year",
+        "className: cx(cls, d.kind && 'fb-c__bar--' + d.kind, at === i && 'is-hovered'),",
+        "capped < 0 ? null : h('text', {",
+        "x: X(capped) + bw / 2,",
+        "y: Y(series[capped].value) + (series[capped].value < 0 ? 14 : -7)",
+        "}, fmt(series[capped].value)),",
+        "// fairband: the tooltip names a point by its `label`",
+        "h('span', { className: 'label' }, cur ? cur.label || cur.period : ''),",
+        "// fairband: the table twin names a point by its `label`",
+        "return [(d.label || d.period) + markFor(d.freshness), fmt(d.value)];",
+    )
+    assert "series[n - 1]" not in bars
+    css = _component_file("bundle.css")
+    _in_order(
+        css,
+        ".fb-c__bar--neg { fill: var(--chart-neg-3); }",
+        "/* fairband: the trailing twelve months",
+        ".fb-c__bar--trailing { fill: var(--chart-context); }",
+        "/* fairband: an analysts' estimate",
+        ".fb-c__bar--estimate { fill: none; stroke: var(--chart-1); stroke-width: 1.5;",
+        ".fb-c__bar--estimate.fb-c__bar--pos { stroke: var(--chart-pos-3); }",
+        ".fb-c__bar--estimate.fb-c__bar--neg { stroke: var(--chart-neg-3); }",
+    )
+    for mark in ("/* fairband: the trailing twelve months", "/* fairband: an analysts' estimate"):
+        patch = css[css.index(mark) :]
+        assert "(spec 2026-11-15 6.6)" in patch[: patch.index("*/")], mark
+    declarations = _component_file("index.d.ts")
+    for name, doc, field in (
+        (
+            "BarPoint",
+            "a bar that is not a fiscal year: the trailing twelve months, or an estimate.",
+            "kind?: 'trailing' | 'estimate';",
+        ),
+        (
+            "BarPoint",
+            "the period in words, for the table twin and the tooltip; the period when absent.",
+            "label?: string;",
+        ),
+        (
+            "HistoryBarsProps",
+            "what the bars run by, for the accessible name; 'fiscal year' when absent.",
+            "by?: string;",
+        ),
+    ):
+        props = re.search(rf"export interface {name} \{{\n(.*?)\n\}}", declarations, re.DOTALL)
+        said = f"  /** fairband: {doc} */\n  {field}"
+        assert props is not None and said in props.group(1), (name, field)
+
+
 def test_the_report_pages_reads_carry_the_request_header() -> None:
     """D11 and B-109: the server refuses the multiples history read, which may call GuruFocus,
     without ``X-Fairband-Request: 1``, as it refuses a write; the report page's one read helper

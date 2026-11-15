@@ -665,6 +665,10 @@ export interface BarPoint {
   period: string;
   value: number;
   freshness?: Freshness;
+  /** fairband: a bar that is not a fiscal year: the trailing twelve months, or an estimate. */
+  kind?: 'trailing' | 'estimate';
+  /** fairband: the period in words, for the table twin and the tooltip; the period when absent. */
+  label?: string;
 }
 
 export interface HistoryBarsProps {
@@ -679,6 +683,8 @@ export interface HistoryBarsProps {
    * Tier 2, 18.4).
    */
   inverse?: boolean;
+  /** fairband: what the bars run by, for the accessible name; 'fiscal year' when absent. */
+  by?: string;
   basis?: Basis;
   height?: number;
   width?: number;

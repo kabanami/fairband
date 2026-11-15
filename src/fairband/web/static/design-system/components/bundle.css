@@ -1008,6 +1008,15 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-c__bar { fill: var(--chart-1); transition: fill 120ms linear; }
 .fb-c__bar--pos { fill: var(--chart-pos-3); }
 .fb-c__bar--neg { fill: var(--chart-neg-3); }
+/* fairband: the trailing twelve months fill in chart-context, the de-emphasis grey, whatever
+   their sign (spec 2026-11-15 6.6). */
+.fb-c__bar--trailing { fill: var(--chart-context); }
+/* fairband: an analysts' estimate is an outline with no fill, its stroke in the colour its fill
+   would have had, chart-1 or the sign's on a signed series; its inside still takes the pointer,
+   so its tooltip shows as a filled bar's does (spec 2026-11-15 6.6). */
+.fb-c__bar--estimate { fill: none; stroke: var(--chart-1); stroke-width: 1.5; pointer-events: visible; }
+.fb-c__bar--estimate.fb-c__bar--pos { stroke: var(--chart-pos-3); }
+.fb-c__bar--estimate.fb-c__bar--neg { stroke: var(--chart-neg-3); }
 .fb-c__bar.is-hovered { fill: var(--accent-hover); }
 .fb-c__bar--neg.is-hovered { fill: var(--chart-neg-2); }
 

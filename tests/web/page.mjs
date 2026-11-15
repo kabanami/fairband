@@ -8,6 +8,11 @@
 // JSON on stdout. Scripts named after the helper are loaded after app.js, as the page loads them
 // (charts.js; tests/web/test_report_charts.py).
 //
+// A bundle component is named as window names it ("Fairband.HistoryBars") and called with its
+// props, the one argument; the stub's hooks give it its first state, its refs and no effect, and
+// what comes back is the tree it draws, each component in it called with its props in turn, since
+// the stub draws nothing (tests/web/test_report_charts.py reads HistoryBars' bars).
+//
 //   node page.mjs <bundle.js> <app.js> <helper> [<script.js> ...]  < arguments.json  > result.json
 import { readFileSync } from 'node:fs';
 
@@ -21,6 +26,9 @@ const React = {
   },
   forwardRef(render) { return (given) => render(given, null); },
   memo(component) { return component; },
+  useState(initial) { return [initial, () => {}]; },
+  useRef(current) { return { current }; },
+  useEffect() {},
 };
 const ReactDOM = { createRoot() { return { render() {} }; } };
 const document = {
@@ -42,5 +50,15 @@ for (const path of process.argv.slice(5)) {
     window, React, window.Fairband, window.FairbandPage, document, fetch);
 }
 
-const helper = process.argv[4].split('.').reduce((held, key) => held[key], window.FairbandPage);
-process.stdout.write(JSON.stringify(helper(...args)));
+function drawn(node) {
+  if (Array.isArray(node)) return node.map(drawn);
+  if (node === null || typeof node !== 'object' || !node.props) return node;
+  if (typeof node.type === 'function') return drawn(node.type(node.props));
+  return { type: node.type, props: Object.assign({}, node.props, { children: drawn(node.props.children) }) };
+}
+
+const name = process.argv[4];
+const component = name.startsWith('Fairband.');
+const helper = name.split('.').reduce((held, key) => held[key], component ? window : window.FairbandPage);
+const result = helper(...args);
+process.stdout.write(JSON.stringify(component ? drawn(result) : result));
