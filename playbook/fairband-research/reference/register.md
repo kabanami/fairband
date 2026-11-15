@@ -44,8 +44,9 @@ sections, the judgments, every reason on an override and every note.
 ## The words
 
 These are the product's terms. They are not interchangeable with their near-synonyms. They are
-for your records, your tool calls and Appendix A; the reader part of a report, the judgments'
-decisions included, writes the phrases of "The words a report writes" below instead.
+for your records, your tool calls and Appendix A. An override's reason may use them too, since
+Fairband shows it verbatim in Appendix A. The reader part of a report, the judgments' decisions
+included, writes the phrases of "The words a report writes" below instead.
 
 | Use | Not | Means |
 |---|---|---|
@@ -93,9 +94,9 @@ Mature Growth stage", "the data on file as of 4 Nov 2026".
 | trim level | the price at which the stock is well above its value |
 | designation | where the price stands against the value, in one of five words from Well below to Well above; a fact about the price, never advice to act |
 | phase | the company's stage in its life cycle: Start-up, Young Growth, High Growth, Mature Growth, Mature Stable or Decline |
-| Dickinson stage | a second reading of the company's stage, one of Introduction, Growth, Mature, Shake-out or Decline, from whether last year's cash from operations, from investing and from financing came in or went out; shown beside the stage Fairband gives, it never changes it |
+| Dickinson stage | a second reading of the company's life cycle, one of Introduction, Growth, Mature, Shake-out or Decline, from whether the last fiscal year's cash from operations, from investing and from financing came in or went out; shown beside the stage Fairband gives, it never changes it |
 | moat | what keeps rivals from taking the company's profits, rated None, Narrow or Wide |
-| belief | the growth rate the value assumes after the analysts' forecast years |
+| belief | the growth rate the value assumes after the analysts' forecast years: where the analysts' last year grows faster, growth eases down to this rate in equal steps over five years; growth then stays at this rate until it settles to the long-run rate |
 | implied growth | the growth the price needs: the yearly growth after the analysts' forecast years at which the value a share equals the price |
 | held rate | the growth a fast-growing company's revenue is assumed to keep after the analysts' forecast years, before it slows |
 | runway | the years the company's growth is assumed to stay above the long-run rate it settles to; more years for a business better protected from its rivals |
@@ -109,19 +110,23 @@ Mature Growth stage", "the data on file as of 4 Nov 2026".
 | liquidation floor | the company's current assets less all its liabilities and less the share of its subsidiaries that outside owners hold, a share; when it is above zero, the value of the business as a going concern is not taken below it |
 | distress-weighted value | the value a share of the business as a going concern and the value a share in a forced sale, weighted by the chance the company fails within ten years; that chance is read from how many times its operating profit covers its interest, and is nil when its cash covers its debt |
 | price-implied requirement | the revenue the company must reach in its tenth year, at the typical operating margin of mature companies like it, for the business to be worth its price today |
-| hurdle rate | the yearly return investors require to own the shares; future cash is discounted to today at this rate |
+| hurdle rate | the yearly return investors require of any company's shares: one rate for every company, restated in the currency of a company that does not report in US dollars; future cash is discounted to today at this rate |
 | consensus | the analysts' average estimate |
 | override | a change to one of the inputs, with its reason and its evidence |
 | review | the valuation under the changes to the inputs that stand: the value after them, and the steps to it from the value before them |
 | bridge | the steps from the value before the changes to the inputs to the value after them, one for each change |
 | snapshot | the data on file as of a date, the date written out |
-| validity window | the time the value stays current: until the company's next earnings report, or about three months when no report date is known |
+| validity window | the time the value stays valid on the data on file: until the company's next earnings report, or about three months after the data's date when no report date is known; past two-thirds of that time the value is aging, and past its end it has expired |
 | secondary valuation | a fallback value a share, from a discounted cash flow or a sum of parts on assumptions set for it; made only where Fairband gives no value, with or without the changes to the inputs |
 | sensitivity grid | the value a share across a few figures for two inputs; it shows how much of the value rests on assumption, and is never a value itself |
 | kill criterion | a measurable event that would prove the report's view wrong |
 
 Two rows, snapshot and bridge, name Fairband's parts: their phrase stands alone, in section 8 too,
 never followed by the term in brackets.
+
+The word "stage" names the phase alone: "Fairband puts the company in its Mature Growth stage".
+Write the Dickinson stage as the second reading of the life cycle, so a reader does not take it
+for a second stage.
 
 Some words belong to the field, not to Fairband: a reader of company research meets them
 elsewhere. Write them by name, and give the meaning the first time each appears, in a short clause

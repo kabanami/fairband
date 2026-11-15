@@ -17,9 +17,10 @@ The report argues the business, and only its valuation section talks about the v
 build it as a chain. The last earnings call gives management's story (step 5). The bull case and
 the bear case argue it, and the thesis decides it (step 9). The decisions turn the thesis into the
 engine's inputs (step 10). A report values the company by the engine's route, under your overrides
-when you make any. Only where neither the route nor your review values the company does a standard
-discounted cash flow from drivers you set, the secondary valuation, stand in. A cyclical business
-(one whose profits rise and fall with its industry's cycle) is valued at mid-cycle (step 7).
+when you make any. Only where neither the route nor your review values the company does the
+secondary valuation stand in: a discounted cash flow from drivers you set, or from free cash flows
+you build part by part. A cyclical business (one whose profits rise and fall with its industry's
+cycle) is valued at mid-cycle (step 7).
 
 ## Before you start
 
@@ -78,6 +79,11 @@ fetched that day) and values it. It takes about a minute.
 
 - Call `refresh_start("scoped", [symbol])` and keep the `refreshId` it answers. When it is refused
   because a refresh is running, call `refresh_status()` until that one ends, then start yours.
+- When it is refused for another reason, no refresh can start until the user acts. The sentence
+  names the reason: "no fmp key: ..." (400), a server with no FMP key, which runs a revalue only;
+  "settings: ...; reset it on the Settings page" (400), a stored setting the policy file no longer
+  accepts; or "no refresh worker" (503). Tell the user, go on with the stored snapshot, and write
+  the price's date in section 9 of the report. Skip the wait below and read `company(symbol)`.
 - Call `refresh_status()` until its `refresh` is `null`: no refresh is running.
 - Call `company(symbol)`. When its `snapshot.refreshId` is not the id you kept, the company was not
   refreshed: its fetch failed inside the run, or another run wrote the snapshot. A run that ends
@@ -233,10 +239,15 @@ Then build the seven parts:
    `filing_report(symbol)` answers. A US filer files no 10-Q for its fourth quarter: its 10-K, `FY`,
    reports the whole year, so a fourth quarter's figure the 10-K does not give is a finding from the
    press release. The consensus for the quarter is the `estimates` quarter's ref, when the store
-   holds it (revenue and EPS). The surprise is `derive` `growth` of the actual over the consensus;
-   the change on the year is `growth` of the actual over the prior year's. Then name what drove the
-   quarter: price, volume, mix, currency, one-time items. Name the one-time items: the engine
-   anchors on earnings without them.
+   holds it (revenue and EPS). The store holds none for the operating margin or the free cash
+   flow. Their consensus cell holds a guidance record's midpoint where the company guided the
+   quarter (`guidance:<id>/midpoint`), and stays empty otherwise; with no figure there, no
+   surprise is derived. The surprise is `derive` `growth` of the actual over the consensus; the
+   change on the year is `growth` of the actual over the prior year's. The operating margin's
+   surprise and its change on the year are each a `difference` of two margins, cited in points
+   (`1.5 percentage points`): a `growth` of one margin over another is a relative change, not a
+   margin's change. Then name what drove the quarter: price, volume, mix, currency, one-time
+   items. Name the one-time items: the engine anchors on earnings without them.
 3. **The story management is telling.** Quote the frame in their words. Then take three to five
    claims. For each: the claim with its figure and its timeline; the evidence for it in the
    numbers; the driver it moves, written as the register's phrase for it (`reference/register.md`,
@@ -451,12 +462,12 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   and names each in the note `override-split-scaled` on the review. A snapshot's figures have seen
   a split when both its quote's date and the day its statements were fetched are on or after the
   split's day; a snapshot a price refresh made carries the figures of the one it repriced, so a
-  refresh on the split's day before the US close has not seen it. The JUDGMENT entry gives the figure in force, and its note the figure as entered
-  and the split. Check the figure in force against the new basis before you publish. Appendix A
-  shows such an override's old and new figures in force, both on the new basis, with the note's
-  words: "entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027". A period-tied
-  override whose input the split rescaled drops as "the input the override corrected changed":
-  make it again on the new basis.
+  refresh on the split's day before the US close has not seen it. The JUDGMENT entry gives the
+  figure in force, and its note the figure as entered and the split. Check the figure in force
+  against the new basis before you publish. Appendix A shows such an override's old and new figures
+  in force, both on the new basis, with the note's words: "entered as $30.00 a share before the
+  2-for-1 split of 27 Jan 2027". A period-tied override whose input the split rescaled drops as "the
+  input the override corrected changed": make it again on the new basis.
 - `basis-scaled`: an ADR's share count or trailing EPS was read on the quote's share basis by the
   ADR ratio or its inverse, because FMP held a period's count off by it, or a trailing period was
   read as stored for the basis. The sentence names the factor, the periods scaled, the stored
@@ -803,7 +814,7 @@ not you, computes the value it gives.
 | `phase` | every route | the life-cycle phase; the route follows it | `Start-up`, `Young Growth`, `High Growth`, `Mature Growth`, `Mature Stable` or `Decline` |
 | `earnings.ntm` | Mature Growth | the anchor's EPS for the next twelve months (NTM), from a clear full-year EPS guidance, or a net income one over the count the company's EPS is per (see "Guidance") | above 0 to 1,000 dollars a share; evidence of kind `guidance` required |
 | `revenue.ntm` | High Growth, Young Growth, Decline | the NTM revenue, year one of the revenue path or of the run-off, from a clear full-year revenue guidance | above 0 dollars; evidence of kind `guidance` required |
-| `growth.belief` | Mature Growth | the belief: the growth rate after the analysts' years, before the fade to the long-run rate | −0.20 to 0.60 a year |
+| `growth.belief` | Mature Growth | the belief: the growth of every year from 4 to the runway's end, save where the year-3 growth is higher: then years 4 to 8 fade from it down to the belief in five equal steps | −0.20 to 0.60 a year |
 | `path.hold` | High Growth, Young Growth | the held rate of years four to the end of high growth | −0.20 to 3.00 a year |
 | `path.step_2`, `path.step_3` | Mature Growth, High Growth, Young Growth, Decline | the consensus growth of year two or year three | −0.80 to 3.00 |
 | `revenue.step_2`, `revenue.step_3` | Mature Growth | the revenue growth of year two or year three that the charge pays for, in place of the analysts' revenue step, or of the earnings step where they give none: for a revenue step that rests on few analysts or outruns the business's record, from a guidance record or a filing. The earnings path does not move. Its old value is the analysts' step as found | −0.80 to 3.00; period-tied only |
@@ -1028,8 +1039,9 @@ one.
 
 ## The secondary valuation
 
-The fallback, and only the fallback: a value a share by the standard discounted cash flow, made
-where neither the route nor your review values the company. Where the route values the company,
+The fallback, and only the fallback: a value a share by a discounted cash flow, from drivers you
+set (the standard form) or from free cash flows you build part by part (the parts form), made where
+neither the route nor your review values the company. Where the route values the company,
 the server refuses the call: "the route values <symbol>: the secondary valuation is the fallback
 where it refuses"; where your review values it, "the review values <symbol>: the secondary
 valuation is the fallback where neither the route nor the review values the company". Make none

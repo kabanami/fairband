@@ -55,7 +55,7 @@ Put the answer first in each section. Keep each sentence to one idea.
 | 5 | The last earnings call | both | One page, in seven parts: the verdict; the quarter against expectations; the story management is telling, claim by claim; the guidance; the positives and the negatives; the questions and answers; what the thesis takes from it. Detail below. |
 | 6 | The bull case and the bear case | both | The debate about the business and its outlook, in arguments: demand and how long it lasts, where the company is in its cycle, competition and the moat, pricing power, capital allocation, management, the balance sheet, the claims of the call. Each side's strongest case, in words a reader without the method follows. Figures may be cited. No valuation arithmetic, input, tag or parameter. |
 | 7 | The thesis | both | The report's own story, set against management's. It opens with a position on each claim of section 5: accepted, rejected or held open. Then the case that settles the debate and leads to the stance: what must be true for the stance to be right, and what you expect to happen. Detail below. |
-| 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (the life-cycle stage, Introduction, Growth, Mature, Shake-out or Decline, that the signs of the three cash flows give), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; on a refused row with no reviewed value only, the secondary valuation in the route's place, and FMP's figure in one sentence when read (where the route or your review values the company, no second value and no DCF beside the route's value); for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
+| 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (a second reading of the life cycle, Introduction, Growth, Mature, Shake-out or Decline, from the signs of the last fiscal year's three cash flows), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; on a refused row with no reviewed value only, the secondary valuation in the route's place, and FMP's figure in one sentence when read (where the route or your review values the company, no second value and no DCF beside the route's value); for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
 | 9 | Price and multiples | both | The price facts, and the multiples against their own history. Detail below. |
 | 10 | Recent news | both | The dated items that matter to the value. |
 | 11 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold you choose is not a fact and never a finding: tie each event to a stored figure and cite it ("below the yearly return of 9.0% that investors require", citing `policy:required_return`), or state it in words ("revenue falls two quarters in a row"). A threshold no stored figure gives is a question for the founder (`reference/citations.md`, "A threshold you choose"). |
@@ -121,7 +121,7 @@ One page, in this order. Step 5 of `SKILL.md` says how to build each part.
 
    | Claim | Evidence | Driver | Test |
    |---|---|---|---|
-   | what management says will happen, with its figure and its timeline | what the numbers already show | the input it would move, written as the register's phrase for it (`reference/register.md`, "The words a report writes"): the growth of years two and three, the belief, the held rate, the target margin, the reinvestment, the moat, the risk | what would show it true or false, and by when |
+   | what management says will happen, with its figure and its timeline | what the numbers already show | the input it would move, written as the register's phrase for it (`reference/register.md`, "The words a report writes"): the consensus, the belief, the held rate, the target margin, the runway return, the sales-to-capital or the moat | what would show it true or false, and by when |
 
    Then a verdict on each claim, in one of three words. **Possible**: it could happen.
    **Plausible**: the evidence makes it believable. **Probable**: the evidence makes it more likely
@@ -270,8 +270,10 @@ The kill criteria of section 11 test it.
 
 The engine or a derivation gives every item. None of them is a target.
 
-- **The price facts.** The current price (`snapshot:<id>/price`). The engine's price facts in the
-  snapshot's intermediates: the high and the low of the past year
+- **The price facts.** The current price (`snapshot:<id>/price`). Where step 3's refresh did not
+  refresh the company, give the price's date beside it, the snapshot's `price_date` written as
+  `4 Nov 2026`: the price is that day's close. The engine's price facts in the snapshot's
+  intermediates: the high and the low of the past year
   (`snapshot:<id>/intermediates/price_facts/high_52w`, `/low_52w`), the change over one, three and
   five years (`/change_1y`, `/change_3y`, `/change_5y`) and the drop from the last peak
   (`/drawdown_from_peak`).
@@ -279,14 +281,14 @@ The engine or a derivation gives every item. None of them is a target.
   `difference` of the price and the low, and the `difference` of the high and the low. The second:
   the `ratio` of the two `derived:` ids the first answered, cited as a percentage: "the price sits
   53.4% of the way from the low to the high".
-- **The earnings multiples against their history**, where earnings are positive. The trailing P/E
-  on two bases side by side, the clean P/E (on the method's earnings, without one-time items) and
-  the reported P/E, and the forward P/E: `snapshot:<id>/intermediates/multiples/pe_clean`,
-  `/pe_reported` and `/pe_forward`. Set each against its own history from `multiples_history`: the
-  trailing series' ten-year average, median, high and low (`multiple:<symbol>/pe/avg_10y`,
-  `/median_10y`, `/high_10y`, `/low_10y`), and the forward series' the same way
-  (`multiple:<symbol>/pe_forward/avg_10y`). The forward series is Fairband's own log: say since
-  when it runs (its `since`), and that it is short while it is.
+- **The earnings multiples against their history**, where earnings are positive. The trailing P/E on
+  two bases side by side, the clean P/E (the price over the trailing earnings a share without
+  one-time items) and the reported P/E, and the forward P/E:
+  `snapshot:<id>/intermediates/multiples/pe_clean`, `/pe_reported` and `/pe_forward`. Set each
+  against its own history from `multiples_history`: the trailing series' ten-year average, median,
+  high and low (`multiple:<symbol>/pe/avg_10y`, `/median_10y`, `/high_10y`, `/low_10y`), and the
+  forward series' the same way (`multiple:<symbol>/pe_forward/avg_10y`). The forward series is
+  Fairband's own log: say since when it runs (its `since`), and that it is short while it is.
 - **The phase's multiples**, each from `derive`:
 
 | Phase | Multiples to show |
@@ -294,7 +296,7 @@ The engine or a derivation gives every item. None of them is a target.
 | Start-up | EV over the market size, over the users, over the subscribers (each a finding) |
 | Young Growth | EV over forward sales |
 | High Growth | EV over sales |
-| Mature Growth | the forward P/E, beside the growth rate it rests on, the belief (`snapshot:<id>/inputs/belief`); PEG is not available yet |
+| Mature Growth | the forward P/E, and beside it the growth rate the value assumes after the analysts' forecast years, the belief (`snapshot:<id>/inputs/belief`); PEG is not available yet |
 | Mature Stable | P/E, EV over EBITDA |
 | Decline | P/B, EV over the liquidation value |
 
@@ -327,12 +329,12 @@ the market cap and the `equity` `fact:` line.
 The report page draws the charts itself, from the store: in section 4 each table's figures; in
 section 5 the revenue, the operating margin and the EPS by quarter, the newest eight stored
 periods; in section 8 the sensitivity grid, or on a refused row the secondary valuation's grid; in
-section 9 the P/E history with its average lines. Section 4's charts show the fiscal years, then,
-for the lines that have them, the twelve months to the newest stored period in grey and the
-analysts' estimate years as outlined bars. The Markdown export carries each chart's table under the
-same title. Write no chart and no chart table: write the sentences, and cite the figures they name.
-Section 5's charts do not replace your table of the quarter against the expectations: write that
-table still.
+section 9 the price against the band by quarter and the P/E history with its average lines.
+Section 4's charts show the fiscal years, then, for the lines that have them, the twelve months to
+the newest stored period in grey and the analysts' estimate years as outlined bars. The Markdown
+export carries each chart's table under the same title. Write no chart and no chart table: write
+the sentences, and cite the figures they name. Section 5's charts do not replace your table of the
+quarter against the expectations: write that table still.
 
 ## The summary page
 
@@ -347,11 +349,12 @@ sections, Appendix A, Appendix B and, last, the references.
 ```
 Stance: hold.
 
-The thesis: customers stay for years and now sign longer contracts, so revenue keeps compounding.
-The price already counts on that. The view waits for two quarters of churn under the new prices.
+The thesis, the report's own view of the business: customers stay for years and now sign longer
+contracts, so revenue keeps compounding. The price counts on slower growth than that. The view
+waits for two quarters of churn under the new prices.
 
 The price of $234.70 is below the value this report puts on the company, $283 a share, but above
-the price at which the discount to the value is wide enough to buy, $212. Prices close to the
+the price at which the discount to the value is wide enough to buy, $184. Prices close to the
 value run from $240 to $325.
 
 The company is in its Mature Growth stage. Revenue grew 11.0% a year over three years, which is
@@ -371,7 +374,7 @@ Main risks:
 What would change the view:
 - Two quarters in a row of falling revenue.
 
-Valid until 27 Jan 2027, the date of the next earnings report.
+The value is valid until 27 Jan 2027, the date of the next earnings report.
 ```
 
 Where the price is well above the value, the paragraph on the price says what the price needs,
@@ -423,19 +426,19 @@ Every plain part holds no quantity; every figure is a cite.
     {
       "heading": "Summary",
       "parts": [
-        "Stance: hold.\n\nThe thesis: customers stay for years and now sign longer contracts, so revenue keeps compounding. The price already counts on that. The view waits for two quarters of churn under the new prices.\n\nThe price of ",
+        "Stance: hold.\n\nThe thesis, the report's own view of the business: customers stay for years and now sign longer contracts, so revenue keeps compounding. The price counts on slower growth than that. The view waits for two quarters of churn under the new prices.\n\nThe price of ",
         {"cite": "$234.70", "ref": "snapshot:412/price"},
         " is below the value this report puts on the company, ",
         {"cite": "$283", "ref": "review:89/value"},
         " a share, but above the price at which the discount to the value is wide enough to buy, ",
-        {"cite": "$212", "ref": "review:89/levels/buy"},
+        {"cite": "$184", "ref": "review:89/levels/buy"},
         ". Prices close to the value run from ",
         {"cite": "$240", "ref": "review:89/levels/fair_low"},
         " to ",
         {"cite": "$325", "ref": "review:89/levels/fair_high"},
         ".\n\nThe company is in its Mature Growth stage. Revenue grew ",
         {"cite": "11.0%", "ref": "snapshot:412/phase/growth_3y"},
-        " a year over three years, which is high for its size. The operating margin is positive and rising. The business is not cyclical: its profits do not rise and fall with its industry's cycle.\n\nReasons for:\n\n1. Most revenue recurs each month.\n2. Customers rarely leave once their books run on the product.\n3. The company funds its growth from its own cash.\n\nMain risks:\n\n1. Customers may leave under the new prices.\n2. A payroll rival bundles accounting into its own product.\n3. Small firms cut spending in a recession.\n\nWhat would change the view:\n\n- Two quarters in a row of falling revenue.\n\nValid until 27 Jan 2027, the date of the next earnings report."
+        " a year over three years, which is high for its size. The operating margin is positive and rising. The business is not cyclical: its profits do not rise and fall with its industry's cycle.\n\nReasons for:\n\n1. Most revenue recurs each month.\n2. Customers rarely leave once their books run on the product.\n3. The company funds its growth from its own cash.\n\nMain risks:\n\n1. Customers may leave under the new prices.\n2. A payroll rival bundles accounting into its own product.\n3. Small firms cut spending in a recession.\n\nWhat would change the view:\n\n- Two quarters in a row of falling revenue.\n\nThe value is valid until 27 Jan 2027, the date of the next earnings report."
       ]
     },
     {
@@ -455,7 +458,7 @@ Every plain part holds no quantity; every figure is a cite.
         {"cite": "24.1%", "ref": "table:EXMP/returns/roic/2026", "period": "2026"},
         " is well above the yearly return of ",
         {"cite": "9.0%", "ref": "policy:required_return"},
-        " that investors require to own the shares."
+        " that investors require of any company's shares."
       ]
     },
     {
@@ -489,7 +492,7 @@ Every plain part holds no quantity; every figure is a cite.
         {"cite": "3.6%", "ref": "derived:532"},
         " |\n\nPrice drove the quarter more than volume: the new price list took effect for new customers in the quarter. There were no one-time items.\n\n**The story management is telling.** Management's frame: \"the system of record for the small firm\". Three claims carry it.\n\n| Claim | Evidence | Driver | Test |\n|---|---|---|---|\n| Customers now sign multi-year contracts. | Multi-year contracts were ",
         {"cite": "41.0%", "ref": "finding:124", "period": "2026-Q4"},
-        " of new bookings in the quarter. | The growth of years two and three. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | The protection from rivals. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The growth assumed after the analysts' forecast years. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable: the bookings already show them. The price list is plausible: one quarter is too short to judge churn. Payroll is possible, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** The company gave ranges for fiscal 2027 (its guidance), both on its reported figures. The EPS outlook is new; the revenue outlook was raised from the call of July.\n\n| Metric | Period | Low | High | Midpoint | Basis | Against the prior record | Against the analysts' average |\n|---|---|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
+        " of new bookings in the quarter. | The growth rate the value assumes after the analysts' forecast years. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | What keeps rivals from taking the company's profits. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The analysts' average estimate of growth in the coming years. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable, more likely than not on the evidence: the bookings already show them. The price list is plausible, believable on the evidence but not yet likely: one quarter is too short to judge churn. Payroll is possible, since nothing rules it out, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** The company gave ranges for fiscal 2027 (its guidance), both on its reported figures. The EPS outlook is new; the revenue outlook was raised from the call of July.\n\n| Metric | Period | Low | High | Midpoint | Basis | Against the prior record | Against the analysts' average |\n|---|---|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
         {"cite": "$7.00", "ref": "guidance:17/low"},
         " | ",
         {"cite": "$7.20", "ref": "guidance:17/high"},
@@ -519,7 +522,7 @@ Every plain part holds no quantity; every figure is a cite.
     {
       "heading": "The thesis",
       "parts": [
-        "The thesis takes the call's three claims in turn. Accepted: customers sign for longer, so revenue holds up better in the coming years. Held open: the price list; churn over the next two quarters decides it, and a fall in revenue would prove the view wrong. Rejected: payroll as a second engine of growth; the value gives payroll no growth of its own until it is reported.\n\nThe stance is hold. The price is fair: it already counts on the longer contracts. For the stance to be right, the price list has to hold with churn flat, and nothing more. The view waits for two quarters of churn under the new prices."
+        "The thesis takes the call's three claims in turn. Accepted: customers sign for longer, so revenue holds up better in the coming years. Held open: the price list; churn over the next two quarters decides it, and a fall in revenue would prove the view wrong. Rejected: payroll as a second engine of growth; the value gives payroll no growth of its own until it is reported.\n\nThe stance is hold. The price is fair for now: it counts on slower growth than the longer contracts support, and churn under the new prices is not yet known. For the stance to be right, the price list has to hold with churn flat, and nothing more. The view waits for two quarters of churn under the new prices."
       ]
     },
     {
@@ -527,9 +530,11 @@ Every plain part holds no quantity; every figure is a cite.
       "parts": [
         "Fairband puts the company in its ",
         {"cite": "Mature Growth", "ref": "snapshot:412/phase/phase"},
-        " stage: its revenue still grows fast for its size, and its operating margin is positive and rising. Nothing in the figures puts that stage in doubt. The business is not cyclical, so the value rests on the earnings as they stand.\n\nThe price needs growth of ",
-        {"cite": "8.2%", "ref": "snapshot:412/intermediates/implied_growth"},
-        " a year after the analysts' forecast years. The value a share on Fairband's own inputs, before any change to them (the mechanical value), is ",
+        " stage: its revenue still grows fast for its size, and its operating margin is positive and rising. A second reading of its life cycle (the Dickinson stage) looks at whether fiscal 2026's cash from operations, from investing and from financing came in or went out. It reads ",
+        {"cite": "Mature", "ref": "snapshot:412/phase/dickinson"},
+        ": cash came in from the business and went out to new investment and to the company's owners and lenders. The two readings agree, and nothing in the figures puts the stage in doubt. The business is not cyclical, so the value rests on the earnings as they stand.\n\nFor the value a share to equal the price, the company's earnings must grow ",
+        {"cite": "5.9%", "ref": "review:89/intermediates/implied_growth"},
+        " a year after the analysts' forecast years (the implied growth). The value assumes faster growth, so the price is below it.\n\nThe value a share on Fairband's own inputs, before any change to them (the mechanical value), is ",
         {"cite": "$247", "ref": "snapshot:412/value"},
         ". Two changes to the inputs moved it to ",
         {"cite": "$283", "ref": "review:89/value"},
@@ -537,17 +542,25 @@ Every plain part holds no quantity; every figure is a cite.
         {"cite": "$7.10", "ref": "guidance:17/midpoint"},
         " a share added ",
         {"cite": "+$5", "ref": "review:89/bridge/1/delta"},
-        ". The growth rate the value assumes after the analysts' years (the belief) rose from ",
+        ". The growth rate the value assumes after the analysts' forecast years (the belief) rose from ",
         {"cite": "7.1%", "ref": "review:89/bridge/2/old"},
         " to ",
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
         ", which added ",
         {"cite": "+$31", "ref": "review:89/bridge/2/delta"},
-        ". The reason: the new contracts run longer than the old ones.\n\nA grid of the value under other assumptions (the sensitivity grid) sets that growth rate against the return the company earns on the money it reinvests in the coming years (the runway return). Across the figures tried, the value a share runs from ",
+        ". The reason: the new contracts run longer than the old ones.\n\nThe value a share across a few figures for two inputs (the sensitivity grid) shows how much of it rests on assumption. The two inputs are that growth rate and the return the company earns on the money it reinvests in the coming years (the runway return). At growth of ",
+        {"cite": "8.0%", "ref": "sensitivity:57/rows/1"},
+        " and a return of ",
+        {"cite": "18.0%", "ref": "sensitivity:57/cols/1"},
+        ", the value a share is ",
         {"cite": "$238", "ref": "sensitivity:57/1/1"},
-        " to ",
+        ". At growth of ",
+        {"cite": "10.0%", "ref": "sensitivity:57/rows/3"},
+        " and a return of ",
+        {"cite": "30.0%", "ref": "sensitivity:57/cols/3"},
+        ", it is ",
         {"cite": "$331", "ref": "sensitivity:57/3/3"},
-        ". The price sits near the low end of that range."
+        ". The price is below every value in the grid."
       ]
     },
     {
@@ -579,7 +592,7 @@ Every plain part holds no quantity; every figure is a cite.
         {"cite": "18.60x", "ref": "multiple:EXMP/pe/low_10y"},
         ". So the stock trades well above its usual multiple, and below its peak one. The forward P/E, on the analysts' earnings for the next twelve months, is ",
         {"cite": "33.77x", "ref": "snapshot:412/intermediates/multiples/pe_forward"},
-        ". Fairband began logging the forward P/E on 1 Nov 2026, so it has no history yet to set it against. It rests on growth of ",
+        ". Fairband began logging the forward P/E on 1 Nov 2026, so it has no history yet to set it against. Beside it, the value assumes growth of ",
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
         " a year after the analysts' forecast years. None of these multiples is a target."
       ]

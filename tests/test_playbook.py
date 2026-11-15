@@ -18,6 +18,7 @@ import anyio
 import httpx
 from mcp import Client
 
+from fairband.config import MissingKey
 from fairband.engine.overrides import BRIDGE_ORDER, LABELS, NO_GUIDANCE, TAGS, anchor_misfit
 from fairband.mcp.client import NOT_RUNNING, FairbandClient
 from fairband.mcp.server import TOOL_NAMES, build_server
@@ -25,6 +26,7 @@ from fairband.policy import load_policy
 from fairband.refresh.passthrough import BUSY, NO_GF_KEY
 from fairband.refresh.rates import NO_RATE
 from fairband.refresh.reviews import OFF_ROUTE
+from fairband.reports.charts import BAND_TITLE
 from fairband.reports.check import (
     ALWAYS_JUDGED,
     FAILURES,
@@ -237,6 +239,10 @@ TERMS = (
     "return by year",
     "value outside the business",
 )
+# The two mode names, which a report writes as given ("The words a report writes").
+MODES = ("full report", "valuation review")
+# A bracket in section 8's text, "the" before its words left out.
+BRACKET = re.compile(r"\((?:the )?([^()]*)\)")
 # The phases each route values, as the overrides table names them; "every route" names all six.
 ROUTE_PHASES: dict[str, tuple[str, ...]] = {
     "mature-growth": ("Mature Growth",),
@@ -382,12 +388,23 @@ def test_the_secondary_valuation_is_the_fallback_only() -> None:
     assert THESIS_ALONE in steps[11]
     assert steps[11].index(VALUE_ORDER) < steps[11].index(THESIS_ALONE)
     assert REFUSED_REVIEW in steps[11]  # a refused review is the agent's to fix (ruling 2026-11-08)
-    opening = _flat(_read(SKILL)).split("## The secondary valuation ", 1)[1][:600]
+    # the fallback in its two forms, the standard one and the parts (method 15.1; B-138)
+    opening = _flat(_read(SKILL)).split("## The secondary valuation ", 1)[1][:700]
     assert opening.startswith(
-        "The fallback, and only the fallback: a value a share by the standard discounted cash flow,"
-        " made where neither the route nor your review values the company."
+        "The fallback, and only the fallback: a value a share by a discounted cash flow, from"
+        " drivers you set (the standard form) or from free cash flows you build part by part (the"
+        " parts form), made where neither the route nor your review values the company."
     )
     assert "Make none there, and read no DCF beside the route's value." in opening
+    intro = _flat(_frontmatter(_read(SKILL))[1].split("## Before you start", 1)[0])
+    assert (
+        "Only where neither the route nor your review values the company does the secondary"
+        " valuation stand in: a discounted cash flow from drivers you set, or from free cash flows"
+        " you build part by part."
+    ) in intro
+    assert "standard discounted cash flow" not in _flat(_read(SKILL)).replace(
+        "with `drivers`, the standard discounted cash flow, as the fallback", ""
+    )
     assert _tool_entry("secondary_valuation").startswith(
         "- `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: the"
         " fallback where neither the route nor your review values the company:"
@@ -502,6 +519,24 @@ def test_every_item_is_refreshed_before_it_is_read() -> None:
     assert "`snapshot.refreshId`" in _tool_entry("company")
     assert "Tell the user, go on with the stored snapshot" in three
     assert "write the price's date in section 9 of the report" in three
+    # a start refused for another reason than a running refresh, by the refusals the server gives
+    # (web/app.py `start_refresh`, the worker's, the run's and `effective_policy`'s; B-138): no
+    # refresh can start until the user acts, so the agent reads the stored snapshot
+    assert str(MissingKey("fmp")).startswith("no fmp key: ")
+    for words in (
+        "When it is refused for another reason, no refresh can start until the user acts.",
+        '"no fmp key: ..." (400), a server with no FMP key, which runs a revalue only',
+        (
+            '"settings: ...; reset it on the Settings page" (400), a stored setting the policy file'
+            " no longer accepts"
+        ),
+        '"no refresh worker" (503)',
+        (
+            "Tell the user, go on with the stored snapshot, and write the price's date in section 9"
+            " of the report. Skip the wait below and read `company(symbol)`."
+        ),
+    ):
+        assert words in three, words
     # a split's remedy is this refresh, every call made again (the whole-branch review of plan 2)
     assert "When a stock split has taken effect, this scoped refresh is the remedy" in three
     assert "(every call, whatever was fetched that day)" in three
@@ -553,26 +588,27 @@ def test_the_report_writes_the_plain_phrase_not_the_term() -> None:
     for term in SUMMARY_FREE:
         assert not _has(term, sections["Summary"]), term
         assert not _has(term, shape), term
-    # in section 8 a term stands only in brackets, a longer bracketed term's part counting as
-    # bracketed ("runway" in "(the runway return)"), and is named in brackets once at most
+    # in section 8 a term stands only in a bracket that names one term, a longer bracketed term's
+    # part counting as bracketed ("runway" in "(the runway return)") and a term in any other
+    # bracket as bare (B-138); each term is named in brackets once at most
+    assert _bare_terms("its inputs (the mechanical value), its return (the runway return)") == []
+    assert _bare_terms("the value rests on growth (its moat is wide)") == ["moat"]
     valuation = sections["Valuation"].lower()
-    brackets = [
-        (m.start(), m.end(), m[1]) for m in re.finditer(r"\((?:the )?([^()]*)\)", valuation)
-    ]
+    assert _bare_terms(valuation) == []
+    named = [m[1] for m in BRACKET.finditer(valuation)]
     for term in TERMS:
-        found = [m.span() for m in re.finditer(rf"\b{_term(term)}\b", valuation)]
-        bare = [s for s in found if not any(a < s[0] and s[1] < b for a, b, _ in brackets)]
-        assert bare == [], term
-        named = [n for _, _, n in brackets if re.fullmatch(_term(term), n)]
-        assert len(named) <= 1, term
+        count = sum(1 for n in named if re.fullmatch(_term(term), n))
+        assert count <= 1, term
         if term in ("belief", "runway return", "mechanical value", "reviewed value"):
-            assert len(named) == 1, term
+            assert count == 1, term
     # outside section 8 no term of the table appears: the shape, the other sections, the
-    # decisions, the kill criteria and the news items
+    # decisions, the kill criteria and the news items; the mode names stand as given, so
+    # "valuation review" holds no "review" while "the review" does (B-138)
+    assert _terms_in("This valuation review reuses the full report of 3 Oct 2026.") == []
+    assert _terms_in("The review moved the value.") == ["review"]
     others = [text for heading, text in sections.items() if heading != "Valuation"]
     for text in [shape, *others, *decisions, *shown]:
-        for term in TERMS:
-            assert not _has(term, text), (term, text[:80])
+        assert _terms_in(text) == [], text[:80]
     # the mechanical value is the value with no override at all, an earlier report's included,
     # and the reviewed value the value under every applied one (the final review of plan 5)
     for path in (REGISTER, TEMPLATE):
@@ -580,8 +616,10 @@ def test_the_report_writes_the_plain_phrase_not_the_term() -> None:
 
 
 def test_the_report_is_read_as_its_reader_before_it_is_submitted() -> None:
-    """Spec 14 step 12 (plan 5, B-134): the agent reads the report once as someone who has never
-    seen Fairband, before `report_submit`, so a report fixed after a rejection is read again."""
+    """Spec 14 step 12 (plan 5, B-134): before `report_submit`, the agent reads the report once as
+    its reader, someone who has never seen Fairband; it rewrites every sentence that needs the
+    Methodology page to follow, by the register's "The words a report writes"; and it reads the
+    summary alone, which must stand on its own."""
     _, body = _frontmatter(_read(SKILL))
     twelve = _flat(_steps(body)[12])
     sentence = "read the report once as its reader: someone who has never seen Fairband"
@@ -1695,8 +1733,11 @@ def test_the_playbook_says_what_the_tables_the_charts_and_the_export_show() -> N
     a split rescaled."""
     template = _flat(_read(TEMPLATE))
     charts = template.split("### The charts", 1)[1].split("## The summary page", 1)[0]
+    # section 9's first chart, as the export titles it
+    band = BAND_TITLE[0].lower() + BAND_TITLE[1:]
     for words in (
         "in section 5 the revenue, the operating margin and the EPS by quarter",
+        f"in section 9 {band} and the P/E history with its average lines",
         "Section 4's charts show the fiscal years, then, for the lines that have them,",
         "the twelve months to the newest stored period in grey",
         "the analysts' estimate years as outlined bars",
@@ -1785,6 +1826,220 @@ def test_the_playbook_says_what_the_tables_the_charts_and_the_export_show() -> N
         ' 2027".'
     )
     assert 0 <= steps[8].index(check) < steps[8].index(shown)
+
+
+def test_the_playbook_s_phrases_state_the_method_as_it_runs() -> None:
+    """Spec 2026-11-15 10 (B-138): the register's hurdle rate is one rate for every company,
+    restated for a company in another currency (method 4.1, 7.5); the belief is the rate growth
+    eases down to over five years and holds to the runway's end, as the overrides table says
+    (5.4, 5.5); the validity window says what stays valid and that the value ages after two-thirds
+    of it (4.10); an override's reason may use the record words, which Appendix A shows; "stage"
+    names the phase alone, and the Dickinson stage is a second reading of the life cycle (3.7)."""
+    register = _read(REGISTER)
+    rows = _table_rows(register, ("Term", "Write instead"))
+    assert rows["hurdle rate"] == (
+        "the yearly return investors require of any company's shares: one rate for every company,"
+        " restated in the currency of a company that does not report in US dollars; future cash is"
+        " discounted to today at this rate"
+    )
+    assert rows["belief"] == (
+        "the growth rate the value assumes after the analysts' forecast years: where the analysts'"
+        " last year grows faster, growth eases down to this rate in equal steps over five years;"
+        " growth then stays at this rate until it settles to the long-run rate"
+    )
+    assert rows["validity window"] == (
+        "the time the value stays valid on the data on file: until the company's next earnings"
+        " report, or about three months after the data's date when no report date is known; past"
+        " two-thirds of that time the value is aging, and past its end it has expired"
+    )
+    assert rows["Dickinson stage"].startswith(
+        "a second reading of the company's life cycle, one of Introduction, Growth, Mature,"
+        " Shake-out or Decline, from whether the last fiscal year's cash from operations,"
+    )
+    assert rows["phase"].startswith("the company's stage in its life cycle:")
+    flat = _flat(register)
+    for words in (
+        (
+            "They are for your records, your tool calls and Appendix A. An override's reason may"
+            " use them too, since Fairband shows it verbatim in Appendix A."
+        ),
+        (
+            'The word "stage" names the phase alone: "Fairband puts the company in its Mature'
+            ' Growth stage". Write the Dickinson stage as the second reading of the life cycle, so'
+            " a reader does not take it for a second stage."
+        ),
+    ):
+        assert words in flat, words
+    table = _table(
+        _read(SKILL), ("Tag", "Routes that read it", "The input", "Takes, the ends included")
+    )
+    assert table["`growth.belief`"][1] == (
+        "the belief: the growth of every year from 4 to the runway's end, save where the year-3"
+        " growth is higher: then years 4 to 8 fade from it down to the belief in five equal steps"
+    )
+    assert "before the fade to the long-run rate" not in _read(SKILL)
+
+
+def test_step_5_reads_a_margin_s_change_in_points_and_the_cells_no_consensus_fills() -> None:
+    """The reviews of the report reader's plan (Task 10): the operating margin's surprise and its
+    change on the year are a `difference` of two margins cited in points, not a `growth`, which
+    is a relative change; the store holds no consensus for the quarter's operating margin or free
+    cash flow, so their consensus cell holds a guidance record's midpoint or stays empty, and no
+    surprise is derived without one."""
+    five = _flat(_steps(_frontmatter(_read(SKILL))[1])[5])
+    for words in (
+        "The store holds none for the operating margin or the free cash flow.",
+        (
+            "Their consensus cell holds a guidance record's midpoint where the company guided the"
+            " quarter (`guidance:<id>/midpoint`), and stays empty otherwise; with no figure there,"
+            " no surprise is derived."
+        ),
+        (
+            "The operating margin's surprise and its change on the year are each a `difference` of"
+            " two margins, cited in points (`1.5 percentage points`): a `growth` of one margin over"
+            " another is a relative change, not a margin's change."
+        ),
+    ):
+        assert words in five, words
+
+
+def test_the_template_s_words_state_what_each_figure_is() -> None:
+    """Spec 2026-11-15 10 (B-138): the forward P/E, the price over the NTM EPS (method 5.9), sits
+    beside the belief and does not rest on it; the Driver column names the inputs by terms whose
+    phrases the register gives; the clean P/E is glossed in words a reader follows (5.9); section
+    9 gives the price's date where step 3's refresh did not refresh the company; the Dickinson
+    stage is a second reading of the life cycle, not a stage (3.7)."""
+    template = _flat(_read(TEMPLATE))
+    assert "the growth rate it rests on" not in template
+    assert (
+        "| Mature Growth | the forward P/E, and beside it the growth rate the value assumes after"
+        " the analysts' forecast years, the belief (`snapshot:<id>/inputs/belief`); PEG is not"
+        " available yet |"
+    ) in template
+    rows = _table_rows(_read(REGISTER), ("Term", "Write instead"))
+    drivers = template.split('"The words a report writes"): ', 1)[1].split(" |", 1)[0]
+    named = [name.removeprefix("the ") for name in re.split(r", | or ", drivers)]
+    assert named == [
+        "consensus",
+        "belief",
+        "held rate",
+        "target margin",
+        "runway return",
+        "sales-to-capital",
+        "moat",
+    ]
+    for name in named:
+        assert name in rows, name
+    assert "the method's earnings" not in template
+    assert (
+        "the clean P/E (the price over the trailing earnings a share without one-time items)"
+    ) in template
+    nine = template.split("### Section 9", 1)[1].split("### The charts", 1)[0]
+    assert (
+        "Where step 3's refresh did not refresh the company, give the price's date beside it, the"
+        " snapshot's `price_date` written as `4 Nov 2026`: the price is that day's close."
+    ) in nine
+    assert (
+        "the Dickinson stage (a second reading of the life cycle, Introduction, Growth, Mature,"
+        " Shake-out or Decline, from the signs of the last fiscal year's three cash flows)"
+    ) in template
+    assert "the life-cycle stage, Introduction" not in template
+
+
+def test_the_template_example_holds_together() -> None:
+    """Spec 2026-11-15 10 (B-138): the example's figures agree with each other. The bridge's
+    lines add up from the value before the changes to the inputs to the value after them; the
+    price sits against the value as the growth the price needs sits against the belief, before the
+    belief's change and after it (method 5.7: at the implied growth the value equals the price);
+    the levels are the value's at the moat's margin of safety and the fair band (4.10); the grid
+    holds the value in force. Its Valuation names the Dickinson stage with its cite, in short
+    sentences; it gives "thesis" and the three words of likelihood their meaning at first use;
+    its Driver cells are the register's phrases; the Summary says what is valid until when."""
+    template = _read(TEMPLATE)
+    example = _example(template)
+    written = {s["heading"]: _written(s["parts"]) for s in example["sections"]}
+    cites = {
+        part["ref"]: part["cite"]
+        for section in example["sections"]
+        for part in section["parts"]
+        if not isinstance(part, str)
+    }
+
+    def number(ref: str) -> float:
+        parsed = parse_cite(cites[ref])
+        assert parsed is not None, ref
+        return parsed[0]
+
+    price, mechanical, value = (
+        number(r) for r in ("snapshot:412/price", "snapshot:412/value", "review:89/value")
+    )
+    lines = sorted(
+        int(m[1]) for ref in cites if (m := re.fullmatch(r"review:89/bridge/(\d+)/delta", ref))
+    )
+    assert abs(mechanical + sum(number(f"review:89/bridge/{n}/delta") for n in lines) - value) < 1
+    belief = next(n for n in lines if f"review:89/bridge/{n}/old" in cites)
+    old, new = number(f"review:89/bridge/{belief}/old"), number(f"review:89/bridge/{belief}/new")
+    before = mechanical + sum(number(f"review:89/bridge/{n}/delta") for n in lines if n < belief)
+    implied = number(next(ref for ref in cites if ref.endswith("/intermediates/implied_growth")))
+    assert (price < before) == (implied < old), (price, before, implied, old)
+    assert (price < value) == (implied < new), (price, value, implied, new)
+    policy = load_policy()
+    safety = policy.margin_of_safety[cites["snapshot:412/inputs/moat_class"]]
+    low, high = policy.fair_band
+    for level, factor in (("buy", 1 - safety), ("fair_low", low), ("fair_high", high)):
+        assert abs(number(f"review:89/levels/{level}") - value * factor) < 1, level
+    cells = [number(ref) for ref in cites if re.fullmatch(r"sensitivity:\d+/\d+/\d+", ref)]
+    assert min(cells) < value < max(cells)
+    # the Valuation names the Dickinson stage and cites it, in short sentences of one bracket each
+    valuation = written["Valuation"]
+    assert any(ref.endswith("/phase/dickinson") for ref in cites)
+    assert "(the Dickinson stage)" in valuation
+    assert "The price needs growth of" not in valuation
+    for sentence in re.split(r"(?<=\.)\s+(?=[A-Z])", valuation):
+        assert len(sentence.split()) <= 30 and sentence.count("(") <= 1, sentence
+    # the thesis and the three words of likelihood, each with its meaning at first use
+    summary = written["Summary"]
+    assert summary.startswith(
+        "Stance: hold.\n\nThe thesis, the report's own view of the business: customers stay"
+    )
+    call = written["The last earnings call"]
+    for words in (
+        "The multi-year contracts are probable, more likely than not on the evidence:",
+        "The price list is plausible, believable on the evidence but not yet likely:",
+        "Payroll is possible, since nothing rules it out, and moves no figure.",
+    ):
+        assert words in call, words
+    # each Driver cell is the register's phrase for the input it would move
+    phrases = _table_rows(_read(REGISTER), ("Term", "Write instead")).values()
+    heads = [re.split(r"[:;,]", phrase)[0] for phrase in phrases]
+    claims = call.split("| Claim | Evidence | Driver | Test |", 1)[1].split("\n\n", 1)[0]
+    drivers = [_cells(line)[2] for line in claims.strip().splitlines()[1:]]
+    assert len(drivers) == 3
+    for driver in drivers:
+        assert any(driver.lower().startswith(head) for head in heads), driver
+    # what is valid until when, in the Summary and its shape
+    valid = "The value is valid until 27 Jan 2027, the date of the next earnings report."
+    assert summary.endswith(valid)
+    shape = _shape(template)
+    assert shape.strip().endswith(valid)
+    assert _flat(shape.split("Reasons for:", 1)[0]) == _flat(summary.split("Reasons for:", 1)[0])
+    # the forward P/E sits beside the growth assumed, and the hurdle rate is every company's
+    nine = written["Price and multiples"]
+    beside = (
+        "Beside it, the value assumes growth of 9.0% a year after the analysts' forecast years."
+    )
+    assert beside in nine and "rests on growth" not in nine
+    hurdle = "the yearly return of 9.0% that investors require of any company's shares."
+    assert hurdle in written["Industry and competition"]
+
+
+def test_the_skill_s_lines_fit_the_page() -> None:
+    """The reviews of the report reader's plan (Task 10): every line of `SKILL.md` but the
+    frontmatter's and a table's row is at most 100 characters, as the rest of its prose is
+    wrapped; the note on `split-pending` held one of 146."""
+    _, body = _frontmatter(_read(SKILL))
+    long = [line for line in body.splitlines() if len(line) > 100 and not line.startswith("|")]
+    assert long == [], long
 
 
 def _read(path: Path) -> str:
@@ -1902,6 +2157,41 @@ def _term(word: str) -> str:
     if pattern.endswith("criterion"):
         return f"{pattern[: -len('on')]}(?:on|a)"
     return f"{pattern}(?:e?s)?"
+
+
+def _written(parts: list[Any]) -> str:
+    """A section's text as the reader sees it, each cite written in."""
+    return "".join(part if isinstance(part, str) else part["cite"] for part in parts)
+
+
+def _terms_in(text: str) -> list[str]:
+    """The terms of ``TERMS`` that ``text`` holds, the two mode names left out: they stand as
+    given, so "valuation review" holds no "review", while "the review" does."""
+    plain = text.lower()
+    for mode in MODES:
+        plain = re.sub(rf"\b{_term(mode)}\b", " ", plain)
+    return [term for term in TERMS if _has(term, plain)]
+
+
+def _bare_terms(text: str) -> list[str]:
+    """The terms of ``TERMS`` that section 8's ``text`` holds outside the brackets that name one:
+    a bracket that holds exactly one term, "the" before it allowed. A term inside such a bracket
+    is bracketed, "runway" in "(the runway return)" too; a term inside any other bracket is bare,
+    "moat" in "(its moat is wide)"."""
+    lower = text.lower()
+    brackets = [
+        m.span()
+        for m in BRACKET.finditer(lower)
+        if any(re.fullmatch(_term(term), m[1]) for term in TERMS)
+    ]
+    return [
+        term
+        for term in TERMS
+        if any(
+            not any(a < m.start() and m.end() < b for a, b in brackets)
+            for m in re.finditer(rf"\b{_term(term)}\b", lower)
+        )
+    ]
 
 
 def _shape(text: str) -> str:
