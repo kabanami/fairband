@@ -75,8 +75,10 @@ setting is wasteful, and five backlog rows hold small faults of the tools:
   means what it meant: a record with no currency is in the reporting currency. A stored report
   reads as it did but for one table of the export, Appendix A's "Guidance on file", which gains
   the currency the page already shows (section 9.5).
-- An answer that an agent meets today changing its status or its words, but for the four
-  section 12.1 names (its clauses 1, 3, 6 and 7).
+- An answer that an agent meets today changing its status or its words, but for those this
+  document orders: clauses 1, 3, 6, 7 and 9 of section 12.1; a `growth` or a `cagr` from a base
+  at or below zero, which has no value (7.4); the wrong-unit detail of a record's cite, which
+  names the record's currency (9.4; the controller's Ruling 3).
 
 ## 5. The evidence (the live database, read-only, 2026-11-15; main `138ef49`)
 
@@ -119,8 +121,9 @@ exponent.
 
 The list (*my call*, from the evidence and the uses the playbook names): the whole numbers 0 to
 12, then 52, 100, 365, 1000 and each further power of ten up to 1,000,000,000,000. They serve a
-complement (1), a change of sign (0), an average or an annual rate (2 to 12, 52, 365), a percent
-as points (100) and a unit scale (a power of ten).
+complement (1), a change of sign (0), an average or an annual rate (2 to 12, 52, 365), a ratio
+with no unit made a PEG (100) and a unit scale (a power of ten). A percent times 100 is still a
+percent by the table of 7.2, so it is not a way to points (the controller's Ruling 1).
 
 Refused, each a 400 that stores none of the call's derivations, as an unresolved reference is
 today:
@@ -176,6 +179,34 @@ separators: "derivation 1602: the product of filing:95122/… and 1,000,000".
   any other, and a multiple or a rate the agent assumes is not arithmetic.
 - A figure a filing states is still cited from its cell; a finding in full units is no longer
   the way to compute with it.
+
+### 7.6 A derivation with a number depends on a stored figure (after the whole-branch review)
+
+The whole-branch review built a chosen figure in two derivations: a figure times `number:0` is
+nought in the figure's unit, and a number added to it is that number, cited as sourced. So (the
+controller's Rulings 6 and 8):
+
+- A derivation with a `number:` anywhere in its tree (its operands and those of a `derived:`
+  operand, nested ones too) must depend on a stored figure. The tree is evaluated from its
+  leaves; each group of leaves of one value is scaled by 1.5 in turn; the derivation depends on
+  a figure when a scaling moves the result from a value to a value, beyond float rounding and a
+  billionth of the result. A nested derivation that no longer evaluates to its stored value is
+  a constant.
+- One that does not is a 400 that stores nothing of the call: "a derivation with a fixed number
+  must depend on a stored figure: this one has the same value whatever its figures are", with
+  ", or rests on an earlier derivation whose figures changed: derive it again" where that is
+  the case.
+- A derivation with no number in its tree is not tested: a figure over itself, plus itself and
+  minus itself compute as before, as section 15 asks.
+- A figure that is nought moves nothing, so a derivation of it with a number is refused in the
+  same words; the figure itself is cited.
+
+The rule refuses a constant. It cannot refuse a figure an agent sets out to construct (filed,
+section 14): a near-constant that rounds to a chosen number (a figure over a large number, plus
+a number); stored figures that cancel among themselves (the price-to-value times the value,
+less the price); a stored figure scaled by numbers chosen to land on a figure (a price of $150
+times 2 over 3). The same was open before this design, through a figure over itself. The number
+check stops a slip and an improvisation, and the references list shows each cited derivation.
 
 ## 8. A threshold on a kill criterion (B-99)
 
@@ -270,15 +301,21 @@ it is converted (*my call*). Two rules:
    is a money figure (unit `currency` or `per-share`) that is not a record in that same
    currency.
 2. A derivation with such an operand never has a money unit: where the unit rules give
-   `currency` or `per-share`, it has none. A derivation carries no currency, so a money unit
-   on it would read as the reporting currency (*my call*, after the builder check).
+   `currency` or `per-share`, it has none. A derivation is stored with no currency, so a money
+   unit on it would read as the reporting currency (*my call*, after the builder check).
+3. A `derived:` operand carries the currency of the record it was derived from, read from the
+   stored rows when it is used, and the two rules above read it as they read the record. It is
+   freed in three cases alone: the `product` of a US-dollar operand with the rate; a `growth`
+   or a `cagr`; a `ratio` of two operands in that same currency (the controller's Rulings 7
+   and 9, after the whole-branch review, which mixed dollars and kronor one derivation deep).
 
 So a US-dollar finding of a TWD reporter:
 
 - with another US-dollar record gives a growth (a percent), a ratio (a multiple), or a sum or a
   difference with a value and no unit;
 - times the rate (`fx_rate`, which has no unit) is the figure in TWD, with no unit, which then
-  combines with anything;
+  combines with anything; over `number:4`, or averaged with another US-dollar record, it is
+  still in US dollars and still has no value with a figure in TWD;
 - with a `fact:` revenue in TWD has no value, where today it would read as a ratio.
 
 A derivation with no unit is cited at the cite's own precision with any suffix (method 16.3),
@@ -414,9 +451,22 @@ currency, for a record; the export's guidance table without a currency.
   two remaining clauses).
 - The reporting currency of a record with no stored currency is the latest snapshot's, which
   says USD for a snapshot refused before its currency was read.
-- A derivation of records in another currency has no unit and carries no currency.
-- The brand book's judgment row.
-- A US-dollar record of a foreign filer has no derived value with the price or a close.
+- A derivation of records in another currency has no unit.
+- The brand book's judgment row, and its words for a news item and a work item beside the
+  product's.
+- A US-dollar record of a foreign filer has no derived value with the price, the value a share,
+  the levels, a close or a grid's cells.
+- **A question for the founder: a figure an agent sets out to construct** (section 7.6). Three
+  ways the dependence rule cannot refuse, and the older one through a figure over itself. Two
+  ways to go further: test every derivation, with or without a number, so that a figure over
+  itself is refused too; and word a cited derivation's whole tree in the references list, so
+  that a reader sees every step.
+- The drawer's Kill criteria block shows neither a criterion's id nor its threshold.
+- Where a company's inputs cannot be assembled, a `derive` call with a `derived:` operand whose
+  tree holds an `estimate:` or a `close:` leaf answers 500 where it answered 201.
+- `annual_lines` still rebuilds the year join inside `financial_tables` (B-103's row named it).
+- The policy loader does not check the secondary valuation's driver range names (the
+  controller's Ruling 5).
 
 ## 15. Tests the builder must write
 
@@ -485,3 +535,4 @@ last read, the whole-branch review and the acceptance.
 | 2026-11-15 | The founder said "proceed" on theme 5. Claude asked four questions with advice; the founder did not follow them ("I don't understand the issue at all") and asked for the problem in simple terms, then asked "why don't we loosen the rule?". Claude: the fix loosens it at three named points and no further, since a general loosening lets an agent write any number unchecked. The founder: "yes". So: a fixed number from a list in `derive`, a threshold on a kill criterion, a currency on a finding and a guidance record, a filing report reused without a limit. |
 | 2026-11-15 | Settled by Claude while writing, on a map of the code and counts from the live database, each marked *my call* above. The list of numbers. A number's unit rule. `number:` is an operand alone. A threshold is cited in one section and enters no arithmetic. A criterion with a threshold is recorded with the tool first. A currency is checked for its form alone. A record in another currency is kept out of money arithmetic until converted. The resolver learns the currency of records alone. No `peg` operation. `fmpCounted` leaves. The review log's stance is documented, not filled. Two faults of `derive` and two of the reports' code are corrected with the theme. |
 | 2026-11-15 | The builder check (Opus 5.5, xhigh), one round, six questions, all settled by Claude; none was the founder's. (1) A misplaced `kill:` cite is an `unresolved reference`: a new failure word would add a row to the list of checks in every stored report's Appendix A. (2) A derivation of a record in another currency has no money unit, since a derivation carries no currency. (3) The acceptance does not read a filing report twice: the filing routes need a vendor key; the tests prove the reuse. (4) A record with no stored currency is in the currency its reader labels it with today, the latest snapshot's, or the report's own snapshot's in Appendix A. (5) The currency does not join the key by which a guidance record supersedes another. (6) The three reads answer 404 for a symbol with no snapshot. Corrected: four statements about the code. Narrowed: B-103's clause on the map of the store's refusals is filed, since `exchange_symbol`'s refusal and every store refusal would need classes of their own; the policy loader's check of tag names is left to the builder, since the engine imports the policy package. |
+| 2026-11-16 | The build and its reviews. Eight tasks, subagent-driven (Opus 5.5, xhigh), each reviewed alone; then one whole-branch review, one fix wave and its re-review. **Claude's rulings during the build**, each open to the founder: (1) a percent times `number:100` keeps the unit percent, so the 100 serves the PEG and not points; (2) `charts.py` joined Task 4 so that one function writes money in another currency; (3) the wrong-unit detail of a record's cite names the record's currency; (4) the new 404 writes the symbol in its exchange form; (5) the policy loader checks the override ranges' names and not the secondary valuation's driver ranges. **The whole-branch review** found two faults in `derive`. A chosen figure passed in two derivations (a figure times `number:0`, then a number added); and the currency guard held one derivation deep (a US-dollar finding over `number:4`, then its growth over a krona revenue). Rulings (6) and (8): the dependence rule of section 7.6, hardened after the implementer broke its first form six ways and tested a repair that closes five. Rulings (7) and (9): the carried currency of section 9.3. Ruling (10): what the dependence rule cannot refuse (three deliberate constructions, and the older one through a figure over itself) is filed as one question for the founder and is not built; a cap of one number a tree would refuse an honest average of scaled cells. If any of these is wrong, the cost is one rule or one sentence, named in the build's readout. |

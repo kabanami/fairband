@@ -321,7 +321,9 @@ derivation with a number anywhere in it, its own operands or those of a `derived
 move with a stored figure. One that keeps its value whatever its figures are is a number you chose
 passed off as a sourced one, and is refused, "a derivation with a fixed number must depend on a
 stored figure: this one has the same value whatever its figures are": a figure times `number:0`, a
-number over a figure over itself, a figure plus a number less the same figure.
+number over a figure over itself, a figure plus a number less the same figure. A figure that is
+nought moves nothing, so a derivation of it with a number is refused in the same words: cite the
+figure itself.
 
 A fixed number is a number of arithmetic, never a figure you chose: the server takes no other, and
 a multiple, a rate or a threshold you assume is not arithmetic. A threshold goes on its kill

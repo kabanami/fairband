@@ -2283,7 +2283,8 @@ def test_a_fixed_number_is_arithmetic_never_a_figure_you_chose() -> None:
         " operand, must move with a stored figure. One that keeps its value whatever its figures"
         " are is a number you chose passed off as a sourced one, and is refused,"
         f' "{DEPENDS_ON_A_FIGURE}": a figure times `number:0`, a number over a figure over itself, a'
-        " figure plus a number less the same figure."
+        " figure plus a number less the same figure. A figure that is nought moves nothing, so a"
+        " derivation of it with a number is refused in the same words: cite the figure itself."
     ) in arithmetic
     # a figure a filing states is still cited from its cell (spec 7.5's third bullet)
     assert (

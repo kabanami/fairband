@@ -1112,15 +1112,21 @@ def test_a_derivation_with_a_number_depends_on_a_stored_figure() -> None:
             " of sign, a cell scaled by a power of ten, the PEG, the cycle gap's half, one plus a"
             " growth."
         ),
+        # the scoped re-review of the fix wave: a figure of nought moves nothing
+        (
+            "A figure that is nought moves nothing, so a derivation with a number whose only figure"
+            " is nought is refused in the same words: the figure itself is cited."
+        ),
         (
             "A number beside a figure a billion times smaller is refused too, the figure moving the"
             " result by less than the billionth (the price plus `number:1000000000000`)."
         ),
-        # the controller's ruling 8: what is left, in one plain sentence
+        # the controller's rulings 8 and 10: what is left, in one plain sentence
         (
-            "The rule refuses a constant, and it cannot refuse a figure built to sit near one or"
-            " made one by stored figures that cancel among themselves; the references list shows"
-            " each cited derivation."
+            "The rule refuses a constant, and it cannot refuse a figure built to sit near one, one"
+            " made by stored figures that cancel among themselves, or a stored figure scaled by"
+            " numbers chosen to land on a figure (a price of $150 times `number:2` over `number:3`"
+            " is $100); the references list shows each cited derivation."
         ),
     ):
         assert words in derivations, words
