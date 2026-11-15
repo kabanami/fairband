@@ -3499,9 +3499,9 @@ def test_the_bundle_draws_a_bar_that_is_not_a_fiscal_year() -> None:
 def test_the_axis_always_prints_the_trailing_twelve_months_tick() -> None:
     """Spec 2026-11-15 6.5, 6.6, a patch to the shared axis: the tick of a point whose `kind` is
     `trailing`, "to date", prints as the two ends' do, and a tick within `every` slots of it is
-    dropped, so no two printed ticks stand closer than before; a series with no such point, every
-    chart but a HistoryBars of a table with a trailing column, labels as before. What the axis
-    prints is read in node (tests/web/test_report_charts.py)."""
+    dropped, so no two printed ticks stand fewer bars apart than before; a series with no such
+    point, every chart but a HistoryBars of a table with a trailing column, labels as before. What
+    the axis prints is read in node (tests/web/test_report_charts.py)."""
     bundle = _component_file("bundle.js")
     axis = _function(bundle, "XAxis")
     _in_order(

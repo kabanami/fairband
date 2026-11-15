@@ -643,9 +643,10 @@ def test_the_export_lists_its_references_last_and_carries_the_columns() -> None:
 def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
     """Spec 2026-11-15 6.5 and 6.6: 16.6 states that the page reads the quarters table beside the
     six and draws section 5's three charts by quarter, the trailing and the estimate bars and the
-    line under a chart that has one; that the axis prints as many ticks as it has room for, the
-    ends' and the trailing twelve months' always; and that a chart table's cell is empty where the
-    table holds no figure, which a trailing or an estimate cell may not measure."""
+    line under a chart that has one; that the axis prints every bar's tick up to seven bars and
+    every other one on more, the ends' and the trailing twelve months' always; and that a chart
+    table's cell is empty where the table holds no figure, which a trailing or an estimate cell may
+    not measure."""
     sixteen = _section(16)
     export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
     for words in (
@@ -665,8 +666,8 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
             " twin naming each by the column's label"
         ),
         (
-            "and its axis prints as many of the bars' ticks as it has room for, the first's, the"
-            " last's and the trailing twelve months' always:"
+            "and its axis prints every bar's tick up to seven bars and every other one on more, the"
+            " first's, the last's and the trailing twelve months' always:"
         ),
         (
             "the fiscal years', each ticked by its year, then the trailing twelve months' filled"

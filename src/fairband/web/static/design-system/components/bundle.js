@@ -1815,8 +1815,8 @@
 
   // fairband: `kept`, the index of the trailing twelve months' point, -1 without one: its tick
   // prints as the two ends' do, and a tick other than theirs within `every` slots of it is
-  // dropped, so it stands no closer to its neighbours than the printed ticks do; it stands at least
-  // two slots from either end on a chart of eight bars or more (spec 2026-11-15 6.5, 6.6).
+  // dropped, so no two printed ticks stand fewer bars apart than before; it stands at least two
+  // slots from either end on a chart of eight bars or more (spec 2026-11-15 6.5, 6.6).
   function periodLabel(d, i, n, most, kept) {
     var every = labelEvery(n, most);
     if (i === 0 || i === n - 1 || i === kept) return d.period;
