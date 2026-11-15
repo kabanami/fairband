@@ -56,6 +56,10 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
 - ``guidance:<id>/low``, ``/high``, ``/midpoint`` and ``/step``: a guidance record's figures in
   its metric's unit (``store.guidance.UNITS``), its step a percent, each of the record's period;
   a step the record does not take holds no figure;
+- ``kill:<id>``: a kill criterion's threshold, a number the author chose, and its unit (spec
+  2026-11-15 8.2), whatever the criterion's state, so a published report's references keep their
+  words; a criterion with no threshold names nothing. The check takes it in one section alone and
+  ``derive`` takes it nowhere (``KILL_FORM``);
 - ``derived:<id>``: a derivation's value and unit (13.4);
 - ``filing:<id>/<sheet>/<row>/<col>``: a cell of a stored filing report (spec 2026-11-11, 5.5) as
   it is served, a number as stored or a string as the reads show it, so a cite of a word fits the
@@ -117,7 +121,8 @@ revenue line of fiscal 2025 on file" or "the revenue line of Q1 of fiscal 2027 o
 ``estimate:`` "the consensus for Q4 of fiscal 2026, EPS"; ``close:`` "the close of 3 Nov 2026";
 ``multiple:`` "the trailing P/E, 30 Oct 2026" or "the forward P/E, the ten-year average";
 ``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
-``guidance:`` "guidance record 5: EPS for fiscal 2027, the midpoint"; ``derived:`` "derivation 7:
+``guidance:`` "guidance record 5: EPS for fiscal 2027, the midpoint"; ``kill:`` "kill criterion
+12, a threshold the author chose", whose number it is; ``derived:`` "derivation 7:
 the ratio of <a> and <b>", the operands' refs, a fixed number without its prefix and with its
 separators ("derivation 7: the product of filing:3/BS/2/0 and 1,000,000"); ``filing:`` "FMP
 filing report of fiscal 2027 Q1, LEASES: <the row's served label>, column 0 (3 Months Ended, Sep.
@@ -166,7 +171,7 @@ from fairband.store.companies import latest_company
 from fairband.store.guidance import UNITS as GUIDANCE_UNITS
 from fairband.store.guidance import guidance_row
 from fairband.store.refreshes import latest_deciles
-from fairband.store.research import finding_row
+from fairband.store.research import KillCriterionRow, finding_row, kill_criterion_row
 from fairband.store.reviews import review_row
 from fairband.store.secondary import derivation_row, secondary_row
 from fairband.store.sensitivities import SensitivityRow, sensitivity_row
@@ -176,6 +181,7 @@ from fairband.web.policy_rows import policy_json
 
 __all__ = [
     "ESTIMATE_UNITS",
+    "KILL_FORM",
     "MAX_ID",
     "NUMBERS",
     "NUMBER_FORM",
@@ -208,6 +214,9 @@ __all__ = [
 NUMBER_FORM = "number"
 NUMBERS: frozenset[int] = frozenset([*range(13), 52, 100, 365, *(10**k for k in range(3, 13))])
 _NUMBER_TEXTS = {str(n): n for n in NUMBERS}  # each written in digits alone, as the list reads
+# A kill criterion's threshold (spec 2026-11-15 8.2), ``kill:<id>``: a number the author chose,
+# which the check takes in "Risks and kill criteria" alone and ``derive`` takes nowhere.
+KILL_FORM = "kill"
 
 # The units of the consensus figures by field; every other figure is currency.
 ESTIMATE_UNITS: dict[str, str] = {
@@ -686,6 +695,7 @@ class Resolver:
             "peer": self._peer,
             "finding": self._finding,
             "guidance": self._guidance,
+            KILL_FORM: self._kill,
             "derived": self._derived,
             "filing": self._filing,
             "response": self._response,
@@ -734,6 +744,8 @@ class Resolver:
                 found = self._finding_source(head)
             case "guidance", [_, name] if name in _GUIDANCE_FIGURES:
                 found = self._guidance_source(head, name)
+            case "kill", [_]:
+                found = self._kill_source(head)
             case "derived", [_]:
                 found = self._derived_source(head)
             case "filing", [_, sheet, row, col] if self.resolve(ref) is not None:
@@ -1018,6 +1030,19 @@ class Resolver:
         unit = "percent" if field == "step" else GUIDANCE_UNITS[row.metric]
         return _figure(getattr(row, field), unit, row.period)
 
+    def _kill(self, path: str) -> Resolved | None:
+        """A kill criterion's threshold with its unit, whatever the criterion's state, of no period
+        and resting on no snapshot (spec 2026-11-15 8.2)."""
+        row = self._criterion(path)
+        return None if row is None else _figure(row.threshold, row.unit)
+
+    def _criterion(self, head: str) -> KillCriterionRow | None:
+        """The company's kill criterion ``head`` names, when it holds a threshold."""
+        row = _row(kill_criterion_row, self.conn, head)
+        if row is None or row.symbol != self.symbol or row.threshold is None:
+            return None
+        return row
+
     def _derived(self, path: str) -> Resolved | None:
         row = _row(derivation_row, self.conn, path)
         if row is None or row.symbol != self.symbol:
@@ -1152,6 +1177,11 @@ class Resolver:
             return None
         guided = f"{field_words(row.metric)} for {_period_words(row.period)}"
         return f"guidance record {row.id}: {guided}, the {name}"
+
+    def _kill_source(self, head: str) -> str | None:
+        """The criterion, and whose number its threshold is."""
+        row = self._criterion(head)
+        return None if row is None else f"kill criterion {row.id}, a threshold the author chose"
 
     def _derived_source(self, head: str) -> str | None:
         """The derivation, its operation and its operands' refs, a fixed number without its

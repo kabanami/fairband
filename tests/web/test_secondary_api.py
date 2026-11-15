@@ -53,7 +53,7 @@ from fairband.store.facts import FactRow, insert_facts
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh, save_deciles
-from fairband.store.research import add_finding
+from fairband.store.research import add_finding, add_kill_criterion
 from fairband.store.reviews import insert_review
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.store.vendor import record_response
@@ -1264,6 +1264,26 @@ def test_a_number_s_unit_follows_the_stored_figure(
         (None, None),  # a division by zero
         (1.0, "multiple"),  # the workaround of before still computes
     ]
+
+
+@pytest.mark.parametrize("side", ["a", "b"])
+def test_a_kill_threshold_is_no_operand(client: TestClient, db_path: Path, side: str) -> None:
+    """Spec 2026-11-15 8.2: a chosen number does not enter arithmetic: a ``kill:`` operand, of a
+    criterion that holds a threshold, is the 400 of a ref that names no number, and none of the
+    call's derivations is stored."""
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    with closing(connect(db_path)) as conn:
+        criterion = add_kill_criterion(
+            conn, "AAPL", "growth below 5%", writer, NOW, threshold=0.05, unit="percent"
+        )
+    good, ref = "policy:required_return", f"kill:{criterion}"
+    r = _derive(
+        client,
+        {"operation": "sum", "a": good, "b": good},
+        {"operation": "difference"} | {"a": good, "b": good} | {side: ref},
+    )
+    assert (r.status_code, r.json()) == (400, {"detail": f"unresolved reference: {ref}"})
+    _nothing_stored(client)
 
 
 def test_a_derivation_built_on_a_number_is_an_operand(client: TestClient) -> None:

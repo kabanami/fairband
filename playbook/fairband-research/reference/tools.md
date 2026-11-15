@@ -344,7 +344,8 @@ and store nothing:
   work_item_id?)`:
   submit a report; published whole, it answers `{report: {id, symbol, createdAt, workItemId}}`,
   and `report(symbol, id)` reads it whole; rejected whole, the `findings`.
-- `kill_criterion_add(symbol, text)`: add a kill criterion to the company.
+- `kill_criterion_add(symbol, text, threshold?, unit?, currency?)`: add a kill criterion to the
+  company.
 - `kill_criterion_set(id, state, reason)`: move a kill criterion to `open`, `triggered` or
   `retired`, with the reason.
 - `news_item_add(symbol, date, headline, source, text, kill_criterion_id?)`: record a dated news

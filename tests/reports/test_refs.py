@@ -34,6 +34,7 @@ from fairband.refresh.inputs_statements import statements_for, stored_quarters
 from fairband.reports.check import WRONG_UNIT, check_sections
 from fairband.reports.filing_report import row_ref, served
 from fairband.reports.refs import (
+    KILL_FORM,
     NUMBER_FORM,
     NUMBERS,
     Resolved,
@@ -49,7 +50,7 @@ from fairband.reports.tables import financial_tables, quarters_table
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.multiples import log_multiples
-from fairband.store.research import add_finding
+from fairband.store.research import add_finding, add_kill_criterion, set_kill_criterion
 from fairband.store.reviews import insert_review
 from fairband.store.secondary import insert_derivation, insert_secondary
 from fairband.store.sensitivities import insert_sensitivity
@@ -1113,6 +1114,45 @@ def test_a_net_income_guidance_ref_reads_a_total(
     ]
     sections = [{"heading": "Valuation", "parts": cites}]
     assert check_sections(conn, "AAPL", snapshots["AAPL"], sections, policy) == []
+
+
+def test_kill_refs(conn: sqlite3.Connection, policy: Policy) -> None:
+    """Spec 2026-11-15 8.2: ``kill:<id>`` names a criterion's threshold with its unit, with no
+    period and resting on no snapshot, open, triggered or retired alike, so a published report's
+    references keep their words; a criterion with no threshold, one of another company and an id
+    no criterion has name nothing, and each is its own description."""
+
+    def criterion(symbol: str, threshold: float | None = None, unit: Any = None) -> int:
+        return add_kill_criterion(
+            conn, symbol, "a criterion", AGENT, NOW, threshold=threshold, unit=unit
+        )
+
+    growth = criterion("AAPL", 0.05, "percent")
+    capex = criterion("AAPL", 50e9, "currency")
+    triggered, retired = criterion("AAPL", 2.5, "multiple"), criterion("AAPL", 3.0, "years")
+    set_kill_criterion(conn, triggered, "triggered", "it happened", NOW)
+    set_kill_criterion(conn, retired, "retired", "the thesis changed", NOW)
+    words, theirs = criterion("AAPL"), criterion("AAL", 0.05, "percent")
+    resolver = Resolver(conn, "AAPL", policy)
+    assert resolver.resolve(f"kill:{growth}") == Resolved(0.05, "percent", None, None)
+    assert resolver.resolve(f" kill:{capex} ") == Resolved(50e9, "currency", None, None)
+    assert resolver.resolve(f"kill:{triggered}") == Resolved(2.5, "multiple", None, None)
+    assert resolver.resolve(f"kill:{retired}") == Resolved(3.0, "years", None, None)
+    for ref in (f"kill:{growth}", f"kill:{retired}"):
+        assert resolver.describe(ref) == f"kill criterion {ref[5:]}, a threshold the author chose"
+    for ref in (
+        f"kill:{words}",
+        f"kill:{theirs}",
+        "kill:999",
+        "kill:x",
+        f"kill:{growth}/threshold",
+        "kill:",
+    ):
+        assert resolver.resolve(ref) is None, ref
+        assert resolver.describe(ref) == ref, ref
+    assert rests_on(conn, f"kill:{growth}") is None
+    assert snapshots_of(conn, f"kill:{growth}") == frozenset()
+    assert KILL_FORM == "kill"
 
 
 def test_response_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:

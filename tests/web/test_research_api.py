@@ -636,9 +636,9 @@ def test_the_research_read_serves_each_record_as_its_own_read(
 def test_the_research_read_names_each_record_s_currency(
     client: TestClient, db_path: Path, policy: Policy
 ) -> None:
-    """Spec 2026-11-15 9.1: FXCO reports in SEK. Each finding and guidance record carries the
-    currency of its money, as its own read serves it: the code it names, else SEK; none for a
-    figure that is not money."""
+    """Spec 2026-11-15 9.1: FXCO reports in SEK. Each finding, guidance record and kill criterion
+    carries the currency of its money, as its own read serves it: the code it names, else SEK;
+    none for a figure that is not money."""
     with closing(connect(db_path)) as conn:
         insert_snapshot(conn, value_company(fx_inputs(), universe_deciles(), policy, TODAY), 1)
     base = "/api/companies/FXCO"
@@ -661,11 +661,21 @@ def test_the_research_read_names_each_record_s_currency(
     margin = guidance | {"metric": "operating_margin", "low": 0.3, "high": 0.32}
     for record in (guidance | {"currency": "USD"}, guidance | {"metric": "eps"}, margin):
         _post(client, f"{base}/guidance", record, AGENT_HEADERS)
+    threshold = {"text": "capex above", "threshold": 4e9, "unit": "currency"}
+    for criterion in (
+        threshold | {"currency": "USD"},
+        threshold,
+        {"text": "growth below 5%", "threshold": 0.05, "unit": "percent"},
+        {"text": "the founder leaves"},
+    ):  # spec 2026-11-15 8.1: a kill criterion's threshold, as its own read serves it
+        _post(client, f"{base}/kill-criteria", criterion, AGENT_HEADERS)
     found = _research(client, "fxco")
     assert [f["currency"] for f in found["findings"]] == [None, None, "SEK", "USD"]
     assert [g["currency"] for g in found["guidance"]] == [None, "SEK", "USD"]
+    assert [k["currency"] for k in found["killCriteria"]] == [None, None, "SEK", "USD"]
     assert found["findings"] == client.get(f"{base}/findings").json()["findings"]
     assert found["guidance"] == client.get(f"{base}/guidance").json()["guidance"]
+    assert found["killCriteria"] == client.get(f"{base}/kill-criteria").json()["killCriteria"]
 
 
 def test_the_research_reads_the_twenty_newest_ledger_rows(client: TestClient) -> None:

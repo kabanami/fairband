@@ -155,7 +155,7 @@ from fairband.store.reviews import latest_review
 from fairband.store.secondary import latest_secondary, no_secondary
 from fairband.store.settings import read_overlay
 from fairband.store.snapshots import latest_snapshot
-from fairband.web.agents_api import KillCriterionPost, NewsItemPost, WriterOf, gist, record_json
+from fairband.web.agents_api import KillCriterionText, NewsItemPost, WriterOf, gist, record_json
 from fairband.web.methodology_text import section_index, section_text
 from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.settings_api import effective
@@ -213,7 +213,7 @@ class ReportPost(_Body):
     stance: str
     sections: list[Section]
     judgments: list[JudgmentPost]
-    kill_criteria: list[KillCriterionPost] = []
+    kill_criteria: list[KillCriterionText] = []  # text alone; a threshold is the tool's (8.1)
     news_items: list[NewsItemPost] = []
     work_item_id: int | None = None
 

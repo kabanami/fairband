@@ -12,7 +12,10 @@ and need not have a snapshot. Text is kept as written; a blank one is refused.
   money figure may name its currency (``store.currency``; spec 2026-11-15 9.1), the code stored
   as given; none is the company's reporting currency.
 - A kill criterion: a measurable event that would prove the view wrong, the report that set it,
-  and a state, ``open`` until ``set_kill_criterion`` moves it with a reason.
+  and a state, ``open`` until ``set_kill_criterion`` moves it with a reason. It may hold one
+  threshold the author chose (spec 2026-11-15 8.1): a finite number with its unit, one of
+  ``UNITS``, the two together, and for a money figure the currency it is in, as a finding's; a
+  report cites it as ``kill:<id>``. Its text stays its statement and is never checked.
 - A news item: a date, a headline, a source (a URL or a vendor response id), text, the
   company's kill criterion it touches, if any, and the report that recorded it, if one.
 
@@ -96,6 +99,9 @@ class KillCriterionRow:
     at: datetime
     state_reason: str | None
     state_at: datetime | None
+    threshold: float | None = None  # the number the author chose, with its unit, or none
+    unit: Unit | None = None
+    currency: str | None = None  # as stored: none is the reporting currency
 
 
 @dataclass(frozen=True)
@@ -202,11 +208,32 @@ def add_kill_criterion(
     writer: Writer,
     at: datetime,
     report_id: int | None = None,
+    *,
+    threshold: float | None = None,
+    unit: Unit | None = None,
+    currency: str | None = None,
 ) -> int:
-    """Set an open kill criterion, by the report ``report_id`` if one set it; return its id."""
+    """Set an open kill criterion, by the report ``report_id`` if one set it, holding the
+    ``threshold`` the author chose in ``unit``, a money figure in ``currency`` when one is named;
+    return its id."""
     symbol = exchange_symbol(symbol)
     _require_text(text, "a kill criterion needs text")
-    fields = {"symbol": symbol, "text": text, "state": "open", "report_id": report_id}
+    if (threshold is None) != (unit is None):
+        raise ValueError("a kill criterion's threshold and unit come together")
+    if unit is not None and unit not in UNITS:
+        raise ValueError(f"a unit is one of {', '.join(UNITS)}, not {unit!r}")
+    if threshold is not None and not math.isfinite(threshold):
+        raise ValueError("a kill criterion's threshold is a finite number")
+    check_currency(currency, unit)
+    fields = {
+        "symbol": symbol,
+        "text": text,
+        "state": "open",
+        "report_id": report_id,
+        "threshold": dump_float(threshold),
+        "unit": unit,
+        "currency": currency,
+    }
     return _insert(conn, "kill_criteria", fields, writer, at)
 
 
@@ -380,6 +407,9 @@ def _kill_criterion(row: sqlite3.Row) -> KillCriterionRow:
         at=load_stamp(row["at"]),
         state_reason=row["state_reason"],
         state_at=load_stamp(row["state_at"]),
+        threshold=load_float(row["threshold"]),
+        unit=row["unit"],
+        currency=row["currency"],
     )
 
 

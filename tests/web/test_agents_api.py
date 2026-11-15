@@ -361,6 +361,80 @@ def test_a_finding_names_the_currency_of_its_money(
     assert len(client.get(url).json()["findings"]) == 3
 
 
+def test_a_kill_criterion_holds_a_threshold_and_answers_its_currency(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-15 8.1: the post takes a threshold, its unit and a currency, each optional, and
+    answers them; a money threshold answers the currency it names, else the company's reporting
+    currency (SEK for FXCO, USD for a company with no snapshot), and any other none. The list and a
+    state move answer the same. A threshold without its unit, or a currency on a figure that is not
+    money, is refused 400 and stores nothing."""
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, value_company(fx_inputs(), universe_deciles(), policy, TODAY), 1)
+    url = "/api/companies/FXCO/kill-criteria"
+    growth = _post(
+        client, url, {"text": "growth below 5%", "threshold": 0.05, "unit": "percent"}, AGENT
+    )
+    capex = _post(client, url, {"text": "capex above", "threshold": 4e9, "unit": "currency"}, AGENT)
+    eps = _post(
+        client,
+        url.lower(),
+        {"text": "EPS below", "threshold": 1.5, "unit": "per-share", "currency": "USD"},
+        AGENT,
+    )
+    words = _post(client, url, {"text": "the founder leaves"}, AGENT)
+    assert [(k["threshold"], k["unit"], k["currency"]) for k in (growth, capex, eps, words)] == [
+        (0.05, "percent", None),
+        (4e9, "currency", "SEK"),
+        (1.5, "per-share", "USD"),
+        (None, None, None),
+    ]
+    assert growth == {
+        "id": growth["id"],
+        "symbol": "FXCO",
+        "text": "growth below 5%",
+        "state": "open",
+        "reportId": None,
+        "principal": "agent",
+        "actor": "claude-opus-5-5",
+        "client": "claude-code/2.1",
+        "at": AT,
+        "stateReason": None,
+        "stateAt": None,
+        "threshold": 0.05,
+        "unit": "percent",
+        "currency": None,
+    }
+    assert client.get(url).json() == {"killCriteria": [words, eps, capex, growth]}
+    r = client.patch(
+        f"/api/kill-criteria/{capex['id']}",
+        json={"state": "retired", "reason": "the plan changed"},
+        headers=AGENT,
+    )
+    assert r.status_code == 200, r.text
+    assert (r.json()["state"], r.json()["threshold"], r.json()["currency"]) == (
+        "retired",
+        4e9,
+        "SEK",
+    )
+    total = {"text": "capex above", "threshold": 4e9, "unit": "currency"}
+    found = _post(client, "/api/companies/ZZZZ/kill-criteria", total, AGENT)
+    assert found["currency"] == "USD"  # no snapshot
+    assert client.get("/api/companies/ZZZZ/kill-criteria").json() == {"killCriteria": [found]}
+    for given, detail in (
+        ({"text": "x", "threshold": 0.05}, "a kill criterion's threshold and unit come together"),
+        ({"text": "x", "unit": "percent"}, "a kill criterion's threshold and unit come together"),
+        (
+            {"text": "x", "threshold": 0.05, "unit": "percent", "currency": "USD"},
+            "a currency goes with a money figure",
+        ),
+        (total | {"currency": "usd"}, "a currency is three capital letters, not 'usd'"),
+    ):
+        r = client.post(url, json=given, headers=AGENT)
+        assert (r.status_code, r.json()) == (400, {"detail": detail})
+    assert len(client.get(url).json()["killCriteria"]) == 4
+
+
 def test_every_write_is_a_ledger_row(client: TestClient) -> None:
     item = _post(client, "/api/inbox", {"symbol": "AAPL", "mode": "full report"}, HEADER)
     client.post("/api/inbox/claim", json={"itemId": item["id"]}, headers=AGENT)

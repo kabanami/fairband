@@ -1,6 +1,7 @@
 """The research records: notes, findings, kill criteria and news items (spec 2026-11-06 Tier 2,
 section 9), each with its writer and read newest first."""
 
+import re
 import sqlite3
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -21,6 +22,7 @@ from fairband.store.research import (
     finding_row,
     findings_for,
     kill_criteria_for,
+    kill_criterion_row,
     news_items_for,
     notes_for,
     set_kill_criterion,
@@ -271,6 +273,97 @@ def test_kill_criteria(conn: sqlite3.Connection) -> None:
     ]
     with pytest.raises(ValueError, match="^a kill criterion needs text$"):
         add_kill_criterion(conn, "AAPL", "", AGENT, NOW)
+    # a criterion recorded with no threshold is words alone, as every criterion before
+    assert {(k.threshold, k.unit, k.currency) for k in kill_criteria_for(conn, "AAPL")} == {
+        (None, None, None)
+    }
+
+
+def test_a_kill_criterion_holds_one_threshold_the_author_chose(conn: sqlite3.Connection) -> None:
+    """Spec 2026-11-15 8.1: a criterion may hold one threshold, a number with its unit, one of a
+    finding's, and for a money figure the currency it is in, stored as given; its text stays its
+    statement."""
+    growth = add_kill_criterion(
+        conn,
+        "TSM",
+        "revenue growth below 5% for two years",
+        AGENT,
+        NOW,
+        threshold=0.05,
+        unit="percent",
+    )
+    capex = add_kill_criterion(
+        conn,
+        "TSM",
+        "capital spending above US$50 billion",
+        AGENT,
+        LATER,
+        threshold=50e9,
+        unit="currency",
+        currency="USD",
+    )
+    eps = add_kill_criterion(
+        conn, "TSM", "EPS below TWD 40", AGENT, LATER, threshold=40.0, unit="per-share"
+    )
+    words = add_kill_criterion(conn, "TSM", "the chief executive leaves", AGENT, LATER)
+    assert kill_criteria_for(conn, "TSM")[-1] == KillCriterionRow(
+        id=growth,
+        symbol="TSM",
+        text="revenue growth below 5% for two years",
+        state="open",
+        report_id=None,
+        **BY_AGENT,
+        at=NOW,
+        state_reason=None,
+        state_at=None,
+        threshold=0.05,
+        unit="percent",
+        currency=None,
+    )
+    stored = {k.id: (k.threshold, k.unit, k.currency) for k in kill_criteria_for(conn, "TSM")}
+    assert stored == {
+        growth: (0.05, "percent", None),
+        capex: (50e9, "currency", "USD"),
+        eps: (40.0, "per-share", None),
+        words: (None, None, None),
+    }
+    found = kill_criterion_row(conn, capex)
+    assert found is not None and (found.threshold, found.unit, found.currency) == (
+        50e9,
+        "currency",
+        "USD",
+    )
+
+
+THRESHOLD_TOGETHER = "a kill criterion's threshold and unit come together"
+ALL_UNITS = "currency, percent, multiple, count, per-share, score, years"
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        ({"threshold": 0.05}, THRESHOLD_TOGETHER),
+        ({"unit": "percent"}, THRESHOLD_TOGETHER),
+        ({"threshold": 0.05, "unit": "usd"}, f"a unit is one of {ALL_UNITS}, not 'usd'"),
+        (
+            {"threshold": float("nan"), "unit": "percent"},
+            "a kill criterion's threshold is a finite number",
+        ),
+        (
+            {"threshold": float("inf"), "unit": "currency"},
+            "a kill criterion's threshold is a finite number",
+        ),
+        ({"threshold": 0.05, "unit": "percent", "currency": "USD"}, MONEY),
+        ({"currency": "USD"}, MONEY),  # no threshold
+        ({"threshold": 1.0, "unit": "currency", "currency": "usd"}, _form("usd")),
+    ],
+)
+def test_a_kill_criterion_refuses_a_threshold_out_of_form(
+    conn: sqlite3.Connection, extra: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
+        add_kill_criterion(conn, "TSM", "a criterion", AGENT, NOW, **extra)
+    assert kill_criteria_for(conn, "TSM") == []
 
 
 def test_a_kill_criterion_moves_state_with_a_reason(conn: sqlite3.Connection) -> None:

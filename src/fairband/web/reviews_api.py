@@ -127,11 +127,13 @@ no value and no unit. The refs resolve as a report's do
 (``fairband.reports.refs``, every form of spec 13.2, a ``table:`` cell included, under the
 effective policy), their units the reads' (``currency``, ``per-share``, ``percent`` ...); a ref
 that names no number, a word or a figure the record does not hold included, is a 400,
-"unresolved reference: <ref>", and stores none of the call's derivations. One operand may be a
-fixed number (spec 2026-11-15 7.1), ``number:<n>`` of ``refs.NUMBERS``, read before the resolver
-and stored as written; it has no unit, and the result's follows the stored figure (7.2): a sum, a
-difference or a product with it keeps the figure's unit, as does a ratio of the figure over it,
-and a ratio of it over the figure has none. A number off the list or written another way is a
+"unresolved reference: <ref>", and stores none of the call's derivations; so is a kill
+criterion's threshold, ``kill:<id>``, a number the author chose, which enters no arithmetic (spec
+2026-11-15 8.2). One operand may be a fixed number (spec 2026-11-15 7.1), ``number:<n>`` of
+``refs.NUMBERS``, read before the resolver and stored as written; it has no unit, and the
+result's follows the stored figure (7.2): a sum, a difference or a product with it keeps the
+figure's unit, as does a ratio of the figure over it, and a ratio of it over the figure has none.
+A number off the list or written another way is a
 400, "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to
 1,000,000,000,000, not <what was written>", and two numbers in one derivation a 400, "a derivation
 needs a stored figure"; each stores none of the call's derivations.
@@ -191,6 +193,7 @@ from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.reviews import drop_off_route, row_route, write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
 from fairband.reports.refs import (
+    KILL_FORM,
     MAX_ID,
     NUMBER_FORM,
     Resolver,
@@ -1025,13 +1028,16 @@ class _Operand:
 
 def _operand(resolver: Resolver, ref: str) -> _Operand:
     """The number and unit ``ref`` names, a fixed number (``refs.fixed_number``) read before the
-    resolver, with no unit; 400 when it names no number, or is a ``number:`` off the list."""
+    resolver, with no unit; 400 when it names no number, is a ``number:`` off the list, or is a
+    ``kill:`` threshold, the author's own number (spec 2026-11-15 8.2)."""
     written = ref.strip()
     if written.startswith(f"{NUMBER_FORM}:"):
         number = fixed_number(written)
         if number is None:
             raise HTTPException(400, f"{FIXED_NUMBERS}, not {written[len(NUMBER_FORM) + 1 :]}")
         return _Operand(float(number), None, fixed=True)
+    if written.startswith(f"{KILL_FORM}:"):  # a number the author chose enters no arithmetic
+        raise HTTPException(400, f"unresolved reference: {ref}")
     found = resolver.resolve(ref)
     if found is None or not isinstance(found.value, float):
         raise HTTPException(400, f"unresolved reference: {ref}")

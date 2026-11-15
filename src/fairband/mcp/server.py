@@ -669,9 +669,19 @@ def build_server(client: FairbandClient) -> MCPServer:
         }
         return _published(write(lambda: client.post(_company(symbol, "reports"), body)))
 
-    @server.tool(description="Add a kill criterion to the company.")
-    def kill_criterion_add(symbol: str, text: str) -> dict[str, Any]:
-        return write(lambda: client.post(_company(symbol, "kill-criteria"), {"text": text}))
+    @server.tool(
+        description="Add a kill criterion to the company, with one threshold the author chose and"
+        " its unit when one is given, cited as kill:<id> in Risks and kill criteria alone."
+    )
+    def kill_criterion_add(
+        symbol: str,
+        text: str,
+        threshold: float | None = None,
+        unit: Unit | None = None,
+        currency: str | None = None,
+    ) -> dict[str, Any]:
+        body = {"text": text, "threshold": threshold, "unit": unit, "currency": currency}
+        return write(lambda: client.post(_company(symbol, "kill-criteria"), body))
 
     @server.tool(
         description="Move a kill criterion to open, triggered or retired, with the reason."

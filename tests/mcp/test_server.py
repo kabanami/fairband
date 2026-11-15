@@ -502,6 +502,33 @@ def test_a_finding_and_a_guidance_record_send_their_currency(api: FairbandClient
     assert [a["currency"] for a in answers] == ["TWD", "USD", "TWD", "USD"]
 
 
+def test_a_kill_criterion_sends_its_threshold(api: FairbandClient) -> None:
+    """Spec 2026-11-15 8.1: `kill_criterion_add` sends a threshold, its unit and a currency, and
+    answers them; `kill_criteria` lists them; with none the criterion is words alone. With no
+    currency named, AAPL's money threshold answers its reporting currency, USD."""
+    server = build_server(api)
+    criterion = WRITES["kill_criterion_add"]
+    _, *answers, listed = _session(
+        server,
+        ("identify", AGENT),
+        ("kill_criterion_add", criterion | {"threshold": 0.05, "unit": "percent"}),
+        ("kill_criterion_add", criterion | {"threshold": 50e9, "unit": "currency"}),
+        (
+            "kill_criterion_add",
+            criterion | {"threshold": 1.5, "unit": "per-share", "currency": "TWD"},
+        ),
+        ("kill_criterion_add", criterion),
+        ("kill_criteria", {"symbol": "AAPL"}),
+    )
+    assert [(a["threshold"], a["unit"], a["currency"]) for a in answers] == [
+        (0.05, "percent", None),
+        (50e9, "currency", "USD"),
+        (1.5, "per-share", "TWD"),
+        (None, None, None),
+    ]
+    assert listed == {"killCriteria": answers[::-1]}
+
+
 def _store_revenue(db_path: Path, revenue: float, symbol: str = "AAPL") -> None:
     """The company's fiscal 2025 revenue, its trailing revenue with no quarters on file."""
     with closing(connect(db_path)) as conn:

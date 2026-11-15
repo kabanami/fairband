@@ -997,3 +997,58 @@ def test_a_fixed_number_is_an_operand_of_derive_alone() -> None:
         assert words in derivations, words
     assert FIXED_NUMBERS in derivations
     assert NEEDS_A_FIGURE in derivations
+
+
+def test_a_kill_criterion_holds_a_threshold_cited_in_its_section_alone() -> None:
+    """Spec 2026-11-15 8.1, 8.2: 16.2 names the form `kill:`, the threshold's record with its
+    refusals and its words in the references; 16.3 the section rule, an unresolved reference
+    elsewhere with its detail, and no arithmetic."""
+    sixteen = _section(16)
+    references = sixteen[sixteen.index("### 16.2") : sixteen.index("### 16.3")]
+    for words in (
+        (
+            "| `kill:<id>` | a kill criterion's threshold, the number the author chose for it,"
+            " whatever the criterion's state; a criterion with no threshold names nothing |"
+            " the threshold's |"
+        ),
+        (
+            "A kill criterion may hold one threshold, a number the author chose (spec 2026-11-15"
+            " 8.1): the number, its unit, one of a finding's, and for a money figure its currency,"
+            " by the rule of a finding's above."
+        ),
+        (
+            "The number and the unit come together, \"a kill criterion's threshold and unit come"
+            ' together", and the number is finite, "a kill criterion\'s threshold is a finite'
+            " number\"; the criterion's text stays its statement and is never checked."
+        ),
+        "a report's own kill criteria (16.1) are text alone",
+        (
+            "`kill:<id>` resolves to the threshold with its unit, of no period and resting on no"
+            " snapshot, whatever the criterion's state, so a published report's references keep"
+            " their words once the criterion is triggered or retired; the references list says"
+            ' whose number it is, "kill criterion 12, a threshold the author chose".'
+        ),
+        (
+            "Every read of a criterion (`kill_criteria`, the drawer's research read) answers its"
+            " `threshold`, its `unit` and its `currency`, as a finding's."
+        ),
+    ):
+        assert words in references, words
+    check = sixteen[sixteen.index("### 16.3") : sixteen.index("### 16.4")]
+    for words in (
+        (
+            'A `kill:` cite, a number the author chose (16.2), passes in one section alone, "Risks'
+            ' and kill criteria", known by its heading: section 11 of a full report, the ninth of'
+            " a valuation review."
+        ),
+        (
+            "There it is checked as a `finding:` cite is; anywhere else it is `unresolved"
+            " reference`, \"kill:12 is the author's own threshold: cite it in Risks and kill"
+            ' criteria", so a chosen number enters no other section (spec 2026-11-15 8.2).'
+        ),
+        (
+            'Nor does it enter arithmetic: `derive` takes no `kill:` operand, "unresolved'
+            ' reference: kill:12", as for a ref that names no number.'
+        ),
+    ):
+        assert words in check, words

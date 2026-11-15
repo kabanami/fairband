@@ -478,6 +478,57 @@ def test_kill_criteria_and_news_items_are_stored_with_the_report(client: TestCli
     assert len(client.get("/api/companies/AAPL/reports").json()["reports"]) == 1
 
 
+def test_a_kill_threshold_cited_in_risks_and_kill_criteria_publishes(client: TestClient) -> None:
+    """Spec 2026-11-15 8.2: a criterion recorded with a threshold is cited as ``kill:<id>`` in
+    "Risks and kill criteria"; the report publishes, its references say whose number it is, and
+    they keep their words once the criterion is retired. Cited in another section, it refuses the
+    report."""
+    sid = _snapshot_id(client)
+    body = {"text": "revenue growth below 5% for two years", "threshold": 0.05, "unit": "percent"}
+    r = client.post("/api/companies/AAPL/kill-criteria", json=body, headers=AGENT)
+    assert r.status_code == 201, r.text
+    ref = f"kill:{r.json()['id']}"
+    risks = [
+        "The thesis ends if revenue growth falls below ",
+        {"cite": "5%", "ref": ref},
+        " for two years running.",
+    ]
+    sections = _sections(sid)
+    at = HEADINGS.index("Risks and kill criteria")
+    sections[at] = {"heading": HEADINGS[at], "parts": risks}
+    report = _published(client, _body(sid, sections=sections))
+    words = {
+        "n": 4,
+        "ref": ref,
+        "source": f"kill criterion {ref[5:]}, a threshold the author chose",
+    }
+    assert report["references"][-1] == words
+    r = client.patch(
+        f"/api/kill-criteria/{ref[5:]}",
+        json={"state": "retired", "reason": "the thesis changed"},
+        headers=AGENT,
+    )
+    assert r.status_code == 200, r.text
+    assert client.get(f"/api/reports/{report['id']}").json()["references"][-1] == words
+    text = client.get(f"/api/reports/{report['id']}/markdown").text
+    assert f"[^4]: {ref} — kill criterion {ref[5:]}, a threshold the author chose" in text
+    # in the Summary it is refused, whatever the criterion's state
+    elsewhere = _submit(client, _body(sid, sections=_sections(sid, "full report", risks[1])))
+    assert (elsewhere.status_code, elsewhere.json()) == (
+        422,
+        {
+            "findings": [
+                {
+                    "where": "section 1, part 8: 5%",
+                    "what": UNRESOLVED,
+                    "detail": f"{ref} is the author's own threshold: cite it in Risks and kill"
+                    " criteria",
+                }
+            ]
+        },
+    )
+
+
 def test_a_named_work_item_must_be_the_company_s_and_open(client: TestClient) -> None:
     sid = _snapshot_id(client)
     r = _submit(client, _body(sid, workItemId=99))

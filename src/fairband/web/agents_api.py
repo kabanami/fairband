@@ -10,9 +10,10 @@ the named item, or the oldest pending one, for the agent; ``PATCH /api/inbox/{id
 with a published report of its company, or declines it with a reason. Each company's notes,
 findings, kill criteria and news items are read and written under ``/api/companies/{symbol}/``;
 a finding may name the currency of its money figure, and answers the one it is in
-(``money_json``; spec 2026-11-15 9.1). ``PATCH /api/kill-criteria/{id}`` moves a criterion's
-state with a reason. ``/api/ledger`` and ``/api/companies/{symbol}/ledger`` read the ledger newest
-first.
+(``money_json``; spec 2026-11-15 9.1), and a kill criterion may hold one threshold the author
+chose, with its unit and, for money, its currency, answered alike (``criterion_json``; 8.1).
+``PATCH /api/kill-criteria/{id}`` moves a criterion's state with a reason. ``/api/ledger`` and
+``/api/companies/{symbol}/ledger`` read the ledger newest first.
 
 Every write names its writer by the identity headers (``fairband.web.identity``) and is a ledger
 row, written in the same transaction as the record: the writer, the kind of write, the company,
@@ -127,8 +128,16 @@ class FindingPost(_Body):
     currency: str | None = None
 
 
-class KillCriterionPost(_Body):
+class KillCriterionText(_Body):
+    """A kill criterion as a report's own list takes it: text alone (spec 2026-11-15 8.1)."""
+
     text: str
+
+
+class KillCriterionPost(KillCriterionText):
+    threshold: float | None = None
+    unit: Unit | None = None
+    currency: str | None = None
 
 
 class KillCriterionMove(_Body):
@@ -150,13 +159,21 @@ def record_json(row: Any) -> dict[str, Any]:
     return {to_camel(f.name): _plain(getattr(row, f.name)) for f in fields(row)}
 
 
-def money_json(row: FindingRow | GuidanceRow, unit: str | None, reporting: str) -> dict[str, Any]:
-    """A finding or a guidance record whose figure is of ``unit`` as the API sends it
-    (``record_json``), its ``currency`` the one that figure is in (``store.currency.currency_of``):
-    the stored code, else ``reporting``, the company's reporting currency
-    (``store.currency.reporting_currency``); ``None`` for a figure that is not money (spec
-    2026-11-15 9.1). Every answer of either record reads its currency here."""
+def money_json(
+    row: FindingRow | GuidanceRow | KillCriterionRow, unit: str | None, reporting: str
+) -> dict[str, Any]:
+    """A finding, a guidance record or a kill criterion whose figure is of ``unit`` as the API
+    sends it (``record_json``), its ``currency`` the one that figure is in
+    (``store.currency.currency_of``): the stored code, else ``reporting``, the company's reporting
+    currency (``store.currency.reporting_currency``); ``None`` for a figure that is not money
+    (spec 2026-11-15 9.1). Every answer of each of the three reads its currency here."""
     return record_json(row) | {"currency": currency_of(row.currency, unit, reporting)}
+
+
+def criterion_json(criterion: KillCriterionRow, reporting: str) -> dict[str, Any]:
+    """A kill criterion with its threshold, if it holds one, and the currency of a money
+    threshold in the company's ``reporting`` currency (``money_json``; spec 2026-11-15 8.1)."""
+    return money_json(criterion, criterion.unit, reporting)
 
 
 def finding_json(finding: FindingRow, reporting: str) -> dict[str, Any]:
@@ -329,7 +346,9 @@ def add_agent_routes(
     @app.get("/api/companies/{symbol}/kill-criteria")
     def kill_criteria(symbol: str) -> dict[str, Any]:
         with closing(conn_factory()) as conn, _refusals("kill criterion"):
-            return {"killCriteria": [record_json(k) for k in kill_criteria_for(conn, symbol)]}
+            found = kill_criteria_for(conn, symbol)
+            reporting = reporting_currency(conn, symbol)
+            return {"killCriteria": [criterion_json(k, reporting) for k in found]}
 
     @app.post("/api/companies/{symbol}/kill-criteria", status_code=201)
     def post_kill_criterion(
@@ -341,11 +360,20 @@ def add_agent_routes(
             _refusals("kill criterion"),
             transaction(conn, immediate=True),
         ):
-            criterion_id = add_kill_criterion(conn, symbol, body.text, writer, at)
+            criterion_id = add_kill_criterion(
+                conn,
+                symbol,
+                body.text,
+                writer,
+                at,
+                threshold=body.threshold,
+                unit=body.unit,
+                currency=body.currency,
+            )
             criterion = kill_criterion_row(conn, criterion_id)
             assert criterion is not None  # written in this transaction
             _record_criterion(conn, writer, at, criterion, gist(criterion.text))
-            return record_json(criterion)
+            return criterion_json(criterion, reporting_currency(conn, criterion.symbol))
 
     @app.patch("/api/kill-criteria/{criterion_id}")
     def move_kill_criterion(
@@ -361,7 +389,7 @@ def add_agent_routes(
             criterion = set_kill_criterion(conn, criterion_id, body.state, body.reason, at)
             summary = f"{criterion.state}: {gist(body.reason)}"
             _record_criterion(conn, writer, at, criterion, summary)
-            return record_json(criterion)
+            return criterion_json(criterion, reporting_currency(conn, criterion.symbol))
 
     @app.get("/api/companies/{symbol}/news-items")
     def news_items(symbol: str) -> dict[str, Any]:

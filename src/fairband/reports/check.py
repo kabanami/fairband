@@ -22,7 +22,10 @@ each failure, ``where`` the section and the part counted from 1 and the text at 
 - ``a number with no reference``: a quantity in a plain part (``quantities``);
 - ``unresolved reference``: a cite whose ref names nothing, or a figure the record does not hold;
   a ``number:`` cite names nothing, a fixed number being an operand of ``derive`` alone (spec
-  2026-11-15 7.3), "<ref> is an operand of derive: cite the derivation";
+  2026-11-15 7.3), "<ref> is an operand of derive: cite the derivation"; and a ``kill:`` cite, a
+  threshold the author chose, outside the section headed "Risks and kill criteria" (spec
+  2026-11-15 8.2), "<ref> is the author's own threshold: cite it in Risks and kill criteria",
+  where it is checked as a ``finding:`` cite is;
 - ``wrong unit``: a cite whose suffix does not fit the ref's unit, or whose number is not the
   ref's value at the report's rounding (``rounded_equal``), the value in the detail as the cite
   should read; a word cited against a number, or a word that is not the ref's;
@@ -99,6 +102,7 @@ from fairband.engine.types import Route
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
 from fairband.reports.refs import (
+    KILL_FORM,
     NUMBER_FORM,
     Resolved,
     Resolver,
@@ -136,6 +140,9 @@ HEADINGS = (
 )
 # The two sections a valuation review leaves out (design.md 7.5).
 FULL_ONLY = ("The business", "Industry and competition")
+# The one section a ``kill:`` cite passes in (spec 2026-11-15 8.2), known by its heading: section
+# 11 of a full report, the ninth of a valuation review.
+_KILL_SECTION = HEADINGS[10]
 ALWAYS_JUDGED = ("phase", "moat", "belief")
 _JUDGED_BY_ROUTE: dict[str, str] = {
     "mature-growth": "roic",
@@ -337,13 +344,14 @@ def check_sections(
     ``snapshot_id``; ``policy`` is the effective one and ``tax`` the statements' table."""
     resolver = Resolver(conn, symbol, policy, tax)
     found = []
-    for where, part in parts(sections):
+    for where, heading, part in _headed_parts(sections):
         if isinstance(part, str):
             for q in quantities(part):
                 what = NOT_EMITTED if _multiple(q) else NO_REFERENCE
                 found.append(Finding(f"{where}: {q}", what, _plain_detail(what)))
         elif isinstance(part, Mapping):
-            failure = _cite_failure(conn, resolver, snapshot_id, part)
+            in_kill_section = heading == _KILL_SECTION
+            failure = _cite_failure(conn, resolver, snapshot_id, part, in_kill_section)
             if failure is not None:
                 found.append(Finding(f"{where}: {part.get('cite', '')}", *failure))
     return found
@@ -363,10 +371,18 @@ def check_judgments(judgments: Sequence[Mapping[str, object]]) -> list[Finding]:
 
 def parts(sections: Sequence[Mapping[str, object]]) -> Iterator[tuple[str, object]]:
     """Each part of each section with its place, ``section <i>, part <j>``, counted from 1."""
+    for where, _, part in _headed_parts(sections):
+        yield where, part
+
+
+def _headed_parts(sections: Sequence[Mapping[str, object]]) -> Iterator[tuple[str, str, object]]:
+    """``parts``, each with its section's heading as written, its ends trimmed, as the structural
+    check reads it."""
     for i, section in enumerate(sections, 1):
+        heading = str(section.get("heading", "")).strip()
         found = section.get("parts")
         for j, part in enumerate(found if isinstance(found, list | tuple) else (), 1):
-            yield f"section {i}, part {j}", part
+            yield f"section {i}, part {j}", heading, part
 
 
 def cited_records(
@@ -474,9 +490,14 @@ def shown(value: float, unit: str | None) -> str:
 
 
 def _cite_failure(
-    conn: sqlite3.Connection, resolver: Resolver, latest: int, part: Mapping[str, object]
+    conn: sqlite3.Connection,
+    resolver: Resolver,
+    latest: int,
+    part: Mapping[str, object],
+    in_kill_section: bool,
 ) -> tuple[str, str] | None:
-    """The first failure of the cite, its word and its detail; ``None`` when it passes."""
+    """The first failure of the cite, its word and its detail; ``None`` when it passes. A
+    ``kill:`` cite passes only ``in_kill_section``, "Risks and kill criteria"."""
     cite, ref = str(part.get("cite", "")), str(part.get("ref", ""))
     period = part.get("period")
     for rested in sorted(snapshots_of(conn, ref)):  # a derivation's: every operand's
@@ -486,6 +507,8 @@ def _cite_failure(
     stale = _stale_review(conn, resolver.symbol, ref) or _stale_reading(conn, resolver.symbol, ref)
     if stale is not None:
         return WRONG_SNAPSHOT, stale
+    if ref.strip().startswith(f"{KILL_FORM}:") and not in_kill_section:
+        return UNRESOLVED, f"{ref} is the author's own threshold: cite it in {_KILL_SECTION}"
     resolved = resolver.resolve(ref)
     if ref.strip().startswith("derived:") and (resolved is None or resolved.value is None):
         why = "has no value" if resolved else f"is no derivation of {resolver.symbol}"

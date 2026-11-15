@@ -55,7 +55,7 @@ from fairband.reports.filing_report import row_ref
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import applied_overrides, drop_override, insert_override
-from fairband.store.research import add_finding
+from fairband.store.research import add_finding, add_kill_criterion
 from fairband.store.reviews import insert_review, review_row
 from fairband.store.secondary import insert_derivation, no_secondary
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, snapshot_row
@@ -371,6 +371,83 @@ def test_a_number_is_an_operand_of_derive_alone(
             UNRESOLVED,
             f"{ref} is an operand of derive: cite the derivation",
         )
+
+
+KILL_SECTION = "Risks and kill criteria"
+
+
+@pytest.mark.parametrize(("mode", "n"), [("full report", 11), ("valuation review", 9)])
+def test_a_kill_threshold_is_cited_in_risks_and_kill_criteria_alone(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int], mode: str, n: int
+) -> None:
+    """Spec 2026-11-15 8.2: a ``kill:`` cite passes in "Risks and kill criteria" alone, section 11
+    of a full report and the ninth of a valuation review, read by its heading; there it is checked
+    as a ``finding:`` cite is, and anywhere else it is an unresolved reference that says where it
+    goes."""
+    sid = snapshots["AAPL"]
+    names = headings(mode)
+    assert names.index(KILL_SECTION) + 1 == n  # not at one index in the two modes
+
+    def recorded(threshold: float | None, unit: Any) -> str:
+        found = add_kill_criterion(
+            conn, "AAPL", "growth below 5%", AGENT, NOW, threshold=threshold, unit=unit
+        )
+        return f"kill:{found}"
+
+    ref, words = recorded(0.05, "percent"), recorded(None, None)
+    source = {"kind": "filing", "ref": "10-K 2025, p. 12", "note": None}
+    finding = add_finding(
+        conn, "AAPL", TODAY, "growth", source, AGENT, NOW, value=0.05, unit="percent"
+    )
+
+    def check(heading: str, *cited: dict[str, Any]) -> list[Finding]:
+        sections = [
+            {"heading": h, "parts": list(cited) if h == heading else ["Plain words."]}
+            for h in names
+        ]
+        return check_sections(conn, "AAPL", sid, sections, policy)
+
+    assert check(KILL_SECTION, _cite("5%", ref), _cite("5.0%", f" {ref} ")) == []
+    elsewhere = f"{ref} is the author's own threshold: cite it in Risks and kill criteria"
+    for heading in ("Summary", "Valuation"):
+        at = names.index(heading) + 1
+        assert check(heading, _cite("5%", ref)) == [
+            Finding(f"section {at}, part 1: 5%", UNRESOLVED, elsewhere)
+        ], heading
+    # in its section, as a finding's figure is: the rounding, the suffix, the period
+    found = check(
+        KILL_SECTION,
+        _cite("5.5%", ref),
+        _cite("5.5%", f"finding:{finding}"),
+        _cite("5.0", ref),
+        _cite("5.0%", ref, "2026"),
+        _cite("5.0%", words),
+    )
+    assert [(f.where, f.what, f.detail) for f in found] == [
+        (f"section {n}, part 1: 5.5%", WRONG_UNIT, f"{ref} reads 5.0%"),
+        (f"section {n}, part 2: 5.5%", WRONG_UNIT, f"finding:{finding} reads 5.0%"),
+        (
+            f"section {n}, part 3: 5.0",
+            WRONG_UNIT,
+            f"'5.0' does not fit a percent figure: {ref} reads 5.0%",
+        ),
+        (f"section {n}, part 4: 5.0%", WRONG_PERIOD, f"{ref} has no period, not 2026"),
+        (f"section {n}, part 5: 5.0%", UNRESOLVED, f"{words} names no stored value"),
+    ]
+
+
+def test_the_kill_cite_adds_no_failure_word() -> None:
+    """Spec 2026-11-15 8.2: a ``kill:`` cite out of its section is an unresolved reference, so the
+    list of checks Appendix A reads from the code is as it was."""
+    assert FAILURES == (
+        "unresolved reference",
+        "wrong unit",
+        "wrong period",
+        "wrong snapshot",
+        "a number with no reference",
+        "a derived figure the engine has not emitted",
+    )
+    assert len(CHECKS) == 11
 
 
 def test_a_derivation_rests_on_every_snapshot_of_its_operands(
