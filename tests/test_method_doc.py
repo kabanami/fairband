@@ -1291,10 +1291,12 @@ def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> N
             " derivation of it (spec 2026-11-15 4): an operand is foreign in a currency where it is"
             " a record in that currency, or a `derived:` operand whose stored derivation has an"
             " operand foreign in it, read through the stored rows as the tree is (above), but for"
-            " three derivations, foreign in nothing: a `product` or a `ratio` with a"
-            " `snapshot:<id>/inputs/fx_rate` ref, which converted it; a `growth` or a `cagr`, a"
-            " percent having no currency; and a `ratio` of two operands foreign in the same"
-            " currency, which cancels it."
+            " three derivations, foreign in nothing: the `product` of an operand foreign in US"
+            " dollars and a `snapshot:<id>/inputs/fx_rate` ref, the reporting currency per US"
+            " dollar, which converted it (a `ratio` over the rate, or the rate's product with an"
+            " operand in another currency, converts nothing and keeps its mark); a `growth` or a"
+            " `cagr`, a percent having no currency; and a `ratio` of two operands foreign in the"
+            " same currency, which cancels it."
         ),
         "A derivation is still stored with no currency; the mark is read where it is an operand.",
         (
@@ -1339,6 +1341,8 @@ def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> N
     for old in (
         "by two rules: a derivation has no value",
         "since a derivation carries no currency",
+        # the controller's ruling 9: a ratio over the rate converts nothing
+        "a `product` or a `ratio` with a `snapshot:<id>/inputs/fx_rate` ref",
     ):
         assert old not in derivations, old
 

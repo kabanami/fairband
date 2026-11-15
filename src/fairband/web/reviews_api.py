@@ -148,14 +148,16 @@ A record in another currency
 is not the reporting currency (``Resolver.reporting``), in either direction, is kept out of money
 arithmetic until it is converted, and so is a derivation of it (method 16.4): an operand is foreign
 in that currency where it is such a record, or a ``derived:`` operand whose tree carries it
-(``_carried``), but a ``product`` or a ``ratio`` with the rate (``snapshot:<id>/inputs/fx_rate``)
-converted it, a ``growth`` or a ``cagr`` is a percent, and a ``ratio`` of two operands in one
-currency cancels it. An operand foreign in a currency, with a ``currency`` or ``per-share`` figure
-or an operand foreign in another currency, gives no value and no unit, and where the rules above
-give it a money unit it has none, since a stored derivation has no currency. So two records in one
-currency give a growth, a ratio, and a sum or a difference with no unit, a quarter or an average of
-a record is still in its currency, and a record times the rate (which has no unit) is the figure
-converted, with no unit. ``GET /api/derivations/{id}`` reads one back, 404 without it.
+(``_carried``), but the ``product`` of an operand in US dollars and the rate
+(``snapshot:<id>/inputs/fx_rate``, the reporting currency per US dollar) converted it, a
+``growth`` or a ``cagr`` is a percent, and a ``ratio`` of two operands in one currency cancels it;
+a ratio over the rate, or the rate's product with another currency, converts nothing. An operand
+foreign in a currency, with a ``currency`` or ``per-share`` figure or an operand foreign in another
+currency, gives no value and no unit, and where the rules above give it a money unit it has none,
+since a stored derivation has no currency. So two records in one currency give a growth, a ratio,
+and a sum or a difference with no unit, a quarter or an average of a record is still in its
+currency, and a US-dollar record times the rate (which has no unit) is the figure converted, with
+no unit. ``GET /api/derivations/{id}`` reads one back, 404 without it.
 
 ``sensitivity_api`` shares ``require_current``, ``agents_only``, ``snapshot_of``, ``built_inputs``
 (the store-moved 409), ``judged_route`` (the route the rules judge a tag on) and ``counted``.
@@ -1127,13 +1129,16 @@ def _foreign(resolver: Resolver, found: Resolved | None) -> str | None:
 def _carried(operation: str, refs: tuple[str, str], a: _Tree, b: _Tree) -> str | None:
     """The currency a stored derivation carries where it is an operand (method 16.4): that of an
     operand foreign in it, a record in another currency or a derivation that carries one; none for
-    a ``product`` or a ``ratio`` with the rate, ``snapshot:<id>/inputs/fx_rate``, which converted
-    it, for a ``growth`` or a ``cagr``, a percent having no currency, and for a ``ratio`` of two
-    operands in one currency, which cancels it."""
+    the ``product`` of an operand in US dollars and the rate, ``snapshot:<id>/inputs/fx_rate``,
+    the reporting currency per US dollar, which converted it, for a ``growth`` or a ``cagr``, a
+    percent having no currency, and for a ``ratio`` of two operands in one currency, which cancels
+    it. A ratio over the rate, or the rate's product with another currency, converts nothing."""
     fa, fb = (x.foreign if isinstance(x, _Leaf | _Node) else None for x in (a, b))
     if operation in ("growth", "cagr"):
         return None
-    if operation in ("product", "ratio") and any(_is_rate(ref) for ref in refs):
+    if operation == "product" and (
+        (_is_rate(refs[1]) and fa == "USD") or (_is_rate(refs[0]) and fb == "USD")
+    ):
         return None
     if operation == "ratio" and fa == fb:
         return None

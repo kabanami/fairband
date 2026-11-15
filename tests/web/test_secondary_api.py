@@ -1818,6 +1818,43 @@ def test_a_derivation_carries_its_record_s_currency_until_it_is_converted(
     ]
 
 
+def test_only_a_us_dollar_figure_s_product_with_the_rate_converts(
+    client: TestClient, db_path: Path
+) -> None:
+    """Method 16.4 (the controller's ruling 9) on FXCO, SEK at 8.0 a dollar: the rate is kronor
+    per US dollar, so only the product of a figure in US dollars and the rate converts it. A euro
+    record times the rate keeps its euros, and a US-dollar record over the rate keeps its dollars,
+    so each then has no value with the SEK revenue; a US-dollar record times the rate, the rate
+    written first, still converts and combines."""
+    snapshot_id = _sek_revenue(db_path)
+    usd, eur = _money_findings(db_path, "FXCO", (110e6, "USD"), (40e6, "EUR"))
+    rate, revenue = f"snapshot:{snapshot_id}/inputs/fx_rate", "fact:FXCO/revenue/2025"
+    first = _next_derivation(db_path)
+
+    def at(n: int) -> str:  # the call's n-th derivation, counted from 0
+        return f"derived:{first + n}"
+
+    r = _derive(
+        client,
+        {"operation": "product", "a": eur, "b": rate},  # 0: still in euros
+        {"operation": "sum", "a": at(0), "b": revenue},
+        {"operation": "ratio", "a": usd, "b": rate},  # 2: still in US dollars
+        {"operation": "sum", "a": at(2), "b": revenue},
+        {"operation": "product", "a": rate, "b": usd},  # 4: in SEK
+        {"operation": "sum", "a": at(4), "b": revenue},
+        symbol="FXCO",
+    )
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (pytest.approx(320e6), None),
+        (None, None),
+        (pytest.approx(13.75e6), None),
+        (None, None),
+        (pytest.approx(880e6), None),
+        (pytest.approx(1_680e6), None),
+    ]
+
+
 def test_one_derivation_does_not_convert_a_record(client: TestClient, db_path: Path) -> None:
     """The whole-branch review's ``test_launder`` on FXCO: a US-dollar finding over ``number:4``,
     stored by one call, is still in US dollars in the next, so its growth and its ratio over the
