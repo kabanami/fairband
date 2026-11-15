@@ -543,8 +543,8 @@ def test_the_v13_values_at_their_ends_load(
 
 @pytest.mark.parametrize("value", ["0.20", "0.09", "1.01", "nan"])
 def test_a_cap_outside_its_range_is_refused(tmp_path: Path, value: str) -> None:
-    """The cap is no setting, so the file is the only way in. It stays above 20%, the highest
-    required return a setting allows, so the capped return is always above r."""
+    """The file's cap is checked as the setting's is (a setting since 2026-11-15). It stays above
+    20%, the highest required return a setting allows, so the capped return is always above r."""
     rule = "return_without_goodwill_cap: must be above 20% and at most 100%"
     with pytest.raises(ValueError, match=f"^{re.escape(rule)}$"):
         load_policy(_packaged_with(tmp_path, "return_without_goodwill_cap", value))

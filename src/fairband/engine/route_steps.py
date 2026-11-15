@@ -18,9 +18,8 @@ method), and a route reads each input of ``overrides.TAGS`` through ``chosen``: 
 value when one applies, else the route's own reading. ``judgment_inputs`` are the JUDGMENT
 entries ``route`` cites for them. ``RoicTerms.of`` takes an overriding runway return as
 ``runway_override``: it replaces the runway return the charge uses, the start of its fade, and
-charges the runway years, and the terminal return still follows the moat on the measured return,
-save on a row the engine started at the return without goodwill, where the moat's rule reads the
-override (14.4).
+charges the runway years, and the moat's terminal rule reads the override in place of the
+measure on every row (``method.md`` 4.7, 14.4).
 ``outside_value`` is an agent's value outside the business a share, nil without one: each valued
 route adds it to its own value a share, and every solve on the price targets the price less it,
 ``business_price``, the business's share of the price (``method.md`` 14.4). The share count
@@ -195,8 +194,9 @@ class RoicTerms:
         measured return (``return-floored``, ``return-without-goodwill``, ``charge-zeroed``) are
         not raised. The override is the return in force, so the moat's terminal rule reads it
         too, whatever the engine measured (``method.md`` 4.7, 14.4): the terminal return never
-        stands above an agent's lower start, and an override equals the return sensitivity at
-        the same figure. ``revenue`` is each fiscal year's revenue, from which the marginal
+        stands above an agent's start at or above r (the rule's floor is r, so a start below
+        r still fades up to it), and on Mature Growth an override equals the return
+        sensitivity at the same figure. ``revenue`` is each fiscal year's revenue, from which the marginal
         return at a constant margin is recorded; without it the record holds no figure."""
         result = aggregate_roic(years)
         rr = runway_return(result, moat, policy)

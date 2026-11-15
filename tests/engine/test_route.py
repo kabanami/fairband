@@ -867,9 +867,9 @@ def test_a_runway_override_sets_the_terminal_return_and_equals_the_return_sensit
     policy: Policy, deciles: Deciles
 ) -> None:
     """An agent's ``return.runway`` is the return in force: the moat's terminal rule reads it,
-    so a Wide row's terminal return never stands above an agent's lower start, and the value
-    under the override is the row's own return sensitivity at the same figure (method 4.7, 5.8,
-    14.4; the founder's ruling of 2026-11-15)."""
+    so a Wide row's terminal return never stands above an agent's start at or above r, and on
+    Mature Growth the value under the override is the row's own return sensitivity at the same
+    figure (method 4.7, 5.8, 14.4; the founder's ruling of 2026-11-15)."""
     inputs = engine_companies.mature_growth_inputs()
     mechanical = value_company(inputs, deciles, policy, TODAY)
     im = mechanical.intermediates

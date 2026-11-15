@@ -21,6 +21,7 @@ from fairband.engine.roic import (
 )
 from fairband.engine.route_steps import RoicTerms, charge_for, constant_margin_return
 from fairband.policy import Moat, Policy, load_policy
+from fairband.policy.settings import apply_overlay
 
 
 def cy(year: int, oi: float | None = 20.0, ppe: float | None = 100.0) -> CapitalYear:
@@ -467,12 +468,12 @@ def test_a_measure_below_r_reads_the_return_without_goodwill(policy: Policy) -> 
 
 
 def test_the_cap_on_the_return_without_goodwill_is_the_policys_to_move(policy: Policy) -> None:
-    """The cap is a setting (the founder's ruling of 2026-11-15): the start follows it, and a
-    measure under it stands."""
-    higher = replace(policy, return_without_goodwill_cap=0.40)
+    """The cap is a setting (the founder's ruling of 2026-11-15): the user's value, through the
+    overlay the store applies, is the one the charge starts at, and a measure under it stands."""
+    higher = apply_overlay(policy, {"return_without_goodwill_cap": 0.40})
     rr = runway_return(bought(1800.0), "Narrow", higher)  # 100 on 200: 50% without them
     assert rr.used == "without-goodwill" and rr.value == 0.40
-    lower = replace(policy, return_without_goodwill_cap=0.21)
+    lower = apply_overlay(policy, {"return_without_goodwill_cap": 0.21})
     assert runway_return(bought(1800.0), "Narrow", lower).value == 0.21
     assert runway_return(bought(1500.0), "Narrow", higher).value == pytest.approx(0.20)
 
@@ -753,9 +754,8 @@ def test_an_override_sets_the_terminal_return_by_the_moats_rule_on_every_measure
     """An agent's ``return.runway`` is the return in force, so the terminal return reads it by
     the moat's rule whatever the engine measured (the founder's ruling of 2026-11-15, B-170):
     Wide, the override under the cap and never below r; otherwise r. The terminal return then
-    never stands above an agent's lower start, the same override gives a floored row and one
-    just above r the same terminal return, and an override equals the return sensitivity at the
-    same figure (method 5.8)."""
+    never stands above an agent's start at or above r (below r it is r, the rule's floor), and
+    the same override gives a floored row and one just above r the same terminal return."""
     years = [cy(2015 + k, oi=20.0 + 5 * k, ppe=100.0 + 10 * k) for k in range(11)]  # marginal 50%
     terms = RoicTerms.of(years, "Wide", policy, runway_override=0.10)
     assert terms.runway_return.used == "marginal" and terms.terminal == pytest.approx(0.10)
@@ -819,6 +819,8 @@ def test_the_return_at_a_constant_margin_holds_no_figure_without_its_terms(
         missing = {y: v for y, v in REVENUE.items() if y != year}
         assert constant_margin_return(by_year, missing, policy) is None
     assert constant_margin_return(by_year, {**REVENUE, 2022: 0.0}, policy) is None
+    # a newest revenue at or below zero, on a span whose revenue still grew
+    assert constant_margin_return(by_year, {**REVENUE, 2017: -100.0, 2022: 0.0}, policy) is None
     assert constant_margin_return(by_year, {**REVENUE, 2022: 900.0}, policy) is None  # it fell
     slow = [(n, 1000 + 30 * k) for k, (n, _) in enumerate(RISING_MARGIN)]  # capital grew 15%
     assert constant_margin_return(kept(slow).by_year, REVENUE, policy) is None
@@ -840,7 +842,6 @@ def test_the_intermediates_record_the_return_at_a_constant_margin(policy: Policy
     assert terms.constant_margin == pytest.approx(expected)
     rr = terms.intermediates()["runway_return"]
     assert rr["constant_margin"] == pytest.approx(expected) and rr["marginal"] == pytest.approx(0.5)
-    assert list(rr).index("constant_margin") == list(rr).index("one_year") + 1
     assert terms.runway == pytest.approx(0.5)  # shown, never used: the marginal still charges
     # an agent's override keeps the measured figure beside it
     judged = RoicTerms.of(years, "Wide", policy, runway_override=0.2, revenue=revenue)

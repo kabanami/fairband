@@ -142,9 +142,15 @@ def test_the_runway_returns_rulings_of_2026_11_15() -> None:
             "The override is the return in force, so the moat's terminal rule (4.7) reads it in "
             "place of the measure, on every row"
         ),
-        "So the terminal return never stands above an agent's lower start",
+        (
+            "So the terminal return never stands above an agent's start at or above r, while a "
+            "start below r, which the range allows, still fades up to r"
+        ),
         "the same terminal return",
-        "the row's own return sensitivity at the same figure (5.8)",
+        (
+            "on Mature Growth the value under the override alone is the row's own return "
+            "sensitivity at the same figure (5.8; the Mature Stable route has no return sensitivity)"
+        ),
     ):
         assert words in bullet, words
     assert "the terminal return stays at r" not in bullet
@@ -181,6 +187,8 @@ def test_the_runway_returns_rulings_of_2026_11_15() -> None:
         "a ROIC year on average invested capital at or below zero written as its note"
     ) in sixteen
     assert "as the page's ROIC chart leaves that year out and names it under the chart" in sixteen
+    assert "the report page's ROIC chart leaves a year on average invested capital" in rows[-1]
+    assert "an agent set at r, which sets the terminal return at r too (14.4)" in four
 
 
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:

@@ -949,8 +949,21 @@ def test_the_agent_weighs_the_marginal_return_against_the_return_at_a_constant_m
             "on that capital: the marginal stands"
         ),
         "Decide it in the `roic` judgment, and cite both figures.",
+        "on a Wide row a figure below the Wide cap lowers the terminal return too",
     ):
         assert words in eight, words
+    # the references name the figure, and the inputs' table says what the override also sets
+    assert (
+        "`runway_return/constant_margin`, the five-year marginal return at a constant margin"
+        in (_flat(_read(CITATIONS)))
+    )
+    assert "cite both, `/runway_return/marginal` and `/runway_return/constant_margin`" in _flat(
+        _read(TEMPLATE)
+    )
+    assert (
+        "on a Wide row it also sets the terminal return, at most the Wide cap and never below the "
+        "hurdle rate"
+    ) in _flat(_read(SKILL))
 
 
 def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:

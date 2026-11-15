@@ -3221,6 +3221,10 @@ def test_a_missing_cell_is_a_gap() -> None:
         _function(script, "roicPoints")
     )
     assert "var drawn = roicPoints(rows[c.row], rows[c.hurdle]);" in _function(script, "spread")
+    # with every year left out, the panel shows that sentence, not "No data on file."
+    assert "if (!drawn.series.length) return panel(c.title, noData(c.title, drawn.left));" in (
+        _function(script, "spread")
+    )
     month = _function(script, "byMonth")
     assert "value: Object.prototype.hasOwnProperty.call(last, key) ? last[key] : null" in month
     band = _function(script, "band")

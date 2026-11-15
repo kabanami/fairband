@@ -105,7 +105,8 @@ business's own values, before any value outside the business is added.
   sales_class, median), ``moat``, ``runway``, ``fade_years``, ``growth_rates`` (years 2 to the
   runway), ``roic`` (aggregate, years, by_year, each kept year with its
   average_goodwill_and_intangibles), ``runway_return`` (used, marginal, marginal_usable,
-  three_year, ten_year, one_year, without_goodwill, value), ``terminal_roic``, ``charge_off``,
+  three_year, ten_year, one_year, constant_margin, without_goodwill, value), ``terminal_roic``,
+  ``charge_off``,
   ``charge`` (growth_by_year, return_by_year, hold_years, revenue_steps, the steps the charge
   read, an agent's included, revenue_steps_found, the consensus's as found, and
   revenue_step_source, each year's ``consensus``, ``agent``, ``thin`` or ``none``), ``shares`` (the

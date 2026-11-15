@@ -191,7 +191,10 @@ The kill criteria of section 11 test it.
   for `/charge/hold_years` years, and the growth it pays for, `/charge/growth_by_year/<n>`. A year
   whose growth outruns its return pays out less than nothing: say the owners fund that year's
   growth. Under heavy capital spending, cite the newest year's marginal return,
-  `/runway_return/one_year`, beside the return you chose. Where the return starts at the figure
+  `/runway_return/one_year`, beside the return you chose. Where the return starts at the
+  five-year marginal return and you weighed it against the same return at a constant margin,
+  cite both, `/runway_return/marginal` and `/runway_return/constant_margin`, and say what
+  raised the margin. Where the return starts at the figure
   without goodwill (the note `return-without-goodwill`), cite the return on the capital without
   goodwill and intangibles, `/runway_return/without_goodwill/measure`, say that the return with
   them is below the yearly return investors require, and say why the growth ahead is the

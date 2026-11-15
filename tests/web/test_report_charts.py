@@ -83,6 +83,28 @@ def test_a_row_without_such_a_year_draws_every_point_and_says_nothing() -> None:
     assert _call("reportCharts.roicPoints", None, HURDLE) == {"series": [], "left": None}
 
 
+def test_every_year_left_out_leaves_no_point_and_the_sentence() -> None:
+    """The panel then shows the sentence in place of "No data on file." (``spread``)."""
+    notes = {str(year): NOTE for year in range(2021, 2026)}
+    drawn = _call("reportCharts.roicPoints", _row([-1.0, -2.0, -3.0, -4.0, -5.0], notes), HURDLE)
+    assert drawn["series"] == []
+    assert drawn["left"] == (
+        "Fiscal 2021, 2022, 2023, 2024 and 2025 are not drawn: "
+        "average invested capital is at or below zero."
+    )
+
+
+def test_a_year_on_capital_of_exactly_zero_has_no_figure_and_is_named_too() -> None:
+    """At exactly zero the engine's ROIC is none and the cell still carries the note
+    (``tables.NO_CAPITAL``): the export writes the note, so the page names the year."""
+    roic = _row([0.20, 0.25, 0.30, None, 0.31], {"2024": NOTE})
+    drawn = _call("reportCharts.roicPoints", roic, HURDLE)
+    assert [p["period"] for p in drawn["series"]] == ["2021", "2022", "2023", "2025"]
+    assert drawn["left"] == (
+        "Fiscal 2024 is not drawn: average invested capital is at or below zero."
+    )
+
+
 def test_three_years_left_out_are_listed_with_commas() -> None:
     notes = {"2023": NOTE, "2024": NOTE, "2025": NOTE}
     drawn = _call("reportCharts.roicPoints", _row([0.2, 0.2, -5.0, -6.0, -7.0], notes), HURDLE)

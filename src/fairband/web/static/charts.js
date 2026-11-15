@@ -145,14 +145,15 @@
 
   /* The ROIC chart's points, percentages, a year missing either figure left out; and `left`, the
      sentence for the years left out because the ROIC cell carries a note: average invested
-     capital at or below zero, on which the figure has the wrong sign and no meaning (method
-     16.5), "Fiscal 2024 and 2025 are not drawn: <the note>.", none without such a year. */
+     capital at or below zero, on which the figure has the wrong sign and no meaning, or at
+     exactly zero is none (method 16.5), "Fiscal 2024 and 2025 are not drawn: <the note>.",
+     none without such a year. */
   function roicPoints(roic, hurdle) {
     var cells = !roic || !hurdle ? [] : roic.cells.map(function (cell, i) {
       return { period: cell.period, roic: cell.value, wacc: hurdle.cells[i].value,
         note: cell.note };
     });
-    var noted = cells.filter(function (p) { return p.note && p.roic != null; });
+    var noted = cells.filter(function (p) { return p.note; });
     var series = cells.filter(function (p) {
       return p.roic != null && p.wacc != null && !p.note;
     }).map(function (p) { return { period: p.period, roic: p.roic * 100, wacc: p.wacc * 100 }; });

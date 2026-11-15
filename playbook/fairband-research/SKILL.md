@@ -472,7 +472,8 @@ company already had reads as a return on new capital, though it took none. The f
 constant margin leaves that rise out: the newest margin times the revenue added, over the
 capital added. Where it sits well below the marginal, find what raised the margin. Costs cut, or
 prices at a cycle's peak, do not repeat on new capital: set `return.runway` at the
-constant-margin figure, or between the two, with the evidence. A mix that moved to a line with a
+constant-margin figure, or between the two, with the evidence; on a Wide row a figure below the
+Wide cap lowers the terminal return too. A mix that moved to a line with a
 higher margin, where the new capital went, is a return on that capital: the marginal stands, and
 section 8 says why. The engine does not choose: no measure on the stored years says well what
 growth will cost. Decide it in the `roic` judgment, and cite both figures.
@@ -805,7 +806,7 @@ not you, computes the value it gives.
 | `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | the moat class; it sets the margin of safety, the runway and the terminal return | `None`, `Narrow` or `Wide` |
 | `margin.target` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten | −0.50 to 0.60 |
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | the revenue a dollar of invested capital buys | 0.1 to 10 |
-| `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end | above 0 to 5.00 |
+| `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end; on a Wide row it also sets the terminal return, at most the Wide cap and never below the hurdle rate | above 0 to 5.00 |
 | `earnings.nri_gap` | Mature Growth, Mature Stable | the non-recurring gap in the earnings a share | −100 to 100 dollars a share |
 | `earnings.sbc` | Mature Growth | the trailing stock pay, a total for the trailing periods in the reporting currency, from the cash flow statements of their filings; it stands in for the stored figure in the test of the analysts' basis and in the charge for stock pay | 0 dollars or more, period-tied; lasting at 0 only, for a company that pays no stock |
 | `earnings.sbc_basis` | Mature Growth | whether the analysts' EPS includes stock pay or excludes it, in place of the engine's test; the evidence is the company's own definition of its adjusted EPS in the release | `includes` or `excludes`; lasting or period-tied |

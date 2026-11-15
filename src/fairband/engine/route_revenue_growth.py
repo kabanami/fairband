@@ -198,6 +198,7 @@ from fairband.engine.route_steps import (
     outside_value,
     present,
     price_facts_for,
+    revenue_by_fiscal_year,
     rule,
     sheet_entry,
     signed,
@@ -275,7 +276,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         path = replace(path, hold=chosen(c, "path.hold", path.hold))
         path_flags = tuple(f for f in path_flags if f.code != "consensus-above-base-rate")
     moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
-    roic = RoicTerms.of(i.capital_years, moat, policy)
+    roic = RoicTerms.of(i.capital_years, moat, policy, revenue=revenue_by_fiscal_year(i))
     s2c = _sales_to_capital(c, roic)
     outside = outside_value(c)
     rebuild: dict[str, Any] = {
@@ -619,7 +620,7 @@ def _sales_to_capital(c: Context, roic: RoicTerms) -> _SalesToCapital:
     (spec 2026-11-06 7.1); else the mature peers' median; else none. An agent's figure stands
     over all three, the measures kept beside it."""
     i, policy = c.inputs, c.policy
-    revenue = {fy.year: fy.revenue for fy in i.series if fy.revenue is not None}
+    revenue = revenue_by_fiscal_year(i)
     own, usable = own_sales_to_capital(
         roic.result.by_year,
         revenue,

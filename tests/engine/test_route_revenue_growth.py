@@ -36,9 +36,15 @@ from fairband.engine.revenue_growth import (
     revenue_valuation,
 )
 from fairband.engine.review import review_company
+from fairband.engine.roic import aggregate_roic
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.route_revenue_growth import consensus_beyond, implied_margin_at_price
-from fairband.engine.route_steps import sheet_entry, sheet_note
+from fairband.engine.route_steps import (
+    constant_margin_return,
+    revenue_by_fiscal_year,
+    sheet_entry,
+    sheet_note,
+)
 from fairband.engine.types import TaggedInput, ValuationResult, result_from_json, result_to_json
 from fairband.policy import Policy
 
@@ -1110,6 +1116,12 @@ def test_cross_check_present_with_a_positive_anchor(
     gr = p.intermediates["growth_route"]
     assert gr["value_per_share"] is not None and gr["refusal"] is None
     assert "implied_growth" in gr and gr["path_steps"] == pytest.approx([0.28, 0.25])
+    # the cross-check's record of the runway return carries the marginal return at a constant
+    # margin as a mature row's does (method 4.6), from the row's own fiscal years
+    assert "constant_margin" in gr["runway_return"]
+    assert gr["runway_return"]["constant_margin"] == constant_margin_return(
+        aggregate_roic(positive.capital_years).by_year, revenue_by_fiscal_year(positive), policy
+    )
     assert p.value == r.value  # the cross-check never moves the value
     assert p.intermediates["eps"]["forward"] == pytest.approx(2.40)
     assert p.intermediates["multiples"]["pe_forward"] == pytest.approx(150 / 2.40)
