@@ -2,10 +2,10 @@
 
 An agent's write carries ``X-Fairband-Principal: agent``, ``X-Fairband-Actor`` (the model
 identifier it runs as, kept exactly as it arrived) and ``X-Fairband-Client`` (its client's name
-and version, ``<name>/<version>``, when the client sends one). A request without the principal
-header, or with ``owner``, is the owner's: the page and the CLI send none. An agent's write
-without an actor is refused 400 with ``IDENTIFY_FIRST``, and any other principal 400: ``system``
-is the engine's own writes, which no request makes.
+and version, ``<name>/<version>``, when the client sends one; a blank one names none). A request
+without the principal header, or with ``owner``, is the owner's: the page and the CLI send none.
+An agent's write without an actor is refused 400 with ``IDENTIFY_FIRST``, and any other principal
+400: ``system`` is the engine's own writes, which no request makes.
 """
 
 from fastapi import HTTPException, Request
@@ -28,4 +28,5 @@ def writer_of(request: Request) -> Writer:
     actor = request.headers.get(ACTOR_HEADER, "")
     if not actor.strip():
         raise HTTPException(400, IDENTIFY_FIRST)
-    return Writer("agent", actor, request.headers.get(CLIENT_HEADER))
+    client = request.headers.get(CLIENT_HEADER)
+    return Writer("agent", actor, client if client is not None and client.strip() else None)

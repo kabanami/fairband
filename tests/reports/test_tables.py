@@ -228,6 +228,40 @@ def test_returns_read_the_engine_s_roic(conn: sqlite3.Connection, policy: Policy
     assert earlier == [(None, "the ten-year aggregate is the newest year's figure")] * 4
 
 
+@pytest.mark.parametrize(("first", "years"), [(2014, 10), (2016, 9), (2018, 7), (2020, 5)])
+def test_the_aggregate_says_how_many_years_it_holds_below_ten(
+    conn: sqlite3.Connection, policy: Policy, first: int, years: int
+) -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 9): the newest year's aggregate ROIC cell is noted
+    "over <n> years" where the engine's aggregate holds fewer than ten usable years, n of them;
+    with ten it carries no note. ACME's statements kept from ``first`` on: twelve years from 2014
+    give ten ROIC years, the last ten of eleven, and each later start one fewer."""
+    with transaction(conn):
+        conn.execute(
+            "DELETE FROM facts WHERE symbol = 'ACME' AND dataset LIKE '%-annual'"
+            " AND period_end < ?",
+            (f"{first}-01-01",),
+        )
+    capital = statements_for(conn, "ACME", "US", load_tax_table(), date(2026, 11, 1)).capital_years
+    engine = aggregate_roic(capital)
+    assert engine.years_used == years and engine.aggregate is not None
+    cell = _row(financial_tables(conn, "ACME", policy), "returns", "aggregate_roic_ten_year")
+    note = None if years == 10 else f"over {years} years"
+    assert (cell["2025"].value, cell["2025"].note) == (engine.aggregate, note)
+
+
+def test_no_aggregate_says_no_years(conn: sqlite3.Connection, policy: Policy) -> None:
+    """Fewer than five ROIC years give the engine no aggregate: the newest cell holds no figure
+    and, holding none, no note of its years, as before."""
+    with transaction(conn):
+        conn.execute(
+            "DELETE FROM facts WHERE symbol = 'ACME' AND dataset LIKE '%-annual'"
+            " AND period_end < '2021-01-01'"
+        )
+    cell = _row(financial_tables(conn, "ACME", policy), "returns", "aggregate_roic_ten_year")
+    assert (cell["2025"].value, cell["2025"].note) == (None, None)
+
+
 def test_the_hurdle_rate_of_a_company_in_another_currency_is_restated(
     conn: sqlite3.Connection, policy: Policy
 ) -> None:

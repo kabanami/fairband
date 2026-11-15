@@ -11,6 +11,7 @@ import pytest
 from fairband.store.ledger import OWNER, Writer
 from fairband.store.overrides import insert_override
 from fairband.store.research import (
+    AlreadyInState,
     FindingRow,
     KillCriterionRow,
     NewsItemRow,
@@ -372,8 +373,9 @@ def test_a_kill_criterion_moves_state_with_a_reason(conn: sqlite3.Connection) ->
         set_kill_criterion(conn, criterion, "triggered", " ", LATER)
     with pytest.raises(ValueError, match="^a kill criterion's state is open, triggered or retired"):
         set_kill_criterion(conn, criterion, "broken", "x", LATER)  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="^kill criterion 1 is already open$"):
+    with pytest.raises(AlreadyInState, match="^kill criterion 1 is already open$"):
         set_kill_criterion(conn, criterion, "open", "still holds", LATER)
+    assert issubclass(AlreadyInState, ValueError)  # B-103 clause 1: the route's 409
     with pytest.raises(KeyError):
         set_kill_criterion(conn, 99, "retired", "x", LATER)
     moved = set_kill_criterion(conn, criterion, "triggered", "Q3 gross margin 39.8%", LATER)

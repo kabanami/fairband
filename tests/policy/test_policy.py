@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from fairband.engine.overrides import TAGS
 from fairband.policy import BaseRateClass, load_policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH, SETTINGS
 
@@ -642,6 +643,66 @@ def test_an_override_range_that_does_not_ascend_is_refused(tmp_path: Path, pair:
         ValueError, match=r"\[values\.override_ranges\] is malformed .*growth\.belief"
     ):
         load_policy(copy)
+
+
+def _ranges_written(tmp_path: Path, old: str, new: str) -> Path:
+    """A copy of the packaged file with ``old``, which it holds once, written as ``new``."""
+    text = _packaged_bytes().decode()
+    assert text.count(old) == 1
+    copy = tmp_path / "policy.toml"
+    copy.write_text(text.replace(old, new))
+    return copy
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "section", "refusal"),
+    [
+        (  # B-103 (spec 2026-11-15 12.1, clause 10): a tag the engine does not know
+            '"growth.belief" = [-0.20, 0.60]',
+            '"growth.belief" = [-0.20, 0.60]\n"growth.beleif" = [-0.20, 0.60]',
+            "override_ranges",
+            "ValueError: 'growth.beleif' is not an override tag",
+        ),
+        (
+            '"growth.belief" = [-0.20, 0.60]',
+            '"growth.belief" = [0.60, -0.20]',
+            "override_ranges",
+            "ValueError: the range of growth.belief, 0.6 to -0.2, does not ascend",
+        ),
+        (
+            "tax_rate = [0.0, 0.50]",
+            "tax_rate = [0.50, 0.50]",
+            "secondary_driver_ranges",
+            "ValueError: the range of tax_rate, 0.5 to 0.5, does not ascend",
+        ),
+        (
+            "[values.override_ranges.value]",
+            "value = 3\n\n[values.override_ranges.unread]",
+            "override_ranges",
+            "TypeError: 3 is not a table of ranges",
+        ),
+        (
+            "[values.secondary_driver_ranges.value]",
+            'value = ["revenue_growth"]\n\n[values.secondary_driver_ranges.unread]',
+            "secondary_driver_ranges",
+            "TypeError: ['revenue_growth'] is not a table of ranges",
+        ),
+    ],
+)
+def test_a_malformed_range_table_is_refused_in_its_words(
+    tmp_path: Path, old: str, new: str, section: str, refusal: str
+) -> None:
+    """Each refusal of a range table, whole: a name the engine has no override tag for, a range
+    whose low is not below its high, and a value that is not a table of ranges."""
+    with pytest.raises(ValueError) as refused:
+        load_policy(_ranges_written(tmp_path, old, new))
+    assert str(refused.value) == f"policy: [values.{section}] is malformed ({refusal})"
+
+
+def test_every_override_range_of_the_shipped_policy_names_a_tag() -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 10): the shipped policy loads, every name of its
+    override ranges an override tag the engine knows."""
+    assert load_policy().override_ranges.keys() <= TAGS.keys()
 
 
 def test_v7_is_v6_with_the_two_values_added() -> None:

@@ -25,7 +25,7 @@ from fairband.store.inbox import (
     work_item,
     work_items,
 )
-from fairband.store.ledger import OWNER, Writer
+from fairband.store.ledger import OWNER, LedgerRow, Writer, entries
 from fairband.store.snapshots import insert_snapshot
 from fairband.store.watchlists import add_symbol, create_watchlist, remove_symbol
 
@@ -286,3 +286,24 @@ def test_a_declined_expiry_item_holds_for_its_window(conn: sqlite3.Connection, c
         date(2026, 10, 15),
     )
     assert work_item(conn, first).state == "declined"
+
+
+def test_the_expiry_rule_writes_its_own_ledger_rows(conn: sqlite3.Connection, core: int) -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 2): the expiry rule writes the system's ledger row of
+    each item it posts and each it drops, in its own transaction, each resting on the company's
+    latest snapshot and naming the item; a run that posts and drops nothing writes none."""
+    snapshot_id = _expire(conn, "AAPL")
+    [item_id], [] = post_expiry_items(conn, TODAY, NOW)
+    assert post_expiry_items(conn, TODAY, NOW) == ([], [])
+    remove_symbol(conn, core, "AAPL")
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [item_id])
+    assert not conn.in_transaction
+
+    def row(n: int, at: datetime, kind: str, summary: str) -> LedgerRow:
+        refs = ("work_items", item_id, snapshot_id, item_id)
+        return LedgerRow(n, at, "system", None, None, kind, "AAPL", *refs, summary)
+
+    assert entries(conn) == [
+        row(2, LATER, "drop", "dropped: AAPL is on no watchlist"),
+        row(1, NOW, "work-item", "valuation review posted: expired 2026-10-01"),
+    ]

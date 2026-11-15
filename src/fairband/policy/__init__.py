@@ -16,7 +16,8 @@ so a file outside them fails at load with the setting's name.
 The six values v8 adds for the agents and the one v9 adds (spec 2026-11-06 Tier 2, section 19)
 are not settings: the override ranges (v9 adds the cycle gap's), the evidence rule above the 90th
 percentile, the secondary valuation's bounds, its driver ranges (v9) and the stance words. An
-override range or a driver range whose low is not below its high fails at load. The two values v10
+override range or a driver range whose low is not below its high fails at load, as does an
+override range whose name is no tag the engine knows (``engine.overrides.TAGS``). The two values v10
 adds (spec 2026-11-09, section 11), the step-series gap and the split implied-count tolerance, are
 not settings either, nor are the two override ranges it adds, the outside value's and the diluted
 count's; either value outside 0 to 0.5 fails at load. Nor are the three values v11 adds (spec
@@ -311,7 +312,7 @@ def load_policy(path: Path | None = None) -> Policy:
         z_safe=read("z_safe", _num),
         f_score_low=read("f_score_low", _whole),
         burn_cover_flag_years=read("burn_cover_flag_years", _num),
-        override_ranges=read("override_ranges", _ranges),
+        override_ranges=read("override_ranges", _override_ranges),
         override_primary_evidence_above_p90=read("override_primary_evidence_above_p90", _bool),
         secondary_parts_max=read("secondary_parts_max", _whole),
         secondary_years_min=read("secondary_years_min", _whole),
@@ -372,6 +373,19 @@ def _ranges(t: Any) -> dict[str, tuple[float, float]]:
     for tag, (low, high) in table.items():
         if not low < high:
             raise ValueError(f"the range of {tag}, {low} to {high}, does not ascend")
+    return table
+
+
+def _override_ranges(t: Any) -> dict[str, tuple[float, float]]:
+    """The override ranges (``_ranges``), each named by an override tag the engine knows."""
+    # imported here: ``engine.overrides`` imports this package, so its tags are known only once
+    # the package has loaded
+    from fairband.engine.overrides import TAGS
+
+    table = _ranges(t)
+    for tag in table:
+        if tag not in TAGS:
+            raise ValueError(f"{tag!r} is not an override tag")
     return table
 
 

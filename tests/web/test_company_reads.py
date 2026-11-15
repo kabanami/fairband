@@ -524,11 +524,9 @@ def test_peers(client: TestClient) -> None:
     body = _get(client, "/api/companies/AAPL/peers")
     # FMP's list keeps HGCO alone (AAL has no statements), fewer than the three a target margin
     # needs, so the peers are the industry's: HGCO again
-    assert body["source"] == {
-        "kind": "industry",
-        "industry": "Software - Application",
-        "fmpCounted": 1,
-    }
+    # the source names its kind and its industry; FMP's count, a bare number no ref cites, is not
+    # served (B-103, spec 2026-11-15 12.1, clause 7)
+    assert body["source"] == {"kind": "industry", "industry": "Software - Application"}
     [hgco] = body["peers"]
     assert hgco["symbol"] == "HGCO"
     assert hgco["marketCap"] == _figure(15e9, "currency", "peer:AAPL/HGCO/market_cap")
@@ -548,6 +546,42 @@ def test_peers_without_deciles(client: TestClient, db_path: Path) -> None:
         "source": None,
         "peers": [],
     }
+
+
+@pytest.mark.parametrize("read", ["estimates", "price-history", "peers"])
+def test_a_read_of_a_company_with_no_snapshot_is_404(client: TestClient, read: str) -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 6): the estimates, the closes and the peers of a symbol
+    with no snapshot answer 404 with the company read's own words, a symbol that is not one 400;
+    a company with a snapshot answers 200, AAL, with no consensus and no closes on file, with its
+    empty lists (``test_peers_without_deciles`` pins the peers' own)."""
+    company = client.get("/api/companies/ZZZZ")
+    assert (company.status_code, company.json()) == (404, {"detail": "no snapshot for ZZZZ"})
+    for symbol in ("ZZZZ", "zzzz"):
+        r = client.get(f"/api/companies/{symbol}/{read}")
+        assert (r.status_code, r.json()) == (404, {"detail": "no snapshot for ZZZZ"})
+    r = client.get(f"/api/companies/not%20one/{read}")
+    assert (r.status_code, r.json()) == (400, {"detail": "'not one' is not a symbol"})
+    body = _get(client, f"/api/companies/AAL/{read}")
+    empty = {
+        "estimates": {"symbol": "AAL", "quarters": [], "annual": []},
+        "price-history": {"symbol": "AAL", "closes": []},
+    }
+    if read in empty:  # AAL's peers are its industry's
+        assert body == empty[read]
+
+
+def test_the_tables_read_reads_the_statements_once(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 8): the tables read hands the statements it read for
+    its own answer to the tables, which read none of their own."""
+
+    def unread(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("the tables read the statements again")
+
+    monkeypatch.setattr("fairband.reports.tables.stated_for", unread)
+    body = _get(client, "/api/companies/AAPL/financial-tables")
+    assert [t["name"] for t in body["tables"]] == list(TABLES)
 
 
 def test_a_methodology_section_reads_with_its_live_values(client: TestClient) -> None:

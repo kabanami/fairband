@@ -67,7 +67,8 @@ text, which could hold a key or a URL; so the tables never fail a read that work
   wrong sign or none and no meaning; ROE, net income over
   the average of the opening and closing equity; the ten-year aggregate ROIC in the newest year's
   cell only, ``aggregate_roic`` over all the capital years as assembly reads it (the store keeps
-  eleven statement years, so an earlier year has fewer than ten ROIC years behind it), the
+  eleven statement years, so an earlier year has fewer than ten ROIC years behind it), noted
+  "over <n> years" where the engine's aggregate holds fewer than ten kept years, n of them, the
   earlier cells ``None`` noted "the ten-year aggregate is the newest year's figure"; the hurdle
   rate, the policy's r, which on a company in another currency, whose ROIC is in it, is restated
   by the inflation differential of its latest snapshot when that snapshot carries a rate
@@ -132,6 +133,8 @@ NO_CAPITAL = "average invested capital is at or below zero"
 NOT_TRAILING = "not measured over the trailing twelve months"
 NO_ESTIMATE = "no estimate for this line"
 SHORT_HISTORY = "fewer than two years of periods on file"
+# The engine's flag on an aggregate ROIC over fewer than ten kept years (``roic.aggregate_roic``).
+_FEWER_YEARS = "roic-on-n-years"
 # The note of an EPS estimate cell: the analysts' EPS is on their own basis (the whole-branch
 # review's I2).
 ANALYSTS_BASIS = "on the analysts' own basis, which can leave out items the reported EPS includes"
@@ -376,6 +379,9 @@ class _Figures:
         self.roic = {y.year: y.roic for y in engine.by_year}
         self.capital = {y.year: y.average_capital for y in engine.by_year}
         self.aggregate = engine.aggregate
+        # the engine flags an aggregate over five to nine kept years (method 4.5)
+        short = any(flag.code == _FEWER_YEARS for flag in engine.flags)
+        self.aggregate_note = f"over {engine.years_used} years" if short else None
         self.trailing = _standing(stated)
         self.year_before = (
             None
@@ -634,7 +640,9 @@ def _returns(f: _Figures) -> Table:
         return f.roic.get(y), NO_CAPITAL if capital is not None and capital <= 0 else None
 
     def aggregate(y: int) -> _Reading:
-        return f.aggregate if y == f.years[-1] else (None, NEWEST_ONLY)
+        if y != f.years[-1]:
+            return None, NEWEST_ONLY
+        return f.aggregate, None if f.aggregate is None else f.aggregate_note
 
     t = "returns"
     return f.table(

@@ -26,13 +26,15 @@ engine's snake_case name.
 - ``/price-history?years=``: the closes of the latest stored price history as ``build_inputs``
   reads them, oldest first, each with its ``close:`` ref; with ``years`` (one or more), those on
   or after the same day that many years before the newest close.
-- ``/peers``: the company's mature peers with their figures and their source, as ``build_inputs``
-  reads them on the latest deciles (``peer_figures``), each figure with its ``peer:`` ref; none,
-  and no source, before any deciles.
+- ``/peers``: the company's mature peers with their figures and their source, its kind and its
+  industry, as ``build_inputs`` reads them on the latest deciles (``peer_figures``), each figure
+  with its ``peer:`` ref; none, and no source, before any deciles.
 
 The financials, the quarters and the tables answer 404 "no financial statements for <symbol>" when
-the store holds no annual income statement; the other reads answer what the store holds, none
-included. A symbol that is not one is a 400.
+the store holds no annual income statement; the estimates, the closes and the peers 404 "no
+snapshot for <symbol>", as the company read (``GET /api/companies/{symbol}``) does, for a company
+with no snapshot, and what the store holds, none included, for one with a snapshot. A symbol that
+is not one is a 400.
 
 ``GET /api/methodology/{section}`` answers ``{id, title, text}`` for the Methodology page's
 ``<section id>`` (``methodology_text``), its live values from the effective policy and the latest
@@ -237,6 +239,11 @@ def add_report_routes(
             raise HTTPException(404, f"no financial statements for {symbol}")
         return stated
 
+    def known(conn: sqlite3.Connection, symbol: str) -> None:
+        """404 for a company with no snapshot, in the company read's words."""
+        if latest_snapshot(conn, symbol) is None:
+            raise HTTPException(404, f"no snapshot for {symbol}")
+
     @app.get("/api/companies/{symbol}/financials")
     def financials(symbol: str) -> dict[str, Any]:
         symbol = _symbol(symbol)
@@ -270,9 +277,10 @@ def add_report_routes(
     def tables(symbol: str) -> dict[str, Any]:
         symbol = _symbol(symbol)
         with closing(conn_factory()) as conn:
-            stated = statements(conn, symbol)
+            stated = statements(conn, symbol)  # once, for the answer and the six
             stored = stored_quarters(conn, symbol).periods  # once, for the six and the quarters
-            found = financial_tables(conn, symbol, effective(conn, policy), tax, stored=stored)
+            current = effective(conn, policy)
+            found = financial_tables(conn, symbol, current, tax, stored=stored, stated=stated)
             quarters = quarters_table(conn, symbol, stored=stored)
         return {
             "symbol": symbol,
@@ -285,6 +293,7 @@ def add_report_routes(
     def estimates(symbol: str) -> dict[str, Any]:
         symbol = _symbol(symbol)
         with closing(conn_factory()) as conn:
+            known(conn, symbol)
             inputs = build_inputs(conn, symbol, effective(conn, policy), tax, clock().date())
         quarters = [
             _estimate(symbol, f"{q.fiscal_year}-{q.fiscal_period}", q)
@@ -299,6 +308,7 @@ def add_report_routes(
     ) -> dict[str, Any]:
         symbol = _symbol(symbol)
         with closing(conn_factory()) as conn:
+            known(conn, symbol)
             closes = build_inputs(conn, symbol, effective(conn, policy), tax, clock().date()).closes
         if years is not None and closes:
             since = _years_before(closes[-1][0], years)
@@ -318,6 +328,7 @@ def add_report_routes(
     def peers(symbol: str) -> dict[str, Any]:
         symbol = _symbol(symbol)
         with closing(conn_factory()) as conn:
+            known(conn, symbol)
             current = effective(conn, policy)
             found = peer_figures(conn, symbol, latest_deciles(conn), current, tax, clock().date())
         source = found.source
@@ -325,11 +336,7 @@ def add_report_routes(
             "symbol": symbol,
             "source": None
             if source is None
-            else {
-                "kind": source.kind,
-                "industry": source.industry,
-                "fmpCounted": source.fmp_counted,
-            },
+            else {"kind": source.kind, "industry": source.industry},
             "peers": [_peer(symbol, p) for p in found.figures],
         }
 

@@ -19,10 +19,11 @@ and need not have a snapshot. Text is kept as written; a blank one is refused.
 - A news item: a date, a headline, a source (a URL or a vendor response id), text, the
   company's kill criterion it touches, if any, and the report that recorded it, if one.
 
-A refused value raises ``ValueError`` with the sentence the writer can act on; a cited record
-that is not the company's, a note's override or a news item's kill criterion, ``KeyError(id)``. Each write is
-one transaction; it joins the caller's when there is one, so the caller's ledger row commits with
-it.
+A refused value raises ``ValueError`` with the sentence the writer can act on, and a kill
+criterion moved to the state it is in ``AlreadyInState``, a ``ValueError`` (``"kill criterion 3
+is already open"``); a cited record that is not the company's, a note's override or a news item's
+kill criterion, ``KeyError(id)``. Each write is one transaction; it joins the caller's when there
+is one, so the caller's ledger row commits with it.
 """
 
 import math
@@ -53,6 +54,10 @@ CriterionState = Literal["open", "triggered", "retired"]
 SOURCE_KINDS: tuple[SourceKind, ...] = get_args(SourceKind)
 UNITS: tuple[Unit, ...] = get_args(Unit)
 CRITERION_STATES: tuple[CriterionState, ...] = get_args(CriterionState)
+
+
+class AlreadyInState(ValueError):
+    """The kill criterion is in the state the move names already."""
 
 
 @dataclass(frozen=True)
@@ -239,7 +244,7 @@ def set_kill_criterion(
     _require_text(reason, "a state change needs a reason")
     with transaction(conn, immediate=True):
         if _require_criterion(conn, criterion_id).state == state:
-            raise ValueError(f"kill criterion {criterion_id} is already {state}")
+            raise AlreadyInState(f"kill criterion {criterion_id} is already {state}")
         conn.execute(
             "UPDATE kill_criteria SET state = ?, state_reason = ?, state_at = ? WHERE id = ?",
             (state, reason, dump_stamp(at), criterion_id),

@@ -140,6 +140,21 @@ def test_an_agent_post_carries_its_actor(client: TestClient) -> None:
     }
 
 
+def test_a_blank_client_header_is_stored_as_none(client: TestClient) -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 4): a client header that is blank or whitespace names no
+    client: the record and its ledger row store none."""
+    for blank in ("", "   "):
+        headers = AGENT | {CLIENT_HEADER: blank}
+        note = _post(client, "/api/companies/AAPL/notes", {"text": "margins look peaked"}, headers)
+        assert (note["actor"], note["client"]) == ("claude-opus-5-5", None)
+        entry = _ledger(client, "AAPL")[0]
+        assert (entry["refId"], entry["actor"], entry["client"]) == (
+            note["id"],
+            note["actor"],
+            None,
+        )
+
+
 def test_a_write_names_its_writer_or_is_refused(client: TestClient) -> None:
     body = {"symbol": "AAPL", "mode": "full report"}
     r = client.post("/api/inbox", json=body, headers=HEADER | {PRINCIPAL_HEADER: "agent"})
@@ -209,6 +224,24 @@ def test_claim_and_decline_over_the_api(client: TestClient) -> None:
     assert (r.status_code, r.json()) == (404, {"detail": "no work item 99"})
     r = client.patch(url, json={"action": "drop"}, headers=AGENT)
     assert r.status_code == 400 and r.json()["detail"].startswith("action: ")
+
+
+def test_a_claim_without_a_body_claims_the_oldest_pending_item(client: TestClient) -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 3): a claim with no body claims the oldest pending item,
+    as an empty body does, and answers as one does with none pending."""
+    r = client.post("/api/inbox/claim", headers=AGENT)
+    assert (r.status_code, r.json()) == (404, {"detail": "no pending work item"})
+    first = _post(client, "/api/inbox", {"symbol": "AAPL", "mode": "full report"}, HEADER)
+    _post(client, "/api/inbox", {"symbol": "AAL", "mode": "full report"}, HEADER)
+    r = client.post("/api/inbox/claim", headers=AGENT)
+    assert r.status_code == 200, r.text
+    assert (r.json()["id"], r.json()["state"], r.json()["claimedBy"]) == (
+        first["id"],
+        "claimed",
+        "claude-opus-5-5",
+    )
+    r = client.post("/api/inbox/claim", headers=HEADER)
+    assert (r.status_code, r.json()) == (400, {"detail": "a claim is an agent's write"})
 
 
 def test_complete_needs_a_published_report(client: TestClient) -> None:
@@ -435,6 +468,36 @@ def test_a_kill_criterion_holds_a_threshold_and_answers_its_currency(
     assert len(client.get(url).json()["killCriteria"]) == 4
 
 
+def test_a_kill_criterion_moved_to_the_state_it_is_in_is_409(client: TestClient) -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 1): a move to the state the criterion is in already is
+    a state the record cannot move from, 409, in the words it had as a 400, and writes nothing; a
+    move without a reason is still a bad value, 400."""
+    criterion = _post(
+        client, "/api/companies/AAPL/kill-criteria", {"text": "gross margin below 40%"}, AGENT
+    )
+    url = f"/api/kill-criteria/{criterion['id']}"
+    r = client.patch(url, json={"state": "open", "reason": "it still holds"}, headers=AGENT)
+    assert (r.status_code, r.json()) == (
+        409,
+        {"detail": f"kill criterion {criterion['id']} is already open"},
+    )
+    body = {"state": "retired", "reason": "the thesis changed"}
+    assert client.patch(url, json=body, headers=AGENT).status_code == 200
+    r = client.patch(url, json=body | {"reason": "again"}, headers=AGENT)
+    assert (r.status_code, r.json()) == (
+        409,
+        {"detail": f"kill criterion {criterion['id']} is already retired"},
+    )
+    r = client.patch(url, json={"state": "open", "reason": " "}, headers=AGENT)
+    assert (r.status_code, r.json()) == (400, {"detail": "a state change needs a reason"})
+    [found] = client.get("/api/companies/AAPL/kill-criteria").json()["killCriteria"]
+    assert (found["state"], found["stateReason"]) == ("retired", "the thesis changed")
+    assert [e["summary"] for e in _ledger(client, "AAPL")] == [
+        "retired: the thesis changed",
+        "gross margin below 40%",
+    ]
+
+
 def test_every_write_is_a_ledger_row(client: TestClient) -> None:
     item = _post(client, "/api/inbox", {"symbol": "AAPL", "mode": "full report"}, HEADER)
     client.post("/api/inbox/claim", json={"itemId": item["id"]}, headers=AGENT)
@@ -562,6 +625,52 @@ def test_the_inbox_read_runs_the_expiry_rule(
         "system",
         "dropped: AAPL is on no watchlist",
     )
+
+
+def test_the_expiry_rule_s_ledger_rows_on_an_inbox_read(
+    client: TestClient, client_with_clock: Callable[[datetime], TestClient], db_path: Path
+) -> None:
+    """B-103 (spec 2026-11-15 12.1, clause 2): the ledger rows on file after an inbox read that
+    posts and drops expiry items, whole, every field: the system's, one a post and one a drop, in
+    the order written, each resting on its company's latest snapshot and naming its item. They are
+    the rows the read wrote when the route wrote them, before the expiry rule wrote its own."""
+    with closing(connect(db_path)) as conn:
+        aapl, hgco = latest_snapshot(conn, "AAPL"), latest_snapshot(conn, "HGCO")
+    assert aapl is not None and hgco is not None
+    core = _post(client, "/api/watchlists", {"name": "Core"}, HEADER)
+    for symbol in ("HGCO", "AAPL"):
+        client.put(f"/api/watchlists/{core['id']}/symbols/{symbol}", headers=HEADER)
+    ended = max(aapl.valid_until, hgco.valid_until)
+    later = datetime.combine(ended + timedelta(days=1), time(9, 30), NOW.tzinfo)
+    past = client_with_clock(later)
+    items = {i["symbol"]: i["id"] for i in past.get("/api/inbox").json()["items"]}
+    past.delete(f"/api/watchlists/{core['id']}/symbols/HGCO", headers=HEADER)
+    past.get("/api/inbox")
+
+    def row(n: int, kind: str, symbol: str, snapshot_id: int, summary: str) -> dict[str, Any]:
+        return {
+            "id": n,
+            "at": later.isoformat(),
+            "principal": "system",
+            "actor": None,
+            "client": None,
+            "kind": kind,
+            "symbol": symbol,
+            "refTable": "work_items",
+            "refId": items[symbol],
+            "snapshotId": snapshot_id,
+            "workItemId": items[symbol],
+            "summary": summary,
+        }
+
+    posted = "valuation review posted: expired"
+    assert past.get("/api/ledger").json()["entries"] == [
+        row(3, "drop", "HGCO", hgco.id, "dropped: HGCO is on no watchlist"),
+        row(2, "work-item", "HGCO", hgco.id, f"{posted} {hgco.valid_until}"),
+        row(1, "work-item", "AAPL", aapl.id, f"{posted} {aapl.valid_until}"),
+    ]
+    past.get("/api/inbox")  # a read that posts and drops nothing writes no row
+    assert len(past.get("/api/ledger").json()["entries"]) == 3
 
 
 def test_a_declined_item_over_the_api_from_the_owner(

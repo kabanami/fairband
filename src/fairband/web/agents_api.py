@@ -2,13 +2,14 @@
 records and the ledger.
 
 ``GET /api/inbox`` runs the expiry rule first (``fairband.store.inbox.post_expiry_items``), as the
-system's write, then lists the items newest first, or those in ``state``, each with
-``reportRevision``, the revision of the report a done item was completed with (``None`` without a
-report or its row; 18.5, plan 4). ``POST /api/inbox`` posts an item for the company, its origin
-the writer's principal and its snapshot the company's latest. ``POST /api/inbox/claim`` claims
-the named item, or the oldest pending one, for the agent; ``PATCH /api/inbox/{id}`` completes it
-with a published report of its company, or declines it with a reason. Each company's notes,
-findings, kill criteria and news items are read and written under ``/api/companies/{symbol}/``;
+system's write, which writes its own ledger rows, then lists the items newest first, or those in
+``state``, each with ``reportRevision``, the revision of the report a done item was completed
+with (``None`` without a report or its row; 18.5, plan 4). ``POST /api/inbox`` posts an item for
+the company, its origin the writer's principal and its snapshot the company's latest.
+``POST /api/inbox/claim`` claims the named item, or the oldest pending one when it names none or
+has no body, for the agent; ``PATCH /api/inbox/{id}`` completes it with a published report of its
+company, or declines it with a reason. Each company's notes, findings, kill criteria and news
+items are read and written under ``/api/companies/{symbol}/``;
 a finding may name the currency of its money figure, and answers the one it is in
 (``money_json``; spec 2026-11-15 9.1), and a kill criterion may hold one threshold the author
 chose, with its unit and, for money, its currency, answered alike (``criterion_json``; 8.1).
@@ -20,8 +21,8 @@ row, written in the same transaction as the record: the writer, the kind of writ
 the record by table and id, the company's latest snapshot (``None`` without one) and, for a work
 item's write, the item. A write answers with the record as it now is (a create with 201), its keys
 camelCase. The refusals follow ``watchlists_api``: a bad value is a 400, a missing record a 404,
-and a second open item for a company or a state the item cannot move from a 409, each with the
-sentence the writer can act on.
+and a second open item for a company, a state the item cannot move from or a kill criterion moved
+to the state it is in a 409, each with the sentence the writer can act on.
 """
 
 import sqlite3
@@ -55,9 +56,10 @@ from fairband.store.inbox import (
     work_item,
     work_items,
 )
-from fairband.store.ledger import SYSTEM, Writer, entries, record
+from fairband.store.ledger import Writer, entries, record
 from fairband.store.reports import report_row, revisions_by_id
 from fairband.store.research import (
+    AlreadyInState,
     CriterionState,
     FindingRow,
     KillCriterionRow,
@@ -186,12 +188,12 @@ def finding_json(finding: FindingRow, reporting: str) -> dict[str, Any]:
 
 @contextmanager
 def _refusals(missing: str, symbol: str | None = None) -> Iterator[None]:
-    """The store's refusals as answers: a second open item or a state the record cannot move from
-    409, a bad value 400, a missing ``missing`` 404, named as the company's when the record cites
-    it for ``symbol``."""
+    """The store's refusals as answers: a second open item, a state the record cannot move from or
+    a kill criterion moved to the state it is in 409, a bad value 400, a missing ``missing`` 404,
+    named as the company's when the record cites it for ``symbol``."""
     try:
         yield
-    except (ItemOpen, WrongState) as exc:
+    except (ItemOpen, WrongState, AlreadyInState) as exc:
         raise HTTPException(409, str(exc)) from None
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
@@ -211,14 +213,7 @@ def add_agent_routes(
         items' report revisions read in one query."""
         at = clock()
         with closing(conn_factory()) as conn:
-            with transaction(conn, immediate=True):
-                posted, dropped = post_expiry_items(conn, at.date(), at)
-                for item_id in posted:
-                    _record_post(conn, SYSTEM, at, work_item(conn, item_id))
-                for item_id in dropped:
-                    item = work_item(conn, item_id)
-                    summary = f"dropped: {item.symbol} is on no watchlist"
-                    _record_item(conn, SYSTEM, at, "drop", item, summary)
+            post_expiry_items(conn, at.date(), at)  # its ledger rows written with it
             items = work_items(conn, state)
             found = revisions_by_id(conn, [i.report_id for i in items if i.report_id is not None])
             return {
@@ -247,9 +242,9 @@ def add_agent_routes(
             return record_json(item)
 
     @app.post("/api/inbox/claim")
-    def claim(body: InboxClaim, writer: WriterOf) -> dict[str, Any]:
+    def claim(writer: WriterOf, body: InboxClaim | None = None) -> dict[str, Any]:
         """Claim the named item, or the oldest pending one, for the agent; naming a claimed item
-        takes it over."""
+        takes it over. A claim with no body names none, as an empty one."""
         if writer.actor is None:  # the owner's: only an agent claims
             raise HTTPException(400, "a claim is an agent's write")
         at = clock()
@@ -258,7 +253,7 @@ def add_agent_routes(
             _refusals("work item"),
             transaction(conn, immediate=True),
         ):
-            named = body.item_id
+            named = None if body is None else body.item_id
             before = oldest_pending(conn) if named is None else work_item(conn, named)
             if before is None:
                 raise HTTPException(404, "no pending work item")

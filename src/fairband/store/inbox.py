@@ -15,7 +15,8 @@ one, so the caller's ledger row commits with it.
 The expiry rule (``post_expiry_items``) runs when the inbox is read: every company on any
 watchlist whose latest snapshot expired (``valid_until`` before today), with no open item and no
 expiry item yet posted for that same ``valid_until``, gets a valuation review posted by the
-system; then every pending expiry item whose company is on no watchlist drops.
+system; then every pending expiry item whose company is on no watchlist drops. The rule writes the
+system's ledger row of each post and each drop itself, in its transaction.
 
 An expiry item stands for its window, the ``valid_until`` it was posted for, whatever becomes of
 it. Declined, in particular, it holds: no new item is posted for the company on any later read
@@ -34,7 +35,8 @@ from typing import Literal, get_args
 from fairband.policy.settings import exchange_symbol
 from fairband.store._codec import dump_date, dump_stamp, inserted_id, load_date, load_stamp
 from fairband.store.db import transaction
-from fairband.store.ledger import SYSTEM, Principal, Writer
+from fairband.store.ledger import SYSTEM, Principal, Writer, record
+from fairband.store.snapshots import latest_snapshot
 
 Mode = Literal["valuation review", "full report"]
 State = Literal["pending", "claimed", "done", "declined", "dropped"]
@@ -179,7 +181,8 @@ def post_expiry_items(
 ) -> tuple[list[int], list[int]]:
     """Run the expiry rule (the module docstring) on ``today``, posting and dropping ``at``;
     return the ids posted and the ids dropped, each in ascending order. A company on two lists is
-    one company. The caller records each post and drop in the ledger, in its transaction."""
+    one company. Each post and each drop is the system's ledger row, written in the same
+    transaction (``_record_expiry``)."""
     with transaction(conn, immediate=True):
         expired = conn.execute(
             "SELECT s.symbol, s.id, s.valid_until FROM snapshots s"
@@ -211,7 +214,34 @@ def post_expiry_items(
             " AND symbol NOT IN (SELECT symbol FROM watchlist_entries) ORDER BY id"
         ).fetchall()
         dropped = [drop_item(conn, r["id"], at).id for r in stranded]
+        for item_id in posted:
+            item = work_item(conn, item_id)
+            _record_expiry(conn, at, "work-item", item, f"{item.mode} posted: {item.note}")
+        for item_id in dropped:
+            item = work_item(conn, item_id)
+            _record_expiry(conn, at, "drop", item, f"dropped: {item.symbol} is on no watchlist")
     return posted, dropped
+
+
+def _record_expiry(
+    conn: sqlite3.Connection, at: datetime, kind: str, item: WorkItem, summary: str
+) -> None:
+    """The system's ledger row of the expiry rule's write to ``item``, which it also rests on,
+    with the company's latest snapshot, in the caller's transaction. An expiry item's note is one
+    short line, ``expired <date>``, so a post's summary carries it whole."""
+    snapshot = latest_snapshot(conn, item.symbol)
+    record(
+        conn,
+        SYSTEM,
+        at,
+        kind,
+        item.symbol,
+        "work_items",
+        item.id,
+        snapshot_id=None if snapshot is None else snapshot.id,
+        work_item_id=item.id,
+        summary=summary,
+    )
 
 
 def _move(
