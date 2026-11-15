@@ -175,6 +175,12 @@ def test_the_runway_returns_rulings_of_2026_11_15() -> None:
     assert "a setting since the founder's ruling of 2026-11-15" in value
     assert "`return_without_goodwill_cap` (25%), becomes a setting" in rows[-1]
     assert "A return far above 100% on capital near zero stands with no cap" in rows[-1]
+    # B-8's last part: the chart and its table do not print a ROIC on capital at or below zero
+    sixteen = _section(16)
+    assert (
+        "a ROIC year on average invested capital at or below zero written as its note"
+    ) in sixteen
+    assert "as the page's ROIC chart leaves that year out and names it under the chart" in sixteen
 
 
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:

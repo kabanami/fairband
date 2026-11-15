@@ -10,7 +10,10 @@
    by its read's title, the secondary valuation's grid by its table's; the price against the band
    by its table's; each P/E series by its column's in the year-end table. A cell with no value is
    left out, a gap, never a zero; a chart with no point shows its title and "No data on file.";
-   a read the server refused shows its sentence, as it arrives. */
+   a read the server refused shows its sentence, as it arrives. A ROIC year on average invested
+   capital at or below zero, whose figure has the wrong sign and no meaning, is left out of the
+   ROIC chart, and a line under the chart names the years and why (B-8; the export's table
+   writes the note in the cell). */
 (function () {
   'use strict';
 
@@ -130,15 +133,38 @@
      reporting currency on a company in another currency, as its ROIC is in it), both percentages
      on one axis with the gap filled (SpreadChart); a year missing either is left out. */
   function spread(c, rows, tables) {
-    var roic = rows[c.row], hurdle = rows[c.hurdle];
-    var series = !roic || !hurdle ? [] : roic.cells.map(function (cell, i) {
-      return { period: cell.period, roic: cell.value, wacc: hurdle.cells[i].value };
-    }).filter(function (p) { return p.roic != null && p.wacc != null; })
-      .map(function (p) { return { period: p.period, roic: p.roic * 100, wacc: p.wacc * 100 }; });
-    return panel(c.title, series.length ? h(F.SpreadChart, {
-      title: c.title, subtitle: 'against the hurdle rate', series: series, basis: 'mechanical',
-      hurdleLabel: 'Hurdle rate', tableView: tables
-    }) : noData(c.title));
+    var drawn = roicPoints(rows[c.row], rows[c.hurdle]);
+    if (!drawn.series.length) return panel(c.title, noData(c.title, drawn.left));
+    return panel(c.title, h(React.Fragment, null,
+      h(F.SpreadChart, {
+        title: c.title, subtitle: 'against the hurdle rate', series: drawn.series,
+        basis: 'mechanical', hurdleLabel: 'Hurdle rate', tableView: tables
+      }),
+      drawn.left ? h('p', { className: 'caption app-muted' }, drawn.left) : null));
+  }
+
+  /* The ROIC chart's points, percentages, a year missing either figure left out; and `left`, the
+     sentence for the years left out because the ROIC cell carries a note: average invested
+     capital at or below zero, on which the figure has the wrong sign and no meaning (method
+     16.5), "Fiscal 2024 and 2025 are not drawn: <the note>.", none without such a year. */
+  function roicPoints(roic, hurdle) {
+    var cells = !roic || !hurdle ? [] : roic.cells.map(function (cell, i) {
+      return { period: cell.period, roic: cell.value, wacc: hurdle.cells[i].value,
+        note: cell.note };
+    });
+    var noted = cells.filter(function (p) { return p.note && p.roic != null; });
+    var series = cells.filter(function (p) {
+      return p.roic != null && p.wacc != null && !p.note;
+    }).map(function (p) { return { period: p.period, roic: p.roic * 100, wacc: p.wacc * 100 }; });
+    return { series: series, left: noted.length ? notDrawn(noted) : null };
+  }
+
+  function notDrawn(noted) {
+    var years = noted.map(function (p) { return p.period; });
+    var listed = years.length === 1 ? years[0]
+      : years.slice(0, -1).join(', ') + ' and ' + years[years.length - 1];
+    return 'Fiscal ' + listed + (years.length === 1 ? ' is' : ' are') + ' not drawn: ' +
+      noted[0].note + '.';
   }
 
   /* ------------------------------------------------------------------ the grids */
@@ -344,5 +370,5 @@
       what + ' did not load: ' + sentence + '.');
   }
 
-  P.reportCharts = { draw: draw };
+  P.reportCharts = { draw: draw, roicPoints: roicPoints };
 })();

@@ -15,6 +15,9 @@ section each leads:
   titled by the table (``TITLES``), each row by its name in words (``row_name``, "Altman's Z″",
   "Ten-year aggregate ROIC"), over the last five fiscal years; a table without statements has no
   rows. The page draws a part's charts under its table's title, each titled by its row's name.
+  A ROIC year on average invested capital at or below zero has a figure with the wrong sign and
+  no meaning (``tables.NO_CAPITAL``): its cell reads the note in place of the figure, and the
+  page's chart leaves the year out and names it under the chart (B-8).
 - "Valuation": each sensitivity reading the sections cite (a ``sensitivity:`` ref), once, in the
   order first cited, titled and its axes worded by ``reading_axes``, which the reading's read
   sends the page: the rows the first input's values and the columns the second's; then the grid
@@ -46,7 +49,7 @@ from fairband.refresh.inputs import stored_closes
 from fairband.reports.check import parts, shown
 from fairband.reports.multiples import SERIES, STATS, Series, stored_series, years_before
 from fairband.reports.refs import day_words, field_words, unit_of
-from fairband.reports.tables import Table, financial_tables
+from fairband.reports.tables import NO_CAPITAL, Cell, Table, financial_tables
 from fairband.store.reports import ReportRow
 from fairband.store.secondary import GRID_ROWS, secondary_row
 from fairband.store.sensitivities import SensitivityRow, sensitivity_row
@@ -151,10 +154,18 @@ def _financial(table: Table, currency: str) -> ChartTable:
     if not periods:
         return ChartTable(TITLES[table.name], ("Fiscal year",), ())
     rows = tuple(
-        (row_name(row.name), *(_shown(cell.value, cell.unit, currency) for cell in row.cells))
-        for row in table.rows
+        (row_name(row.name), *(_cell(cell, currency) for cell in row.cells)) for row in table.rows
     )
     return ChartTable(TITLES[table.name], ("Fiscal year", *periods), rows)
+
+
+def _cell(cell: Cell, currency: str) -> str:
+    """A table cell as its chart's table writes it: the figure as a cite of it reads, but the
+    note of a ROIC on average invested capital at or below zero in place of that figure, which
+    has the wrong sign and no meaning."""
+    if cell.note == NO_CAPITAL:
+        return NO_CAPITAL
+    return _shown(cell.value, cell.unit, currency)
 
 
 def _sensitivities(conn: sqlite3.Connection, report: ReportRow, currency: str) -> list[ChartTable]:

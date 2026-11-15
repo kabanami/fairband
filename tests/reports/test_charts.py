@@ -27,7 +27,8 @@ from fairband.reports.charts import (
     shift_words,
 )
 from fairband.reports.check import HEADINGS, headings, shown
-from fairband.reports.tables import financial_tables
+from fairband.reports.tables import NO_CAPITAL, financial_tables
+from fairband.store.db import transaction
 from fairband.store.ledger import Writer
 from fairband.store.multiples import log_multiples
 from fairband.store.reports import ReportRow, insert_report, report_row
@@ -163,6 +164,33 @@ def test_section_4_holds_the_six_tables_at_the_cite_rounding(
         for row, cells in zip(table.rows, chart.rows, strict=True):
             written = tuple("" if c.value is None else shown(c.value, c.unit) for c in row.cells)
             assert cells[1:] == written, (table.name, row.name)
+
+
+def test_a_roic_year_on_capital_at_or_below_zero_reads_as_its_note(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """B-8 (the founder's ruling of 2026-11-15): a year's ROIC on average invested capital at or
+    below zero has the wrong sign and no meaning, so the chart's table writes the cell's note in
+    place of the figure, as the page's chart leaves the year out and says why. The financial
+    table's cell keeps the engine's figure with the note (16.5)."""
+    with transaction(conn):
+        conn.execute(
+            "UPDATE facts SET value = '9000000000' WHERE symbol = 'AAPL'"
+            " AND dataset = 'balance-annual' AND field = 'totalCurrentLiabilities'"
+            " AND period_end IN ('2024-12-31', '2025-12-31')"
+        )
+    table = next(t for t in financial_tables(conn, "AAPL", policy) if t.name == "returns")
+    cells = {c.period: c for c in next(r for r in table.rows if r.name == "roic").cells}
+    assert cells["2025"].value is not None and cells["2025"].note == NO_CAPITAL
+    returns = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)[HEADINGS[3]][3]
+    assert returns.title == "Returns on capital"
+    roic = dict(zip(returns.header[1:], next(r for r in returns.rows if r[0] == "ROIC")[1:]))
+    assert roic["2025"] == NO_CAPITAL == "average invested capital is at or below zero"
+    assert roic["2023"] == shown(cells["2023"].value, "percent") and roic["2023"].endswith("%")
+    # no other row of the table reads a note for a figure
+    for row in returns.rows:
+        if row[0] != "ROIC":
+            assert NO_CAPITAL not in row
 
 
 def test_section_4_without_statements_has_tables_without_rows(

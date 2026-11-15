@@ -3174,7 +3174,7 @@ def test_the_report_page_draws_the_charts_per_section(db_path: Path, policy: Pol
         f"multiple('{SERIES_TITLES['pe_forward']}', forward,",
         "'since ' + F.formatDate(forward.since)",
     )
-    assert "P.reportCharts = { draw: draw };" in script
+    assert "P.reportCharts = { draw: draw, roicPoints: roicPoints };" in script
     report = _code(_static_file("report.js"))
     reads = _function(report, "readSeries")
     _in_order(
@@ -3215,9 +3215,12 @@ def test_a_missing_cell_is_a_gap() -> None:
         "var value = cell.value == null || paid == null ? null : -(cell.value + paid);"
         in _function(script, "returned")
     )
-    assert "filter(function (p) { return p.roic != null && p.wacc != null; })" in (
-        _function(script, "spread")
+    # and so is a ROIC year whose cell carries a note, capital at or below zero (B-8), which
+    # tests/web/test_report_charts.py runs
+    assert "return p.roic != null && p.wacc != null && !p.note;" in (
+        _function(script, "roicPoints")
     )
+    assert "var drawn = roicPoints(rows[c.row], rows[c.hurdle]);" in _function(script, "spread")
     month = _function(script, "byMonth")
     assert "value: Object.prototype.hasOwnProperty.call(last, key) ? last[key] : null" in month
     band = _function(script, "band")
