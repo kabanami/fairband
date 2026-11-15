@@ -336,6 +336,20 @@ def test_inbox_post_says_what_the_note_holds(api: FairbandClient) -> None:
     assert "its note the request in the requester's own words on one line" in post
 
 
+def test_derive_names_the_fixed_number(api: FairbandClient) -> None:
+    """Spec 2026-11-15 7.1: one operand of a derivation may be a fixed number of the server's
+    list; the tool's description names the form."""
+
+    async def listed() -> list[Any]:
+        async with Client(build_server(api)) as session:
+            return (await session.list_tools()).tools
+
+    derive = next(t.description or "" for t in anyio.run(listed) if t.name == "derive")
+    assert "one operand of each may be a fixed number of the server's list written number:<n>" in (
+        derive
+    )
+
+
 def test_financial_tables_names_its_columns(api: FairbandClient) -> None:
     """Spec 2026-11-15 6.4, 6.5: the tables carry their columns past the fiscal years, and the
     quarters table stands beside the six; the tool's description says so."""

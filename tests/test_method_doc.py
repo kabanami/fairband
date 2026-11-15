@@ -12,6 +12,7 @@ from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
 from fairband.reports.check import FAILURES
 from fairband.store.guidance import METRICS
+from fairband.web.reviews_api import FIXED_NUMBERS, NEEDS_A_FIGURE
 
 METHOD = Path(__file__).parent.parent / "docs" / "method.md"
 
@@ -886,3 +887,67 @@ def test_section_16_names_the_six_failures() -> None:
     for form in ("finding", "guidance", "derived", "sensitivity", "response", "policy"):
         assert f"`{form}:" in section, form
     assert "`stance_words`" in section
+
+
+def test_a_fixed_number_is_an_operand_of_derive_alone() -> None:
+    """Spec 2026-11-15 7.1 to 7.4: 16.2 names the operand form `number:`, an operand of `derive`
+    alone, and a derivation resting on every snapshot of its operands; 16.3 the number cite's
+    refusal and the snapshot test of every operand; 16.4 the list, the two refusals, the unit
+    table, the references' words and growth from a base at or below zero."""
+    sixteen = _section(16)
+    references = sixteen[sixteen.index("### 16.2") : sixteen.index("### 16.3")]
+    for words in (
+        (
+            "a `derived:` ref on every snapshot its operands rest on, through nested derivations"
+            " (spec 2026-11-15 7.4)"
+        ),
+        (
+            "`number:<n>` is no reference a report cites: it is an operand of `derive` alone"
+            " (16.4), a fixed number of the server's list written in digits alone, with no unit,"
+            " resting on no snapshot (spec 2026-11-15 7.3)"
+        ),
+    ):
+        assert words in references, words
+    check = sixteen[sixteen.index("### 16.3") : sixteen.index("### 16.4")]
+    for words in (
+        (
+            "A `number:` cite names nothing, a fixed number being an operand of `derive` alone"
+            ' (16.4); the detail says so, "number:100 is an operand of derive: cite the'
+            ' derivation".'
+        ),
+        (
+            "A `derived:` cite is tested on every snapshot its operands rest on, through nested"
+            " derivations (spec 2026-11-15 7.4), so a derivation whose second operand, or an"
+            " operand of an operand, rests on an older snapshot fails"
+        ),
+    ):
+        assert words in check, words
+    derivations = sixteen[sixteen.index("### 16.4") : sixteen.index("### 16.5")]
+    for words in (
+        (
+            "A division by zero, a growth or a cagr from a base at or below zero, a cagr over a"
+            " negative ratio and a result that is not finite have no value."
+        ),
+        "a derivation stored before the rule keeps its value",
+        "it rests on every snapshot its operands rest on, through nested derivations",
+        (
+            "the whole numbers 0 to 12, then 52, 100, 365, 1000 and each further power of ten up"
+            " to 1,000,000,000,000"
+        ),
+        (
+            '"a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to'
+            ' 1,000,000,000,000, not <what was written>"'
+        ),
+        'two numbers in one derivation, "a derivation needs a stored figure"',
+        "| `sum`, `difference`, `product` with a number | the stored figure's unit |",
+        "| `ratio` of a figure over a number | the figure's unit |",
+        "| `ratio` of a number over a figure | none |",
+        "| `growth`, `cagr` | percent, as ever |",
+        (
+            'writes the number without its prefix, with separators: "derivation 1602: the'
+            ' product of filing:95122/… and 1,000,000"'
+        ),
+    ):
+        assert words in derivations, words
+    assert FIXED_NUMBERS in derivations
+    assert NEEDS_A_FIGURE in derivations

@@ -34,11 +34,15 @@ from fairband.refresh.inputs_statements import statements_for, stored_quarters
 from fairband.reports.check import WRONG_UNIT, check_sections
 from fairband.reports.filing_report import row_ref, served
 from fairband.reports.refs import (
+    NUMBER_FORM,
+    NUMBERS,
     Resolved,
     Resolver,
+    fixed_number,
     resolve,
     rests_on,
     same_snapshot,
+    snapshots_of,
     unit_of,
 )
 from fairband.reports.tables import financial_tables, quarters_table
@@ -1339,6 +1343,78 @@ def test_rests_on(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str,
     assert rests_on(conn, f"review:{review_id}/value") == snapshots["AAPL"]
     assert rests_on(conn, "snapshot:999/value") is None
     assert rests_on(conn, "fact:AAPL/revenue/2025") is None
+    assert rests_on(conn, "number:100") is None
+
+
+@pytest.mark.parametrize(
+    ("ref", "n"),
+    [
+        *[(f"number:{n}", n) for n in (0, 1, 12, 52, 100, 365, 1000, 1_000_000_000_000)],
+        (" number:2 ", 2),
+        ("number:13", None),
+        ("number:1.5", None),
+        ("number:1e6", None),
+        ("number:1,000", None),
+        ("number:-1", None),
+        ("number:", None),
+        ("number:10000000000000", None),
+        ("number:0100", None),  # written another way
+        ("number: 1", None),
+        ("number:²", None),
+        ("number", None),
+        ("finding:1", None),
+        ("1", None),
+    ],
+)
+def test_fixed_number(ref: str, n: int | None) -> None:
+    """Spec 2026-11-15 7.1: ``number:<n>`` names a number of the server's list, written in digits
+    alone; anything else names none."""
+    assert fixed_number(ref) == n
+
+
+def test_the_list_of_fixed_numbers() -> None:
+    assert frozenset(range(13)) | {52, 100, 365} | {10**k for k in range(3, 13)} == NUMBERS
+    assert NUMBER_FORM == "number"
+
+
+def test_a_number_is_no_ref_a_report_cites(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 7.3: ``number:`` is an operand of ``derive`` alone, which the resolver
+    reads nothing by; its description is the ref itself."""
+    resolver = Resolver(conn, "AAPL", policy)
+    assert resolver.resolve("number:100") is None
+    assert resolver.describe("number:100") == "number:100"
+
+
+def test_snapshots_of(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:
+    """Spec 2026-11-15 7.4: a derivation rests on every snapshot its operands rest on, through
+    nested derivations; a number and a company fact rest on none."""
+    aapl, aal = snapshots["AAPL"], snapshots["AAL"]
+    review_id = _review_id(conn, policy, aapl)
+    ours, theirs = f"snapshot:{aapl}/value", f"snapshot:{aal}/value"
+
+    def derived(a: str, b: str) -> str:
+        found = insert_derivation(conn, "AAPL", "sum", a, b, None, 1.0, None, AGENT, NOW)
+        return f"derived:{found}"
+
+    second = derived(ours, theirs)
+    inner = derived("fact:AAPL/revenue/2025", theirs)
+    nested = derived(ours, inner)
+    deeper = derived(nested, nested)
+    with_number = derived(ours, "number:2")
+    on_facts = derived("fact:AAPL/revenue/2025", "number:1000000")
+    assert snapshots_of(conn, second) == {aapl, aal}
+    assert snapshots_of(conn, nested) == {aapl, aal}
+    assert snapshots_of(conn, deeper) == {aapl, aal}
+    assert snapshots_of(conn, with_number) == {aapl}
+    assert snapshots_of(conn, on_facts) == frozenset()
+    assert rests_on(conn, second) == aapl  # its answer as before: the first operand's
+    assert rests_on(conn, nested) == aapl
+    assert snapshots_of(conn, ours) == {aapl}
+    assert snapshots_of(conn, f"review:{review_id}/value") == {aapl}
+    for ref in ("fact:AAPL/revenue/2025", "number:100", "derived:999", "snapshot:999/value"):
+        assert snapshots_of(conn, ref) == frozenset(), ref
 
 
 @pytest.fixture
@@ -1349,7 +1425,7 @@ def described(
     sid = snapshots["AAPL"]
     source = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": None}
     grid = SensitivityGrid((0.05, 0.08), (0.10, 0.20), ((120.5, 130.0), (140.0, 150.0)), None)
-    revenue = "fact:AAPL/revenue/2025"
+    revenue, rate = "fact:AAPL/revenue/2025", "policy:required_return"
     payload = json.dumps([{"symbol": "AAPL", "revenue": 391.0}])
     observed = datetime(2026, 11, 1, 14, 0, tzinfo=UTC)
     return {
@@ -1381,6 +1457,12 @@ def described(
         ),
         "cagr": insert_derivation(
             conn, "AAPL", "cagr", revenue, "fact:AAPL/revenue/2021", 4, 0.05, "percent", AGENT, NOW
+        ),
+        "scaled": insert_derivation(
+            conn, "AAPL", "product", revenue, "number:1000000", None, 2.1e15, None, AGENT, NOW
+        ),
+        "complement": insert_derivation(
+            conn, "AAPL", "difference", "number:1", rate, None, 0.91, None, AGENT, NOW
         ),
         "response": record_response(
             conn, "fmp", "segments", {"symbol": "AAPL"}, "AAPL", 200, payload, None, observed
@@ -1571,6 +1653,15 @@ def described(
                 "derivation {cagr}: the cagr of fact:AAPL/revenue/2025 and fact:AAPL/revenue/2021"
                 " over 4 years"
             ),
+        ),
+        # a fixed number without its prefix, with separators (spec 2026-11-15 7.3)
+        (
+            "derived:{scaled}",
+            "derivation {scaled}: the product of fact:AAPL/revenue/2025 and 1,000,000",
+        ),
+        (
+            "derived:{complement}",
+            "derivation {complement}: the difference of 1 and policy:required_return",
         ),
         ("response:{response}/0/revenue", "FMP segments, observed 1 Nov 2026"),
         ("policy:required_return", "policy required_return, {version}"),

@@ -53,6 +53,7 @@ from fairband.store.facts import FactRow, insert_facts
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh, save_deciles
+from fairband.store.research import add_finding
 from fairband.store.reviews import insert_review
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.store.vendor import record_response
@@ -1163,6 +1164,157 @@ def test_an_unresolved_reference_stores_nothing(client: TestClient, ref: str) ->
     assert (r.status_code, r.json()) == (400, {"detail": f"unresolved reference: {ref}"})
     assert client.get("/api/companies/AAPL/ledger").json()["entries"] == []
     assert client.get("/api/derivations/1").status_code == 404
+
+
+FIXED = "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to 1,000,000,000,000"
+
+
+def _nothing_stored(client: TestClient) -> None:
+    assert client.get("/api/companies/AAPL/ledger").json()["entries"] == []
+    assert client.get("/api/derivations/1").status_code == 404
+
+
+@pytest.mark.parametrize("n", [0, 1, 12, 52, 100, 365, 1000, 1_000_000_000_000])
+def test_a_fixed_number_is_an_operand(client: TestClient, n: int) -> None:
+    """Spec 2026-11-15 7.1: one operand may be a fixed number of the server's list, written
+    ``number:<n>`` where a ref goes; the derivation keeps the operand as written."""
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    price = f"snapshot:{snapshot_id}/price"
+    r = _derive(
+        client,
+        {"operation": "sum", "a": price, "b": f"number:{n}"},
+        {"operation": "sum", "a": f"number:{n}", "b": price},
+    )
+    assert r.status_code == 201, r.text
+    found = r.json()["derivations"]
+    assert [(d["value"], d["unit"]) for d in found] == [(pytest.approx(150.0 + n), "per-share")] * 2
+    stored = client.get(f"/api/derivations/{found[0]['id']}").json()
+    assert (stored["a"], stored["b"]) == (price, f"number:{n}")
+    entries = client.get("/api/companies/AAPL/ledger").json()["entries"]
+    assert entries[-1]["summary"] == f"sum of {price} and number:{n}"
+
+
+@pytest.mark.parametrize("side", ["a", "b"])
+@pytest.mark.parametrize(
+    "written", ["13", "1.5", "1e6", "1,000", "-1", "", "10000000000000", "0100", " 1"]
+)
+def test_a_number_off_the_list_stores_nothing(client: TestClient, written: str, side: str) -> None:
+    """Spec 2026-11-15 7.1: a number outside the list, or written another way, is a 400 with what
+    was written, and none of the call's derivations is stored, an earlier valid one included."""
+    good = f"snapshot:{client.get('/api/companies/AAPL').json()['snapshot']['id']}/price"
+    operands = {"a": good, "b": good} | {side: f"number:{written}"}
+    r = _derive(
+        client,
+        {"operation": "difference", "a": "number:1", "b": "policy:required_return"},
+        {"operation": "product"} | operands,
+    )
+    assert (r.status_code, r.json()) == (400, {"detail": f"{FIXED}, not {written}"})
+    _nothing_stored(client)
+
+
+def test_a_derivation_needs_a_stored_figure(client: TestClient) -> None:
+    """Spec 2026-11-15 7.1: two numbers in one derivation are refused, and nothing of the call is
+    stored."""
+    good = "fact:AAPL/revenue/2025"
+    for second in ({"a": "number:1", "b": "number:2"}, {"a": "number:0", "b": "number:0"}):
+        r = _derive(
+            client,
+            {"operation": "ratio", "a": good, "b": good},
+            {"operation": "sum"} | second,
+        )
+        assert (r.status_code, r.json()) == (400, {"detail": "a derivation needs a stored figure"})
+    _nothing_stored(client)
+
+
+def test_a_number_s_unit_follows_the_stored_figure(
+    client: TestClient, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-15 7.2: a number has no unit; a sum, a difference or a product with one keeps
+    the stored figure's unit, a ratio of a figure over one keeps the figure's and one over a
+    figure has none, growth and cagr are percents. A figure with no unit gives none, a ratio over
+    0 no value, and a figure over itself is still the number 1, a multiple."""
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    s = f"snapshot:{snapshot_id}"
+    no_unit = f"{s}/intermediates/belief/rate"  # an intermediate, 0.063
+    r = _derive(
+        client,
+        {"operation": "difference", "a": "number:1", "b": "policy:required_return"},
+        {"operation": "sum", "a": f"{s}/price", "b": "number:2"},
+        {"operation": "product", "a": "number:2", "b": f"{s}/inputs/eps_ttm"},
+        {"operation": "ratio", "a": f"{s}/inputs/revenue_ttm", "b": "number:2"},
+        {"operation": "ratio", "a": "number:1", "b": f"{s}/price_to_value"},
+        {"operation": "growth", "a": f"{s}/price", "b": "number:100"},
+        {"operation": "cagr", "a": f"{s}/price", "b": "number:100", "years": 2},
+        {"operation": "product", "a": no_unit, "b": "number:1000000"},
+        {"operation": "ratio", "a": f"{s}/price", "b": "number:0"},
+        {"operation": "ratio", "a": f"{s}/price", "b": f"{s}/price"},
+    )
+    assert r.status_code == 201, r.text
+    price_to_value = results["AAPL"].price_to_value
+    assert price_to_value is not None
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (pytest.approx(0.91), "percent"),  # 1 less the required return
+        (pytest.approx(152.0), "per-share"),
+        (pytest.approx(10.60), "per-share"),  # twice the trailing EPS
+        (pytest.approx(11_400e6), "currency"),  # half the trailing revenue
+        (pytest.approx(1 / price_to_value), None),  # 1 over a multiple
+        (pytest.approx(0.5), "percent"),
+        (pytest.approx(1.5**0.5 - 1), "percent"),
+        (pytest.approx(63_000.0), None),  # a figure with no unit, scaled
+        (None, None),  # a division by zero
+        (1.0, "multiple"),  # the workaround of before still computes
+    ]
+
+
+def test_a_derivation_built_on_a_number_is_an_operand(client: TestClient) -> None:
+    """Spec 2026-11-15 7.1: a derivation with a number is a ref as any other, nested in a later
+    one."""
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    r = _derive(client, {"operation": "difference", "a": "number:1", "b": "policy:required_return"})
+    assert r.status_code == 201, r.text
+    first = r.json()["derivations"][0]["id"]
+    revenue = f"snapshot:{snapshot_id}/inputs/revenue_ttm"
+    r = _derive(client, {"operation": "product", "a": f"derived:{first}", "b": revenue})
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (pytest.approx(0.91 * 22_800e6), "currency")  # the revenue after the required return
+    ]
+
+
+def test_growth_from_a_base_at_or_below_zero_has_no_value(
+    client: TestClient, db_path: Path
+) -> None:
+    """Spec 2026-11-15 7.4: growth and cagr give no value where the base is at or below zero, as
+    the guidance step takes none; over a positive base they are as before."""
+    source = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": None}
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    with closing(connect(db_path)) as conn:
+        losses = [
+            add_finding(
+                conn, "AAPL", TODAY, "a loss", source, writer, NOW, value=x, unit="currency"
+            )
+            for x in (-100.0, -50.0)
+        ]
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    price = f"snapshot:{snapshot_id}/price"
+    zero = f"snapshot:{snapshot_id}/intermediates/price_facts/drawdown_from_peak"  # 0.0
+    below, smaller = (f"finding:{i}" for i in losses)  # −100 and −50
+    r = _derive(
+        client,
+        {"operation": "growth", "a": price, "b": zero},
+        {"operation": "cagr", "a": price, "b": zero, "years": 2},
+        {"operation": "growth", "a": price, "b": below},  # −250% before, a wrong sign
+        {"operation": "growth", "a": smaller, "b": below},  # −50% before
+        {"operation": "cagr", "a": smaller, "b": below, "years": 2},  # −29.3% before
+        {"operation": "growth", "a": below, "b": price},  # a positive base
+        {"operation": "cagr", "a": price, "b": "fact:AAPL/revenue/2025", "years": 2},
+    )
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        *[(None, None)] * 5,
+        (pytest.approx(-100.0 / 150.0 - 1), "percent"),
+        (pytest.approx((150.0 / 22e9) ** 0.5 - 1), "percent"),
+    ]
 
 
 def test_a_cagr_needs_its_years(client: TestClient) -> None:

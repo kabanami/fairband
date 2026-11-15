@@ -121,12 +121,20 @@ ledger row resting on the latest snapshot (none without one). The operations: ``
 ratio of two values in one unit, else none; ``percent`` for growth and cagr; a difference or a
 sum keeps its operands' unit when they share one, else none; a product with a multiple, then
 with a percent, keeps the other operand's unit, a figure a share times a count is a ``currency``
-total, and any other product has none. A division by zero, a cagr over a negative ratio or a result
-that is not finite has no value and no unit. The refs resolve as a report's do
+total, and any other product has none. A division by zero, a growth or a cagr from a base at or
+below zero (spec 2026-11-15 7.4), a cagr over a negative ratio or a result that is not finite has
+no value and no unit. The refs resolve as a report's do
 (``fairband.reports.refs``, every form of spec 13.2, a ``table:`` cell included, under the
 effective policy), their units the reads' (``currency``, ``per-share``, ``percent`` ...); a ref
 that names no number, a word or a figure the record does not hold included, is a 400,
-"unresolved reference: <ref>", and stores none of the call's derivations.
+"unresolved reference: <ref>", and stores none of the call's derivations. One operand may be a
+fixed number (spec 2026-11-15 7.1), ``number:<n>`` of ``refs.NUMBERS``, read before the resolver
+and stored as written; it has no unit, and the result's follows the stored figure (7.2): a sum, a
+difference or a product with it keeps the figure's unit, as does a ratio of the figure over it,
+and a ratio of it over the figure has none. A number off the list or written another way is a
+400, "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to
+1,000,000,000,000, not <what was written>", and two numbers in one derivation a 400, "a derivation
+needs a stored figure"; each stores none of the call's derivations.
 ``GET /api/derivations/{id}`` reads one back, 404 without it.
 
 ``sensitivity_api`` shares ``require_current``, ``agents_only``, ``snapshot_of``, ``built_inputs``
@@ -138,7 +146,7 @@ import math
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from typing import Any, Literal, cast, get_args
 
@@ -182,7 +190,15 @@ from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import newest_debt_and_cash
 from fairband.refresh.reviews import drop_off_route, row_route, write_review
 from fairband.refresh.run_price import METHOD_CHANGED, POLICY_CHANGED, SETTINGS_CHANGED
-from fairband.reports.refs import MAX_ID, Resolver, fact_ref, guidance_cited, same_snapshot
+from fairband.reports.refs import (
+    MAX_ID,
+    NUMBER_FORM,
+    Resolver,
+    fact_ref,
+    fixed_number,
+    guidance_cited,
+    same_snapshot,
+)
 from fairband.store.db import transaction
 from fairband.store.guidance import anchor_year, guidance_row
 from fairband.store.ledger import Writer, record
@@ -220,6 +236,10 @@ GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
 NIL_ON_FILE = (
     "a lasting earnings.sbc of 0 is refused: the snapshot's trailing stock pay is above zero"
 )
+FIXED_NUMBERS = (
+    "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to 1,000,000,000,000"
+)
+NEEDS_A_FIGURE = "a derivation needs a stored figure"
 _MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
 # The overrides the system dropped at a recompute, each with its reason (``drop_off_route``).
@@ -624,7 +644,8 @@ def add_review_routes(
 
     @app.post("/api/companies/{symbol}/derivations", status_code=201)
     def post_derivations(symbol: str, body: DerivationsPost, writer: WriterOf) -> dict[str, Any]:
-        """Compute and store each derivation; an unresolved reference stores none of them."""
+        """Compute and store each derivation; an unresolved reference, a fixed number off the list
+        or two numbers in one derivation stores none of them."""
         if not body.derivations:
             raise HTTPException(400, "a derive call needs a derivation")
         if any(d.operation == "cagr" and (d.years or 0) < 1 for d in body.derivations):
@@ -637,6 +658,8 @@ def add_review_routes(
             answers = []
             for d in body.derivations:
                 a, b = _operand(resolver, d.a), _operand(resolver, d.b)
+                if a.fixed and b.fixed:
+                    raise HTTPException(400, NEEDS_A_FIGURE)
                 years = d.years if d.operation == "cagr" else None
                 value, unit = _derived(d.operation, a, b, years)
                 derivation_id = insert_derivation(
@@ -990,12 +1013,29 @@ def _dollars(x: float) -> str:
     return f"{'−' if x < 0 else ''}${abs(x):,.2f}"
 
 
-def _operand(resolver: Resolver, ref: str) -> _Figure:
-    """The number and unit ``ref`` names; 400 when it names no number."""
+@dataclass(frozen=True)
+class _Operand:
+    """A derivation's operand as read (``_operand``): its number, its unit, and whether it is a
+    fixed number, which has no unit and leaves the result's to the stored figure."""
+
+    value: float
+    unit: str | None
+    fixed: bool = False
+
+
+def _operand(resolver: Resolver, ref: str) -> _Operand:
+    """The number and unit ``ref`` names, a fixed number (``refs.fixed_number``) read before the
+    resolver, with no unit; 400 when it names no number, or is a ``number:`` off the list."""
+    written = ref.strip()
+    if written.startswith(f"{NUMBER_FORM}:"):
+        number = fixed_number(written)
+        if number is None:
+            raise HTTPException(400, f"{FIXED_NUMBERS}, not {written[len(NUMBER_FORM) + 1 :]}")
+        return _Operand(float(number), None, fixed=True)
     found = resolver.resolve(ref)
     if found is None or not isinstance(found.value, float):
         raise HTTPException(400, f"unresolved reference: {ref}")
-    return found.value, found.unit
+    return _Operand(found.value, found.unit)
 
 
 def _number(x: Any, unit: str | None) -> _Figure | None:
@@ -1006,31 +1046,49 @@ def _number(x: Any, unit: str | None) -> _Figure | None:
 
 
 def _derived(
-    operation: Operation, a: _Figure, b: _Figure, years: int | None
+    operation: Operation, a: _Operand, b: _Operand, years: int | None
 ) -> tuple[float | None, str | None]:
-    """The operation's value and unit (module docstring); ``(None, None)`` where it is undefined."""
-    (x, x_unit), (y, y_unit) = a, b
-    shared = x_unit if x_unit == y_unit else None
+    """The operation's value and unit (module docstring); ``(None, None)`` where it is undefined:
+    a division by zero, growth from a base at or below zero, a cagr over a negative ratio and a
+    result that is not finite."""
+    x, y = a.value, b.value
     value: float | None
     if operation == "difference":
-        value, unit = x - y, shared
+        value = x - y
     elif operation == "sum":
-        value, unit = x + y, shared
+        value = x + y
     elif operation == "product":
-        value, unit = x * y, _product_unit(x_unit, y_unit)
-    elif y == 0:
-        value, unit = None, None
+        value = x * y
     elif operation == "ratio":
-        value, unit = x / y, None if shared is None else "multiple"
+        value = None if y == 0 else x / y
+    elif y <= 0:  # growth from a base at or below zero has no meaning, as the guidance step's
+        value = None
     elif operation == "growth":
-        value, unit = x / y - 1, "percent"
+        value = x / y - 1
     elif x / y < 0 or years is None:  # cagr: a negative ratio has no real root
-        value, unit = None, None
+        value = None
     else:
-        value, unit = (x / y) ** (1 / years) - 1, "percent"
+        value = (x / y) ** (1 / years) - 1
     if value is None or not math.isfinite(value):
         return None, None
-    return value, unit
+    return value, _derived_unit(operation, a, b)
+
+
+def _derived_unit(operation: Operation, a: _Operand, b: _Operand) -> str | None:
+    """A derivation's unit (module docstring). With a fixed number, which has none, the stored
+    figure sets it: a sum, a difference or a product, and a ratio of the figure over the number,
+    keep the figure's unit; a ratio of the number over the figure has none (spec 2026-11-15
+    7.2)."""
+    if operation in ("growth", "cagr"):
+        return "percent"
+    if a.fixed or b.fixed:
+        return None if operation == "ratio" and a.fixed else (b if a.fixed else a).unit
+    if operation == "product":
+        return _product_unit(a.unit, b.unit)
+    shared = a.unit if a.unit == b.unit else None
+    if operation == "ratio":
+        return None if shared is None else "multiple"
+    return shared
 
 
 def _product_unit(a: str | None, b: str | None) -> str | None:

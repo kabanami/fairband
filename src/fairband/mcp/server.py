@@ -631,7 +631,8 @@ def build_server(client: FairbandClient) -> MCPServer:
         return write(lambda: client.post(_company(symbol, "sensitivities"), body))
 
     @server.tool(
-        description="Compute figures from refs, [{operation, a, b, years}], each stored to cite as"
+        description="Compute figures from refs, [{operation, a, b, years}], one operand of each"
+        " may be a fixed number of the server's list written number:<n>, each stored to cite as"
         " derived:<id>."
     )
     def derive(symbol: str, derivations: list[dict[str, Any]]) -> dict[str, Any]:

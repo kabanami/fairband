@@ -69,6 +69,10 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   ``count`` reads as a ``score`` (the Z″ edges have decimals), its ``fraction`` and ``points`` as
   a percent.
 
+``number:<n>`` is no form the resolver reads: it is an operand of ``derive`` alone (spec
+2026-11-15 7.1), a fixed number of ``NUMBERS`` written in digits alone (``fixed_number``), with no
+unit and resting on no snapshot, so ``resolve`` names nothing by it.
+
 Each resolves to a ``Resolved``: the value (a number, a word, or ``None`` where the record holds no
 figure), its unit, its period and the snapshot it rests on, and two marks the check reads: a share
 price (``snapshot:<id>/price``, ``/inputs/price``, ``close:``), which is written to cents, and a
@@ -87,8 +91,11 @@ over invested capital) are each a ``multiple``, not a fraction; the rate
 quarter (``2026-Q4``), ``ttm``, a table's estimate column (``2026E``), or the close's or the
 multiple's date for the forms that have one, a finding's and a guidance record's as recorded;
 ``None`` for the others. The snapshot is the record's own for ``snapshot:``, ``review:``,
-``secondary:`` and ``sensitivity:``, and for ``derived:`` the snapshot its operands rest on;
-``None`` for the others, a finding and a guidance record being facts of the company.
+``secondary:`` and ``sensitivity:``, and for ``derived:`` the snapshot its operands rest on, the
+first operand's that rests on one (``rests_on``); ``None`` for the others, a finding and a
+guidance record being facts of the company. ``snapshots_of`` gives every snapshot a ref rests on,
+for a ``derived:`` ref those of all its operands through nested derivations, which the check's
+snapshot test reads (spec 2026-11-15 7.4).
 
 A ref resolves to ``None`` when it names nothing: a malformed ref, a record or a field that does
 not exist, a figure that is a table rather than a number or a word, or a record of another
@@ -111,10 +118,12 @@ revenue line of fiscal 2025 on file" or "the revenue line of Q1 of fiscal 2027 o
 ``multiple:`` "the trailing P/E, 30 Oct 2026" or "the forward P/E, the ten-year average";
 ``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
 ``guidance:`` "guidance record 5: EPS for fiscal 2027, the midpoint"; ``derived:`` "derivation 7:
-the ratio of <a> and <b>", the operands' refs; ``filing:`` "FMP filing report of fiscal 2027 Q1,
-LEASES: <the row's served label>, column 0 (3 Months Ended, Sep. 30, 2026), observed 11 Nov
-2026", the stored call's year and period, the column with its words where the sheet names it
-(``filing_report.column``; "column 0" alone where it does not), read as ``resolve`` reads it;
+the ratio of <a> and <b>", the operands' refs, a fixed number without its prefix and with its
+separators ("derivation 7: the product of filing:3/BS/2/0 and 1,000,000"); ``filing:`` "FMP
+filing report of fiscal 2027 Q1, LEASES: <the row's served label>, column 0 (3 Months Ended, Sep.
+30, 2026), observed 11 Nov 2026", the stored call's year and period, the column with its words
+where the sheet names it (``filing_report.column``; "column 0" alone where it does not), read as
+``resolve`` reads it;
 ``response:`` "FMP segments, observed 1 Nov 2026";
 ``policy:`` "policy required_return, <the version>", the ``policy_version`` the resolver is given
 (the report's snapshot's), else the policy's. A ref whose form or record names nothing, a record
@@ -168,6 +177,8 @@ from fairband.web.policy_rows import policy_json
 __all__ = [
     "ESTIMATE_UNITS",
     "MAX_ID",
+    "NUMBERS",
+    "NUMBER_FORM",
     "PEER_UNITS",
     "Resolved",
     "Resolver",
@@ -176,6 +187,7 @@ __all__ = [
     "estimate_ref",
     "fact_ref",
     "field_words",
+    "fixed_number",
     "guidance_cited",
     "multiple_ref",
     "peer_ref",
@@ -184,9 +196,18 @@ __all__ = [
     "rests_on",
     "same_snapshot",
     "same_snapshot_rows",
+    "snapshots_of",
     "table_ref",
     "unit_of",
 ]
+
+# A fixed number of ``derive`` (spec 2026-11-15 7.1), ``number:<n>``: the whole numbers 0 to 12,
+# 52, 100, 365 and each power of ten from 1,000 to 1,000,000,000,000. They serve a complement
+# (1), a change of sign (0), an average or an annual rate (2 to 12, 52, 365), a percent as points
+# (100) and a unit scale (a power of ten).
+NUMBER_FORM = "number"
+NUMBERS: frozenset[int] = frozenset([*range(13), 52, 100, 365, *(10**k for k in range(3, 13))])
+_NUMBER_TEXTS = {str(n): n for n in NUMBERS}  # each written in digits alone, as the list reads
 
 # The units of the consensus figures by field; every other figure is currency.
 ESTIMATE_UNITS: dict[str, str] = {
@@ -554,8 +575,9 @@ def same_snapshot_rows(cited: SnapshotRow, latest: SnapshotRow) -> bool:
 
 def rests_on(conn: sqlite3.Connection, ref: str) -> int | None:
     """The snapshot the record a ``snapshot:``, ``review:``, ``secondary:``, ``sensitivity:`` or
-    ``derived:`` ref names rests on, whichever company's it is (a derivation's, its operands');
-    ``None`` for the other forms and for a record that does not exist."""
+    ``derived:`` ref names rests on, whichever company's it is (a derivation's, the first of its
+    operands' that rests on one; ``snapshots_of`` gives them all); ``None`` for the other forms
+    and for a record that does not exist."""
     form, path = _split(ref)
     head = path.partition("/")[0]
     record_id = record_id_of(head)
@@ -581,6 +603,38 @@ def rests_on(conn: sqlite3.Connection, ref: str) -> int | None:
             if found is not None:
                 return found
     return None
+
+
+def snapshots_of(conn: sqlite3.Connection, ref: str) -> frozenset[int]:
+    """Every snapshot ``ref`` rests on: ``rests_on``'s for a record of the other forms, and for a
+    ``derived:`` ref those of every operand, through nested derivations (spec 2026-11-15 7.4);
+    empty where it rests on none, a fixed number among them."""
+    found: set[int] = set()
+    read: set[int] = set()  # the derivations read, each once however often it is an operand
+    pending = [ref]
+    while pending:
+        current = pending.pop()
+        form, path = _split(current)
+        if form != "derived":
+            rested = rests_on(conn, current)
+            if rested is not None:
+                found.add(rested)
+            continue
+        record_id = record_id_of(path.partition("/")[0])
+        if record_id is None or record_id in read:
+            continue
+        read.add(record_id)
+        derivation = derivation_row(conn, record_id)
+        if derivation is not None:
+            pending += [derivation.a, derivation.b]
+    return frozenset(found)
+
+
+def fixed_number(ref: str) -> int | None:
+    """The number ``number:<n>`` names: ``<n>`` in digits alone, as ``NUMBERS`` writes it, one of
+    them; ``None`` for any other text (spec 2026-11-15 7.1)."""
+    form, path = _split(ref)
+    return _NUMBER_TEXTS.get(path) if form == NUMBER_FORM else None
 
 
 def unit_of(engine_unit: str | None) -> str | None:
@@ -1100,12 +1154,14 @@ class Resolver:
         return f"guidance record {row.id}: {guided}, the {name}"
 
     def _derived_source(self, head: str) -> str | None:
-        """The derivation, its operation and its operands' refs."""
+        """The derivation, its operation and its operands' refs, a fixed number without its
+        prefix and with its thousands separators."""
         row = _row(derivation_row, self.conn, head)
         if row is None or row.symbol != self.symbol:
             return None
+        a, b = (_operand_words(operand) for operand in (row.a, row.b))
         over = "" if row.years is None else f" over {row.years} years"
-        return f"derivation {row.id}: the {row.operation} of {row.a} and {row.b}{over}"
+        return f"derivation {row.id}: the {row.operation} of {a} and {b}{over}"
 
     def _response_source(self, head: str) -> str | None:
         """The vendor, the endpoint and the day the response was observed."""
@@ -1216,6 +1272,13 @@ def _iso_words(text: str) -> str:
 def _split(ref: str) -> tuple[str, str]:
     form, colon, path = ref.strip().partition(":")
     return (form, path) if colon else ("", "")
+
+
+def _operand_words(operand: str) -> str:
+    """A derivation's operand as the references list writes it: a fixed number in digits with
+    its thousands separators ("1,000,000"), any other its ref as stored."""
+    number = fixed_number(operand)
+    return operand if number is None else f"{number:,}"
 
 
 def _figure(

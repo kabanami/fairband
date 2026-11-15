@@ -21,6 +21,8 @@ each failure, ``where`` the section and the part counted from 1 and the text at 
 
 - ``a number with no reference``: a quantity in a plain part (``quantities``);
 - ``unresolved reference``: a cite whose ref names nothing, or a figure the record does not hold;
+  a ``number:`` cite names nothing, a fixed number being an operand of ``derive`` alone (spec
+  2026-11-15 7.3), "<ref> is an operand of derive: cite the derivation";
 - ``wrong unit``: a cite whose suffix does not fit the ref's unit, or whose number is not the
   ref's value at the report's rounding (``rounded_equal``), the value in the detail as the cite
   should read; a word cited against a number, or a word that is not the ref's;
@@ -28,7 +30,9 @@ each failure, ``where`` the section and the part counted from 1 and the text at 
   financial table's estimate column ``2026E`` or ``FY2026E`` reads ``2026``, and a quarter reads
   the same with its dash or without, ``2027-Q1`` as ``2027Q1``); a cite naming none passes;
 - ``wrong snapshot``: a cite whose ref rests on a snapshot other than the company's latest, or one
-  the latest does not reprice (``refs.same_snapshot``), the latest's id in the detail;
+  the latest does not reprice (``refs.same_snapshot``), the latest's id in the detail; a
+  ``derived:`` cite rests on every snapshot its operands rest on, through nested derivations
+  (``refs.snapshots_of``, spec 2026-11-15 7.4), and the detail names the first that fails;
 - ``a derived figure the engine has not emitted``: a ``derived:`` cite with no stored derivation
   of the company or one with no value, and a multiple (``12.3x``) in a plain part, a ratio
   written out rather than derived.
@@ -94,7 +98,15 @@ from decimal import Decimal
 from fairband.engine.types import Route
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
-from fairband.reports.refs import Resolved, Resolver, record_id_of, rests_on, same_snapshot
+from fairband.reports.refs import (
+    NUMBER_FORM,
+    Resolved,
+    Resolver,
+    record_id_of,
+    rests_on,
+    same_snapshot,
+    snapshots_of,
+)
 from fairband.store.reviews import latest_review, latest_review_on, review_row
 from fairband.store.sensitivities import sensitivity_row
 
@@ -467,10 +479,10 @@ def _cite_failure(
     """The first failure of the cite, its word and its detail; ``None`` when it passes."""
     cite, ref = str(part.get("cite", "")), str(part.get("ref", ""))
     period = part.get("period")
-    rested = rests_on(conn, ref)
-    if rested is not None and not same_snapshot(conn, rested, latest):
-        why = f"{ref} rests on snapshot {rested}; the company's latest is snapshot {latest}"
-        return WRONG_SNAPSHOT, f"{why}: read it again"
+    for rested in sorted(snapshots_of(conn, ref)):  # a derivation's: every operand's
+        if not same_snapshot(conn, rested, latest):
+            why = f"{ref} rests on snapshot {rested}; the company's latest is snapshot {latest}"
+            return WRONG_SNAPSHOT, f"{why}: read it again"
     stale = _stale_review(conn, resolver.symbol, ref) or _stale_reading(conn, resolver.symbol, ref)
     if stale is not None:
         return WRONG_SNAPSHOT, stale
@@ -478,6 +490,8 @@ def _cite_failure(
     if ref.strip().startswith("derived:") and (resolved is None or resolved.value is None):
         why = "has no value" if resolved else f"is no derivation of {resolver.symbol}"
         return NOT_EMITTED, f"{ref} {why}: derive the figure and cite its id"
+    if resolved is None and ref.strip().startswith(f"{NUMBER_FORM}:"):
+        return UNRESOLVED, f"{ref} is an operand of derive: cite the derivation"
     if resolved is None:
         return UNRESOLVED, f"{ref} names no stored value"
     if resolved.value is None:

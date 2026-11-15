@@ -360,6 +360,48 @@ def test_a_derived_figure_the_engine_has_not_emitted(
     )
 
 
+def test_a_number_is_an_operand_of_derive_alone(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 7.3: a ``number:`` cite names nothing: the derivation is cited."""
+    sid = snapshots["AAPL"]
+    for cite, ref in (("100", "number:100"), ("13", "number:13")):
+        found = _one(_check(conn, policy, sid, _cite(cite, ref)), sid, cite)
+        assert (found.what, found.detail) == (
+            UNRESOLVED,
+            f"{ref} is an operand of derive: cite the derivation",
+        )
+
+
+def test_a_derivation_rests_on_every_snapshot_of_its_operands(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 7.4: a ``derived:`` cite fails the snapshot test when any operand, through
+    nested derivations, rests on a snapshot that is not the company's latest; a number rests on
+    none."""
+    sid = snapshots["AAPL"]
+    cited = snapshot_row(conn, sid)
+    assert cited is not None and cited.value is not None
+    revalued = replace(cited.result, value=cited.value + 1.0)
+    latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    new, old = f"snapshot:{latest}/price", f"snapshot:{sid}/price"
+
+    def derived(operation: str, a: str, b: str, value: float, unit: str | None) -> str:
+        found = insert_derivation(conn, "AAPL", operation, a, b, None, value, unit, AGENT, NOW)
+        return f"derived:{found}"
+
+    second = derived("ratio", new, old, 1.0, "multiple")
+    inner = derived("ratio", "fact:AAPL/revenue/2025", old, 14e6, None)
+    nested = derived("sum", new, inner, 14_000_150.0, None)
+    on_latest = derived("product", new, "number:2", 300.0, "per-share")
+    for cite, ref in (("1.00x", second), ("14,000,150", nested)):
+        found = check_sections(conn, "AAPL", latest, _report([_cite(cite, ref)]), policy)
+        why = f"{ref} rests on snapshot {sid}; the company's latest is snapshot {latest}"
+        assert [(f.what, f.detail) for f in found] == [(WRONG_SNAPSHOT, f"{why}: read it again")]
+    found = check_sections(conn, "AAPL", latest, _report([_cite("$300.00", on_latest)]), policy)
+    assert found == []
+
+
 def test_years_quarters_forms_and_small_counts_pass(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
