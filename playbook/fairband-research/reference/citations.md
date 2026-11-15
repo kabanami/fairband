@@ -147,9 +147,10 @@ it". On any other ref it does not know the currency, so the rule is yours to kee
 A record in another currency than the reporting one is kept out of money arithmetic until you
 convert it ("Your own arithmetic"): to set an input from it, or to compare it with a statement,
 take first the `derive` `product` of a US-dollar figure and `snapshot:<id>/inputs/fx_rate`, the
-reporting currency per US dollar. A figure in a third currency, neither the reporting currency nor
-the US dollar, has no rate: it is stated and cited in its own currency and enters no arithmetic
-with the company's figures.
+reporting currency per US dollar. A derivation of it keeps its currency until that product, its
+quarter or its average among them, so convert first, or keep to figures in its own currency. A
+figure in a third currency, neither the reporting currency nor the US dollar, has no rate: it is
+stated and cited in its own currency and enters no arithmetic with the company's figures.
 
 The number must lie within half a step of the stored value at that rounding. `22.7%` cites
 0.22702; `23%` does not. When in doubt, write exactly the decimals in the table: `22.7%` for
@@ -343,13 +344,16 @@ at or below zero, a `cagr` over a negative ratio or a result that is not finite 
 a cite of it fails.
 
 A record in another currency. A finding or a guidance record whose `currency` is not the
-reporting currency stays out of money arithmetic until you convert it. With a money figure (a
-total or a figure a share) that is not a record in its own currency it has no value, and no
-derivation with it has a money unit; with another record in its currency it gives a growth, a
-ratio, or a sum or a difference with no unit. The `product` of a US-dollar record and
+reporting currency stays out of money arithmetic until you convert it, and so does every
+derivation of it: its quarter (a `ratio` over `number:4`), its average with another record, the
+record times `number:1`, each keeps its currency until its `product` with the rate. With a money
+figure (a total or a figure a share) that is not in its own currency, the record or a derivation
+of it has no value, and no derivation with it has a money unit; with another record in its
+currency, or a derivation of one, it gives a growth, a ratio, or a sum or a difference with no
+unit. The `product` of a US-dollar record, or of a derivation of one, and
 `snapshot:<id>/inputs/fx_rate` is the figure in the reporting currency, with no unit, which then
-combines with anything: convert so before you set an input from the record or set it against a
-statement. On a company in another currency a US-dollar record has no value with the price, the
+combines with anything: convert so first, before you set an input from the record or set it
+against a statement, or keep to figures in its own currency. On a company in another currency a US-dollar record has no value with the price, the
 value a share, the levels, a close or a grid's cells, whose currency the server does not know. A
 derivation with no unit is cited at the decimals you write: name its currency in the text.
 

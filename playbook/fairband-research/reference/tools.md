@@ -375,10 +375,12 @@ and store nothing:
   On a company in another currency the rate is `snapshot:<id>/inputs/fx_rate`: a `ratio` of a
   figure in the currency and the rate is that figure in US dollars, a derivation with no unit, so
   its cite takes `$` or none at the decimals you write. A finding or a guidance record in another
-  currency than the reporting one stays out of money arithmetic until you convert it: with a money
-  figure that is not a record in its own currency it has no value, and no derivation with it has
-  a money unit. The `product` of a US-dollar record and the rate is the figure in the reporting
-  currency, with no unit, which then combines with anything.
+  currency than the reporting one stays out of money arithmetic until you convert it, and so does
+  every derivation of it, its quarter or its average among them: with a money figure not in its
+  own currency it has no value, and no derivation with it has a money unit. The `product` of a
+  US-dollar record, or of a derivation of one, and the rate is the figure in the reporting
+  currency, with no unit, which then combines with anything: convert first, or keep to figures in
+  its own currency.
 - `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?,
   work_item_id?)`:
   submit a report; published whole, it answers `{report: {id, symbol, createdAt, workItemId}}`,

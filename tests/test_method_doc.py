@@ -1175,7 +1175,8 @@ def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> N
     """Spec 2026-11-15 9.3, 9.4: 16.2 says a resolved record's money figure carries its currency
     and every other ref none; 16.3 the `$` rule the server checks for a record, the detail with
     the code, and the playbook's for every other ref; 16.4 a record in another currency and its
-    two rules with their examples."""
+    two rules with their examples, a derivation carrying its record's currency until it is
+    converted (the whole-branch review's I1)."""
     sixteen = _section(16)
     references = sixteen[sixteen.index("### 16.2") : sixteen.index("### 16.3")]
     for words in (
@@ -1196,8 +1197,9 @@ def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> N
             " currency among them, as before (spec 2026-11-15 3, 14)."
         ),
         (
-            "So the server checks the `$` rule (16.3) and keeps a record in another currency out"
-            " of money arithmetic (16.4) for a record alone."
+            "So the server checks the `$` rule (16.3) for a record alone, and keeps out of money"
+            " arithmetic (16.4) a record in another currency and a derivation of one until it is"
+            " converted."
         ),
     ):
         assert words in references, words
@@ -1246,14 +1248,38 @@ def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> N
             "A record that names the reporting currency, or names none, is not one, and derives as"
             " before."
         ),
+        # the whole-branch review's I1 (the controller's ruling 7): a derivation carries its
+        # record's currency where it is an operand, until it is converted
         (
-            "Such a record is kept out of money arithmetic until it is converted, by two rules: a"
-            " derivation has no value, and no unit, where one operand is such a record and the"
-            " other is a money figure (currency or per-share) that is not a record in that same"
-            " currency; and a derivation with such an operand never has a money unit: where the"
-            " unit rules above give currency or per-share, it has none, since a derivation carries"
-            " no currency and a money unit on it would read as the reporting currency, so a"
+            "Such a record is kept out of money arithmetic until it is converted, and so is a"
+            " derivation of it (spec 2026-11-15 4): an operand is foreign in a currency where it is"
+            " a record in that currency, or a `derived:` operand whose stored derivation has an"
+            " operand foreign in it, read through the stored rows as the tree is (above), but for"
+            " three derivations, foreign in nothing: a `product` or a `ratio` with a"
+            " `snapshot:<id>/inputs/fx_rate` ref, which converted it; a `growth` or a `cagr`, a"
+            " percent having no currency; and a `ratio` of two operands foreign in the same"
+            " currency, which cancels it."
+        ),
+        "A derivation is still stored with no currency; the mark is read where it is an operand.",
+        (
+            "Two rules: a derivation has no value, and no unit, where one operand is foreign in a"
+            " currency and the other is a money figure (currency or per-share), or an operand"
+            " foreign in another currency, that is not foreign in that same currency; and a"
+            " derivation with an operand foreign in a currency never has a money unit: where the"
+            " unit rules above give currency or per-share, it has none, since a stored derivation"
+            " has no currency and a money unit on it would read as the reporting currency, so a"
             " US-dollar record times `number:1` has no unit."
+        ),
+        (
+            "An operand foreign in a currency combines as before with one that has no unit and is"
+            " foreign in nothing: the rate, a number, a filing cell, a converted figure."
+        ),
+        (
+            "A derivation of it keeps its currency: its quarter, its `ratio` over `number:4`, or"
+            " the average of two US-dollar records has no value with the TWD revenue until it is"
+            " converted; times the rate it is in TWD and combines with anything; its `growth` over"
+            " a US-dollar record is a percent; and the ratio of two such averages, the currency"
+            " cancelled, combines with anything."
         ),
         (
             "So a US-dollar finding of a TWD reporter with another US-dollar record gives a growth"
@@ -1274,6 +1300,11 @@ def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> N
         ),
     ):
         assert words in derivations, words
+    for old in (
+        "by two rules: a derivation has no value",
+        "since a derivation carries no currency",
+    ):
+        assert old not in derivations, old
 
 
 def test_a_filing_report_is_kept_and_a_revenue_split_names_its_newest_year() -> None:

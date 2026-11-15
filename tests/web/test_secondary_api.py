@@ -1637,6 +1637,139 @@ def test_a_record_of_a_us_company_in_another_currency(client: TestClient, db_pat
     ]
 
 
+def _sek_revenue(db_path: Path) -> int:
+    """FXCO's fiscal 2025 revenue on file, SEK 800 m; its latest snapshot's id, whose rate is 8.0
+    kronor a dollar."""
+    with closing(connect(db_path)) as conn:
+        response = record_response(
+            conn, "fmp", "income-statement", {"symbol": "FXCO"}, "FXCO", 200, "[]", None, CREATED
+        )
+        insert_facts(
+            conn, [_fact("income-annual", FY25, "revenue", 800e6, response, "FXCO", "SEK")]
+        )
+        snapshot = latest_snapshot(conn, "FXCO")
+    assert snapshot is not None
+    return snapshot.id
+
+
+def test_a_derivation_carries_its_record_s_currency_until_it_is_converted(
+    client: TestClient, db_path: Path
+) -> None:
+    """Method 16.4 (the whole-branch review's I1) on FXCO, SEK at 8.0 a dollar: a derivation of a
+    US-dollar record is in US dollars where it is an operand, read through the stored rows, a
+    derivation of the same call among them. A quarter of the record, or the average of two such
+    records, has no value with the SEK revenue, in a ratio, a growth or a sum; the average times
+    the rate is the figure in SEK, which combines with the revenue; the ratio of two US-dollar
+    averages cancels the currency and combines; the growth of an average over a US-dollar record is
+    a percent; and a derivation in US dollars has none with one in euros, each a money figure in
+    its own currency."""
+    snapshot_id = _sek_revenue(db_path)
+    usd, usd_before, usd_third, eur = _money_findings(
+        db_path, "FXCO", (110e6, "USD"), (100e6, "USD"), (90e6, "USD"), (40e6, "EUR")
+    )
+    rate, revenue = f"snapshot:{snapshot_id}/inputs/fx_rate", "fact:FXCO/revenue/2025"
+    first = _next_derivation(db_path)
+
+    def at(n: int) -> str:  # the call's n-th derivation, counted from 0
+        return f"derived:{first + n}"
+
+    r = _derive(
+        client,
+        {"operation": "ratio", "a": usd, "b": "number:4"},  # 0: a quarter, in US dollars
+        {"operation": "growth", "a": at(0), "b": revenue},  # the review's case
+        {"operation": "ratio", "a": at(0), "b": revenue},
+        {"operation": "sum", "a": usd, "b": usd_before},  # 3
+        {"operation": "ratio", "a": at(3), "b": "number:2"},  # 4: the average, in US dollars
+        {"operation": "ratio", "a": at(4), "b": revenue},
+        {"operation": "growth", "a": at(4), "b": revenue},
+        {"operation": "sum", "a": at(4), "b": revenue},
+        {"operation": "product", "a": at(4), "b": rate},  # 8: converted, in SEK
+        {"operation": "growth", "a": at(8), "b": revenue},
+        {"operation": "sum", "a": usd_before, "b": usd_third},  # 10
+        {"operation": "ratio", "a": at(10), "b": "number:2"},  # 11: a second average
+        {"operation": "ratio", "a": at(4), "b": at(11)},  # 12: the currency cancels
+        {"operation": "product", "a": at(12), "b": revenue},
+        {"operation": "growth", "a": at(4), "b": usd},
+        {"operation": "ratio", "a": eur, "b": "number:2"},  # 15: half of it, in euros
+        {"operation": "sum", "a": at(0), "b": at(15)},
+        symbol="FXCO",
+    )
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (pytest.approx(27.5e6), None),
+        *[(None, None)] * 2,
+        (pytest.approx(210e6), None),
+        (pytest.approx(105e6), None),
+        *[(None, None)] * 3,
+        (pytest.approx(840e6), None),  # 105 m dollars at 8.0 kronor a dollar
+        (pytest.approx(0.05), "percent"),
+        (pytest.approx(190e6), None),
+        (pytest.approx(95e6), None),
+        (pytest.approx(105 / 95), None),
+        (pytest.approx(800e6 * 105 / 95), None),
+        (pytest.approx(105 / 110 - 1), "percent"),
+        (pytest.approx(20e6), None),
+        (None, None),
+    ]
+
+
+def test_one_derivation_does_not_convert_a_record(client: TestClient, db_path: Path) -> None:
+    """The whole-branch review's ``test_launder`` on FXCO: a US-dollar finding over ``number:4``,
+    stored by one call, is still in US dollars in the next, so its growth and its ratio over the
+    SEK revenue have no value."""
+    _sek_revenue(db_path)
+    (usd,) = _money_findings(db_path, "FXCO", (110e6, "USD"))
+    revenue = "fact:FXCO/revenue/2025"
+    r = _derive(
+        client,
+        {"operation": "growth", "a": usd, "b": revenue},
+        {"operation": "ratio", "a": usd, "b": "number:4"},
+        symbol="FXCO",
+    )
+    assert r.status_code == 201, r.text
+    quarter = f"derived:{r.json()['derivations'][1]['id']}"
+    r = _derive(
+        client,
+        {"operation": "growth", "a": quarter, "b": revenue},
+        {"operation": "ratio", "a": quarter, "b": revenue},
+        symbol="FXCO",
+    )
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [(None, None)] * 2
+
+
+def test_a_derivation_of_a_us_company_s_euro_record_stays_in_euros(
+    client: TestClient, db_path: Path
+) -> None:
+    """Method 16.4 on AAPL, which reports in US dollars: a euro finding times ``number:1`` is still
+    in euros, so it has no value with a ``fact:`` total; records that name no currency derive as
+    before, through a derivation too."""
+    eur, usd, usd_before = _money_findings(
+        db_path, "AAPL", (2e9, "EUR"), (22e9, None), (20e9, None)
+    )
+    revenue = "fact:AAPL/revenue/2025"
+    first = _next_derivation(db_path)
+    r = _derive(
+        client,
+        {"operation": "product", "a": eur, "b": "number:1"},
+        {"operation": "sum", "a": f"derived:{first}", "b": revenue},
+        {"operation": "ratio", "a": f"derived:{first}", "b": revenue},
+        {"operation": "sum", "a": usd, "b": usd_before},
+        {"operation": "ratio", "a": f"derived:{first + 3}", "b": "number:2"},
+        {"operation": "growth", "a": f"derived:{first + 4}", "b": revenue},
+        {"operation": "sum", "a": f"derived:{first + 4}", "b": revenue},
+    )
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (pytest.approx(2e9), None),
+        *[(None, None)] * 2,
+        (pytest.approx(42e9), "currency"),
+        (pytest.approx(21e9), "currency"),
+        (pytest.approx(21 / 22 - 1), "percent"),
+        (pytest.approx(43e9), "currency"),
+    ]
+
+
 def test_a_cagr_needs_its_years(client: TestClient) -> None:
     good = "fact:AAPL/revenue/2025"
     for years in ({}, {"years": 0}):

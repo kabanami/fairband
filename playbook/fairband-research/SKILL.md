@@ -128,9 +128,11 @@ report such a figure takes `$` where it is in US dollars, and its code in the pl
 bare cite otherwise (`reference/citations.md`). To set an input from it, or to compare it with a
 statement, convert it first: the `derive` `product` of a US-dollar figure and
 `snapshot:<id>/inputs/fx_rate`, the reporting currency per US dollar, is the figure in the
-reporting currency, with no unit. Until then `derive` keeps it out of money arithmetic. A figure
-in a third currency, neither the reporting currency nor the US dollar, is stated and cited in its
-own currency and enters no arithmetic with the company's figures.
+reporting currency, with no unit. Until then `derive` keeps it out of money arithmetic, and every
+derivation of it too: its quarter, its average with another, the record times `number:1`, each
+keeps its currency until its `product` with the rate. So convert it first, or keep to figures in
+its own currency. A figure in a third currency, neither the reporting currency nor the US dollar,
+is stated and cited in its own currency and enters no arithmetic with the company's figures.
 
 Then read everything the page shows:
 

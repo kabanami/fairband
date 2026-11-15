@@ -143,12 +143,16 @@ scaled by 1.5, moves for no group (``_independent``). Each stores none of the ca
 A record in another currency
 (spec 2026-11-15 9.3), a finding's or a guidance record's money figure whose ``Resolved.currency``
 is not the reporting currency (``Resolver.reporting``), in either direction, is kept out of money
-arithmetic until it is converted: with a ``currency`` or ``per-share`` figure that is not a record
-in that same currency it gives no value and no unit, and where the rules above give it a money
-unit it has none, since a derivation carries no currency. So two records in one currency give a
-growth, a ratio, and a sum or a difference with no unit, and a record times the rate
-(``snapshot:<id>/inputs/fx_rate``, which has no unit) is the figure converted, with no unit.
-``GET /api/derivations/{id}`` reads one back, 404 without it.
+arithmetic until it is converted, and so is a derivation of it (method 16.4): an operand is foreign
+in that currency where it is such a record, or a ``derived:`` operand whose tree carries it
+(``_carried``), but a ``product`` or a ``ratio`` with the rate (``snapshot:<id>/inputs/fx_rate``)
+converted it, a ``growth`` or a ``cagr`` is a percent, and a ``ratio`` of two operands in one
+currency cancels it. An operand foreign in a currency, with a ``currency`` or ``per-share`` figure
+or an operand foreign in another currency, gives no value and no unit, and where the rules above
+give it a money unit it has none, since a stored derivation has no currency. So two records in one
+currency give a growth, a ratio, and a sum or a difference with no unit, a quarter or an average of
+a record is still in its currency, and a record times the rate (which has no unit) is the figure
+converted, with no unit. ``GET /api/derivations/{id}`` reads one back, 404 without it.
 
 ``sensitivity_api`` shares ``require_current``, ``agents_only``, ``snapshot_of``, ``built_inputs``
 (the store-moved 409), ``judged_route`` (the route the rules judge a tag on) and ``counted``.
@@ -207,6 +211,7 @@ from fairband.reports.refs import (
     KILL_FORM,
     MAX_ID,
     NUMBER_FORM,
+    Resolved,
     Resolver,
     fact_ref,
     fixed_number,
@@ -1053,9 +1058,11 @@ type _Tree = float | _Leaf | _Node
 @dataclass(frozen=True)
 class _Leaf:
     """A stored figure in a derivation's tree: its number resolved now, ``None`` where its ref
-    names no number now."""
+    names no number now; ``foreign`` the currency it is in where it is a record's money figure in
+    another currency than the reporting one (``_foreign``)."""
 
     value: float | None
+    foreign: str | None = None
 
 
 @dataclass(frozen=True, eq=False)  # one node a derivation however often the tree names it
@@ -1063,7 +1070,8 @@ class _Node:
     """A derivation in a tree (``_node``): its operation, its operands' trees, its years and its
     value, the stored one for a derivation on file; ``whole`` whether every leaf under it has a
     number now, else the tree takes it as one leaf at its value (method 16.4); ``numbered``
-    whether a fixed number is anywhere under it."""
+    whether a fixed number is anywhere under it; ``foreign`` the currency a stored derivation
+    carries where it is an operand (``_carried``)."""
 
     operation: Operation
     a: _Tree
@@ -1072,17 +1080,23 @@ class _Node:
     value: float | None
     whole: bool
     numbered: bool
+    foreign: str | None = None
 
 
 def _node(
-    operation: Operation, a: _Tree, b: _Tree, years: int | None, value: float | None
+    operation: Operation,
+    a: _Tree,
+    b: _Tree,
+    years: int | None,
+    value: float | None,
+    foreign: str | None = None,
 ) -> _Node:
     """The node of a derivation over the trees ``a`` and ``b``: whole where each has a number now,
     a nested derivation that is not whole counting as its value; numbered where either is a fixed
     number or holds one."""
     whole = all(_has_number(x) for x in (a, b))
     numbered = any(isinstance(x, float) or (isinstance(x, _Node) and x.numbered) for x in (a, b))
-    return _Node(operation, a, b, years, value, whole, numbered)
+    return _Node(operation, a, b, years, value, whole, numbered, foreign)
 
 
 def _has_number(tree: _Tree) -> bool:
@@ -1091,11 +1105,43 @@ def _has_number(tree: _Tree) -> bool:
     return not isinstance(tree, _Node) or tree.whole or tree.value is not None
 
 
+def _foreign(resolver: Resolver, found: Resolved | None) -> str | None:
+    """The currency of a record's money figure that is not the reporting currency, in either
+    direction (spec 2026-11-15 9.3); ``None`` for any other ref, the resolver knowing the currency
+    of a record alone."""
+    currency = None if found is None else found.currency
+    return currency if currency is not None and currency != resolver.reporting() else None
+
+
+def _carried(operation: str, refs: tuple[str, str], a: _Tree, b: _Tree) -> str | None:
+    """The currency a stored derivation carries where it is an operand (method 16.4): that of an
+    operand foreign in it, a record in another currency or a derivation that carries one; none for
+    a ``product`` or a ``ratio`` with the rate, ``snapshot:<id>/inputs/fx_rate``, which converted
+    it, for a ``growth`` or a ``cagr``, a percent having no currency, and for a ``ratio`` of two
+    operands in one currency, which cancels it."""
+    fa, fb = (x.foreign if isinstance(x, _Leaf | _Node) else None for x in (a, b))
+    if operation in ("growth", "cagr"):
+        return None
+    if operation in ("product", "ratio") and any(_is_rate(ref) for ref in refs):
+        return None
+    if operation == "ratio" and fa == fb:
+        return None
+    return fa if fa is not None else fb
+
+
+def _is_rate(ref: str) -> bool:
+    """Whether ``ref`` is a snapshot's rate, ``snapshot:<id>/inputs/fx_rate``."""
+    form, _, path = ref.strip().partition(":")
+    head, _, rest = path.partition("/")
+    return form == "snapshot" and rest == "inputs/fx_rate" and record_id_of(head) is not None
+
+
 class _Trees:
     """The trees of a call's ``derived:`` operands, read from the stored rows as
     ``refs.snapshots_of`` walks them: each derivation's operation, operands and years, nested ones
     too, each derivation read once; a call's derivations are stored one by one, so a later one of
-    the call reads an earlier one. A stored figure is resolved now by the call's resolver."""
+    the call reads an earlier one. A stored figure is resolved now by the call's resolver, and a
+    derivation carries the currency of its tree's records until it is converted (``_carried``)."""
 
     def __init__(self, conn: sqlite3.Connection, resolver: Resolver) -> None:
         self._conn = conn
@@ -1116,7 +1162,8 @@ class _Trees:
 
     def _of(self, row: DerivationRow) -> _Node:
         a, b = self._operand(row.a), self._operand(row.b)
-        return _node(cast(Operation, row.operation), a, b, row.years, row.value)
+        foreign = _carried(row.operation, (row.a, row.b), a, b)
+        return _node(cast(Operation, row.operation), a, b, row.years, row.value, foreign)
 
     def _operand(self, ref: str) -> _Tree:
         number = fixed_number(ref)
@@ -1126,7 +1173,8 @@ class _Trees:
         if nested is not None:
             return nested
         found = self._resolver.resolve(ref)
-        return _Leaf(found.value if found is not None and isinstance(found.value, float) else None)
+        value = found.value if found is not None and isinstance(found.value, float) else None
+        return _Leaf(value, _foreign(self._resolver, found))
 
 
 def _independent(node: _Node) -> bool:
@@ -1179,8 +1227,9 @@ def _moved(base: float | None, scaled: float | None) -> bool:
 class _Operand:
     """A derivation's operand as read (``_operand``): its number, its unit, whether it is a fixed
     number, which has no unit and leaves the result's to the stored figure, and ``foreign``, the
-    currency of a record's money figure in another currency than the reporting one, ``None`` for
-    any other operand; ``tree`` its tree (``_Trees``)."""
+    currency it is foreign in: a record's money figure in another currency than the reporting one,
+    or a derivation that carries one (``_carried``), ``None`` for any other operand; ``tree`` its
+    tree (``_Trees``)."""
 
     value: float
     unit: str | None
@@ -1194,7 +1243,8 @@ def _operand(resolver: Resolver, trees: _Trees, ref: str) -> _Operand:
     resolver, with no unit; 400 when it names no number, is a ``number:`` off the list, or is a
     ``kill:`` threshold, the author's own number (spec 2026-11-15 8.2). A record's money figure
     whose currency (``Resolved.currency``) is not the reporting currency carries it (spec
-    2026-11-15 9.3). A ``derived:`` operand's tree is read from the stored rows."""
+    2026-11-15 9.3). A ``derived:`` operand's tree is read from the stored rows, and it carries
+    the currency its tree gives it (``_carried``)."""
     written = ref.strip()
     if written.startswith(f"{NUMBER_FORM}:"):
         number = fixed_number(written)
@@ -1206,11 +1256,11 @@ def _operand(resolver: Resolver, trees: _Trees, ref: str) -> _Operand:
     found = resolver.resolve(ref)
     if found is None or not isinstance(found.value, float):
         raise HTTPException(400, f"unresolved reference: {ref}")
-    currency = found.currency
-    foreign = currency if currency is not None and currency != resolver.reporting() else None
     nested = trees.derived(written)
-    tree: _Tree = _Leaf(found.value) if nested is None else nested
-    return _Operand(found.value, found.unit, tree, foreign=foreign)
+    if nested is not None:
+        return _Operand(found.value, found.unit, nested, foreign=nested.foreign)
+    foreign = _foreign(resolver, found)
+    return _Operand(found.value, found.unit, _Leaf(found.value, foreign), foreign=foreign)
 
 
 def _number(x: Any, unit: str | None) -> _Figure | None:
@@ -1225,15 +1275,16 @@ def _derived(
 ) -> tuple[float | None, str | None]:
     """The operation's value and unit (module docstring); ``(None, None)`` where it is undefined:
     a division by zero, growth from a base at or below zero, a cagr over a negative ratio, a
-    result that is not finite, and a record in another currency with a money figure not in that
-    currency (spec 2026-11-15 9.3, rule 1). With such a record a money unit is none (rule 2)."""
+    result that is not finite, and an operand foreign in a currency with a money figure not
+    foreign in that currency (method 16.4, rule 1). With such an operand a money unit is none
+    (rule 2)."""
     if _unconverted(a, b) or _unconverted(b, a):
         return None, None
     value = _value(operation, a.value, b.value, years)
     if value is None:
         return None, None
     unit = _derived_unit(operation, a, b)
-    if unit in MONEY_UNITS and (a.foreign or b.foreign):  # a derivation carries no currency
+    if unit in MONEY_UNITS and (a.foreign or b.foreign):  # a stored derivation has no currency
         return value, None
     return value, unit
 
@@ -1263,11 +1314,15 @@ def _value(operation: Operation, x: float, y: float, years: int | None) -> float
 
 
 def _unconverted(record: _Operand, other: _Operand) -> bool:
-    """Whether ``record`` is a record in another currency than the reporting one and ``other`` a
-    money figure that is not a record in that same currency (spec 2026-11-15 9.3, rule 1): a sum
-    or a ratio of the two would mix currencies until the record is converted."""
+    """Whether ``record`` is foreign in a currency, a record in another currency than the
+    reporting one or a derivation that carries one, and ``other`` a money figure not foreign in
+    that same currency: a figure in ``currency`` or ``per-share``, or one foreign in another
+    currency, money with its unit gone (method 16.4, rule 1). A sum or a ratio of the two would mix
+    currencies until the record is converted."""
     return (
-        record.foreign is not None and other.unit in MONEY_UNITS and other.foreign != record.foreign
+        record.foreign is not None
+        and other.foreign != record.foreign
+        and (other.unit in MONEY_UNITS or other.foreign is not None)
     )
 
 

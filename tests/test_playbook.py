@@ -2399,7 +2399,8 @@ def test_a_money_figure_is_recorded_in_the_currency_the_company_states() -> None
     the tools: a money figure is recorded in the currency the company states it in, with
     `currency` when that is not the reporting currency; `$` for a US-dollar figure and the code
     before a bare cite otherwise; converted with `product` and the rate before it sets an input or
-    meets a statement; a third currency enters no arithmetic. The words "in the reporting currency
+    meets a statement, a derivation of it keeping its currency until then (the whole-branch
+    review's I1); a third currency enters no arithmetic. The words "in the reporting currency
     as the company states it" go; the guidance step says a record in another currency takes none;
     the tools quote the currency's two refusals as the store words them."""
     rule = (
@@ -2424,6 +2425,35 @@ def test_a_money_figure_is_recorded_in_the_currency_the_company_states() -> None
     assert (
         '"finding:812 reads TWD 1,000,000,000: write the number without $ and name TWD before it"'
     ) in citations
+    # the whole-branch review's I1: a derivation of a record keeps its currency until its product
+    # with the rate, so the agent converts first or keeps to figures in that currency
+    assert (
+        "Until then `derive` keeps it out of money arithmetic, and every derivation of it too: its"
+        " quarter, its average with another, the record times `number:1`, each keeps its currency"
+        " until its `product` with the rate. So convert it first, or keep to figures in its own"
+        " currency."
+    ) in three
+    for words in (
+        (
+            "A derivation of it keeps its currency until that product, its quarter or its average"
+            " among them, so convert first, or keep to figures in its own currency."
+        ),
+        (
+            "stays out of money arithmetic until you convert it, and so does every derivation of"
+            " it: its quarter (a `ratio` over `number:4`), its average with another record, the"
+            " record times `number:1`, each keeps its currency until its `product` with the rate."
+        ),
+        (
+            "convert so first, before you set an input from the record or set it against a"
+            " statement, or keep to figures in its own currency."
+        ),
+    ):
+        assert words in citations, words
+    assert (
+        "stays out of money arithmetic until you convert it, and so does every derivation of it,"
+        " its quarter or its average among them"
+    ) in _tool_entry("derive")
+    assert "convert first, or keep to figures in its own currency." in _tool_entry("derive")
     guidance = _flat(_read(SKILL).split("## Guidance", 1)[1].split("## Overrides", 1)[0])
     for words in (
         "`guidance_add(symbol, metric, period, low, high, basis, as_of, text, source, currency?)`",
