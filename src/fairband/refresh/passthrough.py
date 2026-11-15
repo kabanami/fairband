@@ -37,8 +37,9 @@ payload: ``KINDS`` stays that route's list, and ``unknown_kind`` names it alone.
   report on file, newest first;
 - ``filing-report``: ``filing-report``, the 10-Q or the 10-K of the fiscal ``year`` and ``period``
   (``FILING_PERIODS``: ``FY``, ``Q1`` to ``Q4``), both required (``NEEDS_PERIOD``, ``BAD_PERIOD``),
-  reused inside ``FILING_REPORT_REUSE_HOURS`` (thirty days) whatever ``reuse_hours`` is, since a
-  filing does not change once filed.
+  reused whatever its age, with no window (spec 2026-11-15 10): a filing does not change once
+  filed, and a ``filing:`` ref names its stored copy by the response id, so a second copy would
+  only split the cites of one filing over two ids. Nothing is deleted.
 
 A ``filings`` or a ``filing-reports`` payload is usable when it is a list, a ``filing-report`` one
 when ``filing_report_usable``: FMP answers a period it does not hold, or an unknown symbol, with
@@ -48,13 +49,13 @@ payload: ...``, answered as fetched, never reused, as ``pe-history``'s is.
 For each call, as ``fetch_company`` does: the newest HTTP 200 response to the same call (provider,
 endpoint, symbol and the call's logical params, ``symbol`` among them) stored without an error is
 reused when it was observed less than its reuse window before the clock (``reuse_hours`` but for
-``pe-history`` and ``filing-report``); else the vendor is called, outside any transaction, and the
-response is stored with its body scrubbed of ``secrets`` (a key inside a link FMP answers among
-them). The answer's payload is the stored text parsed, so it carries no key either. A body that
-is not JSON is stored with the error ``unusable payload: ...`` and raises a ``VendorError``; a
-``VendorError`` is stored as a response row with its message and status and no payload, then
-raised, its message scrubbed (the GuruFocus token travels in the URL path, which the message
-names). None of the three is reused.
+``pe-history``), or, a ``filing-report``, whatever its age; else the vendor is called, outside any
+transaction, and the response is stored with its body scrubbed of ``secrets`` (a key inside a link
+FMP answers among them). The answer's payload is the stored text parsed, so it carries no key
+either. A body that is not JSON is stored with the error ``unusable payload: ...`` and raises a
+``VendorError``; a ``VendorError`` is stored as a response row with its message and status and no
+payload, then raised, its message scrubbed (the GuruFocus token travels in the URL path, which the
+message names). None of the three is reused.
 
 The FMP calls go through the FMP client the server builds on the limiter its refresh runs share,
 so the pass-throughs keep the refresh's pace; the GuruFocus client is not paced, as the refresh's
@@ -102,7 +103,6 @@ KINDS = (
 )
 FILING_KINDS = ("filings", "filing-reports", "filing-report")  # not the generic route's
 FILING_PERIODS = ("FY", "Q1", "Q2", "Q3", "Q4")
-FILING_REPORT_REUSE_HOURS = 720  # a filing does not change once filed: thirty days of reuse
 BAD_PERIOD = "period is FY or Q1 to Q4"
 NEEDS_PERIOD = "a filing report needs year and period"
 BAD_WINDOW = "from and to are ISO dates, from on or before to"
@@ -142,6 +142,7 @@ class _Call:
     send: Callable[[], VendorResponse]
     provider: str = FMP
     reuse: timedelta | None = None  # the reuse window; ``reuse_hours`` when ``None``
+    ages: bool = True  # False: no window, a usable copy is reused whatever its age
     usable: Callable[[Any], bool] | None = None  # whether a JSON payload reads; any does if None
 
 
@@ -187,7 +188,7 @@ class Passthrough:
     def _fetch(self, conn: sqlite3.Connection, call: _Call, symbol: str) -> Fetched:
         latest = latest_response(conn, call.provider, call.endpoint, symbol, call.params)
         window = self._window if call.reuse is None else call.reuse
-        if latest is not None and self._clock() - latest.observed_at < window:
+        if latest is not None and (not call.ages or self._clock() - latest.observed_at < window):
             text = response_payload(conn, latest.id)
             if text is not None:
                 return Fetched(latest, json.loads(text), reused=True)
@@ -337,7 +338,7 @@ class Passthrough:
                         "filing-report",
                         logical,
                         partial(fmp.filing_report, symbol, year, period),
-                        reuse=timedelta(hours=FILING_REPORT_REUSE_HOURS),
+                        ages=False,  # a filing does not change once filed
                         usable=filing_report_usable,
                     )
                 ]

@@ -147,7 +147,9 @@ def test_segments_news_and_insider_trades_over_the_api(
     assert (product["responseId"], geographic["responseId"]) == (1, 2)
     assert product["payload"] == _fixture("revenue-product-segmentation.ACME.json")
     assert geographic["payload"] == _fixture("revenue-geographic-segmentation.ACME.json")
+    assert (product["newestYear"], geographic["newestYear"]) == (2025, 2025)
     news = with_passthrough.get("/api/vendor/news/ACME", params={"limit": "5"}).json()
+    assert "newestYear" not in news
     assert (news["responseId"], news["payload"]) == (3, _fixture("news-stock.ACME.json"))
     trades = with_passthrough.get("/api/vendor/insider-trades/ACME").json()
     assert trades["payload"] == _fixture("insider-trading-search.ACME.json")
@@ -159,10 +161,66 @@ def test_segments_news_and_insider_trades_over_the_api(
     ]
 
 
+def _split(fiscal_year: Any) -> dict[str, Any]:
+    """A row of FMP's revenue split with ``fiscal_year`` as its ``fiscalYear``."""
+    return {"symbol": "ACME", "fiscalYear": fiscal_year, "period": "FY", "data": {"A": 1}}
+
+
+@pytest.mark.parametrize(
+    ("product", "geographic", "newest"),
+    [
+        pytest.param(
+            [_split(2024), _split(2025), _split(2023)],
+            [_split(2023), _split(2021), _split(2022)],
+            (2025, 2023),
+            id="the-region-split-ends-early",
+        ),
+        pytest.param([], [_split(2023)], (None, 2023), id="an-empty-list"),
+        pytest.param(
+            [_split("2026"), _split(2026.5), _split(True), _split(None), {"data": {}}, "x", 7],
+            [_split(2022), _split("2025")],
+            (None, 2022),
+            id="rows-without-a-whole-number",
+        ),
+        pytest.param(
+            {"Error Message": "No data"}, [{"fiscalYear": 2020}], (None, 2020), id="not-a-list"
+        ),
+    ],
+)
+def test_each_revenue_split_names_its_newest_year(
+    with_passthrough: TestClient,
+    vendor: Vendor,
+    product: Any,
+    geographic: Any,
+    newest: tuple[int | None, int | None],
+) -> None:
+    """Spec 2026-11-15 11 (B-118): FMP's revenue by region can end years before its revenue by
+    product (QCOM's ended at fiscal 2023), so each part of the ``segments`` answer names
+    ``newestYear``, the largest ``fiscalYear`` among its payload's rows that hold a whole number
+    there, null where none does or the payload is not a list; the payload stays whole."""
+    bodies = {
+        "/stable/revenue-product-segmentation": product,
+        "/stable/revenue-geographic-segmentation": geographic,
+    }
+    vendor.answer = lambda request: httpx.Response(200, json=bodies[request.url.path])
+    answer = with_passthrough.get("/api/vendor/segments/ACME").json()
+    parts = answer["responses"]
+    assert list(parts) == ["product", "geographic"]
+    for part, body in (("product", product), ("geographic", geographic)):
+        assert list(parts[part]) == ["responseId", "observedAt", "reused", "payload", "newestYear"]
+        assert parts[part]["payload"] == body
+    assert (parts["product"]["newestYear"], parts["geographic"]["newestYear"]) == newest
+    again = with_passthrough.get("/api/vendor/segments/ACME").json()["responses"]
+    assert [again[part]["reused"] for part in again] == [True, True]  # a reuse names it too
+    assert (again["product"]["newestYear"], again["geographic"]["newestYear"]) == newest
+
+
 def test_dcf_over_the_api(with_passthrough: TestClient, vendor: Vendor) -> None:
     answer = with_passthrough.get("/api/vendor/dcf/ACME").json()
     assert list(answer) == ["responses"]
     dcf, levered = answer["responses"]["dcf"], answer["responses"]["levered"]
+    for part in (dcf, levered):  # the whole response, no newest year: not a revenue split
+        assert list(part) == ["responseId", "observedAt", "reused", "payload"]
     assert (dcf["responseId"], levered["responseId"]) == (1, 2)
     assert dcf["payload"] == _fixture("discounted-cash-flow.ACME.json")
     assert levered["payload"] == _fixture("levered-discounted-cash-flow.ACME.json")

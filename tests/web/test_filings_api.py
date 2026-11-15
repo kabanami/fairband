@@ -21,6 +21,7 @@ from fairband.refresh.passthrough import BUSY, Passthrough, PassthroughBusy
 from fairband.reports.filing_report import LIST_CHARS
 from fairband.reports.refs import Resolved, resolve
 from fairband.store.db import connect
+from fairband.store.vendor import record_response
 
 FILINGS = "/api/companies/ACME/filings"
 REPORT = "/api/companies/ACME/filing-report"
@@ -543,6 +544,38 @@ def test_a_sheet_with_white_space_is_read_by_its_served_name(with_passthrough: T
     assert body["rows"][0]["rowRef"] == f"filing:{body['responseId']}/LEASES/0"
     whole = with_passthrough.get(REPORT, params={**Q1, "sheet": "LEASES\xa0", "row": 2}).json()
     assert (whole["sheet"], whole["label"]) == ("LEASES", "LEASES")
+
+
+def test_a_report_stored_long_ago_is_read_without_a_call(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    """Spec 2026-11-15 10 (B-167): a filing report is reused whatever its age, so a copy stored
+    400 days before the clock answers the sheet list and the search, its rows' refs naming it,
+    and FMP is not asked; a copy stored with an error as long ago is not reused, and FMP is."""
+    long_ago = NOW - timedelta(days=400)
+    stored = (FIXTURES / "financial-reports-json.ACME.json").read_text()
+    call = {"symbol": "ACME", "year": "2027", "period": "Q1"}
+    unread = {"symbol": "ACME", "year": "2026", "period": "FY"}
+    body = '{"Error Message": "No Data"}'  # stored with its payload, as the pass-through does
+    error = f"unusable payload: {body}"
+    with closing(connect(db_path)) as conn:
+        old = record_response(
+            conn, "fmp", "filing-report", call, "ACME", 200, stored, None, long_ago
+        )
+        record_response(conn, "fmp", "filing-report", unread, "ACME", 200, body, error, long_ago)
+    listed = with_passthrough.get(REPORT, params=Q1).json()
+    assert (listed["responseId"], listed["observedAt"], listed["reused"]) == (
+        old,
+        long_ago.isoformat(),
+        True,
+    )
+    hit = with_passthrough.get(SEARCH, params={**Q1, "text": "not yet commenced"}).json()
+    assert (hit["responseId"], hit["reused"]) == (old, True)
+    assert hit["hits"][1]["rowRef"] == f"filing:{old}/{ADDITIONAL}/2"
+    assert vendor.paths == []
+    fetched = with_passthrough.get(REPORT, params={"year": "2026", "period": "FY"}).json()
+    assert (fetched["reused"], fetched["observedAt"]) == (False, NOW.isoformat())
+    assert vendor.paths == [REPORT_JSON]
 
 
 def test_a_report_fmp_does_not_hold_is_404(with_passthrough: TestClient, vendor: Vendor) -> None:

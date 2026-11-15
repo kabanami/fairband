@@ -11,7 +11,9 @@ keeps its place, so a ``response:`` ref names it at any limit), ``transcript-dat
 year, the quarter and the date of every call on file) and ``dcf`` from FMP, and ``pe-history``
 from GuruFocus, reused for seven days; ``segments`` and ``dcf`` are two responses each, answered
 as ``{responses: {product: {...}, geographic: {...}}}`` and ``{responses: {dcf: {...}, levered:
-{...}}}``.
+{...}}}``. Each part of ``segments`` adds ``newestYear``, the largest ``fiscalYear`` among its
+payload's rows that hold a whole number there, null where none does or the payload is not a list
+(spec 2026-11-15 11): FMP's revenue by region can end years before its revenue by product.
 
 The route may call a vendor, so a request carries ``X-Fairband-Request: 1`` as a write does,
 else 403 before anything else is read (``app``, D11). An unknown kind, a symbol that is not one or
@@ -68,7 +70,9 @@ def add_vendor_routes(app: FastAPI, passthrough: Passthrough | None) -> None:
             raise HTTPException(503, str(exc)) from None
         except VendorError as exc:
             raise HTTPException(502, str(exc)) from None
-        if len(parts) > 1:  # segments and dcf: two calls, each its part
+        if kind == "segments":  # two calls, each its part with the newest year of its split
+            return {"responses": {part: _split(fetched) for part, fetched in parts.items()}}
+        if len(parts) > 1:  # dcf: two calls, each its part
             return {"responses": {part: _answer(fetched) for part, fetched in parts.items()}}
         if kind == "insider-trades":
             return _trades(parts[kind], limit)
@@ -82,6 +86,17 @@ def _answer(fetched: Fetched) -> dict[str, Any]:
         "reused": fetched.reused,
         "payload": fetched.payload,
     }
+
+
+def _split(fetched: Fetched) -> dict[str, Any]:
+    """A revenue split's answer, with ``newestYear``: the largest ``fiscalYear`` among the
+    payload's rows that hold a whole number there, null where none does or the payload is not a
+    list. FMP's split by region can end years before its split by product (QCOM's ended at fiscal
+    2023), and the payload names no newest year."""
+    rows = fetched.payload if isinstance(fetched.payload, list) else []
+    years = [row.get("fiscalYear") for row in rows if isinstance(row, dict)]
+    whole = [year for year in years if isinstance(year, int) and not isinstance(year, bool)]
+    return _answer(fetched) | {"newestYear": max(whole, default=None)}
 
 
 def _trades(fetched: Fetched, limit: int | None) -> dict[str, Any]:

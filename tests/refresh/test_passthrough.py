@@ -1,6 +1,6 @@
 """The vendor pass-throughs on the fixture router: each kind's call, stored scrubbed and reused
-inside ``reuse_hours`` (seven days for GuruFocus's P/E series, thirty for a filing report), the
-filing kinds' parameters and unusable payloads, the one limiter the worker's client and the
+inside ``reuse_hours`` (seven days for GuruFocus's P/E series, at any age for a filing report),
+the filing kinds' parameters and unusable payloads, the one limiter the worker's client and the
 pass-through's share, and the slots that bound the vendor calls in flight."""
 
 import json
@@ -23,7 +23,6 @@ from fairband.refresh.clients import build_clients, build_fmp
 from fairband.refresh.fetch import fetch_company
 from fairband.refresh.passthrough import (
     FILING_KINDS,
-    FILING_REPORT_REUSE_HOURS,
     KINDS,
     PASSTHROUGH_SLOTS,
     PASSTHROUGH_WAIT_S,
@@ -129,24 +128,61 @@ def test_the_reports_on_file_are_one_call(env: Env) -> None:
     assert env.router.calls == {"filing-report-dates": 2}
 
 
-def test_a_report_is_reused_for_thirty_days(env: Env) -> None:
-    """A filing does not change once filed: a usable report is reused inside
-    ``FILING_REPORT_REUSE_HOURS`` (720) whatever ``reuse_hours`` is."""
-    assert FILING_REPORT_REUSE_HOURS == 720 and env.policy.refresh.reuse_hours < 720
+def test_a_report_is_reused_whatever_its_age(env: Env) -> None:
+    """Spec 2026-11-15 10 (B-167): a filing does not change once filed, and a ``filing:`` ref
+    names its copy by the response id, so a usable report is reused at any age, 31 days and 400
+    days after it was stored: no vendor call, no second copy."""
     passthrough = _passthrough(env)
     first = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
     report = {"symbol": "ACME", "year": "2027", "period": "Q1"}
     assert env.router.requested["filing-report"] == report
     assert _stored(env, first.row.id) == ("filing-report", "ACME", report, None)
     assert first.payload == _fixture("financial-reports-json.ACME.json")
-    env.clock.now += timedelta(hours=FILING_REPORT_REUSE_HOURS - 1)
-    assert passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"].reused is True
-    env.clock.now += timedelta(hours=1)
+    for days in (31, 400):
+        env.clock.now = first.row.observed_at + timedelta(days=days)
+        again = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
+        assert (again.reused, again.row, again.payload) == (True, first.row, first.payload), days
+    assert env.router.calls == {"filing-report": 1}
+    with closing(env.connect()) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM vendor_responses").fetchone()[0] == 1
+
+
+def test_a_report_stored_unusable_is_fetched_again_at_any_age(env: Env) -> None:
+    """Spec 2026-11-15 10: a copy stored with an error is never reused, 31 days on as at once;
+    the usable copy a later ask stores is the one reused after, 400 days on."""
+    env.router.bodies["filing-report"] = b'{"Error Message": "No Data for this symbol"}'
+    passthrough = _passthrough(env)
+    unread = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
+    assert unread.row.error is not None and unread.row.error.startswith("unusable payload")
+    env.clock.now = unread.row.observed_at + timedelta(days=31)
     again = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
-    assert again.reused is False and again.row.id != first.row.id
-    assert env.router.calls == {"filing-report": 2}
-    with closing(env.connect()) as conn:  # a ref made on the first row still has its payload
-        assert response_payload(conn, first.row.id) is not None
+    assert (again.reused, again.row.error) == (False, unread.row.error)
+    assert again.row.id > unread.row.id
+    del env.router.bodies["filing-report"]  # the fixture's report: usable
+    read = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
+    assert (read.reused, read.row.error) == (False, None)
+    env.clock.now = read.row.observed_at + timedelta(days=400)
+    later = passthrough.fetch("filing-report", "ACME", REPORT)["filing-report"]
+    assert (later.reused, later.row) == (True, read.row)
+    assert env.router.calls == {"filing-report": 3}
+
+
+@pytest.mark.parametrize(
+    ("kind", "params", "endpoint"),
+    [("filings", WINDOW, "sec-filings"), ("filing-reports", {}, "filing-report-dates")],
+)
+def test_the_filing_lists_keep_reuse_hours(
+    env: Env, kind: str, params: dict[str, str], endpoint: str
+) -> None:
+    """Spec 2026-11-15 10: the filing list and the list of reports keep their window: stored 25
+    hours before the clock (``reuse_hours`` is 24), each is fetched again."""
+    assert env.policy.refresh.reuse_hours == 24
+    passthrough = _passthrough(env)
+    first = passthrough.fetch(kind, "ACME", params)[kind]
+    env.clock.now = first.row.observed_at + timedelta(hours=25)
+    again = passthrough.fetch(kind, "ACME", params)[kind]
+    assert again.reused is False and again.row.id > first.row.id
+    assert env.router.calls == {endpoint: 2}
 
 
 def test_a_report_fmp_does_not_hold_is_stored_unusable_and_never_reused(env: Env) -> None:

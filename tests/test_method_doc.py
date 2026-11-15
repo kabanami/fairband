@@ -1190,3 +1190,42 @@ def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> N
         ),
     ):
         assert words in derivations, words
+
+
+def test_a_filing_report_is_kept_and_a_revenue_split_names_its_newest_year() -> None:
+    """Spec 2026-11-15 10 and 11: 16.8 says a filing report is reused at any age and nothing is
+    deleted, the filing list and the list of reports keeping `reuse_hours`, and that each part of
+    the `segments` answer names its newest year."""
+    sixteen = _section(16)
+    filings = sixteen[sixteen.index("### 16.8") : sixteen.index("### 16.9")]
+    for words in (
+        (
+            "and reused as every pass-through is: the newest response to the same call observed"
+            " within the kind's window, a filing report's at any age, never one stored with an"
+            " error."
+        ),
+        (
+            "`filing-reports` stores `financial-reports-dates` under `filing-report-dates`, every"
+            " report on file, reused for `reuse_hours`."
+        ),
+        (
+            "`filing-report` stores `financial-reports-json` under `filing-report`, the report of a"
+            " fiscal `year` and a `period` (`FY`, `Q1` to `Q4`), reused whatever its age, with no"
+            " window (spec 2026-11-15 10): a filing does not change once filed, and a `filing:` ref"
+            " names its stored copy by the response id, so a second copy would only split the"
+            " cites of one filing over two ids."
+        ),
+        (
+            "Nothing is deleted: every stored copy keeps its payload, so a published report's"
+            " references keep resolving."
+        ),
+        (
+            "`segments` answers its two calls whole, `product` and `geographic`, each with"
+            " `newestYear`, the largest `fiscalYear` among its payload's rows that hold a whole"
+            " number there, null where none does or the payload is not a list (spec 2026-11-15"
+            " 11): FMP's revenue by region can end years before its revenue by product (QCOM's"
+            " ended at fiscal 2023), and the payload names no newest year."
+        ),
+    ):
+        assert words in filings, words
+    assert "720 hours" not in filings and "thirty days" not in filings
