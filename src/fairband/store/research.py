@@ -170,13 +170,7 @@ def add_finding(
         raise ValueError(f"a source kind is one of {', '.join(SOURCE_KINDS)}, not {kind!r}")
     if ref is None or not ref.strip():
         raise ValueError("a finding's source needs a ref")
-    if (value is None) != (unit is None):
-        raise ValueError("a finding's value and unit come together")
-    if unit is not None and unit not in UNITS:
-        raise ValueError(f"a unit is one of {', '.join(UNITS)}, not {unit!r}")
-    if value is not None and not math.isfinite(value):
-        raise ValueError("a finding's value is a finite number")
-    check_currency(currency, unit)
+    _require_figure(value, unit, currency, "a finding's value")
     fields = {
         "symbol": symbol,
         "as_of": dump_date(as_of),
@@ -218,13 +212,7 @@ def add_kill_criterion(
     return its id."""
     symbol = exchange_symbol(symbol)
     _require_text(text, "a kill criterion needs text")
-    if (threshold is None) != (unit is None):
-        raise ValueError("a kill criterion's threshold and unit come together")
-    if unit is not None and unit not in UNITS:
-        raise ValueError(f"a unit is one of {', '.join(UNITS)}, not {unit!r}")
-    if threshold is not None and not math.isfinite(threshold):
-        raise ValueError("a kill criterion's threshold is a finite number")
-    check_currency(currency, unit)
+    _require_figure(threshold, unit, currency, "a kill criterion's threshold")
     fields = {
         "symbol": symbol,
         "text": text,
@@ -314,6 +302,23 @@ def news_items_for(conn: sqlite3.Connection, symbol: str) -> list[NewsItemRow]:
 def _require_text(text: str, refusal: str) -> None:
     if not text.strip():
         raise ValueError(refusal)
+
+
+def _require_figure(
+    number: float | None, unit: str | None, currency: str | None, noun: str
+) -> None:
+    """Refuse a record's figure out of form, in this order, each with the sentence the writer can
+    act on: the number, named ``noun`` ("a finding's value", "a kill criterion's threshold"), and
+    its unit come together; the unit is one of ``UNITS``; the number is finite; a currency is
+    ``store.currency.check_currency``'s. A finding's and a criterion's rule alike (spec 2026-11-15
+    8.1)."""
+    if (number is None) != (unit is None):
+        raise ValueError(f"{noun} and unit come together")
+    if unit is not None and unit not in UNITS:
+        raise ValueError(f"a unit is one of {', '.join(UNITS)}, not {unit!r}")
+    if number is not None and not math.isfinite(number):
+        raise ValueError(f"{noun} is a finite number")
+    check_currency(currency, unit)
 
 
 def _has_override(conn: sqlite3.Connection, override_id: int, symbol: str) -> bool:

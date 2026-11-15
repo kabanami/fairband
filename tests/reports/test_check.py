@@ -409,7 +409,7 @@ def test_a_kill_threshold_is_cited_in_risks_and_kill_criteria_alone(
 
     assert check(KILL_SECTION, _cite("5%", ref), _cite("5.0%", f" {ref} ")) == []
     elsewhere = f"{ref} is the author's own threshold: cite it in Risks and kill criteria"
-    for heading in ("Summary", "Valuation"):
+    for heading in (h for h in names if h != KILL_SECTION):  # every other section
         at = names.index(heading) + 1
         assert check(heading, _cite("5%", ref)) == [
             Finding(f"section {at}, part 1: 5%", UNRESOLVED, elsewhere)

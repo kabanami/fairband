@@ -1002,7 +1002,7 @@ def test_a_fixed_number_is_an_operand_of_derive_alone() -> None:
 def test_a_kill_criterion_holds_a_threshold_cited_in_its_section_alone() -> None:
     """Spec 2026-11-15 8.1, 8.2: 16.2 names the form `kill:`, the threshold's record with its
     refusals and its words in the references; 16.3 the section rule, an unresolved reference
-    elsewhere with its detail, and no arithmetic."""
+    elsewhere with its detail, and no arithmetic; 16.4 the one ref of 16.2 `derive` refuses."""
     sixteen = _section(16)
     references = sixteen[sixteen.index("### 16.2") : sixteen.index("### 16.3")]
     for words in (
@@ -1052,3 +1052,9 @@ def test_a_kill_criterion_holds_a_threshold_cited_in_its_section_alone() -> None
         ),
     ):
         assert words in check, words
+    derivations = sixteen[sixteen.index("### 16.4") : sixteen.index("### 16.5")]
+    words = (
+        "over two refs of 16.2 resolved for the company, a table cell included, but `kill:`, a"
+        ' number the author chose, which is the 400 "unresolved reference: kill:12" (16.3).'
+    )
+    assert words in derivations
