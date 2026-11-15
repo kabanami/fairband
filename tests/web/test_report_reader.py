@@ -3,12 +3,16 @@
 the end of the validity window and the full report a valuation review reuses, each in words and
 joined by the reader's ``·``, and names no part of Fairband and no record's id. The drawer's
 Summary passes no ``cites`` and draws no line. The harness (``page.mjs``) calls the component with
-its props and the tests read the tree it draws (``support.page``)."""
+its props and the tests read the tree it draws (``support.page``).
+
+And Appendix A's record of an override the review applied at a split (spec 2026-11-15 8): the
+page's script, report.js, builds it with the pair in force and the words of the scaling under it,
+and the test reads the tree it builds."""
 
 from typing import Any
 
 import pytest
-from support.page import NODE, classed, elements, node, text
+from support.page import NODE, STATIC, classed, elements, node, text
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
@@ -88,3 +92,53 @@ def test_the_drawer_s_summary_draws_no_line() -> None:
     assert classed(tree, "fb-report__cites") == []
     [section] = classed(tree, "fb-report__section")
     assert text(section) == "SummaryPlain words."
+
+
+def _override(override_id: int, tag: str, unit: str, old: float, new: float) -> dict[str, Any]:
+    """An entry of Appendix A's overrides as the server sends it, applied as entered."""
+    return {
+        "id": override_id,
+        "tag": tag,
+        "old": old,
+        "new": new,
+        "unit": unit,
+        "reason": "a stake",
+        "evidence": [{"kind": "transcript", "ref": "Q3 call", "note": ""}],
+        "lifetime": "lasting",
+        "period": None,
+        "principal": "agent",
+        "actor": "claude-opus-5-5",
+        "at": "2026-11-06T09:30:00+00:00",
+        "inForce": None,
+        "rescaled": None,
+    }
+
+
+def test_an_override_scaled_at_a_split_shows_the_figures_in_force_and_the_words() -> None:
+    """Spec 2026-11-15 8: on the report page, Appendix A's record of an override the review applied
+    at a split, $30.00 entered before a 2-for-1 split, shows the pair in force, $5.90 → $15.00,
+    both on the new basis, with the words of the scaling under it as the server sends them; one
+    applied as entered shows its stored pair and no words (report.js's ``overrides``, its tree as
+    the page's script builds it)."""
+    words = "entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027"
+    scaled = _override(1, "earnings.ntm", "USD a share", 11.8, 30.0)
+    scaled |= {"inForce": {"old": 5.9, "new": 15.0}, "rescaled": words}
+    lines = [
+        {"overrideId": 1, "old": 5.9, "new": 15.0, "delta": 196.92, "refusal": None},
+        {"overrideId": 2, "old": 0.063, "new": 0.08, "delta": 12.5, "refusal": None},
+    ]
+    a = {
+        "snapshot": {"validUntil": "2027-04-29"},
+        "bridge": {"reviewId": 9, "reviewedValue": 337.1, "lines": lines},
+        "overrides": [scaled, _override(2, "growth.belief", "ratio", 0.063, 0.08)],
+    }
+    tree = node("reportAppendix.overrides", [a], STATIC / "report.js")
+    records = [e["props"] for e in elements(tree) if "from" in e["props"]]
+    assert [(r["tag"], r["from"], r["to"]) for r in records] == [
+        ("earnings.ntm", "$5.90", "$15.00"),
+        ("growth.belief", "6.3%", "8.0%"),
+    ]
+    assert [r["effect"] for r in records] == [196.92, 12.5]
+    [entered] = classed(tree, "app-report__entered")
+    assert text(entered) == words  # as the server sends them, never rewritten
+    assert "$11.80" not in str(tree) and "$30.00 →" not in str(tree)

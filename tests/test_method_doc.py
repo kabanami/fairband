@@ -713,7 +713,9 @@ def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s
             "The page's line under the title follows the same rule, its parts joined by"
             ' "·", the full report a valuation review reuses last ("On the data of 4 Nov 2026 ·'
             ' priced that day · valid until 27 Jan 2027 · reuses the full report of 3 Nov 2026"),'
-            " and names no record: the snapshot's and the review's ids are in Appendix A."
+            " that part left out where the reused report's record is not on file, where the"
+            ' export writes "Reuses an earlier full report.", and names no record: the'
+            " snapshot's and the review's ids are in Appendix A."
         ),
         (
             "The export writes Appendix A's dates in words, as the references write a day: the"
@@ -736,6 +738,41 @@ def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s
         "Reuses full report",
     ):
         assert gone not in export, gone
+
+
+def test_appendix_a_shows_an_override_scaled_at_a_split_with_both_figures() -> None:
+    """Spec 2026-11-15 8: 16.6 states that Appendix A shows an override the review applied at a
+    split with the review's pair in force, both on the new basis, and the words of the scaling, the
+    export after the new figure in brackets and the page under the record, read from the stored
+    review; one the review did not apply so, its stored pair. 14.6's sentence on the note points to
+    it."""
+    sixteen = _section(16)
+    export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
+    for words in (
+        (
+            "the overrides inside the review with their reasons and evidence, each with its old"
+            " and new figures as stored, but one the review applied at a figure other than the one"
+            " entered, because a split fell between (14.6), with the review's pair in force, its"
+            " bridge line's old and new, both on the new share basis, and the words the scaling"
+            " added to its JUDGMENT entry's note, \"entered as $30.00 a share before the 2-for-1"
+            ' split of 27 Jan 2027"'
+        ),
+        "a reading of $60 cut to $30 before a 2-for-1 split shows $30.00 and $15.00 with the words",
+        "never $60.00 and $15.00",
+        "the export writing the words after the new figure in brackets and the page under the record",
+        (
+            "both read from the stored review, never from the splits on file when the report is"
+            " read, and an override whose step refused, or one in a review written before the"
+            " scaling, shows its figures as stored (spec 2026-11-15 8)"
+        ),
+    ):
+        assert words in export, words
+    fourteen = _section(14)
+    follows = fourteen[fourteen.index("### 14.6") : fourteen.index("### 14.7")]
+    assert (
+        "A report's Appendix A shows such an override with the review's pair in force and these"
+        " words (16.6)."
+    ) in follows
 
 
 def test_section_16_names_the_six_failures() -> None:

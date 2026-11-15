@@ -20,6 +20,16 @@ from support.engine_companies import (
     universe_deciles,
 )
 from support.payloads import store_payloads
+from support.splits import (
+    AFTER,
+    BEFORE,
+    SPLIT_DAY,
+    follow_mgco,
+    made_on_mgco,
+    mgco_on,
+    store_splits,
+    under,
+)
 from support.web import TODAY
 
 from fairband.engine.flags import QUALITY_WARNINGS
@@ -994,3 +1004,81 @@ def test_the_bridge_table_has_labels(
     block = text[text.index("### Bridge") : text.index("### Secondary valuation")]
     assert "| Input | Label | Override | Old | New | Delta | Refusal |" in block
     assert f"| growth.belief | belief | {override_id} | 0.063 | 0.08 | " in block
+
+
+def _made_before_the_split(conn: sqlite3.Connection, policy: Policy) -> int:
+    """MGCO's snapshot of 10 Jan 2027 on the share basis before its 2-for-1 split of 27 Jan 2027,
+    its NTM consensus each quarter twice the one after (``support.splits``); its id."""
+    pre = mgco_on(BEFORE, BEFORE)
+    doubled = tuple(
+        replace(q, eps=None if q.eps is None else 2 * q.eps) for q in pre.quarter_estimates
+    )
+    result = value_company(
+        replace(pre, quarter_estimates=doubled), universe_deciles(), policy, TODAY
+    )
+    return insert_snapshot(conn, result, under(conn, policy, "revalue"), clock=lambda: NOW)
+
+
+SCALED_WORDS = "entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027"
+
+
+def test_appendix_a_shows_an_override_scaled_at_a_split_with_both_figures(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-15 8 (method 14.6, 16.6): MGCO's lasting NTM EPS override, a reading of
+    $11.80 set to $30.00 on its snapshot before its 2-for-1 split, and a belief of 8%, reviewed as
+    the refresh reviews them on its snapshot after the split, where the engine reads $5.90.
+    Appendix A's entry of the NTM override carries the pair in force, its bridge line's old and
+    new, $5.90 and $15.00, both on the new basis, and the words of the scaling from its JUDGMENT
+    entry's note, beside the stored pair as entered; the belief, applied as entered, carries
+    neither. The export's row prints the pair in force and the words after the new figure in
+    brackets, never the stored old figure beside the new one in force; the belief's row prints as
+    before."""
+    made_on = _made_before_the_split(conn, policy)
+    ntm = made_on_mgco(conn, made_on, "earnings.ntm", 30.0, "USD a share")
+    belief = made_on_mgco(conn, made_on, "growth.belief", 0.08, "ratio")
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    review = follow_mgco(conn, policy, AFTER, AFTER)
+    assert review.value is not None and review.override_ids == (ntm, belief)
+    [line] = [x for x in review.bridge if x["override_id"] == ntm]
+    assert (line["old"], line["new"]) == (5.9, 15.0)
+    report = _stored(conn, review.snapshot_id, review.id, symbol="MGCO")
+    a = appendix_a(conn, report, policy)
+    by = {o["id"]: o for o in a["overrides"]}
+    scaled, plain = by[ntm], by[belief]
+    assert scaled["inForce"] == {"old": 5.9, "new": 15.0}
+    assert scaled["rescaled"] == SCALED_WORDS
+    assert (scaled["old"], scaled["new"]) == (pytest.approx(11.8), 30.0)  # the stored pair
+    assert (plain["inForce"], plain["rescaled"]) == (None, None)
+    assert (plain["old"], plain["new"]) == (0.063, 0.08)
+    text = markdown(report, a, [], [], {})
+    block = text[text.index("### Overrides") : text.index("### Guidance on file")]
+    assert f"| {ntm} | earnings.ntm | 5.9 | 15.0 ({SCALED_WORDS}) | a stake |" in block
+    row = next(r for r in block.splitlines() if r.startswith(f"| {ntm} |"))
+    assert repr(scaled["old"]) not in row and "| 30.0 |" not in row
+    assert f"| {belief} | growth.belief | 0.063 | 0.08 | a stake |" in block
+
+
+def test_an_override_whose_step_refused_at_a_split_shows_as_entered(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """An override the review did not apply shows its stored pair, as before (spec 2026-11-15 8):
+    MGCO's NTM EPS set to −$2.00 before its 2-for-1 split, scaled to −$1.00 after it, where the
+    step refuses ("no positive forward anchor"), though the refused review's JUDGMENT entry still
+    holds the words."""
+    made_on = _made_before_the_split(conn, policy)
+    ntm = made_on_mgco(conn, made_on, "earnings.ntm", -2.0, "USD a share")
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    review = follow_mgco(conn, policy, AFTER, AFTER)
+    [line] = review.bridge
+    assert (line["new"], line["refusal"]) == (-1.0, "no positive forward anchor")
+    [entry] = [i for i in review.result.inputs if i.tag == "JUDGMENT"]
+    assert (
+        entry.note == "a stake; entered as −$2.00 a share before the 2-for-1 split of 27 Jan 2027"
+    )
+    report = _stored(conn, review.snapshot_id, review.id, symbol="MGCO")
+    a = appendix_a(conn, report, policy)
+    [o] = a["overrides"]
+    assert (o["inForce"], o["rescaled"], o["new"]) == (None, None, -2.0)
+    text = markdown(report, a, [], [], {})
+    assert f"| {ntm} | earnings.ntm | {o['old']!r} | -2.0 | a stake |" in text

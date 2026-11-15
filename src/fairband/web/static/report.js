@@ -423,23 +423,29 @@
   /* The overrides inside the review, each a record, read-only: no one adds or drops an override
      here (spec 3). Each is applied; its effect is its step in the bridge when the review has a
      value, with the reviewed value and the end of the snapshot's window; else its step's refusal,
-     or that the review has no value. */
+     or that the review has no value. One the review applied at a figure other than the one
+     entered, because a split fell between (method 14.6), shows the review's pair in force, both on
+     the new basis, with the words of the scaling under the record as the server sends them
+     ("entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027"); any other its stored
+     pair (spec 2026-11-15 8). */
   function overrides(a) {
     var b = a.bridge;
     return a.overrides.map(function (o) {
       var line = b ? b.lines.filter(function (l) { return l.overrideId === o.id; })[0] : null;
       var effect = line && line.delta != null && b.reviewedValue != null ? line.delta : undefined;
-      return h(F.OverrideRecord, {
-        key: o.id, tag: o.tag, from: P.inputFigure(o.old, o.unit),
-        to: P.inputFigure(o.new, o.unit),
-        lifetime: o.lifetime, period: o.period, reason: o.reason, evidence: o.evidence,
-        principal: o.principal, actor: o.actor,
-        state: 'applied',
-        effect: effect,
-        reviewed: effect === undefined ? undefined : b.reviewedValue,
-        validUntil: effect === undefined ? undefined : a.snapshot.validUntil,
-        resultNote: effect === undefined ? (line && line.refusal) || NO_EFFECT : undefined
-      });
+      var pair = o.inForce || o;
+      return h(React.Fragment, { key: o.id },
+        h(F.OverrideRecord, {
+          tag: o.tag, from: P.inputFigure(pair.old, o.unit), to: P.inputFigure(pair.new, o.unit),
+          lifetime: o.lifetime, period: o.period, reason: o.reason, evidence: o.evidence,
+          principal: o.principal, actor: o.actor,
+          state: 'applied',
+          effect: effect,
+          reviewed: effect === undefined ? undefined : b.reviewedValue,
+          validUntil: effect === undefined ? undefined : a.snapshot.validUntil,
+          resultNote: effect === undefined ? (line && line.refusal) || NO_EFFECT : undefined
+        }),
+        o.rescaled ? h('p', { className: 'caption app-report__entered' }, o.rescaled) : null);
     });
   }
 
@@ -618,5 +624,8 @@
 
   function none(text) { return h('p', { className: 'caption app-muted' }, text); }
 
+  /* Appendix A's overrides, which the node tests read (tests/web/test_report_reader.py), as
+     charts.js hangs its helpers. */
+  P.reportAppendix = { overrides: overrides };
   P.onShow.report = load;
 })();

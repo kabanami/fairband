@@ -7,10 +7,13 @@ the reporting currency its money figures are in (``currency``, ``types.money_of`
 input with its tag (DATA, RULE or JUDGMENT), its value at full precision and its provenance (its
 source and its three dates: as of, observed, entered), the review's when the report rests on one
 (its JUDGMENT entries beside the snapshot's own), else the snapshot's; the overrides inside the
-review with their reasons and evidence; the guidance on file, the company's guidance records
-written by the report's time, newest first, each with its figures, its basis, its call's date,
-whether a record on file by then superseded it, and the overrides inside the review that cite it;
-the bridge, each line with its input's label in a
+review with their reasons and evidence, each with its stored pair and, where the review applied it
+at a figure other than the one entered because a split fell between, the review's pair in force
+and the words of the scaling (``inForce``, ``rescaled``; spec 2026-11-15 8), which the export's
+row prints in place of the stored pair, the words after the new figure in brackets; the guidance
+on file, the company's guidance records written by the report's time, newest first, each with its
+figures, its basis, its call's date, whether a record on file by then superseded it, and the
+overrides inside the review that cite it; the bridge, each line with its input's label in a
 reader's words (``overrides.LABELS``); the secondary valuation's form, the currency of its totals
 (the snapshot's reporting currency) and the rate it ran at (``currency``, ``fxRate``; the
 export's line names both on a company in another currency, spec 2026-11-10 7.6), its drivers
@@ -79,7 +82,7 @@ from fairband.reports.check import (
 )
 from fairband.reports.refs import Resolver, day_words, guidance_cited
 from fairband.store.guidance import guidance_for
-from fairband.store.overrides import override_row
+from fairband.store.overrides import OverrideRow, override_row
 from fairband.store.reports import ReportRow
 from fairband.store.reviews import ReviewRow, review_row
 from fairband.store.secondary import GRID_ROWS, SecondaryRow, no_secondary, secondary_row
@@ -304,6 +307,9 @@ _NO_SECONDARY: dict[str, str] = {
     "the route values the company": "Fairband's own valuation gives the company a value",
     "the review values the company": "the review gives the company a value",
 }
+# How the words of an override's scaling at a split begin, after the reason in the note of the
+# review's JUDGMENT entry (``engine.route_steps``, method 14.6).
+_ENTERED = "entered as "
 
 
 def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> dict[str, Any]:
@@ -315,7 +321,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
     secondary = None if report.secondary_id is None else secondary_row(conn, report.secondary_id)
     result = snapshot.result if review is None else review.result
     rules = _RULES | {"the stance word": f"one of {', '.join(policy.stance_words)}"}
-    overrides = [] if review is None else _overrides(conn, review.override_ids)
+    overrides = [] if review is None else _overrides(conn, review)
     why = no_secondary(snapshot, review) if secondary is None else None
     why = None if why is None else _NO_SECONDARY.get(why, why)
     currency = money_of(snapshot.result)[1]
@@ -469,12 +475,15 @@ def markdown(
     return "\n".join(lines) + "\n"
 
 
-def _overrides(conn: sqlite3.Connection, ids: Sequence[int]) -> list[dict[str, Any]]:
-    """The overrides inside the review, as Appendix A lists them."""
+def _overrides(conn: sqlite3.Connection, review: ReviewRow) -> list[dict[str, Any]]:
+    """The overrides inside ``review``, as Appendix A lists them: each with its stored pair, and
+    with the pair in force and the words of its scaling where the review applied it at a split
+    (``_in_force``)."""
     found = []
-    for override_id in ids:
+    for override_id in review.override_ids:
         row = override_row(conn, override_id)
         if row is not None:
+            in_force, rescaled = _in_force(review, row)
             found.append(
                 {
                     "id": row.id,
@@ -489,9 +498,29 @@ def _overrides(conn: sqlite3.Connection, ids: Sequence[int]) -> list[dict[str, A
                     "principal": row.principal,
                     "actor": row.actor,
                     "at": row.at.isoformat(),
+                    "inForce": in_force,
+                    "rescaled": rescaled,
                 }
             )
     return found
+
+
+def _in_force(review: ReviewRow, row: OverrideRow) -> tuple[dict[str, Any] | None, str | None]:
+    """Where ``review`` applied the override ``row`` at a figure other than the one entered,
+    because a split fell between (method 14.6, spec 2026-11-15 8): the pair in force, the old and
+    new of the override's bridge line, both on the new share basis, and the words of the scaling,
+    the clause "entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027" that follows
+    the reason in the note of the review's JUDGMENT entry for the input. Both are read from the
+    stored review, never from the splits on file. ``(None, None)`` where the review applied it as
+    entered, a review written before the scaling included, and where its step refused."""
+    line = next((x for x in review.bridge if x["override_id"] == row.id), None)
+    judged = (i for i in review.result.inputs if i.tag == "JUDGMENT" and i.name == row.tag)
+    note = next((i.note for i in judged), None) or ""
+    lead = f"{row.reason}; "
+    words = note[len(lead) :] if note.startswith(lead) else ""
+    if line is None or line["refusal"] is not None or not words.startswith(_ENTERED):
+        return None, None
+    return {"old": line["old"], "new": line["new"]}, words
 
 
 def _guidance(
@@ -622,8 +651,7 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
             (
                 o["id"],
                 o["tag"],
-                o["old"],
-                o["new"],
+                *_pair(o),
                 o["reason"],
                 "; ".join(_evidence(e) for e in o["evidence"]),
                 o["lifetime"] if o["period"] is None else f"{o['lifetime']}, {o['period']}",
@@ -801,6 +829,17 @@ def _note(i: Mapping[str, Any]) -> Any:
         return day_words(date.fromisoformat(note))
     except ValueError:
         return note
+
+
+def _pair(o: Mapping[str, Any]) -> tuple[Any, Any]:
+    """An override's Old and New cells: where the review applied it at a split, the pair in force
+    and, after the new figure, the words of the scaling in brackets, "15.0 (entered as $30.00 a
+    share before the 2-for-1 split of 27 Jan 2027)", so the pair reads on one basis (spec
+    2026-11-15 8); else the stored pair."""
+    in_force = o["inForce"]
+    if in_force is None:
+        return o["old"], o["new"]
+    return in_force["old"], f"{_cell(in_force['new'])} ({o['rescaled']})"
 
 
 def _evidence(item: Mapping[str, Any]) -> str:

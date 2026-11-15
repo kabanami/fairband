@@ -8,7 +8,8 @@ to 2025, the trailing twelve months end 2026-09-30, the data date is 2026-10-30 
 value on 2026-10-31.
 
 ``in_sek`` restates any of them as a company reporting in SEK (spec 2026-11-10 section 7), and
-``fx_inputs`` is FXCO, spec 11.2's company in SEK.
+``fx_inputs`` is FXCO, spec 11.2's company in SEK. ``as_live`` dates any of them as assembly
+does.
 """
 
 from dataclasses import fields, replace
@@ -710,3 +711,16 @@ def ars_refused_inputs() -> CompanyInputs:
         inflation_differential=0.0,
         currency_refused=True,
     )
+
+
+def as_live(inputs: CompanyInputs) -> CompanyInputs:
+    """``inputs`` with the statements' and the share count's dates as assembly writes them: the
+    statements at the newest fiscal year's end (31 Dec 2025 for HGCO), the share count at the
+    newest period's, the trailing period end (30 Sep 2026)."""
+    assert inputs.trailing is not None
+    p = inputs.provenance
+    dated = {
+        "statements": replace(p["statements"], as_of=inputs.series[-1].period_end),
+        "shares_diluted": replace(p["shares_diluted"], as_of=inputs.trailing.period_end),
+    }
+    return replace(inputs, provenance=p | dated)

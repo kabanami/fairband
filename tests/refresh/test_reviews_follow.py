@@ -20,6 +20,7 @@ import pytest
 from fixture_universe import serve_universe
 from refresh_env import Env
 from support.engine_companies import (
+    as_live,
     decline_inputs,
     high_growth_inputs,
     mature_growth_inputs,
@@ -29,7 +30,16 @@ from support.engine_companies import (
     universe_deciles,
     with_minority,
 )
-from support.payloads import split_rows, store_payloads
+from support.splits import (
+    AFTER,
+    BEFORE,
+    SPLIT_DAY,
+    follow_mgco,
+    made_on_mgco,
+    mgco_snapshot,
+    store_splits,
+    under,
+)
 from vendor_double import FIXTURES
 
 from fairband.engine import METHOD_VERSION
@@ -43,7 +53,7 @@ from fairband.refresh.reviews import follow_snapshot
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import SYSTEM, Writer, entries
 from fairband.store.overrides import drop_override, insert_override, override_row
-from fairband.store.refreshes import create_refresh, current_refresh, finish_refresh
+from fairband.store.refreshes import create_refresh
 from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews_for
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 
@@ -299,19 +309,6 @@ def test_a_period_tied_override_stays_when_the_same_statements_are_fetched_again
     assert review.snapshot_id == refetched.id
 
 
-def _as_live(inputs: CompanyInputs) -> CompanyInputs:
-    """``inputs`` with the statements' and the share count's dates as assembly writes them: the
-    statements at the newest fiscal year's end (31 Dec 2025 for HGCO), the share count at the
-    newest period's, the trailing period end (30 Sep 2026)."""
-    assert inputs.trailing is not None
-    p = inputs.provenance
-    dated = {
-        "statements": replace(p["statements"], as_of=inputs.series[-1].period_end),
-        "shares_diluted": replace(p["shares_diluted"], as_of=inputs.trailing.period_end),
-    }
-    return replace(inputs, provenance=p | dated)
-
-
 def _hgco_with_a_cash_correction(
     conn: sqlite3.Connection,
     policy: Policy,
@@ -319,7 +316,7 @@ def _hgco_with_a_cash_correction(
     keep_inputs: tuple[str, ...] | None = None,
 ) -> tuple[int, Follow, CompanyInputs]:
     """``_hgco_with_a_correction`` of the cash line, on HGCO as assembly dates it."""
-    inputs = _as_live(high_growth_inputs())
+    inputs = as_live(high_growth_inputs())
     return _hgco_with_a_correction(conn, policy, "balance.cash", inputs, strip, keep_inputs)
 
 
@@ -436,7 +433,7 @@ def test_a_period_tied_stock_pay_follows_the_figure_the_anchor_read(
     the anchor read, MGCO's stored $400 m, its ``sbc_ttm``. The next snapshot on the same figures
     keeps it applied; one whose stored stock pay moved to $450 m drops it, the reading changed."""
     deciles = universe_deciles()
-    inputs = _as_live(mature_growth_inputs())
+    inputs = as_live(mature_growth_inputs())
     first = value_company(inputs, deciles, policy, HGCO_TODAY)
     figure = current_reading(first, "earnings.sbc")
     assert figure == first.intermediates["sbc_ttm"] == 400e6
@@ -496,7 +493,7 @@ def test_a_lasting_nil_stock_pay_holds_until_the_store_holds_one(
     and when the trailing figure is missing; it drops when the store holds $50 m."""
     assert reviews.ON_FILE == ON_FILE
     deciles = universe_deciles()
-    live = _as_live(mature_growth_inputs())
+    live = as_live(mature_growth_inputs())
     assert live.trailing is not None
     inputs = replace(live, trailing=replace(live.trailing, sbc=0.0))
     first = value_company(inputs, deciles, policy, HGCO_TODAY)
@@ -629,7 +626,7 @@ def test_a_period_tied_minority_interest_follows_the_sheet_s_line(
     which an agent corrects to $1,120 m, period-tied. The next snapshot on the same sheet keeps it
     applied, the review subtracting the agent's figure; one whose line moved to $150 m drops it,
     the reading changed."""
-    held = with_minority(_as_live(high_growth_inputs()), 120e6)
+    held = with_minority(as_live(high_growth_inputs()), 120e6)
     minority, follow, inputs = _hgco_with_a_correction(conn, policy, "balance.minority", held)
     corrected = override_row(conn, minority)
     assert corrected is not None and corrected.corrected_value == 120e6
@@ -652,7 +649,7 @@ def test_a_period_tied_minority_interest_drops_when_a_newer_period_is_on_file(
     """Spec 2026-11-13 11a: HGCO reports a new quarter, its trailing period end moving from 30 Sep
     to 31 Dec, and the correction of the old period's minority interest drops, though the line
     reads the same $120 m."""
-    held = with_minority(_as_live(high_growth_inputs()), 120e6)
+    held = with_minority(as_live(high_growth_inputs()), 120e6)
     minority, follow, inputs = _hgco_with_a_correction(conn, policy, "balance.minority", held)
     later = _a_quarter_on(inputs)
     result = value_company(later, universe_deciles(), policy, HGCO_TODAY)
@@ -672,7 +669,7 @@ def test_period_tied_committed_shares_hold_until_a_newer_period_is_on_file(
     corrected on a snapshot of the same figures, the review dividing the value by 1,060 m; it drops
     when a newer period is on file."""
     deciles = universe_deciles()
-    inputs = _as_live(mature_growth_inputs())
+    inputs = as_live(mature_growth_inputs())
     first = value_company(inputs, deciles, policy, HGCO_TODAY)
     assert first.value is not None and current_reading(first, "shares.committed") == 0.0
     refresh_id = create_refresh(
@@ -732,7 +729,7 @@ def test_a_period_tied_one_time_item_holds_until_a_newer_period_is_on_file(
     company at the mechanical value × 5.31 ÷ 5.90; it drops when a newer period is on file, a
     quarter later."""
     deciles = universe_deciles()
-    inputs = _as_live(mature_growth_inputs())
+    inputs = as_live(mature_growth_inputs())
     first = value_company(inputs, deciles, policy, HGCO_TODAY)
     assert first.value is not None and current_reading(first, "earnings.ntm_nri") == 0.0
     refresh_id = create_refresh(
@@ -855,7 +852,7 @@ def test_a_period_tied_revenue_step_holds_while_the_consensus_step_stands(
         replace(a, revenue=x, analysts_revenue=10)
         for a, x in zip(base.annual_estimates, revenue, strict=True)
     )
-    inputs = _as_live(replace(base, annual_estimates=rows))
+    inputs = as_live(replace(base, annual_estimates=rows))
     step, follow, first = _mgco_with_a_revenue_step(conn, policy, inputs, "revenue.step_3", 0.05)
     assert current_reading(first, "revenue.step_3") == pytest.approx(0.08)
     held = override_row(conn, step)
@@ -881,7 +878,7 @@ def test_a_period_tied_revenue_step_with_no_consensus_step_drops_at_a_newer_peri
     ``revenue.step_2`` is none, so a period-tied override of 4% corrects none and stays applied on
     a snapshot of the same figures, the review's charge paying for 4% in year 2; it drops when a
     newer period is on file, a quarter later."""
-    inputs = _as_live(mature_growth_inputs())
+    inputs = as_live(mature_growth_inputs())
     step, follow, first = _mgco_with_a_revenue_step(conn, policy, inputs, "revenue.step_2", 0.04)
     assert current_reading(first, "revenue.step_2") is None
     assert follow(inputs) is not None
@@ -897,53 +894,10 @@ def test_a_period_tied_revenue_step_with_no_consensus_step_drops_at_a_newer_peri
 
 
 # Overrides at a split (spec 2026-11-14 7, as amended at the build): MGCO's 2-for-1 split of 27 Jan
-# 2027 falls between the basis date of the snapshot an override is made on and that of the next
-# snapshot, a snapshot's basis date the earlier of the price date and the data date of the snapshot
-# that assembled its figures. The fixture's figures stand on both: the split rule's own scaling is
-# ``test_splits``'.
-SPLIT_DAY = date(2027, 1, 27)
-BEFORE, AFTER = date(2027, 1, 10), date(2027, 2, 1)
+# 2027, built by ``support.splits``.
 EVE = date(2027, 1, 26)  # the quote's date of a refresh on the split's day before the US close
 REPRICED = date(2027, 1, 28)  # the day a price refresh reprices at the post-split quote
 SCALED = "override-split-scaled"
-
-
-def _store_splits(conn: sqlite3.Connection, *splits: tuple[date, float, float]) -> None:
-    """MGCO's ``splits`` answer, each split its day, numerator and denominator, stored as the
-    fetch stores one."""
-    store_payloads(conn, "MGCO", {"splits": split_rows("MGCO", *splits)}, HGCO_AT)
-
-
-def _under(conn: sqlite3.Connection, policy: Policy, kind: str) -> int:
-    """The running refresh of ``kind`` the test's snapshots are written under; a running one of
-    another kind is finished first, since one refresh runs at a time."""
-    running = current_refresh(conn)
-    if running is not None and running.kind == kind:
-        return running.id
-    if running is not None:
-        finish_refresh(conn, running.id, "done", HGCO_AT)
-    return create_refresh(
-        conn, kind, None, policy.version, METHOD_VERSION, HGCO_AT, EMPTY_SETTINGS_HASH
-    )
-
-
-def _mgco_on(price_date: date, data_date: date) -> CompanyInputs:
-    """MGCO as assembly dates it, quoted on ``price_date``, its statements fetched on
-    ``data_date``."""
-    return replace(_as_live(mature_growth_inputs()), price_date=price_date, data_date=data_date)
-
-
-def _mgco_snapshot(
-    conn: sqlite3.Connection,
-    policy: Policy,
-    price_date: date,
-    data_date: date,
-    kind: str = "revalue",
-) -> int:
-    """MGCO's snapshot quoted on ``price_date``, its statements fetched on ``data_date``, written
-    under a refresh of ``kind``; its id."""
-    result = value_company(_mgco_on(price_date, data_date), universe_deciles(), policy, HGCO_TODAY)
-    return insert_snapshot(conn, result, _under(conn, policy, kind), clock=lambda: HGCO_AT)
 
 
 def _repriced(conn: sqlite3.Connection, policy: Policy, snapshot_id: int, price_date: date) -> int:
@@ -952,59 +906,7 @@ def _repriced(conn: sqlite3.Connection, policy: Policy, snapshot_id: int, price_
     found = snapshot_row(conn, snapshot_id)
     assert found is not None
     result = reprice(found.result, 75.0, price_date, policy)
-    return insert_snapshot(conn, result, _under(conn, policy, "price"), clock=lambda: HGCO_AT)
-
-
-def _made_on_mgco(
-    conn: sqlite3.Connection,
-    snapshot_id: int,
-    tag: OverrideTag,
-    new: float | str,
-    unit: str,
-    lifetime: Lifetime = "lasting",
-) -> int:
-    """An applied override of MGCO's ``tag`` at ``new`` in ``unit``, made on snapshot
-    ``snapshot_id``; a period-tied one corrects the engine's reading there."""
-    made_on = snapshot_row(conn, snapshot_id)
-    assert made_on is not None
-    old = current_reading(made_on.result, tag)
-    tied = lifetime == "period-tied"
-    return insert_override(
-        conn,
-        "MGCO",
-        tag,
-        old,
-        new,
-        unit,
-        "a stake",
-        EVIDENCE,
-        lifetime,
-        "Q3 2026" if tied else None,
-        old if tied else None,
-        snapshot_id,
-        AGENT,
-        HGCO_AT,
-        "applied",
-        "",
-    )
-
-
-def _follow_mgco(
-    conn: sqlite3.Connection, policy: Policy, price_date: date, data_date: date
-) -> ReviewRow:
-    """MGCO's next snapshot, quoted on ``price_date``, its statements fetched on ``data_date``,
-    written by a revalue and followed: its review."""
-    deciles = universe_deciles()
-    inputs = _mgco_on(price_date, data_date)
-    result = value_company(inputs, deciles, policy, HGCO_TODAY)
-    refresh_id = _under(conn, policy, "revalue")
-    snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: HGCO_AT)
-    review_id = follow_snapshot(
-        conn, inputs, result, snapshot_id, deciles, policy, HGCO_TODAY, refresh_id, lambda: HGCO_AT
-    )
-    review = latest_review(conn, "MGCO")
-    assert review is not None and review.id == review_id
-    return review
+    return insert_snapshot(conn, result, under(conn, policy, "price"), clock=lambda: HGCO_AT)
 
 
 def _judgment(review: ReviewRow, tag: OverrideTag) -> TaggedInput:
@@ -1020,10 +922,10 @@ def test_an_override_a_share_made_before_a_split_applies_on_the_new_basis(
     bridge's new value and the JUDGMENT entry give and the value adds; the entry's note adds the
     figure as entered and the split; the review's result carries the note naming the input, and
     the snapshot none; the stored override keeps $10.00."""
-    made_on = _mgco_snapshot(conn, policy, BEFORE, BEFORE)
-    outside = _made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
-    review = _follow_mgco(conn, policy, AFTER, AFTER)
+    made_on = mgco_snapshot(conn, policy, BEFORE, BEFORE)
+    outside = made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    review = follow_mgco(conn, policy, AFTER, AFTER)
     [line] = review.bridge
     assert (line["tag"], line["old"], line["new"]) == ("value.outside", 0.0, 5.0)
     assert review.mechanical_value is not None and line["delta"] == pytest.approx(5.0)
@@ -1051,10 +953,10 @@ def test_committed_shares_made_before_a_split_apply_on_the_new_basis(
     """A period-tied ``shares.committed`` of 60 m made before MGCO's 2-for-1 split applies at
     60 m × 2 = 120 m on the next snapshot, of the same period, whose nil reading keeps it: the
     review divides the value among 1,000 m + 120 m shares."""
-    made_on = _mgco_snapshot(conn, policy, BEFORE, BEFORE)
-    committed = _made_on_mgco(conn, made_on, "shares.committed", 60e6, "shares", "period-tied")
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
-    review = _follow_mgco(conn, policy, AFTER, AFTER)
+    made_on = mgco_snapshot(conn, policy, BEFORE, BEFORE)
+    committed = made_on_mgco(conn, made_on, "shares.committed", 60e6, "shares", "period-tied")
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    review = follow_mgco(conn, policy, AFTER, AFTER)
     assert review.override_ids == (committed,)
     [line] = review.bridge
     assert (line["tag"], line["new"]) == ("shares.committed", 120e6)
@@ -1075,11 +977,11 @@ def test_an_override_made_after_a_split_is_not_scaled(
 ) -> None:
     """An override made on MGCO's snapshot of 1 Feb 2027, whose figures the 2-for-1 split of 27
     Jan 2027 had reached, applies as entered on the next snapshot, with no words and no note."""
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
-    _made_on_mgco(
-        conn, _mgco_snapshot(conn, policy, AFTER, AFTER), "value.outside", 10.0, "USD a share"
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    made_on_mgco(
+        conn, mgco_snapshot(conn, policy, AFTER, AFTER), "value.outside", 10.0, "USD a share"
     )
-    review = _follow_mgco(conn, policy, AFTER, AFTER)
+    review = follow_mgco(conn, policy, AFTER, AFTER)
     [line] = review.bridge
     assert line["new"] == 10.0
     entry = _judgment(review, "value.outside")
@@ -1100,10 +1002,10 @@ def test_an_override_made_on_the_split_s_day_before_the_close_is_scaled_on_the_n
     the day of the 2-for-1 split, its quote of 26 Jan, so the split rule did not reach its figures
     and its basis date is 26 Jan. An override made on it is scaled on the next snapshot, quoted
     and fetched on 27 Jan."""
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
-    made_on = _mgco_snapshot(conn, policy, EVE, SPLIT_DAY)
-    _made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
-    assert _outside_line(_follow_mgco(conn, policy, SPLIT_DAY, SPLIT_DAY)) == (5.0, True)
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    made_on = mgco_snapshot(conn, policy, EVE, SPLIT_DAY)
+    made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
+    assert _outside_line(follow_mgco(conn, policy, SPLIT_DAY, SPLIT_DAY)) == (5.0, True)
 
 
 def test_a_snapshot_of_the_split_s_day_before_the_close_has_not_seen_the_split(
@@ -1112,14 +1014,14 @@ def test_a_snapshot_of_the_split_s_day_before_the_close_has_not_seen_the_split(
     """An override made on a snapshot of 10 Jan 2027 is not scaled on the snapshot of the split's
     day before the close (quoted 26 Jan, fetched 27 Jan), whose figures did not see the split; it
     is scaled on the next."""
-    _made_on_mgco(
-        conn, _mgco_snapshot(conn, policy, BEFORE, BEFORE), "value.outside", 10.0, "USD a share"
+    made_on_mgco(
+        conn, mgco_snapshot(conn, policy, BEFORE, BEFORE), "value.outside", 10.0, "USD a share"
     )
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
-    early = _follow_mgco(conn, policy, EVE, SPLIT_DAY)
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    early = follow_mgco(conn, policy, EVE, SPLIT_DAY)
     assert _outside_line(early) == (10.0, False)
     assert _judgment(early, "value.outside").note == "a stake"
-    assert _outside_line(_follow_mgco(conn, policy, AFTER, AFTER)) == (5.0, True)
+    assert _outside_line(follow_mgco(conn, policy, AFTER, AFTER)) == (5.0, True)
 
 
 def test_an_override_on_a_snapshot_repriced_after_a_split_is_scaled(
@@ -1129,12 +1031,12 @@ def test_an_override_on_a_snapshot_repriced_after_a_split_is_scaled(
     28 Jan 2027 reprices the snapshot quoted and fetched on 10 Jan 2027 at the post-split quote,
     fetching no split, so an override made on the repriced snapshot stands on the old basis and is
     scaled."""
-    made_on = _repriced(conn, policy, _mgco_snapshot(conn, policy, BEFORE, BEFORE), REPRICED)
+    made_on = _repriced(conn, policy, mgco_snapshot(conn, policy, BEFORE, BEFORE), REPRICED)
     found = snapshot_row(conn, made_on)
     assert found is not None and (found.data_date, found.price_date) == (BEFORE, REPRICED)
-    _made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
-    review = _follow_mgco(conn, policy, AFTER, AFTER)
+    made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    review = follow_mgco(conn, policy, AFTER, AFTER)
     assert _outside_line(review) == (5.0, True)
     assert _judgment(review, "value.outside").note.endswith(
         "entered as $10.00 a share before the 2-for-1 split of 27 Jan 2027"
@@ -1149,16 +1051,16 @@ def test_an_override_on_a_repriced_snapshot_reads_the_figures_it_repriced(
     saw the split, and an override made on the repriced one is not scaled. Where it was the
     refresh before the close (quoted 26 Jan), they did not, and the override is scaled, though the
     repriced snapshot's own two dates (28 and 27 Jan) are both on or after the split's day."""
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
-    seen = _repriced(conn, policy, _mgco_snapshot(conn, policy, SPLIT_DAY, SPLIT_DAY), REPRICED)
-    outside = _made_on_mgco(conn, seen, "value.outside", 10.0, "USD a share")
-    assert _outside_line(_follow_mgco(conn, policy, AFTER, AFTER)) == (10.0, False)
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    seen = _repriced(conn, policy, mgco_snapshot(conn, policy, SPLIT_DAY, SPLIT_DAY), REPRICED)
+    outside = made_on_mgco(conn, seen, "value.outside", 10.0, "USD a share")
+    assert _outside_line(follow_mgco(conn, policy, AFTER, AFTER)) == (10.0, False)
     drop_override(conn, outside, "made again below", HGCO_AT)
-    unseen = _repriced(conn, policy, _mgco_snapshot(conn, policy, EVE, SPLIT_DAY), REPRICED)
+    unseen = _repriced(conn, policy, mgco_snapshot(conn, policy, EVE, SPLIT_DAY), REPRICED)
     found = snapshot_row(conn, unseen)
     assert found is not None and (found.price_date, found.data_date) == (REPRICED, SPLIT_DAY)
-    _made_on_mgco(conn, unseen, "value.outside", 10.0, "USD a share")
-    assert _outside_line(_follow_mgco(conn, policy, AFTER, AFTER)) == (5.0, True)
+    made_on_mgco(conn, unseen, "value.outside", 10.0, "USD a share")
+    assert _outside_line(follow_mgco(conn, policy, AFTER, AFTER)) == (5.0, True)
 
 
 def test_a_repriced_snapshot_with_no_assembling_snapshot_reads_its_own_dates(
@@ -1167,10 +1069,10 @@ def test_a_repriced_snapshot_with_no_assembling_snapshot_reads_its_own_dates(
     """A snapshot a price refresh made, with no earlier snapshot of the company that a full or
     scoped refresh or a revalue made, falls back to its own two dates: quoted 28 Jan 2027 with
     statements fetched on 10 Jan, its basis date is 10 Jan, so an override made on it is scaled."""
-    made_on = _mgco_snapshot(conn, policy, REPRICED, BEFORE, kind="price")
-    _made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
-    assert _outside_line(_follow_mgco(conn, policy, AFTER, AFTER)) == (5.0, True)
+    made_on = mgco_snapshot(conn, policy, REPRICED, BEFORE, kind="price")
+    made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    assert _outside_line(follow_mgco(conn, policy, AFTER, AFTER)) == (5.0, True)
 
 
 def test_the_splits_between_the_two_basis_dates_multiply(
@@ -1180,10 +1082,10 @@ def test_the_splits_between_the_two_basis_dates_multiply(
     date, divide a $12.00 made on 10 Jan 2027 by 2 × 3 = 6, to $2.00, the note naming both in
     order. A 4-for-1 on 10 Jan 2027, which the made-on snapshot's figures had seen, and a 5-for-1
     after the reviewed snapshot's basis date are not counted."""
-    made_on = _mgco_snapshot(conn, policy, BEFORE, BEFORE)
-    _made_on_mgco(conn, made_on, "value.outside", 12.0, "USD a share")
-    _store_splits(conn, (BEFORE, 4, 1), (SPLIT_DAY, 2, 1), (AFTER, 3, 1), (date(2027, 2, 5), 5, 1))
-    review = _follow_mgco(conn, policy, AFTER, AFTER)
+    made_on = mgco_snapshot(conn, policy, BEFORE, BEFORE)
+    made_on_mgco(conn, made_on, "value.outside", 12.0, "USD a share")
+    store_splits(conn, (BEFORE, 4, 1), (SPLIT_DAY, 2, 1), (AFTER, 3, 1), (date(2027, 2, 5), 5, 1))
+    review = follow_mgco(conn, policy, AFTER, AFTER)
     [line] = review.bridge
     assert line["new"] == 2.0
     assert _judgment(review, "value.outside").note == (
@@ -1200,13 +1102,13 @@ def test_a_ratio_or_a_total_is_never_scaled_at_a_split(
     business, which the split halves. Through the follow (the cash figure dropped: MGCO's route
     does not read it), the belief's line stands at 8% and the note names the outside value
     alone."""
-    made_on = _mgco_snapshot(conn, policy, BEFORE, BEFORE)
-    belief = _made_on_mgco(conn, made_on, "growth.belief", 0.08, "ratio")
-    cash = _made_on_mgco(conn, made_on, "balance.cash", 3_000e6, "USD", "period-tied")
-    outside = _made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
-    _store_splits(conn, (SPLIT_DAY, 2, 1))
+    made_on = mgco_snapshot(conn, policy, BEFORE, BEFORE)
+    belief = made_on_mgco(conn, made_on, "growth.belief", 0.08, "ratio")
+    cash = made_on_mgco(conn, made_on, "balance.cash", 3_000e6, "USD", "period-tied")
+    outside = made_on_mgco(conn, made_on, "value.outside", 10.0, "USD a share")
+    store_splits(conn, (SPLIT_DAY, 2, 1))
     rows = [r for r in (override_row(conn, i) for i in (belief, cash, outside)) if r is not None]
-    reviewed = _mgco_snapshot(conn, policy, AFTER, AFTER)
+    reviewed = mgco_snapshot(conn, policy, AFTER, AFTER)
     engine = reviews.engine_overrides(conn, "MGCO", rows, reviewed)
     words = "entered as $10.00 a share before the 2-for-1 split of 27 Jan 2027"
     assert [(o.id, o.tag, o.value, o.rescaled) for o in engine] == [
@@ -1215,7 +1117,7 @@ def test_a_ratio_or_a_total_is_never_scaled_at_a_split(
         (outside, "value.outside", 5.0, words),
     ]
     drop_override(conn, cash, "the route does not read it", HGCO_AT)
-    review = _follow_mgco(conn, policy, AFTER, AFTER)
+    review = follow_mgco(conn, policy, AFTER, AFTER)
     assert [(line["tag"], line["new"]) for line in review.bridge] == [
         ("growth.belief", 0.08),
         ("value.outside", 5.0),
@@ -1231,12 +1133,12 @@ def test_the_words_name_the_currency_and_a_reverse_split(
     """The figure as entered is printed as the flags print an amount a share, after the reporting
     currency's code on a row in another, a negative one with the minus sign first; a 1-for-10
     reverse split multiplies a figure a share by 10 and divides a count by 10."""
-    made_on = _mgco_snapshot(conn, policy, BEFORE, BEFORE)
-    gap = _made_on_mgco(conn, made_on, "earnings.cycle_gap", -1.5, "SEK a share")
-    count = _made_on_mgco(conn, made_on, "shares.committed", 60e6, "shares", "period-tied")
-    _store_splits(conn, (SPLIT_DAY, 1, 10))
+    made_on = mgco_snapshot(conn, policy, BEFORE, BEFORE)
+    gap = made_on_mgco(conn, made_on, "earnings.cycle_gap", -1.5, "SEK a share")
+    count = made_on_mgco(conn, made_on, "shares.committed", 60e6, "shares", "period-tied")
+    store_splits(conn, (SPLIT_DAY, 1, 10))
     rows = [r for r in (override_row(conn, gap), override_row(conn, count)) if r is not None]
-    reviewed = _mgco_snapshot(conn, policy, AFTER, AFTER)
+    reviewed = mgco_snapshot(conn, policy, AFTER, AFTER)
     engine = reviews.engine_overrides(conn, "MGCO", rows, reviewed)
     reverse = "the 1-for-10 reverse split of 27 Jan 2027"
     assert [(o.value, o.rescaled) for o in engine] == [
@@ -1380,13 +1282,13 @@ def test_a_lasting_ntm_override_drops_when_its_guided_year_passes(
 
 def _as_mgco(inputs: CompanyInputs) -> CompanyInputs:
     """``inputs`` as MGCO's, dated as assembly dates them."""
-    return _as_live(replace(inputs, symbol="MGCO"))
+    return as_live(replace(inputs, symbol="MGCO"))
 
 
 def _route_snapshot(conn: sqlite3.Connection, policy: Policy, inputs: CompanyInputs) -> int:
     """MGCO's snapshot valued on ``inputs``, written by a revalue: its id."""
     result = value_company(inputs, universe_deciles(), policy, HGCO_TODAY)
-    return insert_snapshot(conn, result, _under(conn, policy, "revalue"), clock=lambda: HGCO_AT)
+    return insert_snapshot(conn, result, under(conn, policy, "revalue"), clock=lambda: HGCO_AT)
 
 
 def _follow_inputs(conn: sqlite3.Connection, policy: Policy, inputs: CompanyInputs) -> int | None:
@@ -1394,7 +1296,7 @@ def _follow_inputs(conn: sqlite3.Connection, policy: Policy, inputs: CompanyInpu
     id, ``None`` with no override left."""
     deciles = universe_deciles()
     result = value_company(inputs, deciles, policy, HGCO_TODAY)
-    refresh_id = _under(conn, policy, "revalue")
+    refresh_id = under(conn, policy, "revalue")
     snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: HGCO_AT)
     return follow_snapshot(
         conn, inputs, result, snapshot_id, deciles, policy, HGCO_TODAY, refresh_id, lambda: HGCO_AT
@@ -1412,14 +1314,14 @@ def test_an_override_the_new_route_does_not_read_drops_with_the_route_s_reason(
     share (spec 13.1's row) plus $1.00."""
     made_on = _route_snapshot(conn, policy, _as_mgco(mature_growth_inputs()))
     stale = {
-        tag: _made_on_mgco(conn, made_on, tag, new, unit)
+        tag: made_on_mgco(conn, made_on, tag, new, unit)
         for tag, new, unit in (
             ("return.runway", 0.15, "ratio"),
             ("growth.belief", 0.08, "ratio"),
             ("moat.class", "Narrow", "class"),
         )
     }
-    outside = _made_on_mgco(conn, made_on, "value.outside", 1.0, "USD a share")
+    outside = made_on_mgco(conn, made_on, "value.outside", 1.0, "USD a share")
     read = [tag for tag in (*stale, "value.outside") if "decline" in TAGS[tag].routes]
     assert read == ["value.outside"]
     review_id = _follow_inputs(conn, policy, _as_mgco(decline_inputs()))
@@ -1450,7 +1352,7 @@ def test_a_period_tied_override_on_another_route_drops_with_the_route_s_reason(
     changed", but the route's test runs first and gives the true reason."""
     inputs = _as_mgco(mature_growth_inputs())
     made_on = _route_snapshot(conn, policy, inputs)
-    pay = _made_on_mgco(conn, made_on, "earnings.sbc", 500e6, "USD", "period-tied")
+    pay = made_on_mgco(conn, made_on, "earnings.sbc", 500e6, "USD", "period-tied")
     held = override_row(conn, pay)
     assert held is not None and held.corrected_value == 400e6
     stable = _as_mgco(mature_stable_inputs())
@@ -1479,9 +1381,9 @@ def test_a_phase_override_dropped_at_a_follow_takes_what_only_its_route_read(
     reason; the review holds the outside value, the Mature Growth value plus $1.00."""
     inputs = _as_mgco(mature_growth_inputs())
     made_on = _route_snapshot(conn, policy, inputs)
-    phase = _made_on_mgco(conn, made_on, "phase", "High Growth", "phase", "period-tied")
-    target = _made_on_mgco(conn, made_on, "margin.target", 0.25, "ratio")
-    outside = _made_on_mgco(conn, made_on, "value.outside", 1.0, "USD a share")
+    phase = made_on_mgco(conn, made_on, "phase", "High Growth", "phase", "period-tied")
+    target = made_on_mgco(conn, made_on, "margin.target", 0.25, "ratio")
+    outside = made_on_mgco(conn, made_on, "value.outside", 1.0, "USD a share")
     held = override_row(conn, phase)
     assert held is not None and held.corrected_value == "Mature Growth"
     assert _follow_inputs(conn, policy, inputs) is not None
@@ -1515,9 +1417,9 @@ def test_an_unclassified_row_has_no_route_and_keeps_every_override(
     the snapshot's refusal over all three."""
     inputs = _as_mgco(mature_growth_inputs())
     made_on = _route_snapshot(conn, policy, inputs)
-    belief = _made_on_mgco(conn, made_on, "growth.belief", 0.08, "ratio")
-    target = _made_on_mgco(conn, made_on, "margin.target", 0.25, "ratio")
-    moat = _made_on_mgco(conn, made_on, "moat.class", "Narrow", "class")
+    belief = made_on_mgco(conn, made_on, "growth.belief", 0.08, "ratio")
+    target = made_on_mgco(conn, made_on, "margin.target", 0.25, "ratio")
+    moat = made_on_mgco(conn, made_on, "moat.class", "Narrow", "class")
     unclassified = replace(inputs, series=inputs.series[-1:])
     result = value_company(unclassified, universe_deciles(), policy, HGCO_TODAY)
     assert (result.phase.phase, result.refusal) == (None, "fewer than two fiscal years")
