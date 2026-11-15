@@ -47,6 +47,7 @@ from fairband.reports.refs import (
     unit_of,
 )
 from fairband.reports.tables import financial_tables, quarters_table
+from fairband.store.currency import reporting_currency
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.multiples import log_multiples
@@ -1055,18 +1056,21 @@ def test_guidance_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
     margin = guided("AAPL", "operating_margin", "2026", 0.30, 0.32)
     theirs = guided("AAL", "capex", "2026", 10 * M, 12 * M)
     g = f"guidance:{revenue}"
-    assert _resolve(conn, f"{g}/low", policy) == Resolved(100 * M, "currency", "2026", None)
-    assert _resolve(conn, f"{g}/high", policy) == Resolved(110 * M, "currency", "2026", None)
+    usd = {"currency": "USD"}  # AAPL reports in US dollars: a money figure's currency
+    assert _resolve(conn, f"{g}/low", policy) == Resolved(100 * M, "currency", "2026", None, **usd)
+    assert _resolve(conn, f"{g}/high", policy) == Resolved(110 * M, "currency", "2026", None, **usd)
     midpoint = _resolve(conn, f"{g}/midpoint", policy)
     assert midpoint is not None and midpoint.value == pytest.approx(105 * M)
     step = _resolve(conn, f"{g}/step", policy)
     assert step is not None and step.value == pytest.approx(0.05)
     assert (step.unit, step.period, step.snapshot_id) == ("percent", "2026", None)
+    assert step.currency is None  # a percent
     on_eps = f"guidance:{eps}"
-    assert _resolve(conn, f"{on_eps}/low", policy) == Resolved(1.5, "per-share", "2026Q3", None)
+    low = Resolved(1.5, "per-share", "2026Q3", None, **usd)
+    assert _resolve(conn, f"{on_eps}/low", policy) == low
     assert _resolve(conn, f"{on_eps}/step", policy) == Resolved(None, "percent", "2026Q3", None)
     found = _resolve(conn, f"guidance:{margin}/midpoint", policy)
-    assert found is not None and found.unit == "percent"
+    assert found is not None and (found.unit, found.currency) == ("percent", None)
     for ref in (
         f"guidance:{theirs}/low",
         f"{g}/text",
@@ -1100,10 +1104,11 @@ def test_a_net_income_guidance_ref_reads_a_total(
         conn, "AAPL", "net_income", "2027", low, high, "gaap", TODAY, said, source, AGENT, NOW, base
     )
     g = f"guidance:{record}"
-    assert _resolve(conn, f"{g}/low", policy) == Resolved(1.1e9, "currency", "2027", None)
+    low = Resolved(1.1e9, "currency", "2027", None, currency="USD")
+    assert _resolve(conn, f"{g}/low", policy) == low
     midpoint = _resolve(conn, f"{g}/midpoint", policy)
     assert midpoint is not None and midpoint.value == pytest.approx(1.2e9)
-    assert (midpoint.unit, midpoint.period) == ("currency", "2027")
+    assert (midpoint.unit, midpoint.period, midpoint.currency) == ("currency", "2027", "USD")
     step = _resolve(conn, f"{g}/step", policy)
     assert step is not None and step.value == pytest.approx(0.2) and step.unit == "percent"
     words = Resolver(conn, "AAPL", policy).describe(f"{g}/midpoint")
@@ -1135,7 +1140,8 @@ def test_kill_refs(conn: sqlite3.Connection, policy: Policy) -> None:
     words, theirs = criterion("AAPL"), criterion("AAL", 0.05, "percent")
     resolver = Resolver(conn, "AAPL", policy)
     assert resolver.resolve(f"kill:{growth}") == Resolved(0.05, "percent", None, None)
-    assert resolver.resolve(f" kill:{capex} ") == Resolved(50e9, "currency", None, None)
+    capex_threshold = Resolved(50e9, "currency", None, None, currency="USD")
+    assert resolver.resolve(f" kill:{capex} ") == capex_threshold
     assert resolver.resolve(f"kill:{triggered}") == Resolved(2.5, "multiple", None, None)
     assert resolver.resolve(f"kill:{retired}") == Resolved(3.0, "years", None, None)
     for ref in (f"kill:{growth}", f"kill:{retired}"):
@@ -1153,6 +1159,97 @@ def test_kill_refs(conn: sqlite3.Connection, policy: Policy) -> None:
     assert rests_on(conn, f"kill:{growth}") is None
     assert snapshots_of(conn, f"kill:{growth}") == frozenset()
     assert KILL_FORM == "kill"
+
+
+def test_a_record_s_money_figure_resolves_with_its_currency(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    snapshots: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec 2026-11-15 9.3 on FXCO, whose snapshot names SEK, with ACME's statements in SEK: a
+    finding's figure, a guidance record's low, high and midpoint and a kill criterion's threshold
+    resolve with the record's currency where they are money, the stored code, else the reporting
+    currency; a percent, a guidance step and every ref of another form with none, as before. The
+    resolver reads the reporting currency once for all its refs."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    fxco = value_company(fx_inputs(), universe_deciles(), policy, TODAY)
+    sid = insert_snapshot(conn, fxco, aapl.refresh_id, clock=lambda: NOW)
+    statements = {e: p for e, p in bodies(currency="SEK").items() if e != "earnings"}
+    store_payloads(conn, "FXCO", statements, NOW)
+    source = {"kind": "filing", "ref": "20-F 2025, p. 41", "note": None}
+
+    def finding(unit: Any, currency: str | None = None) -> str:
+        figure = {"value": 2.0, "unit": unit, "currency": currency}
+        found = add_finding(conn, "FXCO", TODAY, "a figure", source, AGENT, NOW, **figure)
+        return f"finding:{found}"
+
+    def guided(metric: str, low: float, currency: str | None = None) -> str:
+        said, cited, high = "We guide.", "response:12/0/content", low * 1.1
+        found = insert_guidance(
+            conn,
+            "FXCO",
+            metric,
+            "2026",
+            low,
+            high,
+            "gaap",
+            TODAY,
+            said,
+            cited,
+            AGENT,
+            NOW,
+            low,
+            currency=currency,
+        )
+        return f"guidance:{found}"
+
+    def criterion(threshold: float, unit: Any, currency: str | None = None) -> str:
+        figure = {"threshold": threshold, "unit": unit, "currency": currency}
+        found = add_kill_criterion(conn, "FXCO", "a criterion", AGENT, NOW, **figure)
+        return f"kill:{found}"
+
+    dollars, kronor = guided("revenue", 100 * M, "USD"), guided("net_income", 50 * M)
+    margin = guided("operating_margin", 0.30)
+    expected = {
+        finding("currency", "USD"): "USD",
+        finding("per-share", "USD"): "USD",
+        finding("currency", "EUR"): "EUR",
+        finding("currency", "SEK"): "SEK",
+        finding("currency"): "SEK",
+        finding("per-share"): "SEK",
+        finding("percent"): None,
+        finding("count"): None,
+        f"{dollars}/low": "USD",
+        f"{dollars}/high": "USD",
+        f"{dollars}/midpoint": "USD",
+        f"{kronor}/midpoint": "SEK",
+        f"{kronor}/step": None,  # a percent, the record's currency or not
+        f"{margin}/midpoint": None,
+        criterion(50 * M, "currency", "USD"): "USD",
+        criterion(50 * M, "currency"): "SEK",
+        criterion(0.05, "percent"): None,
+        # every other form as before: the resolver knows the currency of a record alone
+        "fact:FXCO/revenue/2025": None,
+        f"snapshot:{sid}/inputs/market_cap": None,
+        f"snapshot:{sid}/value": None,
+    }
+    read: list[str] = []
+
+    def counted(conn: sqlite3.Connection, symbol: str) -> str:
+        read.append(symbol)
+        return reporting_currency(conn, symbol)
+
+    monkeypatch.setattr("fairband.reports.refs.reporting_currency", counted)
+    resolver = Resolver(conn, "FXCO", policy)
+    for ref, currency in expected.items():
+        found = resolver.resolve(ref)
+        assert found is not None and found.value is not None, ref
+        assert found.currency == currency, ref
+    assert read == ["FXCO"]
+    step = resolver.resolve(f"{kronor}/step")
+    assert step is not None and step.value == pytest.approx(0.05)  # it steps, as before
 
 
 def test_response_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> None:

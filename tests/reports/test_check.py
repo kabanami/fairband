@@ -12,13 +12,14 @@ from datetime import date
 from typing import Any
 
 import pytest
-from refresh.synthetic import NOW
+from refresh.synthetic import NOW, bodies
 from support.engine_companies import (
     fx_inputs,
     mature_growth_inputs,
     universe_deciles,
     young_growth_inputs,
 )
+from support.payloads import store_payloads
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
@@ -690,6 +691,144 @@ def test_shown_writes_the_value_as_its_cite_reads() -> None:
     assert shown(0.22702, "percent") == "22.7%"
     assert shown(1.12472, "multiple") == "1.12x"
     assert shown(2.46, "years") == "2.5 years"
+    # a money figure in another currency than USD with its code (spec 2026-11-15 9.4)
+    assert shown(1e9, "currency", "SEK") == "SEK 1,000,000,000"
+    assert shown(-126e6, "currency", "TWD") == "−TWD 126,000,000"
+    assert shown(12.5, "per-share", "SEK") == "SEK 12.50"
+    assert shown(2.1e9, "currency", "USD") == "$2,100,000,000"
+    assert shown(12.5, "per-share", "USD") == "$12.50"
+    assert shown(0.22702, "percent", "SEK") == "22.7%"
+    assert shown(1234.0, "count", "SEK") == "1,234"
+
+
+def _sek_company(conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]) -> int:
+    """FXCO, whose snapshot names SEK (``fx_inputs``), with ACME's statements in SEK (revenue SEK
+    2,100 m in fiscal 2025); its snapshot's id."""
+    aal = snapshot_row(conn, snapshots["AAL"])
+    assert aal is not None
+    fxco = value_company(fx_inputs(), universe_deciles(), policy, TODAY)
+    assert fxco.intermediates["currency"] == "SEK"
+    sid = insert_snapshot(conn, fxco, aal.refresh_id, clock=lambda: NOW)
+    statements = {e: p for e, p in bodies(currency="SEK").items() if e != "earnings"}
+    store_payloads(conn, "FXCO", statements, NOW)
+    return sid
+
+
+def _records(conn: sqlite3.Connection, symbol: str, currency: str | None) -> list[str]:
+    """A finding of ``symbol`` of 1,500 m, one of 12.50 a share, a revenue guidance record's
+    midpoint of 1,500 m and a kill criterion's threshold of 1,500 m, each in ``currency`` (none
+    naming none); their refs."""
+    source = {"kind": "filing", "ref": "20-F 2025, p. 41", "note": None}
+    total = {"value": 1.5e9, "unit": "currency", "currency": currency}
+    a_share = {"value": 12.5, "unit": "per-share", "currency": currency}
+    said, cited = "We guide.", "response:12/0/content"
+    guided = insert_guidance(
+        conn,
+        symbol,
+        "revenue",
+        "2026",
+        1.4e9,
+        1.6e9,
+        "gaap",
+        TODAY,
+        said,
+        cited,
+        AGENT,
+        NOW,
+        None,
+        currency=currency,
+    )
+    threshold = {"threshold": 1.5e9, "unit": "currency", "currency": currency}
+    return [
+        f"finding:{add_finding(conn, symbol, TODAY, 'a total', source, AGENT, NOW, **total)}",
+        f"finding:{add_finding(conn, symbol, TODAY, 'an EPS', source, AGENT, NOW, **a_share)}",
+        f"guidance:{guided}/midpoint",
+        f"kill:{add_kill_criterion(conn, symbol, 'below', AGENT, NOW, **threshold)}",
+    ]
+
+
+def _in_the_kill_section(
+    conn: sqlite3.Connection, symbol: str, sid: int, policy: Policy, cites: list[Any]
+) -> list[tuple[str, str, str]]:
+    """The findings of a full report whose "Risks and kill criteria" holds ``cites``, where a
+    ``kill:`` cite is checked as a ``finding:`` cite is."""
+    sections = [
+        {"heading": h, "parts": cites if h == KILL_SECTION else ["Plain words."]} for h in HEADINGS
+    ]
+    return [
+        (f.where, f.what, f.detail) for f in check_sections(conn, symbol, sid, sections, policy)
+    ]
+
+
+def test_a_dollar_on_a_record_passes_where_the_record_is_in_us_dollars(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 9.4 on FXCO, whose snapshot names SEK: a ``$`` on a finding, a guidance
+    record's figure or a kill criterion's threshold passes where the record is in US dollars, and
+    is ``wrong unit`` on one that names no currency, in SEK, the detail writing the figure with its
+    code; the same number bare passes, and any other wrong-unit detail of such a record writes the
+    code. A ``fact:`` cite of FXCO takes ``$`` as before: the check knows a record's currency
+    alone (spec 2026-11-15 14)."""
+    sid = _sek_company(conn, policy, snapshots)
+    dollars, kronor = _records(conn, "FXCO", "USD"), _records(conn, "FXCO", None)
+    figures = ("1,500,000,000", "12.50", "1,500,000,000", "1,500,000,000")
+    with_dollar = [_cite(f"${x}", ref) for x, ref in zip(figures, dollars, strict=True)]
+    with_dollar += [_cite("$1.5 billion", dollars[0])]
+    bare = [_cite(x, ref) for x, ref in zip(figures, kronor, strict=True)]
+    assert _in_the_kill_section(conn, "FXCO", sid, policy, with_dollar + bare) == []
+    revenue = "fact:FXCO/revenue/2025"
+    as_before = [_cite("$2,100,000,000", revenue), _cite("2,100,000,000", revenue)]
+    assert _in_the_kill_section(conn, "FXCO", sid, policy, as_before) == []
+    on_kronor = [_cite(f"${x}", ref) for x, ref in zip(figures, kronor, strict=True)]
+    on_kronor += [
+        _cite("$1.5 billion", kronor[0]),
+        _cite("1,600,000,000", kronor[0]),
+        _cite("12.5%", kronor[1]),
+        _cite("$2,000,000,000", revenue),
+    ]
+    found = _in_the_kill_section(conn, "FXCO", sid, policy, on_kronor)
+    advice = "write the number without $ and name SEK before it"
+    total, eps = "SEK 1,500,000,000", "SEK 12.50"
+    where = "section 11, part"
+    assert found == [
+        (f"{where} 1: $1,500,000,000", WRONG_UNIT, f"{kronor[0]} reads {total}: {advice}"),
+        (f"{where} 2: $12.50", WRONG_UNIT, f"{kronor[1]} reads {eps}: {advice}"),
+        (f"{where} 3: $1,500,000,000", WRONG_UNIT, f"{kronor[2]} reads {total}: {advice}"),
+        (f"{where} 4: $1,500,000,000", WRONG_UNIT, f"{kronor[3]} reads {total}: {advice}"),
+        (f"{where} 5: $1.5 billion", WRONG_UNIT, f"{kronor[0]} reads {total}: {advice}"),
+        (f"{where} 6: 1,600,000,000", WRONG_UNIT, f"{kronor[0]} reads {total}"),
+        (
+            f"{where} 7: 12.5%",
+            WRONG_UNIT,
+            f"'12.5%' does not fit a per-share figure: {kronor[1]} reads {eps}",
+        ),
+        (f"{where} 8: $2,000,000,000", WRONG_UNIT, f"{revenue} reads $2,100,000,000"),
+    ]
+
+
+def test_a_dollar_on_a_us_company_s_record(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 9.4 on AAPL, which reports in US dollars: a ``$`` on a record that names no
+    currency, or names USD, passes as before; on a euro record it is ``wrong unit`` with EUR in
+    the detail, and the same number bare passes."""
+    sid = snapshots["AAPL"]
+    plain, dollars, euros = (_records(conn, "AAPL", c) for c in (None, "USD", "EUR"))
+    figures = ("1,500,000,000", "12.50", "1,500,000,000", "1,500,000,000")
+    cites = [
+        _cite(f"${x}", ref)
+        for refs in (plain, dollars)
+        for x, ref in zip(figures, refs, strict=True)
+    ]
+    cites += [_cite(x, ref) for x, ref in zip(figures, euros, strict=True)]
+    assert _in_the_kill_section(conn, "AAPL", sid, policy, cites) == []
+    on_euros = [_cite(f"${x}", ref) for x, ref in zip(figures, euros, strict=True)]
+    advice = "write the number without $ and name EUR before it"
+    readings = ("EUR 1,500,000,000", "EUR 12.50", "EUR 1,500,000,000", "EUR 1,500,000,000")
+    assert _in_the_kill_section(conn, "AAPL", sid, policy, on_euros) == [
+        (f"section 11, part {n}: ${x}", WRONG_UNIT, f"{ref} reads {reading}: {advice}")
+        for n, (x, ref, reading) in enumerate(zip(figures, euros, readings, strict=True), 1)
+    ]
 
 
 JUDGED = ("phase", "moat", "belief", "roic")

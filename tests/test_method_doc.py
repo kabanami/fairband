@@ -1023,10 +1023,11 @@ def test_a_kill_criterion_holds_a_threshold_cited_in_its_section_alone() -> None
         ),
         "a report's own kill criteria (16.1) are text alone",
         (
-            "`kill:<id>` resolves to the threshold with its unit, of no period and resting on no"
-            " snapshot, whatever the criterion's state, so a published report's references keep"
-            " their words once the criterion is triggered or retired; the references list says"
-            ' whose number it is, "kill criterion 12, a threshold the author chose".'
+            "`kill:<id>` resolves to the threshold with its unit, and a money threshold with its"
+            " currency as a finding's figure does, of no period and resting on no snapshot,"
+            " whatever the criterion's state, so a published report's references keep their words"
+            " once the criterion is triggered or retired; the references list says whose number it"
+            ' is, "kill criterion 12, a threshold the author chose".'
         ),
         (
             "Every read of a criterion (`kill_criteria`, the drawer's research read) answers its"
@@ -1058,3 +1059,103 @@ def test_a_kill_criterion_holds_a_threshold_cited_in_its_section_alone() -> None
         ' number the author chose, which is the 400 "unresolved reference: kill:12" (16.3).'
     )
     assert words in derivations
+
+
+def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> None:
+    """Spec 2026-11-15 9.3, 9.4: 16.2 says a resolved record's money figure carries its currency
+    and every other ref none; 16.3 the `$` rule the server checks for a record, the detail with
+    the code, and the playbook's for every other ref; 16.4 a record in another currency and its
+    two rules with their examples."""
+    sixteen = _section(16)
+    references = sixteen[sixteen.index("### 16.2") : sixteen.index("### 16.3")]
+    for words in (
+        (
+            "Each resolves to a value (a number, a word, or none where the record holds no"
+            " figure), a unit, a period and the snapshot it rests on, and a record's money figure"
+            " to its currency too (below)."
+        ),
+        (
+            "The resolver reads it alike (spec 2026-11-15 9.3): a `finding:` and a `guidance:`"
+            " low, high or midpoint of a money figure resolve with that currency, the reporting"
+            " currency read once for all the refs of a report or of a `derive` call; a guidance"
+            " step, a percent, resolves with none."
+        ),
+        (
+            "The resolver knows the currency of a record alone: every ref of another form resolves"
+            " with none, a `fact:`, an `estimate:` or a snapshot's figure of a company in another"
+            " currency among them, as before (spec 2026-11-15 3, 14)."
+        ),
+        (
+            "So the server checks the `$` rule (16.3) and keeps a record in another currency out"
+            " of money arithmetic (16.4) for a record alone."
+        ),
+    ):
+        assert words in references, words
+    check = sixteen[sixteen.index("### 16.3") : sixteen.index("### 16.4")]
+    for words in (
+        (
+            "A word cited against a number, or a word that is not the ref's, is also `wrong"
+            " unit`, and so is a `$` on a record's money figure in another currency than USD"
+            " (below)."
+        ),
+        "A figure in another currency than USD (section 7) takes no new rounding (spec 2026-11-10",
+        (
+            "`$` is for a figure in US dollars: the price, the value a share, the levels, a close,"
+            " a grid's cells, a record's figure in US dollars."
+        ),
+        (
+            "A figure of a company in another currency, a statement line, an input in the"
+            " currency, a finding's, a guidance record's or a threshold's figure in the currency,"
+            " an override's figure, a secondary valuation's total, is cited with no `$`"
+        ),
+        (
+            "The server checks the rule for a record's money figure, whose currency the resolver"
+            " knows (16.2; spec 2026-11-15 9.4): a `$` on a `finding:`, a `guidance:` or a `kill:`"
+            " cite passes only where the record's currency is USD, a US-dollar record of a company"
+            " in another currency among them, and on a record in any other currency is `wrong"
+            ' unit`, "finding:812 reads TWD 1,000,000,000: write the number without $ and name TWD'
+            ' before it"; every wrong-unit detail of such a figure writes it with its code where'
+            ' `$` would stand, "SEK 12.50".'
+        ),
+        (
+            "For every other ref the rule stays the playbook's: a `$` on a `fact:`, an `estimate:`"
+            " or a snapshot's figure of a company in another currency still passes, and a detail"
+            " still writes `$` on it (spec 2026-11-15 14)."
+        ),
+    ):
+        assert words in check, words
+    derivations = sixteen[sixteen.index("### 16.4") : sixteen.index("### 16.5")]
+    for words in (
+        (
+            "A record in another currency (spec 2026-11-15 9.3) is a `finding:`, or a `guidance:`"
+            " low, high or midpoint, whose currency (16.2) is not the company's reporting"
+            " currency, in either direction: a US-dollar finding of a company that reports in TWD,"
+            " a euro finding of one that reports in US dollars."
+        ),
+        (
+            "A record that names the reporting currency, or names none, is not one, and derives as"
+            " before."
+        ),
+        (
+            "Such a record is kept out of money arithmetic until it is converted, by two rules: a"
+            " derivation has no value, and no unit, where one operand is such a record and the"
+            " other is a money figure (currency or per-share) that is not a record in that same"
+            " currency; and a derivation with such an operand never has a money unit: where the"
+            " unit rules above give currency or per-share, it has none, since a derivation carries"
+            " no currency and a money unit on it would read as the reporting currency, so a"
+            " US-dollar record times `number:1` has no unit."
+        ),
+        (
+            "So a US-dollar finding of a TWD reporter with another US-dollar record gives a growth"
+            " (a percent), a ratio (a multiple), or a sum or a difference with a value and no"
+            " unit; times the rate, `snapshot:<id>/inputs/fx_rate` (TWD per US dollar, a figure"
+            " with no unit), it is the figure in TWD, with no unit, which then combines with"
+            " anything; and with a `fact:` revenue in TWD, or with a finding in the reporting"
+            " currency, it has no value."
+        ),
+        (
+            "Nor has it one with the price or a close, which are in US dollars but whose currency"
+            " the resolver does not know (spec 2026-11-15 14)."
+        ),
+    ):
+        assert words in derivations, words

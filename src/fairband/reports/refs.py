@@ -82,7 +82,13 @@ figure), its unit, its period and the snapshot it rests on, and two marks the ch
 price (``snapshot:<id>/price``, ``/inputs/price``, ``close:``), which is written to cents, and a
 line the store signs as an outflow (``capex``, ``dividends`` and ``buybacks`` as ``fact:`` lines
 and table rows, and the snapshot's ``capex_ttm``, ``dividends_ttm`` and ``buybacks_ttm``), which a
-cite may give by its size. The units are the reads': ``currency``
+cite may give by its size. A record's money figure, a finding's, a guidance record's low, high and
+midpoint and a kill criterion's threshold of unit ``currency`` or ``per-share``, carries its
+currency (spec 2026-11-15 9.3; ``store.currency.currency_of``): the stored code, else the company's
+reporting currency (``Resolver.reporting``, read once for all the refs); a guidance step, a figure
+that is not money and every ref of another form carry none, the resolver knowing the currency of a
+record alone, so the check's ``$`` rule and ``derive``'s two rules read it there alone. The units
+are the reads': ``currency``
 (a total, in the statements' currency), ``per-share``, ``percent`` (a fraction), ``multiple``,
 ``count``, ``score``, ``years``; ``None`` for a word and wherever the record names no unit, an
 intermediate or a vendor field. An engine input's unit maps onto them: a currency code is
@@ -168,6 +174,7 @@ from fairband.refresh.peers import peer_figures
 from fairband.reports import filing_report
 from fairband.reports.multiples import SERIES, STATS, Series, stored_series
 from fairband.store.companies import latest_company
+from fairband.store.currency import currency_of, reporting_currency
 from fairband.store.guidance import UNITS as GUIDANCE_UNITS
 from fairband.store.guidance import guidance_row
 from fairband.store.refreshes import latest_deciles
@@ -510,7 +517,8 @@ _ESTIMATE_YEAR = re.compile(r"(\d{4})E")
 class Resolved:
     """A ref's value, its unit, its period and the snapshot it rests on (module docstring);
     ``price`` marks a share price, which is written to cents, and ``outflow`` a cash flow line the
-    store signs as an outflow, which a cite may give by its size."""
+    store signs as an outflow, which a cite may give by its size; ``currency`` is a record's money
+    figure's currency, ``None`` for every other ref."""
 
     value: float | str | None
     unit: str | None
@@ -518,6 +526,7 @@ class Resolved:
     snapshot_id: int | None
     price: bool = False
     outflow: bool = False
+    currency: str | None = None
 
 
 def fact_ref(symbol: str, line: str, period: str) -> str:
@@ -755,6 +764,12 @@ class Resolver:
             case "policy", _ if path:
                 found = f"policy {path}, {self.policy_version}"
         return ref.strip() if found is None else found
+
+    def reporting(self) -> str:
+        """The company's reporting currency (``store.currency.reporting_currency``), the currency
+        of a record that names none, read once for all the refs."""
+        found: str = self._once("reporting", lambda: reporting_currency(self.conn, self.symbol))
+        return found
 
     def _once(self, key: str, read: Callable[[], Any]) -> Any:
         if key not in self._cache:
@@ -1016,25 +1031,36 @@ class Resolver:
         figures = next((p for p in found.figures if p.symbol == peer), None)
         return None if figures is None else _figure(getattr(figures, field), PEER_UNITS[field])
 
+    def _currency(self, stored: str | None, unit: str | None) -> str | None:
+        """A record's figure's currency (``store.currency.currency_of``): for a money figure the
+        ``stored`` code, else the reporting currency; ``None`` for a figure that is not money."""
+        return currency_of(stored, unit, self.reporting())
+
     def _finding(self, path: str) -> Resolved | None:
         row = _row(finding_row, self.conn, path)
         if row is None or row.symbol != self.symbol:
             return None
-        return _figure(row.value, row.unit, row.period, None)
+        currency = self._currency(row.currency, row.unit)
+        return _figure(row.value, row.unit, row.period, None, currency=currency)
 
     def _guidance(self, path: str) -> Resolved | None:
+        """A guidance record's figure in its metric's unit and its currency, its step a percent
+        with none."""
         head, _, field = path.partition("/")
         row = _row(guidance_row, self.conn, head)
         if row is None or row.symbol != self.symbol or field not in _GUIDANCE_FIGURES:
             return None
         unit = "percent" if field == "step" else GUIDANCE_UNITS[row.metric]
-        return _figure(getattr(row, field), unit, row.period)
+        currency = self._currency(row.currency, unit)
+        return _figure(getattr(row, field), unit, row.period, currency=currency)
 
     def _kill(self, path: str) -> Resolved | None:
-        """A kill criterion's threshold with its unit, whatever the criterion's state, of no period
-        and resting on no snapshot (spec 2026-11-15 8.2)."""
+        """A kill criterion's threshold with its unit and its currency, whatever the criterion's
+        state, of no period and resting on no snapshot (spec 2026-11-15 8.2)."""
         row = self._criterion(path)
-        return None if row is None else _figure(row.threshold, row.unit)
+        if row is None:
+            return None
+        return _figure(row.threshold, row.unit, currency=self._currency(row.currency, row.unit))
 
     def _criterion(self, head: str) -> KillCriterionRow | None:
         """The company's kill criterion ``head`` names, when it holds a threshold."""
@@ -1319,6 +1345,7 @@ def _figure(
     *,
     price: bool = False,
     outflow: bool = False,
+    currency: str | None = None,
 ) -> Resolved | None:
     """The resolved figure: a finite number, a word or ``None``; ``None`` for anything else, a
     table, a list or a step that is not there, which names no figure."""
@@ -1327,7 +1354,7 @@ def _figure(
         value = number if math.isfinite(number) else None
     elif value is not None and not isinstance(value, str):
         return None
-    return Resolved(value, unit, period, snapshot_id, price, outflow)
+    return Resolved(value, unit, period, snapshot_id, price, outflow, currency)
 
 
 def _input_value(value: float | None, unit: str, note: str | None) -> float | str | None:

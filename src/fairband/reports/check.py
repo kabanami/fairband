@@ -28,7 +28,12 @@ each failure, ``where`` the section and the part counted from 1 and the text at 
   where it is checked as a ``finding:`` cite is;
 - ``wrong unit``: a cite whose suffix does not fit the ref's unit, or whose number is not the
   ref's value at the report's rounding (``rounded_equal``), the value in the detail as the cite
-  should read; a word cited against a number, or a word that is not the ref's;
+  should read; a word cited against a number, or a word that is not the ref's; and a ``$`` on a
+  record's money figure (``Resolved.currency``, a ``finding:``, ``guidance:`` or ``kill:`` cite)
+  in another currency than USD, "<ref> reads SEK 1,500,000,000: write the number without $ and
+  name SEK before it" (spec 2026-11-15 9.4), every detail writing such a figure with its code
+  (``shown``); for every other ref the ``$`` rule stays the playbook's, so a ``$`` on a ``fact:``
+  figure of a company in another currency passes;
 - ``wrong period``: a cite naming a period that is not the ref's (``FY2025`` reads ``2025``, a
   financial table's estimate column ``2026E`` or ``FY2026E`` reads ``2026``, and a quarter reads
   the same with its dash or without, ``2027-Q1`` as ``2027Q1``); a cite naming none passes;
@@ -261,6 +266,9 @@ _PLACES: dict[str, tuple[int, ...]] = {
 }
 # The engine's ratios of two figures in one unit, a ``%`` cite may write as a percentage.
 _RATIO_FORMS = ("derived:", "table:")
+# The currency ``$`` names: a record's money figure in any other is cited with no ``$`` (spec
+# 2026-11-15 9.4).
+_DOLLARS = "USD"
 
 
 @dataclass(frozen=True)
@@ -467,15 +475,18 @@ def rounded_equal(
     return any(_on_grid(cite, p) and _within(cite, scaled, p) for p in places_by_unit)
 
 
-def shown(value: float, unit: str | None) -> str:
-    """The value as a cite of it reads at the report's rounding."""
+def shown(value: float, unit: str | None, currency: str | None = None) -> str:
+    """The value as a cite of it reads at the report's rounding; a money figure in a ``currency``
+    other than USD with its code where ``$`` would stand, "SEK 1,000,000,000", "SEK 12.50" (spec
+    2026-11-15 9.4)."""
     sign = "−" if value < 0 else ""
     size = abs(value)
+    money = "$" if currency in (None, _DOLLARS) else f"{currency} "
     match unit:
         case "currency":
-            return f"{sign}${size:,.0f}"
+            return f"{sign}{money}{size:,.0f}"
         case "per-share" | "price":
-            return f"{sign}${size:,.2f}"
+            return f"{sign}{money}{size:,.2f}"
         case "percent":
             return f"{sign}{size * 100:,.1f}%"
         case "multiple":
@@ -572,7 +583,9 @@ def _stale_reading(conn: sqlite3.Connection, symbol: str, ref: str) -> str | Non
 
 
 def _unit_failure(cite: str, ref: str, resolved: Resolved) -> tuple[str, str] | None:
-    value, unit = resolved.value, resolved.unit
+    """The cite's failure against the figure ``ref`` names, a record's money figure in its own
+    currency (spec 2026-11-15 9.4); ``None`` when it fits."""
+    value, unit, currency = resolved.value, resolved.unit, resolved.currency
     if isinstance(value, str):
         if cite.strip().casefold() == value.strip().casefold():
             return None
@@ -582,11 +595,15 @@ def _unit_failure(cite: str, ref: str, resolved: Resolved) -> tuple[str, str] | 
         unit = "price"
     parsed = _parsed(cite)
     if parsed is None:
-        return WRONG_UNIT, f"{cite!r} is not one number: {ref} reads {shown(value, unit)}"
+        reading = shown(value, unit, currency)
+        return WRONG_UNIT, f"{cite!r} is not one number: {ref} reads {reading}"
     if parsed.suffix == "%" and unit == "multiple" and ref.strip().startswith(_RATIO_FORMS):
         unit = "percent"  # a ratio of two figures in one unit, written as a percentage
     target = abs(value) if resolved.outflow and not parsed.signed else value
-    expected = shown(target, unit)
+    expected = shown(target, unit, currency)
+    if parsed.suffix == "$" and currency not in (None, _DOLLARS):  # a record in another currency
+        advice = f"write the number without $ and name {currency} before it"
+        return WRONG_UNIT, f"{ref} reads {expected}: {advice}"
     if parsed.scale != 1 and parsed.significant < 2:
         rule = "a cite with a scale word gives two significant figures or more"
         return WRONG_UNIT, f"{rule}: {ref} reads {expected}"

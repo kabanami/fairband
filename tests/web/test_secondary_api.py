@@ -50,6 +50,7 @@ from fairband.policy.tax import TaxTable
 from fairband.store.companies import insert_companies
 from fairband.store.db import connect
 from fairband.store.facts import FactRow, insert_facts
+from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh, save_deciles
@@ -326,9 +327,9 @@ def _stored(client: TestClient, symbol: str = "AAPL") -> list[dict[str, Any]]:
     return found
 
 
-def _derive(client: TestClient, *derivations: dict[str, Any]) -> Any:
+def _derive(client: TestClient, *derivations: dict[str, Any], symbol: str = "AAPL") -> Any:
     body = {"derivations": list(derivations)}
-    return client.post("/api/companies/AAPL/derivations", json=body, headers=AGENT)
+    return client.post(f"/api/companies/{symbol}/derivations", json=body, headers=AGENT)
 
 
 @pytest.mark.parametrize("symbol", ["HGCO", "AAPL", "ADRX"])
@@ -1334,6 +1335,134 @@ def test_growth_from_a_base_at_or_below_zero_has_no_value(
         *[(None, None)] * 5,
         (pytest.approx(-100.0 / 150.0 - 1), "percent"),
         (pytest.approx((150.0 / 22e9) ** 0.5 - 1), "percent"),
+    ]
+
+
+def _money_findings(db_path: Path, symbol: str, *figures: tuple[float, str | None]) -> list[str]:
+    """A finding of ``symbol`` for each figure, a total in the currency named, none naming none;
+    their refs."""
+    source = {"kind": "filing", "ref": "20-F 2025, p. 41", "note": None}
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    refs = []
+    with closing(connect(db_path)) as conn:
+        for value, currency in figures:
+            total = {"value": value, "unit": "currency", "currency": currency}
+            found = add_finding(conn, symbol, TODAY, "a total", source, writer, NOW, **total)
+            refs.append(f"finding:{found}")
+    return refs
+
+
+def test_a_record_in_another_currency_stays_out_of_money_arithmetic(
+    client: TestClient, db_path: Path
+) -> None:
+    """Spec 2026-11-15 9.3 on FXCO, whose snapshot names SEK at 8.0 a dollar, its fiscal 2025
+    revenue SEK 800 m: two US-dollar findings give a growth, a ratio, and a sum with a value and no
+    unit, a derivation carrying no currency (rule 2); one times the rate is the figure in SEK with
+    no unit, which then combines with the revenue; with the revenue, or with a finding in the
+    reporting currency, it has no value (rule 1), nor with the price (spec 2026-11-15 14); so too a
+    US-dollar guidance midpoint; and two findings that name no currency derive as before."""
+    with closing(connect(db_path)) as conn:
+        response = record_response(
+            conn, "fmp", "income-statement", {"symbol": "FXCO"}, "FXCO", 200, "[]", None, CREATED
+        )
+        insert_facts(
+            conn, [_fact("income-annual", FY25, "revenue", 800e6, response, "FXCO", "SEK")]
+        )
+        snapshot = latest_snapshot(conn, "FXCO")
+        assert snapshot is not None
+        said, cited = "We guide.", "response:12/0/content"
+        writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+        guided = insert_guidance(
+            conn,
+            "FXCO",
+            "revenue",
+            "2026",
+            100e6,
+            120e6,
+            "gaap",
+            TODAY,
+            said,
+            cited,
+            writer,
+            NOW,
+            None,
+            currency="USD",
+        )
+    usd, usd_before, sek, sek_before = _money_findings(
+        db_path, "FXCO", (110e6, "USD"), (100e6, "USD"), (880e6, None), (800e6, None)
+    )
+    rate, revenue = f"snapshot:{snapshot.id}/inputs/fx_rate", "fact:FXCO/revenue/2025"
+    midpoint = f"guidance:{guided}/midpoint"
+    r = _derive(
+        client,
+        {"operation": "growth", "a": usd, "b": usd_before},
+        {"operation": "ratio", "a": usd, "b": usd_before},
+        {"operation": "sum", "a": usd, "b": usd_before},
+        {"operation": "difference", "a": usd, "b": midpoint},  # two records in one currency
+        {"operation": "product", "a": usd, "b": rate},
+        {"operation": "product", "a": usd, "b": "number:1"},  # a money unit, then none
+        {"operation": "ratio", "a": usd, "b": revenue},
+        {"operation": "growth", "a": usd, "b": revenue},
+        {"operation": "sum", "a": usd, "b": revenue},
+        {"operation": "sum", "a": revenue, "b": usd},
+        {"operation": "sum", "a": usd, "b": sek},
+        {"operation": "ratio", "a": midpoint, "b": revenue},
+        # the price is in dollars, but the resolver knows no currency of it: the accepted edge
+        {"operation": "ratio", "a": usd, "b": f"snapshot:{snapshot.id}/price"},
+        {"operation": "sum", "a": sek, "b": sek_before},
+        {"operation": "ratio", "a": sek, "b": revenue},
+        symbol="FXCO",
+    )
+    assert r.status_code == 201, r.text
+    found = r.json()["derivations"]
+    assert [(d["value"], d["unit"]) for d in found] == [
+        (pytest.approx(0.1), "percent"),
+        (pytest.approx(1.1), "multiple"),
+        (pytest.approx(210e6), None),
+        (pytest.approx(0.0), None),
+        (pytest.approx(880e6), None),  # 110 m dollars at 8.0 kronor a dollar
+        (pytest.approx(110e6), None),
+        *[(None, None)] * 7,
+        (pytest.approx(1_680e6), "currency"),  # as before
+        (pytest.approx(1.1), "multiple"),
+    ]
+    converted = f"derived:{found[4]['id']}"
+    r = _derive(
+        client,
+        {"operation": "growth", "a": converted, "b": revenue},
+        {"operation": "difference", "a": converted, "b": sek},
+        symbol="FXCO",
+    )
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (pytest.approx(0.1), "percent"),
+        (pytest.approx(0.0), None),
+    ]
+
+
+def test_a_record_of_a_us_company_in_another_currency(client: TestClient, db_path: Path) -> None:
+    """Spec 2026-11-15 9.3, the rule the other way: AAPL reports in US dollars, so a euro finding
+    has no value with its revenue, while two US-dollar findings, in the reporting currency, and
+    one with the revenue derive as before."""
+    eur, usd, usd_before = _money_findings(
+        db_path, "AAPL", (2e9, "EUR"), (22e9, "USD"), (20e9, "USD")
+    )
+    revenue = "fact:AAPL/revenue/2025"
+    r = _derive(
+        client,
+        {"operation": "ratio", "a": eur, "b": revenue},
+        {"operation": "sum", "a": eur, "b": usd},
+        {"operation": "sum", "a": usd, "b": usd_before},
+        {"operation": "ratio", "a": usd, "b": revenue},
+        {"operation": "growth", "a": usd, "b": usd_before},
+    )
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (None, None),
+        (None, None),
+        (pytest.approx(42e9), "currency"),
+        (pytest.approx(1.0), "multiple"),
+        (pytest.approx(0.1), "percent"),
     ]
 
 

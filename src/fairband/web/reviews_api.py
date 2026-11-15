@@ -136,7 +136,14 @@ figure's unit, as does a ratio of the figure over it, and a ratio of it over the
 A number off the list or written another way is a
 400, "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to
 1,000,000,000,000, not <what was written>", and two numbers in one derivation a 400, "a derivation
-needs a stored figure"; each stores none of the call's derivations.
+needs a stored figure"; each stores none of the call's derivations. A record in another currency
+(spec 2026-11-15 9.3), a finding's or a guidance record's money figure whose ``Resolved.currency``
+is not the reporting currency (``Resolver.reporting``), in either direction, is kept out of money
+arithmetic until it is converted: with a ``currency`` or ``per-share`` figure that is not a record
+in that same currency it gives no value and no unit, and where the rules above give it a money
+unit it has none, since a derivation carries no currency. So two records in one currency give a
+growth, a ratio, and a sum or a difference with no unit, and a record times the rate
+(``snapshot:<id>/inputs/fx_rate``, which has no unit) is the figure converted, with no unit.
 ``GET /api/derivations/{id}`` reads one back, 404 without it.
 
 ``sensitivity_api`` shares ``require_current``, ``agents_only``, ``snapshot_of``, ``built_inputs``
@@ -202,6 +209,7 @@ from fairband.reports.refs import (
     guidance_cited,
     same_snapshot,
 )
+from fairband.store.currency import MONEY_UNITS
 from fairband.store.db import transaction
 from fairband.store.guidance import anchor_year, guidance_row
 from fairband.store.ledger import Writer, record
@@ -1018,18 +1026,23 @@ def _dollars(x: float) -> str:
 
 @dataclass(frozen=True)
 class _Operand:
-    """A derivation's operand as read (``_operand``): its number, its unit, and whether it is a
-    fixed number, which has no unit and leaves the result's to the stored figure."""
+    """A derivation's operand as read (``_operand``): its number, its unit, whether it is a fixed
+    number, which has no unit and leaves the result's to the stored figure, and ``foreign``, the
+    currency of a record's money figure in another currency than the reporting one, ``None`` for
+    any other operand."""
 
     value: float
     unit: str | None
     fixed: bool = False
+    foreign: str | None = None
 
 
 def _operand(resolver: Resolver, ref: str) -> _Operand:
     """The number and unit ``ref`` names, a fixed number (``refs.fixed_number``) read before the
     resolver, with no unit; 400 when it names no number, is a ``number:`` off the list, or is a
-    ``kill:`` threshold, the author's own number (spec 2026-11-15 8.2)."""
+    ``kill:`` threshold, the author's own number (spec 2026-11-15 8.2). A record's money figure
+    whose currency (``Resolved.currency``) is not the reporting currency carries it (spec
+    2026-11-15 9.3)."""
     written = ref.strip()
     if written.startswith(f"{NUMBER_FORM}:"):
         number = fixed_number(written)
@@ -1041,7 +1054,9 @@ def _operand(resolver: Resolver, ref: str) -> _Operand:
     found = resolver.resolve(ref)
     if found is None or not isinstance(found.value, float):
         raise HTTPException(400, f"unresolved reference: {ref}")
-    return _Operand(found.value, found.unit)
+    currency = found.currency
+    foreign = currency if currency is not None and currency != resolver.reporting() else None
+    return _Operand(found.value, found.unit, foreign=foreign)
 
 
 def _number(x: Any, unit: str | None) -> _Figure | None:
@@ -1055,8 +1070,11 @@ def _derived(
     operation: Operation, a: _Operand, b: _Operand, years: int | None
 ) -> tuple[float | None, str | None]:
     """The operation's value and unit (module docstring); ``(None, None)`` where it is undefined:
-    a division by zero, growth from a base at or below zero, a cagr over a negative ratio and a
-    result that is not finite."""
+    a division by zero, growth from a base at or below zero, a cagr over a negative ratio, a
+    result that is not finite, and a record in another currency with a money figure not in that
+    currency (spec 2026-11-15 9.3, rule 1). With such a record a money unit is none (rule 2)."""
+    if _unconverted(a, b) or _unconverted(b, a):
+        return None, None
     x, y = a.value, b.value
     value: float | None
     if operation == "difference":
@@ -1077,7 +1095,19 @@ def _derived(
         value = (x / y) ** (1 / years) - 1
     if value is None or not math.isfinite(value):
         return None, None
-    return value, _derived_unit(operation, a, b)
+    unit = _derived_unit(operation, a, b)
+    if unit in MONEY_UNITS and (a.foreign or b.foreign):  # a derivation carries no currency
+        return value, None
+    return value, unit
+
+
+def _unconverted(record: _Operand, other: _Operand) -> bool:
+    """Whether ``record`` is a record in another currency than the reporting one and ``other`` a
+    money figure that is not a record in that same currency (spec 2026-11-15 9.3, rule 1): a sum
+    or a ratio of the two would mix currencies until the record is converted."""
+    return (
+        record.foreign is not None and other.unit in MONEY_UNITS and other.foreign != record.foreign
+    )
 
 
 def _derived_unit(operation: Operation, a: _Operand, b: _Operand) -> str | None:
