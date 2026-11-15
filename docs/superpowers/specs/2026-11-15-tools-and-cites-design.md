@@ -304,7 +304,9 @@ For every other ref the check is as today.
   currency (`$` for USD, the code before the number otherwise, as `findingFigure` does today
   with the company's code).
 - Appendix A's "Guidance on file" writes each figure in its record's currency on the report
-  page, and the export's table writes it the same way; today the export writes the bare number.
+  page. The export's table keeps its bare numbers and gains a Currency column after the
+  midpoint, the record's code for a money metric and empty for a percent (*my call*: the
+  table's numbers are raw today, and a column names the currency without a new format).
 - A cite's text is the agent's, as ever.
 
 ### 9.6 What the playbook says
