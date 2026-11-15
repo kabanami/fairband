@@ -725,10 +725,9 @@ def test_the_intermediates_record_the_return_without_goodwill(policy: Policy) ->
 def test_an_override_on_a_return_without_goodwill_sets_the_terminal_return_too(
     policy: Policy, override: float, terminal: float
 ) -> None:
-    """On a row the engine started at the return without goodwill, the engine's own terminal
-    return rests on that start, so the agent's ``return.runway``, which judges it, moves the Wide
-    moat's terminal return too: an agent who finds the growth is bought takes the whole lift back
-    (method 14.4)."""
+    """On a row the engine started at the return without goodwill, the agent's ``return.runway``
+    moves the Wide moat's terminal return too: an agent who finds the growth is bought takes the
+    whole lift back (method 14.4)."""
     years = [replace(cy(2015 + k, oi=100.0, ppe=500.0), goodwill=1500.0) for k in range(11)]
     terms = RoicTerms.of(years, "Wide", policy, runway_override=override)
     assert terms.runway_return.used == "without-goodwill" and terms.overridden
@@ -737,23 +736,37 @@ def test_an_override_on_a_return_without_goodwill_sets_the_terminal_return_too(
     assert RoicTerms.of(years, "Narrow", policy, runway_override=override).terminal == 0.09
 
 
-def test_an_override_on_any_other_measure_leaves_the_terminal_on_the_measured_return(
+def test_an_override_sets_the_terminal_return_by_the_moats_rule_on_every_measure(
     policy: Policy,
 ) -> None:
-    """Every other row keeps the rule it had before method 1.2: the override sets the runway
-    return, and the terminal return stays on the measure. So the same override never makes a
-    floored row worth more than one whose measure stands just above r (the second review of
-    2026-11-12)."""
+    """An agent's ``return.runway`` is the return in force, so the terminal return reads it by
+    the moat's rule whatever the engine measured (the founder's ruling of 2026-11-15, B-170):
+    Wide, the override under the cap and never below r; otherwise r. The terminal return then
+    never stands above an agent's lower start, the same override gives a floored row and one
+    just above r the same terminal return, and an override equals the return sensitivity at the
+    same figure (method 5.8)."""
     years = [cy(2015 + k, oi=20.0 + 5 * k, ppe=100.0 + 10 * k) for k in range(11)]  # marginal 50%
     terms = RoicTerms.of(years, "Wide", policy, runway_override=0.10)
-    assert terms.runway_return.used == "marginal" and terms.terminal == pytest.approx(0.13)
+    assert terms.runway_return.used == "marginal" and terms.terminal == pytest.approx(0.10)
+    assert RoicTerms.of(years, "Wide", policy, runway_override=0.30).terminal == 0.13
+    assert RoicTerms.of(years, "Wide", policy, runway_override=0.05).terminal == 0.09
     low = [cy(2015 + k, oi=9.5, ppe=100.0) for k in range(11)]  # 9.5%: above r, under the cap
     above = RoicTerms.of(low, "Wide", policy, runway_override=0.15)
-    assert above.runway_return.used == "three-year" and above.terminal == pytest.approx(0.095)
+    assert above.runway_return.used == "three-year" and above.terminal == 0.13
     floored = [cy(2015 + k, oi=8.9, ppe=100.0) for k in range(11)]  # 8.9% and no goodwill
     below = RoicTerms.of(floored, "Wide", policy, runway_override=0.15)
-    assert below.runway_return.used == "floor" and below.terminal == 0.09
-    assert below.terminal < above.terminal  # the weaker row never gets the better terminal
+    assert below.runway_return.used == "floor" and below.terminal == above.terminal
     off = [cy(2015 + k, oi=20.0, ppe=-50.0) for k in range(11)]
-    assert RoicTerms.of(off, "Wide", policy, runway_override=0.10).terminal == 0.13
-    assert RoicTerms.of(years[-4:], "Wide", policy, runway_override=0.20).terminal == 0.09
+    assert RoicTerms.of(off, "Wide", policy, runway_override=0.10).terminal == pytest.approx(0.10)
+    assert RoicTerms.of(years[-4:], "Wide", policy, runway_override=0.20).terminal == 0.13
+    for measured in (years, low, floored, off, years[-4:]):  # no moat but Wide reads the override
+        assert RoicTerms.of(measured, "Narrow", policy, runway_override=0.20).terminal == 0.09
+        assert RoicTerms.of(measured, "None", policy, runway_override=0.20).terminal == 0.09
+
+
+def test_no_override_leaves_the_terminal_return_on_the_measure(policy: Policy) -> None:
+    years = [cy(2015 + k, oi=20.0 + 5 * k, ppe=100.0 + 10 * k) for k in range(11)]  # marginal 50%
+    assert RoicTerms.of(years, "Wide", policy).terminal == 0.13
+    low = [cy(2015 + k, oi=9.5, ppe=100.0) for k in range(11)]
+    assert RoicTerms.of(low, "Wide", policy).terminal == pytest.approx(0.095)
+    assert RoicTerms.of(years[-4:], "Wide", policy).terminal == 0.09  # unavailable: r

@@ -1174,13 +1174,13 @@ def test_the_agent_judges_the_return_without_goodwill() -> None:
             "(`intermediates/runway_return/without_goodwill/bought`), the engine keeps the floor "
             "(`return-floored`)"
         ),
-        # only a row the engine started at the return without goodwill lets the override set the
-        # terminal return; a floored row and one above the hurdle rate keep theirs (method 14.4)
+        # the override is the return in force on every row, so the Wide terminal return follows
+        # it (method 4.7 and 14.4, the founder's ruling of 2026-11-15)
         (
-            "On a floored row the override raises the start, and the terminal return stays at the "
-            "hurdle rate"
+            "On every row your `return.runway` is the return in force: on a Wide row the terminal "
+            "return follows it, at most the Wide cap and never below the hurdle rate"
         ),
-        "the terminal return stays on the measure",
+        "So a return you set below the Wide cap lowers the terminal return too.",
         # on a row started at the return without goodwill neither the earnings nor the return
         # carry the purchases' cost, which the older ruling on amortization relied on
         (

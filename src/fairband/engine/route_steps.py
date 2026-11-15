@@ -188,20 +188,18 @@ class RoicTerms:
         """The returns of ``years`` under ``moat``; with ``runway_override``, an agent's runway
         return in place of the measured one: it charges the runway years, and the flags of the
         measured return (``return-floored``, ``return-without-goodwill``, ``charge-zeroed``) are
-        not raised. The terminal return stays on the measured return, save on a row whose
-        measured start is the return without goodwill: there the engine's own terminal return
-        rests on that start, the override judges it, and the moat's terminal rule reads the
-        override (``method.md`` 14.4). Every other row keeps the rule it had before method 1.2,
-        a floored one too."""
+        not raised. The override is the return in force, so the moat's terminal rule reads it
+        too, whatever the engine measured (``method.md`` 4.7, 14.4): the terminal return never
+        stands above an agent's lower start, and an override equals the return sensitivity at
+        the same figure."""
         result = aggregate_roic(years)
         rr = runway_return(result, moat, policy)
-        terminal = terminal_return(rr, moat, policy)
         aggregate = result.aggregate
         usable = aggregate if aggregate is not None and aggregate > 0 else None
         if runway_override is not None:
-            if rr.used == "without-goodwill":
-                terminal = terminal_roic(runway_override, moat, policy)
+            terminal = terminal_roic(runway_override, moat, policy)
             return cls(result, rr, usable, runway_override, terminal, False, result.flags, True)
+        terminal = terminal_return(rr, moat, policy)
         flags = result.flags + rr.flags
         return cls(result, rr, usable, rr.value, terminal, rr.charge_off, flags)
 

@@ -333,12 +333,13 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   (`return-floored`), and its sentence says so: capital grew by a fifth with goodwill, not
   without it, and goodwill and intangibles grew. Read
   `intermediates/runway_return/without_goodwill`, and raise `return.runway` only with evidence
-  that the growth ahead is the business's own. On a floored row the override raises the start,
-  and the terminal return stays at the hurdle rate. And a measure just above the hurdle rate
-  that a purchase holds down keeps its
-  measure: read `intermediates/runway_return/without_goodwill/measure`, and where the growth
-  ahead is the business's own, `return.runway` may take it, at most the cap; there the override
-  raises the start only, and the terminal return stays on the measure.
+  that the growth ahead is the business's own. And a measure just above the hurdle rate that a
+  purchase holds down keeps its measure: read
+  `intermediates/runway_return/without_goodwill/measure`, and where the growth ahead is the
+  business's own, `return.runway` may take it, at most the cap. On every row your
+  `return.runway` is the return in force: on a Wide row the terminal return follows it, at most
+  the Wide cap and never below the hurdle rate, and on a Narrow or None row the terminal return
+  is the hurdle rate. So a return you set below the Wide cap lowers the terminal return too.
 - `growth-above-return`: the growth a year's reinvestment pays for outruns the return it earns, so
   the year pays out less than nothing: the owner funds the growth. The value already carries that
   cost. Read the growth the charge pays for and its return by year (`intermediates/charge`). A step

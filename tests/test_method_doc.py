@@ -112,10 +112,48 @@ def test_a_thin_revenue_step_is_not_read() -> None:
     # a sensitivity grid marks the growth the charge read (14.8)
     assert "On a thin year (5.3) the pair marked is the earnings step's, not the step" in fourteen
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-2].startswith("| 1.4, policy v16 |")
-    assert rows[-1].startswith("| 1.5, policy v16 | 2026-11-15 | A thin revenue step is not read")
-    assert "above `thin_revenue_step_max` (50%)" in rows[-1]
-    assert "Policy v16 gains one value for the rule, `thin_revenue_step_max` (50%)" in rows[-1]
+    thin = next(
+        k
+        for k, x in enumerate(rows)
+        if x.startswith("| 1.5, policy v16 | 2026-11-15 | A thin revenue step is not read")
+    )
+    assert rows[thin - 1].startswith("| 1.4, policy v16 |")
+    assert "above `thin_revenue_step_max` (50%)" in rows[thin]
+    assert "Policy v16 gains one value for the rule, `thin_revenue_step_max` (50%)" in rows[thin]
+
+
+def test_the_runway_returns_rulings_of_2026_11_15() -> None:
+    """The founder's rulings of 2026-11-15 on the runway return (B-8, B-170): 4.7 and 14.4 say an
+    agent's ``return.runway`` sets the terminal return by the moat's rule on every row, 4.6's
+    edge follows, and 11 has the row after the thin rule's, the method unchanged at 1.5."""
+    four = _section(4)
+    assert (
+        "Under an agent's `return.runway` (14.4) the override is the return in force, and the "
+        "rule reads it in place of the measure on every row"
+    ) in four
+    assert "and the Wide moat's terminal return reads the override (4.7, 14.4)" in four
+    assert "the Wide moat's terminal return stays on the measure" not in four
+    fourteen = _section(14)
+    bullet = next(
+        x for x in fourteen.splitlines() if x.startswith("- `return.runway` replaces the runway")
+    )
+    for words in (
+        (
+            "The override is the return in force, so the moat's terminal rule (4.7) reads it in "
+            "place of the measure, on every row"
+        ),
+        "So the terminal return never stands above an agent's lower start",
+        "the same terminal return",
+        "the row's own return sensitivity at the same figure (5.8)",
+    ):
+        assert words in bullet, words
+    assert "the terminal return stays at r" not in bullet
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    assert rows[-1].startswith(
+        "| 1.5, policy v16 | 2026-11-15 | The runway return's rulings (founder 2026-11-15"
+    )
+    assert "The method is unchanged at 1.5: no mechanical value moves." in rows[-1]
+    assert "the moat's terminal rule reads it in place of the measure on every row" in rows[-1]
 
 
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:

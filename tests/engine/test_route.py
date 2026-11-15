@@ -836,10 +836,31 @@ def test_a_runway_override_starts_the_fade_even_with_the_charge_off(
     ch = r.intermediates["charge"]
     assert ch["return_by_year"][0] == pytest.approx(0.20)
     assert r.intermediates["charge_off"] is False
-    # held through year 6, then faded to the Wide cap the measured return leaves as the terminal
+    # held through year 6, then faded to the terminal return, the override under the Wide cap
     assert ch["hold_years"] == 6 and ch["return_by_year"][5] == pytest.approx(0.20)
     assert ch["return_by_year"][6] == pytest.approx(0.20 + (0.13 - 0.20) / 14)
     assert ch["return_by_year"][-1] == r.intermediates["terminal_roic"] == 0.13
+
+
+def test_a_runway_override_sets_the_terminal_return_and_equals_the_return_sensitivity(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """An agent's ``return.runway`` is the return in force: the moat's terminal rule reads it,
+    so a Wide row's terminal return never stands above an agent's lower start, and the value
+    under the override is the row's own return sensitivity at the same figure (method 4.7, 5.8,
+    14.4; the founder's ruling of 2026-11-15)."""
+    inputs = engine_companies.mature_growth_inputs()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    im = mechanical.intermediates
+    assert im["moat"] == "Wide" and im["terminal_roic"] == 0.13
+    assert im["runway_return"]["value"] > 0.13  # the measure reads above the Wide cap
+    for figure in policy.roic_sensitivity:  # 15% and 9%
+        r = value_company(inputs, deciles, policy, TODAY, judged(("return.runway", figure)))
+        assert r.intermediates["terminal_roic"] == pytest.approx(min(figure, 0.13))
+        assert r.intermediates["charge"]["return_by_year"][-1] == pytest.approx(min(figure, 0.13))
+        assert r.value == pytest.approx(im["value_by_roic"][f"{figure:g}"])
+    low = value_company(inputs, deciles, policy, TODAY, judged(("return.runway", 0.10)))
+    assert low.intermediates["charge"]["return_by_year"] == pytest.approx([0.10] * 20)
 
 
 def test_a_reprice_rebuilds_the_same_charge(policy: Policy, deciles: Deciles) -> None:
