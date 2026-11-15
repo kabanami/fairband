@@ -117,7 +117,9 @@ GLOSSARY: dict[str, str] = {
         "they gave none (4.2, 5.2)"
     ),
     "Belief": (
-        "The growth rate for years 4 to N before the fade: the base-rate median plus 2 points"
+        "The growth rate the value assumes after the analysts' forecast years: growth eases down "
+        "to it from year 3's over the fade, then holds at it to the end of the runway; the "
+        "base-rate median plus 2 points"
     ),
     "Runway N": "The years of growth above the terminal rate, set by the moat class",
     "Runway return": (
@@ -132,7 +134,10 @@ GLOSSARY: dict[str, str] = {
     "Charge off": (
         "The runway years are not charged, because measured capital is at or below zero"
     ),
-    "Fade": "The five equal steps from the year-3 consensus growth down to the belief",
+    "Fade": (
+        "The equal steps from the year-3 consensus growth down to the belief, one a year over the "
+        "fade years, a setting, five at the defaults"
+    ),
     "EPV": "Earnings power value: clean trailing earnings ÷ r, the value with no growth",
     "Designation": (
         "Where the price stands against the value at belief: one of five bands on price ÷ value "

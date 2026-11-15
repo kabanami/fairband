@@ -454,15 +454,15 @@ The base year is the fiscal year that holds most of the NTM window's periods (5.
 
 ### 5.4 The belief
 
-The growth for years 4 to N, before the fade: the Base Rate Book median ten-year net-income growth for the company's sales class plus 2 points. The sales class is the first class whose upper bound is at or above trailing revenue in current dollars; the bounds are in 2015 dollars, and no index is applied.
+The growth rate the earnings path settles at after the consensus years (5.5): where the year-3 growth is higher, years 4 to 3 + F fade down to it, F the fade years (`fade_years`), and every later year to the runway's end N grows at it. It is the Base Rate Book median ten-year net-income growth for the company's sales class plus 2 points. The sales class is the first class whose upper bound is at or above trailing revenue in current dollars; the bounds are in 2015 dollars, and no index is applied.
 
 ### 5.5 The growth path
 
-With belief b and year-3 growth g_3: if g_3 > b, years 4 to 8 fade in five equal steps,
+With belief b, year-3 growth g_3 and F = `fade_years` (5 at the defaults; 4.1): if g_3 > b, years 4 to 3 + F fade in F equal steps,
 
-    g_t = b + (g_3 − b) × (8 − t) ÷ 5, for t = 4 … 8,
+    g_t = b + (g_3 − b) × (3 + F − t) ÷ F, for t = 4 … 3 + F,
 
-so g_8 = b, and years 9 to N grow at b. If g_3 ≤ b, years 4 to N grow at b. The runway cuts the path: with N = 5 the path ends at g_5 mid-fade.
+so g_{3+F} = b, and years 4 + F to N grow at b. At the defaults years 4 to 8 fade and g_8 = b. If g_3 ≤ b, years 4 to N grow at b. The runway cuts the path: with N = 5 the path ends at g_5 mid-fade.
 
 Earnings_1 = NTM net income; earnings_t = earnings_{t−1} × (1 + g_t).
 
@@ -1210,7 +1210,7 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | The charge without a floor: reinvestment above earnings is the owner's money going in | Damodaran, *Investment Valuation* 2e, ch. 11 and 12; *Return on Capital* pp. 60–61; McKinsey V99; Mauboussin V101; spec 2026-11-09 6.1 |
 | The charge on revenue growth; earnings growth above it is margin change, which needs no new capital | Damodaran H12, H13, H16; spec 2026-11-09 6.2 |
 | The runway return held through the high growth, then faded to the terminal return | Damodaran, *Return on Capital* pp. 58–60 (H29); H5; spec 2026-11-09 6.3 |
-| The fade in five equal steps | Damodaran's template H2; the one-step drop fits moderate growth only (G6); calibration spec 5.4 |
+| The fade in equal steps, five at the defaults | Damodaran's template H2; the one-step drop fits moderate growth only (G6); calibration spec 5.4 |
 | The terminal return: r by default, a modest excess for a wide moat, never below r | Damodaran T6; McKinsey G42; Mauboussin T25; Morningstar T36; design.md 6.6 |
 | Invested capital from the operating side, with goodwill, without cash; average capital; the statutory rate; leases | Damodaran H57; D2, D3, D3a, D3b, D17 |
 | The belief: the base-rate median for the sales class | Base Rate Book (Mauboussin and Callahan 2016), exhibit 4; D6 |
@@ -1261,13 +1261,13 @@ The labels are those of the research notes in the openalice workspace (H), the s
 | Pair | The FMP forex symbol `USD<code>`, whose close is the currency's units per USD: the rate a figure comes into the currency at (×) and goes back to USD at (÷) (section 7) |
 | Inflation differential | d = (1 + π_currency) ÷ (1 + π_USD) − 1, π the mean of the IMF projections in the inflation table; it restates a nominal USD rate in the currency as (1 + rate) × (1 + d) − 1 (section 7) |
 | Cadence | How often a company reports, read from its two newest quarterly statement rows: quarterly when they end 80 to 100 days apart, half-yearly when 170 to 195 and the row before them does not end a quarter before the older. The trailing figures sum four quarters or two half-years, and the NTM window reads the next four quarters or two half-years; the fiscal-year fallback keeps the cadence the rows gave, quarterly when they gave none (4.2, 5.2) |
-| Belief | The growth rate for years 4 to N before the fade: the base-rate median plus 2 points |
+| Belief | The growth rate the value assumes after the analysts' forecast years: growth eases down to it from year 3's over the fade, then holds at it to the end of the runway; the base-rate median plus 2 points |
 | Runway N | The years of growth above the terminal rate, set by the moat class |
 | Runway return | The return on new capital the charge starts at, held through the hold K, then faded to the terminal return in year N (4.8) |
 | Terminal return | The return on new capital after the runway |
 | Charge | The share of earnings held back to pay for the next year's revenue growth, h ÷ return; above 100% when the growth outruns the return |
 | Charge off | The runway years are not charged, because measured capital is at or below zero |
-| Fade | The five equal steps from the year-3 consensus growth down to the belief |
+| Fade | The equal steps from the year-3 consensus growth down to the belief, one a year over the fade years, a setting, five at the defaults |
 | EPV | Earnings power value: clean trailing earnings ÷ r, the value with no growth |
 | Designation | Where the price stands against the value at belief: one of five bands on price ÷ value (4.10); a fact about the price, never an action |
 | Non-recurring gap | GuruFocus EPS trailing less EPS without non-recurring items |

@@ -4,6 +4,9 @@ them."""
 from pathlib import Path
 from typing import get_args
 
+import pytest
+
+from fairband.engine.mature_growth import _fade
 from fairband.engine.overrides import OverrideTag, anchor_misfit
 from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
@@ -778,6 +781,60 @@ def test_appendix_a_shows_an_override_scaled_at_a_split_with_both_figures() -> N
         "A report's Appendix A shows such an override with the review's pair in force and these"
         " words (16.6)."
     ) in follows
+
+
+def test_the_belief_is_the_rate_the_path_fades_to_over_the_fade_years() -> None:
+    """The reviews of the report reader's plan (Task 10): 5.4 says what the belief is in 5.5's
+    terms, the rate the path fades down to and then holds, not "the growth for years 4 to N, before
+    the fade"; 5.5 writes the fade over F = `fade_years`, the setting the engine reads (4.1, 4.8),
+    with the defaults' worked sentence; the glossary's Belief and Fade and the sources' row say the
+    same. The formula is the engine's (`mature_growth._fade`), here on a fade of three years."""
+    five = _section(5)
+    four = five.split("### 5.4 The belief\n\n", 1)[1].split("\n\n", 1)[0]
+    assert four.startswith(
+        "The growth rate the earnings path settles at after the consensus years (5.5): where the"
+        " year-3 growth is higher, years 4 to 3 + F fade down to it, F the fade years"
+        " (`fade_years`), and every later year to the runway's end N grows at it. It is the Base Rate Book median ten-year net-income growth"
+        " for the company's sales class plus 2 points."
+    ), four
+    path = five.split("### 5.5 The growth path\n\n", 1)[1].split("\n### ", 1)[0]
+    for words in (
+        (
+            "With belief b, year-3 growth g_3 and F = `fade_years` (5 at the defaults; 4.1): if"
+            " g_3 > b, years 4 to 3 + F fade in F equal steps,"
+        ),
+        "g_t = b + (g_3 − b) × (3 + F − t) ÷ F, for t = 4 … 3 + F,",
+        (
+            "so g_{3+F} = b, and years 4 + F to N grow at b. At the defaults years 4 to 8 fade and"
+            " g_8 = b."
+        ),
+        (
+            "If g_3 ≤ b, years 4 to N grow at b. The runway cuts the path: with N = 5 the path ends"
+            " at g_5 mid-fade."
+        ),
+    ):
+        assert words in path, words
+    assert load_policy().fade_years == 5
+    g3, belief, years = 0.20, 0.05, 3
+    formula = tuple(belief + (g3 - belief) * (3 + years - t) / years for t in range(4, 4 + years))
+    assert _fade(g3, belief, years) == pytest.approx(formula)
+    glossary = _section(13)
+    for row in (
+        (
+            "| Belief | The growth rate the value assumes after the analysts' forecast years: growth"
+            " eases down to it from year 3's over the fade, then holds at it to the end of the"
+            " runway; the base-rate median plus 2 points |"
+        ),
+        (
+            "| Fade | The equal steps from the year-3 consensus growth down to the belief, one a"
+            " year over the fade years, a setting, five at the defaults |"
+        ),
+    ):
+        assert row in glossary, row
+    assert "| The fade in equal steps, five at the defaults |" in _section(12)
+    text = METHOD.read_text(encoding="utf-8")
+    for old in ("years 4 to 8 fade in five equal steps", "The growth for years 4 to N, before"):
+        assert old not in text, old
 
 
 def test_section_16_names_the_six_failures() -> None:
