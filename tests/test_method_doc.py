@@ -643,8 +643,9 @@ def test_the_export_lists_its_references_last_and_carries_the_columns() -> None:
 def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
     """Spec 2026-11-15 6.5 and 6.6: 16.6 states that the page reads the quarters table beside the
     six and draws section 5's three charts by quarter, the trailing and the estimate bars and the
-    line under a chart that has one; and that a chart table's cell is empty where the table holds
-    no figure, which a trailing or an estimate cell may not measure."""
+    line under a chart that has one; that the axis prints as many ticks as it has room for, the
+    ends' and the trailing twelve months' always; and that a chart table's cell is empty where the
+    table holds no figure, which a trailing or an estimate cell may not measure."""
     sixteen = _section(16)
     export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
     for words in (
@@ -655,7 +656,7 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
         ),
         (
             'in The last earnings call three charts by quarter under "By quarter", the revenue, the'
-            " operating margin and the EPS, each by its row's name, a bar marked by its quarter and"
+            " operating margin and the EPS, each by its row's name, each bar's tick its quarter and"
             ' the last two digits of its year ("Q3 26"), and where no period is stored the three'
             ' with "No data on file.";'
         ),
@@ -664,9 +665,13 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
             " twin naming each by the column's label"
         ),
         (
-            'then the trailing twelve months\' filled in grey and marked "to date", then the'
-            ' estimates\' as outlines marked by their period ("2026E"), the value printed over the'
-            " last bar that is not an estimate"
+            "and its axis prints as many of the bars' ticks as it has room for, the first's, the"
+            " last's and the trailing twelve months' always:"
+        ),
+        (
+            "the fiscal years', each ticked by its year, then the trailing twelve months' filled"
+            ' in grey and ticked "to date", then the estimates\' as outlines, each ticked by its'
+            ' period ("2026E"), the value printed over the last bar that is not an estimate'
         ),
         (
             '"Grey: the 12 months to 30 Sep 2026. Outlined: analysts\' estimates.", the first'
@@ -676,6 +681,7 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
     ):
         assert words in export, words
     assert "an empty cell where none is on file" not in export
+    assert "a bar marked by its quarter" not in export and 'marked "to date"' not in export
 
 
 def test_section_16_names_the_six_failures() -> None:

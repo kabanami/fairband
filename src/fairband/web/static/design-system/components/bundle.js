@@ -1813,11 +1813,16 @@
   // months on a half-width panel carries as many as fit (spec 2026-11-06 Tier 2, 18.4).
   function labelEvery(n, most) { return Math.max(1, Math.ceil(n / (most || 7))); }
 
-  function periodLabel(d, i, n, most) {
+  // fairband: `kept`, the index of the trailing twelve months' point, -1 without one: its tick
+  // prints as the two ends' do, and a tick other than theirs within `every` slots of it is
+  // dropped, so it stands no closer to its neighbours than the printed ticks do; it stands at least
+  // two slots from either end on a chart of eight bars or more (spec 2026-11-15 6.5, 6.6).
+  function periodLabel(d, i, n, most, kept) {
     var every = labelEvery(n, most);
-    if (i === 0 || i === n - 1) return d.period;
+    if (i === 0 || i === n - 1 || i === kept) return d.period;
     if (i % every !== 0) return '';
     if (n - 1 - i < every) return '';
+    if (kept >= 0 && Math.abs(i - kept) < every) return '';
     return d.period;
   }
 
@@ -1841,10 +1846,14 @@
 
   function XAxis(props) {
     var p = props;
+    // fairband: the trailing twelve months' tick, "to date", is always printed, as the ends' are
+    // (spec 2026-11-15 6.5, 6.6); a series with no point of that kind labels as before.
+    var kept = -1;
+    p.series.forEach(function (d, i) { if (d.kind === 'trailing') kept = i; });
     return h('g', { className: 'fb-c__xaxis' },
       h('line', { className: 'fb-c__axisline', x1: p.left, x2: p.right, y1: p.y, y2: p.y }),
       p.series.map(function (d, i) {
-        var text = periodLabel(d, i, p.series.length, p.most);
+        var text = periodLabel(d, i, p.series.length, p.most, kept);
         if (!text) return null;
         var mark = markFor(d.freshness);
         var end = i === 0 ? 'fb-c__tick--start'

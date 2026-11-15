@@ -284,6 +284,42 @@ def test_the_table_twin_reads_the_label() -> None:
     assert _classed(_draw(series=series), "fb-c__table") == []
 
 
+def _axis(series: list[Any]) -> list[str]:
+    """The ticks the bars' axis prints, in order."""
+    [axis] = _classed(_draw(series=series), "fb-c__xaxis")
+    return [_text(tick) for tick in _classed(axis, "fb-c__tick")]
+
+
+FISCAL = [_point(str(year), 100 + year % 10) for year in range(2021, 2026)]
+TO_DATE = _point("to date", 130, "trailing", TRAILING)
+AHEAD = [_point(f"{year}E", 150, "estimate", ESTIMATE.format(year)) for year in (2026, 2027, 2028)]
+
+
+def test_the_axis_always_prints_the_trailing_twelve_months_tick() -> None:
+    """Spec 2026-11-15 6.5, 6.6: on eight bars and on nine the axis prints every other tick, so
+    the trailing twelve months' tick is kept as the two ends' are and a tick within a slot of it
+    is dropped; on seven bars or fewer every tick prints, as before."""
+    assert _axis([*FISCAL, TO_DATE, *AHEAD]) == ["2021", "2023", "to date", "2028E"]
+    assert _axis([*FISCAL, TO_DATE, *AHEAD[:2]]) == ["2021", "2023", "to date", "2027E"]
+    assert _axis([*FISCAL, TO_DATE, AHEAD[0]]) == [
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025",
+        "to date",
+        "2026E",
+    ]
+
+
+def test_an_axis_with_no_trailing_point_prints_as_before() -> None:
+    """The other charts pass no `kind`: eight bars of fiscal years and estimates, or eight
+    quarters, print every other tick and the last, as before the patch."""
+    assert _axis([*FISCAL, *AHEAD]) == ["2021", "2023", "2025", "2028E"]
+    quarters = [_point(f"Q{q} {y}", 10) for y in (25, 26) for q in (1, 2, 3, 4)]
+    assert _axis(quarters) == ["Q1 25", "Q3 25", "Q1 26", "Q4 26"]
+
+
 def test_a_chart_s_points_carry_each_column_s_kind_and_label() -> None:
     columns = [
         {"period": "2025", "kind": "fiscal", "label": "2025"},
@@ -486,6 +522,15 @@ def test_section_4_draws_the_trailing_and_the_estimate_bars_with_the_line_under(
     assert drawn == [("2024", 60), ("2025", 71), ("to date", 82)]
     assert returned["series"][-1]["kind"] == "trailing"
     assert captions == ["Grey: the 12 months to 30 Sep 2026."]
+    unpaid = _table(
+        "capital_allocation",
+        ["2024", "2025", "ttm"],
+        {"dividends": ("currency", [-10.0, -11.0, None]), "buybacks": ("currency", [-50.0] * 3)},
+    )
+    alone = _sections({"body": _body(tables=[GROWTH, unpaid])})["Financial performance and health"]
+    returned, captions = _panel(alone, "Buybacks and dividends")
+    assert returned is not None and "by" not in returned and captions == []
+    assert _ticks(returned) == ["2024", "2025"]  # no trailing dividends, no trailing sum
     shares, captions = _panel(part, "Share count change")
     assert shares is not None and "by" not in shares and captions == []
     assert _ticks(shares) == ["2024", "2025"]

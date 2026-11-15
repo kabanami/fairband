@@ -3343,7 +3343,7 @@ def test_the_bundle_exports_multiple_history() -> None:
     assert "function labelEvery(n, most) { return Math.max(1, Math.ceil(n / (most || 7))); }" in (
         bundle
     )
-    assert "var text = periodLabel(d, i, p.series.length, p.most);" in bundle
+    assert "var text = periodLabel(d, i, p.series.length, p.most, kept);" in bundle
     exported = bundle[bundle.index("global.Fairband = {") :]
     assert "MultipleHistory: MultipleHistory," in exported
     css = _component_file("bundle.css")
@@ -3494,6 +3494,35 @@ def test_the_bundle_draws_a_bar_that_is_not_a_fiscal_year() -> None:
         props = re.search(rf"export interface {name} \{{\n(.*?)\n\}}", declarations, re.DOTALL)
         said = f"  /** fairband: {doc} */\n  {field}"
         assert props is not None and said in props.group(1), (name, field)
+
+
+def test_the_axis_always_prints_the_trailing_twelve_months_tick() -> None:
+    """Spec 2026-11-15 6.5, 6.6, a patch to the shared axis: the tick of a point whose `kind` is
+    `trailing`, "to date", prints as the two ends' do, and a tick within `every` slots of it is
+    dropped, so no two printed ticks stand closer than before; a series with no such point, every
+    chart but a HistoryBars of a table with a trailing column, labels as before. What the axis
+    prints is read in node (tests/web/test_report_charts.py)."""
+    bundle = _component_file("bundle.js")
+    axis = _function(bundle, "XAxis")
+    _in_order(
+        axis,
+        '// fairband: the trailing twelve months\' tick, "to date", is always printed',
+        "var kept = -1;",
+        "p.series.forEach(function (d, i) { if (d.kind === 'trailing') kept = i; });",
+        "var text = periodLabel(d, i, p.series.length, p.most, kept);",
+    )
+    label = _function(bundle, "periodLabel")
+    lead = bundle.index("// fairband: `kept`, the index of the trailing twelve months' point")
+    assert "(spec 2026-11-15 6.5, 6.6)" in bundle[lead : bundle.index(label)]
+    _in_order(
+        label,
+        "function periodLabel(d, i, n, most, kept) {",
+        "if (i === 0 || i === n - 1 || i === kept) return d.period;",
+        "if (i % every !== 0) return '';",
+        "if (n - 1 - i < every) return '';",
+        "if (kept >= 0 && Math.abs(i - kept) < every) return '';\n    return d.period;",
+    )
+    assert _code(bundle).count("periodLabel(") == 2  # its definition and XAxis, its one caller
 
 
 def test_the_report_pages_reads_carry_the_request_header() -> None:
