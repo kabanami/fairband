@@ -466,15 +466,41 @@ def test_a_finding_and_a_guidance_record_name_their_currency() -> None:
         (
             "A record that names none is in the reporting currency, as every record before it:"
             " the currency of the company's latest snapshot as its money reads, USD where the"
-            " company has no snapshot."
+            " company has no snapshot; in a report's Appendix A, the currency of the report's own"
+            " snapshot (16.6)."
         ),
         (
             "Every read of a finding or a guidance record (`findings`, `guidance`, the drawer's"
-            " research read) answers `currency`: the stored code, else the reporting currency;"
-            " none for a figure that is not money."
+            " research read, and for a guidance record a report's Appendix A) answers `currency`:"
+            " the stored code, else the reporting currency; none for a figure that is not money."
+        ),
+        (
+            "The drawer writes a finding's and a guidance record's money figure in that currency,"
+            ' `$` for USD and the code before the number otherwise ("SEK 2,100,000,000"), as the'
+            " report page's Appendix A writes a guidance record's (16.6; spec 2026-11-15 9.5)."
         ),
     ):
         assert words in references, words
+
+
+def test_appendix_a_writes_each_guidance_record_in_its_currency() -> None:
+    """Spec 2026-11-15 9.5: 16.6 states that Appendix A's guidance on file carries each record's
+    currency, the report's own snapshot's for one that names none, which the page writes with each
+    figure and the export's table in a Currency column after the midpoint, its numbers bare, the
+    cell empty for a percent."""
+    sixteen = _section(16)
+    export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
+    assert (
+        "the guidance on file, the company's guidance records written by the report's time, newest"
+        " first, each with its metric, period, low, high, midpoint, the currency of its money"
+        " (16.2: the stored code, else the reporting currency of the report's own snapshot; none"
+        " for a percent), basis and call's date, current or superseded as of the report, and the"
+        " overrides inside the review that cite it; the page writes each money figure in its"
+        ' record\'s currency, `$` for USD and the code before the number otherwise ("SEK 42.00"),'
+        " and the export's table keeps its figures bare, as before, and names the currency in a"
+        ' column of its own after the midpoint, "Currency", the code for a money metric and empty'
+        " for a percent (spec 2026-11-15 9.5);"
+    ) in export
 
 
 def test_a_sensitivity_marks_a_revenue_step_at_the_growth_the_charge_read() -> None:

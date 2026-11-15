@@ -375,6 +375,42 @@ def test_markdown_download(client: TestClient) -> None:
     assert client.get("/api/reports/99").status_code == 404
 
 
+def test_appendix_a_s_guidance_carries_each_record_s_currency(client: TestClient) -> None:
+    """Spec 2026-11-15 9.5: a report's Appendix A gives each guidance record the currency of its
+    money, the stored code, else the snapshot's reporting currency, AAPL's USD, none for a percent;
+    the export's table names it in a Currency column after the midpoint, its numbers bare, the
+    cell empty for the percent."""
+    said = {"period": "2027", "basis": "gaap", "asOf": "2026-10-28", "text": "Guided."}
+    posted = {}
+    for metric, low, high, currency in (
+        ("revenue", 24e9, 25e9, None),
+        ("capex", 2e9, 2e9, "EUR"),
+        ("operating_margin", 0.3, 0.32, None),
+    ):
+        body = said | {"metric": metric, "low": low, "high": high, "source": "response:1/0/content"}
+        r = client.post(
+            "/api/companies/AAPL/guidance", json=body | {"currency": currency}, headers=AGENT
+        )
+        assert r.status_code == 201, r.text
+        posted[metric] = r.json()["id"]
+    report = _published(client, _body(_snapshot_id(client)))
+    guidance = client.get(f"/api/reports/{report['id']}").json()["appendixA"]["guidance"]
+    assert {g["id"]: g["currency"] for g in guidance} == {
+        posted["revenue"]: "USD",
+        posted["capex"]: "EUR",
+        posted["operating_margin"]: None,
+    }
+    text = client.get(f"/api/reports/{report['id']}/markdown").text
+    block = text[text.index("### Guidance on file") : text.index("### Bridge")]
+    assert "| Low | High | Midpoint | Currency | Basis | Call |" in block
+    revenue, capex, margin = (posted[m] for m in ("revenue", "capex", "operating_margin"))
+    assert (
+        f"| {revenue} | revenue | 2027 | 24000000000.0 | 25000000000.0 | 24500000000.0 | USD |"
+    ) in block
+    assert f"| {capex} | capex | 2027 | 2000000000.0 | 2000000000.0 | 2000000000.0 | EUR |" in block
+    assert f"| {margin} | operating_margin | 2027 | 0.3 | 0.32 | 0.31 |  | gaap |" in block
+
+
 def test_the_markdown_renders_when_the_consensus_cannot_be_read(
     client: TestClient, db_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

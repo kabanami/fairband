@@ -13,7 +13,8 @@ And a cite's number in a report's table (spec 2026-11-15 9): ``ReportReader`` ho
 its number in one span there, and nowhere else.
 
 And Appendix A's Snapshot line (the whole-branch review's I1), which the export writes in the
-same words."""
+same words; and its guidance on file, each figure in its record's currency (spec 2026-11-15
+9.5)."""
 
 from typing import Any
 
@@ -176,6 +177,45 @@ def test_appendix_a_s_snapshot_line_names_another_currency_last() -> None:
     assert line(priceDate=None, value=None).endswith(
         " · priced — · valid until 27 Jan 2027 · price $150.00 · value —"
     )
+
+
+def test_appendix_a_s_guidance_writes_each_record_in_its_currency() -> None:
+    """Spec 2026-11-15 9.5: on the report page, Appendix A's "Guidance on file" writes each figure
+    in its record's currency as the server sends it (``render._guidance``): a record in USD with
+    `$`, one with none stored in the report's snapshot's SEK, which the server sends as its code,
+    and a percent as before. report.js passes the snapshot's currency as the code
+    (``P.guidanceTable(a.guidance, a.snapshot.currency)``), which a record naming none falls back
+    to."""
+
+    def record(record_id: int, metric: str, mid: float, currency: str | None) -> dict[str, Any]:
+        return {
+            "id": record_id,
+            "metric": metric,
+            "period": "2027",
+            "low": mid,
+            "high": mid,
+            "midpoint": mid,
+            "currency": currency,
+            "basis": "gaap",
+            "asOf": "2026-10-28",
+            "state": "superseded",
+            "citedBy": [7],
+        }
+
+    guidance = [
+        record(1, "revenue", 2.1e9, "USD"),
+        record(2, "eps", 42.0, "SEK"),
+        record(3, "operating_margin", 0.31, None),
+        record(4, "capex", 5e8, None),  # a payload naming none: the snapshot's code
+    ]
+    table = node("guidanceTable", [guidance, "SEK"])
+    rows = [text(row) for row in elements(table) if row.get("type") == "tr"][1:]
+    assert len(rows) == 4
+    assert "$2,100,000,000" in rows[0] and "SEK" not in rows[0]
+    assert "SEK 42.00" in rows[1] and "midpoint SEK 42.00" in rows[1]
+    assert "31.0%" in rows[2] and "SEK" not in rows[2] and "$" not in rows[2]
+    assert "SEK 500,000,000" in rows[3]
+    assert "cited by override 7" in rows[0]
 
 
 def _override(override_id: int, tag: str, unit: str, old: float, new: float) -> dict[str, Any]:

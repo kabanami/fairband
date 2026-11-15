@@ -48,6 +48,7 @@ from fairband.reports.render import (
     references,
     resting_words,
 )
+from fairband.store.currency import reporting_currency
 from fairband.store.db import transaction
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
@@ -451,6 +452,7 @@ def test_appendix_a_lists_the_guidance_on_file(
             "low": 6.25,
             "high": 6.75,
             "midpoint": 6.5,
+            "currency": "USD",  # a US company's: none stored is the snapshot's reporting currency
             "basis": "gaap",
             "asOf": "2026-10-28",
             "state": "current",  # as of the report: the later record came after it
@@ -463,6 +465,7 @@ def test_appendix_a_lists_the_guidance_on_file(
             "low": 6.0,
             "high": 6.5,
             "midpoint": 6.25,
+            "currency": "USD",
             "basis": "gaap",
             "asOf": "2026-07-28",
             "state": "superseded",
@@ -473,14 +476,77 @@ def test_appendix_a_lists_the_guidance_on_file(
     text = markdown(report, a, [], [], {})
     block = text[text.index("### Guidance on file") : text.index("### Bridge")]
     header = (
-        "| Guidance | Metric | Period | Low | High | Midpoint | Basis | Call | State | Cited by |"
+        "| Guidance | Metric | Period | Low | High | Midpoint | Currency | Basis | Call | State"
+        " | Cited by |"
     )
     assert header in block
     # the call's date in words, as the references write a day (spec 2026-11-15 7)
-    assert f"| {new} | eps | 2027 | 6.25 | 6.75 | 6.5 | gaap | 28 Oct 2026 | current |" in block
-    assert f"| {old} | eps | 2027 | 6.0 | 6.5 | 6.25 | gaap | 28 Jul 2026 | superseded |" in block
+    assert f"| {new} | eps | 2027 | 6.25 | 6.75 | 6.5 | USD | gaap | 28 Oct 2026 | current |" in (
+        block
+    )
+    assert (
+        f"| {old} | eps | 2027 | 6.0 | 6.5 | 6.25 | USD | gaap | 28 Jul 2026 | superseded |"
+        in block
+    )
     assert ISO_DATE.search(block) is None
     assert f"| current | {override_id} |" in block and "| superseded | — |" in block
+
+
+def test_appendix_a_gives_each_guidance_record_its_currency(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 9.1 and 9.5: on FXCO, whose report rests on a snapshot in SEK, a guidance
+    record with no stored currency is in SEK, one recorded in USD in USD, and a percent metric's
+    has none; the export's table keeps its bare numbers and names each in a Currency column after
+    the midpoint, empty for the percent. The SEK is the report's own snapshot's, so a newer
+    snapshot in another currency changes nothing in the report."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    fx = value_company(fx_inputs(), universe_deciles(), policy, TODAY)
+    sid = insert_snapshot(conn, fx, aapl.refresh_id, clock=lambda: NOW)
+
+    def guided(metric: str, low: float, high: float, currency: str | None) -> int:
+        said = f"We guide fiscal 2027 {metric}."
+        return insert_guidance(
+            conn,
+            "FXCO",
+            metric,
+            "2027",
+            low,
+            high,
+            "gaap",
+            date(2026, 10, 28),
+            said,
+            "response:3/0/content",
+            AGENT,
+            NOW,
+            None,
+            currency=currency,
+        )
+
+    eps = guided("eps", 40.0, 44.0, None)
+    revenue = guided("revenue", 2.0e9, 2.2e9, "USD")
+    margin = guided("operating_margin", 0.30, 0.32, None)
+    report = _stored(conn, sid, symbol="FXCO")
+    usd = replace(mature_growth_inputs(), symbol="FXCO")  # a newer snapshot, in USD
+    insert_snapshot(conn, value_company(usd, universe_deciles(), policy, TODAY), aapl.refresh_id)
+    assert reporting_currency(conn, "FXCO") == "USD"  # the drawer's, not the report's
+    a = appendix_a(conn, report, policy)
+    assert a["snapshot"]["currency"] == "SEK"
+    by_id = {g["id"]: g["currency"] for g in a["guidance"]}
+    assert by_id == {eps: "SEK", revenue: "USD", margin: None}
+    text = markdown(report, a, [], [], {})
+    block = text[text.index("### Guidance on file") : text.index("### Bridge")]
+    assert (
+        "| Guidance | Metric | Period | Low | High | Midpoint | Currency | Basis | Call | State"
+        " | Cited by |"
+    ) in block
+    # the numbers stay bare, as before; the code is in its own cell, empty for a percent
+    assert f"| {eps} | eps | 2027 | 40.0 | 44.0 | 42.0 | SEK | gaap | 28 Oct 2026 |" in block
+    assert (
+        f"| {revenue} | revenue | 2027 | 2000000000.0 | 2200000000.0 | 2100000000.0 | USD | gaap |"
+    ) in block
+    assert f"| {margin} | operating_margin | 2027 | 0.3 | 0.32 | 0.31 |  | gaap |" in block
 
 
 def test_appendix_a_without_a_review_or_a_secondary(

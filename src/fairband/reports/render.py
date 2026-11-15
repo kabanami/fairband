@@ -12,9 +12,12 @@ at a figure other than the one entered because a split fell between, the review'
 and the words of the scaling (``inForce``, ``rescaled``; spec 2026-11-15 8), which the export's
 row prints in place of the stored pair, the words after the new figure in brackets; the guidance
 on file, the company's guidance records written by the report's time, newest first, each with its
-figures, its basis, its call's date, whether a record on file by then superseded it, and the
-overrides inside the review that cite it; the bridge, each line with its input's label in a
-reader's words (``overrides.LABELS``); the secondary valuation's form, the currency of its totals
+figures and their currency (``currency``: the record's stored code, else the reporting currency of
+the report's own snapshot, none for a percent; spec 2026-11-15 9.1, 9.5), which the export's
+table names in a column of its own after the midpoint, its figures bare, its basis, its call's
+date, whether a record on file by then superseded it, and the overrides inside the review that
+cite it; the bridge, each line with its input's label in a reader's words
+(``overrides.LABELS``); the secondary valuation's form, the currency of its totals
 (the snapshot's reporting currency) and the rate it ran at (``currency``, ``fxRate``; the
 export's line names both on a company in another currency, spec 2026-11-10 7.6), its drivers
 with the trailing revenue and the terminal return and its projection year by year, or its parts
@@ -88,7 +91,8 @@ from fairband.reports.check import (
     shown,
 )
 from fairband.reports.refs import Resolver, day_words, guidance_cited
-from fairband.store.guidance import guidance_for
+from fairband.store.currency import currency_of
+from fairband.store.guidance import UNITS, guidance_for
 from fairband.store.overrides import OverrideRow, override_row
 from fairband.store.reports import ReportRow
 from fairband.store.reviews import ReviewRow, review_row
@@ -367,7 +371,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
             for i in result.inputs
         ],
         "overrides": overrides,
-        "guidance": _guidance(conn, report, overrides),
+        "guidance": _guidance(conn, report, overrides, currency),
         "bridge": None if review is None else _bridge(review),
         "secondary": None if secondary is None else _secondary(secondary, currency),
         "noSecondary": None if why is None else f"No secondary valuation: {why}",
@@ -538,11 +542,16 @@ def _in_force(review: ReviewRow, row: OverrideRow) -> tuple[dict[str, Any] | Non
 
 
 def _guidance(
-    conn: sqlite3.Connection, report: ReportRow, overrides: Sequence[Mapping[str, Any]]
+    conn: sqlite3.Connection,
+    report: ReportRow,
+    overrides: Sequence[Mapping[str, Any]],
+    currency: str,
 ) -> list[dict[str, Any]]:
     """The company's guidance records on file when the report was published, newest first: each
-    current, or superseded by a record on file by then; and the overrides inside the review whose
-    evidence cites it."""
+    with the currency of its money (``store.currency.currency_of``), the stored code, else
+    ``currency``, the reporting currency of the report's own snapshot, none for a percent (spec
+    2026-11-15 9.1, 9.5); current, or superseded by a record on file by then; and the overrides
+    inside the review whose evidence cites it."""
     on_file = [g for g in guidance_for(conn, report.symbol) if g.created_at <= report.created_at]
     listed = {g.id for g in on_file}
     cited_by: dict[int, list[int]] = {}
@@ -559,6 +568,7 @@ def _guidance(
             "low": g.low,
             "high": g.high,
             "midpoint": g.midpoint,
+            "currency": currency_of(g.currency, UNITS[g.metric], currency),
             "basis": g.basis,
             "asOf": g.as_of.isoformat(),
             "state": "superseded" if g.superseded_by in listed else "current",
@@ -707,13 +717,22 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
         ],
     )
     out += ["", "### Guidance on file", ""]
-    keys = ("id", "metric", "period", "low", "high", "midpoint", "basis")
-    header = ("Guidance", "Metric", "Period", "Low", "High", "Midpoint", "Basis", "Call", "State")
+    # the figures bare, as before, and their currency in a column after the midpoint, empty for a
+    # percent (spec 2026-11-15 9.5)
+    keys = ("id", "metric", "period", "low", "high", "midpoint")
+    header = ("Guidance", "Metric", "Period", "Low", "High", "Midpoint", "Currency", "Basis")
     guided = [
-        (*(g[key] for key in keys), _day_words(g["asOf"]), g["state"], g["citedBy"])
+        (
+            *(g[key] for key in keys),
+            g["currency"] or "",
+            g["basis"],
+            _day_words(g["asOf"]),
+            g["state"],
+            g["citedBy"],
+        )
         for g in a["guidance"]
     ]
-    out += _table((*header, "Cited by"), guided)
+    out += _table((*header, "Call", "State", "Cited by"), guided)
     out += ["", "### Bridge", ""]
     bridge = a["bridge"]
     if bridge is None:  # the mechanical value is the value, unless the snapshot refused

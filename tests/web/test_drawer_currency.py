@@ -2,7 +2,8 @@
 2026-11-10 6.2, 7.4 and 10): a USD figure with `$` as before, any other with its code before the
 number, a total to whole units and a figure a share to two decimals; the rate, the differential and
 the ADR ratio among the inputs, each in its own form; and the line under the head that says what
-the figures are in. The page's own script runs in node after the bundle (``page.mjs``), and the
+the figures are in. A finding's and a guidance record's money in the record's own currency (spec
+2026-11-15 9.5). The page's own script runs in node after the bundle (``page.mjs``), and the
 tests read what its helpers return."""
 
 import json
@@ -217,3 +218,83 @@ def test_the_secondary_path_and_the_guidance_read_in_the_currency() -> None:
     for figure in ("SEK 4.20 – SEK 4.40", "midpoint SEK 4.30", "SEK 2,100,000,000"):
         assert figure in texts, figure
     assert "$4.20 – $4.40" in _texts(_call("guidanceTable", guidance))
+
+
+def _guided(record_id: int, metric: str, low: float, high: float, currency: str | None) -> Any:
+    """A guidance record as the research read sends it, its ``currency`` that of its money (spec
+    2026-11-15 9.1), with the state and the citing overrides Details gives it."""
+    return {
+        "id": record_id,
+        "metric": metric,
+        "period": "2027",
+        "basis": "gaap",
+        "asOf": "2026-10-30",
+        "state": "current",
+        "citedBy": [],
+        "low": low,
+        "high": high,
+        "midpoint": (low + high) / 2,
+        "currency": currency,
+    }
+
+
+def test_the_guidance_table_writes_each_record_in_its_own_currency() -> None:
+    """Spec 2026-11-15 9.5: each record's money in the record's currency, `$` for USD and the code
+    before the number otherwise, the company's code only where the record names none; a percent
+    as before. A US company's records read with `$` as before, and one in EUR with EUR."""
+    guidance = [
+        _guided(1, "eps", 4.2, 4.4, "USD"),
+        _guided(2, "revenue", 2.1e9, 2.1e9, "SEK"),
+        _guided(3, "net_income", 3e8, 3e8, None),
+        _guided(4, "operating_margin", 0.3, 0.32, None),
+    ]
+    texts = _texts(_call("guidanceTable", guidance, "SEK"))
+    for figure in (
+        "$4.20 – $4.40",
+        "midpoint $4.30",
+        "SEK 2,100,000,000",
+        "SEK 300,000,000",  # none named: the company's code
+        "30.0% – 32.0%",
+        "midpoint 31.0%",
+    ):
+        assert figure in texts, figure
+    assert "SEK 4.20 – SEK 4.40" not in texts and "$2,100,000,000" not in texts
+    us = [_guided(1, "eps", 4.2, 4.4, "USD"), _guided(2, "revenue", 2.1e9, 2.1e9, "EUR")]
+    texts = _texts(_call("guidanceTable", us, "USD"))
+    assert "$4.20 – $4.40" in texts and "EUR 2,100,000,000" in texts
+
+
+def _finding(finding_id: int, value: float, unit: str, currency: str | None) -> Any:
+    """A finding as the research read sends it (``agents_api.finding_json``)."""
+    return {
+        "id": finding_id,
+        "symbol": "FXCO",
+        "asOf": "2026-10-30",
+        "text": "Segment revenue.",
+        "value": value,
+        "unit": unit,
+        "period": "2026",
+        "principal": "agent",
+        "actor": "claude-opus-5-5",
+        "client": "claude-code/2.1",
+        "at": "2026-11-01T09:30:00+00:00",
+        "currency": currency,
+        "source": {"kind": "filing", "ref": "10-K 2026, p. 41", "note": None},
+    }
+
+
+def test_the_findings_block_writes_each_finding_in_its_own_currency() -> None:
+    """Spec 2026-11-15 9.5: Details' Findings block writes a finding's money in its currency, a
+    USD finding with `$` and one with no currency named in the company's code; a percent as
+    before. A US company's findings read as before, and one in EUR with EUR."""
+    findings = [
+        _finding(1, 1.5e9, "currency", "USD"),
+        _finding(2, 4.2, "per-share", None),
+        _finding(3, 0.12, "percent", None),
+    ]
+    texts = _texts(_call("findingsList", findings, "SEK"))
+    for figure in (" $1,500,000,000", " SEK 4.20", " 12.0%"):
+        assert figure in texts, figure
+    us = [_finding(1, 1.5e9, "currency", "USD"), _finding(2, 2e9, "currency", "EUR")]
+    texts = _texts(_call("findingsList", us, "USD"))
+    assert " $1,500,000,000" in texts and " EUR 2,000,000,000" in texts

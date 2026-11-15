@@ -2179,12 +2179,20 @@ def test_details_order_is_pinned() -> None:
     table = _function(script, "guidanceTable")
     for text in (
         "'call ', when(g.asOf), ' · ', g.state",
-        "'midpoint ' + guided(g.midpoint, g.metric, code)",
+        # each record's money in its own currency, the company's where it names none (spec
+        # 2026-11-15 9.5)
+        "guidedRange(g, g.currency || code)",
+        "'midpoint ' + guided(g.midpoint, g.metric, g.currency || code)",
         "g.citedBy.length ? h('span', { className: 'caption app-line' },",
         "'cited by override ' + g.citedBy.join(', ')",
     ):
         assert text in table, text
     assert "var found = /^guidance:(\\d+)$/.exec(String(e.ref).trim());" in script
+    # the findings, each figure in the finding's own currency (spec 2026-11-15 9.5)
+    findings = details[details.index("'app-findings'") : details.index("'app-ledger'")]
+    assert "findingsList(rs.findings, code)" in findings
+    listed = _function(script, "findingsList")
+    assert "findingFigure(f.value, f.unit, f.currency || code)" in listed
     # the ledger: the date, the principal and actor, the kind and the summary
     ledger = details[details.index("'app-ledger'") : details.index("h(F.ValidityWindow, {")]
     assert "h(F.PrincipalChip, { principal: e.principal, actor: e.actor, at: localIso(e.at) })" in (

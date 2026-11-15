@@ -184,8 +184,8 @@
      evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the
      line that says what the figures are in (currencyLine), a report's footnote numbers, and
      Request research with a request of its own (asking). The drawer's route sections, the
-     charge's rows, an input's value, the intermediates and the flags it lists are here for the
-     tests, which read them in node (tests/web/page.mjs). */
+     charge's rows, an input's value, the intermediates, the flags it lists and Details' findings
+     are here for the tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
@@ -206,7 +206,7 @@
     chargeRows: chargeRows, matureRoute: matureRoute, revenueRoute: revenueRoute,
     declineRoute: declineRoute, startUpRoute: startUpRoute, intermediates: intermediates,
     briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
-    drawerFlags: drawerFlags
+    drawerFlags: drawerFlags, findingsList: findingsList
   };
 
   function load() {
@@ -899,11 +899,12 @@
      and the secondary come with the detail; the rest is its own read (readResearch). A list with
      nothing in it is left out, but for the notes, which carry the owner's field. The money
      figures of the records are in the company's reporting currency (spec 2026-11-10 7.3 and
-     7.6), the head's value and levels and the secondary valuation's value a share in USD. */
+     7.6), but a finding's and a guidance record's, each in its own currency (spec 2026-11-15
+     9.5); the head's value and levels and the secondary valuation's value a share in USD. */
   function details(body) {
     var r = body.result;
     var im = r.intermediates;
-    var code = body.currency; /* the reporting currency the records' money figures are in */
+    var code = body.currency; /* the reporting currency, a record's that names none */
     var phase = PHASE_NUMBER[r.phase.phase];
     var growth = r.route === 'revenue-growth';
     var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
@@ -1021,18 +1022,7 @@
           }, 'Add a note')),
         draft.error ? h('p', { className: 'caption app-notes__error' }, draft.error) : null),
       rs && rs.findings.length ? block('app-findings', 'Findings',
-        h('ul', { className: 'app-list' }, rs.findings.map(function (f) {
-          return h('li', { key: f.id },
-            h('span', { className: 'caption app-line' }, 'as of ', when(f.asOf),
-              f.period ? ' · ' + f.period : null),
-            h('p', { className: 'body' }, f.text, f.value != null ? h('span',
-              { className: 'figure-sm' }, ' ' + findingFigure(f.value, f.unit, code)) : null),
-            h('p', { className: 'caption app-muted app-source' }, f.source.kind + ' ',
-              h('code', { className: 'fb-tag figure-sm' }, f.source.ref),
-              f.source.note ? ' — ' + f.source.note : null),
-            h('p', { className: 'app-chipline' },
-              h(F.PrincipalChip, { principal: f.principal, actor: f.actor, at: localIso(f.at) })));
-        }))) : null,
+        findingsList(rs.findings, code)) : null,
       rs && rs.ledger.length ? block('app-ledger', 'Ledger',
         h('ul', { className: 'app-list' }, rs.ledger.map(function (e) {
           return h('li', { key: e.id },
@@ -1399,8 +1389,7 @@
 
   /* A guidance figure in its metric's unit (store.guidance.UNITS): EPS to cents, a margin or a
      growth rate as a percent, any other a total in whole units. A point is one figure. The money
-     figures are in `code`, the reporting currency, as the company states them (spec 2026-11-10
-     7.3). */
+     figures are in `code`, the record's currency (spec 2026-11-10 7.3, spec 2026-11-15 9.5). */
   var GUIDED_PERCENT = ['operating_margin', 'revenue_growth', 'eps_growth'];
 
   function guided(v, metric, code) {
@@ -1416,9 +1405,11 @@
 
   /* The guidance on file (spec 18.3, and Appendix A's, 18.4): each record's metric, period and
      basis, its call's date and its state in words, the overrides citing it, then its range and
-     midpoint in the metric's unit, a money figure in `code`, the company's reporting currency.
-     Each record brings its state and the ids citing it, which Details reads from the research
-     records and the report page from Appendix A. */
+     midpoint in the metric's unit, a money figure in the record's own currency, `g.currency`,
+     `$` for USD and the code before the number otherwise, else in `code`, the reporting currency
+     (spec 2026-11-15 9.5). Each record brings its state, the ids citing it and its currency,
+     which Details reads from the research records and the report page from Appendix A, whose
+     record naming none is in the report's snapshot's currency. */
   function guidanceTable(guidance, code) {
     return h('table', { className: 'fb-table app-inputs' },
       h('thead', null, h('tr', null,
@@ -1435,14 +1426,33 @@
             g.citedBy.length ? h('span', { className: 'caption app-line' },
               'cited by override ' + g.citedBy.join(', ')) : null),
           h('td', { className: 'fb-num' },
-            h('span', { className: 'figure-sm app-line' }, guidedRange(g, code)),
+            h('span', { className: 'figure-sm app-line' }, guidedRange(g, g.currency || code)),
             h('span', { className: 'caption app-muted app-line' },
-              'midpoint ' + guided(g.midpoint, g.metric, code))));
+              'midpoint ' + guided(g.midpoint, g.metric, g.currency || code))));
       })));
   }
 
+  /* Details' findings (spec 18.3): each with its date and period, its text and its figure, its
+     source and who wrote it; a money figure in the finding's own currency, `f.currency`, else in
+     `code`, the reporting currency (spec 2026-11-15 9.5). */
+  function findingsList(findings, code) {
+    return h('ul', { className: 'app-list' }, findings.map(function (f) {
+      return h('li', { key: f.id },
+        h('span', { className: 'caption app-line' }, 'as of ', when(f.asOf),
+          f.period ? ' · ' + f.period : null),
+        h('p', { className: 'body' }, f.text, f.value != null ? h('span',
+          { className: 'figure-sm' }, ' ' + findingFigure(f.value, f.unit, f.currency || code))
+          : null),
+        h('p', { className: 'caption app-muted app-source' }, f.source.kind + ' ',
+          h('code', { className: 'fb-tag figure-sm' }, f.source.ref),
+          f.source.note ? ' — ' + f.source.note : null),
+        h('p', { className: 'app-chipline' },
+          h(F.PrincipalChip, { principal: f.principal, actor: f.actor, at: localIso(f.at) })));
+    }));
+  }
+
   /* A finding's value in its unit (store.research.UNITS), a total or a figure a share in `code`,
-     the company's reporting currency, as the statements' figures are. */
+     the finding's currency, `$` for USD and the code before the number otherwise. */
   function findingFigure(v, unit, code) {
     if (unit === 'currency') return whole(v, code);
     if (unit === 'per-share') return money(v, code);
