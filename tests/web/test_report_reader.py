@@ -141,4 +141,26 @@ def test_an_override_scaled_at_a_split_shows_the_figures_in_force_and_the_words(
     assert [r["effect"] for r in records] == [196.92, 12.5]
     [entered] = classed(tree, "app-report__entered")
     assert text(entered) == words  # as the server sends them, never rewritten
-    assert "$11.80" not in str(tree) and "$30.00 →" not in str(tree)
+    assert "$11.80" not in str(tree)
+
+
+def test_a_step_refused_at_a_split_shows_the_figures_in_force_beside_its_refusal() -> None:
+    """A step refused at the figure in force (spec 2026-11-15 8, the Task 7 review's ruling): the
+    record shows the pair in force, $5.90 → −$1.00, its Result the step's refusal, and the words
+    under it, in a review whose last step refused and so has no value."""
+    words = "entered as −$2.00 a share before the 2-for-1 split of 27 Jan 2027"
+    refused = _override(1, "earnings.ntm", "USD a share", 11.8, -2.0)
+    refused |= {"inForce": {"old": 5.9, "new": -1.0}, "rescaled": words}
+    why = "no positive forward anchor"
+    line = {"overrideId": 1, "old": 5.9, "new": -1.0, "delta": None, "refusal": why}
+    a = {
+        "snapshot": {"validUntil": "2027-04-29"},
+        "bridge": {"reviewId": 9, "reviewedValue": None, "refusal": why, "lines": [line]},
+        "overrides": [refused],
+    }
+    tree = node("reportAppendix.overrides", [a], STATIC / "report.js")
+    [record] = [e["props"] for e in elements(tree) if "from" in e["props"]]
+    assert (record["from"], record["to"], record["resultNote"]) == ("$5.90", "−$1.00", why)
+    assert record.get("effect") is None
+    [entered] = classed(tree, "app-report__entered")
+    assert text(entered) == words

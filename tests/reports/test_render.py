@@ -34,7 +34,7 @@ from support.web import TODAY
 
 from fairband.engine.flags import QUALITY_WARNINGS
 from fairband.engine.overrides import Override
-from fairband.engine.review import review_company
+from fairband.engine.review import Review, review_company
 from fairband.engine.route import value_company
 from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.policy import Policy
@@ -1059,26 +1059,62 @@ def test_appendix_a_shows_an_override_scaled_at_a_split_with_both_figures(
     assert f"| {belief} | growth.belief | 0.063 | 0.08 | a stake |" in block
 
 
-def test_an_override_whose_step_refused_at_a_split_shows_as_entered(
+def test_an_override_whose_step_refused_at_a_split_shows_the_figures_in_force(
     conn: sqlite3.Connection, policy: Policy
 ) -> None:
-    """An override the review did not apply shows its stored pair, as before (spec 2026-11-15 8):
-    MGCO's NTM EPS set to −$2.00 before its 2-for-1 split, scaled to −$1.00 after it, where the
-    step refuses ("no positive forward anchor"), though the refused review's JUDGMENT entry still
-    holds the words."""
+    """A step that refused was applied at the figure in force and met its refusal there, so its
+    override shows the pair in force and the words, as the bridge and the JUDGMENT entry read it
+    (spec 2026-11-15 8, the controller's ruling of the Task 7 review): MGCO's NTM EPS set to
+    −$2.00 before its 2-for-1 split, scaled to −$1.00 after it, where the step refuses ("no
+    positive forward anchor"). The same override with no bridge line, as in the empty bridge of a
+    failed review, which the review did not apply, shows its stored pair, the words on file or
+    not."""
     made_on = _made_before_the_split(conn, policy)
     ntm = made_on_mgco(conn, made_on, "earnings.ntm", -2.0, "USD a share")
     store_splits(conn, (SPLIT_DAY, 2, 1))
     review = follow_mgco(conn, policy, AFTER, AFTER)
     [line] = review.bridge
-    assert (line["new"], line["refusal"]) == (-1.0, "no positive forward anchor")
+    assert (line["old"], line["new"], line["refusal"]) == (5.9, -1.0, "no positive forward anchor")
+    words = "entered as −$2.00 a share before the 2-for-1 split of 27 Jan 2027"
     [entry] = [i for i in review.result.inputs if i.tag == "JUDGMENT"]
-    assert (
-        entry.note == "a stake; entered as −$2.00 a share before the 2-for-1 split of 27 Jan 2027"
-    )
+    assert (entry.value, entry.note) == (-1.0, f"a stake; {words}")
     report = _stored(conn, review.snapshot_id, review.id, symbol="MGCO")
     a = appendix_a(conn, report, policy)
     [o] = a["overrides"]
-    assert (o["inForce"], o["rescaled"], o["new"]) == (None, None, -2.0)
+    assert (o["inForce"], o["rescaled"]) == ({"old": 5.9, "new": -1.0}, words)
+    assert (o["old"], o["new"]) == (pytest.approx(11.8), -2.0)  # the stored pair
     text = markdown(report, a, [], [], {})
-    assert f"| {ntm} | earnings.ntm | {o['old']!r} | -2.0 | a stake |" in text
+    assert f"| {ntm} | earnings.ntm | 5.9 | -1.0 ({words}) | a stake |" in text
+    unbridged = Review(review.result, review.mechanical_value, (), review.override_ids)
+    failed = insert_review(conn, unbridged, "MGCO", review.snapshot_id, None, clock=lambda: NOW)
+    a = appendix_a(conn, _stored(conn, review.snapshot_id, failed, symbol="MGCO"), policy)
+    [o] = a["overrides"]
+    assert (o["inForce"], o["rescaled"], o["new"]) == (None, None, -2.0)
+
+
+def test_appendix_a_shows_two_overrides_scaled_at_once_each_with_its_own_figures(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """A review with two overrides scaled at the one 2-for-1 split, a figure a share and a count:
+    MGCO's NTM EPS of $30.00 divided to $15.00 and its committed shares of 60 m multiplied to
+    120 m, each with its own pair in force and its own words, in Appendix A and in the export's
+    rows (spec 2026-11-15 8)."""
+    made_on = _made_before_the_split(conn, policy)
+    ntm = made_on_mgco(conn, made_on, "earnings.ntm", 30.0, "USD a share")
+    committed = made_on_mgco(conn, made_on, "shares.committed", 60e6, "shares", "period-tied")
+    store_splits(conn, (SPLIT_DAY, 2, 1))
+    review = follow_mgco(conn, policy, AFTER, AFTER)
+    assert review.value is not None and review.override_ids == (ntm, committed)
+    report = _stored(conn, review.snapshot_id, review.id, symbol="MGCO")
+    a = appendix_a(conn, report, policy)
+    by = {o["id"]: o for o in a["overrides"]}
+    count = "entered as 60.0M shares before the 2-for-1 split of 27 Jan 2027"
+    assert (by[ntm]["inForce"], by[ntm]["rescaled"]) == ({"old": 5.9, "new": 15.0}, SCALED_WORDS)
+    assert (by[committed]["inForce"], by[committed]["rescaled"]) == (
+        {"old": 0.0, "new": 120e6},
+        count,
+    )
+    assert (by[ntm]["new"], by[committed]["new"]) == (30.0, 60e6)  # the stored figures
+    block = markdown(report, a, [], [], {}).split("### Overrides", 1)[1]
+    assert f"| {ntm} | earnings.ntm | 5.9 | 15.0 ({SCALED_WORDS}) | a stake |" in block
+    assert f"| {committed} | shares.committed | 0.0 | 120000000.0 ({count}) | a stake |" in block

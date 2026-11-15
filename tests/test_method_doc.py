@@ -744,8 +744,9 @@ def test_appendix_a_shows_an_override_scaled_at_a_split_with_both_figures() -> N
     """Spec 2026-11-15 8: 16.6 states that Appendix A shows an override the review applied at a
     split with the review's pair in force, both on the new basis, and the words of the scaling, the
     export after the new figure in brackets and the page under the record, read from the stored
-    review; one the review did not apply so, its stored pair. 14.6's sentence on the note points to
-    it."""
+    review, a step that refused included; one with no bridge line or in a review written before
+    the scaling, its stored pair (the Task 7 review's ruling). 14.6's sentence on the note points
+    to it."""
     sixteen = _section(16)
     export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
     for words in (
@@ -762,11 +763,15 @@ def test_appendix_a_shows_an_override_scaled_at_a_split_with_both_figures() -> N
         "the export writing the words after the new figure in brackets and the page under the record",
         (
             "both read from the stored review, never from the splits on file when the report is"
-            " read, and an override whose step refused, or one in a review written before the"
-            " scaling, shows its figures as stored (spec 2026-11-15 8)"
+            " read; a step that refused was applied at the figure in force and met its refusal"
+            " there, so its override shows the pair in force and the words too, while an override"
+            " with no bridge line, in the empty bridge of a failed fetch or a failed review, or one"
+            " in a review written before the scaling existed, shows its figures as stored (spec"
+            " 2026-11-15 8)"
         ),
     ):
         assert words in export, words
+    assert "an override whose step refused, or one in a review written before" not in export
     fourteen = _section(14)
     follows = fourteen[fourteen.index("### 14.6") : fourteen.index("### 14.7")]
     assert (

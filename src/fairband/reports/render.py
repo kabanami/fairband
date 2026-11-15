@@ -510,15 +510,17 @@ def _in_force(review: ReviewRow, row: OverrideRow) -> tuple[dict[str, Any] | Non
     because a split fell between (method 14.6, spec 2026-11-15 8): the pair in force, the old and
     new of the override's bridge line, both on the new share basis, and the words of the scaling,
     the clause "entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027" that follows
-    the reason in the note of the review's JUDGMENT entry for the input. Both are read from the
-    stored review, never from the splits on file. ``(None, None)`` where the review applied it as
-    entered, a review written before the scaling included, and where its step refused."""
+    the reason in the note of the review's JUDGMENT entry for the input. A step that refused was
+    applied at the figure in force and met its refusal there, so it has both too. Both are read
+    from the stored review, never from the splits on file. ``(None, None)`` where the review
+    applied it as entered, a review written before the scaling included, and where the override
+    has no bridge line (the empty bridge of a failed fetch or a failed review)."""
     line = next((x for x in review.bridge if x["override_id"] == row.id), None)
     judged = (i for i in review.result.inputs if i.tag == "JUDGMENT" and i.name == row.tag)
     note = next((i.note for i in judged), None) or ""
     lead = f"{row.reason}; "
     words = note[len(lead) :] if note.startswith(lead) else ""
-    if line is None or line["refusal"] is not None or not words.startswith(_ENTERED):
+    if line is None or not words.startswith(_ENTERED):
         return None, None
     return {"old": line["old"], "new": line["new"]}, words
 
