@@ -499,12 +499,17 @@
     /* the agent's table and a list item stay on one page (spec 2026-11-06 Tier 2, 18.4) */
     .fb-report__table, .fb-report__list li { break-inside: avoid; }
     /* the agent's table prints whole (spec 2026-11-15 9): neither its scroller nor the reader's
-       card clips it; its body at the body token's 14px on a 20px line, the size the cell's class
-       names, a cite and its number at their screen sizes; its cells wrap as on screen, a cite
-       still with its number */
+       card clips it, and it takes the floor of the type scale, nothing below it, since a cite
+       and its number never wrap and in a table dense with figures those pairs set its width:
+       the cells' words at the label token's 12px on a 16px line, a cite at figure-sm's 12px,
+       the size of its own class, on the cell's line, and its number at the caption's 11px, its
+       screen size; the cells wrap as on screen, a cite still with its number. The type tokens
+       are classes with no variables, so the sizes are written out; the page's style follows
+       the bundle's, so these win over the reader's rules at equal specificity. */
     .fb-report__scroll { overflow: visible; }
     .fb-report { overflow: visible; }
-    .fb-report .fb-report__table td { font-size: 14px; line-height: 20px; }
+    .fb-report .fb-report__table td { font-size: 12px; line-height: 16px; }
+    .fb-report .fb-report__table td .fb-cite { font-size: 12px; }
   }
 </style>
 </head>
