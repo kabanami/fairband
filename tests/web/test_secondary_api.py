@@ -1473,6 +1473,111 @@ def test_the_playbook_s_recipes_depend_on_their_figures(client: TestClient, db_p
     assert client.get(f"/api/derivations/{found[11]['id']}").json()["value"] is None
 
 
+REDERIVE = f"{SAME_VALUE}, or rests on an earlier derivation whose figures changed: derive it again"
+
+
+def test_a_move_is_from_a_value_to_a_value_beyond_the_rounding(
+    client: TestClient, db_path: Path
+) -> None:
+    """Method 16.4 (the controller's ruling 8, the fix wave's cases 5b, 7 and 8): a move counts
+    only from a value to a value, and only beyond the float rounding the evaluation can carry.
+    So the trailing revenue times 3,000,000 (6.84e16) plus 5 less itself, which rounds to 8 and,
+    scaled, to 0; a growth over a difference that crosses zero under the scaling, times nought; a
+    figure scaled to 1.37e308, which overflows at 1.5 times; and the price beside 10^12, which
+    moves the sum by less than its billionth, are each refused, and nothing of the call is
+    stored."""
+    s = f"snapshot:{client.get('/api/companies/AAPL').json()['snapshot']['id']}"
+    price, revenue = f"{s}/price", f"{s}/inputs/revenue_ttm"
+    first = _next_derivation(db_path) + 1  # each case's first, after ``good``
+
+    def at(n: int) -> str:  # the case's n-th derivation, counted from 0
+        return f"derived:{first + n}"
+
+    good = {"operation": "ratio", "a": price, "b": "number:2"}
+    big = [{"operation": "product", "a": revenue, "b": "number:1000000000000"}]
+    big += [{"operation": "product", "a": at(n), "b": "number:1000000000000"} for n in range(23)]
+    big += [
+        {"operation": "product", "a": at(23), "b": "number:1000000000"},  # 2.28e307
+        {"operation": "product", "a": at(24), "b": "number:6"},  # 1.368e308
+        {"operation": "product", "a": at(25), "b": "number:0"},
+    ]
+    cases: list[list[dict[str, Any]]] = [
+        [
+            {"operation": "product", "a": revenue, "b": "number:3"},
+            {"operation": "product", "a": at(0), "b": "number:1000000"},
+            {"operation": "sum", "a": at(1), "b": "number:5"},
+            {"operation": "difference", "a": at(2), "b": at(1)},  # 8, and 0 scaled: rounding
+        ],
+        [
+            {
+                "operation": "difference",
+                "a": "fact:AAPL/revenue/2025",
+                "b": "fact:AAPL/revenue/2024",
+            },
+            {"operation": "growth", "a": price, "b": at(0)},  # none at 1.5 times the 2024 revenue
+            {"operation": "product", "a": at(1), "b": "number:0"},
+        ],
+        big,
+        [{"operation": "sum", "a": price, "b": "number:1000000000000"}],
+    ]
+    for case in cases:
+        r = _derive(client, good, *case)
+        assert (r.status_code, r.json()) == (400, {"detail": SAME_VALUE}), case[-1]
+        _nothing_stored(client)
+
+
+def test_a_derivation_whose_figures_changed_is_a_constant(
+    client: TestClient, db_path: Path
+) -> None:
+    """Method 16.4 (the controller's ruling 8, the fix wave's cases 9 and 10): a nested derivation
+    whose leaves do not all resolve now, or whose tree no longer gives its stored value, is a
+    constant at its stored value, never scaled. So a number over a figure over itself whose year
+    has left the store, and a number added to a figure less a finding of its value, once the
+    figure is restated, are refused with words that say to derive it again, and nothing of the
+    call is stored; derived again from its refs, the figure moves."""
+    price = f"snapshot:{client.get('/api/companies/AAPL').json()['snapshot']['id']}/price"
+    good = {"operation": "ratio", "a": price, "b": "number:2"}
+    (same,) = _money_findings(db_path, "AAPL", (22e9, None))  # fiscal 2025's revenue
+    gap = {"operation": "difference", "a": "fact:AAPL/revenue/2025", "b": same}
+    r = _derive(
+        client,
+        {"operation": "ratio", "a": "fact:AAPL/revenue/2024", "b": "fact:AAPL/revenue/2024"},
+        gap,
+    )
+    assert r.status_code == 201, r.text
+    one, zero = (f"derived:{d['id']}" for d in r.json()["derivations"])
+    with closing(connect(db_path)) as conn:
+        conn.execute("DELETE FROM facts WHERE symbol = 'AAPL' AND fiscal_year = 2024")
+        conn.commit()
+        response = record_response(
+            conn,
+            "fmp",
+            "income-statement",
+            {"symbol": "AAPL", "restated": 1},
+            "AAPL",
+            200,
+            "[]",
+            None,
+            CREATED,
+        )
+        insert_facts(conn, [_fact("income-annual", FY25, "revenue", 23e9, response)])
+    stored = len(client.get("/api/companies/AAPL/ledger").json()["entries"])
+    for refused in (
+        {"operation": "ratio", "a": "number:5", "b": one},  # its year gone
+        {"operation": "sum", "a": zero, "b": "number:5"},  # its revenue restated
+    ):
+        r = _derive(client, good, refused)
+        assert (r.status_code, r.json()) == (400, {"detail": REDERIVE}), refused
+        assert len(client.get("/api/companies/AAPL/ledger").json()["entries"]) == stored
+    first = _next_derivation(db_path)
+    r = _derive(client, gap, {"operation": "sum", "a": f"derived:{first}", "b": "number:5"})
+    assert r.status_code == 201, r.text
+    assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
+        (pytest.approx(1e9), "currency"),
+        (pytest.approx(1e9 + 5), "currency"),
+    ]
+
+
 def test_growth_from_a_base_at_or_below_zero_has_no_value(
     client: TestClient, db_path: Path
 ) -> None:

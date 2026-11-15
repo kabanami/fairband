@@ -53,6 +53,7 @@ from fairband.web.reviews_api import (
     FIXED_NUMBERS,
     GUIDANCE_REF,
     NEEDS_A_FIGURE,
+    REDERIVE,
 )
 from fairband.web.vendor_api import NO_FMP_KEY
 
@@ -172,6 +173,7 @@ REFUSALS = (
     f"{FIXED_NUMBERS}, not <what was written>",
     NEEDS_A_FIGURE,
     DEPENDS_ON_A_FIGURE,
+    REDERIVE,  # the controller's ruling 8
 )
 # The forms the example cites at least once: the history, the grid, the guidance.
 EXAMPLE_FORMS = ("multiple", "sensitivity", "guidance")
@@ -2225,6 +2227,11 @@ def test_a_fixed_number_is_arithmetic_never_a_figure_you_chose() -> None:
             " operand, must move with a stored figure: one that keeps its value whatever its"
             " figures are, a figure times `number:0`, a number over a figure over itself, a figure"
             f' plus a number less the same figure, is refused, "{DEPENDS_ON_A_FIGURE}".'
+        ),
+        (  # the controller's ruling 8: an earlier derivation whose figures changed
+            "Where it rests on an earlier derivation whose figures changed since, or are no"
+            " longer on file, the words go on,"
+            f' "{REDERIVE}": derive that one again from its refs.'
         ),
         "A refusal stores none of the call's derivations.",
         "| `sum`, `difference`, `product` with a number | the stored figure's unit |",

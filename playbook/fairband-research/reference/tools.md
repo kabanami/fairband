@@ -359,9 +359,12 @@ and store nothing:
   or those of a `derived:` operand, must move with a stored figure: one that keeps its value
   whatever its figures are, a figure times `number:0`, a number over a figure over itself, a
   figure plus a number less the same figure, is refused, "a derivation with a fixed number must
-  depend on a stored figure: this one has the same value whatever its figures are". A refusal
-  stores none of the call's derivations. A number has no unit, so the result's follows the stored
-  figure:
+  depend on a stored figure: this one has the same value whatever its figures are". Where it rests
+  on an earlier derivation whose figures changed since, or are no longer on file, the words go on,
+  "a derivation with a fixed number must depend on a stored figure: this one has the same value
+  whatever its figures are, or rests on an earlier derivation whose figures changed: derive it
+  again": derive that one again from its refs. A refusal stores none of the call's derivations. A
+  number has no unit, so the result's follows the stored figure:
 
   | Operation | Unit |
   |---|---|

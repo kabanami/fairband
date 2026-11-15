@@ -139,7 +139,10 @@ A number off the list or written another way is a
 needs a stored figure"; so is a derivation with a value and a number anywhere in its tree that
 depends on no stored figure (``DEPENDS_ON_A_FIGURE``, method 16.4): its tree, read from the stored
 rows (``_Trees``), evaluated from its leaves and again with each group of leaves of one value
-scaled by 1.5, moves for no group (``_independent``). Each stores none of the call's derivations.
+scaled by 1.5, moves from a value to a value beyond the billionth and the float rounding for no
+group (``_no_dependence``); an earlier derivation whose figures changed is a constant there, and
+the refusal then says to derive it again (``REDERIVE``). Each stores none of the call's
+derivations.
 A record in another currency
 (spec 2026-11-15 9.3), a finding's or a guidance record's money figure whose ``Resolved.currency``
 is not the reporting currency (``Resolver.reporting``), in either direction, is kept out of money
@@ -266,11 +269,19 @@ DEPENDS_ON_A_FIGURE = (
     "a derivation with a fixed number must depend on a stored figure: this one has the same value"
     " whatever its figures are"
 )
+# The same refusal where an earlier derivation of the tree was taken as a constant (``_frozen``).
+REDERIVE = (
+    f"{DEPENDS_ON_A_FIGURE}, or rests on an earlier derivation whose figures changed: derive it"
+    " again"
+)
 # The dependence test of a derivation with a fixed number (method 16.4): each group of its tree's
 # leaves is scaled by ``_SCALE``, and a result moves when it moves by more than ``_MOVED`` of the
-# larger of 1 and the unscaled result's size.
+# larger of 1 and the unscaled result's size, and by more than ``_BOUND`` times the float rounding
+# the two evaluations can carry, each value's bound ``_EPS`` of it, carried through each operation.
 _SCALE = 1.5
 _MOVED = 1e-9
+_BOUND = 4.0
+_EPS = 2.0**-52
 _MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
 # The overrides the system dropped at a recompute, each with its reason (``drop_off_route``).
@@ -695,10 +706,10 @@ def add_review_routes(
                     raise HTTPException(400, NEEDS_A_FIGURE)
                 years = d.years if d.operation == "cagr" else None
                 value, unit = _derived(d.operation, a, b, years)
-                if value is not None and _independent(
-                    _node(d.operation, a.tree, b.tree, years, value)
-                ):
-                    raise HTTPException(400, DEPENDS_ON_A_FIGURE)
+                if value is not None:
+                    refusal = _no_dependence(_node(d.operation, a.tree, b.tree, years, value))
+                    if refusal is not None:
+                        raise HTTPException(400, refusal)
                 derivation_id = insert_derivation(
                     conn, symbol, d.operation, d.a, d.b, years, value, unit, writer, at
                 )
@@ -1177,50 +1188,117 @@ class _Trees:
         return _Leaf(value, _foreign(self._resolver, found))
 
 
-def _independent(node: _Node) -> bool:
-    """Whether a derivation holds a fixed number in its tree and depends on no stored figure
-    (method 16.4): its tree evaluated from its leaves by ``derive``'s arithmetic, then again with
-    each group of leaves of one value scaled by ``_SCALE`` in turn, moves for no group (``_moved``).
-    A tree with no fixed number is not tested."""
+# A value of a tree as ``_evaluated`` gives it: the number, ``None`` where it has none, and a bound
+# on its absolute float rounding.
+type _Bounded = tuple[float | None, float]
+
+
+def _no_dependence(node: _Node) -> str | None:
+    """The refusal of a derivation that holds a fixed number in its tree and depends on no stored
+    figure (method 16.4), ``None`` where it depends or holds no number. Its tree is evaluated from
+    its leaves by ``derive``'s arithmetic, then again with each group of leaves of one value scaled
+    by ``_SCALE`` in turn; it depends where, for one group at least, both results have a value and
+    they differ beyond ``_moved``'s floor. A tree with no value is refused. The refusal says to
+    derive again where an earlier derivation of the tree was taken as a constant (``_frozen``)."""
     if not node.numbered:
-        return False
-    base = _evaluated(node, None, {})
-    return not any(_moved(base, _evaluated(node, group, {})) for group in _groups(node, set()))
+        return None
+    memo: dict[_Node, _Bounded] = {}
+    frozen = _frozen(node, node, set(), memo)
+    base, rounding = _evaluated(node, None, frozen, memo)
+    if base is not None:
+        for group in _groups(node, frozen, set()):
+            scaled, more = _evaluated(node, group, frozen, {})
+            if scaled is not None and _moved(base, scaled, rounding + more):
+                return None
+    return REDERIVE if frozen else DEPENDS_ON_A_FIGURE
 
 
-def _groups(tree: _Tree, seen: set[_Node]) -> set[float]:
-    """The values of a tree's leaves, each the value of one group: its stored figures', and a
-    nested derivation's that is not whole."""
+def _frozen(tree: _Tree, top: _Node, frozen: set[_Node], memo: dict[_Node, _Bounded]) -> set[_Node]:
+    """``frozen`` with the nested derivations under ``tree`` that are constants at their stored
+    value: one whose leaves do not all resolve now (not ``whole``), or whose tree, its own frozen
+    derivations constant, no longer gives its stored value within ``_MOVED``. A derivation's
+    descendants are judged before it, so ``memo`` (unscaled) holds final values."""
+    if not isinstance(tree, _Node) or tree in memo or tree in frozen:
+        return frozen
+    if tree is not top and not tree.whole:
+        frozen.add(tree)
+        return frozen
+    _frozen(tree.a, top, frozen, memo)
+    _frozen(tree.b, top, frozen, memo)
+    value, _ = _evaluated(tree, None, frozen, memo)
+    stored = tree.value
+    if tree is not top and (
+        stored is None or value is None or abs(value - stored) > _MOVED * max(1.0, abs(stored))
+    ):
+        frozen.add(tree)
+    return frozen
+
+
+def _groups(tree: _Tree, frozen: set[_Node], seen: set[_Node]) -> set[float]:
+    """The values of a tree's leaves, each the value of one group: its stored figures'. A frozen
+    derivation is a constant and gives none."""
     if isinstance(tree, float):
         return set()
-    if isinstance(tree, _Leaf) or not tree.whole:
+    if isinstance(tree, _Leaf):
         return set() if tree.value is None else {tree.value}
-    if tree in seen:
+    if tree in frozen or tree in seen:
         return set()
     seen.add(tree)
-    return _groups(tree.a, seen) | _groups(tree.b, seen)
+    return _groups(tree.a, frozen, seen) | _groups(tree.b, frozen, seen)
 
 
-def _evaluated(tree: _Tree, group: float | None, memo: dict[_Node, float | None]) -> float | None:
+def _evaluated(
+    tree: _Tree, group: float | None, frozen: set[_Node], memo: dict[_Node, _Bounded]
+) -> _Bounded:
     """A tree's value from its leaves by ``derive``'s arithmetic (``_value``), the leaves of the
-    value ``group`` scaled by ``_SCALE``, a nested derivation that is not whole a leaf at its
-    value; ``None`` where it has none."""
-    if isinstance(tree, float):  # a fixed number is never scaled
-        return tree
-    if isinstance(tree, _Leaf) or not tree.whole:
-        return None if tree.value is None else tree.value * (_SCALE if tree.value == group else 1)
+    value ``group`` scaled by ``_SCALE``, a frozen derivation a constant at its stored value, with
+    a bound on its float rounding (``_rounded``)."""
+    if isinstance(tree, float):  # a fixed number is exact and never scaled
+        return tree, 0.0
+    if isinstance(tree, _Leaf):
+        if tree.value is None:
+            return None, 0.0
+        value = tree.value * (_SCALE if tree.value == group else 1)
+        return value, abs(value) * _EPS
+    if tree in frozen:
+        return tree.value, 0.0
     if tree not in memo:
-        x, y = _evaluated(tree.a, group, memo), _evaluated(tree.b, group, memo)
-        memo[tree] = None if x is None or y is None else _value(tree.operation, x, y, tree.years)
+        (x, ex), (y, ey) = (_evaluated(t, group, frozen, memo) for t in (tree.a, tree.b))
+        if x is None or y is None:
+            memo[tree] = None, 0.0
+        else:
+            memo[tree] = _rounded(tree.operation, x, ex, y, ey, tree.years)
     return memo[tree]
 
 
-def _moved(base: float | None, scaled: float | None) -> bool:
-    """Whether a scaled result moved from the base: a value where there was none or none where
-    there was one, or a value more than ``_MOVED`` of the larger of 1 and the base's size away."""
-    if base is None or scaled is None:
-        return (base is None) != (scaled is None)
-    return abs(scaled - base) > _MOVED * max(1.0, abs(base))
+def _rounded(
+    operation: Operation, x: float, ex: float, y: float, ey: float, years: int | None
+) -> _Bounded:
+    """The operation over ``x`` and ``y`` (``_value``) and a first-order bound on its absolute
+    float rounding, ``ex`` and ``ey`` being the operands': a sum or a difference adds them, a
+    product weighs each by the other operand, a ratio, a growth and a cagr carry the quotient's;
+    each result rounds by ``_EPS`` of its size."""
+    value = _value(operation, x, y, years)
+    if value is None:
+        return None, 0.0
+    if operation in ("sum", "difference"):
+        bound = ex + ey
+    elif operation == "product":
+        bound = abs(x) * ey + abs(y) * ex
+    else:  # a ratio, a growth and a cagr divide x by a y that is not zero
+        q = x / y
+        bound = ex / abs(y) + abs(x) / abs(y) * ey / abs(y) + abs(q) * _EPS
+        if operation == "cagr" and years is not None and years > 1:
+            root = value + 1  # q to the 1/years
+            bound = root / q / years * bound + abs(root) * _EPS if q > 0 else math.inf
+    bound += abs(value) * _EPS
+    return value, math.inf if math.isnan(bound) else bound
+
+
+def _moved(base: float, scaled: float, rounding: float) -> bool:
+    """Whether a scaled result moved from the base: by more than ``_MOVED`` of the larger of 1 and
+    the base's size, and by more than ``_BOUND`` times the rounding the two can carry."""
+    return abs(scaled - base) > max(_MOVED * max(1.0, abs(base)), _BOUND * rounding)
 
 
 @dataclass(frozen=True)

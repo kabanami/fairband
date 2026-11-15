@@ -12,7 +12,7 @@ from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
 from fairband.reports.check import FAILURES
 from fairband.store.guidance import METRICS
-from fairband.web.reviews_api import DEPENDS_ON_A_FIGURE, FIXED_NUMBERS, NEEDS_A_FIGURE
+from fairband.web.reviews_api import DEPENDS_ON_A_FIGURE, FIXED_NUMBERS, NEEDS_A_FIGURE, REDERIVE
 
 METHOD = Path(__file__).parent.parent / "docs" / "method.md"
 
@@ -1040,10 +1040,12 @@ def test_a_fixed_number_is_an_operand_of_derive_alone() -> None:
 
 
 def test_a_derivation_with_a_number_depends_on_a_stored_figure() -> None:
-    """The whole-branch review's C1 (the controller's ruling 6): 16.4 names the third refusal in
-    the server's words, the tree read from the stored rows, the leaves and their groups, the
-    evaluation and the scaling, the nested derivation that cannot be resolved, a derivation with
-    no value and a tree with no number left untested, the recipes, and the two edges."""
+    """The whole-branch review's C1 (the controller's rulings 6 and 8): 16.4 names the third
+    refusal in the server's words, with its words for a tree that rests on a changed derivation;
+    the tree read from the stored rows, the leaves and their groups, the evaluation and the
+    scaling, a move from a value to a value beyond the float rounding, the nested derivation taken
+    as a constant, a derivation with no value and a tree with no number left untested, the
+    recipes, the edge beside a large number, and what the rule cannot refuse."""
     derivations = _section(16)
     derivations = derivations[derivations.index("### 16.4") : derivations.index("### 16.5")]
     for words in (
@@ -1073,20 +1075,31 @@ def test_a_derivation_with_a_number_depends_on_a_stored_figure() -> None:
             " same ref twice, or two refs of one figure (the price and its input, a `fact:` line"
             " and its `table:` cell), count once."
         ),
+        # the controller's ruling 8: R1, a move beyond the float rounding; R2, from a value to a
+        # value; R3, an earlier derivation whose figures changed is a constant
         (
             "The tree is evaluated from its leaves by `derive`'s own arithmetic, not from the"
             " nested derivations' stored values, then again with each group's value × 1.5 in turn;"
             " the derivation depends on a stored figure where, for one group at least, the result"
-            " moves: no value where it had one, or the reverse, or a value more than a billionth"
-            " (1e-9) of the larger of 1 and the unscaled result's size away."
+            " moves: it has a value both times, and the two differ by more than a billionth (1e-9)"
+            " of the larger of 1 and the unscaled result's size and by more than four times the"
+            " float rounding the two can carry, a bound on each value's rounding carried through"
+            " each operation, so a sum that rounds past 2^53 does not move."
         ),
         (
-            "A nested derivation whose own leaves cannot all be resolved now is one leaf at its"
-            " stored value."
+            "A value that turns into none under the scaling, a growth over a base that crosses zero"
+            " or an overflow, is no move, and a tree with no value is refused."
+        ),
+        (
+            "A nested derivation whose own leaves do not all resolve now, or whose tree no longer"
+            " gives its stored value (a figure restated since), is a constant at its stored value"
+            " and is never scaled."
         ),
         (
             "A derivation that holds a number and depends on no stored figure is refused,"
-            f' "{DEPENDS_ON_A_FIGURE}".'
+            f' "{DEPENDS_ON_A_FIGURE}"; where an earlier derivation of its tree is such a constant,'
+            f' "{REDERIVE}", and that one, derived again from its refs, reads its figures as they'
+            " are now."
         ),
         (
             "A derivation with no value is not tested, being no figure a report cites (16.3) nor an"
@@ -1101,12 +1114,22 @@ def test_a_derivation_with_a_number_depends_on_a_stored_figure() -> None:
         ),
         (
             "A number beside a figure a billion times smaller is refused too, the figure moving the"
-            " result by less than the billionth (the price plus `number:1000000000000`), and a"
-            " dependence made to sit above the billionth and below a cite's rounding passes."
+            " result by less than the billionth (the price plus `number:1000000000000`)."
+        ),
+        # the controller's ruling 8: what is left, in one plain sentence
+        (
+            "The rule refuses a constant, and it cannot refuse a figure built to sit near one or"
+            " made one by stored figures that cancel among themselves; the references list shows"
+            " each cited derivation."
         ),
     ):
         assert words in derivations, words
-    assert "Two refusals, each a 400" not in derivations
+    for old in (
+        "Two refusals, each a 400",
+        "is one leaf at its stored value",
+        "no value where it had one, or the reverse",
+    ):
+        assert old not in derivations, old
 
 
 def test_a_report_is_stored_on_the_earliest_snapshot_its_cites_rest_on() -> None:
