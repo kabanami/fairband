@@ -312,7 +312,12 @@ whole numbers 0 to 12, then 52, 100, 365, 1000 and each further power of ten up 
 `difference` or a `product` with a number, and a `ratio` of a figure over a number, keep the
 figure's unit; a `ratio` of a number over a figure has none. Any other number is refused, "a fixed
 number is one of 0 to 12, 52, 100, 365 or a power of ten up to 1,000,000,000,000, not <what was
-written>", and so are two numbers in one derivation, "a derivation needs a stored figure".
+written>", and so are two numbers in one derivation, "a derivation needs a stored figure". A
+derivation with a number anywhere in it, its own operands or those of a `derived:` operand, must
+move with a stored figure. One that keeps its value whatever its figures are is a number you chose
+passed off as a sourced one, and is refused, "a derivation with a fixed number must depend on a
+stored figure: this one has the same value whatever its figures are": a figure times `number:0`, a
+number over a figure over itself, a figure plus a number less the same figure.
 
 A fixed number is a number of arithmetic, never a figure you chose: the server takes no other, and
 a multiple, a rate or a threshold you assume is not arithmetic. A threshold goes on its kill

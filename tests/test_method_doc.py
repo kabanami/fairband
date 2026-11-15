@@ -12,7 +12,7 @@ from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
 from fairband.reports.check import FAILURES
 from fairband.store.guidance import METRICS
-from fairband.web.reviews_api import FIXED_NUMBERS, NEEDS_A_FIGURE
+from fairband.web.reviews_api import DEPENDS_ON_A_FIGURE, FIXED_NUMBERS, NEEDS_A_FIGURE
 
 METHOD = Path(__file__).parent.parent / "docs" / "method.md"
 
@@ -1037,6 +1037,76 @@ def test_a_fixed_number_is_an_operand_of_derive_alone() -> None:
     assert "a percent as points (100)" not in derivations
     assert FIXED_NUMBERS in derivations
     assert NEEDS_A_FIGURE in derivations
+
+
+def test_a_derivation_with_a_number_depends_on_a_stored_figure() -> None:
+    """The whole-branch review's C1 (the controller's ruling 6): 16.4 names the third refusal in
+    the server's words, the tree read from the stored rows, the leaves and their groups, the
+    evaluation and the scaling, the nested derivation that cannot be resolved, a derivation with
+    no value and a tree with no number left untested, the recipes, and the two edges."""
+    derivations = _section(16)
+    derivations = derivations[derivations.index("### 16.4") : derivations.index("### 16.5")]
+    for words in (
+        (
+            "Three refusals, each a 400 that stores none of the call's derivations, as an"
+            " unresolved reference does"
+        ),
+        (
+            'and a derivation with a fixed number whose value depends on no stored figure, "a'
+            " derivation with a fixed number must depend on a stored figure: this one has the same"
+            ' value whatever its figures are" (below).'
+        ),
+        (
+            "A fixed number serves arithmetic on a stored figure and never stands for a number the"
+            " agent chose (spec 2026-11-15 4), so a derivation with a number anywhere in its tree"
+            " must depend on a stored figure"
+        ),
+        (
+            "The tree is the derivation's two operands and, for a `derived:` operand, the operands"
+            " of its stored derivation, nested ones too, as the snapshots it rests on are read"
+            " (16.2); a call's derivations are stored one by one, so a later one of the call may"
+            " name an earlier one, and its tree is read alike."
+        ),
+        (
+            "The tree's leaves are its operands that are neither a number nor a derivation, stored"
+            " figures each resolved now, and leaves that resolve to one value are one group, so the"
+            " same ref twice, or two refs of one figure (the price and its input, a `fact:` line"
+            " and its `table:` cell), count once."
+        ),
+        (
+            "The tree is evaluated from its leaves by `derive`'s own arithmetic, not from the"
+            " nested derivations' stored values, then again with each group's value × 1.5 in turn;"
+            " the derivation depends on a stored figure where, for one group at least, the result"
+            " moves: no value where it had one, or the reverse, or a value more than a billionth"
+            " (1e-9) of the larger of 1 and the unscaled result's size away."
+        ),
+        (
+            "A nested derivation whose own leaves cannot all be resolved now is one leaf at its"
+            " stored value."
+        ),
+        (
+            "A derivation that holds a number and depends on no stored figure is refused,"
+            f' "{DEPENDS_ON_A_FIGURE}".'
+        ),
+        (
+            "A derivation with no value is not tested, being no figure a report cites (16.3) nor an"
+            " operand of another, so a ratio over `number:0` is stored with none, as before; and"
+            " neither is a tree with no number, so a figure over itself, plus itself or less itself"
+            " computes as before."
+        ),
+        (
+            "Each recipe of the playbook moves with its figure: a complement, an average, a change"
+            " of sign, a cell scaled by a power of ten, the PEG, the cycle gap's half, one plus a"
+            " growth."
+        ),
+        (
+            "A number beside a figure a billion times smaller is refused too, the figure moving the"
+            " result by less than the billionth (the price plus `number:1000000000000`), and a"
+            " dependence made to sit above the billionth and below a cite's rounding passes."
+        ),
+    ):
+        assert words in derivations, words
+    assert "Two refusals, each a 400" not in derivations
 
 
 def test_a_kill_criterion_holds_a_threshold_cited_in_its_section_alone() -> None:

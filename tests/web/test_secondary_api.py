@@ -1178,21 +1178,25 @@ def _nothing_stored(client: TestClient) -> None:
 @pytest.mark.parametrize("n", [0, 1, 12, 52, 100, 365, 1000, 1_000_000_000_000])
 def test_a_fixed_number_is_an_operand(client: TestClient, n: int) -> None:
     """Spec 2026-11-15 7.1: one operand may be a fixed number of the server's list, written
-    ``number:<n>`` where a ref goes; the derivation keeps the operand as written."""
+    ``number:<n>`` where a ref goes; the derivation keeps the operand as written. The figure is
+    the trailing revenue, $22.8 bn, which moves the sum by more than a billionth of it (method
+    16.4) beside each number of the list."""
     snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
-    price = f"snapshot:{snapshot_id}/price"
+    revenue = f"snapshot:{snapshot_id}/inputs/revenue_ttm"
     r = _derive(
         client,
-        {"operation": "sum", "a": price, "b": f"number:{n}"},
-        {"operation": "sum", "a": f"number:{n}", "b": price},
+        {"operation": "sum", "a": revenue, "b": f"number:{n}"},
+        {"operation": "sum", "a": f"number:{n}", "b": revenue},
     )
     assert r.status_code == 201, r.text
     found = r.json()["derivations"]
-    assert [(d["value"], d["unit"]) for d in found] == [(pytest.approx(150.0 + n), "per-share")] * 2
+    assert [(d["value"], d["unit"]) for d in found] == [
+        (pytest.approx(22_800e6 + n), "currency")
+    ] * 2
     stored = client.get(f"/api/derivations/{found[0]['id']}").json()
-    assert (stored["a"], stored["b"]) == (price, f"number:{n}")
+    assert (stored["a"], stored["b"]) == (revenue, f"number:{n}")
     entries = client.get("/api/companies/AAPL/ledger").json()["entries"]
-    assert entries[-1]["summary"] == f"sum of {price} and number:{n}"
+    assert entries[-1]["summary"] == f"sum of {revenue} and number:{n}"
 
 
 @pytest.mark.parametrize("side", ["a", "b"])
@@ -1300,6 +1304,173 @@ def test_a_derivation_built_on_a_number_is_an_operand(client: TestClient) -> Non
     assert [(d["value"], d["unit"]) for d in r.json()["derivations"]] == [
         (pytest.approx(0.91 * 22_800e6), "currency")  # the revenue after the required return
     ]
+
+
+SAME_VALUE = (
+    "a derivation with a fixed number must depend on a stored figure: this one has the same value"
+    " whatever its figures are"
+)
+
+
+def _next_derivation(db_path: Path) -> int:
+    """The id the next stored derivation takes, so a derivation can name an earlier one of its own
+    call, whose derivations are stored one by one."""
+    with closing(connect(db_path)) as conn:
+        (found,) = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM derivations").fetchone()
+    return int(found)
+
+
+def test_a_derivation_with_a_number_must_depend_on_a_stored_figure(
+    client: TestClient, db_path: Path
+) -> None:
+    """Method 16.4 (the whole-branch review's C1): a derivation whose tree holds a fixed number and
+    whose value is the same whatever its figures are is refused, and none of the call's
+    derivations is stored, the valid one before it included. The tree is read from the stored
+    rows, so an earlier derivation of the same call is in it; the price and its input are two
+    refs of one figure, scaled together."""
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    x, same = f"snapshot:{snapshot_id}/price", f"snapshot:{snapshot_id}/inputs/price"
+    good = {"operation": "difference", "a": "number:1", "b": "policy:required_return"}
+    earlier = f"derived:{_next_derivation(db_path) + 1}"  # the case's first, after ``good``
+    cases: list[list[dict[str, Any]]] = [
+        [{"operation": "product", "a": x, "b": "number:0"}],
+        [{"operation": "ratio", "a": "number:0", "b": x}],
+        [
+            {"operation": "ratio", "a": x, "b": x},
+            {"operation": "ratio", "a": "number:5", "b": earlier},
+        ],
+        [
+            {"operation": "sum", "a": x, "b": "number:5"},
+            {"operation": "difference", "a": earlier, "b": x},
+        ],
+        [
+            {"operation": "difference", "a": x, "b": same},
+            {"operation": "sum", "a": earlier, "b": "number:5"},
+        ],
+        [
+            {"operation": "sum", "a": x, "b": "number:5"},
+            {"operation": "difference", "a": earlier, "b": same},
+        ],
+    ]
+    for case in cases:
+        r = _derive(client, good, *case)
+        assert (r.status_code, r.json()) == (400, {"detail": SAME_VALUE}), case
+        _nothing_stored(client)
+
+
+def test_a_nested_derivation_of_an_earlier_call_is_read_from_its_leaves(
+    client: TestClient,
+) -> None:
+    """Method 16.4: a ``derived:`` operand stored by an earlier call is read through its stored
+    operands, nested ones too, so a fixed number over a figure over itself, or a number in the
+    tree that a cancelling figure leaves unmoved, one or two derivations deep, is refused, while
+    the earlier call's derivations stay stored."""
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    x = f"snapshot:{snapshot_id}/price"
+    r = _derive(
+        client,
+        {"operation": "ratio", "a": x, "b": x},  # 1, with no number: as before
+        {"operation": "sum", "a": x, "b": "number:5"},  # 155, which moves with the price
+        {"operation": "difference", "a": x, "b": x},  # 0, with no number: as before
+        {"operation": "sum", "a": x, "b": x},  # 300
+    )
+    assert r.status_code == 201, r.text
+    one, plus, zero, twice = (f"derived:{d['id']}" for d in r.json()["derivations"])
+    r = _derive(client, {"operation": "sum", "a": plus, "b": x})  # 305, which moves too
+    assert r.status_code == 201, r.text
+    more = f"derived:{r.json()['derivations'][0]['id']}"
+    for refused in (
+        {"operation": "ratio", "a": "number:5", "b": one},
+        {"operation": "product", "a": one, "b": "number:12"},
+        {"operation": "difference", "a": plus, "b": x},
+        {"operation": "sum", "a": zero, "b": "number:3"},
+        {"operation": "product", "a": plus, "b": zero},  # the number one derivation deep
+        {"operation": "difference", "a": more, "b": twice},  # two deep: 5
+    ):
+        r = _derive(client, {"operation": "ratio", "a": x, "b": "number:2"}, refused)
+        assert (r.status_code, r.json()) == (400, {"detail": SAME_VALUE}), refused
+    ids = [e["refId"] for e in client.get("/api/companies/AAPL/ledger").json()["entries"]]
+    assert sorted(ids) == [1, 2, 3, 4, 5]
+
+
+def test_the_review_s_chosen_figures_cannot_be_built(client: TestClient, db_path: Path) -> None:
+    """The whole-branch review's ``test_manufacture``: a chosen $100 a share, 5% and 15x, each a
+    stored figure times nought or over itself and then a number added, stop at the first step
+    that holds a number and moves with no figure; nothing of the call is stored."""
+    s = f"snapshot:{client.get('/api/companies/AAPL').json()['snapshot']['id']}"
+    value, rate = f"{s}/value", "policy:required_return"
+    earlier = f"derived:{_next_derivation(db_path)}"  # each chain's first
+    chains: list[list[dict[str, Any]]] = [
+        [{"operation": "product", "a": value, "b": "number:0"}],
+        [{"operation": "product", "a": rate, "b": "number:0"}],
+        [
+            {"operation": "ratio", "a": value, "b": value},
+            {"operation": "product", "a": earlier, "b": "number:12"},
+        ],
+        [
+            {"operation": "difference", "a": value, "b": value},
+            {"operation": "sum", "a": earlier, "b": "number:100"},
+        ],
+    ]
+    for chain in chains:
+        r = _derive(client, *chain)
+        assert (r.status_code, r.json()) == (400, {"detail": SAME_VALUE}), chain
+    assert client.get("/api/derivations/1").status_code == 404
+
+
+def test_the_playbook_s_recipes_depend_on_their_figures(client: TestClient, db_path: Path) -> None:
+    """Method 16.4: every recipe of the playbook moves with its figure and computes as before: a
+    complement, an average, a change of sign, a cell with no unit times 1,000,000, the PEG by two
+    ratios, the cycle gap's half and one plus a growth. A ratio over ``number:0`` has no value
+    either way and is stored as before: a derivation with no value is not tested, being no figure
+    a report cites nor an operand of another. With no number in its tree a figure over itself,
+    plus itself and less itself compute as before (the review's deferred minor 4)."""
+    s = f"snapshot:{client.get('/api/companies/AAPL').json()['snapshot']['id']}"
+    price, eps = f"{s}/price", f"{s}/inputs/eps_ttm"
+    first = _next_derivation(db_path)
+
+    def at(n: int) -> str:  # the call's n-th derivation, counted from 0
+        return f"derived:{first + n}"
+
+    r = _derive(
+        client,
+        {"operation": "difference", "a": "number:1", "b": "policy:required_return"},
+        {"operation": "sum", "a": "fact:AAPL/revenue/2025", "b": "fact:AAPL/revenue/2024"},
+        {"operation": "ratio", "a": at(1), "b": "number:2"},  # the average of two years
+        {"operation": "difference", "a": "number:0", "b": eps},
+        {"operation": "product", "a": f"{s}/intermediates/belief/rate", "b": "number:1000000"},
+        {"operation": "ratio", "a": price, "b": eps},  # 5: a P/E
+        {"operation": "growth", "a": f"{s}/inputs/ntm_eps", "b": eps},  # 6: a growth rate
+        {"operation": "ratio", "a": at(5), "b": at(6)},  # 7: a hundred times the PEG
+        {"operation": "ratio", "a": at(7), "b": "number:100"},  # the PEG
+        {"operation": "ratio", "a": eps, "b": "number:2"},  # a half
+        {"operation": "sum", "a": "number:1", "b": at(6)},  # one plus a growth
+        {"operation": "ratio", "a": price, "b": "number:0"},
+        {"operation": "ratio", "a": price, "b": price},
+        {"operation": "sum", "a": price, "b": price},
+        {"operation": "difference", "a": price, "b": price},
+    )
+    assert r.status_code == 201, r.text
+    found = r.json()["derivations"]
+    growth = 5.90 / 5.30 - 1
+    assert [(d["value"], d["unit"]) for d in found] == [
+        (pytest.approx(0.91), "percent"),
+        (pytest.approx(42e9), "currency"),
+        (pytest.approx(21e9), "currency"),
+        (pytest.approx(-5.30), "per-share"),
+        (pytest.approx(63_000.0), None),
+        (pytest.approx(150.0 / 5.30), "multiple"),
+        (pytest.approx(growth), "percent"),
+        (pytest.approx(150.0 / 5.30 / growth), None),
+        (pytest.approx(150.0 / 5.30 / growth / 100), None),
+        (pytest.approx(2.65), "per-share"),
+        (pytest.approx(1 + growth), "percent"),
+        (None, None),  # a division by zero, stored as before
+        (1.0, "multiple"),
+        (300.0, "per-share"),
+        (0.0, "per-share"),
+    ]
+    assert client.get(f"/api/derivations/{found[11]['id']}").json()["value"] is None
 
 
 def test_growth_from_a_base_at_or_below_zero_has_no_value(

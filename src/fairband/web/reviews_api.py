@@ -136,7 +136,11 @@ figure's unit, as does a ratio of the figure over it, and a ratio of it over the
 A number off the list or written another way is a
 400, "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to
 1,000,000,000,000, not <what was written>", and two numbers in one derivation a 400, "a derivation
-needs a stored figure"; each stores none of the call's derivations. A record in another currency
+needs a stored figure"; so is a derivation with a value and a number anywhere in its tree that
+depends on no stored figure (``DEPENDS_ON_A_FIGURE``, method 16.4): its tree, read from the stored
+rows (``_Trees``), evaluated from its leaves and again with each group of leaves of one value
+scaled by 1.5, moves for no group (``_independent``). Each stores none of the call's derivations.
+A record in another currency
 (spec 2026-11-15 9.3), a finding's or a guidance record's money figure whose ``Resolved.currency``
 is not the reporting currency (``Resolver.reporting``), in either direction, is kept out of money
 arithmetic until it is converted: with a ``currency`` or ``per-share`` figure that is not a record
@@ -207,6 +211,7 @@ from fairband.reports.refs import (
     fact_ref,
     fixed_number,
     guidance_cited,
+    record_id_of,
     same_snapshot,
 )
 from fairband.store.currency import MONEY_UNITS
@@ -227,6 +232,7 @@ from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews
 from fairband.store.secondary import (
     GRID_ROWS,
     BalanceSource,
+    DerivationRow,
     Operation,
     SecondaryRow,
     cannot_fix,
@@ -251,6 +257,15 @@ FIXED_NUMBERS = (
     "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to 1,000,000,000,000"
 )
 NEEDS_A_FIGURE = "a derivation needs a stored figure"
+DEPENDS_ON_A_FIGURE = (
+    "a derivation with a fixed number must depend on a stored figure: this one has the same value"
+    " whatever its figures are"
+)
+# The dependence test of a derivation with a fixed number (method 16.4): each group of its tree's
+# leaves is scaled by ``_SCALE``, and a result moves when it moves by more than ``_MOVED`` of the
+# larger of 1 and the unscaled result's size.
+_SCALE = 1.5
+_MOVED = 1e-9
 _MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
 # The overrides the system dropped at a recompute, each with its reason (``drop_off_route``).
@@ -655,8 +670,9 @@ def add_review_routes(
 
     @app.post("/api/companies/{symbol}/derivations", status_code=201)
     def post_derivations(symbol: str, body: DerivationsPost, writer: WriterOf) -> dict[str, Any]:
-        """Compute and store each derivation; an unresolved reference, a fixed number off the list
-        or two numbers in one derivation stores none of them."""
+        """Compute and store each derivation; an unresolved reference, a fixed number off the list,
+        two numbers in one derivation, or a fixed number in a derivation that depends on no stored
+        figure stores none of them."""
         if not body.derivations:
             raise HTTPException(400, "a derive call needs a derivation")
         if any(d.operation == "cagr" and (d.years or 0) < 1 for d in body.derivations):
@@ -666,13 +682,18 @@ def add_review_routes(
             symbol = exchange_symbol(symbol)
             latest = latest_snapshot(conn, symbol)
             resolver = Resolver(conn, symbol, effective(conn, policy), tax)
+            trees = _Trees(conn, resolver)
             answers = []
             for d in body.derivations:
-                a, b = _operand(resolver, d.a), _operand(resolver, d.b)
+                a, b = _operand(resolver, trees, d.a), _operand(resolver, trees, d.b)
                 if a.fixed and b.fixed:
                     raise HTTPException(400, NEEDS_A_FIGURE)
                 years = d.years if d.operation == "cagr" else None
                 value, unit = _derived(d.operation, a, b, years)
+                if value is not None and _independent(
+                    _node(d.operation, a.tree, b.tree, years, value)
+                ):
+                    raise HTTPException(400, DEPENDS_ON_A_FIGURE)
                 derivation_id = insert_derivation(
                     conn, symbol, d.operation, d.a, d.b, years, value, unit, writer, at
                 )
@@ -1024,31 +1045,162 @@ def _dollars(x: float) -> str:
     return f"{'−' if x < 0 else ''}${abs(x):,.2f}"
 
 
+# A derivation's tree (``_Trees``): a fixed number as its float, a stored figure as a ``_Leaf``, a
+# derivation as a ``_Node`` over its two operands' trees.
+type _Tree = float | _Leaf | _Node
+
+
+@dataclass(frozen=True)
+class _Leaf:
+    """A stored figure in a derivation's tree: its number resolved now, ``None`` where its ref
+    names no number now."""
+
+    value: float | None
+
+
+@dataclass(frozen=True, eq=False)  # one node a derivation however often the tree names it
+class _Node:
+    """A derivation in a tree (``_node``): its operation, its operands' trees, its years and its
+    value, the stored one for a derivation on file; ``whole`` whether every leaf under it has a
+    number now, else the tree takes it as one leaf at its value (method 16.4); ``numbered``
+    whether a fixed number is anywhere under it."""
+
+    operation: Operation
+    a: _Tree
+    b: _Tree
+    years: int | None
+    value: float | None
+    whole: bool
+    numbered: bool
+
+
+def _node(
+    operation: Operation, a: _Tree, b: _Tree, years: int | None, value: float | None
+) -> _Node:
+    """The node of a derivation over the trees ``a`` and ``b``: whole where each has a number now,
+    a nested derivation that is not whole counting as its value; numbered where either is a fixed
+    number or holds one."""
+    whole = all(_has_number(x) for x in (a, b))
+    numbered = any(isinstance(x, float) or (isinstance(x, _Node) and x.numbered) for x in (a, b))
+    return _Node(operation, a, b, years, value, whole, numbered)
+
+
+def _has_number(tree: _Tree) -> bool:
+    if isinstance(tree, _Leaf):
+        return tree.value is not None
+    return not isinstance(tree, _Node) or tree.whole or tree.value is not None
+
+
+class _Trees:
+    """The trees of a call's ``derived:`` operands, read from the stored rows as
+    ``refs.snapshots_of`` walks them: each derivation's operation, operands and years, nested ones
+    too, each derivation read once; a call's derivations are stored one by one, so a later one of
+    the call reads an earlier one. A stored figure is resolved now by the call's resolver."""
+
+    def __init__(self, conn: sqlite3.Connection, resolver: Resolver) -> None:
+        self._conn = conn
+        self._resolver = resolver
+        self._read: dict[int, _Node | None] = {}
+
+    def derived(self, ref: str) -> _Node | None:
+        """The tree of the derivation ``ref`` names, ``derived:<id>``; ``None`` for a ref of
+        another form or an id with no derivation."""
+        form, _, path = ref.strip().partition(":")
+        derivation_id = record_id_of(path) if form == "derived" else None
+        if derivation_id is None:
+            return None
+        if derivation_id not in self._read:  # each an earlier record: no cycle
+            row = derivation_row(self._conn, derivation_id)
+            self._read[derivation_id] = None if row is None else self._of(row)
+        return self._read[derivation_id]
+
+    def _of(self, row: DerivationRow) -> _Node:
+        a, b = self._operand(row.a), self._operand(row.b)
+        return _node(cast(Operation, row.operation), a, b, row.years, row.value)
+
+    def _operand(self, ref: str) -> _Tree:
+        number = fixed_number(ref)
+        if number is not None:
+            return float(number)
+        nested = self.derived(ref)
+        if nested is not None:
+            return nested
+        found = self._resolver.resolve(ref)
+        return _Leaf(found.value if found is not None and isinstance(found.value, float) else None)
+
+
+def _independent(node: _Node) -> bool:
+    """Whether a derivation holds a fixed number in its tree and depends on no stored figure
+    (method 16.4): its tree evaluated from its leaves by ``derive``'s arithmetic, then again with
+    each group of leaves of one value scaled by ``_SCALE`` in turn, moves for no group (``_moved``).
+    A tree with no fixed number is not tested."""
+    if not node.numbered:
+        return False
+    base = _evaluated(node, None, {})
+    return not any(_moved(base, _evaluated(node, group, {})) for group in _groups(node, set()))
+
+
+def _groups(tree: _Tree, seen: set[_Node]) -> set[float]:
+    """The values of a tree's leaves, each the value of one group: its stored figures', and a
+    nested derivation's that is not whole."""
+    if isinstance(tree, float):
+        return set()
+    if isinstance(tree, _Leaf) or not tree.whole:
+        return set() if tree.value is None else {tree.value}
+    if tree in seen:
+        return set()
+    seen.add(tree)
+    return _groups(tree.a, seen) | _groups(tree.b, seen)
+
+
+def _evaluated(tree: _Tree, group: float | None, memo: dict[_Node, float | None]) -> float | None:
+    """A tree's value from its leaves by ``derive``'s arithmetic (``_value``), the leaves of the
+    value ``group`` scaled by ``_SCALE``, a nested derivation that is not whole a leaf at its
+    value; ``None`` where it has none."""
+    if isinstance(tree, float):  # a fixed number is never scaled
+        return tree
+    if isinstance(tree, _Leaf) or not tree.whole:
+        return None if tree.value is None else tree.value * (_SCALE if tree.value == group else 1)
+    if tree not in memo:
+        x, y = _evaluated(tree.a, group, memo), _evaluated(tree.b, group, memo)
+        memo[tree] = None if x is None or y is None else _value(tree.operation, x, y, tree.years)
+    return memo[tree]
+
+
+def _moved(base: float | None, scaled: float | None) -> bool:
+    """Whether a scaled result moved from the base: a value where there was none or none where
+    there was one, or a value more than ``_MOVED`` of the larger of 1 and the base's size away."""
+    if base is None or scaled is None:
+        return (base is None) != (scaled is None)
+    return abs(scaled - base) > _MOVED * max(1.0, abs(base))
+
+
 @dataclass(frozen=True)
 class _Operand:
     """A derivation's operand as read (``_operand``): its number, its unit, whether it is a fixed
     number, which has no unit and leaves the result's to the stored figure, and ``foreign``, the
     currency of a record's money figure in another currency than the reporting one, ``None`` for
-    any other operand."""
+    any other operand; ``tree`` its tree (``_Trees``)."""
 
     value: float
     unit: str | None
+    tree: _Tree
     fixed: bool = False
     foreign: str | None = None
 
 
-def _operand(resolver: Resolver, ref: str) -> _Operand:
+def _operand(resolver: Resolver, trees: _Trees, ref: str) -> _Operand:
     """The number and unit ``ref`` names, a fixed number (``refs.fixed_number``) read before the
     resolver, with no unit; 400 when it names no number, is a ``number:`` off the list, or is a
     ``kill:`` threshold, the author's own number (spec 2026-11-15 8.2). A record's money figure
     whose currency (``Resolved.currency``) is not the reporting currency carries it (spec
-    2026-11-15 9.3)."""
+    2026-11-15 9.3). A ``derived:`` operand's tree is read from the stored rows."""
     written = ref.strip()
     if written.startswith(f"{NUMBER_FORM}:"):
         number = fixed_number(written)
         if number is None:
             raise HTTPException(400, f"{FIXED_NUMBERS}, not {written[len(NUMBER_FORM) + 1 :]}")
-        return _Operand(float(number), None, fixed=True)
+        return _Operand(float(number), None, float(number), fixed=True)
     if written.startswith(f"{KILL_FORM}:"):  # a number the author chose enters no arithmetic
         raise HTTPException(400, f"unresolved reference: {ref}")
     found = resolver.resolve(ref)
@@ -1056,7 +1208,9 @@ def _operand(resolver: Resolver, ref: str) -> _Operand:
         raise HTTPException(400, f"unresolved reference: {ref}")
     currency = found.currency
     foreign = currency if currency is not None and currency != resolver.reporting() else None
-    return _Operand(found.value, found.unit, foreign=foreign)
+    nested = trees.derived(written)
+    tree: _Tree = _Leaf(found.value) if nested is None else nested
+    return _Operand(found.value, found.unit, tree, foreign=foreign)
 
 
 def _number(x: Any, unit: str | None) -> _Figure | None:
@@ -1075,7 +1229,19 @@ def _derived(
     currency (spec 2026-11-15 9.3, rule 1). With such a record a money unit is none (rule 2)."""
     if _unconverted(a, b) or _unconverted(b, a):
         return None, None
-    x, y = a.value, b.value
+    value = _value(operation, a.value, b.value, years)
+    if value is None:
+        return None, None
+    unit = _derived_unit(operation, a, b)
+    if unit in MONEY_UNITS and (a.foreign or b.foreign):  # a derivation carries no currency
+        return value, None
+    return value, unit
+
+
+def _value(operation: Operation, x: float, y: float, years: int | None) -> float | None:
+    """The operation over ``x`` and ``y`` (module docstring); ``None`` where it is undefined: a
+    division by zero, growth from a base at or below zero, a cagr over a negative ratio and a
+    result that is not finite."""
     value: float | None
     if operation == "difference":
         value = x - y
@@ -1093,12 +1259,7 @@ def _derived(
         value = None
     else:
         value = (x / y) ** (1 / years) - 1
-    if value is None or not math.isfinite(value):
-        return None, None
-    unit = _derived_unit(operation, a, b)
-    if unit in MONEY_UNITS and (a.foreign or b.foreign):  # a derivation carries no currency
-        return value, None
-    return value, unit
+    return value if value is not None and math.isfinite(value) else None
 
 
 def _unconverted(record: _Operand, other: _Operand) -> bool:

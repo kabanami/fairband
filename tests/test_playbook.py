@@ -48,7 +48,12 @@ from fairband.store.secondary import cannot_fix
 from fairband.store.settings import effective_policy
 from fairband.web.app import _NO_WORKER as NO_WORKER
 from fairband.web.identity import IDENTIFY_FIRST
-from fairband.web.reviews_api import FIXED_NUMBERS, GUIDANCE_REF, NEEDS_A_FIGURE
+from fairband.web.reviews_api import (
+    DEPENDS_ON_A_FIGURE,
+    FIXED_NUMBERS,
+    GUIDANCE_REF,
+    NEEDS_A_FIGURE,
+)
 from fairband.web.vendor_api import NO_FMP_KEY
 
 PLAYBOOK = Path(__file__).parent.parent / "playbook" / "fairband-research"
@@ -166,6 +171,7 @@ REFUSALS = (
     # a fixed number in `derive` (spec 2026-11-15 7.1)
     f"{FIXED_NUMBERS}, not <what was written>",
     NEEDS_A_FIGURE,
+    DEPENDS_ON_A_FIGURE,
 )
 # The forms the example cites at least once: the history, the grid, the guidance.
 EXAMPLE_FORMS = ("multiple", "sensitivity", "guidance")
@@ -2202,7 +2208,14 @@ def test_a_fixed_number_is_arithmetic_never_a_figure_you_chose() -> None:
         ),
         f'"{FIXED_NUMBERS}, not <what was written>"',
         f'and so are two numbers in one derivation, "{NEEDS_A_FIGURE}"',
-        "a refusal stores none of the call's derivations",
+        # the whole-branch review's C1: a number in the tree, and the tree moves with a figure
+        (
+            "A derivation with a number anywhere in it, its own operands or those of a `derived:`"
+            " operand, must move with a stored figure: one that keeps its value whatever its"
+            " figures are, a figure times `number:0`, a number over a figure over itself, a figure"
+            f' plus a number less the same figure, is refused, "{DEPENDS_ON_A_FIGURE}".'
+        ),
+        "A refusal stores none of the call's derivations.",
         "| `sum`, `difference`, `product` with a number | the stored figure's unit |",
         "| `ratio` of a figure over a number | the figure's unit |",
         "| `ratio` of a number over a figure | none |",
@@ -2242,6 +2255,13 @@ def test_a_fixed_number_is_arithmetic_never_a_figure_you_chose() -> None:
     for text in (ten, arithmetic):
         for words in (rule, *recipes):
             assert words in text, words
+    assert (
+        "A derivation with a number anywhere in it, its own operands or those of a `derived:`"
+        " operand, must move with a stored figure. One that keeps its value whatever its figures"
+        " are is a number you chose passed off as a sourced one, and is refused,"
+        f' "{DEPENDS_ON_A_FIGURE}": a figure times `number:0`, a number over a figure over itself, a'
+        " figure plus a number less the same figure."
+    ) in arithmetic
     # a figure a filing states is still cited from its cell (spec 7.5's third bullet)
     assert (
         "A figure a filing states is still cited from its cell: a finding in full units is not the"

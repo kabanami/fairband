@@ -354,8 +354,13 @@ and store nothing:
   12, then 52, 100, 365, 1000 and each further power of ten up to 1,000,000,000,000. Any other is
   refused (400), "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to
   1,000,000,000,000, not <what was written>", and so are two numbers in one derivation, "a
-  derivation needs a stored figure"; a refusal stores none of the call's derivations. A number
-  has no unit, so the result's follows the stored figure:
+  derivation needs a stored figure". A derivation with a number anywhere in it, its own operands
+  or those of a `derived:` operand, must move with a stored figure: one that keeps its value
+  whatever its figures are, a figure times `number:0`, a number over a figure over itself, a
+  figure plus a number less the same figure, is refused, "a derivation with a fixed number must
+  depend on a stored figure: this one has the same value whatever its figures are". A refusal
+  stores none of the call's derivations. A number has no unit, so the result's follows the stored
+  figure:
 
   | Operation | Unit |
   |---|---|
