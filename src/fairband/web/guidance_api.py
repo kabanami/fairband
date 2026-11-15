@@ -13,13 +13,14 @@ revenue, EPS or net income record the server reads the actual of the fiscal year
 one from the statements as ``fact:<symbol>/revenue/<year>``, ``fact:<symbol>/eps_diluted/<year>``
 or ``fact:<symbol>/net_income/<year>`` resolves it (spec 2026-11-14 9); with no actual on file the
 record takes no step, and neither does a record on a basis other than ``gaap``, whatever the
-actual, nor one that names a currency other than the statements' (``base_currency``, the currency
-the financial tables' read names; spec 2026-11-15 9.2), read for such a record alone
-(``store.guidance``). The company needs no snapshot. The call's date orders the records of one
-metric, period and basis (``store.guidance``): a record of a call on or after the current one's
-supersedes it, whose ``supersededBy`` then names it, and a record of an earlier call is stored
-already superseded. The write is a ``guidance`` ledger row resting on the company's latest
-snapshot (none without one), its summary "<metric> <period>: <the text's first line>".
+actual, nor one that names a currency other than that of the statement the actual is read from,
+the year before's (``base_currency``; spec 2026-11-15 9.2), read for a ``gaap`` record that names
+a currency and has an actual alone (``store.guidance``). The company needs no snapshot. The call's
+date orders the records of one metric, period and basis (``store.guidance``): a record of a call
+on or after the current one's supersedes it, whose ``supersededBy`` then names it, and a record of
+an earlier call is stored already superseded. The write is a ``guidance`` ledger row resting on
+the company's latest snapshot (none without one), its summary "<metric> <period>: <the text's
+first line>".
 
 ``GET`` on the same path lists the company's records newest first, each as the post answers it,
 under ``guidance``. A record's keys are camelCase; its ``currency`` is the one its money is in, the
@@ -40,8 +41,8 @@ from pydantic.alias_generators import to_camel
 from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
+from fairband.refresh.inputs_statements import series_for
 from fairband.reports.refs import Resolver, fact_ref
-from fairband.reports.tables import stated_for
 from fairband.store.currency import reporting_currency
 from fairband.store.db import transaction
 from fairband.store.guidance import (
@@ -104,8 +105,11 @@ def add_guidance_routes(
             try:
                 symbol = exchange_symbol(symbol)
                 resolver = Resolver(conn, symbol, effective(conn, policy), tax)
-                # the statements' currency matters only to a record that names its own
-                stated = None if body.currency is None else stated_for(conn, symbol, tax)
+                base = _base_actual(resolver, body.metric, body.period)
+                # the base year's currency matters only to a gaap record that names its own and
+                # has an actual to step from
+                named = body.currency is not None and body.basis == "gaap" and base is not None
+                base_in = _base_currency(conn, symbol, body.metric, body.period) if named else None
                 guidance_id = insert_guidance(
                     conn,
                     symbol,
@@ -119,9 +123,9 @@ def add_guidance_routes(
                     body.source,
                     writer,
                     at,
-                    _base_actual(resolver, body.metric, body.period),
+                    base,
                     currency=body.currency,
-                    base_currency=None if stated is None else stated.currency,
+                    base_currency=base_in,
                 )
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from None
@@ -162,3 +166,14 @@ def _base_actual(resolver: Resolver, metric: str, period: str) -> float | None:
     found = resolver.resolve(fact_ref(resolver.symbol, _BASE_LINES[metric], str(year)))
     value = None if found is None else found.value
     return value if isinstance(value, float) else None
+
+
+def _base_currency(conn: sqlite3.Connection, symbol: str, metric: str, period: str) -> str | None:
+    """The currency of the statement the actual is read from (spec 2026-11-15 9.2): the income
+    statement of the fiscal year before the guided one, as the fiscal-year series carries it (a
+    year whose statement names none takes the year before's), not the newest statement's; ``None``
+    for any other record or with no such year on file."""
+    year = year_before(metric, period)
+    if year is None:
+        return None
+    return next((y.currency for y in series_for(conn, symbol) if y.year == year), None)

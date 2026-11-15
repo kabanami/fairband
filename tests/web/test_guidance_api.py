@@ -230,6 +230,27 @@ def test_a_record_names_its_currency_and_steps_in_the_statements(
     ]
 
 
+def test_a_record_steps_in_the_currency_of_its_base_year_s_statement(
+    client: TestClient, db_path: Path
+) -> None:
+    """Spec 2026-11-15 9.2, the task review's finding: the currency a record is compared with is
+    that of the statement its actual is read from, the year before the guided one's, not the
+    newest statement's nor the snapshot's. SWCO reported fiscal 2024 in SEK and fiscal 2025 in
+    EUR, and has no snapshot, so its reporting currency is USD. A 2025 record written late steps
+    from the SEK actual of 2024 when it names SEK, and takes no step when it names EUR, the newest
+    statement's currency, or USD; a 2026 record steps from the EUR actual of 2025 when it names
+    EUR."""
+    _store_line(db_path, "revenue", 2024, 200e9, symbol="SWCO", currency="SEK")
+    _store_line(db_path, "revenue", 2025, 20e9, symbol="SWCO", currency="EUR")
+    late = REVENUE_2026 | {"period": "2025", "low": 230e9, "high": 250e9}
+    assert _post(client, late | {"currency": "SEK"}, "SWCO")["step"] == pytest.approx(0.2)
+    for currency in ("EUR", "USD"):
+        assert _post(client, late | {"currency": currency}, "SWCO")["step"] is None, currency
+    newest = REVENUE_2026 | {"low": 23e9, "high": 25e9, "currency": "EUR"}
+    assert _post(client, newest, "SWCO")["step"] == pytest.approx(0.2)
+    assert _post(client, newest | {"currency": "SEK"}, "SWCO")["step"] is None
+
+
 def test_a_company_with_no_snapshot_reads_in_us_dollars(client: TestClient) -> None:
     """Spec 2026-11-15 9.1: with no snapshot, the reporting currency is USD; a record's own
     currency stands."""

@@ -443,9 +443,9 @@ def test_a_finding_and_a_guidance_record_name_their_currency() -> None:
         '"a guidance record needs its source", then a currency\'s two (16.2)',
         (
             "Nor is there a step on a record whose stored currency (16.2) is not that actual's, the"
-            " statements' currency as the financial tables' read names it, since its midpoint over"
-            " an actual in another currency is no growth (spec 2026-11-15 9.2); a record that names"
-            " no currency steps as before."
+            " currency of that year's statement (a year whose statement names none takes the year"
+            " before's), since its midpoint over an actual in another currency is no growth (spec"
+            " 2026-11-15 9.2); a record that names no currency steps as before."
         ),
     ):
         assert words in guidance, words

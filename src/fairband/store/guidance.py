@@ -16,9 +16,9 @@ growth, and a constant-currency figure over it is growth at constant currency, a
 derives and names as such. A step such a record holds from before this rule is not read. A record
 of a money metric may name the currency the company guides in (``store.currency``; spec
 2026-11-15 9.1), the code stored as given; none is the company's reporting currency. A record
-whose currency is named and is not the actual's (``base_currency``, the statements' currency)
-takes no step either: its midpoint over an actual in another currency is no growth (spec
-2026-11-15 9.2).
+whose currency is named and is not the actual's (``base_currency``, the currency of the statement
+the actual is read from) takes no step either: its midpoint over an actual in another currency is
+no growth (spec 2026-11-15 9.2).
 
 The call's date orders a company's records of one metric, period and basis, of which one at most
 is current (``superseded_by`` empty), whatever the currency of either: a GAAP and an adjusted
