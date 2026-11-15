@@ -288,6 +288,14 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
     edges = body["values"]["designation_edges"]
     assert edges["value"] == [0.65, 0.85, 1.15, 1.5] and edges["setting"] is False
     assert body["values"]["wide_terminal_roic_cap"]["value"] == 0.13
+    # the cap on the return without goodwill is a setting since 2026-11-15 (method 4.6, B-170)
+    cap = body["values"]["return_without_goodwill_cap"]
+    assert (cap["value"], cap["unit"], cap["setting"], cap["changed"]) == (
+        0.25,
+        "fraction",
+        True,
+        False,
+    )
     read_only = {
         "moat_wide_min": 8,
         "moat_narrow_min": 4,
@@ -298,7 +306,6 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "implied_margin_bounds": [-0.5, 1.0],
         "inflation_max": 0.1,  # the Methodology page names the two bounds (spec 2026-11-10 10)
         "fx_stale_days": 7,
-        "return_without_goodwill_cap": 0.25,  # the Methodology page names the cap (method 4.6)
         # the stock-pay thresholds and the share-count band (spec 2026-11-13 7.1 and 8)
         "sbc_material_share": 0.02,
         "sbc_basis_tax_share": 0.5,

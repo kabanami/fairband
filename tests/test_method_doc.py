@@ -170,6 +170,11 @@ def test_the_runway_returns_rulings_of_2026_11_15() -> None:
     ):
         assert words in paragraph, words
     assert "`runway_return` gains `constant_margin`" in rows[-1]
+    # the cap is a setting; the other calls stand, and no cap bounds a return on capital near zero
+    value = next(x for x in four.splitlines() if "| `return_without_goodwill_cap` | yes |" in x)
+    assert "a setting since the founder's ruling of 2026-11-15" in value
+    assert "`return_without_goodwill_cap` (25%), becomes a setting" in rows[-1]
+    assert "A return far above 100% on capital near zero stands with no cap" in rows[-1]
 
 
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:

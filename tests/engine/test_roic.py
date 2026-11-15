@@ -466,6 +466,17 @@ def test_a_measure_below_r_reads_the_return_without_goodwill(policy: Policy) -> 
     )
 
 
+def test_the_cap_on_the_return_without_goodwill_is_the_policys_to_move(policy: Policy) -> None:
+    """The cap is a setting (the founder's ruling of 2026-11-15): the start follows it, and a
+    measure under it stands."""
+    higher = replace(policy, return_without_goodwill_cap=0.40)
+    rr = runway_return(bought(1800.0), "Narrow", higher)  # 100 on 200: 50% without them
+    assert rr.used == "without-goodwill" and rr.value == 0.40
+    lower = replace(policy, return_without_goodwill_cap=0.21)
+    assert runway_return(bought(1800.0), "Narrow", lower).value == 0.21
+    assert runway_return(bought(1500.0), "Narrow", higher).value == pytest.approx(0.20)
+
+
 def test_the_return_without_goodwill_is_capped(policy: Policy) -> None:
     assert policy.return_without_goodwill_cap == 0.25
     rr = runway_return(bought(1800.0), "Narrow", policy)  # 100 on 200: 50% without them

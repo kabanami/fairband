@@ -24,8 +24,10 @@ from fairband.policy.settings import (
 )
 
 
-def test_forty_settings_in_the_spec_order() -> None:
-    assert len(SETTINGS) == 40
+def test_forty_one_settings_in_the_spec_order() -> None:
+    # spec 2026-11-04 8.2's forty, and the cap on the return without goodwill (the founder's
+    # ruling of 2026-11-15, B-170), which follows the Wide spread
+    assert len(SETTINGS) == 41
     assert [s.name for s in SETTINGS[:3]] == ["required_return", "terminal_growth", "runway_years"]
     assert SETTINGS[-1].name == "refresh.gf_reuse_days"
     assert {s.group for s in SETTINGS} == {"valuation", "flags", "validity", "universe", "refresh"}
@@ -35,8 +37,8 @@ def test_the_groups_run_in_the_spec_order_and_each_name_once() -> None:
     order = ("valuation", "flags", "validity", "universe", "refresh")
     groups = [s.group for s in SETTINGS]
     assert groups == sorted(groups, key=order.index)
-    assert [groups.count(g) for g in order] == [19, 9, 2, 5, 5]
-    assert len({s.name for s in SETTINGS}) == 40
+    assert [groups.count(g) for g in order] == [20, 9, 2, 5, 5]
+    assert len({s.name for s in SETTINGS}) == 41
 
 
 def test_the_catalogue_rows_read_as_the_spec_tables() -> None:
@@ -72,6 +74,28 @@ def test_the_catalogue_rows_read_as_the_spec_tables() -> None:
     assert "Mature Growth skips its revenue step above 50%" in analysts.description
     with pytest.raises(KeyError):
         setting("designation_edges")
+
+
+def test_the_cap_on_the_return_without_goodwill_is_a_setting() -> None:
+    """The founder's ruling of 2026-11-15 (B-170): the cap of method 4.6 rule 5 is the user's to
+    move, in the valuation group right after the Wide spread, read at a revalue and hashed."""
+    cap = setting("return_without_goodwill_cap")
+    assert (cap.group, cap.label, cap.unit, cap.effect, cap.range_text, cap.hashed) == (
+        "valuation",
+        "Cap on the return without goodwill",
+        "fraction",
+        "revalue",
+        "above 20%, up to 100%",
+        True,
+    )
+    names = [s.name for s in SETTINGS]
+    assert names.index(cap.name) == names.index("wide_terminal_roic_spread") + 1
+    base = load_policy()
+    assert default_of(cap.name, base) == value_of(cap.name, base) == 0.25
+    moved = apply_overlay(base, {"return_without_goodwill_cap": 0.30})
+    assert moved.return_without_goodwill_cap == 0.30 and moved.version == base.version
+    assert moved.settings_hash == settings_hash({"return_without_goodwill_cap": 0.30})
+    assert moved.settings_hash != base.settings_hash
 
 
 def test_every_setting_names_a_value_of_the_file() -> None:
@@ -248,6 +272,14 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
         {"wide_terminal_roic_spread": -0.01},
         "wide_terminal_roic_spread: must be from 0 to 10 points",
     ),
+    (
+        {"return_without_goodwill_cap": 0.20},
+        "return_without_goodwill_cap: must be above 20% and at most 100%",
+    ),
+    (
+        {"return_without_goodwill_cap": 1.01},
+        "return_without_goodwill_cap: must be above 20% and at most 100%",
+    ),
     ({"inflation_addition": 0.051}, "inflation_addition: must be from 0 to 5 points"),
     ({"repricing_horizon_years": 0}, "repricing_horizon_years: must be from 1 to 10 years"),
     ({"repricing_horizon_years": 11}, "repricing_horizon_years: must be from 1 to 10 years"),
@@ -376,6 +408,8 @@ INSIDE: list[dict[str, Any]] = [
     {"fair_band": [0.99, 1.50], "trim_multiple": 3.0},
     {"wide_terminal_roic_spread": 0.0},
     {"wide_terminal_roic_spread": 0.10},
+    {"return_without_goodwill_cap": 0.21},
+    {"return_without_goodwill_cap": 1.0},
     {"inflation_addition": 0.0},
     {"inflation_addition": 0.05},
     {"repricing_horizon_years": 1},
@@ -517,6 +551,7 @@ def test_a_thin_revenue_step_max_of_0_percent_or_more_is_accepted() -> None:
         ("margin_of_safety", {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}),
         ("fair_band", [0.85, 1.15]),
         ("wide_terminal_roic_spread", 0.04),
+        ("return_without_goodwill_cap", 0.25),
         ("repricing_horizon_years", 3),
         ("margin_flag_min_years", 6),
         ("validity_fallback_days", 91),

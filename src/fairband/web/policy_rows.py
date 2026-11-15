@@ -8,9 +8,9 @@ Mid band's floor, under a changed size floor) is served as the effective policy 
 not read changed: resetting it would change nothing. A derived value is changed when it differs
 from the file's.
 
-Besides the forty settings, the page cites sixteen values that are not settings, read from the
-file only, among them the foreign filers' two bounds (the inflation bound and the stale-rate bound,
-spec 2026-11-10 9), the cap on the return without goodwill (``method.md`` 4.6), the three
+Besides the forty-one settings, the page cites fifteen values that are not settings, read from
+the file only, among them the foreign filers' two bounds (the inflation bound and the stale-rate
+bound, spec 2026-11-10 9), the three
 stock-pay thresholds and the share-count band (spec 2026-11-13 7.1 and 8), the sheet-shift
 multiple (spec 2026-11-13 12.5) and the size above which a thin revenue step is not read (spec
 2026-11-14 6.2), and the two the policy derives (the designation edges and the Wide moat's
@@ -40,7 +40,6 @@ READ_ONLY: dict[str, str] = {
     "implied_margin_bounds": "fraction",
     "inflation_max": "fraction",
     "fx_stale_days": "days",
-    "return_without_goodwill_cap": "fraction",
     "sbc_material_share": "fraction",
     "sbc_basis_tax_share": "fraction",
     "sbc_basis_gap_multiple": "times",

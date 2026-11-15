@@ -418,14 +418,15 @@ def test_v11_is_v10_with_the_three_values_added() -> None:
 
 def test_v12_is_v11_with_the_cap_added() -> None:
     """Every v11 value loads unchanged from v12; v12 adds the cap on the return read on capital
-    without goodwill and intangibles, not a setting (method 4.6 rule 5)."""
+    without goodwill and intangibles (method 4.6 rule 5), a setting since the founder's ruling of
+    2026-11-15."""
     v11 = _file_values("fairband-policy-v11.toml")
     v12 = _file_values("fairband-policy-v12.toml")
     assert v12.keys() - v11.keys() == V12_VALUES
     assert {k: v12[k] for k in v11} == v11
     assert "founder 2026-11-12" in v12["return_without_goodwill_cap"]["source"]
     assert "no source gives the number" in v12["return_without_goodwill_cap"]["source"]
-    assert not {s.name for s in SETTINGS} & V12_VALUES
+    assert {s.name for s in SETTINGS} >= V12_VALUES
 
 
 def test_v13_is_v12_with_the_four_values_added_and_two_ranges() -> None:

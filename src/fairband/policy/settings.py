@@ -1,7 +1,9 @@
 """The settings: the policy values the user may change, their ranges, and the overlay.
 
-``SETTINGS`` names the forty policy values of spec 2026-11-04 8.2 in its order and groups, each
-with the label, the plain sentence, the unit, the range and the effect the Settings page shows.
+``SETTINGS`` names the forty policy values of spec 2026-11-04 8.2 in its order and groups, and
+one more since: the cap on the return without goodwill (``method.md`` 4.6 rule 5; the founder's
+ruling of 2026-11-15), after the Wide spread. Each has the label, the plain sentence, the unit,
+the range and the effect the Settings page shows.
 A dotted name (``universe.cap_floor_usd``, ``refresh.workers``) addresses a value inside the
 file's ``[values.universe]`` or ``[values.refresh]`` table.
 
@@ -151,6 +153,16 @@ SETTINGS: tuple[Setting, ...] = (
         "points",
         "revalue",
         "0 to 10 points",
+        True,
+    ),
+    Setting(
+        "return_without_goodwill_cap",
+        "valuation",
+        "Cap on the return without goodwill",
+        "The highest return the charge starts at when it reads the return without goodwill.",
+        "fraction",
+        "revalue",
+        "above 20%, up to 100%",
         True,
     ),
     Setting(
