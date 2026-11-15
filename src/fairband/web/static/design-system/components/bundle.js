@@ -2146,6 +2146,7 @@
               onMouseLeave: function () { setAt(null); }
             });
           })),
+          // fairband: the value on `capped`, the last bar that is not an estimate (spec 2026-11-15 6.6).
           capped < 0 ? null : h('text', {
             className: 'fb-c__capvalue', x: X(capped) + bw / 2,
             y: Y(series[capped].value) + (series[capped].value < 0 ? 14 : -7)

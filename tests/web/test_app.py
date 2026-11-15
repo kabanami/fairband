@@ -3394,10 +3394,11 @@ def test_the_bundle_draws_what_the_report_charts_need() -> None:
 def test_the_bundle_draws_a_bar_that_is_not_a_fiscal_year() -> None:
     """Spec 2026-11-15 6.6, a patch as `inverse` is one: a HistoryBars point's `kind` gives its
     bar a class, the trailing twelve months filled in chart-context whatever their sign, an
-    estimate an outline in the colour its fill would have had; the value stands on the last bar
-    that is not an estimate; the accessible name reads `by`; the tooltip and the table twin read a
-    point's `label`. Each change is marked, and index.d.ts says each field. What the bars draw is
-    read in node (tests/web/test_report_charts.py)."""
+    estimate an outline in the colour its fill would have had, and both keep their look hovered
+    (spec 4); the value stands on the last bar that is not an estimate, with a halo in the panel's
+    surface where an estimate's outline runs under it; the accessible name reads `by`; the tooltip
+    and the table twin read a point's `label`. Each change is marked, and index.d.ts says each
+    field. What the bars draw is read in node (tests/web/test_report_charts.py)."""
     bars = _function(_component_file("bundle.js"), "HistoryBars")
     _in_order(
         bars,
@@ -3407,6 +3408,7 @@ def test_the_bundle_draws_a_bar_that_is_not_a_fiscal_year() -> None:
         "'aria-label': p.title + ' by ' + (p.by || 'fiscal year')",
         "// fairband: a bar that is not a fiscal year",
         "className: cx(cls, d.kind && 'fb-c__bar--' + d.kind, at === i && 'is-hovered'),",
+        "// fairband: the value on `capped`, the last bar that is not an estimate",
         "capped < 0 ? null : h('text', {",
         "x: X(capped) + bw / 2,",
         "y: Y(series[capped].value) + (series[capped].value < 0 ? 14 : -7)",
@@ -3424,13 +3426,31 @@ def test_the_bundle_draws_a_bar_that_is_not_a_fiscal_year() -> None:
         "/* fairband: the trailing twelve months",
         ".fb-c__bar--trailing { fill: var(--chart-context); }",
         "/* fairband: an analysts' estimate",
-        ".fb-c__bar--estimate { fill: none; stroke: var(--chart-1); stroke-width: 1.5;",
+        ".fb-c__bar--estimate { fill: none; stroke: var(--chart-1); stroke-width: 1.5;"
+        " pointer-events: visible; }",
         ".fb-c__bar--estimate.fb-c__bar--pos { stroke: var(--chart-pos-3); }",
         ".fb-c__bar--estimate.fb-c__bar--neg { stroke: var(--chart-neg-3); }",
+        ".fb-c__bar.is-hovered { fill: var(--accent-hover); }",
+        ".fb-c__bar--neg.is-hovered { fill: var(--chart-neg-2); }",
+        "/* fairband: hovered, an estimate stays an outline",
+        ".fb-c__bar--estimate.is-hovered { fill: none; stroke-width: 2.5; }",
+        ".fb-c__bar--trailing.is-hovered { fill: var(--ink-muted); }",
     )
-    for mark in ("/* fairband: the trailing twelve months", "/* fairband: an analysts' estimate"):
+    _in_order(
+        css,
+        ".fb-c__capvalue { text-anchor: middle; }",
+        "/* fairband: the value above a bar has a halo in the chart panel's surface",
+        ".fb-c__capvalue { paint-order: stroke; stroke: var(--surface-raised); stroke-width: 3px;"
+        " stroke-linejoin: round; }",
+    )
+    for mark, spec in (
+        ("/* fairband: the trailing twelve months", "(spec 2026-11-15 6.6)"),
+        ("/* fairband: an analysts' estimate", "(spec 2026-11-15 6.6)"),
+        ("/* fairband: hovered, an estimate stays an outline", "(spec 2026-11-15 4, 6.6)"),
+        ("/* fairband: the value above a bar has a halo", "(spec 2026-11-15 6.6)"),
+    ):
         patch = css[css.index(mark) :]
-        assert "(spec 2026-11-15 6.6)" in patch[: patch.index("*/")], mark
+        assert spec in patch[: patch.index("*/")], mark
     declarations = _component_file("index.d.ts")
     for name, doc, field in (
         (

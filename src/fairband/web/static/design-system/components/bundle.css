@@ -1000,6 +1000,10 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   font-variant-numeric: tabular-nums;
 }
 .fb-c__capvalue { text-anchor: middle; }
+/* fairband: the value above a bar has a halo in the chart panel's surface, so where it stands
+   beside a taller estimate on a narrow chart the estimate's outline breaks under the figure
+   instead of crossing it (spec 2026-11-15 6.6). */
+.fb-c__capvalue { paint-order: stroke; stroke: var(--surface-raised); stroke-width: 3px; stroke-linejoin: round; }
 .fb-c__endlabel--context { fill: var(--ink-faint); }
 /* fairband: MultipleHistory's average (spec 2026-11-06 Tier 2, 18.4): a reference, 1px solid in
    chart-context, the de-emphasis grey; its label is an end label in ink-faint. */
@@ -1019,6 +1023,10 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-c__bar--estimate.fb-c__bar--neg { stroke: var(--chart-neg-3); }
 .fb-c__bar.is-hovered { fill: var(--accent-hover); }
 .fb-c__bar--neg.is-hovered { fill: var(--chart-neg-2); }
+/* fairband: hovered, an estimate stays an outline and the trailing twelve months stay grey
+   (spec 2026-11-15 4, 6.6). */
+.fb-c__bar--estimate.is-hovered { fill: none; stroke-width: 2.5; }
+.fb-c__bar--trailing.is-hovered { fill: var(--ink-muted); }
 
 .fb-c__legend {
   display: flex;
