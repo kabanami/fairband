@@ -485,6 +485,23 @@ def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
     assert guided["actor"] == "claude-opus-5-5"
 
 
+def test_a_finding_and_a_guidance_record_send_their_currency(api: FairbandClient) -> None:
+    """Spec 2026-11-15 9.1: `finding_add` and `guidance_add` send the currency the company states
+    a money figure in; with none, AAPL's answers its reporting currency, USD."""
+    server = build_server(api)
+    finding = WRITES["finding_add"]
+    guided = WRITES["guidance_add"]
+    _, *answers = _session(
+        server,
+        ("identify", AGENT),
+        ("finding_add", finding | {"currency": "TWD"}),
+        ("finding_add", finding),
+        ("guidance_add", guided | {"currency": "TWD"}),
+        ("guidance_add", guided | {"period": "2027"}),
+    )
+    assert [a["currency"] for a in answers] == ["TWD", "USD", "TWD", "USD"]
+
+
 def _store_revenue(db_path: Path, revenue: float, symbol: str = "AAPL") -> None:
     """The company's fiscal 2025 revenue, its trailing revenue with no quarters on file."""
     with closing(connect(db_path)) as conn:

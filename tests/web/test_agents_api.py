@@ -10,10 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
-from support.web import HEADER, NOW
+from support.engine_companies import fx_inputs, universe_deciles
+from support.web import HEADER, NOW, TODAY
 
-from fairband.engine.route import refusal_result
-from fairband.policy import load_policy
+from fairband.engine.route import refusal_result, value_company
+from fairband.policy import Policy, load_policy
 from fairband.store.db import connect
 from fairband.store.ledger import Writer
 from fairband.store.reports import insert_report
@@ -261,6 +262,7 @@ def test_notes_findings_kill_criteria_and_news_items_round_trip(client: TestClie
         "actor": "claude-opus-5-5",
         "client": "claude-code/2.1",
         "at": AT,
+        "currency": None,  # a percent is no money figure
     }
     assert client.get(f"{base}/findings").json() == {"findings": [finding]}
     r = client.post(
@@ -325,6 +327,38 @@ def test_notes_findings_kill_criteria_and_news_items_round_trip(client: TestClie
         assert client.get(f"/api/companies/AAL/{kind}").status_code == 200
         r = client.get(f"/api/companies/a b/{kind}")
         assert (r.status_code, r.json()) == (400, {"detail": "'a b' is not a symbol"})
+
+
+def test_a_finding_names_the_currency_of_its_money(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-15 9.1: a money finding answers the currency it names, else the company's
+    reporting currency, its latest snapshot's (SEK for FXCO, USD for AAPL and for a company with
+    no snapshot); a figure that is not money answers none. A currency on a figure that is not
+    money, or out of form, is refused 400 and stores nothing."""
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, value_company(fx_inputs(), universe_deciles(), policy, TODAY), 1)
+    source = {"kind": "transcript", "ref": "response:7", "note": None}
+    fact = {"asOf": "2026-10-16", "text": "capex", "source": source}
+    total = fact | {"value": 4e9, "unit": "currency"}
+    url = "/api/companies/FXCO/findings"
+    usd = _post(client, url, total | {"currency": "USD"}, AGENT)
+    bare = _post(client, url.lower(), total | {"value": 12.5, "unit": "per-share"}, AGENT)
+    rate = total | {"value": 0.11, "unit": "percent"}
+    percent = _post(client, url, rate, AGENT)
+    assert [f["currency"] for f in (usd, bare, percent)] == ["USD", "SEK", None]
+    assert client.get(url.lower()).json() == {"findings": [percent, bare, usd]}
+    for symbol in ("AAPL", "ZZZZ"):  # USD, and no snapshot
+        found = _post(client, f"/api/companies/{symbol}/findings", total, AGENT)
+        assert found["currency"] == "USD", symbol
+        assert client.get(f"/api/companies/{symbol}/findings").json() == {"findings": [found]}
+    for given, detail in (
+        (rate | {"currency": "USD"}, "a currency goes with a money figure"),
+        (total | {"currency": "usd"}, "a currency is three capital letters, not 'usd'"),
+    ):
+        r = client.post(url, json=given, headers=AGENT)
+        assert (r.status_code, r.json()) == (400, {"detail": detail})
+    assert len(client.get(url).json()["findings"]) == 3
 
 
 def test_every_write_is_a_ledger_row(client: TestClient) -> None:

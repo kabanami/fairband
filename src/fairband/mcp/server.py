@@ -515,6 +515,7 @@ def build_server(client: FairbandClient) -> MCPServer:
         value: float | None = None,
         unit: Unit | None = None,
         period: str | None = None,
+        currency: str | None = None,
     ) -> dict[str, Any]:
         body = {
             "asOf": as_of,
@@ -523,6 +524,7 @@ def build_server(client: FairbandClient) -> MCPServer:
             "value": value,
             "unit": unit,
             "period": period,
+            "currency": currency,
         }
         return write(lambda: client.post(_company(symbol, "findings"), body))
 
@@ -540,6 +542,7 @@ def build_server(client: FairbandClient) -> MCPServer:
         as_of: str,
         text: str,
         source: str,
+        currency: str | None = None,
     ) -> dict[str, Any]:
         body = {
             "metric": metric,
@@ -550,6 +553,7 @@ def build_server(client: FairbandClient) -> MCPServer:
             "asOf": as_of,
             "text": text,
             "source": source,
+            "currency": currency,
         }
         return write(lambda: client.post(_company(symbol, "guidance"), body))
 

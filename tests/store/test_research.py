@@ -177,6 +177,71 @@ def test_a_finding_refuses_an_unknown_source_kind_or_unit(
     assert findings_for(conn, "AAPL") == []
 
 
+def test_a_finding_names_the_currency_of_its_money(conn: sqlite3.Connection) -> None:
+    """Spec 2026-11-15 9.1: a money figure may name the currency the company states it in, stored
+    as given, also when it is the reporting currency; a finding that names none is in the
+    reporting currency, as every finding before."""
+    capex = add_finding(
+        conn,
+        "TSM",
+        date(2026, 10, 16),
+        "capex guided at US$42 billion",
+        FILING,
+        AGENT,
+        NOW,
+        value=42e9,
+        unit="currency",
+        period="2026",
+        currency="USD",
+    )
+    dividend = add_finding(
+        conn,
+        "TSM",
+        date(2026, 10, 16),
+        "a dividend",
+        FILING,
+        AGENT,
+        NOW,
+        value=6.0,
+        unit="per-share",
+        currency="TWD",
+    )
+    bare = add_finding(
+        conn, "TSM", date(2026, 10, 16), "revenue", FILING, AGENT, NOW, value=3e12, unit="currency"
+    )
+    stored = {f.id: f.currency for f in findings_for(conn, "TSM")}
+    assert stored == {capex: "USD", dividend: "TWD", bare: None}
+    found = finding_row(conn, capex)
+    assert found is not None
+    assert (found.value, found.unit, found.currency) == (42e9, "currency", "USD")
+
+
+MONEY = "a currency goes with a money figure"
+
+
+def _form(code: str) -> str:
+    return f"a currency is three capital letters, not {code!r}"
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        ({"value": 0.112, "unit": "percent", "currency": "USD"}, MONEY),
+        ({"value": 3.0, "unit": "multiple", "currency": "USD"}, MONEY),
+        ({"currency": "USD"}, MONEY),  # no value
+        ({"value": 1.0, "unit": "currency", "currency": "usd"}, _form("usd")),
+        ({"value": 1.0, "unit": "currency", "currency": "US"}, _form("US")),
+        ({"value": 1.0, "unit": "per-share", "currency": "DOLLAR"}, _form("DOLLAR")),
+    ],
+)
+def test_a_finding_refuses_a_currency_off_a_money_figure_or_out_of_form(
+    conn: sqlite3.Connection, extra: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValueError, match=f"^{message}$"):
+        add_finding(conn, "TSM", date(2026, 10, 16), "a fact", FILING, AGENT, NOW, **extra)
+    assert findings_for(conn, "TSM") == []
+
+
 def test_kill_criteria(conn: sqlite3.Connection) -> None:
     first = add_kill_criterion(conn, "AAPL", "services growth below 5% for two years", AGENT, NOW)
     second = add_kill_criterion(conn, "AAPL", "gross margin below 40%", AGENT, LATER, report_id=3)

@@ -431,6 +431,52 @@ def test_a_guidance_record_holds_net_income_and_backs_the_ntm_eps() -> None:
     ) in row
 
 
+def test_a_finding_and_a_guidance_record_name_their_currency() -> None:
+    """Spec 2026-11-15 9.1, 9.2: 16.2 says a finding and a guidance record may name the currency
+    of a money figure, with the form's and the figure's refusals, none meaning the reporting
+    currency, and that every read answers it; 14.9 lists the currency among the record's fields
+    and its refusals, and says a record in another currency than its actual takes no step."""
+    fourteen = _section(14)
+    guidance = fourteen[fourteen.index("### 14.9") :]
+    for words in (
+        "its currency, where it names one (16.2)",
+        '"a guidance record needs its source", then a currency\'s two (16.2)',
+        (
+            "Nor is there a step on a record whose stored currency (16.2) is not that actual's, the"
+            " statements' currency as the financial tables' read names it, since its midpoint over"
+            " an actual in another currency is no growth (spec 2026-11-15 9.2); a record that names"
+            " no currency steps as before."
+        ),
+    ):
+        assert words in guidance, words
+    sixteen = _section(16)
+    references = sixteen[sixteen.index("### 16.2") : sixteen.index("### 16.3")]
+    for words in (
+        (
+            "A finding and a guidance record may name the currency the company states a money"
+            " figure in (spec 2026-11-15 9.1): a finding of unit currency or per-share, a guidance"
+            " record of `revenue`, `net_income`, `free_cash_flow`, `capex` or `eps`."
+        ),
+        (
+            'The code is three capital letters, checked for its form and not against a list, "a'
+            ' currency is three capital letters, not <what was written>", and goes with a money'
+            ' figure alone, "a currency goes with a money figure"; it is stored as given, also'
+            " when it is the reporting currency."
+        ),
+        (
+            "A record that names none is in the reporting currency, as every record before it:"
+            " the currency of the company's latest snapshot as its money reads, USD where the"
+            " company has no snapshot."
+        ),
+        (
+            "Every read of a finding or a guidance record (`findings`, `guidance`, the drawer's"
+            " research read) answers `currency`: the stored code, else the reporting currency;"
+            " none for a figure that is not money."
+        ),
+    ):
+        assert words in references, words
+
+
 def test_a_sensitivity_marks_a_revenue_step_at_the_growth_the_charge_read() -> None:
     """14.8: a revenue step with no applied override is marked at the growth the charge read for
     its year, while the engine's reading of 14.4 stays the step found."""

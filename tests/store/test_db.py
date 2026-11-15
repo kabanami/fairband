@@ -5,7 +5,7 @@ import subprocess
 import sys
 from collections.abc import Iterator
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from importlib import resources
 from pathlib import Path
 
@@ -14,7 +14,9 @@ import pytest
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store import db
 from fairband.store.db import applied_versions, connect, migrate
+from fairband.store.guidance import GuidanceRow, guidance_row
 from fairband.store.reports import JudgmentRow, judgments_for
+from fairband.store.research import FindingRow, KillCriterionRow, finding_row, kill_criterion_row
 
 _TABLES = {
     "schema_versions",
@@ -40,11 +42,14 @@ _ALL = [
     "005_agents.sql",
     "006_report.sql",
     "007_secondary_fx.sql",
+    "008_record_currency.sql",
 ]
 # The agents' records (spec 2026-11-06 Tier 2, section 17), each table's columns the record's
-# fields in order, as 005 made them and 006 and 007 changed them: a judgment without its debate
-# text, a secondary valuation with its form, drivers, projection and grid, and its snapshot's rate
-# (spec 2026-11-10 7.6); a work item's poster carries its client as every other writer does.
+# fields in order, as 005 made them and 006, 007 and 008 changed them: a judgment without its
+# debate text, a secondary valuation with its form, drivers, projection and grid, and its
+# snapshot's rate (spec 2026-11-10 7.6); a finding's and a kill criterion's currency, and the kill
+# criterion's threshold and its unit (spec 2026-11-15 8.1, 9.1); a work item's poster carries its
+# client as every other writer does.
 _AGENT_COLUMNS = {
     "ledger": [
         *("id", "at", "principal", "actor", "client", "kind", "symbol", "ref_table", "ref_id"),
@@ -58,11 +63,11 @@ _AGENT_COLUMNS = {
     "notes": ["id", "symbol", "text", "principal", "actor", "client", "at", "override_id"],
     "findings": [
         *("id", "symbol", "as_of", "text", "source_kind", "source_ref", "source_note", "value"),
-        *("unit", "period", "principal", "actor", "client", "at"),
+        *("unit", "period", "principal", "actor", "client", "at", "currency"),
     ],
     "kill_criteria": [
         *("id", "symbol", "text", "state", "report_id", "principal", "actor", "client", "at"),
-        *("state_reason", "state_at"),
+        *("state_reason", "state_at", "threshold", "unit", "currency"),
     ],
     "news_items": [
         *("id", "symbol", "date", "headline", "source", "text", "kill_criterion_id"),
@@ -105,7 +110,8 @@ _AGENT_COLUMNS = {
     "judgments": ["id", "report_id", "symbol", "judgment", "decision", "override_id"],
 }
 # The report's records 006 adds (spec 2026-11-06 Tier 2, 9, 13.7 and 13.8): the multiples log,
-# the sensitivity readings and the guidance records.
+# the sensitivity readings and the guidance records, a record's currency 008's (spec 2026-11-15
+# 9.1).
 _REPORT_COLUMNS = {
     "multiples_log": [
         *("id", "symbol", "day", "price", "pe_reported", "pe_clean", "pe_forward"),
@@ -119,7 +125,7 @@ _REPORT_COLUMNS = {
     "guidance": [
         *("id", "symbol", "metric", "period", "low", "high", "midpoint", "step", "basis"),
         *("as_of", "text", "source", "principal", "actor", "client", "created_at"),
-        "superseded_by",
+        *("superseded_by", "currency"),
     ],
 }
 
@@ -150,7 +156,7 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
     assert migrate(conn) == _ALL
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -193,7 +199,7 @@ def test_designation_columns_join_a_database_at_001(
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
     assert migrate(conn) == _ALL[1:]
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -288,7 +294,7 @@ def test_migration_006_on_a_005_database_keeps_the_judgments(
     )
     conn.commit()
 
-    assert migrate(conn) == ["006_report.sql", "007_secondary_fx.sql"]
+    assert migrate(conn) == _ALL[5:]
 
     assert judgments_for(conn, 1) == [
         JudgmentRow(1, 1, "AAPL", "phase", "as is", None),
@@ -339,12 +345,110 @@ def test_migration_007_gives_a_secondary_valuation_its_rate(
     )
     conn.commit()
 
-    assert migrate(conn) == ["007_secondary_fx.sql"]
+    assert migrate(conn) == _ALL[6:]
 
     columns = {r["name"]: r for r in conn.execute("pragma table_info(secondary_valuations)")}
     rate = columns["fx_rate"]
     assert (rate["type"], rate["notnull"], rate["dflt_value"]) == ("REAL", 1, "1.0")
     assert conn.execute("select fx_rate from secondary_valuations").fetchone()[0] == 1.0
+
+
+def test_migration_008_gives_a_record_its_currency(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 007 holds a finding, a guidance record and a kill criterion, each written
+    before a record named its currency. 008 adds a currency to all three and a threshold with its
+    unit to the kill criterion (spec 2026-11-15 8.1, 9.1), each column empty, so every record
+    reads with its fields as before and no currency: the company's reporting currency."""
+    folder = _migrations_dir(tmp_path, {})
+    for filename in _ALL[1:7]:
+        (folder / filename).write_bytes(_packaged(filename))
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", folder)
+        assert migrate(conn) == _ALL[:7]
+    stamp = "2026-11-11T09:30:00+00:00"
+    conn.execute(
+        "insert into findings (symbol, as_of, text, source_kind, source_ref, source_note, value,"
+        " unit, period, principal, actor, client, at) values ('TSM', '2026-10-16', 'capex guided',"
+        " 'transcript', 'response:7', null, '42000000000.0', 'currency', '2026', 'agent',"
+        " 'claude-opus-5-5', 'claude-code/2.1', ?)",
+        (stamp,),
+    )
+    conn.execute(
+        "insert into guidance (symbol, metric, period, low, high, midpoint, step, basis, as_of,"
+        " text, source, principal, actor, client, created_at) values ('TSM', 'revenue', '2026',"
+        " '3.0e12', '3.2e12', '3.1e12', '0.2', 'gaap', '2026-10-16', 'We expect revenue to grow.',"
+        " 'response:7', 'agent', 'claude-opus-5-5', 'claude-code/2.1', ?)",
+        (stamp,),
+    )
+    conn.execute(
+        "insert into kill_criteria (symbol, text, state, report_id, principal, actor, client, at)"
+        " values ('TSM', 'gross margin below 50%', 'open', null, 'agent', 'claude-opus-5-5',"
+        " 'claude-code/2.1', ?)",
+        (stamp,),
+    )
+    conn.commit()
+
+    assert migrate(conn) == ["008_record_currency.sql"]
+
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8]
+    at = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
+    by_agent = {"principal": "agent", "actor": "claude-opus-5-5", "client": "claude-code/2.1"}
+    assert finding_row(conn, 1) == FindingRow(
+        id=1,
+        symbol="TSM",
+        as_of=date(2026, 10, 16),
+        text="capex guided",
+        source_kind="transcript",
+        source_ref="response:7",
+        source_note=None,
+        value=42e9,
+        unit="currency",
+        period="2026",
+        **by_agent,
+        at=at,
+        currency=None,
+    )
+    assert guidance_row(conn, 1) == GuidanceRow(
+        id=1,
+        symbol="TSM",
+        metric="revenue",
+        period="2026",
+        low=3.0e12,
+        high=3.2e12,
+        midpoint=3.1e12,
+        step=0.2,
+        basis="gaap",
+        as_of=date(2026, 10, 16),
+        text="We expect revenue to grow.",
+        source="response:7",
+        **by_agent,
+        created_at=at,
+        superseded_by=None,
+        currency=None,
+    )
+    assert kill_criterion_row(conn, 1) == KillCriterionRow(
+        id=1,
+        symbol="TSM",
+        text="gross margin below 50%",
+        state="open",
+        report_id=None,
+        **by_agent,
+        at=at,
+        state_reason=None,
+        state_at=None,
+    )
+    for table, added in (
+        ("findings", ["currency"]),
+        ("guidance", ["currency"]),
+        ("kill_criteria", ["threshold", "unit", "currency"]),
+    ):
+        columns = {r["name"]: r for r in conn.execute(f"pragma table_info({table})")}
+        for name in added:
+            column = columns[name]
+            assert (column["type"], column["notnull"], column["dflt_value"]) == ("TEXT", 0, None)
+        stored = conn.execute(f"select {', '.join(added)} from {table}").fetchone()
+        assert tuple(stored) == (None,) * len(added), table
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -456,6 +560,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 005_agents.sql",
         "Applied 006_report.sql",
         "Applied 007_secondary_fx.sql",
+        "Applied 008_record_currency.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()

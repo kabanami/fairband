@@ -293,13 +293,13 @@ and store nothing:
 - `inbox_decline(item_id, reason)`: decline a work item, with the reason.
 - `note_add(symbol, text, override_id?)`: add a note to the company, tied to an override when one
   is named.
-- `finding_add(symbol, as_of, text, source, value?, unit?, period?)`: record a fact from outside
-  Fairband with its source, so a report can cite it as `finding:<id>`.
-- `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source)`: record a figure
-  the company guided on a call for a future period, low and high equal for a point; it answers the
-  record with the midpoint and, for a fiscal-year revenue, EPS or net income figure on the `gaap`
-  basis, the step the server computed. An override cites it in its evidence as `guidance:<id>`; a
-  report cites its figures.
+- `finding_add(symbol, as_of, text, source, value?, unit?, period?, currency?)`: record a fact
+  from outside Fairband with its source, so a report can cite it as `finding:<id>`.
+- `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source, currency?)`: record
+  a figure the company guided on a call for a future period, low and high equal for a point; it
+  answers the record with the midpoint and, for a fiscal-year revenue, EPS or net income figure on
+  the `gaap` basis, the step the server computed. An override cites it in its evidence as
+  `guidance:<id>`; a report cites its figures.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input of
   the twenty-five in `SKILL.md`'s table, the diluted share count (`shares.diluted`), the
   committed shares (`shares.committed`), the value outside the business (`value.outside`), the

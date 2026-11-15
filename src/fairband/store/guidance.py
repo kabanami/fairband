@@ -13,10 +13,16 @@ one, so the agent never computes a rate; no step otherwise, nor on a base at or 
 which growth has no meaning. The actual is the statement's line, a GAAP figure, so a record on
 another basis takes no step: an adjusted figure over a GAAP actual is a rate across two bases, no
 growth, and a constant-currency figure over it is growth at constant currency, a rate the agent
-derives and names as such. A step such a record holds from before this rule is not read.
+derives and names as such. A step such a record holds from before this rule is not read. A record
+of a money metric may name the currency the company guides in (``store.currency``; spec
+2026-11-15 9.1), the code stored as given; none is the company's reporting currency. A record
+whose currency is named and is not the actual's (``base_currency``, the statements' currency)
+takes no step either: its midpoint over an actual in another currency is no growth (spec
+2026-11-15 9.2).
 
 The call's date orders a company's records of one metric, period and basis, of which one at most
-is current (``superseded_by`` empty): a GAAP and an adjusted figure of one call both stay current.
+is current (``superseded_by`` empty), whatever the currency of either: a GAAP and an adjusted
+figure of one call both stay current.
 A new record of a call on or after the current record's supersedes it, and the old record keeps
 its figures and names its successor in ``superseded_by``; a new record of an earlier call, the
 previous call's figure written late, is stored already superseded by the current one. Every
@@ -47,6 +53,7 @@ from fairband.store._codec import (
     load_float,
     load_stamp,
 )
+from fairband.store.currency import check_currency
 from fairband.store.db import transaction
 from fairband.store.ledger import Principal, Writer
 
@@ -96,6 +103,7 @@ class GuidanceRow:
     client: str | None
     created_at: datetime
     superseded_by: int | None
+    currency: str | None = None  # as stored: none is the reporting currency
 
 
 def year_before(metric: str, period: str) -> int | None:
@@ -137,17 +145,23 @@ def insert_guidance(
     writer: Writer,
     at: datetime,
     base_actual: float | None,
+    *,
+    currency: str | None = None,
+    base_currency: str | None = None,
 ) -> int:
-    """Record the guidance, its step from ``base_actual`` (the actual on file of the year before
-    the guided one, or ``None``) when it takes one, a ``gaap`` record alone, and order it against
-    the company's current record of the same metric, period and basis by the call's date (module
-    docstring); return its id."""
+    """Record the guidance, in ``currency`` when one is named, its step from ``base_actual`` (the
+    actual on file of the year before the guided one, or ``None``, in ``base_currency``) when it
+    takes one, a ``gaap`` record alone and none in a named currency that is not the actual's, and
+    order it against the company's current record of the same metric, period and basis by the
+    call's date (module docstring); return its id."""
     symbol = exchange_symbol(symbol)
     _check(metric, period, low, high, basis, text, source)
+    check_currency(currency, UNITS[metric])
     midpoint = (low + high) / 2
     step = None
     stepped = basis == "gaap" and year_before(metric, period) is not None
-    if stepped and base_actual is not None and base_actual > 0:
+    same = currency is None or currency == base_currency
+    if stepped and same and base_actual is not None and base_actual > 0:
         step = midpoint / base_actual - 1
     row = (
         symbol,
@@ -176,9 +190,9 @@ def insert_guidance(
         later = current is not None and load_date(current["as_of"]) > as_of
         cursor = conn.execute(
             "INSERT INTO guidance (symbol, metric, period, low, high, midpoint, step, basis, as_of,"
-            " text, source, principal, actor, client, created_at, superseded_by)"
-            f" VALUES ({', '.join('?' * (len(row) + 1))})",
-            (*row, current["id"] if later else None),
+            " text, source, principal, actor, client, created_at, superseded_by, currency)"
+            f" VALUES ({', '.join('?' * (len(row) + 2))})",
+            (*row, current["id"] if later else None, currency),
         )
         guidance_id = inserted_id(cursor)
         if current is not None and not later:
@@ -243,4 +257,5 @@ def _guidance(row: sqlite3.Row) -> GuidanceRow:
         client=row["client"],
         created_at=load_stamp(row["created_at"]),
         superseded_by=row["superseded_by"],
+        currency=row["currency"],
     )

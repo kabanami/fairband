@@ -38,9 +38,11 @@ value, else the snapshot's; ``None`` otherwise.
 
 ``GET /api/companies/{symbol}/research`` answers what Details lists (18.3), each record as its own
 read serves it: ``overrides``, ``guidance``, ``killCriteria``, ``newsItems``, ``notes`` and
-``findings`` newest first; ``judgments``, the latest report's, in the order the agent gave them;
-and ``ledger``, the company's twenty newest rows, newest first. A company with no snapshot is a
-404, "no snapshot for <symbol>", as the detail answers; a symbol that is not one a 400.
+``findings`` newest first, a finding and a guidance record with the currency of its money
+(``agents_api.money_json``; spec 2026-11-15 9.1); ``judgments``, the latest report's, in the
+order the agent gave them; and ``ledger``, the company's twenty newest rows, newest first. A
+company with no snapshot is a 404, "no snapshot for <symbol>", as the detail answers; a symbol
+that is not one a 400.
 """
 
 import sqlite3
@@ -59,6 +61,7 @@ from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.reports.render import references
+from fairband.store.currency import reporting_currency
 from fairband.store.guidance import guidance_for
 from fairband.store.inbox import open_item
 from fairband.store.ledger import entries
@@ -69,6 +72,7 @@ from fairband.store.reviews import ReviewRow, latest_review
 from fairband.store.secondary import SecondaryRow, latest_secondary
 from fairband.store.snapshots import SnapshotRow, latest_snapshot, snapshot_rows
 from fairband.web.agents_api import finding_json, record_json
+from fairband.web.guidance_api import guidance_json
 from fairband.web.reviews_api import secondary_json
 from fairband.web.rows import counts_on, rested_on, standing, window_ended
 
@@ -138,14 +142,15 @@ def add_research_routes(app: FastAPI, conn_factory: Callable[[], sqlite3.Connect
         with closing(conn_factory()) as conn:
             if latest_snapshot(conn, company) is None:
                 raise HTTPException(404, f"no snapshot for {company}")
+            reporting = reporting_currency(conn, company)
             return {
                 "overrides": [record_json(o) for o in overrides_for(conn, company)],
-                "guidance": [record_json(g) for g in guidance_for(conn, company)],
+                "guidance": [guidance_json(g, reporting) for g in guidance_for(conn, company)],
                 "judgments": [record_json(j) for j in latest_judgments(conn, company)],
                 "killCriteria": [record_json(k) for k in kill_criteria_for(conn, company)],
                 "newsItems": [record_json(n) for n in news_items_for(conn, company)],
                 "notes": [record_json(n) for n in notes_for(conn, company)],
-                "findings": [finding_json(f) for f in findings_for(conn, company)],
+                "findings": [finding_json(f, reporting) for f in findings_for(conn, company)],
                 "ledger": [record_json(e) for e in entries(conn, company, LEDGER_ROWS)],
             }
 

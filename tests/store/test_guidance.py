@@ -39,9 +39,25 @@ def _add(
     symbol: str = "AAPL",
     basis: str = "gaap",
     call: date = CALL,
+    currency: str | None = None,
+    base_currency: str | None = None,
 ) -> int:
     return insert_guidance(
-        conn, symbol, metric, period, low, high, basis, call, SAID, SOURCE, AGENT, NOW, base
+        conn,
+        symbol,
+        metric,
+        period,
+        low,
+        high,
+        basis,
+        call,
+        SAID,
+        SOURCE,
+        AGENT,
+        NOW,
+        base,
+        currency=currency,
+        base_currency=base_currency,
     )
 
 
@@ -196,6 +212,53 @@ def test_an_earlier_call_recorded_later_is_stored_superseded(conn: sqlite3.Conne
     by_id = {g.id: g for g in guidance_for(conn, "AAPL")}
     assert by_id[newest].superseded_by == restated and by_id[restated].superseded_by is None
     assert by_id[previous].superseded_by == newest  # kept as stored
+
+
+def test_a_money_record_names_its_currency(conn: sqlite3.Connection) -> None:
+    """Spec 2026-11-15 9.1: a record of a money metric may name the currency the company guides
+    in, stored as given; a percent metric takes none; a record that names none is in the
+    reporting currency, as every record before."""
+    revenue = _add(conn, "revenue", "2026", 30e9, 32e9, None, currency="USD")
+    eps = _add(conn, "eps", "2026", 60.0, 62.0, None, currency="TWD")
+    capex = _add(conn, "capex", "2026", 40e9, 42e9, None)
+    stored = {g.id: g.currency for g in guidance_for(conn, "AAPL")}
+    assert stored == {revenue: "USD", eps: "TWD", capex: None}
+    for metric in ("operating_margin", "revenue_growth", "eps_growth"):
+        with pytest.raises(ValueError, match="^a currency goes with a money figure$"):
+            _add(conn, metric, "2026", 0.3, 0.32, None, currency="USD")
+    for code in ("usd", "US", "DOLLAR"):
+        refusal = f"^a currency is three capital letters, not '{code}'$"
+        with pytest.raises(ValueError, match=refusal):
+            _add(conn, "revenue", "2027", 30e9, 32e9, None, currency=code)
+    assert len(guidance_for(conn, "AAPL")) == 3
+
+
+def test_a_record_in_another_currency_than_its_actual_takes_no_step(
+    conn: sqlite3.Connection,
+) -> None:
+    """Spec 2026-11-15 9.2: TSM guides revenue in US dollars and reports in TWD, so a step of its
+    US-dollar midpoint over a TWD actual would be no growth: the record takes none. A record in the
+    actual's currency, or one that names none, steps as before."""
+    usd = _add(
+        conn, "revenue", "2026", 30e9, 32e9, 900e9, "TSM", currency="USD", base_currency="TWD"
+    )
+    row = guidance_row(conn, usd)
+    assert row is not None and (row.step, row.midpoint, row.currency) == (None, 31e9, "USD")
+    named = _add(conn, "revenue", "2027", 1.1e12, 1.1e12, 1e12, currency="TWD", base_currency="TWD")
+    bare = _add(conn, "eps", "2026", 6.3, 6.6, 6.0, base_currency="TWD")
+    unread = _add(conn, "eps", "2027", 6.3, 6.6, 6.0, currency="USD")  # no base currency read
+    steps = {g.id: g.step for g in guidance_for(conn, "AAPL")}
+    assert steps == {named: pytest.approx(0.1), bare: pytest.approx(0.075), unread: None}
+
+
+def test_a_record_in_a_currency_supersedes_one_with_none(conn: sqlite3.Connection) -> None:
+    """Spec 2026-11-15 9.1: one current record a metric, period and basis, whatever the currency
+    of either."""
+    bare = _add(conn, "revenue", "2026", 900e9, 950e9, None, symbol="TSM")
+    later = date(2027, 1, 15)
+    usd = _add(conn, "revenue", "2026", 30e9, 32e9, None, "TSM", call=later, currency="USD")
+    by_id = {g.id: g for g in guidance_for(conn, "TSM")}
+    assert (by_id[bare].superseded_by, by_id[usd].superseded_by) == (usd, None)
 
 
 @pytest.mark.parametrize(

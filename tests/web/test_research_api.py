@@ -633,6 +633,41 @@ def test_the_research_read_serves_each_record_as_its_own_read(
     assert _research(client, "HGCO") == empty
 
 
+def test_the_research_read_names_each_record_s_currency(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-15 9.1: FXCO reports in SEK. Each finding and guidance record carries the
+    currency of its money, as its own read serves it: the code it names, else SEK; none for a
+    figure that is not money."""
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, value_company(fx_inputs(), universe_deciles(), policy, TODAY), 1)
+    base = "/api/companies/FXCO"
+    source = {"kind": "transcript", "ref": "response:7", "note": None}
+    fact = {"asOf": "2026-10-16", "text": "capex", "source": source}
+    money = fact | {"value": 4e9, "unit": "currency"}
+    rate = fact | {"value": 0.11, "unit": "percent"}
+    for finding in (money | {"currency": "USD"}, money, fact, rate):
+        _post(client, f"{base}/findings", finding, AGENT_HEADERS)
+    guidance = {
+        "metric": "revenue",
+        "period": "2026",
+        "low": 2.4e9,
+        "high": 2.5e9,
+        "basis": "gaap",
+        "asOf": "2026-10-28",
+        "text": "We expect revenue of $2.4 billion to $2.5 billion for fiscal 2026.",
+        "source": "response:12/0/content",
+    }
+    margin = guidance | {"metric": "operating_margin", "low": 0.3, "high": 0.32}
+    for record in (guidance | {"currency": "USD"}, guidance | {"metric": "eps"}, margin):
+        _post(client, f"{base}/guidance", record, AGENT_HEADERS)
+    found = _research(client, "fxco")
+    assert [f["currency"] for f in found["findings"]] == [None, None, "SEK", "USD"]
+    assert [g["currency"] for g in found["guidance"]] == [None, "SEK", "USD"]
+    assert found["findings"] == client.get(f"{base}/findings").json()["findings"]
+    assert found["guidance"] == client.get(f"{base}/guidance").json()["guidance"]
+
+
 def test_the_research_reads_the_twenty_newest_ledger_rows(client: TestClient) -> None:
     for n in range(25):
         _post(client, "/api/companies/AAPL/notes", {"text": f"note {n}"}, HEADER)

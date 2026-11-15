@@ -9,8 +9,10 @@ the writer's principal and its snapshot the company's latest. ``POST /api/inbox/
 the named item, or the oldest pending one, for the agent; ``PATCH /api/inbox/{id}`` completes it
 with a published report of its company, or declines it with a reason. Each company's notes,
 findings, kill criteria and news items are read and written under ``/api/companies/{symbol}/``;
-``PATCH /api/kill-criteria/{id}`` moves a criterion's state with a reason. ``/api/ledger`` and
-``/api/companies/{symbol}/ledger`` read the ledger newest first.
+a finding may name the currency of its money figure, and answers the one it is in
+(``money_json``; spec 2026-11-15 9.1). ``PATCH /api/kill-criteria/{id}`` moves a criterion's
+state with a reason. ``/api/ledger`` and ``/api/companies/{symbol}/ledger`` read the ledger newest
+first.
 
 Every write names its writer by the identity headers (``fairband.web.identity``) and is a ledger
 row, written in the same transaction as the record: the writer, the kind of write, the company,
@@ -33,7 +35,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 from fairband.policy.settings import exchange_symbol
+from fairband.store.currency import currency_of, reporting_currency
 from fairband.store.db import transaction
+from fairband.store.guidance import GuidanceRow
 from fairband.store.inbox import (
     ItemOpen,
     Mode,
@@ -120,6 +124,7 @@ class FindingPost(_Body):
     value: float | None = None
     unit: Unit | None = None
     period: str | None = None
+    currency: str | None = None
 
 
 class KillCriterionPost(_Body):
@@ -145,9 +150,19 @@ def record_json(row: Any) -> dict[str, Any]:
     return {to_camel(f.name): _plain(getattr(row, f.name)) for f in fields(row)}
 
 
-def finding_json(finding: FindingRow) -> dict[str, Any]:
-    """A finding, its source as one ``{kind, ref, note}``, as it was written."""
-    plain = record_json(finding)
+def money_json(row: FindingRow | GuidanceRow, unit: str | None, reporting: str) -> dict[str, Any]:
+    """A finding or a guidance record whose figure is of ``unit`` as the API sends it
+    (``record_json``), its ``currency`` the one that figure is in (``store.currency.currency_of``):
+    the stored code, else ``reporting``, the company's reporting currency
+    (``store.currency.reporting_currency``); ``None`` for a figure that is not money (spec
+    2026-11-15 9.1). Every answer of either record reads its currency here."""
+    return record_json(row) | {"currency": currency_of(row.currency, unit, reporting)}
+
+
+def finding_json(finding: FindingRow, reporting: str) -> dict[str, Any]:
+    """A finding, its source as one ``{kind, ref, note}``, as it was written, and the currency of
+    its money in the company's ``reporting`` currency (``money_json``)."""
+    plain = money_json(finding, finding.unit, reporting)
     source = {key: plain.pop(f"source{key.title()}") for key in ("kind", "ref", "note")}
     return plain | {"source": source}
 
@@ -279,7 +294,9 @@ def add_agent_routes(
     @app.get("/api/companies/{symbol}/findings")
     def findings(symbol: str) -> dict[str, Any]:
         with closing(conn_factory()) as conn, _refusals("finding"):
-            return {"findings": [finding_json(f) for f in findings_for(conn, symbol)]}
+            found = findings_for(conn, symbol)
+            reporting = reporting_currency(conn, symbol)
+            return {"findings": [finding_json(f, reporting) for f in found]}
 
     @app.post("/api/companies/{symbol}/findings", status_code=201)
     def post_finding(symbol: str, body: FindingPost, writer: WriterOf) -> dict[str, Any]:
@@ -301,12 +318,13 @@ def add_agent_routes(
                 value=body.value,
                 unit=body.unit,
                 period=body.period,
+                currency=body.currency,
             )
             finding = finding_row(conn, finding_id)
             assert finding is not None  # written in this transaction
             summary = gist(finding.text)
             _record(conn, writer, at, "finding", finding.symbol, "findings", finding.id, summary)
-            return finding_json(finding)
+            return finding_json(finding, reporting_currency(conn, finding.symbol))
 
     @app.get("/api/companies/{symbol}/kill-criteria")
     def kill_criteria(symbol: str) -> dict[str, Any]:

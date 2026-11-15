@@ -8,7 +8,9 @@ and need not have a snapshot. Text is kept as written; a blank one is refused.
 - A note: text, and the override whose provenance it carries, if any.
 - A finding: a dated, sourced fact. ``as_of`` is the date the fact describes; the source is
   ``{kind, ref, note}`` with kind one of ``SOURCE_KINDS`` and a ref; a value comes with its unit
-  (one of ``UNITS``), and a period (a fiscal year, a quarter, ``ttm``) may name what it covers.
+  (one of ``UNITS``), and a period (a fiscal year, a quarter, ``ttm``) may name what it covers. A
+  money figure may name its currency (``store.currency``; spec 2026-11-15 9.1), the code stored
+  as given; none is the company's reporting currency.
 - A kill criterion: a measurable event that would prove the view wrong, the report that set it,
   and a state, ``open`` until ``set_kill_criterion`` moves it with a reason.
 - A news item: a date, a headline, a source (a URL or a vendor response id), text, the
@@ -37,6 +39,7 @@ from fairband.store._codec import (
     load_float,
     load_stamp,
 )
+from fairband.store.currency import check_currency
 from fairband.store.db import transaction
 from fairband.store.ledger import Principal, Writer
 
@@ -77,6 +80,7 @@ class FindingRow:
     actor: str | None
     client: str | None
     at: datetime
+    currency: str | None = None  # as stored: none is the reporting currency
 
 
 @dataclass(frozen=True)
@@ -149,8 +153,10 @@ def add_finding(
     value: float | None = None,
     unit: Unit | None = None,
     period: str | None = None,
+    currency: str | None = None,
 ) -> int:
-    """Record the finding, sourced by ``source`` (``{kind, ref, note}``); return its id."""
+    """Record the finding, sourced by ``source`` (``{kind, ref, note}``), a money figure in
+    ``currency`` when one is named; return its id."""
     symbol = exchange_symbol(symbol)
     _require_text(text, "a finding needs text")
     kind, ref = source.get("kind"), source.get("ref")
@@ -164,6 +170,7 @@ def add_finding(
         raise ValueError(f"a unit is one of {', '.join(UNITS)}, not {unit!r}")
     if value is not None and not math.isfinite(value):
         raise ValueError("a finding's value is a finite number")
+    check_currency(currency, unit)
     fields = {
         "symbol": symbol,
         "as_of": dump_date(as_of),
@@ -174,6 +181,7 @@ def add_finding(
         "value": dump_float(value),
         "unit": unit,
         "period": period,
+        "currency": currency,
     }
     return _insert(conn, "findings", fields, writer, at)
 
@@ -355,6 +363,7 @@ def _finding(row: sqlite3.Row) -> FindingRow:
         actor=row["actor"],
         client=row["client"],
         at=load_stamp(row["at"]),
+        currency=row["currency"],
     )
 
 

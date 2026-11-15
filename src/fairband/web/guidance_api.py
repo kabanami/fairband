@@ -1,26 +1,30 @@
 """The guidance routes (spec 2026-11-06 Tier 2, 9, 15.4 and 16; ``method.md`` 14.9).
 
 ``POST /api/companies/{symbol}/guidance`` takes ``{metric, period, low, high, basis, asOf, text,
-source}`` from an agent and answers 201 with the stored guidance record, its midpoint and its step
-the server's (``fairband.store.guidance``). The owner's post answers 403, "a guidance record is an
-agent's write". A value the record cannot take is a 400 with the store's sentence, in the order of
-the fields: "metric is one of revenue, eps, ...", "period is a fiscal year or a quarter (2026,
-2026Q3)", "low is above high", "basis is one of gaap, adjusted or constant-currency", "a guidance
-record needs its text", "a guidance record needs its source"; a low or a high that is not a
-finite number is refused by the body's types, a 400 too. For a fiscal-year revenue, EPS or net
-income record the server reads the actual of the fiscal year before the guided one from the
-statements as ``fact:<symbol>/revenue/<year>``, ``fact:<symbol>/eps_diluted/<year>`` or
-``fact:<symbol>/net_income/<year>`` resolves it (spec 2026-11-14 9); with no actual on file the
+source, currency?}`` from an agent and answers 201 with the stored guidance record, its midpoint
+and its step the server's (``fairband.store.guidance``). The owner's post answers 403, "a guidance
+record is an agent's write". A value the record cannot take is a 400 with the store's sentence, in
+the order of the fields: "metric is one of revenue, eps, ...", "period is a fiscal year or a
+quarter (2026, 2026Q3)", "low is above high", "basis is one of gaap, adjusted or
+constant-currency", "a guidance record needs its text", "a guidance record needs its source", "a
+currency is three capital letters, not ...", "a currency goes with a money figure"; a low or a
+high that is not a finite number is refused by the body's types, a 400 too. For a fiscal-year
+revenue, EPS or net income record the server reads the actual of the fiscal year before the guided
+one from the statements as ``fact:<symbol>/revenue/<year>``, ``fact:<symbol>/eps_diluted/<year>``
+or ``fact:<symbol>/net_income/<year>`` resolves it (spec 2026-11-14 9); with no actual on file the
 record takes no step, and neither does a record on a basis other than ``gaap``, whatever the
-actual (``store.guidance``). The company needs no snapshot. The call's
-date orders the records of one metric, period and basis (``store.guidance``): a record of a call
-on or after the current one's supersedes it, whose ``supersededBy`` then names it, and a record of
-an earlier call is stored already superseded.
-The write is a ``guidance`` ledger row resting on the company's latest snapshot (none without
-one), its summary "<metric> <period>: <the text's first line>".
+actual, nor one that names a currency other than the statements' (``base_currency``, the currency
+the financial tables' read names; spec 2026-11-15 9.2), read for such a record alone
+(``store.guidance``). The company needs no snapshot. The call's date orders the records of one
+metric, period and basis (``store.guidance``): a record of a call on or after the current one's
+supersedes it, whose ``supersededBy`` then names it, and a record of an earlier call is stored
+already superseded. The write is a ``guidance`` ledger row resting on the company's latest
+snapshot (none without one), its summary "<metric> <period>: <the text's first line>".
 
 ``GET`` on the same path lists the company's records newest first, each as the post answers it,
-under ``guidance``. A record's keys are camelCase.
+under ``guidance``. A record's keys are camelCase; its ``currency`` is the one its money is in, the
+stored code, else the company's reporting currency, none for a percent (``guidance_json``; spec
+2026-11-15 9.1).
 """
 
 import sqlite3
@@ -37,11 +41,20 @@ from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.reports.refs import Resolver, fact_ref
+from fairband.reports.tables import stated_for
+from fairband.store.currency import reporting_currency
 from fairband.store.db import transaction
-from fairband.store.guidance import guidance_for, guidance_row, insert_guidance, year_before
+from fairband.store.guidance import (
+    UNITS,
+    GuidanceRow,
+    guidance_for,
+    guidance_row,
+    insert_guidance,
+    year_before,
+)
 from fairband.store.ledger import record
 from fairband.store.snapshots import latest_snapshot
-from fairband.web.agents_api import WriterOf, gist, record_json
+from fairband.web.agents_api import WriterOf, gist, money_json
 from fairband.web.reviews_api import agents_only
 from fairband.web.settings_api import effective
 
@@ -63,6 +76,13 @@ class GuidancePost(BaseModel):
     as_of: date
     text: str
     source: str
+    currency: str | None = None
+
+
+def guidance_json(record: GuidanceRow, reporting: str) -> dict[str, Any]:
+    """A guidance record as the API sends it, the currency of its money in the company's
+    ``reporting`` currency (``agents_api.money_json``) by its metric's unit."""
+    return money_json(record, UNITS[record.metric], reporting)
 
 
 def add_guidance_routes(
@@ -84,6 +104,8 @@ def add_guidance_routes(
             try:
                 symbol = exchange_symbol(symbol)
                 resolver = Resolver(conn, symbol, effective(conn, policy), tax)
+                # the statements' currency matters only to a record that names its own
+                stated = None if body.currency is None else stated_for(conn, symbol, tax)
                 guidance_id = insert_guidance(
                     conn,
                     symbol,
@@ -98,6 +120,8 @@ def add_guidance_routes(
                     writer,
                     at,
                     _base_actual(resolver, body.metric, body.period),
+                    currency=body.currency,
+                    base_currency=None if stated is None else stated.currency,
                 )
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from None
@@ -115,7 +139,7 @@ def add_guidance_routes(
                 snapshot_id=None if latest is None else latest.id,
                 summary=f"{found.metric} {found.period}: {gist(found.text)}",
             )
-            return record_json(found)
+            return guidance_json(found, reporting_currency(conn, symbol))
 
     @app.get("/api/companies/{symbol}/guidance")
     def guidance(symbol: str) -> dict[str, Any]:
@@ -124,7 +148,8 @@ def add_guidance_routes(
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
         with closing(conn_factory()) as conn:
-            return {"guidance": [record_json(g) for g in guidance_for(conn, company)]}
+            reporting = reporting_currency(conn, company)
+            return {"guidance": [guidance_json(g, reporting) for g in guidance_for(conn, company)]}
 
 
 def _base_actual(resolver: Resolver, metric: str, period: str) -> float | None:

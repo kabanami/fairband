@@ -10,10 +10,14 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from support.web import CREATED, HEADER, NOW
+from support.engine_companies import fx_inputs, universe_deciles
+from support.web import CREATED, HEADER, NOW, TODAY
 
+from fairband.engine.route import value_company
+from fairband.policy import Policy
 from fairband.store.db import connect
 from fairband.store.facts import FactRow, insert_facts
+from fairband.store.snapshots import insert_snapshot
 from fairband.store.vendor import record_response
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -35,23 +39,31 @@ REVENUE_2026 = {
 }
 
 
-def _store_line(db_path: Path, field: str, year: int, value: float) -> None:
-    """One line of AAPL's fiscal-year income statement, as the refresh stores it."""
+def _store_line(
+    db_path: Path,
+    field: str,
+    year: int,
+    value: float,
+    symbol: str = "AAPL",
+    currency: str = "USD",
+) -> None:
+    """One line of the company's fiscal-year income statement, as the refresh stores it, in
+    ``currency``: AAPL's in USD unless named."""
     with closing(connect(db_path)) as conn:
         response = record_response(
-            conn, "fmp", "income-statement", {"symbol": "AAPL"}, "AAPL", 200, "[]", None, CREATED
+            conn, "fmp", "income-statement", {"symbol": symbol}, symbol, 200, "[]", None, CREATED
         )
         end = date(year, 9, 27)
         fact = FactRow(
-            symbol="AAPL",
+            symbol=symbol,
             dataset="income-annual",
             period_end=end,
             fiscal_year=year,
             fiscal_period="FY",
             field=field,
             value=Decimal(repr(value)),
-            unit="USD",
-            currency="USD",
+            unit=currency,
+            currency=currency,
             kind="observed",
             estimate_method=None,
             missing_reason=None,
@@ -94,6 +106,7 @@ def test_guidance_round_trip(client: TestClient, db_path: Path) -> None:
         "client": "claude-code/2.1",
         "createdAt": NOW.isoformat(),
         "supersededBy": None,
+        "currency": "USD",  # none stored: the reporting currency, AAPL's snapshot's
     }
     point = _post(client, REVENUE_2026 | {"low": 24.6e9, "high": 24.6e9, "text": "About $24.6bn."})
     assert (point["midpoint"], point["step"]) == (24.6e9, pytest.approx(0.23))
@@ -170,6 +183,12 @@ def test_only_a_gaap_record_takes_a_step(client: TestClient, db_path: Path) -> N
         ({"period": "FY2026"}, "period is a fiscal year or a quarter (2026, 2026Q3)"),
         ({"text": "  "}, "a guidance record needs its text"),
         ({"source": ""}, "a guidance record needs its source"),
+        (
+            {"metric": "operating_margin", "low": 0.30, "high": 0.32, "currency": "USD"},
+            "a currency goes with a money figure",
+        ),
+        ({"currency": "usd"}, "a currency is three capital letters, not 'usd'"),
+        ({"currency": "DOLLAR"}, "a currency is three capital letters, not 'DOLLAR'"),
     ],
 )
 def test_guidance_refusals(client: TestClient, changes: dict[str, Any], detail: str) -> None:
@@ -177,6 +196,49 @@ def test_guidance_refusals(client: TestClient, changes: dict[str, Any], detail: 
     assert (r.status_code, r.json()) == (400, {"detail": detail})
     assert client.get("/api/companies/AAPL/guidance").json() == {"guidance": []}
     assert client.get("/api/companies/AAPL/ledger").json() == {"entries": []}
+
+
+def test_a_record_names_its_currency_and_steps_in_the_statements(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-15 9.1, 9.2: FXCO reports in SEK, its snapshot's currency and its statements'.
+    A record that names no currency is in SEK and steps from the SEK actual of the year before; one
+    that names SEK steps too; one in US dollars takes no step, its midpoint over a SEK actual being
+    no growth; a margin has no currency. Each answer, and the read, names the currency."""
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, value_company(fx_inputs(), universe_deciles(), policy, TODAY), 1)
+    _store_line(db_path, "revenue", 2025, 20e9, symbol="FXCO", currency="SEK")
+    bare = _post(client, REVENUE_2026, "FXCO")
+    assert (bare["currency"], bare["step"]) == ("SEK", pytest.approx(0.225))
+    sek = _post(client, REVENUE_2026 | {"currency": "SEK"}, "FXCO")
+    assert (sek["currency"], sek["step"]) == ("SEK", pytest.approx(0.225))
+    usd = _post(client, REVENUE_2026 | {"low": 2.4e9, "high": 2.5e9, "currency": "USD"}, "fxco")
+    assert (usd["currency"], usd["step"], usd["midpoint"]) == ("USD", None, 2.45e9)
+    margin = REVENUE_2026 | {"metric": "operating_margin", "low": 0.30, "high": 0.32}
+    assert _post(client, margin, "FXCO")["currency"] is None
+    listed = client.get("/api/companies/fxco/guidance").json()["guidance"]
+    assert [(g["metric"], g["currency"]) for g in listed] == [
+        ("operating_margin", None),
+        ("revenue", "USD"),
+        ("revenue", "SEK"),
+        ("revenue", "SEK"),
+    ]
+    assert listed[1:] == [
+        usd,
+        sek | {"supersededBy": usd["id"]},
+        bare | {"supersededBy": sek["id"]},
+    ]
+
+
+def test_a_company_with_no_snapshot_reads_in_us_dollars(client: TestClient) -> None:
+    """Spec 2026-11-15 9.1: with no snapshot, the reporting currency is USD; a record's own
+    currency stands."""
+    bare = _post(client, REVENUE_2026, "ZZZZ")
+    eps = REVENUE_2026 | {"metric": "eps", "low": 6.3, "high": 6.6, "currency": "TWD"}
+    assert (bare["currency"], bare["step"]) == ("USD", None)
+    assert _post(client, eps, "ZZZZ")["currency"] == "TWD"
+    listed = client.get("/api/companies/zzzz/guidance").json()["guidance"]
+    assert [(g["metric"], g["currency"]) for g in listed] == [("eps", "TWD"), ("revenue", "USD")]
 
 
 def test_a_guidance_record_is_an_agents_write(client: TestClient) -> None:
