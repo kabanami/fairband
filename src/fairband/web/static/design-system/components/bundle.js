@@ -956,13 +956,17 @@
               // fairband: the cites line only when the caller passes cites: the drawer's Summary
               // leaves it to the report page (spec 2026-11-06 Tier 2, 18.2).
               p.cites ? h('p', { className: 'fb-report__cites caption' },
-                'cites snapshot ', h('span', { className: 'figure-sm' }, cites.snapshot),
-                // fairband: a review and a thesis only when the report rests on one, so a report
-                // with no review names none (spec 2026-11-06 Tier 2, 18.4).
-                cites.review == null ? null : h(React.Fragment, null, ' · review ',
-                  h('span', { className: 'figure-sm' }, cites.review)),
-                cites.thesis == null ? null : h(React.Fragment, null, ' · thesis ',
-                  h('span', { className: 'figure-sm' }, cites.thesis)),
+                // fairband: the line under the title says what the report rests on in the reader's
+                // words, each date a DateText and no record's id, which Appendix A names: the
+                // data's date; "priced that day" where the price's is the same day, else the
+                // price's date, nothing without one; the end of the validity window, nothing
+                // without one; the full report a valuation review reuses (spec 2026-11-15 7).
+                'On the data of ', h(DateText, { value: cites.dataDate }),
+                cites.priceDate == null ? null
+                  : cites.priceDate === cites.dataDate ? ' · priced that day'
+                  : h(React.Fragment, null, ' · priced ', h(DateText, { value: cites.priceDate })),
+                cites.validUntil == null ? null : h(React.Fragment, null, ' · valid until ',
+                  h(DateText, { value: cites.validUntil })),
                 cites.reusesFullReportOf ? h(React.Fragment, null, ' · reuses the full report of ',
                   h(DateText, { value: cites.reusesFullReportOf })) : null) : null,
               (p.sections || []).map(function (s, i) {

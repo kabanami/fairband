@@ -9,7 +9,7 @@ news items; a rejected one stores nothing but its ledger row."""
 
 from contextlib import closing
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ from fairband.engine.route import reprice, value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.reports.check import HEADINGS, NO_REFERENCE, UNRESOLVED, headings
+from fairband.reports.refs import day_words
 from fairband.store.db import connect
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
@@ -50,8 +51,10 @@ REFUSED_JUDGMENTS = [
     {"judgment": kind, "decision": f"keep the {kind}"}
     for kind in ("phase", "moat", "belief", "target_margin")
 ]
-ROUTE_VALUES = "no secondary valuation: the route values the company"
-REVIEW_VALUES = "no secondary valuation: the review values the company"
+# Appendix A's sentences where the company can have no secondary valuation, in the register's words
+# (spec 2026-11-15 7)
+ROUTE_VALUES = "No secondary valuation: Fairband's own valuation gives the company a value"
+REVIEW_VALUES = "No secondary valuation: the review gives the company a value"
 # Refusals an agent cannot fix (spec 2026-11-10 7.6), as the engine words them; and the one the
 # engine gave a foreign filer before method 1.1, which a snapshot on file may carry.
 ABOVE_BOUND = "ARS: expected inflation 12.1% above the 10% bound"
@@ -275,6 +278,13 @@ def test_a_review_mode_has_ten_sections(client: TestClient) -> None:
     full = _published(client, _body(sid))
     second = _published(client, review)
     assert second["reusesFullReportOf"] == full["id"]
+    # the export names the full report it reuses by its date, as the page's line does, and the
+    # first, which reuses none, says so (spec 2026-11-15 7)
+    reused = datetime.fromisoformat(full["createdAt"]).date()
+    text = client.get(f"/api/reports/{second['id']}/markdown").text
+    assert text.splitlines()[3] == f"Reuses the full report of {day_words(reused)}."
+    text = client.get(f"/api/reports/{first['id']}/markdown").text
+    assert text.splitlines()[3] == "No full report to reuse."
     r = _submit(client, _body(sid, mode="valuation review"))
     assert (r.status_code, r.json()) == (
         400,
@@ -325,7 +335,10 @@ def test_markdown_download(client: TestClient) -> None:
     assert r.status_code == 200
     assert r.headers["content-type"] == "text/markdown; charset=utf-8"
     lines = r.text.splitlines()
-    assert lines[0] == "AAPL · full report · 2026-11-01 · claude-opus-5-5 · revision 1"
+    assert lines[0] == "AAPL · full report · 1 Nov 2026 · claude-opus-5-5 · revision 1"
+    assert lines[2] == (
+        "Stance: hold. On the data of 30 Oct 2026, priced that day, valid until 28 Jan 2027."
+    )
     assert [line[3:] for line in lines if line.startswith("## ")] == [
         *HEADINGS,
         "Appendix A",
@@ -703,7 +716,8 @@ def _aal_review(
         # a snapshot refused as a foreign filer before method 1.1, as one on file may be
         ("OLDF", {"currency": "EUR", "refusal": FOREIGN_FILER}, FOREIGN_FILER),
         ("NOSH", {"shares_diluted": None}, "no diluted share count"),
-        ("PLAIN", {}, "the route values the company"),
+        # the route's reason in the register's words, without "the route" (spec 2026-11-15 7)
+        ("PLAIN", {}, "Fairband's own valuation gives the company a value"),
     ],
 )
 def test_a_company_that_can_have_no_secondary_publishes_without_one(
@@ -729,10 +743,10 @@ def test_a_company_that_can_have_no_secondary_publishes_without_one(
     report = _published(client, body, symbol)
     assert (report["snapshotId"], report["secondaryId"]) == (sid, None)
     a = report["appendixA"]
-    assert (a["secondary"], a["noSecondary"]) == (None, f"no secondary valuation: {why}")
+    assert (a["secondary"], a["noSecondary"]) == (None, f"No secondary valuation: {why}")
     text = client.get(f"/api/reports/{report['id']}/markdown").text
     block = text.split("### Secondary valuation\n\n", 1)[1].split("\n", 1)[0]
-    assert block == f"no secondary valuation: {why}"  # the server's sentence, as the page shows it
+    assert block == f"No secondary valuation: {why}"  # the server's sentence, as the page shows it
 
 
 def test_appendix_a_says_none_for_a_report_with_no_secondary_that_could_have_one(

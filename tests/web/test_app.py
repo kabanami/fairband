@@ -2742,6 +2742,12 @@ def test_the_report_page_order_is_pinned() -> None:
         "state.downloadError",
     )
     assert "var expired = report.appendixA.snapshot.validUntil < d.today;" in meta
+    # the faded stance's title says the value is past its date in the register's words, naming no
+    # part of Fairband (spec 2026-11-15 7)
+    assert "title: expired ? 'The value of this report is past the date it was valid until'" in (
+        meta
+    )
+    assert "snapshot window" not in meta
     # Request research under the revisions line, spaced as the meta's other lines are (plan 4)
     page = _static_file("index.html")
     assert "margin-top: var(--space-2);" in _rule(page, ".app-report__meta .app-request {")
@@ -2751,13 +2757,16 @@ def test_the_report_page_order_is_pinned() -> None:
     assert "href: '#report/' + encodeURIComponent(report.symbol) + '/' + r.id" in link
     reader = _function(script, "reader")
     for text in (
+        "var s = report.appendixA.snapshot;",
         "mode: report.mode, state: 'published', revision: 'revision ' + report.revision,",
-        "snapshot: String(report.snapshotId),",
-        "review: report.reviewId == null ? undefined : String(report.reviewId),",
+        "dataDate: s.dataDate, priceDate: s.priceDate, validUntil: s.validUntil,",
         "reusesFullReportOf: reusedDate(report)",
         "sections: report.sections, footnotes: P.footnotes(report.references), appendixes: false",
     ):
         assert text in reader, text
+    # the line under the title names no record: the ids are in Appendix A (spec 2026-11-15 7)
+    for gone in ("snapshot:", "review:", "thesis:", "snapshotId", "reviewId"):
+        assert gone not in reader, gone
     refs = _function(script, "references")
     for text in ("h('ol', {", "title: e.ref", "'[' + e.n + ']'", "e.source", "'No references.'"):
         assert text in refs, text
@@ -2941,7 +2950,7 @@ def test_the_reader_numbers_its_footnotes() -> None:
     dotted underline and the ref in the title and adds the number as a superscript, from the
     caller's ``footnotes`` (ref → n), a `// fairband:` patch. The report page numbers its cites
     by its references; the drawer's Summary by the full report's numbers, so a number reads the
-    same in both. The cites line names a review or a thesis only when given."""
+    same in both."""
     bundle = _component_file("bundle.js")
     reader = _function(bundle, "ReportReader")
     assert "// fairband: a cited number keeps its dotted underline" in reader
@@ -2952,13 +2961,6 @@ def test_the_reader_numbers_its_footnotes() -> None:
         "var n = own(footnotes, String(part.ref).trim());",
         "h(Cite, { source: part.ref }, part.cite),",
         "n == null ? null : h('sup', { className: 'fb-cite__n' }, '[' + n + ']'));",
-    )
-    _in_order(
-        reader,
-        "'cites snapshot ', h('span', { className: 'figure-sm' }, cites.snapshot),",
-        "cites.review == null ? null : h(React.Fragment, null, ' · review ',",
-        "cites.thesis == null ? null : h(React.Fragment, null, ' · thesis ',",
-        "cites.reusesFullReportOf ?",
     )
     assert "return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;" in (
         _function(bundle, "own")
@@ -2979,6 +2981,52 @@ def test_the_reader_numbers_its_footnotes() -> None:
     marks = _function(app, "footnotes")
     assert "(references || []).forEach(function (e) { marks[e.ref] = e.n; });" in marks
     assert "footnotes: P.footnotes(report.references)" in _static_file("report.js")
+
+
+def test_the_line_under_the_title_is_in_the_reader_s_words() -> None:
+    """Spec 2026-11-15 7, a `// fairband:` patch: ReportReader's line under the title says what the
+    report rests on, the data's date, the price's ("priced that day" where it is the same day,
+    none without one), the end of the validity window and the full report a valuation review
+    reuses, each date the bundle's ``DateText``, joined by `·`, and names no record's id;
+    ``index.d.ts`` declares the four dates with a `fairband:` note. The drawer's Summary still
+    passes no cites. ``tests/web/test_report_reader.py`` draws the line."""
+    bundle = _component_file("bundle.js")
+    reader = _function(bundle, "ReportReader")
+    patch = reader[reader.index("// fairband: the line under the title says what the report") :]
+    patch = patch[: patch.index("'On the data of '")]
+    assert "(spec 2026-11-15 7)" in patch
+    _in_order(
+        reader,
+        "p.cites ? h('p', { className: 'fb-report__cites caption' },",
+        "'On the data of ', h(DateText, { value: cites.dataDate }),",
+        "cites.priceDate == null ? null",
+        ": cites.priceDate === cites.dataDate ? ' · priced that day'",
+        ": h(React.Fragment, null, ' · priced ', h(DateText, { value: cites.priceDate })),",
+        "cites.validUntil == null ? null : h(React.Fragment, null, ' · valid until ',",
+        "h(DateText, { value: cites.validUntil })),",
+        "cites.reusesFullReportOf ? h(React.Fragment, null, ' · reuses the full report of ',",
+        "h(DateText, { value: cites.reusesFullReportOf })) : null) : null,",
+    )
+    code = _code(reader)
+    for gone in ("'cites snapshot '", "cites.snapshot", "cites.review", "cites.thesis"):
+        assert gone not in code, gone
+    declarations = _component_file("index.d.ts")
+    props = re.search(r"export interface ReportReaderProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None
+    cites = props.group(1)[props.group(1).index("  cites?: {") :]
+    cites = cites[: cites.index("\n  };")]
+    for field in (
+        "dataDate?: string;",
+        "priceDate?: string | null;",
+        "validUntil?: string | null;",
+        "reusesFullReportOf?: string;",
+    ):
+        assert f"    {field}" in cites, field
+    for gone in ("snapshot?:", "review?:", "thesis?:"):
+        assert gone not in cites, gone
+    note = props.group(1)[: props.group(1).index("  cites?: {")]
+    note = note[note.rindex("/**") :]
+    assert "fairband:" in note and "(spec 2026-11-15 7)" in note
 
 
 def test_the_reader_renders_the_text_as_blocks() -> None:

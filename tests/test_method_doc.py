@@ -685,6 +685,57 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
     assert "a bar marked by its quarter" not in export and 'marked "to date"' not in export
 
 
+def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s_words() -> None:
+    """Spec 2026-11-15 7: 16.6 states the export's two opening lines and its line on a reused full
+    report in the reader's words, the page's line under the title by the same rule, Appendix A's
+    dates in words and its sentence for no secondary valuation without "the route"."""
+    sixteen = _section(16)
+    export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
+    for words in (
+        (
+            "The Markdown export opens with a line naming the company, the mode, the date, the"
+            ' actor and the revision ("GOOG · full report · 9 Nov 2026 · claude-opus-5-5 ·'
+            ' revision 1"), then a line naming the stance and what the report rests on'
+        ),
+        (
+            '"On the data of" and the snapshot\'s data date, then "priced that day" where the'
+            ' price date is the same day, "priced" and the price date where it is another and'
+            ' nothing where the snapshot has none, then "valid until" and the date'
+        ),
+        '("Stance: hold. On the data of 4 Nov 2026, priced that day, valid until 27 Jan 2027.")',
+        (
+            "a valuation review's next line names the full report it reuses by its date, \"Reuses"
+            ' the full report of 3 Nov 2026.", or says "No full report to reuse."'
+        ),
+        (
+            "The page's line under the title follows the same rule, its parts joined by"
+            ' "·", the full report a valuation review reuses last ("On the data of 4 Nov 2026 ·'
+            ' priced that day · valid until 27 Jan 2027 · reuses the full report of 3 Nov 2026"),'
+            " and names no record: the snapshot's and the review's ids are in Appendix A."
+        ),
+        (
+            "The export writes Appendix A's dates in words, as the references write a day: the"
+            ' Inputs table\'s "As of" and the guidance\'s "Call". A date input\'s note, the next'
+            " earnings date, is in words too."
+        ),
+        (
+            '"No secondary valuation: Fairband\'s own valuation gives the company a value" where'
+            ' the snapshot has a value, "No secondary valuation: the review gives the company a'
+            ' value" where the report\'s review has one, or "No secondary valuation: " followed'
+            " by the snapshot's refusal in its own words"
+        ),
+        '"No secondary valuation: no diluted share count"',
+    ):
+        assert words in export, words
+    for gone in (
+        "then the stance and the snapshot with its price date",
+        "no secondary valuation: the route values the company",
+        "no secondary valuation: the review values the company",
+        "Reuses full report",
+    ):
+        assert gone not in export, gone
+
+
 def test_section_16_names_the_six_failures() -> None:
     section = _section(16)
     for failure in FAILURES:

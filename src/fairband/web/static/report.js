@@ -220,7 +220,8 @@
   /* --------------------------------------------------------- the line above it */
 
   /* Above the reader (18.4): the report's stance in the drawer's chip classes, faded once the
-     window of the snapshot it rests on has ended (rows.window_ended's rule); its mode, its date,
+     window of the snapshot it rests on has ended (rows.window_ended's rule), its title then saying
+     so in the register's words (spec 2026-11-15 7); its mode, its date,
      who wrote it and its revision; Download .md and the page's one table toggle. Under it, that a
      valuation review has no full report to reuse, when it has none; the other revisions by number
      and by date and time; Request research, the drawer's own with this page's request, as on a
@@ -232,7 +233,7 @@
         h('span', {
           className: 'fb-stance fb-stance--' + report.stance +
             (expired ? ' fb-stance--expired' : '') + ' label',
-          title: expired ? 'The snapshot window of this report has expired' : null
+          title: expired ? 'The value of this report is past the date it was valid until' : null
         }, report.stance),
         h('span', { className: 'label app-report__mode' }, report.mode),
         h('span', { className: 'caption' }, P.when(report.createdAt)),
@@ -287,16 +288,17 @@
 
   /* Every section, each cited number followed by its footnote number in the references (13.1),
      and the charts of the sections that have them under their headings (18.4, charts.js); the
-     cites line names the snapshot, the review when the report rests on one and, for a valuation
-     review, the date of the full report it reuses. The appendixes follow on the page, so the
-     reader's own pointer to them is off. */
+     line under the title says what the report rests on in the reader's words, the data's date,
+     the price's, the end of the validity window and, for a valuation review, the date of the full
+     report it reuses, and names no record, whose ids Appendix A gives (spec 2026-11-15 7). The
+     appendixes follow on the page, so the reader's own pointer to them is off. */
   function reader(report) {
+    var s = report.appendixA.snapshot;
     return h(F.ReportReader, {
       key: 'reader',
       mode: report.mode, state: 'published', revision: 'revision ' + report.revision,
       cites: {
-        snapshot: String(report.snapshotId),
-        review: report.reviewId == null ? undefined : String(report.reviewId),
+        dataDate: s.dataDate, priceDate: s.priceDate, validUntil: s.validUntil,
         reusesFullReportOf: reusedDate(report)
       },
       sections: report.sections, footnotes: P.footnotes(report.references), appendixes: false,

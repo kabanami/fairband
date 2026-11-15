@@ -18,10 +18,12 @@ with the trailing revenue and the terminal return and its projection year by yea
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
 every part's (``GRID_ROWS``), with the rows in words as the export's grid table writes them
 (``rowWords``, for the report page's chart), or, for a report with none whose company can have
-none on its snapshot, why (``noSecondary``, "no secondary valuation: the route values the company",
-"...: the review values the company" (the report's review has a value), or "...: " and the
-snapshot's refusal when it is one an agent cannot fix, "...: no diluted share count" or "...: share
-basis unclear: ..." (spec 2026-11-10 7.6), ``store.secondary.no_secondary``); the checks that ran
+none on its snapshot, why, in the register's words (``noSecondary``, "No secondary valuation:
+Fairband's own valuation gives the company a value" where ``store.secondary.no_secondary`` says the
+route values it, "...: the review gives the company a value" (the report's review has a value), or
+"...: " and the snapshot's refusal in its own words when it is one an agent cannot fix, "...: no
+diluted share count" or "...: share basis unclear: ..." (spec 2026-11-10 7.6, spec 2026-11-15 7);
+``no_secondary``'s own words stay as they are); the checks that ran
 (``check.CHECKS``, each with its rule); the versions (method, policy, settings hash, review and
 secondary methods); and the classifier's evidence. Appendix B (``appendix_b``), the glossary: the
 terms of ``GLOSSARY`` that the sections' text uses, a term matched whole and in any case, a plural
@@ -34,13 +36,17 @@ section 8 and also, in the brand book's word, the note an owner or an agent writ
 one entry a distinct ref whatever the period a cite names, each with its source in words
 (``refs.Resolver.describe``).
 
-``markdown`` renders the published report: a header line naming the company, the mode, the date,
-the actor (the principal for the owner) and the revision; a line naming the stance and the
-snapshot with its price date, and for a valuation review the full report it reuses or that there
-is none; the sections under their headings as ``##``, each led by its chart tables
+``markdown`` renders the published report: a header line naming the company, the mode, the date
+in words, the actor (the principal for the owner) and the revision; a line naming the stance and
+what the report rests on in the reader's words (``resting_words``, "On the data of 4 Nov 2026,
+priced that day, valid until 27 Jan 2027."), and for a valuation review the full report it reuses
+by its date, "Reuses the full report of 3 Nov 2026.", or that there is none: the lines above the
+sections name no part of Fairband and write every date as the references do (spec 2026-11-15 7);
+the sections under their headings as ``##``, each led by its chart tables
 (``charts.chart_tables``) as ``###`` tables, then each part's text in order, a cite as its text
-and its footnote mark, ``$150.00[^1]``, so no ref is in the text; then Appendix A as tables and
-Appendix B as a list; and last the references under ``## References``, ``[^n]: <ref> —
+and its footnote mark, ``$150.00[^1]``, so no ref is in the text; then Appendix A as tables, its
+inputs' "As of", a date input's note and its guidance's "Call" in words, and Appendix B as a
+list; and last the references under ``## References``, ``[^n]: <ref> —
 <source>``: GitHub-flavoured Markdown renders footnote definitions at the end of the document, so
 the heading stands over its list there (spec 2026-11-15 9). The report page keeps its order, the
 references after the last section.
@@ -70,7 +76,7 @@ from fairband.reports.check import (
     WRONG_UNIT,
     parts,
 )
-from fairband.reports.refs import Resolver, guidance_cited
+from fairband.reports.refs import Resolver, day_words, guidance_cited
 from fairband.store.guidance import guidance_for
 from fairband.store.overrides import override_row
 from fairband.store.reports import ReportRow
@@ -290,6 +296,13 @@ _RULES: dict[str, str] = {
 _DASH = "—"
 # Each input's bridge label by its tag as a stored bridge line names it.
 _LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
+# ``no_secondary``'s reasons in the register's words where Appendix A writes them, "the route"
+# being a name the register forbids (spec 2026-11-15 7); any other reason, a snapshot's refusal,
+# keeps its own words.
+_NO_SECONDARY: dict[str, str] = {
+    "the route values the company": "Fairband's own valuation gives the company a value",
+    "the review values the company": "the review gives the company a value",
+}
 
 
 def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> dict[str, Any]:
@@ -303,6 +316,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
     rules = _RULES | {"the stance word": f"one of {', '.join(policy.stance_words)}"}
     overrides = [] if review is None else _overrides(conn, review.override_ids)
     why = no_secondary(snapshot, review) if secondary is None else None
+    why = None if why is None else _NO_SECONDARY.get(why, why)
     currency = money_of(snapshot.result)[1]
     return {
         "snapshot": {
@@ -337,7 +351,7 @@ def appendix_a(conn: sqlite3.Connection, report: ReportRow, policy: Policy) -> d
         "guidance": _guidance(conn, report, overrides),
         "bridge": None if review is None else _bridge(review),
         "secondary": None if secondary is None else _secondary(secondary, currency),
-        "noSecondary": None if why is None else f"no secondary valuation: {why}",
+        "noSecondary": None if why is None else f"No secondary valuation: {why}",
         "checks": [{"check": check, "rule": rules[check]} for check in CHECKS],
         "versions": {
             "method": snapshot.method_version,
@@ -393,27 +407,49 @@ def references(
     return [{"n": n, "ref": ref, "source": resolver.describe(ref)} for ref, n in numbered.items()]
 
 
+def resting_words(data_date: date, price_date: date | None, valid_until: date | None) -> str:
+    """What a report rests on in the reader's words, the export's second line after its stance
+    (spec 2026-11-15 7): "On the data of" and the data date; "priced that day" where the price
+    date is the same day, "priced" and the price date where it is another, nothing without one;
+    "valid until" and the date, nothing without one. Each date as the references write a day."""
+    parts = [f"On the data of {day_words(data_date)}"]
+    if price_date is not None:
+        parts.append(
+            "priced that day" if price_date == data_date else f"priced {day_words(price_date)}"
+        )
+    if valid_until is not None:
+        parts.append(f"valid until {day_words(valid_until)}")
+    return ", ".join(parts) + "."
+
+
 def markdown(
     report: ReportRow,
     a: Mapping[str, Any],
     b: Sequence[Mapping[str, str]],
     refs: Sequence[Mapping[str, Any]],
     tables: Mapping[str, Sequence[ChartTable]],
+    *,
+    reused: date | None = None,
 ) -> str:
     """The report as Markdown (module docstring): its Appendix A ``a``, its Appendix B ``b``,
-    its references ``refs`` and its chart tables by the heading of the section they lead."""
+    its references ``refs`` and its chart tables by the heading of the section they lead;
+    ``reused`` the day of the full report a valuation review reuses, which its line names."""
     actor = report.actor or report.principal
-    day = report.created_at.date().isoformat()
+    day = day_words(report.created_at.date())
     snapshot = a["snapshot"]
     header = f"{report.symbol} · {report.mode} · {day} · {actor} · revision {report.revision}"
-    priced = snapshot["priceDate"] or _DASH
-    rests = f"On snapshot {snapshot['id']}, priced {priced}, valid until {snapshot['validUntil']}."
+    rests = resting_words(
+        date.fromisoformat(snapshot["dataDate"]),
+        _day(snapshot["priceDate"]),
+        _day(snapshot["validUntil"]),
+    )
     lines = [header, "", f"Stance: {report.stance}. {rests}"]
     if report.mode == "valuation review":
-        reused = report.reuses_full_report_of
-        lines.append(
-            "No full report to reuse." if reused is None else f"Reuses full report {reused}."
-        )
+        if report.reuses_full_report_of is None:
+            lines.append("No full report to reuse.")
+        else:
+            assert reused is not None  # the caller reads the reused report's day
+            lines.append(f"Reuses the full report of {day_words(reused)}.")
     marks = {str(entry["ref"]): int(entry["n"]) for entry in refs}
     for section in report.sections:
         heading = section["heading"]
@@ -570,8 +606,8 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
                 i["tag"],
                 i["kind"],
                 i["source"],
-                i["asOf"],
-                i["note"],
+                _day_words(i["asOf"]),
+                _note(i),
             )
             for i in a["inputs"]
         ],
@@ -594,9 +630,12 @@ def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
         ],
     )
     out += ["", "### Guidance on file", ""]
-    keys = ("id", "metric", "period", "low", "high", "midpoint", "basis", "asOf", "state")
+    keys = ("id", "metric", "period", "low", "high", "midpoint", "basis")
     header = ("Guidance", "Metric", "Period", "Low", "High", "Midpoint", "Basis", "Call", "State")
-    guided = [(*(g[key] for key in keys), g["citedBy"]) for g in a["guidance"]]
+    guided = [
+        (*(g[key] for key in keys), _day_words(g["asOf"]), g["state"], g["citedBy"])
+        for g in a["guidance"]
+    ]
     out += _table((*header, "Cited by"), guided)
     out += ["", "### Bridge", ""]
     bridge = a["bridge"]
@@ -734,6 +773,31 @@ def _cell(x: Any) -> str:
 def _iso(day: date | None) -> str | None:
     """A date or a time as ISO text; ``None`` for none."""
     return None if day is None else day.isoformat()
+
+
+def _day(text: str | None) -> date | None:
+    """An ISO date of Appendix A as a date; ``None`` for none."""
+    return None if text is None else date.fromisoformat(text)
+
+
+def _day_words(text: str | None) -> str | None:
+    """An ISO date of Appendix A as the references write a day, "3 Nov 2026" (spec 2026-11-15
+    7); ``None`` for none, which a table cell writes as its dash."""
+    day = _day(text)
+    return None if day is None else day_words(day)
+
+
+def _note(i: Mapping[str, Any]) -> Any:
+    """An input's note as the export writes it: a date input's, its date as ISO text (the next
+    earnings date), in words, as Appendix A's other dates (spec 2026-11-15 7); any other as it
+    is."""
+    note = i["note"]
+    if i["unit"] != "date" or not isinstance(note, str):
+        return note
+    try:
+        return day_words(date.fromisoformat(note))
+    except ValueError:
+        return note
 
 
 def _evidence(item: Mapping[str, Any]) -> str:

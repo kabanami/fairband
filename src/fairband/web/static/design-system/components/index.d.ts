@@ -347,14 +347,18 @@ export interface ReportReaderProps {
   revision?: string;
   /**
    * fairband: absent, a published report draws no cites line, as the drawer's Summary leaves it
-   * to the report page (spec 2026-11-06 Tier 2, 18.2).
+   * to the report page (spec 2026-11-06 Tier 2, 18.2). Given, the line says what the report rests
+   * on in the reader's words, each date in words and no record's id: "On the data of 4 Nov 2026 ·
+   * priced that day · valid until 27 Jan 2027 · reuses the full report of 3 Nov 2026"
+   * (spec 2026-11-15 7). Each date is an ISO date.
    */
   cites?: {
-    snapshot?: string;
-    /** fairband: absent, the cites line names no review (spec 2026-11-06 Tier 2, 18.4). */
-    review?: string;
-    /** fairband: absent, the cites line names no thesis (spec 2026-11-06 Tier 2, 18.4). */
-    thesis?: string;
+    /** The date of the data the report's valuation rests on. */
+    dataDate?: string;
+    /** The price's date: "priced that day" when it is `dataDate`; absent or `null`, none. */
+    priceDate?: string | null;
+    /** The last day the report's value is valid; absent or `null`, none. */
+    validUntil?: string | null;
     /** The date of the full report a valuation review reuses. */
     reusesFullReportOf?: string;
   };

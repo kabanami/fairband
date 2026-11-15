@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+import pytest
 from refresh.synthetic import NOW
 from support.engine_companies import (
     ABOVE_BOUND,
@@ -29,7 +30,14 @@ from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.policy import Policy
 from fairband.reports.charts import chart_tables
 from fairband.reports.check import CHECKS, HEADINGS, headings
-from fairband.reports.render import GLOSSARY, appendix_a, appendix_b, markdown, references
+from fairband.reports.render import (
+    GLOSSARY,
+    appendix_a,
+    appendix_b,
+    markdown,
+    references,
+    resting_words,
+)
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
@@ -42,6 +50,9 @@ from fairband.store.vendor import record_response
 METHOD = Path(__file__).parent.parent.parent / "docs" / "method.md"
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 EVIDENCE = [{"kind": "transcript", "ref": "Q3 call", "note": "guidance"}]
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# Appendix A's sentences where the company can have no secondary valuation (spec 2026-11-15 7).
+ROUTE_VALUES = "No secondary valuation: Fairband's own valuation gives the company a value"
 
 
 def _sections(sid: int, mode: str = "full report") -> list[dict[str, Any]]:
@@ -248,7 +259,7 @@ def test_appendix_a_names_the_currency_of_a_row_refused_for_it(
     a = appendix_a(conn, report, policy)
     assert a["snapshot"]["currency"] == "ARS"
     assert a["secondary"] is None
-    assert a["noSecondary"] == "no secondary valuation: " + ABOVE_BOUND
+    assert a["noSecondary"] == "No secondary valuation: " + ABOVE_BOUND
 
 
 def test_appendix_a_names_the_currency_and_the_rate_of_a_secondary_valuation(
@@ -454,24 +465,28 @@ def test_appendix_a_lists_the_guidance_on_file(
         "| Guidance | Metric | Period | Low | High | Midpoint | Basis | Call | State | Cited by |"
     )
     assert header in block
-    assert f"| {new} | eps | 2027 | 6.25 | 6.75 | 6.5 | gaap | 2026-10-28 | current |" in block
+    # the call's date in words, as the references write a day (spec 2026-11-15 7)
+    assert f"| {new} | eps | 2027 | 6.25 | 6.75 | 6.5 | gaap | 28 Oct 2026 | current |" in block
+    assert f"| {old} | eps | 2027 | 6.0 | 6.5 | 6.25 | gaap | 28 Jul 2026 | superseded |" in block
+    assert ISO_DATE.search(block) is None
     assert f"| current | {override_id} |" in block and "| superseded | — |" in block
 
 
 def test_appendix_a_without_a_review_or_a_secondary(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
-    """AAPL's snapshot is valued, so a report with no secondary valuation says the route values
-    the company (method 16.6, plan 3); AAL's is refused and could have one, so its report names
-    no reason."""
+    """AAPL's snapshot is valued, so a report with no secondary valuation says Fairband's own
+    valuation gives the company a value, in the register's words, without "the route" (method
+    16.6, plan 3, spec 2026-11-15 7); AAL's is refused and could have one, so its report names no
+    reason."""
     a = appendix_a(conn, _stored(conn, snapshots["AAPL"]), policy)
     assert a["overrides"] == [] and a["bridge"] is None and a["secondary"] is None
-    assert a["noSecondary"] == "no secondary valuation: the route values the company"
+    assert a["noSecondary"] == ROUTE_VALUES
     assert a["guidance"] == []
     text = markdown(_stored(conn, snapshots["AAPL"]), a, [], [], {})
     assert "### Guidance on file\n\nNone." in text
-    route_values = "no secondary valuation: the route values the company"
-    assert f"### Secondary valuation\n\n{route_values}\n" in text
+    assert f"### Secondary valuation\n\n{ROUTE_VALUES}\n" in text
+    assert "the route" not in text.split("### Secondary valuation\n\n", 1)[1].split("\n", 1)[0]
     assert {i["tag"] for i in a["inputs"]} == {"DATA", "RULE"}
     assert a["versions"]["review"] is None and a["versions"]["secondary"] is None
     refused = _stored(conn, snapshots["AAL"], symbol="AAL")
@@ -504,9 +519,9 @@ def test_appendix_a_names_a_refusal_an_agent_cannot_fix(
     )
     report = _stored(conn, sid, symbol="AAL")
     a = appendix_a(conn, report, policy)
-    assert (a["secondary"], a["noSecondary"]) == (None, f"no secondary valuation: {basis}")
+    assert (a["secondary"], a["noSecondary"]) == (None, f"No secondary valuation: {basis}")
     text = markdown(report, a, [], [], {})
-    assert f"### Secondary valuation\n\nno secondary valuation: {basis}\n" in text
+    assert f"### Secondary valuation\n\nNo secondary valuation: {basis}\n" in text
 
 
 def test_the_bridge_without_a_review_names_the_value_that_stands(
@@ -596,8 +611,21 @@ def test_the_markdown(conn: sqlite3.Connection, policy: Policy, snapshots: dict[
     refs = references(conn, report, policy)
     text = markdown(report, a, b, refs, chart_tables(conn, report, policy))
     lines = text.splitlines()
-    assert lines[0] == "AAPL · full report · 2026-11-01 · claude-opus-5-5 · revision 1"
-    assert lines[2] == f"Stance: buy. On snapshot {sid}, priced 2026-10-30, valid until 2027-01-28."
+    # the lines above the sections name no part of Fairband and write each date in words, as the
+    # references do (spec 2026-11-15 7); the actor and the revision stay
+    assert lines[0] == "AAPL · full report · 1 Nov 2026 · claude-opus-5-5 · revision 1"
+    assert lines[2] == (
+        "Stance: buy. On the data of 30 Oct 2026, priced that day, valid until 28 Jan 2027."
+    )
+    assert lines[2].startswith("Stance: ")
+    assert "snapshot" not in lines[2].lower() and ISO_DATE.search(lines[2]) is None
+    assert ISO_DATE.search(lines[0]) is None
+    # Appendix A's inputs, each as of a day in words, and the next earnings date, a date input's
+    # note, in words too
+    inputs = text[text.index("### Inputs") : text.index("### Overrides")]
+    assert "| price | 150.0 | USD | DATA | observed | FMP quote | 30 Oct 2026 | — |" in inputs
+    assert "| next_earnings | — | date | DATA | " in inputs and " | 28 Jan 2027 |" in inputs
+    assert ISO_DATE.search(inputs) is None
     # the references last, where GitHub-flavoured Markdown renders footnote definitions (B-108)
     assert [line[3:] for line in lines if line.startswith("## ")] == [
         *HEADINGS,
@@ -628,8 +656,63 @@ def test_a_review_mode_names_the_full_report_it_reuses_or_that_there_is_none(
     assert "No full report to reuse." in text and "## The business" not in text
     assert "## Appendix B\n\nNo terms used.\n\n## References\n\nNo references.\n" in text
     reusing = replace(report, reuses_full_report_of=3)
-    text = markdown(reusing, appendix_a(conn, reusing, policy), [], [], {})
-    assert "Reuses full report 3." in text
+    a = appendix_a(conn, reusing, policy)
+    text = markdown(reusing, a, [], [], {}, reused=date(2026, 11, 3))
+    # the full report by its date, not its id (spec 2026-11-15 7)
+    assert text.splitlines()[3] == "Reuses the full report of 3 Nov 2026."
+    assert "Reuses full report" not in text
+
+
+@pytest.mark.parametrize(
+    ("data", "price", "valid", "words"),
+    [
+        (
+            date(2026, 11, 4),
+            date(2026, 11, 4),
+            date(2027, 1, 27),
+            "On the data of 4 Nov 2026, priced that day, valid until 27 Jan 2027.",
+        ),
+        (
+            date(2026, 11, 4),
+            date(2026, 11, 3),
+            date(2027, 1, 27),
+            "On the data of 4 Nov 2026, priced 3 Nov 2026, valid until 27 Jan 2027.",
+        ),
+        (
+            date(2026, 11, 4),
+            None,
+            date(2027, 1, 27),
+            "On the data of 4 Nov 2026, valid until 27 Jan 2027.",
+        ),
+        (
+            date(2026, 11, 4),
+            date(2026, 11, 4),
+            None,
+            "On the data of 4 Nov 2026, priced that day.",
+        ),
+    ],
+)
+def test_the_export_says_what_the_report_rests_on_in_the_reader_s_words(
+    data: date, price: date | None, valid: date | None, words: str
+) -> None:
+    assert resting_words(data, price, valid) == words
+
+
+def test_the_export_s_second_line_follows_the_snapshot_s_dates(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The second line reads the snapshot's dates from Appendix A: a snapshot priced on another day
+    than its data's names the price's day, and one with no price date says nothing of a price."""
+    report = _stored(conn, snapshots["AAPL"])
+    a = appendix_a(conn, report, policy)
+    other = {**a, "snapshot": {**a["snapshot"], "priceDate": "2026-10-29"}}
+    assert markdown(report, other, [], [], {}).splitlines()[2] == (
+        "Stance: buy. On the data of 30 Oct 2026, priced 29 Oct 2026, valid until 28 Jan 2027."
+    )
+    unpriced = {**a, "snapshot": {**a["snapshot"], "priceDate": None}}
+    assert markdown(report, unpriced, [], [], {}).splitlines()[2] == (
+        "Stance: buy. On the data of 30 Oct 2026, valid until 28 Jan 2027."
+    )
 
 
 def test_a_review_mode_leads_its_earnings_call_with_the_quarters(

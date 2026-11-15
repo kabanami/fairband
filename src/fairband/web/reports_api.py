@@ -84,7 +84,8 @@ references, ``[{n, ref, source}]``, generated at read time (``render.appendix_a`
 ``references``), as the publish answers it; ``GET /api/reports/{id}/markdown`` its Markdown
 (``render.markdown``), ``text/markdown``, each cite with its footnote mark, the references last,
 after Appendix B, and the chart tables (``charts.chart_tables``) under their sections, which the
-JSON does not carry. A missing report is a 404, "no report <id>".
+JSON does not carry; a valuation review's names the full report it reuses by that report's date
+(spec 2026-11-15 7). A missing report is a 404, "no report <id>".
 """
 
 import sqlite3
@@ -478,7 +479,10 @@ def add_report_routes(
             a = appendix_a(conn, found, current)
             refs = references(conn, found, current, tax)
             tables = chart_tables(conn, found, current, tax)
-        text = markdown(found, a, appendix_b(found.sections), refs, tables)
+            reused = None
+            if found.reuses_full_report_of is not None:
+                reused = _report(conn, found.reuses_full_report_of).created_at.date()
+        text = markdown(found, a, appendix_b(found.sections), refs, tables, reused=reused)
         return Response(text, media_type="text/markdown; charset=utf-8")
 
 
