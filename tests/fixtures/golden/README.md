@@ -167,6 +167,12 @@ and its source reads `thin`. No fixture's consensus gives a revenue step: MGCO, 
 are refusals that carry no charge. So no golden holds a thin step, and all seven files are
 unchanged byte for byte.
 
+MGCO, MSCO and FXCO re-captured under 1.5 on 2026-11-15 for one cause: `runway_return` in the
+intermediates gains `constant_margin`, the five-year marginal return at a constant margin, shown
+and never used (method 4.6; the founder's ruling of 2026-11-15): 28.15% on MGCO and FXCO, beside
+their marginal 43.1%, and none on MSCO, whose capital did not grow by a fifth over the span.
+Every figure is unchanged; only the key is new.
+
 Run from the repository root:
 
 ```

@@ -180,6 +180,7 @@ from fairband.engine.route_steps import (
     per_share,
     present,
     price_facts_for,
+    revenue_by_fiscal_year,
     rule,
     trailing_flags,
 )
@@ -233,7 +234,13 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     anchor, path, base_year, belief, revenue = found
     moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
     runway_return: float | None = chosen(c, "return.runway", None)
-    roic = RoicTerms.of(i.capital_years, moat, policy, runway_override=runway_return)
+    roic = RoicTerms.of(
+        i.capital_years,
+        moat,
+        policy,
+        runway_override=runway_return,
+        revenue=revenue_by_fiscal_year(i),
+    )
     growth, charge = _growth_and_charge(anchor, path, revenue, belief, moat, roic, policy)
     value_total = value_at_belief(growth, charge)
     value = value_total / c.shares

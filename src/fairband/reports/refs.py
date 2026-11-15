@@ -388,6 +388,9 @@ _SNAPSHOT_PATH_WORDS = {
     "intermediates/roic/aggregate": "the ten-year aggregate ROIC",
     "intermediates/charge/hold_years": "the years the runway return holds",
     "intermediates/runway_return/one_year": "the newest year's marginal return",
+    "intermediates/runway_return/constant_margin": (
+        "the five-year marginal return at a constant margin"
+    ),
     "intermediates/runway_return/without_goodwill/measure": (
         "the return on capital without goodwill and intangibles"
     ),

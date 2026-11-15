@@ -1284,6 +1284,13 @@ def described(
             "snapshot {snapshot}, the newest year's marginal return, priced 30 Oct 2026",
         ),
         (
+            "snapshot:{snapshot}/intermediates/runway_return/constant_margin",
+            (
+                "snapshot {snapshot}, the five-year marginal return at a constant margin, priced "
+                "30 Oct 2026"
+            ),
+        ),
+        (
             "snapshot:{snapshot}/intermediates/runway_return/without_goodwill/measure",
             (
                 "snapshot {snapshot}, the return on capital without goodwill and intangibles, priced "

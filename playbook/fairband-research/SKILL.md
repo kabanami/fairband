@@ -464,6 +464,19 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   the pairs, wait until `refresh_status()` shows no refresh running, and read `company` again;
   when the note stays, section 8 says the rate is old.
 
+On Mature Growth and Mature Stable, one reading of the return has no flag. Where the charge
+starts at the five-year marginal return (`intermediates/runway_return/used` is `marginal`), read
+`intermediates/runway_return/constant_margin` beside it. The marginal return divides the whole
+rise in after-tax operating profit by the capital added, so a margin that rose on sales the
+company already had reads as a return on new capital, though it took none. The figure at a
+constant margin leaves that rise out: the newest margin times the revenue added, over the
+capital added. Where it sits well below the marginal, find what raised the margin. Costs cut, or
+prices at a cycle's peak, do not repeat on new capital: set `return.runway` at the
+constant-margin figure, or between the two, with the evidence. A mix that moved to a line with a
+higher margin, where the new capital went, is a return on that capital: the marginal stands, and
+section 8 says why. The engine does not choose: no measure on the stored years says well what
+growth will cost. Decide it in the `roic` judgment, and cite both figures.
+
 On Mature Growth, two steps on the stock pay, in every report. The value rests on the analysts'
 EPS, and the engine charges stock pay against it only where its test reads that EPS as leaving
 stock pay out (`intermediates/sbc_basis`: `includes-sbc`, `excludes-sbc` or `unknown`).
@@ -1170,7 +1183,7 @@ is refused (400), naming the key. The debate lives in section 6, and the thesis 
 | `phase` | every report | the life-cycle phase the classifier gave, and whether it fits |
 | `moat` | every report | the moat class: how long the company can earn more than its cost of capital |
 | `belief` | every report | the growth rate the route holds: the belief on Mature Growth, the held rate on High Growth and Young Growth, the decline rate on Decline; on Mature Stable and Start-up, which hold none, the growth the evidence supports against the growth the price needs; and whether the higher case stood (step 10) |
-| `roic` | Mature Growth, Mature Stable | the return on invested capital and the runway return; when `heavy-capex` fires, read the newest year's marginal return (`intermediates/runway_return/one_year`) and the capital-spending guidance, decide the runway return and cite both figures; when `return-without-goodwill` fires, decide whether the growth ahead is built or bought; and whether the higher case stood (step 10) |
+| `roic` | Mature Growth, Mature Stable | the return on invested capital and the runway return; when `heavy-capex` fires, read the newest year's marginal return (`intermediates/runway_return/one_year`) and the capital-spending guidance, decide the runway return and cite both figures; where the charge starts at the five-year marginal return, read the same return at a constant margin (`intermediates/runway_return/constant_margin`) and decide whether new capital earned the margin's gain; when `return-without-goodwill` fires, decide whether the growth ahead is built or bought; and whether the higher case stood (step 10) |
 | `target_margin` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten; and whether the higher case stood (step 10) |
 
 The route that decides the list is the current review's when the company has one, else the

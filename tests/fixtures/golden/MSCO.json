@@ -578,6 +578,7 @@
   },
   "runway": 20,
   "runway_return": {
+   "constant_margin": null,
    "marginal": 0.1825122271263271,
    "marginal_usable": false,
    "one_year": 0.18251222712632692,

@@ -93,6 +93,7 @@ from fairband.engine.route_steps import (
     outside_entry,
     outside_value,
     price_facts_for,
+    revenue_by_fiscal_year,
     rule,
     trailing_flags,
     ttm_margin,
@@ -110,7 +111,13 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     e = None if t.net_income is None else t.net_income - nil(gap) * c.consensus_shares
     moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
     runway_return: float | None = chosen(c, "return.runway", None)
-    roic = RoicTerms.of(i.capital_years, moat, policy, runway_override=runway_return)
+    roic = RoicTerms.of(
+        i.capital_years,
+        moat,
+        policy,
+        runway_override=runway_return,
+        revenue=revenue_by_fiscal_year(i),
+    )
     growth_route = growth_cross_check(c, moat, roic)
     margin = ttm_margin(t)
     median = median_margin(i.series)

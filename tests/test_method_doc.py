@@ -154,6 +154,22 @@ def test_the_runway_returns_rulings_of_2026_11_15() -> None:
     )
     assert "The method is unchanged at 1.5: no mechanical value moves." in rows[-1]
     assert "the moat's terminal rule reads it in place of the measure on every row" in rows[-1]
+    # the marginal return at a constant margin: recorded, shown and never used (4.6)
+    paragraph = next(
+        x for x in four.splitlines() if x.startswith("The row records one more figure, shown and")
+    )
+    for words in (
+        "the five-year marginal return at a constant margin (`runway_return.constant_margin`)",
+        (
+            "the newest kept year's NOPAT over that fiscal year's revenue, times the revenue added "
+            "over the average capital added across the marginal span"
+        ),
+        "so a margin that rose on the revenue already there reads as a return on new capital",
+        "It holds no figure with fewer than six kept years",
+        "The engine keeps the marginal (founder 2026-11-15)",
+    ):
+        assert words in paragraph, words
+    assert "`runway_return` gains `constant_margin`" in rows[-1]
 
 
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:

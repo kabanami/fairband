@@ -1675,8 +1675,9 @@
 
   /* The charge's rows (spec 2026-11-09 6.2 and 6.3): the return each year's reinvestment pays
      at; the growth it pays for in years 2 and 3 beside the earnings growth, or on a Mature Stable
-     row the terminal growth in every year; and the newest year's marginal return, shown and
-     never used, when there is one. Where the measure was below the hurdle rate and the charge
+     row the terminal growth in every year; and the newest year's marginal return and the
+     five-year marginal return at a constant margin (method 4.6), each shown and never used,
+     when there is one. Where the measure was below the hurdle rate and the charge
      read the return without goodwill (method 4.6 rule 5), both measures follow: the one below
      the hurdle rate, then the same measure on capital without goodwill and intangibles, or the
      words for a business with no capital without them. The return by year shows the start. */
@@ -1693,6 +1694,10 @@
     ];
     if (rr.one_year != null) {
       rows.push(['Newest year\'s marginal return', F.formatPercent(rr.one_year), true]);
+    }
+    if (rr.constant_margin != null) {
+      rows.push(['Five-year return at a constant margin', F.formatPercent(rr.constant_margin),
+        true]);
     }
     if (organic) {
       rows.push(['Return with goodwill',

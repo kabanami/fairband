@@ -246,9 +246,11 @@ PHASES = tuple(phase for phases in ROUTE_PHASES.values() for phase in phases)
 ROIC_JUDGMENT = (
     "the return on invested capital and the runway return; when `heavy-capex` fires, read the"
     " newest year's marginal return (`intermediates/runway_return/one_year`) and the"
-    " capital-spending guidance, decide the runway return and cite both figures; when"
-    " `return-without-goodwill` fires, decide whether the growth ahead is built or bought; and"
-    " whether the higher case stood (step 10)"
+    " capital-spending guidance, decide the runway return and cite both figures; where the charge"
+    " starts at the five-year marginal return, read the same return at a constant margin"
+    " (`intermediates/runway_return/constant_margin`) and decide whether new capital earned the"
+    " margin's gain; when `return-without-goodwill` fires, decide whether the growth ahead is built"
+    " or bought; and whether the higher case stood (step 10)"
 )
 # The judgments that record a growth, a margin or a return, each tested for a higher figure.
 HIGHER_CASE_JUDGMENTS = ("`belief`", "`roic`", "`target_margin`")
@@ -923,6 +925,32 @@ def test_the_cycle_formula_reads_the_ten_year_median_net_margin() -> None:
     cell = row["`snapshot:<id>/intermediates/<path>`"][0]
     for path in ("operating/median", "net/median", "operating/years", "net/years"):
         assert f"`margin_history/{path}`" in cell, path
+
+
+def test_the_agent_weighs_the_marginal_return_against_the_return_at_a_constant_margin() -> None:
+    """The founder's ruling of 2026-11-15 (theme 2 of the research round): the engine keeps the
+    five-year marginal return and records the same return at a constant margin; step 8 tells the
+    agent to read both where the marginal is the measure, what a margin gain that took no new
+    capital looks like, and where the marginal stands."""
+    eight = _flat(_steps(_frontmatter(_read(SKILL))[1])[8])
+    for words in (
+        "On Mature Growth and Mature Stable, one reading of the return has no flag.",
+        (
+            "(`intermediates/runway_return/used` is `marginal`), read "
+            "`intermediates/runway_return/constant_margin` beside it"
+        ),
+        "so a margin that rose on sales the company already had reads as a return on new capital",
+        (
+            "Costs cut, or prices at a cycle's peak, do not repeat on new capital: set "
+            "`return.runway` at the constant-margin figure, or between the two, with the evidence"
+        ),
+        (
+            "A mix that moved to a line with a higher margin, where the new capital went, is a return "
+            "on that capital: the marginal stands"
+        ),
+        "Decide it in the `roic` judgment, and cite both figures.",
+    ):
+        assert words in eight, words
 
 
 def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:

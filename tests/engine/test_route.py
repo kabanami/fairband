@@ -36,7 +36,13 @@ from fairband.engine.roic import (
 )
 from fairband.engine.route import CompanyInputs, refusal_result, reprice, value_company
 from fairband.engine.route_mature_growth import growth_at_price
-from fairband.engine.route_steps import Context, Valued, expected
+from fairband.engine.route_steps import (
+    Context,
+    Valued,
+    constant_margin_return,
+    expected,
+    revenue_by_fiscal_year,
+)
 from fairband.engine.types import (
     Flag,
     Provenance,
@@ -255,9 +261,24 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
         "three_year": expected.three_year,
         "ten_year": expected.ten_year,
         "one_year": expected.one_year,
+        "constant_margin": constant_margin_return(
+            aggregate_roic(capital).by_year, revenue_by_fiscal_year(mg_inputs), policy
+        ),
         "without_goodwill": asdict(expected.without_goodwill),  # type: ignore[arg-type]
         "value": expected.value,
     }
+    # the marginal return at a constant margin, shown and never used: the newest NOPAT margin
+    # times the revenue added over the capital added across the five-year span (method 4.6)
+    kept = aggregate_roic(capital).by_year
+    revenue = revenue_by_fiscal_year(mg_inputs)
+    newest, first = kept[-1], kept[-6]
+    assert rr["constant_margin"] == pytest.approx(
+        newest.nopat
+        / revenue[newest.year]
+        * (revenue[newest.year] - revenue[first.year])
+        / (newest.average_capital - first.average_capital)
+    )
+    assert rr["constant_margin"] < rr["marginal"]  # MGCO's margin rose over the span
     assert (rr["used"], rr["marginal_usable"], rr["ten_year"]) == (
         "marginal",
         True,

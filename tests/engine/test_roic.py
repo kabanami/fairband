@@ -19,7 +19,7 @@ from fairband.engine.roic import (
     terminal_roic,
     window_aggregate,
 )
-from fairband.engine.route_steps import RoicTerms, charge_for
+from fairband.engine.route_steps import RoicTerms, charge_for, constant_margin_return
 from fairband.policy import Moat, Policy, load_policy
 
 
@@ -770,3 +770,73 @@ def test_no_override_leaves_the_terminal_return_on_the_measure(policy: Policy) -
     low = [cy(2015 + k, oi=9.5, ppe=100.0) for k in range(11)]
     assert RoicTerms.of(low, "Wide", policy).terminal == pytest.approx(0.095)
     assert RoicTerms.of(years[-4:], "Wide", policy).terminal == 0.09  # unavailable: r
+
+
+# NOPAT 100 on capital 1,000 and revenue 1,000, then in five years NOPAT 400 on capital 2,000 and
+# revenue 2,000: the margin rose from 10% to 20%, so the marginal return of 30% counts 100 of
+# margin gain on the revenue already there, and at the newest margin the capital added earned 20%
+RISING_MARGIN = [(100, 1000), (160, 1200), (220, 1400), (280, 1600), (340, 1800), (400, 2000)]
+REVENUE = {2017: 1000.0, 2018: 1200.0, 2019: 1400.0, 2020: 1600.0, 2021: 1800.0, 2022: 2000.0}
+
+
+def test_the_return_at_a_constant_margin_leaves_the_margins_change_out(policy: Policy) -> None:
+    by_year = kept(RISING_MARGIN).by_year
+    assert runway_return(kept(RISING_MARGIN), "Wide", policy).marginal == pytest.approx(0.30)
+    assert constant_margin_return(by_year, REVENUE, policy) == pytest.approx(0.20)
+    # the newest margin times the revenue added over the capital added
+    assert constant_margin_return(by_year, REVENUE, policy) == pytest.approx(
+        (400 / 2000) * (2000 - 1000) / (2000 - 1000)
+    )
+    # a steady margin: the two measures agree
+    steady = [(100 + 20 * k, 1000 + 200 * k) for k in range(6)]
+    revenue = {2017 + k: 1000.0 + 200 * k for k in range(6)}
+    assert constant_margin_return(kept(steady).by_year, revenue, policy) == pytest.approx(0.10)
+    assert runway_return(kept(steady), "Wide", policy).marginal == pytest.approx(0.10)
+    # a margin that fell reads above the marginal: 300 of NOPAT on 3,000 of revenue is 10%
+    fell = [(200, 1000), (220, 1200), (240, 1400), (260, 1600), (280, 1800), (300, 2000)]
+    wide = {2017 + k: 1000.0 + 400 * k for k in range(6)}
+    assert constant_margin_return(kept(fell).by_year, wide, policy) == pytest.approx(0.20)
+    assert runway_return(kept(fell), "Wide", policy).marginal == pytest.approx(0.10)
+
+
+def test_the_return_at_a_constant_margin_holds_no_figure_without_its_terms(
+    policy: Policy,
+) -> None:
+    by_year = kept(RISING_MARGIN).by_year
+    assert constant_margin_return(by_year[1:], REVENUE, policy) is None  # five kept years
+    for year in (2017, 2022):  # either end of the span without a revenue
+        missing = {y: v for y, v in REVENUE.items() if y != year}
+        assert constant_margin_return(by_year, missing, policy) is None
+    assert constant_margin_return(by_year, {**REVENUE, 2022: 0.0}, policy) is None
+    assert constant_margin_return(by_year, {**REVENUE, 2022: 900.0}, policy) is None  # it fell
+    slow = [(n, 1000 + 30 * k) for k, (n, _) in enumerate(RISING_MARGIN)]  # capital grew 15%
+    assert constant_margin_return(kept(slow).by_year, REVENUE, policy) is None
+    shrinking = [(n, 2000 - 100 * k) for k, (n, _) in enumerate(RISING_MARGIN)]
+    assert constant_margin_return(kept(shrinking).by_year, REVENUE, policy) is None
+    # a loss in the newest year is still the arithmetic: shown, never used
+    loss = [*RISING_MARGIN[:-1], (-100, 2000)]
+    assert constant_margin_return(kept(loss).by_year, REVENUE, policy) == pytest.approx(-0.05)
+
+
+def test_the_intermediates_record_the_return_at_a_constant_margin(policy: Policy) -> None:
+    # 11 balance sheets, tax 0: NOPAT 20 + 5k on capital 100 + 10k, the average capital of the
+    # kept year k (fiscal 2016 + k) 105 + 10k; revenue 1,000 + 100k
+    years = [cy(2015 + k, oi=20.0 + 5 * k, ppe=100.0 + 10 * k) for k in range(11)]
+    revenue = {2016 + k: 1000.0 + 100 * k for k in range(10)}
+    terms = RoicTerms.of(years, "Wide", policy, revenue=revenue)
+    # the newest margin 70 / 1,900, times 500 of revenue added on 50 of capital added
+    expected = (70 / 1900) * 500 / 50
+    assert terms.constant_margin == pytest.approx(expected)
+    rr = terms.intermediates()["runway_return"]
+    assert rr["constant_margin"] == pytest.approx(expected) and rr["marginal"] == pytest.approx(0.5)
+    assert list(rr).index("constant_margin") == list(rr).index("one_year") + 1
+    assert terms.runway == pytest.approx(0.5)  # shown, never used: the marginal still charges
+    # an agent's override keeps the measured figure beside it
+    judged = RoicTerms.of(years, "Wide", policy, runway_override=0.2, revenue=revenue)
+    assert judged.constant_margin == pytest.approx(expected) and judged.runway == 0.2
+    # no revenue passed, or too few kept years: no figure
+    assert (
+        RoicTerms.of(years, "Wide", policy).intermediates()["runway_return"]["constant_margin"]
+        is None
+    )
+    assert RoicTerms.of(years[-4:], "Wide", policy, revenue=revenue).constant_margin is None

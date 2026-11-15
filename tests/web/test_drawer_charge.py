@@ -25,6 +25,7 @@ pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 RETURNS = "Return by year"
 GROWTH = "Growth the charge pays for"
 NEWEST = "Newest year's marginal return"
+CONSTANT = "Five-year return at a constant margin"
 
 
 def _call(helper: str, *args: Any) -> Any:
@@ -118,7 +119,9 @@ def _growth_row(
 def test_mgco_holds_its_return_then_fades_on_its_earnings_growth() -> None:
     """MGCO's golden: a 43.1% runway return held through year 6 and faded to 13.0% in year 20, its
     20-year runway; no revenue consensus, so the charge pays for the earnings growth, 12.0% then
-    10.0%; the newest year's marginal return 45.7%."""
+    10.0%; the newest year's marginal return 45.7%; and the five-year marginal return at a
+    constant margin, 28.2%, the 43.1% without the margin's rise on the revenue already there
+    (method 4.6)."""
     assert _rows(_golden("MGCO")) == [
         [RETURNS, "43.1% through year 6, then to 13.0% in year 20", False],
         [
@@ -127,7 +130,16 @@ def test_mgco_holds_its_return_then_fades_on_its_earnings_growth() -> None:
             False,
         ],
         [NEWEST, "45.7%", True],
+        [CONSTANT, "28.2%", True],
     ]
+
+
+def test_a_row_without_the_return_at_a_constant_margin_shows_no_row_for_it() -> None:
+    """A result stored before the figure, or a row whose span gives none (MSCO's golden: its
+    capital did not grow by a fifth), draws no row."""
+    assert [row[0] for row in _rows(_growth_row((0.15, 0.10)))] == [RETURNS, GROWTH, NEWEST]
+    assert _golden("MSCO")["runway_return"]["constant_margin"] is None
+    assert CONSTANT not in [row[0] for row in _rows(_golden("MSCO"))]
 
 
 def test_msco_fades_from_year_1_on_the_terminal_growth() -> None:
@@ -155,6 +167,8 @@ def test_a_refused_mature_row_draws_its_charge_under_its_phase_s_route() -> None
         "12.0% then 10.0%, the earnings growth: years 2 and 3 have no revenue consensus",
         NEWEST,
         "45.7%",
+        CONSTANT,
+        "28.2%",
     ]
 
 
@@ -380,7 +394,7 @@ def test_a_return_read_without_goodwill_shows_both_measures() -> None:
 def test_a_row_on_another_measure_shows_no_goodwill_rows() -> None:
     """The measures without goodwill are recorded on every row (MGCO's golden holds them) and
     drawn only where the charge read them."""
-    assert [row[0] for row in _rows(_golden("MGCO"))] == [RETURNS, GROWTH, NEWEST]
+    assert [row[0] for row in _rows(_golden("MGCO"))] == [RETURNS, GROWTH, NEWEST, CONSTANT]
     floored = _lifted_row(0.05)
     floored["runway_return"]["used"] = "floor"
     assert [row[0] for row in _rows(floored)] == [RETURNS, GROWTH]

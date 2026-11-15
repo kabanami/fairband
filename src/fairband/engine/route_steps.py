@@ -37,7 +37,7 @@ intermediates, under the override only.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date
 from typing import TYPE_CHECKING, Any, cast
@@ -57,9 +57,11 @@ from fairband.engine.overrides import (
 )
 from fairband.engine.price_facts import price_facts
 from fairband.engine.returns import expected_return
+from fairband.engine.revenue_growth import own_sales_to_capital
 from fairband.engine.roic import (
     CapitalYear,
     RoicResult,
+    RoicYear,
     RunwayReturn,
     aggregate_roic,
     runway_note,
@@ -164,8 +166,9 @@ class Refused:
 class RoicTerms:
     """The ten-year ROIC result, the runway return, the usable (positive) ten-year aggregate the
     sensitivity reads, the runway and terminal returns of the charge, whether the runway charge
-    is off, the ROIC flags (the ten-year ones, then the runway return's), and whether the runway
-    return is an agent's override."""
+    is off, the ROIC flags (the ten-year ones, then the runway return's), whether the runway
+    return is an agent's override, and the marginal return at a constant margin
+    (``constant_margin_return``), shown and never used."""
 
     result: RoicResult
     runway_return: RunwayReturn
@@ -175,6 +178,7 @@ class RoicTerms:
     charge_off: bool
     flags: tuple[Flag, ...]
     overridden: bool = False
+    constant_margin: float | None = None
 
     @classmethod
     def of(
@@ -184,6 +188,7 @@ class RoicTerms:
         policy: Policy,
         *,
         runway_override: float | None = None,
+        revenue: Mapping[int, float] | None = None,
     ) -> RoicTerms:
         """The returns of ``years`` under ``moat``; with ``runway_override``, an agent's runway
         return in place of the measured one: it charges the runway years, and the flags of the
@@ -191,17 +196,21 @@ class RoicTerms:
         not raised. The override is the return in force, so the moat's terminal rule reads it
         too, whatever the engine measured (``method.md`` 4.7, 14.4): the terminal return never
         stands above an agent's lower start, and an override equals the return sensitivity at
-        the same figure."""
+        the same figure. ``revenue`` is each fiscal year's revenue, from which the marginal
+        return at a constant margin is recorded; without it the record holds no figure."""
         result = aggregate_roic(years)
         rr = runway_return(result, moat, policy)
         aggregate = result.aggregate
         usable = aggregate if aggregate is not None and aggregate > 0 else None
+        constant = constant_margin_return(result.by_year, revenue or {}, policy)
         if runway_override is not None:
             terminal = terminal_roic(runway_override, moat, policy)
-            return cls(result, rr, usable, runway_override, terminal, False, result.flags, True)
+            return cls(
+                result, rr, usable, runway_override, terminal, False, result.flags, True, constant
+            )
         terminal = terminal_return(rr, moat, policy)
         flags = result.flags + rr.flags
-        return cls(result, rr, usable, rr.value, terminal, rr.charge_off, flags)
+        return cls(result, rr, usable, rr.value, terminal, rr.charge_off, flags, False, constant)
 
     def intermediates(self) -> dict[str, Any]:
         r, rr = self.result, self.runway_return
@@ -218,6 +227,7 @@ class RoicTerms:
                 "three_year": rr.three_year,
                 "ten_year": rr.ten_year,
                 "one_year": rr.one_year,
+                "constant_margin": self.constant_margin,
                 "without_goodwill": (
                     None if rr.without_goodwill is None else asdict(rr.without_goodwill)
                 ),
@@ -231,6 +241,37 @@ class RoicTerms:
         the runway years when the marginal return is not usable and the three-year capital sum
         is at or below zero, and the ``hold`` of ``charge_for``."""
         return charge_for(self.runway, self.terminal, self.charge_off, policy, hold)
+
+
+def constant_margin_return(
+    kept: Sequence[RoicYear], revenue_by_fiscal_year: Mapping[int, float], policy: Policy
+) -> float | None:
+    """The marginal return at a constant margin (``method.md`` 4.6): the newest kept year's NOPAT
+    over its revenue, times the revenue added over the capital added across the marginal span,
+    the route's own sales-to-capital of 5a.5. The marginal return counts the whole change in
+    NOPAT, so a margin that rose on the revenue already there reads as a return on the capital
+    added, though it took none; this figure leaves that part out. It is shown and never used.
+
+    ``None`` with fewer kept years than the span needs, either year without a revenue, a newest
+    revenue at or below zero, or a span over which capital did not grow by the policy's share or
+    revenue did not grow.
+    """
+    ratio, usable = own_sales_to_capital(
+        kept,
+        revenue_by_fiscal_year,
+        policy.marginal_return_span_years,
+        policy.marginal_capital_growth_min,
+    )
+    if ratio is None or not usable:
+        return None
+    last = kept[-1]
+    revenue = revenue_by_fiscal_year[last.year]
+    return None if revenue <= 0 else last.nopat / revenue * ratio
+
+
+def revenue_by_fiscal_year(i: CompanyInputs) -> dict[int, float]:
+    """Each fiscal year's revenue, the years without one left out."""
+    return {fy.year: fy.revenue for fy in i.series if fy.revenue is not None}
 
 
 def charge_for(
