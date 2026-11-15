@@ -1154,8 +1154,13 @@ def test_a_record_s_currency_is_read_by_the_resolver_derive_and_the_check() -> N
             " currency, it has no value."
         ),
         (
-            "Nor has it one with the price or a close, which are in US dollars but whose currency"
-            " the resolver does not know (spec 2026-11-15 14)."
+            "Nor has it one with the price, the value a share, the levels, a close or a grid's"
+            " cells, which are in US dollars (16.3) but whose currency the resolver does not know"
+            " (spec 2026-11-15 14)."
+        ),
+        (
+            "A derivation with no unit is cited at the cite's own precision (16.3), its currency"
+            " written in the text."
         ),
     ):
         assert words in derivations, words

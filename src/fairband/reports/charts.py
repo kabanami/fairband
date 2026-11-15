@@ -338,22 +338,13 @@ def row_name(name: str) -> str:
 
 
 def _input(value: float | str, tag: str, currency: str) -> str:
-    """An input's value as a cite of it reads, a money input's in ``currency``; a word as it
-    is."""
-    return value if isinstance(value, str) else _in(value, _UNITS.get(tag), currency)
+    """An input's value as a cite of it reads (``check.shown``), a money input's in ``currency``;
+    a word as it is."""
+    return value if isinstance(value, str) else shown(value, _UNITS.get(tag), currency)
 
 
 def _shown(value: float | None, unit: str | None, currency: str = "USD") -> str:
-    """A figure as a cite of it reads, a total or a figure a share in ``currency``; an empty
-    cell for none on file."""
-    return "" if value is None else _in(value, unit, currency)
-
-
-def _in(value: float, unit: str | None, currency: str) -> str:
-    """A figure as a cite of it reads (``check.shown``), but a total or a figure a share in another
+    """A figure as a cite of it reads (``check.shown``), a total or a figure a share in another
     currency than USD with the code before it, "SEK 2,100,000,000", "SEK 40.00" (spec 2026-11-10
-    7.4)."""
-    if currency == "USD" or unit not in ("currency", "per-share"):
-        return shown(value, unit)
-    places = 0 if unit == "currency" else 2
-    return f"{'−' if value < 0 else ''}{currency} {abs(value):,.{places}f}"
+    7.4); an empty cell for none on file."""
+    return "" if value is None else shown(value, unit, currency)
