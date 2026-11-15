@@ -79,11 +79,14 @@ fetched that day) and values it. It takes about a minute.
 
 - Call `refresh_start("scoped", [symbol])` and keep the `refreshId` it answers. When it is refused
   because a refresh is running, call `refresh_status()` until that one ends, then start yours.
-- When it is refused for another reason, no refresh can start until the user acts. The sentence
-  names the reason: "no fmp key: ..." (400), a server with no FMP key, which runs a revalue only;
-  "settings: ...; reset it on the Settings page" (400), a stored setting the policy file no longer
-  accepts; or "no refresh worker" (503). Tell the user, go on with the stored snapshot, and write
-  the price's date in section 9 of the report. Skip the wait below and read `company(symbol)`.
+- When it is refused with "no fmp key: ..." (400), a server with no FMP key, which runs a revalue
+  only, or "no refresh worker" (503), no refresh can start until the user acts. Tell the user, go
+  on with the stored snapshot, and write the price's date in section 9 of the report. Skip the wait
+  below and read `company(symbol)`.
+- When it is refused with "settings: ...; reset it on the Settings page" (400), a stored setting
+  the policy file no longer accepts, every read of the policy answers the same sentence (409),
+  `company` among them. Tell the user, and wait until they reset the setting, as for a server that
+  is not running. Then start the refresh again.
 - Call `refresh_status()` until its `refresh` is `null`: no refresh is running.
 - Call `company(symbol)`. When its `snapshot.refreshId` is not the id you kept, the company was not
   refreshed: its fetch failed inside the run, or another run wrote the snapshot. A run that ends
@@ -239,12 +242,15 @@ Then build the seven parts:
    `filing_report(symbol)` answers. A US filer files no 10-Q for its fourth quarter: its 10-K, `FY`,
    reports the whole year, so a fourth quarter's figure the 10-K does not give is a finding from the
    press release. The consensus for the quarter is the `estimates` quarter's ref, when the store
-   holds it (revenue and EPS). The store holds none for the operating margin or the free cash
-   flow. Their consensus cell holds a guidance record's midpoint where the company guided the
-   quarter (`guidance:<id>/midpoint`), and stays empty otherwise; with no figure there, no
-   surprise is derived. The surprise is `derive` `growth` of the actual over the consensus; the
-   change on the year is `growth` of the actual over the prior year's. The operating margin's
-   surprise and its change on the year are each a `difference` of two margins, cited in points
+   holds it (revenue and EPS). The surprise is `derive` `growth` of the actual over the
+   consensus; the change on the year is `growth` of the actual over the prior year's. The store
+   holds no consensus for the operating margin or the free cash flow, so their consensus and
+   surprise cells stay empty: a company's own figure never stands under the analysts' average.
+   Where the company guided the quarter on the actual's basis, a `gaap` record, one sentence after
+   the table sets the actual against the record's midpoint (`guidance:<id>/midpoint`) and names it
+   the company's guidance. A figure guided on another basis, an adjusted margin against the
+   reported one, is not set against the actual. The operating margin's change, on the year or
+   against a guided margin, is a `difference` of two margins, cited in points
    (`1.5 percentage points`): a `growth` of one margin over another is a relative change, not a
    margin's change. Then name what drove the quarter: price, volume, mix, currency, one-time
    items. Name the one-time items: the engine anchors on earnings without them.
@@ -814,7 +820,7 @@ not you, computes the value it gives.
 | `phase` | every route | the life-cycle phase; the route follows it | `Start-up`, `Young Growth`, `High Growth`, `Mature Growth`, `Mature Stable` or `Decline` |
 | `earnings.ntm` | Mature Growth | the anchor's EPS for the next twelve months (NTM), from a clear full-year EPS guidance, or a net income one over the count the company's EPS is per (see "Guidance") | above 0 to 1,000 dollars a share; evidence of kind `guidance` required |
 | `revenue.ntm` | High Growth, Young Growth, Decline | the NTM revenue, year one of the revenue path or of the run-off, from a clear full-year revenue guidance | above 0 dollars; evidence of kind `guidance` required |
-| `growth.belief` | Mature Growth | the belief: the growth of every year from 4 to the runway's end, save where the year-3 growth is higher: then years 4 to 8 fade from it down to the belief in five equal steps | −0.20 to 0.60 a year |
+| `growth.belief` | Mature Growth | the belief: the growth of each year from 4 to the runway's end, save where the year-3 growth is higher: then years 4 to 3 + `fade_years` (4 to 8 at the defaults) fade from it down to the belief in equal steps, and a runway that ends sooner ends the path mid-fade | −0.20 to 0.60 a year |
 | `path.hold` | High Growth, Young Growth | the held rate of years four to the end of high growth | −0.20 to 3.00 a year |
 | `path.step_2`, `path.step_3` | Mature Growth, High Growth, Young Growth, Decline | the consensus growth of year two or year three | −0.80 to 3.00 |
 | `revenue.step_2`, `revenue.step_3` | Mature Growth | the revenue growth of year two or year three that the charge pays for, in place of the analysts' revenue step, or of the earnings step where they give none: for a revenue step that rests on few analysts or outruns the business's record, from a guidance record or a filing. The earnings path does not move. Its old value is the analysts' step as found | −0.80 to 3.00; period-tied only |

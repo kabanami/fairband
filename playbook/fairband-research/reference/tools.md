@@ -351,7 +351,11 @@ and store nothing:
   item, tied to a kill criterion when one is named.
 - `refresh_start(kind, symbols?)`: start a refresh: `full`, `price`, `scoped` with `symbols`, or
   `revalue`. It answers `{"refreshId": <id>}`, the started refresh's id. A refresh already running
-  refuses it (409), with that refresh's id as `running`.
+  refuses it (409), with that refresh's id as `running`. A server with no FMP key refuses every
+  kind but `revalue`, "no fmp key: ..." (400). A stored setting the policy file no longer accepts
+  refuses every kind, "settings: ...; reset it on the Settings page" (400), and every read of the
+  policy answers the same sentence (409) until the user resets it. A server with no refresh worker
+  answers "no refresh worker" (503). Step 3 of `SKILL.md` says what to do on each.
 - `refresh_cancel()`: ask the running refresh to stop after the companies in flight.
 
 ## The records inside the arguments

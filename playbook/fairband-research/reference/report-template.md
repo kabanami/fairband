@@ -410,11 +410,17 @@ The route values the company, so the report makes no secondary valuation and rea
 Appendix A says "No secondary valuation: Fairband's own valuation gives the company a value".
 Sensitivity reading 57 sets the belief against the runway return. The quarter's revenue and EPS,
 and the same quarter a year before, are the stored quarters' figures from `quarters`, each cited
-by its `fact:` ref; finding 124, the share of bookings, is a figure the statements do not hold.
-The derivations: 531 and 532 the surprises, `growth` of the quarter's stored figure (its `fact:`
-ref) over the consensus; 534 the next-day move, `growth` of the close of 29 Oct 2026 over the
-close of 28 Oct 2026; 535 and 536 the two differences of the year's range, and 537 their ratio.
-Every plain part holds no quantity; every figure is a cite.
+by its `fact:` ref; their operating margins are the quarters table's cells,
+`table:EXMP/quarters/operating_margin/<period>`; finding 124, the share of bookings, is a figure
+the statements do not hold. The company guided no figure for the quarter, and the store holds no
+consensus for its margin or its free cash flow, so those cells stay empty. The derivations: 531
+and 532 the surprises, `growth` of the quarter's stored figure (its `fact:` ref) over the
+consensus; 534 the next-day move, `growth` of the close of 29 Oct 2026 over the close of 28 Oct
+2026; 535 and 536 the two differences of the year's range, and 537 their ratio; 538 and 539 the
+free cash flow of the quarter and of the same quarter a year before, each the `sum` of its cash
+from operations and its capital spending; 540 the margin's change on the year, the `difference`
+of the two quarters' operating margins. Every plain part holds no quantity; every figure is a
+cite.
 
 ```json
 {
@@ -474,7 +480,7 @@ Every plain part holds no quantity; every figure is a cite.
       "parts": [
         "**The verdict.** The call of 28 Oct 2026, on the fourth quarter of fiscal 2026, confirmed the thesis. The price rose ",
         {"cite": "+6.1%", "ref": "derived:534"},
-        " on the next trading day.\n\n**The quarter against expectations.** The quarter beat the analysts' average estimate on both lines.\n\n| | The quarter | A year before | The analysts' average | The surprise |\n|---|---|---|---|---|\n| Revenue | ",
+        " on the next trading day.\n\n**The quarter against expectations.** The quarter beat the analysts' average estimate on revenue and on EPS. No analysts' estimate of the margin or the free cash flow is on file.\n\n| | The quarter | A year before | The analysts' average | The surprise |\n|---|---|---|---|---|\n| Revenue | ",
         {"cite": "$412.3 million", "ref": "fact:EXMP/revenue/2026-Q4", "period": "2026-Q4"},
         " | ",
         {"cite": "$370.8 million", "ref": "fact:EXMP/revenue/2025-Q4", "period": "2025-Q4"},
@@ -490,7 +496,17 @@ Every plain part holds no quantity; every figure is a cite.
         {"cite": "$1.68", "ref": "estimate:EXMP/2026-Q4/eps", "period": "2026-Q4"},
         " | ",
         {"cite": "3.6%", "ref": "derived:532"},
-        " |\n\nPrice drove the quarter more than volume: the new price list took effect for new customers in the quarter. There were no one-time items.\n\n**The story management is telling.** Management's frame: \"the system of record for the small firm\". Three claims carry it.\n\n| Claim | Evidence | Driver | Test |\n|---|---|---|---|\n| Customers now sign multi-year contracts. | Multi-year contracts were ",
+        " |\n| Operating margin | ",
+        {"cite": "33.0%", "ref": "table:EXMP/quarters/operating_margin/2026-Q4", "period": "2026-Q4"},
+        " | ",
+        {"cite": "30.9%", "ref": "table:EXMP/quarters/operating_margin/2025-Q4", "period": "2025-Q4"},
+        " | | |\n| Free cash flow | ",
+        {"cite": "$131.2 million", "ref": "derived:538"},
+        " | ",
+        {"cite": "$108.6 million", "ref": "derived:539"},
+        " | | |\n\nThe operating margin rose ",
+        {"cite": "2.1 percentage points", "ref": "derived:540"},
+        " on the year. Price drove the quarter more than volume: the new price list took effect for new customers in the quarter. There were no one-time items.\n\n**The story management is telling.** Management's frame: \"the system of record for the small firm\". Three claims carry it.\n\n| Claim | Evidence | Driver | Test |\n|---|---|---|---|\n| Customers now sign multi-year contracts. | Multi-year contracts were ",
         {"cite": "41.0%", "ref": "finding:124", "period": "2026-Q4"},
         " of new bookings in the quarter. | The growth rate the value assumes after the analysts' forecast years. | The share holds through fiscal 2027. |\n| The new price list sticks. | Churn did not rise in the first quarter of the new prices. | What keeps rivals from taking the company's profits. | Churn stays flat through the second quarter of fiscal 2027. |\n| Payroll becomes a second engine of growth. | Payroll is still small, and its growth was not given. | The analysts' average estimate of growth in the coming years. | Payroll is reported on its own by the end of fiscal 2027. |\n\nThe verdicts. The multi-year contracts are probable, more likely than not on the evidence: the bookings already show them. The price list is plausible, believable on the evidence but not yet likely: one quarter is too short to judge churn. Payroll is possible, since nothing rules it out, and moves no figure.\n\nThe drift since the call of July: management no longer gives the count of new customers, and the word \"macro\" appeared for the first time. They did not say how many customers left after the price rise.\n\n**The guidance.** The company gave ranges for fiscal 2027 (its guidance), both on its reported figures. The EPS outlook is new; the revenue outlook was raised from the call of July.\n\n| Metric | Period | Low | High | Midpoint | Basis | Against the prior record | Against the analysts' average |\n|---|---|---|---|---|---|---|---|\n| EPS | fiscal 2027 | ",
         {"cite": "$7.00", "ref": "guidance:17/low"},
@@ -522,7 +538,7 @@ Every plain part holds no quantity; every figure is a cite.
     {
       "heading": "The thesis",
       "parts": [
-        "The thesis takes the call's three claims in turn. Accepted: customers sign for longer, so revenue holds up better in the coming years. Held open: the price list; churn over the next two quarters decides it, and a fall in revenue would prove the view wrong. Rejected: payroll as a second engine of growth; the value gives payroll no growth of its own until it is reported.\n\nThe stance is hold. The price is fair for now: it counts on slower growth than the longer contracts support, and churn under the new prices is not yet known. For the stance to be right, the price list has to hold with churn flat, and nothing more. The view waits for two quarters of churn under the new prices."
+        "The thesis takes the call's three claims in turn. Accepted: customers sign for longer, so revenue holds up better in the coming years. Held open: the price list; churn over the next two quarters decides it, and a fall in revenue would prove the view wrong. Rejected: payroll as a second engine of growth; the value gives payroll no growth of its own until it is reported.\n\nThe stance is hold. The price is below the value, but not far enough below it to buy: rivals sell close substitutes, so the discount a buyer asks for is wide, and churn under the new prices is not yet known. For the stance to be right, the price list has to hold with churn flat, and nothing more. The view waits for two quarters of churn under the new prices."
       ]
     },
     {
@@ -532,7 +548,7 @@ Every plain part holds no quantity; every figure is a cite.
         {"cite": "Mature Growth", "ref": "snapshot:412/phase/phase"},
         " stage: its revenue still grows fast for its size, and its operating margin is positive and rising. A second reading of its life cycle (the Dickinson stage) looks at whether fiscal 2026's cash from operations, from investing and from financing came in or went out. It reads ",
         {"cite": "Mature", "ref": "snapshot:412/phase/dickinson"},
-        ": cash came in from the business and went out to new investment and to the company's owners and lenders. The two readings agree, and nothing in the figures puts the stage in doubt. The business is not cyclical, so the value rests on the earnings as they stand.\n\nFor the value a share to equal the price, the company's earnings must grow ",
+        ": cash came in from the business and went out to new investment and to the company's owners and lenders. The two readings agree, and nothing in the figures puts the Mature Growth stage in doubt. The business is not cyclical, so the value rests on the earnings as they stand.\n\nFor the value a share to equal the price, the company's earnings must grow ",
         {"cite": "5.9%", "ref": "review:89/intermediates/implied_growth"},
         " a year after the analysts' forecast years (the implied growth). The value assumes faster growth, so the price is below it.\n\nThe value a share on Fairband's own inputs, before any change to them (the mechanical value), is ",
         {"cite": "$247", "ref": "snapshot:412/value"},
@@ -592,9 +608,9 @@ Every plain part holds no quantity; every figure is a cite.
         {"cite": "18.60x", "ref": "multiple:EXMP/pe/low_10y"},
         ". So the stock trades well above its usual multiple, and below its peak one. The forward P/E, on the analysts' earnings for the next twelve months, is ",
         {"cite": "33.77x", "ref": "snapshot:412/intermediates/multiples/pe_forward"},
-        ". Fairband began logging the forward P/E on 1 Nov 2026, so it has no history yet to set it against. Beside it, the value assumes growth of ",
+        ". Fairband began logging the forward P/E on 1 Nov 2026, so it has no history yet to set it against. The value assumes growth of ",
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
-        " a year after the analysts' forecast years. None of these multiples is a target."
+        " a year after the analysts' forecast years, and the forward P/E is read beside that rate. None of these multiples is a target."
       ]
     },
     {
@@ -616,7 +632,7 @@ Every plain part holds no quantity; every figure is a cite.
       "parts": [
         "The company's stage stands as Fairband gave it. The rating of what keeps rivals from taking the company's profits stands at ",
         {"cite": "Narrow", "ref": "snapshot:412/inputs/moat_class"},
-        ", the middle of none, narrow and wide: customers face real costs to switch, but rivals sell close substitutes. The growth rate assumed after the analysts' years rose to the rate the longer contracts support, through a change to the inputs. The return on reinvested money, as Fairband measured it, stands. A second change to the inputs set the earnings of the next twelve months at the company's guidance."
+        ", the middle of none, narrow and wide: customers face real costs to switch, but rivals sell close substitutes. The growth rate assumed after the analysts' forecast years rose to the rate the longer contracts support, through a change to the inputs. The return on reinvested money, as Fairband measured it, stands. A second change to the inputs set the earnings of the next twelve months at the company's guidance."
       ]
     }
   ],
@@ -628,7 +644,7 @@ Every plain part holds no quantity; every figure is a cite.
     },
     {
       "judgment": "belief",
-      "decision": "The growth rate assumed after the analysts' years rose to the rate the longer contracts support.",
+      "decision": "The growth rate assumed after the analysts' forecast years rose to the rate the longer contracts support.",
       "override_id": 302
     },
     {"judgment": "roic", "decision": "The return on reinvested money, as Fairband measured it, stands."}

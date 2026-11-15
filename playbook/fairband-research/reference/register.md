@@ -96,7 +96,7 @@ Mature Growth stage", "the data on file as of 4 Nov 2026".
 | phase | the company's stage in its life cycle: Start-up, Young Growth, High Growth, Mature Growth, Mature Stable or Decline |
 | Dickinson stage | a second reading of the company's life cycle, one of Introduction, Growth, Mature, Shake-out or Decline, from whether the last fiscal year's cash from operations, from investing and from financing came in or went out; shown beside the stage Fairband gives, it never changes it |
 | moat | what keeps rivals from taking the company's profits, rated None, Narrow or Wide |
-| belief | the growth rate the value assumes after the analysts' forecast years: where the analysts' last year grows faster, growth eases down to this rate in equal steps over five years; growth then stays at this rate until it settles to the long-run rate |
+| belief | the growth rate the value assumes after the analysts' forecast years: where the analysts' last year grows faster, growth eases down toward this rate in equal steps, over five years at the defaults, then holds at it until it settles to the long-run rate; where growth settles to the long-run rate sooner, the easing stops there |
 | implied growth | the growth the price needs: the yearly growth after the analysts' forecast years at which the value a share equals the price |
 | held rate | the growth a fast-growing company's revenue is assumed to keep after the analysts' forecast years, before it slows |
 | runway | the years the company's growth is assumed to stay above the long-run rate it settles to; more years for a business better protected from its rivals |
@@ -116,7 +116,7 @@ Mature Growth stage", "the data on file as of 4 Nov 2026".
 | review | the valuation under the changes to the inputs that stand: the value after them, and the steps to it from the value before them |
 | bridge | the steps from the value before the changes to the inputs to the value after them, one for each change |
 | snapshot | the data on file as of a date, the date written out |
-| validity window | the time the value stays valid on the data on file: until the company's next earnings report, or about three months after the data's date when no report date is known; past two-thirds of that time the value is aging, and past its end it has expired |
+| validity window | the time the value stays valid on the data on file: until the company's next earnings report when one is due after the data's date, else for a fixed time after that date; past a share of that time the value is aging, and past its end it has expired. At the defaults the fixed time is about three months and the share two-thirds |
 | secondary valuation | a fallback value a share, from a discounted cash flow or a sum of parts on assumptions set for it; made only where Fairband gives no value, with or without the changes to the inputs |
 | sensitivity grid | the value a share across a few figures for two inputs; it shows how much of the value rests on assumption, and is never a value itself |
 | kill criterion | a measurable event that would prove the report's view wrong |

@@ -9,6 +9,7 @@ founder's rule of 2026-11-08, spec 14 steps 10 and 11 as amended for plan 3)."""
 
 import json
 import re
+from contextlib import closing
 from datetime import date
 from functools import cache
 from pathlib import Path
@@ -39,7 +40,10 @@ from fairband.reports.check import (
 from fairband.reports.refs import day_words
 from fairband.reports.render import resting_words
 from fairband.reports.tables import QUARTERS, TABLES, Kind
+from fairband.store.db import connect, migrate
 from fairband.store.secondary import cannot_fix
+from fairband.store.settings import effective_policy
+from fairband.web.app import _NO_WORKER as NO_WORKER
 from fairband.web.identity import IDENTIFY_FIRST
 from fairband.web.reviews_api import GUIDANCE_REF
 from fairband.web.vendor_api import NO_FMP_KEY
@@ -498,7 +502,7 @@ def test_the_note_has_one_form() -> None:
     assert "asked in chat on 2026-11-08 (the second run)" in skill  # the counter-example
 
 
-def test_every_item_is_refreshed_before_it_is_read() -> None:
+def test_every_item_is_refreshed_before_it_is_read(tmp_path: Path) -> None:
     """Spec 14 step 3 (plan 5, B-126): a scoped refresh of the company opens step 3 on every
     item, so the report reads the latest price; before plan 5 only an expired company was
     refreshed, and QCOM's report 2 of 8 Nov 2026 read the close of 4 Nov. The snapshot's refresh
@@ -520,23 +524,46 @@ def test_every_item_is_refreshed_before_it_is_read() -> None:
     assert "Tell the user, go on with the stored snapshot" in three
     assert "write the price's date in section 9 of the report" in three
     # a start refused for another reason than a running refresh, by the refusals the server gives
-    # (web/app.py `start_refresh`, the worker's, the run's and `effective_policy`'s; B-138): no
-    # refresh can start until the user acts, so the agent reads the stored snapshot
-    assert str(MissingKey("fmp")).startswith("no fmp key: ")
+    # (web/app.py `start_refresh`, the worker's, the run's and `effective_policy`'s; B-138), each
+    # sentence read from the code: without a key or a worker the agent reads the stored snapshot;
+    # under a stored setting the policy refuses, every read of the policy, `company` among them,
+    # answers the same sentence (409, `settings_api.effective`), so the agent waits (the review)
+    no_key = str(MissingKey("fmp")).split(": ", 1)[0]
+    with closing(connect(tmp_path / "f.db")) as conn:
+        migrate(conn)
+        conn.execute("INSERT INTO settings VALUES ('gone_value', '1', '2026-11-15T00:00:00+00:00')")
+        conn.commit()
+        try:
+            effective_policy(conn)
+            stale = ""
+        except ValueError as exc:
+            stale = str(exc)
+    assert stale.startswith("settings: gone_value: "), stale
+    head, tail = stale.split(": ", 1)[0], stale.rsplit("; ", 1)[1]
     for words in (
-        "When it is refused for another reason, no refresh can start until the user acts.",
-        '"no fmp key: ..." (400), a server with no FMP key, which runs a revalue only',
         (
-            '"settings: ...; reset it on the Settings page" (400), a stored setting the policy file'
-            " no longer accepts"
+            f'When it is refused with "{no_key}: ..." (400), a server with no FMP key, which runs a'
+            f' revalue only, or "{NO_WORKER}" (503), no refresh can start until the user acts.'
         ),
-        '"no refresh worker" (503)',
         (
             "Tell the user, go on with the stored snapshot, and write the price's date in section 9"
             " of the report. Skip the wait below and read `company(symbol)`."
         ),
+        (
+            f'When it is refused with "{head}: ...; {tail}" (400), a stored setting the policy file'
+            " no longer accepts, every read of the policy answers the same sentence (409),"
+            " `company` among them."
+        ),
+        (
+            "Tell the user, and wait until they reset the setting, as for a server that is not"
+            " running. Then start the refresh again."
+        ),
     ):
         assert words in three, words
+    assert "When it is refused for another reason" not in three
+    entry = _tool_entry("refresh_start")
+    for words in (f'"{no_key}: ..." (400)', f'"{head}: ...; {tail}" (400)', f'"{NO_WORKER}" (503)'):
+        assert words in entry, words
     # a split's remedy is this refresh, every call made again (the whole-branch review of plan 2)
     assert "When a stock split has taken effect, this scoped refresh is the remedy" in three
     assert "(every call, whatever was fetched that day)" in three
@@ -1842,15 +1869,20 @@ def test_the_playbook_s_phrases_state_the_method_as_it_runs() -> None:
         " restated in the currency of a company that does not report in US dollars; future cash is"
         " discounted to today at this rate"
     )
+    # the fade's length is a setting and the runway cuts the path (method 4.1, 4.8, 5.5)
     assert rows["belief"] == (
         "the growth rate the value assumes after the analysts' forecast years: where the analysts'"
-        " last year grows faster, growth eases down to this rate in equal steps over five years;"
-        " growth then stays at this rate until it settles to the long-run rate"
+        " last year grows faster, growth eases down toward this rate in equal steps, over five"
+        " years at the defaults, then holds at it until it settles to the long-run rate; where"
+        " growth settles to the long-run rate sooner, the easing stops there"
     )
+    # the fallback and the aging share are settings, and a known report date on or before the
+    # data's date gives the fallback too (method 4.1, 4.10)
     assert rows["validity window"] == (
         "the time the value stays valid on the data on file: until the company's next earnings"
-        " report, or about three months after the data's date when no report date is known; past"
-        " two-thirds of that time the value is aging, and past its end it has expired"
+        " report when one is due after the data's date, else for a fixed time after that date; past"
+        " a share of that time the value is aging, and past its end it has expired. At the"
+        " defaults the fixed time is about three months and the share two-thirds"
     )
     assert rows["Dickinson stage"].startswith(
         "a second reading of the company's life cycle, one of Introduction, Growth, Mature,"
@@ -1874,33 +1906,45 @@ def test_the_playbook_s_phrases_state_the_method_as_it_runs() -> None:
         _read(SKILL), ("Tag", "Routes that read it", "The input", "Takes, the ends included")
     )
     assert table["`growth.belief`"][1] == (
-        "the belief: the growth of every year from 4 to the runway's end, save where the year-3"
-        " growth is higher: then years 4 to 8 fade from it down to the belief in five equal steps"
+        "the belief: the growth of each year from 4 to the runway's end, save where the year-3"
+        " growth is higher: then years 4 to 3 + `fade_years` (4 to 8 at the defaults) fade from it"
+        " down to the belief in equal steps, and a runway that ends sooner ends the path mid-fade"
     )
     assert "before the fade to the long-run rate" not in _read(SKILL)
 
 
 def test_step_5_reads_a_margin_s_change_in_points_and_the_cells_no_consensus_fills() -> None:
-    """The reviews of the report reader's plan (Task 10): the operating margin's surprise and its
-    change on the year are a `difference` of two margins cited in points, not a `growth`, which
-    is a relative change; the store holds no consensus for the quarter's operating margin or free
-    cash flow, so their consensus cell holds a guidance record's midpoint or stays empty, and no
-    surprise is derived without one."""
+    """The reviews of the report reader's plan (Task 10), as the controller ruled: the store holds
+    no consensus for the quarter's operating margin or free cash flow, so their consensus and
+    surprise cells stay empty, and a company's own figure never stands under the analysts'
+    average; a quarter the company guided on the actual's basis is set against the guided midpoint
+    in one sentence after the table, named as the company's guidance, and a figure guided on
+    another basis is not; the margin's change is a `difference` of two margins cited in points,
+    not a `growth`, which is a relative change."""
     five = _flat(_steps(_frontmatter(_read(SKILL))[1])[5])
     for words in (
-        "The store holds none for the operating margin or the free cash flow.",
         (
-            "Their consensus cell holds a guidance record's midpoint where the company guided the"
-            " quarter (`guidance:<id>/midpoint`), and stays empty otherwise; with no figure there,"
-            " no surprise is derived."
+            "The store holds no consensus for the operating margin or the free cash flow, so their"
+            " consensus and surprise cells stay empty: a company's own figure never stands under the"
+            " analysts' average."
         ),
         (
-            "The operating margin's surprise and its change on the year are each a `difference` of"
-            " two margins, cited in points (`1.5 percentage points`): a `growth` of one margin over"
-            " another is a relative change, not a margin's change."
+            "Where the company guided the quarter on the actual's basis, a `gaap` record, one"
+            " sentence after the table sets the actual against the record's midpoint"
+            " (`guidance:<id>/midpoint`) and names it the company's guidance."
+        ),
+        (
+            "A figure guided on another basis, an adjusted margin against the reported one, is not"
+            " set against the actual."
+        ),
+        (
+            "The operating margin's change, on the year or against a guided margin, is a"
+            " `difference` of two margins, cited in points (`1.5 percentage points`): a `growth` of"
+            " one margin over another is a relative change, not a margin's change."
         ),
     ):
         assert words in five, words
+    assert "Their consensus cell holds a guidance record's midpoint" not in five
 
 
 def test_the_template_s_words_state_what_each_figure_is() -> None:
@@ -2026,9 +2070,45 @@ def test_the_template_example_holds_together() -> None:
     # the forward P/E sits beside the growth assumed, and the hurdle rate is every company's
     nine = written["Price and multiples"]
     beside = (
-        "Beside it, the value assumes growth of 9.0% a year after the analysts' forecast years."
+        "The value assumes growth of 9.0% a year after the analysts' forecast years, and the"
+        " forward P/E is read beside that rate."
     )
-    assert beside in nine and "rests on growth" not in nine
+    assert beside in nine and "rests on growth" not in nine and "Beside it," not in nine
+    # the reviews of Task 10: the hold's reason against a price below the value, the stage named,
+    # and one phrase for the belief in the judgments as in the Valuation
+    assert (
+        "The price is below the value, but not far enough below it to buy: rivals sell close"
+        " substitutes, so the discount a buyer asks for is wide, and churn under the new prices is"
+        " not yet known."
+    ) in written["The thesis"]
+    assert "fair for now" not in written["The thesis"]
+    assert "nothing in the figures puts the Mature Growth stage in doubt" in valuation
+    decisions = [j["decision"] for j in example["judgments"]] + [written["Key judgments"]]
+    for text in decisions:
+        assert "the analysts' years" not in text, text
+    assert (
+        "The growth rate assumed after the analysts' forecast years rose"
+        in (written["Key judgments"])
+    )
+    # the quarter's table has the four lines: the margin and the free cash flow with their
+    # consensus and surprise cells empty, the margin's change on the year a difference in points
+    table = call.split("| | The quarter |", 1)[1].split("\n\n", 1)[0]
+    rows_of = {cells[0]: cells[1:] for cells in map(_cells, table.splitlines()[2:])}
+    assert list(rows_of) == ["Revenue", "EPS", "Operating margin", "Free cash flow"]
+    for line in ("Operating margin", "Free cash flow"):
+        assert rows_of[line][2:] == ["", ""], line
+    for period in ("2026-Q4", "2025-Q4"):
+        assert f"table:EXMP/quarters/operating_margin/{period}" in cites, period
+    change = next(
+        part
+        for section in example["sections"]
+        if section["heading"] == "The last earnings call"
+        for part in section["parts"]
+        if not isinstance(part, str) and part["cite"].endswith("percentage points")
+    )
+    margins = [number(f"table:EXMP/quarters/operating_margin/{p}") for p in ("2026-Q4", "2025-Q4")]
+    assert abs(number(change["ref"]) - (margins[0] - margins[1])) < 0.05
+    assert "The operating margin rose 2.1 percentage points on the year." in call
     hurdle = "the yearly return of 9.0% that investors require of any company's shares."
     assert hurdle in written["Industry and competition"]
 
