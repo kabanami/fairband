@@ -226,8 +226,9 @@ def build_server(client: FairbandClient) -> MCPServer:
         return answer(lambda: client.get(_company(symbol, "quarters")))
 
     @server.tool(
-        description="The six five-year tables of a report's section 4, each cell with its ref to"
-        " cite."
+        description="The six tables of a report's section 4, with their columns (the five fiscal"
+        " years, the trailing twelve months and the consensus years where a table has them),"
+        " each cell with its ref to cite."
     )
     def financial_tables(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_company(symbol, "financial-tables")))

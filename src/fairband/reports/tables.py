@@ -26,12 +26,12 @@ dividends and the buybacks, each the trailing figure citing ``fact:<symbol>/<lin
 margins, the free cash flow and its ratios computed from the trailing lines as the fiscal cells
 are from the year's; the revenue growth, the trailing revenue over the revenue of the twelve
 months before − 1, the sum of the stored periods (``stored_quarters``) a year earlier, as many as
-the trailing figures sum, each the cadence's days after the one before and the last as many
-before the trailing ones' first (``consecutive_periods``), ``None`` noted "fewer than two years of
-periods on file" where those are not all stored; the gross margin and the share count change
-``None`` noted "not measured over the trailing twelve months", since neither the trailing figures
-nor the stored periods' read carries the gross profit and the tables read no trailing share
-count; the acquisitions ``None``, "not on file".
+the trailing figures sum, each ending 80 to 100 days after the one before (170 to 195 for
+half-years, ``consecutive_periods``) and the trailing ones' first likewise after the last of
+them, ``None`` noted "fewer than two years of periods on file" where those are not all stored;
+the gross margin and the share count change ``None`` noted "not measured over the trailing twelve
+months", since neither the trailing figures nor the stored periods' read carries the gross profit
+and the tables read no trailing share count; the acquisitions ``None``, "not on file".
 
 The estimate columns (6.3) are the consensus fiscal years after the newest fiscal year on file
 that hold a revenue or an EPS, in order, ``ESTIMATE_YEARS`` at most, each read as an
@@ -201,21 +201,28 @@ def year_lines(conn: sqlite3.Connection, symbol: str) -> dict[int, dict[str, flo
 
 
 def financial_tables(
-    conn: sqlite3.Connection, symbol: str, policy: Policy, tax: TaxTable | None = None
+    conn: sqlite3.Connection,
+    symbol: str,
+    policy: Policy,
+    tax: TaxTable | None = None,
+    *,
+    consensus: Sequence[AnnualEstimate] | None = None,
 ) -> tuple[Table, ...]:
     """The six tables of ``symbol`` with their columns, in ``TABLES``' order: its last five fiscal
     years on file, the trailing twelve months and the consensus years where a table has them
     (module docstring); no column and every row without cells when the store holds no annual
     income statement. ``tax`` is the table the capital years are taxed with, the packaged one
-    when ``None``; the hurdle rate is ``policy``'s r, restated on a company in another currency;
-    the consensus is read as an ``estimate:`` ref reads it, under ``policy`` and ``tax``."""
+    when ``None``; the hurdle rate is ``policy``'s r, restated on a company in another currency.
+    ``consensus`` is the annual consensus as an ``estimate:`` ref reads it (``build_inputs``
+    under ``policy`` and ``tax``), handed in by a caller that holds it, read here when ``None``."""
     country, _ = country_for(conn, symbol, latest_company(conn, symbol))
     taxed = load_tax_table() if tax is None else tax
     stated = statements_for(conn, symbol, country, taxed, _NO_DAY)
     sheets = annual_lines(conn, symbol)
-    consensus = (
-        build_inputs(conn, symbol, policy, taxed, _NO_DAY).annual_estimates if sheets else ()
-    )
+    if consensus is None:
+        consensus = (
+            build_inputs(conn, symbol, policy, taxed, _NO_DAY).annual_estimates if sheets else ()
+        )
     f = _Figures(
         symbol,
         sheets,
@@ -338,10 +345,15 @@ class _Figures:
         found.extend(estimate(y) for y in self.estimates_of(table))
         return tuple(found)
 
-    def fact(self, table: str, row: str, line: str, unit: Unit, estimate: str | None = None) -> Row:
+    def fact(self, table: str, row: str, line: str, unit: Unit, estimate: str = "") -> Row:
         """A row of one stored line, each cell citing it: the fiscal year's line, the trailing
-        figures' and, under an estimate column, the consensus field ``estimate``; a row with no
-        such field holds none there, "no estimate for this line"."""
+        figures' and, under an estimate column, the consensus field ``estimate``, which a row of
+        a table with estimate columns must name and a row of another table does not."""
+        if (table in _ESTIMATE_TABLES) != bool(estimate):
+            raise ValueError(
+                f"{table}/{row}: a row names its consensus field where its table has estimate"
+                " columns, and only there"
+            )
 
         def fiscal(y: int) -> Cell:
             return Cell(str(y), self.line(line, y), unit, fact_ref(self.symbol, line, str(y)))
@@ -351,12 +363,9 @@ class _Figures:
             return Cell(TRAILING, figure, unit, fact_ref(self.symbol, line, TRAILING))
 
         def consensus(y: int) -> Cell:
-            period = estimate_period(y)
-            if estimate is None:
-                ref = table_ref(self.symbol, table, row, period)
-                return Cell(period, None, unit, ref, NO_ESTIMATE)
             figure = getattr(self.consensus[y], estimate)
-            return Cell(period, figure, unit, estimate_ref(self.symbol, str(y), estimate))
+            ref = estimate_ref(self.symbol, str(y), estimate)
+            return Cell(estimate_period(y), figure, unit, ref)
 
         return Row(row, unit, self.cells(table, fiscal, trailing, consensus))
 
@@ -605,9 +614,9 @@ def _year_before(
     stored: Sequence[QuarterFigures], trailing: TrailingFigures, first: date
 ) -> tuple[QuarterFigures, ...] | None:
     """The stored periods of the twelve months before the trailing figures', whose first period
-    ends ``first``: as many as the trailing figures sum, the last of them ending before ``first``,
-    each the cadence's days after the one before and ``first`` as many after the last
-    (``consecutive_periods``); ``None`` unless all of them are stored."""
+    ends ``first``: as many as the trailing figures sum, ending before ``first``, each ending 80 to
+    100 days after the one before (170 to 195 for half-years, ``consecutive_periods``) and
+    ``first`` likewise after the last of them; ``None`` unless all of them are stored."""
     before = tuple(q for q in stored if q.period_end < first)[-trailing.quarters :]
     ends = [*(q.period_end for q in before), first]
     if len(before) < trailing.quarters or not consecutive_periods(ends, trailing.cadence):

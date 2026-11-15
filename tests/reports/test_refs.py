@@ -28,6 +28,7 @@ from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.sensitivity import SensitivityGrid
 from fairband.policy import Policy
 from fairband.policy.tax import load_tax_table
+from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import statements_for, stored_quarters
 from fairband.reports.check import WRONG_UNIT, check_sections
 from fairband.reports.filing_report import row_ref, served
@@ -800,6 +801,39 @@ def test_a_trailing_and_an_estimate_cell_resolve_and_read_in_words(
     later = Resolver(conn, "AAPL", policy)
     assert later.resolve(estimate) is None
     assert later.describe(estimate) == words
+
+
+def test_a_resolver_reads_the_inputs_once_for_its_tables_and_its_consensus(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    snapshots: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The tables' estimate columns read the consensus as an ``estimate:`` ref reads it, so a
+    resolver hands its tables the consensus its own inputs hold: one that resolves a ``table:``,
+    an ``estimate:`` and a ``close:`` ref builds the company's inputs once. The six tables are the
+    same whether handed the consensus or reading it themselves."""
+    built: list[str] = []
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        built.append(args[1])
+        return build_inputs(*args, **kwargs)
+
+    monkeypatch.setattr("fairband.reports.refs.build_inputs", counted)
+    monkeypatch.setattr("fairband.reports.tables.build_inputs", counted)
+    resolver = Resolver(conn, "AAPL", policy)
+    for ref in (
+        "table:AAPL/growth/revenue/2026E",
+        "estimate:AAPL/2026/revenue",
+        "close:AAPL/2025-11-03",
+    ):
+        assert resolver.resolve(ref) is not None, ref
+    assert built == ["AAPL"]
+    held = build_inputs(conn, "AAPL", policy, load_tax_table(), date.min).annual_estimates
+    handed = financial_tables(conn, "AAPL", policy, consensus=held)
+    assert built == ["AAPL"]  # handed the consensus, the tables read no inputs
+    assert handed == financial_tables(conn, "AAPL", policy)
+    assert built == ["AAPL", "AAPL"]
 
 
 def test_estimate_close_and_peer_refs(

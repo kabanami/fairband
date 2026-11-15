@@ -336,6 +336,24 @@ def test_inbox_post_says_what_the_note_holds(api: FairbandClient) -> None:
     assert "its note the request in the requester's own words on one line" in post
 
 
+def test_financial_tables_names_its_columns(api: FairbandClient) -> None:
+    """Spec 2026-11-15 6.5: the tables carry their columns past the fiscal years, and the tool's
+    description says so."""
+    server = build_server(api)
+
+    async def listed() -> list[Any]:
+        async with Client(server) as session:
+            return (await session.list_tools()).tools
+
+    tools = anyio.run(listed)
+    tables = next(t.description or "" for t in tools if t.name == "financial_tables")
+    assert tables == (
+        "The six tables of a report's section 4, with their columns (the five fiscal years, the"
+        " trailing twelve months and the consensus years where a table has them), each cell with"
+        " its ref to cite."
+    )
+
+
 def test_company_names_the_currency_the_rate_and_the_share_basis(api: FairbandClient) -> None:
     """Spec 2026-11-10 7.4: the ``company`` read (web and MCP) carries the reporting currency, the
     ADR flag and ratio, and the rate with its date; the tool's description says so."""

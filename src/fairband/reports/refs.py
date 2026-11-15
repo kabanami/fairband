@@ -851,9 +851,14 @@ class Resolver:
         _, table, row, period = pieces
         from fairband.reports.tables import Table, financial_tables  # tables builds its refs here
 
-        tables: tuple[Table, ...] = self._once(
-            "tables", lambda: financial_tables(self.conn, self.symbol, self.policy, self.tax)
-        )
+        def read() -> tuple[Table, ...]:
+            # the consensus the resolver's ``estimate:`` refs read, so the store is read once
+            consensus = self._inputs().annual_estimates
+            return financial_tables(
+                self.conn, self.symbol, self.policy, self.tax, consensus=consensus
+            )
+
+        tables: tuple[Table, ...] = self._once("tables", read)
         for found in tables:
             for r in found.rows if found.name == table else ():
                 for cell in r.cells if r.name == row else ():

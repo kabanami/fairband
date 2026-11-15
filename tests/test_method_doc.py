@@ -502,6 +502,11 @@ def test_the_tables_carry_their_columns_past_the_last_fiscal_year() -> None:
         "each citing `fact:<symbol>/<line>/ttm`",
         "each citing itself, `table:<symbol>/<table>/<row>/ttm`",
         (
+            "the sum of the stored periods (16.9) a year earlier: as many as the trailing figures"
+            " sum, each ending 80 to 100 days after the one before (170 to 195 for half-years,"
+            " 4.2), and the trailing figures' first likewise after the last of them;"
+        ),
+        (
             'where those are not all stored it holds no figure, noted "fewer than two years of'
             ' periods on file"'
         ),
@@ -539,7 +544,7 @@ def test_the_tables_carry_their_columns_past_the_last_fiscal_year() -> None:
         '"the growth table, revenue growth, the trailing twelve months"',
         '"the growth table, revenue growth, fiscal 2026, the analysts\' estimate"',
         "so a cite of an estimate column no longer on file reads the same",
-        "The check reads `2026E` as the year, `2026`",
+        "The check reads `2026E`, and `FY2026E`, as the year, `2026`",
         (
             "a cite of an estimate cell may give either, on the `estimate:` ref and on a `table:`"
             " ref alike, and no cite is refused for the letter"
