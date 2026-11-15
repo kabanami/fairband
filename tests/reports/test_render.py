@@ -739,21 +739,27 @@ def test_the_export_s_appendix_a_opens_with_the_snapshot(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """The whole-branch review's I1: the export's second line names no record (spec 2026-11-15 7),
-    so its Appendix A opens with the Snapshot part, one line as the report page's Appendix A
-    writes it, in its order: the snapshot's id, its data date, its price date and the end of its
-    window in words, its price and its value a share as the page writes money, and the reporting
-    currency on a company in another currency; a refused snapshot's refusal after the line, as the
-    page shows it under the line (method 16.6)."""
+    so its Appendix A opens with the Snapshot part, one line in the order of the report page's
+    Appendix A: the snapshot's id, its data date, its price date and the end of its window in
+    words, its price and its value a share, both US dollars, as the export writes a figure a share
+    elsewhere, with its thousands separator ("$1,507.85", where the page's line writes
+    "$1507.85"), and the reporting currency on a company in another currency; a refused
+    snapshot's refusal after the line, as the page shows it under the line (method 16.6)."""
     sid = snapshots["AAPL"]
     aapl = snapshot_row(conn, sid)
     assert aapl is not None and aapl.value is not None
     report = _stored(conn, sid)
-    text = markdown(report, appendix_a(conn, report, policy), [], [], {})
+    a = appendix_a(conn, report, policy)
+    text = markdown(report, a, [], [], {})
     line = (
         f"Snapshot {sid} · data 30 Oct 2026 · priced 30 Oct 2026 · valid until 28 Jan 2027"
         f" · price $150.00 · value ${aapl.value:.2f}"
     )
     assert _snapshot_part(text) == f"### Snapshot\n\n{line}\n\n"
+    # a figure of four digits takes the separator; a figure below zero its minus first
+    large = {**a, "snapshot": {**a["snapshot"], "price": 1507.85, "value": -1234.5}}
+    part = _snapshot_part(markdown(report, large, [], [], {}))
+    assert part.endswith(" · price $1,507.85 · value −$1,234.50\n\n")
     # a refused snapshot: no value, and its refusal after the line
     aal = snapshot_row(conn, snapshots["AAL"])
     assert aal is not None and aal.value is None and aal.refusal

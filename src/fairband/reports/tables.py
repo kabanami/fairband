@@ -320,9 +320,17 @@ def _consensus(
     try:
         return build_inputs(conn, symbol, policy, tax, _NO_DAY).annual_estimates
     except Exception as exc:  # noqa: BLE001 - the tables stand without their estimate columns
-        name = type(exc).__name__  # never the text, which could hold a key or a URL
-        logger.warning("%s: the tables have no estimate column: assembly raised %s", symbol, name)
-        return ()
+        return without_consensus(symbol, exc)
+
+
+def without_consensus(symbol: str, exc: Exception) -> tuple[AnnualEstimate, ...]:
+    """No consensus for ``symbol``'s tables, whose assembly raised ``exc``, and a warning naming
+    the symbol and the exception's class, never its text, which could hold a key or a URL: the
+    tables' own read's (``_consensus``) and the resolver's, which hands its tables the consensus
+    its inputs hold (``refs.Resolver``)."""
+    name = type(exc).__name__
+    logger.warning("%s: the tables have no estimate column: assembly raised %s", symbol, name)
+    return ()
 
 
 def _hurdle(conn: sqlite3.Connection, symbol: str, policy: Policy) -> float:

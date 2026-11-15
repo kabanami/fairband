@@ -50,9 +50,10 @@ their headings as ``##``, each led by its chart tables (``charts.chart_tables``)
 tables, "No data on file." under one without rows, as the page writes under its chart, and the
 line a table carries after its rows, then each part's text in order, a cite as its text and its
 footnote mark, ``$150.00[^1]``, so no ref is in the text; then Appendix A, opening with the
-snapshot the report rests on in one line as the page's Appendix A writes it, "Snapshot 412 · data
-4 Nov 2026 · priced 4 Nov 2026 · valid until 27 Jan 2027 · price $150.00 · value $128.00", with
-"· in SEK" last on a company in another currency, and its refusal after the line where it has one
+snapshot the report rests on in one line in the order of the page's Appendix A, "Snapshot 412 ·
+data 4 Nov 2026 · priced 4 Nov 2026 · valid until 27 Jan 2027 · price $150.00 · value $128.00",
+its price and value with the export's thousands separator ("$1,507.85"), with "· in SEK" last on
+a company in another currency, and its refusal after the line where it has one
 (the lines above the sections name no record, so the export names its snapshot here), then its
 other parts as tables, its inputs' "As of", a date input's note and its guidance's "Call" in
 words, and Appendix B as a list; and last the references under ``## References``, ``[^n]: <ref> —
@@ -84,6 +85,7 @@ from fairband.reports.check import (
     WRONG_SNAPSHOT,
     WRONG_UNIT,
     parts,
+    shown,
 )
 from fairband.reports.refs import Resolver, day_words, guidance_cited
 from fairband.store.guidance import guidance_for
@@ -646,10 +648,11 @@ def _chart_table(chart: ChartTable) -> list[str]:
 
 
 def _snapshot_line(snapshot: Mapping[str, Any]) -> str:
-    """The snapshot the report rests on in one line, as the report page's Appendix A writes it
+    """The snapshot the report rests on in one line, in the order of the report page's Appendix A
     (``report.js``, ``snapshotLine``): its id, its data date, its price date and the end of its
-    window, each in words, its price and its value a share as the page writes money, and, on a
-    company in another currency, that currency last; a dash for what it has none of."""
+    window, each in words, its price and its value a share, both US dollars, as the export writes
+    a figure a share elsewhere, with its thousands separator ("$1,507.85"), and, on a company in
+    another currency, that currency last; a dash for what it has none of."""
     said = [
         f"Snapshot {snapshot['id']}",
         f"data {_day_words(snapshot['dataDate']) or _DASH}",
@@ -827,11 +830,9 @@ def _percent(x: float) -> str:
 
 
 def _money(x: float | None) -> str:
-    """A price or a value a share as the report page writes money (the bundle's
-    ``formatMoney``): "$150.00", "−$2.50"; an em dash for none."""
-    if x is None:
-        return _DASH
-    return f"{'−' if x < 0 else ''}${abs(x):.2f}"
+    """A price or a value a share in US dollars as the export writes a figure a share
+    (``check.shown``): "$1,507.85", "−$2.50"; an em dash for none."""
+    return _DASH if x is None else shown(x, "per-share")
 
 
 def _table(header: Sequence[str], rows: Sequence[Sequence[Any]]) -> list[str]:

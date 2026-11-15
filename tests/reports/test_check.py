@@ -283,6 +283,32 @@ def test_an_estimate_cell_is_cited_by_its_year_with_the_letter_or_without(
     assert (found.what, found.detail) == (UNRESOLVED, f"{absent} names no stored value")
 
 
+def test_a_table_cell_passes_when_the_consensus_cannot_be_read(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    snapshots: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fix wave's follow-up to the whole-branch review's M3: where the company's assembly
+    raises, the resolver reads the tables with no consensus, so a section citing a fiscal table
+    cell, the clean one's revenue growth and free cash flow over net income, a trailing cell and a
+    quarter cell passes the check as before the tables read the consensus; a cite of an estimate
+    cell is an unresolved reference."""
+
+    def raising(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("assembly failed")
+
+    monkeypatch.setattr("fairband.reports.refs.build_inputs", raising)
+    monkeypatch.setattr("fairband.reports.tables.build_inputs", raising)
+    sid = snapshots["AAPL"]
+    trailing = _cite("20.0%", "table:AAPL/growth/operating_margin/ttm", "ttm")
+    quarter = _cite("20.0%", "table:AAPL/quarters/operating_margin/2025-Q3", "2025-Q3")
+    assert _check(conn, policy, sid, trailing, quarter) == []
+    estimate = "table:AAPL/growth/eps/2026E"
+    found = _one(_check(conn, policy, sid, _cite("$3.30", estimate)), sid, "$3.30")
+    assert (found.what, found.detail) == (UNRESOLVED, f"{estimate} names no stored value")
+
+
 def test_unresolved_reference(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:

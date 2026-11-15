@@ -3,6 +3,7 @@
 with ACME's synthetic statements, consensus, closes and ACME as its mature peer; AAL, refused."""
 
 import json
+import logging
 import sqlite3
 from dataclasses import replace
 from datetime import UTC, date, datetime
@@ -834,6 +835,43 @@ def test_a_resolver_reads_the_inputs_once_for_its_tables_and_its_consensus(
     assert built == ["AAPL"]  # handed the consensus, the tables read no inputs
     assert handed == financial_tables(conn, "AAPL", policy)
     assert built == ["AAPL", "AAPL"]
+
+
+def test_a_table_cell_resolves_when_the_consensus_cannot_be_read(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    snapshots: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The fix wave's follow-up to the whole-branch review's M3: a resolver hands its tables the
+    consensus its own inputs hold, and where reading those raises, as the refresh lets one
+    company's assembly raise, it reads the tables with no consensus, as the tables' own read does:
+    a fiscal, a trailing and a quarter cell resolve to their values, as before the tables read the
+    consensus, an estimate cell names nothing, and one warning names the symbol and the
+    exception's class, never its text. AAPL's fiscal 2025 revenue is $2,100 m; its four quarters to
+    30 Sep 2026 earn $260 m on $1,300 m; its quarter to 30 Sep 2025 $60 m on $300 m."""
+
+    def raising(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("https://vendor.example/stable?apikey=SECRET")
+
+    monkeypatch.setattr("fairband.reports.refs.build_inputs", raising)
+    monkeypatch.setattr("fairband.reports.tables.build_inputs", raising)
+    resolver = Resolver(conn, "AAPL", policy)
+    with caplog.at_level(logging.WARNING, logger="fairband.reports"):
+        revenue = resolver.resolve("table:AAPL/growth/revenue/2025")
+        margin = resolver.resolve("table:AAPL/growth/operating_margin/ttm")
+        quarter = resolver.resolve("table:AAPL/quarters/operating_margin/2025-Q3")
+        estimate = resolver.resolve("table:AAPL/growth/eps/2026E")
+    assert revenue == Resolved(2_100 * M, "currency", "2025", None)
+    assert margin is not None and margin.value == pytest.approx(260 / 1300)
+    assert quarter is not None and quarter.value == pytest.approx(60 / 300)
+    assert estimate is None
+    [record] = caplog.records
+    assert record.levelno == logging.WARNING and record.name == "fairband.reports"
+    message = record.getMessage()
+    assert "AAPL" in message and "RuntimeError" in message
+    assert "SECRET" not in message and "vendor.example" not in message
 
 
 def test_a_quarter_cell_resolves_and_reads_in_words(

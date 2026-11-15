@@ -37,7 +37,9 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
 - ``table:<symbol>/<table>/<row>/<period>``: a cell of the financial tables (13.5) by its
   column's period, a fiscal year, ``ttm`` or a consensus year and ``E`` (``2026E``; spec
   2026-11-15 6.1), or of the quarters table (``tables.QUARTERS``, 6.4) by a stored period's label
-  (``2026-Q3``); a period the table has no column for names nothing;
+  (``2026-Q3``); a period the table has no column for names nothing; where the company's inputs
+  cannot be read the tables have no estimate column, as their own read has none
+  (``tables.without_consensus``), so every other cell still resolves;
 - ``estimate:<symbol>/<period>/<field>``: a stored consensus figure, ``<period>`` the fiscal year
   (``2026``) or the quarter (``2026-Q4``) and ``<field>`` the engine's name (``eps``,
   ``net_income``, ``analysts_eps``);
@@ -851,12 +853,22 @@ class Resolver:
             return None
         _, table, row, period = pieces
         # tables builds its refs here
-        from fairband.reports.tables import QUARTERS, Table, financial_tables, quarters_table
+        from fairband.reports.tables import (
+            QUARTERS,
+            Table,
+            financial_tables,
+            quarters_table,
+            without_consensus,
+        )
 
         def read() -> tuple[Table, ...]:
             # the consensus the resolver's ``estimate:`` refs read and the stored periods its
-            # ``fact:`` refs read, so the store is read once
-            consensus = self._inputs().annual_estimates
+            # ``fact:`` refs read, so the store is read once; no consensus where the inputs
+            # cannot be read, as the tables' own read, so a cell but an estimate's resolves
+            try:
+                consensus = self._inputs().annual_estimates
+            except Exception as exc:  # noqa: BLE001 - the tables stand without their estimates
+                consensus = without_consensus(self.symbol, exc)
             return financial_tables(
                 self.conn,
                 self.symbol,
