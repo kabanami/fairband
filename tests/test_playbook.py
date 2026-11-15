@@ -9,6 +9,8 @@ founder's rule of 2026-11-08, spec 14 steps 10 and 11 as amended for plan 3)."""
 
 import json
 import re
+import tarfile
+from collections.abc import Callable
 from contextlib import closing
 from datetime import date
 from functools import cache
@@ -30,20 +32,23 @@ from fairband.refresh.reviews import OFF_ROUTE
 from fairband.reports.charts import BAND_TITLE
 from fairband.reports.check import (
     FAILURES,
+    HEADINGS,
     STRUCTURE,
     parse_cite,
     quantities,
     structure_refusal,
 )
-from fairband.reports.refs import day_words
+from fairband.reports.refs import KILL_FORM, NUMBER_FORM, NUMBERS, day_words
 from fairband.reports.render import resting_words
 from fairband.reports.tables import QUARTERS, TABLES, Kind
+from fairband.store.currency import check_currency
 from fairband.store.db import connect, migrate
+from fairband.store.research import _require_figure
 from fairband.store.secondary import cannot_fix
 from fairband.store.settings import effective_policy
 from fairband.web.app import _NO_WORKER as NO_WORKER
 from fairband.web.identity import IDENTIFY_FIRST
-from fairband.web.reviews_api import GUIDANCE_REF
+from fairband.web.reviews_api import FIXED_NUMBERS, GUIDANCE_REF, NEEDS_A_FIGURE
 from fairband.web.vendor_api import NO_FMP_KEY
 
 PLAYBOOK = Path(__file__).parent.parent / "playbook" / "fairband-research"
@@ -52,6 +57,13 @@ TOOLS = PLAYBOOK / "reference" / "tools.md"
 CITATIONS = PLAYBOOK / "reference" / "citations.md"
 TEMPLATE = PLAYBOOK / "reference" / "report-template.md"
 REGISTER = PLAYBOOK / "reference" / "register.md"
+# The brand book, inside the design system's archive (CLAUDE.md: read it without unpacking).
+DESIGN_SYSTEM = (
+    Path(__file__).parent.parent / "docs" / "design-system" / "fairband-design-system_4.tar.gz"
+)
+BRAND_BOOK = "fairband-design-system/docs/brand-book.md"
+# The section a `kill:` cite passes in alone (spec 2026-11-15 8.2), as the check names it.
+KILL_SECTION = HEADINGS[10]
 
 # Spec 14's thirteen steps, each with the tools it names; steps 9 and 11 name none.
 STEPS: dict[int, tuple[str, ...]] = {
@@ -107,6 +119,7 @@ REF_FORMS = (
     "filing",
     "response",
     "policy",
+    "kill",
 )
 # The refusals an agent cannot fix, which spare a report the secondary valuation (spec
 # 2026-11-10 7.6), as the server words them with their placeholders.
@@ -150,6 +163,9 @@ REFUSALS = (
     "the path needs its own evidence item",
     "an axis holds one to five values",
     "the two tags differ",
+    # a fixed number in `derive` (spec 2026-11-15 7.1)
+    f"{FIXED_NUMBERS}, not <what was written>",
+    NEEDS_A_FIGURE,
 )
 # The forms the example cites at least once: the history, the grid, the guidance.
 EXAMPLE_FORMS = ("multiple", "sensitivity", "guidance")
@@ -1410,7 +1426,8 @@ def test_the_skill_reads_a_foreign_filer() -> None:
         "`snapshot:<id>/inputs/fx_rate`",
         "through `derive`",
         "the override ranges in dollars are in the reporting currency",
-        "a guidance record's figures are in the reporting currency",
+        # a record's money is in the currency the company states it in (spec 2026-11-15 9.6)
+        "is in the currency the company states it in",
     ):
         assert words in steps[3], words
     eight = _steps(_frontmatter(skill)[1])[8]
@@ -1719,14 +1736,23 @@ def test_a_filing_cell_is_cited_by_the_ref_the_answer_gives() -> None:
             assert words in text, words
     assert "`columns`" in _tool_entry("filing_report")
     assert "`{col, value, column}`" in _tool_entry("filing_search")
-    # the final review's C.4: a cell is at its sheet's scale, so it is not derived with full units
+    # the final review's C.4: a cell is at its sheet's scale; since spec 2026-11-15 7.5 it is
+    # scaled by a fixed number before it meets a figure in full units, never recorded as a finding
     for text in (four, citations):
         for words in (
-            "A filing cell holds the number at its sheet's scale",
-            "do not `derive` a cell with a figure in full units",
-            "nor two cells of sheets with different scales",
+            "A filing cell holds the number at its sheet's scale, so scale the cell first",
+            (
+                "before it meets a figure in full units (a `fact:` or a `table:` figure), or a cell"
+                " of a sheet with another scale"
+            ),
+            (
+                "the `derive` `product` of the cell and its sheet's scale, `number:1000000` for"
+                " `$ in Millions`"
+            ),
+            "never record it as a finding in full units to compute with it",
         ):
             assert words in text, words
+        assert "do not `derive` a cell with a figure in full units" not in text
     search = _tool_entry("filing_search")
     assert "`33,165` finds the number cell `33165`" in search  # C.3
     assert "read the sheet the hits name" not in search  # C.9: a further match may sit elsewhere
@@ -1959,8 +1985,8 @@ def test_the_template_s_words_state_what_each_figure_is() -> None:
     assert "the growth rate it rests on" not in template
     assert (
         "| Mature Growth | the forward P/E, and beside it the growth rate the value assumes after"
-        " the analysts' forecast years, the belief (`snapshot:<id>/inputs/belief`); PEG is not"
-        " available yet |"
+        " the analysts' forecast years, the belief (`snapshot:<id>/inputs/belief`), and the PEG,"
+        " the forward P/E over that rate |"
     ) in template
     rows = _table_rows(_read(REGISTER), ("Term", "Write instead"))
     drivers = template.split('"The words a report writes"): ', 1)[1].split(" |", 1)[0]
@@ -2151,6 +2177,348 @@ def test_a_hold_says_why_the_price_calls_for_neither_buying_nor_trimming() -> No
     ) in template
     for text in (nine, template):
         assert "why the price is fair" not in text
+
+
+def test_a_fixed_number_is_arithmetic_never_a_figure_you_chose() -> None:
+    """Spec 2026-11-15 7.5 and the controller's ruling 1 on Task 1: the `derive` entry gives the
+    form `number:<n>`, the server's list, its two refusals in the server's words and the unit
+    table; step 10 and the citations give the same recipes (a complement, an average, a change of
+    sign, a filing cell scaled before it meets a figure in full units, a PEG as two ratios) and the
+    rule that a fixed number is arithmetic, never a figure the agent chose; the cycle gap's half
+    takes `number:2`; the template computes the PEG it once said was not available; and no file
+    teaches a percent times 100 as points."""
+    assert NUMBERS == {*range(13), 52, 100, 365, *(10**k for k in range(3, 13))}
+    assert (NUMBER_FORM, KILL_FORM) == ("number", "kill")
+    rule = (
+        "A fixed number is a number of arithmetic, never a figure you chose: the server takes no"
+        " other, and a multiple, a rate or a threshold you assume is not arithmetic."
+    )
+    derive = _tool_entry("derive")
+    for words in (
+        (
+            "One operand may be a fixed number, `number:<n>` where a ref goes, `<n>` in digits"
+            " alone, with no sign, separator, point or exponent: the whole numbers 0 to 12, then"
+            " 52, 100, 365, 1000 and each further power of ten up to 1,000,000,000,000."
+        ),
+        f'"{FIXED_NUMBERS}, not <what was written>"',
+        f'and so are two numbers in one derivation, "{NEEDS_A_FIGURE}"',
+        "a refusal stores none of the call's derivations",
+        "| `sum`, `difference`, `product` with a number | the stored figure's unit |",
+        "| `ratio` of a figure over a number | the figure's unit |",
+        "| `ratio` of a number over a figure | none |",
+        "| `growth`, `cagr` | percent |",
+        (
+            "A fixed number is a number of arithmetic, never a figure you chose: the recipes are in"
+            " `SKILL.md`, step 10."
+        ),
+        "`growth` and `cagr` have no value from a base at or below zero.",
+        (
+            'A `kill:` ref is refused, "unresolved reference: kill:<id>": a threshold you chose'
+            " enters no arithmetic."
+        ),
+    ):
+        assert words in derive, words
+    assert "one of them a fixed number, `number:<n>`" in _flat(_read(TOOLS))  # the record
+    recipes = (
+        "- a complement: the `difference` of `number:1` and a rate, such as 1 less the tax rate;",
+        (
+            "- an average: the `sum` of the figures (chained `sum` calls for more than two), then"
+            " the `ratio` of that `derived:` id and their count, `number:2` for two;"
+        ),
+        "- a change of sign: the `difference` of `number:0` and the figure;",
+        (
+            "- a filing cell before it meets a figure in full units: the `product` of the cell and"
+            " its sheet's scale, `number:1000000` for `$ in Millions`, a figure with no unit, as the"
+            " cell has none;"
+        ),
+        (
+            "- a PEG: the `ratio` of the P/E and the growth rate, a figure with no unit that is a"
+            " hundred times the PEG, since the rate is a fraction; then the `ratio` of that"
+            " `derived:` id and `number:100`."
+        ),
+    )
+    ten = _flat(_steps(_frontmatter(_read(SKILL))[1])[10])
+    arithmetic = _flat(_read(CITATIONS).split("## Your own arithmetic", 1)[1].split("\n## ")[0])
+    for text in (ten, arithmetic):
+        for words in (rule, *recipes):
+            assert words in text, words
+    # a figure a filing states is still cited from its cell (spec 7.5's third bullet)
+    assert (
+        "A figure a filing states is still cited from its cell: a finding in full units is not the"
+        " way to compute with it."
+    ) in arithmetic
+    # the cycle gap's half takes the fixed number; the workaround of a figure over itself goes
+    skill = _flat(_read(SKILL))
+    assert "Half is the `derive` `ratio` of the full gap and `number:2`." in skill
+    assert "`derive` takes no constant" not in skill
+    # the template's PEG, the two ratios, where it once said PEG was not available
+    template = _flat(_read(TEMPLATE))
+    nine = template.split("### Section 9", 1)[1].split("### The charts", 1)[0]
+    for words in (
+        (
+            "The PEG is the forward P/E over the growth rate beside it, by two `derive` calls: the"
+            " `ratio` of the forward P/E, `snapshot:<id>/intermediates/multiples/pe_forward`, and"
+            " the growth rate, a figure with no unit that is a hundred times the PEG, since the rate"
+            " is a fraction; then the `ratio` of that `derived:` id and `number:100`."
+        ),
+        "Cite the second, at the decimals you write (`3.75`).",
+    ):
+        assert words in nine, words
+    # the controller's ruling 1: a percent times 100 stays a percent, so no file teaches it
+    for path in sorted(PLAYBOOK.rglob("*.md")):
+        text = _flat(_read(path))
+        for old in ("PEG is not available yet", "takes refs only", "percent as points"):
+            assert old not in text, (path.name, old)
+
+
+def test_a_threshold_you_choose_goes_on_its_kill_criterion() -> None:
+    """Spec 2026-11-15 8.3 and Task 3's review: a threshold the agent chooses goes on the kill
+    criterion with `kill_criterion_add` before the report is written, is cited by `kill:<id>` in
+    "Risks and kill criteria" alone, enters no arithmetic and is left out of the report's
+    `killCriteria`, where it would be dropped without a word; a criterion of a report not
+    published is retired; an event tied to a stored figure is still the better criterion where
+    one serves. The citations' passage, the failures table, the skill's step 9 and rules, the
+    template's section 11 row and its example say so, and the tools list the threshold."""
+    citations = _flat(_read(CITATIONS))
+    passage = citations.split("## A threshold you choose", 1)[1].split(" ## ", 1)[0]
+    for words in (
+        "A threshold you choose is not a fact, so it is never a finding",
+        (
+            "A reader can follow such a line to its source, so it is the better criterion where one"
+            " serves."
+        ),
+        "Put the threshold on the kill criterion.",
+        "`kill_criterion_add(symbol, text, threshold, unit, currency?)` before you write the report",
+        (
+            "Cite it as `kill:<id>` in Risks and kill criteria (section 11 of a full report, the"
+            " ninth of a valuation review), and only there"
+        ),
+        "`derive` refuses it, so it enters no arithmetic",
+        '"kill criterion <id>, a threshold the author chose"',
+        "Leave the criterion out of the report's `kill_criteria`",
+        "a threshold put there is dropped without a word",
+        'retire the criterion with `kill_criterion_set(id, "retired", reason)`',
+    ):
+        assert words in passage, words
+    assert KILL_SECTION == "Risks and kill criteria"
+    failures = _table(_read(CITATIONS), ("`what`", "It means", "What to do"))
+    assert (
+        "Never record a threshold you chose as a finding: put it on its kill criterion and cite"
+        " `kill:<id>` in Risks and kill criteria, tie the event to a cited figure, or state it in"
+        " words"
+    ) in failures["`a number with no reference`"][1]
+    unresolved = failures["`unresolved reference`"]
+    for words in (
+        '"number:100 is an operand of derive: cite the derivation"',
+        f'"kill:12 is the author\'s own threshold: cite it in {KILL_SECTION}"',
+    ):
+        assert words in unresolved[1], words
+    steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
+    for words in (
+        (
+            "Where the line is one you choose, record the criterion with its threshold before you"
+            " write the report: `kill_criterion_add(symbol, text, threshold, unit, currency?)`"
+        ),
+        "Section 11 cites the threshold as `kill:<id>`, and only there; it enters no arithmetic.",
+        "Leave such a criterion out of the report's `kill_criteria`",
+        'If the report is not published, retire it with `kill_criterion_set(id, "retired", reason)`.',
+    ):
+        assert words in steps[9], words
+    rules = _flat(_read(SKILL).split("## The rules", 1)[1].split("## Guidance", 1)[0])
+    assert (
+        "- A threshold you choose is never a finding: put it on its kill criterion and cite it as"
+        " `kill:<id>` in section 11 alone (step 9), tie the event to a stored figure, cited, or"
+        " state it in words (`reference/citations.md`)."
+    ) in rules
+    template = _read(TEMPLATE)
+    row = _flat(_table(template, ("#", "Heading", "Mode", "What it holds"))["11"][2])
+    assert (
+        "Else record your threshold on the kill criterion with `kill_criterion_add` before you"
+        " write the report, cite it here alone as `kill:<id>`, and leave that criterion out of"
+        " `kill_criteria`"
+    ) in row
+    assert (
+        "a criterion with a threshold you chose is recorded with `kill_criterion_add` before the"
+        " report and left out of this list"
+    ) in _flat(template)
+    # the example cites one threshold, in section 11 alone, and its own list holds text alone
+    example = _example(template)
+    kills = [
+        (section["heading"], part)
+        for section in example["sections"]
+        for part in section["parts"]
+        if not isinstance(part, str) and part["ref"].startswith(f"{KILL_FORM}:")
+    ]
+    assert len(kills) == 1 and kills[0][0] == KILL_SECTION, kills
+    assert "period" not in kills[0][1]  # a threshold has no period
+    assert all(set(criterion) == {"text"} for criterion in example["kill_criteria"])
+    # the tools: the add with its threshold, the read, the move's 409 and the report's list
+    threshold = _refused(lambda: _require_figure(1.0, None, None, "a kill criterion's threshold"))
+    add = _tool_entry("kill_criterion_add")
+    for words in (
+        "`threshold` and `unit` together, the unit one of a finding's",
+        "cite the threshold as `kill:<id>` in Risks and kill criteria alone",
+        "leave the criterion out of the report's `kill_criteria`",
+        f'"{threshold}"',
+    ):
+        assert words in add, words
+    assert "cited as `kill:<id>` in Risks and kill criteria alone" in _tool_entry("kill_criteria")
+    already = '"kill criterion <id> is already <state>" (409)'
+    assert already in _tool_entry("kill_criterion_set")
+    tools = _flat(_read(TOOLS))
+    assert "a superseded guidance record, a kill criterion moved to the state it is in)" in tools
+    assert "text alone, so a threshold there is dropped without a word" in tools
+    for path in sorted(PLAYBOOK.rglob("*.md")):
+        text = _flat(_read(path))
+        for old in ("a later piece of Fairband", "a question for the founder"):
+            assert old not in text, (path.name, old)
+
+
+def test_a_money_figure_is_recorded_in_the_currency_the_company_states() -> None:
+    """Spec 2026-11-15 9.6: one rule in the three places that state it, step 3, the citations and
+    the tools: a money figure is recorded in the currency the company states it in, with
+    `currency` when that is not the reporting currency; `$` for a US-dollar figure and the code
+    before a bare cite otherwise; converted with `product` and the rate before it sets an input or
+    meets a statement; a third currency enters no arithmetic. The words "in the reporting currency
+    as the company states it" go; the guidance step says a record in another currency takes none;
+    the tools quote the currency's two refusals as the store words them."""
+    rule = (
+        "in the currency the company states it in",
+        "when that is not the reporting currency",
+        "`$` where it is in US dollars, and its code in the plain text before a bare cite otherwise",
+        "the `derive` `product` of a US-dollar figure and `snapshot:<id>/inputs/fx_rate`",
+        "a third currency, neither the reporting currency nor the US dollar",
+        "enters no arithmetic with the company's figures",
+    )
+    three = _flat(_steps(_frontmatter(_read(SKILL))[1])[3])
+    citations = _flat(_read(CITATIONS))
+    tools = _flat(_read(TOOLS))
+    for text in (three, citations, tools):
+        for words in rule:
+            assert words in text, words
+    assert (
+        "A money figure you record (a finding's value, a guidance record's low and high, a kill"
+        " criterion's threshold) is in the currency the company states it in."
+    ) in three
+    # the check's own rule for a record, as the server words its detail
+    assert (
+        '"finding:812 reads TWD 1,000,000,000: write the number without $ and name TWD before it"'
+    ) in citations
+    guidance = _flat(_read(SKILL).split("## Guidance", 1)[1].split("## Overrides", 1)[0])
+    for words in (
+        "`guidance_add(symbol, metric, period, low, high, basis, as_of, text, source, currency?)`",
+        (
+            "Money in full, in the currency the company states it in, with `currency` when that is"
+            " not the reporting currency (step 3)"
+        ),
+        (
+            "Nor does a record whose `currency` is not that of the year before's statement: convert"
+            " its midpoint (step 3) and `derive` the `growth` of that over the year's `fact:` line."
+        ),
+    ):
+        assert words in guidance, words
+    code = _refused(lambda: check_currency("usd", "currency")).split(", not ", 1)[0]
+    money = _refused(lambda: check_currency("USD", "percent"))
+    for words in (f'"{code}, not <what was written>"', f'"{money}"'):
+        assert words in tools, words
+    for name in ("finding_add", "guidance_add", "kill_criterion_add"):
+        assert "`currency`" in _tool_entry(name), name
+    for name in ("findings", "guidance", "kill_criteria"):
+        assert "`currency`" in _tool_entry(name), name
+    for path in sorted(PLAYBOOK.rglob("*.md")):
+        text = _flat(_read(path))
+        for old in (
+            "in the reporting currency as the company states it",
+            "in the reporting currency, as the company states them",
+            "money in the company's reporting currency, as its statements are",
+            "money in full in the reporting currency, as the statements are",
+        ):
+            assert old not in text, (path.name, old)
+
+
+def test_the_playbook_reads_a_split_s_newest_year_a_late_close_and_a_kept_filing() -> None:
+    """Spec 2026-11-15 10 and 11: the `segments` entry names `newestYear`, and step 4 sends the
+    agent to the 10-K's segment note where a split ends before the newest fiscal year; step 5 and
+    the template's section 5 state no move where the next trading day's close is not on file yet;
+    the filing report is reused whatever its age, not for thirty days; and the reads that answer a
+    company with no snapshot 404 say so (B-103 clause 6)."""
+    assert "`newestYear`, the newest fiscal year among its rows" in _tool_entry("segments")
+    steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
+    assert (
+        "Where a split's `newestYear` is before the company's newest fiscal year (`financials`),"
+        " the split ends early: read the 10-K's segment note instead, found with `filing_search`"
+        " in the newest `FY` report and read with `filing_report`, and cite its cells."
+    ) in steps[4]
+    late = (
+        "Where no close is on file for the trading day after the call, state no move and say that"
+        " the close is not on file yet."
+    )
+    assert late in steps[5]
+    template = _flat(_read(TEMPLATE))
+    section_5 = template.split("### Section 5", 1)[1].split("### Section 7", 1)[0]
+    assert (
+        "where no close is on file for that day yet, no move, and say that the close is not on file"
+        " yet."
+    ) in section_5
+    tools = _flat(_read(TOOLS))
+    assert "thirty days" not in tools
+    assert (
+        "A filing report, once stored, is reused whatever its age, since a filing does not change"
+        " once filed"
+    ) in tools
+    assert "Its newest stored copy is reused without a limit" in _tool_entry("filing_report")
+    assert (
+        "404 a record that does not exist (and, to `company`, `estimates`, `price_history` and"
+        ' `peers`, a company with no snapshot: "no snapshot for <symbol>")'
+    ) in tools
+
+
+def test_the_playbook_s_debt_rows_are_settled() -> None:
+    """Spec 2026-11-15 12.2 and 12.3: the register's "Means" on snapshot, news item and work item
+    are the brand book's words, the judgment row the register's own; the sales class is explained
+    at its first use; a figure from a secondary analysis names that source and the report says
+    the filing was not read; the skill reads a filing on the company's investor site where
+    sec.gov refuses; the review log's stance is the one in force when the review was written."""
+    with tarfile.open(DESIGN_SYSTEM, "r:gz") as archive:
+        member = archive.extractfile(BRAND_BOOK)
+        assert member is not None
+        book = _table(member.read().decode("utf-8"), ("Use", "Not", "Means"))
+    register = _table(_read(REGISTER), ("Use", "Not", "Means"))
+    for term in ("snapshot", "news item", "work item"):
+        assert register[term][1] == book[term][1], term
+    assert register["judgment"][1].startswith("the record of one input decision")  # kept, filed
+    # the sales class, explained in the paragraph of its first use
+    body = _frontmatter(_read(SKILL))[1]
+    first = next(p for p in body.split("\n\n") if "sales class" in p)
+    assert (
+        "The sales class is the size band of the company's trailing revenue in US dollars, one of"
+        " the Base Rate Book's eleven; its 90th percentile is the yearly sales growth over five"
+        " years that only one company in ten of that size beat."
+    ) in _flat(first)
+    finding = _flat(_read(CITATIONS).split("## A figure from outside Fairband", 1)[1])
+    assert (
+        "A figure you take from a secondary analysis (a broker's note, an article, a data site that"
+        " quotes the filing) names that source in its finding, not the filing it quotes, and the"
+        " report says that the filing itself was not read."
+    ) in finding.split(" ## ", 1)[0]
+    four = _flat(_steps(body)[4])
+    assert (
+        "Where sec.gov refuses the fetch, read the filing's text on the company's investor site."
+    ) in four
+    assert (
+        "`stance`, the stance of the company's newest report when the review was written: a review"
+        " your overrides write carries the stance of the report before yours, and one written"
+        " before a company's first report carries none (`null`)."
+    ) in _tool_entry("review_log")
+
+
+def _refused(call: Callable[[], object]) -> str:
+    """The sentence ``call`` is refused with, a ``ValueError``'s."""
+    try:
+        call()
+    except ValueError as exc:
+        return str(exc)
+    raise AssertionError("not refused")
 
 
 def _read(path: Path) -> str:

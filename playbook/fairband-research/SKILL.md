@@ -117,9 +117,20 @@ figure is per ADS, the unit the quote prices, and the report says so once: "one 
 ordinary shares; every per-share figure here is per ADS". Any arithmetic across US dollars and
 the currency goes through `derive`, with the rate cited as `snapshot:<id>/inputs/fx_rate`: a
 `ratio` of a figure in the currency and the rate is that figure in US dollars. On such a company
-the override ranges in dollars are in the reporting currency (see "Overrides"), and a guidance
-record's figures are in the reporting currency, as the company states them. Step 8 reads
+the override ranges in dollars are in the reporting currency (see "Overrides"). Step 8 reads
 `basis-scaled` and `fx-stale`.
+
+A money figure you record (a finding's value, a guidance record's low and high, a kill
+criterion's threshold) is in the currency the company states it in. Pass `currency`, its code,
+when that is not the reporting currency: a TWD reporter's outlook given in US dollars, a euro
+figure of a company that reports in US dollars. Every read answers a record's `currency`. In the
+report such a figure takes `$` where it is in US dollars, and its code in the plain text before a
+bare cite otherwise (`reference/citations.md`). To set an input from it, or to compare it with a
+statement, convert it first: the `derive` `product` of a US-dollar figure and
+`snapshot:<id>/inputs/fx_rate`, the reporting currency per US dollar, is the figure in the
+reporting currency, with no unit. Until then `derive` keeps it out of money arithmetic. A figure
+in a third currency, neither the reporting currency nor the US dollar, is stated and cited in its
+own currency and enters no arithmetic with the company's figures.
 
 Then read everything the page shows:
 
@@ -171,9 +182,12 @@ resolve to nothing. A `filing:` cite takes no `period`: a cite given one fails `
 sheet's columns are periods or members (this year's quarter beside last year's, or one segment
 beside another), and the check cannot tell one column from another: read the column's words (the
 sheet's `columns`, or the hit's `column`) before you cite a number, and name that period in the
-sentence. A filing cell holds the number at its sheet's scale, so do not `derive` a cell with a
-figure in full units (a `fact:` or a `table:` figure), nor two cells of sheets with different
-scales. A sentence of a note is a finding whose source is `{kind: "filing", ref:
+sentence. A filing cell holds the number at its sheet's scale, so scale the cell first: before it
+meets a figure in full units (a `fact:` or a `table:` figure), or a cell of a sheet with another
+scale, take the `derive` `product` of the cell and its sheet's scale, `number:1000000` for
+`$ in Millions` (`number:1000` for thousands). A figure the filing states is still cited from its
+cell: never record it as a finding in full units to compute with it. A sentence of a note is a
+finding whose source is `{kind: "filing", ref:
 "response:<responseId>", note}`: the `responseId` the filing report answered, and the note naming
 the report and the sheet ("10-Q of fiscal 2027 Q1, sheet LEASES"). `filing_report` reads another
 listed company's 10-K or 10-Q by its symbol, but a `filing:` ref names a cell of the report's own
@@ -189,10 +203,15 @@ The host's own tools read only what Fairband does not hold: a filing FMP holds n
 as an 8-K's exhibits (the press release, recast figures), the proxy statement or another company's
 S-1; the parts of a 10-K or a 10-Q the filing report leaves out, the 10-K's Item 1, the MD&A and
 the risk factors; and the company's own site. Open a filing by its `finalLink`, or an exhibit by the
-filing's `link`, never by a search of EDGAR.
+filing's `link`, never by a search of EDGAR. Where sec.gov refuses the fetch, read the filing's text
+on the company's investor site.
 
 From Fairband, read `segments(symbol)` for the revenue by product and by region, and
 `transcript(symbol, year, quarter)` for the earlier earnings calls; the last call is step 5's.
+Each split of `segments` names its `newestYear`. Where a split's `newestYear` is before the
+company's newest fiscal year (`financials`), the split ends early: read the 10-K's segment note
+instead, found with `filing_search` in the newest `FY` report and read with `filing_report`, and
+cite its cells.
 `insider_trades(symbol)` shows what the insiders bought and sold, the newest 25 trades unless you
 ask for more with `limit`.
 
@@ -223,7 +242,8 @@ Then build the seven parts:
 1. **The verdict.** The call's date and quarter. Whether it confirmed, changed or broke the thesis
    (the newest report's, or the one this report forms). The price's move on the next trading day:
    `derive` `growth` of the first close after the call over the last close before it, two `close:`
-   refs from `price_history`.
+   refs from `price_history`. Where no close is on file for the trading day after the call, state
+   no move and say that the close is not on file yet.
 2. **The quarter against expectations.** Revenue, EPS, the operating margin and free cash flow, each
    against the same quarter a year before and against the consensus for the quarter. The quarter's
    revenue, EPS, operating income and cash flow are the figures of `quarters(symbol)`, cited by
@@ -549,7 +569,15 @@ be right, and what you expect to happen. Write it for every stance:
 - a trim says why the price ran ahead of the business;
 - an avoid says why the business is not worth owning at the prices shown.
 
-The kill criteria of section 11 test the thesis.
+The kill criteria of section 11 test the thesis. Write each as an event a reader can check. Tie it
+to a stored figure where one serves, since a reader can follow it to its source: "the ROIC falls
+below the yearly return investors require", that rate cited in section 11. Where the line is one
+you choose, record the criterion with its threshold before you write the report:
+`kill_criterion_add(symbol, text, threshold, unit, currency?)`, the unit one of a finding's.
+Section 11 cites the threshold as `kill:<id>`, and only there; it enters no arithmetic. Leave such
+a criterion out of the report's `kill_criteria`, which takes text alone: there it would be recorded
+twice, and its threshold dropped without a word. If the report is not published, retire it with
+`kill_criterion_set(id, "retired", reason)`.
 
 ### 10. The decisions and the overrides
 
@@ -577,10 +605,12 @@ The case is evidence, not hope: the company's own record above the median for it
 contracts that cover years of the path, the company's own margin where its business is mature,
 capital the growth ahead does not need. Accept it or reject it, with the reason. Accept it where
 a filing or a transcript carries it, and write the override; a belief or a held rate above the
-sales class's 90th percentile needs that evidence in any case. Reject it where it rests on a
-forecast or a story alone. Test the lower case with the same care. Section 8 records each test
-in one sentence (the template's "The higher case"), and the judgment's decision says whether the
-higher case stood.
+sales class's 90th percentile needs that evidence in any case. The sales class is the size band of
+the company's trailing revenue in US dollars, one of the Base Rate Book's eleven; its 90th
+percentile is the yearly sales growth over five years that only one company in ten of that size
+beat. Reject it where it rests on a forecast or a story alone. Test the lower case with the same
+care. Section 8 records each test in one sentence (the template's "The higher case"), and the
+judgment's decision says whether the higher case stood.
 
 The guidance, at your best effort and never required. A clear full-year guidance for the right
 fiscal year may replace the consensus: an NTM anchor, `earnings.ntm` on Mature Growth or
@@ -629,7 +659,20 @@ company, make no secondary valuation and read no DCF beside the route's value.
   reading" below.
 
 Compute every other figure the report needs from stored figures with `derive`: a ratio, a
-difference, a sum, a growth rate or a compound annual growth rate. Never compute one yourself.
+difference, a sum, a product, a growth rate or a compound annual growth rate. Never compute one
+yourself. One operand may be a fixed number, `number:<n>`, from the server's short list
+(`reference/tools.md`, `derive`). A fixed number is a number of arithmetic, never a figure you
+chose: the server takes no other, and a multiple, a rate or a threshold you assume is not
+arithmetic. The recipes:
+
+- a complement: the `difference` of `number:1` and a rate, such as 1 less the tax rate;
+- an average: the `sum` of the figures (chained `sum` calls for more than two), then the `ratio`
+  of that `derived:` id and their count, `number:2` for two;
+- a change of sign: the `difference` of `number:0` and the figure;
+- a filing cell before it meets a figure in full units: the `product` of the cell and its sheet's
+  scale, `number:1000000` for `$ in Millions`, a figure with no unit, as the cell has none;
+- a PEG: the `ratio` of the P/E and the growth rate, a figure with no unit that is a hundred times
+  the PEG, since the rate is a fraction; then the `ratio` of that `derived:` id and `number:100`.
 
 ### 11. The stance
 
@@ -680,9 +723,11 @@ instead.
 - Cite every quantity. In a report, every number is a cite `{cite, ref, period?}`.
 - Write small counts in words: "three years", "two quarters".
 - A number from outside Fairband becomes a finding first, then a cite `finding:<id>`.
-- Your own arithmetic goes through `derive`, then a cite `derived:<id>`.
-- A threshold you choose is never a finding: tie it to a stored figure, cited, or state it in
-  words (`reference/citations.md`).
+- Your own arithmetic goes through `derive`, then a cite `derived:<id>`. A fixed number in it is
+  arithmetic, never a figure you chose (step 10).
+- A threshold you choose is never a finding: put it on its kill criterion and cite it as
+  `kill:<id>` in section 11 alone (step 9), tie the event to a stored figure, cited, or state it
+  in words (`reference/citations.md`).
 - The decision of a judgment holds no figure at all.
 - The valuation and its detail are in section 8 only. The rest of the report argues the business
   and its outlook.
@@ -704,7 +749,8 @@ instead.
 ## Guidance
 
 A guidance record is a figure the company itself gave on an earnings call for a future period.
-Record one with `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source)`:
+Record one with
+`guidance_add(symbol, metric, period, low, high, basis, as_of, text, source, currency?)`:
 
 - `metric`: `revenue`, `eps`, `net_income`, `operating_margin`, `free_cash_flow`, `capex`,
   `revenue_growth` or `eps_growth`. `net_income` is the net income that belongs to the company's
@@ -712,8 +758,8 @@ Record one with `guidance_add(symbol, metric, period, low, high, basis, as_of, t
   record it with the sentence verbatim and nothing added: that record does not back
   `earnings.ntm`, and the report says so where it cites the record.
 - `period`: a fiscal year, `2027`, or a quarter, `2027Q1`, written with no dash.
-- `low` and `high`: the range, equal for a point. Money in full, in the reporting currency as the
-  company states it (dollars for a company that reports in them); a percent as a fraction.
+- `low` and `high`: the range, equal for a point. Money in full, in the currency the company states
+  it in, with `currency` when that is not the reporting currency (step 3); a percent as a fraction.
 - `basis`: `gaap`, `adjusted` or `constant-currency`.
 - `as_of`: the call's date, from `transcript_dates`.
 - `text`: the sentence, verbatim. `source`: the transcript's `response:<responseId>`, or a filing.
@@ -722,11 +768,12 @@ The server computes the midpoint. For a fiscal-year revenue, EPS or net income r
 `gaap` basis it also computes the step: the growth from the year before's actual on file, so you
 never compute that rate. The step is the track-record figure: the guided growth set against what
 the company last delivered, for section 5. It is never an override's `new`. An `adjusted` or a
-`constant-currency` record takes no step, since the actual on file is the GAAP one. For the growth
-of an adjusted figure, record the year before's adjusted actual from the release as a finding and
-`derive` the `growth` of the record's midpoint over it. For a constant-currency figure, `derive`
-the `growth` of the midpoint over the year before's `fact:` line, and call it growth at constant
-currency.
+`constant-currency` record takes no step, since the actual on file is the GAAP one. Nor does a
+record whose `currency` is not that of the year before's statement: convert its midpoint (step 3)
+and `derive` the `growth` of that over the year's `fact:` line. For the growth of an adjusted
+figure, record the year before's adjusted actual from the release as a finding and `derive` the
+`growth` of the record's midpoint over it. For a constant-currency figure, `derive` the `growth`
+of the midpoint over the year before's `fact:` line, and call it growth at constant currency.
 
 A newer record of the same metric, period and basis supersedes the older one, in the order of the
 calls' dates. Record the previous call's figure too, so the section can say raised, held or cut:
@@ -897,9 +944,7 @@ How much of the gap to take:
 - Take half of it only where a filing or a transcript shows a lasting cause for part of the
   margin's rise: a price rise under contract, a change of mix already in the reported margins, or
   a margin that held through the last downturn. The override's evidence cites it, and its reason
-  says "half" and why. Half is the `derive` `ratio` of the full gap to two. `derive` takes no
-  constant, so build the two: the `sum` of a figure with itself, then the `ratio` of that sum to
-  the figure.
+  says "half" and why. Half is the `derive` `ratio` of the full gap and `number:2`.
 - Where the analysts' EPS is on a basis that leaves out the amortization of bought intangibles
   while the history is as reported, the full gap cuts for accounting as well as for the cycle.
   Say so in section 8: that is evidence for half.

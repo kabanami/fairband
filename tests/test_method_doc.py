@@ -444,8 +444,9 @@ def test_a_finding_and_a_guidance_record_name_their_currency() -> None:
         (
             "Nor is there a step on a record whose stored currency (16.2) is not that actual's, the"
             " currency of that year's statement (a year whose statement names none takes the year"
-            " before's), since its midpoint over an actual in another currency is no growth (spec"
-            " 2026-11-15 9.2); a record that names no currency steps as before."
+            " before's, and the oldest years with none the first currency named after them), since"
+            " its midpoint over an actual in another currency is no growth (spec 2026-11-15 9.2); a"
+            " record that names no currency steps as before."
         ),
     ):
         assert words in guidance, words
@@ -992,8 +993,11 @@ def test_a_fixed_number_is_an_operand_of_derive_alone() -> None:
             " derivations (spec 2026-11-15 7.4), so a derivation whose second operand, or an"
             " operand of an operand, rests on an older snapshot fails"
         ),
+        # the check reads the snapshots in order and names the first that is not the latest
+        "the detail names, of the snapshots that fail, the one with the lowest id.",
     ):
         assert words in check, words
+    assert "the detail names, of those snapshots, the one with the lowest id" not in check
     derivations = sixteen[sixteen.index("### 16.4") : sixteen.index("### 16.5")]
     for words in (
         (
@@ -1019,8 +1023,18 @@ def test_a_fixed_number_is_an_operand_of_derive_alone() -> None:
             'writes the number without its prefix, with separators: "derivation 1602: the'
             ' product of filing:95122/… and 1,000,000"'
         ),
+        # the controller's ruling 1 on Task 1: 100 serves the PEG, a ratio with no unit; a
+        # percent times 100 keeps its unit, so it is never points
+        (
+            "They serve a complement (1), a change of sign (0), an average or an annual rate (2 to"
+            " 12, 52, 365), the PEG (100: the ratio of a P/E to a growth rate, a fraction, has no"
+            " unit and is a hundred times the PEG, so its ratio to 100 is the PEG; a percent times"
+            " 100 stays a percent, so it is never cited as points) and a unit scale (a power of"
+            " ten)."
+        ),
     ):
         assert words in derivations, words
+    assert "a percent as points (100)" not in derivations
     assert FIXED_NUMBERS in derivations
     assert NEEDS_A_FIGURE in derivations
 
@@ -1205,6 +1219,11 @@ def test_a_filing_report_is_kept_and_a_revenue_split_names_its_newest_year() -> 
             " error."
         ),
         (
+            "`filings` stores FMP's `sec-filings-search/symbol` under the endpoint `sec-filings`,"
+            " page 0 of 1,000 rows, the call being the symbol, `from`, `to` and the page size,"
+            " reused for `reuse_hours`."
+        ),
+        (
             "`filing-reports` stores `financial-reports-dates` under `filing-report-dates`, every"
             " report on file, reused for `reuse_hours`."
         ),
@@ -1221,11 +1240,38 @@ def test_a_filing_report_is_kept_and_a_revenue_split_names_its_newest_year() -> 
         ),
         (
             "`segments` answers its two calls whole, `product` and `geographic`, each with"
-            " `newestYear`, the largest `fiscalYear` among its payload's rows that hold a whole"
-            " number there, null where none does or the payload is not a list (spec 2026-11-15"
-            " 11): FMP's revenue by region can end years before its revenue by product (QCOM's"
-            " ended at fiscal 2023), and the payload names no newest year."
+            " `newestYear`, the largest `fiscalYear` among its payload's rows that hold an integer"
+            " there (a JSON `2025.0` is no integer), null where none does or the payload is not a"
+            " list (spec 2026-11-15 11): FMP's revenue by region can end years before its revenue"
+            " by product (QCOM's ended at fiscal 2023), and the payload names no newest year."
         ),
     ):
         assert words in filings, words
     assert "720 hours" not in filings and "thirty days" not in filings
+    assert "hold a whole number there" not in filings
+
+
+def test_the_log_s_stance_and_the_tables_three_notes() -> None:
+    """Spec 2026-11-15 12.1 clause 9 and 12.2: 14.7 says the log's stance is the one in force
+    when the review was written, none before a company's first report; 16.5 names the aggregate
+    ROIC's "over <n> years" beside the two notes that mark a figure that would mislead."""
+    fourteen = _section(14)
+    log = fourteen[fourteen.index("### 14.7") : fourteen.index("### 14.8")]
+    assert (
+        "The stance is the one in force when the review was written, the stance of the company's"
+        " newest report at that time: a review an agent's override writes before its report is"
+        " published carries the stance of the report before it, and a company's reviews before"
+        " its first report carry none (spec 2026-11-15 12.2)."
+    ) in log
+    sixteen = _section(16)
+    tables = sixteen[sixteen.index("### 16.5") : sixteen.index("### 16.6")]
+    assert (
+        "Among the cells' notes, three mark a figure that would mislead: the interest coverage"
+        ' holds no figure on a stored interest expense of zero, "the interest expense on file is'
+        " zero\"; a year's ROIC on average invested capital at or below zero keeps the engine's"
+        ' figure, "average invested capital is at or below zero", a figure with the wrong sign or'
+        " none and no meaning (4.5); and the ten-year aggregate ROIC in the newest year's cell,"
+        ' where it stands on fewer than ten kept years, says how many, "over <n> years" (4.5;'
+        " spec 2026-11-15 12.1)."
+    ) in tables
+    assert "two mark a figure that would mislead" not in tables

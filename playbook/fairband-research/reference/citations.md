@@ -42,7 +42,8 @@ its `ref`: `financials`, `quarters`, `financial_tables`, `estimates`, `price_his
 `reviews` and the answers of `override_add` and `override_drop` give the review's id; `secondary`
 and `secondary_valuation` give the secondary valuation's; `sensitivity` gives the reading's;
 `guidance` and `guidance_add` give a guidance record's; `finding_add` and `findings` give a
-finding's; `derive` gives a derivation's; a pass-through gives its `responseId`.
+finding's; `kill_criterion_add` and `kill_criteria` give a kill criterion's; `derive` gives a
+derivation's; a pass-through gives its `responseId`.
 
 ## The references
 
@@ -74,12 +75,16 @@ nothing.
 | `close:<symbol>/<date>` | a stored daily close | per-share |
 | `peer:<symbol>/<peer>/<field>` | a mature peer's `market_cap`, `margin`, `margin_years`, `sales_to_capital` or `roic` | currency, percent, count, multiple, percent |
 | `finding:<id>` | a finding's value, unit and period, as recorded | the finding's |
+| `kill:<id>` | a kill criterion's threshold, the number you chose for it, whatever the criterion's state; it passes in Risks and kill criteria alone ("A threshold you choose"), and a criterion with no threshold names nothing | the threshold's |
 | `derived:<id>` | a derivation's value | the derivation's |
 | `filing:<id>/<sheet>/<row>/<col>` | a cell of a stored filing report as served, a number or a word as the tool shows it: the sheet by its name as the sheet list gives it, `~` written `~0` and `/` written `~1`, and the row and the cell by their indexes from 0. A row's `rowRef` plus `/<col>`, such as `filing:812/LEASES/2/0`; a row with no `rowRef` holds no cell to cite | none |
 | `response:<id>/<json pointer>` | a field of a stored vendor response, such as `response:731/0/revenue` | none |
 | `policy:<name>` | a policy value, by its name, or with a moat class or an index: `runway_years.Wide`, `fair_band.0` | the value's |
 
 A record holds a percent as a fraction: 0.112. The cite writes it as a percentage: `11.2%`.
+
+`number:<n>` is no ref a report cites: it is an operand of `derive` alone ("Your own
+arithmetic"). A cite of it is `unresolved reference`: cite the derivation that used it.
 
 A filing report's cell. Copy its ref from the answer: the row's `rowRef` plus `/<col>`, the cell's
 index counted from 0. Never build a `filing:` ref by hand: a sheet name with a `/` or a `~` is
@@ -89,10 +94,12 @@ period, so a cite of last year's column passes the check as this year's would: r
 words (the sheet's `columns`, or the hit's `column`) before you cite a number, and name that period
 in the sentence. The references list names the column by its index and its words. The sheet's
 title names the scale (`$ in Millions`). A filing cell holds the number at its sheet's scale, so
-do not `derive` a cell with a figure in full units (a `fact:` or a `table:` figure), nor two cells
-of sheets with different scales. Cite the number as the cell holds it, with no period (a `filing:`
-ref has none, so a cite that names one fails), and write the scale word in the plain part after
-the cite:
+scale the cell first: before it meets a figure in full units (a `fact:` or a `table:` figure), or
+a cell of a sheet with another scale, take the `derive` `product` of the cell and its sheet's
+scale, `number:1000000` for `$ in Millions` (`number:1000` for thousands). A figure the filing
+states is still cited from its cell: never record it as a finding in full units to compute with
+it. Cite the number as the cell holds it, with no period (a `filing:` ref has none, so a cite that
+names one fails), and write the scale word in the plain part after the cite:
 
 ```json
 [
@@ -122,12 +129,27 @@ A change may carry a `+`, as a bridge line does: `+$28`, `+5.0%`. A difference o
 be written in points, `2.0 pp` or `2.0 percentage points`, compared as `2.0%` is.
 
 The currency. `$` for a figure in US dollars only: the price, the value a share, the levels, a
-close, a grid's or a reading's cells, and every figure of a company that reports in US dollars. A
-company in another currency (`company`'s `currency`) has its statements, consensus, inputs,
-guidance records, overrides and secondary valuation's totals in that currency. Cite such a figure
+close, a grid's or a reading's cells, a record's figure in US dollars, and every figure of a
+company that reports in US dollars. A company in another currency (`company`'s `currency`) has its
+statements, consensus, inputs, overrides and secondary valuation's totals in that currency. A
+money figure you record, a finding's, a guidance record's or a kill criterion's threshold, is in
+the currency the company states it in: pass `currency` when that is not the reporting currency,
+and every read answers the record's `currency`. Cite a figure in any currency but the US dollar
 with no `$`: put the code before the number in the plain part, `"TWD "` then
-`{"cite": "331.25", "ref": ...}`, or its sign for €, £ and ¥, `"€"` then the cite. The cite is the
-number alone, read in the ref's unit; a sign or a code alone in a plain part is no quantity.
+`{"cite": "331.25", "ref": ...}`, or its sign for €, £ and ¥, `"€"` then the cite. So a record's
+figure takes `$` where it is in US dollars, and its code in the plain text before a bare cite
+otherwise. The cite is the number alone, read in the ref's unit; a sign or a code alone in a plain
+part is no quantity. On a `finding:`, a `guidance:` or a `kill:` cite the check knows the record's
+currency: a `$` there passes only where the record is in US dollars, and is `wrong unit`
+otherwise, "finding:812 reads TWD 1,000,000,000: write the number without $ and name TWD before
+it". On any other ref it does not know the currency, so the rule is yours to keep.
+
+A record in another currency than the reporting one is kept out of money arithmetic until you
+convert it ("Your own arithmetic"): to set an input from it, or to compare it with a statement,
+take first the `derive` `product` of a US-dollar figure and `snapshot:<id>/inputs/fx_rate`, the
+reporting currency per US dollar. A figure in a third currency, neither the reporting currency nor
+the US dollar, has no rate: it is stated and cited in its own currency and enters no arithmetic
+with the company's figures.
 
 The number must lie within half a step of the stored value at that rounding. `22.7%` cites
 0.22702; `23%` does not. When in doubt, write exactly the decimals in the table: `22.7%` for
@@ -168,10 +190,11 @@ research is fine: a reprice of the cited snapshot, with the same data date, meth
 settings, counts as the cited one. A revalue or a full refresh in between is not: the report is
 rejected `wrong snapshot`, with the latest snapshot's id in the detail. Read `company` again, take
 the new ids, check each figure, and submit again. A `secondary:` and a `sensitivity:` ref rest on
-their record's snapshot too, and a `derived:` ref on its operands': after a revalue, make the
-reading and those derivations again, and the secondary valuation too where neither the route nor
-your review values the company; where either does, the server refuses one. A `finding:`, a
-`guidance:` and a `multiple:` ref rest on none.
+their record's snapshot too, and a `derived:` ref on every snapshot its operands rest on, the
+operands of a derivation it takes as an operand included: after a revalue, make the reading and
+those derivations again, and the secondary valuation too where neither the route nor your review
+values the company; where either does, the server refuses one. A `finding:`, a `guidance:`, a
+`kill:` and a `multiple:` ref rest on none, and so does a fixed number.
 
 A `review:` cite must be the company's current review: the newest review on the latest snapshot,
 or the one that snapshot reprices. Each applied override and each drop makes a new review; a
@@ -226,34 +249,48 @@ These forms count, so reword them:
 A number Fairband does not store (from a sentence of a filing, a document the filing report does
 not hold, a transcript you read elsewhere, a web page) enters a report only as a finding. A filing
 report's number cell is stored: cite its `filing:` ref, with no finding. Record a finding with
-`finding_add(symbol, as_of, text, source, value, unit, period)`, then cite `finding:<id>`:
+`finding_add(symbol, as_of, text, source, value, unit, period, currency?)`, then cite
+`finding:<id>`:
 
 - `value` in the unit: a total in full (`2100000000`), a percent as a fraction (`0.25` for 25%), a
-  per-share figure, a multiple, a count, a score or years; money in the company's reporting
-  currency, as its statements are (dollars for a company that reports in them);
+  per-share figure, a multiple, a count, a score or years; money in the currency the company
+  states it in, with `currency` when that is not the reporting currency ("The currency");
 - `period` as the fact's: `2025`, `2026-Q2` or `ttm`; the cite's period must match it;
 - `source` as `{kind, ref, note}`: where a reader finds the fact.
 
 The check cannot prove a finding true. It proves the finding is recorded with its source.
 
+A figure you take from a secondary analysis (a broker's note, an article, a data site that quotes
+the filing) names that source in its finding, not the filing it quotes, and the report says that
+the filing itself was not read.
+
 ## A threshold you choose
 
 A risk or a kill criterion often names a line to cross. A threshold you choose is not a fact, so it
-is never a finding. A number of your own in the text is `a number with no reference`. Write the
-event one of two ways:
+is never a finding, and a number of your own in the text is `a number with no reference`. Write
+the event one of three ways:
 
 - Tie it to a stored figure, and cite that figure. "The ROIC falls below the yearly return of 9.0%
   that investors require" cites `policy:required_return`, or the returns table's `hurdle_rate`
   cell. "The operating margin falls below its 2025 level of 31.2%" cites that cell of the growth
-  table.
+  table. A reader can follow such a line to its source, so it is the better criterion where one
+  serves.
+- Put the threshold on the kill criterion. Record the criterion with
+  `kill_criterion_add(symbol, text, threshold, unit, currency?)` before you write the report: the
+  number, its unit (one of a finding's) and, for a money figure, its currency as "The currency"
+  says. Cite it as `kill:<id>` in Risks and kill criteria (section 11 of a full report, the ninth
+  of a valuation review), and only there: anywhere else it is `unresolved reference`, and `derive`
+  refuses it, so it enters no arithmetic. The references list names it "kill criterion <id>, a
+  threshold the author chose". Leave the criterion out of the report's `kill_criteria`: that list
+  takes text alone, a threshold put there is dropped without a word, and the criterion would be
+  recorded twice. If the report is not published, retire the criterion with
+  `kill_criterion_set(id, "retired", reason)`.
 - State it in words: "revenue falls two quarters in a row", "the operating margin turns negative".
 
-A kill criterion you record, with `kill_criterion_add` or in a report's `kill_criteria`, is text
+A kill criterion in the report's `kill_criteria`, or one you record with no threshold, is text
 only: it carries no cite. Name the stored figure in words, "the ROIC falls below the yearly return
 that investors require", or state the event, "revenue falls two quarters in a row"; section 11 of
-the report cites the figure. A threshold that no stored figure gives is a question for the founder:
-ask the user, and state the event in words meanwhile. A stored threshold on a kill criterion is a
-later piece of Fairband.
+the report cites the figure.
 
 ## Your own arithmetic: a derivation
 
@@ -269,10 +306,47 @@ Every figure you would compute goes through `derive(symbol, derivations)`, then 
 | `growth` | a ÷ b − 1 | percent |
 | `cagr` | (a ÷ b)^(1 ÷ years) − 1 | percent |
 
+One operand may be a fixed number, written `number:<n>` where a ref goes, in digits alone: the
+whole numbers 0 to 12, then 52, 100, 365, 1000 and each further power of ten up to
+1,000,000,000,000. A number has no unit, so the result's follows the stored figure: a `sum`, a
+`difference` or a `product` with a number, and a `ratio` of a figure over a number, keep the
+figure's unit; a `ratio` of a number over a figure has none. Any other number is refused, "a fixed
+number is one of 0 to 12, 52, 100, 365 or a power of ten up to 1,000,000,000,000, not <what was
+written>", and so are two numbers in one derivation, "a derivation needs a stored figure".
+
+A fixed number is a number of arithmetic, never a figure you chose: the server takes no other, and
+a multiple, a rate or a threshold you assume is not arithmetic. A threshold goes on its kill
+criterion ("A threshold you choose"). The recipes:
+
+- a complement: the `difference` of `number:1` and a rate, such as 1 less the tax rate;
+- an average: the `sum` of the figures (chained `sum` calls for more than two), then the `ratio`
+  of that `derived:` id and their count, `number:2` for two;
+- a change of sign: the `difference` of `number:0` and the figure;
+- a filing cell before it meets a figure in full units: the `product` of the cell and its sheet's
+  scale, `number:1000000` for `$ in Millions`, a figure with no unit, as the cell has none;
+- a PEG: the `ratio` of the P/E and the growth rate, a figure with no unit that is a hundred times
+  the PEG, since the rate is a fraction; then the `ratio` of that `derived:` id and `number:100`.
+
+A figure a filing states is still cited from its cell: a finding in full units is not the way to
+compute with it.
+
 One call takes many derivations. A derivation may take a `derived:` ref as `a` or `b`, so a chain
 (a sum, then a ratio over it) takes one call for each link. A ref that names no number refuses the
-whole call, "unresolved reference: <ref>", and stores none of it. A division by zero, a `cagr` over
-a negative ratio or a result that is not finite has no value, and a cite of it fails.
+whole call, "unresolved reference: <ref>", and stores none of it; so does a `kill:` ref, since a
+threshold you chose enters no arithmetic. A division by zero, a `growth` or a `cagr` from a base
+at or below zero, a `cagr` over a negative ratio or a result that is not finite has no value, and
+a cite of it fails.
+
+A record in another currency. A finding or a guidance record whose `currency` is not the
+reporting currency stays out of money arithmetic until you convert it. With a money figure (a
+total or a figure a share) that is not a record in its own currency it has no value, and no
+derivation with it has a money unit; with another record in its currency it gives a growth, a
+ratio, or a sum or a difference with no unit. The `product` of a US-dollar record and
+`snapshot:<id>/inputs/fx_rate` is the figure in the reporting currency, with no unit, which then
+combines with anything: convert so before you set an input from the record or set it against a
+statement. On a company in another currency a US-dollar record has no value with the price, the
+value a share, the levels, a close or a grid's cells, whose currency the server does not know. A
+derivation with no unit is cited at the decimals you write: name its currency in the text.
 
 A price over earnings is `ratio` of `snapshot:<id>/price` and an EPS ref, cited `12.34x`. A
 multiple written in plain text, `2.4x`, is rejected: derive it and cite it.
@@ -288,11 +362,11 @@ gets one for each quantity.
 
 | `what` | It means | What to do |
 |---|---|---|
-| `a number with no reference` | a quantity in plain text, or in a judgment's text | Cite it. Write a small count in words. Reword a name with a free number. Record a fact Fairband does not hold as a finding first. Never record a threshold you chose as a finding: tie it to a cited figure or state it in words ("A threshold you choose"). Take every figure out of the judgment's text. |
-| `unresolved reference` | the ref names nothing, or the record holds no figure there | Copy the ref from the tool's answer again: check the form, the id, the symbol and the year. A table cell with no value cannot be cited: say in words that the figure is not on file. |
-| `wrong unit` | the suffix does not fit the ref's unit, or the number is not the stored value at the report's rounding | The detail gives the value as the cite should read. Write it so. A price takes cents; a percent one decimal; a multiple two. |
+| `a number with no reference` | a quantity in plain text, or in a judgment's text | Cite it. Write a small count in words. Reword a name with a free number. Record a fact Fairband does not hold as a finding first. Never record a threshold you chose as a finding: put it on its kill criterion and cite `kill:<id>` in Risks and kill criteria, tie the event to a cited figure, or state it in words ("A threshold you choose"). Take every figure out of the judgment's text. |
+| `unresolved reference` | the ref names nothing, or the record holds no figure there; or it is a `number:` ref, an operand of `derive` alone; or a `kill:` ref outside Risks and kill criteria | Copy the ref from the tool's answer again: check the form, the id, the symbol and the year. A table cell with no value cannot be cited: say in words that the figure is not on file. A `number:` cite, "number:100 is an operand of derive: cite the derivation": cite the derivation that used it. A `kill:` cite in another section, "kill:12 is the author's own threshold: cite it in Risks and kill criteria": move it there, or tie the sentence to a stored figure. |
+| `wrong unit` | the suffix does not fit the ref's unit, or the number is not the stored value at the report's rounding; or a `$` on a record's figure in another currency than the US dollar | The detail gives the value as the cite should read. Write it so. A price takes cents; a percent one decimal; a multiple two. A record's figure in another currency: write the number without `$`, and its code before it in the plain part. |
 | `wrong period` | the cite's period is not the ref's (a quarter reads the same with its dash or without, `2027-Q1` as `2027Q1`) | Correct the period or the ref, or leave the period out. |
-| `wrong snapshot` | the ref rests on a snapshot other than the latest, a `review:` ref is not the current review, or a `sensitivity:` ref's reading was taken before the review moved | Read `company` and `reviews` again. Take the ids the detail names. Check each figure, since a revalue may have moved them, and submit again. |
+| `wrong snapshot` | the ref rests on a snapshot other than the latest (a `derived:` ref on any snapshot its operands rest on, nested ones' too), a `review:` ref is not the current review, or a `sensitivity:` ref's reading was taken before the review moved | Read `company` and `reviews` again. Take the ids the detail names. Check each figure, since a revalue may have moved them, and submit again. |
 | `a derived figure the engine has not emitted` | a `derived:` ref with no stored derivation of the company, or a multiple in plain text | Call `derive` and cite the `derived:` id it answers. |
 
 Fix every finding of the answer, then submit the whole report again.

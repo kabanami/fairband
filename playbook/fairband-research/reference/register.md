@@ -52,14 +52,14 @@ included, writes the phrases of "The words a report writes" below instead.
 |---|---|---|
 | override | adjustment, tweak | a change to one tagged input, with its reason and evidence; lasting, or period-tied |
 | review | analysis | the overrides on one snapshot and the reviewed result they produce |
-| snapshot | baseline | a company's frozen inputs with the rules version, the data date and the price date |
+| snapshot | baseline | a company's frozen inputs with the rules version, data date and price date |
 | locked input | | an input no override may change |
 | finding | | a dated, sourced fact an agent records |
 | judgment | opinion | the record of one input decision, the phase, the moat, the growth belief, the ROIC or the target margin: the decision in words and the override it produced, if any |
 | note | comment | a dated note on a company, with the same provenance as an override |
-| news item | | a dated item, marked with any kill criterion it touches |
+| news item | | a dated item, marked with any kill criterion it triggers |
 | report | memo | the agents' written report, in one of two modes |
-| work item | task, ticket | a request for research on one company, claimed and completed by an agent |
+| work item | task, ticket | a request for an analysis, claimed and completed by an agent |
 
 "Analysis" is kept for the agents' work as a whole. Never use it for one review.
 

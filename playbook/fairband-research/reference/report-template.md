@@ -23,7 +23,9 @@ work_item_id?)`
   override_id?}`. Every report gives `phase`, `moat` and `belief`. A Mature Growth or Mature
   Stable company adds `roic`; a High Growth, Young Growth or Start-up company adds
   `target_margin`. A judgment takes no other key: a `bull` or a `bear` is refused.
-- `kill_criteria`, optional: the new kill criteria this report sets, each `{text}`.
+- `kill_criteria`, optional: the new kill criteria this report sets, each `{text}`, text alone: a
+  criterion with a threshold you chose is recorded with `kill_criterion_add` before the report and
+  left out of this list (section 11 below).
 - `news_items`, optional: the dated items section 10 discusses that are not yet recorded, each
   `{date, headline, source, text, kill_criterion_id?}`.
 - `work_item_id`, optional: the work item the report completes.
@@ -50,7 +52,7 @@ Put the answer first in each section. Keep each sentence to one idea.
 | # | Heading | Mode | What it holds |
 |---|---|---|---|
 | 1 | Summary | both | One page: the stance; the thesis in two or three sentences; the value against the price and the levels (on a refused row with no reviewed value, the secondary valuation's value in its place); the phase in one sentence, with the word "cyclical" when the business is; three reasons for; three risks; what would change the view; the end of the validity window. Shape below. |
-| 2 | The business | full report | The products (the 10-K's Item 1); the revenue by product and by region over three years (`segments`); what drives revenue: price, volume, users, contracts, recurring or one-time; the customers, any customer at a tenth of revenue or more; the unit economics: the gross margin and the incremental margin (the share of each extra dollar of revenue that became operating profit). |
+| 2 | The business | full report | The products (the 10-K's Item 1); the revenue by product and by region over three years (`segments`, or the 10-K's segment note where a split's `newestYear` is before the newest fiscal year); what drives revenue: price, volume, users, contracts, recurring or one-time; the customers, any customer at a tenth of revenue or more; the unit economics: the gross margin and the incremental margin (the share of each extra dollar of revenue that became operating profit). |
 | 3 | Industry and competition | full report | The value chain: the suppliers, the customers, where the profit goes; the industry's size and growth; the competitors (`peers` and the 10-K); the company's position, its share and its rank; the moat by Damodaran's five sources: brand name, switching costs, network effect, cost advantages, efficient scale. End with a plain answer to "are the economics favorable?", from the gross margin, the incremental margin against the average margin, and the ROIC against the hurdle rate. |
 | 4 | Financial performance and health | both | Six parts, one for each table of `financial_tables`, each two or three plain sentences that cite its cells. Detail below. |
 | 5 | The last earnings call | both | One page, in seven parts: the verdict; the quarter against expectations; the story management is telling, claim by claim; the guidance; the positives and the negatives; the questions and answers; what the thesis takes from it. Detail below. |
@@ -59,7 +61,7 @@ Put the answer first in each section. Keep each sentence to one idea.
 | 8 | Valuation | both | The only section that talks about the valuation. The phase, the growth word and the margin direction behind it, any check flag, the Dickinson stage (a second reading of the life cycle, Introduction, Growth, Mature, Shake-out or Decline, from the signs of the last fiscal year's three cash flows), and why if an override changed the phase; the growth the price needs; the belief and why; the mechanical value and the reviewed value, with one sentence in words for each override that moved it; the guidance override in one sentence, where one moved an anchor or a step; on a refused row with no reviewed value only, the secondary valuation in the route's place, and FMP's figure in one sentence when read (where the route or your review values the company, no second value and no DCF beside the route's value); for a cyclical, where it is in its cycle and the mid-cycle basis used; the sensitivity grid. For Start-up, the price-implied requirement. For Decline, the floor and the distress-weighted value. Detail below. |
 | 9 | Price and multiples | both | The price facts, and the multiples against their own history. Detail below. |
 | 10 | Recent news | both | The dated items that matter to the value. |
-| 11 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold you choose is not a fact and never a finding: tie each event to a stored figure and cite it ("below the yearly return of 9.0% that investors require", citing `policy:required_return`), or state it in words ("revenue falls two quarters in a row"). A threshold no stored figure gives is a question for the founder (`reference/citations.md`, "A threshold you choose"). |
+| 11 | Risks and kill criteria | both | The risks, and the measurable events that would prove the thesis wrong. A threshold you choose is not a fact and never a finding. Tie each event to a stored figure and cite it where one serves ("below the yearly return of 9.0% that investors require", citing `policy:required_return`): a reader can follow it to its source. Else record your threshold on the kill criterion with `kill_criterion_add` before you write the report, cite it here alone as `kill:<id>`, and leave that criterion out of `kill_criteria`; or state the event in words ("revenue falls two quarters in a row"). See `reference/citations.md`, "A threshold you choose". |
 | 12 | Key judgments | both | The record: each judgment's decision in one sentence, naming in words the override it produced. Last, because it is the audit trail and not the reading. |
 
 A valuation review reuses the company's newest full report for the business and the industry. The
@@ -110,7 +112,8 @@ A table in the text is Markdown in the plain parts, each figure a cite.
 One page, in this order. Step 5 of `SKILL.md` says how to build each part.
 
 1. **The verdict.** The call's date and quarter. Whether it confirmed, changed or broke the
-   thesis. The price's move on the next trading day, a `derive` `growth` of two closes.
+   thesis. The price's move on the next trading day, a `derive` `growth` of two closes; where no
+   close is on file for that day yet, no move, and say that the close is not on file yet.
 2. **The quarter against expectations.** A table of revenue, EPS, the operating margin and free
    cash flow: the quarter, the same quarter a year before, the consensus for the quarter and the
    surprise. Every cell is a stored quarter's figure from `quarters`, the quarters table's
@@ -297,15 +300,18 @@ The engine or a derivation gives every item. None of them is a target.
 | Start-up | EV over the market size, over the users, over the subscribers (each a finding) |
 | Young Growth | EV over forward sales |
 | High Growth | EV over sales |
-| Mature Growth | the forward P/E, and beside it the growth rate the value assumes after the analysts' forecast years, the belief (`snapshot:<id>/inputs/belief`); PEG is not available yet |
+| Mature Growth | the forward P/E, and beside it the growth rate the value assumes after the analysts' forecast years, the belief (`snapshot:<id>/inputs/belief`), and the PEG, the forward P/E over that rate |
 | Mature Stable | P/E, EV over EBITDA |
 | Decline | P/B, EV over the liquidation value |
 
-PEG is not available yet. `derive` takes refs only, so a P/E over a growth rate divides by the
-fraction and gives a figure about a hundred times the usual one, which the check would pass. Show
-the forward P/E and cite the growth rate beside it instead: the snapshot's belief,
-`snapshot:<id>/inputs/belief`, or, when an applied `growth.belief` override replaced it, the
-override's line of the current review's bridge, `review:<id>/bridge/<n>/new`.
+The PEG is the forward P/E over the growth rate beside it, by two `derive` calls: the `ratio` of
+the forward P/E, `snapshot:<id>/intermediates/multiples/pe_forward`, and the growth rate, a figure
+with no unit that is a hundred times the PEG, since the rate is a fraction; then the `ratio` of
+that `derived:` id and `number:100`. Cite the second, at the decimals you write (`3.75`). The
+growth rate is the snapshot's belief, `snapshot:<id>/inputs/belief`, or, when an applied
+`growth.belief` override replaced it, the override's line of the current review's bridge,
+`review:<id>/bridge/<n>/new`. Say beside the PEG that its rate is the growth the value assumes
+after the analysts' forecast years, not the analysts' own.
 
 EV (the enterprise value: the market cap plus debt less cash) takes one `derive` call for each
 link, since a link names the `derived:` id the call before it answered:
@@ -423,8 +429,11 @@ consensus; 534 the next-day move, `growth` of the close of 29 Oct 2026 over the 
 2026; 535 and 536 the two differences of the year's range, and 537 their ratio; 538 and 539 the
 free cash flow of the quarter and of the same quarter a year before, each the `sum` of its cash
 from operations and its capital spending; 540 the margin's change on the year, the `difference`
-of the two quarters' operating margins. Every plain part holds no quantity; every figure is a
-cite.
+of the two quarters' operating margins. Kill criterion 23, which the agent recorded with
+`kill_criterion_add` before writing the report, holds the agent's own threshold for the share of
+multi-year contracts in new bookings, a percent: section 11 cites it as `kill:23`, its only cite,
+and the report's own `kill_criteria` leaves it out. Every plain part holds no quantity; every
+figure is a cite.
 
 ```json
 {
@@ -628,7 +637,11 @@ cite.
       "parts": [
         "The main risk is churn under the new prices. The thesis is wrong if revenue falls year on year in two quarters in a row, or if the ROIC falls below the yearly return of ",
         {"cite": "9.0%", "ref": "policy:required_return"},
-        " that investors require. A payroll rival that bundles accounting is the second risk. A recession that cuts small firms' spending is the third."
+        " that investors require. It is wrong too if multi-year contracts fall below ",
+        {"cite": "30.0%", "ref": "kill:23"},
+        " of new bookings in a quarter, a line this report draws itself: they were ",
+        {"cite": "41.0%", "ref": "finding:124", "period": "2026-Q4"},
+        " in the fourth quarter. A payroll rival that bundles accounting is the second risk. A recession that cuts small firms' spending is the third."
       ]
     },
     {

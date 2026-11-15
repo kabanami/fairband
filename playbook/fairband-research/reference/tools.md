@@ -16,9 +16,11 @@ be left out.
 - A refusal is `{"refused": <sentence>, "status": <code>}`, with the rest of the answer beside it:
   a refused override's `override`, a rejected report's `findings`. The status says what kind of
   refusal it is: 400 a value the call cannot take, or a report's structural refusal; 404 a record
-  that does not exist; 409 a state the write cannot move from (a snapshot valued under other
-  settings, a store that moved, a superseded guidance record); 422 a rejected report; 502 a vendor
-  call that failed; 503 a pass-through that is busy or has no key.
+  that does not exist (and, to `company`, `estimates`, `price_history` and `peers`, a company with
+  no snapshot: "no snapshot for <symbol>"); 409 a state the write cannot move from (a snapshot
+  valued under other settings, a store that moved, a superseded guidance record, a kill criterion
+  moved to the state it is in); 422 a rejected report; 502 a vendor call that failed; 503 a
+  pass-through that is busy or has no key.
 - A write before `identify` answers `{"refused": "identify first: the model identifier you run
   as"}` and calls nothing. The reads and the pass-throughs need no identity.
 - When the web server is down, every tool answers `{"refused": "the Fairband server is not
@@ -105,10 +107,12 @@ be left out.
 - `report(symbol, id?)`: one published report whole, with its judgments and its appendixes: the
   one with that id, or the company's latest.
 - `notes(symbol)`: the company's notes, newest first.
-- `findings(symbol)`: the company's findings with their sources; cite one as `finding:<id>`.
+- `findings(symbol)`: the company's findings with their sources, each with `currency`, the
+  currency of its money figure (see "A money figure" below); cite one as `finding:<id>`.
 - `guidance(symbol)`: the company's guidance records, newest first, each with its midpoint, its
-  step and `supersededBy`, the newer record that superseded it, if any; cite one's figures as
-  `guidance:<id>/midpoint` and its siblings.
+  step, `currency` as a finding's, and `supersededBy`, the newer record that superseded it, if
+  any; cite one's figures as `guidance:<id>/midpoint` and its siblings. A record whose `currency`
+  is not that of the year before's statement has no step.
 - `overrides(symbol)`: the company's overrides, newest first, each with its state.
 - `reviews(symbol)`: the company's reviews, newest first, each with its bridge and without its
   result. The review's intermediates, cited as `review:<id>/intermediates/<path>`, are in the
@@ -117,12 +121,15 @@ be left out.
   rate it ran at, 1 for a company in US dollars: its totals are in the reporting currency, its
   value a share and levels in US dollars.
 - `kill_criteria(symbol)`: the company's kill criteria, each with its state: `open`, `triggered`
-  or `retired`.
+  or `retired`, and its `threshold`, `unit` and `currency`, `null` on one with no threshold. A
+  threshold you chose is cited as `kill:<id>` in Risks and kill criteria alone.
 - `news_items(symbol)`: the company's news items.
 - `ledger(symbol?, limit?)`: the ledger's newest rows, for one company or for all: every write, who
   made it and what it rests on.
 - `review_log(symbol?)`: the review log, newest first: each review's mechanical and reviewed value
-  beside the price.
+  beside the price, and `stance`, the stance of the company's newest report when the review was
+  written: a review your overrides write carries the stance of the report before yours, and one
+  written before a company's first report carries none (`null`).
 - `policy()`: the policy values in force, the user's settings over the file's, each with its
   source.
 - `methodology(section?)`: one section of the Methodology page in plain words, with the live
@@ -133,8 +140,8 @@ be left out.
 
 Ten vendor reads the engine does not use: seven pass-throughs, six from FMP and one from
 GuruFocus, then three filing reads from FMP. The server fetches each with its own key and stores
-the response, so a report can cite it. It reuses a response it fetched within the reuse window, so
-a repeated call costs no vendor call.
+the response, so a report can cite it. It reuses a response it fetched within the reuse window, a
+filing report at any age, so a repeated call costs no vendor call.
 
 ### The seven pass-throughs
 
@@ -147,7 +154,9 @@ such as `response:731/0/revenue`.
   quarter 1 to 4. Take the year and the quarter from `transcript_dates`.
 - `news(symbol, limit?)`: recent stock news: 20 items, or `limit` up to 100.
 - `segments(symbol)`: the revenue by product and by region, two responses under `product` and
-  `geographic`.
+  `geographic`, each with `newestYear`, the newest fiscal year among its rows, `null` with none.
+  FMP's split by region can end years before its split by product: where a split's `newestYear` is
+  before the company's newest fiscal year, read the 10-K's segment note (`SKILL.md`, step 4).
 - `insider_trades(symbol, limit?)`: the insiders' newest trades: 25, or `limit` up to 100.
   `tradeCount` says how many are on file; a trade keeps its place in the stored page, so its
   `response:` ref is the same at any limit.
@@ -165,8 +174,9 @@ such as `response:731/0/revenue`.
 
 They serve FMP's filing list and its filing reports, a 10-Q or a 10-K as JSON, a part at a time,
 so no answer holds a whole report. Each answer carries `symbol`, and `responseId`, `observedAt`
-and `reused` of the stored response it was read from, beside its own keys below. A filing report
-is reused for thirty days, since a filing does not change once filed. A sheet's name, a label and
+and `reused` of the stored response it was read from, beside its own keys below. A filing report,
+once stored, is reused whatever its age, since a filing does not change once filed; the filing
+list and the list of reports are fetched again after the reuse window. A sheet's name, a label and
 a text cell are served with every run of white space as one space and the ends trimmed; an offset
 or a length counts in that text.
 
@@ -188,8 +198,9 @@ under about 40,000 characters as you receive it. The counts below are upper boun
   dropped; and `truncated`, `true` when FMP answered 1,000 filings, the most Fairband asks it for,
   so older filings of the window are missing: ask again with an earlier `to_date` for them.
 - `filing_report(symbol, year?, period?, sheet?, from_row?, row?, col?, offset?)`: FMP's filing
-  report, a part at a time. Four views, by the arguments given; an argument the view does not read
-  is not read:
+  report, a part at a time. Its newest stored copy is reused without a limit, never one FMP
+  answered with an error, so a report read once is not fetched again. Four views, by the arguments
+  given; an argument the view does not read is not read:
   1. Neither `year` nor `period`: `reports`, the reports FMP holds as it orders them, each
      `{year, period}`, a 10-K as `FY` and a 10-Q as its quarter, `Q1` to `Q3`. Take `year` and
      `period` from this list. A US filer files no 10-Q for its fourth quarter: its 10-K, `FY`,
@@ -294,12 +305,13 @@ and store nothing:
 - `note_add(symbol, text, override_id?)`: add a note to the company, tied to an override when one
   is named.
 - `finding_add(symbol, as_of, text, source, value?, unit?, period?, currency?)`: record a fact
-  from outside Fairband with its source, so a report can cite it as `finding:<id>`.
+  from outside Fairband with its source, so a report can cite it as `finding:<id>`; a money value
+  with `currency` when it is not in the reporting currency (see "A money figure" below).
 - `guidance_add(symbol, metric, period, low, high, basis, as_of, text, source, currency?)`: record
-  a figure the company guided on a call for a future period, low and high equal for a point; it
-  answers the record with the midpoint and, for a fiscal-year revenue, EPS or net income figure on
-  the `gaap` basis, the step the server computed. An override cites it in its evidence as
-  `guidance:<id>`; a report cites its figures.
+  a figure the company guided on a call for a future period, low and high equal for a point, with
+  `currency` as a finding's; it answers the record with the midpoint and, for a fiscal-year
+  revenue, EPS or net income figure on the `gaap` basis, the step the server computed. An override
+  cites it in its evidence as `guidance:<id>`; a report cites its figures.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input of
   the twenty-five in `SKILL.md`'s table, the diluted share count (`shares.diluted`), the
   committed shares (`shares.committed`), the value outside the business (`value.outside`), the
@@ -336,18 +348,49 @@ and store nothing:
   and its axes' values as `sensitivity:<id>/rows/<i>` and `/cols/<j>`; nothing is overridden.
   `current` marks the pair in force as `[i, j]`; a cell whose valuation refuses is `null`.
 - `derive(symbol, derivations)`: compute figures from refs; it answers
-  `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`. On a company in another
-  currency the rate is `snapshot:<id>/inputs/fx_rate`: a `ratio` of a figure in the currency and
-  the rate is that figure in US dollars, a derivation with no unit, so its cite takes `$` or none
-  at the decimals you write.
+  `{derivations: [{id, value, unit}]}`, each cited as `derived:<id>`. A derivation is
+  `{operation, a, b, years?}` (below). One operand may be a fixed number, `number:<n>` where a ref
+  goes, `<n>` in digits alone, with no sign, separator, point or exponent: the whole numbers 0 to
+  12, then 52, 100, 365, 1000 and each further power of ten up to 1,000,000,000,000. Any other is
+  refused (400), "a fixed number is one of 0 to 12, 52, 100, 365 or a power of ten up to
+  1,000,000,000,000, not <what was written>", and so are two numbers in one derivation, "a
+  derivation needs a stored figure"; a refusal stores none of the call's derivations. A number
+  has no unit, so the result's follows the stored figure:
+
+  | Operation | Unit |
+  |---|---|
+  | `sum`, `difference`, `product` with a number | the stored figure's unit |
+  | `ratio` of a figure over a number | the figure's unit |
+  | `ratio` of a number over a figure | none |
+  | `growth`, `cagr` | percent |
+
+  A fixed number is a number of arithmetic, never a figure you chose: the recipes are in
+  `SKILL.md`, step 10. `growth` and `cagr` have no value from a base at or below zero. A `kill:`
+  ref is refused, "unresolved reference: kill:<id>": a threshold you chose enters no arithmetic.
+  On a company in another currency the rate is `snapshot:<id>/inputs/fx_rate`: a `ratio` of a
+  figure in the currency and the rate is that figure in US dollars, a derivation with no unit, so
+  its cite takes `$` or none at the decimals you write. A finding or a guidance record in another
+  currency than the reporting one stays out of money arithmetic until you convert it: with a money
+  figure that is not a record in its own currency it has no value, and no derivation with it has
+  a money unit. The `product` of a US-dollar record and the rate is the figure in the reporting
+  currency, with no unit, which then combines with anything.
 - `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?,
   work_item_id?)`:
   submit a report; published whole, it answers `{report: {id, symbol, createdAt, workItemId}}`,
   and `report(symbol, id)` reads it whole; rejected whole, the `findings`.
-- `kill_criterion_add(symbol, text, threshold?, unit?, currency?)`: add a kill criterion to the
-  company.
+- `kill_criterion_add(symbol, text, threshold?, unit?, currency?)`: add an open kill criterion to
+  the company: `text`, the event that would prove the view wrong, and, where you chose the line it
+  crosses, `threshold` and `unit` together, the unit one of a finding's, with `currency` for a
+  money threshold as a finding's. It answers the criterion with its `threshold`, `unit` and
+  `currency`. Record a criterion with a threshold before you write the report, cite the threshold
+  as `kill:<id>` in Risks and kill criteria alone, and leave the criterion out of the report's
+  `kill_criteria`. Refused (400), nothing stored: "a kill criterion needs text"; "a kill
+  criterion's threshold and unit come together"; a currency's two refusals, as a finding's. A
+  unit that is not a finding's never reaches the web server: the tool's argument names the units,
+  so the MCP tool answers a tool error and calls nothing.
 - `kill_criterion_set(id, state, reason)`: move a kill criterion to `open`, `triggered` or
-  `retired`, with the reason.
+  `retired`, with the reason. A move to the state it is in answers "kill criterion <id> is
+  already <state>" (409).
 - `news_item_add(symbol, date, headline, source, text, kill_criterion_id?)`: record a dated news
   item, tied to a kill criterion when one is named.
 - `refresh_start(kind, symbols?)`: start a refresh: `full`, `price`, `scoped` with `symbols`, or
@@ -377,26 +420,37 @@ and store nothing:
 - A guidance record (`guidance_add`): the `metric` is `revenue`, `eps`, `net_income`,
   `operating_margin`, `free_cash_flow`, `capex`, `revenue_growth` or `eps_growth` (`net_income` a
   total, the net income that belongs to the shareholders); the `period` a fiscal year (`2027`)
-  or a quarter (`2027Q1`, no dash); `low` and `high` in the metric's unit, money in full in the
-  reporting currency as the company states it, a percent as a fraction; the `basis` `gaap`,
-  `adjusted` or `constant-currency`; `as_of` the call's date; `text` the sentence verbatim;
-  `source` a string, the transcript's `response:<id>` or a filing. A newer record of the same
-  metric, period and basis supersedes the older, in the order of the calls' dates. A value the
-  record cannot take is refused (400), nothing stored, with the first of these sentences that
-  applies: "metric is one of revenue, eps, net_income, operating_margin,
+  or a quarter (`2027Q1`, no dash); `low` and `high` in the metric's unit, money as "A money
+  figure" below says, a percent as a fraction; the `basis` `gaap`, `adjusted` or
+  `constant-currency`; `as_of` the call's date; `text` the sentence verbatim; `source` a string,
+  the transcript's `response:<id>` or a filing. A newer record of the same metric, period and
+  basis supersedes the older, in the order of the calls' dates, whatever the currency of either.
+  A value the record cannot take is refused (400), nothing stored, with the first of these
+  sentences that applies: "metric is one of revenue, eps, net_income, operating_margin,
   free_cash_flow, capex, revenue_growth or eps_growth"; "period is a fiscal year or a quarter
   (2026, 2026Q3)"; "low is above high"; "basis is one of gaap, adjusted or constant-currency"; "a
-  guidance record needs its text"; "a guidance record needs its source". A low or a high that is
-  not a number never reaches the web server: the tool's own arguments are typed as numbers, so the
-  MCP tool answers a tool error first and calls nothing. A number that is not finite (NaN or
-  infinity) fails when the tool encodes the body, since httpx refuses to write one in JSON: the
-  tool answers an error and calls nothing.
+  guidance record needs its text"; "a guidance record needs its source"; then a currency's two
+  refusals. A low or a high that is not a number never reaches the web server: the tool's own
+  arguments are typed as numbers, so the MCP tool answers a tool error first and calls nothing. A
+  number that is not finite (NaN or infinity) fails when the tool encodes the body, since httpx
+  refuses to write one in JSON: the tool answers an error and calls nothing.
 - A finding's source (`finding_add`): `{kind, ref, note}`, the kind one of `filing`,
   `transcript`, `url`, `vendor` or `base-rate`. `as_of` is the date the fact describes, as
   `2026-09-30`. The `unit` is `currency`, `percent`, `multiple`, `count`, `per-share`, `score` or
-  `years`. The `value` is in that unit: money in full in the reporting currency, as the
-  statements are, a percent as a fraction. The `period` is a fiscal year (`2025`), a quarter
-  (`2026-Q2`) or `ttm`.
+  `years`. The `value` is in that unit: money as "A money figure" below says, a percent as a
+  fraction. The `period` is a fiscal year (`2025`), a quarter (`2026-Q2`) or `ttm`.
+- A money figure (`finding_add`'s `value` of unit `currency` or `per-share`, `guidance_add`'s
+  `low` and `high` of a money metric, `kill_criterion_add`'s `threshold` of either unit): in full,
+  in the currency the company states it in, with `currency`, three capital letters, when that is
+  not the reporting currency, such as a US-dollar outlook of a company that reports in TWD. Every
+  read answers the record's `currency`: the stored code, else the reporting currency; `null` for a
+  figure that is not money. In the report it takes `$` where it is in US dollars, and its code in
+  the plain text before a bare cite otherwise. To set an input from it, or to compare it with a
+  statement, convert it first: the `derive` `product` of a US-dollar figure and
+  `snapshot:<id>/inputs/fx_rate` is the figure in the reporting currency. A figure in a third
+  currency, neither the reporting currency nor the US dollar, has no rate and enters no arithmetic
+  with the company's figures. Refused (400), nothing stored: "a currency is three capital letters,
+  not <what was written>"; "a currency goes with a money figure", a code on any other figure.
 - The drivers (`secondary_valuation`): `{years, revenue_growth, operating_margin, tax_rate,
   sales_to_capital, terminal_growth}`, rates as fractions: `years` N from 3 to 15; the
   `revenue_growth` and `operating_margin` lists with an entry for each year; the terminal growth
@@ -409,11 +463,14 @@ and store nothing:
   differ, "the two tags differ".
 - A derivation (`derive`): `{operation, a, b, years?}`. The operation is `ratio` (a ÷ b),
   `difference` (a − b), `sum` (a + b), `product` (a × b), `growth` (a ÷ b − 1) or `cagr`, the
-  compound annual growth over `years`. `a` and `b` are refs.
+  compound annual growth over `years`. `a` and `b` are refs, or one of them a fixed number,
+  `number:<n>` (see `derive`).
 - A section (`report_submit`): `{heading, parts}`, a part a plain string or a cite
   `{cite, ref, period?}`.
 - A judgment (`report_submit`): `{judgment, decision, override_id?}`, the judgment one of
   `phase`, `moat`, `belief`, `roic` and `target_margin`; it takes no other key.
-- A kill criterion (`report_submit`): `{text}`, a measurable event that would prove the view wrong.
+- A kill criterion (`report_submit`): `{text}`, a measurable event that would prove the view wrong;
+  text alone, so a threshold there is dropped without a word: record a criterion with a threshold
+  through `kill_criterion_add` before you write the report.
 - A news item (`report_submit`): `{date, headline, source, text, kill_criterion_id?}`, the source a
   URL or a stored vendor response.
