@@ -8,7 +8,13 @@ And the bundle's ``HistoryBars`` on a bar that is not a fiscal year (spec 2026-1
 trailing twelve months in the de-emphasis grey, an analysts' estimate an outline, the value on
 the last bar that is not an estimate, the accessible name by what the bars run by and the table
 twin by each point's label. The harness calls the component with its props and the tests read
-the tree it draws."""
+the tree it draws.
+
+And the page's charts past the fiscal year and by quarter (spec 2026-11-15 6.5, 6.6): charts.js's
+``points`` makes a point of each cell under its column, its tick, its kind and its label;
+``kindsLine`` the line under a chart with a bar that is not a fiscal year; ``draw`` section 4's
+charts with those bars and that line, and section 5's three charts by quarter. ``draw``'s tree
+comes back as the page's script builds it, a bundle component's props unread by the stub."""
 
 import json
 import shutil
@@ -276,3 +282,258 @@ def test_the_table_twin_reads_the_label() -> None:
         ESTIMATE.format(2027),
     ]
     assert _classed(_draw(series=series), "fb-c__table") == []
+
+
+def test_a_chart_s_points_carry_each_column_s_kind_and_label() -> None:
+    columns = [
+        {"period": "2025", "kind": "fiscal", "label": "2025"},
+        {"period": "ttm", "kind": "trailing", "label": "12 months to 30 Sep 2026"},
+        {"period": "2026E", "kind": "estimate", "label": "2026 estimate"},
+    ]
+    row = {
+        "name": "revenue",
+        "unit": "currency",
+        "cells": [
+            {"period": "2025", "value": 2100.0},
+            {"period": "ttm", "value": 1300.0},
+            {"period": "2026E", "value": 2200.0},
+        ],
+    }
+    assert _call("reportCharts.points", row, columns) == [
+        {"period": "2025", "value": 2100.0, "label": "2025"},
+        {
+            "period": "to date",
+            "value": 1300.0,
+            "kind": "trailing",
+            "label": "12 months to 30 Sep 2026",
+        },
+        {"period": "2026E", "value": 2200.0, "kind": "estimate", "label": "2026 estimate"},
+    ]
+
+
+def test_the_line_under_a_chart_names_the_grey_and_the_outlined_bars() -> None:
+    trailing = {"period": "ttm", "kind": "trailing", "label": "12 months to 30 Sep 2026"}
+    estimate = {"period": "2026E", "kind": "estimate", "label": "2026 estimate"}
+    fiscal = {"period": "2025", "kind": "fiscal", "label": "2025"}
+    assert _call("reportCharts.kindsLine", [fiscal, trailing, estimate]) == (
+        "Grey: the 12 months to 30 Sep 2026. Outlined: analysts' estimates."
+    )
+    assert _call("reportCharts.kindsLine", [fiscal, trailing]) == (
+        "Grey: the 12 months to 30 Sep 2026."
+    )
+    assert _call("reportCharts.kindsLine", [fiscal, estimate]) == "Outlined: analysts' estimates."
+    assert _call("reportCharts.kindsLine", [fiscal]) is None
+
+
+def _column(period: str) -> dict[str, str]:
+    """A column as the financial tables' read serves it, by its period (spec 2026-11-15 6.1,
+    6.4)."""
+    if period == "ttm":
+        return {"period": period, "kind": "trailing", "label": TRAILING}
+    if period.endswith("E"):
+        return {"period": period, "kind": "estimate", "label": f"{period[:-1]} estimate"}
+    if "-" in period:
+        year, quarter = period.split("-")
+        return {"period": period, "kind": "quarter", "label": f"{quarter} {year}"}
+    return {"period": period, "kind": "fiscal", "label": period}
+
+
+def _table(
+    name: str, periods: list[str], rows: dict[str, tuple[str, list[float | None]]]
+) -> dict[str, Any]:
+    """A table as the read serves it: its columns, and each row a cell under each column."""
+    return {
+        "name": name,
+        "columns": [_column(period) for period in periods],
+        "rows": [
+            {
+                "name": row,
+                "unit": unit,
+                "cells": [
+                    {
+                        "period": period,
+                        "value": value,
+                        "unit": unit,
+                        "ref": f"table:ACME/{name}/{row}/{period}",
+                        "note": None,
+                    }
+                    for period, value in zip(periods, values, strict=True)
+                ],
+            }
+            for row, (unit, values) in rows.items()
+        ],
+    }
+
+
+GROWTH = _table(
+    "growth",
+    ["2024", "2025", "ttm", "2026E", "2027E"],
+    {
+        "revenue": ("currency", [1900.0, 2100.0, 2150.0, 2200.0, 2400.0]),
+        "operating_margin": ("percent", [0.30, 0.31, 0.32, None, None]),
+        "eps": ("per-share", [5.0, 5.5, 5.6, 6.0, 6.5]),
+    },
+)
+CAPITAL = _table(
+    "capital_allocation",
+    ["2024", "2025", "ttm"],
+    {
+        "dividends": ("currency", [-10.0, -11.0, -12.0]),
+        "buybacks": ("currency", [-50.0, -60.0, -70.0]),
+        "share_count_change": ("percent", [-0.02, -0.03, None]),
+    },
+)
+QUARTERS = _table(
+    "quarters",
+    ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3"],
+    {
+        "revenue": ("currency", [500.0, 520.0, 530.0, 600.0]),
+        "operating_margin": ("percent", [0.30, 0.31, None, 0.33]),
+        "eps": ("per-share", [1.3, 1.4, 1.5, 1.6]),
+    },
+)
+LINE = "Grey: the 12 months to 30 Sep 2026. Outlined: analysts' estimates."
+
+
+def _sections(read: dict[str, Any]) -> Any:
+    """``draw``'s charts by the heading, on the financial tables' read settled as ``read``."""
+    return _call("reportCharts.draw", {}, {"tables": read}, False)
+
+
+def _body(**over: Any) -> dict[str, Any]:
+    """The read's body: the growth and capital allocation tables and the quarters."""
+    body = {"symbol": "ACME", "currency": "USD", "tables": [GROWTH, CAPITAL], "quarters": QUARTERS}
+    return body | over
+
+
+def _panel(tree: Any, title: str) -> tuple[dict[str, Any] | None, list[str]]:
+    """The panel of the chart titled ``title`` in a drawn section: the chart's props, none where
+    the panel shows that nothing is on file, and the captions in the panel."""
+    for panel in _classed(tree, "app-chart"):
+        charts = [e["props"] for e in _elements(panel) if "series" in e["props"]]
+        heads = [_text(e) for e in _classed(panel, "fb-c__title")]
+        if [c["title"] for c in charts] == [title] or heads == [title]:
+            captions = [_text(e) for e in _classed(panel, "caption")]
+            return (charts[0] if charts else None), captions
+    raise AssertionError(title)
+
+
+def _ticks(chart: dict[str, Any]) -> list[str]:
+    """The ticks under a chart's bars, in order."""
+    return [p["period"] for p in chart["series"]]
+
+
+def test_a_cell_with_no_value_is_left_out_and_shifts_no_kind() -> None:
+    periods = ["2024", "2025", "ttm", "2026E", "2027E"]
+    row = _table("growth", periods, {"eps": ("per-share", [None, 5.5, None, 6.0, 6.5])})
+    columns = [_column(period) for period in periods]
+    assert _call("reportCharts.points", row["rows"][0], columns) == [
+        {"period": "2025", "value": 5.5, "label": "2025"},
+        {"period": "2026E", "value": 6.0, "kind": "estimate", "label": "2026 estimate"},
+        {"period": "2027E", "value": 6.5, "kind": "estimate", "label": "2027 estimate"},
+    ]
+
+
+def test_a_quarter_s_tick_is_its_quarter_and_its_year_s_last_two_digits() -> None:
+    """A quarter's label stays whole for the tooltip and the table twin; a period the store names
+    otherwise, a half-year, takes its label, its year shortened, or the label as it is."""
+    half = {"period": "2026-H1", "kind": "quarter", "label": "H1 2026"}
+    odd = {"period": "2026-P1", "kind": "quarter", "label": "first period"}
+    periods = ["2026-Q3", "2026-H1", "2026-P1"]
+    row = _table("quarters", periods, {"revenue": ("currency", [600.0, 1100.0, 900.0])})
+    assert _call("reportCharts.points", row["rows"][0], [_column("2026-Q3"), half, odd]) == [
+        {"period": "Q3 26", "value": 600.0, "label": "Q3 2026"},
+        {"period": "H1 26", "value": 1100.0, "label": "H1 2026"},
+        {"period": "first period", "value": 900.0, "label": "first period"},
+    ]
+
+
+def test_a_table_served_without_columns_draws_its_cells_as_today() -> None:
+    """A page loaded against an older answer: the points from the cells' own periods, no kind and
+    no label, the accessible name by fiscal year and no line under the chart; no section 5."""
+    row = GROWTH["rows"][0]
+    assert _call("reportCharts.points", row) == [
+        {"period": cell["period"], "value": cell["value"]} for cell in row["cells"]
+    ]
+    older = {k: v for k, v in GROWTH.items() if k != "columns"}
+    sections = _sections({"body": {"symbol": "ACME", "currency": "USD", "tables": [older]}})
+    chart, captions = _panel(sections["Financial performance and health"], "Revenue")
+    assert chart is not None and "by" not in chart
+    assert all("kind" not in p and "label" not in p for p in chart["series"])
+    assert captions == []
+    assert sections["The last earnings call"] is None
+
+
+def test_section_4_draws_the_trailing_and_the_estimate_bars_with_the_line_under() -> None:
+    """Spec 2026-11-15 6.5, 6.6: a chart with a bar that is not a fiscal year runs by period and
+    says which bar is which under it, once, from the columns of the bars it draws; buybacks and
+    dividends, the page's sum of two rows, gets its trailing bar; a chart whose trailing cell
+    holds no figure, the share count's change, draws its fiscal years alone, as before."""
+    part = _sections({"body": _body()})["Financial performance and health"]
+    revenue, captions = _panel(part, "Revenue")
+    assert revenue is not None and revenue["by"] == "period"
+    assert _ticks(revenue) == ["2024", "2025", "to date", "2026E", "2027E"]
+    kinds = [p.get("kind") for p in revenue["series"]]
+    assert kinds == [None, None, "trailing", "estimate", "estimate"]
+    assert captions == [LINE]
+    margin, captions = _panel(part, "Operating margin")
+    assert margin is not None and margin["by"] == "period"
+    assert _ticks(margin) == ["2024", "2025", "to date"]
+    assert captions == ["Grey: the 12 months to 30 Sep 2026."]
+    returned, captions = _panel(part, "Buybacks and dividends")
+    assert returned is not None and returned["by"] == "period"
+    drawn = [(p["period"], p["value"]) for p in returned["series"]]
+    assert drawn == [("2024", 60), ("2025", 71), ("to date", 82)]
+    assert returned["series"][-1]["kind"] == "trailing"
+    assert captions == ["Grey: the 12 months to 30 Sep 2026."]
+    shares, captions = _panel(part, "Share count change")
+    assert shares is not None and "by" not in shares and captions == []
+    assert _ticks(shares) == ["2024", "2025"]
+    for title in ("Revenue", "Operating margin", "EPS", "Buybacks and dividends"):
+        chart, _ = _panel(part, title)
+        assert chart is not None, title
+        assert not any("Q" in tick for tick in _ticks(chart)), title  # never a quarter
+    assert _panel(part, "Free cash flow") == (None, ["No data on file."])
+
+
+def test_section_5_draws_three_charts_by_quarter() -> None:
+    """Spec 2026-11-15 6.5: under the export's title for its table, "By quarter", the revenue, the
+    operating margin and the EPS of the stored periods, titled by their rows' names and run by
+    quarter, each tick the quarter short and each point its column's label; no line under them."""
+    section = _sections({"body": _body()})["The last earnings call"]
+    assert [_text(e) for e in _elements(section) if e.get("type") == "h5"] == ["By quarter"]
+    charts = [e["props"] for e in _elements(section) if "series" in e["props"]]
+    assert [c["title"] for c in charts] == ["Revenue", "Operating margin", "EPS"]
+    for chart in charts:
+        assert chart["by"] == "quarter"
+        assert all("kind" not in p for p in chart["series"])
+        assert _panel(section, chart["title"])[1] == []
+    revenue, margin, eps = charts
+    assert _ticks(revenue) == ["Q4 25", "Q1 26", "Q2 26", "Q3 26"]
+    assert [p["label"] for p in revenue["series"]] == ["Q4 2025", "Q1 2026", "Q2 2026", "Q3 2026"]
+    assert revenue["unit"] == "USD" and eps["unit"] == "USD a share"
+    assert _ticks(margin) == ["Q4 25", "Q1 26", "Q3 26"]  # a gap, never a zero
+
+
+def test_section_5_with_no_stored_period_says_nothing_is_on_file() -> None:
+    """A company with no stored period: the quarters table has no column and its rows no cells,
+    so the section shows its three panels with "No data on file.", as section 4 does for a table
+    without statements."""
+    rows: dict[str, tuple[str, list[float | None]]] = {
+        "revenue": ("currency", []),
+        "operating_margin": ("percent", []),
+        "eps": ("per-share", []),
+    }
+    section = _sections({"body": _body(quarters=_table("quarters", [], rows))})
+    for title in ("Revenue", "Operating margin", "EPS"):
+        assert _panel(section["The last earnings call"], title) == (None, ["No data on file."])
+
+
+def test_section_5_says_why_when_the_read_was_refused() -> None:
+    sections = _sections({"error": "no financial statements for ACME"})
+    assert _text(sections["The last earnings call"]) == (
+        "The figures by quarter did not load: no financial statements for ACME."
+    )
+    assert _text(sections["Financial performance and health"]) == (
+        "The financial tables did not load: no financial statements for ACME."
+    )

@@ -55,9 +55,16 @@ from fairband.engine.route import value_company
 from fairband.engine.types import Designation, ValuationResult, result_to_json
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
-from fairband.reports.charts import BAND_TITLE, GRID_TITLE, SERIES_TITLES, TITLES, row_name
+from fairband.reports.charts import (
+    BAND_TITLE,
+    GRID_TITLE,
+    QUARTERS_TITLE,
+    SERIES_TITLES,
+    TITLES,
+    row_name,
+)
 from fairband.reports.check import HEADINGS
-from fairband.reports.tables import financial_tables
+from fairband.reports.tables import financial_tables, quarters_table
 from fairband.store.companies import insert_companies
 from fairband.store.db import applied_versions, connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh
@@ -3129,19 +3136,31 @@ def test_the_report_page_draws_the_charts_per_section(db_path: Path, policy: Pol
     revenue, the operating margin as a percentage, the EPS; free cash flow, stock compensation to
     revenue; net debt to EBITDA, interest coverage; buybacks and dividends, one measure, and the
     share count's change; Altman's Z″ and Piotroski's F; and ROIC against the hurdle rate the
-    returns table carries (SpreadChart). Section 8: the readings the sections cite and the
-    secondary valuation's grid (SensitivityGrid twice), titled as their tables are. Section 9: the
-    price against the band (BandHistory) and the trailing and forward P/E (MultipleHistory twice),
-    titled as their table and the year-end table's columns. So the page and its Markdown export
-    never differ."""
+    returns table carries (SpreadChart). Section 5 (spec 2026-11-15 6.5): the quarters table's
+    revenue, operating margin and EPS by quarter (HistoryBars three times), under its title in the
+    export (charts.QUARTERS_TITLE), each titled by its row's name there. Section 8: the readings
+    the sections cite and the secondary valuation's grid (SensitivityGrid twice), titled as their
+    tables are. Section 9: the price against the band (BandHistory) and the trailing and forward
+    P/E (MultipleHistory twice), titled as their table and the year-end table's columns. So the
+    page and its Markdown export never differ."""
     script = _code(_static_file("charts.js"))
     draw = _function(script, "draw")
-    for heading in (HEADINGS[3], HEADINGS[7], HEADINGS[8]):  # chart_tables' keys
+    for heading in (HEADINGS[3], HEADINGS[4], HEADINGS[7], HEADINGS[8]):  # chart_tables' keys
         assert f"'{heading}': " in draw, heading
     parts = re.findall(r"\{ table: '(\w+)', title: '([^']+)', charts: \[", script)
     assert parts == list(TITLES.items())
     with closing(connect(db_path)) as conn:
         rows = {t.name: [r.name for r in t.rows] for t in financial_tables(conn, "AAPL", policy)}
+        quarters = quarters_table(conn, "AAPL")
+    assert f"var QUARTERS_TITLE = '{QUARTERS_TITLE}';" in script
+    quarterly = re.search(
+        r"var QUARTERLY = \{ table: '(\w+)', title: QUARTERS_TITLE, by: 'quarter', charts: \[(.*?)\]"
+        r" \};",
+        script,
+        re.DOTALL,
+    )
+    assert quarterly is not None and quarterly.group(1) == quarters.name
+    assert re.findall(r"\{ row: '(\w+)'", quarterly.group(2)) == [r.name for r in quarters.rows]
     part = r"\{ table: '(\w+)', title: '[^']+', charts: \[(.*?)\] \}"
     blocks = re.findall(part, script, re.DOTALL)
     charted = {table: re.findall(r"\{ row: '(\w+)'", block) for table, block in blocks}
@@ -3174,7 +3193,10 @@ def test_the_report_page_draws_the_charts_per_section(db_path: Path, policy: Pol
         f"multiple('{SERIES_TITLES['pe_forward']}', forward,",
         "'since ' + F.formatDate(forward.since)",
     )
-    assert "P.reportCharts = { draw: draw, roicPoints: roicPoints };" in script
+    assert (
+        "P.reportCharts = { draw: draw, roicPoints: roicPoints, points: points,"
+        " kindsLine: kindsLine };"
+    ) in script
     report = _code(_static_file("report.js"))
     reads = _function(report, "readSeries")
     _in_order(
@@ -3210,7 +3232,7 @@ def test_a_missing_cell_is_a_gap() -> None:
     left with no point shows its title and "No data on file.", not an empty plot."""
     script = _code(_static_file("charts.js"))
     assert "filter(function (p) { return p.value != null; })" in _function(script, "points")
-    assert "var series = row ? points(row) : [];" in _function(script, "bars")
+    assert "var series = row ? points(row, columns) : [];" in _function(script, "bars")
     assert (
         "var value = cell.value == null || paid == null ? null : -(cell.value + paid);"
         in _function(script, "returned")
@@ -3518,6 +3540,7 @@ def test_each_series_lands_as_its_read_settles() -> None:
     draw = _function(script, "draw")
     for text in (
         "s.tables ? financial(s.tables, tables) : null",
+        "s.tables ? byQuarter(s.tables, tables) : null",
         "s.readings ? valuation(report, s.readings) : null",
         "(s.closes && s.band) || s.multiples ? price(s, tables) : null",
     ):

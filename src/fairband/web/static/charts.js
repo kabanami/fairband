@@ -13,7 +13,14 @@
    a read the server refused shows its sentence, as it arrives. A ROIC year on average invested
    capital at or below zero, whose figure has the wrong sign and no meaning, is left out of the
    ROIC chart, and a line under the chart names the years and why (B-8; the export's table
-   writes the note in the cell). */
+   writes the note in the cell).
+
+   Past the fiscal year (spec 2026-11-15 6.5, 6.6): a chart's bars stand under its table's
+   columns, the tooltip and the table twin naming each by the label the server gives its column.
+   The trailing twelve months stand after the fiscal years in grey, marked "to date", and the
+   analysts' estimates after them as outlines, marked by their period ("2026E"); under a chart
+   with such a bar one line says which is which. The last earnings call draws the quarters table
+   by quarter, under the export's title for it. */
 (function () {
   'use strict';
 
@@ -55,16 +62,31 @@
       { row: 'piotroski_f', title: "Piotroski's F" }
     ] }
   ];
+  /* The last earnings call (spec 2026-11-15 6.5): the quarters table under its title in the
+     export (charts.QUARTERS_TITLE), its charts by its rows, each titled by its row's name there,
+     run by quarter. */
+  var QUARTERS_TITLE = 'By quarter';
+  var QUARTERLY = { table: 'quarters', title: QUARTERS_TITLE, by: 'quarter', charts: [
+    { row: 'revenue', title: 'Revenue' },
+    { row: 'operating_margin', title: 'Operating margin' },
+    { row: 'eps', title: 'EPS' }
+  ] };
   var BAND_TITLE = 'The price against the band by quarter';
   var GRID_TITLE = 'The grid of secondary valuation ';
+  /* The tick under the trailing twelve months' bar, and the line's sentence for the estimates'
+     (6.6). */
+  var TO_DATE = 'to date';
+  var OUTLINED = 'Outlined: analysts\' estimates.';
 
   /* Each section's charts by its heading, as ReportReader places them, each drawn once the
-     series it reads have landed: the price against the band once the closes and the band's
-     history have, the P/E series once the multiples history has. */
+     series it reads have landed: the six tables and the quarters once the financial tables have,
+     the price against the band once the closes and the band's history have, the P/E series once
+     the multiples history has. */
   function draw(report, series, tables) {
     var s = series || {};
     return {
       'Financial performance and health': s.tables ? financial(s.tables, tables) : null,
+      'The last earnings call': s.tables ? byQuarter(s.tables, tables) : null,
       'Valuation': s.readings ? valuation(report, s.readings) : null,
       'Price and multiples': (s.closes && s.band) || s.multiples ? price(s, tables) : null
     };
@@ -78,45 +100,106 @@
     if (read.error) return refused('The financial tables', read.error);
     var body = read.body;
     var byName = {};
-    body.tables.forEach(function (t) {
-      var rows = {};
-      t.rows.forEach(function (r) { rows[r.name] = r; });
-      byName[t.name] = rows;
-    });
+    body.tables.forEach(function (t) { byName[t.name] = t; });
     return h('div', { className: 'app-charts__parts' }, FINANCIAL.map(function (part) {
-      var rows = byName[part.table] || {};
-      return h(React.Fragment, { key: part.table },
-        h('h5', { className: 'label app-charts__part' }, part.title),
-        h('div', { className: 'app-charts' }, part.charts.map(function (c) {
-          return c.hurdle ? spread(c, rows, tables) : bars(c, rows, body.currency, tables);
-        })));
+      return charted(part, byName[part.table], body.currency, tables);
     }));
   }
 
-  /* One row's columns, one measure (HistoryBars): a currency in the statements' currency, the
-     EPS a share of it, a percentage as one, a multiple or a score bare. */
-  function bars(c, rows, currency, tables) {
+  /* The quarters table's part, its three charts with "No data on file." where no period is
+     stored; the server's sentence when the tables did not load, and none on an answer from
+     before the quarters were served. */
+  function byQuarter(read, tables) {
+    if (read.error) return refused('The figures by quarter', read.error);
+    var body = read.body;
+    return body.quarters ? h('div', { className: 'app-charts__parts' },
+      charted(QUARTERLY, body.quarters, body.currency, tables)) : null;
+  }
+
+  /* A part: its title over a chart for each of its charts, from its table's rows and columns;
+     with no table, every chart with "No data on file.". */
+  function charted(part, table, currency, tables) {
+    var rows = {};
+    if (table) table.rows.forEach(function (r) { rows[r.name] = r; });
+    var columns = table ? table.columns : null;
+    return h(React.Fragment, { key: part.table },
+      h('h5', { className: 'label app-charts__part' }, part.title),
+      h('div', { className: 'app-charts' }, part.charts.map(function (c) {
+        return c.hurdle ? spread(c, rows, tables)
+          : bars(c, rows, columns, part.by, currency, tables);
+      })));
+  }
+
+  /* One row's bars, one measure (HistoryBars): a currency in the statements' currency, the EPS a
+     share of it, a percentage as one, a multiple or a score bare. Run by the part's `by`, a
+     quarter; else by period where a bar is the trailing twelve months or an estimate, with the
+     line that says which under the chart, and by fiscal year where none is (6.6). */
+  function bars(c, rows, columns, by, currency, tables) {
     var row = c.rows ? returned(rows[c.rows[0]], rows[c.rows[1]]) : rows[c.row];
-    var series = row ? points(row) : [];
-    var unit = row ? row.unit : null;
+    var series = row ? points(row, columns) : [];
+    if (!series.length) return panel(c.title, noData(c.title));
+    var unit = row.unit;
     var caption = unit === 'per-share' ? currency + ' a share' : undefined;
-    return panel(c.title, series.length ? h(F.HistoryBars, {
-      title: c.title, series: series, basis: 'mechanical', tableView: tables,
-      unit: unit === 'currency' ? currency : caption,
-      format: unit === 'percent' ? F.formatPercent : undefined,
-      inverse: !!c.inverse
-    }) : noData(c.title));
+    var line = kindsLine(series); /* a point carries its column's kind and label */
+    return panel(c.title, h(React.Fragment, null,
+      h(F.HistoryBars, {
+        title: c.title, series: series, basis: 'mechanical', tableView: tables,
+        unit: unit === 'currency' ? currency : caption,
+        format: unit === 'percent' ? F.formatPercent : undefined,
+        inverse: !!c.inverse, by: by || (line ? 'period' : undefined)
+      }),
+      line ? h('p', { className: 'caption app-muted' }, line) : null));
   }
 
-  /* A row's cells as a chart's points, oldest first: a cell with no value is left out, a gap,
-     never a zero (18.4). */
-  function points(row) {
-    return row.cells.map(function (cell) { return { period: cell.period, value: cell.value }; })
-      .filter(function (p) { return p.value != null; });
+  /* A row's cells as a chart's points, oldest first, each under its column of the table's
+     `columns`: its tick (`period`) the year for a fiscal year, "to date" for the trailing twelve
+     months, an estimate's period ("2026E") and a quarter's short name ("Q3 26"); its `kind`,
+     `trailing` or `estimate`, none otherwise; and its `label`, the column's, which the tooltip
+     and the table twin read. A cell with no value is left out, a gap, never a zero (18.4). On a
+     table served without columns, an older answer, a point is its cell's period and value. */
+  function points(row, columns) {
+    var under = {};
+    (columns || []).forEach(function (column) { under[column.period] = column; });
+    return row.cells.map(function (cell) {
+      var column = Object.prototype.hasOwnProperty.call(under, cell.period)
+        ? under[cell.period] : null;
+      if (!column) return { period: cell.period, value: cell.value };
+      var p = { period: tick(column), value: cell.value, label: column.label };
+      if (column.kind === 'trailing' || column.kind === 'estimate') p.kind = column.kind;
+      return p;
+    }).filter(function (p) { return p.value != null; });
   }
 
-  /* The cash returned to holders a year, one measure: the buybacks and the dividends, which the
-     cash flow signs as outflows, summed and turned; none where either is missing. */
+  /* The tick under a column's bar: "to date" for the trailing twelve months, a quarter's short
+     name, and the period otherwise, a fiscal year's ("2025") or an estimate's ("2026E"). */
+  function tick(column) {
+    if (column.kind === 'trailing') return TO_DATE;
+    return column.kind === 'quarter' ? quarterTick(column) : column.period;
+  }
+
+  /* A quarter's tick, the quarter and the last two digits of its fiscal year, "Q3 26" for
+     `2026-Q3`; a period the store names otherwise (a half-year, `2026-H1`) takes the column's
+     label, its year shortened so where the label ends in one ("H1 26"), else as it is. */
+  function quarterTick(column) {
+    var named = /^\d\d(\d\d)-(Q[1-4])$/.exec(column.period);
+    if (named) return named[2] + ' ' + named[1];
+    return column.label.replace(/(^|\D)\d\d(\d\d)$/, '$1$2');
+  }
+
+  /* The line under a chart with a bar that is not a fiscal year, from its columns' kinds and
+     labels, or its points', which carry them: "Grey: the 12 months to 30 Sep 2026. Outlined:
+     analysts' estimates.", the first sentence alone without an estimate and the second alone
+     without the trailing twelve months; none with neither (6.6). */
+  function kindsLine(columns) {
+    var trailing = columns.filter(function (c) { return c.kind === 'trailing'; })[0];
+    var said = trailing ? ['Grey: the ' + trailing.label + '.'] : [];
+    if (columns.some(function (c) { return c.kind === 'estimate'; })) said.push(OUTLINED);
+    return said.length ? said.join(' ') : null;
+  }
+
+  /* The cash returned to holders a period, one measure: the buybacks and the dividends, which
+     the cash flow signs as outflows, summed and turned, each under its cells' period, so the
+     trailing twelve months keep their column; none where either is missing. */
   function returned(buybacks, dividends) {
     if (!buybacks || !dividends) return null;
     return {
@@ -371,5 +454,5 @@
       what + ' did not load: ' + sentence + '.');
   }
 
-  P.reportCharts = { draw: draw, roicPoints: roicPoints };
+  P.reportCharts = { draw: draw, roicPoints: roicPoints, points: points, kindsLine: kindsLine };
 })();
