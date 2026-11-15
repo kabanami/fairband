@@ -149,9 +149,9 @@ Open with each claim of section 5 and its position:
 - **held open**: a kill criterion, or a thing to watch.
 
 Then the case for the stance, written for every stance. A buy says why the market is wrong on the
-downside. A hold says why the price is fair and what the view waits for. A trim says why the price
-ran ahead of the business. An avoid says why the business is not worth owning at the prices shown.
-The kill criteria of section 11 test it.
+downside. A hold says why the price calls for neither buying nor trimming, and what the view waits
+for. A trim says why the price ran ahead of the business. An avoid says why the business is not
+worth owning at the prices shown. The kill criteria of section 11 test it.
 
 ### Section 8: valuation
 
@@ -522,7 +522,7 @@ cite.
         {"cite": "$1.82 billion", "ref": "guidance:18/midpoint"},
         " | GAAP | raised | above |\n\nThe analysts' average estimate for fiscal 2027 EPS is ",
         {"cite": "$6.95", "ref": "estimate:EXMP/2027/eps", "period": "2027"},
-        ". The valuation takes the EPS guidance: fiscal 2027 is the base year, the fiscal year that holds most of the next four quarters after the last one reported (two half-years for a company that reports twice a year), so its midpoint replaces the analysts' average estimate as the earnings the value starts from. The revenue guidance moves nothing in this valuation. A one-sided promise on the adjusted operating margin stays out of the value.\n\n**The positives and the negatives.** For: multi-year bookings, and an outlook above the analysts' average estimate. Against: the count of new customers is no longer reported, and payroll's growth was not given.\n\n**The questions and answers.** Two analysts pressed on churn after the price rise; the answers named no figure. One asked about payroll; the answer was direct: payroll will be reported on its own next year.\n\n**What the thesis takes from it.** Revenue grew, so falling revenue, the event that would prove the view wrong, has not begun. The one thing to watch next quarter is churn under the new prices. The price moved more than the value: it rose ",
+        ". The valuation takes the EPS guidance. Fiscal 2027 holds the next four quarters, so its midpoint replaces the analysts' average estimate as the earnings the value starts from. The revenue guidance moves nothing in this valuation. A one-sided promise on the adjusted operating margin stays out of the value.\n\n**The positives and the negatives.** For: multi-year bookings, and an outlook above the analysts' average estimate. Against: the count of new customers is no longer reported, and payroll's growth was not given.\n\n**The questions and answers.** Two analysts pressed on churn after the price rise; the answers named no figure. One asked about payroll; the answer was direct: payroll will be reported on its own next year.\n\n**What the thesis takes from it.** Revenue grew, so falling revenue, the event that would prove the view wrong, has not begun. The one thing to watch next quarter is churn under the new prices. The price moved more than the value: it rose ",
         {"cite": "+6.1%", "ref": "derived:534"},
         ", while the guidance added ",
         {"cite": "+$5", "ref": "review:89/bridge/1/delta"},

@@ -42,22 +42,21 @@ be left out.
 - `company(symbol)`: the latest snapshot in full: `snapshot.id`, `snapshot.refreshId` (the refresh
   that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
   intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
-  universe. `review`: the current review on the latest snapshot, or on one a price refresh
-  repriced, `null` without one; where it has a value, its `flags` are the review's own, each with
-  its `code`, `word` and `sentence`, as the screen's row shows them, so you read what your inputs
-  settled; on a refused review `flags` is `null`. The `result`'s flags stay the snapshot's.
-  `priceNeeds`: where the price is well above the value, one or two sentences on what
-  the price needs of the business beside what the route holds, read under your review when it
-  has a value; `null` otherwise. An input scaled for a split is an estimate under the method `split-scaled` with a
-  note naming the split, and the row's `split-pending` note names the rest. What the figures are
-  in: `currency`, the reporting currency; `isAdr`, the ADR flag as the valuation reads it, the
-  company profile's, else the universe row's; `adrRatio`, the ordinary shares one ADS stands for,
-  `null` without one; `fxRate` and `fxDate`, the exchange rate the value was translated at, units
-  of the currency per US dollar, and its close's date, `null` on a company in US dollars and on
-  one refused for its currency, which has no rate ("no exchange rate for <code>", "no inflation
-  projection for <code>" or "<code>: expected inflation <π>% above the 10% bound"). An input in
-  the currency names its code as its unit (`TWD`, `TWD a share`); one read on the ADS basis is an
-  estimate under `basis-scaled`.
+  universe. `review`: the current review on the latest snapshot, or on one a price refresh repriced,
+  `null` without one; where it has a value, its `flags` are the review's own, each with its `code`,
+  `word` and `sentence`, as the screen's row shows them, so you read what your inputs settled; on a
+  refused review `flags` is `null`. The `result`'s flags stay the snapshot's. `priceNeeds`: where
+  the price is well above the value, one or two sentences on what the price needs of the business
+  beside what the route holds, read under your review when it has a value; `null` otherwise. An
+  input scaled for a split is an estimate under the method `split-scaled` with a note naming the
+  split, and the row's `split-pending` note names the rest. What the figures are in: `currency`, the
+  reporting currency; `isAdr`, the ADR flag as the valuation reads it, the company profile's, else
+  the universe row's; `adrRatio`, the ordinary shares one ADS stands for, `null` without one;
+  `fxRate` and `fxDate`, the exchange rate the value was translated at, units of the currency per US
+  dollar, and its close's date, `null` on a company in US dollars and on one refused for its
+  currency, which has no rate ("no exchange rate for <code>", "no inflation projection for <code>"
+  or "<code>: expected inflation <π>% above the 10% bound"). An input in the currency names its code
+  as its unit (`TWD`, `TWD a share`); one read on the ADS basis is an estimate under `basis-scaled`.
 - `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
   stored statements, each figure with its `fact:` ref.
 - `quarters(symbol)`: the newest eight stored quarters, oldest first, each by its fiscal label
@@ -341,7 +340,8 @@ and store nothing:
   currency the rate is `snapshot:<id>/inputs/fx_rate`: a `ratio` of a figure in the currency and
   the rate is that figure in US dollars, a derivation with no unit, so its cite takes `$` or none
   at the decimals you write.
-- `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`:
+- `report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?,
+  work_item_id?)`:
   submit a report; published whole, it answers `{report: {id, symbol, createdAt, workItemId}}`,
   and `report(symbol, id)` reads it whole; rejected whole, the `findings`.
 - `kill_criterion_add(symbol, text)`: add a kill criterion to the company.

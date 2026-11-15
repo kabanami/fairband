@@ -544,7 +544,8 @@ Then the case that settles the debate and leads to the stance: what must be true
 be right, and what you expect to happen. Write it for every stance:
 
 - a buy says why the market is wrong on the downside;
-- a hold says why the price is fair and what the view waits for;
+- a hold says why the price calls for neither buying nor trimming, and what the view
+  waits for;
 - a trim says why the price ran ahead of the business;
 - an avoid says why the business is not worth owning at the prices shown.
 

@@ -117,9 +117,9 @@ GLOSSARY: dict[str, str] = {
         "they gave none (4.2, 5.2)"
     ),
     "Belief": (
-        "The growth rate the value assumes after the analysts' forecast years: growth eases down "
-        "to it from year 3's over the fade, then holds at it to the end of the runway; the "
-        "base-rate median plus 2 points"
+        "The growth rate the value assumes after the analysts' forecast years: where year 3's "
+        "growth is higher, growth eases down to it over the fade, then holds at it as far as "
+        "the runway reaches; the base-rate median plus 2 points"
     ),
     "Runway N": "The years of growth above the terminal rate, set by the moat class",
     "Runway return": (

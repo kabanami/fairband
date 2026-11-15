@@ -2109,17 +2109,46 @@ def test_the_template_example_holds_together() -> None:
     margins = [number(f"table:EXMP/quarters/operating_margin/{p}") for p in ("2026-Q4", "2025-Q4")]
     assert abs(number(change["ref"]) - (margins[0] - margins[1])) < 0.05
     assert "The operating margin rose 2.1 percentage points on the year." in call
+    # the sentence on the EPS guidance in the register: no method term, no bracket for
+    # another kind of company (the re-review of Task 10; method 14.9, SKILL.md's Guidance)
+    assert (
+        "The valuation takes the EPS guidance. Fiscal 2027 holds the next four quarters, so"
+        " its midpoint replaces the analysts' average estimate as the earnings the value"
+        " starts from."
+    ) in call
+    assert "base year" not in call and "half-years" not in call
     hurdle = "the yearly return of 9.0% that investors require of any company's shares."
     assert hurdle in written["Industry and competition"]
 
 
 def test_the_skill_s_lines_fit_the_page() -> None:
     """The reviews of the report reader's plan (Task 10): every line of `SKILL.md` but the
-    frontmatter's and a table's row is at most 100 characters, as the rest of its prose is
-    wrapped; the note on `split-pending` held one of 146."""
+    frontmatter's and a table's row, and every line of `reference/tools.md` but a table's row, is
+    at most 100 characters, as the rest of the prose is wrapped; the note on `split-pending` held
+    one of 146, and the `company` entry and `report_submit`'s signature in the tool list ones of
+    114 and 105."""
     _, body = _frontmatter(_read(SKILL))
-    long = [line for line in body.splitlines() if len(line) > 100 and not line.startswith("|")]
-    assert long == [], long
+    for text in (body, _read(TOOLS)):
+        long = [line for line in text.splitlines() if len(line) > 100 and not line.startswith("|")]
+        assert long == [], long
+
+
+def test_a_hold_says_why_the_price_calls_for_neither_buying_nor_trimming() -> None:
+    """The re-review of Task 10: a hold's price can stand below or above the range of prices
+    close to the value, so the template and step 9 ask a hold why the price calls for neither
+    buying nor trimming, as step 11 reads the price against the buy and the trim levels."""
+    nine = _flat(_steps(_frontmatter(_read(SKILL))[1])[9])
+    template = _flat(_read(TEMPLATE))
+    assert (
+        "- a hold says why the price calls for neither buying nor trimming, and what the view waits"
+        " for;"
+    ) in nine
+    assert (
+        "A hold says why the price calls for neither buying nor trimming, and what the view waits"
+        " for."
+    ) in template
+    for text in (nine, template):
+        assert "why the price is fair" not in text
 
 
 def _read(path: Path) -> str:

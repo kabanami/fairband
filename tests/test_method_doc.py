@@ -794,8 +794,9 @@ def test_the_belief_is_the_rate_the_path_fades_to_over_the_fade_years() -> None:
     assert four.startswith(
         "The growth rate the earnings path settles at after the consensus years (5.5): where the"
         " year-3 growth is higher, years 4 to 3 + F fade down to it, F the fade years"
-        " (`fade_years`), and every later year to the runway's end N grows at it. It is the Base Rate Book median ten-year net-income growth"
-        " for the company's sales class plus 2 points."
+        " (`fade_years`), and every later year to the runway's end N grows at it. It is the"
+        " Base Rate Book median ten-year net-income growth for the company's sales class"
+        " plus 2 points."
     ), four
     path = five.split("### 5.5 The growth path\n\n", 1)[1].split("\n### ", 1)[0]
     for words in (
@@ -809,8 +810,8 @@ def test_the_belief_is_the_rate_the_path_fades_to_over_the_fade_years() -> None:
             " g_8 = b."
         ),
         (
-            "If g_3 ≤ b, years 4 to N grow at b. The runway cuts the path: with N = 5 the path ends"
-            " at g_5 mid-fade."
+            "If g_3 ≤ b, years 4 to N grow at b. The runway cuts the path. At the defaults, with"
+            " N = 5 the path ends at g_5 mid-fade."
         ),
     ):
         assert words in path, words
@@ -821,9 +822,9 @@ def test_the_belief_is_the_rate_the_path_fades_to_over_the_fade_years() -> None:
     glossary = _section(13)
     for row in (
         (
-            "| Belief | The growth rate the value assumes after the analysts' forecast years: growth"
-            " eases down to it from year 3's over the fade, then holds at it to the end of the"
-            " runway; the base-rate median plus 2 points |"
+            "| Belief | The growth rate the value assumes after the analysts' forecast years: where"
+            " year 3's growth is higher, growth eases down to it over the fade, then holds at it"
+            " as far as the runway reaches; the base-rate median plus 2 points |"
         ),
         (
             "| Fade | The equal steps from the year-3 consensus growth down to the belief, one a"
