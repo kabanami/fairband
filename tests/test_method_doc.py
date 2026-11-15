@@ -149,9 +149,11 @@ def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:
 def test_an_override_made_before_a_split_applies_on_the_new_basis() -> None:
     """Spec 2026-11-14 7, as amended at the build: 14.6 states the rule on the two snapshots' basis
     dates, the earlier of the price date and the data date of the snapshot that assembled the
-    figures, its two residuals, what the row says and what stays; 14.4's JUDGMENT entry and 14.8's
-    reading point to it; section 8 names the note, not counted; and 11's row states the basis date
-    and cites every section that states the rule."""
+    figures, its three residuals (the third, statements and splits fetched on different days, from
+    the whole-branch review), what the row says and what stays; 14.4's JUDGMENT entry and 14.8's
+    reading point to it; section 8 names the note, not counted, and where it stands among the
+    review's flags; and 11's row states the basis date and cites every section that states the
+    rule."""
     fourteen = _section(14)
     follows = fourteen[fourteen.index("### 14.6") : fourteen.index("### 14.7")]
     for words in (
@@ -168,7 +170,15 @@ def test_an_override_made_before_a_split_applies_on_the_new_basis() -> None:
             " dates."
         ),
         "a refresh on a split's day before the US close, whose quote is the day before's, has not",
-        "Two cases escape the basis date",
+        "Three cases escape the basis date",
+        (
+            "the statements can be read from an answer fetched on one day and the splits from an"
+            " answer fetched on another, when a fetch stopped on a 429 after the statements and a"
+            " full refresh inside the reuse window fetched again only the calls that failed"
+            " (section 2), or when the vendor lists a split a day late, while the basis date reads"
+            " the statements' data date, so it can say the figures saw a split they did not, or"
+            " the reverse."
+        ),
         "The stored override keeps the figure entered.",
         '"entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027"',
         "`override-split-scaled`",
@@ -184,6 +194,13 @@ def test_an_override_made_before_a_split_applies_on_the_new_basis() -> None:
     assert row.startswith("| `override-split-scaled` | no |")
     assert '"Override scaled at a split"' in row
     assert "seeing the splits dated at or before its basis date" in row
+    # a reprice re-reads a flag that can land after the note (the whole-branch review)
+    assert (
+        "at the recompute it comes after the review's other flags, `fx-stale` last; a price"
+        " refresh keeps it with the review, and a flag the reprice re-reads,"
+        " `long-runway-high-growth` or `below-net-cash` (section 10), can land after it"
+    ) in row
+    assert "last among the review's flags but `fx-stale`" not in row
     row = next(x for x in _section(11).splitlines() if x.startswith("| 1.4, policy v16 |"))
     assert (
         "a snapshot's figures seeing the splits dated at or before its basis date, the earlier of"
@@ -367,6 +384,12 @@ def test_section_15_names_the_bounds_and_the_two_versions() -> None:
         assert f'"{name} is ' in section, name  # each driver's refusal sentence
     # spec 2026-11-13 3: no minority interest in the secondary valuation; the debt carries one
     assert "The secondary valuation subtracts no minority interest" in section
+    # the count is the snapshot's, so an agent's two share inputs do not reach it (the
+    # whole-branch review of spec 2026-11-14)
+    assert (
+        "So the secondary valuation divides by the snapshot's reported diluted count, and neither"
+        " an agent's `shares.diluted` nor its `shares.committed` (14.2) reaches it."
+    ) in section
 
 
 def test_section_16_names_the_six_failures() -> None:

@@ -197,9 +197,10 @@ the snapshot the override was made on did not. A snapshot's figures saw a split 
 before its basis date. The basis date is the earlier of the price date and the data date of the
 snapshot that assembled the figures: the snapshot itself, or, for a snapshot a price refresh
 made, the latest earlier snapshot of the company that a full or scoped refresh or a revalue
-made. The split rule applies a split only from the price date on (method 4.2), and the data date
-is the day the figures were fetched (method 4.10); a price refresh fetches no splits and
-re-assembles nothing. The stored override keeps the figure the agent entered.
+made. Where no such earlier snapshot is on file, the basis date is the earlier of the snapshot's
+own two dates. The split rule applies a split only from the price date on (method 4.2), and the
+data date is the day the figures were fetched (method 4.10); a price refresh fetches no splits
+and re-assembles nothing. The stored override keeps the figure the agent entered.
 
 It is done where the store's overrides become the engine's, once, for the refresh's follow, the
 web's recompute and a sensitivity reading. The engine knows no split.
@@ -275,7 +276,10 @@ The inputs an agent may override become twenty-five. No database migration is ne
   metric).
 - The Methodology page: the count of inputs, and what an agent may change, in its register; its
   six examples re-read if method 1.5 merges.
-- The drawer: the charge's lines for years 2 and 3; the committed shares beside the count.
+- The drawer: the charge's lines for years 2 and 3; the committed shares beside the count. On a
+  reviewed row the drawer draws the snapshot's mechanical result, so the committed shares, the
+  one-time item and an agent's revenue step show in the review's bridge and not in the route's
+  section (decision log, 2026-11-15).
 - The playbook: the overrides table and the four inputs' entries, "Nothing counts twice", the
   share-count passage, the split passage, the guidance metric, and the tools reference.
 - `docs/backlog.md`: the rows closed, and what a review parks.
@@ -330,7 +334,7 @@ twice: once without the commits of 6.2 and once with them.
 
 - The name of the count without the committed shares on the route's context, and where
   Mature Stable takes it.
-- How the split helper reads the splits and the two data dates, and the note's exact words.
+- How the split helper reads the splits and the two basis dates, and the note's exact words.
 - Where the route drop sits among the drop tests, and the shape of the web answer's list.
 - The drawer's words.
 - The split of the plan into tasks.

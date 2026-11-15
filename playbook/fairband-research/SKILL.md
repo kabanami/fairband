@@ -938,7 +938,8 @@ The server checks an override by these rules, in this order, and answers the fir
    EPS). Debt, cash and the minority interest change only through the three balance tags, the
    diluted share count only through `shares.diluted`, and the shares not yet issued join it only
    through `shares.committed`. The consensus of the next twelve months changes only through the
-   two NTM anchors.
+   two NTM anchors, and through `earnings.ntm_nri`, which takes a one-time item out of the
+   NTM EPS.
 2. `refused-not-input`: a tag that is not in the table.
 3. `refused-route`: a route that does not read the tag. The route follows an applied `phase`
    override, so override the phase first. The Mature Stable route reads no consensus step, so
