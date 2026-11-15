@@ -16,8 +16,8 @@ engine's snake_case name.
   periodEnd, fiscalYear, fiscalPeriod}`` with a figure a line of the trailing figures, its ref
   ``fact:<symbol>/<line>/<period>`` by the stored fiscal label (``2027-Q1``); ``otherCurrency``
   counts the stored periods left out for another currency. ``financials`` does not serve them.
-- ``/financial-tables``: the six tables of ``fairband.reports.tables``, each cell
-  ``{period, value, unit, ref, note}``.
+- ``/financial-tables``: the six tables of ``fairband.reports.tables``, each with its columns
+  ``{period, kind, label}`` and each cell ``{period, value, unit, ref, note}``.
 - ``/estimates``: the stored consensus as ``build_inputs`` reads it, the quarters and the fiscal
   years oldest first, each figure with its ``estimate:`` ref; a quarter's period is
   ``<fiscal year>-Q<n>`` and a year's the fiscal year. None without statements to place them.

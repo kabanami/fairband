@@ -139,7 +139,10 @@ def test_section_4_holds_the_six_tables_at_the_cite_rounding(
         "Quality scores",
     ]
     years = ("2021", "2022", "2023", "2024", "2025")
-    assert {t.header for t in financial} == {("Fiscal year", *years)}
+    found = financial_tables(conn, "AAPL", policy)
+    for table, chart in zip(found, financial, strict=True):
+        assert chart.header == ("Fiscal year", *(c.period for c in table.columns)), table.name
+        assert chart.header[1:6] == years, table.name
     growth = {row[0]: row[1:] for row in financial[0].rows}
     assert list(growth) == [
         "Revenue",
@@ -149,8 +152,8 @@ def test_section_4_holds_the_six_tables_at_the_cite_rounding(
         "Net margin",
         "EPS",
     ]
-    assert growth["Revenue"][-2:] == ("$2,000,000,000", "$2,100,000,000")
-    assert growth["Revenue growth"][-1] == "5.0%"
+    assert growth["Revenue"][3:5] == ("$2,000,000,000", "$2,100,000,000")
+    assert growth["Revenue growth"][4] == "5.0%"
     assert [row[0] for row in financial[3].rows] == [
         "ROIC",
         "ROE",
@@ -160,7 +163,7 @@ def test_section_4_holds_the_six_tables_at_the_cite_rounding(
     quality = {row[0]: row[1:] for row in financial[5].rows}
     assert list(quality) == ["Altman's Z″", "Piotroski's F", "Beneish's M"]
     assert quality["Beneish's M"] == ("",) * 5  # not on file
-    for table, chart in zip(financial_tables(conn, "AAPL", policy), financial, strict=True):
+    for table, chart in zip(found, financial, strict=True):
         for row, cells in zip(table.rows, chart.rows, strict=True):
             written = tuple("" if c.value is None else shown(c.value, c.unit) for c in row.cells)
             assert cells[1:] == written, (table.name, row.name)
@@ -291,9 +294,9 @@ def test_a_company_in_another_currency_names_its_code_on_its_figures(
     assert report is not None
     tables = chart_tables(conn, report, policy)
     growth = {row[0]: row[1:] for row in tables[HEADINGS[3]][0].rows}
-    assert growth["Revenue"][-2:] == ("SEK 2,000,000,000", "SEK 2,100,000,000")
-    assert growth["Revenue growth"][-1] == "5.0%"
-    assert growth["EPS"][-1].startswith("SEK ") and "$" not in growth["EPS"][-1]
+    assert growth["Revenue"][3:5] == ("SEK 2,000,000,000", "SEK 2,100,000,000")
+    assert growth["Revenue growth"][4] == "5.0%"
+    assert growth["EPS"][4].startswith("SEK ") and "$" not in growth["EPS"][4]
     (valuation,) = tables["Valuation"]
     assert valuation.header == ("outside the business", "belief 8.0%")
     assert valuation.rows == (("SEK 40.00", "$110.00"), ("SEK 80.00", "$115.25"))

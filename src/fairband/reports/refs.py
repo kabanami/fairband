@@ -34,7 +34,9 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   the quarters read serves it, ``<fiscalYear>-<fiscalPeriod>`` (``2027-Q1``, or a half-year's as
   FMP stores it; read through ``inputs_statements.stored_quarters``: a period left out for its
   currency, or not on file, names nothing; spec 2026-11-11 7.2);
-- ``table:<symbol>/<table>/<row>/<period>``: a cell of the financial tables (13.5);
+- ``table:<symbol>/<table>/<row>/<period>``: a cell of the financial tables (13.5) by its
+  column's period, a fiscal year, ``ttm`` or a consensus year and ``E`` (``2026E``; spec
+  2026-11-15 6.1); a period the table has no column for names nothing;
 - ``estimate:<symbol>/<period>/<field>``: a stored consensus figure, ``<period>`` the fiscal year
   (``2026``) or the quarter (``2026-Q4``) and ``<field>`` the engine's name (``eps``,
   ``net_income``, ``analysts_eps``);
@@ -79,11 +81,11 @@ its input, an override's bridge line or a sensitivity axis, reads as a USD one d
 (``adr_ratio``, ordinary shares per ADS) and the sales-to-capital (``sales_to_capital``, revenue
 over invested capital) are each a ``multiple``, not a fraction; the rate
 (``fx_rate``, ``<code> per USD``) has no unit. The period is the fiscal year (``2025``), the
-quarter (``2026-Q4``), ``ttm``, or the close's or the multiple's date for the forms that have
-one, a finding's and a guidance record's as recorded; ``None`` for the others. The snapshot is
-the record's own for ``snapshot:``, ``review:``, ``secondary:`` and ``sensitivity:``, and for
-``derived:`` the snapshot its operands rest on; ``None`` for the others, a finding and a guidance
-record being facts of the company.
+quarter (``2026-Q4``), ``ttm``, a table's estimate column (``2026E``), or the close's or the
+multiple's date for the forms that have one, a finding's and a guidance record's as recorded;
+``None`` for the others. The snapshot is the record's own for ``snapshot:``, ``review:``,
+``secondary:`` and ``sensitivity:``, and for ``derived:`` the snapshot its operands rest on;
+``None`` for the others, a finding and a guidance record being facts of the company.
 
 A ref resolves to ``None`` when it names nothing: a malformed ref, a record or a field that does
 not exist, a figure that is a table rather than a number or a word, or a record of another
@@ -99,7 +101,9 @@ snapshot's price date); ``review:``
 valuation 9, year 3 FCFF"; ``sensitivity:`` "sensitivity 7, row 1 column 2" or "sensitivity 7, the
 belief of row 1", the axis's input by its label; ``fact:`` "the
 revenue line of fiscal 2025 on file" or "the revenue line of Q1 of fiscal 2027 on file";
-``table:`` "the growth table, revenue growth, fiscal 2025";
+``table:`` "the growth table, revenue growth, fiscal 2025", "…, the trailing twelve months" or
+"…, fiscal 2026, the analysts' estimate" (read from the period alone, so a cell no longer on file
+reads the same);
 ``estimate:`` "the consensus for Q4 of fiscal 2026, EPS"; ``close:`` "the close of 3 Nov 2026";
 ``multiple:`` "the trailing P/E, 30 Oct 2026" or "the forward P/E, the ten-year average";
 ``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
@@ -465,6 +469,8 @@ _REVENUE_STEP_WORDS = {
 _LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 _QUARTER = re.compile(r"(\d{4})-?(Q[1-4])")
+# A financial table's estimate column's period, the consensus year and ``E`` (``2026E``).
+_ESTIMATE_YEAR = re.compile(r"(\d{4})E")
 
 
 @dataclass(frozen=True)
@@ -1147,11 +1153,16 @@ def _secondary_words(rest: Sequence[str]) -> str | None:
 
 
 def _period_words(period: str) -> str:
-    """A fiscal year, a quarter or the trailing twelve months in words."""
+    """A fiscal year, a table's estimate column (``2026E``), a quarter or the trailing twelve
+    months in words; read from the period alone, so a cite of a column no longer on file still
+    reads its words."""
     if period == "ttm":
         return "the trailing twelve months"
     if len(period) == 4 and period.isdecimal():
         return f"fiscal {period}"
+    estimate = _ESTIMATE_YEAR.fullmatch(period)
+    if estimate is not None:
+        return f"fiscal {estimate[1]}, the analysts' estimate"
     quarter = _QUARTER.fullmatch(period)
     return period if quarter is None else f"{quarter[2]} of fiscal {quarter[1]}"
 

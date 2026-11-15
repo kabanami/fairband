@@ -332,7 +332,13 @@ def test_financial_tables(client: TestClient) -> None:
     assert [t["name"] for t in body["tables"]] == list(TABLES)
     growth = body["tables"][0]["rows"]
     assert [r["name"] for r in growth][:2] == ["revenue", "revenue_growth"]
-    cell = growth[1]["cells"][-1]
+    # each table serves its columns, a cell of each row under each (spec 2026-11-15 6.1)
+    columns = body["tables"][0]["columns"]
+    assert columns[4] == {"period": "2025", "kind": "fiscal", "label": "2025"}
+    for table in body["tables"]:
+        periods = [c["period"] for c in table["columns"]]
+        assert all([c["period"] for c in r["cells"]] == periods for r in table["rows"])
+    cell = growth[1]["cells"][4]
     assert cell == {
         "period": "2025",
         "value": pytest.approx(0.05),

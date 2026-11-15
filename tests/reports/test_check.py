@@ -248,6 +248,32 @@ def test_a_quarter_s_line_is_cited_by_its_fiscal_label(
     assert (found.what, found.detail) == (WRONG_PERIOD, f"{ref} is for 2026-Q3, not 2026-Q2")
 
 
+def test_an_estimate_cell_is_cited_by_its_year_with_the_letter_or_without(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 6.3: the growth table's ``2026E`` column keeps the estimate apart from the
+    fiscal year's column, while its revenue cites ``estimate:AAPL/2026/revenue``, whose period is
+    ``2026``; so the check reads ``2026E`` as the year and a cite may give either, on the
+    ``estimate:`` ref and on a ``table:`` ref alike. Another year is a wrong period, a column the
+    table lacks an unresolved reference; the trailing column's cells are cited by ``ttm``."""
+    sid = snapshots["AAPL"]
+    revenue = ("estimate:AAPL/2026/revenue", "table:AAPL/growth/revenue/2026E")
+    for ref in revenue:
+        for period in ("2026E", "2026", None):
+            cite = _cite("$2,200,000,000", ref, period)
+            assert _check(conn, policy, sid, cite) == [], (ref, period)
+    growth = "table:AAPL/growth/revenue_growth/2026E"  # 2,200 over 2,100 − 1
+    for period in ("2026E", "2026", None):
+        assert _check(conn, policy, sid, _cite("4.8%", growth, period)) == [], period
+    margin = _cite("20.0%", "table:AAPL/growth/operating_margin/ttm", "ttm")
+    assert _check(conn, policy, sid, margin) == []
+    found = _one(_check(conn, policy, sid, _cite("4.8%", growth, "2027")), sid, "4.8%")
+    assert (found.what, found.detail) == (WRONG_PERIOD, f"{growth} is for 2026E, not 2027")
+    absent = "table:AAPL/growth/revenue/2029E"
+    found = _one(_check(conn, policy, sid, _cite("$2,200,000,000", absent)), sid, "$2,200,000,000")
+    assert (found.what, found.detail) == (UNRESOLVED, f"{absent} names no stored value")
+
+
 def test_unresolved_reference(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:

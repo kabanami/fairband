@@ -24,9 +24,9 @@ each failure, ``where`` the section and the part counted from 1 and the text at 
 - ``wrong unit``: a cite whose suffix does not fit the ref's unit, or whose number is not the
   ref's value at the report's rounding (``rounded_equal``), the value in the detail as the cite
   should read; a word cited against a number, or a word that is not the ref's;
-- ``wrong period``: a cite naming a period that is not the ref's (``FY2025`` reads ``2025``, and
-  a quarter reads the same with its dash or without, ``2027-Q1`` as ``2027Q1``); a cite naming
-  none passes;
+- ``wrong period``: a cite naming a period that is not the ref's (``FY2025`` reads ``2025``, a
+  financial table's estimate column ``2026E`` reads ``2026``, and a quarter reads the same with
+  its dash or without, ``2027-Q1`` as ``2027Q1``); a cite naming none passes;
 - ``wrong snapshot``: a cite whose ref rests on a snapshot other than the company's latest, or one
   the latest does not reprice (``refs.same_snapshot``), the latest's id in the detail;
 - ``a derived figure the engine has not emitted``: a ``derived:`` cite with no stored derivation
@@ -144,6 +144,8 @@ CHECKS = STRUCTURE + FAILURES
 
 # A quarter as a cite or a ref writes it, with a dash or without: ``2027-Q1``, ``2027Q1``.
 _DASHED_QUARTER = re.compile(r"(\d{4})-?(Q[1-4])")
+# A financial table's estimate column's period, the consensus year and ``E``: ``2026E``.
+_ESTIMATE_YEAR = re.compile(r"(\d{4})E")
 _NUMBER = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 # The words after a number, with or without a space and in any case, that make it a quantity
 # whatever its digits: a scale of two letters or more (``bn``, ``mm``, ``million``), points
@@ -597,13 +599,17 @@ def _multiple(token: str) -> bool:
 
 def _period(text: str | None) -> str | None:
     """A period as compared: upper case, a fiscal year's ``FY`` dropped, a quarter's dash dropped
-    (``2027-Q1`` reads ``2027Q1``, as a guidance record writes it)."""
+    (``2027-Q1`` reads ``2027Q1``, as a guidance record writes it), an estimate column's ``E``
+    dropped (``2026E`` reads ``2026``, the period of the ``estimate:`` ref its figure cites)."""
     if text is None:
         return None
     upper = text.strip().upper()
     quarter = _DASHED_QUARTER.fullmatch(upper)
     if quarter is not None:
         return quarter[1] + quarter[2]
+    estimate = _ESTIMATE_YEAR.fullmatch(upper)
+    if estimate is not None:
+        return estimate[1]
     return upper[2:] if upper.startswith("FY") and upper[2:].isdigit() else upper
 
 

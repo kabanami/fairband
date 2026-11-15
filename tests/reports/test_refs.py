@@ -775,6 +775,33 @@ def test_table_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[st
     assert _resolve(conn, "table:AAPL/growth/nope/2025", policy) is None
 
 
+def test_a_trailing_and_an_estimate_cell_resolve_and_read_in_words(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 6.5: a ``table:`` ref of a trailing or an estimate cell resolves by the
+    column's period and reads its words; an estimate cell's words need no cell (Review Focus 4),
+    so a cite of ``2026E`` still reads them once the consensus no longer holds fiscal 2026."""
+    resolver = Resolver(conn, "AAPL", policy)
+    trailing = "table:AAPL/growth/revenue_growth/ttm"
+    estimate = "table:AAPL/growth/revenue_growth/2026E"
+    margin = resolver.resolve("table:AAPL/growth/operating_margin/ttm")
+    assert margin is not None and (margin.unit, margin.period) == ("percent", "ttm")
+    assert margin.value == pytest.approx(260 / 1300)
+    growth = resolver.resolve(estimate)
+    assert growth is not None and (growth.unit, growth.period) == ("percent", "2026E")
+    assert growth.value == pytest.approx(2200 / 2100 - 1)
+    assert resolver.describe(trailing) == (
+        "the growth table, revenue growth, the trailing twelve months"
+    )
+    words = "the growth table, revenue growth, fiscal 2026, the analysts' estimate"
+    assert resolver.describe(estimate) == words
+    moved = [{"symbol": "AAPL", "date": "2027-12-31", "revenueAvg": 2_420 * M, "epsAvg": 3.63}]
+    store_payloads(conn, "AAPL", {"estimates-annual": moved}, NOW)
+    later = Resolver(conn, "AAPL", policy)
+    assert later.resolve(estimate) is None
+    assert later.describe(estimate) == words
+
+
 def test_estimate_close_and_peer_refs(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:

@@ -465,6 +465,89 @@ def test_section_15_names_the_bounds_and_the_two_versions() -> None:
     ) in section
 
 
+def test_the_tables_carry_their_columns_past_the_last_fiscal_year() -> None:
+    """Spec 2026-11-15 6.1 to 6.3 and 6.5: 16.5 states the columns, the three tables' trailing
+    cells and the growth table's estimate cells; 16.2 the periods of a ``table:`` ref, their
+    words, and the check reading ``2026E`` as the year."""
+    sixteen = _section(16)
+    tables = sixteen[sixteen.index("### 16.5") : sixteen.index("### 16.6")]
+    for words in (
+        (
+            "computed by the server from the stored statements, the engine's readings and the"
+            " stored consensus"
+        ),
+        "A cell that is one stored line cites it as `fact:`, a consensus figure as `estimate:`",
+        (
+            "A table carries its columns, and each row one cell under each column, in order, the"
+            " cell's period the column's"
+        ),
+        "the `/financial-tables` read serves each table with its `columns`",
+        (
+            'the trailing twelve months, its period `ttm` and its label "12 months to" and the'
+            ' trailing period\'s end as the references write a day ("12 months to 30 Sep 2026")'
+        ),
+        (
+            "an estimate, its period the consensus year and `E` (`2026E`) and its label the year"
+            ' and "estimate" ("2026 estimate")'
+        ),
+        (
+            "Three tables, growth, cash flow and capital allocation, gain one trailing column after"
+            " the fiscal years"
+        ),
+        (
+            "It stands when the trailing figures (4.2) are on file, are sums of stored periods and"
+            " not the last fiscal year standing in, and end after the newest fiscal year's period"
+            " end; otherwise the table has no trailing column."
+        ),
+        "each citing `fact:<symbol>/<line>/ttm`",
+        "each citing itself, `table:<symbol>/<table>/<row>/ttm`",
+        (
+            'where those are not all stored it holds no figure, noted "fewer than two years of'
+            ' periods on file"'
+        ),
+        'The gross margin holds none, noted "not measured over the trailing twelve months"',
+        (
+            'The share count change holds none under the same note, and acquisitions none, "not on'
+            ' file"'
+        ),
+        "Returns, solvency and quality keep their fiscal columns alone",
+        "The growth table alone gains estimate columns, after the trailing column",
+        (
+            "the consensus fiscal years after the newest fiscal year on file that hold a revenue or"
+            " an EPS, in order, three at most, each read as its `estimate:` ref reads it (16.2)"
+        ),
+        "citing `estimate:<symbol>/<year>/revenue` and `estimate:<symbol>/<year>/eps`",
+        (
+            "the newest fiscal year's reported revenue for the year after it and the year before's"
+            " consensus revenue for a later one"
+        ),
+        "cites itself, `table:<symbol>/growth/revenue_growth/<year>E`",
+        'The gross, operating and net margins hold none, noted "no estimate for this line"',
+        (
+            "A consensus year already reported, or one with neither a revenue nor an EPS, gives no"
+            " column, and no other table gains one"
+        ),
+    ):
+        assert words in tables, words
+    references = sixteen[sixteen.index("### 16.2") : sixteen.index("### 16.3")]
+    for words in (
+        (
+            "| `table:<symbol>/<table>/<row>/<period>` | a cell of the financial tables (16.5) by"
+            " its column's period: a fiscal year (`2025`), `ttm` for the trailing twelve months,"
+            " or a consensus year and `E` for an estimate (`2026E`)"
+        ),
+        '"the growth table, revenue growth, the trailing twelve months"',
+        '"the growth table, revenue growth, fiscal 2026, the analysts\' estimate"',
+        "so a cite of an estimate column no longer on file reads the same",
+        "The check reads `2026E` as the year, `2026`",
+        (
+            "a cite of an estimate cell may give either, on the `estimate:` ref and on a `table:`"
+            " ref alike, and no cite is refused for the letter"
+        ),
+    ):
+        assert words in references, words
+
+
 def test_section_16_names_the_six_failures() -> None:
     section = _section(16)
     for failure in FAILURES:
