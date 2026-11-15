@@ -388,6 +388,23 @@ def test_financial_tables_serve_the_quarters_beside_the_six(
     }
 
 
+def test_financial_tables_answer_when_the_consensus_cannot_be_read(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole-branch review's M3: the tables read the consensus through the company's
+    assembly; where it raises, the read still answers, its tables without estimate columns, as it
+    answered before the tables gained them."""
+
+    def raising(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("assembly failed")
+
+    monkeypatch.setattr("fairband.reports.tables.build_inputs", raising)
+    body = _get(client, "/api/companies/AAPL/financial-tables")
+    assert [t["name"] for t in body["tables"]] == list(TABLES)
+    kinds = {c["kind"] for t in body["tables"] for c in t["columns"]}
+    assert kinds == {"fiscal", "trailing"}
+
+
 def test_estimates(client: TestClient) -> None:
     body = _get(client, "/api/companies/AAPL/estimates")
     quarters, annual = body["quarters"], body["annual"]

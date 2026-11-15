@@ -1768,6 +1768,12 @@ def test_the_playbook_says_what_the_tables_the_charts_and_the_export_show() -> N
         "Section 4's charts show the fiscal years, then, for the lines that have them,",
         "the twelve months to the newest stored period in grey",
         "the analysts' estimate years as outlined bars",
+        # the EPS estimates' basis (the whole-branch review's I2)
+        (
+            "The EPS estimates are on the analysts' own basis, which can leave out items the"
+            " reported EPS includes, such as stock pay: where a step from a reported EPS to an"
+            " estimate matters to what you write, say which basis each figure is on."
+        ),
         (
             "Section 5's charts do not replace your table of the quarter against the expectations:"
             " write that table still."
@@ -2189,7 +2195,8 @@ def _served() -> dict[str, list[str]]:
 
 
 def _signatures(text: str) -> dict[str, list[str]]:
-    """The tools ``reference/tools.md`` lists, one a line, ``- `name(argument, optional?)` ``."""
+    """The tools ``reference/tools.md`` lists, one entry each, ``- `name(argument, optional?)` ``,
+    a signature on one line or wrapped over the next, as ``report_submit``'s is."""
     found: dict[str, list[str]] = {}
     for name, arguments in re.findall(r"^- `(\w+)\(([^)]*)\)`", text, re.MULTILINE):
         assert name not in found, f"{name} is listed twice"

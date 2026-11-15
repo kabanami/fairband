@@ -3122,9 +3122,12 @@ def test_a_cite_s_number_stays_with_its_figure_in_a_table() -> None:
     assert "function inlineNodes(pieces, footnotes, inCell) {" in inline
     assert "put(cited(piece, footnotes, 'c' + key++, inCell));" in inline
     blocks = _function(bundle, "blocks")
-    # a table's row, its header's and its body's, draws its cells as cells; a paragraph and a
-    # list item do not
-    assert "inlineNodes(pieces, footnotes, true));" in blocks
+    # a table's row, its header's and its body's, draws its cells as cells, under its mark; a
+    # paragraph and a list item do not
+    assert (
+        "// fairband: a table's cell keeps a cite with its number (spec 2026-11-15 9)\n"
+        "          inlineNodes(pieces, footnotes, true));"
+    ) in blocks
     assert (
         "h('p', { className: 'fb-report__prose body', key: k },\n"
         "          inlineNodes(pieces, footnotes));"

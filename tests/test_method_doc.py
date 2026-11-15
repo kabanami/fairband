@@ -530,6 +530,12 @@ def test_the_tables_carry_their_columns_past_the_last_fiscal_year() -> None:
             " consensus revenue for a later one"
         ),
         "cites itself, `table:<symbol>/growth/revenue_growth/<year>E`",
+        (
+            "Every estimate cell of the EPS is noted \"on the analysts' own basis, which can leave"
+            " out items the reported EPS includes\": the analysts' EPS often leaves out stock pay"
+            " or other items the reported diluted EPS includes. The revenue's estimate cells carry"
+            " no note: the revenue consensus is on the reported basis."
+        ),
         'The gross, operating and net margins hold none, noted "no estimate for this line"',
         (
             "A consensus year already reported, or one with neither a revenue nor an EPS, gives no"
@@ -646,10 +652,13 @@ def test_the_export_lists_its_references_last_and_carries_the_columns() -> None:
 def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
     """Spec 2026-11-15 6.5 and 6.6: 16.6 states that the page reads the quarters table beside the
     six and draws section 5's three charts by quarter, the trailing and the estimate bars and the
-    line under a chart that has one; that the axis prints every bar's tick up to seven bars and
-    every other one on more, the ends' and the trailing twelve months' always; and that a chart
-    table's cell is empty where the table holds no figure, which a trailing or an estimate cell may
-    not measure."""
+    line under a chart that has one, which names the EPS estimates' basis where their cells carry
+    it, as the export's line under the growth table does (the whole-branch review's I2); that the
+    axis prints every bar's tick up to seven bars and every other one on more, none within a
+    stride of the last bar's or of the trailing twelve months', which print always, as the
+    first's does (its I3); that a chart table's cell is empty where the table holds no figure,
+    which a trailing or an estimate cell may not measure; and that a chart table with no rows
+    reads "No data on file." in the export, as on the page (its M8)."""
     sixteen = _section(16)
     export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
     for words in (
@@ -669,8 +678,11 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
             " twin naming each by the column's label"
         ),
         (
-            "and its axis prints every bar's tick up to seven bars and every other one on more, the"
-            " first's, the last's and the trailing twelve months' always:"
+            "and its axis prints every bar's tick up to seven bars and every other one on more,"
+            " none within a stride of the last bar's or of the trailing twelve months', which"
+            " print always, as the first's does (eight quarters print the first, third, fifth and"
+            " eighth ticks; nine bars ending in the trailing twelve months' and three estimates"
+            " the first, third, sixth and ninth):"
         ),
         (
             "the fiscal years', each ticked by its year, then the trailing twelve months' filled"
@@ -679,22 +691,47 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
         ),
         (
             '"Grey: the 12 months to 30 Sep 2026. Outlined: analysts\' estimates.", the first'
-            " sentence alone without an outlined bar and the second alone without a grey one."
+            " sentence alone without an outlined bar and the second alone without a grey one,"
+            " the second followed by the drawn estimates' note, after a comma, where their cells"
+            " carry one, the EPS's: \"Outlined: analysts' estimates, on the analysts' own basis,"
+            ' which can leave out items the reported EPS includes."'
+        ),
+        (
+            "Under the growth table's twin, where an estimate cell of its EPS holds a figure, the"
+            " export prints one plain line after the rows, \"EPS estimates are on the analysts'"
+            ' own basis, which can leave out items the reported EPS includes."; no other twin'
+            " has a line."
+        ),
+        (
+            'A twin with no rows reads "No data on file." in the export, as its chart does on the'
+            " page."
         ),
         "The annual charts never hold a quarter.",
     ):
         assert words in export, words
     assert "an empty cell where none is on file" not in export
     assert "a bar marked by its quarter" not in export and 'marked "to date"' not in export
+    assert "the first's, the last's and the trailing twelve months' always" not in export
 
 
 def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s_words() -> None:
     """Spec 2026-11-15 7: 16.6 states the export's two opening lines and its line on a reused full
     report in the reader's words, the page's line under the title by the same rule, Appendix A's
-    dates in words and its sentence for no secondary valuation without "the route"."""
+    dates in words and its sentence for no secondary valuation without "the route"; and, since
+    those lines name no record, the Snapshot part that opens Appendix A on the page and in the
+    export alike, which names the snapshot the report rests on (the whole-branch review's I1)."""
     sixteen = _section(16)
     export = sixteen[sixteen.index("### 16.6") : sixteen.index("### 16.7")]
     for words in (
+        (
+            "Appendix A: the snapshot the report rests on, with the reporting currency its money"
+            " figures are in (section 7; USD for a row with no rate), in one line that opens it,"
+            " the page's and the export's alike: its id, its data date, its price date, the end"
+            " of its window, its price and its value a share, and last, on a company in another"
+            ' currency, the currency ("Snapshot 412 · data 4 Nov 2026 · priced 4 Nov 2026 · valid'
+            ' until 27 Jan 2027 · price $150.00 · value $128.00 · in SEK"), a dash for a date or a'
+            " figure the snapshot has none of, and a refused snapshot's refusal after the line;"
+        ),
         (
             "The Markdown export opens with a line naming the company, the mode, the date, the"
             ' actor and the revision ("GOOG · full report · 9 Nov 2026 · claude-opus-5-5 ·'
@@ -722,8 +759,8 @@ def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s
         ),
         (
             "The export writes Appendix A's dates in words, as the references write a day: the"
-            ' Inputs table\'s "As of" and the guidance\'s "Call". A date input\'s note, the next'
-            " earnings date, is in words too."
+            ' Snapshot line\'s, the Inputs table\'s "As of" and the guidance\'s "Call". A date'
+            " input's note, the next earnings date, is in words too."
         ),
         (
             '"No secondary valuation: Fairband\'s own valuation gives the company a value" where'

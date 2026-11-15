@@ -21,6 +21,8 @@ from typing import Any
 import pytest
 from support.page import NODE, STATIC, classed, elements, node, text
 
+from fairband.reports.tables import ANALYSTS_BASIS
+
 NOTE = "average invested capital is at or below zero"
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
@@ -313,6 +315,47 @@ def test_the_line_under_a_chart_names_the_grey_and_the_outlined_bars() -> None:
     assert _call("reportCharts.kindsLine", [fiscal]) is None
 
 
+def test_the_line_says_the_estimates_basis_where_their_points_carry_it() -> None:
+    """The whole-branch review's I2: where the drawn estimate points carry their cells' note, the
+    EPS's ``tables.ANALYSTS_BASIS``, the line's second sentence says it after a comma, in the
+    cell's words; estimates without a note keep the short sentence."""
+    trailing = {"period": "ttm", "kind": "trailing", "label": "12 months to 30 Sep 2026"}
+    estimate = {"period": "2026E", "kind": "estimate", "label": "2026 estimate"}
+    noted = {**estimate, "note": ANALYSTS_BASIS}
+    assert _call("reportCharts.kindsLine", [trailing, noted, noted]) == (
+        "Grey: the 12 months to 30 Sep 2026. Outlined: analysts' estimates, on the analysts' own"
+        " basis, which can leave out items the reported EPS includes."
+    )
+    assert _call("reportCharts.kindsLine", [noted]) == (
+        f"Outlined: analysts' estimates, {ANALYSTS_BASIS}."
+    )
+    assert _call("reportCharts.kindsLine", [estimate]) == "Outlined: analysts' estimates."
+
+
+def test_a_point_carries_its_cell_s_note() -> None:
+    """A cell's note rides on its point, so the line under the chart can read it; a cell with no
+    note gives a point with none."""
+    columns = [_column("2025"), _column("2026E")]
+    row = {
+        "name": "eps",
+        "unit": "per-share",
+        "cells": [
+            {"period": "2025", "value": 5.5, "note": None},
+            {"period": "2026E", "value": 6.0, "note": ANALYSTS_BASIS},
+        ],
+    }
+    assert _call("reportCharts.points", row, columns) == [
+        {"period": "2025", "value": 5.5, "label": "2025"},
+        {
+            "period": "2026E",
+            "value": 6.0,
+            "kind": "estimate",
+            "label": "2026 estimate",
+            "note": ANALYSTS_BASIS,
+        },
+    ]
+
+
 def _column(period: str) -> dict[str, str]:
     """A column as the financial tables' read serves it, by its period (spec 2026-11-15 6.1,
     6.4)."""
@@ -491,6 +534,33 @@ def test_section_4_draws_the_trailing_and_the_estimate_bars_with_the_line_under(
         assert chart is not None, title
         assert not any("Q" in tick for tick in _ticks(chart)), title  # never a quarter
     assert _panel(part, "Free cash flow") == (None, ["No data on file."])
+
+
+def test_the_eps_chart_says_its_estimates_basis_under_it() -> None:
+    """The whole-branch review's I2: the EPS row's estimate cells carry the analysts' basis as
+    their note, so the line under the EPS chart says it; the revenue's carry none, and its line
+    stays the short one."""
+    noted = {
+        **GROWTH,
+        "rows": [
+            r
+            if r["name"] != "eps"
+            else {
+                **r,
+                "cells": [
+                    {**c, "note": ANALYSTS_BASIS} if c["period"].endswith("E") else c
+                    for c in r["cells"]
+                ],
+            }
+            for r in GROWTH["rows"]
+        ],
+    }
+    part = _sections({"body": _body(tables=[noted, CAPITAL])})["Financial performance and health"]
+    _, captions = _panel(part, "EPS")
+    assert captions == [
+        f"Grey: the 12 months to 30 Sep 2026. Outlined: analysts' estimates, {ANALYSTS_BASIS}."
+    ]
+    assert _panel(part, "Revenue")[1] == [LINE]
 
 
 def test_section_5_draws_three_charts_by_quarter() -> None:

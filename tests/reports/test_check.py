@@ -256,7 +256,9 @@ def test_an_estimate_cell_is_cited_by_its_year_with_the_letter_or_without(
     ``2026``; so the check reads ``2026E`` as the year, with its ``FY`` or without, and a cite may
     give any of them, on the ``estimate:`` ref and on a ``table:`` ref alike. Another year is a
     wrong period, a column the table lacks an unresolved reference; the trailing column's cells
-    are cited by ``ttm``."""
+    are cited by ``ttm``; and a quarters-table cell (spec 13: a trailing, an estimate and a
+    quarter cell pass) by its stored period, with its dash or without, or by none, while "Q3 2025"
+    is a wrong period, as for a ``fact:`` quarter (the whole-branch review's M6)."""
     sid = snapshots["AAPL"]
     periods = ("2026E", "FY2026E", "fy2026e", "2026", "FY2026", None)
     revenue = ("estimate:AAPL/2026/revenue", "table:AAPL/growth/revenue/2026E")
@@ -269,6 +271,11 @@ def test_an_estimate_cell_is_cited_by_its_year_with_the_letter_or_without(
         assert _check(conn, policy, sid, _cite("4.8%", growth, period)) == [], period
     margin = _cite("20.0%", "table:AAPL/growth/operating_margin/ttm", "ttm")
     assert _check(conn, policy, sid, margin) == []
+    quarter = "table:AAPL/quarters/operating_margin/2025-Q3"  # $60 m over $300 m
+    for period in ("2025-Q3", "2025Q3", None):
+        assert _check(conn, policy, sid, _cite("20.0%", quarter, period)) == [], period
+    found = _one(_check(conn, policy, sid, _cite("20.0%", quarter, "Q3 2025")), sid, "20.0%")
+    assert (found.what, found.detail) == (WRONG_PERIOD, f"{quarter} is for 2025-Q3, not Q3 2025")
     found = _one(_check(conn, policy, sid, _cite("4.8%", growth, "2027")), sid, "4.8%")
     assert (found.what, found.detail) == (WRONG_PERIOD, f"{growth} is for 2026E, not 2027")
     absent = "table:AAPL/growth/revenue/2029E"

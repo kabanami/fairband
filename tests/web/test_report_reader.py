@@ -10,7 +10,10 @@ page's script, report.js, builds it with the pair in force and the words of the 
 and the test reads the tree it builds.
 
 And a cite's number in a report's table (spec 2026-11-15 9): ``ReportReader`` holds a cite and
-its number in one span there, and nowhere else."""
+its number in one span there, and nowhere else.
+
+And Appendix A's Snapshot line (the whole-branch review's I1), which the export writes in the
+same words."""
 
 from typing import Any
 
@@ -141,6 +144,38 @@ def test_a_cite_in_a_table_keeps_its_number_and_one_outside_is_drawn_as_before()
     assert "type" not in held
     assert [text(child) for child in held["props"]["children"]] == ["$10.44 billion", "[3]"]
     assert text(prose) == "Revenue was $10.44 billion[3]."
+
+
+SNAPSHOT = {
+    "id": 412,
+    "dataDate": "2026-11-04",
+    "priceDate": "2026-11-04",
+    "validUntil": "2027-01-27",
+    "currency": "USD",
+    "price": 150.0,
+    "value": 128.0,
+    "refusal": None,
+}
+
+
+def test_appendix_a_s_snapshot_line_names_another_currency_last() -> None:
+    """The whole-branch review's I1: Appendix A's Snapshot part names the snapshot the report rests
+    on and, on a company in another currency, the reporting currency its money figures are in
+    (method 16.6), last, as the export's line does (report.js's ``snapshotLine``); a USD company's
+    names none, and a missing date or figure is a dash."""
+
+    def line(**changes: Any) -> str:
+        return text(node("reportAppendix.snapshotLine", [SNAPSHOT | changes], STATIC / "report.js"))
+
+    usd = (
+        "Snapshot 412 · data 4 Nov 2026 · priced 4 Nov 2026 · valid until 27 Jan 2027"
+        " · price $150.00 · value $128.00"
+    )
+    assert line() == usd
+    assert line(currency="SEK") == usd + " · in SEK"
+    assert line(priceDate=None, value=None).endswith(
+        " · priced — · valid until 27 Jan 2027 · price $150.00 · value —"
+    )
 
 
 def _override(override_id: int, tag: str, unit: str, old: float, new: float) -> dict[str, Any]:

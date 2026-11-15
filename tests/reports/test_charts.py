@@ -16,10 +16,10 @@ from support.engine_companies import fx_inputs, universe_deciles
 from support.payloads import store_payloads
 from support.web import TODAY
 
-from fairband.engine.route import value_company
+from fairband.engine.route import refusal_result, value_company
 from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.sensitivity import SensitivityGrid
-from fairband.engine.types import Levels
+from fairband.engine.types import Levels, money_of
 from fairband.policy import Policy
 from fairband.refresh.inputs_statements import StoredQuarters, stored_quarters
 from fairband.reports import charts as charts_module
@@ -33,7 +33,7 @@ from fairband.reports.charts import (
     shift_words,
 )
 from fairband.reports.check import HEADINGS, headings, shown
-from fairband.reports.tables import NO_CAPITAL, financial_tables
+from fairband.reports.tables import ANALYSTS_BASIS, NO_CAPITAL, financial_tables
 from fairband.store.db import transaction
 from fairband.store.ledger import Writer
 from fairband.store.multiples import log_multiples
@@ -200,6 +200,29 @@ def test_section_4_carries_the_trailing_and_estimate_columns_under_their_labels(
     assert returns.header == ("Fiscal year", "2021", "2022", "2023", "2024", "2025")
 
 
+def test_the_growth_table_says_the_eps_estimates_basis_under_it(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The whole-branch review's I2: under the growth table, whose EPS row holds an analysts'
+    estimate, one line says the estimates' basis, from the cells' note; no other table carries a
+    line, and a growth table whose EPS estimate cells hold no figure carries none either."""
+    financial = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)[HEADINGS[3]]
+    assert financial[0].line == (
+        "EPS estimates are on the analysts' own basis, which can leave out items the reported EPS"
+        " includes."
+    )
+    assert financial[0].line == f"EPS estimates are {ANALYSTS_BASIS}."
+    assert [t.line for t in financial[1:]] == [None] * 5
+    tables = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)
+    assert all(
+        t.line is None for heading, found in tables.items() if heading != HEADINGS[3] for t in found
+    )
+    revenue_only = [{"symbol": "AAPL", "date": "2026-12-31", "revenueAvg": 2_200_000_000}]
+    store_payloads(conn, "AAPL", {"estimates-annual": revenue_only}, NOW)
+    growth = chart_tables(conn, _report(conn, snapshots["AAPL"]), policy)[HEADINGS[3]][0]
+    assert growth.header[-1] == "2026 estimate" and growth.line is None
+
+
 def test_section_5_leads_with_the_quarters(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
@@ -216,8 +239,9 @@ def test_section_5_without_a_stored_period_has_the_quarters_without_rows(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """AAPL with its quarterly statements gone: section 5's one table, titled as ever, its header
-    the corner alone and no rows, which the export writes as "None."; section 4's six tables have
-    no trailing column, and the growth table keeps its estimate years."""
+    the corner alone and no rows, under which the export writes "No data on file.", as the page
+    does under its charts; section 4's six tables have no trailing column, and the growth table
+    keeps its estimate years."""
     with transaction(conn):
         conn.execute(
             "DELETE FROM facts WHERE symbol = 'AAPL'"
@@ -403,6 +427,34 @@ def test_a_company_in_another_currency_names_its_code_on_its_figures(
     assert found is not None
     assert reading_axes(found, "SEK").rows == ("SEK 40.00", "SEK 80.00")
     assert reading_axes(found, "USD").rows == ("$40.00", "$80.00")
+
+
+def test_a_snapshot_refused_before_its_currency_keeps_the_statements_currency(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The whole-branch review's M7: a snapshot refused before its currency was read (a failed
+    valuation, say) names none, so its money reads as USD; the financial and the quarters tables
+    take the statements' currency, as the financial tables' read labels the page's charts with it,
+    and write SKCO's SEK figures with the code."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    refused = refusal_result("SKCO", "valuation failed: ValueError: no", policy, TODAY)
+    assert money_of(refused)[1] == "USD"
+    sid = insert_snapshot(conn, refused, aapl.refresh_id)
+    statements = {e: p for e, p in bodies(currency="SEK").items() if e != "earnings"}
+    store_payloads(conn, "SKCO", statements, NOW)
+    sections = [{"heading": h, "parts": ["Plain words."]} for h in headings("full report")]
+    report_id = insert_report(
+        conn, "SKCO", "full report", "hold", sections, None, sid, None, None, None, AGENT, NOW
+    )
+    report = report_row(conn, report_id)
+    assert report is not None
+    tables = chart_tables(conn, report, policy)
+    growth = {row[0]: row[1:] for row in tables[HEADINGS[3]][0].rows}
+    assert growth["Revenue"][3:5] == ("SEK 2,000,000,000", "SEK 2,100,000,000")
+    assert growth["EPS"][4].startswith("SEK ") and "$" not in growth["EPS"][4]
+    [quarters] = tables[HEADINGS[4]]
+    assert {row[0]: row[1:] for row in quarters.rows}["Revenue"][-1] == "SEK 340,000,000"
 
 
 def test_a_parts_grid_reads_its_rows_as_shifts(

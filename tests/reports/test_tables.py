@@ -7,6 +7,7 @@ tables carry the trailing twelve months after the fiscal years (6.2) and the qua
 the five; AAPL on the ``snapshots`` fixture, the same statements with the consensus for 2026 and
 2027, whose growth table carries them as estimate columns (6.3)."""
 
+import logging
 import sqlite3
 from collections.abc import Sequence
 from datetime import date
@@ -29,8 +30,10 @@ from fairband.engine.route import value_company
 from fairband.policy import Policy, in_currency
 from fairband.policy.tax import load_tax_table
 from fairband.refresh.inputs_statements import statements_for
+from fairband.reports import tables as tables_module
 from fairband.reports.refs import Resolver
 from fairband.reports.tables import (
+    ANALYSTS_BASIS,
     ESTIMATE_YEARS,
     LINES,
     NO_ESTIMATE,
@@ -597,6 +600,59 @@ def test_a_company_with_no_consensus_has_no_estimate_column(
 ) -> None:
     for table in financial_tables(conn, "ACME", policy):
         assert "estimate" not in {c.kind for c in table.columns}, table.name
+
+
+def test_the_eps_estimates_say_their_basis_and_the_revenue_s_do_not(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The whole-branch review's I2: the analysts' EPS is on their own basis, which for many
+    companies leaves out stock pay or other items the reported diluted EPS includes, so every
+    estimate cell of the EPS row carries that as its note, a year with no EPS figure too; the
+    revenue's estimate cells carry none, the revenue consensus being on the reported basis, and
+    the fiscal and trailing EPS cells none."""
+    assert ANALYSTS_BASIS == (
+        "on the analysts' own basis, which can leave out items the reported EPS includes"
+    )
+    growth = _cells(_table(financial_tables(conn, "AAPL", policy), "growth"))
+    for period in ("2026E", "2027E"):
+        assert growth["eps"][period].note == ANALYSTS_BASIS, period
+        assert growth["revenue"][period].note is None, period
+    for period in (*PERIODS, TRAILING):
+        assert growth["eps"][period].note is None, period
+    revenue_only = [{"symbol": "AAPL", "date": "2026-12-31", "revenueAvg": 2_200 * M}]
+    store_payloads(conn, "AAPL", {"estimates-annual": revenue_only}, NOW)
+    eps = _cells(_table(financial_tables(conn, "AAPL", policy), "growth"))["eps"]["2026E"]
+    assert (eps.value, eps.note) == (None, ANALYSTS_BASIS)
+
+
+def test_a_consensus_that_cannot_be_read_leaves_the_tables_without_estimates(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    snapshots: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The whole-branch review's M3: the tables read the consensus through the company's
+    assembly, which the refresh treats as able to raise for one company. Where it raises, the six
+    tables come back as before the estimate columns, with no estimate column, and one warning
+    names the symbol and the exception's class, never its text, which could hold a key or a
+    URL."""
+
+    def raising(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("https://vendor.example/stable?apikey=SECRET")
+
+    monkeypatch.setattr(tables_module, "build_inputs", raising)
+    with caplog.at_level(logging.WARNING, logger="fairband.reports"):
+        tables = financial_tables(conn, "AAPL", policy)
+    assert tuple(t.name for t in tables) == TABLES
+    for table in tables:
+        assert "estimate" not in {c.kind for c in table.columns}, table.name
+    assert _periods(_table(tables, "growth")) == [*PERIODS, TRAILING]
+    [record] = caplog.records
+    assert record.levelno == logging.WARNING and record.name == "fairband.reports"
+    message = record.getMessage()
+    assert "AAPL" in message and "RuntimeError" in message
+    assert "SECRET" not in message and "vendor.example" not in message
 
 
 def test_the_quarters_table_holds_the_stored_periods(

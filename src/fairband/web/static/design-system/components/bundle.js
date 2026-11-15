@@ -890,6 +890,7 @@
     function row(cells, cell, i) {
       return h('tr', { key: i }, cells.map(function (pieces, j) {
         return h(cell, { key: j, className: cell === 'th' ? 'label' : 'body' },
+          // fairband: a table's cell keeps a cite with its number (spec 2026-11-15 9)
           inlineNodes(pieces, footnotes, true));
       }));
     }

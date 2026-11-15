@@ -74,9 +74,10 @@
   var BAND_TITLE = 'The price against the band by quarter';
   var GRID_TITLE = 'The grid of secondary valuation ';
   /* The tick under the trailing twelve months' bar, and the line's sentence for the estimates'
-     (6.6). */
+     (6.6), before its full stop: their cells' note follows it after a comma where they carry one,
+     the EPS's basis (the whole-branch review's I2). */
   var TO_DATE = 'to date';
-  var OUTLINED = 'Outlined: analysts\' estimates.';
+  var OUTLINED = 'Outlined: analysts\' estimates';
 
   /* Each section's charts by its heading, as ReportReader places them, each drawn once the
      series it reads have landed: the six tables and the quarters once the financial tables have,
@@ -154,9 +155,10 @@
   /* A row's cells as a chart's points, oldest first, each under its column of the table's
      `columns`: its tick (`period`) the year for a fiscal year, "to date" for the trailing twelve
      months, an estimate's period ("2026E") and a quarter's short name ("Q3 26"); its `kind`,
-     `trailing` or `estimate`, none otherwise; and its `label`, the column's, which the tooltip
-     and the table twin read. A cell with no value is left out, a gap, never a zero (18.4). On a
-     table served without columns, an older answer, a point is its cell's period and value. */
+     `trailing` or `estimate`, none otherwise; its `label`, the column's, which the tooltip and
+     the table twin read; and its cell's `note` where the cell has one, which the line under the
+     chart reads. A cell with no value is left out, a gap, never a zero (18.4). On a table served
+     without columns, an older answer, a point is its cell's period and value. */
   function points(row, columns) {
     var under = {};
     (columns || []).forEach(function (column) { under[column.period] = column; });
@@ -166,6 +168,7 @@
       if (!column) return { period: cell.period, value: cell.value };
       var p = { period: tick(column), value: cell.value, label: column.label };
       if (column.kind === 'trailing' || column.kind === 'estimate') p.kind = column.kind;
+      if (cell.note) p.note = cell.note;
       return p;
     }).filter(function (p) { return p.value != null; });
   }
@@ -189,11 +192,16 @@
   /* The line under a chart with a bar that is not a fiscal year, from its columns' kinds and
      labels, or its points', which carry them: "Grey: the 12 months to 30 Sep 2026. Outlined:
      analysts' estimates.", the first sentence alone without an estimate and the second alone
-     without the trailing twelve months; none with neither (6.6). */
+     without the trailing twelve months; none with neither (6.6). Where an estimate point carries
+     its cell's note, the second sentence says it after a comma, in the cell's words: "Outlined:
+     analysts' estimates, on the analysts' own basis, which can leave out items the reported EPS
+     includes." (the EPS's, tables.ANALYSTS_BASIS). */
   function kindsLine(columns) {
     var trailing = columns.filter(function (c) { return c.kind === 'trailing'; })[0];
+    var estimates = columns.filter(function (c) { return c.kind === 'estimate'; });
+    var noted = estimates.filter(function (c) { return c.note; })[0];
     var said = trailing ? ['Grey: the ' + trailing.label + '.'] : [];
-    if (columns.some(function (c) { return c.kind === 'estimate'; })) said.push(OUTLINED);
+    if (estimates.length) said.push(OUTLINED + (noted ? ', ' + noted.note : '') + '.');
     return said.length ? said.join(' ') : null;
   }
 

@@ -11,7 +11,8 @@ and its outlook.
 
 ## The submission
 
-`report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?, work_item_id?)`
+`report_submit(symbol, mode, stance, sections, judgments, kill_criteria?, news_items?,
+work_item_id?)`
 
 - `mode`: the work item's mode, `full report` or `valuation review`.
 - `stance`: `buy`, `hold`, `trim` or `avoid`.
@@ -331,10 +332,13 @@ section 5 the revenue, the operating margin and the EPS by quarter, the newest e
 periods; in section 8 the sensitivity grid, or on a refused row the secondary valuation's grid; in
 section 9 the price against the band by quarter and the P/E history with its average lines.
 Section 4's charts show the fiscal years, then, for the lines that have them, the twelve months to
-the newest stored period in grey and the analysts' estimate years as outlined bars. The Markdown
-export carries each chart's table under the same title. Write no chart and no chart table: write
-the sentences, and cite the figures they name. Section 5's charts do not replace your table of the
-quarter against the expectations: write that table still.
+the newest stored period in grey and the analysts' estimate years as outlined bars. The EPS
+estimates are on the analysts' own basis, which can leave out items the reported EPS includes,
+such as stock pay: where a step from a reported EPS to an estimate matters to what you write, say
+which basis each figure is on. The Markdown export carries each chart's table under the same
+title. Write no chart and no chart table: write the sentences, and cite the figures they name.
+Section 5's charts do not replace your table of the quarter against the expectations: write that
+table still.
 
 ## The summary page
 

@@ -3,10 +3,14 @@ where the report page draws a chart, the Markdown export carries its table twin 
 section's heading, before the prose, and the page titles its charts with the words here, so the
 two never differ. Every figure is written as a cite of it would read (``check.shown``), a day as
 the references write it (``refs.day_words``, "3 Nov 2026"), and a cell with no figure on file is
-empty. A company in another currency (spec 2026-11-10 7.4) has its statements' totals and figures
-a share, and a sensitivity reading's money axis, in its reporting currency, the report's
-snapshot's: the code before the number, "SEK 2,100,000,000", "SEK 40.00"; the closes, the band,
-the values a share of a reading and of a grid are US dollars, `$` as before.
+empty; a table with no rows reads ``NO_DATA``, "No data on file.", as the page writes under a
+chart with no point. A company in another currency (spec 2026-11-10 7.4) has its statements'
+totals and figures a share in their currency, the statements' own, as the financial tables' read
+labels the page's charts with it (the snapshot's where they name none), so a snapshot refused
+before its currency was read takes no USD for them (the whole-branch review's M7); a sensitivity
+reading's money axis is in the report's snapshot's currency: the code before the number,
+"SEK 2,100,000,000", "SEK 40.00"; the closes, the band, the values a share of a reading and of a
+grid are US dollars, `$` as before.
 
 ``chart_tables`` reads them from the store at export, no vendor called, by the heading of the
 section each leads:
@@ -17,16 +21,19 @@ section each leads:
   2026-11-15 6.5): the last five fiscal years ("2025"), then on growth, cash flow and capital
   allocation the trailing twelve months ("12 months to 30 Sep 2026") and on growth the estimate
   years ("2026 estimate"); the header's first cell reads "Fiscal year" where every column is a
-  fiscal year and "Period" where one is not; a table without statements has no rows. The page
-  draws a part's charts under its table's title, each titled by its row's name. A ROIC year on
+  fiscal year and "Period" where one is not; a table without statements has no rows. Under the
+  growth table, where an estimate cell of its EPS holds a figure, one line says the analysts'
+  basis from the cell's note (``tables.ANALYSTS_BASIS``), "EPS estimates are on the analysts' own
+  basis, which can leave out items the reported EPS includes."; no other table has a line. The
+  page draws a part's charts under its table's title, each titled by its row's name. A ROIC year on
   average invested capital at or below zero has a figure with the wrong sign and no meaning
   (``tables.NO_CAPITAL``): its cell reads the note in place of the figure, and the page's chart
   leaves the year out and names it under the chart (B-8).
 - "The last earnings call": one table, "By quarter" (``QUARTERS_TITLE``), the quarters table of
   ``tables.quarters_table`` (6.4), its rows the revenue, the operating margin and the EPS under
   the periods' labels ("Q3 2026"), "Period" first; no rows where no period is stored. A full
-  report's section 5 and a valuation review's carry it alike. The stored periods are read once,
-  for the six tables and the quarters.
+  report's section 5 and a valuation review's carry it alike. The stored periods and the
+  statements are read once, for the six tables and the quarters.
 - "Valuation": each sensitivity reading the sections cite (a ``sensitivity:`` ref), once, in the
   order first cited, titled and its axes worded by ``reading_axes``, which the reading's read
   sends the page: the rows the first input's values and the columns the second's; then the grid
@@ -47,7 +54,7 @@ section each leads:
 
 import sqlite3
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
@@ -60,7 +67,15 @@ from fairband.refresh.inputs_statements import stored_quarters
 from fairband.reports.check import parts, shown
 from fairband.reports.multiples import SERIES, STATS, Series, stored_series, years_before
 from fairband.reports.refs import day_words, field_words, unit_of
-from fairband.reports.tables import NO_CAPITAL, Cell, Table, financial_tables, quarters_table
+from fairband.reports.tables import (
+    ANALYSTS_BASIS,
+    NO_CAPITAL,
+    Cell,
+    Table,
+    financial_tables,
+    quarters_table,
+    stated_for,
+)
 from fairband.store.reports import ReportRow
 from fairband.store.secondary import GRID_ROWS, secondary_row
 from fairband.store.sensitivities import SensitivityRow, sensitivity_row
@@ -77,6 +92,8 @@ TITLES = {
 # The page's two multiples charts, titled as the year-end table's columns and the statistics' rows.
 SERIES_TITLES = {"pe": "Trailing P/E", "pe_forward": "Forward P/E"}
 QUARTERS_TITLE = "By quarter"
+# What the export writes under a table with no rows, as the page under a chart with no point.
+NO_DATA = "No data on file."
 GRID_TITLE = "The grid of secondary valuation {}"
 BAND_TITLE = "The price against the band by quarter"
 BAND_YEARS = 5
@@ -90,11 +107,13 @@ _UNITS: dict[str, str | None] = {tag: unit_of(spec.unit) for tag, spec in TAGS.i
 
 @dataclass(frozen=True)
 class ChartTable:
-    """A chart's table twin: its title, its header and its rows, every cell written."""
+    """A chart's table twin: its title, its header and its rows, every cell written; and the one
+    plain line under its rows, where it has one."""
 
     title: str
     header: tuple[str, ...]
     rows: tuple[tuple[str, ...], ...]
+    line: str | None = None
 
 
 @dataclass(frozen=True)
@@ -116,14 +135,18 @@ def chart_tables(
     ``policy`` is the effective one and ``tax`` the statements' table."""
     symbol = report.symbol
     snapshot = snapshot_row(conn, report.snapshot_id)
-    currency = "USD" if snapshot is None else money_of(snapshot.result)[1]
+    valued_in = "USD" if snapshot is None else money_of(snapshot.result)[1]
     stored = stored_quarters(conn, symbol).periods  # once, for the six and the quarters
-    financial = financial_tables(conn, symbol, policy, tax, stored=stored)
+    stated = stated_for(conn, symbol, tax)  # once, for the six and their currency
+    # the statements' currency, as the financial tables' read gives it; the snapshot's where the
+    # statements name none
+    stated_in = stated.currency or valued_in
+    financial = financial_tables(conn, symbol, policy, tax, stored=stored, stated=stated)
     quarters = quarters_table(conn, symbol, stored=stored)
     return {
-        "Financial performance and health": tuple(_financial(t, currency) for t in financial),
-        "The last earnings call": (_twin(QUARTERS_TITLE, _PERIOD, quarters, currency),),
-        "Valuation": (*_sensitivities(conn, report, currency), *_secondary_grid(conn, report)),
+        "Financial performance and health": tuple(_financial(t, stated_in) for t in financial),
+        "The last earnings call": (_twin(QUARTERS_TITLE, _PERIOD, quarters, stated_in),),
+        "Valuation": (*_sensitivities(conn, report, valued_in), *_secondary_grid(conn, report)),
         "Price and multiples": (_band(conn, symbol), *_multiples(conn, symbol)),
     }
 
@@ -164,9 +187,21 @@ def shift_words(x: float, *, top: bool = False) -> str:
 
 def _financial(table: Table, currency: str) -> ChartTable:
     """One of the six financial tables titled by its name, its header's first cell "Fiscal year"
-    where every column is a fiscal year and "Period" where one is not (``_twin``)."""
+    where every column is a fiscal year and "Period" where one is not (``_twin``), with the line
+    that says its EPS estimates' basis where it has one (``_basis_line``)."""
     fiscal = all(column.kind == "fiscal" for column in table.columns)
-    return _twin(TITLES[table.name], _FISCAL_YEAR if fiscal else _PERIOD, table, currency)
+    twin = _twin(TITLES[table.name], _FISCAL_YEAR if fiscal else _PERIOD, table, currency)
+    return replace(twin, line=_basis_line(table))
+
+
+def _basis_line(table: Table) -> str | None:
+    """The line under a table whose EPS row holds an analysts' estimate, a cell with a figure
+    and the note ``tables.ANALYSTS_BASIS``, the growth table's alone: that the estimates are on
+    the analysts' own basis, in the note's words; none elsewhere."""
+    eps = next((row for row in table.rows if row.name == "eps"), None)
+    cells = () if eps is None else eps.cells
+    held = any(cell.note == ANALYSTS_BASIS and cell.value is not None for cell in cells)
+    return f"EPS estimates are {ANALYSTS_BASIS}." if held else None
 
 
 def _twin(title: str, corner: str, table: Table, currency: str) -> ChartTable:

@@ -361,14 +361,18 @@
   }
 
   /* The snapshot: its id, its data date, its price date, the end of its window, its price and its
-     value a share. */
+     value a share, and on a company in another currency the reporting currency its money figures
+     are in, last; the export's Appendix A opens with the same line (render.py, `_snapshot_line`;
+     method 16.6). */
   function snapshotLine(s) {
+    var code = s.currency && s.currency !== 'USD' ? s.currency : null;
     return h('p', { className: 'body' },
       'Snapshot ', h('span', { className: 'figure-sm' }, s.id),
       ' · data ', P.when(s.dataDate), ' · priced ', P.when(s.priceDate),
       ' · valid until ', P.when(s.validUntil),
       ' · price ', h('span', { className: 'figure-sm' }, F.formatMoney(s.price)),
-      ' · value ', h('span', { className: 'figure-sm' }, F.formatMoney(s.value)));
+      ' · value ', h('span', { className: 'figure-sm' }, F.formatMoney(s.value)),
+      code ? ' · in ' + code : null);
   }
 
   /* An Appendix A input as the drawer's inputs table reads a result's: its provenance's source
@@ -624,8 +628,8 @@
 
   function none(text) { return h('p', { className: 'caption app-muted' }, text); }
 
-  /* Appendix A's overrides, which the node tests read (tests/web/test_report_reader.py), as
-     charts.js hangs its helpers. */
-  P.reportAppendix = { overrides: overrides };
+  /* Appendix A's overrides and its Snapshot line, which the node tests read
+     (tests/web/test_report_reader.py), as charts.js hangs its helpers. */
+  P.reportAppendix = { overrides: overrides, snapshotLine: snapshotLine };
   P.onShow.report = load;
 })();

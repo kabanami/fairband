@@ -16,7 +16,9 @@ from typing import Any
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from refresh.synthetic import bodies
 from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
+from support.payloads import store_payloads
 from support.vendor import FIXTURES, Vendor
 from support.web import HEADER, NOW, TODAY
 
@@ -371,6 +373,32 @@ def test_markdown_download(client: TestClient) -> None:
     r = client.get("/api/reports/99/markdown")
     assert (r.status_code, r.json()) == (404, {"detail": "no report 99"})
     assert client.get("/api/reports/99").status_code == 404
+
+
+def test_the_markdown_renders_when_the_consensus_cannot_be_read(
+    client: TestClient, db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole-branch review's M3: the export's chart tables read the consensus through the
+    company's assembly, here on AAPL with the synthetic statements and two consensus years; where
+    assembly raises, the report still exports, its growth table without estimate columns."""
+    report = _published(client, _body(_snapshot_id(client)))
+    statements = {e: p for e, p in bodies().items() if e != "earnings"}
+    consensus = [
+        {"symbol": "AAPL", "date": f"{year}-12-31", "revenueAvg": 2_200_000_000, "epsAvg": 3.3}
+        for year in (2027, 2026)
+    ]
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, "AAPL", {**statements, "estimates-annual": consensus}, NOW)
+    r = client.get(f"/api/reports/{report['id']}/markdown")
+    assert r.status_code == 200 and "| 2026 estimate | 2027 estimate |" in r.text
+
+    def raising(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("assembly failed")
+
+    monkeypatch.setattr("fairband.reports.tables.build_inputs", raising)
+    r = client.get(f"/api/reports/{report['id']}/markdown")
+    assert r.status_code == 200
+    assert "| Revenue | " in r.text and " estimate |" not in r.text
 
 
 def test_a_second_submission_is_revision_two(client: TestClient) -> None:

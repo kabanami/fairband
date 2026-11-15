@@ -48,6 +48,7 @@ from fairband.reports.render import (
     references,
     resting_words,
 )
+from fairband.store.db import transaction
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
@@ -728,6 +729,74 @@ def test_the_export_s_second_line_follows_the_snapshot_s_dates(
     )
 
 
+def _snapshot_part(text: str) -> str:
+    """The export's Appendix A from its first part to its Inputs part."""
+    appendix = text.split("\n## Appendix A\n\n", 1)[1]
+    return appendix[: appendix.index("### Inputs")]
+
+
+def test_the_export_s_appendix_a_opens_with_the_snapshot(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The whole-branch review's I1: the export's second line names no record (spec 2026-11-15 7),
+    so its Appendix A opens with the Snapshot part, one line as the report page's Appendix A
+    writes it, in its order: the snapshot's id, its data date, its price date and the end of its
+    window in words, its price and its value a share as the page writes money, and the reporting
+    currency on a company in another currency; a refused snapshot's refusal after the line, as the
+    page shows it under the line (method 16.6)."""
+    sid = snapshots["AAPL"]
+    aapl = snapshot_row(conn, sid)
+    assert aapl is not None and aapl.value is not None
+    report = _stored(conn, sid)
+    text = markdown(report, appendix_a(conn, report, policy), [], [], {})
+    line = (
+        f"Snapshot {sid} · data 30 Oct 2026 · priced 30 Oct 2026 · valid until 28 Jan 2027"
+        f" · price $150.00 · value ${aapl.value:.2f}"
+    )
+    assert _snapshot_part(text) == f"### Snapshot\n\n{line}\n\n"
+    # a refused snapshot: no value, and its refusal after the line
+    aal = snapshot_row(conn, snapshots["AAL"])
+    assert aal is not None and aal.value is None and aal.refusal
+    refused = _stored(conn, aal.id, symbol="AAL")
+    text = markdown(refused, appendix_a(conn, refused, policy), [], [], {})
+    part = _snapshot_part(text)
+    assert part.startswith(f"### Snapshot\n\nSnapshot {aal.id} · data ")
+    assert part.endswith(f" · value —\n\n{aal.refusal}\n\n")
+    # a company in another currency names it last; the price and the value are US dollars
+    fx = value_company(fx_inputs(), universe_deciles(), policy, TODAY)
+    fxid = insert_snapshot(conn, fx, aapl.refresh_id, clock=lambda: NOW)
+    sek = _stored(conn, fxid, symbol="FXCO")
+    part = _snapshot_part(markdown(sek, appendix_a(conn, sek, policy), [], [], {}))
+    assert part.startswith(f"### Snapshot\n\nSnapshot {fxid} · data ")
+    assert " · price $50.00 · value $" in part and part.endswith(" · in SEK\n\n")
+    assert ISO_DATE.search(part) is None
+
+
+def test_the_export_writes_no_data_under_a_chart_table_without_rows(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """The whole-branch review's M8: under a chart table with no rows the export writes "No data
+    on file.", as the page does under a chart with no point; Appendix A's empty parts, which are
+    no chart's table, keep "None."."""
+    sid = snapshots["AAPL"]
+    with transaction(conn):
+        conn.execute(
+            "DELETE FROM facts WHERE symbol = 'AAPL'"
+            " AND dataset IN ('income-quarter', 'cashflow-quarter', 'balance-quarter')"
+        )
+    report = _stored(conn, sid)
+    a = appendix_a(conn, report, policy)
+    text = markdown(report, a, [], [], chart_tables(conn, report, policy))
+    assert _part(text, HEADINGS[4]) == "\n### By quarter\n\nNo data on file.\n\nPlain words.\n"
+    assert "### Guidance on file\n\nNone." in text
+    refused = _stored(conn, snapshots["AAL"], symbol="AAL")
+    text = markdown(
+        refused, appendix_a(conn, refused, policy), [], [], chart_tables(conn, refused, policy)
+    )
+    financial = _part(text, HEADINGS[3])
+    assert financial.count("\n\nNo data on file.\n") == 6 and "None." not in financial
+
+
 def test_a_review_mode_leads_its_earnings_call_with_the_quarters(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
@@ -917,6 +986,14 @@ def test_the_markdown_carries_the_chart_tables(
         " | 2027 estimate |"
     )
     assert f"### Growth and profitability\n\n{growth}\n" in financial
+    # one plain line under the growth table's rows, its EPS estimates' basis (the whole-branch
+    # review's I2), and under no other table
+    basis = (
+        "EPS estimates are on the analysts' own basis, which can leave out items the reported EPS"
+        " includes."
+    )
+    assert financial.split("### Cash flow", 1)[0].endswith(f" |\n\n{basis}\n\n")
+    assert text.count(basis) == 1
     assert "| Revenue | " in financial and " | $1,300,000,000 | $2,200,000,000 | " in financial
     returns = "### Returns on capital\n\n| Fiscal year | 2021 | 2022 | 2023 | 2024 | 2025 |\n"
     assert returns in financial
@@ -938,6 +1015,13 @@ def test_the_markdown_carries_the_chart_tables(
     charted = {HEADINGS[3], HEADINGS[4], "Valuation", "Price and multiples"}
     for heading in set(HEADINGS) - charted:
         assert "### " not in _part(text, heading), heading
+    # without an EPS estimate on file, no line
+    revenue_only = [{"symbol": "AAPL", "date": "2026-12-31", "revenueAvg": 2_200_000_000}]
+    store_payloads(conn, "AAPL", {"estimates-annual": revenue_only}, NOW)
+    text = markdown(
+        report, appendix_a(conn, report, policy), [], [], chart_tables(conn, report, policy)
+    )
+    assert "| 2026 estimate |" in text and basis not in text
 
 
 def test_a_report_on_file_renders_with_the_columns_and_the_quarters(
@@ -979,6 +1063,8 @@ def test_a_report_on_file_renders_with_the_columns_and_the_quarters(
     ]
     assert "| 12 months to 30 Sep 2026 | 2026 estimate | 2027 estimate |" in financial
     assert "### By quarter\n\n| Period | Q3 2025 |" in _part(text, HEADINGS[4])
+    # Appendix A names the snapshot the report rests on (the whole-branch review's I1)
+    assert f"\n## Appendix A\n\n### Snapshot\n\nSnapshot {sid} · data 30 Oct 2026 · " in text
     words = "the growth table, revenue growth, fiscal 2026, the analysts' estimate"
     assert text.endswith(f"[^4]: {estimate} — {words}\n")
     moved = [{"symbol": "AAPL", "date": "2027-12-31", "revenueAvg": 2_420_000_000, "epsAvg": 3.63}]

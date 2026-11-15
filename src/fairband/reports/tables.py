@@ -37,10 +37,15 @@ The estimate columns (6.3) are the consensus fiscal years after the newest fisca
 that hold a revenue or an EPS, in order, ``ESTIMATE_YEARS`` at most, each read as an
 ``estimate:`` ref reads it (``build_inputs``' annual consensus, a later row of one year winning).
 Their cells: the revenue and the EPS, the consensus figures citing
-``estimate:<symbol>/<year>/revenue`` and ``/eps``; the revenue growth, the consensus revenue over
-the year before's − 1, the reported revenue for the year after the newest fiscal year and the
-consensus revenue for a later one, ``None`` where the year before has no figure; the three
-margins ``None``, "no estimate for this line".
+``estimate:<symbol>/<year>/revenue`` and ``/eps``, every EPS cell noted ``ANALYSTS_BASIS``, since
+the analysts' EPS often leaves out stock pay or other items the reported diluted EPS includes,
+the revenue's none, the revenue consensus being on the reported basis (the whole-branch review's
+I2); the revenue growth, the consensus revenue over the year before's − 1, the reported revenue
+for the year after the newest fiscal year and the consensus revenue for a later one, ``None``
+where the year before has no figure; the three margins ``None``, "no estimate for this line".
+Where the company's assembly raises, as the refresh lets it raise for one company, the tables
+have no estimate column and a warning names the symbol and the exception's class, never its
+text, which could hold a key or a URL; so the tables never fail a read that worked before them.
 
 - ``growth``: revenue (``revenue``); revenue growth, the revenue over the year before's − 1; the
   gross, operating and net margins, gross profit, operating income and net income over revenue;
@@ -87,6 +92,7 @@ period. Its rows: ``revenue`` and ``eps``, the period's revenue and diluted EPS,
 revenue is at or below zero.
 """
 
+import logging
 import sqlite3
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -126,6 +132,9 @@ NO_CAPITAL = "average invested capital is at or below zero"
 NOT_TRAILING = "not measured over the trailing twelve months"
 NO_ESTIMATE = "no estimate for this line"
 SHORT_HISTORY = "fewer than two years of periods on file"
+# The note of an EPS estimate cell: the analysts' EPS is on their own basis (the whole-branch
+# review's I2).
+ANALYSTS_BASIS = "on the analysts' own basis, which can leave out items the reported EPS includes"
 # The tables with a trailing column, and the one with estimate columns (spec 2026-11-15 6.2, 6.3).
 _TRAILING_TABLES = frozenset({"growth", "cash_flow", "capital_allocation"})
 _ESTIMATE_TABLES = frozenset({"growth"})
@@ -166,6 +175,8 @@ _BY_SIZE = frozenset({"interest_expense"})
 # ``statements_for`` reads its day only as the data date of a store without statements, which
 # the tables do not read.
 _NO_DAY = date.min
+
+logger = logging.getLogger("fairband.reports")
 
 type _Reading = float | None | tuple[float | None, str | None]
 
@@ -213,6 +224,14 @@ def year_lines(conn: sqlite3.Connection, symbol: str) -> dict[int, dict[str, flo
     return {year: _named(sheets) for year, sheets in annual_lines(conn, symbol).items()}
 
 
+def stated_for(conn: sqlite3.Connection, symbol: str, tax: TaxTable | None = None) -> Statements:
+    """``symbol``'s statements as the tables read them, taxed at its country's statutory rates in
+    ``tax``, the packaged table when ``None``."""
+    country, _ = country_for(conn, symbol, latest_company(conn, symbol))
+    taxed = load_tax_table() if tax is None else tax
+    return statements_for(conn, symbol, country, taxed, _NO_DAY)
+
+
 def financial_tables(
     conn: sqlite3.Connection,
     symbol: str,
@@ -221,6 +240,7 @@ def financial_tables(
     *,
     consensus: Sequence[AnnualEstimate] | None = None,
     stored: Sequence[QuarterFigures] | None = None,
+    stated: Statements | None = None,
 ) -> tuple[Table, ...]:
     """The six tables of ``symbol`` with their columns, in ``TABLES``' order: its last five fiscal
     years on file, the trailing twelve months and the consensus years where a table has them
@@ -228,16 +248,14 @@ def financial_tables(
     income statement. ``tax`` is the table the capital years are taxed with, the packaged one
     when ``None``; the hurdle rate is ``policy``'s r, restated on a company in another currency.
     ``consensus`` is the annual consensus as an ``estimate:`` ref reads it (``build_inputs``
-    under ``policy`` and ``tax``), and ``stored`` the stored periods as ``stored_quarters`` reads
-    them, each handed in by a caller that holds it and read here when ``None``."""
-    country, _ = country_for(conn, symbol, latest_company(conn, symbol))
+    under ``policy`` and ``tax``; none where that raises), ``stored`` the stored periods as
+    ``stored_quarters`` reads them and ``stated`` the statements as ``stated_for`` reads them,
+    each handed in by a caller that holds it and read here when ``None``."""
     taxed = load_tax_table() if tax is None else tax
-    stated = statements_for(conn, symbol, country, taxed, _NO_DAY)
+    stated = stated_for(conn, symbol, taxed) if stated is None else stated
     sheets = annual_lines(conn, symbol)
     if consensus is None:
-        consensus = (
-            build_inputs(conn, symbol, policy, taxed, _NO_DAY).annual_estimates if sheets else ()
-        )
+        consensus = _consensus(conn, symbol, policy, taxed) if sheets else ()
     f = _Figures(
         symbol,
         sheets,
@@ -291,6 +309,20 @@ def quarters_table(
         ),
         tuple(Column(q.period, "quarter", f"{q.fiscal_period} {q.fiscal_year}") for q in shown),
     )
+
+
+def _consensus(
+    conn: sqlite3.Connection, symbol: str, policy: Policy, tax: TaxTable
+) -> Sequence[AnnualEstimate]:
+    """The annual consensus as an ``estimate:`` ref reads it, from the company's assembly; none,
+    and a warning naming the symbol and the exception's class, where assembly raises, as the
+    refresh catches one company's (module docstring)."""
+    try:
+        return build_inputs(conn, symbol, policy, tax, _NO_DAY).annual_estimates
+    except Exception as exc:  # noqa: BLE001 - the tables stand without their estimate columns
+        name = type(exc).__name__  # never the text, which could hold a key or a URL
+        logger.warning("%s: the tables have no estimate column: assembly raised %s", symbol, name)
+        return ()
 
 
 def _hurdle(conn: sqlite3.Connection, symbol: str, policy: Policy) -> float:
@@ -396,10 +428,20 @@ class _Figures:
         found.extend(estimate(y) for y in self.estimates_of(table))
         return tuple(found)
 
-    def fact(self, table: str, row: str, line: str, unit: Unit, estimate: str = "") -> Row:
+    def fact(
+        self,
+        table: str,
+        row: str,
+        line: str,
+        unit: Unit,
+        estimate: str = "",
+        basis: str | None = None,
+    ) -> Row:
         """A row of one stored line, each cell citing it: the fiscal year's line, the trailing
         figures' and, under an estimate column, the consensus field ``estimate``, which a row of
-        a table with estimate columns must name and a row of another table does not."""
+        a table with estimate columns must name and a row of another table does not, each such
+        cell noted ``basis``, the basis of the consensus figure where the reported line's can
+        differ."""
         if (table in _ESTIMATE_TABLES) != bool(estimate):
             raise ValueError(
                 f"{table}/{row}: a row names its consensus field where its table has estimate"
@@ -416,7 +458,7 @@ class _Figures:
         def consensus(y: int) -> Cell:
             figure = getattr(self.consensus[y], estimate)
             ref = estimate_ref(self.symbol, str(y), estimate)
-            return Cell(estimate_period(y), figure, unit, ref)
+            return Cell(estimate_period(y), figure, unit, ref, basis)
 
         return Row(row, unit, self.cells(table, fiscal, trailing, consensus))
 
@@ -496,7 +538,8 @@ def _growth(f: _Figures) -> Table:
                 margin("net_income"),
                 lambda ttm: _per(ttm.net_income, ttm.revenue),
             ),
-            f.fact(t, "eps", "eps_diluted", "per-share", estimate="eps"),
+            # the analysts' EPS is on their own basis; their revenue is on the reported one
+            f.fact(t, "eps", "eps_diluted", "per-share", estimate="eps", basis=ANALYSTS_BASIS),
         ),
     )
 

@@ -46,11 +46,16 @@ priced that day, valid until 27 Jan 2027."), and for a valuation review the full
 by its date, "Reuses the full report of 3 Nov 2026." ("Reuses an earlier full report." where that
 report's record is not on file), or that there is none: the lines above the sections name no part
 of Fairband and write every date as the references do (spec 2026-11-15 7); the sections under
-their headings as ``##``, each led by its chart tables
-(``charts.chart_tables``) as ``###`` tables, then each part's text in order, a cite as its text
-and its footnote mark, ``$150.00[^1]``, so no ref is in the text; then Appendix A as tables, its
-inputs' "As of", a date input's note and its guidance's "Call" in words, and Appendix B as a
-list; and last the references under ``## References``, ``[^n]: <ref> —
+their headings as ``##``, each led by its chart tables (``charts.chart_tables``) as ``###``
+tables, "No data on file." under one without rows, as the page writes under its chart, and the
+line a table carries after its rows, then each part's text in order, a cite as its text and its
+footnote mark, ``$150.00[^1]``, so no ref is in the text; then Appendix A, opening with the
+snapshot the report rests on in one line as the page's Appendix A writes it, "Snapshot 412 · data
+4 Nov 2026 · priced 4 Nov 2026 · valid until 27 Jan 2027 · price $150.00 · value $128.00", with
+"· in SEK" last on a company in another currency, and its refusal after the line where it has one
+(the lines above the sections name no record, so the export names its snapshot here), then its
+other parts as tables, its inputs' "As of", a date input's note and its guidance's "Call" in
+words, and Appendix B as a list; and last the references under ``## References``, ``[^n]: <ref> —
 <source>``: GitHub-flavoured Markdown renders footnote definitions at the end of the document, so
 the heading stands over its list there (spec 2026-11-15 9). The report page keeps its order, the
 references after the last section.
@@ -69,7 +74,7 @@ from fairband.engine.overrides import LABELS
 from fairband.engine.types import money_of
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable
-from fairband.reports.charts import ChartTable, grid_row_words, shift_words
+from fairband.reports.charts import NO_DATA, ChartTable, grid_row_words, shift_words
 from fairband.reports.check import (
     CHECKS,
     NO_REFERENCE,
@@ -469,7 +474,7 @@ def markdown(
         heading = section["heading"]
         lines += ["", f"## {heading}"]
         for chart in tables.get(heading.strip(), ()):
-            lines += ["", f"### {chart.title}", "", *_table(chart.header, chart.rows)]
+            lines += ["", f"### {chart.title}", "", *_chart_table(chart)]
         lines += ["", "".join(_marked(p, marks) for p in section["parts"])]
     lines += ["", "## Appendix A", "", *_appendix_a_tables(a), "", "## Appendix B", ""]
     lines += [f"- **{entry['term']}**: {entry['meaning']}" for entry in b] or ["No terms used."]
@@ -632,9 +637,40 @@ def _camel(record: Mapping[str, Any]) -> dict[str, Any]:
     return {to_camel(key): value for key, value in record.items()}
 
 
+def _chart_table(chart: ChartTable) -> list[str]:
+    """A chart's table twin: its rows, or "No data on file." without any, as the page writes under
+    a chart with no point; then its line, where it has one, as one plain line after a blank one,
+    which ends the table."""
+    out = _table(chart.header, chart.rows) if chart.rows else [NO_DATA]
+    return out if chart.line is None else [*out, "", chart.line]
+
+
+def _snapshot_line(snapshot: Mapping[str, Any]) -> str:
+    """The snapshot the report rests on in one line, as the report page's Appendix A writes it
+    (``report.js``, ``snapshotLine``): its id, its data date, its price date and the end of its
+    window, each in words, its price and its value a share as the page writes money, and, on a
+    company in another currency, that currency last; a dash for what it has none of."""
+    said = [
+        f"Snapshot {snapshot['id']}",
+        f"data {_day_words(snapshot['dataDate']) or _DASH}",
+        f"priced {_day_words(snapshot['priceDate']) or _DASH}",
+        f"valid until {_day_words(snapshot['validUntil']) or _DASH}",
+        f"price {_money(snapshot['price'])}",
+        f"value {_money(snapshot['value'])}",
+    ]
+    code = snapshot["currency"]
+    return " · ".join([*said, f"in {code}"] if code and code != "USD" else said)
+
+
 def _appendix_a_tables(a: Mapping[str, Any]) -> list[str]:
-    """Appendix A's parts as Markdown tables, each under its own heading."""
-    out = ["### Inputs", ""]
+    """Appendix A's parts, each under its own heading: the snapshot the report rests on as one
+    line, its refusal after it where it has one, as the page shows them; the others as Markdown
+    tables."""
+    snapshot = a["snapshot"]
+    out = ["### Snapshot", "", _snapshot_line(snapshot)]
+    if snapshot["refusal"]:
+        out += ["", snapshot["refusal"]]
+    out += ["", "### Inputs", ""]
     out += _table(
         ("Input", "Value", "Unit", "Tag", "Kind", "Source", "As of", "Note"),
         [
@@ -788,6 +824,14 @@ def _grid_table(grid: Mapping[str, Any]) -> list[str]:
 
 def _percent(x: float) -> str:
     return f"{'−' if x < 0 else ''}{abs(x):.1%}"
+
+
+def _money(x: float | None) -> str:
+    """A price or a value a share as the report page writes money (the bundle's
+    ``formatMoney``): "$150.00", "−$2.50"; an em dash for none."""
+    if x is None:
+        return _DASH
+    return f"{'−' if x < 0 else ''}${abs(x):.2f}"
 
 
 def _table(header: Sequence[str], rows: Sequence[Sequence[Any]]) -> list[str]:
