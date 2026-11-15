@@ -16,7 +16,7 @@
 # v13: v12 with the three stock-pay thresholds, the share-count band, the override range of the trailing stock pay, and the runway return's range widened to 500% (spec 2026-11-13 sections 7.1, 8, 10 and 14)
 # v14: v13 with the override range of the minority interest (spec 2026-11-13 sections 13 and 14)
 # v15: v14 with the multiple of the note sheet-shift (spec 2026-11-13 section 12.5)
-# v16: v15 with the override ranges of the committed shares, the one-time item in the NTM consensus and the two revenue steps (spec 2026-11-14 section 10)
+# v16: v15 with the override ranges of the committed shares, the one-time item in the NTM consensus and the two revenue steps, and thin_revenue_step_max, the size above which a thin consensus revenue step is not read (spec 2026-11-14 sections 6.2 and 10)
 #
 # Each [values.<name>] table holds `value` and `source`. The source is the design.md section, the
 # stocks mech/1.2 rule, the founder decision (research.md D<n>), the calibration, growth routes or

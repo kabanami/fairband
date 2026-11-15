@@ -23,7 +23,8 @@ Six changes in one plan.
    a share that the consensus carries and that does not recur. It comes off year 1.
 3. **The revenue steps** (B-148). Two new inputs, `revenue.step_2` and `revenue.step_3`, for
    the consensus revenue growth the charge pays for. And one rule: a consensus revenue step on
-   fewer than 5 revenue analysts is not read. The rule is measured before it is kept.
+   fewer than 5 revenue analysts and above 50% is not read. The rule is measured before it is
+   kept.
 4. **Overrides at a split** (B-151). An applied override in dollars a share, or in shares, is
    scaled by the ratio of a split that took effect after it was made, and the row says so.
 5. **An override the route no longer reads** (B-98). At a recompute the system drops it, with
