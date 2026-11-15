@@ -1573,6 +1573,11 @@ def test_the_agent_reads_fairband_before_it_goes_outside() -> None:
             " `table:<symbol>/quarters/operating_margin/2026-Q3`, which `financial_tables` gives"
             " under `quarters`."
         ),
+        (  # the table may hold no such cell (spec 2026-11-15 6.4; the Task 9 review)
+            "Where the table has no such cell (no stored period, the quarter not yet stored, or a"
+            " line missing), the operating margin is the `derive` `ratio` of the quarter's"
+            " operating income to its revenue."
+        ),
         (
             "The free cash flow is the `derive` `sum` of its cash from operations and its capital"
             " spending"
@@ -1701,11 +1706,19 @@ def test_the_playbook_says_what_the_tables_the_charts_and_the_export_show() -> N
         ),
     ):
         assert words in charts, words
-    # the quarter's operating margin is a cell to cite, in the template's section 5 and in step 5
+    # the quarter's operating margin is a cell to cite, in the template's section 5 and in step 5,
+    # which keeps the `derive` for a quarter the table holds no cell of
     steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
     for text in (template, steps[5]):
         assert "`table:<symbol>/quarters/operating_margin/" in text
-        assert "`derive` `ratio` of the quarter's operating income" not in text
+    # a cite's period may be an estimate year, in the cite's keys and in the template's example
+    assert (
+        "the period the text claims, a fiscal year (`2025` or `FY2025`), a quarter (`2026-Q2`),"
+        " `ttm` or an estimate year (`2026E`)."
+    ) in _flat(_read(CITATIONS))
+    assert "With the period it claims, a fiscal year, a quarter, `ttm` or an estimate year" in (
+        template
+    )
     # the periods a `table:` ref takes, what each cell is, and the cite of an estimate cell
     citations = _read(CITATIONS)
     cell = _table(citations, ("Ref", "The stored value", "Unit"))[

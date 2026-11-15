@@ -25,7 +25,7 @@ stored value it shows.
   Nothing else: `$283 a share` is not a cite. Write the cite `$283`, then the plain part ` a share`.
 - `ref`: the stored value the number shows (below).
 - `period`, optional: the period the text claims, a fiscal year (`2025` or `FY2025`), a quarter
-  (`2026-Q2`) or `ttm`. A cite with no period skips the period check.
+  (`2026-Q2`), `ttm` or an estimate year (`2026E`). A cite with no period skips the period check.
 
 The server joins the parts with nothing between them. Put the spaces and the punctuation in the
 plain parts.

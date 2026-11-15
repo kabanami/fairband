@@ -215,26 +215,28 @@ Then build the seven parts:
    (the newest report's, or the one this report forms). The price's move on the next trading day:
    `derive` `growth` of the first close after the call over the last close before it, two `close:`
    refs from `price_history`.
-2. **The quarter against expectations.** Revenue, EPS, the operating margin and free cash flow,
-   each against the same quarter a year before and against the consensus for the quarter. The
-   quarter's revenue, EPS, operating income and cash flow are the figures of `quarters(symbol)`,
-   cited by their `fact:` refs (`fact:<symbol>/revenue/2026-Q3`), with the quarter as their period;
-   the same quarter a year before is among the eight. The operating margin is the quarters table's
-   cell, `table:<symbol>/quarters/operating_margin/2026-Q3`, which `financial_tables` gives under
-   `quarters`. The free cash flow is the `derive` `sum` of its cash from operations and its capital
-   spending, which the store holds negative. On a row
-   flagged `split-pending` or `basis-scaled`, check a quarter's EPS against the flag's note before
-   you cite it: the stored EPS may sit on another share basis than the quote's. A figure the stored
-   statements do not hold (a segment's revenue, a customer count, a non-GAAP figure) comes from the
-   quarter's filing report, a number cell by its row's ref and a sentence of a note as a finding
-   (step 4); else it is a finding from the document the filing list links. Take the report's year
-   and period from the list `filing_report(symbol)` answers. A US filer files no 10-Q for its
-   fourth quarter: its 10-K, `FY`, reports the whole year, so a fourth quarter's figure the 10-K
-   does not give is a finding from the press release. The consensus for the quarter is the
-   `estimates` quarter's ref, when the store holds it (revenue and EPS). The surprise is `derive`
-   `growth` of the actual over the consensus; the change on the year is `growth` of the actual
-   over the prior year's. Then name what drove the quarter: price, volume, mix, currency, one-time
-   items. Name the one-time items: the engine anchors on earnings without them.
+2. **The quarter against expectations.** Revenue, EPS, the operating margin and free cash flow, each
+   against the same quarter a year before and against the consensus for the quarter. The quarter's
+   revenue, EPS, operating income and cash flow are the figures of `quarters(symbol)`, cited by
+   their `fact:` refs (`fact:<symbol>/revenue/2026-Q3`), with the quarter as their period; the same
+   quarter a year before is among the eight. The operating margin is the quarters table's cell,
+   `table:<symbol>/quarters/operating_margin/2026-Q3`, which `financial_tables` gives under
+   `quarters`. Where the table has no such cell (no stored period, the quarter not yet stored, or a
+   line missing), the operating margin is the `derive` `ratio` of the quarter's operating income to
+   its revenue. The free cash flow is the `derive` `sum` of its cash from operations and its capital
+   spending, which the store holds negative. On a row flagged `split-pending` or `basis-scaled`,
+   check a quarter's EPS against the flag's note before you cite it: the stored EPS may sit on
+   another share basis than the quote's. A figure the stored statements do not hold (a segment's
+   revenue, a customer count, a non-GAAP figure) comes from the quarter's filing report, a number
+   cell by its row's ref and a sentence of a note as a finding (step 4); else it is a finding from
+   the document the filing list links. Take the report's year and period from the list
+   `filing_report(symbol)` answers. A US filer files no 10-Q for its fourth quarter: its 10-K, `FY`,
+   reports the whole year, so a fourth quarter's figure the 10-K does not give is a finding from the
+   press release. The consensus for the quarter is the `estimates` quarter's ref, when the store
+   holds it (revenue and EPS). The surprise is `derive` `growth` of the actual over the consensus;
+   the change on the year is `growth` of the actual over the prior year's. Then name what drove the
+   quarter: price, volume, mix, currency, one-time items. Name the one-time items: the engine
+   anchors on earnings without them.
 3. **The story management is telling.** Quote the frame in their words. Then take three to five
    claims. For each: the claim with its figure and its timeline; the evidence for it in the
    numbers; the driver it moves, written as the register's phrase for it (`reference/register.md`,
@@ -636,18 +638,16 @@ not read its method, and wants to know what the company is worth and why. Rewrit
 that needs the Methodology page to follow, by `reference/register.md`, "The words a report
 writes". Then read the summary alone: it must stand on its own, since many readers stop there.
 
-Submit with `report_submit`. The server publishes a report whole or rejects it whole. Published,
-the answer is the report's id, symbol, time and work item; `report(symbol, id)` reads it whole, so
-read it only when you need to. A structural
-refusal (the section count, the stance, a judgment, a heading, or no secondary valuation on a
-refused snapshot) is one sentence: fix it and submit again. A valued snapshot needs no secondary
-valuation: Appendix A says "No secondary valuation: Fairband's own valuation gives the company a
-value". A refused snapshot your review values needs none either: Appendix A says "No secondary
-valuation: the review gives the company a value". A snapshot refused for a reason you cannot fix
-needs none (no diluted share
-count, the reporting currency's or the share basis's): the server refused one, section 8 says why,
-and Appendix A names the refusal in its own words. A rejection (422) lists the findings: fix each
-one and submit again.
+Submit with `report_submit`. The server publishes a report whole or rejects it whole. Published, the
+answer is the report's id, symbol, time and work item; `report(symbol, id)` reads it whole, so read
+it only when you need to. A structural refusal (the section count, the stance, a judgment, a
+heading, or no secondary valuation on a refused snapshot) is one sentence: fix it and submit again.
+A valued snapshot needs no secondary valuation: Appendix A says "No secondary valuation: Fairband's
+own valuation gives the company a value". A refused snapshot your review values needs none either:
+Appendix A says "No secondary valuation: the review gives the company a value". A snapshot refused
+for a reason you cannot fix needs none (no diluted share count, the reporting currency's or the
+share basis's): the server refused one, section 8 says why, and Appendix A names the refusal in its
+own words. A rejection (422) lists the findings: fix each one and submit again.
 
 ### 13. Complete the work item
 

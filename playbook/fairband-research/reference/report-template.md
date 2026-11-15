@@ -391,7 +391,7 @@ anything else shows as plain text.
 {"cite": "$283", "ref": "review:89/value"}
 ```
 
-With the period it claims, a fiscal year, a quarter or `ttm`:
+With the period it claims, a fiscal year, a quarter, `ttm` or an estimate year (`2026E`):
 
 ```json
 {"cite": "31.2%", "ref": "table:EXMP/growth/operating_margin/2026", "period": "2026"}
