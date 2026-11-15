@@ -2811,8 +2811,13 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
     for text in (
         "estimate_method: i.estimateMethod,",
         "source: i.source, as_of: i.asOf, observed_at: i.observedAt, entered_at: i.enteredAt",
+        # a date input's note, the next earnings date as an ISO day, in words, as the export
+        # writes it (spec 2026-11-15 7); the drawer's Details keeps its note as it is
+        r"var day = i.unit === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(i.note));",
+        "note: day ? F.formatDate(i.note) : i.note,",
     ):
         assert text in adapted, text
+    assert "formatDate" not in _function(_code(_static_file("app.js")), "inputsTable")
     bridge = _function(script, "bridge")
     # without a review: the mechanical value is the value, unless the snapshot refused and has none
     _in_order(

@@ -705,7 +705,9 @@ def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s
         '("Stance: hold. On the data of 4 Nov 2026, priced that day, valid until 27 Jan 2027.")',
         (
             "a valuation review's next line names the full report it reuses by its date, \"Reuses"
-            ' the full report of 3 Nov 2026.", or says "No full report to reuse."'
+            ' the full report of 3 Nov 2026." ("Reuses an earlier full report." where that'
+            " report's record is not on file, so a stored report always renders), or says \"No"
+            ' full report to reuse."'
         ),
         (
             "The page's line under the title follows the same rule, its parts joined by"

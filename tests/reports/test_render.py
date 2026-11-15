@@ -661,6 +661,9 @@ def test_a_review_mode_names_the_full_report_it_reuses_or_that_there_is_none(
     # the full report by its date, not its id (spec 2026-11-15 7)
     assert text.splitlines()[3] == "Reuses the full report of 3 Nov 2026."
     assert "Reuses full report" not in text
+    # where the reused report's record is not on file the report still renders, naming no day
+    text = markdown(reusing, a, [], [], {})
+    assert text.splitlines()[3] == "Reuses an earlier full report."
 
 
 @pytest.mark.parametrize(

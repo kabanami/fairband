@@ -16,43 +16,19 @@ And the page's charts past the fiscal year and by quarter (spec 2026-11-15 6.5, 
 charts with those bars and that line, and section 5's three charts by quarter. ``draw``'s tree
 comes back as the page's script builds it, a bundle component's props unread by the stub."""
 
-import json
-import shutil
-import subprocess
-from collections.abc import Iterator
-from importlib import resources
-from pathlib import Path
 from typing import Any
 
 import pytest
+from support.page import NODE, STATIC, classed, elements, node, text
 
-NODE = shutil.which("node")
-HARNESS = Path(__file__).with_name("page.mjs")
-STATIC = Path(str(resources.files("fairband.web").joinpath("static")))
-BUNDLE = STATIC / "design-system" / "components" / "bundle.js"
 NOTE = "average invested capital is at or below zero"
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 
-def _node(helper: str, args: list[Any], *scripts: Path) -> Any:
-    """What ``helper``, as the harness names it, returns on ``args``, through JSON."""
-    assert NODE is not None
-    done = subprocess.run(
-        [NODE, str(HARNESS), str(BUNDLE), str(STATIC / "app.js"), helper]
-        + [str(script) for script in scripts],
-        input=json.dumps(args),
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,
-    )
-    return json.loads(done.stdout)
-
-
 def _call(helper: str, *args: Any) -> Any:
     """What charts.js's ``helper`` returns on ``args``, through JSON."""
-    return _node(helper, list(args), STATIC / "charts.js")
+    return node(helper, list(args), STATIC / "charts.js")
 
 
 def _row(values: list[float | None], notes: dict[str, str] | None = None) -> dict[str, Any]:
@@ -127,36 +103,12 @@ def test_three_years_left_out_are_listed_with_commas() -> None:
 
 def _draw(**props: Any) -> Any:
     """The tree the bundle's ``HistoryBars`` draws on ``props``, every component in it called."""
-    return _node("Fairband.HistoryBars", [{"title": "Revenue", **props}])
-
-
-def _elements(node: Any) -> Iterator[dict[str, Any]]:
-    """Every element of a drawn tree, in the document's order."""
-    if isinstance(node, list):
-        for child in node:
-            yield from _elements(child)
-    elif isinstance(node, dict):
-        yield node
-        yield from _elements(node["props"].get("children"))
-
-
-def _classed(tree: Any, name: str) -> list[dict[str, Any]]:
-    """The elements whose class list holds ``name``, in order."""
-    return [e for e in _elements(tree) if name in str(e["props"].get("className") or "").split()]
+    return node("Fairband.HistoryBars", [{"title": "Revenue", **props}])
 
 
 def _bars(tree: Any) -> list[str]:
     """The bars' class lists, in order."""
-    return [e["props"]["className"] for e in _classed(tree, "fb-c__bar")]
-
-
-def _text(node: Any) -> str:
-    """The text an element holds."""
-    if isinstance(node, list):
-        return "".join(_text(child) for child in node)
-    if isinstance(node, dict):
-        return _text(node["props"].get("children"))
-    return "" if node is None else str(node)
+    return [e["props"]["className"] for e in classed(tree, "fb-c__bar")]
 
 
 def _point(period: str, value: float, kind: str | None = None, label: str | None = None) -> Any:
@@ -208,15 +160,15 @@ def test_a_trailing_and_an_estimate_bar_take_their_classes() -> None:
 
 def test_the_value_stands_on_the_last_bar_that_is_not_an_estimate() -> None:
     tree = _draw(series=SERIES)
-    [value] = _classed(tree, "fb-c__capvalue")
-    assert _text(value) == "130"
-    bars = _classed(tree, "fb-c__bar")
+    [value] = classed(tree, "fb-c__capvalue")
+    assert text(value) == "130"
+    bars = classed(tree, "fb-c__bar")
     assert _left(bars[3]) < value["props"]["x"] < _left(bars[4])
     untrailed = [p for p in SERIES if p.get("kind") != "trailing"]
     tree = _draw(series=untrailed)
-    [value] = _classed(tree, "fb-c__capvalue")
-    assert _text(value) == "120"
-    bars = _classed(tree, "fb-c__bar")
+    [value] = classed(tree, "fb-c__capvalue")
+    assert text(value) == "120"
+    bars = classed(tree, "fb-c__bar")
     assert _left(bars[2]) < value["props"]["x"] < _left(bars[3])
 
 
@@ -226,11 +178,11 @@ def test_a_chart_of_estimates_alone_prints_no_value_and_one_bar_draws() -> None:
     estimates = [p for p in SERIES if p.get("kind") == "estimate"]
     tree = _draw(series=estimates)
     assert _bars(tree) == ["fb-c__bar fb-c__bar--estimate"] * 2
-    assert _classed(tree, "fb-c__capvalue") == []
+    assert classed(tree, "fb-c__capvalue") == []
     tree = _draw(series=[_point("2025", 120)])
     assert _bars(tree) == ["fb-c__bar"]
-    [value] = _classed(tree, "fb-c__capvalue")
-    assert _text(value) == "120"
+    [value] = classed(tree, "fb-c__capvalue")
+    assert text(value) == "120"
 
 
 def test_an_estimate_below_zero_keeps_the_sign_s_class() -> None:
@@ -250,8 +202,8 @@ def test_an_estimate_below_zero_keeps_the_sign_s_class() -> None:
         "fb-c__bar fb-c__bar--neg fb-c__bar--estimate",
         "fb-c__bar fb-c__bar--pos fb-c__bar--estimate",
     ]
-    [value] = _classed(tree, "fb-c__capvalue")
-    assert _text(value) == "-2"
+    [value] = classed(tree, "fb-c__capvalue")
+    assert text(value) == "-2"
     assert _bars(_draw(series=series, inverse=True))[2] == (
         "fb-c__bar fb-c__bar--pos fb-c__bar--estimate"
     )
@@ -259,7 +211,7 @@ def test_an_estimate_below_zero_keeps_the_sign_s_class() -> None:
 
 def test_the_accessible_name_reads_what_the_bars_run_by() -> None:
     def name(tree: Any) -> str:
-        [svg] = [e for e in _elements(tree) if e.get("type") == "svg"]
+        [svg] = [e for e in elements(tree) if e.get("type") == "svg"]
         return str(svg["props"]["aria-label"])
 
     assert name(_draw(series=SERIES, by="quarter")) == "Revenue by quarter"
@@ -271,9 +223,9 @@ def test_the_table_twin_reads_the_label() -> None:
     """A point without a label keeps its period, a stale year its mark; no table without
     ``tableView``."""
     series = [{**SERIES[0], "freshness": "aging"}, *SERIES[1:]]
-    [table] = _classed(_draw(series=series, tableView=True), "fb-c__table")
-    rows = [e for e in _elements(table) if e.get("type") == "tr"][1:]
-    assert [_text(row["props"]["children"][0][0]) for row in rows] == [
+    [table] = classed(_draw(series=series, tableView=True), "fb-c__table")
+    rows = [e for e in elements(table) if e.get("type") == "tr"][1:]
+    assert [text(row["props"]["children"][0][0]) for row in rows] == [
         "2023!",
         "2024",
         "2025",
@@ -281,13 +233,13 @@ def test_the_table_twin_reads_the_label() -> None:
         ESTIMATE.format(2026),
         ESTIMATE.format(2027),
     ]
-    assert _classed(_draw(series=series), "fb-c__table") == []
+    assert classed(_draw(series=series), "fb-c__table") == []
 
 
 def _axis(series: list[Any]) -> list[str]:
     """The ticks the bars' axis prints, in order."""
-    [axis] = _classed(_draw(series=series), "fb-c__xaxis")
-    return [_text(tick) for tick in _classed(axis, "fb-c__tick")]
+    [axis] = classed(_draw(series=series), "fb-c__xaxis")
+    return [text(tick) for tick in classed(axis, "fb-c__tick")]
 
 
 FISCAL = [_point(str(year), 100 + year % 10) for year in range(2021, 2026)]
@@ -445,11 +397,11 @@ def _body(**over: Any) -> dict[str, Any]:
 def _panel(tree: Any, title: str) -> tuple[dict[str, Any] | None, list[str]]:
     """The panel of the chart titled ``title`` in a drawn section: the chart's props, none where
     the panel shows that nothing is on file, and the captions in the panel."""
-    for panel in _classed(tree, "app-chart"):
-        charts = [e["props"] for e in _elements(panel) if "series" in e["props"]]
-        heads = [_text(e) for e in _classed(panel, "fb-c__title")]
+    for panel in classed(tree, "app-chart"):
+        charts = [e["props"] for e in elements(panel) if "series" in e["props"]]
+        heads = [text(e) for e in classed(panel, "fb-c__title")]
         if [c["title"] for c in charts] == [title] or heads == [title]:
-            captions = [_text(e) for e in _classed(panel, "caption")]
+            captions = [text(e) for e in classed(panel, "caption")]
             return (charts[0] if charts else None), captions
     raise AssertionError(title)
 
@@ -546,8 +498,8 @@ def test_section_5_draws_three_charts_by_quarter() -> None:
     operating margin and the EPS of the stored periods, titled by their rows' names and run by
     quarter, each tick the quarter short and each point its column's label; no line under them."""
     section = _sections({"body": _body()})["The last earnings call"]
-    assert [_text(e) for e in _elements(section) if e.get("type") == "h5"] == ["By quarter"]
-    charts = [e["props"] for e in _elements(section) if "series" in e["props"]]
+    assert [text(e) for e in elements(section) if e.get("type") == "h5"] == ["By quarter"]
+    charts = [e["props"] for e in elements(section) if "series" in e["props"]]
     assert [c["title"] for c in charts] == ["Revenue", "Operating margin", "EPS"]
     for chart in charts:
         assert chart["by"] == "quarter"
@@ -576,9 +528,9 @@ def test_section_5_with_no_stored_period_says_nothing_is_on_file() -> None:
 
 def test_section_5_says_why_when_the_read_was_refused() -> None:
     sections = _sections({"error": "no financial statements for ACME"})
-    assert _text(sections["The last earnings call"]) == (
+    assert text(sections["The last earnings call"]) == (
         "The figures by quarter did not load: no financial statements for ACME."
     )
-    assert _text(sections["Financial performance and health"]) == (
+    assert text(sections["Financial performance and health"]) == (
         "The financial tables did not load: no financial statements for ACME."
     )

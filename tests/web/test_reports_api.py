@@ -297,6 +297,24 @@ def test_a_review_mode_has_ten_sections(client: TestClient) -> None:
     assert (r.status_code, r.json()) == (400, {"detail": detail})
 
 
+def test_a_review_whose_reused_report_is_gone_still_exports(
+    client: TestClient, db_path: Path
+) -> None:
+    """A stored report always renders: a valuation review whose reused full report's record is not
+    on file exports, its line naming no day (spec 2026-11-15 7)."""
+    sid = _snapshot_id(client)
+    full = _published(client, _body(sid))
+    sections = _sections(sid, "valuation review")
+    review = _published(client, _body(sid, mode="valuation review", sections=sections))
+    assert review["reusesFullReportOf"] == full["id"]
+    with closing(connect(db_path)) as conn:
+        conn.execute("DELETE FROM reports WHERE id = ?", (full["id"],))
+        conn.commit()
+    r = client.get(f"/api/reports/{review['id']}/markdown")
+    assert r.status_code == 200
+    assert r.text.splitlines()[3] == "Reuses an earlier full report."
+
+
 def test_an_unknown_stance_is_refused(client: TestClient) -> None:
     r = _submit(client, _body(_snapshot_id(client), stance="accumulate"))
     detail = "a stance is one of buy, hold, trim or avoid, not 'accumulate'"

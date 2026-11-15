@@ -68,7 +68,7 @@ they cite, else the company's current review when it rests on the latest snapsho
 reprices and, on a refused latest snapshot, its newest secondary valuation when that one does;
 where ``no_secondary`` gives a reason a secondary valuation on file (one made before plan 3, or
 before an override routed the company) is the report's only when a cite names it, else Appendix A
-names the reason, the route or the review values the company; a valuation review reuses the
+names the reason in its own sentence (``render.appendix_a``); a valuation review reuses the
 company's newest full report, ``None`` without one. Its judgments, kill criteria and news items are
 stored with it, under its id (an override a judgment names, or a kill criterion a news item names,
 must be the company's: 404; a blank text 400), and the work item named is completed. Each record is
@@ -85,7 +85,8 @@ references, ``[{n, ref, source}]``, generated at read time (``render.appendix_a`
 (``render.markdown``), ``text/markdown``, each cite with its footnote mark, the references last,
 after Appendix B, and the chart tables (``charts.chart_tables``) under their sections, which the
 JSON does not carry; a valuation review's names the full report it reuses by that report's date
-(spec 2026-11-15 7). A missing report is a 404, "no report <id>".
+(spec 2026-11-15 7), or, where that report's record is not on file, an earlier full report, so a
+stored report always renders. A missing report is a 404, "no report <id>".
 """
 
 import sqlite3
@@ -479,10 +480,12 @@ def add_report_routes(
             a = appendix_a(conn, found, current)
             refs = references(conn, found, current, tax)
             tables = chart_tables(conn, found, current, tax)
-            reused = None
-            if found.reuses_full_report_of is not None:
-                reused = _report(conn, found.reuses_full_report_of).created_at.date()
-        text = markdown(found, a, appendix_b(found.sections), refs, tables, reused=reused)
+            # the reused full report's day; none where its row is not on file, so the report
+            # still renders
+            reused_of = found.reuses_full_report_of
+            reused = None if reused_of is None else report_row(conn, reused_of)
+        day = None if reused is None else reused.created_at.date()
+        text = markdown(found, a, appendix_b(found.sections), refs, tables, reused=day)
         return Response(text, media_type="text/markdown; charset=utf-8")
 
 

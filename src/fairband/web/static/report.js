@@ -372,11 +372,13 @@
   }
 
   /* An Appendix A input as the drawer's inputs table reads a result's: its provenance's source
-     and its three dates. */
+     and its three dates; a date input's note, its date as an ISO day (the next earnings date), in
+     words, as the page writes its dates and the export that note (spec 2026-11-15 7). */
   function input(i) {
+    var day = i.unit === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(i.note));
     return {
       name: i.name, value: i.value, unit: i.unit, tag: i.tag, kind: i.kind,
-      estimate_method: i.estimateMethod, note: i.note,
+      estimate_method: i.estimateMethod, note: day ? F.formatDate(i.note) : i.note,
       provenance: {
         source: i.source, as_of: i.asOf, observed_at: i.observedAt, entered_at: i.enteredAt
       }

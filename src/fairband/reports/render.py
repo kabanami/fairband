@@ -40,9 +40,10 @@ one entry a distinct ref whatever the period a cite names, each with its source 
 in words, the actor (the principal for the owner) and the revision; a line naming the stance and
 what the report rests on in the reader's words (``resting_words``, "On the data of 4 Nov 2026,
 priced that day, valid until 27 Jan 2027."), and for a valuation review the full report it reuses
-by its date, "Reuses the full report of 3 Nov 2026.", or that there is none: the lines above the
-sections name no part of Fairband and write every date as the references do (spec 2026-11-15 7);
-the sections under their headings as ``##``, each led by its chart tables
+by its date, "Reuses the full report of 3 Nov 2026." ("Reuses an earlier full report." where that
+report's record is not on file), or that there is none: the lines above the sections name no part
+of Fairband and write every date as the references do (spec 2026-11-15 7); the sections under
+their headings as ``##``, each led by its chart tables
 (``charts.chart_tables``) as ``###`` tables, then each part's text in order, a cite as its text
 and its footnote mark, ``$150.00[^1]``, so no ref is in the text; then Appendix A as tables, its
 inputs' "As of", a date input's note and its guidance's "Call" in words, and Appendix B as a
@@ -433,7 +434,8 @@ def markdown(
 ) -> str:
     """The report as Markdown (module docstring): its Appendix A ``a``, its Appendix B ``b``,
     its references ``refs`` and its chart tables by the heading of the section they lead;
-    ``reused`` the day of the full report a valuation review reuses, which its line names."""
+    ``reused`` the day of the full report a valuation review reuses, which its line names, or
+    ``None`` where that report's record is not on file, when the line names no day."""
     actor = report.actor or report.principal
     day = day_words(report.created_at.date())
     snapshot = a["snapshot"]
@@ -447,8 +449,9 @@ def markdown(
     if report.mode == "valuation review":
         if report.reuses_full_report_of is None:
             lines.append("No full report to reuse.")
+        elif reused is None:  # the reused report's record is not on file: no day to name
+            lines.append("Reuses an earlier full report.")
         else:
-            assert reused is not None  # the caller reads the reused report's day
             lines.append(f"Reuses the full report of {day_words(reused)}.")
     marks = {str(entry["ref"]): int(entry["n"]) for entry in refs}
     for section in report.sections:
