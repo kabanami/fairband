@@ -9,9 +9,10 @@ founder's rule of 2026-11-08, spec 14 steps 10 and 11 as amended for plan 3)."""
 
 import json
 import re
+from datetime import date
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import anyio
 import httpx
@@ -33,6 +34,9 @@ from fairband.reports.check import (
     quantities,
     structure_refusal,
 )
+from fairband.reports.refs import day_words
+from fairband.reports.render import resting_words
+from fairband.reports.tables import QUARTERS, TABLES, Kind
 from fairband.store.secondary import cannot_fix
 from fairband.web.identity import IDENTIFY_FIRST
 from fairband.web.reviews_api import GUIDANCE_REF
@@ -1560,12 +1564,14 @@ def test_the_agent_reads_fairband_before_it_goes_outside() -> None:
         "record each quarter's figure as a finding from the 10-Q or the press release" not in five
     )
     assert "`split-pending` or `basis-scaled`" in five
-    # the quarter's figures and their two derivations (the fix round of Task 6)
+    # the quarter's figures, its operating margin a cell of the quarters table (spec 2026-11-15
+    # 6.4), and the free cash flow's derivation (the fix round of Task 6)
     for words in (
         "The quarter's figures still come from `quarters`.",
         (
-            "The operating margin is the `derive` `ratio` of the quarter's operating income to its"
-            " revenue."
+            "The operating margin is the quarters table's cell,"
+            " `table:<symbol>/quarters/operating_margin/2026-Q3`, which `financial_tables` gives"
+            " under `quarters`."
         ),
         (
             "The free cash flow is the `derive` `sum` of its cash from operations and its capital"
@@ -1671,6 +1677,101 @@ def test_a_filing_cell_is_cited_by_the_ref_the_answer_gives() -> None:
     for words in ("`nextRow`", "`nextOffset`", "`more`", "`truncated`", "the past 365 days"):
         assert words in tools, words
     assert "`Q2` and `Q4`" in _tool_entry("quarters")
+
+
+def test_the_playbook_says_what_the_tables_the_charts_and_the_export_show() -> None:
+    """Spec 2026-11-15 6, 7, 8 and 12 (the report reader's plan, Task 9): the template says what
+    section 4's charts draw after the fiscal years, and that section 5 draws the quarters beside
+    the agent's table of the quarter, which the agent still writes; the quarter's operating margin
+    is a cell of the quarters table; the `table:` row names the periods a cell takes and what each
+    cell is; the `financial_tables` entry names the columns, their kinds and the quarters; the
+    playbook quotes Appendix A's sentences for no secondary valuation and the export's opening
+    lines as the server writes them; and the split note says what Appendix A shows of an override
+    a split rescaled."""
+    template = _flat(_read(TEMPLATE))
+    charts = template.split("### The charts", 1)[1].split("## The summary page", 1)[0]
+    for words in (
+        "in section 5 the revenue, the operating margin and the EPS by quarter",
+        "Section 4's charts show the fiscal years, then, for the lines that have them,",
+        "the twelve months to the newest stored period in grey",
+        "the analysts' estimate years as outlined bars",
+        (
+            "Section 5's charts do not replace your table of the quarter against the expectations:"
+            " write that table still."
+        ),
+    ):
+        assert words in charts, words
+    # the quarter's operating margin is a cell to cite, in the template's section 5 and in step 5
+    steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
+    for text in (template, steps[5]):
+        assert "`table:<symbol>/quarters/operating_margin/" in text
+        assert "`derive` `ratio` of the quarter's operating income" not in text
+    # the periods a `table:` ref takes, what each cell is, and the cite of an estimate cell
+    citations = _read(CITATIONS)
+    cell = _table(citations, ("Ref", "The stored value", "Unit"))[
+        "`table:<symbol>/<table>/<row>/<period>`"
+    ][0]
+    for words in (
+        "a fiscal year (`2025`), that year's figure",
+        "`ttm`, the trailing twelve months' figure",
+        "a year and `E` (`2026E`), the analysts' estimate for that year",
+        "on the table `quarters`, a stored period (`2026-Q3`), that period's figure",
+        "Cite an estimate cell of revenue or EPS by the `estimate:` ref the read gives.",
+        "may give its period as `2026E` or `2026`",
+    ):
+        assert words in cell, words
+    assert "`FY2025` reads as `2025`, and `2026E` as `2026`." in _flat(citations)
+    # the read: each table's columns with their kinds, and the quarters beside the six
+    tables = _tool_entry("financial_tables")
+    assert "five-year" not in tables
+    for words in (
+        "under `tables`",
+        f"under `{QUARTERS}`",
+        "`columns`, each `{period, kind, label}`",
+        "`{period, value, unit, ref, note}`",
+        "`ttm`",
+        "`2026E`",
+        "`2026-Q3`",
+        "`estimate:` ref",
+    ):
+        assert words in tables, words
+    for name in TABLES:
+        assert f"`{name}`" in tables, name
+    for kind in get_args(Kind):
+        assert f"kind `{kind}`" in tables, kind
+    # Appendix A's sentence for no secondary valuation, as the server writes it (spec 7)
+    route = "No secondary valuation: Fairband's own valuation gives the company a value"
+    review = "No secondary valuation: the review gives the company a value"
+    for text in (steps[12], template):
+        for sentence in (route, review):
+            assert f'Appendix A says "{sentence}"' in text, sentence
+    for path in sorted(PLAYBOOK.rglob("*.md")):
+        text = _flat(_read(path)).lower()
+        for old in (
+            "secondary valuation: the route values",
+            "secondary valuation: the review values",
+        ):
+            assert old not in text, (path.name, old)
+    # the export's opening lines and its order, in the server's words (spec 7 and 9)
+    summary = template.split("## The summary page", 1)[1].split("```", 1)[0]
+    rests = resting_words(date(2026, 11, 4), date(2026, 11, 4), date(2027, 1, 27))
+    reused = f"Reuses the full report of {day_words(date(2026, 11, 3))}."
+    for words in (
+        "the date in words",
+        f'Its second reads "Stance: hold. {rests}"',
+        f'"{reused}"',
+        "the sections, Appendix A, Appendix B and, last, the references",
+    ):
+        assert words in summary, words
+    assert "the snapshot and its price date" not in template
+    # an override a split rescaled: Appendix A shows the figures in force and the scaling's words
+    check = "Check the figure in force against the new basis before you publish."
+    shown = (
+        "Appendix A shows such an override's old and new figures in force, both on the new basis,"
+        " with the note's words: \"entered as $30.00 a share before the 2-for-1 split of 27 Jan"
+        ' 2027".'
+    )
+    assert 0 <= steps[8].index(check) < steps[8].index(shown)
 
 
 def _read(path: Path) -> str:

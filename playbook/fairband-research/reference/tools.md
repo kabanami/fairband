@@ -72,9 +72,18 @@ be left out.
   `split-pending` or `basis-scaled` it may sit on another share basis than the quote's. It calls
   no vendor. Without an annual income statement on file it answers "no financial statements for
   <symbol>" (404), as `financials` does.
-- `financial_tables(symbol)`: the six five-year tables of the report's section 4, `growth`,
-  `cash_flow`, `solvency`, `returns`, `capital_allocation` and `quality`, each cell
-  `{period, value, unit, ref, note}`.
+- `financial_tables(symbol)`: the six tables of the report's section 4 under `tables`, `growth`,
+  `cash_flow`, `solvency`, `returns`, `capital_allocation` and `quality`, and the quarters table
+  of section 5 beside them under `quarters`. Each table has its `columns`, each
+  `{period, kind, label}`, and its `rows`, each `{name, unit, cells}` with one cell
+  `{period, value, unit, ref, note}` under each column. The columns: the last five fiscal years,
+  kind `fiscal` (`2025`, "2025"); on `growth`, `cash_flow` and `capital_allocation`, then the
+  trailing twelve months, kind `trailing`, where the trailing figures end after the newest fiscal
+  year (`ttm`, "12 months to 30 Sep 2026"); and on `growth`, then the analysts' years after the
+  newest fiscal year, three at most, kind `estimate` (`2026E`, "2026 estimate"). The quarters
+  table's columns are the newest eight stored periods, kind `quarter` (`2026-Q3`, "Q3 2026"), and
+  its rows the revenue, the operating margin and the EPS. A cell that is one stored line gives its
+  `fact:` ref, and an estimate of revenue or EPS its `estimate:` ref: cite the ref as given.
 - `estimates(symbol)`: the stored analyst consensus by quarter and by fiscal year, each figure with
   its `estimate:` ref.
 - `price_history(symbol, years?)`: the stored daily closes, oldest first, each with its `close:`

@@ -69,7 +69,7 @@ nothing.
 | `guidance:<id>/low`, `/high`, `/midpoint`, `/step` | a guidance record's figures, of its period; the step only on a `gaap` fiscal-year revenue, EPS or net income record with the year before's actual on file | the metric's: currency for revenue, net income, free cash flow and capex, per-share for EPS, percent for the margin and the two growth rates; percent for the step |
 | `multiple:<symbol>/<series>/<date>`, `multiple:<symbol>/<series>/<stat>` | a point of the trailing (`pe`) or the forward (`pe_forward`) P/E history by its date, or a statistic over the ten years to the series' newest day: `avg_10y`, `median_10y`, `high_10y`, `low_10y`; a date with no point (a loss, a day off the series) names nothing | multiple |
 | `fact:<symbol>/<line>/<year, quarter or ttm>` | a stored statement line as the engine reads it: a fiscal year's, a stored quarter's by its fiscal label (`2027-Q1`), or the trailing figures'. `quarters` gives a quarter's lines with their refs | currency; per-share for EPS; count for the diluted shares |
-| `table:<symbol>/<table>/<row>/<year>` | a cell of `financial_tables` | the row's |
+| `table:<symbol>/<table>/<row>/<period>` | a cell of `financial_tables` by its column's period: a fiscal year (`2025`), that year's figure; `ttm`, the trailing twelve months' figure; a year and `E` (`2026E`), the analysts' estimate for that year; or, on the table `quarters`, a stored period (`2026-Q3`), that period's figure. A cell that is one stored line gives its `fact:` ref instead. Cite an estimate cell of revenue or EPS by the `estimate:` ref the read gives. A cite of an estimate cell, by either ref, may give its period as `2026E` or `2026`. A period the table has no column for names nothing | the row's |
 | `estimate:<symbol>/<period>/<field>` | a stored consensus figure, the period a fiscal year (`2026`) or a quarter (`2026-Q4`) | currency; per-share for EPS; count for the analysts |
 | `close:<symbol>/<date>` | a stored daily close | per-share |
 | `peer:<symbol>/<peer>/<field>` | a mature peer's `market_cap`, `margin`, `margin_years`, `sales_to_capital` or `roic` | currency, percent, count, multiple, percent |
@@ -154,8 +154,9 @@ Four rules more:
 
 ## The period
 
-A cite's period must be the ref's. `FY2025` reads as `2025`. A ref with a period and a cite with
-none passes. A ref with no period (a snapshot's figure, a policy value) fails a cite that names one.
+A cite's period must be the ref's. `FY2025` reads as `2025`, and `2026E` as `2026`. A ref with a
+period and a cite with none passes. A ref with no period (a snapshot's figure, a policy value)
+fails a cite that names one.
 A finding's and a guidance record's period is the one recorded: a guidance quarter reads `2027Q1`,
 with no dash, while a consensus quarter reads `2027-Q1`. A close's and a multiple's period is its
 date. When in doubt, leave the period out.

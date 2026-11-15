@@ -219,9 +219,10 @@ Then build the seven parts:
    each against the same quarter a year before and against the consensus for the quarter. The
    quarter's revenue, EPS, operating income and cash flow are the figures of `quarters(symbol)`,
    cited by their `fact:` refs (`fact:<symbol>/revenue/2026-Q3`), with the quarter as their period;
-   the same quarter a year before is among the eight. The operating margin is the `derive` `ratio`
-   of the quarter's operating income to its revenue. The free cash flow is the `derive` `sum` of
-   its cash from operations and its capital spending, which the store holds negative. On a row
+   the same quarter a year before is among the eight. The operating margin is the quarters table's
+   cell, `table:<symbol>/quarters/operating_margin/2026-Q3`, which `financial_tables` gives under
+   `quarters`. The free cash flow is the `derive` `sum` of its cash from operations and its capital
+   spending, which the store holds negative. On a row
    flagged `split-pending` or `basis-scaled`, check a quarter's EPS against the flag's note before
    you cite it: the stored EPS may sit on another share basis than the quote's. A figure the stored
    statements do not hold (a segment's revenue, a customer count, a non-GAAP figure) comes from the
@@ -449,9 +450,11 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   a split when both its quote's date and the day its statements were fetched are on or after the
   split's day; a snapshot a price refresh made carries the figures of the one it repriced, so a
   refresh on the split's day before the US close has not seen it. The JUDGMENT entry gives the figure in force, and its note the figure as entered
-  and the split. Check the figure in force against the new basis before you publish. A
-  period-tied override whose input the split rescaled drops as "the input the override corrected
-  changed": make it again on the new basis.
+  and the split. Check the figure in force against the new basis before you publish. Appendix A
+  shows such an override's old and new figures in force, both on the new basis, with the note's
+  words: "entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027". A period-tied
+  override whose input the split rescaled drops as "the input the override corrected changed":
+  make it again on the new basis.
 - `basis-scaled`: an ADR's share count or trailing EPS was read on the quote's share basis by the
   ADR ratio or its inverse, because FMP held a period's count off by it, or a trailing period was
   read as stored for the basis. The sentence names the factor, the periods scaled, the stored
@@ -638,9 +641,10 @@ the answer is the report's id, symbol, time and work item; `report(symbol, id)` 
 read it only when you need to. A structural
 refusal (the section count, the stance, a judgment, a heading, or no secondary valuation on a
 refused snapshot) is one sentence: fix it and submit again. A valued snapshot needs no secondary
-valuation: Appendix A says "no secondary valuation: the route values the company". A refused
-snapshot your review values needs none either: Appendix A says "no secondary valuation: the review
-values the company". A snapshot refused for a reason you cannot fix needs none (no diluted share
+valuation: Appendix A says "No secondary valuation: Fairband's own valuation gives the company a
+value". A refused snapshot your review values needs none either: Appendix A says "No secondary
+valuation: the review gives the company a value". A snapshot refused for a reason you cannot fix
+needs none (no diluted share
 count, the reporting currency's or the share basis's): the server refused one, section 8 says why,
 and Appendix A names the refusal in its own words. A rejection (422) lists the findings: fix each
 one and submit again.

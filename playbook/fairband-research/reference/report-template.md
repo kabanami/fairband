@@ -112,8 +112,10 @@ One page, in this order. Step 5 of `SKILL.md` says how to build each part.
    thesis. The price's move on the next trading day, a `derive` `growth` of two closes.
 2. **The quarter against expectations.** A table of revenue, EPS, the operating margin and free
    cash flow: the quarter, the same quarter a year before, the consensus for the quarter and the
-   surprise. Every cell is a stored quarter's figure from `quarters`, a stored estimate or a
-   derivation. Then what drove the quarter: price, volume, mix, currency, one-time items.
+   surprise. Every cell is a stored quarter's figure from `quarters`, the quarters table's
+   operating margin (`table:<symbol>/quarters/operating_margin/<period>`, from `financial_tables`),
+   a stored estimate or a derivation. Then what drove the quarter: price, volume, mix, currency,
+   one-time items.
 3. **The story management is telling.** The frame in their words, quoted. Then three to five
    claims, in a table of four columns:
 
@@ -242,7 +244,8 @@ The kill criteria of section 11 test it.
 - **The secondary valuation**, on a refused row with no reviewed value only: where neither the
   route nor your review values the company, it stands in for the route's value and leads the
   section. Where an override gave the current review a value, the reviewed value leads and there is
-  no secondary valuation: Appendix A says "no secondary valuation: the review values the company".
+  no secondary valuation: Appendix A says "No secondary valuation: the review gives the company a
+  value".
   The drivers in words, with their figures cited (`secondary:<id>/drivers/<name>`,
   `/drivers/<name>/<t>`); the value, `secondary:<id>/value`; the grid's range, two cells
   `secondary:<id>/grid/<i>/<j>`. Where the server refused the secondary valuation for a refusal
@@ -322,14 +325,24 @@ the market cap and the `equity` `fact:` line.
 ### The charts
 
 The report page draws the charts itself, from the store: in section 4 each table's figures; in
-section 8 the sensitivity grid, or on a refused row the secondary valuation's grid; in section 9
-the P/E history with its average lines. The Markdown export carries each chart's table under the
+section 5 the revenue, the operating margin and the EPS by quarter, the newest eight stored
+periods; in section 8 the sensitivity grid, or on a refused row the secondary valuation's grid; in
+section 9 the P/E history with its average lines. Section 4's charts show the fiscal years, then,
+for the lines that have them, the twelve months to the newest stored period in grey and the
+analysts' estimate years as outlined bars. The Markdown export carries each chart's table under the
 same title. Write no chart and no chart table: write the sentences, and cite the figures they name.
+Section 5's charts do not replace your table of the quarter against the expectations: write that
+table still.
 
 ## The summary page
 
 The shape, as the reader sees it once the cites are written in. Every figure is a cite in the
-submission. The server's header line gives the company, the date, the snapshot and its price date.
+submission. The server writes the lines above it. The export's first line names the company, the
+mode, the date in words, the author and the revision. Its second reads "Stance: hold. On the data
+of 4 Nov 2026, priced that day, valid until 27 Jan 2027." A valuation review's third names the
+full report it reuses: "Reuses the full report of 3 Nov 2026." The page's line under the title
+gives the same dates and the report reused, its parts joined by "·". The export then gives the
+sections, Appendix A, Appendix B and, last, the references.
 
 ```
 Stance: hold.
@@ -391,14 +404,14 @@ year ends in September. The call of 28 Oct 2026 reported the fourth quarter of f
 guided fiscal 2027: guidance records 17 (EPS) and 18 (revenue). The agent's override of the NTM
 earnings, citing record 17 (override 301), and of the belief (override 302) made review 89.
 The route values the company, so the report makes no secondary valuation and reads no DCF, and
-Appendix A says "no secondary valuation: the route values the company". Sensitivity reading 57
-sets the belief against the runway return. The quarter's revenue and EPS, and the same quarter a
-year before, are the stored quarters' figures from `quarters`, each cited by its `fact:` ref;
-finding 124, the share of bookings, is a figure the statements do not hold. The derivations: 531
-and 532 the surprises, `growth` of the quarter's stored figure (its `fact:` ref) over the
-consensus; 534 the next-day move, `growth` of the close of 29 Oct 2026 over the close of 28 Oct
-2026; 535 and 536 the two differences of the year's range, and 537 their ratio. Every plain part
-holds no quantity; every figure is a cite.
+Appendix A says "No secondary valuation: Fairband's own valuation gives the company a value".
+Sensitivity reading 57 sets the belief against the runway return. The quarter's revenue and EPS,
+and the same quarter a year before, are the stored quarters' figures from `quarters`, each cited
+by its `fact:` ref; finding 124, the share of bookings, is a figure the statements do not hold.
+The derivations: 531 and 532 the surprises, `growth` of the quarter's stored figure (its `fact:`
+ref) over the consensus; 534 the next-day move, `growth` of the close of 29 Oct 2026 over the
+close of 28 Oct 2026; 535 and 536 the two differences of the year's range, and 537 their ratio.
+Every plain part holds no quantity; every figure is a cite.
 
 ```json
 {
