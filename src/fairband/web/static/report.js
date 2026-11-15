@@ -362,8 +362,8 @@
 
   /* The snapshot: its id, its data date, its price date, the end of its window, its price and its
      value a share, and on a company in another currency the reporting currency its money figures
-     are in, last; the export's Appendix A opens with the same line (render.py, `_snapshot_line`;
-     method 16.6). */
+     are in, last; the export's Appendix A opens with the same line, but for its thousands
+     separator from $1,000 up (render.py, `_snapshot_line`; method 16.6). */
   function snapshotLine(s) {
     var code = s.currency && s.currency !== 'USD' ? s.currency : null;
     return h('p', { className: 'body' },

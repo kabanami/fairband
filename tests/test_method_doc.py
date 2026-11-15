@@ -726,7 +726,9 @@ def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s
         (
             "Appendix A: the snapshot the report rests on, with the reporting currency its money"
             " figures are in (section 7; USD for a row with no rate), in one line that opens it,"
-            " the page's and the export's alike: its id, its data date, its price date, the end"
+            " the page's and the export's alike but for the export's thousands separator from"
+            ' $1,000 up ("$1,507.85" where the page writes "$1507.85"): its id, its data date, its'
+            " price date, the end"
             " of its window, its price and its value a share, and last, on a company in another"
             ' currency, the currency ("Snapshot 412 · data 4 Nov 2026 · priced 4 Nov 2026 · valid'
             ' until 27 Jan 2027 · price $150.00 · value $128.00 · in SEK"), a dash for a date or a'
