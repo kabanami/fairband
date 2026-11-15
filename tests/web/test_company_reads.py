@@ -26,7 +26,7 @@ from fairband.engine.balance import BalanceYear
 from fairband.engine.classifier import FiscalYear
 from fairband.engine.route import value_company
 from fairband.policy import Policy
-from fairband.refresh.inputs_statements import QuarterFigures
+from fairband.refresh.inputs_statements import QuarterFigures, stored_quarters
 from fairband.reports.refs import Resolver
 from fairband.reports.tables import LINES, TABLES
 from fairband.store.companies import insert_companies
@@ -347,6 +347,45 @@ def test_financial_tables(client: TestClient) -> None:
         "note": None,
     }
     assert client.get("/api/companies/AAL/financial-tables").status_code == 404
+
+
+def test_financial_tables_serve_the_quarters_beside_the_six(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Spec 2026-11-15 6.4, 6.5: the read serves the quarters table under ``quarters``, beside the
+    six, which ``tables`` still holds alone; the stored periods are read once for both. AAPL holds
+    the five synthetic quarters to 30 Sep 2026: quarter i with revenue $300 m + $10 m × i and
+    operating income $60 m + $2 m × i."""
+    read: list[str] = []
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        read.append(args[1])
+        return stored_quarters(*args, **kwargs)
+
+    monkeypatch.setattr("fairband.web.reports_api.stored_quarters", counted)
+    monkeypatch.setattr("fairband.reports.tables.stored_quarters", counted)
+    body = _get(client, "/api/companies/AAPL/financial-tables")
+    assert read == ["AAPL"]
+    assert list(body) == ["symbol", "currency", "tables", "quarters"]
+    assert [t["name"] for t in body["tables"]] == list(TABLES) and len(TABLES) == 6
+    quarters = body["quarters"]
+    assert quarters["name"] == "quarters"
+    assert [r["name"] for r in quarters["rows"]] == ["revenue", "operating_margin", "eps"]
+    assert [c["period"] for c in quarters["columns"]] == [
+        "2025-Q3",
+        "2025-Q4",
+        "2026-Q1",
+        "2026-Q2",
+        "2026-Q3",
+    ]
+    assert quarters["columns"][-1] == {"period": "2026-Q3", "kind": "quarter", "label": "Q3 2026"}
+    assert quarters["rows"][1]["cells"][-1] == {
+        "period": "2026-Q3",
+        "value": pytest.approx(68 / 340),
+        "unit": "percent",
+        "ref": "table:AAPL/quarters/operating_margin/2026-Q3",
+        "note": None,
+    }
 
 
 def test_estimates(client: TestClient) -> None:

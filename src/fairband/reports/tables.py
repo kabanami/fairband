@@ -74,6 +74,17 @@ margins ``None``, "no estimate for this line".
   against the year before) on the balance years, ``None`` without the year's balance sheet, or
   the year before's for F; F is ``None`` with no signal read and noted "<n> of 9 signals read"
   when some go unread. Beneish M, which no source supplies yet: ``None``, "not on file".
+
+The quarters table of section 5 (spec 2026-11-15 6.4), ``quarters_table``, stands beside the six
+and not among them: ``financial_tables`` returns the six alone. Its columns are the newest
+``QUARTERS_SHOWN`` stored periods in the reporting currency (``stored_quarters``), oldest first,
+each ``quarter``, its period the stored period's own (``2026-Q3``, a half-year's as the store
+names it) and its label the fiscal period then the fiscal year ("Q3 2026"); none without a stored
+period. Its rows: ``revenue`` and ``eps``, the period's revenue and diluted EPS, citing
+``fact:<symbol>/revenue/<period>`` and ``fact:<symbol>/eps_diluted/<period>``; and
+``operating_margin``, the period's operating income over its revenue, citing itself,
+``table:<symbol>/quarters/operating_margin/<period>``, ``None`` where either is missing or the
+revenue is at or below zero.
 """
 
 import sqlite3
@@ -103,6 +114,8 @@ from fairband.store.companies import latest_company
 from fairband.store.snapshots import latest_snapshot
 
 TABLES = ("growth", "cash_flow", "solvency", "returns", "capital_allocation", "quality")
+QUARTERS = "quarters"  # the quarters table's name, beside the six (spec 2026-11-15 6.4)
+QUARTERS_SHOWN = 8
 YEARS = 5
 TRAILING = "ttm"
 ESTIMATE_YEARS = 3
@@ -207,6 +220,7 @@ def financial_tables(
     tax: TaxTable | None = None,
     *,
     consensus: Sequence[AnnualEstimate] | None = None,
+    stored: Sequence[QuarterFigures] | None = None,
 ) -> tuple[Table, ...]:
     """The six tables of ``symbol`` with their columns, in ``TABLES``' order: its last five fiscal
     years on file, the trailing twelve months and the consensus years where a table has them
@@ -214,7 +228,8 @@ def financial_tables(
     income statement. ``tax`` is the table the capital years are taxed with, the packaged one
     when ``None``; the hurdle rate is ``policy``'s r, restated on a company in another currency.
     ``consensus`` is the annual consensus as an ``estimate:`` ref reads it (``build_inputs``
-    under ``policy`` and ``tax``), handed in by a caller that holds it, read here when ``None``."""
+    under ``policy`` and ``tax``), and ``stored`` the stored periods as ``stored_quarters`` reads
+    them, each handed in by a caller that holds it and read here when ``None``."""
     country, _ = country_for(conn, symbol, latest_company(conn, symbol))
     taxed = load_tax_table() if tax is None else tax
     stated = statements_for(conn, symbol, country, taxed, _NO_DAY)
@@ -230,7 +245,7 @@ def financial_tables(
         policy,
         _hurdle(conn, symbol, policy),
         consensus,
-        stored_quarters(conn, symbol).periods,
+        stored_quarters(conn, symbol).periods if stored is None else stored,
     )
     return (
         _growth(f),
@@ -239,6 +254,42 @@ def financial_tables(
         _returns(f),
         _capital_allocation(f),
         _quality(f),
+    )
+
+
+def quarters_table(
+    conn: sqlite3.Connection,
+    symbol: str,
+    *,
+    stored: Sequence[QuarterFigures] | None = None,
+) -> Table:
+    """The quarters table of ``symbol`` (module docstring): the newest ``QUARTERS_SHOWN`` stored
+    periods, oldest first, under the revenue, the operating margin and the EPS; no column and
+    every row without cells when none is stored. ``stored`` is the stored periods as
+    ``stored_quarters`` reads them, handed in by a caller that holds them, read here when
+    ``None``."""
+    periods = stored_quarters(conn, symbol).periods if stored is None else stored
+    shown = periods[-QUARTERS_SHOWN:]
+
+    def fact(row: str, line: str, unit: Unit) -> Row:
+        """A row of one stored line, each cell the period's, citing it."""
+        cells = (
+            Cell(q.period, getattr(q, line), unit, fact_ref(symbol, line, q.period)) for q in shown
+        )
+        return Row(row, unit, tuple(cells))
+
+    def margin(q: QuarterFigures) -> Cell:
+        ref = table_ref(symbol, QUARTERS, "operating_margin", q.period)
+        return Cell(q.period, _per(q.operating_income, q.revenue), "percent", ref)
+
+    return Table(
+        QUARTERS,
+        (
+            fact("revenue", "revenue", "currency"),
+            Row("operating_margin", "percent", tuple(margin(q) for q in shown)),
+            fact("eps", "eps_diluted", "per-share"),
+        ),
+        tuple(Column(q.period, "quarter", f"{q.fiscal_period} {q.fiscal_year}") for q in shown),
     )
 
 

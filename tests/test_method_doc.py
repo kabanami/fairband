@@ -553,6 +553,55 @@ def test_the_tables_carry_their_columns_past_the_last_fiscal_year() -> None:
         assert words in references, words
 
 
+def test_the_quarters_table_stands_beside_the_six() -> None:
+    """Spec 2026-11-15 6.4 and 6.5: 16.5 states the quarters table, its columns, its rows and
+    their refs, the margin's empty cells, the table with no column and a half-year filer's; 16.2
+    the quarter period of a ``table:`` ref and its words."""
+    sixteen = _section(16)
+    tables = sixteen[sixteen.index("### 16.5") : sixteen.index("### 16.6")]
+    for words in (
+        (
+            "The quarters table of the report's section 5 stands beside the six, not among them"
+            " (spec 2026-11-15 6.4): the newest eight stored periods in the reporting currency"
+            " (16.9), oldest first"
+        ),
+        (
+            "each a column of its own kind, a quarter, its period the stored period's label"
+            ' (`2026-Q3`) and its label the fiscal period and the fiscal year ("Q3 2026")'
+        ),
+        (
+            "Its rows are the revenue and the EPS, each the stored period's line, citing"
+            " `fact:<symbol>/revenue/<period>` and `fact:<symbol>/eps_diluted/<period>`"
+        ),
+        (
+            "the operating margin, the period's operating income over its revenue, citing itself,"
+            " `table:<symbol>/quarters/operating_margin/<period>`"
+        ),
+        (
+            "the margin holds no figure where either line is missing or the revenue is at or"
+            " below zero"
+        ),
+        "A company with no stored period has the table with no column.",
+        "A half-yearly reporter's columns are its half-years, under the store's own period names",
+        (
+            "The `/financial-tables` read serves the table beside the six, under `quarters`, and"
+            " the six alone under `tables`."
+        ),
+    ):
+        assert words in tables, words
+    references = sixteen[sixteen.index("### 16.2") : sixteen.index("### 16.3")]
+    for words in (
+        (
+            "or a consensus year and `E` for an estimate (`2026E`); on the quarters table, a stored"
+            " period's label (`2026-Q3`); a period the table has no column for is `unresolved"
+            " reference`"
+        ),
+        "a year, `ttm`, a year and `E` (`2026E`) or a stored period's label (`2026-Q3`)",
+        '"the quarters table, operating margin, Q3 of fiscal 2026"',
+    ):
+        assert words in references, words
+
+
 def test_section_16_names_the_six_failures() -> None:
     section = _section(16)
     for failure in FAILURES:

@@ -35,6 +35,8 @@ from fairband.reports.tables import (
     NO_ESTIMATE,
     NOT_ON_FILE,
     NOT_TRAILING,
+    QUARTERS,
+    QUARTERS_SHOWN,
     SHORT_HISTORY,
     TABLES,
     TRAILING,
@@ -42,6 +44,7 @@ from fairband.reports.tables import (
     Table,
     estimate_period,
     financial_tables,
+    quarters_table,
 )
 from fairband.store.db import transaction
 from fairband.store.facts import facts_for
@@ -593,3 +596,131 @@ def test_a_company_with_no_consensus_has_no_estimate_column(
 ) -> None:
     for table in financial_tables(conn, "ACME", policy):
         assert "estimate" not in {c.kind for c in table.columns}, table.name
+
+
+def test_the_quarters_table_holds_the_stored_periods(
+    conn: sqlite3.Connection, policy: Policy
+) -> None:
+    """Spec 2026-11-15 6.4: quarter i of the five stored, with revenue $300 m + $10 m × i,
+    operating income $60 m + $2 m × i and EPS 0.45 + 0.01 × i. The table stands beside the six:
+    ``financial_tables`` keeps returning them alone."""
+    table = quarters_table(conn, "ACME")  # five stored quarters, 30 Sep 2025 to 30 Sep 2026
+    assert table.name == "quarters" and [r.name for r in table.rows] == [
+        "revenue",
+        "operating_margin",
+        "eps",
+    ]
+    assert [(c.period, c.kind, c.label) for c in table.columns] == [
+        ("2025-Q3", "quarter", "Q3 2025"),
+        ("2025-Q4", "quarter", "Q4 2025"),
+        ("2026-Q1", "quarter", "Q1 2026"),
+        ("2026-Q2", "quarter", "Q2 2026"),
+        ("2026-Q3", "quarter", "Q3 2026"),
+    ]
+    assert _periods(table) == [c.period for c in table.columns]
+    for row, unit in zip(table.rows, ("currency", "percent", "per-share"), strict=True):
+        assert row.unit == unit and {c.unit for c in row.cells} == {unit}, row.name
+    cell = {r.name: {c.period: c for c in r.cells} for r in table.rows}
+    assert cell["revenue"]["2026-Q3"].value == 340 * M
+    assert cell["revenue"]["2026-Q3"].ref == "fact:ACME/revenue/2026-Q3"
+    assert cell["operating_margin"]["2026-Q3"].value == pytest.approx(68 / 340)
+    assert cell["operating_margin"]["2026-Q3"].ref == "table:ACME/quarters/operating_margin/2026-Q3"
+    assert cell["eps"]["2025-Q3"].value == pytest.approx(0.45)
+    assert cell["eps"]["2025-Q3"].ref == "fact:ACME/eps_diluted/2025-Q3"
+    assert table.name == QUARTERS and QUARTERS not in TABLES
+    assert tuple(t.name for t in financial_tables(conn, "ACME", policy)) == TABLES
+
+
+def test_the_quarters_table_shows_the_newest_eight(conn: sqlite3.Connection) -> None:
+    """Ten stored quarters, 30 Jun 2024 to 30 Sep 2026, quarter i with revenue $300 m + $10 m × i:
+    the table shows the last eight, oldest first, from quarter 2."""
+    _store_quarters(conn, "ACME", (date(2024, 6, 30), date(2024, 9, 30), *EIGHT_QUARTERS))
+    table = quarters_table(conn, "ACME")
+    assert QUARTERS_SHOWN == 8 and len(table.columns) == QUARTERS_SHOWN
+    assert _periods(table) == [
+        "2024-Q4",
+        "2025-Q1",
+        "2025-Q2",
+        "2025-Q3",
+        "2025-Q4",
+        "2026-Q1",
+        "2026-Q2",
+        "2026-Q3",
+    ]
+    revenue = _cells(table)["revenue"]
+    assert (revenue["2024-Q4"].value, revenue["2026-Q3"].value) == (320 * M, 390 * M)
+
+
+def test_a_company_without_stored_periods_has_the_table_without_columns(
+    conn: sqlite3.Connection,
+) -> None:
+    """ACME with its quarterly statements gone, and a symbol with no statements at all: the table
+    with no column and its three rows without cells."""
+    _store_quarters(conn, "ACME", ())
+    for symbol in ("ACME", "NONE"):
+        table = quarters_table(conn, symbol)
+        assert (table.name, table.columns) == (QUARTERS, ()), symbol
+        assert [(r.name, r.unit, r.cells) for r in table.rows] == [
+            ("revenue", "currency", ()),
+            ("operating_margin", "percent", ()),
+            ("eps", "per-share", ()),
+        ], symbol
+
+
+def test_a_half_year_filer_s_quarters_table_holds_its_half_years(
+    conn: sqlite3.Connection,
+) -> None:
+    """Review Focus 3: the columns are the stored half-years under the store's own period names.
+    The fixture's half-years end in December and June and are stored as FMP names a period by its
+    end's quarter, ``Q4`` and ``Q2``; the newest is stored here as ``H1``, and keeps that name.
+    Half i has revenue $300 m + $10 m × i and operating income $60 m + $2 m × i."""
+    payloads = {e: p for e, p in bodies(cadence="half-yearly").items() if e != "earnings"}
+    newest = max(payloads["income-quarter"], key=lambda row: row["date"])
+    newest["period"] = "H1"
+    store_payloads(conn, "HALF", payloads, NOW)
+    table = quarters_table(conn, "HALF")
+    assert [(c.period, c.kind, c.label) for c in table.columns] == [
+        ("2024-Q4", "quarter", "Q4 2024"),
+        ("2025-Q2", "quarter", "Q2 2025"),
+        ("2025-Q4", "quarter", "Q4 2025"),
+        ("2026-H1", "quarter", "H1 2026"),
+    ]
+    assert _periods(table) == [c.period for c in table.columns]
+    cells = _cells(table)
+    assert (cells["revenue"]["2026-H1"].value, cells["revenue"]["2026-H1"].ref) == (
+        330 * M,
+        "fact:HALF/revenue/2026-H1",
+    )
+    margin = cells["operating_margin"]["2025-Q2"]
+    assert margin.value == pytest.approx(62 / 310)
+    assert margin.ref == "table:HALF/quarters/operating_margin/2025-Q2"
+
+
+def test_a_quarter_without_revenue_has_no_margin(conn: sqlite3.Connection) -> None:
+    """The operating margin is ``None`` where the period's revenue is missing or at or below zero,
+    or its operating income is missing; the revenue cell holds what is stored."""
+    first, second = bodies()["income-quarter"][:2]
+    rows = [{**first, "revenue": 0}, {**second, "revenue": -10 * M}]
+    store_payloads(conn, "ACME", {"income-quarter": rows}, NOW)
+    _drop(conn, "income-quarter", "revenue", "2026-03-31")
+    _drop(conn, "income-quarter", "operatingIncome", "2026-06-30")
+    cells = _cells(quarters_table(conn, "ACME"))
+    assert [c.value for c in cells["revenue"].values()] == [0, -10 * M, None, 330 * M, 340 * M]
+    assert [c.value for c in cells["operating_margin"].values()] == [
+        None,
+        None,
+        None,
+        None,
+        pytest.approx(68 / 340),
+    ]
+
+
+def test_a_quarter_in_another_currency_has_no_column(conn: sqlite3.Connection) -> None:
+    """Beside annual statements in USD, the two oldest quarters reported in CAD are left out, as
+    ``stored_quarters`` leaves them out: the table shows the reporting currency's periods."""
+    payloads = {e: p for e, p in bodies().items() if e != "earnings"}
+    rows = payloads["income-quarter"]
+    for k in (0, 1):
+        rows[k] = {**rows[k], "reportedCurrency": "CAD"}
+    store_payloads(conn, "CADQ", payloads, NOW)
+    assert _periods(quarters_table(conn, "CADQ")) == ["2026-Q1", "2026-Q2", "2026-Q3"]

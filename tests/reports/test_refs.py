@@ -40,7 +40,7 @@ from fairband.reports.refs import (
     same_snapshot,
     unit_of,
 )
-from fairband.reports.tables import financial_tables
+from fairband.reports.tables import financial_tables, quarters_table
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.multiples import log_multiples
@@ -834,6 +834,81 @@ def test_a_resolver_reads_the_inputs_once_for_its_tables_and_its_consensus(
     assert built == ["AAPL"]  # handed the consensus, the tables read no inputs
     assert handed == financial_tables(conn, "AAPL", policy)
     assert built == ["AAPL", "AAPL"]
+
+
+def test_a_quarter_cell_resolves_and_reads_in_words(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-15 6.5: a ``table:`` ref of a quarter cell resolves through the table named
+    ``quarters``, by the column's period, and reads "the quarters table, operating margin, Q3 of
+    fiscal 2026". Every cell of the table resolves so, and its own ref, a ``fact:`` of a stored
+    period's line or the cell's ``table:`` path, to the cell's value. AAPL holds ACME's five
+    quarters to 30 Sep 2026: quarter i with operating income $60 m + $2 m × i on revenue
+    $300 m + $10 m × i."""
+    resolver = Resolver(conn, "AAPL", policy)
+    margin = "table:AAPL/quarters/operating_margin/2026-Q3"
+    found = resolver.resolve(margin)
+    assert found is not None and (found.unit, found.period) == ("percent", "2026-Q3")
+    assert found.value == pytest.approx(68 / 340)
+    assert resolver.describe(margin) == "the quarters table, operating margin, Q3 of fiscal 2026"
+    table = quarters_table(conn, "AAPL")
+    assert len(table.columns) == 5
+    for row in table.rows:
+        for cell in row.cells:
+            ref = f"table:AAPL/quarters/{row.name}/{cell.period}"
+            assert resolver.resolve(ref) == Resolved(cell.value, cell.unit, cell.period, None), ref
+            cited = resolver.resolve(cell.ref)
+            assert cited is not None and cited.value == cell.value, cell.ref
+            assert cited.period == cell.period, cell.ref
+    # a period the table has no column for, a fiscal year among them, and a row it does not hold
+    for ref in (
+        "table:AAPL/quarters/operating_margin/2025-Q2",
+        "table:AAPL/quarters/operating_margin/2025",
+        "table:AAPL/quarters/net_margin/2026-Q3",
+        "table:AAPL/growth/operating_margin/2026-Q3",
+    ):
+        assert resolver.resolve(ref) is None, ref
+
+
+def test_a_resolver_reads_the_quarters_table_only_for_a_quarter_cell(
+    conn: sqlite3.Connection,
+    policy: Policy,
+    snapshots: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The quarters table is held apart from the six in the resolver's reads, so one that
+    resolves no quarter cell does not build it, and one that resolves two builds it once. The
+    stored periods are read once for a stored period's ``fact:`` ref, the six tables and the
+    quarters table; the tables are the same whether handed them or reading them themselves."""
+    built: list[str] = []
+    read: list[str] = []
+
+    def counted_table(*args: Any, **kwargs: Any) -> Any:
+        built.append(args[1])
+        return quarters_table(*args, **kwargs)
+
+    def counted_read(*args: Any, **kwargs: Any) -> Any:
+        read.append(args[1])
+        return stored_quarters(*args, **kwargs)
+
+    monkeypatch.setattr("fairband.reports.tables.quarters_table", counted_table)
+    monkeypatch.setattr("fairband.reports.refs.stored_quarters", counted_read)
+    monkeypatch.setattr("fairband.reports.tables.stored_quarters", counted_read)
+    resolver = Resolver(conn, "AAPL", policy)
+    for ref in (
+        "table:AAPL/growth/revenue/2025",
+        "table:AAPL/growth/operating_margin/ttm",
+        "fact:AAPL/revenue/2026-Q3",
+    ):
+        assert resolver.resolve(ref) is not None, ref
+    assert built == []
+    for ref in ("table:AAPL/quarters/revenue/2026-Q3", "table:AAPL/quarters/eps/2025-Q3"):
+        assert resolver.resolve(ref) is not None, ref
+    assert (built, read) == (["AAPL"], ["AAPL"])
+    held = stored_quarters(conn, "AAPL").periods
+    assert quarters_table(conn, "AAPL", stored=held) == quarters_table(conn, "AAPL")
+    handed = financial_tables(conn, "AAPL", policy, stored=held)
+    assert handed == financial_tables(conn, "AAPL", policy)
 
 
 def test_estimate_close_and_peer_refs(

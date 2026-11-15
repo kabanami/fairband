@@ -16,8 +16,10 @@ engine's snake_case name.
   periodEnd, fiscalYear, fiscalPeriod}`` with a figure a line of the trailing figures, its ref
   ``fact:<symbol>/<line>/<period>`` by the stored fiscal label (``2027-Q1``); ``otherCurrency``
   counts the stored periods left out for another currency. ``financials`` does not serve them.
-- ``/financial-tables``: the six tables of ``fairband.reports.tables``, each with its columns
-  ``{period, kind, label}`` and each cell ``{period, value, unit, ref, note}``.
+- ``/financial-tables``: the six tables of ``fairband.reports.tables`` under ``tables``, each with
+  its columns ``{period, kind, label}`` and each cell ``{period, value, unit, ref, note}``, and
+  the quarters table of section 5 beside them under ``quarters``, in the same form (spec
+  2026-11-15 6.4, 6.5).
 - ``/estimates``: the stored consensus as ``build_inputs`` reads it, the quarters and the fiscal
   years oldest first, each figure with its ``estimate:`` ref; a quarter's period is
   ``<fiscal year>-Q<n>`` and a year's the fiscal year. None without statements to place them.
@@ -131,7 +133,7 @@ from fairband.reports.refs import (
     same_snapshot,
 )
 from fairband.reports.render import appendix_a, appendix_b, markdown, references
-from fairband.reports.tables import financial_tables
+from fairband.reports.tables import financial_tables, quarters_table
 from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.inbox import Mode, WorkItem, complete_item, work_item
@@ -267,11 +269,14 @@ def add_report_routes(
         symbol = _symbol(symbol)
         with closing(conn_factory()) as conn:
             stated = statements(conn, symbol)
-            found = financial_tables(conn, symbol, effective(conn, policy), tax)
+            stored = stored_quarters(conn, symbol).periods  # once, for the six and the quarters
+            found = financial_tables(conn, symbol, effective(conn, policy), tax, stored=stored)
+            quarters = quarters_table(conn, symbol, stored=stored)
         return {
             "symbol": symbol,
             "currency": stated.currency,
             "tables": [asdict(table) for table in found],
+            "quarters": asdict(quarters),
         }
 
     @app.get("/api/companies/{symbol}/estimates")

@@ -36,7 +36,8 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
   currency, or not on file, names nothing; spec 2026-11-11 7.2);
 - ``table:<symbol>/<table>/<row>/<period>``: a cell of the financial tables (13.5) by its
   column's period, a fiscal year, ``ttm`` or a consensus year and ``E`` (``2026E``; spec
-  2026-11-15 6.1); a period the table has no column for names nothing;
+  2026-11-15 6.1), or of the quarters table (``tables.QUARTERS``, 6.4) by a stored period's label
+  (``2026-Q3``); a period the table has no column for names nothing;
 - ``estimate:<symbol>/<period>/<field>``: a stored consensus figure, ``<period>`` the fiscal year
   (``2026``) or the quarter (``2026-Q4``) and ``<field>`` the engine's name (``eps``,
   ``net_income``, ``analysts_eps``);
@@ -101,9 +102,9 @@ snapshot's price date); ``review:``
 valuation 9, year 3 FCFF"; ``sensitivity:`` "sensitivity 7, row 1 column 2" or "sensitivity 7, the
 belief of row 1", the axis's input by its label; ``fact:`` "the
 revenue line of fiscal 2025 on file" or "the revenue line of Q1 of fiscal 2027 on file";
-``table:`` "the growth table, revenue growth, fiscal 2025", "…, the trailing twelve months" or
-"…, fiscal 2026, the analysts' estimate" (read from the period alone, so a cell no longer on file
-reads the same);
+``table:`` "the growth table, revenue growth, fiscal 2025", "…, the trailing twelve months",
+"…, fiscal 2026, the analysts' estimate" or "the quarters table, operating margin, Q3 of fiscal
+2026" (read from the period alone, so a cell no longer on file reads the same);
 ``estimate:`` "the consensus for Q4 of fiscal 2026, EPS"; ``close:`` "the close of 3 Nov 2026";
 ``multiple:`` "the trailing P/E, 30 Oct 2026" or "the forward P/E, the ten-year average";
 ``peer:`` "ACME, margin"; ``finding:`` "finding 88: 10-K 2025, p. 41", the finding's source;
@@ -849,16 +850,31 @@ class Resolver:
         if len(pieces) != 4 or not self._own(pieces[0]):
             return None
         _, table, row, period = pieces
-        from fairband.reports.tables import Table, financial_tables  # tables builds its refs here
+        # tables builds its refs here
+        from fairband.reports.tables import QUARTERS, Table, financial_tables, quarters_table
 
         def read() -> tuple[Table, ...]:
-            # the consensus the resolver's ``estimate:`` refs read, so the store is read once
+            # the consensus the resolver's ``estimate:`` refs read and the stored periods its
+            # ``fact:`` refs read, so the store is read once
             consensus = self._inputs().annual_estimates
             return financial_tables(
-                self.conn, self.symbol, self.policy, self.tax, consensus=consensus
+                self.conn,
+                self.symbol,
+                self.policy,
+                self.tax,
+                consensus=consensus,
+                stored=self._stored_periods(),
             )
 
-        tables: tuple[Table, ...] = self._once("tables", read)
+        def read_quarters() -> tuple[Table, ...]:
+            return (quarters_table(self.conn, self.symbol, stored=self._stored_periods()),)
+
+        # the quarters table is held apart, so a report that cites none of its cells reads none
+        tables: tuple[Table, ...] = (
+            self._once("quarters table", read_quarters)
+            if table == QUARTERS
+            else self._once("tables", read)
+        )
         for found in tables:
             for r in found.rows if found.name == table else ():
                 for cell in r.cells if r.name == row else ():
@@ -1014,6 +1030,11 @@ class Resolver:
             lambda: {q.period: q for q in stored_quarters(self.conn, self.symbol).periods},
         )
         return found
+
+    def _stored_periods(self) -> tuple[QuarterFigures, ...]:
+        """The stored quarters in the reporting currency, oldest first, as ``stored_quarters``
+        serves them: the quarters' read, which keeps their order."""
+        return tuple(self._quarters().values())
 
     def _inputs(self) -> CompanyInputs:
         found: CompanyInputs = self._once(

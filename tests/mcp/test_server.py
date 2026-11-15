@@ -337,8 +337,8 @@ def test_inbox_post_says_what_the_note_holds(api: FairbandClient) -> None:
 
 
 def test_financial_tables_names_its_columns(api: FairbandClient) -> None:
-    """Spec 2026-11-15 6.5: the tables carry their columns past the fiscal years, and the tool's
-    description says so."""
+    """Spec 2026-11-15 6.4, 6.5: the tables carry their columns past the fiscal years, and the
+    quarters table stands beside the six; the tool's description says so."""
     server = build_server(api)
 
     async def listed() -> list[Any]:
@@ -349,8 +349,9 @@ def test_financial_tables_names_its_columns(api: FairbandClient) -> None:
     tables = next(t.description or "" for t in tools if t.name == "financial_tables")
     assert tables == (
         "The six tables of a report's section 4, with their columns (the five fiscal years, the"
-        " trailing twelve months and the consensus years where a table has them), each cell with"
-        " its ref to cite."
+        " trailing twelve months and the consensus years where a table has them), and the"
+        " quarters table of section 5 (the newest eight stored periods), each cell with its ref"
+        " to cite."
     )
 
 
