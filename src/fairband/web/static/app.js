@@ -211,7 +211,9 @@
      company page (company.js; the company page's design, 7) draws its head with the logo, the
      phase numbers, the moat stamp (moatStamp) and Request research as the report page keeps it,
      and opens the watchlists popup under its head's button (watch) on the company's row or, the
-     lists loaded, on the company alone (rows, watchlists). The
+     lists loaded, on the company alone (rows, watchlists); its Fairband value block
+     (company_overview.js, 8.2) draws the meter, the four levels under it in the screen's words
+     (levelRows) and the local day of its report (localIso). The
      Inbox view's row (inbox.js, B-210) keeps a request for each pending item too, posts its launch
      (openLaunch) and draws the line's words (launchWords) from the item the line is drawn from
      (lineItem). The open item's line (launchLine), the drawer's route sections, the charge's
@@ -228,7 +230,7 @@
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
     openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
-    meter: meter,
+    meter: meter, levelRows: levelRows,
     inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     inputValue: inputValue,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
@@ -905,6 +907,29 @@
     var v = body.review;
     return !isValued(r) && !!r.refusal && !(v && v.value != null) && !!s && !!s.levels &&
       r.price != null;
+  }
+
+  /* The four levels under the meter in the screen's words, as [name, text] pairs (the company
+     page's design, 8.2 and 11): Fair value, Buy level, Fair band and Trim level of the value the
+     meter draws (meter). On a valued row the review's where it counts and has a value, else the
+     snapshot's (drawnLevels); on a refused row the review's band or the secondary valuation's
+     that the meter draws; null where the meter draws no band. */
+  function levelRows(body) {
+    var d = isValued(body.result) ? drawnLevels(body) : null;
+    var v = body.review;
+    var s = body.secondary;
+    var band = d ? {
+      value: d.value, buy: d.levels.buy, fairLow: d.levels.fair_low,
+      fairHigh: d.levels.fair_high, trim: d.levels.trim
+    } : isReviewBanded(body) ? Object.assign({ value: v.value }, v.levels)
+      : isBanded(body) ? Object.assign({ value: s.valuePerShare }, s.levels) : null;
+    if (!band) return null;
+    return [
+      ['Fair value', F.formatMoney(band.value)],
+      ['Buy level', F.formatMoney(band.buy)],
+      ['Fair band', F.formatMoney(band.fairLow) + ' – ' + F.formatMoney(band.fairHigh)],
+      ['Trim level', F.formatMoney(band.trim)]
+    ];
   }
 
   /* The flags the drawer lists, { flags, reviewed } (spec 2026-11-13 8a): the review's, which the

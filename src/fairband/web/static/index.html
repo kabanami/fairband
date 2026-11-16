@@ -620,6 +620,41 @@
     padding-left: 0; text-align: left;
   }
   .app-company__table td.app-company__rowname { color: var(--ink-muted); }
+  /* The Overview's left column (the company page's design, 8.1 to 8.3), as its mockup lays it
+     out: inside a block, two or three columns, three becoming two under 700px of the block's
+     width and both one under 460px; the company's brief in ink-muted, three lines while closed,
+     Show more under it in accent; the meter clear of the levels; the report's line under a
+     hairline rule. */
+  .app-company__two {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--space-8);
+  }
+  .app-company__three {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4) var(--space-8); align-items: start;
+  }
+  @container (width < 700px) {
+    .app-company__three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container (width < 460px) {
+    .app-company__two, .app-company__three { grid-template-columns: minmax(0, 1fr); }
+  }
+  .app-company__stack { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+  .app-company__brief { max-width: 86ch; margin: 0 0 var(--space-2); color: var(--ink-muted); }
+  .app-company__brief.is-clamped {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3;
+    overflow: hidden;
+  }
+  .app-company__more {
+    appearance: none; margin: 0 0 var(--space-3); padding: 0; background: none; border: 0;
+    color: var(--accent); cursor: pointer;
+  }
+  .app-company__more:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-company__meter { margin-bottom: var(--space-3); }
+  .app-company__research {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+    margin: var(--space-3) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--hairline);
+  }
+  .app-company__research p { margin: 0; color: var(--ink-muted); }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or
      menu, no Request research or its lines (plan 4), and not today's figures, the headline, the
@@ -679,5 +714,6 @@
 <script src="/static/report.js"></script>
 <script src="/static/charts.js"></script>
 <script src="/static/company.js"></script>
+<script src="/static/company_overview.js"></script>
 </body>
 </html>

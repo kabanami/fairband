@@ -9,8 +9,9 @@ stored. The detail is written by hand in the shape of ``GET /api/companies/{symb
 (``web/app.py``, ``company``): LFOX valued on the Mature Growth route at $196.50 against a price
 of $182.40, a wide moat, two notes, no review, no report and no open item.
 
-The builders give the variants: a refused row, a reviewed row with a published report, and the
-two answers of a company with nothing stored but its profile. Each returns a new copy."""
+The builders give the variants: a refused row, a reviewed row with a published report, the two
+answers of a company with nothing stored but its profile, and the overview of one with nothing
+stored at all. Each returns a new copy."""
 
 import copy
 from datetime import date
@@ -234,6 +235,16 @@ def profile_only_overview() -> dict[str, Any]:
         "priceChange": page_fmp.price_change(None),
         "prices": page_fmp.prices(None, None),
         "news": {"stories": [], "observedAt": None, "stale": True, "limit": NEWS_STORIES},
+    }
+
+
+def empty_overview() -> dict[str, Any]:
+    """The overview answer of a company with nothing stored, not even its profile: every figure
+    and every fact ``None``, no prices and no stories."""
+    return profile_only_overview() | {
+        "company": page_fmp.company(None),
+        "statistics": page_fmp.statistics({}, None, None, "USD", TODAY),
+        "trading": page_fmp.trading(None, None, None),
     }
 
 

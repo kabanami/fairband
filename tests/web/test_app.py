@@ -846,6 +846,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/report.js",
         "/static/charts.js",
         "/static/company.js",
+        "/static/company_overview.js",
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url

@@ -364,6 +364,9 @@
   /* A multiple to one decimal: 39.3x; a dash at exactly 0. */
   function multiple(x) { return ok(x) && x !== 0 ? minus(fixed(Math.abs(x), 1) + 'x', x) : '—'; }
 
+  /* A plain number to `dp` decimals, grouped: 1.18, 11.9, −0.42; its zero is a zero. */
+  function decimal(x, dp) { return ok(x) ? minus(fixed(Math.abs(x), dp), x) : '—'; }
+
   /* A day: 13 Nov 2026. */
   function day(iso) { return iso ? F.formatDate(String(iso).slice(0, 10)) : '—'; }
 
@@ -398,7 +401,7 @@
   P.companyPage = {
     head: head, tabs: tabs, panel: panel, kv: kv, group: group, table: table,
     money: money, big: big, percent: percent, points: points, signed: signed,
-    multiple: multiple, day: day, count: count,
+    multiple: multiple, decimal: decimal, day: day, count: count,
     watchRow: watchRow, failure: failure,
     draw: {}
   };

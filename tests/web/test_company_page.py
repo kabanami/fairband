@@ -366,6 +366,13 @@ def test_a_tab_replaces_the_hash_and_research_adds_an_entry() -> None:
         ("multiple", [39.3], "39.3x"),
         ("multiple", [0], "—"),
         ("multiple", [None], "—"),
+        ("decimal", [1.18, 2], "1.18"),
+        ("decimal", [11.86, 1], "11.9"),
+        ("decimal", [0, 2], "0.00"),
+        ("decimal", [-0.42, 2], "−0.42"),
+        ("decimal", [-0.001, 2], "0.00"),
+        ("decimal", [1234.5, 2], "1,234.50"),
+        ("decimal", [None, 2], "—"),
         ("day", ["2026-11-13"], "13 Nov 2026"),
         ("day", [None], "—"),
         ("count", [167000], "167,000"),
@@ -375,8 +382,8 @@ def test_a_tab_replaces_the_hash_and_research_adds_an_entry() -> None:
 def test_the_formatters(helper: str, args: list[Any], shown: str) -> None:
     """Money to cents, a currency other than the US dollar by its code; large amounts compact; a
     fraction or a percent as given to one decimal unless told; a sign on a change that is not
-    zero at its precision; a multiple's x, and a dash at 0; a date in words; a count grouped. A
-    missing figure is the dash."""
+    zero at its precision; a multiple's x, and a dash at 0; a plain number to the decimals told,
+    its zero a zero; a date in words; a count grouped. A missing figure is the dash."""
     assert _page(helper, *args) == shown
 
 
