@@ -622,3 +622,16 @@ launch route.
   the new page with the `settings.js` it had kept from the build before. The page and its static
   files now answer `Cache-Control: no-cache`, so a browser asks at each load whether a file
   changed (`web/app.py`). B-213.
+- 2026-11-16, the live acceptance of section 15, steps 2 to 5, done by the founder on the live
+  server (main `9ab3a30`) and read from the records. Step 2: Use the Windows Terminal line, Save
+  and Test opened a tab in which Claude Code wrote "The Fairband research skill is loaded. The
+  Fairband tools are connected: identify is among my tools, as mcp__fairband__identify"; the
+  test's launch ended with exit code 0. Step 3: the founder saved the model `opus`, the effort
+  `xhigh` and the mode `bypassPermissions`, and the session of step 4 identified itself as
+  `claude-opus-5-5`; no record holds the effort, and what the tab showed for it was not reported.
+  Step 4: a request for ADBE, a full report (work item 33). The launch was stored 0.02 seconds
+  after the item and reported started 0.8 seconds later; the session claimed the item 11.8
+  seconds after the post and wrote "I claimed work item 33 (ADBE, full report) and started the
+  scoped refresh." Step 5: the `settings` table holds no row, as before, and the snapshot that
+  the session's refresh made carries the one settings hash that every other snapshot carries.
+  Still not tested: a launch with Windows Terminal closed.
