@@ -241,16 +241,28 @@ def test_the_newest_growth_and_dividend_rows_are_found_by_date_not_by_place() ->
     assert answer == statistics(ANSWERS, p.PROFILE, ROW, "TWD")
 
 
+def test_the_last_payment_is_an_older_row_s_under_a_newest_row_without_one() -> None:
+    declared = {"date": "2026-12-11", "paymentDate": "", "frequency": "Irregular"}
+    paid = {**p.DIVIDENDS[0], "frequency": "Semi-Annual"}  # paid 9 Oct 2026
+    stored = {**ANSWERS, "dividends": [declared, paid]}
+    dividends = statistics(stored, p.PROFILE, ROW, "TWD")["dividends"]
+    assert dividends["lastPayment"] == "2026-10-09"
+    assert dividends["frequency"] == "Irregular"  # the newest row's, dated by its date
+
+
 def test_a_dividend_without_a_payment_date_is_placed_by_its_date() -> None:
     declared = {"date": "2026-12-11", "paymentDate": "", "frequency": "Irregular"}
     undated = {"paymentDate": None, "date": None, "frequency": "Monthly"}
     stored = {**ANSWERS, "dividends": [undated, *p.DIVIDENDS, declared]}
     dividends = statistics(stored, p.PROFILE, ROW, "TWD")["dividends"]
-    assert dividends["frequency"] == "Irregular" and dividends["lastPayment"] is None
+    assert dividends["frequency"] == "Irregular" and dividends["lastPayment"] == "2026-10-09"
     early = {**declared, "date": "2026-10-01"}  # before the newest payment date
     stored = {**ANSWERS, "dividends": [early, *p.DIVIDENDS]}
     dividends = statistics(stored, p.PROFILE, ROW, "TWD")["dividends"]
     assert dividends["frequency"] == "Quarterly" and dividends["lastPayment"] == "2026-10-09"
+    stored = {**ANSWERS, "dividends": [declared, early]}  # no row holds a payment date
+    dividends = statistics(stored, p.PROFILE, ROW, "TWD")["dividends"]
+    assert dividends["frequency"] == "Irregular" and dividends["lastPayment"] is None
 
 
 def test_a_growth_row_without_a_date_is_passed_over() -> None:

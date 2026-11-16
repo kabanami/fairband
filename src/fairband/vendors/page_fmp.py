@@ -19,7 +19,9 @@ name is the page's own (camelCase), not FMP's.
   quote's price and change stay plain numbers in US dollars. Nothing is converted.
 - Days are ISO dates. The newest row of an answer is found by its date, not by its place in the
   answer: the growth's by ``date``, the dividends' by ``paymentDate``, else ``date``; the prices,
-  the earnings and the consensus are put in order by date.
+  the earnings and the consensus are put in order by date. The last payment is the latest
+  ``paymentDate`` among the dividends that hold one, so a newest dividend declared without one
+  does not hide an older payment.
 - An answer of the wrong shape (FMP's ``{"Error Message": ...}``, ``null``, a text, a list of
   anything but objects) reads as no answer: each reader gives its shape with ``None`` figures or
   an empty list. None raises on any JSON value.
@@ -174,14 +176,15 @@ def statistics(
     """The Key statistics block, group by group (the design's 8.3). ``answers`` maps a page
     endpoint (``fetch.PAGE_ENDPOINTS``) to its parsed answer, an absent or ``None`` one being no
     answer; ``quote`` is the company's quote row (``quote_row``); ``reporting`` is the company's
-    reporting currency. The growth is the newest fiscal year's, and the dividend's frequency and
-    last payment the newest dividend's."""
+    reporting currency. The growth is the newest fiscal year's; the dividend's frequency is the
+    newest dividend's, and its last payment the latest ``paymentDate`` any row holds."""
     ratios = _first(answers.get("ratios-ttm"))
     metrics = _first(answers.get("key-metrics-ttm"))
     scores = _first(answers.get("financial-scores"))
     floated = _first(answers.get("shares-float"))
     growth = _newest(answers.get("financial-growth"), "date")
-    paid = _newest(answers.get("dividends"), "paymentDate", "date")
+    newest_dividend = _newest(answers.get("dividends"), "paymentDate", "date")
+    last_paid = _newest(answers.get("dividends"), "paymentDate")
     listed = _row(quote)
     about = _first(profile)
     return {
@@ -218,8 +221,8 @@ def statistics(
             "yield": number(ratios.get("dividendYieldTTM")),
             "payout": number(ratios.get("dividendPayoutRatioTTM")),
             "perShare": money(ratios.get("dividendPerShareTTM"), reporting),
-            "frequency": text(paid.get("frequency")),
-            "lastPayment": _day(paid.get("paymentDate")),
+            "frequency": text(newest_dividend.get("frequency")),
+            "lastPayment": _day(last_paid.get("paymentDate")),
         },
     }
 
