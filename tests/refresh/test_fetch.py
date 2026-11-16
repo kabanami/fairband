@@ -547,13 +547,20 @@ def test_the_page_calls_store_their_params(
 
 
 def test_a_failed_page_call_is_named_and_costs_nothing(
-    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+    conn: sqlite3.Connection,
+    clients: Clients,
+    router: Router,
+    clock: Clock,
+    policy: Policy,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """None of the ten is required: each failure is named, and the error stays ``None``, so the
-    company is valued (``test_run``)."""
+    """None of the ten is required: each failure is logged and named, and the error stays
+    ``None``, so the company is valued (``test_run``)."""
+    caplog.set_level(logging.WARNING, logger="fairband.refresh")
     router.fail = set(PAGE_ENDPOINTS)
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome("ACME", calls=27, reused=0, failed=PAGE_ENDPOINTS, error=None)
+    assert all(f"ACME fmp {e} failed: GET " in caplog.text for e in PAGE_ENDPOINTS)
     stored = responses(conn)
     assert {(stored[e]["http_status"], stored[e]["payload"]) for e in PAGE_ENDPOINTS} == {
         (500, None)
@@ -631,21 +638,26 @@ def test_a_429_on_a_page_call_stops_the_fetch(
     assert (stored["grades"]["http_status"], stored["grades"]["payload"]) == (429, None)
 
 
+def env_passthrough(env: Env) -> Passthrough:
+    """The pass-through over the environment's clients and database."""
+    clients = env.clients
+    return Passthrough(clients.fmp, env.connect, env.policy, env.clock, clients.secrets, clients.gf)
+
+
+def env_fetch(env: Env, symbol: str) -> FetchOutcome:
+    """``fetch_company`` for ``symbol`` on the environment's clients and database."""
+    clients = env.clients
+    with closing(env.connect()) as conn:
+        return fetch_company(
+            conn, clients.fmp, clients.gf, symbol, env.policy, env.clock(), clients.secrets
+        )
+
+
 def test_the_news_is_stored_under_the_pass_through_s_key(env: Env) -> None:
     """Spec 2026-11-16 10.1: the refresh's news and the pass-through's at the same limit, 60, are
     one reuse key, so each reuses the other's copy."""
-    clients = env.clients
-    passthrough = Passthrough(
-        clients.fmp, env.connect, env.policy, env.clock, clients.secrets, clients.gf
-    )
-
-    def fetch_company_of(symbol: str) -> FetchOutcome:
-        with closing(env.connect()) as conn:
-            return fetch_company(
-                conn, clients.fmp, clients.gf, symbol, env.policy, env.clock(), clients.secrets
-            )
-
-    assert fetch_company_of("ACME").failed == ()
+    passthrough = env_passthrough(env)
+    assert env_fetch(env, "ACME").failed == ()
     assert env.router.calls["news"] == 1
     fetched = passthrough.fetch("news", "ACME", {"limit": "60"})["news"]
     assert fetched.reused and env.router.calls["news"] == 1
@@ -654,6 +666,24 @@ def test_the_news_is_stored_under_the_pass_through_s_key(env: Env) -> None:
     # The other way round: BOLT's news, fetched by the pass-through first, the fetch reuses.
     fresh = passthrough.fetch("news", "BOLT", {"limit": "60"})["news"]
     assert not fresh.reused and env.router.calls["news"] == 2
-    outcome = fetch_company_of("BOLT")
+    outcome = env_fetch(env, "BOLT")
     assert (outcome.failed, outcome.reused) == ((), 1)
     assert env.router.calls["news"] == 2
+
+
+def test_a_news_error_body_the_pass_through_stored_is_not_reused(env: Env) -> None:
+    """FMP answers some failures with HTTP 200 and ``{"Error Message": ...}``. The pass-through
+    stores such a news answer with its error and answers it as fetched, so neither it nor the
+    fetch, which shares its key at 60, reuses it: the fetch calls the news again."""
+    env.router.bodies["news"] = b'{"Error Message": "x"}'
+    passthrough = env_passthrough(env)
+    first = passthrough.fetch("news", "ACME", {"limit": "60"})["news"]
+    assert (first.reused, first.payload) == (False, {"Error Message": "x"})
+    assert first.row.error == 'unusable payload: {"Error Message": "x"}'
+    assert passthrough.fetch("news", "ACME", {"limit": "60"})["news"].reused is False
+    assert env.router.calls["news"] == 2
+
+    del env.router.bodies["news"]
+    outcome = env_fetch(env, "ACME")
+    assert (outcome.failed, outcome.reused) == ((), 0)
+    assert env.router.calls["news"] == 3
