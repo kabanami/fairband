@@ -20,8 +20,9 @@ name is the page's own (camelCase), not FMP's.
 - Days are ISO dates. The newest row of an answer is found by its date, not by its place in the
   answer: the growth's by ``date``, the dividends' by ``paymentDate``, else ``date``; the prices,
   the earnings and the consensus are put in order by date. The last payment is the latest
-  ``paymentDate`` among the dividends that hold one, so a newest dividend declared without one
-  does not hide an older payment.
+  ``paymentDate`` on or before today among the dividends that hold one, so neither a newest
+  dividend declared without one nor a payment still to come hides an older payment. Today comes
+  in as an argument, as it does for the next earnings date.
 - An answer of the wrong shape (FMP's ``{"Error Message": ...}``, ``null``, a text, a list of
   anything but objects) reads as no answer: each reader gives its shape with ``None`` figures or
   an empty list. None raises on any JSON value.
@@ -171,20 +172,25 @@ def company(profile: Any) -> dict[str, Any]:
 
 
 def statistics(
-    answers: Mapping[str, Any], profile: Any, quote: Mapping[str, Any] | None, reporting: str
+    answers: Mapping[str, Any],
+    profile: Any,
+    quote: Mapping[str, Any] | None,
+    reporting: str,
+    today: date,
 ) -> dict[str, Any]:
     """The Key statistics block, group by group (the design's 8.3). ``answers`` maps a page
     endpoint (``fetch.PAGE_ENDPOINTS``) to its parsed answer, an absent or ``None`` one being no
     answer; ``quote`` is the company's quote row (``quote_row``); ``reporting`` is the company's
     reporting currency. The growth is the newest fiscal year's; the dividend's frequency is the
-    newest dividend's, and its last payment the latest ``paymentDate`` any row holds."""
+    newest dividend's, and its last payment the latest ``paymentDate`` on or before ``today``
+    that any row holds: a payment still to come is not a last payment."""
     ratios = _first(answers.get("ratios-ttm"))
     metrics = _first(answers.get("key-metrics-ttm"))
     scores = _first(answers.get("financial-scores"))
     floated = _first(answers.get("shares-float"))
     growth = _newest(answers.get("financial-growth"), "date")
     newest_dividend = _newest(answers.get("dividends"), "paymentDate", "date")
-    last_paid = _newest(answers.get("dividends"), "paymentDate")
+    last_paid = _last_payment(answers.get("dividends"), today)
     listed = _row(quote)
     about = _first(profile)
     return {
@@ -222,7 +228,7 @@ def statistics(
             "payout": number(ratios.get("dividendPayoutRatioTTM")),
             "perShare": money(ratios.get("dividendPerShareTTM"), reporting),
             "frequency": text(newest_dividend.get("frequency")),
-            "lastPayment": _day(last_paid.get("paymentDate")),
+            "lastPayment": _iso(last_paid),
         },
     }
 
@@ -290,15 +296,7 @@ def next_earnings(payload: Any, today: date) -> dict[str, Any] | None:
     ``today`` with no actual EPS. Its ``time`` as FMP gives it (``"amc"``, ``"bmo"`` or other) and
     ``confirmed`` where FMP gives a boolean, else ``None``; ``None`` without such a row."""
     found = _next_row(payload, today)
-    if found is None:
-        return None
-    when, row = found
-    confirmed = row.get("confirmed")
-    return {
-        "day": when.isoformat(),
-        "time": text(row.get("time")),
-        "confirmed": confirmed if isinstance(confirmed, bool) else None,
-    }
+    return None if found is None else _next_date(*found)
 
 
 def earnings(payload: Any, today: date) -> dict[str, Any]:
@@ -309,12 +307,11 @@ def earnings(payload: Any, today: date) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     found = _next_row(payload, today)
     if found is not None:
-        when, row = found
-        rows.append(_earnings_row(when, row, reported=False))
+        rows.append(_earnings_row(*found, reported=False))
     reported = [(when, row) for row, when in dated(payload) if row.get("epsActual") is not None]
     reported.sort(key=lambda pair: pair[0], reverse=True)
     rows.extend(_earnings_row(when, row, reported=True) for when, row in reported)
-    return {"next": next_earnings(payload, today), "rows": rows}
+    return {"next": None if found is None else _next_date(*found), "rows": rows}
 
 
 def consensus(payload: Any, after: date | None, reporting: str) -> list[dict[str, Any]]:
@@ -376,6 +373,12 @@ def _newest(payload: Any, *fields: str) -> Mapping[str, Any]:
     return {} if newest is None else newest[1]
 
 
+def _last_payment(payload: Any, today: date) -> date | None:
+    """The latest ``paymentDate`` on or before ``today`` among the dividends that hold one."""
+    days = (parse_date(row.get("paymentDate")) for row in objects(payload))
+    return max((day for day in days if day is not None and day <= today), default=None)
+
+
 def _numbers(
     row: Mapping[str, Any], fields: tuple[tuple[str, str], ...]
 ) -> dict[str, float | None]:
@@ -410,6 +413,16 @@ def _next_row(payload: Any, today: date) -> tuple[date, dict[str, Any]] | None:
         if row.get("epsActual") is None and when >= today
     ]
     return min(upcoming, key=lambda pair: pair[0], default=None)
+
+
+def _next_date(when: date, row: Mapping[str, Any]) -> dict[str, Any]:
+    """``next_earnings``'s answer for the row of the next date."""
+    confirmed = row.get("confirmed")
+    return {
+        "day": when.isoformat(),
+        "time": text(row.get("time")),
+        "confirmed": confirmed if isinstance(confirmed, bool) else None,
+    }
 
 
 def _earnings_row(when: date, row: Mapping[str, Any], *, reported: bool) -> dict[str, Any]:

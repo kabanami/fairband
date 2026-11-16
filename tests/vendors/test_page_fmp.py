@@ -101,7 +101,7 @@ def test_yearly() -> None:
     assert yearly(-1.0, 3) is None and yearly(-1.5, 3) is None and yearly(None, 3) is None
 
 
-def test_yearly_of_a_fall_and_of_none() -> None:
+def test_yearly_of_a_fall_and_of_no_growth() -> None:
     assert yearly(-0.271, 3) == pytest.approx(-0.1000, abs=1e-4)
     assert yearly(0, 5) == 0
 
@@ -146,7 +146,7 @@ def test_the_employees_are_a_whole_number_from_a_number_or_a_text_of_digits(
     profile = [{**p.PROFILE[0], "fullTimeEmployees": employees}]
     assert company(profile)["employees"] == count
     assert isinstance(company(profile)["employees"], int)
-    assert statistics({}, profile, None, "USD")["size"]["employees"] == count
+    assert statistics({}, profile, None, "USD", TODAY)["size"]["employees"] == count
 
 
 @pytest.mark.parametrize(
@@ -156,11 +156,11 @@ def test_the_employees_are_a_whole_number_from_a_number_or_a_text_of_digits(
 def test_employees_that_are_not_a_whole_number_read_none(employees: Any) -> None:
     profile = [{**p.PROFILE[0], "fullTimeEmployees": employees}]
     assert company(profile)["employees"] is None
-    assert statistics({}, profile, None, "USD")["size"]["employees"] is None
+    assert statistics({}, profile, None, "USD", TODAY)["size"]["employees"] is None
 
 
 def test_statistics() -> None:
-    assert statistics(ANSWERS, p.PROFILE, ROW, "TWD") == {
+    assert statistics(ANSWERS, p.PROFILE, ROW, "TWD", TODAY) == {
         "size": {
             "marketCap": usd(412600000000),
             "enterpriseValue": twd(12480000000000),
@@ -234,41 +234,57 @@ def test_the_newest_growth_and_dividend_rows_are_found_by_date_not_by_place() ->
         "financial-growth": p.GROWTH[::-1],
         "dividends": p.DIVIDENDS[::-1],
     }
-    answer = statistics(oldest_first, p.PROFILE, ROW, "TWD")
+    answer = statistics(oldest_first, p.PROFILE, ROW, "TWD", TODAY)
     assert answer["growth"]["fiscalYear"] == 2025
     assert answer["growth"]["revenue"] == 0.3381
     assert answer["dividends"]["lastPayment"] == "2026-10-09"
-    assert answer == statistics(ANSWERS, p.PROFILE, ROW, "TWD")
+    assert answer == statistics(ANSWERS, p.PROFILE, ROW, "TWD", TODAY)
 
 
 def test_the_last_payment_is_an_older_row_s_under_a_newest_row_without_one() -> None:
     declared = {"date": "2026-12-11", "paymentDate": "", "frequency": "Irregular"}
     paid = {**p.DIVIDENDS[0], "frequency": "Semi-Annual"}  # paid 9 Oct 2026
     stored = {**ANSWERS, "dividends": [declared, paid]}
-    dividends = statistics(stored, p.PROFILE, ROW, "TWD")["dividends"]
+    dividends = statistics(stored, p.PROFILE, ROW, "TWD", TODAY)["dividends"]
     assert dividends["lastPayment"] == "2026-10-09"
     assert dividends["frequency"] == "Irregular"  # the newest row's, dated by its date
+
+
+def test_the_last_payment_is_on_or_before_today() -> None:
+    declared = {"date": "2026-12-11", "paymentDate": "2027-01-08", "frequency": "Irregular"}
+    stored = {**ANSWERS, "dividends": [declared, *p.DIVIDENDS]}
+    dividends = statistics(stored, p.PROFILE, ROW, "TWD", TODAY)["dividends"]
+    assert dividends["lastPayment"] == "2026-10-09"  # the older paid row's, not 8 Jan 2027
+    assert dividends["frequency"] == "Irregular"  # the newest row's, dated by its payment date
+    on_the_day = {**declared, "paymentDate": "2026-11-16"}
+    stored = {**ANSWERS, "dividends": [on_the_day, *p.DIVIDENDS]}
+    assert statistics(stored, p.PROFILE, ROW, "TWD", TODAY)["dividends"]["lastPayment"] == (
+        "2026-11-16"
+    )
+    stored = {**ANSWERS, "dividends": [declared]}  # only a payment to come
+    dividends = statistics(stored, p.PROFILE, ROW, "TWD", TODAY)["dividends"]
+    assert dividends["lastPayment"] is None and dividends["frequency"] == "Irregular"
 
 
 def test_a_dividend_without_a_payment_date_is_placed_by_its_date() -> None:
     declared = {"date": "2026-12-11", "paymentDate": "", "frequency": "Irregular"}
     undated = {"paymentDate": None, "date": None, "frequency": "Monthly"}
     stored = {**ANSWERS, "dividends": [undated, *p.DIVIDENDS, declared]}
-    dividends = statistics(stored, p.PROFILE, ROW, "TWD")["dividends"]
+    dividends = statistics(stored, p.PROFILE, ROW, "TWD", TODAY)["dividends"]
     assert dividends["frequency"] == "Irregular" and dividends["lastPayment"] == "2026-10-09"
     early = {**declared, "date": "2026-10-01"}  # before the newest payment date
     stored = {**ANSWERS, "dividends": [early, *p.DIVIDENDS]}
-    dividends = statistics(stored, p.PROFILE, ROW, "TWD")["dividends"]
+    dividends = statistics(stored, p.PROFILE, ROW, "TWD", TODAY)["dividends"]
     assert dividends["frequency"] == "Quarterly" and dividends["lastPayment"] == "2026-10-09"
     stored = {**ANSWERS, "dividends": [declared, early]}  # no row holds a payment date
-    dividends = statistics(stored, p.PROFILE, ROW, "TWD")["dividends"]
+    dividends = statistics(stored, p.PROFILE, ROW, "TWD", TODAY)["dividends"]
     assert dividends["frequency"] == "Irregular" and dividends["lastPayment"] is None
 
 
 def test_a_growth_row_without_a_date_is_passed_over() -> None:
     undated = {**p.GROWTH[1], "date": "", "fiscalYear": "2026"}
     stored = {**ANSWERS, "financial-growth": [undated, p.GROWTH[1]]}
-    assert statistics(stored, p.PROFILE, ROW, "TWD")["growth"]["fiscalYear"] == 2024
+    assert statistics(stored, p.PROFILE, ROW, "TWD", TODAY)["growth"]["fiscalYear"] == 2024
 
 
 def test_a_field_that_is_not_a_finite_number_reads_none() -> None:
@@ -276,13 +292,13 @@ def test_a_field_that_is_not_a_finite_number_reads_none() -> None:
         '[{"grossProfitMarginTTM": "0.59", "netProfitMarginTTM": NaN, '
         '"ebitdaMarginTTM": null, "pretaxProfitMarginTTM": true}]'
     )
-    margins = statistics({**ANSWERS, "ratios-ttm": ratios}, p.PROFILE, ROW, "TWD")["margins"]
+    margins = statistics({**ANSWERS, "ratios-ttm": ratios}, p.PROFILE, ROW, "TWD", TODAY)["margins"]
     assert margins == dict.fromkeys(("gross", "ebitda", "operating", "pretax", "net"))
 
 
 def test_an_endpoint_absent_or_none_reads_as_no_answer() -> None:
-    absent = statistics({}, p.PROFILE, ROW, "TWD")
-    assert absent == statistics(dict.fromkeys(PAGE_ENDPOINTS), p.PROFILE, ROW, "TWD")
+    absent = statistics({}, p.PROFILE, ROW, "TWD", TODAY)
+    assert absent == statistics(dict.fromkeys(PAGE_ENDPOINTS), p.PROFILE, ROW, "TWD", TODAY)
     assert absent["size"] == {
         "marketCap": usd(412600000000),
         "enterpriseValue": None,
@@ -299,7 +315,7 @@ def test_an_endpoint_absent_or_none_reads_as_no_answer() -> None:
 
 def test_interest_cover_is_kept_as_given() -> None:
     ratios = [{**p.RATIOS[0], "interestCoverageRatioTTM": 0, "priceToEarningsRatioTTM": 0}]
-    answer = statistics({**ANSWERS, "ratios-ttm": ratios}, p.PROFILE, ROW, "TWD")
+    answer = statistics({**ANSWERS, "ratios-ttm": ratios}, p.PROFILE, ROW, "TWD", TODAY)
     assert answer["health"]["interestCover"] == 0
     assert answer["valuation"]["pe"] == 0
 
@@ -545,8 +561,8 @@ def test_every_reader_answers_on_a_payload_of_the_wrong_shape(payload: Any) -> N
     shaped = [
         (company(payload), company(p.PROFILE)),
         (
-            statistics(stored, payload, payload, "TWD"),
-            statistics(ANSWERS, p.PROFILE, ROW, "TWD"),
+            statistics(stored, payload, payload, "TWD", TODAY),
+            statistics(ANSWERS, p.PROFILE, ROW, "TWD", TODAY),
         ),
         (trading(payload, payload, None), trading(ROW, p.PROFILE, "2027-01-14")),
         (price_change(payload), price_change(p.PRICE_CHANGE)),
@@ -574,7 +590,7 @@ def test_a_row_of_the_wrong_shape_in_a_list_is_passed_over(row: Any) -> None:
 
 def test_the_reporting_currency_is_on_four_figures_and_usd_on_the_rest() -> None:
     answers = {
-        "statistics": statistics(ANSWERS, p.PROFILE, ROW, "TWD"),
+        "statistics": statistics(ANSWERS, p.PROFILE, ROW, "TWD", TODAY),
         "trading": trading(ROW, p.PROFILE, "2027-01-14"),
         "earnings": earnings(p.EARNINGS, TODAY),
         "consensus": consensus(p.ESTIMATES, NEWEST_YEAR, "TWD"),
