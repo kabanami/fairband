@@ -5,21 +5,50 @@ import json
 import logging
 import sqlite3
 from collections import Counter
+from contextlib import closing
 from datetime import date, timedelta
 from decimal import Decimal
 from urllib.parse import quote, quote_plus
 
 import pytest
+from refresh_env import Env
 from vendor_double import FIXTURES, FMP_KEY, GF_TOKEN, Clients, Clock, Router
 
 from fairband.policy import Policy
 from fairband.refresh import fetch as fetch_module
 from fairband.refresh.fetch import FetchOutcome, fetch_company
+from fairband.refresh.passthrough import Passthrough
 from fairband.store.facts import facts_for
 from fairband.store.observations import observations_for
 from fairband.store.vendor import response_payload
 from fairband.vendors.normalize_fmp import price_closes
 
+# The company page's ten (spec 2026-11-16 10.1), fetched after the two GuruFocus calls.
+PAGE_ENDPOINTS = (
+    "ratios-ttm",
+    "key-metrics-ttm",
+    "financial-growth",
+    "financial-scores",
+    "price-change",
+    "price-target",
+    "grades",
+    "dividends",
+    "shares-float",
+    "news",
+)
+# Each page endpoint's stored fixture, the one every company shares but ACME's own news.
+PAGE_FIXTURES = {
+    "ratios-ttm": "ratios-ttm.json",
+    "key-metrics-ttm": "key-metrics-ttm.json",
+    "financial-growth": "financial-growth.json",
+    "financial-scores": "financial-scores.json",
+    "price-change": "stock-price-change.json",
+    "price-target": "price-target-consensus.json",
+    "grades": "grades-consensus.json",
+    "dividends": "dividends.json",
+    "shares-float": "shares-float.json",
+    "news": "news-stock.ACME.json",
+}
 FMP_ENDPOINTS = (
     "income-annual",
     "balance-annual",
@@ -36,9 +65,11 @@ FMP_ENDPOINTS = (
     "earnings",
     "peers",
     "splits",
+    *PAGE_ENDPOINTS,
 )
 GF_ENDPOINTS = ("summary", "keyratios")
-ENDPOINTS = FMP_ENDPOINTS + GF_ENDPOINTS
+# In fetch order: the fifteen FMP calls the engine reads, GuruFocus's two, the page's ten.
+ENDPOINTS = (*FMP_ENDPOINTS[: -len(PAGE_ENDPOINTS)], *GF_ENDPOINTS, *PAGE_ENDPOINTS)
 # (dataset, the endpoint whose response its rows cite)
 DATASETS = {
     ("income-annual", "income-annual"),
@@ -97,14 +128,13 @@ def test_fetches_all_endpoints_and_stores(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=17, reused=0, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=27, reused=0, failed=(), error=None)
     assert router.calls == Counter(dict.fromkeys(ENDPOINTS, 1))
 
     stored = responses(conn)
-    assert count(conn, "vendor_responses") == 17
+    assert count(conn, "vendor_responses") == 27
     assert [(r["provider"], r["endpoint"]) for r in stored.values()] == [
-        *(("fmp", e) for e in FMP_ENDPOINTS),
-        *(("gf", e) for e in GF_ENDPOINTS),
+        ("gf" if e in GF_ENDPOINTS else "fmp", e) for e in ENDPOINTS
     ]
     for row in stored.values():
         assert (row["symbol"], row["http_status"], row["error"]) == ("ACME", 200, None)
@@ -150,9 +180,9 @@ def test_reuses_within_24h(
     # 23 hours on is the next UTC day: the price history's start date moves, its reuse key does not.
     clock.now += timedelta(hours=23)
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=0, reused=17, failed=(), error=None)
-    assert router.calls.total() == 17
-    assert count(conn, "vendor_responses") == 17
+    assert outcome == FetchOutcome("ACME", calls=0, reused=27, failed=(), error=None)
+    assert router.calls.total() == 27
+    assert count(conn, "vendor_responses") == 27
 
 
 def test_force_fetches_fresh_endpoints(
@@ -160,9 +190,9 @@ def test_force_fetches_fresh_endpoints(
 ) -> None:
     fetch(conn, clients, policy, clock)
     outcome = fetch(conn, clients, policy, clock, force=True)
-    assert outcome == FetchOutcome("ACME", calls=17, reused=0, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=27, reused=0, failed=(), error=None)
     assert router.calls == Counter(dict.fromkeys(ENDPOINTS, 2))
-    assert count(conn, "vendor_responses") == 34
+    assert count(conn, "vendor_responses") == 54
 
 
 def test_gf_reused_for_7_days(
@@ -172,14 +202,14 @@ def test_gf_reused_for_7_days(
     fetch(conn, clients, policy, clock)
     clock.now = start + timedelta(days=2)
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=15, reused=2, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=25, reused=2, failed=(), error=None)
     assert router.calls == Counter(
         {**dict.fromkeys(FMP_ENDPOINTS, 2), **dict.fromkeys(GF_ENDPOINTS, 1)}
     )
     # Seven days after the GuruFocus responses were observed they are fetched again.
     clock.now = start + timedelta(days=7)
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=17, reused=0, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=27, reused=0, failed=(), error=None)
     assert router.calls["summary"] == router.calls["keyratios"] == 2
 
 
@@ -221,7 +251,7 @@ def test_endpoint_failure_recorded_and_continues(
     clients = clients_with_500_on_quote
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=17, reused=0, failed=("quote",), error="data fetch failed: quote"
+        "ACME", calls=27, reused=0, failed=("quote",), error="data fetch failed: quote"
     )
     assert router.calls["quote"] == policy.refresh.attempts
     failed = responses(conn)["quote"]
@@ -236,7 +266,7 @@ def test_endpoint_failure_recorded_and_continues(
     # A failed call is not reused: the next fetch calls it again and reuses the rest.
     router.fail.clear()
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=1, reused=16, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=1, reused=26, failed=(), error=None)
     assert stored_datasets(conn) == DATASETS
 
 
@@ -274,7 +304,7 @@ def test_unusable_200_is_failed_and_not_reused(
     router.bodies.update({"quote": b"[]", "summary": error_body.encode()})
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=17, reused=0, failed=("quote", "summary"), error="data fetch failed: quote"
+        "ACME", calls=27, reused=0, failed=("quote", "summary"), error="data fetch failed: quote"
     )
     stored = responses(conn)
     assert (stored["quote"]["http_status"], stored["quote"]["payload"]) == (200, "[]")
@@ -290,7 +320,7 @@ def test_unusable_200_is_failed_and_not_reused(
 
     router.bodies.clear()
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=2, reused=15, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=2, reused=25, failed=(), error=None)
     assert stored_datasets(conn) == DATASETS
 
 
@@ -316,7 +346,7 @@ def test_an_empty_quarterly_consensus_is_not_a_fetch_failure(
     router.bodies["estimates-quarter"] = b"[]"
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=17, reused=0, failed=("estimates-quarter",), error=None
+        "ACME", calls=27, reused=0, failed=("estimates-quarter",), error=None
     )
     assert responses(conn)["estimates-quarter"]["error"] == "unusable payload: []"
 
@@ -332,7 +362,7 @@ def test_missing_gf_key_marks_gf_failed(
     caplog.set_level(logging.WARNING, logger="fairband.refresh")
     outcome = fetch(conn, clients_no_gf, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=15, reused=0, failed=("summary", "keyratios"), error=None
+        "ACME", calls=25, reused=0, failed=("summary", "keyratios"), error=None
     )
     assert router.calls == Counter(dict.fromkeys(FMP_ENDPOINTS, 1))
     assert set(responses(conn)) == set(FMP_ENDPOINTS)  # no row for a call not made
@@ -349,9 +379,9 @@ def test_missing_gf_key_still_reuses_fresh_gf_responses(
 ) -> None:
     fetch(conn, clients, policy, clock)
     outcome = fetch(conn, clients_no_gf, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=0, reused=17, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=0, reused=27, failed=(), error=None)
     outcome = fetch(conn, clients_no_gf, policy, clock, force=True)
-    assert (outcome.calls, outcome.failed) == (15, ("summary", "keyratios"))
+    assert (outcome.calls, outcome.failed) == (25, ("summary", "keyratios"))
 
 
 def test_no_key_in_stored_params_or_payload(
@@ -367,7 +397,7 @@ def test_no_key_in_stored_params_or_payload(
     fetch(conn, clients, policy, clock)
 
     rows = conn.execute("SELECT params, payload, error FROM vendor_responses").fetchall()
-    assert len(rows) == 17
+    assert len(rows) == 27
     texts = [text for row in rows for text in row if text is not None]
     assert any("<key>" in text for text in texts)
     assert 'unusable payload: {"error": "invalid token <key>"}' in texts
@@ -402,16 +432,16 @@ def test_a_peer_list_or_an_empty_list_is_usable_and_nothing_else(
 
     router.bodies["peers"] = b'[{"companyName": "Bolt Industries"}]'
     outcome = fetch(conn, clients, policy, clock)
-    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 16, ("peers",))
+    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 26, ("peers",))
     assert responses(conn)["peers"]["error"] == (
         'unusable payload: [{"companyName": "Bolt Industries"}]'
     )
 
     router.bodies["peers"] = b"[]"
     outcome = fetch(conn, clients, policy, clock)
-    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 16, ())
+    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 26, ())
     assert (responses(conn)["peers"]["payload"], responses(conn)["peers"]["error"]) == ("[]", None)
-    assert fetch(conn, clients, policy, clock).reused == 17
+    assert fetch(conn, clients, policy, clock).reused == 27
     assert stored_datasets(conn) == DATASETS  # the peers store no rows
 
 
@@ -453,7 +483,7 @@ def test_the_quarterly_balance_sheet_is_not_required(
     router.fail_status = 404
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=17, reused=0, failed=("balance-quarter",), error=None
+        "ACME", calls=27, reused=0, failed=("balance-quarter",), error=None
     )
     assert fetch_module.REQUIRED == {"income-annual", "balance-annual", "cashflow-annual", "quote"}
     failed = responses(conn)["balance-quarter"]
@@ -472,3 +502,158 @@ def test_a_pair_history_stores_no_rows_and_is_usable_with_a_close(clock: Clock) 
     for payload in no_close:
         assert fetch_module._rows("fx-history", payload, "USDSEK", now, now) is None
     assert fetch_module.provider_of("fx-history") == "fmp"
+
+
+def test_the_page_calls_come_last_in_this_order(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """Spec 2026-11-16 10.1: the company page's ten calls follow GuruFocus's two, in this order,
+    on their FMP routes, each with its depth."""
+    assert fetch_module.PAGE_ENDPOINTS == PAGE_ENDPOINTS
+    fetch(conn, clients, policy, clock)
+    assert list(router.calls) == list(ENDPOINTS)
+    assert list(responses(conn))[-11:] == ["keyratios", *PAGE_ENDPOINTS]
+    assert router.requested["price-change"] == {"symbol": "ACME"}
+    assert router.requested["financial-growth"] == {"symbol": "ACME", "limit": "1"}
+    assert router.requested["dividends"] == {"symbol": "ACME", "limit": "4"}
+    assert router.requested["news"] == {"symbols": "ACME", "limit": "60"}
+    assert all(fetch_module.provider_of(endpoint) == "fmp" for endpoint in PAGE_ENDPOINTS)
+
+
+def test_the_page_calls_store_their_params(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """Each stored with the symbol, and the depth as ``limit`` where the call sends one; the
+    params have one home, ``page_params``, by which the page's reads find the answers."""
+    fetch(conn, clients, policy, clock)
+    stored = responses(conn)
+    expected = {endpoint: {"symbol": "ACME"} for endpoint in PAGE_ENDPOINTS} | {
+        "financial-growth": {"symbol": "ACME", "limit": "1"},
+        "dividends": {"symbol": "ACME", "limit": "4"},
+        "news": {"symbol": "ACME", "limit": "60"},
+    }
+    assert {e: json.loads(stored[e]["params"]) for e in PAGE_ENDPOINTS} == expected
+    assert {e: fetch_module.page_params(e, "ACME") for e in PAGE_ENDPOINTS} == expected
+    limits = (fetch_module.GROWTH_YEARS, fetch_module.DIVIDEND_ROWS, fetch_module.NEWS_STORIES)
+    assert limits == (1, 4, 60)
+    for endpoint in ("quote", "summary", "news-stock", "stock-price-change"):
+        with pytest.raises(ValueError, match=f"not a page endpoint: {endpoint}"):
+            fetch_module.page_params(endpoint, "ACME")
+    # Stored whole, as received: ACME's own news, the shared fixture for the rest.
+    for endpoint, name in PAGE_FIXTURES.items():
+        row = stored[endpoint]
+        assert (row["http_status"], row["error"]) == (200, None)
+        assert row["payload"] == (FIXTURES / "fmp" / name).read_text(encoding="utf-8")
+
+
+def test_a_failed_page_call_is_named_and_costs_nothing(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """None of the ten is required: each failure is named, and the error stays ``None``, so the
+    company is valued (``test_run``)."""
+    router.fail = set(PAGE_ENDPOINTS)
+    outcome = fetch(conn, clients, policy, clock)
+    assert outcome == FetchOutcome("ACME", calls=27, reused=0, failed=PAGE_ENDPOINTS, error=None)
+    stored = responses(conn)
+    assert {(stored[e]["http_status"], stored[e]["payload"]) for e in PAGE_ENDPOINTS} == {
+        (500, None)
+    }
+    assert stored_datasets(conn) == DATASETS
+
+
+def test_a_page_payload_is_usable_when_it_is_a_list(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """An object (FMP's error body) is unusable: stored with its error and called again. A list is
+    usable, the empty list among them (a company with no dividend, no analyst or no news), and
+    reused like any other answer."""
+    router.bodies.update(dict.fromkeys(PAGE_ENDPOINTS, b'{"Error Message": "x"}'))
+    outcome = fetch(conn, clients, policy, clock)
+    assert (outcome.calls, outcome.failed, outcome.error) == (27, PAGE_ENDPOINTS, None)
+    stored = responses(conn)
+    for endpoint in PAGE_ENDPOINTS:
+        row = stored[endpoint]
+        assert (row["http_status"], row["payload"]) == (200, '{"Error Message": "x"}')
+        assert row["error"] == 'unusable payload: {"Error Message": "x"}'
+    outcome = fetch(conn, clients, policy, clock)
+    assert (outcome.calls, outcome.reused, outcome.failed) == (10, 17, PAGE_ENDPOINTS)
+
+    router.bodies.update(dict.fromkeys(PAGE_ENDPOINTS, b"[]"))
+    outcome = fetch(conn, clients, policy, clock)
+    assert (outcome.calls, outcome.reused, outcome.failed) == (10, 17, ())
+    stored = responses(conn)
+    assert {(stored[e]["payload"], stored[e]["error"]) for e in PAGE_ENDPOINTS} == {("[]", None)}
+    calls = router.calls.total()
+    assert fetch(conn, clients, policy, clock) == FetchOutcome(
+        "ACME", calls=0, reused=27, failed=(), error=None
+    )
+    assert router.calls.total() == calls
+
+
+def test_a_page_call_gives_no_fact_and_no_observation(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """The page reads the stored payloads; nothing is normalized from them."""
+    fetch(conn, clients, policy, clock)
+    stored = responses(conn)
+    page_ids = [stored[endpoint]["id"] for endpoint in PAGE_ENDPOINTS]
+    marks = ", ".join("?" * len(page_ids))
+    for table in ("facts", "observations"):
+        cited = f"SELECT count(*) FROM {table} WHERE response_id IN ({marks})"
+        assert conn.execute(cited, page_ids).fetchone()[0] == 0
+    assert stored_datasets(conn) == DATASETS
+    now = clock()
+    for endpoint, name in PAGE_FIXTURES.items():
+        payload = json.loads((FIXTURES / "fmp" / name).read_text())
+        assert payload and fetch_module._rows(endpoint, payload, "ACME", now, now) == ([], [])
+        assert fetch_module._rows(endpoint, [], "ACME", now, now) == ([], [])
+        for unusable in ({"Error Message": "x"}, None, "167000"):
+            assert fetch_module._rows(endpoint, unusable, "ACME", now, now) is None
+
+
+def test_a_429_on_a_page_call_stops_the_fetch(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """As on any call: the fetch stops there and reports ``rate_limited``, and the runner stops
+    the refresh. The page calls after it are not called; the error stays ``None``."""
+    router.fail.add("grades")
+    router.fail_status = 429
+    outcome = fetch(conn, clients, policy, clock)
+    assert outcome == FetchOutcome(
+        "ACME", calls=24, reused=0, failed=("grades",), error=None, rate_limited=True
+    )
+    assert router.calls["grades"] == policy.refresh.attempts
+    after = PAGE_ENDPOINTS[PAGE_ENDPOINTS.index("grades") + 1 :]
+    assert after == ("dividends", "shares-float", "news")
+    assert not [endpoint for endpoint in after if router.calls[endpoint]]
+    stored = responses(conn)
+    assert list(stored)[-1] == "grades"
+    assert (stored["grades"]["http_status"], stored["grades"]["payload"]) == (429, None)
+
+
+def test_the_news_is_stored_under_the_pass_through_s_key(env: Env) -> None:
+    """Spec 2026-11-16 10.1: the refresh's news and the pass-through's at the same limit, 60, are
+    one reuse key, so each reuses the other's copy."""
+    clients = env.clients
+    passthrough = Passthrough(
+        clients.fmp, env.connect, env.policy, env.clock, clients.secrets, clients.gf
+    )
+
+    def fetch_company_of(symbol: str) -> FetchOutcome:
+        with closing(env.connect()) as conn:
+            return fetch_company(
+                conn, clients.fmp, clients.gf, symbol, env.policy, env.clock(), clients.secrets
+            )
+
+    assert fetch_company_of("ACME").failed == ()
+    assert env.router.calls["news"] == 1
+    fetched = passthrough.fetch("news", "ACME", {"limit": "60"})["news"]
+    assert fetched.reused and env.router.calls["news"] == 1
+    assert fetched.payload == json.loads((FIXTURES / "fmp" / "news-stock.ACME.json").read_text())
+
+    # The other way round: BOLT's news, fetched by the pass-through first, the fetch reuses.
+    fresh = passthrough.fetch("news", "BOLT", {"limit": "60"})["news"]
+    assert not fresh.reused and env.router.calls["news"] == 2
+    outcome = fetch_company_of("BOLT")
+    assert (outcome.failed, outcome.reused) == ((), 1)
+    assert env.router.calls["news"] == 2

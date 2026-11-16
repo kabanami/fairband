@@ -1,0 +1,25 @@
+[
+  {
+    "symbol": "ACME",
+    "date": "2025-12-31",
+    "fiscalYear": "2025",
+    "period": "FY",
+    "reportedCurrency": "USD",
+    "revenueGrowth": 0.0909,
+    "ebitdaGrowth": 0.0714,
+    "epsdilutedGrowth": 0.125,
+    "freeCashFlowGrowth": 0.052,
+    "threeYRevenueGrowthPerShare": 0.214,
+    "fiveYRevenueGrowthPerShare": 0.392,
+    "tenYRevenueGrowthPerShare": 0.947,
+    "threeYNetIncomeGrowthPerShare": 0.268,
+    "fiveYNetIncomeGrowthPerShare": 0.451,
+    "tenYNetIncomeGrowthPerShare": 1.126,
+    "threeYOperatingCFGrowthPerShare": 0.231,
+    "fiveYOperatingCFGrowthPerShare": 0.418,
+    "tenYOperatingCFGrowthPerShare": 1.035,
+    "threeYDividendperShareGrowthPerShare": 0.157,
+    "fiveYDividendperShareGrowthPerShare": 0.276,
+    "tenYDividendperShareGrowthPerShare": 0.629
+  }
+]

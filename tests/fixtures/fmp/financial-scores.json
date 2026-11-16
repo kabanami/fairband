@@ -1,0 +1,15 @@
+[
+  {
+    "symbol": "ACME",
+    "reportedCurrency": "USD",
+    "altmanZScore": 4.37,
+    "piotroskiScore": 7,
+    "workingCapital": 410000000,
+    "totalAssets": 2800000000,
+    "retainedEarnings": 1350000000,
+    "ebit": 214000000,
+    "marketCap": 5000000000,
+    "totalLiabilities": 1330000000,
+    "revenue": 1200000000
+  }
+]

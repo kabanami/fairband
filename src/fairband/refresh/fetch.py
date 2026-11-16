@@ -1,6 +1,7 @@
-"""Fetch one company: fifteen FMP calls and two GuruFocus calls (spec 6.5, the peers of growth
-routes spec 5.5, the splits of spec 2026-11-09 10.1 and the quarterly balance sheet of spec
-2026-11-13 12.1), each reused while fresh and stored whole.
+"""Fetch one company: twenty-five FMP calls and two GuruFocus calls (spec 6.5, the peers of growth
+routes spec 5.5, the splits of spec 2026-11-09 10.1, the quarterly balance sheet of spec
+2026-11-13 12.1 and the company page's ten of spec 2026-11-16 10.1), each reused while fresh and
+stored whole.
 
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
@@ -27,12 +28,19 @@ anything but a list, is unusable. The peers are not required. The splits are sto
 (dataset ``split``, ``split_observations``); any list is usable, the empty list among them (a
 company with no split has none, reused like any other answer), and anything but a list is
 unusable. The splits are not required either: without them the company is valued on what it has.
+The company page's ten (``PAGE_ENDPOINTS``), fetched last, after the two GuruFocus calls, store no
+rows: the page reads their stored payloads. Each is usable when it is a list, the empty list among
+them (a company with no dividend, no analyst or no news has none, reused like any other answer),
+and unusable otherwise (FMP's ``{"Error Message": ...}``). None of the ten is required. ``news`` is
+stored under the pass-through's endpoint and params (``page_params``), so the fetch's copy and a
+pass-through's at the same limit reuse each other.
 
 A ``VendorError`` is stored as a response row with the error, its HTTP status if one came back and
 no payload, in a transaction of its own, and the fetch goes on with the next endpoint, except after
-an HTTP 429: the fetch stops there and reports ``rate_limited``; stopping the refresh is the
-runner's job. Without a GuruFocus client, the two GuruFocus endpoints fail with "no GuruFocus key"
-(logged) and store nothing, unless the store holds fresh responses, which are reused.
+an HTTP 429, on any call, a page call among them: the fetch stops there and reports
+``rate_limited``; stopping the refresh is the runner's job. Without a GuruFocus client, the two
+GuruFocus endpoints fail with "no GuruFocus key" (logged) and store nothing, unless the store holds
+fresh responses, which are reused.
 
 The stored ``params`` are the call's logical parameters (``symbol``, ``period``, ``limit``), never
 the key, and the same call stores the same dict, so they are the reuse key. The price history's
@@ -92,6 +100,27 @@ STATEMENT_YEARS = 11  # ten years for the ROIC aggregate plus the opening balanc
 STATEMENT_QUARTERS = 8
 PRICE_YEARS = 5
 EARNINGS_ROWS = 12
+# The company page's depths (spec 2026-11-16 10.1).
+GROWTH_YEARS = 1  # the newest fiscal year's growth
+DIVIDEND_ROWS = 4
+NEWS_STORIES = 60
+
+# The company page's calls (spec 2026-11-16 10.1), the endpoints as stored, in fetch order after
+# GuruFocus's two. None is required, and none gives a fact or an observation: the page reads their
+# stored payloads.
+PAGE_ENDPOINTS: tuple[str, ...] = (
+    "ratios-ttm",
+    "key-metrics-ttm",
+    "financial-growth",
+    "financial-scores",
+    "price-change",
+    "price-target",
+    "grades",
+    "dividends",
+    "shares-float",
+    "news",
+)
+_PAGE_LIMITS = {"financial-growth": GROWTH_YEARS, "dividends": DIVIDEND_ROWS, "news": NEWS_STORIES}
 
 # Without these the company cannot be valued; their failure sets ``FetchOutcome.error``. The
 # quarterly consensus is not among them: FMP answers ``[]`` for a company without quarterly
@@ -216,8 +245,20 @@ def provider_of(endpoint: str) -> Provider:
     return "gf" if endpoint in _GF_ENDPOINTS else "fmp"
 
 
+def page_params(endpoint: str, symbol: str) -> dict[str, str]:
+    """The logical params the fetch stores for a page endpoint of ``PAGE_ENDPOINTS``: the symbol,
+    and the depth as ``limit`` for ``financial-growth`` (``GROWTH_YEARS``), ``dividends``
+    (``DIVIDEND_ROWS``) and ``news`` (``NEWS_STORIES``). ``news``'s are the pass-through's at the
+    same limit, so each reuses the other's copy. Raises ``ValueError`` for any other endpoint."""
+    if endpoint not in PAGE_ENDPOINTS:
+        raise ValueError(f"not a page endpoint: {endpoint}")
+    limit = _PAGE_LIMITS.get(endpoint)
+    return {"symbol": symbol} if limit is None else {"symbol": symbol, "limit": str(limit)}
+
+
 def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
-    """The calls for ``symbol``, fifteen FMP and two GuruFocus, in fetch order."""
+    """The calls for ``symbol`` in fetch order: fifteen FMP, two GuruFocus, then the company
+    page's ten FMP, in the order of ``PAGE_ENDPOINTS`` with the params of ``page_params``."""
     start = _years_before(today, PRICE_YEARS)
 
     def on_fmp(
@@ -240,6 +281,18 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
         bound = None if gf is None else partial(send, gf, symbol)
         return _Call("gf", endpoint, {"symbol": symbol}, bound)
 
+    page_sends: dict[str, Callable[[], VendorResponse]] = {
+        "ratios-ttm": partial(fmp.ratios_ttm, symbol),
+        "key-metrics-ttm": partial(fmp.key_metrics_ttm, symbol),
+        "financial-growth": partial(fmp.financial_growth, symbol, GROWTH_YEARS),
+        "financial-scores": partial(fmp.financial_scores, symbol),
+        "price-change": partial(fmp.price_change, symbol),
+        "price-target": partial(fmp.price_target, symbol),
+        "grades": partial(fmp.grades, symbol),
+        "dividends": partial(fmp.dividends, symbol, DIVIDEND_ROWS),
+        "shares-float": partial(fmp.shares_float, symbol),
+        "news": partial(fmp.news, symbol, NEWS_STORIES),
+    }
     as_reported = {"period": "annual", "limit": str(STATEMENT_YEARS)}
     return [
         statement("income", "annual", STATEMENT_YEARS),
@@ -265,6 +318,10 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
         on_fmp("splits", {}, partial(fmp.splits, symbol)),
         on_gf("summary", GuruFocus.summary),
         on_gf("keyratios", GuruFocus.keyratios),
+        *(
+            _Call("fmp", endpoint, page_params(endpoint, symbol), page_sends[endpoint])
+            for endpoint in PAGE_ENDPOINTS
+        ),
     ]
 
 
@@ -312,10 +369,10 @@ def _rows(
     endpoint: str, payload: Any, symbol: str, observed: datetime, now: datetime
 ) -> _Rows | None:
     """The facts and observations one endpoint's parsed payload gives, citing ``_PENDING`` for
-    the response; ``None`` when it gives none. The price history, a pair's history and the peers
-    give no rows; the two histories' payloads are usable when they hold a close, the peers' when
-    it names a peer or is exactly ``[]``. The splits' payload is usable when it is a list, even
-    one that gives no rows."""
+    the response; ``None`` when it gives none. The price history, a pair's history, the peers and
+    the page endpoints give no rows; the two histories' payloads are usable when they hold a close,
+    the peers' when it names a peer or is exactly ``[]``, a page endpoint's when it is a list. The
+    splits' payload is usable when it is a list, even one that gives no rows."""
     source = (symbol, _PENDING, observed, now)
     facts: list[FactRow] = []
     observations: list[ObservationRow] = []
@@ -348,6 +405,8 @@ def _rows(
             observations = summary_observations(payload, *source)
         case "keyratios":
             observations = keyratios_observations(payload, *source)
+        case _ if endpoint in PAGE_ENDPOINTS:
+            return ([], []) if isinstance(payload, list) else None
         case _:
             raise ValueError(f"no normalizer for endpoint {endpoint}")
     return (facts, observations) if facts or observations else None

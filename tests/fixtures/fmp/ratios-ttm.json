@@ -1,0 +1,22 @@
+[
+  {
+    "symbol": "ACME",
+    "grossProfitMarginTTM": 0.412,
+    "ebitdaMarginTTM": 0.231,
+    "operatingProfitMarginTTM": 0.178,
+    "pretaxProfitMarginTTM": 0.169,
+    "netProfitMarginTTM": 0.15,
+    "priceToEarningsRatioTTM": 27.8,
+    "priceToEarningsGrowthRatioTTM": 2.1,
+    "priceToBookRatioTTM": 3.4,
+    "priceToSalesRatioTTM": 4.17,
+    "priceToFreeCashFlowRatioTTM": 31.2,
+    "debtToEquityRatioTTM": 0.46,
+    "currentRatioTTM": 1.84,
+    "quickRatioTTM": 1.21,
+    "interestCoverageRatioTTM": 14.8,
+    "dividendYieldTTM": 0.02,
+    "dividendPayoutRatioTTM": 0.556,
+    "dividendPerShareTTM": 1.0
+  }
+]

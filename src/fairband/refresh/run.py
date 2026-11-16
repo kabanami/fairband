@@ -83,7 +83,7 @@ exception outside a symbol's work ends the run ``failed`` with its class and mes
 raised again.
 
 Why daemon threads: an exception in the fetch stage (a second Ctrl-C in the command) must not wait
-for the fetches in flight, which on a stalled vendor run to minutes (15 FMP and 2 GuruFocus calls,
+for the fetches in flight, which on a stalled vendor run to minutes (25 FMP and 2 GuruFocus calls,
 each up to ``deadline_s`` and an FMP call longer by its waits in the limiter). The run gives them up
 at once: their symbols go back to ``pending``, the run ends ``failed`` and the exception propagates.
 A ``ThreadPoolExecutor``'s workers are joined when the interpreter exits, even after

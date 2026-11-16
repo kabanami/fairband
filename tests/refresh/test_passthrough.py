@@ -591,11 +591,11 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
     finally:
         worker_fmp.close()
         passthrough_fmp.close()
-    assert fetched.reused is False and outcome.calls == 15
-    # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 15.
+    assert fetched.reused is False and outcome.calls == 25
+    # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 25.
     interval = limiter.interval.total_seconds()  # 60 / pace, to the microsecond
-    assert limiter.totals() == PaceTotals(16, pytest.approx(120 * interval), 0)
-    assert sleeps[-1] == pytest.approx(15 * interval)
+    assert limiter.totals() == PaceTotals(26, pytest.approx(325 * interval), 0)
+    assert sleeps[-1] == pytest.approx(25 * interval)
 
 
 class Held:

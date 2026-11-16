@@ -33,6 +33,9 @@ _FMP_ENDPOINTS = {
     "historical-price-eod/light": "fx-history",  # a forex pair's closes (``refresh.rates``)
     "company-screener": "screener",
     "stock-peers": "peers",
+    "stock-price-change": "price-change",
+    "price-target-consensus": "price-target",
+    "grades-consensus": "grades",
     "earning-call-transcript": "transcript",
     "earning-call-transcript-dates": "transcript-dates",
     "news/stock": "news",
@@ -57,16 +60,18 @@ class Router:
 
     FMP requests read ``fmp/<route>[.<period>][.<symbol>].json`` (a slash in the route becomes a
     dash; a forex pair is the symbol, ``historical-price-eod-light.USDSEK.json``; a filing
-    report's fiscal period is left out, ``financial-reports-json.ACME.json``), GuruFocus
-    requests ``gurufocus/<route>.<symbol>.json``. ``calls`` counts the requests per
-    endpoint, named as the fetch stores them (``income-annual``, ``quote``, ``summary``), and
-    ``symbol_calls`` per symbol; a retry counts again, and ``requested`` keeps each endpoint's last
-    query parameters, the key left out. An endpoint in ``fail``, or any request for a symbol in
-    ``fail_symbols``, answers ``fail_status`` (HTTP 500 unless set); an endpoint and symbol in
-    ``fail_once`` answer it as many times as their count, then as they would. An endpoint and
-    symbol in ``symbol_bodies`` answer 200 with that body instead of the fixture, and so, for every
-    symbol, does an endpoint in ``bodies``; ``symbol_bodies`` comes first. A request with no
-    fixture answers 404. The fetch workers call it from several threads, so it counts under a lock.
+    report's fiscal period is left out, ``financial-reports-json.ACME.json``), or, where the
+    symbol has none, the same name without the symbol (``ratios-ttm.json``), a fixture that
+    serves every company; GuruFocus requests ``gurufocus/<route>.<symbol>.json``. ``calls``
+    counts the requests per endpoint, named as the fetch stores them (``income-annual``,
+    ``quote``, ``summary``), and ``symbol_calls`` per symbol; a retry counts again, and
+    ``requested`` keeps each endpoint's last query parameters, the key left out. An endpoint in
+    ``fail``, or any request for a symbol in ``fail_symbols``, answers ``fail_status`` (HTTP 500
+    unless set); an endpoint and symbol in ``fail_once`` answer it as many times as their count,
+    then as they would. An endpoint and symbol in ``symbol_bodies`` answer 200 with that body
+    instead of the fixture, and so, for every symbol, does an endpoint in ``bodies``;
+    ``symbol_bodies`` comes first. A request with no fixture answers 404. The fetch workers call it
+    from several threads, so it counts under a lock.
     """
 
     def __init__(self) -> None:
@@ -114,6 +119,10 @@ def _resolve(request: httpx.Request) -> tuple[str, str, Path]:
     name = _FMP_ENDPOINTS.get(route, route)
     parts = (route.replace("/", "-"), period, symbol)
     fixture = FIXTURES / "fmp" / (".".join(part for part in parts if part) + ".json")
+    # The symbol's own fixture first, else the one every company shares.
+    shared = FIXTURES / "fmp" / (".".join(part for part in parts[:2] if part) + ".json")
+    if not fixture.is_file() and shared.is_file():
+        fixture = shared
     return (f"{name}-{period}" if period else name), symbol, fixture
 
 

@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "ACME",
+    "marketCap": 5000000000,
+    "enterpriseValueTTM": 5600000000,
+    "evToSalesTTM": 4.67,
+    "evToEBITDATTM": 20.2,
+    "evToFreeCashFlowTTM": 34.9,
+    "netDebtToEBITDATTM": 2.16,
+    "returnOnEquityTTM": 0.122,
+    "returnOnAssetsTTM": 0.064,
+    "returnOnInvestedCapitalTTM": 0.097,
+    "returnOnCapitalEmployedTTM": 0.113,
+    "earningsYieldTTM": 0.036,
+    "freeCashFlowYieldTTM": 0.032
+  }
+]

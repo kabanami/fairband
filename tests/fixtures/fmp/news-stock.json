@@ -1,0 +1,22 @@
+[
+  {
+    "symbol": "ACME",
+    "publishedDate": "2026-10-28 16:20:00",
+    "publisher": "Example Times",
+    "title": "Acme Corp declares its quarterly dividend",
+    "image": "https://example.com/acme-dividend.jpg",
+    "site": "example.com",
+    "text": "Acme Corp declared a quarterly dividend of 25 cents a share, payable on 2 November.",
+    "url": "https://example.com/acme-quarterly-dividend"
+  },
+  {
+    "symbol": "ACME",
+    "publishedDate": "2026-10-05 11:45:00",
+    "publisher": "Example Business",
+    "title": "Acme Corp names a new chief financial officer",
+    "image": "https://example.com/acme-cfo.jpg",
+    "site": "example.com",
+    "text": "Acme Corp named a new chief financial officer, who joins from another machinery maker.",
+    "url": "https://example.com/acme-new-cfo"
+  }
+]
