@@ -42,7 +42,10 @@
   /* The page FairbandPage.report names: the company's detail and its revisions, then the revision
      the hash names, else the latest. The page shown stays, faded, until the new one lands, and the
      latest read wins. A revision of another company is refused, so the page never shows one
-     company's report under another's head. */
+     company's report under another's head. Another company's page stops the following of the
+     request of the company shown and starts a request of its own; each read that lands goes to
+     FairbandPage.followItem, so the page follows the open item's launch while it is in flight
+     (spec 2026-11-16 agent launch, 10). */
   function load() {
     var want = P.report;
     var request = ++latest;
@@ -63,7 +66,10 @@
           throw new Error('report ' + report.id + ' is ' + report.symbol + '\'s, not ' +
             want.symbol + '\'s');
         }
-        if (state.symbol !== want.symbol) state.request = P.asking(want.symbol);
+        if (state.symbol !== want.symbol) {
+          if (state.request) P.stopLaunch(state.request);
+          state.request = P.asking(want.symbol);
+        }
         if (!report || !state.report || state.report.id !== report.id) state.series = null;
         state.symbol = want.symbol;
         state.detail = found.detail;
@@ -72,6 +78,7 @@
         state.loading = false;
         state.error = null;
         state.downloadError = null;
+        P.followItem(state.request, found.detail.item, render, load);
         render();
         if (report) readSeries(report, request);
       })
@@ -250,7 +257,7 @@
       report.mode === 'valuation review' && report.reusesFullReportOf == null
         ? h('p', { className: 'caption app-report__note' }, 'No full report to reuse.') : null,
       revisions(report),
-      P.requestResearch(state.request, d.item, render, load),
+      P.requestResearch(state.request, d.item, render, load, d.launchReady),
       state.downloadError
         ? h('p', { className: 'caption app-report__error' }, state.downloadError) : null);
   }
@@ -574,7 +581,7 @@
   function noReport(d) {
     return h('section', { key: 'none', className: 'app-report__none' },
       h('p', { className: 'body app-note' }, 'No report yet.'),
-      P.requestResearch(state.request, d.item, render, load));
+      P.requestResearch(state.request, d.item, render, load, d.launchReady));
   }
 
   /* ------------------------------------------------------------------ the controls */

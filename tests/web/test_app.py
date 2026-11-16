@@ -2044,7 +2044,7 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
         "className: 'app-stance'",
         "h(F.ReportReader, {",
         "'Open the report')",
-        "requestResearch(ask, body.item, render, function () { reloadDetail(r.symbol); })",
+        "requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)",
         "'Details ▾')",
         "state.detailsOpen ? details(body) : null",
     )
@@ -2087,20 +2087,23 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
     toggle = main[main.index("requestResearch(ask, body.item") : main.index("'Details ▾')")]
     _in_order(
         toggle,
-        "requestResearch(ask, body.item, render, function () { reloadDetail(r.symbol); })",
+        "requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)",
         "variant: 'quiet'",
         "'aria-expanded': state.detailsOpen ? 'true' : 'false'",
         "onClick: toggleDetails",
     )
     ask = _function(script, "requestResearch")
-    assert "disabled: !!item," in ask
+    assert "disabled: !!item || ask.opening," in ask
     assert "'aria-expanded': ask.open ? 'true' : 'false'" in ask
-    assert "ask.open ? h(RequestMenu, { ask: ask, redraw: redraw, after: after }) : null" in ask
+    assert (
+        "ask.open ? h(RequestMenu, { ask: ask, redraw: redraw, after: after, ready: ready }) : null"
+        in ask
+    )
     _in_order(
         ask,
         "'Request research')",
         "ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null",
-        "requested(item)",
+        "requested(ask, item, redraw, after, ready)",
     )
     asked = _function(script, "asked")
     assert (
@@ -2108,11 +2111,16 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
         in (asked)
     )
     assert "mode: 'full report'" in _function(script, "asking")
-    line = _function(script, "requested")
-    assert "if (!item) return null;" in line
-    assert (
-        "'Requested · ' + (item.state === 'claimed' ? 'claimed by ' + item.claimedBy : 'pending')"
-    ) in line
+    # the open item's line (launchLine, spec 2026-11-16 agent launch, 10): none without an item,
+    # the claim whatever the launch, pending without one
+    assert "if (!line) return null;" in _function(script, "requested")
+    line = _function(script, "launchLine")
+    _in_order(
+        line,
+        "if (!item) return null;",
+        "if (item.state === 'claimed') return said('Requested · claimed by ' + item.claimedBy);",
+        "text: 'Requested · pending'",
+    )
     page = _static_file("index.html")
     assert ".app-stance {" in page and ".app-request .fb-menu { left: 0; right: auto; }" in page
     assert ".app-request__error { margin: var(--space-2) 0 0; color: var(--caution); }" in page
@@ -2497,7 +2505,10 @@ def test_the_request_menu_shows_the_open_item_refusal(client: TestClient) -> Non
         "type: 'radio'",
         "maxLength: 200",
         "'Post')",
-        "onSubmit: function (event) { event.preventDefault(); postRequest(ask, redraw, after); }",
+        (
+            "onSubmit: function (event) {"
+            " event.preventDefault(); postRequest(ask, redraw, after, ready); }"
+        ),
     ):
         assert text in menu, text
     post = _function(script, "postRequest")
@@ -2754,7 +2765,7 @@ def test_the_report_page_order_is_pinned() -> None:
         "'Download .md')",
         "'Tables')",
         "revisions(report)",
-        "P.requestResearch(state.request, d.item, render, load)",
+        "P.requestResearch(state.request, d.item, render, load, d.launchReady)",
         "state.downloadError",
     )
     assert "var expired = report.appendixA.snapshot.validUntil < d.today;" in meta
@@ -2911,19 +2922,23 @@ def test_the_report_page_without_a_report() -> None:
     page = _function(script, "page")
     _in_order(page, "head(d)", "band(d)", "report ?", "noReport(d)")
     none = _function(script, "noReport")
-    _in_order(none, "'No report yet.'", "P.requestResearch(state.request, d.item, render, load)")
+    _in_order(
+        none,
+        "'No report yet.'",
+        "P.requestResearch(state.request, d.item, render, load, d.launchReady)",
+    )
     load = _function(script, "load")
     assert "state.request = P.asking(want.symbol);" in load
     app = _static_file("app.js")
     ask = _function(app, "requestResearch")
     _in_order(
         ask,
-        "disabled: !!item,",
+        "disabled: !!item || ask.opening,",
         "onClick: function () { toggleRequest(ask, redraw); }",
         "'Request research')",
-        "ask.open ? h(RequestMenu, { ask: ask, redraw: redraw, after: after }) : null",
+        "h(RequestMenu, { ask: ask, redraw: redraw, after: after, ready: ready })",
         "ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null",
-        "requested(item)",
+        "requested(ask, item, redraw, after, ready)",
     )
 
 
@@ -2935,9 +2950,9 @@ def test_request_research_shows_with_a_report_too() -> None:
     assert "section('request', null," in sections
     assert ": section('request', null," not in sections  # no longer the Summary's alternative
     meta = _function(_code(_static_file("report.js")), "meta")
-    assert "P.requestResearch(state.request, d.item, render, load)" in meta
+    assert "P.requestResearch(state.request, d.item, render, load, d.launchReady)" in meta
     no_report = _function(_code(_static_file("report.js")), "noReport")
-    assert "P.requestResearch(state.request, d.item, render, load)" in no_report
+    assert "P.requestResearch(state.request, d.item, render, load, d.launchReady)" in no_report
 
 
 def test_the_report_page_has_one_headline_figure() -> None:

@@ -7,8 +7,10 @@
    company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4). The drawer leads with
    the valuation and the agents' report and puts the rest behind Details ▾; without a report it
    posts a research request to the work inbox, and Details takes the owner's notes (spec 2026-11-06
-   Tier 2, 18.2 and 18.3). The header, the status line and the group view are controls.js, loaded
-   after this script; it reaches the screen through window.FairbandPage. */
+   Tier 2, 18.2 and 18.3). Where launching is set up, a request also opens the window where Claude
+   Code starts, and the line under the button follows its launch (spec 2026-11-16 agent launch,
+   10). The header, the status line and the group view are controls.js, loaded after this script;
+   it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -198,7 +200,9 @@
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
      evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the
      line that says what the figures are in (currencyLine), a report's footnote numbers, and
-     Request research with a request of its own (asking). The drawer's route sections, the
+     Request research with a request of its own (asking), whose following of a launch the page
+     stops as it shows another company (stopLaunch) and starts as its read lands (followItem). The
+     open item's line (launchLine), a launch's post (openLaunch), the drawer's route sections, the
      charge's rows, an input's value, the intermediates, the flags it lists and Details' findings
      are here for the tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
@@ -219,6 +223,7 @@
     phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, money: money,
     rate: rate, plain: plain,
     footnotes: footnotes, asking: asking, requestResearch: requestResearch,
+    launchLine: launchLine, openLaunch: openLaunch, stopLaunch: stopLaunch, followItem: followItem,
     chargeRows: chargeRows, matureRoute: matureRoute, revenueRoute: revenueRoute,
     declineRoute: declineRoute, startUpRoute: startUpRoute, intermediates: intermediates,
     briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
@@ -269,6 +274,9 @@
   function open(row) {
     var d = state.drawer;
     if (d && d.symbol === row.ticker && !d.error) return;
+    /* the company the drawer showed no longer follows its launch (spec 2026-11-16 agent launch,
+       10), whether the new one's read lands or fails */
+    if (state.request && state.request.symbol !== row.ticker) stopLaunch(state.request);
     var request = ++latestDetail;
     state.drawer = { symbol: row.ticker, body: d && d.body, loading: true, error: null };
     if (state.detailsOpen) readResearch(row.ticker);
@@ -276,7 +284,7 @@
     getJson('/api/companies/' + encodeURIComponent(row.ticker))
       .then(function (body) {
         if (request !== latestDetail) return;
-        state.drawer = { symbol: row.ticker, body: body, loading: false, error: null };
+        landed(row.ticker, body);
         render();
       })
       .catch(function (err) {
@@ -297,8 +305,10 @@
     window.FairbandPage.show('screen');
   }
 
+  /* The drawer closes, and its company's request no longer follows its launch. */
   function close() {
     latestDetail++;
+    if (state.request) stopLaunch(state.request);
     state.drawer = null;
     render();
   }
@@ -761,7 +771,7 @@
           h(F.Button, { href: '#report/' + encodeURIComponent(r.symbol) }, 'Open the report')))
         : null,
       section('request', null,
-        requestResearch(ask, body.item, render, function () { reloadDetail(r.symbol); })),
+        requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)),
       h('div', { key: 'disclosure', className: 'app-section app-disclosure' },
         h(F.Button, {
           variant: 'quiet', size: 'sm',
@@ -1102,29 +1112,35 @@
   /* A company's Request research, as the drawer and the report page each keep one, so the drawer
      on one company never resets the report page's on another: the menu closed, the mode a full
      report on a company with a report as on one without (the founder asked for a full report on
-     the second run), and no note. */
+     the second run), and no note. Its launch (spec 2026-11-16 agent launch, 10): the menu's box
+     Open Claude Code ticked (`launch`); no launch's post in flight (`opening`); no launch
+     followed (`followed`, the launch as the page last read it); no timer (`timer`, held from the
+     moment a read of the followed launch is due until its answer lands); and the count of the
+     following's stops (`round`), so a read or a post begun before a stop is dropped. */
   function asking(symbol) {
     return {
-      symbol: symbol, open: false, mode: 'full report', note: '', error: null, posting: false
+      symbol: symbol, open: false, mode: 'full report', note: '', error: null, posting: false,
+      launch: true, opening: false, followed: null, timer: null, round: 0
     };
   }
 
   /* Request research (spec 18.2), as the drawer and the report page show it with or without a
-     report (18.4): the button, disabled while an item is open, its menu, the server's refusal
-     under it and the open item's line. `ask` is the view's request (asking), `redraw` draws the
-     view again and `after` runs once a post ends, taken or refused, so the view reads its company
-     again and the open item's line follows. */
-  function requestResearch(ask, item, redraw, after) {
+     report (18.4): the button, disabled while an item is open or a launch's post is in flight,
+     its menu, the server's refusal under it and the open item's line. `ask` is the view's request
+     (asking), `redraw` draws the view again and `after` runs once a post ends, taken or refused,
+     so the view reads its company again and the open item's line follows; `ready` is the detail
+     read's launchReady, whether launching is set up (spec 2026-11-16 agent launch, 10). */
+  function requestResearch(ask, item, redraw, after, ready) {
     return h(React.Fragment, null,
       h('div', { className: 'app-request' },
         h(F.Button, {
-          disabled: !!item,
+          disabled: !!item || ask.opening,
           'aria-expanded': ask.open ? 'true' : 'false',
           onClick: function () { toggleRequest(ask, redraw); }
         }, 'Request research'),
-        ask.open ? h(RequestMenu, { ask: ask, redraw: redraw, after: after }) : null),
+        ask.open ? h(RequestMenu, { ask: ask, redraw: redraw, after: after, ready: ready }) : null),
       ask.error ? h('p', { className: 'caption app-request__error' }, ask.error) : null,
-      requested(item));
+      requested(ask, item, redraw, after, ready));
   }
 
   function toggleRequest(ask, redraw) {
@@ -1134,7 +1150,8 @@
   }
 
   /* Request research's menu (spec 18.2), in the bundle's menu style as Details ▾ draws it: the
-     mode, a radio each, the note line, then Post. It opens under its button from the button's left
+     mode, a radio each, the note line, where launching is set up the box Open Claude Code (spec
+     2026-11-16 agent launch, 10), then Post. It opens under its button from the button's left
      edge, focus on the chosen mode; Post, or Enter in the note line, sends it. A press or focus
      outside the button and its menu closes it, as the screen's menus close, and so does Escape,
      which hands focus back to the button; the listeners last as long as the menu, and the
@@ -1143,6 +1160,7 @@
     var ask = props.ask;
     var redraw = props.redraw;
     var after = props.after;
+    var ready = props.ready;
     var ref = React.useRef(null);
     React.useEffect(function () {
       var control = ref.current.parentNode;
@@ -1171,7 +1189,7 @@
     return h('form', {
       ref: ref, className: 'fb-menu fb-menu--filters app-request__menu',
       'aria-label': 'Request research on ' + ask.symbol,
-      onSubmit: function (event) { event.preventDefault(); postRequest(ask, redraw, after); }
+      onSubmit: function (event) { event.preventDefault(); postRequest(ask, redraw, after, ready); }
     },
       h('div', { className: 'fb-menu__body' },
         h('div', { className: 'fb-menu__sec', role: 'radiogroup', 'aria-label': 'Mode' },
@@ -1191,39 +1209,208 @@
             type: 'text', className: 'control app-field', maxLength: 200, value: ask.note,
             placeholder: 'The request in your words, one line',
             onChange: function (event) { ask.note = event.target.value; redraw(); }
-          }))),
+          })),
+        ready ? h('div', { className: 'fb-menu__sec app-request__launch' },
+          h('label', { className: 'fb-menu__row control' },
+            h('input', {
+              type: 'checkbox', checked: ask.launch,
+              onChange: function () { ask.launch = !ask.launch; redraw(); }
+            }),
+            h('span', null, 'Open Claude Code'))) : null),
       h('div', { className: 'fb-menu__foot' },
         h(F.Button, { type: 'submit', size: 'sm', disabled: ask.posting }, 'Post')));
   }
 
   /* Post: the item, as the owner (no identity headers), with the request header every page write
      carries. The menu closes; a refusal, a second open item's 409 among them, shows the server's
-     sentence under the button as it arrives, the note kept for another try. Either way `after`
-     runs, so the view reads its company again and the open item's line follows. */
-  function postRequest(ask, redraw, after) {
+     sentence under the button as it arrives, the note kept for another try. A post taken where
+     launching is set up and Open Claude Code is ticked posts the item's launch (openLaunch), which
+     runs `after` once its own post ends; otherwise `after` runs, so the view reads its company
+     again and the open item's line follows. */
+  function postRequest(ask, redraw, after, ready) {
     if (ask.posting) return;
     ask.posting = true;
     ask.error = null;
     redraw();
+    var posted = null;
     api.post('/api/inbox', { symbol: ask.symbol, mode: ask.mode, note: ask.note.trim() })
       .then(function (r) {
         if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)
           : 'the server answered ' + r.status);
         ask.note = '';
+        posted = r.body.id;
       })
       .catch(function (err) { ask.error = err.message; })
       .then(function () {
         ask.posting = false;
         ask.open = false;
-        after();
+        if (posted !== null && ready && ask.launch) openLaunch(ask, posted, redraw, after);
+        else after();
       });
   }
 
-  /* The open item's line under Request research, until the item is done or declined. */
-  function requested(item) {
+  /* The open item's line under Request research, until the item is done or declined
+     (launchLine): the opening one while a launch's post is in flight, whatever the item's launch,
+     before the item is read again too; else the item's, with the launch the page follows in place
+     of its own where it is that item's. A failure's line is in the request's error style. After
+     its text, where launching is set up, the row's button, Open Claude Code or Open again, which
+     posts a launch for the item. */
+  function requested(ask, item, redraw, after, ready) {
+    var shown = item && ask.followed && ask.followed.itemId === item.id
+      ? Object.assign({}, item, { launch: ask.followed }) : item;
+    var line = ask.opening ? launchLine({ state: 'pending', launch: { state: 'opening' } }, ready)
+      : launchLine(shown, ready);
+    if (!line) return null;
+    return h('p', {
+      className: line.failed ? 'caption app-request__error' : 'caption app-requested'
+    },
+      line.text,
+      ready && line.action ? h(F.Button, {
+        size: 'sm', variant: 'quiet', className: 'app-request__open',
+        onClick: function () { openLaunch(ask, item.id, redraw, after); }
+      }, line.action === 'open' ? 'Open Claude Code' : 'Open again') : null);
+  }
+
+  /* The open item's line (spec 2026-11-16 agent launch, 10) from the item and its newest launch,
+     as { text, failed, action }: a claim whatever the launch; a pending item with no launch with
+     the action 'open' where launching is set up (`ready`); a failure's line, and the two overdue
+     ones, in the error style with the action 'again'; the others with none. No item has no
+     line. */
+  function launchLine(item, ready) {
     if (!item) return null;
-    return h('p', { className: 'caption app-requested' },
-      'Requested · ' + (item.state === 'claimed' ? 'claimed by ' + item.claimedBy : 'pending'));
+    var launch = item.launch;
+    if (item.state === 'claimed') return said('Requested · claimed by ' + item.claimedBy);
+    if (!launch) {
+      return { text: 'Requested · pending', failed: false, action: ready ? 'open' : null };
+    }
+    if (launch.state === 'opening') return said('Requested · opening a window…');
+    if (launch.state === 'opened' && !launch.overdue) {
+      return said('Requested · the window opened, Claude Code is starting…');
+    }
+    if (launch.state === 'opened') {
+      return failure('The window opened, but nothing in it reported after 90 seconds. ' +
+        'Check the window.');
+    }
+    if (launch.state === 'started' && !launch.overdue) {
+      return said('Requested · Claude Code started, not claimed yet');
+    }
+    if (launch.state === 'started') {
+      return failure('Claude Code started, but no agent claimed this request after 90 ' +
+        'seconds. Check the window.');
+    }
+    if (launch.state === 'ended') {
+      return failure('Claude Code ended before it claimed this request (exit code ' +
+        launch.exitCode + ').');
+    }
+    if (launch.stage === 'window') {
+      return failure('Could not open the window: ' + launch.detail + '. Check Settings, Agents.');
+    }
+    return failure('The window opened, but Claude Code did not start: ' + launch.detail +
+      '. Check Settings, Agents.');
+  }
+
+  function said(text) { return { text: text, failed: false, action: null }; }
+
+  function failure(text) { return { text: text, failed: true, action: 'again' }; }
+
+  /* Open Claude Code, Open again, and a post taken with the box ticked: the item's launch,
+     posted as the owner with the request header. Any following stops first, and while the post
+     is in flight, up to the window command's 15 seconds, the line is the opening one. A 201 is
+     the launch, which the page then follows; a 409, the item no longer pending or a launch for it
+     in flight, shows no error, since the company read again draws the claim or that launch; any
+     other refusal's sentence, or a failed request's, is the request's error. Either way `after`
+     runs once the post ends, so the view reads its company again with the item and its launch;
+     a request stopped meanwhile (stopLaunch) follows nothing. */
+  function openLaunch(ask, itemId, redraw, after) {
+    if (ask.opening) return;
+    stopLaunch(ask);
+    ask.followed = null;
+    ask.opening = true;
+    ask.error = null;
+    redraw();
+    var round = ask.round;
+    api.post('/api/launches', { itemId: itemId })
+      .then(function (r) {
+        if (r.ok) ask.followed = r.body;
+        else if (r.status !== 409) throw new Error(r.body && r.body.detail ? String(r.body.detail)
+          : 'the server answered ' + r.status);
+      })
+      .catch(function (err) { ask.error = err.message; })
+      .then(function () {
+        ask.opening = false;
+        after();
+        if (round === ask.round) followLaunch(ask, redraw, after);
+      });
+  }
+
+  /* How long after an answer the page reads a followed launch again. */
+  var LAUNCH_READ_MS = 2000;
+
+  /* The page follows the request's launch (spec 2026-11-16 agent launch, 10): while it is
+     followed (following), it is read again LAUNCH_READ_MS after the last answer and the view is
+     drawn with each answer, with one timer for a request. Once an answer is no longer followed,
+     the item claimed or no longer open, the launch failed or ended, or ten minutes past its
+     making, the following ends and `after` runs once, so the view reads its company again and the
+     line draws the claim or the failure. An answer from before a stop (stopLaunch) is dropped; a
+     read that fails ends the following, its sentence the request's error. */
+  function followLaunch(ask, redraw, after) {
+    var launch = ask.followed;
+    if (ask.timer !== null || !following(launch)) return;
+    var round = ask.round;
+    ask.timer = setTimeout(function () {
+      getJson('/api/launches/' + launch.id).then(function (got) {
+        if (round !== ask.round) return;
+        ask.timer = null;
+        ask.followed = got;
+        if (following(got)) followLaunch(ask, redraw, after);
+        else after();
+        redraw();
+      }, function (err) {
+        if (round !== ask.round) return;
+        ask.timer = null;
+        ask.error = 'The launch could not be read: ' + err.message + '.';
+        redraw();
+      });
+    }, LAUNCH_READ_MS);
+  }
+
+  /* The request's following stops: its timer is cleared and its round moves on, so a read begun
+     before the stop is dropped when it lands, and a launch's post begun before it follows
+     nothing. The drawer stops it as it closes and as it turns to another company, the report page
+     as it shows another company. */
+  function stopLaunch(ask) {
+    ask.round++;
+    if (ask.timer !== null) clearTimeout(ask.timer);
+    ask.timer = null;
+  }
+
+  /* A view's read of its company has landed, with its open item or none. The launch the request
+     follows goes once the read holds no open item, another item or a newer launch of it, and
+     once no following runs, since the read is then the newer. Then, where no following runs and
+     no launch's post is in flight, an open item whose launch is followed (following) starts the
+     following: a view that loads while a launch is in flight follows it. */
+  function followItem(ask, item, redraw, after) {
+    var held = ask.followed;
+    if (held && (ask.timer === null || !item || held.itemId !== item.id ||
+        (item.launch && item.launch.id > held.id))) {
+      stopLaunch(ask);
+      ask.followed = null;
+    }
+    if (ask.timer !== null || ask.opening || !item || !following(item.launch)) return;
+    ask.followed = item.launch;
+    followLaunch(ask, redraw, after);
+  }
+
+  /* The drawer's company read has landed: the drawer shows it, and its request follows the open
+     item's launch (followItem). */
+  function landed(symbol, body) {
+    state.drawer = { symbol: symbol, body: body, loading: false, error: null };
+    followItem(asked(body.result.symbol), body.item, render, reread(body.result.symbol));
+  }
+
+  /* The drawer's `after` for a company's request: its detail read again. */
+  function reread(symbol) {
+    return function () { reloadDetail(symbol); };
   }
 
   /* The drawer's company read again in place after a write that changes its detail, while the
@@ -1238,7 +1425,7 @@
     getJson('/api/companies/' + encodeURIComponent(symbol))
       .then(function (body) {
         if (request !== latestDetail) return;
-        state.drawer = { symbol: symbol, body: body, loading: false, error: null };
+        landed(symbol, body);
       })
       .catch(function () { /* the drawer keeps what it shows */ })
       .then(render);

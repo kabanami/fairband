@@ -398,8 +398,9 @@
   /* The drawer's main view (spec 2026-11-06 Tier 2, 18.2): the stance line, the report's word as
      the row's chip with who published it, close over the Summary; Open the report under it.
      Request research's menu opens under its button from the button's left edge, the menu's note
-     line as wide as the menu; the server's refusal and the open item's line follow the button.
-     Details ▾ closes the main view. */
+     line as wide as the menu, the box Open Claude Code a little under it; the server's refusal
+     and the open item's line follow the button, the line's Open Claude Code or Open again set a
+     little after its text (spec 2026-11-16 agent launch, 10). Details ▾ closes the main view. */
   .app-stance {
     display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
     margin: var(--space-6) 0 0;
@@ -412,6 +413,8 @@
   .app-request__line .app-field { width: 100%; }
   .app-request__error { margin: var(--space-2) 0 0; color: var(--caution); }
   .app-requested { margin: var(--space-2) 0 0; color: var(--ink-muted); }
+  .app-request__launch { margin-top: var(--space-2); }
+  .app-request__open { margin-left: var(--space-2); }
   .app-disclosure { margin-left: calc(-1 * var(--space-2)); }
   /* Details (18.3): the overrides one record under another; a chip on a line of its own under the
      text it signs; a note's text as written, its lines kept; Add a note's field the rail's width,
