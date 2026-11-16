@@ -222,7 +222,7 @@
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
     openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
-    meter: meter, priceNeeds: priceNeeds,
+    meter: meter,
     inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     inputValue: inputValue,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
@@ -733,9 +733,6 @@
             briefLine(body.company, body.brief)) : null,
         currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },
           currencyLine(body)) : null),
-      /* A price well above the value the meter draws: what it needs leads the band (method
-         4.11), since the value alone says only that the method cannot reach the price. */
-      priceNeeds(body),
       valued ? section('band', null, meter(body),
         levels(drawnLevels(body)),
         h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route),
@@ -792,14 +789,6 @@
         }, 'Details ▾')),
       state.detailsOpen ? details(body) : null
     ];
-  }
-
-  /* What the price needs (method 4.11), as the drawer and the report page lead the band with it:
-     the server's sentences on the detail (research_api's priceNeeds), written for the value the
-     meter draws when the price is well above it; null without them, which draws nothing. */
-  function priceNeeds(body) {
-    return body.priceNeeds
-      ? h('p', { key: 'needs', className: 'body app-needs' }, body.priceNeeds) : null;
   }
 
   /* The meter of a company's detail (spec 2026-11-06 Tier 2, 18.2 and 18.4), as the drawer and

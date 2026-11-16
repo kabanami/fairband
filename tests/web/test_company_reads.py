@@ -660,12 +660,12 @@ def test_the_value_section_says_what_a_price_well_above_the_value_shows(
     value = " ".join(_get(client, "/api/methodology/value")["text"].split())
     assert (
         "When the word is Well above, the value alone says only that the method cannot reach "
-        "the price. The drawer and the report page then lead with what the price needs."
+        "the price. An agent's report then leads its valuation with what the price needs."
     ) in value
-    assert "When no rate in the route's range reaches the price, the page says so." in value
+    assert "When no rate in the route's range reaches the price, the report says so." in value
     # a row charged at the hurdle rate gives that reason, never "no rate" (method 4.11)
     assert (
-        "Where growth is charged at the hurdle rate, it adds no value, and the page says that "
+        "Where growth is charged at the hurdle rate, it adds no value, and the report says that "
         "instead."
     ) in value
 
