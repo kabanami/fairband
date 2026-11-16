@@ -16,7 +16,9 @@ reports. The company detail carries the agents' records the drawer leads with
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
 the page, its script, the design system copy and the vendored React, so the page renders with
-no network. Nothing here reads a key. The refresh routes hand the work to the ``RefreshWorker``,
+no network. The page and each static file answer ``Cache-Control: no-cache``: a browser keeps its
+copy and asks at each load whether the file changed (a 304 where it did not), so it never draws
+a newer server's page with an older build's script. Nothing here reads a key. The refresh routes hand the work to the ``RefreshWorker``,
 whose thread calls the vendors; without one they answer 503. ``serve`` always passes one; without
 an FMP key its runs refuse every kind but a revalue, and a refusal is a 400. The pass-through
 route, the multiples history read and the filing reads alone call a vendor from a request: they
@@ -87,6 +89,7 @@ opener or no port answers it 503 and starts nothing.
 
 import json
 import logging
+import os
 import re
 import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -101,6 +104,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.types import Scope
 
 from fairband.config import Settings, utcnow
 from fairband.engine.types import ValuationResult, money_of, rated, result_to_json
@@ -169,6 +173,8 @@ from fairband.web.watchlists_api import add_watchlist_routes
 logger = logging.getLogger("fairband.web")
 
 _STATIC = resources.files("fairband.web").joinpath("static")
+# The page and its files: kept by the browser, and asked for again at each load.
+_CHECK_AGAIN = {"Cache-Control": "no-cache"}
 TRUSTED_HOSTS = ["127.0.0.1", "localhost"]
 REQUEST_HEADER = "X-Fairband-Request"
 _SAFE_METHODS = ("GET", "HEAD")
@@ -182,6 +188,23 @@ _VENDOR_READS = re.compile(
     r"|/api/companies/[^/]+/filing-report/search"
 )
 _NO_WORKER = "no refresh worker"
+
+
+class _CheckedStatic(StaticFiles):
+    """The static files, each answered with ``Cache-Control: no-cache``: the file, and the 304 of
+    one that did not change. Without the header a browser reuses a script for a time it works out
+    from the file's age, and draws an older build's script on a newer server's page."""
+
+    def file_response(
+        self,
+        full_path: str | os.PathLike[str],
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers.update(_CHECK_AGAIN)
+        return response
 
 
 class RefreshRequest(BaseModel):
@@ -231,7 +254,7 @@ def create_app(
     app = FastAPI(
         title="Fairband", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
     )
-    app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+    app.mount("/static", _CheckedStatic(directory=str(_STATIC)), name="static")
 
     @app.middleware("http")
     async def require_request_header(
@@ -254,7 +277,9 @@ def create_app(
 
     @app.get("/")
     def page() -> FileResponse:
-        return FileResponse(str(_STATIC.joinpath("index.html")), media_type="text/html")
+        return FileResponse(
+            str(_STATIC.joinpath("index.html")), media_type="text/html", headers=_CHECK_AGAIN
+        )
 
     def current(conn: sqlite3.Connection) -> Policy:
         """The effective policy: the file's values with the user's settings over them."""

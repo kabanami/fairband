@@ -173,6 +173,36 @@ def test_index_and_static_served(client: TestClient) -> None:
     assert client.get("/static/no-such-file.js").status_code == 404
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/",
+        "/static/app.js",
+        "/static/settings.js",
+        "/static/design-system/components/bundle.js",
+        "/static/design-system/tokens/tokens.css",
+        "/static/vendor/react.production.min.js",
+    ],
+)
+def test_the_page_and_its_files_are_checked_again_at_each_load(
+    client: TestClient, path: str
+) -> None:
+    """No-cache: the browser keeps its copy and asks at each load whether the file changed, so a
+    page file of an older build is not used after the server changed (the founder, 2026-11-16:
+    the Agents section was missing behind an old settings.js)."""
+    assert client.get(path).headers["cache-control"] == "no-cache", path
+
+
+def test_a_static_file_that_did_not_change_is_a_304_that_says_no_cache_too(
+    client: TestClient,
+) -> None:
+    first = client.get("/static/app.js")
+    again = client.get("/static/app.js", headers={"If-None-Match": first.headers["etag"]})
+    assert again.status_code == 304
+    assert again.content == b""
+    assert again.headers["cache-control"] == "no-cache"
+
+
 def test_screen_rows_and_default_sort(
     client: TestClient, results: dict[str, ValuationResult]
 ) -> None:

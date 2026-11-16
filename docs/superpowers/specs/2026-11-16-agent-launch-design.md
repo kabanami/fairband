@@ -618,3 +618,7 @@ launch route.
   suggestions and a help line that says what it takes (7.3). No list of models is read: Claude
   Code has no command that lists them, and Anthropic's model list needs an API key, which
   Fairband does not hold; an alias means the newest model of its family. B-212.
+- 2026-11-16, the founder did not see the Agents section on the first day live: his browser drew
+  the new page with the `settings.js` it had kept from the build before. The page and its static
+  files now answer `Cache-Control: no-cache`, so a browser asks at each load whether a file
+  changed (`web/app.py`). B-213.
