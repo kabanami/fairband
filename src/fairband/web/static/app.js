@@ -172,42 +172,46 @@
   /* Whether the page reads a launch again (spec 2026-11-16 agent launch, 7.4 and 10): while it is
      opening, opened or started, under LAUNCH_FOLLOW_S seconds after it was made by the server's
      clock, and, for a work item's launch, while the item is pending, past overdue too, since a
-     claim may still arrive. A test waits for no claim, so its launch is not read again once it has
-     started or is overdue. No launch is not read. The Settings page's Test and the request button
-     both follow a launch by it. */
+     claim may still arrive. A test waits for no claim: its launch is read again while it is
+     opening or opened and not overdue, and once it has started only while it is under
+     TEST_STARTED_S seconds old, so that a Claude Code that ends at once shows. No launch is not
+     read. The Settings page's Test and the request button both follow a launch by it. */
   var LAUNCH_FOLLOW_S = 600;
+  var TEST_STARTED_S = 60;
   function following(launch) {
     if (!launch || ['opening', 'opened', 'started'].indexOf(launch.state) === -1) return false;
     if (!(launch.ageSeconds < LAUNCH_FOLLOW_S)) return false;
-    if (launch.test) return launch.state !== 'started' && !launch.overdue;
+    if (launch.test) {
+      return launch.state === 'started' ? launch.ageSeconds < TEST_STARTED_S : !launch.overdue;
+    }
     return launch.itemState === 'pending';
   }
 
-  /* What controls.js uses: the screen's reload when a refresh ends, the write helpers and a
-     refused write's sentence, the GET helper, the local-time helper, whether a launch is followed
-     (following), the phase numbers and a work item's open states; and the later views, find, the
-     lists (null until they load), their reload, which settles once they are in, and watch, the
-     marks' onWatch, which opens the popup; the loaded rows (null until they load), the chosen
-     columns, openRow, which opens a row's drawer, reloadDetail, which reads the drawer's company
-     again after another view's write about it (the Inbox view's decline and a watchlist's Request
-     research, spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever
-     company the drawer shows again when a run ends. controls.js adds show, onShow, section,
-     running and countInbox, the Inbox view onInbox, agents.js adds agents, the Settings view's
-     Agents section, and methodology.js adds methodologySection, which the drawer's link reads; a
-     view drawn from the rows or the lists sets onRender, which runs after each draw of the screen,
-     so it draws again as they load and change. The report page (report.js, 18.4) draws with the
-     drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
+  /* What controls.js uses: the screen's reload when a refresh ends, the write helpers and a refused
+     write's sentence and its reason (refusalDetail), the GET helper, the local-time helper, whether
+     a launch is followed (following), the phase numbers and a work item's open states; and the
+     later views, find, the lists (null until they load), their reload, which settles once they are
+     in, and watch, the marks' onWatch, which opens the popup; the loaded rows (null until they
+     load), the chosen columns, openRow, which opens a row's drawer, reloadDetail, which reads the
+     drawer's company again after another view's write about it (the Inbox view's decline and a
+     watchlist's Request research, spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which
+     reads whichever company the drawer shows again when a run ends. controls.js adds show, onShow,
+     section, running and countInbox, the Inbox view onInbox, agents.js adds agents, the Settings
+     view's Agents section, and methodology.js adds methodologySection, which the drawer's link
+     reads; a view drawn from the rows or the lists sets onRender, which runs after each draw of the
+     screen, so it draws again as they load and change. The report page (report.js, 18.4) draws with
+     the drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
-     evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the
-     line that says what the figures are in (currencyLine), a report's footnote numbers, and
-     Request research with a request of its own (asking), whose following of a launch the page
-     stops as it shows another company (stopLaunch) and starts as its read lands (followItem). The
-     open item's line (launchLine), a launch's post (openLaunch), the drawer's route sections, the
+     evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the line
+     that says what the figures are in (currencyLine), a report's footnote numbers, and Request
+     research with a request of its own (asking), whose following of a launch the page stops as it
+     starts to read another company (stopLaunch) and starts as its read lands (followItem). The open
+     item's line (launchLine), a launch's post (openLaunch), the drawer's route sections, the
      charge's rows, an input's value, the intermediates, the flags it lists and Details' findings
      are here for the tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
-    reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
-    following: following,
+    reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
+    localIso: localIso, following: following,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
     find: find,
     watchlists: function () { return state.watchlists; },
@@ -477,13 +481,18 @@
   }
 
   /* A refused write's sentence, led by the write's own head, with the server's reason as it
-     arrived, or its status when it sent none; null for a write it took. The popup's, and every
-     later view's through FairbandPage. */
+     arrived (refusalDetail); null for a write it took. The popup's, and every later view's
+     through FairbandPage. */
   function refusal(head, r) {
     if (r.ok) return null;
-    var detail = r.body && typeof r.body.detail === 'string' ? r.body.detail
+    return head + ': ' + refusalDetail(r) + '.';
+  }
+
+  /* A refused write's reason: the server's sentence as it arrived, or its status when it sent
+     none. */
+  function refusalDetail(r) {
+    return r.body && typeof r.body.detail === 'string' ? r.body.detail
       : 'the server answered ' + r.status;
-    return head + ': ' + detail + '.';
   }
 
   /* The popup's writes run one after another in the order made, so a quick second change never
@@ -1115,12 +1124,13 @@
      the second run), and no note. Its launch (spec 2026-11-16 agent launch, 10): the menu's box
      Open Claude Code ticked (`launch`); no launch's post in flight (`opening`); no launch
      followed (`followed`, the launch as the page last read it); no timer (`timer`, held from the
-     moment a read of the followed launch is due until its answer lands); and the count of the
-     following's stops (`round`), so a read or a post begun before a stop is dropped. */
+     moment a read of the followed launch is due until its answer lands); no failed read of it in
+     a row (`misses`); and the count of the following's stops (`round`), so a read or a post begun
+     before a stop is dropped. */
   function asking(symbol) {
     return {
       symbol: symbol, open: false, mode: 'full report', note: '', error: null, posting: false,
-      launch: true, opening: false, followed: null, timer: null, round: 0
+      launch: true, opening: false, followed: null, timer: null, misses: 0, round: 0
     };
   }
 
@@ -1225,14 +1235,16 @@
      carries. The menu closes; a refusal, a second open item's 409 among them, shows the server's
      sentence under the button as it arrives, the note kept for another try. A post taken where
      launching is set up and Open Claude Code is ticked posts the item's launch (openLaunch), which
-     runs `after` once its own post ends; otherwise `after` runs, so the view reads its company
-     again and the open item's line follows. */
+     runs `after` once its own post ends, unless the request was stopped (stopLaunch: the drawer
+     closed or turned to another company) while the item's post was in flight; otherwise `after`
+     runs, so the view reads its company again and the open item's line follows. */
   function postRequest(ask, redraw, after, ready) {
     if (ask.posting) return;
     ask.posting = true;
     ask.error = null;
     redraw();
     var posted = null;
+    var round = ask.round;
     api.post('/api/inbox', { symbol: ask.symbol, mode: ask.mode, note: ask.note.trim() })
       .then(function (r) {
         if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)
@@ -1244,8 +1256,11 @@
       .then(function () {
         ask.posting = false;
         ask.open = false;
-        if (posted !== null && ready && ask.launch) openLaunch(ask, posted, redraw, after);
-        else after();
+        if (posted !== null && ready && ask.launch && round === ask.round) {
+          openLaunch(ask, posted, redraw, after);
+        } else {
+          after();
+        }
       });
   }
 
@@ -1318,9 +1333,10 @@
      is in flight, up to the window command's 15 seconds, the line is the opening one. A 201 is
      the launch, which the page then follows; a 409, the item no longer pending or a launch for it
      in flight, shows no error, since the company read again draws the claim or that launch; any
-     other refusal's sentence, or a failed request's, is the request's error. Either way `after`
-     runs once the post ends, so the view reads its company again with the item and its launch;
-     a request stopped meanwhile (stopLaunch) follows nothing. */
+     other refusal's sentence is the request's error, and a post that fails on the network says
+     that the window was not opened and why. Either way `after` runs once the post ends, so the
+     view reads its company again with the item and its launch; a request stopped meanwhile
+     (stopLaunch) follows nothing. */
   function openLaunch(ask, itemId, redraw, after) {
     if (ask.opening) return;
     stopLaunch(ask);
@@ -1332,10 +1348,10 @@
     api.post('/api/launches', { itemId: itemId })
       .then(function (r) {
         if (r.ok) ask.followed = r.body;
-        else if (r.status !== 409) throw new Error(r.body && r.body.detail ? String(r.body.detail)
-          : 'the server answered ' + r.status);
+        else if (r.status !== 409) ask.error = refusalDetail(r);
+      }, function (err) {
+        ask.error = 'The window was not opened: ' + err.message + '.';
       })
-      .catch(function (err) { ask.error = err.message; })
       .then(function () {
         ask.opening = false;
         after();
@@ -1343,16 +1359,22 @@
       });
   }
 
-  /* How long after an answer the page reads a followed launch again. */
+  /* How long after an answer the page reads a followed launch again; how many reads in a row
+     may fail before the following stops; and the words a failed read's sentence starts with. */
   var LAUNCH_READ_MS = 2000;
+  var LAUNCH_MISSES = 30;
+  var UNREAD = 'The launch could not be read: ';
 
   /* The page follows the request's launch (spec 2026-11-16 agent launch, 10): while it is
      followed (following), it is read again LAUNCH_READ_MS after the last answer and the view is
      drawn with each answer, with one timer for a request. Once an answer is no longer followed,
      the item claimed or no longer open, the launch failed or ended, or ten minutes past its
      making, the following ends and `after` runs once, so the view reads its company again and the
-     line draws the claim or the failure. An answer from before a stop (stopLaunch) is dropped; a
-     read that fails ends the following, its sentence the request's error. */
+     line draws the claim or the failure. An answer from before a stop (stopLaunch) is dropped. A
+     read that fails does not end the following: the next read runs LAUNCH_READ_MS later, and the
+     request's error says the launch could not be read and that the page tries again, until a read
+     succeeds and clears that sentence (unread). The LAUNCH_MISSES-th failed read in a row ends
+     the following: `after` runs once, and the sentence says to reload the page. */
   function followLaunch(ask, redraw, after) {
     var launch = ask.followed;
     if (ask.timer !== null || !following(launch)) return;
@@ -1361,6 +1383,8 @@
       getJson('/api/launches/' + launch.id).then(function (got) {
         if (round !== ask.round) return;
         ask.timer = null;
+        ask.misses = 0;
+        unread(ask);
         ask.followed = got;
         if (following(got)) followLaunch(ask, redraw, after);
         else after();
@@ -1368,27 +1392,42 @@
       }, function (err) {
         if (round !== ask.round) return;
         ask.timer = null;
-        ask.error = 'The launch could not be read: ' + err.message + '.';
+        ask.misses++;
+        if (ask.misses < LAUNCH_MISSES) {
+          ask.error = UNREAD + err.message + '. Trying again.';
+          followLaunch(ask, redraw, after);
+        } else {
+          ask.error = UNREAD + err.message + '. Reload the page.';
+          after();
+        }
         redraw();
       });
     }, LAUNCH_READ_MS);
   }
 
-  /* The request's following stops: its timer is cleared and its round moves on, so a read begun
-     before the stop is dropped when it lands, and a launch's post begun before it follows
-     nothing. The drawer stops it as it closes and as it turns to another company, the report page
-     as it shows another company. */
+  /* The request's error goes where it is a failed read's sentence (followLaunch), and no other. */
+  function unread(ask) {
+    if (ask.error && ask.error.indexOf(UNREAD) === 0) ask.error = null;
+  }
+
+  /* The request's following stops: its timer is cleared, its count of failed reads goes back to
+     none, and its round moves on, so a read begun before the stop is dropped when it lands, and a
+     post begun before it (the item's or its launch's) follows nothing. The drawer stops it as it
+     closes and as it turns to another company, the report page as it starts to read another
+     company. */
   function stopLaunch(ask) {
     ask.round++;
     if (ask.timer !== null) clearTimeout(ask.timer);
     ask.timer = null;
+    ask.misses = 0;
   }
 
   /* A view's read of its company has landed, with its open item or none. The launch the request
      follows goes once the read holds no open item, another item or a newer launch of it, and
      once no following runs, since the read is then the newer. Then, where no following runs and
      no launch's post is in flight, an open item whose launch is followed (following) starts the
-     following: a view that loads while a launch is in flight follows it. */
+     following, and a failed read's sentence goes (unread): a view that loads while a launch is in
+     flight follows it. */
   function followItem(ask, item, redraw, after) {
     var held = ask.followed;
     if (held && (ask.timer === null || !item || held.itemId !== item.id ||
@@ -1397,6 +1436,7 @@
       ask.followed = null;
     }
     if (ask.timer !== null || ask.opening || !item || !following(item.launch)) return;
+    unread(ask);
     ask.followed = item.launch;
     followLaunch(ask, redraw, after);
   }

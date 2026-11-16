@@ -4,7 +4,8 @@ opens a window for its item, and the line under the button says where the launch
 Claude Code or Open again after it. ``launchLine``, ``asking`` and ``requestResearch``'s drawing
 run in node (``support.page``) and the tests read what they return; the menu, the posts, the
 following and its clears, report.js's calls and the page's styles are read from the files, as
-``tests/web/test_agents_page.py`` reads the Agents section's."""
+``tests/web/test_agents_page.py`` reads the Agents section's; ``tests/web/test_launch_following.py``
+runs the posts and the following with a fetch and timers of its own."""
 
 import re
 from datetime import UTC, datetime
@@ -104,6 +105,7 @@ def _ask(**changes: Any) -> dict[str, Any]:
         "opening": False,
         "followed": None,
         "timer": None,
+        "misses": 0,
         "round": 0,
     } | changes
 
@@ -326,18 +328,22 @@ def test_the_menu_ticks_open_claude_code_only_where_launching_is_set_up() -> Non
 
 
 def test_a_post_taken_with_the_box_ticked_opens_a_window_for_its_item() -> None:
-    """The item is posted as before; where the post was taken, launching is set up and the box is
-    ticked, its answer's id goes to ``openLaunch``, which reads the company again itself, so
-    ``after`` runs once for a click either way."""
+    """The item is posted as before; where the post was taken, launching is set up, the box is
+    ticked and the request was not stopped while the post was in flight, its answer's id goes to
+    ``openLaunch``, which reads the company again itself, so ``after`` runs once for a click
+    either way (``tests/web/test_launch_following.py`` runs it)."""
     post = _function(_static_file("app.js"), "postRequest")
     _in_order(
         post,
+        "var round = ask.round;",
         "api.post('/api/inbox', { symbol: ask.symbol, mode: ask.mode, note: ask.note.trim() })",
         "posted = r.body.id;",
         ".catch(function (err) { ask.error = err.message; })",
         "ask.open = false;",
-        "if (posted !== null && ready && ask.launch) openLaunch(ask, posted, redraw, after);",
-        "else after();",
+        "if (posted !== null && ready && ask.launch && round === ask.round) {",
+        "openLaunch(ask, posted, redraw, after);",
+        "} else {",
+        "after();",
     )
     assert post.count("after()") == 1
 
@@ -346,7 +352,8 @@ def test_open_launch_posts_a_launch_and_a_409_shows_no_error() -> None:
     """``openLaunch`` stops any following, posts the item's launch and, once the post ends, reads
     the company again once and follows the launch a 201 gave. A 409, the item no longer pending or
     a launch in flight, sets no error: the company read again draws the claim or the launch. Any
-    other refusal's sentence, or a network failure's, is the request's error."""
+    other refusal's sentence is the request's error, and a post that fails on the network says
+    that the window was not opened."""
     launch = _function(_static_file("app.js"), "openLaunch")
     _in_order(
         launch,
@@ -359,9 +366,9 @@ def test_open_launch_posts_a_launch_and_a_409_shows_no_error() -> None:
         "var round = ask.round;",
         "api.post('/api/launches', { itemId: itemId })",
         "if (r.ok) ask.followed = r.body;",
-        "else if (r.status !== 409) throw new Error(",
-        "'the server answered ' + r.status",
-        ".catch(function (err) { ask.error = err.message; })",
+        "else if (r.status !== 409) ask.error = refusalDetail(r);",
+        "}, function (err) {",
+        "ask.error = 'The window was not opened: ' + err.message + '.';",
         "ask.opening = false;",
         "after();",
         "if (round === ask.round) followLaunch(ask, redraw, after);",
@@ -394,10 +401,12 @@ def test_the_following_reads_the_launch_every_2_seconds_and_reads_the_company_on
     """One timer for a request: while the followed launch is followed (FairbandPage.following) it
     is read 2 seconds after the last answer, each answer replacing the followed launch and drawn;
     once an answer is no longer followed, the company is read again once. An answer from a
-    following stopped meanwhile is dropped; a read that fails ends the following with its
-    sentence."""
+    following stopped meanwhile is dropped; a read that fails is tried again, and the 30th in a
+    row ends the following and reads the company again (``tests/web/test_launch_following.py``
+    runs it)."""
     script = _static_file("app.js")
     assert "var LAUNCH_READ_MS = 2000;" in script
+    assert "var LAUNCH_MISSES = 30;" in script
     follow = _function(script, "followLaunch")
     _in_order(
         follow,
@@ -415,6 +424,8 @@ def test_the_following_reads_the_launch_every_2_seconds_and_reads_the_company_on
         answer,
         "if (round !== ask.round) return;",
         "ask.timer = null;",
+        "ask.misses = 0;",
+        "unread(ask);",
         "ask.followed = got;",
         "if (following(got)) followLaunch(ask, redraw, after);",
         "else after();",
@@ -424,19 +435,31 @@ def test_the_following_reads_the_launch_every_2_seconds_and_reads_the_company_on
         failed,
         "if (round !== ask.round) return;",
         "ask.timer = null;",
-        "ask.error = 'The launch could not be read: ' + err.message + '.';",
+        "ask.misses++;",
+        "if (ask.misses < LAUNCH_MISSES) {",
+        "ask.error = UNREAD + err.message + '. Trying again.';",
+        "followLaunch(ask, redraw, after);",
+        "} else {",
+        "ask.error = UNREAD + err.message + '. Reload the page.';",
+        "after();",
         "redraw();",
     )
-    assert "after()" not in failed
-    assert follow.count("after()") == 1
+    assert failed.count("after()") == 1
+    assert follow.count("after()") == 2
     stop = _function(script, "stopLaunch")
-    for part in ("ask.round++;", "clearTimeout(ask.timer);", "ask.timer = null;"):
+    for part in (
+        "ask.round++;",
+        "clearTimeout(ask.timer);",
+        "ask.timer = null;",
+        "ask.misses = 0;",
+    ):
         assert part in stop, part
 
 
 def test_the_following_stops_when_the_drawer_closes_or_another_company_shows() -> None:
     """The timer is cleared when the drawer closes, when it turns to another company, and when
-    the report page shows another company."""
+    the report page starts to read another company, before the read, so a read that fails leaves
+    no following of the company shown before."""
     script = _static_file("app.js")
     assert "if (state.request) stopLaunch(state.request);" in _function(script, "close")
     _in_order(
@@ -445,13 +468,15 @@ def test_the_following_stops_when_the_drawer_closes_or_another_company_shows() -
         "if (state.request && state.request.symbol !== row.ticker) stopLaunch(state.request);",
         "getJson('/api/companies/' + encodeURIComponent(row.ticker))",
     )
-    load = _function(_static_file("report.js"), "load")
+    load = _code(_function(_static_file("report.js"), "load"))
     _in_order(
         load,
-        "if (state.symbol !== want.symbol) {",
-        "if (state.request) P.stopLaunch(state.request);",
-        "state.request = P.asking(want.symbol);",
+        "var want = P.report;",
+        "if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);",
+        "Promise.all([read(company), read(company + '/reports')])",
+        "if (state.symbol !== want.symbol) state.request = P.asking(want.symbol);",
     )
+    assert load.count("P.stopLaunch(") == 1
 
 
 def test_a_view_that_loads_with_a_launch_in_flight_follows_it() -> None:
@@ -469,6 +494,7 @@ def test_a_view_that_loads_with_a_launch_in_flight_follows_it() -> None:
         "stopLaunch(ask);",
         "ask.followed = null;",
         "if (ask.timer !== null || ask.opening || !item || !following(item.launch)) return;",
+        "unread(ask);",
         "ask.followed = item.launch;",
         "followLaunch(ask, redraw, after);",
     )

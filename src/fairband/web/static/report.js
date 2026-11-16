@@ -42,14 +42,16 @@
   /* The page FairbandPage.report names: the company's detail and its revisions, then the revision
      the hash names, else the latest. The page shown stays, faded, until the new one lands, and the
      latest read wins. A revision of another company is refused, so the page never shows one
-     company's report under another's head. Another company's page stops the following of the
-     request of the company shown and starts a request of its own; each read that lands goes to
+     company's report under another's head. A read of another company stops the following of the
+     request of the company shown before it starts, so a read that fails leaves none running, and
+     the page starts a request of its own as the read lands; each read that lands goes to
      FairbandPage.followItem, so the page follows the open item's launch while it is in flight
      (spec 2026-11-16 agent launch, 10). */
   function load() {
     var want = P.report;
     var request = ++latest;
     var company = '/api/companies/' + encodeURIComponent(want.symbol);
+    if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);
     state.loading = true;
     render();
     Promise.all([read(company), read(company + '/reports')])
@@ -66,10 +68,7 @@
           throw new Error('report ' + report.id + ' is ' + report.symbol + '\'s, not ' +
             want.symbol + '\'s');
         }
-        if (state.symbol !== want.symbol) {
-          if (state.request) P.stopLaunch(state.request);
-          state.request = P.asking(want.symbol);
-        }
+        if (state.symbol !== want.symbol) state.request = P.asking(want.symbol);
         if (!report || !state.report || state.report.id !== report.id) state.series = null;
         state.symbol = want.symbol;
         state.detail = found.detail;

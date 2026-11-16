@@ -917,27 +917,33 @@ def test_the_count_follows_the_poll() -> None:
 
 
 def test_one_copy_of_the_open_states_and_the_refusal() -> None:
-    """A work item's open states and a refused write's sentence are app.js's, on FairbandPage, and
-    the header, the Inbox view and the Watchlists view read them there. The sentence is the
-    server's string detail as it arrived, led by the write's head, or the status when the server
-    sent none."""
+    """A work item's open states and a refused write's sentence and its reason are app.js's, on
+    FairbandPage, and the header, the Inbox view, the Watchlists view and the Agents section read
+    them there. The reason is the server's string detail as it arrived, or the status when the
+    server sent none; the sentence is the reason led by the write's head."""
     app = _static_file("app.js")
     assert "var OPEN_STATES = ['pending', 'claimed'];" in app
     assert "refusal: refusal" in app and "OPEN_STATES: OPEN_STATES" in app
+    assert "refusalDetail: refusalDetail" in app
     _in_order(
         _function(app, "refusal"),
         "if (r.ok) return null;",
-        "var detail = r.body && typeof r.body.detail === 'string' ? r.body.detail",
+        "return head + ': ' + refusalDetail(r) + '.';",
+    )
+    _in_order(
+        _function(app, "refusalDetail"),
+        "return r.body && typeof r.body.detail === 'string' ? r.body.detail",
         ": 'the server answered ' + r.status;",
-        "return head + ': ' + detail + '.';",
     )
     for name, uses in (
         ("controls.js", ("var OPEN = P.OPEN_STATES;",)),
         ("inbox.js", ("var OPEN = P.OPEN_STATES;", "var refusal = P.refusal;")),
         ("watchlists.js", ("var refusal = P.refusal;",)),
+        ("agents.js", ("P.refusal('Not saved', r)", "P.refusalDetail(r)")),
     ):
         js = _static_file(name)
         assert "function refusal(" not in js and "['pending', 'claimed']" not in js, name
+        assert "function detailOf(" not in js, name
         for text in uses:
             assert text in js, (name, text)
 

@@ -23,6 +23,7 @@ pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 AGENTS = STATIC / "agents.js"
 OVERDUE = "The window opened, but nothing in it reported after 90 seconds. Check the window."
 STARTED = "Claude Code started. Its window should say that the Fairband research skill is loaded."
+FIX_FILE = "Correct the file, or save here to write it again with the values shown."
 
 
 def _function(script: str, name: str) -> str:
@@ -127,14 +128,23 @@ def test_edits_gives_the_changed_names_alone() -> None:
         ),
         (_launch("started", test=True), STARTED, False),
         (_launch("ended", test=True, exit_code=0), "Claude Code ended (exit code 0).", False),
-        (_launch("ended", test=True, exit_code=1), "Claude Code ended (exit code 1).", False),
+        (
+            _launch("ended", test=True, exit_code=1),
+            "Claude Code ended (exit code 1). Check the window.",
+            True,
+        ),
+        (
+            _launch("ended", test=True, exit_code=-2),
+            "Claude Code ended (exit code -2). Check the window.",
+            True,
+        ),
     ],
 )
 def test_the_test_line_says_where_the_test_is(
     launch: dict[str, Any], text: str, failed: bool
 ) -> None:
-    """Spec 7.4's line for each state of the test's launch; a failure's and the overdue line
-    take the error style."""
+    """Spec 7.4's line for each state of the test's launch; a failure's, the overdue line and an
+    end with another exit code than 0 take the error style."""
     assert node("agents.testLine", [launch], AGENTS) == {"text": text, "failed": failed}
 
 
@@ -156,8 +166,11 @@ def test_the_test_line_says_where_the_test_is(
         (_launch("opened", test=True), True),
         (_launch("opened", test=True, age=599), True),
         (_launch("opened", test=True, age=600), False),
-        # a test waits for no claim: it is done once it has started, or once it is overdue
-        (_launch("started", test=True), False),
+        # a test waits for no claim: once it has started it is followed for its first 60 seconds,
+        # so that a Claude Code that ends at once shows, and it is done once it is overdue
+        (_launch("started", test=True), True),
+        (_launch("started", test=True, age=59), True),
+        (_launch("started", test=True, age=60), False),
         (_launch("opened", test=True, age=91, overdue=True), False),
         (_launch("failed", test=True, stage="agent", detail="no"), False),
         (_launch("ended", test=True, exit_code=0), False),
@@ -186,7 +199,8 @@ def test_the_section_draws_the_form_as_the_server_serves_it() -> None:
         "h('h2', { id: 'set-group-agents', className: 'title app-set__head' }, 'Agents'),",
         "form && form.fileError ? h('div', { className: 'app-set__notice' },",
         "h('p', { className: 'caption app-set__error' }, form.fileError),",
-        "h('p', { className: 'caption' }, 'Correct the file, or save here to write it again.'))",
+        "h('p', { className: 'caption' },",
+        f"'{FIX_FILE}'))",
         "form.fields.map(function (field) { return row(field, redraw); }),",
         "actions(form, redraw)",
     )
@@ -218,7 +232,9 @@ def test_save_sends_the_edits_alone_and_a_refusal_goes_to_its_field() -> None:
     """Save is off with no edit and while a save is in flight, except where the server cannot use
     the file, when a save writes it again. It sends ``edits`` alone as ``changes``. Taken, the
     form is the answer and the draft is cleared; refused, the server's "<name>: <rule>" stands
-    under the field it names, or beside Save where it names none."""
+    under the field it names, or, where it names none, "Not saved: <the server's sentence>."
+    beside Save, as the valuation settings say it (FairbandPage.refusal); a save that fails on the
+    network is "Not saved: <the error>." there too."""
     script = _static_file("agents.js")
     actions = _function(script, "actions")
     assert "var changed = Object.keys(edits(form, state.draft)).length > 0;" in actions
@@ -233,11 +249,15 @@ def test_save_sends_the_edits_alone_and_a_refusal_goes_to_its_field() -> None:
         "P.api.put('/api/launch-settings', { changes: edits(state.form, state.draft) })",
         "state.form = r.body;",
         "state.draft = {};",
+        "var detail = P.refusalDetail(r);",
         "var cut = detail.indexOf(': ');",
         "var name = cut > 0 ? detail.slice(0, cut) : SAVE;",
-        "state.error = { name: named(name) ? name : SAVE, sentence: detail };",
+        "state.error = named(name) ? { name: name, sentence: detail }",
+        ": { name: SAVE, sentence: P.refusal('Not saved', r) };",
+        "state.error = { name: SAVE, sentence: 'Not saved: ' + err.message + '.' };",
     ):
         assert part in save, part
+    assert "detailOf" not in script
     assert save.index("if (r.ok) {") < save.index("state.draft = {};")
     assert "state.error && state.error.name === SAVE ? state.error.sentence : null;" in actions
 
@@ -270,7 +290,8 @@ def test_test_posts_a_test_launch_and_follows_it() -> None:
     follows it, its line drawn each time. One timer at most: it is cleared before a new test and
     whenever the launch is no longer followed, and an answer for an earlier test is dropped. A
     refusal's sentence shows where the test's line shows, in the error style; while the post is
-    in flight the line is the opening one."""
+    in flight the line is the opening one. A read of the launch that fails says so in the error
+    style."""
     script = _static_file("agents.js")
     assert "var READ_MS = 2000;" in script
     start = _function(script, "startTest")
@@ -281,7 +302,7 @@ def test_test_posts_a_test_launch_and_follows_it() -> None:
         "state.launch = r.body;",
         "follow(redraw);",
     )
-    assert "state.testError = detailOf(r);" in start
+    assert "state.testError = P.refusalDetail(r);" in start
     follow = _function(script, "follow")
     _in_order(
         follow,
@@ -293,6 +314,7 @@ def test_test_posts_a_test_launch_and_follows_it() -> None:
         "state.launch = launch;",
         "follow(redraw);",
         "redraw();",
+        "state.testError = 'The test\\'s launch could not be read: ' + err.message + '.';",
         "}, READ_MS);",
     )
     stop = _function(script, "stop")
@@ -366,6 +388,10 @@ def test_the_page_loads_agents_js_before_settings_js_and_styles_it_with_tokens()
     assert scripts.index("app.js") < scripts.index("agents.js") < scripts.index("settings.js")
     assert "width: 32rem;" in _rule(".app-agents__text")
     assert "font-family: var(--font-mono);" in _rule(".app-agents__text")
+    # The text field narrows to its column and never lays over the label: at 700px wide the
+    # 32rem field ran left over "Claude Code command".
+    assert "min-width: 0;" in _rule(".app-agents__text")
+    assert _rule(".app-agents .app-set__fields") == "align-self: stretch;"
     assert _rule(".app-agents__line") == "flex-basis: 100%; margin: 0;"
     rules = html[html.index("  .app-agents {") : html.index("  .app-agents__line {")]
     assert "#" not in rules, "a raw colour"

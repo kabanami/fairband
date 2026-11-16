@@ -50,11 +50,6 @@
     });
   }
 
-  function detailOf(r) {
-    return r.body && typeof r.body.detail === 'string' ? r.body.detail
-      : 'the server answered ' + r.status;
-  }
-
   /* ------------------------------------------------------- values and words */
 
   /* The changes a save sends: each name whose draft is unlike the form's value, with its value. */
@@ -86,7 +81,7 @@
   }
 
   /* The line of spec 7.4 for the test's launch, and whether it is a failure's, which takes the
-     error style: the overdue line is one. */
+     error style: the overdue line is one, and so is an end with another exit code than 0. */
   function testLine(launch) {
     if (launch.state === 'opening') return { text: 'Opening a window…', failed: false };
     if (launch.state === 'opened') {
@@ -111,7 +106,11 @@
         failed: false
       };
     }
-    return { text: 'Claude Code ended (exit code ' + launch.exitCode + ').', failed: false };
+    if (launch.exitCode === 0) return { text: 'Claude Code ended (exit code 0).', failed: false };
+    return {
+      text: 'Claude Code ended (exit code ' + launch.exitCode + '). Check the window.',
+      failed: true
+    };
   }
 
   /* ------------------------------------------------------------ the writes */
@@ -124,8 +123,10 @@
   }
 
   /* Save: the changed names alone, in one PUT, all or none. Taken, the form is the answer and the
-     draft is cleared; refused, the server's "<name>: <rule>" stands under the field it names, or
-     beside Save where the words before its first colon name no field. */
+     draft is cleared; refused, the server's "<name>: <rule>" stands under the field it names, or,
+     where the words before its first colon name no field, "Not saved: <the server's sentence>."
+     stands beside Save, as the valuation settings say it (FairbandPage.refusal); a save that fails
+     on the network is "Not saved: <the error>." there too. */
   function save(redraw) {
     if (state.saving) return;
     state.saving = true;
@@ -139,15 +140,16 @@
           state.form = r.body;
           state.draft = {};
         } else {
-          var detail = detailOf(r);
+          var detail = P.refusalDetail(r);
           var cut = detail.indexOf(': ');
           var name = cut > 0 ? detail.slice(0, cut) : SAVE;
-          state.error = { name: named(name) ? name : SAVE, sentence: detail };
+          state.error = named(name) ? { name: name, sentence: detail }
+            : { name: SAVE, sentence: P.refusal('Not saved', r) };
         }
         redraw();
       }).catch(function (err) {
         state.saving = false;
-        state.error = { name: SAVE, sentence: err.message };
+        state.error = { name: SAVE, sentence: 'Not saved: ' + err.message + '.' };
         redraw();
       });
   }
@@ -168,7 +170,7 @@
         state.launch = r.body;
         follow(redraw);
       } else {
-        state.testError = detailOf(r);
+        state.testError = P.refusalDetail(r);
       }
       redraw();
     }).catch(function (err) {
@@ -181,7 +183,8 @@
   /* While the page follows the test's launch (FairbandPage.following), it is read again
      READ_MS after the last answer and drawn each time: one timer at most, and none once the
      launch is no longer followed. An answer for an earlier test is dropped; a read that fails
-     ends the following, its reason where the test's line shows. */
+     ends the following, and the test's line says that the launch could not be read and why, in
+     the error style. */
   function follow(redraw) {
     stop();
     if (!P.following(state.launch)) return;
@@ -195,7 +198,7 @@
         redraw();
       }).catch(function (err) {
         if (!state.launch || state.launch.id !== id) return;
-        state.testError = err.message;
+        state.testError = 'The test\'s launch could not be read: ' + err.message + '.';
         redraw();
       });
     }, READ_MS);
@@ -290,7 +293,8 @@
       state.failed ? h('p', { className: 'caption app-set__error' }, state.failed) : null,
       form && form.fileError ? h('div', { className: 'app-set__notice' },
         h('p', { className: 'caption app-set__error' }, form.fileError),
-        h('p', { className: 'caption' }, 'Correct the file, or save here to write it again.'))
+        h('p', { className: 'caption' },
+          'Correct the file, or save here to write it again with the values shown.'))
         : null,
       form ? h('form', {
         noValidate: true,

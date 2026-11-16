@@ -248,12 +248,16 @@
     .app-set__range, .app-set__edit .app-set__error { text-align: left; }
   }
   /* The Agents section (spec 2026-11-16 agent launch, 7.3), after the valuation settings: its
-     rows laid out as theirs; a text field in mono, wide enough for the window command's one line,
-     a choice at the field's own width, each bordered in caution under a refused save's sentence;
-     Use the Windows Terminal line under the window command's field; Save and Test in a row at the
-     section's foot, a refused save's sentence and the test's line each a line under them. */
+     rows laid out as theirs; a text field in mono, wide enough for the window command's one line
+     where the row has room and as wide as its column where it has not, so it never lays over the
+     label at its left (the row's fields take the whole column, and the field may narrow below its
+     32rem); a choice at the field's own width, each bordered in caution under a refused save's
+     sentence; Use the Windows Terminal line under the window command's field; Save and Test in a
+     row at the section's foot, a refused save's sentence and the test's line each a line under
+     them. */
   .app-agents { padding-bottom: var(--space-4); }
-  .app-agents__text { width: 32rem; font-family: var(--font-mono); }
+  .app-agents .app-set__fields { align-self: stretch; }
+  .app-agents__text { width: 32rem; min-width: 0; font-family: var(--font-mono); }
   .app-agents__text[aria-invalid="true"], .app-agents__choice[aria-invalid="true"] {
     border-color: var(--caution);
   }

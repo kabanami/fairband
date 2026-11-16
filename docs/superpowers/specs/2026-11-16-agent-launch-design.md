@@ -262,7 +262,8 @@ write without the server.
   settings read answers the defaults with `fileError`, one sentence that names the file and the
   fault ("launch.json: `claude.effort` is `extreme`; it is one of low, medium, high, xhigh, max").
   The Agents section shows the sentence at its head, with "Correct the file, or save here to
-  write it again". A launch asked meanwhile is refused with the same sentence.
+  write it again with the values shown." A launch asked meanwhile is refused with the same
+  sentence.
 - The rule that the window command's first word is a program the server finds is checked at Save
   and when a launch runs, not at each read: a file written by hand that names a missing program
   fails its launch at the window stage, with the sentence of 6.1.
@@ -275,6 +276,9 @@ The Settings page gains an **Agents** section under the valuation groups, with a
 the valuation save asks for a reason and warns of a revalue, and neither fits here.
 
 - Each field has one line of help under it. The window command's says what Fairband adds.
+- A file the server cannot use (7.2) shows its sentence at the section's head, and under it
+  "Correct the file, or save here to write it again with the values shown." The fields then show
+  the defaults, and Save writes them, with any change, whole.
 - **Use the Windows Terminal line** fills the window command with the line of 6.1 for this
   machine's distribution. The button shows only where the server runs under WSL and finds
   `wt.exe`; the server suggests the line, the page does not build it. Nothing is saved until Save.
@@ -297,11 +301,15 @@ follows the launch as section 10 follows one, and shows a line of its own for ea
 | `opened`, overdue | `The window opened, but nothing in it reported after 90 seconds. Check the window.` |
 | `failed` at the agent | `The window opened, but Claude Code did not start: <reason>.` |
 | `started` | `Claude Code started. Its window should say that the Fairband research skill is loaded.` |
-| `ended` | `Claude Code ended (exit code 0).` |
+| `ended`, exit code 0 | `Claude Code ended (exit code 0).` |
+| `ended`, another exit code | `Claude Code ended (exit code <n>). Check the window.` |
 
 A test waits for no claim, so it is never overdue once it has started. It is overdue while it is
 still `opened` after 90 seconds: a wrong distribution name or a `bash` that fails leaves a window
-in which nothing reports, and that is the failure a first setup most often meets.
+in which nothing reports, and that is the failure a first setup most often meets. The test is
+followed for its first 60 seconds after it starts, so that an agent that ends at once shows; an
+end with another exit code than 0 is in the error style, and the window, held by the launcher
+(6.2), shows why.
 
 ## 8. The launch record
 
