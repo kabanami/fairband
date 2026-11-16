@@ -104,7 +104,7 @@ Three results set the design:
 ```
 page      POST /api/inbox                    the work item, as today
 page      POST /api/launches                 {itemId}
-server    stores the launch (opening), runs the window command with five words added
+server    stores the launch (opening), runs the window command with six words added
 window    bash -l <launcher.sh> <python> <port> <launch id>
 launcher  GET  /api/launches/{id}/command    the agent's words and its folder
 launcher  POST /api/launches/{id}/status     started
@@ -124,7 +124,7 @@ wt.exe -w 0 new-tab --title {title} wsl.exe -d Ubuntu -e
 ```
 
 The server splits the line into words by the shell's rules (`shlex.split`), replaces `{title}`
-in each word, and adds five words:
+in each word, and adds six words:
 
 ```
 bash  -l  <the launcher script's path>  <the server's Python>  <the server's port>  <the launch id>
@@ -136,7 +136,7 @@ bash  -l  <the launcher script's path>  <the server's Python>  <the server's por
 - The server runs the words as a list of arguments, with no shell, its input closed and its
   output captured, in the server's own folder and environment, and waits at most 15 seconds.
 - **A word that is not plain fails the launch before anything runs.** A plain word is one or more
-  of letters, digits and `_ . / : @ + -`. The rule covers the five added words and the title; a
+  of letters, digits and `_ . / : @ + -`. The rule covers the six added words and the title; a
   path with a space cannot cross Windows Terminal, and the failure's sentence names the path.
 
 The window's program may reach the server before the window command has returned. `wt.exe`
@@ -198,7 +198,7 @@ launcher starts the program with a list of arguments, and no shell reads them.
 | Field | Name | Default | Rule at save |
 |---|---|---|---|
 | Window command | `window_command` | empty | Splits into words by the shell's rules. Its first word is a program the server finds. Empty turns launching off. |
-| Claude Code command | `claude.command` | `claude` | At least one word; the first does not start with `-`. |
+| Claude Code command | `claude.command` | `claude` | Splits into words by the shell's rules. At least one word; the first does not start with `-`. |
 | First prompt | `claude.prompt` | `/fairband-research work item {item}` | One line of at most 500 characters. Holds `{item}`. No other name in braces than `item`, `symbol` and `mode`. |
 | Model | `claude.model` | empty | No white space, no leading `-`, at most 100 characters. Free text, because model names change: `opus`, `claude-opus-5-5`. |
 | Effort | `claude.effort` | empty | One of `low`, `medium`, `high`, `xhigh`, `max`. |
@@ -463,7 +463,7 @@ the launcher's program start are doubles.
   good file over a bad one; nothing here writes the `settings` table or moves the settings hash;
   an agent's write through the server is refused; the suggested line appears only under WSL with
   `wt.exe` found.
-- **The window command:** the words run are the setting's words, the title replaced, and the five
+- **The window command:** the words run are the setting's words, the title replaced, and the six
   added words, in that order; no shell; a word that is not plain fails the launch and runs
   nothing; each failure of 6.1 with its sentence; exit 0 leaves `opened`.
 - **The agent's words:** every combination of an empty and a set model, effort and mode; the
