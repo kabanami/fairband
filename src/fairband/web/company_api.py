@@ -1,0 +1,210 @@
+"""The company page's two reads (the company page's design, 7.4, 10.3, 10.4 and 10.5), each from
+the store alone: neither calls a vendor, so each is a plain GET that needs no request header.
+
+- ``GET /api/companies/{symbol}/page/overview`` answers ``{symbol, dataDate, company, statistics,
+  trading, priceChange, prices, news}``: the Company block (``page_fmp.company``), the Key
+  statistics (``page_fmp.statistics``), the Trading group with the head's price and change
+  (``page_fmp.trading``), the price changes (``page_fmp.price_change``), the prices
+  (``page_fmp.prices``), and ``news``, ``{stories, observedAt, stale, limit}``: the stored
+  stories (``page_fmp.stories``), the time their answer was observed, ``null`` without one,
+  whether a refresh would fetch them again, and ``limit``, the depth the refresh stores them at
+  (``fetch.NEWS_STORIES``), at which the page asks the pass-through for newer ones.
+- ``GET /api/companies/{symbol}/page/estimates`` answers ``{symbol, dataDate, earnings,
+  consensus, target, ratings}``: the Earnings block (``page_fmp.earnings``), the Consensus
+  estimates (``page_fmp.consensus``), the price target (``page_fmp.target``) and the ratings
+  (``page_fmp.ratings``).
+
+Rules for both:
+
+- An answer is the company's newest HTTP 200 FMP answer with no error to its endpoint under the
+  params the fetch stores it with, whatever its age (``store.vendor.latest_response``), parsed.
+  An endpoint with none, or whose payload does not parse, has no answer, and its reader gives its
+  figures ``null`` and its lists empty.
+- The quote's row (10.4) is the symbol's row (``page_fmp.quote_row``) in the payload of the
+  response that the company's newest ``quote`` observation cites: a fetch's quote, or a price
+  refresh's batch, which is stored under no symbol.
+- The overview draws the profile, the quote's row, the price history, the earnings (for the next
+  date), the six answers of the Key statistics (``ratios-ttm``, ``key-metrics-ttm``,
+  ``financial-growth``, ``financial-scores``, ``dividends``, ``shares-float``), the price changes
+  and the news; the estimates the earnings, the annual consensus, the price target and the grades.
+- ``dataDate`` (7.4) is the day of the oldest observation among the answers the read drew, as ISO
+  text, the news left out, since its stories carry their own days; ``null`` when it drew none.
+- ``news.stale`` (10.5) is true without a stored answer, or when it was observed at or before the
+  clock's time less the effective policy's reuse window (``refresh.reuse_hours``).
+- The consensus keeps the fiscal years that end after the newest fiscal year on file
+  (``series_for``, the years the report tables' estimate columns follow), every year where none
+  is; a money figure in the reporting currency carries the company's
+  (``store.currency.reporting_currency``), USD where it has no snapshot. The next earnings date
+  and the last dividend payment are judged on the clock's day.
+
+A symbol that is not one is a 400 with its sentence (``reports_api.checked_symbol``); a company
+with no stored profile a 404, "no page data for <symbol>"; on the overview, a stored setting the
+policy refuses a 409 (``settings_api.effective``). A company needs no snapshot.
+"""
+
+import json
+import sqlite3
+from collections.abc import Callable, Iterable
+from contextlib import closing
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any
+
+from fastapi import FastAPI, HTTPException
+
+from fairband.policy import Policy
+from fairband.refresh.fetch import EARNINGS_ROWS, NEWS_STORIES, PAGE_ENDPOINTS, page_params
+from fairband.refresh.inputs_statements import series_for
+from fairband.store.currency import reporting_currency
+from fairband.store.observations import observations_for
+from fairband.store.vendor import latest_response, response_payload
+from fairband.vendors import page_fmp
+from fairband.vendors.fmp import ANNUAL_ESTIMATE_LIMIT
+from fairband.web.reports_api import checked_symbol
+from fairband.web.settings_api import effective
+
+# The page answers of the Key statistics (the design's 8.3).
+_STATISTICS = (
+    "ratios-ttm",
+    "key-metrics-ttm",
+    "financial-growth",
+    "financial-scores",
+    "dividends",
+    "shares-float",
+)
+# The params beside the symbol that the fetch stores the engine's answers the page reads under
+# (``fetch._calls``); the page's own are ``fetch.page_params``.
+_ENGINE_PARAMS: dict[str, dict[str, str]] = {
+    "profile": {},
+    "price-history": {},
+    "earnings": {"limit": str(EARNINGS_ROWS)},
+    "estimates-annual": {"period": "annual", "limit": str(ANNUAL_ESTIMATE_LIMIT)},
+}
+
+
+@dataclass(frozen=True)
+class _Answer:
+    """A stored answer, parsed, and the time it was observed."""
+
+    payload: Any
+    observed_at: datetime
+
+
+def add_company_page_routes(
+    app: FastAPI,
+    conn_factory: Callable[[], sqlite3.Connection],
+    policy: Policy,
+    clock: Callable[[], datetime],
+) -> None:
+    """Register the company page's two reads; ``policy`` is the file's, which the user's settings
+    overlay, and ``clock`` gives the time the news is judged stale at and the day the next
+    earnings date and the last dividend payment are judged on."""
+
+    @app.get("/api/companies/{symbol}/page/overview")
+    def page_overview(symbol: str) -> dict[str, Any]:
+        symbol = checked_symbol(symbol)
+        now = clock()
+        today = now.date()
+        with closing(conn_factory()) as conn:
+            profile = _profile(conn, symbol)
+            window = timedelta(hours=effective(conn, policy).refresh.reuse_hours)
+            quote = _quote(conn, symbol)
+            history = _stored(conn, "price-history", symbol)
+            earnings = _stored(conn, "earnings", symbol)
+            statistics = {endpoint: _stored(conn, endpoint, symbol) for endpoint in _STATISTICS}
+            change = _stored(conn, "price-change", symbol)
+            news = _stored(conn, "news", symbol)
+            reporting = reporting_currency(conn, symbol)
+        drawn = [profile, quote, history, earnings, change, *statistics.values()]
+        row = _payload(quote)
+        upcoming = page_fmp.next_earnings(_payload(earnings), today)
+        answers = {endpoint: _payload(found) for endpoint, found in statistics.items()}
+        return {
+            "symbol": symbol,
+            "dataDate": _data_date(drawn),
+            "company": page_fmp.company(profile.payload),
+            "statistics": page_fmp.statistics(answers, profile.payload, row, reporting, today),
+            "trading": page_fmp.trading(
+                row, profile.payload, None if upcoming is None else upcoming["day"]
+            ),
+            "priceChange": page_fmp.price_change(_payload(change)),
+            "prices": page_fmp.prices(_payload(history), row),
+            "news": {
+                "stories": page_fmp.stories(_payload(news)),
+                "observedAt": None if news is None else news.observed_at.isoformat(),
+                "stale": news is None or news.observed_at <= now - window,
+                "limit": NEWS_STORIES,
+            },
+        }
+
+    @app.get("/api/companies/{symbol}/page/estimates")
+    def page_estimates(symbol: str) -> dict[str, Any]:
+        symbol = checked_symbol(symbol)
+        today = clock().date()
+        with closing(conn_factory()) as conn:
+            _profile(conn, symbol)
+            earnings = _stored(conn, "earnings", symbol)
+            consensus = _stored(conn, "estimates-annual", symbol)
+            target = _stored(conn, "price-target", symbol)
+            grades = _stored(conn, "grades", symbol)
+            years = series_for(conn, symbol)
+            reporting = reporting_currency(conn, symbol)
+        after = years[-1].period_end if years else None
+        return {
+            "symbol": symbol,
+            "dataDate": _data_date([earnings, consensus, target, grades]),
+            "earnings": page_fmp.earnings(_payload(earnings), today),
+            "consensus": page_fmp.consensus(_payload(consensus), after, reporting),
+            "target": page_fmp.target(_payload(target)),
+            "ratings": page_fmp.ratings(_payload(grades)),
+        }
+
+
+def _profile(conn: sqlite3.Connection, symbol: str) -> _Answer:
+    """The company's stored profile; a 404 without one."""
+    found = _stored(conn, "profile", symbol)
+    if found is None:
+        raise HTTPException(404, f"no page data for {symbol}")
+    return found
+
+
+def _stored(conn: sqlite3.Connection, endpoint: str, symbol: str) -> _Answer | None:
+    """The company's newest usable answer to ``endpoint`` under the fetch's params; ``None``
+    without one, or when its payload does not parse."""
+    if endpoint in PAGE_ENDPOINTS:
+        params = page_params(endpoint, symbol)
+    else:
+        params = {"symbol": symbol, **_ENGINE_PARAMS[endpoint]}
+    response = latest_response(conn, "fmp", endpoint, symbol, params)
+    if response is None:
+        return None
+    payload = _parsed(response_payload(conn, response.id))
+    return None if payload is None else _Answer(payload, response.observed_at)
+
+
+def _quote(conn: sqlite3.Connection, symbol: str) -> _Answer | None:
+    """The quote's row (the module docstring), observed when its response was; ``None`` without
+    a ``quote`` observation, or where the response it cites holds no row for the symbol."""
+    cited = max(observations_for(conn, symbol, "quote"), key=lambda r: r.response_id, default=None)
+    if cited is None:
+        return None
+    row = page_fmp.quote_row(_parsed(response_payload(conn, cited.response_id)), symbol)
+    return None if row is None else _Answer(row, cited.observed_at)
+
+
+def _parsed(text: str | None) -> Any:
+    """A stored payload parsed; ``None`` without one, or when it does not parse."""
+    try:
+        return None if text is None else json.loads(text)
+    except ValueError:
+        return None
+
+
+def _payload(answer: _Answer | None) -> Any:
+    return None if answer is None else answer.payload
+
+
+def _data_date(answers: Iterable[_Answer | None]) -> str | None:
+    """The day of the oldest observation among ``answers``, as ISO text; ``None`` without one."""
+    days = [answer.observed_at.date() for answer in answers if answer is not None]
+    return min(days).isoformat() if days else None

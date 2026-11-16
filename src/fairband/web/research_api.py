@@ -36,7 +36,10 @@ it), each ``None`` without one:
 
 Beside them it gives ``priceNeeds`` (``method.md`` 4.11): the sentences on what the price needs
 when it is well above the value the meter draws, the review's when the review counts and has a
-value, else the snapshot's; ``None`` otherwise.
+value, else the snapshot's; ``None`` otherwise. And ``moat`` (the company page's design, 7.2), the
+moat class in force (method 4.9), ``"Wide"``, ``"Narrow"`` or ``"None"``: the review's when it
+counts and has a value, else the snapshot's when the snapshot has one, as the screen's row reads
+it (``rows.screen_row``); ``None`` otherwise, so a refused row has no moat.
 
 ``GET /api/companies/{symbol}/research`` answers what Details lists (18.3), each record as its own
 read serves it: ``overrides``, ``guidance``, ``killCriteria``, ``newsItems``, ``notes`` and
@@ -94,10 +97,11 @@ def agent_records(
     tax: TaxTable,
     now: datetime,
 ) -> dict[str, Any]:
-    """The detail's ``review``, ``secondary``, ``report`` and ``item`` (module docstring) on the
-    company's latest ``snapshot``; ``policy`` is the effective one and ``tax`` the statements'
-    table, by which the Summary's references read their sources; ``today`` is the day the report's
-    window is judged on and ``now`` the time the item's launch is read at."""
+    """The detail's ``review``, ``priceNeeds``, ``moat``, ``secondary``, ``report`` and ``item``
+    (module docstring) on the company's latest ``snapshot``; ``policy`` is the effective one and
+    ``tax`` the statements' table, by which the Summary's references read their sources; ``today``
+    is the day the report's window is judged on and ``now`` the time the item's launch is read
+    at."""
     symbol = snapshot.symbol
     review = latest_review(conn, symbol)
     secondary = latest_secondary(conn, symbol)
@@ -115,6 +119,7 @@ def agent_records(
             )
         ),
         "priceNeeds": _price_needs(snapshot, counted, edges),
+        "moat": _moat(snapshot, counted),
         "secondary": (
             _secondary(secondary, snapshot.price, edges)
             if secondary is not None and counts_on(snapshot, cited, secondary)
@@ -208,6 +213,18 @@ def _price_needs(
     return price_needs(
         result.route, result.intermediates, snapshot.designation, _required_return(result)
     )
+
+
+def _moat(snapshot: SnapshotRow, review: ReviewRow | None) -> str | None:
+    """The moat class in force (module docstring): the counted ``review``'s when it has a value,
+    else the snapshot's when it has one; ``None`` otherwise."""
+    if review is not None and review.value is not None:
+        moat = review.result.intermediates.get("moat")
+    elif snapshot.value is not None:
+        moat = snapshot.result.intermediates.get("moat")
+    else:
+        return None
+    return moat if isinstance(moat, str) else None
 
 
 def _required_return(result: ValuationResult) -> float | None:

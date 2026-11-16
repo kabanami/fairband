@@ -246,7 +246,7 @@ def add_report_routes(
 
     @app.get("/api/companies/{symbol}/financials")
     def financials(symbol: str) -> dict[str, Any]:
-        symbol = _symbol(symbol)
+        symbol = checked_symbol(symbol)
         with closing(conn_factory()) as conn:
             stated = statements(conn, symbol)
         trailing = stated.trailing
@@ -262,7 +262,7 @@ def add_report_routes(
 
     @app.get("/api/companies/{symbol}/quarters")
     def quarters(symbol: str) -> dict[str, Any]:
-        symbol = _symbol(symbol)
+        symbol = checked_symbol(symbol)
         with closing(conn_factory()) as conn:
             stated = statements(conn, symbol)
             stored = stored_quarters(conn, symbol)
@@ -275,7 +275,7 @@ def add_report_routes(
 
     @app.get("/api/companies/{symbol}/financial-tables")
     def tables(symbol: str) -> dict[str, Any]:
-        symbol = _symbol(symbol)
+        symbol = checked_symbol(symbol)
         with closing(conn_factory()) as conn:
             stated = statements(conn, symbol)  # once, for the answer and the six
             stored = stored_quarters(conn, symbol).periods  # once, for the six and the quarters
@@ -291,7 +291,7 @@ def add_report_routes(
 
     @app.get("/api/companies/{symbol}/estimates")
     def estimates(symbol: str) -> dict[str, Any]:
-        symbol = _symbol(symbol)
+        symbol = checked_symbol(symbol)
         with closing(conn_factory()) as conn:
             known(conn, symbol)
             inputs = build_inputs(conn, symbol, effective(conn, policy), tax, clock().date())
@@ -306,7 +306,7 @@ def add_report_routes(
     def price_history(
         symbol: str, years: Annotated[int | None, Query(ge=1)] = None
     ) -> dict[str, Any]:
-        symbol = _symbol(symbol)
+        symbol = checked_symbol(symbol)
         with closing(conn_factory()) as conn:
             known(conn, symbol)
             closes = build_inputs(conn, symbol, effective(conn, policy), tax, clock().date()).closes
@@ -326,7 +326,7 @@ def add_report_routes(
 
     @app.get("/api/companies/{symbol}/peers")
     def peers(symbol: str) -> dict[str, Any]:
-        symbol = _symbol(symbol)
+        symbol = checked_symbol(symbol)
         with closing(conn_factory()) as conn:
             known(conn, symbol)
             current = effective(conn, policy)
@@ -358,7 +358,7 @@ def add_report_routes(
     @app.post("/api/companies/{symbol}/reports", status_code=201, response_model=None)
     def submit(symbol: str, body: ReportPost, writer: WriterOf) -> dict[str, Any] | JSONResponse:
         """Check the report and publish it whole, or reject it whole (module docstring)."""
-        symbol = _symbol(symbol)
+        symbol = checked_symbol(symbol)
         sections = [s.model_dump(exclude_none=True) for s in body.sections]
         at = clock()
         with closing(conn_factory()) as conn, transaction(conn, immediate=True):
@@ -467,7 +467,7 @@ def add_report_routes(
 
     @app.get("/api/companies/{symbol}/reports")
     def reports(symbol: str) -> dict[str, Any]:
-        symbol = _symbol(symbol)
+        symbol = checked_symbol(symbol)
         with closing(conn_factory()) as conn:
             found = reports_for(conn, symbol)
         listed = [record_json(r) for r in found]
@@ -585,7 +585,9 @@ def _report_json(
     }
 
 
-def _symbol(text: str) -> str:
+def checked_symbol(text: str) -> str:
+    """The symbol ``text`` names in the store's form (``exchange_symbol``); a 400 with its
+    sentence for one that is not a symbol. The company page's reads share it."""
     try:
         return exchange_symbol(text)
     except ValueError as exc:

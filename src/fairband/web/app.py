@@ -3,15 +3,15 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
 (``agents_api``), the guidance routes (``guidance_api``), the override and review routes
 (``reviews_api``), the sensitivity reading's routes (``sensitivity_api``), the company reads, the
-Methodology section read and the report routes (``reports_api``), the drawer's research read
-(``research_api``), the multiples history read (``multiples_api``), the band's history read
-(``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
-(``filings_api``), the company logo's read (``logo_api``), and the policy values and growth
-deciles the Methodology page cites (spec 2026-11-04 7.4). The Agents section's settings routes
-(``launch_api``) read and write ``launch.json`` in the config folder, not the ``settings`` table;
-its launch routes (``launch_api``) store a launch, open its window and take its launcher's
-reports. The company detail carries the agents' records the drawer leads with
-(``research_api.agent_records``).
+Methodology section read and the report routes (``reports_api``), the company page's two reads
+(``company_api``), the drawer's research read (``research_api``), the multiples history read
+(``multiples_api``), the band's history read (``history_api``), the vendor pass-through route
+(``vendor_api``), the filing reads (``filings_api``), the company logo's read (``logo_api``), and
+the policy values and growth deciles the Methodology page cites (spec 2026-11-04 7.4). The
+Agents section's settings routes (``launch_api``) read and write ``launch.json`` in the config
+folder, not the ``settings`` table; its launch routes (``launch_api``) store a launch, open its
+window and take its launcher's reports. The company detail carries the agents' records the drawer
+leads with (``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -127,6 +127,7 @@ from fairband.store.refreshes import (
     mark_interrupted,
 )
 from fairband.store.reports import latest_reports
+from fairband.store.research import notes_for
 from fairband.store.reviews import latest_reviews
 from fairband.store.secondary import latest_secondaries
 from fairband.store.settings import read_overlay
@@ -139,6 +140,7 @@ from fairband.store.snapshots import (
 from fairband.store.watchlists import memberships
 from fairband.vendors.logos import LogoError, Logos
 from fairband.web.agents_api import add_agent_routes
+from fairband.web.company_api import add_company_page_routes
 from fairband.web.filings_api import add_filing_routes
 from fairband.web.guidance_api import add_guidance_routes
 from fairband.web.history_api import add_history_routes
@@ -364,9 +366,12 @@ def create_app(
         value figure inside the word's band, and ``aging_fraction``, by which its validity window
         reads aging where the screen's Freshness column does; and the agents' records the drawer
         leads with (``research_api.agent_records``: ``review``, ``secondary``, ``report``,
-        ``item``); and the company brief (B-149), the latest stored profile's description, which
-        the drawer's head reads a line of, the report page and Details show whole, and the MCP
-        ``company`` tool carries; and ``logo`` (B-203), the address of the company's logo read
+        ``item``), with ``moat``, the moat class in force, which the drawer's head and the company
+        page's head stamp (the company page's design, 7.2); and ``noteCount``, the count of the
+        company's notes, which the Notes control draws beside its word (11.1); and the company
+        brief (B-149), the latest stored profile's description, which the drawer's head reads a
+        line of, the report page and Details show whole, and the MCP ``company`` tool carries;
+        and ``logo`` (B-203), the address of the company's logo read
         where the latest stored profile names a logo, which the drawer's head and the report
         page's draw, ``None`` without one (``logo_api.logo_route``). And what the figures are in
         (spec 2026-11-10 7.4), which the drawer's head, Details and the report page name:
@@ -392,6 +397,7 @@ def create_app(
             brief = brief_for(conn, symbol)
             logo = logo_route(conn, snapshot.symbol)
             adr = adr_flag(conn, symbol, listed)
+            note_count = len(notes_for(conn, snapshot.symbol))
         return {
             "company": None if listed is None else company_json(listed),
             "brief": brief,
@@ -403,6 +409,7 @@ def create_app(
             "designationEdges": list(read_under.designation_edges),
             "agingFraction": read_under.aging_fraction,
             **records,
+            "noteCount": note_count,
             "launchReady": read_launch_file(settings.config_dir).ready,
         }
 
@@ -468,6 +475,7 @@ def create_app(
     add_review_routes(app, conn_factory, policy, taxed, clock)
     add_sensitivity_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
+    add_company_page_routes(app, conn_factory, policy, clock)
     add_research_routes(app, conn_factory)
     add_history_routes(app, conn_factory)
     add_multiples_routes(app, conn_factory, passthrough)

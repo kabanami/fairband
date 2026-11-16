@@ -755,6 +755,10 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         # whether launching is set up (spec 2026-11-16 agent launch, 9): no launch file here;
         # tests/web/test_launch_settings_api.py
         "launchReady",
+        # the moat class in force and the count of the company's notes (the company page's
+        # design, 7.2 and 11.1): tests/web/test_company_page_api.py
+        "moat",
+        "noteCount",
     }
     assert body["launchReady"] is False
     # The company brief (B-149) is the stored profile's description; none is stored here.
