@@ -36,6 +36,14 @@ cycle) is valued at mid-cycle (step 7).
   valuation review leaves out sections 2 and 3, so from section 4 on its numbers are two lower.
 - The register and the product's words: `reference/register.md`.
 
+## A launch test
+
+When the request is `launch test`, it is a test of the window that opened this session, not a
+request for research. Do not identify, do not claim an item, call no tool that writes, and do no
+research. Answer with the sentence "The Fairband research skill is loaded." and then one sentence
+that says whether the Fairband tools are connected, which you can tell from seeing `identify` among
+your tools. Then stop.
+
 ## The steps
 
 ### 1. Identify yourself
@@ -53,6 +61,10 @@ would rename every later write.
 Call `inbox_list()` to see the work items. Claim one with `inbox_claim(item_id)`. Without an id, it
 claims the oldest pending item. Keep the item's id, its symbol, its mode and its note. Do not take
 over an item that another agent has claimed unless the user asks.
+
+When the request names a work item, as `work item 12`, claim that item with `inbox_claim(12)` where
+it is pending. Where another agent has claimed it, say so and stop, unless the user asks you to take
+it over. Read its state in the list first: a claim by id takes over a claimed item.
 
 When the user asks for research in chat, post the request first with `inbox_post(symbol, mode,
 note)`, then claim the item it answers. Every piece of work has a work item. The note is the

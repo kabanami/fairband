@@ -23,6 +23,8 @@ from mcp import Client
 
 from fairband.config import MissingKey
 from fairband.engine.overrides import BRIDGE_ORDER, LABELS, NO_GUIDANCE, TAGS, anchor_misfit
+from fairband.launch.command import TEST_PROMPT
+from fairband.launch.settings import DEFAULTS
 from fairband.mcp.client import NOT_RUNNING, FairbandClient
 from fairband.mcp.server import TOOL_NAMES, build_server
 from fairband.policy import load_policy
@@ -2605,6 +2607,52 @@ def test_the_playbook_s_debt_rows_are_settled() -> None:
         " your overrides write carries the stance of the report before yours, and one written"
         " before a company's first report carries none (`null`)."
     ) in _tool_entry("review_log")
+
+
+def test_a_launch_test_answers_and_a_named_item_is_claimed_where_it_is_pending() -> None:
+    """Spec 2026-11-16 agent launch, 11 and 7.4: before the steps, a part answers the first prompt
+    of the Settings page's Test (``TEST_PROMPT``) with the sentence that the skill is loaded and one
+    on whether the Fairband tools are connected, read from `identify` among the agent's tools, and
+    does nothing else; in step 2 a request that names a work item, as a launched session's first
+    prompt does (the default ``claude.prompt``), claims that item where it is pending, and stops on
+    an item another agent has claimed unless the user asks for a takeover, since a claim by id takes
+    an item over."""
+    front, body = _frontmatter(_read(SKILL))
+    command = f"/{front['name']} "
+    assert TEST_PROMPT.startswith(command)
+    assert body.index("## A launch test") < body.index("## The steps")
+    test = _flat(body.split("## A launch test", 1)[1].split("\n## ", 1)[0])
+    request = TEST_PROMPT.removeprefix(command)
+    assert (
+        f"When the request is `{request}`, it is a test of the window that opened this session, not"
+        " a request for research."
+    ) in test
+    assert (
+        "Do not identify, do not claim an item, call no tool that writes, and do no research."
+    ) in test
+    assert 'Answer with the sentence "The Fairband research skill is loaded." and then one' in test
+    assert (
+        "one sentence that says whether the Fairband tools are connected, which you can tell from"
+        " seeing `identify` among your tools."
+    ) in test
+    assert test.endswith("Then stop.")
+    # step 2: the item a launched session's first prompt names, claimed only where it is pending
+    two = _steps(body)[2]
+    named = DEFAULTS["claude.prompt"].replace("{item}", "12").removeprefix(command)
+    assert named == "work item 12"
+    title, _, text = two.partition("\n")
+    assert title == "Take the work item"
+    paragraphs = [_flat(p) for p in text.strip().split("\n\n")]
+    assert (
+        "Do not take over an item that another agent has claimed unless the user asks."
+    ) in paragraphs[0]  # the step's rule of today, kept
+    assert paragraphs[1].startswith(
+        f"When the request names a work item, as `{named}`, claim that item with `inbox_claim(12)`"
+        " where it is pending. Where another agent has claimed it, say so and stop, unless the user"
+        " asks you to take it over."
+    )
+    assert "a claim by id takes over a claimed item" in paragraphs[1]
+    assert "naming a claimed item takes it over" in _tool_entry("inbox_claim")
 
 
 def _refused(call: Callable[[], object]) -> str:
