@@ -537,17 +537,18 @@ launch route.
   log for a launch setting, and a save writes every name (7.2); a launch is not in the ledger (8);
   the Inbox and Watchlists pages are left out (3); the menu's checkbox (10). And unmarked, as
   readings of "a clear failure message": the launch record that the launcher reports to, the 90
-  seconds, and the test button. - 2026-11-16, the builder check (a fresh reader asked to plan from
-  this document). Its four questions were settled without the founder, each a reading of "a failure
-  is never silent" or a fact: a test is overdue while nothing in its window has reported (7.4, 8); a
-  launched session does not take over a claimed item, and the command read refuses once the item is
-  not pending (9, 11); only Windows Terminal is promised (3), and the launcher's calls are taken
-  while the window command still runs (6.1, 8); Claude Code's options and the user scope of the
-  Fairband tools were read on the machine (5). Its three contradictions were corrected: a launch
-  left `opening` (8), the test's own lines (7.4), and B-207's row (13). - 2026-11-16, the founder,
-  on reading this design: "should we provide a way for the user's own agent to update these values
-  so that the user does not have to do it manually via the settings? so is there something like a
-  settings.json that an agent can update and it would show in the settings?" Yes: the section's
-  values are the file `launch.json` and nothing else (7.2), in place of the table this design first
-  gave them. The server's two owner-only routes stay, and section 12 says what the file does and
-  does not change about safety.
+  seconds, and the test button.
+- 2026-11-16, the builder check (a fresh reader asked to plan from this document). Its four
+  questions were settled without the founder, each a reading of "a failure is never silent" or a
+  fact: a test is overdue while nothing in its window has reported (7.4, 8); a launched session does
+  not take over a claimed item, and the command read refuses once the item is not pending (9, 11);
+  only Windows Terminal is promised (3), and the launcher's calls are taken while the window command
+  still runs (6.1, 8); Claude Code's options and the user scope of the Fairband tools were read on
+  the machine (5). Its three contradictions were corrected: a launch left `opening` (8), the test's
+  own lines (7.4), and B-207's row (13).
+- 2026-11-16, the founder, on reading this design: "should we provide a way for the user's own agent
+  to update these values so that the user does not have to do it manually via the settings? so is
+  there something like a settings.json that an agent can update and it would show in the settings?"
+  Yes: the section's values are the file `launch.json` and nothing else (7.2), in place of the table
+  this design first gave them. The server's two owner-only routes stay, and section 12 says what the
+  file does and does not change about safety.
