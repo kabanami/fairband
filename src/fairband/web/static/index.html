@@ -715,6 +715,22 @@
   .app-company__newstitle { display: block; color: inherit; text-decoration: none; }
   a.app-company__newstitle:hover { color: var(--accent); }
   .app-company__newsby { margin: 1px 0 0; color: var(--ink-faint); }
+  /* The Estimates tab's analysts (the company page's design, 9), as its mockup draws them: each
+     part's title in label, upper case, in ink-faint, clear of what is above it; the five ratings
+     in a row of boxes on the surface with a hairline border, each its count over its name in
+     ink-faint, centred. */
+  .app-company__subtitle {
+    margin: var(--space-4) 0 var(--space-1); color: var(--ink-faint); text-transform: uppercase;
+  }
+  .app-company__grades {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2);
+  }
+  .app-company__grade {
+    padding: var(--space-2); background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: var(--radius-md); text-align: center;
+  }
+  .app-company__grade p { margin: 0; }
+  .app-company__gradename { color: var(--ink-faint); }
   /* The two columns end on one line (the company page's design, 8.7 and 9), as version 3 of the
      mockup has it: the grid stretches both columns to the row's height. On the Overview the
      right column adds no height of its own, so the left one sets the row, and News, its last
@@ -797,5 +813,6 @@
 <script src="/static/company.js"></script>
 <script src="/static/company_overview.js"></script>
 <script src="/static/company_chart.js"></script>
+<script src="/static/company_estimates.js"></script>
 </body>
 </html>
