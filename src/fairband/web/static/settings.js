@@ -6,7 +6,8 @@
    refused save's sentence. Above the form, one notice from valuedUnder and current; under it, the
    Reason field and Save, which shows the changes, old to new, in the design system's
    ConfirmDialog and sends them in one PUT. While a stored setting is one the policy refuses, the
-   server answers 409: the view shows its sentence and Reset all settings, and nothing else. */
+   server answers 409: the view shows its sentence and Reset all settings, and nothing else. After
+   whichever of these it shows, the Agents section, which agents.js draws and loads. */
 (function () {
   'use strict';
 
@@ -591,6 +592,8 @@
     return n ? n + ' unsaved change' + (n === 1 ? '' : 's') : 'No unsaved change.';
   }
 
+  /* The valuation settings, whichever of the three they are, and the Agents section after them
+     (agents.js), which has its own read and its own save. */
   function View() {
     /* Focus moves where the last change asked, once the view has drawn. */
     React.useEffect(function () {
@@ -599,6 +602,11 @@
       state.focus = null;
       if (el) el.focus();
     });
+    return h(React.Fragment, null, valuation(), P.agents.section(render));
+  }
+
+  /* The form, the 409's view, or why the form did not load. */
+  function valuation() {
     if (state.refused) return refusedView();
     if (!state.body) {
       return state.failed ? h('p', { className: 'body app-note app-set' }, state.failed) : null;
@@ -655,9 +663,11 @@
     }, RUN_MS);
   }
 
-  /* The view loads as it opens, so the notice reads what ran while it was closed. */
+  /* The view loads as it opens, so the notice reads what ran while it was closed, and the Agents
+     section reads launch.json as it is now. */
   P.onShow.settings = function () {
     load();
+    P.agents.load(render);
     follow();
   };
 })();

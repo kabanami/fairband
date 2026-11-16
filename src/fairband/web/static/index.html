@@ -247,6 +247,22 @@
     .app-set__fields { justify-content: flex-start; }
     .app-set__range, .app-set__edit .app-set__error { text-align: left; }
   }
+  /* The Agents section (spec 2026-11-16 agent launch, 7.3), after the valuation settings: its
+     rows laid out as theirs; a text field in mono, wide enough for the window command's one line,
+     a choice at the field's own width, each bordered in caution under a refused save's sentence;
+     Use the Windows Terminal line under the window command's field; Save and Test in a row at the
+     section's foot, a refused save's sentence and the test's line each a line under them. */
+  .app-agents { padding-bottom: var(--space-4); }
+  .app-agents__text { width: 32rem; font-family: var(--font-mono); }
+  .app-agents__text[aria-invalid="true"], .app-agents__choice[aria-invalid="true"] {
+    border-color: var(--caution);
+  }
+  .app-agents__suggest { margin-top: var(--space-2); }
+  .app-agents__actions {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+    padding-top: var(--space-3); border-top: 1px solid var(--hairline);
+  }
+  .app-agents__line { flex-basis: 100%; margin: 0; }
   /* The Methodology view (spec 2026-11-04 7): prose at a measure of about 70 characters, its
      headings in title and heading, its text in body, its tables in fb-table, their text cells
      free to wrap and their header cells not sticky, since many tables share one scroller; a
@@ -545,6 +561,7 @@
 <script src="/static/controls.js"></script>
 <script src="/static/watchlists.js"></script>
 <script src="/static/inbox.js"></script>
+<script src="/static/agents.js"></script>
 <script src="/static/settings.js"></script>
 <script src="/static/methodology.js"></script>
 <script src="/static/report.js"></script>

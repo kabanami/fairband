@@ -167,16 +167,31 @@
 
   function two(n) { return (n < 10 ? '0' : '') + n; }
 
+  /* Whether the page reads a launch again (spec 2026-11-16 agent launch, 7.4 and 10): while it is
+     opening, opened or started, under LAUNCH_FOLLOW_S seconds after it was made by the server's
+     clock, and, for a work item's launch, while the item is pending, past overdue too, since a
+     claim may still arrive. A test waits for no claim, so its launch is not read again once it has
+     started or is overdue. No launch is not read. The Settings page's Test and the request button
+     both follow a launch by it. */
+  var LAUNCH_FOLLOW_S = 600;
+  function following(launch) {
+    if (!launch || ['opening', 'opened', 'started'].indexOf(launch.state) === -1) return false;
+    if (!(launch.ageSeconds < LAUNCH_FOLLOW_S)) return false;
+    if (launch.test) return launch.state !== 'started' && !launch.overdue;
+    return launch.itemState === 'pending';
+  }
+
   /* What controls.js uses: the screen's reload when a refresh ends, the write helpers and a
-     refused write's sentence, the GET helper, the local-time helper, the phase numbers and a work
-     item's open states; and the later views, find, the lists (null until they load), their
-     reload, which settles once they are in, and watch, the marks' onWatch, which opens the popup;
-     the loaded rows (null until they load), the chosen columns, openRow, which opens a row's
-     drawer, reloadDetail, which reads the drawer's company again after another view's write
-     about it (the Inbox view's decline and a watchlist's Request research, spec 2026-11-06 Tier
-     2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the drawer shows again
-     when a run ends. controls.js adds show, onShow, section, running and countInbox, the Inbox
-     view onInbox, and methodology.js adds methodologySection, which the drawer's link reads; a
+     refused write's sentence, the GET helper, the local-time helper, whether a launch is followed
+     (following), the phase numbers and a work item's open states; and the later views, find, the
+     lists (null until they load), their reload, which settles once they are in, and watch, the
+     marks' onWatch, which opens the popup; the loaded rows (null until they load), the chosen
+     columns, openRow, which opens a row's drawer, reloadDetail, which reads the drawer's company
+     again after another view's write about it (the Inbox view's decline and a watchlist's Request
+     research, spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever
+     company the drawer shows again when a run ends. controls.js adds show, onShow, section,
+     running and countInbox, the Inbox view onInbox, agents.js adds agents, the Settings view's
+     Agents section, and methodology.js adds methodologySection, which the drawer's link reads; a
      view drawn from the rows or the lists sets onRender, which runs after each draw of the screen,
      so it draws again as they load and change. The report page (report.js, 18.4) draws with the
      drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
@@ -188,6 +203,7 @@
      are here for the tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, getJson: getJson, localIso: localIso,
+    following: following,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
     find: find,
     watchlists: function () { return state.watchlists; },
