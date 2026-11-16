@@ -15,10 +15,19 @@ and choices (a list for the effort and the permission mode, ``None`` for the res
 GET and needs no ``X-Fairband-Request`` header; a bad file is a 200 with ``fileError``, never a
 500.
 
+The three owner routes, ``PUT /api/launch-settings``, ``POST /api/launches`` and the launcher's
+``POST /api/launches/{id}/status``, each refuse the agent's principal header with a 403, as their
+lists below say. Two 400s come before that 403, from FastAPI's reading of the request: an agent's
+request with no ``X-Fairband-Actor`` header, "identify first: the model identifier you run as" (and
+a principal header that names neither the owner nor an agent), from the routes' dependency
+``identity.writer_of``; and a body of the wrong shape, as every request the routes' types refuse is
+(``app``).
+
 ``PUT /api/launch-settings`` with ``{"changes": {<name>: <value>}}`` lays the changes over the file
 as it is now, not as the form read it, writes the whole file and answers the form again. It
 applies every change or none, and like every write needs the ``X-Fairband-Request`` header
-(``app``, D11). Its refusals, the first that applies in this order, each with nothing written:
+(``app``, D11). Its refusals after the two 400s above, the first that applies in this order, each
+with nothing written:
 
 - a request with the agent's principal header: 403, "the Agents section is the owner's", before
   the file is read;
@@ -52,8 +61,10 @@ error raised while the words are built or run is a failure at the same stage, "t
 could not start: <the error's text>" (the error's kind where it has no text), logged once with its
 traceback under the launch's id, so no launch is left ``opening`` to hold its item; an error of the
 second write itself is not caught, and the app's next start marks the launch. A launch the
-launcher has already moved on is answered as it is. It answers 201 with the launch. Its refusals,
-the first that applies in this order, each with nothing stored and nothing run:
+launcher has already moved on is answered as it is. It answers 201 with the launch. Its refusals
+after the two 400s above (a body whose ``itemId`` is not a whole number or whose ``test`` is not
+true or false is one of the wrong shape), the first that applies in this order, each with nothing
+stored and nothing run:
 
 - a request with the agent's principal header: 403, "a launch is the owner's";
 - an app given no opener or no port: 503, "this server opens no window";
@@ -64,9 +75,6 @@ the first that applies in this order, each with nothing stored and nothing run:
 - an item claimed: 409, "item <id> is claimed by <actor>"; done, declined or dropped: 409,
   "item <id> is <state>";
 - a launch in flight for the item: 409, "a window for this request opened <n> seconds ago".
-
-A body whose ``itemId`` is not a whole number or whose ``test`` is not true or false is a 400
-before any of these, as every request the routes' types refuse is (``app``).
 
 ``GET /api/launches/{id}`` answers the launch, and 404, "no launch <id>", for no such launch.
 
@@ -79,11 +87,12 @@ longer pending; 400 with the file's sentence once the file cannot be used.
 ``POST /api/launches/{id}/status`` with ``{"state", "detail", "exitCode"}`` moves the launch and
 answers it: ``started``; ``ended``, keeping ``exitCode``; ``failed`` at the ``agent`` stage,
 keeping ``detail``. A report's ``detail`` is kept for ``failed`` alone and its ``exitCode`` for
-``ended`` alone. Its refusals, in this order: 403, "a launch is the owner's", for the agent's
-principal; 400, "a launcher reports started, ended or failed", for another state; 400, "a failed
-report gives its reason", for a failure with no detail or a blank one; 400, "an ended report gives
-its exit code", for an end with no ``exitCode``; 404, "no launch <id>"; 409 with the record's
-sentence, "a launch that is <from> does not become <to>", for a move the record refuses.
+``ended`` alone. Its refusals after the two 400s above, in this order: 403, "a launch is the
+owner's", for the agent's principal; 400, "a launcher reports started, ended or failed", for
+another state; 400, "a failed report gives its reason", for a failure with no detail or a blank
+one; 400, "an ended report gives its exit code", for an end with no ``exitCode``; 404, "no launch
+<id>"; 409 with the record's sentence, "a launch that is <from> does not become <to>", for a move
+the record refuses.
 
 The two reads are GETs and need no ``X-Fairband-Request`` header; the two posts need it, as every
 write does.

@@ -2614,9 +2614,11 @@ def test_a_launch_test_answers_and_a_named_item_is_claimed_where_it_is_pending()
     of the Settings page's Test (``TEST_PROMPT``) with the sentence that the skill is loaded and one
     on whether the Fairband tools are connected, read from `identify` among the agent's tools, and
     does nothing else; in step 2 a request that names a work item, as a launched session's first
-    prompt does (the default ``claude.prompt``), claims that item where it is pending, and stops on
-    an item another agent has claimed unless the user asks for a takeover, since a claim by id takes
-    an item over."""
+    prompt does (the default ``claude.prompt``), claims that item where it is pending, reading its
+    state first since a claim by id takes an item over; it stops on an item claimed by any session
+    but this one, unless the user asks for a takeover, since two sessions may share one model
+    identifier; and it stops on an item done, declined, dropped or not in the list, claiming no
+    other in its place."""
     front, body = _frontmatter(_read(SKILL))
     command = f"/{front['name']} "
     assert TEST_PROMPT.startswith(command)
@@ -2646,12 +2648,14 @@ def test_a_launch_test_answers_and_a_named_item_is_claimed_where_it_is_pending()
     assert (
         "Do not take over an item that another agent has claimed unless the user asks."
     ) in paragraphs[0]  # the step's rule of today, kept
-    assert paragraphs[1].startswith(
+    assert paragraphs[1] == (
         f"When the request names a work item, as `{named}`, claim that item with `inbox_claim(12)`"
-        " where it is pending. Where another agent has claimed it, say so and stop, unless the user"
-        " asks you to take it over."
+        " where it is pending. Read its state in the list first: a claim by id takes over a claimed"
+        " item. Where it is already claimed, by any session but this one, say so and stop, unless"
+        " the user asks you to take it over. Where it is done, declined, dropped or not in the"
+        " list, say so and stop: do not claim another item in its place."
     )
-    assert "a claim by id takes over a claimed item" in paragraphs[1]
+    assert "another agent has claimed it" not in paragraphs[1]
     assert "naming a claimed item takes it over" in _tool_entry("inbox_claim")
 
 

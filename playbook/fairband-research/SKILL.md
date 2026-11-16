@@ -63,8 +63,10 @@ claims the oldest pending item. Keep the item's id, its symbol, its mode and its
 over an item that another agent has claimed unless the user asks.
 
 When the request names a work item, as `work item 12`, claim that item with `inbox_claim(12)` where
-it is pending. Where another agent has claimed it, say so and stop, unless the user asks you to take
-it over. Read its state in the list first: a claim by id takes over a claimed item.
+it is pending. Read its state in the list first: a claim by id takes over a claimed item. Where it
+is already claimed, by any session but this one, say so and stop, unless the user asks you to take
+it over. Where it is done, declined, dropped or not in the list, say so and stop: do not claim
+another item in its place.
 
 When the user asks for research in chat, post the request first with `inbox_post(symbol, mode,
 note)`, then claim the item it answers. Every piece of work has a work item. The note is the

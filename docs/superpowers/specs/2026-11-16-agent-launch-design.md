@@ -111,7 +111,7 @@ launcher  POST /api/launches/{id}/status     started
 launcher  runs Claude Code as its child, in the folder, on the window's terminal
 agent     /fairband-research work item 12    identify, then inbox_claim(12)
 launcher  POST /api/launches/{id}/status     ended, with the exit code; or failed, with the reason
-page      GET  /api/launches/{id}            every 2 s, until claimed, failed, ended or overdue
+page      GET  /api/launches/{id}            every 2 s, until claimed, failed or ended, or ten minutes
 ```
 
 ### 6.1 The window command
@@ -133,8 +133,10 @@ bash  -l  <the launcher script's path>  <the server's Python>  <the server's por
 - `{title}` is `Fairband-<SYMBOL>`, the stored item's symbol, or `Fairband-test`.
 - The launcher script is a file of the package (6.2). The Python is `sys.executable`. The port is
   the one the server listens on, which `serve` passes to the app.
-- The server runs the words as a list of arguments, with no shell, its input closed and its
-  output captured, in the server's own folder and environment, and waits at most 15 seconds.
+- The server runs the words as a list of arguments, with no shell, its input closed, its standard
+  output discarded and its error output kept in a temporary file, so that it waits for the
+  command's exit and not for a pipe to close, in the server's own folder and environment, and
+  waits at most 15 seconds.
 - **A word that is not plain fails the launch before anything runs.** A plain word is one or more
   of letters, digits and `_ . / : @ + -`. The rule covers the six added words and the title; a
   path with a space cannot cross Windows Terminal, and the failure's sentence names the path.
@@ -419,10 +421,13 @@ Two additions to `playbook/fairband-research/SKILL.md`, and to its tests.
   tools are connected, which the agent can tell from seeing `identify` among its tools. Then
   stop.
 - **In step 2:** when the request names a work item, as `work item 12`, claim that item with
-  `inbox_claim(12)` where it is pending. Where another agent has claimed it, say so and stop,
-  unless the user asks for a takeover. This keeps the step's rule of today, "Do not take over an
-  item that another agent has claimed unless the user asks": the server lets a claim by id take
-  an item over, so the rule is the playbook's to keep.
+  `inbox_claim(12)` where it is pending, reading its state in the list first. Where it is already
+  claimed, by any session but this one, say so and stop, unless the user asks you to take it over:
+  two sessions may run as one model identifier, so "another agent" would not tell them apart.
+  Where it is done, declined, dropped or not in the list, say so and stop: do not claim another
+  item in its place. This keeps the step's rule of today, "Do not take over an item that another
+  agent has claimed unless the user asks": the server lets a claim by id take an item over, so the
+  rule is the playbook's to keep.
 
 ## 12. Safety
 

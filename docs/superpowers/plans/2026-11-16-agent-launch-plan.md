@@ -4,7 +4,7 @@
 
 **Goal:** A click on Request research posts the work item and opens a terminal window in which Claude Code starts with the research skill and the item's id; the Agents section of Settings holds what the launch needs, in one file; a failure says which stage failed and why.
 
-**Architecture:** The values are a file, `launch.json` in the config folder, read at each use. `POST /api/launches` stores a launch, then runs the window command with five plain words added, with no shell. In the window a packaged script runs under `bash -l` and starts `fairband launch <port> <id>`, which asks the server for the agent's words, starts Claude Code as its child and reports `started`, `ended` or `failed`. The page reads the launch every 2 seconds and draws one line for each state.
+**Architecture:** The values are a file, `launch.json` in the config folder, read at each use. `POST /api/launches` stores a launch, then runs the window command with six plain words added, with no shell. In the window a packaged script runs under `bash -l` and starts `fairband launch <port> <id>`, which asks the server for the agent's words, starts Claude Code as its child and reports `started`, `ended` or `failed`. The page reads the launch every 2 seconds and draws one line for each state.
 
 **Tech Stack:** Python 3.13, uv, FastAPI, SQLite, httpx; plain JavaScript with React from the design-system bundle; pytest, with node for the page's own scripts (`tests/web/page.mjs`, `tests/support/page.py`).
 
