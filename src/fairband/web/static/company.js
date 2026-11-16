@@ -36,15 +36,16 @@
   var latest = 0;
 
   /* The page FairbandPage.company names (7.1, 7.5). Another company, or the tab shown asked for
-     again (the view opened again, or a request's post ended), reads the detail, then the tab's
-     read, and drops what the page held of the other tab; another tab of the company shown reads
-     only that tab, and one it read already is shown at once. The page shown stays, faded, until
-     the new one lands, and the latest read wins, so a read that lands after the reader moved to
-     another company or tab is dropped. A read of another company stops the following of the
-     request of the company shown before it starts, and the page follows the open item's launch
-     as the detail lands (FairbandPage.followItem), as the report page does. A tab's read that
-     fails draws its sentence under the tabs; the detail's draws the server's sentence and the
-     link back. */
+     again (the view opened again, a request's post ended, or a refresh ended while the page
+     shows, controls.js), reads the detail, then the tab's read, and drops what the page held of
+     the other tab, so the head and the tab draw the run's figures; another tab of the company
+     shown reads only that tab, and one it read already is shown at once. The page shown stays,
+     faded, until the new one lands, and the latest read wins, so a read that lands after the
+     reader moved to another company or tab is dropped. A read of another company stops the
+     following of the request of the company shown before it starts, and the page follows the
+     open item's launch as the detail lands (FairbandPage.followItem), as the report page does. A
+     tab's read that fails draws its sentence under the tabs; the detail's draws the server's
+     sentence and the link back. */
   function load() {
     var want = P.company;
     var request = ++latest;

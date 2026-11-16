@@ -432,6 +432,28 @@ def test_the_view_is_one_of_controls_js_s() -> None:
     assert "overflow: auto;" in rule and "flex: 1;" in rule
 
 
+def test_the_page_reads_again_when_a_refresh_ends() -> None:
+    """When a run ends while the company page shows, the page reads the company shown again, as
+    the report page does: its loader on the same company and tab reads the detail and the open
+    tab's answer afresh, the page shown staying, faded, until they land."""
+    js = _static_file("controls.js")
+    ended = js[js.index("if (ended) {") :]
+    ended = ended[: ended.index("\n        }\n")]
+    _in_order(
+        ended,
+        "P.reload();",
+        "if (state.tab === 'report') P.onShow.report();",
+        "if (state.tab === 'company') P.onShow.company();",
+    )
+    load = _function(_static_file("company.js"), "load")
+    _in_order(
+        load,
+        "var whole = !held || want.tab === state.tab;",
+        "state.loading = true;",
+        "(whole ? read(company) : Promise.resolve(state.detail))",
+    )
+
+
 def test_the_symbol_is_coded_as_the_report_page_codes_it() -> None:
     """Decoded and upper-cased where the hash is read, encoded where the hash is written, in
     keepCompany and companyPath as in keepReport and reportPath."""

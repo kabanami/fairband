@@ -7,10 +7,10 @@
    calibration's breakdown behind Details ▾ (growth-routes spec 6.1). While a refresh runs, the
    page asks /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons
    were, the stamp is gone and the tables keep their old figures at ink-faint; when it ends, the
-   rows (and the groups or the report page, when that view is open) load again. The group view is
-   one plain table from /api/groups (spec 6.3), with no chart. The report page (report.js) is a
-   panel no header view names: #report/<symbol> and #report/<symbol>/<id> open it (18.4). So is
-   the company page (company.js): #company/<symbol> opens its Overview and
+   rows (and the groups, the report page or the company page, when that view is open) load again.
+   The group view is one plain table from /api/groups (spec 6.3), with no chart. The report page
+   (report.js) is a panel no header view names: #report/<symbol> and #report/<symbol>/<id> open
+   it (18.4). So is the company page (company.js): #company/<symbol> opens its Overview and
    #company/<symbol>/estimates its Estimates tab (the company page's design, 7.1). */
 (function () {
   'use strict';
@@ -86,6 +86,7 @@
           P.reloadDrawer(); /* its review, secondary valuation and item may have moved */
           if (state.tab === 'groups') loadGroups();
           if (state.tab === 'report') P.onShow.report();
+          if (state.tab === 'company') P.onShow.company();
         }
         if (body.refresh !== null) timer = setTimeout(poll, POLL_MS);
         render();
