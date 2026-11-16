@@ -181,6 +181,7 @@ BROKEN = [
     ("claude.folder", "", "is not an absolute path"),
     ("claude.folder", "./research", "is not an absolute path"),
     ("claude.folder", "~nosuchuser-of-fairband/research", "is not an absolute path"),
+    ("claude.folder", "~\x00x", "is not an absolute path"),
 ]
 
 

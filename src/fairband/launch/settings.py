@@ -275,7 +275,8 @@ def _one_of(choices: tuple[str, ...]) -> Callable[[str], str | None]:
 def _folder(value: str) -> str | None:
     try:
         absolute = Path(value).expanduser().is_absolute()
-    except RuntimeError:  # ``~user`` of a user whose home cannot be found
+    # ``~user`` of a user whose home cannot be found, or a user name that holds a NUL byte
+    except (RuntimeError, ValueError):
         absolute = False
     return None if absolute else "is not an absolute path"
 
