@@ -696,25 +696,25 @@
      day in a narrow column in ink-faint, its title in the text's colour, in accent under the
      pointer where it is a link, its publisher under it in ink-faint. The list scrolls inside its
      block (the columns' rule below), with a thin scrollbar and a focus ring for the keyboard. */
-  .app-news__head {
+  .app-company__newshead {
     display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end;
     gap: 0 var(--space-3); min-width: 0; text-align: right;
   }
-  .app-news {
+  .app-company__news {
     flex: 1 1 0; min-height: 0; overflow-y: auto; margin: 0 calc(var(--space-2) * -1) 0 0;
     padding: 0 var(--space-2) 0 0; list-style: none; scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
-  .app-news:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-  .app-news li {
+  .app-company__news:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-company__news li {
     display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: var(--space-3);
     padding: 7px 0; border-bottom: 1px solid var(--hairline);
   }
-  .app-news li:last-child { border-bottom: 0; }
-  .app-news__day { padding-top: 2px; color: var(--ink-faint); }
-  .app-news__title { display: block; color: inherit; text-decoration: none; }
-  a.app-news__title:hover { color: var(--accent); }
-  .app-news__by { margin: 1px 0 0; color: var(--ink-faint); }
+  .app-company__news li:last-child { border-bottom: 0; }
+  .app-company__newsday { padding-top: 2px; color: var(--ink-faint); }
+  .app-company__newstitle { display: block; color: inherit; text-decoration: none; }
+  a.app-company__newstitle:hover { color: var(--accent); }
+  .app-company__newsby { margin: 1px 0 0; color: var(--ink-faint); }
   /* The two columns end on one line (the company page's design, 8.7 and 9), as version 3 of the
      mockup has it: the grid stretches both columns to the row's height. On the Overview the
      right column adds no height of its own, so the left one sets the row, and News, its last
@@ -734,7 +734,7 @@
     .app-company__grid { grid-template-columns: minmax(0, 1fr); }
     .app-company__col--match { height: auto; min-height: 0; }
     .app-company__panel--fill { flex: none; }
-    .app-news { flex: none; max-height: 520px; }
+    .app-company__news { flex: none; max-height: 520px; }
   }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or

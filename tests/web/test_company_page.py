@@ -583,7 +583,9 @@ def test_the_page_reads_again_when_a_refresh_ends() -> None:
     the report page does: its loader on the same company and tab reads the detail and the open
     tab's answer afresh, the page shown staying, faded, until they land. While that read is out,
     a tab the page holds from before the run is not shown at once: the page reads the detail and
-    that tab, so the reread is never dropped for the figures of before the run."""
+    that tab, so the reread is never dropped for the figures of before the run. A tab whose read
+    is out, not yet shown, asked for again (a run that ends while the reader's tab loads) is read
+    whole too, so the detail and the other tab do not keep the figures of before the run."""
     js = _static_file("controls.js")
     ended = js[js.index("if (ended) {") :]
     ended = ended[: ended.index("\n        }\n")]
@@ -599,15 +601,21 @@ def test_the_page_reads_again_when_a_refresh_ends() -> None:
     _in_order(
         landed,
         "if (held && want.tab !== state.tab && state.answers[want.tab] && !state.whole) {",
-        "var whole = !held || want.tab === state.tab || state.whole;",
-        "state.whole = whole;",
+        "state.reading = null;\n      shown();\n      return;",
+        "var whole = !held || want.tab === state.tab || want.tab === state.reading ||\n"
+        "      state.whole;",
+        "state.whole = whole;\n    state.reading = want.tab;",
         "state.loading = true;",
         "(whole ? read(company) : Promise.resolve(state.detail))",
         ".then(function (found) {\n        if (request !== latest) return;",
-        "state.whole = false;",
+        "state.whole = false;\n        state.reading = null;",
     )
-    _in_order(failed, "if (request !== latest) return;", "state.whole = false;")
-    assert "whole: false," in script
+    _in_order(
+        failed,
+        "if (request !== latest) return;",
+        "state.whole = false;\n        state.reading = null;",
+    )
+    assert "whole: false," in script and "reading: null," in script
 
 
 def test_the_symbol_is_coded_as_the_report_page_codes_it() -> None:

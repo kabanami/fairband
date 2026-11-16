@@ -758,12 +758,12 @@ def _head_texts(tree: Any) -> list[str]:
 
 def _stories(tree: Any) -> list[tuple[str, str, str | None]]:
     """Each story of the news list: its day, its title and its publisher, None for none."""
-    [found] = classed(tree, "app-news")
+    [found] = classed(tree, "app-company__news")
     return [
         (
-            text(classed(item, "app-news__day")[0]),
-            text(classed(item, "app-news__title")[0]),
-            text(by[0]) if (by := classed(item, "app-news__by")) else None,
+            text(classed(item, "app-company__newsday")[0]),
+            text(classed(item, "app-company__newstitle")[0]),
+            text(by[0]) if (by := classed(item, "app-company__newsby")) else None,
         )
         for item in elements(found)
         if item.get("type") == "li"
@@ -781,7 +781,7 @@ def test_the_news_list_and_its_count() -> None:
     assert _head_texts(tree) == ["3 stories"]
     [count] = [e for e in classed(tree, "caption") if text(e) == "3 stories"]
     assert count["props"]["className"] == "caption app-company__note"
-    [found] = classed(tree, "app-news")
+    [found] = classed(tree, "app-company__news")
     assert (found["type"], found["props"]["tabIndex"]) == ("ul", 0)
     assert _stories(tree) == [
         (
@@ -792,10 +792,10 @@ def test_the_news_list_and_its_count() -> None:
         ("12 Nov 2026", "Three lens makers to watch", "lensdaily.example"),
         ("10 Nov 2026", "Lanternfield Optics' October sales", "Quayside Markets"),
     ]
-    [day] = classed(tree, "app-news__day")[:1]
-    assert day["props"]["className"] == "figure-sm app-news__day"
-    [by] = classed(tree, "app-news__by")[:1]
-    assert by["props"]["className"] == "caption app-news__by"
+    [day] = classed(tree, "app-company__newsday")[:1]
+    assert day["props"]["className"] == "figure-sm app-company__newsday"
+    [by] = classed(tree, "app-company__newsby")[:1]
+    assert by["props"]["className"] == "caption app-company__newsby"
     one = _page("news", {"stories": STORIES[:1], "note": None})
     assert _head_texts(one) == ["1 story"]
     # a story with no day, title or publisher: the dash for the day and the title, no line under
@@ -812,7 +812,7 @@ def test_a_story_is_a_link_only_when_its_address_is_a_web_address() -> None:
     for url in ("https://harborstreet.example/a", "http://lensdaily.example/b?c=1"):
         tree = _page("news", {"stories": [STORIES[0] | {"url": url}], "note": None})
         [link] = _links(tree)
-        assert link["props"]["className"] == "body app-news__title"
+        assert link["props"]["className"] == "body app-company__newstitle"
         assert link["props"]["href"] == url
         assert link["props"]["target"] == "_blank"
         assert link["props"]["rel"] == "noopener noreferrer"
@@ -820,8 +820,11 @@ def test_a_story_is_a_link_only_when_its_address_is_a_web_address() -> None:
     for url in ("javascript:alert(1)", " javascript:alert(1)", "data:text/html,<b>x</b>", "", None):
         tree = _page("news", {"stories": [STORIES[0] | {"url": url}], "note": None})
         assert _links(tree) == []
-        [title] = classed(tree, "app-news__title")
-        assert (title["type"], title["props"]["className"]) == ("span", "body app-news__title")
+        [title] = classed(tree, "app-company__newstitle")
+        assert (title["type"], title["props"]["className"]) == (
+            "span",
+            "body app-company__newstitle",
+        )
         assert "href" not in title["props"]
         assert text(title) == STORIES[0]["title"]
     # the stored third story's address is javascript:
@@ -843,8 +846,33 @@ def test_no_news_draws_an_empty_list_and_its_count() -> None:
     tree = _page("news", {"stories": [], "note": None})
     assert _head_texts(tree) == ["0 stories"]
     assert _stories(tree) == []
-    [found] = classed(tree, "app-news")
+    [found] = classed(tree, "app-company__news")
     assert found["type"] == "ul"
+
+
+TYPE_STYLES = {"heading", "body", "caption", "figure-sm"}  # the design system's, which it shares
+
+
+def test_the_news_classes_are_the_company_page_s_alone() -> None:
+    """Every class the News block draws but the design system's type styles is the company
+    page's own: under its prefix, and in no script but the company page's, so none of the block's
+    rules can style an element another view draws. The drawer's News items section carries
+    ``app-news`` (app.js), which no rule of the page's styles."""
+    linked = STORIES[0] | {"url": "https://harborstreet.example/a"}
+    tree = _page("news", {"stories": [linked, STORIES[2]], "note": "no FMP key"})
+    drawn = {
+        name for e in elements(tree) for name in str(e["props"].get("className") or "").split()
+    }
+    own = drawn - TYPE_STYLES
+    news = {"__news", "__newshead", "__newsday", "__newstitle", "__newsby"}
+    assert {"app-company" + part for part in news} <= own
+    page = {"company.js", "company_overview.js", "company_chart.js"}
+    scripts = {p.name: p.read_text() for p in STATIC.rglob("*.js") if p.name not in page}
+    assert {"app.js", "report.js", "inbox.js", "charts.js", "bundle.js"} <= set(scripts)
+    for name in sorted(own):
+        assert name.startswith("app-company__"), name
+        assert [script for script, body in scripts.items() if name in body] == [], name
+    assert re.search(r"\.app-news\b", _static_file("index.html")) is None
 
 
 # ---------------------------------------------------------------------------- the second read
@@ -970,6 +998,8 @@ def test_fresh_news_reads_the_pass_through_and_shapes_its_stories_as_the_read_do
         ),
         ({"status": 200, "body": {"payload": None}}, "the answer held no stories"),
         ({"status": 200, "body": None}, "the answer held no stories"),
+        # a 200 whose body is not JSON: the same sentence, not the parser's
+        ({"status": 200}, "the answer held no stories"),
     ],
 )
 def test_fresh_news_refused_is_the_server_s_sentence(answer: dict[str, Any], error: str) -> None:
@@ -1107,7 +1137,7 @@ def test_the_columns_rule_is_in_the_page_s_css() -> None:
     fill = _top_rule(".app-company__panel--fill {")
     for part in ("display: flex;", "flex-direction: column;", "flex: 1 1 0;", "min-height: 260px;"):
         assert part in fill
-    news = _top_rule(".app-news {")
+    news = _top_rule(".app-company__news {")
     for part in ("flex: 1 1 0;", "min-height: 0;", "overflow-y: auto;"):
         assert part in news
     grows = ".app-company__col > .app-company__panel:last-child:not(.app-company__panel--fill) {"
@@ -1120,10 +1150,10 @@ def test_the_columns_rule_is_in_the_page_s_css() -> None:
         ".app-company__grid { grid-template-columns: minmax(0, 1fr); }",
         ".app-company__col--match { height: auto; min-height: 0; }",
         ".app-company__panel--fill { flex: none; }",
-        ".app-news { flex: none; max-height: 520px; }",
+        ".app-company__news { flex: none; max-height: 520px; }",
     ]
     assert html.count("@media (width < 1180px)") == 1
-    assert ".app-news:focus-visible {" in html
+    assert ".app-company__news:focus-visible {" in html
 
 
 def test_the_script_and_the_columns_inside_a_block() -> None:

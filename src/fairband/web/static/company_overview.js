@@ -304,12 +304,12 @@
   function news(newsState) {
     var stories = newsState.stories || [];
     return C.panel('News',
-      h('div', { className: 'app-news__head' },
+      h('div', { className: 'app-company__newshead' },
         h('p', { className: 'caption app-company__note' },
           stories.length + (stories.length === 1 ? ' story' : ' stories')),
         newsState.note ? h('p', { className: 'caption app-company__note' },
           'newer news did not load: ' + newsState.note) : null),
-      h('ul', { className: 'app-news', tabIndex: 0 }, stories.map(story)),
+      h('ul', { className: 'app-company__news', tabIndex: 0 }, stories.map(story)),
       'app-company__panel--fill');
   }
 
@@ -318,13 +318,13 @@
     var href = safeHref(s.url);
     var title = s.title || '—';
     return h('li', { key: i },
-      h('span', { className: 'figure-sm app-news__day' }, C.day(s.day)),
+      h('span', { className: 'figure-sm app-company__newsday' }, C.day(s.day)),
       h('div', null,
         href ? h('a', {
-          className: 'body app-news__title', href: href, target: '_blank',
+          className: 'body app-company__newstitle', href: href, target: '_blank',
           rel: 'noopener noreferrer'
-        }, title) : h('span', { className: 'body app-news__title' }, title),
-        s.publisher ? h('p', { className: 'caption app-news__by' }, s.publisher) : null));
+        }, title) : h('span', { className: 'body app-company__newstitle' }, title),
+        s.publisher ? h('p', { className: 'caption app-company__newsby' }, s.publisher) : null));
   }
 
   /* What the page and the tests use: the tab's function, its blocks, and the link rule. */
