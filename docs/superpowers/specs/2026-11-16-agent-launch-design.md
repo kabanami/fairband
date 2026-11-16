@@ -153,9 +153,11 @@ in 15 seconds".
 
 Two pieces, both on the Linux side.
 
-- **The script**, a packaged file `src/fairband/launch/launcher.sh` of one line,
-  `exec "$1" -m fairband launch "$2" "$3"`. The window runs it with `bash -l`, so it has the
-  user's login path and needs neither a first line that names a shell nor an exec bit.
+- **The script**, a packaged file `src/fairband/launch/launcher.sh` of one line and a comment,
+  `exec "$1" -P -m fairband launch "$2" "$3"`. The window runs it with `bash -l`, so it has the
+  user's login path and needs neither a first line that names a shell nor an exec bit. `-P` keeps
+  the window's folder off Python's import path, so a file there cannot stand in for a module the
+  launcher imports.
 - **The command** `fairband launch <port> <launch id>`, a new subcommand that only the script
   calls. It talks to the server at `127.0.0.1:<port>` and reads nothing from the environment, as
   the MCP server's client does. It reads no key and opens no database: a server on another data
@@ -168,7 +170,11 @@ What the command does:
 2. Makes the folder if it is missing, and enters it.
 3. Starts the agent as its child on the window's terminal, and reports `started`.
 4. Waits for it. While it waits, Ctrl-C belongs to the agent: the launcher does not end on it.
-5. Reports `ended` with the agent's exit code, and ends.
+5. Reports `ended` with the agent's exit code.
+6. Where that code is not 0, writes "Claude Code ended with exit code <n>.", an empty line and
+   "Press Enter to close this window.", and waits for Enter: the agent's own error (a refused
+   option, an unknown model) is on the window's screen, and a window that closes takes it away.
+   Then it ends.
 
 When a step fails, the command reports `failed` with the reason where it can, writes the same
 sentence in the window, and waits for Enter, so the window does not close on the reader. The

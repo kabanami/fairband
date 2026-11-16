@@ -10,16 +10,21 @@ In order, it:
 2. makes the folder with its parents, where it is missing;
 3. starts the agent as its child, from the words as a list of arguments, with no shell, in the
    folder and on the window's terminal;
-4. reports ``started``;
-5. ignores SIGINT while it waits for the agent, so Ctrl-C belongs to the agent, and puts the
-   handler before it back after the wait. SIGINT is ignored only once the agent has started, so
-   the agent does not inherit it ignored;
+4. ignores SIGINT as soon as the agent has started, so Ctrl-C belongs to the agent, and puts the
+   handler before it back once the agent has ended, or once the report or the wait raises.
+   SIGINT is ignored only once the agent has started, so the agent does not inherit it ignored;
+5. reports ``started``, and waits for the agent;
 6. reports ``ended`` with the agent's exit code as ``Popen.wait`` gives it, a negative number for
-   a signal, and answers 0, whatever that code.
+   a signal;
+7. where that code is not 0, writes "Claude Code ended with exit code <code>.", an empty line and
+   "Press Enter to close this window.", and waits for Enter: Claude Code's own error line is on
+   the window's screen, and a window that closed would take it away;
+8. answers 0, whatever the agent's exit code.
 
 Each failure writes its sentence in the window and, once the command has been read, reports
 ``failed`` with the same sentence; then it writes an empty line and "Press Enter to close this
-window.", waits for Enter and answers 1:
+window.", waits for Enter and answers 1. The wait for Enter ends at the end of the input and on
+Ctrl-C as well, with no traceback. The failures:
 
 - the server does not answer the command read (any transport error, a timeout among them): "no
   Fairband server answered on port <port>", reported nowhere;
@@ -106,13 +111,18 @@ class _Launcher:
             return self.fail(f"`{argv[0]}` was not found on the path of a login shell", http)
         except OSError as exc:
             return self.fail(f"`{argv[0]}` could not start: {exc}", http)
-        self.report(http, {"state": "started"})
         before = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
+            self.report(http, {"state": "started"})
             exit_code = agent.wait()
         finally:
             signal.signal(signal.SIGINT, signal.default_int_handler if before is None else before)
         self.report(http, {"state": "ended", "exitCode": exit_code})
+        if exit_code != 0:
+            self.say(f"Claude Code ended with exit code {exit_code}.")
+            self.say("")
+            self.say(CLOSE)
+            self.hold()
         return 0
 
     def fail(self, sentence: str, http: httpx.Client | None = None) -> int:
@@ -157,10 +167,10 @@ def _start(argv: Sequence[str], folder: str) -> subprocess.Popen[bytes]:
 
 
 def _wait_for_enter() -> None:
-    """Read one line of the standard input; return at its end as well."""
+    """Read one line of the standard input; return at its end, and on Ctrl-C, as well."""
     try:
         input()
-    except EOFError:
+    except (EOFError, KeyboardInterrupt):
         return
 
 

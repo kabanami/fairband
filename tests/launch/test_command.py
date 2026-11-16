@@ -450,10 +450,13 @@ def _launcher_lines() -> list[str]:
 
 
 def test_the_launcher_names_no_shell_and_holds_one_exec() -> None:
+    """A login shell runs the file, so no first line names one; ``-P`` keeps the window's folder,
+    where a ``json.py`` of the user's could stand, off the import path."""
     lines = _launcher_lines()
-    assert not lines[0].startswith("#!")
-    commands = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
-    assert commands == ['exec "$1" -m fairband launch "$2" "$3"']
+    assert lines[0].startswith("# ")
+    assert "#!" not in lines[0] and "bash" not in lines[0]
+    assert len(lines[0]) <= 100
+    assert lines[1:] == ['exec "$1" -P -m fairband launch "$2" "$3"']
 
 
 def test_the_launcher_starts_its_first_word_with_the_other_two_whole(tmp_path: Path) -> None:
@@ -472,4 +475,4 @@ def test_the_launcher_starts_its_first_word_with_the_other_two_whole(tmp_path: P
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.decode().strip() == repr(["-m", "fairband", "launch", "8470", "17"])
+    assert result.stdout.decode().strip() == repr(["-P", "-m", "fairband", "launch", "8470", "17"])

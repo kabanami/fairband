@@ -10,7 +10,7 @@ or uses the network. One test starts this Python itself through the default star
 import json
 import signal
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from io import StringIO
 from pathlib import Path
 from typing import Any
@@ -35,17 +35,19 @@ CLAIMED = "item 12 is claimed by claude-opus-5-5"
 class Server:
     """The server's two launcher routes. The command read answers ``command``, a status and a
     body, or raises ``down``; a report of a state answers ``refused[state]`` or raises
-    ``dropped[state]``, else 200. Every request is recorded."""
+    ``dropped[state]``, else 200. Every request is recorded, with SIGINT's handler as it came."""
 
     def __init__(self, folder: Path) -> None:
         self.command: tuple[int, Any] = (200, {"argv": ARGV, "folder": str(folder)})
         self.down: httpx.TransportError | None = None
         self.refused: dict[str, tuple[int, Any]] = {}
-        self.dropped: dict[str, httpx.TransportError] = {}
+        self.dropped: dict[str, Exception] = {}
         self.requests: list[httpx.Request] = []
+        self.sigint: list[Any] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
+        self.sigint.append(signal.getsignal(signal.SIGINT))
         if request.url.path == COMMAND:
             if self.down is not None:
                 raise self.down
@@ -110,14 +112,18 @@ class Start:
 
 
 class Hold:
-    """The wait for Enter: it counts its calls and keeps what the window showed at each."""
+    """The wait for Enter: it counts its calls and keeps what the window showed at each and the
+    requests the server had by then."""
 
-    def __init__(self, out: StringIO) -> None:
+    def __init__(self, out: StringIO, server: Server) -> None:
         self.out = out
+        self.server = server
         self.shown: list[str] = []
+        self.requests_before: list[int] = []
 
     def __call__(self) -> None:
         self.shown.append(self.out.getvalue())
+        self.requests_before.append(len(self.server.requests))
 
 
 @pytest.fixture
@@ -142,8 +148,20 @@ def out() -> StringIO:
 
 
 @pytest.fixture
-def hold(out: StringIO) -> Hold:
-    return Hold(out)
+def hold(out: StringIO, server: Server) -> Hold:
+    return Hold(out, server)
+
+
+@pytest.fixture
+def earlier() -> Iterator[Callable[[int, Any], None]]:
+    """A SIGINT handler of the launcher's caller, in place for the test and taken out after it."""
+
+    def handler(signum: int, frame: Any) -> None:
+        raise KeyboardInterrupt
+
+    before = signal.signal(signal.SIGINT, handler)
+    yield handler
+    signal.signal(signal.SIGINT, before)
 
 
 @pytest.fixture
@@ -165,6 +183,11 @@ def _window(*lines: str) -> str:
     return "".join(f"{line}\n" for line in (*lines, "", CLOSE))
 
 
+def _ended(code: int) -> str:
+    """What an agent that ended with ``code``, not 0, leaves in the window."""
+    return _window(f"Claude Code ended with exit code {code}.")
+
+
 def test_a_launch_reads_the_command_starts_the_agent_and_reports_its_end(
     http: httpx.Client, server: Server, start: Start, out: StringIO, hold: Hold, folder: Path
 ) -> None:
@@ -181,8 +204,38 @@ def test_a_launch_reads_the_command_starts_the_agent_and_reports_its_end(
     assert start.started == [(ARGV, str(folder))]
     assert isinstance(start.started[0][0], list), "the agent starts from a list of arguments"
     assert start.folder_was_there, "the folder is made before the agent starts"
+    assert out.getvalue() == _ended(3)
+    assert hold.shown == [_ended(3)]
+
+
+@pytest.mark.parametrize("code", [3, 1, -2])
+def test_an_agent_that_ends_with_another_code_than_0_is_written_and_held_after_its_report(
+    http: httpx.Client,
+    server: Server,
+    agent: Agent,
+    start: Start,
+    out: StringIO,
+    hold: Hold,
+    code: int,
+) -> None:
+    """Claude Code's own error line (a refused option, an unknown model) is on the window's
+    screen; a window that closed on the launcher's 0 would take it away."""
+    agent.code = code
+    assert _run(http, start, out, hold) == 0
+    assert out.getvalue() == _ended(code)
+    assert hold.shown == [_ended(code)]
+    assert hold.requests_before == [3], "held after the ended report"
+    assert server.calls[-1] == ("POST", STATUS, {"state": "ended", "exitCode": code})
+
+
+def test_an_agent_that_ends_with_0_writes_nothing_and_is_not_held(
+    http: httpx.Client, server: Server, agent: Agent, start: Start, out: StringIO, hold: Hold
+) -> None:
+    agent.code = 0
+    assert _run(http, start, out, hold) == 0
     assert out.getvalue() == ""
     assert hold.shown == []
+    assert server.calls[-1] == ("POST", STATUS, {"state": "ended", "exitCode": 0})
 
 
 def test_started_is_reported_after_the_agent_has_started_and_before_the_wait(
@@ -226,6 +279,45 @@ def test_sigint_is_restored_when_the_wait_raises(
     with pytest.raises(RuntimeError):
         _run(http, start, out, hold)
     assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+
+
+def test_sigint_is_ignored_from_the_agents_start_and_the_earlier_handler_is_put_back(
+    http: httpx.Client,
+    server: Server,
+    start: Start,
+    agent: Agent,
+    out: StringIO,
+    hold: Hold,
+    earlier: Callable[[int, Any], None],
+) -> None:
+    """A Ctrl-C meant for the agent while the started report is in flight does not end the
+    launcher: SIGINT is ignored once the agent has started, before the report."""
+    assert _run(http, start, out, hold) == 0
+    assert start.sigint_at_start is earlier, "the agent does not inherit an ignored SIGINT"
+    assert server.sigint == [earlier, signal.SIG_IGN, earlier]
+    assert agent.sigint_while_waiting is signal.SIG_IGN
+    assert signal.getsignal(signal.SIGINT) is earlier
+
+
+@pytest.mark.parametrize("where", ["report", "wait"])
+def test_the_earlier_sigint_handler_is_put_back_when_the_report_or_the_wait_raises(
+    http: httpx.Client,
+    server: Server,
+    start: Start,
+    agent: Agent,
+    out: StringIO,
+    hold: Hold,
+    earlier: Callable[[int, Any], None],
+    where: str,
+) -> None:
+    if where == "report":
+        server.dropped["started"] = RuntimeError("the report broke")
+    else:
+        agent.raises = RuntimeError("the wait broke")
+    with pytest.raises(RuntimeError, match=f"^the {where} broke$"):
+        _run(http, start, out, hold)
+    assert server.sigint[1] is signal.SIG_IGN
+    assert signal.getsignal(signal.SIGINT) is earlier
 
 
 @pytest.mark.parametrize(
@@ -322,18 +414,26 @@ def test_a_refused_started_report_leaves_the_agent_running_to_its_end(
     server.refused["started"] = (409, {"detail": refusal})
     assert _run(http, start, out, hold) == 0
     assert agent.waited
-    assert out.getvalue() == f"the report `started` did not reach the server: {refusal}\n"
+    unreported = f"the report `started` did not reach the server: {refusal}\n"
+    assert out.getvalue() == unreported + _ended(3)
     assert server.calls[-1] == ("POST", STATUS, {"state": "ended", "exitCode": 3})
-    assert hold.shown == []
+    assert hold.shown == [unreported + _ended(3)]
 
 
 def test_an_ended_report_the_server_does_not_answer_is_one_line(
-    http: httpx.Client, server: Server, start: Start, out: StringIO, hold: Hold
+    http: httpx.Client, server: Server, agent: Agent, start: Start, out: StringIO, hold: Hold
 ) -> None:
     server.dropped["ended"] = httpx.ConnectError("Connection refused")
     assert _run(http, start, out, hold) == 0
-    assert out.getvalue() == "the report `ended` did not reach the server: ConnectError\n"
-    assert hold.shown == []
+    unreported = "the report `ended` did not reach the server: ConnectError\n"
+    assert out.getvalue() == unreported + _ended(3)
+    assert hold.shown == [unreported + _ended(3)]
+    agent.code = 0
+    out.seek(0)
+    out.truncate()
+    assert _run(http, start, out, hold) == 0
+    assert out.getvalue() == unreported
+    assert len(hold.shown) == 1
 
 
 def test_a_refused_failed_report_is_written_before_the_way_out(
@@ -372,6 +472,26 @@ def test_the_default_hold_returns_at_the_end_of_the_input(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(sys, "stdin", StringIO(""))
+    server.command = (409, {"detail": CLAIMED})
+    assert run_launcher(PORT, LAUNCH, http=http, start=start, out=out) == 1
+    assert out.getvalue() == _window(CLAIMED)
+
+
+class _Interrupted(StringIO):
+    """A standard input at which the reader presses Ctrl-C."""
+
+    def readline(self, size: int | None = -1) -> str:
+        raise KeyboardInterrupt
+
+
+def test_the_default_hold_returns_quietly_on_ctrl_c(
+    http: httpx.Client,
+    server: Server,
+    start: Start,
+    out: StringIO,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "stdin", _Interrupted())
     server.command = (409, {"detail": CLAIMED})
     assert run_launcher(PORT, LAUNCH, http=http, start=start, out=out) == 1
     assert out.getvalue() == _window(CLAIMED)
