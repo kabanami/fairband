@@ -552,6 +552,9 @@ def test_the_detail_carries_the_open_item(client: TestClient) -> None:
         "mode": "full report",
         "claimedBy": None,
         "createdAt": AT,
+        # its newest launch (spec 2026-11-16 agent launch, 9): none here;
+        # tests/web/test_launch_api.py
+        "launch": None,
     }
     response = client.post("/api/inbox/claim", json={}, headers=AGENT_HEADERS)
     assert response.status_code == 200, response.text

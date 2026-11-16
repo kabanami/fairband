@@ -8,8 +8,9 @@ Methodology section read and the report routes (``reports_api``), the drawer's r
 (``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
 (``filings_api``), the company logo's read (``logo_api``), and the policy values and growth
 deciles the Methodology page cites (spec 2026-11-04 7.4). The Agents section's settings routes
-(``launch_api``) read and write ``launch.json`` in the config folder, not the ``settings`` table.
-The company detail carries the agents' records the drawer leads with
+(``launch_api``) read and write ``launch.json`` in the config folder, not the ``settings`` table;
+its launch routes (``launch_api``) store a launch, open its window and take its launcher's
+reports. The company detail carries the agents' records the drawer leads with
 (``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
@@ -47,7 +48,8 @@ word a row reads at its reviewed value (``rows.agent_fields``) and of the drawer
 the policy refuses makes those routes answer 409 naming it, until it is reset (``settings_api``).
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
-command that stopped, and logs how many.
+command that stopped, and ``failed`` at the window stage every launch a server that stopped left
+``opening`` (``store.launches.fail_opening``), and logs how many of each.
 
 A write names its writer (spec 2026-11-06 Tier 2, section 7; ``identity``): an agent sends
 ``X-Fairband-Principal: agent`` with ``X-Fairband-Actor``, the model identifier it runs as, and
@@ -73,7 +75,14 @@ preflight, which the app never answers. The logo's read (``/api/companies/{symbo
 fetch a file from FMP's image host and is not among them (B-203): the page reads it from an
 ``<img>``, which cannot send the header. It refuses a request the browser marks as another
 site's (``Sec-Fetch-Site``), and its fetch sends no key, spends no quota and is bounded as
-``logo_api`` says.
+``logo_api`` says. The launch route (``POST /api/launches``, spec 2026-11-16 agent launch, 12) is
+the one route that starts a program: it runs the window command of ``launch.json`` as a list of
+words through the ``Opener`` that ``serve`` passes, with no shell and no word from the request,
+which names a stored item's id or a test. It is the owner's alone, as is the launcher's report
+(``POST /api/launches/{id}/status``): a request with the agent's principal header is a 403. Both
+are writes and need the header, so a page on another site can neither launch nor report. It is
+bounded: one launch in flight for an item, and 15 seconds for the window command. An app given no
+opener or no port answers it 503 and starts nothing.
 """
 
 import json
@@ -105,6 +114,7 @@ from fairband.refresh.passthrough import Passthrough
 from fairband.refresh.run import KINDS
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import CompanyRow, latest_companies, latest_company
+from fairband.store.launches import fail_opening
 from fairband.store.refreshes import (
     RefreshRow,
     RefreshRunning,
@@ -128,7 +138,7 @@ from fairband.web.agents_api import add_agent_routes
 from fairband.web.filings_api import add_filing_routes
 from fairband.web.guidance_api import add_guidance_routes
 from fairband.web.history_api import add_history_routes
-from fairband.web.launch_api import add_launch_settings_routes
+from fairband.web.launch_api import add_launch_routes, add_launch_settings_routes
 from fairband.web.logo_api import add_logo_routes, logo_route
 from fairband.web.multiples_api import add_multiples_routes
 from fairband.web.policy_rows import deciles_json, policy_json
@@ -199,10 +209,13 @@ def create_app(
     answer 503 without one; ``fetch_logo`` fetches a logo's file from its address
     (``vendors.logos.fetch_logo``), and without one the logo read answers the files already in
     the data folder's ``logos`` and fetches none. ``opener`` is what opening a window reaches
-    outside the server (``launch.command.Opener``): the Agents section's save checks a changed
-    window command's program with its finder, and its read suggests the Windows Terminal line
-    from its environment; without one the save checks no program and the read suggests none.
-    ``port`` is the port the server listens on, for the launch routes; nothing reads it yet."""
+    outside the server (``launch.command.Opener``): the launch route runs the window command
+    through it, the Agents section's save checks a changed window command's program with its
+    finder, and its read suggests the Windows Terminal line from its environment. ``port`` is the
+    port the server listens on, which the window's launcher calls back on. Without an opener or a
+    port the launch route answers 503 and starts nothing; without an opener the save checks no
+    program and the read suggests none. ``clock`` also gives the time a launch is made, moved and
+    read at."""
     taxed = load_tax_table() if tax is None else tax
     logos = Logos(settings.data_dir / "logos", fetch_logo or _no_fetch, clock)
 
@@ -210,7 +223,9 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         with closing(conn_factory()) as conn:
             count = mark_interrupted(conn, clock())
+            failed = fail_opening(conn, clock())
         logger.info("%d running refresh%s marked interrupted", count, "" if count == 1 else "es")
+        logger.info("%d opening launch%s marked failed", failed, "" if failed == 1 else "es")
         yield
 
     app = FastAPI(
@@ -338,15 +353,17 @@ def create_app(
         ``fxDate``, the rate the value was translated at and its close's date, ``None`` on a row
         with no rate (``types.rated``). And ``launchReady`` (spec 2026-11-16 agent launch, 9),
         whether launching is set up: the launch file in the config folder, read at each request,
-        can be used and its window command holds a word (``launch.settings``)."""
-        today = clock().date()
+        can be used and its window command holds a word (``launch.settings``); the open item's
+        ``launch`` is read at the clock's time."""
+        now = clock()
+        today = now.date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
             listed = latest_company(conn, symbol)
             read_under = current(conn)
             if snapshot is None:
                 raise HTTPException(404, f"no snapshot for {symbol}")
-            records = agent_records(conn, snapshot, today, read_under, taxed)
+            records = agent_records(conn, snapshot, today, read_under, taxed, now)
             brief = brief_for(conn, symbol)
             logo = logo_route(conn, snapshot.symbol)
             adr = adr_flag(conn, symbol, listed)
@@ -433,6 +450,7 @@ def create_app(
     add_filing_routes(app, passthrough, clock)
     add_logo_routes(app, conn_factory, logos)
     add_launch_settings_routes(app, settings.config_dir, opener)
+    add_launch_routes(app, conn_factory, settings.config_dir, opener, port, clock)
     return app
 
 

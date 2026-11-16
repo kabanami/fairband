@@ -29,8 +29,10 @@ it), each ``None`` without one:
   (``{heading, parts}``, the cites included) and ``references`` the refs that section cites, each
   with its number in the whole report's list (``render.references``), so a number in the drawer
   matches the report page.
-- ``item``: the company's open work item, ``{id, state, mode, claimedBy, createdAt}``,
-  ``createdAt`` the time it was posted.
+- ``item``: the company's open work item, ``{id, state, mode, claimedBy, createdAt, launch}``,
+  ``createdAt`` the time it was posted and ``launch`` its newest launch as
+  ``GET /api/launches/{id}`` answers it (``launch_api.launch_json``, read at the time the detail
+  is read), ``None`` without one (spec 2026-11-16 agent launch, 9).
 
 Beside them it gives ``priceNeeds`` (``method.md`` 4.11): the sentences on what the price needs
 when it is well above the value the meter draws, the review's when the review counts and has a
@@ -49,7 +51,7 @@ import sqlite3
 from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import asdict
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -63,7 +65,8 @@ from fairband.policy.tax import TaxTable
 from fairband.reports.render import references
 from fairband.store.currency import reporting_currency
 from fairband.store.guidance import guidance_for
-from fairband.store.inbox import open_item
+from fairband.store.inbox import WorkItem, open_item
+from fairband.store.launches import newest_launch
 from fairband.store.ledger import entries
 from fairband.store.overrides import OverrideRow, overrides_for
 from fairband.store.reports import ReportRow, latest_judgments, latest_report
@@ -73,6 +76,7 @@ from fairband.store.secondary import SecondaryRow, latest_secondary
 from fairband.store.snapshots import SnapshotRow, latest_snapshot, snapshot_rows
 from fairband.web.agents_api import criterion_json, finding_json, record_json
 from fairband.web.guidance_api import guidance_json
+from fairband.web.launch_api import launch_json
 from fairband.web.reviews_api import secondary_json
 from fairband.web.rows import counts_on, rested_on, standing, window_ended
 
@@ -83,11 +87,17 @@ _UNITS: dict[str, str] = {tag: spec.unit for tag, spec in TAGS.items()}
 
 
 def agent_records(
-    conn: sqlite3.Connection, snapshot: SnapshotRow, today: date, policy: Policy, tax: TaxTable
+    conn: sqlite3.Connection,
+    snapshot: SnapshotRow,
+    today: date,
+    policy: Policy,
+    tax: TaxTable,
+    now: datetime,
 ) -> dict[str, Any]:
     """The detail's ``review``, ``secondary``, ``report`` and ``item`` (module docstring) on the
     company's latest ``snapshot``; ``policy`` is the effective one and ``tax`` the statements'
-    table, by which the Summary's references read their sources."""
+    table, by which the Summary's references read their sources; ``today`` is the day the report's
+    window is judged on and ``now`` the time the item's launch is read at."""
     symbol = snapshot.symbol
     review = latest_review(conn, symbol)
     secondary = latest_secondary(conn, symbol)
@@ -115,17 +125,20 @@ def agent_records(
             if report is None
             else _report(conn, report, window_ended(snapshot, cited, report, today), policy, tax)
         ),
-        "item": (
-            None
-            if item is None
-            else {
-                "id": item.id,
-                "state": item.state,
-                "mode": item.mode,
-                "claimedBy": item.claimed_by,
-                "createdAt": item.posted_at.isoformat(),
-            }
-        ),
+        "item": None if item is None else _item(conn, item, now),
+    }
+
+
+def _item(conn: sqlite3.Connection, item: WorkItem, now: datetime) -> dict[str, Any]:
+    """The open work item, with its newest launch read at ``now``, ``None`` without one."""
+    newest = newest_launch(conn, item.id)
+    return {
+        "id": item.id,
+        "state": item.state,
+        "mode": item.mode,
+        "claimedBy": item.claimed_by,
+        "createdAt": item.posted_at.isoformat(),
+        "launch": None if newest is None else launch_json(newest, item, now),
     }
 
 
