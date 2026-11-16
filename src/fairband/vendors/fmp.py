@@ -79,6 +79,16 @@ The filing routes, checked live on 2026-11-11 (spec 2026-11-11 filings access, 3
   list of rows, a row an object with one key, its label, whose value is the list of its cells.
   A period FMP does not hold, or an unknown symbol, answers HTTP 200 with
   ``{"Error Message": ...}``; a period that is not one of the five answers HTTP 400.
+
+The company page's routes, called live on 2026-11-16 (spec 2026-11-16 company page, 10.1); each
+answered HTTP 200 with one row or a list:
+
+- ``ratios-ttm``, ``key-metrics-ttm``, ``financial-scores``, ``stock-price-change``,
+  ``price-target-consensus``, ``grades-consensus``, ``shares-float``: ``symbol``.
+- ``financial-growth``: ``symbol``, ``limit``. ``period`` is left out, so the rows are FMP's
+  default, the fiscal years, newest first. The three, five and ten-year figures
+  (``tenYRevenueGrowthPerShare``) are totals over the span, not yearly rates.
+- ``dividends``: ``symbol``, ``limit``.
 """
 
 from collections.abc import Mapping, Sequence
@@ -121,8 +131,8 @@ def to_fmp_symbol(symbol: str) -> str:
 
 
 class Fmp:
-    """The FMP stable routes the screen reads and the agent's pass-throughs fetch; every method
-    returns the response as received."""
+    """The FMP stable routes the screen reads, the company page shows and the agent's
+    pass-throughs fetch; every method returns the response as received."""
 
     def __init__(self, http: VendorHttp, api_key: str) -> None:
         self._http = http
@@ -185,6 +195,42 @@ class Fmp:
 
     def splits(self, symbol: str) -> VendorResponse:
         return self._get("splits", {"symbol": to_fmp_symbol(symbol)})
+
+    def ratios_ttm(self, symbol: str) -> VendorResponse:
+        """The ratios over the trailing twelve months: margins, multiples, health, the dividend."""
+        return self._get("ratios-ttm", {"symbol": to_fmp_symbol(symbol)})
+
+    def key_metrics_ttm(self, symbol: str) -> VendorResponse:
+        """The metrics over the trailing twelve months: enterprise value, returns, EV multiples."""
+        return self._get("key-metrics-ttm", {"symbol": to_fmp_symbol(symbol)})
+
+    def financial_growth(self, symbol: str, limit: int) -> VendorResponse:
+        """The growth of the newest ``limit`` fiscal years, a row a year, newest first."""
+        return self._get("financial-growth", {"symbol": to_fmp_symbol(symbol), "limit": str(limit)})
+
+    def financial_scores(self, symbol: str) -> VendorResponse:
+        """The Altman Z-score and the Piotroski score, with the figures behind them."""
+        return self._get("financial-scores", {"symbol": to_fmp_symbol(symbol)})
+
+    def price_change(self, symbol: str) -> VendorResponse:
+        """The price's change in percent over spans from one day to ten years."""
+        return self._get("stock-price-change", {"symbol": to_fmp_symbol(symbol)})
+
+    def price_target(self, symbol: str) -> VendorResponse:
+        """The analysts' price targets: the consensus, the median, the low and the high."""
+        return self._get("price-target-consensus", {"symbol": to_fmp_symbol(symbol)})
+
+    def grades(self, symbol: str) -> VendorResponse:
+        """The analysts' ratings counted from strong buy to strong sell, and their consensus."""
+        return self._get("grades-consensus", {"symbol": to_fmp_symbol(symbol)})
+
+    def dividends(self, symbol: str, limit: int) -> VendorResponse:
+        """The newest ``limit`` dividends, each with its amount, its dates and its frequency."""
+        return self._get("dividends", {"symbol": to_fmp_symbol(symbol), "limit": str(limit)})
+
+    def shares_float(self, symbol: str) -> VendorResponse:
+        """The shares outstanding, the shares that float and the free float in percent."""
+        return self._get("shares-float", {"symbol": to_fmp_symbol(symbol)})
 
     def transcript(self, symbol: str, year: int, quarter: int) -> VendorResponse:
         params = {"symbol": to_fmp_symbol(symbol), "year": str(year), "quarter": str(quarter)}

@@ -183,6 +183,45 @@ ROUTES = [
         "levered-discounted-cash-flow",
         {"symbol": "BRK-B"},
     ),
+    _route("ratios-ttm", lambda f: f.ratios_ttm("BRK.B"), "ratios-ttm", {"symbol": "BRK-B"}),
+    _route(
+        "key-metrics-ttm",
+        lambda f: f.key_metrics_ttm("BRK.B"),
+        "key-metrics-ttm",
+        {"symbol": "BRK-B"},
+    ),
+    _route(
+        "financial-growth",
+        lambda f: f.financial_growth("BRK.B", 1),
+        "financial-growth",
+        {"symbol": "BRK-B", "limit": "1"},
+    ),
+    _route(
+        "financial-scores",
+        lambda f: f.financial_scores("BRK.B"),
+        "financial-scores",
+        {"symbol": "BRK-B"},
+    ),
+    _route(
+        "price-change",
+        lambda f: f.price_change("BRK.B"),
+        "stock-price-change",
+        {"symbol": "BRK-B"},
+    ),
+    _route(
+        "price-target",
+        lambda f: f.price_target("BRK.B"),
+        "price-target-consensus",
+        {"symbol": "BRK-B"},
+    ),
+    _route("grades", lambda f: f.grades("BRK.B"), "grades-consensus", {"symbol": "BRK-B"}),
+    _route(
+        "dividends",
+        lambda f: f.dividends("BRK.B", 4),
+        "dividends",
+        {"symbol": "BRK-B", "limit": "4"},
+    ),
+    _route("shares-float", lambda f: f.shares_float("BRK.B"), "shares-float", {"symbol": "BRK-B"}),
 ]
 
 
