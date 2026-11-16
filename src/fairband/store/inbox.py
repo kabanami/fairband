@@ -44,7 +44,7 @@ Origin = Literal["owner", "agent", "expiry"]
 
 MODES: tuple[Mode, ...] = get_args(Mode)
 STATES: tuple[State, ...] = get_args(State)
-_OPEN = ("pending", "claimed")
+OPEN_STATES = ("pending", "claimed")  # the states of an open item
 
 
 class ItemOpen(ValueError):
@@ -118,13 +118,13 @@ def post_item(
 def claim_item(conn: sqlite3.Connection, item_id: int, actor: str, at: datetime) -> WorkItem:
     """Claim the item for the agent ``actor``: a pending one, or a claimed one taken over."""
     assignments = "state = 'claimed', claimed_by = ?, claimed_at = ?"
-    return _move(conn, item_id, _OPEN, assignments, (actor, dump_stamp(at)))
+    return _move(conn, item_id, OPEN_STATES, assignments, (actor, dump_stamp(at)))
 
 
 def complete_item(conn: sqlite3.Connection, item_id: int, report_id: int, at: datetime) -> WorkItem:
     """Mark the open item done with report ``report_id``; the caller checks the report."""
     assignments = "state = 'done', report_id = ?, finished_at = ?"
-    return _move(conn, item_id, _OPEN, assignments, (report_id, dump_stamp(at)))
+    return _move(conn, item_id, OPEN_STATES, assignments, (report_id, dump_stamp(at)))
 
 
 def decline_item(conn: sqlite3.Connection, item_id: int, reason: str, at: datetime) -> WorkItem:
@@ -132,7 +132,7 @@ def decline_item(conn: sqlite3.Connection, item_id: int, reason: str, at: dateti
     if not reason.strip():
         raise ValueError("a decline needs a reason")
     assignments = "state = 'declined', reason = ?, finished_at = ?"
-    return _move(conn, item_id, _OPEN, assignments, (reason, dump_stamp(at)))
+    return _move(conn, item_id, OPEN_STATES, assignments, (reason, dump_stamp(at)))
 
 
 def drop_item(conn: sqlite3.Connection, item_id: int, at: datetime) -> WorkItem:
@@ -163,7 +163,7 @@ def open_item(conn: sqlite3.Connection, symbol: str) -> WorkItem | None:
     """The company's pending or claimed item, if it has one."""
     row = conn.execute(
         "SELECT * FROM work_items WHERE symbol = ? AND state IN (?, ?) ORDER BY id DESC LIMIT 1",
-        (exchange_symbol(symbol), *_OPEN),
+        (exchange_symbol(symbol), *OPEN_STATES),
     ).fetchone()
     return None if row is None else _item(row)
 
@@ -193,7 +193,7 @@ def post_expiry_items(
             " AND (w.state IN (?, ?) OR (w.origin = 'expiry'"
             " AND w.expiry_valid_until = s.valid_until)))"
             " ORDER BY s.symbol",
-            (dump_date(today), *_OPEN),
+            (dump_date(today), *OPEN_STATES),
         ).fetchall()
         posted = [
             post_item(

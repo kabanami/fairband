@@ -985,6 +985,72 @@ def test_the_detail_reads_launch_is_read_on_the_apps_clock(
     assert (found["ageSeconds"], found["overdue"]) == (90, True)
 
 
+# ------------------------------------------------------------------ the inbox read
+
+
+def _listed(client: TestClient) -> dict[int, Any]:
+    """Each item of the inbox read's ``launch``, by the item's id."""
+    return {item["id"]: item["launch"] for item in client.get("/api/inbox").json()["items"]}
+
+
+def test_the_inbox_reads_open_item_carries_its_newest_launch(
+    served: TestClient, finder: Finder
+) -> None:
+    """Each open item of ``GET /api/inbox`` has ``launch``, its newest launch as
+    ``GET /api/launches/{id}`` answers it, and ``None`` with none, as the detail read's item has
+    (B-210): the Inbox view's row draws its line and its button from it."""
+    item_id = _item(served)
+    other = _item(served, "AAL")
+    assert _listed(served) == {item_id: None, other: None}
+    finder.missing = {"wt.exe"}
+    first = _made(served, {"itemId": item_id})
+    assert _listed(served) == {item_id: first, other: None}
+    finder.missing = set()
+    second = _made(served, {"itemId": item_id})
+    assert _listed(served) == {item_id: second, other: None}
+    assert second == served.get(f"/api/launches/{second['id']}").json()
+
+
+def test_the_inbox_reads_launch_is_read_on_the_apps_clock(served: TestClient, clock: Clock) -> None:
+    _made(served, {"itemId": _item(served)})
+    clock.now = NOW + timedelta(seconds=90)
+    [item] = served.get("/api/inbox").json()["items"]
+    assert (item["launch"]["ageSeconds"], item["launch"]["overdue"]) == (90, True)
+
+
+def test_a_claimed_item_keeps_its_launch_and_a_closed_item_has_none(served: TestClient) -> None:
+    """An open item is pending or claimed. An item that is closed, declined here, has no
+    ``launch``: its row draws no line."""
+    item_id = _item(served)
+    made = _made(served, {"itemId": item_id})
+    _claim(served, item_id)
+    [item] = served.get("/api/inbox").json()["items"]
+    assert item["launch"] == made | {"itemState": "claimed", "claimedBy": "claude-opus-5-5"}
+    declined = served.patch(
+        f"/api/inbox/{item_id}", json={"action": "decline", "reason": "no"}, headers=HEADER
+    )
+    assert declined.status_code == 200, declined.text
+    [item] = served.get("/api/inbox").json()["items"]
+    assert (item["state"], item["launch"]) == ("declined", None)
+
+
+def test_the_inbox_read_says_whether_launching_is_set_up(
+    tmp_path: Path,
+    db_path: Path,
+    policy: Policy,
+    clock: Clock,
+    runner: Runner,
+    finder: Finder,
+    config_dir: Path,
+) -> None:
+    """``launchReady``, as the detail read's: the launch file, read at each request."""
+    app = _app(tmp_path, db_path, policy, clock, _opener(runner, finder))
+    with TestClient(app, base_url=HOST) as client:
+        assert client.get("/api/inbox").json() == {"launchReady": False, "items": []}
+        _set_up(config_dir)
+        assert client.get("/api/inbox").json() == {"launchReady": True, "items": []}
+
+
 # ------------------------------------------------------------------ serve
 
 

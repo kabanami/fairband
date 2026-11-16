@@ -43,9 +43,9 @@ which of the two failed and why.
 ## 3. Non-goals
 
 - Codex. It is B-208.
-- The Inbox page and the Watchlists page. The Inbox lists items and the Watchlists page posts a
-  request for every company of a list; neither opens a window here. (*My call*; a pending item's
-  button on the Inbox page is a small follow-up, filed at the end.)
+- The Watchlists page, which posts a request for every company of a list and opens no window.
+  The Inbox page was left out too (*my call*) and gained a pending item's button the same day, on
+  the founder's word (10, "The Inbox view's row"; B-210).
 - A run with no window. The session is interactive.
 - Another terminal than Windows Terminal over WSL, the founder's machine and the only one
   tested. The window command is a setting, so a terminal that takes its command as trailing words
@@ -376,6 +376,10 @@ it was made and last changed.
 - The company detail read gains two things: `launchReady`, whether launching is set up; and, on
   its open `item`, `launch`: the item's newest launch as `GET /api/launches/{id}` answers it, or
   none.
+- The inbox read, `GET /api/inbox`, gains the same two (B-210): `launchReady` beside the items,
+  and `launch` on each item, the newest launch of an open item (pending or claimed) and none for
+  an item that is closed. The agents' `inbox_list` tool passes the read on whole, so an agent
+  sees both; neither changes what an agent may do.
 
 ## 10. The request button
 
@@ -418,6 +422,24 @@ waits on a prompt. A second window then gives two sessions for one item. The com
 refusal (section 9) stops the second where the first has claimed, and the playbook's line
 (section 11) stops a session from taking over a claimed item. Where both start while the item is
 pending, the founder is at both windows and closes one.
+
+**The Inbox view's row** (B-210, the founder, 2026-11-16: "add the button in the inbox"). A
+work item that no click on Request research made waits in the Inbox with no window: the review
+Fairband posts when a watched company's window ends, an item an agent posted, and a request posted
+with the menu's box cleared. A pending item's row starts it:
+
+- Where launching is set up, the row's last cell has **Open Claude Code** before Decline, and
+  **Open again** after a failure. Each posts a launch for the item, as the drawer's buttons do.
+- Under the state word the row says where the item's launch is, in the words of the table above
+  without `Requested ·`: `opening a window…`, `the window opened, Claude Code is starting…`,
+  `Claude Code started, not claimed yet`, and a failure's sentence whole, in the error style. A
+  pending item with no launch says `pending` alone. A claimed item's row says claimed and by whom,
+  as before.
+- A launch's refusal, the server's sentence, stands on a line under the row, as a refused
+  decline's does.
+- The view follows each pending item's launch as the drawer follows its open item's, and reads
+  the inbox again once a following ends. A view that is hidden stops every following; the read as
+  it opens again starts those still in flight.
 
 ## 11. The playbook
 
@@ -635,3 +657,15 @@ launch route.
   scoped refresh." Step 5: the `settings` table holds no row, as before, and the snapshot that
   the session's refresh made carries the one settings hash that every other snapshot carries.
   Still not tested: a launch with Windows Terminal closed.
+- 2026-11-16, the founder, after the live acceptance, on B-210: "add the button in the inbox,
+  then we call the feature closed." Built the same day (3, 9, 10): the inbox read carries
+  `launchReady` and each open item's `launch`, and a pending item's row has Open Claude Code
+  before Decline with the launch's words under its state word. Claude's calls: the words leave
+  out `Requested ·`, since the row's state cell says the state; a claimed item has no launch
+  line; a hidden view follows nothing. Checked on a scratch server in a browser, with a stand-in
+  for Claude Code and a window command that opens no window: Open Claude Code on a pending item
+  read "opening a window…", then "Claude Code started, not claimed yet" 2 seconds later; a claim
+  by the item's id turned the row to claimed inside 2 seconds; a stand-in that ended with exit
+  code 3 read "Claude Code ended before it claimed this request (exit code 3)." in the error
+  style with Open again. The other half of B-210, a terminal other than Windows Terminal over
+  WSL, is B-214.

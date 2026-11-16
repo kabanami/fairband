@@ -4,7 +4,12 @@ records and the ledger.
 ``GET /api/inbox`` runs the expiry rule first (``fairband.store.inbox.post_expiry_items``), as the
 system's write, which writes its own ledger rows, then lists the items newest first, or those in
 ``state``, each with ``reportRevision``, the revision of the report a done item was completed
-with (``None`` without a report or its row; 18.5, plan 4). ``POST /api/inbox`` posts an item for
+with (``None`` without a report or its row; 18.5, plan 4), and ``launch``, an open item's newest
+launch as ``GET /api/launches/{id}`` answers it (``launch_api.launch_json``, read at the clock's
+time), ``None`` without one and for an item that is closed. Beside the items it answers
+``launchReady``, whether launching is set up, as the company detail does: the launch file in the
+config folder, read at each request (``launch.settings``). The Inbox view's row draws Open Claude
+Code and the launch's line from the two (B-210). ``POST /api/inbox`` posts an item for
 the company, its origin the writer's principal and its snapshot the company's latest.
 ``POST /api/inbox/claim`` claims the named item, or the oldest pending one when it names none or
 has no body, for the agent; ``PATCH /api/inbox/{id}`` completes it with a published report of its
@@ -30,17 +35,20 @@ from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import fields
 from datetime import date, datetime
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from fairband.launch.settings import read_launch_file
 from fairband.policy.settings import exchange_symbol
 from fairband.store.currency import currency_of, reporting_currency
 from fairband.store.db import transaction
 from fairband.store.guidance import GuidanceRow
 from fairband.store.inbox import (
+    OPEN_STATES,
     ItemOpen,
     Mode,
     Origin,
@@ -56,6 +64,7 @@ from fairband.store.inbox import (
     work_item,
     work_items,
 )
+from fairband.store.launches import newest_launch
 from fairband.store.ledger import Writer, entries, record
 from fairband.store.reports import report_row, revisions_by_id
 from fairband.store.research import (
@@ -81,6 +90,7 @@ from fairband.store.research import (
 )
 from fairband.store.snapshots import latest_snapshot
 from fairband.web.identity import writer_of
+from fairband.web.launch_api import launch_json
 
 _GIST = 80  # the longest summary taken from a record's text
 
@@ -202,26 +212,42 @@ def _refusals(missing: str, symbol: str | None = None) -> Iterator[None]:
         raise HTTPException(404, f"no {missing} {exc.args[0]}{company}") from None
 
 
+def _open_launch(conn: sqlite3.Connection, item: WorkItem, now: datetime) -> dict[str, Any] | None:
+    """An open item's newest launch read at ``now``; ``None`` without one, and for an item that
+    is closed."""
+    newest = newest_launch(conn, item.id) if item.state in OPEN_STATES else None
+    return None if newest is None else launch_json(newest, item, now)
+
+
 def add_agent_routes(
-    app: FastAPI, conn_factory: Callable[[], sqlite3.Connection], clock: Callable[[], datetime]
+    app: FastAPI,
+    conn_factory: Callable[[], sqlite3.Connection],
+    clock: Callable[[], datetime],
+    config_dir: Path,
 ) -> None:
-    """Register the agent routes."""
+    """Register the agent routes; ``config_dir`` holds the launch file the inbox read asks
+    whether launching is set up."""
 
     @app.get("/api/inbox")
     def inbox(state: State | None = None) -> dict[str, Any]:
         """The items, newest first, after the expiry rule has run on the clock's day; the done
-        items' report revisions read in one query."""
+        items' report revisions read in one query, each open item's newest launch in one of its
+        own."""
         at = clock()
         with closing(conn_factory()) as conn:
             post_expiry_items(conn, at.date(), at)  # its ledger rows written with it
             items = work_items(conn, state)
             found = revisions_by_id(conn, [i.report_id for i in items if i.report_id is not None])
             return {
+                "launchReady": read_launch_file(config_dir).ready,
                 "items": [
                     record_json(i)
-                    | {"reportRevision": None if i.report_id is None else found.get(i.report_id)}
+                    | {
+                        "reportRevision": None if i.report_id is None else found.get(i.report_id),
+                        "launch": _open_launch(conn, i, at),
+                    }
                     for i in items
-                ]
+                ],
             }
 
     @app.post("/api/inbox", status_code=201)

@@ -463,7 +463,7 @@ def create_app(
 
     add_settings_routes(app, conn_factory, policy, clock)
     add_watchlist_routes(app, conn_factory, clock)
-    add_agent_routes(app, conn_factory, clock)
+    add_agent_routes(app, conn_factory, clock, settings.config_dir)
     add_guidance_routes(app, conn_factory, policy, taxed, clock)
     add_review_routes(app, conn_factory, policy, taxed, clock)
     add_sensitivity_routes(app, conn_factory, policy, taxed, clock)

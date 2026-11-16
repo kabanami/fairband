@@ -34,7 +34,7 @@ def test_get_and_post_carry_the_request_header(api: FairbandClient) -> None:
     # A write without the header is refused 403 (D11): this one passes.
     item = api.post("/api/inbox", ITEM)
     assert (item["symbol"], item["state"], item["origin"]) == ("AAPL", "pending", "owner")
-    assert api.get("/api/inbox")["items"] == [item | {"reportRevision": None}]
+    assert api.get("/api/inbox")["items"] == [item | {"reportRevision": None, "launch": None}]
     assert api.get("/api/inbox", {"state": "done"})["items"] == []
     entry = _newest_entry(api)
     assert (entry["principal"], entry["actor"], entry["client"]) == ("owner", None, None)

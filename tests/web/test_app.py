@@ -1434,11 +1434,12 @@ def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
         "h(F.PrincipalChip, { principal: 'agent', actor: item.claimedBy, compact: true })",
         "h('td', { className: 'body app-inbox__wrap' }, item.note || none()),",
         "href: '#report/' + encodeURIComponent(item.symbol) + '/' + item.reportId",
-        "h('td', null, open && !declining ? h(F.Button, {",
+        # the launch's button stands before Decline (B-210; tests/web/test_inbox_launch.py)
+        "h('td', null, parts.button, open && !declining ? h(F.Button, {",
         "state.declining = item.id;",
         "}, 'Decline') : null)),",
         "declining ? reasonLine(item) : null,",
-        "state.errors[item.id] ? refused(item) : null);",
+        "state.errors[item.id] ? refused(state.errors[item.id]) : null,",
     )
     assert "colSpan: HEADS.length + 1" in _function(js, "refused")
     line = _function(js, "reasonLine")
@@ -2150,12 +2151,15 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
     # the open item's line (launchLine, spec 2026-11-16 agent launch, 10): none without an item,
     # the claim whatever the launch, pending without one
     assert "if (!line) return null;" in _function(script, "requested")
-    line = _function(script, "launchLine")
+    # its words (launchWords) after the word Requested, which the Inbox view's row leaves out
+    assert "return { text: 'Requested · ' + words.text, failed: false, action: words.action };" in (
+        _function(script, "launchLine")
+    )
     _in_order(
-        line,
+        _function(script, "launchWords"),
         "if (!item) return null;",
-        "if (item.state === 'claimed') return said('Requested · claimed by ' + item.claimedBy);",
-        "text: 'Requested · pending'",
+        "if (item.state === 'claimed') return said('claimed by ' + item.claimedBy);",
+        "text: 'pending'",
     )
     page = _static_file("index.html")
     assert ".app-stance {" in page and ".app-request .fb-menu { left: 0; right: auto; }" in page

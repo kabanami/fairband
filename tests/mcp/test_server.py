@@ -442,9 +442,11 @@ def test_inbox_list_calls_the_api(api: FairbandClient, client: TestClient) -> No
         ("inbox_list", {"state": "pending"}),
         ("inbox_list", {"state": "done"}),
     )
-    listed = posted | {"reportRevision": None}  # the list's own field (18.5, plan 4)
-    assert every == client.get("/api/inbox").json() == {"items": [listed]}
-    assert pending == every and done == {"items": []}
+    # the list's own fields: the report's revision (18.5, plan 4), the open item's newest launch
+    # and whether launching is set up (B-210)
+    listed = posted | {"reportRevision": None, "launch": None}
+    assert every == client.get("/api/inbox").json() == {"launchReady": False, "items": [listed]}
+    assert pending == every and done == {"launchReady": False, "items": []}
 
 
 def test_every_read_tool_reads_its_route(api: FairbandClient, client: TestClient) -> None:

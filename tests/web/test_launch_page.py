@@ -204,13 +204,42 @@ def test_the_line_says_where_the_items_launch_is(
     assert node("launchLine", [item, ready]) == {"text": line, "failed": failed, "action": wanted}
 
 
+@pytest.mark.parametrize(("item", "line", "failed", "action"), LINES)
+def test_the_words_are_the_line_without_requested(
+    item: dict[str, Any], line: str, failed: bool, action: str | None
+) -> None:
+    """``launchWords``, which the Inbox view's row shows under its state word (B-210): the line
+    without its first word Requested, a failure's sentence whole."""
+    words = line.removeprefix("Requested · ")
+    assert (words == line) is failed
+    assert node("launchWords", [item, True]) == {"text": words, "failed": failed, "action": action}
+
+
 def test_no_open_item_has_no_line() -> None:
     assert node("launchLine", [None, True]) is None
+    assert node("launchWords", [None, True]) is None
+
+
+def test_the_item_a_line_is_drawn_from() -> None:
+    """``lineItem``: an item with an opening launch while a launch's post is in flight, whatever
+    the item, before the item is read again too; else the item, with the launch the page follows
+    in place of its own where it is that item's."""
+    opening = {"state": "pending", "launch": {"state": "opening"}}
+    item = _item(launch=_launch("opened"))
+    for held in (None, _item(), item):
+        assert node("lineItem", [_ask(opening=True), held]) == opening
+    assert node("lineItem", [_ask(), None]) is None
+    assert node("lineItem", [_ask(), item]) == item
+    followed = _launch("started")
+    assert node("lineItem", [_ask(followed=followed), item]) == item | {"launch": followed}
+    other = _launch("started", item_id=13)
+    assert node("lineItem", [_ask(followed=other), item]) == item
+    assert node("lineItem", [_ask(followed=followed), None]) is None
 
 
 def test_the_line_reads_only_what_the_server_sends() -> None:
-    """Every name ``launchLine`` reads off the item or its launch is one the detail read sends."""
-    script = _code(_function(_static_file("app.js"), "launchLine"))
+    """Every name ``launchWords`` reads off the item or its launch is one the detail read sends."""
+    script = _code(_function(_static_file("app.js"), "launchWords"))
     made = datetime(2026, 11, 16, 10, tzinfo=UTC)
     row = LaunchRow(
         id=7,
@@ -381,8 +410,7 @@ def test_the_buttons_open_a_window_for_the_open_item() -> None:
     line = _function(_static_file("app.js"), "requested")
     _in_order(
         line,
-        "ask.opening ? launchLine({ state: 'pending', launch: { state: 'opening' } }, ready)",
-        ": launchLine(shown, ready);",
+        "var line = launchLine(lineItem(ask, item), ready);",
         "className: line.failed ? 'caption app-request__error' : 'caption app-requested'",
         "line.text,",
         "ready && line.action ? h(F.Button, {",
@@ -538,6 +566,8 @@ def test_the_page_hangs_the_launch_helpers_on_fairband_page() -> None:
     for name in (
         "requestResearch: requestResearch",
         "launchLine: launchLine",
+        "launchWords: launchWords",
+        "lineItem: lineItem",
         "openLaunch: openLaunch",
         "stopLaunch: stopLaunch",
         "followItem: followItem",

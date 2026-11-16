@@ -102,7 +102,8 @@ be left out.
   where the list of peers came from.
 - `watchlists()`: the watchlists with their companies.
 - `inbox_list(state?)`: the work items, newest first, or those in one state: `pending`, `claimed`,
-  `done`, `declined` or `dropped`.
+  `done`, `declined` or `dropped`. An open item's `launch` is the window the page last opened for
+  it, if any, and `launchReady` says whether the page can open one; neither changes what you do.
 - `reports(symbol)`: the company's published reports, newest first, without their text.
 - `report(symbol, id?)`: one published report whole, with its judgments and its appendixes: the
   one with that id, or the company's latest.

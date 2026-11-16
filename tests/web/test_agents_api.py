@@ -47,7 +47,7 @@ def _ledger(client: TestClient, symbol: str) -> list[dict[str, Any]]:
 
 
 def test_post_and_list_inbox(client: TestClient) -> None:
-    assert client.get("/api/inbox").json() == {"items": []}
+    assert client.get("/api/inbox").json() == {"launchReady": False, "items": []}
     item = _post(
         client, "/api/inbox", {"symbol": "aapl", "mode": "full report", "note": "why"}, HEADER
     )
@@ -70,10 +70,12 @@ def test_post_and_list_inbox(client: TestClient) -> None:
         "finishedAt": None,
         "expiryValidUntil": None,
     }
-    listed = item | {"reportRevision": None}  # the list's own field (18.5, plan 4)
-    assert client.get("/api/inbox").json() == {"items": [listed]}
-    assert client.get("/api/inbox", params={"state": "pending"}).json() == {"items": [listed]}
-    assert client.get("/api/inbox", params={"state": "done"}).json() == {"items": []}
+    # the list's own fields: the report's revision (18.5, plan 4) and the open item's newest
+    # launch, with whether launching is set up beside the items (B-210)
+    listed = item | {"reportRevision": None, "launch": None}
+    assert client.get("/api/inbox").json() == {"launchReady": False, "items": [listed]}
+    assert client.get("/api/inbox", params={"state": "pending"}).json()["items"] == [listed]
+    assert client.get("/api/inbox", params={"state": "done"}).json()["items"] == []
     r = client.get("/api/inbox", params={"state": "open"})
     assert (r.status_code, r.json()) == (
         400,
@@ -165,7 +167,7 @@ def test_a_write_names_its_writer_or_is_refused(client: TestClient) -> None:
         {"detail": "a principal is owner or agent, not 'system'"},
     )
     assert client.post("/api/inbox", json=body).status_code == 403  # no request header
-    assert client.get("/api/inbox").json() == {"items": []}
+    assert client.get("/api/inbox").json()["items"] == []
     assert client.get("/api/ledger").json() == {"entries": []}
 
 
@@ -586,7 +588,7 @@ def test_the_inbox_read_runs_the_expiry_rule(
     assert snapshot is not None
     core = _post(client, "/api/watchlists", {"name": "Core"}, HEADER)
     client.put(f"/api/watchlists/{core['id']}/symbols/AAPL", headers=HEADER)
-    assert client.get("/api/inbox").json() == {"items": []}  # inside its window
+    assert client.get("/api/inbox").json()["items"] == []  # inside its window
 
     later = datetime.combine(snapshot.valid_until + timedelta(days=1), time(9, 30), NOW.tzinfo)
     past = client_with_clock(later)

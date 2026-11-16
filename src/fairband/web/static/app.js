@@ -205,10 +205,12 @@
      evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the line
      that says what the figures are in (currencyLine), a report's footnote numbers, and Request
      research with a request of its own (asking), whose following of a launch the page stops as it
-     starts to read another company (stopLaunch) and starts as its read lands (followItem). The open
-     item's line (launchLine), a launch's post (openLaunch), the drawer's route sections, the
-     charge's rows, an input's value, the intermediates, the flags it lists and Details' findings
-     are here for the tests, which read them in node (tests/web/page.mjs). */
+     starts to read another company (stopLaunch) and starts as its read lands (followItem). The
+     Inbox view's row (inbox.js, B-210) keeps a request for each pending item too, posts its launch
+     (openLaunch) and draws the line's words (launchWords) from the item the line is drawn from
+     (lineItem). The open item's line (launchLine), the drawer's route sections, the charge's
+     rows, an input's value, the intermediates, the flags it lists and Details' findings are here
+     for the tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
@@ -227,7 +229,8 @@
     phaseEvidence: phaseEvidence, pairs: pairs, when: when, whole: whole, money: money,
     rate: rate, plain: plain,
     footnotes: footnotes, asking: asking, requestResearch: requestResearch,
-    launchLine: launchLine, openLaunch: openLaunch, stopLaunch: stopLaunch, followItem: followItem,
+    launchLine: launchLine, launchWords: launchWords, lineItem: lineItem,
+    openLaunch: openLaunch, stopLaunch: stopLaunch, followItem: followItem,
     chargeRows: chargeRows, matureRoute: matureRoute, revenueRoute: revenueRoute,
     declineRoute: declineRoute, startUpRoute: startUpRoute, intermediates: intermediates,
     briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
@@ -1264,17 +1267,12 @@
       });
   }
 
-  /* The open item's line under Request research, until the item is done or declined
-     (launchLine): the opening one while a launch's post is in flight, whatever the item's launch,
-     before the item is read again too; else the item's, with the launch the page follows in place
-     of its own where it is that item's. A failure's line is in the request's error style. After
-     its text, where launching is set up, the row's button, Open Claude Code or Open again, which
-     posts a launch for the item. */
+  /* The open item's line under Request research, until the item is done or declined (launchLine
+     of lineItem). A failure's line is in the request's error style. After its text, where
+     launching is set up, the row's button, Open Claude Code or Open again, which posts a launch
+     for the item. */
   function requested(ask, item, redraw, after, ready) {
-    var shown = item && ask.followed && ask.followed.itemId === item.id
-      ? Object.assign({}, item, { launch: ask.followed }) : item;
-    var line = ask.opening ? launchLine({ state: 'pending', launch: { state: 'opening' } }, ready)
-      : launchLine(shown, ready);
+    var line = launchLine(lineItem(ask, item), ready);
     if (!line) return null;
     return h('p', {
       className: line.failed ? 'caption app-request__error' : 'caption app-requested'
@@ -1286,28 +1284,44 @@
       }, line.action === 'open' ? 'Open Claude Code' : 'Open again') : null);
   }
 
+  /* The item a request's line is drawn from: one with an opening launch while a launch's post is
+     in flight, whatever the item's launch, before the item is read again too; else the item, with
+     the launch the page follows in place of its own where it is that item's. */
+  function lineItem(ask, item) {
+    if (ask.opening) return { state: 'pending', launch: { state: 'opening' } };
+    return item && ask.followed && ask.followed.itemId === item.id
+      ? Object.assign({}, item, { launch: ask.followed }) : item;
+  }
+
   /* The open item's line (spec 2026-11-16 agent launch, 10) from the item and its newest launch,
-     as { text, failed, action }: a claim whatever the launch; a pending item with no launch with
-     the action 'open' where launching is set up (`ready`); a failure's line, and the two overdue
-     ones, in the error style with the action 'again'; the others with none. No item has no
-     line. */
+     as { text, failed, action }: its words (launchWords) after the word Requested, a failure's
+     sentence whole. No item has no line. */
   function launchLine(item, ready) {
+    var words = launchWords(item, ready);
+    if (!words || words.failed) return words;
+    return { text: 'Requested · ' + words.text, failed: false, action: words.action };
+  }
+
+  /* What the line says of the item and its newest launch, as { text, failed, action }: a claim
+     whatever the launch; a pending item with no launch with the action 'open' where launching is
+     set up (`ready`); a failure's sentence, and the two overdue ones, in the error style with the
+     action 'again'; the others with none. No item has no words. The Inbox view's row, whose
+     state cell says the item's state, shows them without the word Requested (B-210). */
+  function launchWords(item, ready) {
     if (!item) return null;
     var launch = item.launch;
-    if (item.state === 'claimed') return said('Requested · claimed by ' + item.claimedBy);
-    if (!launch) {
-      return { text: 'Requested · pending', failed: false, action: ready ? 'open' : null };
-    }
-    if (launch.state === 'opening') return said('Requested · opening a window…');
+    if (item.state === 'claimed') return said('claimed by ' + item.claimedBy);
+    if (!launch) return { text: 'pending', failed: false, action: ready ? 'open' : null };
+    if (launch.state === 'opening') return said('opening a window…');
     if (launch.state === 'opened' && !launch.overdue) {
-      return said('Requested · the window opened, Claude Code is starting…');
+      return said('the window opened, Claude Code is starting…');
     }
     if (launch.state === 'opened') {
       return failure('The window opened, but nothing in it reported after 90 seconds. ' +
         'Check the window.');
     }
     if (launch.state === 'started' && !launch.overdue) {
-      return said('Requested · Claude Code started, not claimed yet');
+      return said('Claude Code started, not claimed yet');
     }
     if (launch.state === 'started') {
       return failure('Claude Code started, but no agent claimed this request after 90 ' +
