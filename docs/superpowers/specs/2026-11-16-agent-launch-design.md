@@ -211,6 +211,8 @@ launcher starts the program with a list of arguments, and no shell reads them.
 | Permission mode | `claude.permission_mode` | empty | One of `acceptEdits`, `auto`, `dontAsk`, `manual`, `plan`. |
 | Folder | `claude.folder` | `~/fairband-research` | An absolute path once `~` is the user's home. The launcher makes it. |
 
+- A value that holds a NUL byte, or that is not text the server can send as UTF-8, is refused for
+  every name.
 - An empty model, effort or mode adds no option, so Claude Code uses its own default.
 - The lists of efforts and modes are Claude Code 2.1.325's, kept in one place in the code.
 - **`bypassPermissions` is not offered** (*my call*). Claude Code has it; it skips every

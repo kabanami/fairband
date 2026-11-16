@@ -25,11 +25,14 @@ applies every change or none, and like every write needs the ``X-Fairband-Reques
 - where the request changes the window command, the app has an opener and the new command holds
   a word: a first word the opener's finder does not find, 400, "window_command: `<word>` was not
   found on the server's path". A window command that is empty or only blanks holds no word and is
-  not checked; one that does not split into words is refused by the file's rule. A save that
-  leaves the window command as it is does not check the file's: a launch checks it again;
+  not checked; one that is not text, does not split into words or holds a NUL byte is refused by
+  the file's rule. A save that leaves the window command as it is does not check the file's: a
+  launch checks it again;
 - a name not in the Agents section: 400, "<name>: is not a name of the Agents section";
-- a value that is not text: 400, "<name>: is not text";
-- a value that breaks a rule of spec 7.1: 400, "<name>: <rule>", the launch file's sentence.
+- a value that is not text, not a string or one the server cannot send as UTF-8: 400, "<name>: is
+  not text";
+- a value that breaks a rule of spec 7.1, a NUL byte first: 400, "<name>: <rule>", the launch
+  file's sentence.
 
 A launch as the API sends it (``launch_json``): ``id``; ``itemId``, ``None`` for a test; ``test``;
 ``agent``; ``state``; ``stage`` and ``detail``, a failure's; ``exitCode``, an end's; ``createdAt``
@@ -113,6 +116,8 @@ from fairband.launch.settings import (
     MODES,
     NAMES,
     LaunchFile,
+    check_value,
+    is_text,
     read_launch_file,
     suggested_window_command,
     write_launch_file,
@@ -262,16 +267,13 @@ def add_launch_settings_routes(app: FastAPI, config_dir: Path, opener: Opener | 
 
 def _missing_program(changes: Mapping[str, Any], opener: Opener | None) -> str | None:
     """The first word of the window command in ``changes`` where ``opener``'s finder does not find
-    it; ``None`` where the changes hold no window command as text, the app has no opener, the
-    command does not split into words (the file's rule refuses it) or holds none, or the program
-    is found."""
+    it; ``None`` where the changes hold no window command as text (``is_text``), the app has no
+    opener, the command breaks a rule of the file (it does not split into words, or holds a NUL
+    byte), which the file's rule then refuses, or holds no word, or the program is found."""
     command = changes.get("window_command")
-    if opener is None or not isinstance(command, str):
+    if opener is None or not is_text(command) or check_value("window_command", command) is not None:
         return None
-    try:
-        words = shlex.split(command)
-    except ValueError:
-        return None
+    words = shlex.split(command)
     if not words or opener.which(words[0]) is not None:
         return None
     return words[0]

@@ -10,8 +10,9 @@ every default, so launching is off.
 ``read_launch_file`` reads the file at each call, keeps no copy and never raises. A file the server
 cannot use answers the defaults and ``error``, one sentence that names the file and the first
 fault found in this order: the file cannot be read, is not JSON, holds no object, holds a name it
-does not know (the top level's before those under ``claude``), holds a value that is not text, or
-holds a value that breaks a rule of ``check_value`` (by the order of ``NAMES``).
+does not know (the top level's before those under ``claude``), holds a value that is not text
+(``is_text``: not a string, or one the server cannot send as UTF-8), or holds a value that breaks
+a rule of ``check_value`` (by the order of ``NAMES``). A NUL byte breaks a rule of every name.
 
 ``write_launch_file`` lays its changes over the file as it is now, or over the defaults where the
 server cannot use the file, checks every name, and writes the whole file: every name in the order
@@ -31,7 +32,7 @@ import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from fairband.launch.command import is_plain
 
@@ -83,8 +84,23 @@ class LaunchFile:
 
 def check_value(name: str, value: str) -> str | None:
     """The rule of spec 7.1 that ``value`` breaks at ``name``, as the words that follow
-    ``<name>: ``; ``None`` when it breaks none. A name not in ``NAMES`` is a ``KeyError``."""
-    return _RULES[name](value)
+    ``<name>: ``; ``None`` when it breaks none. A NUL byte breaks the one rule of every name,
+    checked before the name's own. A name not in ``NAMES`` is a ``KeyError``."""
+    rule = _RULES[name]
+    if "\x00" in value:
+        return "holds a NUL byte"
+    return rule(value)
+
+
+def is_text(value: object) -> TypeGuard[str]:
+    """Whether ``value`` is text the server can send as UTF-8: a string with no lone surrogate."""
+    if not isinstance(value, str):
+        return False
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 def read_launch_file(config_dir: Path) -> LaunchFile:
@@ -100,15 +116,14 @@ def read_launch_file(config_dir: Path) -> LaunchFile:
 
 def write_launch_file(config_dir: Path, changes: Mapping[str, str]) -> LaunchFile:
     """Lay ``changes`` over the launch file as it is now, or over the defaults where the server
-    cannot use it, and write the whole file. A name not in ``NAMES``, a value that is not text and
-    a value that breaks a rule are each a ``ValueError`` of ``<name>: <words>``, and nothing is
-    written."""
+    cannot use it, and write the whole file. A name not in ``NAMES``, a value that is not text
+    (``is_text``) and a value that breaks a rule are each a ``ValueError`` of ``<name>: <words>``,
+    and nothing is written."""
     for name, value in changes.items():
         if name not in NAMES:
             raise ValueError(f"{name}: is not a name of the Agents section")
-        if not isinstance(value, str):
-            # A ValueError like every other refusal of a save, so its caller takes one kind.
-            raise ValueError(f"{name}: is not text")  # noqa: TRY004
+        if not is_text(value):
+            raise ValueError(f"{name}: is not text")
     values = read_launch_file(config_dir).values | dict(changes)
     for name in NAMES:
         rule = check_value(name, values[name])
@@ -158,7 +173,7 @@ def _read_values(path: Path) -> dict[str, str]:
         raise _Unusable(f"{FILE_NAME}: the file holds no object")
     found = _named(document)
     for name in NAMES:
-        if name in found and not isinstance(found[name], str):
+        if name in found and not is_text(found[name]):
             raise _Unusable(f"{FILE_NAME}: `{name}` is not text")
     values = {name: found.get(name, DEFAULTS[name]) for name in NAMES}
     for name in NAMES:
@@ -276,7 +291,8 @@ def _one_of(choices: tuple[str, ...]) -> Callable[[str], str | None]:
 def _folder(value: str) -> str | None:
     try:
         absolute = Path(value).expanduser().is_absolute()
-    # ``~user`` of a user whose home cannot be found, or a user name that holds a NUL byte
+    # ``~user`` of a user whose home cannot be found, or whose name the user database cannot be
+    # asked for (``check_value`` refuses a NUL byte before this rule)
     except (RuntimeError, ValueError):
         absolute = False
     return None if absolute else "is not an absolute path"

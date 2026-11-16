@@ -263,6 +263,17 @@ def test_a_second_launch_is_refused_while_one_is_in_flight(
     assert not conn.in_transaction
 
 
+def test_the_seconds_of_a_launch_in_flight_are_never_below_0(conn: sqlite3.Connection) -> None:
+    """A clock that stepped back since the launch was made gives 0 seconds, not a negative."""
+    item_id = _item(conn)
+    _launch_in(conn, "opened", item_id)
+
+    with pytest.raises(InFlight) as refused:
+        insert_launch(conn, item_id, "claude", NOW - timedelta(seconds=5))
+
+    assert str(refused.value) == "a window for this request opened 0 seconds ago"
+
+
 def test_a_launch_left_opening_blocks_until_the_start_fails_it(conn: sqlite3.Connection) -> None:
     """An opening launch is never overdue, so it holds its item until ``fail_opening`` runs."""
     item_id = _item(conn)

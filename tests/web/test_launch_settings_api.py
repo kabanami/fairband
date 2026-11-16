@@ -228,6 +228,9 @@ def test_a_saved_window_command_sets_launching_up(served: TestClient, finder: Fi
             {"window_command": "wt.exe --title 'Fairband"},
             "window_command: does not split into words: No closing quotation",
         ),
+        # a NUL byte is refused before the program is looked for
+        ({"window_command": "wt.exe\x00 -e"}, "window_command: holds a NUL byte"),
+        ({"claude.model": "opus\x00"}, "claude.model: holds a NUL byte"),
     ],
 )
 def test_a_refused_save_is_a_400_with_its_sentence_and_writes_nothing(
@@ -310,6 +313,28 @@ def test_a_file_that_is_not_json_reads_as_the_defaults_and_a_save_writes_it_agai
     assert response.json() == _form({"claude.effort": "xhigh"})
     assert launch_file.read_text(encoding="utf-8") == SAVED_EFFORT
     assert served.get(URL).json()["fileError"] is None
+
+
+def test_a_lone_surrogate_in_the_file_reads_as_not_text_and_a_save_of_one_is_a_400(
+    served: TestClient, launch_file: Path
+) -> None:
+    """A value that does not encode as UTF-8 cannot go into a JSON answer: the read names it as
+    not text, with a 200, so the section loads and a save can repair the file; a save that sends
+    one is refused with the save's sentence, the window command's before its program is looked
+    for."""
+    launch_file.parent.mkdir()
+    launch_file.write_text('{"claude": {"model": "\\ud800"}}', encoding="utf-8")
+    response = served.get(URL)
+    assert response.status_code == 200, response.text
+    assert response.json() == _form({}, fileError="launch.json: `claude.model` is not text")
+    before = launch_file.read_bytes()
+    for name in ("claude.model", "window_command"):
+        body = '{"changes": {"' + name + '": "wt.exe \\ud800"}}'
+        response = served.put(
+            URL, content=body, headers=HEADER | {"Content-Type": "application/json"}
+        )
+        assert (response.status_code, response.json()) == (400, {"detail": f"{name}: is not text"})
+    assert launch_file.read_bytes() == before
 
 
 def test_a_save_keeps_a_change_made_to_the_file_after_the_form_was_read(

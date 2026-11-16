@@ -2,13 +2,13 @@
 (spec 2026-11-16, section 8).
 
 A launch names its work item (``None`` for a test from Settings) and its agent (``claude``). It is
-made ``opening``, before the window command runs. The server moves it to ``opened`` with
-``opened`` when the command ends with exit 0, and to ``failed`` at the ``window`` stage when it
-does not; the launcher moves it to ``started``, then ``ended`` with the agent's exit code, or to
-``failed`` at the ``agent`` stage. A failure keeps its sentence. The moves are ``opening`` to ``opened``,
-``started`` or ``failed``; ``opened`` to ``started`` or ``failed``; ``started`` to ``ended``. Any
-other raises ``WrongMove`` (``"a launch that is ended does not become started"``). A missing
-launch raises ``KeyError(id)``.
+made ``opening``, before the window command runs. When the command ends with exit 0 the server
+moves it to ``opened`` through the function ``opened``, and when it does not, to ``failed`` at the
+``window`` stage; the launcher moves it to ``started``, then ``ended`` with the agent's exit code,
+or to ``failed`` at the ``agent`` stage. A failure keeps its sentence. The moves are ``opening`` to
+``opened``, ``started`` or ``failed``; ``opened`` to ``started`` or ``failed``; ``started`` to
+``ended``. Any other raises ``WrongMove`` (``"a launch that is ended does not become started"``).
+A missing launch raises ``KeyError(id)``.
 
 A launch is overdue (``overdue``) when it is ``opened`` or ``started``, its item is still pending,
 and ``CLAIM_WAIT_S`` seconds have passed since it was made. A test is overdue while it is
@@ -82,7 +82,7 @@ def insert_launch(
     """Make a launch ``opening`` for the item ``item_id`` (``None`` for a test) and ``agent``, at
     ``at``; the launch. The item is read as pending: the caller holds the write lock and has
     checked it. ``InFlight`` when the item's newest launch is in flight and not overdue, with the
-    whole seconds since that launch was made."""
+    whole seconds since that launch was made, never below 0 where the clock stepped back."""
     with transaction(conn, immediate=True):
         if item_id is not None:
             newest = newest_launch(conn, item_id)
@@ -91,7 +91,7 @@ def insert_launch(
                 and newest.state in _IN_FLIGHT
                 and not overdue(newest, "pending", at)
             ):
-                seconds = int((at - newest.created_at).total_seconds())
+                seconds = max(0, int((at - newest.created_at).total_seconds()))
                 raise InFlight(f"a window for this request opened {seconds} seconds ago")
         cursor = conn.execute(
             "INSERT INTO launches (item_id, agent, state, created_at, updated_at)"

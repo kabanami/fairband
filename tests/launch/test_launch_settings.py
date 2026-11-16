@@ -181,7 +181,14 @@ BROKEN = [
     ("claude.folder", "", "is not an absolute path"),
     ("claude.folder", "./research", "is not an absolute path"),
     ("claude.folder", "~nosuchuser-of-fairband/research", "is not an absolute path"),
-    ("claude.folder", "~\x00x", "is not an absolute path"),
+    # A NUL byte breaks one rule of every name, checked before the name's own.
+    ("window_command", "wt.exe\x00 -e", "holds a NUL byte"),
+    ("claude.command", "-\x00", "holds a NUL byte"),
+    ("claude.prompt", "/fairband-research work item\x00", "holds a NUL byte"),
+    ("claude.model", "opus\x00", "holds a NUL byte"),
+    ("claude.effort", "high\x00", "holds a NUL byte"),
+    ("claude.permission_mode", "auto\x00", "holds a NUL byte"),
+    ("claude.folder", "~\x00x", "holds a NUL byte"),
 ]
 
 
@@ -264,6 +271,9 @@ def test_every_default_breaks_no_rule() -> None:
         ('{"claude": {"effort": 5}}', "launch.json: `claude.effort` is not text"),
         ('{"window_command": null}', "launch.json: `window_command` is not text"),
         ('{"claude": {"folder": ["~"]}}', "launch.json: `claude.folder` is not text"),
+        # a lone surrogate, which no answer of the server can send as UTF-8
+        ('{"claude": {"model": "\\ud800"}}', "launch.json: `claude.model` is not text"),
+        ('{"window_command": "wt.exe \\udfff"}', "launch.json: `window_command` is not text"),
     ],
 )
 def test_a_file_that_cannot_be_used_reads_as_its_sentence(
@@ -421,6 +431,8 @@ def test_a_save_over_a_half_written_file_writes_a_good_one(tmp_path: Path) -> No
         ({"claude.model": "opus", "claude.folder": "r"}, "claude.folder: is not an absolute path"),
         ({"editor": "vim"}, "editor: is not a name of the Agents section"),
         ({"claude.effort": 5}, "claude.effort: is not text"),
+        ({"claude.model": "\ud800"}, "claude.model: is not text"),
+        ({"claude.model": "opus\x00"}, "claude.model: holds a NUL byte"),
     ],
 )
 def test_a_refused_save_writes_nothing(
