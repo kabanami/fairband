@@ -323,6 +323,12 @@
   .app-drawer__body.is-loading { opacity: 0.5; }
   .app-drawer__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
   .app-drawer__ticker { margin: 0; }
+  /* The company's logo (B-203). FMP's logos are drawn for a white ground, many dark on a clear
+     one, so the tile is white under either theme and reads no theme token. */
+  .app-logo {
+    flex: none; box-sizing: border-box; width: 24px; height: 24px; padding: 2px;
+    background: #ffffff; border-radius: var(--radius-sm); object-fit: contain;
+  }
   .app-drawer__name { margin: 0; flex-basis: 100%; color: var(--ink-muted); }
   .app-drawer__brief, .app-drawer__currency { margin: 0; flex-basis: 100%; }
   .app-section { margin: var(--space-6) 0 0; }
@@ -420,6 +426,7 @@
     display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-3);
   }
   .app-report__ticker, .app-report__name { margin: 0; }
+  .app-report__logo { width: 32px; height: 32px; align-self: center; }
   .app-report__name { color: var(--ink-muted); }
   .app-report__currency { margin: 0; flex-basis: 100%; }
   .app-report__brief { max-width: 72ch; margin: var(--space-3) 0 0; }

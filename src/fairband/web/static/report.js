@@ -156,8 +156,9 @@
 
   /* ----------------------------------------------------------------- the head */
 
-  /* The ticker, the name and the phase badge, and under them, for a company in another currency
-     or an ADR, what its figures are in (FairbandPage.currencyLine, spec 2026-11-10 6.2 and 7.4:
+  /* The company's logo where it has one (FairbandPage.logo, B-203), the ticker, the name and the
+     phase badge, and under them, for a company in another currency or an ADR, what its figures
+     are in (FairbandPage.currencyLine, spec 2026-11-10 6.2 and 7.4:
      "Reports in TWD; one ADS is five ordinary shares; every per-share figure here is per ADS;
      valued at TWD 32.96 per USD"); then the one headline figure, the page's only figure-lg
      (CompanyReport's one hero), and the price beside it in figure, both in US dollars. */
@@ -167,6 +168,7 @@
     var value = headline(d);
     return h('header', { key: 'head', className: 'app-report__head' },
       h('div', { className: 'app-report__id' },
+        P.logo(d, 'app-report__logo'),
         h('h2', { className: 'ticker app-report__ticker' }, r.symbol),
         d.company && d.company.name
           ? h('p', { className: 'title app-report__name' }, d.company.name) : null,

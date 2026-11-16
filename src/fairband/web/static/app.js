@@ -206,6 +206,7 @@
     chargeRows: chargeRows, matureRoute: matureRoute, revenueRoute: revenueRoute,
     declineRoute: declineRoute, startUpRoute: startUpRoute, intermediates: intermediates,
     briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
+    logo: logo,
     drawerFlags: drawerFlags, findingsList: findingsList
   };
 
@@ -684,6 +685,7 @@
     var ask = asked(r.symbol);
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
+        logo(body, 'app-drawer__logo'),
         h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol),
         phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,
         body.company && body.company.name
@@ -1614,6 +1616,20 @@
 
   /* The route of a mature phase, for a refused row, which has none. */
   var MATURE = { 'Mature Growth': 'mature-growth', 'Mature Stable': 'mature-stable' };
+
+  /* The company's logo before its ticker (B-203), in the drawer's head and the report page's:
+     an image of the detail read's `logo`, the address of the logo read, which the server names
+     where the stored profile names a logo and fetches once; nothing without one. The ticker and
+     the name stand beside it, so its alt is empty. An image that does not load hides itself.
+     Its key is the address: the drawer's next company draws a new element, not the hidden one.
+     `className` is the head's own class, which sets the size. */
+  function logo(body, className) {
+    if (!body.logo) return null;
+    return h('img', {
+      key: body.logo, className: 'app-logo ' + className, src: body.logo, alt: '',
+      onError: function (event) { event.target.hidden = true; }
+    });
+  }
 
   /* The head's one line on the company (B-149): the universe row's sector and industry, then
      the first sentence of the company brief, the stored profile's description, joined by middle
