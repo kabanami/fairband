@@ -9,7 +9,9 @@
    were, the stamp is gone and the tables keep their old figures at ink-faint; when it ends, the
    rows (and the groups or the report page, when that view is open) load again. The group view is
    one plain table from /api/groups (spec 6.3), with no chart. The report page (report.js) is a
-   panel no header view names: #report/<symbol> and #report/<symbol>/<id> open it (18.4). */
+   panel no header view names: #report/<symbol> and #report/<symbol>/<id> open it (18.4). So is
+   the company page (company.js): #company/<symbol> opens its Overview and
+   #company/<symbol>/estimates its Estimates tab (the company page's design, 7.1). */
 (function () {
   'use strict';
 
@@ -33,8 +35,13 @@
   };
 
   /* The views in the header's order, each with its panel, a section of the page; then the report
-     page's panel, which no header view names: the drawer's Open the report opens it. */
-  var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox', 'report'];
+     page's panel and the company page's, which no header view names: the drawer's Open the report
+     opens the first, a company's link the second. */
+  var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox', 'report',
+    'company'];
+  /* The company page's tabs, the Overview first: the tab of a hash that names none, or one the page
+     does not know. */
+  var COMPANY_TABS = ['overview', 'estimates'];
   var panels = {};
   VIEWS.forEach(function (id) { panels[id] = document.getElementById(id); });
   var header = ReactDOM.createRoot(document.getElementById('header'));
@@ -210,14 +217,21 @@
      view's script to scroll to; one named while the view is open runs its loader again
      (spec 2026-11-04 6). The report page takes a company's symbol and, for an earlier revision, a
      report's id, kept in P.report for its script; without a symbol it is the Screen, and another
-     symbol or id while it is open runs its loader again (spec 2026-11-06 Tier 2, 18.4). */
+     symbol or id while it is open runs its loader again (spec 2026-11-06 Tier 2, 18.4). The
+     company page takes a company's symbol and a tab, kept in P.company for its script, as the
+     report page takes its own; a change of tab replaces the hash as a change of view does, so the
+     browser's Back never steps through the tabs (the company page's design, 7.1). */
   function show(tab, section, id) {
-    if (VIEWS.indexOf(tab) === -1 || (tab === 'report' && !section)) tab = 'screen';
+    if (VIEWS.indexOf(tab) === -1 || ((tab === 'report' || tab === 'company') && !section)) {
+      tab = 'screen';
+    }
     var opened = state.tab !== tab;
     P.section = tab === 'methodology' && section ? section : null;
-    var moved = tab === 'report' && keepReport(section, id);
+    var moved = (tab === 'report' && keepReport(section, id)) ||
+      (tab === 'company' && keepCompany(section, id));
     history.replaceState(null, '', tab === 'screen' ? location.pathname
-      : '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'report' ? reportPath() : ''));
+      : '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'report' ? reportPath() : '') +
+        (tab === 'company' ? companyPath() : ''));
     if (!opened && !P.section && !moved) return;
     state.tab = tab;
     VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });
@@ -245,9 +259,31 @@
     return '/' + encodeURIComponent(P.report.symbol) + (id == null ? '' : '/' + id);
   }
 
+  /* The company a hash names, kept in P.company as keepReport keeps a report: the symbol decoded,
+     as the links encode it, and upper-cased, as the store keeps it, and the tab, the Overview for
+     none or one the page does not know. True when it is not the company and tab already kept. */
+  function keepCompany(symbol, tab) {
+    var name = symbol;
+    try { name = decodeURIComponent(symbol); } catch (e) { /* a malformed escape stays as typed */ }
+    var company = {
+      symbol: name.toUpperCase(), tab: COMPANY_TABS.indexOf(tab) === -1 ? COMPANY_TABS[0] : tab
+    };
+    var kept = P.company;
+    P.company = company;
+    return !kept || kept.symbol !== company.symbol || kept.tab !== company.tab;
+  }
+
+  /* The kept company's part of the hash, the symbol encoded as the links encode it: /AAPL for the
+     Overview, which names no tab, or /AAPL/estimates. */
+  function companyPath() {
+    var tab = P.company.tab;
+    return '/' + encodeURIComponent(P.company.symbol) + (tab === COMPANY_TABS[0] ? '' : '/' + tab);
+  }
+
   /* The view a hash names, on load and when a link changes it: #watchlists, #methodology,
      #settings, #methodology/<section-id>, the Methodology view at that section, #report/<symbol>,
-     the company's report page, or #report/<symbol>/<id>, an earlier revision. */
+     the company's report page, or #report/<symbol>/<id>, an earlier revision; #company/<symbol>,
+     the company page's Overview, or #company/<symbol>/estimates, its Estimates tab. */
   function fromHash() {
     var parts = location.hash.slice(1).split('/');
     show(parts[0], parts[1], parts[2]);
@@ -381,8 +417,9 @@
       views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },
         { id: 'watchlists', label: 'Watchlists' }, { id: 'methodology', label: 'Methodology' },
         { id: 'settings', label: 'Settings' }, { id: 'inbox', label: 'Inbox', count: state.open }],
-      /* the report page is no header view: none is marked while it shows */
-      view: state.tab === 'report' ? '' : state.tab,
+      /* the report page and the company page are no header views: none is marked while either
+         shows */
+      view: state.tab === 'report' || state.tab === 'company' ? '' : state.tab,
       onViewChange: show,
       engineRanAt: ran ? P.localIso(ran) : null,
       children: actions(alive)
@@ -501,7 +538,8 @@
   /* What the later views use: show opens a view; each view registers its loader in onShow, and
      onShow[tab]() runs each time that view opens; section is the Methodology section a hash
      named; report is the report the report page shows, { symbol, id }, the id null for the
-     latest, and openReport(symbol, id?) opens that page; running() is true while a refresh runs;
+     latest, and openReport(symbol, id?) opens that page; company is the company and the tab the
+     company page shows, { symbol, tab }; running() is true while a refresh runs;
      followRefresh() follows a refresh another view started (the Settings view's revalue) as the
      header follows its own: the run bar while it runs, the rows loaded again when it ends;
      countInbox(items) hands the header the Inbox view's own read, so its count follows; the
@@ -510,6 +548,7 @@
   P.onShow = {};
   P.section = null;
   P.report = null;
+  P.company = null;
   P.openReport = function (symbol, id) { show('report', symbol, id == null ? null : String(id)); };
   P.running = function () { return state.running !== null; };
   P.followRefresh = function () { started = true; poll(); };

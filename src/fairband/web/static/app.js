@@ -191,7 +191,8 @@
      write's sentence and its reason (refusalDetail), the GET helper, the local-time helper, whether
      a launch is followed (following), the phase numbers and a work item's open states; and the
      later views, find, the lists (null until they load), their reload, which settles once they are
-     in, and watch, the marks' onWatch, which opens the popup; the loaded rows (null until they
+     in, and watch, the marks' onWatch, which opens the popup, under the element it is handed
+     where it is handed one (the company page's Watchlists ▾); the loaded rows (null until they
      load), the chosen columns, openRow, which opens a row's drawer, reloadDetail, which reads the
      drawer's company again after another view's write about it (the Inbox view's decline and a
      watchlist's Request research, spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which
@@ -206,6 +207,9 @@
      that says what the figures are in (currencyLine), a report's footnote numbers, and Request
      research with a request of its own (asking), whose following of a launch the page stops as it
      starts to read another company (stopLaunch) and starts as its read lands (followItem). The
+     company page (company.js; the company page's design, 7) draws its head with the logo, the
+     phase numbers, the moat stamp (moatStamp) and Request research as the report page keeps it,
+     and opens the watchlists popup under its head's button (watch). The
      Inbox view's row (inbox.js, B-210) keeps a request for each pending item too, posts its launch
      (openLaunch) and draws the line's words (launchWords) from the item the line is drawn from
      (lineItem). The open item's line (launchLine), the drawer's route sections, the charge's
@@ -234,7 +238,7 @@
     chargeRows: chargeRows, matureRoute: matureRoute, revenueRoute: revenueRoute,
     declineRoute: declineRoute, startUpRoute: startUpRoute, intermediates: intermediates,
     briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
-    logo: logo, logoGround: logoGround,
+    logo: logo, logoGround: logoGround, moatStamp: moatStamp,
     drawerFlags: drawerFlags, findingsList: findingsList
   };
 
@@ -429,9 +433,11 @@
     }).map(function (w) { return w.id; });
   }
 
-  /* onWatch: a mark opens its popup, or closes it when the popup is its own. */
-  function watch(row) {
-    var anchor = pressedMark;
+  /* onWatch: a mark opens its popup, or closes it when the popup is its own. The popup opens under
+     `mark` where one is given, the company page's Watchlists ▾ (the company page's design, 7.2),
+     else under the mark the click landed on. */
+  function watch(row, mark) {
+    var anchor = mark || pressedMark;
     if (!anchor || (state.watch && state.watch.anchor === anchor)) {
       closeWatch();
       return;
@@ -1944,6 +1950,17 @@
     }
     if (marks === 0 || (edge === 0 && light === marks)) return 'blank';
     return lightEdge > edge / 2 ? 'dark' : 'white';
+  }
+
+  /* The moat stamp after the phase badge (the company page's design, 7.2): the detail's `moat`,
+     the moat class in force, the review's where a review counts, else the snapshot's, in the
+     stamp's words. An outlined label in ink-muted with no fill, since the phase colours mean the
+     phase alone. A row with no value has no moat, and no stamp. */
+  var MOAT_WORDS = { Wide: 'WIDE MOAT', Narrow: 'NARROW MOAT', None: 'NO MOAT' };
+
+  function moatStamp(body) {
+    var words = MOAT_WORDS[body.moat];
+    return words ? h('span', { className: 'label app-moat' }, words) : null;
   }
 
   /* The head's one line on the company (B-149): the universe row's sector and industry, then

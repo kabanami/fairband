@@ -22,3 +22,11 @@ def test_the_report_page_does_not_draw_it() -> None:
 
 def test_the_page_has_no_style_for_it() -> None:
     assert ".app-needs" not in INDEX.read_text(encoding="utf-8")
+
+
+def test_no_page_script_names_it() -> None:
+    """No script of the page draws it (the design's 13), the company page's among them."""
+    scripts = sorted(STATIC.glob("*.js"))
+    assert APP in scripts and REPORT in scripts
+    for script in scripts:
+        assert "priceNeeds" not in script.read_text(encoding="utf-8"), script.name

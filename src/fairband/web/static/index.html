@@ -357,6 +357,13 @@
   }
   .app-logo.is-loaded { visibility: visible; }
   .app-logo.is-on-dark { background: #121417; }
+  /* The moat stamp after the phase badge (the company page's design, 7.2): an outlined label in
+     ink-muted, no fill and none of the phase colours, which mean the phase alone. */
+  .app-moat {
+    display: inline-flex; align-items: center; padding: 0 var(--space-1); color: var(--ink-muted);
+    background: none; border: 1px solid currentColor; border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
   .app-drawer__name { margin: 0; flex-basis: 100%; color: var(--ink-muted); }
   .app-drawer__brief, .app-drawer__currency { margin: 0; flex-basis: 100%; }
   .app-section { margin: var(--space-6) 0 0; }
@@ -516,6 +523,103 @@
   .app-chart .fb-c + .app-report__error { margin-top: var(--space-2); }
   .fb-report__section > .app-report__error { margin: var(--space-1) 0 var(--space-3); }
   @media (width < 840px) { .app-charts { grid-template-columns: minmax(0, 1fr); } }
+  /* The company page (the company page's design, 7), as its mockup lays it out: the link back to
+     the screen; the head, the logo on the drawer's tile at 40px, the name, the ticker, the phase
+     badge and the moat stamp over the caption line at its left, and at its right the price in
+     figure-lg, the day's change in the text's own colour and the close's day, then the controls,
+     Request research's menu opening from its button's right edge and its lines under the
+     buttons; the tabs' row on a hairline, the open tab underlined in accent and the data date at
+     its right end. Under it the open tab's two columns of blocks, one column below 1180px: each
+     block a raised panel with a hairline border, its title and the caption at its right in its
+     head; in a block, lists of a name and a figure on hairlines, groups under their titles in
+     label, and small tables of figures. Loading, the page keeps what it had, faded. */
+  #company { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-6) var(--space-4); }
+  .app-company { max-width: 1760px; padding: var(--space-2) 0 var(--space-8); }
+  .app-company.is-loading { opacity: 0.5; }
+  .app-company__back { margin: 0 0 var(--space-3); }
+  .app-company__head {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: var(--space-3) var(--space-8);
+  }
+  .app-company__id { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+  .app-company__logo {
+    width: 40px; height: 40px; padding: 4px; border-radius: var(--radius-md);
+  }
+  .app-company__names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .app-company__line {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+  }
+  .app-company__name { margin: 0; }
+  .app-company__sub { margin: 0; color: var(--ink-muted); }
+  .app-company__side {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-6);
+  }
+  .app-company__quote { display: flex; align-items: baseline; gap: var(--space-3); }
+  .app-company__quote p { margin: 0; }
+  .app-company__change { color: var(--ink-muted); }
+  .app-company__at { color: var(--ink-faint); }
+  .app-company__actions {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
+    gap: var(--space-2);
+  }
+  .app-company__actions > p { flex-basis: 100%; margin: 0; text-align: right; }
+  .app-company__actions .app-request .fb-menu { left: auto; right: 0; }
+  .app-company__tabs {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-1);
+    margin-top: var(--space-4); border-bottom: 1px solid var(--hairline);
+  }
+  .app-company__tablist { display: flex; gap: var(--space-1); }
+  .app-company__tab {
+    appearance: none; margin: 0 0 -1px; padding: var(--space-2) var(--space-3); background: none;
+    border: 0; border-bottom: 2px solid transparent; color: var(--ink-muted); cursor: pointer;
+    text-decoration: none;
+  }
+  .app-company__tab:hover { color: var(--ink); }
+  .app-company__tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .app-company__tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-company__asof { margin: 0 0 var(--space-2) auto; color: var(--ink-faint); }
+  .app-company__grid {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4);
+    align-items: start; margin-top: var(--space-4);
+  }
+  @media (width < 1180px) { .app-company__grid { grid-template-columns: minmax(0, 1fr); } }
+  .app-company__col { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+  .app-company__panel {
+    min-width: 0; padding: var(--space-4); background: var(--surface-raised);
+    border: 1px solid var(--hairline); border-radius: var(--radius-lg);
+    container-type: inline-size;
+  }
+  .app-company__panelhead {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+    margin: 0 0 var(--space-3);
+  }
+  .app-company__paneltitle { margin: 0; }
+  .app-company__note { margin: 0; color: var(--ink-faint); }
+  .app-company__grouptitle {
+    margin: 0 0 var(--space-1); color: var(--ink-faint); text-transform: uppercase;
+  }
+  .app-kv { display: flex; flex-direction: column; }
+  .app-kv__row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3);
+    padding: 5px 0; border-bottom: 1px solid var(--hairline);
+  }
+  .app-kv__row:last-child { border-bottom: 0; }
+  .app-kv__k { color: var(--ink-muted); }
+  .app-kv__v { text-align: right; white-space: nowrap; }
+  .app-company__table { width: 100%; border-collapse: collapse; }
+  .app-company__table th {
+    padding: 5px 0 5px var(--space-2); color: var(--ink-faint); font-weight: 500;
+    text-align: right; text-transform: uppercase; border-bottom: 1px solid var(--hairline);
+  }
+  .app-company__table td {
+    padding: 5px 0 5px var(--space-2); text-align: right; white-space: nowrap;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .app-company__table tr:last-child td { border-bottom: 0; }
+  .app-company__table th:first-child, .app-company__table td:first-child {
+    padding-left: 0; text-align: left;
+  }
+  .app-company__table td.app-company__rowname { color: var(--ink-muted); }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or
      menu, no Request research or its lines (plan 4), and not today's figures, the headline, the
@@ -560,6 +664,7 @@
   <section id="settings" hidden></section>
   <section id="inbox" hidden></section>
   <section id="report" hidden></section>
+  <section id="company" hidden></section>
 </main>
 <script src="/static/vendor/react.production.min.js"></script>
 <script src="/static/vendor/react-dom.production.min.js"></script>
@@ -573,5 +678,6 @@
 <script src="/static/methodology.js"></script>
 <script src="/static/report.js"></script>
 <script src="/static/charts.js"></script>
+<script src="/static/company.js"></script>
 </body>
 </html>

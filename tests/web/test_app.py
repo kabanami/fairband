@@ -845,6 +845,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/methodology.js",
         "/static/report.js",
         "/static/charts.js",
+        "/static/company.js",
     ]
     for url in references.urls:
         assert client.get(url).status_code == 200, url
@@ -869,7 +870,7 @@ def test_controls_js_mounts_app_header() -> None:
 
 def test_header_has_the_six_views() -> None:
     """Spec 2026-11-06 Tier 2, 18.5: a sixth header view, Inbox, after Settings, its count the
-    open work items; the report page stays a panel no header view names."""
+    open work items; the report page and the company page stay panels no header view names."""
     js = _static_file("controls.js")
     assert (
         "views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },\n"
@@ -878,7 +879,7 @@ def test_header_has_the_six_views() -> None:
         "        { id: 'settings', label: 'Settings' }, "
         "{ id: 'inbox', label: 'Inbox', count: state.open }],"
     ) in js
-    assert "view: state.tab === 'report' ? '' : state.tab," in js
+    assert "view: state.tab === 'report' || state.tab === 'company' ? '' : state.tab," in js
     assert "location.hash" in js and "history.replaceState" in js
     html = _static_file("index.html")
     for panel in ("watchlists", "methodology", "settings", "inbox"):
@@ -997,21 +998,23 @@ def test_page_opens_the_view_the_hash_names() -> None:
     loads through FairbandPage.onShow as it opens, every panel but the Methodology view's fades
     while a refresh runs, and FairbandPage.find puts a symbol in FIND with the filters cleared and
     opens the Screen. The report page's own hash and what of it fades are
-    test_the_report_view_opens_from_the_hash's."""
+    test_the_report_view_opens_from_the_hash's, the company page's
+    tests/web/test_company_page.py's."""
     js = _static_file("controls.js")
     assert (
         "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox',"
-        " 'report'];"
+        " 'report',\n    'company'];"
     ) in js
     show = js[js.index("function show(tab, section, id) {") :]
     show = show[: show.index("\n  }\n")]
     assert (
-        "if (VIEWS.indexOf(tab) === -1 || (tab === 'report' && !section)) tab = 'screen';" in show
-    )
+        "if (VIEWS.indexOf(tab) === -1 || ((tab === 'report' || tab === 'company') && !section)) {\n"
+        "      tab = 'screen';"
+    ) in show
     assert "P.section = tab === 'methodology' && section ? section : null;" in show
     assert "history.replaceState(null, '', tab === 'screen' ? location.pathname" in show
     assert (
-        ": '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'report' ? reportPath() : ''));"
+        ": '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'report' ? reportPath() : '') +"
     ) in show
     assert "VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });" in show
     assert "if (P.onShow[tab]) P.onShow[tab]();" in show
@@ -2698,13 +2701,14 @@ def test_the_report_view_opens_from_the_hash() -> None:
     js = _static_file("controls.js")
     assert (
         "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox',"
-        " 'report'];"
+        " 'report',\n    'company'];"
     ) in js
     show = _function(js, "show")
     _in_order(
         show,
-        "if (VIEWS.indexOf(tab) === -1 || (tab === 'report' && !section)) tab = 'screen';",
-        "var moved = tab === 'report' && keepReport(section, id);",
+        "if (VIEWS.indexOf(tab) === -1 || ((tab === 'report' || tab === 'company') && !section)) {",
+        "tab = 'screen';",
+        "var moved = (tab === 'report' && keepReport(section, id)) ||",
         "(tab === 'report' ? reportPath() : '')",
         "if (!opened && !P.section && !moved) return;",
         "if (P.onShow[tab]) P.onShow[tab]();",
@@ -2724,7 +2728,7 @@ def test_the_report_view_opens_from_the_hash() -> None:
         path
     )
     assert "show(parts[0], parts[1], parts[2]);" in js  # #report/AAPL/12: the id is parts[2]
-    assert "view: state.tab === 'report' ? '' : state.tab," in js
+    assert "view: state.tab === 'report' || state.tab === 'company' ? '' : state.tab," in js
     # the report panel takes the fade as every panel but the Methodology view's does; its CSS
     # fades only today's figures, never its appendixes' tables
     assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);" in js
