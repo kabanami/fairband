@@ -31,6 +31,7 @@
     failed: null, /* the shown tab's read failed: the sentence drawn under the tabs */
     error: null, /* the detail's read failed: the server's sentence, drawn in the head's place */
     loading: false,
+    whole: false, /* the read out reads the detail too: the tabs held may be older than it */
     request: null /* Request research for the page's company (FairbandPage.asking) */
   };
   var latest = 0;
@@ -39,26 +40,29 @@
      again (the view opened again, a request's post ended, or a refresh ended while the page
      shows, controls.js), reads the detail, then the tab's read, and drops what the page held of
      the other tab, so the head and the tab draw the run's figures; another tab of the company
-     shown reads only that tab, and one it read already is shown at once. The page shown stays,
-     faded, until the new one lands, and the latest read wins, so a read that lands after the
-     reader moved to another company or tab is dropped. A read of another company stops the
-     following of the request of the company shown before it starts, and every landing follows
-     the open item's launch again (shown). A tab's read that fails draws its sentence under the
-     tabs; the detail's draws its own (failure) and the link back. */
+     shown reads only that tab, and one it read already is shown at once, but while a read of the
+     detail is out, which that tab may be older than, it reads the detail and the tab, so a
+     reread a refresh's end started is never dropped for the figures of before the run. The page
+     shown stays, faded, until the new one lands, and the latest read wins, so a read that lands
+     after the reader moved to another company or tab is dropped. A read of another company stops
+     the following of the request of the company shown before it starts, and every landing
+     follows the open item's launch again (shown). A tab's read that fails draws its sentence
+     under the tabs; the detail's draws its own (failure) and the link back. */
   function load() {
     var want = P.company;
     var request = ++latest;
     var held = !!state.detail && !state.error && state.symbol === want.symbol;
-    if (held && want.tab !== state.tab && state.answers[want.tab]) {
+    if (held && want.tab !== state.tab && state.answers[want.tab] && !state.whole) {
       state.tab = want.tab;
       state.failed = null;
       state.loading = false;
       shown();
       return;
     }
-    var whole = !held || want.tab === state.tab;
+    var whole = !held || want.tab === state.tab || state.whole;
     var company = '/api/companies/' + encodeURIComponent(want.symbol);
     if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);
+    state.whole = whole;
     state.loading = true;
     render();
     (whole ? read(company) : Promise.resolve(state.detail))
@@ -71,6 +75,7 @@
       })
       .then(function (found) {
         if (request !== latest) return;
+        state.whole = false;
         if (whole) state.answers = {};
         if (found.answer) state.answers[want.tab] = found.answer;
         state.symbol = want.symbol;
@@ -83,6 +88,7 @@
       })
       .catch(function (err) {
         if (request !== latest) return;
+        state.whole = false;
         state.symbol = want.symbol;
         state.tab = want.tab;
         state.detail = null;
@@ -312,12 +318,12 @@
   /* The mark before a money figure's number: `$`, or another currency's code and a space. */
   function unit(m) { return m.currency && m.currency !== 'USD' ? m.currency + ' ' : '$'; }
 
-  /* Money to cents with no thousands separator, the design system's amount (Fairband.formatMoney,
-     which the meter, the drawer and the screen write), its `$` the currency's mark: $356.27,
-     $1495.16, TWD 1495.16, −$1.20. */
+  /* Money to cents with no thousands separator, as the design system writes an amount
+     (Fairband.formatMoney, which the meter, the drawer and the screen write), its `$` the
+     currency's mark: $356.27, $1495.16, TWD 1495.16, −$1.20. */
   function money(m) {
     if (!m || !ok(m.value)) return '—';
-    return minus(unit(m) + F.formatMoney(Math.abs(m.value)).slice(1), m.value);
+    return minus(unit(m) + Math.abs(m.value).toFixed(2), m.value);
   }
 
   /* The compact scales, largest first: the least amount each draws, its divisor, its decimals and

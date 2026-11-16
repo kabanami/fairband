@@ -133,6 +133,16 @@ def test_the_brief_opens_and_closes() -> None:
     assert "-webkit-line-clamp: 3;" in clamp and "overflow: hidden;" in clamp
 
 
+def test_the_company_block_is_keyed_on_the_company() -> None:
+    """The Overview keys the Company block on the company, as it keys the chart, so a brief opened
+    on one company's page is closed on the next one's."""
+    for symbol in (answers.SYMBOL, "BRK.B"):
+        tree = _page("draw.overview", answers.OVERVIEW | {"symbol": symbol}, answers.DETAIL)
+        company = tree["props"]["children"][0]["props"]["children"][0]
+        assert company["props"]["company"] == COMPANY
+        assert company["props"]["key"] == "company " + symbol
+
+
 def test_a_company_with_no_brief_draws_no_paragraph_and_no_button() -> None:
     for brief in (None, ""):
         tree = _page("Company", {"company": COMPANY | {"brief": brief}})
@@ -323,6 +333,48 @@ SECONDARY: dict[str, Any] = {
     "priceToValue": 1.216,
     "designation": "above",
 }
+
+
+def test_a_row_neither_valued_nor_refused_draws_no_refusal() -> None:
+    """A row the meter draws no band for and that has no refusal, a value with no price to draw
+    it against, draws neither the meter nor an empty refusal paragraph, and no levels."""
+    for changes in ({"price": None}, {"value": None, "levels": None}):
+        detail = answers.detail()
+        detail["result"] |= changes
+        tree = _page("value", detail)
+        assert classed(tree, "app-refusal") == []
+        assert _meters(tree) == []
+        assert classed(tree, "app-company__two") == []
+        assert _chip(tree)["props"]["basis"] == "mechanical"
+
+
+def test_the_basis_chip_follows_the_band_the_meter_draws() -> None:
+    """``bandBasis``, the one rule the chip reads: reviewed exactly where the meter and the four
+    levels draw a review's band or a secondary valuation's, else mechanical. A review with a
+    value and no levels leaves a valued row's mechanical band, and a secondary valuation with no
+    levels, or a review's band with no price, draws none: each is mechanical."""
+    unlevelled = answers.detail(review=answers.REVIEW | {"levels": None})
+    unbanded = answers.refused_detail() | {"secondary": SECONDARY | {"levels": None}}
+    unpriced = answers.refused_detail() | {"review": answers.REVIEW}
+    unpriced["result"] |= {"price": None}
+    cases = [
+        (answers.DETAIL, "mechanical", 196.5),
+        (answers.reviewed_detail(), "reviewed", 182.0),
+        (answers.refused_detail() | {"review": answers.REVIEW}, "reviewed", 182.0),
+        (answers.refused_detail() | {"secondary": SECONDARY}, "reviewed", 150.0),
+        (unlevelled, "mechanical", 196.5),
+        (unbanded, "mechanical", None),
+        (unpriced, "mechanical", None),
+        (answers.refused_detail(), "mechanical", None),
+    ]
+    for detail, basis, drawn in cases:
+        assert node("bandBasis", [detail]) == basis
+        tree = _page("value", detail)
+        assert _chip(tree)["props"]["basis"] == basis
+        assert [m["props"]["fairValue"] for m in _meters(tree)] == ([drawn] if drawn else [])
+    script = _static_file("company_overview.js")
+    start = script.index("  function value(")
+    assert "P.bandBasis(d)" in script[start : script.index("\n  }\n", start)]
 
 
 def test_the_four_levels_follow_the_value_the_meter_draws() -> None:

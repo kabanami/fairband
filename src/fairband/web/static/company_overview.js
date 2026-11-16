@@ -16,15 +16,16 @@
   var P = FairbandPage;
   var C = P.companyPage;
 
-  /* The Overview (8): the grid's two columns. At the left Company on the answer's company,
-     Fairband value on the company's detail and Key statistics on the answer. At the right first
-     Price, company_chart.js's chart (FairbandPage.companyChart, loaded after this script and read
-     as the tab draws) on the answer's prices, keyed on the company so each company's chart opens
-     at 1Y with no day picked; Price facts and News join it as they are built. */
+  /* The Overview (8): the grid's two columns. At the left Company on the answer's company, keyed
+     on the company so each company's brief opens closed, Fairband value on the company's detail
+     and Key statistics on the answer. At the right first Price, company_chart.js's chart
+     (FairbandPage.companyChart, loaded after this script and read as the tab draws) on the
+     answer's prices, keyed on the company so each company's chart opens at 1Y with no day picked;
+     Price facts and News join it as they are built. */
   function overview(answer, detail) {
     return h('div', { className: 'app-company__grid' },
       h('div', { className: 'app-company__col' },
-        h(Company, { key: 'company', company: answer.company }),
+        h(Company, { key: 'company ' + answer.symbol, company: answer.company }),
         value(detail),
         statistics(answer)),
       h('div', { className: 'app-company__col' },
@@ -95,30 +96,22 @@
 
   /* ----------------------------------------------------------- Fairband value */
 
-  /* The Fairband value block (8.2) of the company's detail `d`: the basis chip in its head; the
-     meter as the report page draws it (FairbandPage.meter), its price in figure, and the four
-     levels of the value it draws in two columns (FairbandPage.levelRows); a refused row with no
-     band, its refusal's sentence in the meter's place and no levels. Then the report's line,
-     where the company has a published report. */
+  /* The Fairband value block (8.2) of the company's detail `d`: the basis chip in its head, the
+     basis of the band the meter draws (FairbandPage.bandBasis); the meter as the report page
+     draws it (FairbandPage.meter), its price in figure, and the four levels of the value it draws
+     in two columns (FairbandPage.levelRows); a row with no band, its refusal's sentence in the
+     meter's place where it is refused, and no levels. Then the report's line, where the company
+     has a published report. */
   function value(d) {
     var rows = P.levelRows(d);
-    return C.panel('Fairband value', h(F.BasisChip, { basis: basis(d) }), [
+    var refusal = d.result.refusal;
+    return C.panel('Fairband value', h(F.BasisChip, { basis: P.bandBasis(d) }), [
       rows ? h('div', { key: 'meter', className: 'app-company__meter' }, P.meter(d, false))
-        : h('p', { key: 'refusal', className: 'body app-refusal' }, d.result.refusal),
+        : refusal ? h('p', { key: 'refusal', className: 'body app-refusal' }, refusal) : null,
       rows ? h('div', { key: 'levels', className: 'app-company__two' },
         C.kv(rows.slice(0, 2)), C.kv(rows.slice(2))) : null,
       d.report ? reportLine(d.result.symbol, d.report) : null
     ]);
-  }
-
-  /* The block's basis, as the report page's headline decides it: reviewed where the review on the
-     latest snapshot has a value, or, on a refused row, a secondary valuation counts with a value
-     above zero, the value the meter draws; else mechanical, the engine's. */
-  function basis(d) {
-    var s = d.secondary;
-    if (d.review && d.review.value != null) return 'reviewed';
-    if (d.result.value == null && s && s.valuePerShare > 0) return 'reviewed';
-    return 'mechanical';
   }
 
   /* The published report's line, under a rule: its stance in the drawer's chip classes, faded once

@@ -213,8 +213,9 @@
      and opens the watchlists popup under its head's button (watch) on the company's row or, the
      lists loaded, on the company alone (rows, watchlists); its Fairband value block
      (company_overview.js, 8.2) draws the meter, the four levels under it in the screen's words
-     (levelRows) and the local day of its report (localIso). The
-     Inbox view's row (inbox.js, B-210) keeps a request for each pending item too, posts its launch
+     (levelRows), the basis chip of the band they draw (bandBasis) and the local day of its
+     report (localIso). The Inbox view's row (inbox.js, B-210) keeps a request for each pending
+     item too, posts its launch
      (openLaunch) and draws the line's words (launchWords) from the item the line is drawn from
      (lineItem). The open item's line (launchLine), the drawer's route sections, the charge's
      rows, an input's value, the intermediates, the flags it lists and Details' findings are here
@@ -230,7 +231,7 @@
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
     openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
-    meter: meter, levelRows: levelRows,
+    meter: meter, levelRows: levelRows, bandBasis: bandBasis,
     inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     inputValue: inputValue,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
@@ -930,6 +931,13 @@
       ['Fair band', F.formatMoney(band.fairLow) + ' – ' + F.formatMoney(band.fairHigh)],
       ['Trim level', F.formatMoney(band.trim)]
     ];
+  }
+
+  /* The basis of the band the meter draws (meter) and the four levels name (levelRows), by the
+     branch they take: reviewed where they draw a review's band, on a valued row or a refused one,
+     or a secondary valuation's; else mechanical, the engine's band or none. */
+  function bandBasis(body) {
+    return isReviewed(body) || isReviewBanded(body) || isBanded(body) ? 'reviewed' : 'mechanical';
   }
 
   /* The flags the drawer lists, { flags, reviewed } (spec 2026-11-13 8a): the review's, which the

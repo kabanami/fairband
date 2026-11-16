@@ -391,6 +391,16 @@ def test_the_formatters(helper: str, args: list[Any], shown: str) -> None:
     assert _page(helper, *args) == shown
 
 
+def test_money_writes_its_own_amount_as_the_design_system_writes_it() -> None:
+    """``money`` writes the amount to cents itself, with no thousands separator, as
+    Fairband.formatMoney writes it, and does not cut that function's text, so it does not hang on
+    the one-character prefix that text starts with."""
+    body = _function(_static_file("company.js"), "money")
+    assert "formatMoney" not in body and ".slice(" not in body
+    for v in (0, 0.004, 7.5, 1495.16, 1000000.5, -2.5):
+        assert _page("money", {"value": v, "currency": "USD"}) == node("Fairband.formatMoney", [v])
+
+
 def test_a_price_above_a_thousand_reads_as_the_meter_reads_it() -> None:
     """One rule for money on the page: the head's price and the Fairband value block's meter and
     levels write an amount above a thousand alike, with no thousands separator."""
@@ -532,7 +542,7 @@ def test_the_request_is_made_where_the_read_lands_and_follows_at_every_landing()
     )
     load = _function(script, "load")
     assert load.count("shown();") == 2
-    _in_order(load, "if (held && want.tab !== state.tab && state.answers[want.tab]) {", "shown();")
+    _in_order(load, "if (held && want.tab !== state.tab && state.answers[want.tab] &&", "shown();")
     head = _function(script, "head")
     assert "state.request =" not in head and "asked(" not in script
     assert "P.requestResearch(ask, d.item, render, load, d.launchReady)" in head
@@ -571,7 +581,9 @@ def test_the_view_is_one_of_controls_js_s() -> None:
 def test_the_page_reads_again_when_a_refresh_ends() -> None:
     """When a run ends while the company page shows, the page reads the company shown again, as
     the report page does: its loader on the same company and tab reads the detail and the open
-    tab's answer afresh, the page shown staying, faded, until they land."""
+    tab's answer afresh, the page shown staying, faded, until they land. While that read is out,
+    a tab the page holds from before the run is not shown at once: the page reads the detail and
+    that tab, so the reread is never dropped for the figures of before the run."""
     js = _static_file("controls.js")
     ended = js[js.index("if (ended) {") :]
     ended = ended[: ended.index("\n        }\n")]
@@ -581,13 +593,21 @@ def test_the_page_reads_again_when_a_refresh_ends() -> None:
         "if (state.tab === 'report') P.onShow.report();",
         "if (state.tab === 'company') P.onShow.company();",
     )
-    load = _function(_static_file("company.js"), "load")
+    script = _static_file("company.js")
+    load = _function(script, "load")
+    landed, failed = load.split(".catch(function (err) {")
     _in_order(
-        load,
-        "var whole = !held || want.tab === state.tab;",
+        landed,
+        "if (held && want.tab !== state.tab && state.answers[want.tab] && !state.whole) {",
+        "var whole = !held || want.tab === state.tab || state.whole;",
+        "state.whole = whole;",
         "state.loading = true;",
         "(whole ? read(company) : Promise.resolve(state.detail))",
+        ".then(function (found) {\n        if (request !== latest) return;",
+        "state.whole = false;",
     )
+    _in_order(failed, "if (request !== latest) return;", "state.whole = false;")
+    assert "whole: false," in script
 
 
 def test_the_symbol_is_coded_as_the_report_page_codes_it() -> None:
