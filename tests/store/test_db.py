@@ -15,6 +15,7 @@ from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store import db
 from fairband.store.db import applied_versions, connect, migrate
 from fairband.store.guidance import GuidanceRow, guidance_row
+from fairband.store.inbox import WorkItem, work_item
 from fairband.store.reports import JudgmentRow, judgments_for
 from fairband.store.research import FindingRow, KillCriterionRow, finding_row, kill_criterion_row
 
@@ -43,6 +44,7 @@ _ALL = [
     "006_report.sql",
     "007_secondary_fx.sql",
     "008_record_currency.sql",
+    "009_launches.sql",
 ]
 # The agents' records (spec 2026-11-06 Tier 2, section 17), each table's columns the record's
 # fields in order, as 005 made them and 006, 007 and 008 changed them: a judgment without its
@@ -156,7 +158,7 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
     assert migrate(conn) == _ALL
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -199,7 +201,7 @@ def test_designation_columns_join_a_database_at_001(
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
     assert migrate(conn) == _ALL[1:]
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -389,9 +391,9 @@ def test_migration_008_gives_a_record_its_currency(
     )
     conn.commit()
 
-    assert migrate(conn) == ["008_record_currency.sql"]
+    assert migrate(conn) == _ALL[7:]
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     at = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
     by_agent = {"principal": "agent", "actor": "claude-opus-5-5", "client": "claude-code/2.1"}
     assert finding_row(conn, 1) == FindingRow(
@@ -449,6 +451,74 @@ def test_migration_008_gives_a_record_its_currency(
             assert (column["type"], column["notnull"], column["dflt_value"]) == ("TEXT", 0, None)
         stored = conn.execute(f"select {', '.join(added)} from {table}").fetchone()
         assert tuple(stored) == (None,) * len(added), table
+
+
+def test_migration_009_adds_the_launch_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 008 holds a pending work item. 009 adds the launch record (spec 2026-11-16,
+    section 8), empty, with its index on an item's launches in order; the item reads as before."""
+    folder = _migrations_dir(tmp_path, {})
+    for filename in _ALL[1:8]:
+        (folder / filename).write_bytes(_packaged(filename))
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", folder)
+        assert migrate(conn) == _ALL[:8]
+    conn.execute(
+        "insert into work_items (symbol, mode, note, snapshot_id, origin, posted_by, posted_actor,"
+        " posted_client, posted_at, state) values ('AAPL', 'full report', 'why', null, 'owner',"
+        " 'owner', null, null, '2026-11-16T09:30:00+00:00', 'pending')"
+    )
+    conn.commit()
+
+    assert migrate(conn) == ["009_launches.sql"]
+
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    recorded = conn.execute("select filename, checksum from schema_versions where version = 9")
+    assert tuple(recorded.fetchone()) == (
+        "009_launches.sql",
+        hashlib.sha256(_packaged("009_launches.sql")).hexdigest(),
+    )
+    assert work_item(conn, 1) == WorkItem(
+        id=1,
+        symbol="AAPL",
+        mode="full report",
+        note="why",
+        snapshot_id=None,
+        origin="owner",
+        posted_by="owner",
+        posted_actor=None,
+        posted_client=None,
+        posted_at=datetime(2026, 11, 16, 9, 30, tzinfo=UTC),
+        state="pending",
+        claimed_by=None,
+        claimed_at=None,
+        report_id=None,
+        reason=None,
+        finished_at=None,
+        expiry_valid_until=None,
+    )
+    assert conn.execute("select count(*) from launches").fetchone()[0] == 0
+    columns = [
+        (r["name"], r["type"], r["notnull"]) for r in conn.execute("pragma table_info(launches)")
+    ]
+    assert columns == [
+        ("id", "INTEGER", 0),
+        ("item_id", "INTEGER", 0),
+        ("agent", "TEXT", 1),
+        ("state", "TEXT", 1),
+        ("stage", "TEXT", 0),
+        ("detail", "TEXT", 0),
+        ("exit_code", "INTEGER", 0),
+        ("created_at", "TEXT", 1),
+        ("updated_at", "TEXT", 1),
+    ]
+    keys = [
+        (r["from"], r["table"], r["to"]) for r in conn.execute("pragma foreign_key_list(launches)")
+    ]
+    assert keys == [("item_id", "work_items", "id")]
+    [index] = [r["name"] for r in conn.execute("pragma index_list(launches)")]
+    assert [c["name"] for c in conn.execute(f"pragma index_info({index})")] == ["item_id", "id"]
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -561,6 +631,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 006_report.sql",
         "Applied 007_secondary_fx.sql",
         "Applied 008_record_currency.sql",
+        "Applied 009_launches.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()
