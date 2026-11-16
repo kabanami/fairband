@@ -134,8 +134,9 @@ _SHARES = "weightedAverageShsOutDil"
 _AS_REPORTED_INTANGIBLES = "intangibles_ex_goodwill"
 # Lease accounting (ASC 842) applies to fiscal years beginning after 15 December 2018.
 _LEASES_ON_BALANCE_SHEET = date(2019, 12, 15)
-# A 52/53-week fiscal year ends up to six days either side of a fixed month and day.
-_YEAR_END_DRIFT = timedelta(days=7)
+# A 52/53-week fiscal year ends up to six days either side of a fixed month and day. The company
+# page's consensus read takes a row dated within it after the newest year's end as that year.
+YEAR_END_DRIFT = timedelta(days=7)
 _DAYS_A_YEAR = 365.25
 # A trailing period's name, one and several, under each cadence; the split and basis notes name
 # the periods so too (``inputs_splits``).
@@ -169,7 +170,7 @@ class FiscalCalendar:
 
     def fiscal_year(self, end: date) -> int:
         for year in (end.year - 1, end.year):
-            if end <= self.year_end(year) + _YEAR_END_DRIFT:
+            if end <= self.year_end(year) + YEAR_END_DRIFT:
                 return year
         return end.year + 1
 

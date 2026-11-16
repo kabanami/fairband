@@ -191,6 +191,29 @@ def test_the_estimates_whole(client: TestClient, db_path: Path, policy: Policy) 
     assert body["target"]["consensus"] == {"value": 205.6, "currency": "USD"}
 
 
+def test_an_estimate_dated_within_the_drift_of_the_newest_year_is_that_year(
+    client: TestClient, db_path: Path
+) -> None:
+    """A 52/53-week fiscal year ends up to six days either side of its month and day: FMP may date
+    the reported year's estimate a few days after the statement's period end. That row is the
+    reported year, not a consensus year; the next year's, a year later, is."""
+    _store(db_path, "profile", pages.PROFILE, AT)
+    income = [
+        {"symbol": SYMBOL, "date": day, "fiscalYear": year, "period": "FY", "revenue": 3.0e12}
+        for day, year in (("2025-12-27", "2025"), ("2024-12-28", "2024"))
+    ]
+    reported, upcoming = (
+        pages.ESTIMATES[-1] | {"date": "2025-12-31"},
+        pages.ESTIMATES[-2] | {"date": "2026-12-31"},
+    )
+    _store(db_path, "estimates-annual", [upcoming, reported], AT)
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, SYMBOL, {"income-annual": income}, AT)
+    consensus = _get(client, ESTIMATES)["consensus"]
+    assert consensus == page_fmp.consensus([upcoming], None, "USD")
+    assert [row["fiscalYear"] for row in consensus] == [2026]
+
+
 def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: Path) -> None:
     """Review Focus 2: a company fetched before the page's calls, or whose ten calls all failed,
     opens with every figure ``None``, no price and no story."""

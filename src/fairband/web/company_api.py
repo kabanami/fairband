@@ -31,11 +31,13 @@ Rules for both:
   text, the news left out, since its stories carry their own days; ``null`` when it drew none.
 - ``news.stale`` (10.5) is true without a stored answer, or when it was observed at or before the
   clock's time less the effective policy's reuse window (``refresh.reuse_hours``).
-- The consensus keeps the fiscal years that end after the newest fiscal year on file
-  (``series_for``, the years the report tables' estimate columns follow), every year where none
-  is; a money figure in the reporting currency carries the company's
-  (``store.currency.reporting_currency``), USD where it has no snapshot. The next earnings date
-  and the last dividend payment are judged on the clock's day.
+- The consensus keeps the rows dated after the newest fiscal year's period end on file
+  (``series_for``, the years the report tables' estimate columns follow) and the week a 52/53-week
+  year's end drifts by (``inputs_statements.YEAR_END_DRIFT``): a row dated within that week is the
+  year already reported. Every row is kept where no year is on file. A money figure in the
+  reporting currency carries the company's (``store.currency.reporting_currency``), USD where it
+  has no snapshot. The next earnings date and the last dividend payment are judged on the clock's
+  day.
 
 A symbol that is not one is a 400 with its sentence (``reports_api.checked_symbol``); a company
 with no stored profile a 404, "no page data for <symbol>"; on the overview, a stored setting the
@@ -54,7 +56,7 @@ from fastapi import FastAPI, HTTPException
 
 from fairband.policy import Policy
 from fairband.refresh.fetch import EARNINGS_ROWS, NEWS_STORIES, PAGE_ENDPOINTS, page_params
-from fairband.refresh.inputs_statements import series_for
+from fairband.refresh.inputs_statements import YEAR_END_DRIFT, series_for
 from fairband.store.currency import reporting_currency
 from fairband.store.observations import observations_for
 from fairband.store.vendor import latest_response, response_payload
@@ -149,7 +151,7 @@ def add_company_page_routes(
             grades = _stored(conn, "grades", symbol)
             years = series_for(conn, symbol)
             reporting = reporting_currency(conn, symbol)
-        after = years[-1].period_end if years else None
+        after = years[-1].period_end + YEAR_END_DRIFT if years else None
         return {
             "symbol": symbol,
             "dataDate": _data_date([earnings, consensus, target, grades]),
