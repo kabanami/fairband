@@ -23,6 +23,11 @@ Package in `src/fairband/`; tests in `tests/`, mirroring the package.
 - Brand book: `fairband-design-system/docs/brand-book.md` inside the archive
   `docs/design-system/fairband-design-system_4.tar.gz`. Read it without unpacking:
   `tar -xzOf docs/design-system/fairband-design-system_4.tar.gz fairband-design-system/docs/brand-book.md`
+  Its rules on provenance, the dates and the validity window cover Fairband's own figures and
+  writes: the value, the levels, an input, an override, a record. A cite on every number is
+  the rule of an agent's report alone (`docs/method.md` 16). Vendor reference data on a page
+  (a company's statistics, prices, estimates, news) is shown plain: no cite, no chip and no
+  vendor's name on a figure or a block, and one data date for the page or the block.
 
 ## Keys and data
 
