@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from fairband.launch.command import is_plain
+
 FILE_NAME = "launch.json"
 # The efforts and permission modes of Claude Code 2.1.325. ``bypassPermissions`` is not offered:
 # it skips every permission check, and a research session reads web pages a stranger wrote.
@@ -62,7 +64,6 @@ _PROMPT_LIMIT = 500
 _MODEL_LIMIT = 100
 _PROMPT_NAMES = ("item", "symbol", "mode")
 _BRACED = re.compile(r"\{([^{}]*)\}")
-_PLAIN_WORD = re.compile(r"[A-Za-z0-9_./:@+-]+")
 
 
 @dataclass(frozen=True)
@@ -124,7 +125,7 @@ def suggested_window_command(
     ``environ`` names the distribution in one plain word and ``which`` finds ``wt.exe``; else
     ``None``."""
     distribution = environ.get("WSL_DISTRO_NAME", "")
-    if _PLAIN_WORD.fullmatch(distribution) is None or which("wt.exe") is None:
+    if not is_plain(distribution) or which("wt.exe") is None:
         return None
     return f"wt.exe -w 0 new-tab --title {{title}} wsl.exe -d {distribution} -e"
 
